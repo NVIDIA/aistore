@@ -118,8 +118,7 @@ func copyBucket(c *cli.Context, bucket, newBucket string) (err error) {
 
 // Evict a cloud bucket
 func evictBucket(c *cli.Context, bucket string) (err error) {
-	query := url.Values{cmn.URLParamProvider: []string{cmn.Cloud}}
-	if err = api.EvictCloudBucket(defaultAPIParams, bucket, query); err != nil {
+	if err = api.EvictCloudBucket(defaultAPIParams, bucket); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "%s bucket evicted\n", bucket)

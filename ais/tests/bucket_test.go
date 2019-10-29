@@ -700,9 +700,7 @@ func TestCloudMirror(t *testing.T) {
 	}
 
 	// evict
-	query := make(url.Values)
-	query.Add(cmn.URLParamProvider, cmn.Cloud)
-	err := api.EvictCloudBucket(baseParams, m.bucket, query)
+	err := api.EvictCloudBucket(baseParams, m.bucket)
 	tassert.CheckFatal(t, err)
 
 	// enable mirror
@@ -1010,7 +1008,7 @@ func TestCopyBucket(t *testing.T) {
 					numGetsEachFile: 1,
 				}
 				dstms = []*ioContext{
-					&ioContext{
+					{
 						t:               t,
 						num:             1000,
 						bucket:          "dst_copy_bck_1",
@@ -1035,6 +1033,8 @@ func TestCopyBucket(t *testing.T) {
 				if !isCloudBucket(t, proxyURL, srcm.bucket) {
 					t.Skip("test requires a cloud bucket")
 				}
+
+				defer api.EvictCloudBucket(baseParams, srcm.bucket)
 			}
 
 			// Initialize ioContext
@@ -1075,33 +1075,11 @@ func TestCopyBucket(t *testing.T) {
 				srcBckList, err = api.ListBucket(baseParams, srcm.bucket, nil, 0)
 				tassert.CheckFatal(t, err)
 			} else if test.provider == cmn.Cloud {
-				msg := &cmn.SelectMsg{Props: cmn.GetPropsIsCached}
-				query := make(url.Values)
-				query.Set(cmn.URLParamCached, "true")
-				srcBckList, err = api.ListBucket(baseParams, srcm.bucket, msg, 0, query)
-				tassert.CheckFatal(t, err)
-				srcm.num = len(srcBckList.Entries)
+				srcm.cloudPuts()
 
-				// none cached - PUT some and cache them as well
-				if srcm.num == 0 {
-					objs := cloudPUT(t)
-					srcBckList, err = api.ListBucket(baseParams, srcm.bucket, msg, 0, query)
-					tassert.CheckFatal(t, err)
-					srcm.num = len(srcBckList.Entries)
-					if srcm.num != len(objs) {
-						t.Errorf("list-bucket err: %d != %d", srcm.num, len(objs))
-					}
-					// cleanup
-					defer func(objs []string) {
-						err := api.DeleteList(baseParams, srcm.bucket, test.provider, objs, true, 0)
-						if err != nil {
-							t.Errorf("Failed to delete objects from bucket %s, err: %v", srcm.bucket, err)
-						} else {
-							tutils.Logf("DELETE done.\n")
-						}
-					}(objs)
-				}
-				tutils.Logf("cloud bucket %s: %d cached objects\n", srcm.bucket, srcm.num)
+				msg := &cmn.SelectMsg{Props: cmn.GetPropsIsCached}
+				srcBckList, err = api.ListBucket(baseParams, srcm.bucket, msg, 0)
+				tassert.CheckFatal(t, err)
 			}
 
 			for _, dstm := range dstms {
@@ -1216,25 +1194,4 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	tutils.CheckPathExists(t, newBucketFQN, true /*dir*/)
 
 	tutils.DestroyBucket(t, m.proxyURL, newTestBucketName)
-}
-
-func cloudPUT(t *testing.T) (objs []string) {
-	var (
-		prefix   = "copy/cloud_"
-		wg       = &sync.WaitGroup{}
-		errCh    = make(chan error, numfiles)
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-	)
-	for i := 0; i < numfiles; i++ {
-		r, err := tutils.NewRandReader(1024 /*size */, true /* withHash */)
-		tassert.CheckFatal(t, err)
-		objname := fmt.Sprintf("%s%d", prefix, i)
-		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, clibucket, objname, r, errCh)
-		objs = append(objs, objname)
-	}
-	wg.Wait()
-	selectErr(errCh, "put", t, true)
-	tutils.Logf("PUT done.\n")
-	return
 }

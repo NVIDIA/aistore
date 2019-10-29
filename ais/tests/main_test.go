@@ -440,7 +440,7 @@ func listObjects(t *testing.T, proxyURL string, msg *cmn.SelectMsg, bucket strin
 	return reslist, nil
 }
 
-func Test_bucketnames(t *testing.T) {
+func Test_BucketNames(t *testing.T) {
 	var (
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		bucket     = t.Name() + "Bucket"
@@ -1316,7 +1316,6 @@ func Test_evictCloudBucket(t *testing.T) {
 		bucket     = clibucket
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		bProps     *cmn.BucketProps
-		query      = url.Values{}
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -1365,8 +1364,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	if !bProps.Mirror.Enabled {
 		t.Fatalf("Test property hasn't changed")
 	}
-	query.Add(cmn.URLParamProvider, cmn.Cloud)
-	err = api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket, query)
+	err = api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket)
 	tassert.CheckFatal(t, err)
 
 	for _, fname := range filesList {

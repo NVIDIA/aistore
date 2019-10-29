@@ -435,7 +435,11 @@ func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values
 	optParams := OptionalParams{}
 	if len(query) > 0 {
 		optParams.Query = query[0]
+	} else {
+		optParams.Query = make(url.Values)
 	}
+	optParams.Query.Add(cmn.URLParamProvider, cmn.Cloud)
+
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	_, err = DoHTTPRequest(baseParams, path, b, optParams)

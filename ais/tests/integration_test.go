@@ -147,6 +147,48 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	return len(errCh)
 }
 
+func (m *ioContext) cloudPuts() {
+	var (
+		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		msg        = &cmn.SelectMsg{Props: cmn.GetPropsIsCached}
+		query      = make(url.Values)
+	)
+
+	query.Set(cmn.URLParamCached, "true")
+	srcBckList, err := api.ListBucket(baseParams, m.bucket, msg, 0, query)
+	tassert.CheckFatal(m.t, err)
+
+	leftToFill := len(srcBckList.Entries) - m.num
+	if leftToFill <= 0 {
+		m.num = len(srcBckList.Entries)
+		return
+	}
+
+	// Not enough objects in cloud bucket, need to create more.
+	var (
+		errCh = make(chan error, leftToFill)
+		wg    = &sync.WaitGroup{}
+	)
+	for i := 0; i < leftToFill; i++ {
+		r, err := tutils.NewRandReader(1024 /*size */, true /* withHash */)
+		tassert.CheckFatal(m.t, err)
+		objName := fmt.Sprintf("%s%d", "copy/cloud_", i)
+		wg.Add(1)
+		go tutils.PutAsync(wg, m.proxyURL, m.bucket, objName, r, errCh)
+	}
+	wg.Wait()
+	selectErr(errCh, "put", m.t, true)
+	tutils.Logf("cloud PUT done.\n")
+
+	srcBckList, err = api.ListBucket(baseParams, m.bucket, msg, 0, query)
+	tassert.CheckFatal(m.t, err)
+	if len(srcBckList.Entries) != m.num {
+		m.t.Errorf("list-bucket err: %d != %d", len(srcBckList.Entries), m.num)
+	}
+
+	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bucket, m.num)
+}
+
 func (m *ioContext) gets() {
 	for i := 0; i < 10; i++ {
 		m.semaphore <- struct{}{}
