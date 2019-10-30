@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/NVIDIA/aistore/aisfs/ais"
@@ -38,22 +39,26 @@ func (file *FileInode) IsDir() bool {
 }
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) Read(dst []byte, offset int64, length int) (n int, err error) {
-	var (
-		chunk    io.Reader
-		chunkLen int64
-	)
+func (file *FileInode) Load(offset int64, length int64) (r *bytes.Reader, n int64, err error) {
+	buffer := bytes.NewBuffer(make([]byte, 0, length))
+	n, err = file.object.GetChunk(buffer, offset, length)
+	if err != nil {
+		return nil, 0, err
+	}
+	return bytes.NewReader(buffer.Bytes()), n, nil
+}
 
-	chunk, chunkLen, err = file.object.DownloadPart(offset, length)
+// REQUIRES_LOCK(file)
+func (file *FileInode) Read(dst []byte, offset int64) (n int, err error) {
+	reader, _, err := file.Load(offset, int64(len(dst)))
 	if err != nil {
 		return
 	}
 
-	n, err = chunk.Read(dst[:chunkLen])
+	n, err = reader.Read(dst)
 	if err == io.EOF {
 		err = nil
 	}
-
 	return
 }
 

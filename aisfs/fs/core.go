@@ -181,10 +181,7 @@ func (fs *aisfs) allocateDirHandle(dir *DirectoryInode) fuseops.HandleID {
 // REQUIRES_LOCK(fs.mu)
 func (fs *aisfs) allocateFileHandle(file *FileInode) fuseops.HandleID {
 	id := fs.nextHandleID()
-	fs.fileHandles[id] = &fileHandle{
-		id:   id,
-		file: file,
-	}
+	fs.fileHandles[id] = newFileHandle(id, file)
 	return id
 }
 

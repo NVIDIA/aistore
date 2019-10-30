@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"bytes"
 	"io"
 	"net/url"
 	"strconv"
@@ -24,23 +23,22 @@ type Object struct {
 	Atime time.Time
 }
 
-func (obj *Object) DownloadPart(offset int64, length int) (io.Reader, int64, error) {
+func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, err error) {
 	query := url.Values{}
-	query.Add(cmn.URLParamOffset, strconv.Itoa(int(offset)))
-	query.Add(cmn.URLParamLength, strconv.Itoa(length))
-
-	buffer := bytes.NewBuffer(make([]byte, 0, length))
+	query.Add(cmn.URLParamOffset, strconv.Itoa(int(offset))) // TODO: better conversion?
+	query.Add(cmn.URLParamLength, strconv.Itoa(int(length))) // TODO: better conversion?
 
 	objArgs := api.GetObjectInput{
-		Writer: buffer,
+		Writer: w,
 		Query:  query,
 	}
-	n, err := api.GetObject(obj.apiParams, obj.bucket, obj.Name, objArgs)
+
+	n, err = api.GetObject(obj.apiParams, obj.bucket, obj.Name, objArgs)
 	if err != nil {
-		return nil, 0, newObjectIOError(err, "DownloadPart", obj.Name)
+		return 0, newObjectIOError(err, "GetChunk", obj.Name)
 	}
 
-	return buffer, n, nil
+	return
 }
 
 func (obj *Object) Put(data []byte, size uint64) (err error) {

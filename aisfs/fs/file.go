@@ -75,10 +75,7 @@ func (fs *aisfs) ReadFile(ctx context.Context, req *fuseops.ReadFileOp) (err err
 	fileHandle := fs.lookupFhandleMustExist(req.Handle)
 	fs.mu.Unlock()
 
-	fileHandle.file.Lock()
-	req.BytesRead, err = fileHandle.file.Read(req.Dst, req.Offset, len(req.Dst))
-	fileHandle.file.Unlock()
-
+	req.BytesRead, err = fileHandle.readChunk(req.Dst, req.Offset)
 	if err != nil {
 		return fs.handleIOError(err)
 	}
