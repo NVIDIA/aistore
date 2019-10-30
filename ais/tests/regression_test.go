@@ -698,11 +698,11 @@ func TestGetClusterStats(t *testing.T) {
 		dcapstats := v.Capacity
 		for fspath, fstats := range dcapstats {
 			tfstats := tdcapstats[fspath].(map[string]interface{})
-			used, err := tfstats["used"].(json.Number).Int64()
+			used, err := strconv.ParseInt(tfstats["used"].(string), 10, 64)
 			if err != nil {
 				t.Fatalf("Could not decode Target Stats: fstats.Used")
 			}
-			avail, err := tfstats["avail"].(json.Number).Int64()
+			avail, err := strconv.ParseInt(tfstats["avail"].(string), 10, 64)
 			if err != nil {
 				t.Fatalf("Could not decode Target Stats: fstats.Avail")
 			}

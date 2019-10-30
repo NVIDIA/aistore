@@ -38,7 +38,7 @@ import (
 const (
 	whatRenamedLB = "renamedlb"
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
-	fmtUnknownAct = "Unexpected action message <- JSON [%v]"
+	fmtUnknownAct = "unexpected action message <- JSON [%v]"
 	guestError    = "guest account does not have permissions for the operation"
 )
 
@@ -78,7 +78,6 @@ func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.Handle
 	for _, w := range wraps {
 		h = w(h)
 	}
-
 	return h
 }
 
@@ -138,10 +137,11 @@ func (p *proxyrunner) Run() error {
 	bucketHandler, objectHandler := p.bucketHandler, p.objectHandler
 	dsortHandler, downloadHandler := dsort.ProxySortHandler, p.downloadHandler
 	if config.Auth.Enabled {
-		bucketHandler, objectHandler = wrapHandler(p.bucketHandler, p.checkHTTPAuth), wrapHandler(p.objectHandler, p.checkHTTPAuth)
-		dsortHandler, downloadHandler = wrapHandler(dsort.ProxySortHandler, p.checkHTTPAuth), wrapHandler(p.downloadHandler, p.checkHTTPAuth)
+		bucketHandler, objectHandler = wrapHandler(p.bucketHandler, p.checkHTTPAuth),
+			wrapHandler(p.objectHandler, p.checkHTTPAuth)
+		dsortHandler, downloadHandler = wrapHandler(dsort.ProxySortHandler, p.checkHTTPAuth),
+			wrapHandler(p.downloadHandler, p.checkHTTPAuth)
 	}
-
 	networkHandlers := []networkHandler{
 		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
@@ -210,7 +210,7 @@ func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status in
 	return res.status, res.err
 }
 
-func (p *proxyrunner) unregister() (int, error) {
+func (p *proxyrunner) unregisterSelf() (int, error) {
 	smap := p.smapowner.get()
 	args := callArgs{
 		si: smap.ProxySI,
@@ -249,7 +249,7 @@ func (p *proxyrunner) Stop(err error) {
 	}
 
 	if !isPrimary {
-		_, unregerr := p.unregister()
+		_, unregerr := p.unregisterSelf()
 		if unregerr != nil {
 			glog.Warningf("Failed to unregister when terminating: %v", unregerr)
 		}
@@ -2426,7 +2426,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		httpdaeWhat = "httpdaeget-" + getWhat
 	)
 	switch getWhat {
-	case cmn.GetWhatBucketMeta:
+	case cmn.GetWhatBMD:
 		if renamedBucket := q.Get(whatRenamedLB); renamedBucket != "" {
 			p.handlePendingRenamedLB(renamedBucket)
 		}
@@ -2908,7 +2908,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatMountpaths:
 		p.invokeHTTPGetClusterMountpaths(w, r)
 	default:
-		s := fmt.Sprintf("Unexpected GET request, invalid param 'what': [%s]", getWhat)
+		s := fmt.Sprintf("unexpected GET request, invalid param 'what': [%s]", getWhat)
 		cmn.InvalidHandlerWithMsg(w, r, s)
 	}
 }
@@ -3041,9 +3041,10 @@ func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *h
 // start|stop xaction
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		regReq                            targetRegMeta
-		keepalive, register, selfRegister bool
-		nonElectable                      bool
+		regReq                                targetRegMeta
+		pname                                 = p.si.Name()
+		keepalive, userRegister, selfRegister bool
+		nonElectable                          bool
 	)
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster)
 	if err != nil {
@@ -3054,7 +3055,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
 		}
-		register = true
+		userRegister = true
 	case cmn.Keepalive:
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
@@ -3066,7 +3067,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		selfRegister = true
 	default:
-		p.invalmsghdlr(w, r, fmt.Sprintf("invalid path specified: %q", apiItems[0]))
+		p.invalmsghdlr(w, r, fmt.Sprintf("invalid URL path: %q", apiItems[0]))
 		return
 	}
 
@@ -3075,20 +3076,21 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if regReq.BMD != nil && glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Received %s from %s(%s) on registering:\n%s]",
-			bmdTermName, nsi.DaemonID, nsi.DaemonType, regReq.BMD.Dump())
+	if p.startedUp.Load() {
+		if err := p.checkBMDcompat(nsi, regReq.BMD); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	}
-
 	isProxy := nsi.IsProxy()
 	if isProxy {
 		s := r.URL.Query().Get(cmn.URLParamNonElectable)
 		if nonElectable, err = cmn.ParseBool(s); err != nil {
-			glog.Errorf("Failed to parse %s for non-electability: %v", s, err)
+			glog.Errorf("%s: failed to parse %s for non-electability: %v", pname, s, err)
 		}
 	}
 
-	s := fmt.Sprintf("register %s (keepalive=%t, register=%t, self-register=%t)", nsi, keepalive, register, selfRegister)
+	s := fmt.Sprintf("register %s, (keepalive, user, self)=(%t, %t, %t)", nsi, keepalive, userRegister, selfRegister)
 	msg := &cmn.ActionMsg{Action: cmn.ActRegTarget}
 	if isProxy {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
@@ -3098,7 +3100,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
-		s := fmt.Sprintf("failed to register %s: invalid IP address %v", nsi.Name(), nsi.PublicNet.NodeIPAddr)
+		s := fmt.Sprintf("%s: failed to register %s - invalid IP address %v", pname, nsi.Name(), nsi.PublicNet.NodeIPAddr)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -3116,22 +3118,19 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	} else {
 		osi := smap.GetTarget(nsi.DaemonID)
 
-		// FIXME: If not keepalive then update smap anyway - either: new target,
+		// FIXME: If !keepalive then update Smap anyway - either: new target,
 		// updated target or target has powercycled. Except 'updated target' case,
-		// rebalance needs to be triggered and updating smap is the easiest way.
+		// rebalance needs to be triggered and updating smap is the easiest.
 		if keepalive && !p.addOrUpdateNode(nsi, osi, keepalive) {
 			p.smapowner.Unlock()
 			return
 		}
 
-		if register {
-			if glog.V(3) {
-				glog.Infof("register %s (num targets before %d)", nsi.Name(), smap.CountTargets())
+		if userRegister {
+			if glog.FastV(3, glog.SmoduleAIS) {
+				glog.Infof("%s: register %s (num targets before: %d)", pname, nsi.Name(), smap.CountTargets())
 			}
-
-			// Sending current bmd and smap - target can have outdated versions
-			// so eg. gfn will be done on old smap which may not be accurate
-			// and will result in failures.
+			// when registration is done by user send the current BMD and Smap
 			bmd := p.bmdowner.get()
 			meta := &targetRegMeta{smap, bmd, p.si}
 			body := cmn.MustMarshal(meta)
@@ -3148,10 +3147,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			res := p.call(args)
 			if res.err != nil {
 				p.smapowner.Unlock()
-				msg := fmt.Sprintf("Failed to register %s: %v, %s", nsi.Name(), res.err, res.details)
-				// Special case when it is not possible to contact specific instance.
+				msg := fmt.Sprintf("failed to register %s: %v, %s", nsi.Name(), res.err, res.details)
 				if cmn.IsErrConnectionRefused(res.err) {
-					msg = fmt.Sprintf("Failed to contact %s on %s:%s", nsi.Name(), nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
+					msg = fmt.Sprintf("failed to reach %s on %s:%s",
+						nsi.Name(), nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
 				}
 				p.invalmsghdlr(w, r, msg, res.status)
 				return
@@ -3218,18 +3217,20 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, keepalive bool) bool {
+	var pname = p.si.Name()
 	if keepalive {
 		if osi == nil {
-			glog.Warningf("register/keepalive %s %s: adding back to the cluster map", nsi.DaemonType, nsi)
+			glog.Warningf("register/keepalive %s: adding back to the cluster map", nsi.Name())
 			return true
 		}
 
 		if !osi.Equals(nsi) {
 			if p.detectDaemonDuplicate(osi, nsi) {
-				glog.Errorf("%s tried to register/keepalive with a duplicate ID %s", nsi.PublicNet.DirectURL, nsi)
+				glog.Errorf("%s: %s(%s) is trying to register/keepalive with duplicate ID",
+					pname, nsi.Name(), nsi.PublicNet.DirectURL)
 				return false
 			}
-			glog.Warningf("register/keepalive %s %s: info changed - renewing", nsi.DaemonType, nsi)
+			glog.Warningf("%s: renewing registration %s (info changed!)", pname, nsi.Name())
 			return true
 		}
 
@@ -3241,10 +3242,10 @@ func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, ke
 			return true
 		}
 		if osi.Equals(nsi) {
-			glog.Infof("register %s: already done", nsi)
+			glog.Infof("%s: %s is already registered", pname, nsi.Name())
 			return false
 		}
-		glog.Warningf("register %s: renewing the registration %+v => %+v", nsi, osi, nsi)
+		glog.Warningf("%s: renewing %s registration %+v => %+v", pname, nsi.Name(), osi, nsi)
 	}
 	return true
 }
@@ -3255,20 +3256,17 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	var (
 		msg  *cmn.ActionMsg
 		sid  = apitems[0]
 		smap = p.smapowner.get()
 		node = smap.GetNode(sid)
 	)
-
 	if node == nil {
 		errstr := fmt.Sprintf("Unknown node %s", sid)
 		p.invalmsghdlr(w, r, errstr, http.StatusNotFound)
 		return
 	}
-
 	msg = &cmn.ActionMsg{Action: cmn.ActUnregTarget}
 	if node.IsProxy() {
 		msg = &cmn.ActionMsg{Action: cmn.ActUnregProxy}
@@ -3276,18 +3274,22 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, sid, nil) {
 		return
 	}
-
-	p.smapowner.Lock()
-
-	smap = p.smapowner.get()
-	clone := smap.clone()
-	node = smap.GetNode(sid)
-	if node == nil {
-		errstr := fmt.Sprintf("Unknown node %s", sid)
-		p.invalmsghdlr(w, r, errstr, http.StatusNotFound)
-		return
+	if status, err := p.unregisterNode(sid, msg); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), status)
 	}
+}
 
+func (p *proxyrunner) unregisterNode(sid string, msg *cmn.ActionMsg) (status int, err error) {
+	p.smapowner.Lock()
+	defer p.smapowner.Unlock()
+	var (
+		smap  = p.smapowner.get()
+		clone = smap.clone()
+		node  = smap.GetNode(sid)
+	)
+	if node == nil {
+		return http.StatusNotFound, fmt.Errorf("Unknown node %s", sid)
+	}
 	if node.IsProxy() {
 		clone.delProxy(sid)
 		if glog.V(3) {
@@ -3313,25 +3315,20 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 	if !p.startedUp.Load() {
 		p.smapowner.put(clone)
-		p.smapowner.Unlock()
 		return
 	}
-	if err := p.smapowner.persist(clone, true); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		p.smapowner.Unlock()
+	if err = p.smapowner.persist(clone, true); err != nil {
 		return
 	}
 	p.smapowner.put(clone)
 
 	if isPrimary := p.smapowner.get().isPrimary(p.si); !isPrimary {
-		p.smapowner.Unlock()
-		return
+		return 0, fmt.Errorf("%s: is not a primary", p.si.Name())
 	}
 	msgInt := p.newActionMsgInternal(msg, clone, nil)
 	p.setGlobRebID(clone, msgInt, true)
-	p.smapowner.Unlock()
-
 	p.metasyncer.sync(true, revspair{clone, msgInt})
+	return
 }
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
@@ -3437,7 +3434,13 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		p.metasyncer.sync(false, revspair{smap, msgInt})
 	case cmn.ActXactStart, cmn.ActXactStop:
 		body := cmn.MustMarshal(msg)
-		results := p.bcastTo(bcastArgs{req: cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPath(cmn.Version, cmn.Daemon), Body: body}})
+		results := p.bcastTo(bcastArgs{
+			req: cmn.ReqArgs{
+				Method: http.MethodPut,
+				Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+				Body:   body,
+			},
+		})
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, res.err.Error())
@@ -3520,7 +3523,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 	return !nsi.Equals(si)
 }
 
-// User request to recover buckets found on all targets. On primary size:
+// Upon user request to recover bucket metadata, primary:
 // 1. Broadcasts request to get all bucket lists stored in xattrs
 // 2. Sorts results by BMD version in descending order
 // 3. Force=true: use BMD with highest version number as new BMD
@@ -3528,68 +3531,120 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 // 4. Set primary's BMD version to be greater than any target's one
 // 4. Metasync the merged BMD
 func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+	var (
+		origin       int64
+		rbmd         *bucketMD
+		err          error
+		resmap       map[*cluster.Snode]*bucketMD
+		force, slowp bool
+	)
 	if p.forwardCP(w, r, msg, "recover-buckets", nil) {
 		return
 	}
-	force, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
-	query := url.Values{}
-	query.Add(cmn.URLParamWhat, cmn.GetWhatBucketMetaX)
-
-	// request all targets for their BMD saved to xattrs
 	results := p.bcastGet(bcastArgs{
-		req: cmn.ReqArgs{
-			Path:  cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets),
-			Query: query,
-		},
+		req:     cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)},
 		timeout: cmn.GCO.Get().Timeout.Default,
 	})
-
-	bmdList := make([]*bucketMD, 0, len(results))
+	resmap = make(map[*cluster.Snode]*bucketMD, len(results))
 	for res := range results {
+		var bmd = &bucketMD{}
 		if res.err != nil || res.status >= http.StatusBadRequest {
-			glog.Errorf("failed to execute list buckets request: %v (%d: %s)", res.err, res.status, res.details)
+			glog.Errorf("%v (%d: %s)", res.err, res.status, res.details)
 			continue
 		}
-		bmd := &bucketMD{}
-		err := jsoniter.Unmarshal(res.outjson, bmd)
-		if err != nil {
-			glog.Errorf("Failed to unmarshal %s from %s: %v", bmdTermName, res.si.DaemonID, err)
+		if err = jsoniter.Unmarshal(res.outjson, bmd); err != nil {
+			glog.Errorf("unexpected: failed to unmarshal %s from %s: %v", bmdTermName, res.si.Name(), err)
 			continue
 		}
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Received %s from %s (version %d):\n%s", bmdTermName, res.si.DaemonID, bmd.Version, string(res.outjson))
+			glog.Infof("%s from %s v%d", bmdTermName, res.si.Name(), bmd.Version)
 		}
-
-		bmdList = append(bmdList, bmd)
+		if rbmd == nil { // 1. init
+			origin, rbmd = bmd.Origin, bmd
+		} else if origin != bmd.Origin { // 2. slow path
+			slowp = true
+		} else if !slowp && rbmd.Version < bmd.Version { // 3. fast path max(version)
+			rbmd = bmd
+		}
+		resmap[res.si] = bmd
 	}
-
-	bmdLen := len(bmdList)
-	if bmdLen == 0 {
-		p.invalmsghdlr(w, r, "No bucket metadata found on targets")
-		return
+	if slowp {
+		force, _ = cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
+		if rbmd, err = resolveBMDorigin(resmap); err != nil {
+			_, split := err.(*errBmdOriginSplit)
+			if !force || errors.Is(err, errNoBMD) || split {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			if _, ok := err.(*errTgtBmdOriginDiffer); ok {
+				glog.Error(err.Error())
+			}
+		}
 	}
-
-	// sort in descending order by BMD.Version
-	sort.Slice(bmdList, func(i, j int) bool {
-		return bmdList[i].Version > bmdList[j].Version
-	})
-
-	// without force all targets must have BMD of the same version
-	if !force && bmdLen > 1 && bmdList[0].Version != bmdList[bmdLen-1].Version {
-		p.invalmsghdlr(w, r, "Targets have different bucket metadata versions")
-		return
-	}
-
-	// now take the bucket metadata with highest version
-	clone := bmdList[0]
-	// set BMD version greater than the highest target's BMD
-	clone.Version += 100
+	rbmd.Version += 100
 	p.bmdowner.Lock()
-	p.bmdowner.put(clone)
+	p.bmdowner.put(rbmd)
 	p.bmdowner.Unlock()
 
-	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
+	msgInt := p.newActionMsgInternal(msg, nil, rbmd)
+	p.metasyncer.sync(true, revspair{rbmd, msgInt})
+}
+
+////////////////
+// misc utils //
+////////////////
+
+func resolveBMDorigin(resmap map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
+	var (
+		mlist = make(map[int64][]targetRegMeta) // origin => list(targetRegMeta)
+		maxor = make(map[int64]*bucketMD)       // origin => max-ver BMD
+	)
+	// results => (mlist, maxor)
+	for si, bmd := range resmap {
+		if bmd.Version == 0 {
+			continue
+		}
+		mlist[bmd.Origin] = append(mlist[bmd.Origin], targetRegMeta{nil, bmd, si})
+
+		if rbmd, ok := maxor[bmd.Origin]; !ok {
+			maxor[bmd.Origin] = bmd
+		} else if rbmd.Version < bmd.Version {
+			maxor[bmd.Origin] = bmd
+		}
+	}
+	cmn.Assert(len(maxor) == len(mlist)) // TODO: remove
+	if len(maxor) == 0 {
+		return nil, errNoBMD
+	}
+	if len(maxor) == 1 {
+		for _, bmd := range maxor {
+			if bmd.Origin == 0 {
+				bmd.Origin = newBMDorigin() // override zero
+			}
+			return bmd, nil
+		}
+	}
+	// otherwise by simple majority
+	var origin, l = int64(0), int(0)
+	for o, lst := range mlist {
+		if l < len(lst) {
+			origin, l = o, len(lst)
+		}
+	}
+	for o, lst := range mlist {
+		if l == len(lst) && o != origin {
+			s := fmt.Sprintf("targets have different BMD-origins with no simple majority:\n%v", mlist)
+			return nil, &errBmdOriginSplit{s}
+		}
+	}
+	s := fmt.Sprintf("targets have different BMD-origins with simple majory = %d:\n%v", origin, mlist)
+	bmd := maxor[origin]
+	if bmd.Origin == 0 {
+		cmn.Assert(origin == 0)
+		s := fmt.Sprintf("cannot override zero BMD-origin when it's the majority:\n%v", mlist)
+		return nil, &errBmdOriginSplit{s}
+	}
+	return bmd, &errTgtBmdOriginDiffer{s}
 }
 
 func requiresRemirroring(prevm, newm cmn.MirrorConf) bool {

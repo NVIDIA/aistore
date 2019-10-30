@@ -215,7 +215,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		f.Close()
 
 		metrics.Lock()
-		metrics.ExtractedRecordCnt += extractedCount
+		metrics.ExtractedRecordCnt += int64(extractedCount)
 		metrics.ExtractedCnt++
 
 		if metrics.ExtractedCnt == 1 && extractedCount > 0 {
@@ -224,7 +224,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			// will eventually have all records from all shards so we
 			// don't calculate estimates only for single node.
 			recordSize := int(m.recManager.Records.RecordMemorySize())
-			estimateTotalRecordsSize = uint64(metrics.TotalCnt * extractedCount * recordSize)
+			estimateTotalRecordsSize = uint64(metrics.TotalCnt * int64(extractedCount*recordSize))
 			if estimateTotalRecordsSize > m.freeMemory() {
 				warnPossibleOOM = true
 			}
@@ -296,7 +296,7 @@ ExtractAllShards:
 	metrics.Lock()
 	totalExtractedCount := metrics.ExtractedRecordCnt
 	metrics.Unlock()
-	m.incrementRef(int64(totalExtractedCount))
+	m.incrementRef(totalExtractedCount)
 	return nil
 }
 

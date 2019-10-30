@@ -462,7 +462,7 @@ var _ = Describe("Common file", func() {
 					i++
 				}
 				Expect(i).To(Equal(len(expectedStrs)))
-				Expect(i).To(Equal(pt.Count()))
+				Expect(i).To(Equal(int(pt.Count())))
 			},
 			Entry(
 				"simple template", "prefix-{0010..0013..2}-suffix",

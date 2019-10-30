@@ -24,21 +24,21 @@ import (
 
 type (
 	rebStatus struct {
-		Tmap        cluster.NodeMap         `json:"tmap"`         // targets I'm waiting for ACKs from
-		SmapVersion int64                   `json:"smap_version"` // current Smap version (via smapowner)
-		RebVersion  int64                   `json:"reb_version"`  // Smap version of *this* rebalancing operation (m.b. invariant)
-		GlobRebID   int64                   `json:"glob_reb_id"`  // global rebalance ID
-		StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`  // objects and sizes transmitted/received by this reb oper
-		Stage       uint32                  `json:"stage"`        // the current stage - see enum above
-		Aborted     bool                    `json:"aborted"`      // aborted?
-		Running     bool                    `json:"running"`      // running?
+		Tmap        cluster.NodeMap         `json:"tmap"`                // targets I'm waiting for ACKs from
+		SmapVersion int64                   `json:"smap_version,string"` // current Smap version (via smapowner)
+		RebVersion  int64                   `json:"reb_version,string"`  // Smap version of *this* rebalancing op
+		GlobRebID   int64                   `json:"glob_reb_id,string"`  // global rebalance ID
+		StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`         // objects and sizes transmitted/received by this reb oper
+		Stage       uint32                  `json:"stage"`               // the current stage - see enum above
+		Aborted     bool                    `json:"aborted"`             // aborted?
+		Running     bool                    `json:"running"`             // running?
 	}
 
 	// push notification struct - a target sends it when it enters `stage`
 	pushReq struct {
-		DaemonID string `json:"sid"`   // sender's ID
-		RebID    int64  `json:"rebid"` // sender's global rebalance ID
-		Stage    uint32 `json:"stage"` // stage the sender has just reached
+		DaemonID string `json:"sid"`          // sender's ID
+		RebID    int64  `json:"rebid,string"` // sender's global rebalance ID
+		Stage    uint32 `json:"stage"`        // stage the sender has just reached
 	}
 )
 

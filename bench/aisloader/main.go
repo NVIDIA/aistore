@@ -154,15 +154,15 @@ type (
 	}
 
 	jsonStats struct {
-		Start      time.Time     `json:"start_time"` // time current stats started
-		Cnt        int64         `json:"count"`      // total # of requests
-		Bytes      int64         `json:"bytes"`      // total bytes by all requests
-		Errs       int64         `json:"errors"`     // number of failed requests
-		Latency    int64         `json:"latency"`    // Average request latency in nanoseconds
+		Start      time.Time     `json:"start_time"`   // time current stats started
+		Cnt        int64         `json:"count,string"` // total # of requests
+		Bytes      int64         `json:"bytes,string"` // total bytes by all requests
+		Errs       int64         `json:"errors"`       // number of failed requests
+		Latency    int64         `json:"latency"`      // Average request latency in nanoseconds
 		Duration   time.Duration `json:"duration"`
 		MinLatency int64         `json:"min_latency"`
 		MaxLatency int64         `json:"max_latency"`
-		Throughput int64         `json:"throughput"`
+		Throughput int64         `json:"throughput,string"`
 	}
 )
 

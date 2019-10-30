@@ -49,7 +49,7 @@ type (
 	// TokenList is a list of tokens pushed by authn
 	TokenList struct {
 		Tokens  []string `json:"tokens"`
-		Version int64    `json:"version"`
+		Version int64    `json:"version,string"`
 	}
 
 	authRec struct {

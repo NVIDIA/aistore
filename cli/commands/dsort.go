@@ -173,7 +173,7 @@ func genShardsHandler(c *cli.Context) error {
 	text := "Shards created: "
 	progress := mpb.New(mpb.WithWidth(progressBarWidth))
 	bar := progress.AddBar(
-		int64(pt.Count()),
+		pt.Count(),
 		mpb.PrependDecorators(
 			decor.Name(text, decor.WC{W: len(text) + 2, C: decor.DSyncWidthR}),
 			decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
@@ -235,7 +235,7 @@ CreateShards:
 
 type dsortResult struct {
 	dur      time.Duration
-	created  int
+	created  int64
 	errors   []string
 	warnings []string
 	aborted  bool
@@ -262,8 +262,8 @@ func (d dsortResult) String() string {
 }
 
 type dsortPhaseState struct {
-	total    int
-	progress int
+	total    int64
+	progress int64
 	bar      *mpb.Bar
 }
 
@@ -362,7 +362,7 @@ func (b *dsortProgressBar) updateBars(metrics map[string]*dsort.Metrics) bool {
 	for _, targetMetrics = range metrics {
 		phases[dsort.ExtractionPhase].progress += targetMetrics.Extraction.ExtractedCnt
 
-		phases[dsort.SortingPhase].progress = cmn.Max(phases[dsort.SortingPhase].progress, int(targetMetrics.Sorting.RecvStats.Count))
+		phases[dsort.SortingPhase].progress = cmn.MaxI64(phases[dsort.SortingPhase].progress, targetMetrics.Sorting.RecvStats.Count)
 
 		phases[dsort.CreationPhase].progress += targetMetrics.Creation.CreatedCnt
 		phases[dsort.CreationPhase].total += targetMetrics.Creation.ToCreate
@@ -371,7 +371,7 @@ func (b *dsortProgressBar) updateBars(metrics map[string]*dsort.Metrics) bool {
 	}
 
 	phases[dsort.ExtractionPhase].total = targetMetrics.Extraction.TotalCnt
-	phases[dsort.SortingPhase].total = int(math.Log2(float64(len(metrics))))
+	phases[dsort.SortingPhase].total = int64(math.Log2(float64(len(metrics))))
 
 	// Create progress bars if necessary and/or update them.
 	for _, phaseName := range phasesOrdered {
@@ -385,7 +385,7 @@ func (b *dsortProgressBar) updateBars(metrics map[string]*dsort.Metrics) bool {
 			if phases[phaseName].progress > 0 && barPhase.bar == nil {
 				text := phaseToBarText(phaseName)
 				barPhase.bar = b.p.AddBar(
-					int64(phase.total),
+					phase.total,
 					mpb.PrependDecorators(
 						decor.Name(text, decor.WC{W: len(text) + 2, C: decor.DSyncWidthR}),
 						decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
@@ -396,9 +396,9 @@ func (b *dsortProgressBar) updateBars(metrics map[string]*dsort.Metrics) bool {
 
 			if barPhase.bar != nil && diff > 0 {
 				if phase.total > barPhase.total {
-					barPhase.bar.SetTotal(int64(phase.total), false)
+					barPhase.bar.SetTotal(phase.total, false)
 				}
-				barPhase.bar.IncrBy(diff)
+				barPhase.bar.IncrBy(int(diff))
 			}
 		}
 
@@ -413,14 +413,14 @@ func (b *dsortProgressBar) updateBars(metrics map[string]*dsort.Metrics) bool {
 func (b *dsortProgressBar) cleanBars() {
 	for _, phase := range b.phases {
 		if phase.bar != nil {
-			phase.bar.SetTotal(int64(phase.total), true) // complete the bar
+			phase.bar.SetTotal(phase.total, true) // complete the bar
 		}
 	}
 	b.p.Wait()
 }
 
 func (b *dsortProgressBar) result() dsortResult {
-	var created int
+	var created int64
 	if phase, ok := b.phases[dsort.CreationPhase]; ok {
 		created = phase.total
 	}

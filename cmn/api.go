@@ -163,14 +163,14 @@ func (msg *SelectMsg) WantProp(propName string) bool {
 //      to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
 // 3:   CheckExists (for cloud bucket it shows if the object in local cache)
 type BucketEntry struct {
-	Name      string `json:"name"`                // name of the object - note: does not include the bucket name
-	Size      int64  `json:"size,omitempty"`      // size in bytes
-	Checksum  string `json:"checksum,omitempty"`  // checksum
-	Atime     string `json:"atime,omitempty"`     // formatted as per SelectMsg.TimeFormat
-	Version   string `json:"version,omitempty"`   // version/generation ID. In GCP it is int64, in AWS it is a string
-	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry
-	Copies    int16  `json:"copies,omitempty"`    // ## copies (non-replicated = 1)
-	Flags     uint16 `json:"flags,omitempty"`     // object flags, like CheckExists, IsMoved etc
+	Name      string `json:"name"`                  // name of the object - note: does not include the bucket name
+	Size      int64  `json:"size,string,omitempty"` // size in bytes
+	Checksum  string `json:"checksum,omitempty"`    // checksum
+	Atime     string `json:"atime,omitempty"`       // formatted as per SelectMsg.TimeFormat
+	Version   string `json:"version,omitempty"`     // version/generation ID. In GCP it is int64, in AWS it is a string
+	TargetURL string `json:"targetURL,omitempty"`   // URL of target which has the entry
+	Copies    int16  `json:"copies,omitempty"`      // ## copies (non-replicated = 1)
+	Flags     uint16 `json:"flags,omitempty"`       // object flags, like CheckExists, IsMoved etc
 }
 
 func (be *BucketEntry) CheckExists() bool {
@@ -192,9 +192,9 @@ type BucketList struct {
 
 type BucketSummary struct {
 	Name           string `json:"name"`
-	ObjCount       uint64 `json:"count"`
-	Size           uint64 `json:"size"`
-	TotalDisksSize uint64 `json:"disks_size"`
+	ObjCount       uint64 `json:"count,string"`
+	Size           uint64 `json:"size,string"`
+	TotalDisksSize uint64 `json:"disks_size,string"`
 	UsedPct        uint64 `json:"used_pct"`
 	Provider       string `json:"provider"`
 }

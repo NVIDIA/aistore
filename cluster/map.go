@@ -135,7 +135,7 @@ type (
 		Pmap      NodeMap       `json:"pmap"` // proxyID -> proxyInfo
 		NonElects cmn.SimpleKVs `json:"non_electable"`
 		ProxySI   *Snode        `json:"proxy_si"`
-		Version   int64         `json:"version"`
+		Version   int64         `json:"version,string"`
 	}
 )
 

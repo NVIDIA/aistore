@@ -20,12 +20,12 @@ const (
 type TimeStats struct {
 	// Total contains total number of milliseconds spend on
 	// specific task.
-	Total int64 `json:"total_ms"`
+	Total int64 `json:"total_ms,string"`
 	// Count contains number of time specific task was triggered.
-	Count int64 `json:"count"`
-	MinMs int64 `json:"min_ms"`
-	MaxMs int64 `json:"max_ms"`
-	AvgMs int64 `json:"avg_ms"`
+	Count int64 `json:"count,string"`
+	MinMs int64 `json:"min_ms,string"`
+	MaxMs int64 `json:"max_ms,string"`
+	AvgMs int64 `json:"avg_ms,string"`
 }
 
 // ThroughputStats contains statistics about throughput of specific task.
@@ -33,9 +33,9 @@ type ThroughputStats struct {
 	total int64
 	count int64
 
-	MinTp int64 `json:"min_throughput"`
-	MaxTp int64 `json:"max_throughput"`
-	AvgTp int64 `json:"avg_throughput"`
+	MinTp int64 `json:"min_throughput,string"`
+	MaxTp int64 `json:"max_throughput,string"`
+	AvgTp int64 `json:"avg_throughput,string"`
 }
 
 // DetailedStats contains time and throughput statistics .
@@ -120,21 +120,21 @@ func (pi *PhaseInfo) finish() {
 type LocalExtraction struct {
 	PhaseInfo
 	// TotalCnt is the number of shards DSort has to process in total.
-	TotalCnt int `json:"total_count"`
+	TotalCnt int64 `json:"total_count,string"`
 	// ExtractedCnt describes number of extracted shards to given moment. At the
 	// end, number should be roughly equal to TotalCnt/#Targets.
-	ExtractedCnt int `json:"extracted_count"`
+	ExtractedCnt int64 `json:"extracted_count,string"`
 	// ExtractedSize describes uncompressed size of extracted shards to given moment.
-	ExtractedSize int64 `json:"extracted_size"`
+	ExtractedSize int64 `json:"extracted_size,string"`
 	// ExtractedRecordCnt describes number of records extracted from all shards.
-	ExtractedRecordCnt int `json:"extracted_record_count"`
+	ExtractedRecordCnt int64 `json:"extracted_record_count,string"`
 	// ExtractedToDiskCnt describes number of shards extracted to the disk. To
 	// compute the number shards extracted to memory just subtract it from
 	// ExtractedCnt.
-	ExtractedToDiskCnt int `json:"extracted_to_disk_count"`
+	ExtractedToDiskCnt int64 `json:"extracted_to_disk_count,string"`
 	// ExtractedToDiskSize describes uncompressed size of extracted shards to disk
 	// to given moment.
-	ExtractedToDiskSize int64 `json:"extracted_to_disk_size"`
+	ExtractedToDiskSize int64 `json:"extracted_to_disk_size,string"`
 	// ShardExtractionStats describes time statistics about single shard extraction.
 	ShardExtractionStats *DetailedStats `json:"single_shard_stats,omitempty"`
 }
@@ -152,15 +152,15 @@ type MetaSorting struct {
 type ShardCreation struct {
 	PhaseInfo
 	// ToCreate specifies number of shards that have to be created in this phase.
-	ToCreate int `json:"to_create"`
+	ToCreate int64 `json:"to_create,string"`
 	// CreatedCnt specifies number of shards that have been created to given
 	// moment. Should match ToCreate when phase is finished.
-	CreatedCnt int `json:"created_count"`
+	CreatedCnt int64 `json:"created_count,string"`
 	// MovedShardCnt describes number of shards that have been moved from this
 	// target to some other. This only applies when dealing with compressed
 	// data. Sometimes is faster to create shard on specific target and send it
 	// via network than create shard on destination target.
-	MovedShardCnt int `json:"moved_shard_count"`
+	MovedShardCnt int64 `json:"moved_shard_count,string"`
 	// RequestStats describes time statistics about request to other target.
 	RequestStats *TimeStats `json:"req_stats,omitempty"`
 	// ResponseStats describes time statistics about response to other target.

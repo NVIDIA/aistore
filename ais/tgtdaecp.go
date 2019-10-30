@@ -59,13 +59,13 @@ func (t *targetrunner) initHostIP() {
 // target registration with proxy
 func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
 	var (
-		res  callResult
-		meta targetRegMeta
+		res      callResult
+		meta     targetRegMeta
+		url, psi = t.getPrimaryURLAndSI()
 	)
 	if !keepalive {
 		res = t.join(nil)
 	} else { // keepalive
-		url, psi := t.getPrimaryURLAndSI()
 		res = t.registerToURL(url, psi, timeout, nil, keepalive)
 	}
 	if res.err != nil {
@@ -75,20 +75,26 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	if len(res.outjson) == 0 {
 		return
 	}
+	cmn.Assert(!keepalive)
+
+	err = jsoniter.Unmarshal(res.outjson, &meta)
+	cmn.AssertNoErr(err)
+
 	// There's a window of time between:
 	// a) target joining existing cluster and b) cluster starting to rebalance itself
 	// The latter is driven by metasync (see metasync.go) distributing the new Smap.
 	// To handle incoming GETs within this window (which would typically take a few seconds or less)
 	// we need to have the current cluster-wide metadata and the temporary gfn state:
-	err = jsoniter.Unmarshal(res.outjson, &meta)
-	cmn.AssertNoErr(err)
-
 	t.gfn.global.activate()
 
 	// bmd
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
-	if err := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
-		glog.Errorf("registered %s: %s", t.si.Name(), err)
+	if err = t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
+		glog.Errorf("error registering %s: %v", t.si.Name(), err)
+		if _, incompat := err.(*errPrxBmdOriginDiffer); incompat {
+			return
+		}
+		err = nil
 	} else {
 		glog.Infof("registered %s: %s v%d", t.si.Name(), bmdTermName, t.bmdowner.get().version())
 	}
@@ -237,8 +243,8 @@ func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) {
 
 func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apitems []string) {
 	var (
-		prepare bool
 		err     error
+		prepare bool
 	)
 	if len(apitems) != 2 {
 		s := fmt.Sprintf("Incorrect number of API items: %d, should be: %d", len(apitems), 2)
@@ -287,7 +293,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	httpdaeWhat := "httpdaeget-" + getWhat
 	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
+	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
 		body := cmn.MustMarshal(cmn.TSysInfo{SysInfo: nodeCtx.mm.FetchSysInfo(), FSInfo: fs.Mountpaths.FetchFSInfo()})
@@ -461,6 +467,8 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			// a) target joining existing cluster and b) cluster starting to rebalance itself
 			// The latter is driven by metasync (see metasync.go) distributing the new Smap.
 			// To handle incoming GETs within this window (which would typically take a few seconds or less)
+
+			// TODO -- FIXME: this implicitly relies on rebalancing and subsequent deactivate..
 			t.gfn.global.activate()
 
 			if glog.V(3) {
@@ -475,7 +483,13 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			}
 
 			msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
-			t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, "")
+			if err := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
+				glog.Errorf("error registering %s: %v", t.si.Name(), err)
+				if _, incompat := err.(*errPrxBmdOriginDiffer); incompat {
+					t.invalmsghdlr(w, r, err.Error())
+					return
+				}
+			}
 			t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */)
 			return
 		case cmn.Mountpaths:
@@ -689,7 +703,14 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	} else {
 		glog.Infof("%s: %s %s v%d%s, action %s", t.si.Name(), tag, bmdTermName, newbucketmd.version(), from, msgInt.Action)
 	}
+
 	t.bmdowner.Lock()
+	_, psi := t.getPrimaryURLAndSI()
+	if err = t.checkBMDcompat(psi, newbucketmd); err != nil {
+		t.bmdowner.Unlock()
+		return
+	}
+
 	bucketmd := t.bmdowner.get()
 	myver := bucketmd.version()
 	if newbucketmd.version() <= myver {
@@ -926,7 +947,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	}
 	res := t.call(args)
 	if res.err != nil {
-		return fmt.Errorf("failed to %s=%s, err: %v", what, cmn.GetWhatBucketMeta, res.err)
+		return fmt.Errorf("failed to %s=%s, err: %v", what, cmn.GetWhatBMD, res.err)
 	}
 
 	err = jsoniter.Unmarshal(res.outjson, outStruct)
@@ -954,12 +975,12 @@ func (t *targetrunner) bmdVersionFixup(renamed string, sleep bool) {
 		time.Sleep(200 * time.Millisecond) // FIXME: request proxy to execute syncCBmeta()
 	}
 	newBucketMD := &bucketMD{}
-	err := t.fetchPrimaryMD(cmn.GetWhatBucketMeta, newBucketMD, renamed)
+	err := t.fetchPrimaryMD(cmn.GetWhatBMD, newBucketMD, renamed)
 	if err != nil {
 		glog.Error(err)
 		return
 	}
-	msgInt := t.newActionMsgInternalStr("get-what="+cmn.GetWhatBucketMeta, nil, newBucketMD)
+	msgInt := t.newActionMsgInternalStr("get-what="+cmn.GetWhatBMD, nil, newBucketMD)
 	t.receiveBucketMD(newBucketMD, msgInt, bucketMDFixup, "")
 }
 

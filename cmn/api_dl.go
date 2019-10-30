@@ -280,14 +280,12 @@ func (t TaskInfoByName) Less(i, j int) bool { return t[i].Name < t[j].Name }
 
 // Info about a task that is currently or has been downloaded by one of the joggers
 type TaskDlInfo struct {
-	Name       string `json:"name"`
-	Downloaded int64  `json:"downloaded"`
-	Total      int64  `json:"total,omitempty"`
-
-	StartTime time.Time `json:"start_time,omitempty"`
-	EndTime   time.Time `json:"end_time,omitempty"`
-
-	Running bool `json:"running"`
+	Name       string    `json:"name"`
+	Downloaded int64     `json:"downloaded,string"`
+	Total      int64     `json:"total,string,omitempty"`
+	StartTime  time.Time `json:"start_time,omitempty"`
+	EndTime    time.Time `json:"end_time,omitempty"`
+	Running    bool      `json:"running"`
 }
 
 type TaskErrByName []TaskErrInfo

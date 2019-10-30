@@ -27,9 +27,10 @@ type Bowner interface {
 // - BMD versioning is monotonic and incremental
 // Note: Getting a cloud object does not add the cloud bucket to CBmap
 type BMD struct {
-	LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`  // ais buckets and their props
-	CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`  // Cloud-based buckets and their AIStore-only metadata
-	Version int64                       `json:"version"` // version - gets incremented on every update
+	LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`         // ais buckets and their props
+	CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`         // Cloud-based buckets and their AIStore-only metadata
+	Version int64                       `json:"version,string"` // version - gets incremented on every update
+	Origin  int64                       `json:"origin,string"`  // (unique) origin stays the same for the lifetime
 }
 
 func (m *BMD) GenBucketID(isais bool) uint64 {

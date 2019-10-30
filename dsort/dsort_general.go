@@ -253,7 +253,7 @@ func (ds *dsorterGeneral) createShardsLocally() (err error) {
 	metrics.begin()
 	defer metrics.finish()
 	metrics.Lock()
-	metrics.ToCreate = len(phaseInfo.metadata.Shards)
+	metrics.ToCreate = int64(len(phaseInfo.metadata.Shards))
 	metrics.Unlock()
 
 	group, ctx := errgroup.WithContext(context.Background())

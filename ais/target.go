@@ -334,22 +334,20 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	switch apiItems[0] {
 	case cmn.AllBuckets:
-		provider := r.URL.Query().Get(cmn.URLParamProvider)
-
-		normalizedProvider, err := cmn.ProviderFromStr(provider)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-
 		query := r.URL.Query()
 		what := query.Get(cmn.URLParamWhat)
-		if what == cmn.GetWhatBucketMetaX {
-			t.bucketsFromXattr(w, r)
+		if what == cmn.GetWhatBMD {
+			body := cmn.MustMarshal(t.bmdowner.get())
+			t.writeJSON(w, r, body, "get-what-bmd")
 		} else {
+			provider := r.URL.Query().Get(cmn.URLParamProvider)
+			normalizedProvider, err := cmn.ProviderFromStr(provider)
+			if err != nil {
+				t.invalmsghdlr(w, r, err.Error())
+				return
+			}
 			t.getbucketnames(w, r, normalizedProvider)
 		}
 	default:
@@ -1052,17 +1050,6 @@ func (t *targetrunner) checkCloudVersion(ctx context.Context, lom *cluster.LOM) 
 	return
 }
 
-func (t *targetrunner) bucketsFromXattr(w http.ResponseWriter, r *http.Request) {
-	bmdXattr := &bucketMD{}
-	if err := bmdXattr.LoadFromFS(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	body := cmn.MustMarshal(bmdXattr)
-	t.writeJSON(w, r, body, "getbucketsxattr")
-}
-
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, provider string) {
 	var (
 		bmd         = t.bmdowner.get()
@@ -1324,7 +1311,7 @@ func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (red
 	}
 	pts, err := strconv.ParseInt(s, 0, 64)
 	if err != nil {
-		glog.Errorf("Unexpected: failed to convert %s to int, err: %v", s, err)
+		glog.Errorf("unexpected: failed to convert %s to int, err: %v", s, err)
 		return
 	}
 	redelta = started.UnixNano() - pts

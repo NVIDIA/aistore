@@ -103,7 +103,7 @@ type (
 		Stats       *CoreStats             `json:"daemon_stats"`
 		Capacity    map[string]*fscapacity `json:"capacity"`
 		SysInfo     cmn.SysInfo            `json:"sys_info"`
-		SmapVersion int64                  `json:"smap_version"`
+		SmapVersion int64                  `json:"smap_version,string"`
 		TStatus     *TargetStatus          `json:"target,omitempty"`
 	}
 )
@@ -138,14 +138,14 @@ type (
 	// using the the kind field. Only latency stats have numSamples used to compute latency.
 	statsValue struct {
 		sync.RWMutex
-		Value      int64 `json:"v"`
+		Value      int64 `json:"v,string"`
 		kind       string
 		numSamples int64
 		cumulative int64
 		isCommon   bool // optional, common to the proxy and target
 	}
 	copyValue struct {
-		Value int64 `json:"v"`
+		Value int64 `json:"v,string"`
 	}
 	statsTracker map[string]*statsValue
 	copyTracker  map[string]*copyValue

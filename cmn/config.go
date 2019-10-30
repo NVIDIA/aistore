@@ -335,10 +335,10 @@ type TimeoutConf struct {
 }
 
 type ProxyConf struct {
-	NonElectable bool   `json:"non_electable"`
 	PrimaryURL   string `json:"primary_url"`
 	OriginalURL  string `json:"original_url"`
 	DiscoveryURL string `json:"discovery_url"`
+	NonElectable bool   `json:"non_electable"`
 }
 
 type LRUConf struct {
@@ -722,7 +722,7 @@ func (c *DiskConf) Validate(_ *Config) (err error) {
 func (c *LRUConf) Validate(_ *Config) (err error) {
 	lwm, hwm, oos := c.LowWM, c.HighWM, c.OOS
 	if lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
-		return fmt.Errorf("invalid lru (lwm, hwm, oos) configuration %s", c)
+		return fmt.Errorf("invalid lru (lwm, hwm, oos) configuration (%d, %d, %d)", lwm, hwm, oos)
 	}
 	if c.DontEvictTime, err = time.ParseDuration(c.DontEvictTimeStr); err != nil {
 		return fmt.Errorf("invalid lru.dont_evict_time format: %v", err)

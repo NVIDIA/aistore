@@ -47,9 +47,9 @@ type (
 		StoreType string `json:"st"`
 
 		// If set, determines the offset in shard file where the record begins.
-		Offset       int64  `json:"f,omitempty"`
-		MetadataSize int64  `json:"ms"`
-		Size         int64  `json:"s"`
+		Offset       int64  `json:"f,string,omitempty"`
+		MetadataSize int64  `json:"ms,string"`
+		Size         int64  `json:"s,string"`
 		Extension    string `json:"e"`
 	}
 

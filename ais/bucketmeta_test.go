@@ -1,3 +1,7 @@
+// Package ais provides core functionality for the AIStore object storage.
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package ais
 
 import (
@@ -7,9 +11,19 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func (m *bucketMD) LoadFromFS() error {
+	mpath, err := fs.Mountpaths.MpathForMetadata()
+	if err != nil {
+		return err
+	}
+	bmdFullPath := filepath.Join(mpath.Path, cmn.BucketmdBackupFile)
+	return cmn.LocalLoad(bmdFullPath, m)
+}
 
 var _ = Describe("BMD marshal and unmarshal", func() {
 	const (

@@ -90,9 +90,9 @@ type (
 //
 type (
 	fscapacity struct {
-		Used    uint64 `json:"used"`    // bytes
-		Avail   uint64 `json:"avail"`   // ditto
-		Usedpct int32  `json:"usedpct"` // redundant ok
+		Used    uint64 `json:"used,string"`  // bytes
+		Avail   uint64 `json:"avail,string"` // ditto
+		Usedpct int32  `json:"usedpct"`      // redundant ok
 	}
 )
 

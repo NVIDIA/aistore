@@ -955,7 +955,10 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	tutils.Logln("finished distributed sort")
 
 	allMetrics := df.checkMetrics(false /* expectAbort */)
-	extractedToDisk, extractedTotal := 0, 0
+	var (
+		extractedToDisk int64
+		extractedTotal  int64
+	)
 	for _, metrics := range allMetrics {
 		extractedToDisk += metrics.Extraction.ExtractedToDiskCnt
 		extractedTotal += metrics.Extraction.ExtractedCnt
@@ -1023,7 +1026,10 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	tutils.Logln("finished distributed sort")
 
 	allMetrics := df.checkMetrics(false /* expectAbort */)
-	extractedToDisk, extractedTotal := 0, 0
+	var (
+		extractedToDisk int64
+		extractedTotal  int64
+	)
 	for _, metrics := range allMetrics {
 		extractedToDisk += metrics.Extraction.ExtractedToDiskCnt
 		extractedTotal += metrics.Extraction.ExtractedCnt

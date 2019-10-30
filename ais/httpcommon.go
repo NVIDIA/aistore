@@ -86,10 +86,10 @@ type (
 	// actionMsgInternal is an extended ActionMsg with extra information for node <=> node control plane communications
 	actionMsgInternal struct {
 		cmn.ActionMsg
-		BMDVersion  int64  `json:"bmdversion"`
-		SmapVersion int64  `json:"smapversion"`
+		BMDVersion  int64  `json:"bmdversion,string"`
+		SmapVersion int64  `json:"smapversion,string"`
 		NewDaemonID string `json:"newdaemonid"` // used when a node joins cluster
-		GlobRebID   int64  `json:"glob_reb_id"`
+		GlobRebID   int64  `json:"glob_reb_id,string"`
 	}
 
 	// http server and http runner (common for proxy and target)
@@ -128,11 +128,25 @@ type (
 	}
 
 	glogWriter struct{}
+
+	// BMD & its origin
+	errTgtBmdOriginDiffer struct{ detail string }
+	errPrxBmdOriginDiffer struct{ detail string }
+	errBmdOriginSplit     struct{ detail string }
 )
 
 const (
 	initialBucketListSize = 128 //nolint:unused,varcheck,deadcode
 )
+
+/////////////////////
+// BMD origin errs //
+/////////////////////
+var errNoBMD = errors.New("no bucket metadata")
+
+func (e errTgtBmdOriginDiffer) Error() string { return e.detail }
+func (e errBmdOriginSplit) Error() string     { return e.detail }
+func (e errPrxBmdOriginDiffer) Error() string { return e.detail }
 
 ////////////////
 // glogWriter //
@@ -418,7 +432,8 @@ func (h *httprunner) initSI(daemonType string) {
 			glog.Fatalf("%s: cannot use the same IP:port (%s:%d) for two networks", tag, string(ip1), port1)
 		}
 	}
-	mustDiffer(ipAddr, config.Net.L4.Port, true, ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "pub/ctl")
+	mustDiffer(ipAddr, config.Net.L4.Port, true,
+		ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "pub/ctl")
 	mustDiffer(ipAddr, config.Net.L4.Port, true, ipAddrIntraData, config.Net.L4.PortIntraData, config.Net.UseIntraData, "pub/data")
 	mustDiffer(ipAddrIntraData, config.Net.L4.PortIntraData, config.Net.UseIntraData,
 		ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "ctl/data")
@@ -594,7 +609,8 @@ func (h *httprunner) call(args callArgs) callResult {
 	resp, err := client.Do(req)
 	if err != nil {
 		if resp != nil && resp.StatusCode > 0 {
-			details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): status %s, err %v", sid, args.req.Method, args.req.URL(), resp.Status, err)
+			details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): status %s, err %v",
+				sid, args.req.Method, args.req.URL(), resp.Status, err)
 			status = resp.StatusCode
 			return callResult{args.si, outjson, err, details, status}
 		}
@@ -607,7 +623,8 @@ func (h *httprunner) call(args callArgs) callResult {
 		if err == io.EOF {
 			trailer := resp.Trailer.Get("Error")
 			if trailer != "" {
-				details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err: %v, trailer: %s", sid, args.req.Method, args.req.URL(), err, trailer)
+				details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err: %v, trailer: %s",
+					sid, args.req.Method, args.req.URL(), err, trailer)
 			}
 		}
 
@@ -857,7 +874,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		body = cmn.MustMarshal(cmn.GCO.Get())
 	case cmn.GetWhatSmap:
 		body = cmn.MustMarshal(h.smapowner.get())
-	case cmn.GetWhatBucketMeta:
+	case cmn.GetWhatBMD:
 		body = cmn.MustMarshal(h.bmdowner.get())
 	case cmn.GetWhatSmapVote:
 		voteInProgress := h.xactions.globalXactRunning(cmn.ActElection)
@@ -1058,17 +1075,11 @@ func (h *httprunner) join(query url.Values) (res callResult) {
 	return
 }
 
-func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.Duration, query url.Values, keepalive bool) (res callResult) {
+func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values, keepalive bool) (res callResult) {
 	req := targetRegMeta{SI: h.si}
 	if h.si.IsTarget() && !keepalive {
-		xBMD := &bucketMD{}
-		err := xBMD.LoadFromFS()
-		if err == nil && xBMD.Version != 0 {
-			glog.Infof("Target %s is joining cluster and sending xattr %s version %d", h.si.DaemonID, bmdTermName, xBMD.Version)
-			req.BMD = xBMD
-		}
+		req.BMD = h.bmdowner.get()
 	}
-
 	info := cmn.MustMarshal(req)
 
 	path := cmn.URLPath(cmn.Version, cmn.Cluster)
@@ -1087,7 +1098,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.
 			Query:  query,
 			Body:   info,
 		},
-		timeout: timeout,
+		timeout: tout,
 	}
 	for rcount := 0; rcount < 2; rcount++ {
 		res = h.call(callArgs)
@@ -1122,5 +1133,21 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 		return
 	}
 	url, proxysi = config.Proxy.PrimaryURL, smap.ProxySI
+	return
+}
+
+func (h *httprunner) checkBMDcompat(nsi *cluster.Snode, nbmd *bucketMD) (err error) {
+	var nsiname = "???"
+	if nsi != nil {
+		nsiname = nsi.Name()
+	}
+	if nbmd != nil && nbmd.Version != 0 {
+		bmd := h.bmdowner.get()
+		if bmd.Origin != 0 && nbmd.Origin != 0 && bmd.Version != 0 && bmd.Origin != nbmd.Origin {
+			s := fmt.Sprintf("%s BMD-origin (v%d, %d) is incompatible with %s (v%d, %d)",
+				h.si.Name(), bmd.Version, bmd.Origin, nsiname, nbmd.Version, nbmd.Origin)
+			return &errPrxBmdOriginDiffer{s}
+		}
+	}
 	return
 }

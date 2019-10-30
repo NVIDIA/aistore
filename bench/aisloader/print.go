@@ -302,12 +302,12 @@ func writeStats(to io.Writer, jsonFormat, final bool, s, t sts) {
 // printRunParams show run parameters in json format
 func printRunParams(p params) {
 	b, _ := json.MarshalIndent(struct {
-		Seed          int64  `json:"seed"`
+		Seed          int64  `json:"seed,string"`
 		URL           string `json:"proxy"`
 		Provider      string `json:"provider"`
 		Bucket        string `json:"bucket"`
 		Duration      string `json:"duration"`
-		MaxPutBytes   int64  `json:"PUT upper bound"`
+		MaxPutBytes   int64  `json:"PUT upper bound,string"`
 		PutPct        int    `json:"% PUT"`
 		MinSize       int64  `json:"minimum object size (bytes)"`
 		MaxSize       int64  `json:"maximum object size (bytes)"`

@@ -101,8 +101,8 @@ type (
 		PctCPUUsed float64 `json:"pct_cpu_used"`
 	}
 	FSInfo struct {
-		FSUsed     uint64  `json:"fs_used"`
-		FSCapacity uint64  `json:"fs_capacity"`
+		FSUsed     uint64  `json:"fs_used,string"`
+		FSCapacity uint64  `json:"fs_capacity,string"`
 		PctFSUsed  float64 `json:"pct_fs_used"`
 	}
 	TSysInfo struct {
@@ -1033,10 +1033,11 @@ var (
 	ErrNonPositiveStep = errors.New("'step' is non positive number")
 )
 
-func (pt *ParsedTemplate) Count() int {
-	count := 1
+func (pt *ParsedTemplate) Count() int64 {
+	count := int64(1)
 	for _, tr := range pt.Ranges {
-		count *= (tr.End-tr.Start)/tr.Step + 1
+		step := (tr.End-tr.Start)/tr.Step + 1
+		count *= int64(step)
 	}
 	return count
 }

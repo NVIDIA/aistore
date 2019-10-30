@@ -220,7 +220,7 @@ const (
 const (
 	GetWhatConfig       = "config"
 	GetWhatSmap         = "smap"
-	GetWhatBucketMeta   = "bucketmd"
+	GetWhatBMD          = "bmd"
 	GetWhatStats        = "stats"
 	GetWhatXaction      = "xaction"
 	GetWhatSmapVote     = "smapvote"
@@ -229,7 +229,6 @@ const (
 	GetWhatSysInfo      = "sysinfo"
 	GetWhatDiskStats    = "disk"
 	GetWhatDaemonStatus = "status"
-	GetWhatBucketMetaX  = "bucketmdxattr"
 )
 
 // SelectMsg.TimeFormat enum

@@ -26,14 +26,14 @@ type XactStats interface {
 }
 
 type BaseXactStats struct {
-	IDX         int64     `json:"id"`
+	IDX         int64     `json:"id,string"`
 	KindX       string    `json:"kind"`
 	BucketX     string    `json:"bucket"`
 	ProviderX   string    `json:"provider"`
 	StartTimeX  time.Time `json:"start_time"`
 	EndTimeX    time.Time `json:"end_time"`
-	ObjCountX   int64     `json:"obj_count"`
-	BytesCountX int64     `json:"bytes_count"`
+	ObjCountX   int64     `json:"obj_count,string"`
+	BytesCountX int64     `json:"bytes_count,string"`
 	AbortedX    bool      `json:"aborted"`
 }
 
@@ -75,11 +75,11 @@ type RebalanceTargetStats struct {
 }
 
 type ExtRebalanceStats struct {
-	TxRebCount  int64 `json:"tx.reb.n"`
-	TxRebSize   int64 `json:"tx.reb.size"`
-	RxRebCount  int64 `json:"rx.reb.n"`
-	RxRebSize   int64 `json:"rx.reb.size"`
-	GlobalRebID int64 `json:"reb.glob.id"`
+	TxRebCount  int64 `json:"tx.reb.n,string"`
+	TxRebSize   int64 `json:"tx.reb.size,string"`
+	RxRebCount  int64 `json:"rx.reb.n,string"`
+	RxRebSize   int64 `json:"rx.reb.size,string"`
+	GlobalRebID int64 `json:"reb.glob.id,string"`
 }
 
 func (s *RebalanceTargetStats) FillFromTrunner(r *Trunner) {

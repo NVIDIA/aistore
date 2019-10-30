@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -42,13 +43,13 @@ func (p *proxyrunner) bootstrap() {
 			glog.Infof("%s: fast discovery based on %s", p.si.Name(), smap.pp())
 			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
 			url := cmn.URLPath(cmn.Version, cmn.Daemon)
-			res := p.bcastGet(bcastArgs{req: cmn.ReqArgs{Path: url, Query: q}, smap: smap, to: cluster.AllNodes})
-			for re := range res {
-				if re.err != nil {
+			results := p.bcastGet(bcastArgs{req: cmn.ReqArgs{Path: url, Query: q}, smap: smap, to: cluster.AllNodes})
+			for res := range results {
+				if res.err != nil {
 					continue
 				}
 				svm := SmapVoteMsg{}
-				if err := jsoniter.Unmarshal(re.outjson, &svm); err != nil {
+				if err := jsoniter.Unmarshal(res.outjson, &svm); err != nil {
 					continue
 				}
 				if svm.Smap == nil || svm.Smap.version() == 0 {
@@ -60,10 +61,10 @@ func (p *proxyrunner) bootstrap() {
 				}
 				if found == nil {
 					found = svm.Smap
-					glog.Infof("%s: found Smap v%d from %s", p.si.Name(), found.version(), re.si)
+					glog.Infof("%s: found Smap v%d from %s", p.si.Name(), found.version(), res.si)
 				} else if svm.Smap.version() > found.version() {
 					found = svm.Smap
-					glog.Infof("%s: found Smap v%d from %s", p.si.Name(), found.version(), re.si)
+					glog.Infof("%s: found Smap v%d from %s", p.si.Name(), found.version(), res.si)
 				}
 			}
 		}
@@ -268,7 +269,18 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 	if err := p.smapowner.persist(p.smapowner.get(), true); err != nil {
 		glog.Fatalf("FATAL: %s", err)
 	}
+	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
+	// create BMD(new origin)
+	if bmd.Version == 0 {
+		clone := bmd.clone()
+		clone.Version = 1
+		clone.Origin = newBMDorigin()
+		p.bmdowner.put(clone)
+		bmd = clone
+	}
+	p.bmdowner.Unlock()
+
 	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmd)
 	p.setGlobRebID(smap, msgInt, false /*set*/)
 	p.metasyncer.sync(false, revspair{smap, msgInt}, revspair{bmd, msgInt})
@@ -348,48 +360,61 @@ func (p *proxyrunner) discoverMeta(haveRegistratons bool) {
 
 func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 	var (
-		maxVerBucketMD *bucketMD
-		maxVersionSmap *smapX
-		bcastSmap      = p.smapowner.get().clone()
-		q              = url.Values{}
-		config         = cmn.GCO.Get()
-		keeptrying     = true
+		maxVerSmap *smapX
+		maxVerBMD  *bucketMD
+		results    chan callResult
+		origin     int64
+		err        error
+		resmap     map[*cluster.Snode]*bucketMD
+		bcastSmap  = p.smapowner.get().clone()
+		q          = url.Values{}
+		config     = cmn.GCO.Get()
+		keeptrying = true
+		slowp      = false
 	)
+	resmap = make(map[*cluster.Snode]*bucketMD, bcastSmap.CountTargets()+bcastSmap.CountProxies())
 	q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
 	for keeptrying && time.Now().Before(deadline) {
 		url := cmn.URLPath(cmn.Version, cmn.Daemon)
-		res := p.bcastTo(bcastArgs{
+		results = p.bcastTo(bcastArgs{
 			req:  cmn.ReqArgs{Path: url, Query: q},
 			smap: bcastSmap,
 			to:   cluster.AllNodes,
 		})
-		keeptrying = false
-		for re := range res {
-			if re.err != nil {
+		maxVerBMD, origin, keeptrying, slowp = nil, 0, false, false
+		for k := range resmap {
+			delete(resmap, k)
+		}
+		for res := range results {
+			if res.err != nil {
 				keeptrying = true
 				continue
 			}
 			svm := SmapVoteMsg{}
-			if err := jsoniter.Unmarshal(re.outjson, &svm); err != nil {
-				glog.Errorf("Unexpected unmarshal-error: %v", err)
+			if err = jsoniter.Unmarshal(res.outjson, &svm); err != nil {
+				glog.Errorf("unexpected unmarshal-error: %v", err)
 				keeptrying = true
 				continue
 			}
 			if svm.BucketMD != nil && svm.BucketMD.version() > 0 {
-				if maxVerBucketMD == nil || svm.BucketMD.version() > maxVerBucketMD.version() {
-					maxVerBucketMD = svm.BucketMD
+				if maxVerBMD == nil { // 1. init
+					origin, maxVerBMD = svm.BucketMD.Origin, svm.BucketMD
+				} else if origin != svm.BucketMD.Origin { // 2. slow path
+					slowp = true
+				} else if !slowp && maxVerBMD.Version < svm.BucketMD.Version { // 3. fast path max(version)
+					maxVerBMD = svm.BucketMD
 				}
 			}
 			if svm.Smap == nil {
 				keeptrying = true
 				continue
 			}
-			if maxVersionSmap == nil || svm.Smap.version() > maxVersionSmap.version() {
-				maxVersionSmap = svm.Smap
-				for id, v := range maxVersionSmap.Tmap {
+			if maxVerSmap == nil || svm.Smap.version() > maxVerSmap.version() {
+				maxVerSmap = svm.Smap
+				for id, v := range maxVerSmap.Tmap {
 					bcastSmap.Tmap[id] = v
 				}
-				for id, v := range maxVersionSmap.Pmap {
+				for id, v := range maxVerSmap.Pmap {
 					bcastSmap.Pmap[id] = v
 				}
 			}
@@ -399,15 +424,28 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 					s = " of the current one " + svm.Smap.ProxySI.DaemonID
 				}
 				glog.Warningf("%s: starting up as primary(?) during reelection%s", p.si.Name(), s)
-				maxVersionSmap, maxVerBucketMD = nil, nil // zero-out as unusable
+				maxVerSmap, maxVerBMD = nil, nil // zero-out as unusable
 				keeptrying = true
 				time.Sleep(config.Timeout.CplaneOperation)
 				break
 			}
+			if svm.BucketMD != nil && svm.BucketMD.version() > 0 {
+				resmap[res.si] = svm.BucketMD
+			}
 		}
 		time.Sleep(config.Timeout.CplaneOperation)
 	}
-	return maxVersionSmap, maxVerBucketMD
+	if slowp {
+		if maxVerBMD, err = resolveBMDorigin(resmap); err != nil {
+			if _, split := err.(*errBmdOriginSplit); split {
+				glog.Fatalf("FATAL: %v", err)
+			}
+			if !errors.Is(err, errNoBMD) {
+				glog.Error(err.Error())
+			}
+		}
+	}
+	return maxVerSmap, maxVerBMD
 }
 
 func (p *proxyrunner) registerWithRetry() error {

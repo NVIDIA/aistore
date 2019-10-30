@@ -108,7 +108,7 @@ type ParsedRequestSpec struct {
 	Provider         string                `json:"provider"`
 	OutputProvider   string                `json:"output_provider"`
 	Extension        string                `json:"extension"`
-	OutputShardSize  int64                 `json:"output_shard_size"`
+	OutputShardSize  int64                 `json:"output_shard_size,string"`
 	InputFormat      *parsedInputTemplate  `json:"input_format"`
 	OutputFormat     *parsedOutputTemplate `json:"output_format"`
 	Algorithm        *SortAlgorithm        `json:"algorithm"`

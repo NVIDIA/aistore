@@ -7,9 +7,11 @@ package ais
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -54,7 +56,16 @@ var (
 func newBucketMD() *bucketMD {
 	lbmap := make(map[string]*cmn.BucketProps)
 	cbmap := make(map[string]*cmn.BucketProps)
-	return &bucketMD{BMD: cluster.BMD{LBmap: lbmap, CBmap: cbmap}}
+	return &bucketMD{BMD: cluster.BMD{LBmap: lbmap, CBmap: cbmap, Origin: 0}} // only proxy can generate
+}
+
+func newBMDorigin() int64 {
+	origin, err := cmn.GenUUID64()
+	if err != nil {
+		glog.Error(err)
+		return time.Now().UnixNano()
+	}
+	return origin
 }
 
 func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
@@ -207,16 +218,6 @@ func (m *bucketMD) MarshalJSON() ([]byte, error) {
 	}), nil
 }
 
-// Selects a mountpath with highest weight and reads the bmd from the file.
-func (m *bucketMD) LoadFromFS() error {
-	mpath, err := fs.Mountpaths.MpathForMetadata()
-	if err != nil {
-		return err
-	}
-	bmdFullPath := filepath.Join(mpath.Path, cmn.BucketmdBackupFile)
-	return cmn.LocalLoad(bmdFullPath, m)
-}
-
 func (m *bucketMD) Dump() string {
 	s := fmt.Sprintf("BMD Version %d\nais buckets: [", m.Version)
 	for name := range m.LBmap {
@@ -257,54 +258,60 @@ func (r *bmdowner) _put(bucketmd *bucketMD) {
 }
 
 func (r *bmdowner) init() {
-	bmd := newBucketMD()
+	var (
+		bmdFullPath string
+		err         error
+		bmd         = newBucketMD()
+	)
 	switch r.node {
 	case cmn.Target:
-		break
-	case cmn.Proxy:
-		bmdFullPath := filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
-		if err := cmn.LocalLoad(bmdFullPath, bmd); err != nil {
-			// Create empty
-			bmd.Version = 1
-			if err := cmn.LocalSave(bmdFullPath, bmd); err != nil {
-				glog.Fatalf("FATAL: cannot store %s, err: %v", bmdTermName, err)
-			}
+		mpath, err := fs.Mountpaths.MpathForMetadata()
+		if err != nil {
+			glog.Errorf("failed to resolve mountpath, err: %v", err)
+			break
 		}
+		bmdFullPath = filepath.Join(mpath.Path, cmn.BucketmdBackupFile)
+	case cmn.Proxy:
+		bmdFullPath = filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
 	default:
 		cmn.AssertMsg(false, r.node)
 	}
-
+	if bmdFullPath != "" {
+		err = cmn.LocalLoad(bmdFullPath, bmd)
+		if err != nil && !os.IsNotExist(err) {
+			glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bmdFullPath, err)
+			bmd = newBucketMD()
+		}
+	}
 	r._put(bmd)
 }
 
 func (r *bmdowner) put(bmd *bucketMD) {
-	r._put(bmd)
-
 	var (
 		bmdFullPath string
 		err         error
 	)
+	r._put(bmd)
+
 	switch r.node {
 	case cmn.Target:
 		var mpath *fs.MountpathInfo
 		mpath, err = fs.Mountpaths.MpathForMetadata()
 		if err != nil {
+			glog.Errorf("failed to resolve mountpath, err: %v", err)
 			break
 		}
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Saving %s v%d copy to %s of %s", bmdTermName, bmd.Version, cmn.XattrBMD, mpath.Path)
-		}
 		bmdFullPath = filepath.Join(mpath.Path, cmn.BucketmdBackupFile)
-		err = cmn.LocalSave(bmdFullPath, bmd)
 	case cmn.Proxy:
 		bmdFullPath = filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
-		err = cmn.LocalSave(bmdFullPath, bmd)
 	default:
 		cmn.AssertMsg(false, r.node)
 	}
-
-	if err != nil {
-		glog.Errorf("failed to store %s at %s, err: %v", bmdTermName, bmdFullPath, err)
+	if bmdFullPath != "" {
+		err = cmn.LocalSave(bmdFullPath, bmd)
+		if err != nil {
+			glog.Errorf("failed to store %s as %s, err: %v", bmdTermName, bmdFullPath, err)
+		}
 	}
 }
 

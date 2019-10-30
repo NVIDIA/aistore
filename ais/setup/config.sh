@@ -37,10 +37,10 @@ cat > $CONFFILE <<EOL
 		"startup_time":		"1m"
 	},
 	"proxy": {
-		"non_electable": ${NON_ELECTABLE:-false},
 		"primary_url":   "${PROXYURL}",
 		"original_url":  "${PROXYURL}",
-		"discovery_url": "${DISCOVERYURL}"
+		"discovery_url": "${DISCOVERYURL}",
+		"non_electable": ${NON_ELECTABLE:-false}
 	},
 	"lru": {
 		"lowwm":             75,

@@ -351,7 +351,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 			if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
 				continue
 			}
-			glog.Warningf("keepalive: Unexpected status %d, err: %v", res.status, res.err)
+			glog.Warningf("keepalive: unexpected status %d, err: %v", res.status, res.err)
 		case sig := <-pkr.controlCh:
 			if sig.msg == stop {
 				return false, true
