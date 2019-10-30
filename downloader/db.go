@@ -75,29 +75,29 @@ func (db *downloaderDB) getErrors(id string) (errors []cmn.TaskErrInfo, err erro
 	return db.errors(id)
 }
 
-func (db *downloaderDB) persistError(id, objname string, errMsg string) error {
+func (db *downloaderDB) persistError(id, objname string, errMsg string) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
 	errInfo := cmn.TaskErrInfo{Name: objname, Err: errMsg}
 	if len(db.errCache[id]) < errCacheSize { // if possible store error in cache
 		db.errCache[id] = append(db.errCache[id], errInfo)
-		return nil
+		return
 	}
 
 	errMsgs, err := db.errors(id) // it will also append errors from cache
 	if err != nil {
-		return err
+		glog.Error(err)
+		return
 	}
 	errMsgs = append(errMsgs, errInfo)
 
 	if err := db.driver.Write(downloaderErrors, id, errMsgs); err != nil {
 		glog.Error(err)
-		return err
+		return
 	}
 
 	db.errCache[id] = db.errCache[id][:0] // clear cache
-	return nil
 }
 
 func (db *downloaderDB) tasks(id string) (tasks []cmn.TaskDlInfo, err error) {

@@ -890,13 +890,14 @@ func TestHeadCloudBucket(t *testing.T) {
 
 func TestHeadNonexistentBucket(t *testing.T) {
 	var (
-		bucket     = TestNonexistentBucketName
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	_, err := api.HeadBucket(baseParams, bucket)
+	bucket, err := tutils.GenerateNonexistentBucketName("head", baseParams)
+	tassert.CheckFatal(t, err)
 
+	_, err = api.HeadBucket(baseParams, bucket)
 	if err == nil {
 		t.Fatalf("Expected an error, but go no errors.")
 	}

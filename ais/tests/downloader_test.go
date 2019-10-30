@@ -683,15 +683,15 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 
 func TestDownloadIntoNonexistentBucket(t *testing.T) {
 	var (
-		bucket  = TestNonexistentBucketName
-		params  = tutils.DefaultBaseAPIParams(t)
-		objName = "object"
-		obj     = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		objName    = "object"
+		obj        = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
 	)
 
-	tutils.DestroyBucket(t, params.URL, bucket)
-	_, err := api.DownloadSingle(params, generateDownloadDesc(), bucket, objName, obj)
+	bucket, err := tutils.GenerateNonexistentBucketName("download", baseParams)
+	tassert.CheckFatal(t, err)
 
+	_, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bucket, objName, obj)
 	if err == nil {
 		t.Fatalf("Expected an error, but go no errors.")
 	}

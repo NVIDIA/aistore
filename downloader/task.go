@@ -172,12 +172,8 @@ func (t *singleObjectTask) cancel() {
 func (t *singleObjectTask) abort(statusMsg string, err error) {
 	t.parent.stats.Add(stats.ErrDownloadCount, 1)
 
-	dbErr := dlStore.persistError(t.id, t.obj.Objname, statusMsg)
-	cmn.AssertNoErr(dbErr)
-
-	dbErr = dlStore.incErrorCnt(t.id)
-	cmn.AssertNoErr(dbErr)
-
+	dlStore.persistError(t.id, t.obj.Objname, statusMsg)
+	dlStore.incErrorCnt(t.id)
 	t.finishedCh <- err
 }
 

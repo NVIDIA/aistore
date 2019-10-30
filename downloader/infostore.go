@@ -112,15 +112,14 @@ func (is *infoStore) incScheduled(id string) error {
 	return nil
 }
 
-func (is *infoStore) incErrorCnt(id string) error {
+func (is *infoStore) incErrorCnt(id string) {
 	jInfo, err := is.getJob(id)
 	if err != nil {
 		glog.Error(err)
-		return err
+		return
 	}
 
 	jInfo.ErrorCnt.Inc()
-	return nil
 }
 
 func (is *infoStore) setAllDispatched(id string, dispatched bool) error {

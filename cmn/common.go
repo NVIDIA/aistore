@@ -942,40 +942,29 @@ func CheckI64Range(v, low, high int64) (int64, error) {
 	return v, nil
 }
 
-//===========================================================================
-//
-// local (config) save and restore - NOTE: caller is responsible to serialize
-//
-//===========================================================================
-func LocalSave(pathname string, v interface{}) error {
-	tmp := pathname + ".tmp"
-	file, err := os.Create(tmp)
+////////////////////////////
+// local save and restore //
+////////////////////////////
+
+func LocalSave(path string, v interface{}) error {
+	tmp := path + ".tmp"
+	file, err := CreateFile(tmp)
 	if err != nil {
 		return err
 	}
-	b, err := jsoniter.MarshalIndent(v, "", " ")
-	if err != nil {
-		_ = file.Close()
-		_ = os.Remove(tmp)
+	if err = jsoniter.NewEncoder(file).Encode(v); err != nil {
+		file.Close()
+		os.Remove(file.Name())
 		return err
 	}
-	r := bytes.NewReader(b)
-	_, err = io.Copy(file, r)
-	errClose := file.Close()
-	if err != nil {
-		_ = os.Remove(tmp)
+	if err := file.Close(); err != nil {
 		return err
 	}
-	if errClose != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	err = os.Rename(tmp, pathname)
-	return err
+	return os.Rename(tmp, path)
 }
 
-func LocalLoad(pathname string, v interface{}) (err error) {
-	file, err := os.Open(pathname)
+func LocalLoad(path string, v interface{}) (err error) {
+	file, err := os.Open(path)
 	if err != nil {
 		return
 	}

@@ -50,9 +50,8 @@ type regressionTestData struct {
 const (
 	rootDir = "/tmp/ais"
 
-	ListRangeStr              = "__listrange"
-	TestBucketName            = "TESTAISBUCKET"
-	TestNonexistentBucketName = "SOMETESTNONEXISTENTBUCKET"
+	ListRangeStr   = "__listrange"
+	TestBucketName = "TESTAISBUCKET"
 )
 
 var (

@@ -226,8 +226,7 @@ func (d *dispatcher) prepareTask(job DlJob, obj cmn.DlObj) (*singleObjectTask, *
 		glog.Warningf("error in handling downloader request: %s", err.Error())
 		d.parent.stats.Add(stats.ErrDownloadCount, 1)
 
-		dbErr := dlStore.persistError(t.id, t.obj.Objname, err.Error())
-		cmn.AssertNoErr(dbErr)
+		dlStore.persistError(t.id, t.obj.Objname, err.Error())
 		return nil, nil, err
 	}
 

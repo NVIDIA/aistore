@@ -11,19 +11,9 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
-
-func (m *bucketMD) LoadFromFS() error {
-	mpath, err := fs.Mountpaths.MpathForMetadata()
-	if err != nil {
-		return err
-	}
-	bmdFullPath := filepath.Join(mpath.Path, bmdFname)
-	return cmn.LocalLoad(bmdFullPath, m)
-}
 
 var _ = Describe("BMD marshal and unmarshal", func() {
 	const (
@@ -32,13 +22,15 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 
 	var (
 		bmd *bucketMD
+		cfg *cmn.Config
 	)
 
 	BeforeEach(func() {
 		// Set path for proxy (it uses Confdir)
-		cfg := cmn.GCO.BeginUpdate()
-		cfg.Confdir = mpath
-		cmn.GCO.CommitUpdate(cfg)
+		tmpCfg := cmn.GCO.BeginUpdate()
+		tmpCfg.Confdir = mpath
+		cmn.GCO.CommitUpdate(tmpCfg)
+		cfg = cmn.GCO.Get()
 
 		bmd = newBucketMD()
 		for _, provider := range []string{cmn.AIS, cmn.Cloud} {
@@ -52,18 +44,30 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 	})
 
 	for _, node := range []string{cmn.Target, cmn.Proxy} {
+		makeBMDOwner := func() bmdOwner {
+			var bmdo bmdOwner
+			switch node {
+			case cmn.Target:
+				bmdo = newBMDOwnerTgt()
+			case cmn.Proxy:
+				bmdo = newBMDOwnerPrx(cfg)
+			}
+			return bmdo
+		}
+
 		Describe(node, func() {
-			var bmdOwner bmdOwner
+			var (
+				bmdo bmdOwner
+			)
 
 			BeforeEach(func() {
-				bmdOwner = newBMDOwnerTgt()
-				bmdOwner.put(bmd)
+				bmdo = makeBMDOwner()
+				bmdo.put(bmd)
 			})
 
 			It(fmt.Sprintf("should correctly save and load bmd for %s", node), func() {
-				savedBMD := newBucketMD()
-				Expect(savedBMD.LoadFromFS()).NotTo(HaveOccurred())
-				Expect(savedBMD.BMD).To(Equal(bmd.BMD))
+				bmdo.init()
+				Expect(bmdo.Get()).To(Equal(&bmd.BMD))
 			})
 
 			It(fmt.Sprintf("should correctly save and check for incorrect data for %s", node), func() {
@@ -74,8 +78,10 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(f.Close()).NotTo(HaveOccurred())
 
-				savedBMD := newBucketMD()
-				Expect(savedBMD.LoadFromFS()).To(HaveOccurred())
+				bmdo = makeBMDOwner()
+				bmdo.init()
+
+				Expect(bmdo.Get()).NotTo(Equal(&bmd.BMD))
 			})
 		})
 	}
