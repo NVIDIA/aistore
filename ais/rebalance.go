@@ -44,9 +44,11 @@ const (
 	rebStageInactive = iota
 	rebStageInit
 	rebStageTraverse
-	rebStageECNameSpace // local slice list built
-	rebStageECExchange  // local lists are sent, target awaits exchange requests
-	rebStageECDetect    // all lists are received, and objects to fix detected
+	rebStageECNameSpace  // local slice list built
+	rebStageECDetect     // all lists are received, start detecting which objects to fix
+	rebStageECGlobRepair // all local slices are fine, targets start using remote data
+	rebStageECBatch      // target sends message that the current batch is processed
+	rebStageECCleanup    // all is done, time to cleanup memory etc
 	rebStageWaitAck
 	rebStageFin
 	rebStageFinStreams
@@ -114,16 +116,17 @@ type (
 )
 
 var rebStage = map[uint32]string{
-	rebStageInactive:    "<inactive>",
-	rebStageInit:        "<init>",
-	rebStageTraverse:    "<traverse>",
-	rebStageWaitAck:     "<wack>",
-	rebStageFin:         "<fin>",
-	rebStageFinStreams:  "<fin-streams>",
-	rebStageDone:        "<done>",
-	rebStageECNameSpace: "<namespace>",
-	rebStageECExchange:  "<namespace-distribute>",
-	rebStageECDetect:    "<build-fix-list>",
+	rebStageInactive:     "<inactive>",
+	rebStageInit:         "<init>",
+	rebStageTraverse:     "<traverse>",
+	rebStageWaitAck:      "<wack>",
+	rebStageFin:          "<fin>",
+	rebStageFinStreams:   "<fin-streams>",
+	rebStageDone:         "<done>",
+	rebStageECNameSpace:  "<namespace>",
+	rebStageECDetect:     "<build-fix-list>",
+	rebStageECGlobRepair: "<ec-transfer>",
+	rebStageECCleanup:    "<ec-fin>",
 }
 
 //
@@ -140,10 +143,12 @@ func (reb *rebManager) loghdr(globRebID int64, smap *smapX) string {
 }
 
 func (reb *rebManager) globalRebPrecheck(md *globalRebArgs, globRebID int64) bool {
-	// 1. check whether other targets are up and running
+	// get EC rebalancer ready
 	if md.ecUsed {
 		reb.ecReb.cleanup()
+		reb.ecReb.waiter.waitFor.Store(0)
 	}
+	// 1. check whether other targets are up and running
 	if errCnt := reb.bcast(md, reb.pingTarget); errCnt > 0 {
 		return false
 	}
@@ -219,18 +224,18 @@ func (reb *rebManager) buildECNamespace(md *globalRebArgs) int {
 //   2. If the target is too fast, it may send too early(or in case of network
 //      troubles) that results in data loss. But the target does not know if
 //		the destination received the data. So, the targets enters
-//		`rebStageECExchange` state that means "I'm ready to receive data
+//		`rebStageECDetect` state that means "I'm ready to receive data
 //		exchange requests"
 //   3. In a perfect case, all push requests are successful and
-//		`rebStageECExchange` stage will be finished in no time without any
+//		`rebStageECDetect` stage will be finished in no time without any
 //		data transfer
 func (reb *rebManager) distributeECNamespace(md *globalRebArgs) error {
 	const distributeTimeout = 5 * time.Minute
 	if err := reb.ecReb.exchange(); err != nil {
 		return err
 	}
-	reb.stage.Store(rebStageECExchange)
-	if reb.waitForPushReqs(md, rebStageECExchange, distributeTimeout) {
+	reb.stage.Store(rebStageECDetect)
+	if reb.waitForPushReqs(md, rebStageECDetect, distributeTimeout) {
 		return nil
 	}
 	cnt := reb.bcast(md, reb.waitECData)
@@ -241,32 +246,71 @@ func (reb *rebManager) distributeECNamespace(md *globalRebArgs) error {
 }
 
 // find out which objects are broken and how to fix them
-func (reb *rebManager) generateECFixList(md *globalRebArgs) int {
-	reb.ecReb.checkSlices()
-	reb.stage.Store(rebStageECDetect)
-	if reb.waitForPushReqs(md, rebStageECDetect) {
-		return 0
+func (reb *rebManager) generateECFixList(md *globalRebArgs) []*ecRebObject {
+	broken := reb.ecReb.checkSlices()
+	if bool(glog.FastV(4, glog.SmoduleAIS)) || md.dryRun {
+		glog.Infof("Number of objects misplaced locally: %d", len(reb.ecReb.localActions))
+		glog.Infof("Number of objects needs to be reconstructed/resent: %d", len(broken))
 	}
-	return reb.bcast(md, reb.waitFixLists)
+	return broken
+}
+
+func (reb *rebManager) ecFixLocal(md *globalRebArgs) error {
+	if err := reb.ecReb.repairLocal(); err != nil {
+		return fmt.Errorf("Failed to rebalance local slices/objects: %v", err)
+	}
+
+	reb.stage.Store(rebStageECGlobRepair)
+	reb.setStage(reb.t.si.DaemonID, rebStageECGlobRepair)
+	if cnt := reb.bcast(md, reb.waitECLocalReb); cnt != 0 {
+		return fmt.Errorf("%d targets failed to complete local rebalance", cnt)
+	}
+	return nil
+}
+
+func (reb *rebManager) ecFixGlobal(md *globalRebArgs, broken []*ecRebObject) error {
+	if err := reb.ecReb.repairGlobal(broken); err != nil {
+		if !md.xreb.Aborted() {
+			glog.Errorf("EC rebalance failed: %v", err)
+			md.xreb.Abort()
+		}
+		return err
+	}
+
+	reb.stage.Store(rebStageECCleanup)
+	reb.setStage(reb.t.si.DaemonID, rebStageECCleanup)
+	if cnt := reb.bcast(md, reb.waitECCleanup); cnt != 0 {
+		return fmt.Errorf("%d targets failed to complete local rebalance", cnt)
+	}
+	return nil
 }
 
 // when at least one bucket has EC enabled
 func (reb *rebManager) globalRebRunEC(md *globalRebArgs) error {
-	if cnt := reb.buildECNamespace(md); cnt != 0 {
+	var (
+		cnt    int            // the number of targets failed to reach some stage
+		broken []*ecRebObject // objects with missing or misplaced parts
+	)
+	// collect all local slices
+	if cnt = reb.buildECNamespace(md); cnt != 0 {
 		return fmt.Errorf("%d targets failed to build namespace", cnt)
 	}
+	// wait for all targets send their lists of slices to other nodes
 	if err := reb.distributeECNamespace(md); err != nil {
 		return err
 	}
-	if cnt := reb.generateECFixList(md); cnt != 0 {
-		return fmt.Errorf("%d targets failed to generate action lists", cnt)
+	// detect objects with misplaced or missing parts
+	broken = reb.generateECFixList(md)
+
+	// fix objects that are on local target but they are misplaced
+	if err := reb.ecFixLocal(md); err != nil {
+		return err
 	}
 
-	// TODO: move all slices between targets
-	//   0. Check that we should do anything (obj list has objects with actions)
-	//   1. move local slices
-	//   2. move remote slices/restore local full objects
-	//   3. wait until all remote operations finishes
+	// fix objects that needs network transfers and/or object rebuild
+	if err := reb.ecFixGlobal(md, broken); err != nil {
+		return err
+	}
 
 	glog.Infof("[%s] RebalanceEC done", reb.t.si.DaemonID)
 	return nil
@@ -783,6 +827,14 @@ func (reb *rebManager) recvPush(w http.ResponseWriter, hdr transport.Header, obj
 	if req.RebID < reb.globRebID.Load() {
 		// TODO: warning
 		glog.Errorf("Rebalance IDs mismatch: %d vs %d. %s is late(%s)?", reb.globRebID.Load(), req.RebID, req.DaemonID, rebStage[req.Stage])
+		return
+	}
+
+	if req.Stage == rebStageECBatch {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%s Target %s finished batch %d", reb.t.si.Name(), req.DaemonID, req.Batch)
+		}
+		reb.ecReb.batchDone(req.DaemonID, req.Batch)
 		return
 	}
 

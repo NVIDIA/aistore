@@ -297,7 +297,7 @@ const (
 	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
 		"Kind: {{$xact.KindX}}\n" +
 		"{{range $name, $val := $xact.Ext}}" +
-		"{{$name}}: {{$val | printf `%0.0f`}}\t " +
+		"{{$name}}: {{$val | printf `%s`}}\t " +
 		"{{end}}" +
 		"{{end}}{{if $xact.Ext}}\n{{end}}"
 	XactStatsTmpl = XactionBaseStatsHeader +

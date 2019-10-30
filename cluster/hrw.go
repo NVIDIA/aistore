@@ -135,7 +135,7 @@ func HrwTargetTask(taskID uint64, smap *Smap) (si *Snode, err error) {
 	return
 }
 
-func hrwMpath(bucket, objName string) (mi *fs.MountpathInfo, digest uint64, err error) {
+func HrwMpath(bucket, objName string) (mi *fs.MountpathInfo, digest uint64, err error) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 0 {
 		err = fmt.Errorf("%s: cannot hrw(%s/%s)", cmn.NoMountpaths, bucket, objName)

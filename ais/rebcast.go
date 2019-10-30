@@ -36,9 +36,11 @@ type (
 
 	// push notification struct - a target sends it when it enters `stage`
 	pushReq struct {
-		DaemonID string `json:"sid"`          // sender's ID
-		RebID    int64  `json:"rebid,string"` // sender's global rebalance ID
-		Stage    uint32 `json:"stage"`        // stage the sender has just reached
+		DaemonID string `json:"sid"`             // sender's ID
+		RebID    int64  `json:"rebid,string"`    // sender's global rebalance ID
+		Stage    uint32 `json:"stage"`           // stage the sender has just reached
+		Batch    int    `json:"batch"`           // batch when restoring
+		Extra    []byte `json:"extra,omitempty"` // metadata
 	}
 )
 
@@ -122,7 +124,7 @@ func (reb *rebManager) nodesNotInStage(stage uint32) int {
 		if si.DaemonID == reb.t.si.DaemonID {
 			continue
 		}
-		if stage == rebStageECExchange && !reb.ecReb.hasNodeData(si) {
+		if stage == rebStageECDetect && !reb.ecReb.hasNodeData(si) {
 			count++
 			continue
 		}
@@ -383,16 +385,21 @@ func (reb *rebManager) waitNamespace(si *cluster.Snode, md *globalRebArgs) bool 
 	return reb.waitStage(si, md, rebStageECNameSpace)
 }
 
-// Wait until all nodes finishes generating fix lists (just wait)
-func (reb *rebManager) waitFixLists(si *cluster.Snode, md *globalRebArgs) bool {
-	return reb.waitStage(si, md, rebStageECDetect)
+// Wait until all nodes finishes moving local slices/object to correct mpath
+func (reb *rebManager) waitECLocalReb(si *cluster.Snode, md *globalRebArgs) bool {
+	return reb.waitStage(si, md, rebStageECGlobRepair)
+}
+
+// Wait until all nodes clean up everything
+func (reb *rebManager) waitECCleanup(si *cluster.Snode, md *globalRebArgs) bool {
+	return reb.waitStage(si, md, rebStageECCleanup)
 }
 
 // Wait until all nodes finishes exchanging slice lists (do pull request if
 // the remote target's data is still missing)
 func (reb *rebManager) waitECData(si *cluster.Snode, md *globalRebArgs) bool {
 	sleep := md.config.Timeout.CplaneOperation * 2
-	locStage := uint32(rebStageECExchange)
+	locStage := uint32(rebStageECDetect)
 	maxwt := md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
 	curwt := time.Duration(0)
 
@@ -431,7 +438,7 @@ func (reb *rebManager) waitECData(si *cluster.Snode, md *globalRebArgs) bool {
 				}
 			}
 			reb.ecReb.setNodeData(si.DaemonID, slices)
-			reb.setStage(si.DaemonID, rebStageECExchange)
+			reb.setStage(si.DaemonID, rebStageECDetect)
 			return true
 		}
 

@@ -657,7 +657,7 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 		return
 	}
 	if lom.FQN == "" {
-		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = hrwMpath(bucket, lom.Objname)
+		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = HrwMpath(bucket, lom.Objname)
 		if err != nil {
 			return
 		}

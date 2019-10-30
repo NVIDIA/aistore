@@ -1075,13 +1075,14 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 	t.rebManager.getGlobStatus(status)
 
 	// the target is still collecting the data, reply that the result is not ready
-	if status.Stage < rebStageECExchange {
+	if status.Stage < rebStageECDetect {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
 
-	slices := t.rebManager.ecReb.targetSlices(callerID)
-	// no slices for callerID is found. It is possible if the number of object is small
+	// ask rebalance manager the list of all local slices
+	slices := t.rebManager.ecReb.targetSlices(t.si.DaemonID)
+	// no local slices found. It is possible if the number of object is small
 	if slices == nil {
 		w.WriteHeader(http.StatusNoContent)
 		return
