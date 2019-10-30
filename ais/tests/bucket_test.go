@@ -110,16 +110,6 @@ func TestResetBucketProps(t *testing.T) {
 
 	// check that bucket props are reset
 	validateBucketProps(t, globalProps, *p)
-
-	if isCloudBucket(t, bParams.URL, clibucket) {
-		err = api.ResetBucketProps(bParams, clibucket)
-		tassert.CheckFatal(t, err)
-		p, err = api.HeadBucket(bParams, clibucket)
-		tassert.CheckFatal(t, err)
-		if p.EC.Enabled {
-			t.Error("EC should be disabled for cloud bucket")
-		}
-	}
 }
 
 func TestSetInvalidBucketProps(t *testing.T) {

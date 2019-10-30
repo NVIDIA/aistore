@@ -2075,19 +2075,22 @@ func TestECEmergencyMpath(t *testing.T) {
 	}
 }
 
-func globalRebCounters(baseParams *api.BaseParams) (int, int) {
+func globalRebCounters(baseParams *api.BaseParams) (int64, int64) {
 	rebStats, err := api.MakeXactGetRequest(baseParams, cmn.ActGlobalReb, cmn.GetWhatStats, "" /* bucket */, false /* all */)
 	if err != nil {
 		// no xaction - all zeroes
 		return 0, 0
 	}
-	txCount := 0
-	rxCount := 0
+	txCount := int64(0)
+	rxCount := int64(0)
 	for _, daemonStats := range rebStats {
 		for _, st := range daemonStats {
-			extStats := st.Ext.(map[string]interface{})
-			txCount += int(extStats[stats.TxRebCount].(float64))
-			rxCount += int(extStats[stats.RxRebCount].(float64))
+			extRebStats := &stats.ExtRebalanceStats{}
+			if err := cmn.TryUnmarshal(st.Ext, &extRebStats); err != nil {
+				continue
+			}
+			txCount += extRebStats.TxRebCount
+			rxCount += extRebStats.RxRebCount
 		}
 	}
 	return txCount, rxCount

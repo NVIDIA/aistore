@@ -216,7 +216,7 @@ func (t *targetrunner) Run() error {
 }
 
 func (t *targetrunner) initRebManager(config *cmn.Config) {
-	reb := &rebManager{t: t, filterGFN: filter.NewDefaultFilter()}
+	reb := &rebManager{t: t, filterGFN: filter.NewDefaultFilter(), nodeStages: make(map[string]uint32)}
 	reb.ecReb = newECRebalancer(t, reb)
 	// Rx endpoints
 	reb.netd, reb.netc = cmn.NetworkPublic, cmn.NetworkPublic

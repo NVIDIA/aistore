@@ -29,10 +29,6 @@ type targetDiskStats struct {
 	targetID string
 }
 
-const (
-	rebalanceStatsFmt = "%s\t%0.0f\t%0.0f\t%s\t%0.0f\t%s\t%s\t%s\t%t\n"
-)
-
 var (
 	proxy  = make(map[string]*stats.DaemonStatus)
 	target = make(map[string]*stats.DaemonStatus)
@@ -321,10 +317,9 @@ func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.D
 		fmt.Fprintln(tw, strings.Repeat("======\t", 9 /* num of columns */))
 		for _, daemonID := range sortedIDs {
 			st := rebStats[daemonID][0]
-			extStats := st.Ext.(map[string]interface{})
-			i2s := func(stat string) string {
-				// TODO: Replace with a more elegant solution
-				return cmn.B2S(int64(extStats[stat].(float64)), 2)
+			extRebStats := &stats.ExtRebalanceStats{}
+			if err := cmn.TryUnmarshal(st.Ext, &extRebStats); err != nil {
+				continue
 			}
 
 			endTime := "<not completed>"
@@ -333,8 +328,13 @@ func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.D
 			}
 			startTime := st.StartTimeX.Format("01-02 15:04:05")
 
-			fmt.Fprintf(tw, rebalanceStatsFmt, daemonID, extStats[stats.RebGlobID], extStats[stats.RxRebCount], i2s(stats.RxRebSize),
-				extStats[stats.TxRebCount], i2s(stats.TxRebSize), startTime, endTime, st.AbortedX)
+			fmt.Fprintf(tw,
+				"%s\t%d\t%d\t%s\t%d\t%s\t%s\t%s\t%t\n",
+				daemonID, extRebStats.GlobalRebID,
+				extRebStats.RxRebCount, cmn.B2S(extRebStats.RxRebSize, 2),
+				extRebStats.TxRebCount, cmn.B2S(extRebStats.TxRebSize, 2),
+				startTime, endTime, st.AbortedX,
+			)
 		}
 		tw.Flush()
 

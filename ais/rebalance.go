@@ -136,7 +136,6 @@ func (reb *rebManager) loghdr(globRebID int64, smap *smapX) string {
 
 func (reb *rebManager) globalRebPrecheck(md *globalRebArgs, globRebID int64) bool {
 	// 1. check whether other targets are up and running
-	reb.nodeStages = make(map[string]uint32) // cleanup before run
 	if md.ecUsed {
 		reb.ecReb.cleanup()
 	}
@@ -488,6 +487,8 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 	if reb.t.bmdowner.get().ecUsed() {
 		reb.ecReb.cleanup()
 	}
+
+	reb.nodeStages = make(map[string]uint32) // cleanup after run
 }
 
 func (reb *rebManager) serialize(smap *smapX, config *cmn.Config, globRebID int64) (newerSmap, alreadyRunning bool) {
