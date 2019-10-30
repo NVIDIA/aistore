@@ -33,6 +33,11 @@ const (
 	PropOwn     = "own"     // bucket has its own configuration
 )
 
+const (
+	AppendOp = "append"
+	FlushOp  = "flush"
+)
+
 // ActionMsg.Action enum (includes xactions)
 const (
 	ActShutdown      = "shutdown"
@@ -190,6 +195,9 @@ const (
 	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	URLParamTaskID           = "tsk" // ID of a task to return its state/result
 	URLParamTaskAction       = "tac" // "start", "status", "result"
+
+	URLParamPutType    = "putt"
+	URLParamAppendNode = "node"
 
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"

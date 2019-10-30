@@ -20,12 +20,11 @@ const (
 
 const (
 	// prefixes for workfiles created by various services
-	WorkfileReplication = "repl"   // replication runner
-	WorkfileRemote      = "remote" // getting object from neighbor target while rebalance is running
-	WorkfileColdget     = "cold"   // object GET: coldget
-	WorkfilePut         = "put"    // object PUT
-	WorkfileRebalance   = "reb"    // rebalance
-	WorkfileFSHC        = "fshc"   // FSHC test file
+	WorkfileRemote  = "remote" // getting object from neighbor target while rebalance is running
+	WorkfileColdget = "cold"   // object GET: coldget
+	WorkfilePut     = "put"    // object PUT
+	WorkfileAppend  = "append" // object APPEND
+	WorkfileFSHC    = "fshc"   // FSHC test file
 )
 const sep = string(filepath.Separator)
 

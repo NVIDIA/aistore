@@ -59,6 +59,14 @@ type PromoteArgs struct {
 	Verbose    bool
 }
 
+type AppendArgs struct {
+	BaseParams *BaseParams
+	Bucket     string
+	Provider   string
+	Object     string
+	Target     string
+}
+
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
@@ -543,4 +551,30 @@ func doDlStatusRequest(baseParams *BaseParams, path string, optParams OptionalPa
 
 	err = jsoniter.Unmarshal(respBytes, &resp)
 	return resp, err
+}
+
+func AppendObject(args *AppendArgs) error {
+	query := url.Values{}
+	query.Add(cmn.URLParamPutType, cmn.AppendOp)
+	query.Add(cmn.URLParamAppendNode, args.Target)
+	query.Add(cmn.URLParamProvider, args.Provider)
+	params := OptionalParams{Query: query}
+
+	args.BaseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
+	_, err := DoHTTPRequest(args.BaseParams, path, nil, params)
+	return err
+}
+
+func FlushObject(args *AppendArgs) error {
+	query := url.Values{}
+	query.Add(cmn.URLParamPutType, cmn.FlushOp)
+	query.Add(cmn.URLParamAppendNode, args.Target)
+	query.Add(cmn.URLParamProvider, args.Provider)
+	params := OptionalParams{Query: query}
+
+	args.BaseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
+	_, err := DoHTTPRequest(args.BaseParams, path, nil, params)
+	return err
 }

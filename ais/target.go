@@ -545,11 +545,17 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if lom.IsAIS() && lom.VerConf().Enabled {
-		lom.Load() // need to know the current version if versionig enabled
+		lom.Load() // need to know the current version if versioning enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
-	if err, errCode := t.doPut(r, lom, started); err != nil {
-		t.invalmsghdlr(w, r, err.Error(), errCode)
+	if query.Get(cmn.URLParamPutType) == "" {
+		if err, errCode := t.doPut(r, lom, started); err != nil {
+			t.invalmsghdlr(w, r, err.Error(), errCode)
+		}
+	} else {
+		if err, errCode := t.doAppend(r, lom, started); err != nil {
+			t.invalmsghdlr(w, r, err.Error(), errCode)
+		}
 	}
 }
 
@@ -1109,6 +1115,17 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, pr
 
 	body := cmn.MustMarshal(bucketNames)
 	t.writeJSON(w, r, body, "getbucketnames")
+}
+
+func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (err error, errcode int) {
+	aoi := &appendObjInfo{
+		started: started,
+		t:       t,
+		lom:     lom,
+		r:       r.Body,
+		op:      r.URL.Query().Get(cmn.URLParamPutType),
+	}
+	return aoi.appendObject()
 }
 
 // PUT new version and update object metadata

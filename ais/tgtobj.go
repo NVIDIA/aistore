@@ -73,6 +73,17 @@ type (
 		chunked bool
 	}
 
+	appendObjInfo struct {
+		started time.Time // started time of receiving - used to calculate the recv duration
+		t       *targetrunner
+		lom     *cluster.LOM
+
+		// Reader with the content of the object.
+		r io.ReadCloser
+
+		op string
+	}
+
 	writerOnly struct {
 		io.Writer
 	}
@@ -694,5 +705,39 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		stats.NamedVal64{Name: stats.GetLatency, Val: int64(delta)},
 		stats.NamedVal64{Name: stats.GetCount, Val: 1},
 	)
+	return
+}
+
+///////////////////
+// APPEND OBJECT //
+///////////////////
+
+func (aoi *appendObjInfo) appendObject() (err error, errCode int) {
+	cmn.Assert(aoi.op == cmn.AppendOp || aoi.op == cmn.FlushOp)
+
+	// TODO: not using fs.WorkfileType since it will generate unique fqn because we add tie breakers.
+	// TODO: for now assuming that new mountpath has not been added (HRW did not change)
+	workFQN := fs.CSM.GenContentParsedFQN(aoi.lom.ParsedFQN, fs.ObjectType, fs.WorkfileAppend)
+
+	switch aoi.op {
+	case cmn.AppendOp:
+		f, err := os.OpenFile(workFQN, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return err, 0
+		}
+		defer f.Close()
+		if _, err := io.Copy(f, aoi.r); err != nil {
+			return err, 0
+		}
+	case cmn.FlushOp:
+		if err := aoi.t.PromoteFile(workFQN, aoi.lom.Bck(), aoi.lom.Objname, false /*overwrite*/, false /*verbose*/); err != nil {
+			// TODO: stats
+			glog.Error(err)
+			return err, 0
+		}
+	default:
+		cmn.AssertMsg(false, aoi.op)
+	}
+	// TODO: stats
 	return
 }

@@ -425,8 +425,9 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	query := r.URL.Query()
 	bucket, objName := apitems[0], apitems[1]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
+	provider := query.Get(cmn.URLParamProvider)
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
@@ -437,8 +438,38 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bck, objName, &smap.Smap)
+
+	var (
+		si   *cluster.Snode
+		smap = p.smapowner.get()
+	)
+
+	if query.Get(cmn.URLParamPutType) != "" {
+		nodeID := query.Get(cmn.URLParamAppendNode)
+		if nodeID == "" {
+			si, err = cluster.HrwTarget(bck, objName, &smap.Smap)
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+		} else {
+			si = smap.Smap.GetTarget(nodeID)
+			if si != nil {
+				p.invalmsghdlr(w, r, cmn.DoesNotExist)
+				return
+			}
+		}
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
+		}
+		redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
+		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+
+		// p.statsif.Add(stats.PutCount, 1)
+		return
+	}
+
+	si, err = cluster.HrwTarget(bck, objName, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
