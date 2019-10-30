@@ -57,6 +57,10 @@ type (
 	// The state that may influence GET logic when new target joins cluster
 	globalGFN struct {
 		baseGFN
+
+		mtx         sync.Mutex
+		timedLookup atomic.Bool
+		refCount    uint32
 	}
 
 	capUsed struct {
@@ -84,6 +88,8 @@ type (
 	}
 )
 
+// BASE GFN
+
 func (gfn *baseGFN) active() bool { return gfn.lookup.Load() }
 func (gfn *baseGFN) activate() bool {
 	previous := gfn.lookup.Swap(true)
@@ -91,6 +97,58 @@ func (gfn *baseGFN) activate() bool {
 	return previous
 }
 func (gfn *baseGFN) deactivate() { gfn.lookup.Store(false); glog.Infoln(gfn.tag, "deactivated") }
+
+// GLOBAL GFN
+
+func (gfn *globalGFN) active() bool {
+	return gfn.lookup.Load() || gfn.timedLookup.Load()
+}
+
+func (gfn *globalGFN) activate() bool {
+	gfn.mtx.Lock()
+	previous := gfn.lookup.Swap(true)
+	gfn.timedLookup.Store(false)
+	gfn.refCount = 0
+	gfn.mtx.Unlock()
+
+	glog.Infoln(gfn.tag, "activated")
+	return previous
+}
+
+func (gfn *globalGFN) activateTimed() {
+	timedInterval := cmn.GCO.Get().Timeout.Startup
+
+	gfn.mtx.Lock()
+	if active := gfn.timedLookup.Swap(true); active {
+		// There is no need to start goroutine since we know that one is already
+		// running at it should take care about deactivating.
+		gfn.refCount++
+		gfn.mtx.Unlock()
+		glog.Infoln(gfn.tag, "updated timed")
+		return
+	}
+	gfn.mtx.Unlock()
+	glog.Infoln(gfn.tag, "activated timed")
+
+	go func() {
+		for {
+			time.Sleep(timedInterval)
+
+			gfn.mtx.Lock()
+			// If we woke up after defined schedule we are safe to deactivate.
+			// Otherwise it means that someone updated the schedule and we need
+			// to sleep again.
+			if gfn.refCount == 0 {
+				gfn.timedLookup.Store(false)
+				gfn.mtx.Unlock()
+				glog.Infoln(gfn.tag, "deactivated timed")
+				return
+			}
+			gfn.refCount = 0
+			gfn.mtx.Unlock()
+		}
+	}()
+}
 
 //
 // target runner

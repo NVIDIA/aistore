@@ -429,7 +429,6 @@ func (reb *rebManager) globalRebFini(md *globalRebArgs) {
 		}
 	}
 	reb.endStreams()
-	reb.t.gfn.global.deactivate()
 	if !md.xreb.Finished() {
 		md.xreb.EndTime(time.Now())
 	} else {
@@ -476,6 +475,10 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 	if !reb.globalRebInit(md, globRebID, buckets...) {
 		return
 	}
+
+	// At this point only one rebalance is running so we can safely enable regular GFN.
+	reb.t.gfn.global.activate()
+	defer reb.t.gfn.global.deactivate()
 
 	errCnt := 0
 	if err := reb.globalRebSyncAndRun(md); err == nil {

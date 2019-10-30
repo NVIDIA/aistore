@@ -3044,7 +3044,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch apiItems[0] {
-	case cmn.Register: // manual by user (API)
+	case cmn.UserRegister: // manual by user (API)
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
 		}
@@ -3132,7 +3132,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 				si: nsi,
 				req: cmn.ReqArgs{
 					Method: http.MethodPost,
-					Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Register),
+					Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.UserRegister),
 					Body:   body,
 				},
 				timeout: cmn.GCO.Get().Timeout.CplaneOperation,

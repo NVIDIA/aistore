@@ -166,7 +166,7 @@ func RegisterNode(baseParams *BaseParams, nodeInfo *cluster.Snode) error {
 		return err
 	}
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Register)
+	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.UserRegister)
 	_, err = DoHTTPRequest(baseParams, path, nodeJSON)
 	return err
 }

@@ -85,7 +85,7 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	// The latter is driven by metasync (see metasync.go) distributing the new Smap.
 	// To handle incoming GETs within this window (which would typically take a few seconds or less)
 	// we need to have the current cluster-wide metadata and the temporary gfn state:
-	t.gfn.global.activate()
+	t.gfn.global.activateTimed()
 
 	// bmd
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
@@ -458,7 +458,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 
 	if len(apiItems) > 0 {
 		switch apiItems[0] {
-		case cmn.Register:
+		case cmn.UserRegister:
 			// TODO: this is duplicated in `t.register`. The difference is that
 			// here we are reregistered by the user and in `t.register` is
 			// registering new target. This needs to be consolidated somehow.
@@ -467,9 +467,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			// a) target joining existing cluster and b) cluster starting to rebalance itself
 			// The latter is driven by metasync (see metasync.go) distributing the new Smap.
 			// To handle incoming GETs within this window (which would typically take a few seconds or less)
-
-			// TODO -- FIXME: this implicitly relies on rebalancing and subsequent deactivate..
-			t.gfn.global.activate()
+			t.gfn.global.activateTimed()
 
 			if glog.V(3) {
 				glog.Infoln("Sending register signal to target keepalive control channel")
@@ -1064,7 +1062,7 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 	}
 
 	if newSmap != nil && msgInt.Action == cmn.ActStartGFN {
-		t.gfn.global.activate()
+		t.gfn.global.activateTimed()
 	}
 }
 
@@ -1331,7 +1329,7 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 		}
 
 		t.gfn.local.activate()
-		t.gfn.global.activate()
+		t.gfn.global.activateTimed()
 		go xact.run(msgInt.GlobRebID)      // do the work
 		time.Sleep(100 * time.Millisecond) // FIXME: likely no need
 	case cmn.ActCopyBucket:

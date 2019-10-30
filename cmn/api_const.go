@@ -290,7 +290,7 @@ const (
 	// l3
 	SyncSmap     = "syncsmap"
 	Keepalive    = "keepalive"
-	Register     = "register" // node register by admin (manual)
+	UserRegister = "register" // node register by admin (manual)
 	AutoRegister = "autoreg"  // node register itself into the primary proxy (automatic)
 	Unregister   = "unregister"
 	Proxy        = "proxy"
