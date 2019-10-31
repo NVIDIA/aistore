@@ -84,7 +84,7 @@ var (
 		},
 		{
 			Name:         commandPromote,
-			Usage:        "promotes AIStore-resident files and directories to objects",
+			Usage:        "promotes AIStore-local files and directories to objects",
 			ArgsUsage:    putPromoteObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandPromote],
 			Action:       promoteHandler,

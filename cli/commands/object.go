@@ -92,7 +92,7 @@ func getObject(c *cli.Context, bucket, provider, object, outFile string) (err er
 }
 
 //////
-// Promote AIS-resident files and directories to objects (NOTE: advanced usage only)
+// Promote AIS-local files and directories to objects (NOTE: advanced usage only)
 //////
 func promoteFileOrDir(c *cli.Context, bucket, provider, objName, fqn string) (err error) {
 	target := parseStrFlag(c, targetFlag)

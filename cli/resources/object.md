@@ -45,6 +45,31 @@ Puts a file or a directory content into the bucket. If `ais` detects that a user
 
 <a name="ft2">2</a> Option `--base` and argument `OBJECT_NAME` are mutually exclusive and `OBJECT_NAME` has higher priority. When `OBJECT_NAME` is given, options `--base` and `--recursive` are ignored, and `FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
 
+### PROMOTE
+
+`ais promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>
+
+Promote **AIS-local** files and directories to AIS objects in a given bucket. For instance, let's say some (or all) of deployed storage nodes contain a directory called `/tmp/examples`. To make AIS objects out of this directory's files (**one file - one object**), run:
+
+```sh
+$ ais promote /tmp/examples mybucket/ -r
+```
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
+| `--base` | `string` | Pathname prefix that is omitted i.e., not used to generate object names | `""` |
+| `--verbose` or `-v` | `bool` | Verbose printout | `false` |
+| `--target` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
+| `--recursive` or `-r` | `bool` | Promote nested directories | `false` |
+| `--overwrite` or `-o` | `bool` | Overwrite destination (object) if exists | `false` |
+
+> The capability is intended to support existing toolchains that operate on files. Here's the rationale:
+
+>> On the one hand, it is easy to transform files using `tar`, `gzip` and any number of other very familiar Unix tools. On the other hand, it is easy to **promote** files and directories that are locally present inside AIS servers. Once the original file-based content becomes distributed across AIStore cluster, running massive computations (or any other workloads that require scalable storage) also becomes easy and fast.
+
+> NOTE: advanced usage only!
+
 #### Object names
 
 While uploading `ais` assigns names to object by following the rules (staring with the highest priority):

@@ -5,6 +5,7 @@
 package mirror
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -74,8 +75,15 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		cmn.AssertNoErr(err)
 		objName = fname
 	}
-	if err := r.Target().PromoteFile(fqn, r.bck, objName, r.params.Overwrite, r.params.Verbose); err != nil {
-		glog.Error(err)
+	err := r.Target().PromoteFile(fqn, r.bck, objName, r.params.Overwrite, r.params.Verbose)
+	if err != nil {
+		if finfo, ers := os.Stat(fqn); ers == nil {
+			if finfo.Mode().IsRegular() {
+				glog.Error(err)
+			} // else symbolic link, etc.
+		} else if !os.IsNotExist(ers) {
+			glog.Error(err)
+		}
 	}
 	return nil
 }
