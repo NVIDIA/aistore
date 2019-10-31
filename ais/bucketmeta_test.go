@@ -21,7 +21,7 @@ func (m *bucketMD) LoadFromFS() error {
 	if err != nil {
 		return err
 	}
-	bmdFullPath := filepath.Join(mpath.Path, cmn.BucketmdBackupFile)
+	bmdFullPath := filepath.Join(mpath.Path, bmdFname)
 	return cmn.LocalLoad(bmdFullPath, m)
 }
 
@@ -53,10 +53,10 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 
 	for _, node := range []string{cmn.Target, cmn.Proxy} {
 		Describe(node, func() {
-			var bmdOwner *bmdowner
+			var bmdOwner bmdOwner
 
 			BeforeEach(func() {
-				bmdOwner = newBmdowner(node)
+				bmdOwner = newBMDOwnerTgt()
 				bmdOwner.put(bmd)
 			})
 
@@ -67,7 +67,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 			})
 
 			It(fmt.Sprintf("should correctly save and check for incorrect data for %s", node), func() {
-				bmdFullPath := filepath.Join(mpath, cmn.BucketmdBackupFile)
+				bmdFullPath := filepath.Join(mpath, bmdFname)
 				f, err := os.OpenFile(bmdFullPath, os.O_RDWR, 0)
 				Expect(err).NotTo(HaveOccurred())
 				_, err = f.WriteAt([]byte("xxxxxxxxxxxx"), 10)

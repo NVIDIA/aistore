@@ -29,6 +29,11 @@ import (
 )
 
 const (
+	globRebMarker  = ".global_rebalancing"
+	localRebMarker = ".resilvering"
+)
+
+const (
 	rebalanceStreamName = "rebalance"
 	rebalanceAcksName   = "remwack" // NOTE: can become generic remote-write-acknowledgment
 	rebalancePushName   = "rebpush" // push notifications stream
@@ -1181,9 +1186,9 @@ func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 func persistentMarker(kind string) (pm string) {
 	switch kind {
 	case cmn.ActLocalReb:
-		pm = filepath.Join(cmn.GCO.Get().Confdir, cmn.LocalRebMarker)
+		pm = filepath.Join(cmn.GCO.Get().Confdir, localRebMarker)
 	case cmn.ActGlobalReb:
-		pm = filepath.Join(cmn.GCO.Get().Confdir, cmn.GlobalRebMarker)
+		pm = filepath.Join(cmn.GCO.Get().Confdir, globRebMarker)
 	default:
 		cmn.Assert(false)
 	}

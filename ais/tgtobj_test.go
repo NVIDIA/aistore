@@ -46,6 +46,7 @@ func TestMain(m *testing.M) {
 	t = &targetrunner{}
 	t.initSI(cmn.Target)
 	t.init(nil, cmn.GCO.Get())
+	t.bmdowner = newBMDOwnerTgt()
 
 	bmd := newBucketMD()
 	bmd.add(&cluster.Bck{Name: testBucket, Provider: cmn.AIS}, &cmn.BucketProps{

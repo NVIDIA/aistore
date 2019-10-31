@@ -38,6 +38,9 @@ import (
 //     (version check must be protected by the same critical section)
 //
 //=====================================================================
+
+const smapFname = "smap.json"
+
 type smapX struct {
 	cluster.Smap
 }
@@ -289,7 +292,7 @@ func (r *smapowner) persist(newSmap *smapX, saveSmap bool) error {
 	}
 
 	if saveSmap {
-		smapPathName := filepath.Join(config.Confdir, cmn.SmapBackupFile)
+		smapPathName := filepath.Join(config.Confdir, smapFname)
 		if err := cmn.LocalSave(smapPathName, newSmap); err != nil {
 			glog.Errorf("failed writing smapX %s, err: %v", smapPathName, err)
 		}

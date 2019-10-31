@@ -106,13 +106,14 @@ func (p *proxyrunner) initClusterCIDR() {
 func (p *proxyrunner) Run() error {
 	config := cmn.GCO.Get()
 	p.httprunner.init(getproxystatsrunner(), config)
+	p.bmdowner = newBMDOwnerPrx(config)
+
 	p.httprunner.keepalive = getproxykeepalive()
 
-	p.bmdowner.init()
+	p.bmdowner.init() // initialize owner and load BMD
 	p.metasyncer = getmetasyncer()
 
 	// startup sequence - see earlystart.go for the steps and commentary
-	cmn.Assert(p.smapowner.get() == nil)
 	p.bootstrap()
 
 	p.authn = &authManager{

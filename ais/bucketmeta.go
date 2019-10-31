@@ -29,27 +29,60 @@ import (
 
 // - bucketMD is a server-side extension of the cluster.BMD
 // - bucketMD represents buckets (that store objects) and associated metadata
-// - bucketMD (instance) can be obtained via bmdowner.get()
+// - bucketMD (instance) can be obtained via bmdOwner.get()
 // - bucketMD is immutable and versioned
 // - bucketMD versioning is monotonic and incremental
 //
 // - bucketMD typical update transaction:
-// lock -- clone() -- modify the clone -- bmdowner.put(clone) -- unlock
+// lock -- clone() -- modify the clone -- bmdOwner.put(clone) -- unlock
 //
 // (*) for merges and conflict resolution, check the current version prior to put()
 //     (note that version check must be protected by the same critical section)
 //
 
-const bmdTermName = "BMD"
+const (
+	bmdFname    = "bucket-metadata" // BMD basename on disk
+	bmdFext     = ".prev"           // suffix: previous version
+	bmdTermName = "BMD"             // display name
+	bmdCopies   = 2                 // local copies
+)
 
-type bucketMD struct {
-	cluster.BMD
-	vstr string // itoa(Version), to have it handy for http redirects
-}
+type (
+	bucketMD struct {
+		cluster.BMD
+		vstr string // itoa(Version), to have it handy for http redirects
+	}
+	bmdOwner interface {
+		sync.Locker
+		init()
+		put(bmd *bucketMD)
+		get() (bmd *bucketMD)
+		Get() *cluster.BMD
+	}
+	bmdOwnerBase struct {
+		sync.Mutex
+		bucketmd atomic.Pointer
+	}
+	bmdOwnerPrx struct {
+		bmdOwnerBase
+		fpath string
+	}
+	bmdOwnerTgt struct{ bmdOwnerBase }
+
+	// for backwards compatibility - TODO: eventually must be removed
+	oldBMD struct {
+		LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`
+		CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`
+		Version int64                       `json:"version"`
+	}
+)
 
 var (
 	_ json.Marshaler   = &bucketMD{}
 	_ json.Unmarshaler = &bucketMD{}
+	_ cluster.Bowner   = &bmdOwnerBase{}
+	_ bmdOwner         = &bmdOwnerPrx{}
+	_ bmdOwner         = &bmdOwnerTgt{}
 )
 
 // c-tor
@@ -67,6 +100,10 @@ func newBMDorigin() int64 {
 	}
 	return origin
 }
+
+//////////////
+// bucketMD //
+//////////////
 
 func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 	cmn.Assert(p != nil)
@@ -233,92 +270,165 @@ func (m *bucketMD) Dump() string {
 	return s
 }
 
-//=====================================================================
-//
-// bmdowner: implements cluster.Bowner interface
-//
-//=====================================================================
-var _ cluster.Bowner = &bmdowner{}
+//////////////////
+// bmdOwnerBase //
+//////////////////
 
-type bmdowner struct {
-	sync.Mutex
-	node     string
-	bucketmd atomic.Pointer
-}
-
-func newBmdowner(node string) *bmdowner {
-	return &bmdowner{
-		node: node,
-	}
-}
-
-func (r *bmdowner) _put(bucketmd *bucketMD) {
+func (bo *bmdOwnerBase) _put(bucketmd *bucketMD) {
 	bucketmd.vstr = strconv.FormatInt(bucketmd.Version, 10)
-	r.bucketmd.Store(unsafe.Pointer(bucketmd))
+	bo.bucketmd.Store(unsafe.Pointer(bucketmd))
 }
 
-func (r *bmdowner) init() {
-	var (
-		bmdFullPath string
-		err         error
-		bmd         = newBucketMD()
-	)
-	switch r.node {
-	case cmn.Target:
-		mpath, err := fs.Mountpaths.MpathForMetadata()
-		if err != nil {
-			glog.Errorf("failed to resolve mountpath, err: %v", err)
-			break
-		}
-		bmdFullPath = filepath.Join(mpath.Path, cmn.BucketmdBackupFile)
-	case cmn.Proxy:
-		bmdFullPath = filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
-	default:
-		cmn.AssertMsg(false, r.node)
-	}
-	if bmdFullPath != "" {
-		err = cmn.LocalLoad(bmdFullPath, bmd)
-		if err != nil && !os.IsNotExist(err) {
-			glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bmdFullPath, err)
+func (bo *bmdOwnerBase) Get() *cluster.BMD         { return &bo.get().BMD }
+func (bo *bmdOwnerBase) get() (bucketmd *bucketMD) { return (*bucketMD)(bo.bucketmd.Load()) }
+
+/////////////////
+// bmdOwnerPrx //
+/////////////////
+
+func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
+	return &bmdOwnerPrx{fpath: filepath.Join(config.Confdir, bmdFname)}
+}
+
+func (bo *bmdOwnerPrx) init() {
+	var bmd = newBucketMD()
+	err := cmn.LocalLoad(bo.fpath, bmd)
+	if err != nil && !os.IsNotExist(err) {
+		old := &oldBMD{LBmap: bmd.LBmap, CBmap: bmd.CBmap}
+		ers := err
+		// backward-compat
+		if err := cmn.LocalLoad(bo.fpath, old); err != nil {
+			glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bo.fpath, ers)
 			bmd = newBucketMD()
+		} else {
+			bmd.Version = old.Version
+			if bmd.Version == 0 {
+				bmd.Version = 100
+			}
+			bmd.Origin = 99
 		}
 	}
-	r._put(bmd)
+	bo._put(bmd)
 }
 
-func (r *bmdowner) put(bmd *bucketMD) {
-	var (
-		bmdFullPath string
-		err         error
-	)
-	r._put(bmd)
+func (bo *bmdOwnerPrx) put(bmd *bucketMD) {
+	bo._put(bmd)
+	err := cmn.LocalSave(bo.fpath, bmd)
+	if err != nil {
+		glog.Errorf("failed to store %s as %s, err: %v", bmdTermName, bo.fpath, err)
+	}
+}
 
-	switch r.node {
-	case cmn.Target:
-		var mpath *fs.MountpathInfo
-		mpath, err = fs.Mountpaths.MpathForMetadata()
-		if err != nil {
-			glog.Errorf("failed to resolve mountpath, err: %v", err)
+/////////////////
+// bmdOwnerTgt //
+/////////////////
+
+func newBMDOwnerTgt() *bmdOwnerTgt {
+	return &bmdOwnerTgt{}
+}
+
+func (bo *bmdOwnerTgt) find() (avail, curr, prev fs.MPI) {
+	avail, _ = fs.Mountpaths.Get()
+	curr, prev = make(fs.MPI, 2), make(fs.MPI, 2)
+	for mpath, mpathInfo := range avail {
+		fpath := filepath.Join(mpath, bmdFname)
+		if err := fs.Access(fpath); err == nil {
+			curr[mpath] = mpathInfo
+		}
+		fpath += bmdFext
+		if err := fs.Access(fpath); err == nil {
+			prev[mpath] = mpathInfo
+		}
+	}
+	return
+}
+
+func (bo *bmdOwnerTgt) init() {
+	load := func(mpi fs.MPI, suffix bool) (bmd *bucketMD) {
+		for mpath := range mpi {
+			bmd = newBucketMD()
+			fpath := filepath.Join(mpath, bmdFname)
+			if suffix {
+				fpath += bmdFext
+			}
+			if err := cmn.LocalLoad(fpath, bmd); err != nil {
+				old := &oldBMD{LBmap: bmd.LBmap, CBmap: bmd.CBmap}
+				ers := err
+				// backward-compat
+				if err := cmn.LocalLoad(fpath, old); err != nil {
+					glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, fpath, ers)
+					bmd = nil
+				} else {
+					bmd.Version = old.Version
+					bmd.Origin = 99
+					break
+				}
+			} else {
+				break
+			}
+		}
+		return
+	}
+
+	var (
+		bmd           *bucketMD
+		_, curr, prev = bo.find()
+	)
+	if len(curr) > 0 {
+		bmd = load(curr, false)
+	}
+	if bmd == nil && len(prev) > 0 {
+		glog.Errorf("attempting to load older %s version...", bmdTermName)
+		bmd = load(prev, true)
+	}
+	if bmd == nil {
+		glog.Infof("instantiating empty %s", bmdTermName)
+		bmd = newBucketMD()
+	}
+	bo._put(bmd)
+}
+
+func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
+	var (
+		avail, curr, prev = bo.find()
+		cnt               int
+	)
+	bo._put(bmd)
+	// write new
+	for mpath := range avail {
+		fpath := filepath.Join(mpath, bmdFname)
+		if err := cmn.LocalSave(fpath, bmd); err != nil {
+			glog.Errorf("failed to store %s as %s, err: %v", bmdTermName, fpath, err)
+			continue
+		}
+		cnt++
+		if _, ok := curr[mpath]; ok {
+			delete(curr, mpath)
+		}
+		if cnt >= bmdCopies {
 			break
 		}
-		bmdFullPath = filepath.Join(mpath.Path, cmn.BucketmdBackupFile)
-	case cmn.Proxy:
-		bmdFullPath = filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
-	default:
-		cmn.AssertMsg(false, r.node)
 	}
-	if bmdFullPath != "" {
-		err = cmn.LocalSave(bmdFullPath, bmd)
-		if err != nil {
-			glog.Errorf("failed to store %s as %s, err: %v", bmdTermName, bmdFullPath, err)
+	if cnt == 0 {
+		glog.Errorf("failed to store %s (have zero copies)", bmdTermName)
+		return
+	}
+	// rename remaining prev
+	for mpath := range curr {
+		from := filepath.Join(mpath, bmdFname)
+		to := from + bmdFext
+		if err := os.Rename(from, to); err != nil {
+			glog.Errorf("failed to rename %s prev version, err: %v", bmdTermName, err)
+		}
+		if _, ok := prev[mpath]; ok {
+			delete(prev, mpath)
 		}
 	}
-}
-
-// implements cluster.Bowner.Get
-func (r *bmdowner) Get() *cluster.BMD {
-	return &r.get().BMD
-}
-func (r *bmdowner) get() (bucketmd *bucketMD) {
-	return (*bucketMD)(r.bucketmd.Load())
+	// remove remaining older
+	for mpath := range prev {
+		fpath := filepath.Join(mpath, bmdFname) + bmdFext
+		if err := os.Remove(fpath); err != nil {
+			glog.Errorf("failed to remove %s prev version, err: %v", bmdTermName, err)
+		}
+	}
 }

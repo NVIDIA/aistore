@@ -109,7 +109,7 @@ type (
 		httpclientGetPut   *http.Client // http client to execute target <=> target GET & PUT (object)
 		keepalive          keepaliver
 		smapowner          *smapowner
-		bmdowner           *bmdowner
+		bmdowner           bmdOwner
 		xactions           *xactionsRegistry
 		statsif            stats.Tracker
 		statsdC            statsd.Client
@@ -372,7 +372,6 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	}
 
 	h.smapowner = newSmapowner()
-	h.bmdowner = newBmdowner(h.si.DaemonType)
 	h.xactions = newXactions() // extended actions
 }
 

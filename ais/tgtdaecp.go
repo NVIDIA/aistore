@@ -870,8 +870,8 @@ func (t *targetrunner) testCachepathMounts() {
 }
 
 func (t *targetrunner) detectMpathChanges() {
-	// mpath config dir
-	mpathconfigfqn := filepath.Join(cmn.GCO.Get().Confdir, cmn.MountpathBackupFile)
+	const mountpathFname = "mpaths"
+	mpathconfigfqn := filepath.Join(cmn.GCO.Get().Confdir, mountpathFname)
 
 	type mfs struct {
 		Available cmn.StringSet `json:"available"`

@@ -38,7 +38,7 @@ func (p *proxyrunner) bootstrap() {
 	// step 1: load a local copy of the cluster map and
 	//         try to use it for discovery of the current one
 	smap = newSmap()
-	if err := cmn.LocalLoad(filepath.Join(config.Confdir, cmn.SmapBackupFile), smap); err == nil {
+	if err := cmn.LocalLoad(filepath.Join(config.Confdir, smapFname), smap); err == nil {
 		if smap.CountTargets() > 0 || smap.CountProxies() > 1 {
 			glog.Infof("%s: fast discovery based on %s", p.si.Name(), smap.pp())
 			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)

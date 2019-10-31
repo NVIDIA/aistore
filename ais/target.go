@@ -96,17 +96,20 @@ func (gfn *baseGFN) deactivate() { gfn.lookup.Store(false); glog.Infoln(gfn.tag,
 // target runner
 //
 func (t *targetrunner) Run() error {
-	config := cmn.GCO.Get()
-
-	var ereg error
+	var (
+		config = cmn.GCO.Get()
+		ereg   error
+	)
 	t.httprunner.init(getstorstatsrunner(), config)
+	t.bmdowner = newBMDOwnerTgt()
+
 	t.registerStats()
 	t.httprunner.keepalive = gettargetkeepalive()
 
 	dryinit()
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
-	t.bmdowner.init()
+	t.bmdowner.init() // initialize owner and load BMD
 
 	smap := newSmap()
 	smap.Tmap[t.si.DaemonID] = t.si

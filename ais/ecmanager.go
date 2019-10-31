@@ -26,8 +26,8 @@ type ecManager struct {
 	t         *targetrunner
 	smap      *cluster.Smap
 	targetCnt atomic.Int32 // atomic, to avoid races between read/write on smap
-	bowner    *bmdowner    // bucket manager
-	bckMD     *bucketMD    // bucket metadata, used to get EC enabled/disabled information
+	bowner    bmdOwner     // bmd owner
+	bckMD     *bucketMD    // bmd (bucket metadata) used to get EC enabled/disabled information
 
 	xacts map[string]*ec.BckXacts // bckName -> xact map, only ais buckets allowed, no naming collisions
 
