@@ -555,6 +555,9 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	} else {
 		if err, errCode := t.doAppend(r, lom, started); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
+		} else {
+			// return node id as append handle
+			w.Header().Set(cmn.HeaderNodeID, t.si.DaemonID)
 		}
 	}
 }

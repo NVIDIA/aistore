@@ -64,7 +64,7 @@ type AppendArgs struct {
 	Bucket     string
 	Provider   string
 	Object     string
-	Target     string
+	Handle     string
 }
 
 // HeadObject API
@@ -318,6 +318,42 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	return err
 }
 
+// AppendObject API
+//
+// TODO
+func AppendObject(args *AppendArgs) (handle string, err error) {
+	query := url.Values{}
+	query.Add(cmn.URLParamPutType, cmn.AppendOp)
+	query.Add(cmn.URLParamAppendNode, args.Handle)
+	query.Add(cmn.URLParamProvider, args.Provider)
+	params := OptionalParams{Query: query}
+
+	args.BaseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
+	resp, err := doHTTPRequestGetResp(args.BaseParams, path, nil, params)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	return resp.Header.Get(cmn.HeaderNodeID), nil
+}
+
+// FlushObject API
+//
+// TODO
+func FlushObject(args *AppendArgs) (err error) {
+	query := url.Values{}
+	query.Add(cmn.URLParamPutType, cmn.FlushOp)
+	query.Add(cmn.URLParamAppendNode, args.Handle)
+	query.Add(cmn.URLParamProvider, args.Provider)
+	params := OptionalParams{Query: query}
+
+	args.BaseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
+	_, err := DoHTTPRequest(args.BaseParams, path, nil, params)
+	return err
+}
+
 // RenameObject API
 //
 // Creates a cmn.ActionMsg with the new name of the object
@@ -551,30 +587,4 @@ func doDlStatusRequest(baseParams *BaseParams, path string, optParams OptionalPa
 
 	err = jsoniter.Unmarshal(respBytes, &resp)
 	return resp, err
-}
-
-func AppendObject(args *AppendArgs) error {
-	query := url.Values{}
-	query.Add(cmn.URLParamPutType, cmn.AppendOp)
-	query.Add(cmn.URLParamAppendNode, args.Target)
-	query.Add(cmn.URLParamProvider, args.Provider)
-	params := OptionalParams{Query: query}
-
-	args.BaseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
-	_, err := DoHTTPRequest(args.BaseParams, path, nil, params)
-	return err
-}
-
-func FlushObject(args *AppendArgs) error {
-	query := url.Values{}
-	query.Add(cmn.URLParamPutType, cmn.FlushOp)
-	query.Add(cmn.URLParamAppendNode, args.Target)
-	query.Add(cmn.URLParamProvider, args.Provider)
-	params := OptionalParams{Query: query}
-
-	args.BaseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
-	_, err := DoHTTPRequest(args.BaseParams, path, nil, params)
-	return err
 }

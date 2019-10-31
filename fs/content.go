@@ -15,7 +15,7 @@ import (
 )
 
 /*
- * Besides objects we must to deal with additional files like: workfiles, dsort
+ * Besides objects we must deal with additional files like: workfiles, dsort
  * intermediate files (used when spilling to disk) or EC slices. These files can
  * have different rules of rebalancing, evicting and other processing. Each
  * content type needs to implement ContentResolver to reflect the rules and

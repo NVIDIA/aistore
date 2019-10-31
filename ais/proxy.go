@@ -454,7 +454,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			si = smap.Smap.GetTarget(nodeID)
-			if si != nil {
+			if si == nil {
 				p.invalmsghdlr(w, r, cmn.DoesNotExist)
 				return
 			}
