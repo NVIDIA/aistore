@@ -688,6 +688,7 @@ func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseP
 func TestCloudMirror(t *testing.T) {
 	var (
 		m = &ioContext{
+			t:      t,
 			num:    64,
 			bucket: clibucket,
 		}
@@ -737,6 +738,7 @@ func TestCloudMirror(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 	m.ensureNumCopies(2)
+	time.Sleep(4 * time.Second)
 
 	// Increase number of copies
 	makeNCopies(t, 3, m.bucket, baseParams)
