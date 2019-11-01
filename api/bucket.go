@@ -657,6 +657,7 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 	}
 
 	msg.Fast = true
+	msg.Cached = true
 	b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
 	if err != nil {
 		return nil, err

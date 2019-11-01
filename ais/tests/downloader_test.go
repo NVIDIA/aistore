@@ -689,6 +689,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 		obj     = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
 	)
 
+	tutils.DestroyBucket(t, params.URL, bucket)
 	_, err := api.DownloadSingle(params, generateDownloadDesc(), bucket, objName, obj)
 
 	if err == nil {

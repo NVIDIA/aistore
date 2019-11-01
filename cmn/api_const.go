@@ -179,7 +179,6 @@ const (
 	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
 	URLParamProxyID          = "pid" // ID of the redirecting proxy
 	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy
-	URLParamCached           = "cho" // true: return cached objects (names & metadata); false: list Cloud bucket
 	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary and the entire cluster)
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
 	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role

@@ -1135,6 +1135,9 @@ func TestCopyBucket(t *testing.T) {
 }
 
 func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
 	const (
 		newTestBucketName = TestBucketName + "_new"
 	)

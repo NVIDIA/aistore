@@ -62,8 +62,7 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck, msg *cmn.SelectMsg) bool {
 	query := r.URL.Query()
 	taskAction := query.Get(cmn.URLParamTaskAction)
-	useCache, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamCached))
-	silent, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamSilent))
+	silent, _ := cmn.ParseBool(query.Get(cmn.URLParamSilent))
 	ctx := t.contextWithAuth(r.Header)
 	// create task call
 	if taskAction == cmn.TaskStart {
@@ -73,9 +72,9 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 		switch action {
 		case cmn.ActListObjects:
-			_, err = t.xactions.renewBckListXact(ctx, t, bck, msg, useCache)
+			_, err = t.xactions.renewBckListXact(ctx, t, bck, msg)
 		case cmn.ActSummaryBucket:
-			_, err = t.xactions.renewBckSummaryXact(ctx, t, bck, msg, useCache)
+			_, err = t.xactions.renewBckSummaryXact(ctx, t, bck, msg)
 		default:
 			t.invalmsghdlr(w, r, fmt.Sprintf("invalid action: %s", action))
 			return false

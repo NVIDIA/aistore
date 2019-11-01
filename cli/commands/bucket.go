@@ -161,19 +161,16 @@ func listBucketObj(c *cli.Context, bucket string, provider string) error {
 		}
 	}
 
+	msg := &cmn.SelectMsg{Props: props, Prefix: prefix, Cached: flagIsSet(c, cachedFlag)}
 	query := url.Values{}
 	query.Add(cmn.URLParamProvider, parseStrFlag(c, providerFlag))
 	query.Add(cmn.URLParamPrefix, prefix)
-	if flagIsSet(c, cachedFlag) {
-		if provider == cmn.AIS {
-			fmt.Fprintf(c.App.ErrWriter, "warning: ignoring %s flag: irrelevant for ais buckets\n", cachedFlag.Name)
-		} else {
-			query.Add(cmn.URLParamCached, "true")
-		}
+	if flagIsSet(c, cachedFlag) && provider == cmn.AIS {
+		fmt.Fprintf(c.App.ErrWriter, "warning: ignoring %s flag: irrelevant for ais buckets\n", cachedFlag.Name)
+		msg.Cached = false
 	}
 
-	msg := &cmn.SelectMsg{Props: props, Prefix: prefix}
-	if flagIsSet(c, fastFlag) {
+	if flagIsSet(c, fastFlag) && (provider == cmn.AIS || msg.Cached) {
 		msg.Fast = true
 		objList, err := api.ListBucketFast(defaultAPIParams, bucket, msg, query)
 		if err != nil {
@@ -183,6 +180,9 @@ func listBucketObj(c *cli.Context, bucket string, provider string) error {
 		return printObjectNames(c, objList.Entries, objectListFilter, showUnmatched, !flagIsSet(c, noHeaderFlag))
 	}
 
+	if provider != cmn.AIS && flagIsSet(c, fastFlag) {
+		fmt.Fprintf(c.App.ErrWriter, "warning: %q for cloud buckets takes an effect only with %q\n", fastFlag.Name, cachedFlag.Name)
+	}
 	if flagIsSet(c, markerFlag) {
 		msg.PageMarker = parseStrFlag(c, markerFlag)
 	}

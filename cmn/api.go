@@ -98,6 +98,7 @@ type SelectMsg struct {
 	PageSize   int    `json:"pagesize"`      // maximum number of entries returned by list bucket call
 	TaskID     int64  `json:"taskid,string"` // task ID for long running requests
 	Fast       bool   `json:"fast"`          // performs a fast traversal of the bucket contents (returns only names)
+	Cached     bool   `json:"cached"`        // for cloud buckets - list only cached objects
 }
 
 // ListRangeMsgBase contains fields common to Range and List operations

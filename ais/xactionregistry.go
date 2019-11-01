@@ -729,18 +729,17 @@ func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bck *cluster.Bck, msg *cmn.SelectMsg, cached bool) (*xactBckListTask, error) {
+func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bck *cluster.Bck, msg *cmn.SelectMsg) (*xactBckListTask, error) {
 	id := msg.TaskID
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
 	}
 	e := &bckListTaskEntry{
-		ctx:    ctx,
-		t:      t,
-		id:     id,
-		bck:    bck,
-		msg:    msg,
-		cached: cached,
+		ctx: ctx,
+		t:   t,
+		id:  id,
+		bck: bck,
+		msg: msg,
 	}
 	if err := e.Start(id); err != nil {
 		return nil, err
@@ -751,18 +750,17 @@ func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner
 }
 
 func (r *xactionsRegistry) renewBckSummaryXact(ctx context.Context, t *targetrunner, bck *cluster.Bck,
-	msg *cmn.SelectMsg, cached bool) (*xactBckSummaryTask, error) {
+	msg *cmn.SelectMsg) (*xactBckSummaryTask, error) {
 	id := msg.TaskID
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
 	}
 	e := &bckSummaryTaskEntry{
-		id:     id,
-		ctx:    ctx,
-		t:      t,
-		bck:    bck,
-		msg:    msg,
-		cached: cached,
+		id:  id,
+		ctx: ctx,
+		t:   t,
+		bck: bck,
+		msg: msg,
 	}
 	if err := e.Start(id); err != nil {
 		return nil, err
@@ -785,7 +783,7 @@ func (r *xactBckListTask) Run() {
 	if r.bck.IsAIS() {
 		r.UpdateResult(walk.LocalObjPage())
 	} else {
-		r.UpdateResult(walk.CloudObjPage(r.cached))
+		r.UpdateResult(walk.CloudObjPage())
 	}
 }
 

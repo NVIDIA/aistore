@@ -895,10 +895,10 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		smsg.TaskID = id
 	}
 	headerID := r.URL.Query().Get(cmn.URLParamTaskID)
-	if bck.IsAIS() {
+	if bck.IsAIS() || smsg.Cached {
 		bckList, taskID, err = p.listAISBucket(bck, smsg, headerID)
 	} else {
-		bckList, taskID, err = p.listCloudBucket(r, bck, headerID, smsg)
+		bckList, taskID, err = p.listCloudBucket(bck, headerID, smsg)
 	}
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1881,7 +1881,6 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 	if msg.PageSize != 0 {
 		pageSize = msg.PageSize
 	}
-
 	// start new async task if client did not provide taskID (neither in headers nor in SelectMsg)
 	isNew, q, err := p.initAsyncQuery(headerID, &msg)
 	if err != nil {
@@ -1965,7 +1964,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 
 		// shrink the result to `pageSize` entries. If the page is full than
 		// mark the result incomplete by setting PageMarker
-		if len(allEntries.Entries) >= pageSize {
+		if pageSize > 0 && len(allEntries.Entries) >= pageSize {
 			for i := pageSize; i < len(allEntries.Entries); i++ {
 				allEntries.Entries[i] = nil
 			}
@@ -1987,9 +1986,8 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 //      * the list of objects if the aync task finished (taskID is 0 in this case)
 //      * non-zero taskID if the task is still running
 //      * error
-func (p *proxyrunner) listCloudBucket(r *http.Request, bck *cluster.Bck, headerID string,
+func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 	msg cmn.SelectMsg) (allEntries *cmn.BucketList, code int64, err error) {
-	useCache, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamCached))
 	if msg.PageSize > maxPageSize {
 		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.PageSize, bck, maxPageSize)
 	}
@@ -2002,9 +2000,6 @@ func (p *proxyrunner) listCloudBucket(r *http.Request, bck *cluster.Bck, headerI
 	isNew, q, err := p.initAsyncQuery(headerID, &msg)
 	if err != nil {
 		return nil, 0, err
-	}
-	if useCache {
-		q.Set(cmn.URLParamCached, "true")
 	}
 	q.Set(cmn.URLParamProvider, cmn.Cloud)
 
@@ -2059,9 +2054,6 @@ func (p *proxyrunner) listCloudBucket(r *http.Request, bck *cluster.Bck, headerI
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
 	q.Set(cmn.URLParamProvider, cmn.Cloud)
-	if useCache {
-		q.Set(cmn.URLParamCached, "true")
-	}
 	args.req.Query = q
 	results = p.bcastTo(args)
 
@@ -2088,7 +2080,7 @@ func (p *proxyrunner) listCloudBucket(r *http.Request, bck *cluster.Bck, headerI
 			continue
 		}
 
-		if useCache {
+		if msg.Cached {
 			allEntries.Entries, pageMarker = objwalk.ConcatObjLists(
 				[][]*cmn.BucketEntry{allEntries.Entries, bucketList.Entries}, pageSize)
 		} else {

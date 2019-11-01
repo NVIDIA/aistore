@@ -150,11 +150,10 @@ func (m *ioContext) puts(dontFail ...bool) int {
 func (m *ioContext) cloudPuts() {
 	var (
 		baseParams = tutils.DefaultBaseAPIParams(m.t)
-		msg        = &cmn.SelectMsg{Props: cmn.GetPropsIsCached}
+		msg        = &cmn.SelectMsg{Props: cmn.GetPropsIsCached, Cached: true}
 		query      = make(url.Values)
 	)
 
-	query.Set(cmn.URLParamCached, "true")
 	srcBckList, err := api.ListBucket(baseParams, m.bucket, msg, 0, query)
 	tassert.CheckFatal(m.t, err)
 
@@ -296,8 +295,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 
 	// List Bucket - primarily for the copies
 	query := make(url.Values)
-	query.Set(cmn.URLParamCached, "true")
-	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, Cached: true}
 	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0, query)
 	tassert.CheckFatal(m.t, err)
 

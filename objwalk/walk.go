@@ -148,7 +148,6 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 
 	// combine results into one long list
 	// real size of page is set in newFileWalk, so read it from any of results inside loop
-	pageSize := cmn.DefaultPageSize
 	objLists := make([][]*cmn.BucketEntry, 0)
 	for r := range ch {
 		if r.err != nil {
@@ -161,7 +160,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 		objLists = append(objLists, r.infos.objs)
 	}
 
-	maxSize := pageSize
+	maxSize := cmn.DefaultPageSize
 	if w.msg.Fast {
 		maxSize = 0
 	}
@@ -185,8 +184,8 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 // talking to cloud provider.
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
-func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
-	if cached {
+func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
+	if w.msg.Cached {
 		return w.LocalObjPage()
 	}
 
