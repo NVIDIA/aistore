@@ -5,7 +5,6 @@
 package fs
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"sync"
@@ -14,109 +13,143 @@ import (
 	"github.com/jacobsa/fuse/fuseops"
 )
 
-const blockSize = 128 * cmn.KiB
-
-// TODO: optimize buffer allocations
-type blockReader struct {
-	file    *FileInode
-	block   *bytes.Reader
-	blockNo int64
-	valid   bool
-}
-
-func newBlockReader(file *FileInode) *blockReader {
-	return &blockReader{
-		file:  file,
-		valid: false,
-	}
-}
-
-func (r *blockReader) load(blockNo int64) (err error) {
-	r.block, _, err = r.file.Load(blockNo*blockSize, blockSize)
-	if err != nil {
-		r.valid, r.block = false, nil
-		return err
-	}
-	r.valid, r.blockNo = true, blockNo
-	return nil
-}
-
-func (r *blockReader) read(dst []byte, blockNo int64, blockOffset int64) (n int, err error) {
-	if !r.valid || r.blockNo != blockNo {
-		if err = r.load(blockNo); err != nil {
-			return
-		}
-	}
-
-	n, err = r.block.ReadAt(dst, blockOffset)
-	if err == io.EOF {
-		err = nil
-	}
-	return
-}
-
 type fileHandle struct {
 	// Handle ID
 	id fuseops.HandleID
 
 	// File inode that this handle is tied to
-	file *FileInode
+	file     *FileInode
+	fileSize int64
 
+	// Guard
 	mu sync.Mutex
 
 	// Reading
-	blockReader *blockReader
+	readBuffer *BlockBuffer
 
-	// Writing
+	// Writing - Note: not yet fully implemented
 	dirty       bool
-	size        uint64
+	wsize       uint64
 	writeBuffer []byte
 }
 
+// REQUIRES_LOCK(file)
 func newFileHandle(id fuseops.HandleID, file *FileInode) *fileHandle {
 	return &fileHandle{
-		id:          id,
-		file:        file,
-		blockReader: newBlockReader(file),
+		id:       id,
+		file:     file,
+		fileSize: int64(file.Size()),
 	}
 }
 
-func (fh *fileHandle) readChunk(dst []byte, offset int64) (n int, err error) {
-	var (
-		firstBlock = offset / blockSize
-		lastBlock  = (offset + int64(len(dst)) - 1) / blockSize
-	)
+// REQUIRES_LOCK(fh.mu)
+func (fh *fileHandle) destroy() {
+	if fh.readBuffer != nil {
+		fh.readBuffer.Free()
+	}
+}
 
+///////////
+// READING
+///////////
+
+// REQUIRES_LOCK(fh.mu), LOCKS(fh.file)
+func (fh *fileHandle) ensureReadBuffer() int64 {
+	if fh.readBuffer != nil {
+		return fh.readBuffer.BlockSize()
+	}
+
+	var blockSize int64
+	if fh.fileSize < MinBlockSize {
+		blockSize = MinBlockSize
+	} else if fh.fileSize > MaxBlockSize {
+		blockSize = MaxBlockSize
+	} else {
+		blockSize = (fh.fileSize + cmn.PageSize - 1) & cmn.PageSize
+	}
+
+	fh.readBuffer = NewBlockBuffer(blockSize)
+	return blockSize
+}
+
+// LOCKS(fh.mu)
+func (fh *fileHandle) readChunk(dst []byte, offset int64) (n int, err error) {
+	if offset >= fh.fileSize {
+		return 0, io.EOF
+	}
+
+	// Lock the handler in order to read
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
-	// Common case, read from one block
-	if firstBlock == lastBlock {
+	// Ensure that buffer is ready for reading
+	blockSize := fh.ensureReadBuffer()
+	dstLen := len(dst)
+
+	for {
+		blockNo := offset / blockSize
 		blockOffset := offset % blockSize
-		n, err = fh.blockReader.read(dst, firstBlock, blockOffset)
-		return
+
+		err = fh.readBuffer.EnsureBlock(blockNo, fh.file.Load)
+		if err != nil {
+			// In case of error is encountered while loading a block,
+			// return the number of bytes read so far.
+			break
+		}
+
+		var nread int
+		nread, err = fh.readBuffer.ReadAt(dst[n:], blockOffset)
+
+		n += nread
+		if n == dstLen {
+			// Read enough bytes, stop.
+			break
+		}
+
+		offset += int64(nread)
+		if err == io.EOF {
+			// Error io.EOF can indicate either end of file or end of block.
+			if offset == fh.fileSize {
+				// End of file reached.
+				break
+			}
+			// End of block, but not end of file reached, continue reading
+			// from next block.
+			err = nil
+			continue
+		}
+
+		// In case of any other error encountered while reading a block,
+		// return the number of bytes read so far.
+		if err != nil {
+			break
+		}
+
+		// No errors, not end of block, continue reading from the next block.
 	}
 
-	// Read from two adjacent blocks directly from file (object)
-	n, err = fh.file.Read(dst, offset)
 	return
 }
+
+///////////
+// WRITING
+///////////
 
 func (fh *fileHandle) writeChunk(data []byte, offset uint64) error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
 	// Allow only appending for now
-	if offset != fh.size {
+	if offset != fh.wsize {
 		return fmt.Errorf("write file (inode %d): random access write not yet implemented", fh.file.ID())
 	}
 
-	if fh.size == 0 {
+	if fh.wsize == 0 {
 		fh.writeBuffer = make([]byte, 0, len(data))
 		fh.dirty = true
 	}
 	fh.writeBuffer = append(fh.writeBuffer, data...)
-	fh.size += uint64(len(data))
+	fh.wsize += uint64(len(data))
 	return nil
 }
 
@@ -127,5 +160,5 @@ func (fh *fileHandle) flush() error {
 	if !fh.dirty {
 		return nil
 	}
-	return fh.file.Write(fh.writeBuffer, fh.size)
+	return fh.file.Write(fh.writeBuffer, fh.wsize)
 }

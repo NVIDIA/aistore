@@ -5,7 +5,6 @@
 package fs
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/NVIDIA/aistore/fuse/ais"
@@ -39,28 +38,26 @@ func (file *FileInode) IsDir() bool {
 }
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) Load(offset int64, length int64) (r *bytes.Reader, n int64, err error) {
-	buffer := bytes.NewBuffer(make([]byte, 0, length))
-	n, err = file.object.GetChunk(buffer, offset, length)
-	if err != nil {
-		return nil, 0, err
-	}
-	return bytes.NewReader(buffer.Bytes()), n, nil
+func (file *FileInode) Size() uint64 {
+	return file.attrs.Size
 }
+
+///////////
+// Reading
+///////////
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) Read(dst []byte, offset int64) (n int, err error) {
-	reader, _, err := file.Load(offset, int64(len(dst)))
+func (file *FileInode) Load(w io.Writer, offset int64, length int64) (n int64, err error) {
+	n, err = file.object.GetChunk(w, offset, length)
 	if err != nil {
-		return
+		return 0, err
 	}
-
-	n, err = reader.Read(dst)
-	if err == io.EOF {
-		err = nil
-	}
-	return
+	return n, nil
 }
+
+///////////
+// Writing
+///////////
 
 // REQUIRES_LOCK(file)
 func (file *FileInode) Write(data []byte, size uint64) (err error) {

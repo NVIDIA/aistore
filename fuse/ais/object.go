@@ -17,17 +17,15 @@ import (
 type Object struct {
 	apiParams *api.BaseParams
 	bucket    string
-
-	Name  string
-	Size  int64
-	Atime time.Time
+	Name      string
+	Size      int64
+	Atime     time.Time
 }
 
 func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, err error) {
 	query := url.Values{}
-	query.Add(cmn.URLParamOffset, strconv.Itoa(int(offset))) // TODO: better conversion?
-	query.Add(cmn.URLParamLength, strconv.Itoa(int(length))) // TODO: better conversion?
-
+	query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
+	query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
 	objArgs := api.GetObjectInput{
 		Writer: w,
 		Query:  query,
@@ -37,7 +35,6 @@ func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, e
 	if err != nil {
 		return 0, newObjectIOError(err, "GetChunk", obj.Name)
 	}
-
 	return
 }
 

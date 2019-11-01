@@ -6,6 +6,7 @@ package fs
 
 import (
 	"context"
+	"io"
 	"path"
 	"syscall"
 
@@ -72,13 +73,20 @@ func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err
 
 func (fs *aisfs) ReadFile(ctx context.Context, req *fuseops.ReadFileOp) (err error) {
 	fs.mu.Lock()
-	fileHandle := fs.lookupFhandleMustExist(req.Handle)
+	fhandle := fs.lookupFhandleMustExist(req.Handle)
 	fs.mu.Unlock()
 
-	req.BytesRead, err = fileHandle.readChunk(req.Dst, req.Offset)
+	req.BytesRead, err = fhandle.readChunk(req.Dst, req.Offset)
+
+	// As required by FUSE, io.EOF should not be reported as an error.
+	if err == io.EOF {
+		err = nil
+	}
+
 	if err != nil {
 		return fs.handleIOError(err)
 	}
+
 	return
 }
 
@@ -109,7 +117,14 @@ func (fs *aisfs) FlushFile(ctx context.Context, req *fuseops.FlushFileOp) (err e
 
 func (fs *aisfs) ReleaseFileHandle(ctx context.Context, req *fuseops.ReleaseFileHandleOp) (err error) {
 	fs.mu.Lock()
+
+	// Lookup and release the handle's resources.
+	fhandle := fs.lookupFhandleMustExist(req.Handle)
+	fhandle.destroy()
+
+	// Remove the handle from the file handles table.
 	delete(fs.fileHandles, req.Handle)
+
 	fs.mu.Unlock()
 	return
 }

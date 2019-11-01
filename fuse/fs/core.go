@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 
 	"github.com/NVIDIA/aistore/fuse/ais"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
@@ -54,6 +55,14 @@ const (
 	rootPath       = ""
 	invalidInodeID = fuseops.InodeID(fuseops.RootInodeID + 1)
 )
+
+var (
+	glMem2 *memsys.Mem2 // Global memory manager
+)
+
+func init() {
+	glMem2 = memsys.GMM()
+}
 
 // File system implementation.
 type aisfs struct {
@@ -178,10 +187,12 @@ func (fs *aisfs) allocateDirHandle(dir *DirectoryInode) fuseops.HandleID {
 	return id
 }
 
-// REQUIRES_LOCK(fs.mu)
+// REQUIRES_LOCK(fs.mu), LOCKS(file)
 func (fs *aisfs) allocateFileHandle(file *FileInode) fuseops.HandleID {
 	id := fs.nextHandleID()
+	file.Lock()
 	fs.fileHandles[id] = newFileHandle(id, file)
+	file.Unlock()
 	return id
 }
 
