@@ -10,8 +10,8 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/NVIDIA/aistore/aisfs/ais"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fuse/ais"
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseutil"
 )

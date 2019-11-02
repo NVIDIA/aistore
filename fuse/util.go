@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/aisfs/fs"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/fuse/fs"
 	"github.com/urfave/cli"
 )
 

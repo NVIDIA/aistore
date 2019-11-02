@@ -7,7 +7,7 @@ package fs
 import (
 	"path"
 
-	"github.com/NVIDIA/aistore/aisfs/ais"
+	"github.com/NVIDIA/aistore/fuse/ais"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
 )

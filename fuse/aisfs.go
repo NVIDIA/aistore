@@ -14,7 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 
-	"github.com/NVIDIA/aistore/aisfs/fs"
+	"github.com/NVIDIA/aistore/fuse/fs"
 	"github.com/jacobsa/daemonize"
 	"github.com/jacobsa/fuse"
 	"github.com/urfave/cli"
