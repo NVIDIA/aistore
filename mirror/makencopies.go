@@ -59,12 +59,12 @@ func NewXactMNC(id int64, bck *cluster.Bck, t cluster.Target, slab *memsys.Slab2
 }
 
 func (r *XactBckMakeNCopies) Run() (err error) {
-	var numjs int
-	if numjs, err = r.init(); err != nil {
+	var mpathersCount int
+	if mpathersCount, err = r.init(); err != nil {
 		return
 	}
 	glog.Infoln(r.String(), "copies=", r.copies)
-	return r.xactBckBase.run(numjs)
+	return r.xactBckBase.run(mpathersCount)
 }
 
 func ValidateNCopies(prefix string, copies int) error {

@@ -396,9 +396,6 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			return
 		}
-		if err = lom.Persist(); err != nil {
-			return
-		}
 	}
 	return
 }

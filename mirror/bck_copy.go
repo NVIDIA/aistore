@@ -40,10 +40,7 @@ func NewXactBCC(id int64, bckFrom, bckTo *cluster.Bck, action string, t cluster.
 }
 
 func (r *XactBckCopy) Run() (err error) {
-	var mpathCount int
-	if mpathCount, err = r.init(); err != nil {
-		return
-	}
+	mpathCount := r.init()
 	glog.Infoln(r.String(), r.Bucket(), "=>", r.bckTo.Name)
 	return r.xactBckBase.run(mpathCount)
 }
@@ -56,7 +53,7 @@ func (r *XactBckCopy) Description() string {
 // private methods
 //
 
-func (r *XactBckCopy) init() (mpathCount int, err error) {
+func (r *XactBckCopy) init() (mpathCount int) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()
 		config            = cmn.GCO.Get()

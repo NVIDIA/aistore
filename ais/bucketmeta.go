@@ -139,13 +139,13 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 	if !bck.IsAIS() {
 		mm = m.CBmap
 	}
-	if _, ok := mm[bck.Name]; !ok {
-		cmn.Assert(false)
-	}
+	prevProps, ok := mm[bck.Name]
+	cmn.Assert(ok)
 	cmn.Assert(!p.InProgress)
 
 	m.Version++
-	p.BID = m.GenBucketID(bck.IsAIS())
+	p.BID = prevProps.BID // Always use previous BID
+	cmn.Assert(p.BID != 0)
 	mm[bck.Name] = p
 }
 
