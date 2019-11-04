@@ -211,6 +211,10 @@ func (awsp *awsProvider) ListBucket(ct context.Context, bucket string, msg *cmn.
 		bckList.PageMarker = bckList.Entries[len(bckList.Entries)-1].Name
 	}
 
+	if len(bckList.Entries) == 0 {
+		return
+	}
+
 	// if version is requested, read versions page by page and stop
 	// when there is nothing to read or the version page marker is
 	// greater than object page marker
@@ -218,6 +222,7 @@ func (awsp *awsProvider) ListBucket(ct context.Context, bucket string, msg *cmn.
 	if strings.Contains(msg.Props, cmn.GetPropsVersion) {
 		versions := make(map[string]*string, initialBucketListSize)
 		keyMarker := msg.PageMarker
+
 		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket)}
 		if msg.Prefix != "" {
 			verParams.Prefix = aws.String(msg.Prefix)

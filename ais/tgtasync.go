@@ -58,7 +58,6 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 // - creates a new task that runs in background
 // - returns status of a running task by its ID
 // - returns the result of a task by its ID
-// TODO: support cloud buckets
 func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck, msg *cmn.SelectMsg) bool {
 	query := r.URL.Query()
 	taskAction := query.Get(cmn.URLParamTaskAction)

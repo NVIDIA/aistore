@@ -862,7 +862,7 @@ func (r *xactBckSummaryTask) Run() {
 				TotalDisksSize: totalDisksSize,
 			}
 
-			if r.msg.Fast {
+			if r.msg.Fast && (bck.IsAIS() || r.msg.Cached) {
 				for _, mpathInfo := range availablePaths {
 					path := mpathInfo.MakePathBucket(fs.ObjectType, bck.Name, bck.Provider)
 					size, err := ios.GetDirSize(path)
@@ -885,9 +885,18 @@ func (r *xactBckSummaryTask) Run() {
 					summary.ObjCount += uint64(fileCount)
 				}
 			} else { // slow path
+				var (
+					list *cmn.BucketList
+					err  error
+				)
+
 				for {
 					walk := objwalk.NewWalk(context.Background(), r.t, bck, r.msg)
-					list, err := walk.LocalObjPage()
+					if bck.IsAIS() {
+						list, err = walk.LocalObjPage()
+					} else {
+						list, err = walk.CloudObjPage()
+					}
 					if err != nil {
 						errCh <- err
 						return

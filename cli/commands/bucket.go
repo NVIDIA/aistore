@@ -252,17 +252,20 @@ func listBucketObj(c *cli.Context, bucket string, provider string) error {
 	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-func bucketDetails(c *cli.Context, bucket, provider string, fast bool) error {
+func bucketDetails(c *cli.Context, bucket, provider string) error {
 	fDetails := func() error {
-		return bucketDetailsSync(c, bucket, provider, fast)
+		return bucketDetailsSync(c, bucket, provider)
 	}
 	return cmn.WaitForFunc(fDetails, longCommandTime)
 }
 
 // The function shows bucket details
-func bucketDetailsSync(c *cli.Context, bucket, provider string, fast bool) error {
+func bucketDetailsSync(c *cli.Context, bucket, provider string) error {
 	// Request bucket summaries
-	msg := &cmn.SelectMsg{Fast: fast}
+	msg := &cmn.SelectMsg{
+		Fast:   flagIsSet(c, fastDetailsFlag),
+		Cached: flagIsSet(c, cachedFlag),
+	}
 	summaries, err := api.GetBucketsSummaries(defaultAPIParams, bucket, provider, msg)
 	if err != nil {
 		return err

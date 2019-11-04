@@ -22,6 +22,7 @@ var (
 		subcmdShowBucket: {
 			providerFlag,
 			fastDetailsFlag,
+			cachedFlag,
 		},
 		subcmdShowDisk: append(
 			longRunFlags,
@@ -145,7 +146,7 @@ func showBucketHandler(c *cli.Context) (err error) {
 	if bucket, provider, err = validateBucket(c, bucket, "", true /* optional */); err != nil {
 		return
 	}
-	return bucketDetails(c, bucket, provider, flagIsSet(c, fastDetailsFlag))
+	return bucketDetails(c, bucket, provider)
 }
 
 func showDisksHandler(c *cli.Context) (err error) {
