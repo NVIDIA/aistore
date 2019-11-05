@@ -443,27 +443,21 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		si         *cluster.Snode
 		smap       = p.smapowner.get()
 		appendType = query.Get(cmn.URLParamAppendType)
+		nodeID     string
 	)
-
 	if appendType != "" {
-		nodeID := query.Get(cmn.URLParamAppendNode)
-		if nodeID == "" {
-			si, err = cluster.HrwTarget(bck, objName, &smap.Smap)
-			if err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-		} else {
-			si = smap.Smap.GetTarget(nodeID)
-			if si == nil {
-				p.invalmsghdlr(w, r, cmn.DoesNotExist)
-				return
-			}
-		}
-	} else {
+		nodeID = query.Get(cmn.URLParamAppendNode)
+	}
+	if nodeID == "" {
 		si, err = cluster.HrwTarget(bck, objName, &smap.Smap)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+	} else {
+		si = smap.Smap.GetTarget(nodeID)
+		if si == nil {
+			p.invalmsghdlr(w, r, cmn.DoesNotExist)
 			return
 		}
 	}

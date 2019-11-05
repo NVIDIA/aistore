@@ -725,8 +725,9 @@ func (aoi *appendObjInfo) appendObject() (handle string, err error, errCode int)
 		if err != nil {
 			return "", err, http.StatusInternalServerError
 		}
-		defer f.Close()
-		if _, err := io.Copy(f, aoi.r); err != nil {
+		_, err = io.Copy(f, aoi.r)
+		f.Close()
+		if err != nil {
 			return "", err, http.StatusInternalServerError
 		}
 	case cmn.FlushOp:
