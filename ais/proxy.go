@@ -1988,8 +1988,9 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 //      * error
 func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 	msg cmn.SelectMsg) (allEntries *cmn.BucketList, code int64, err error) {
-	if msg.PageSize > maxPageSize {
-		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.PageSize, bck, maxPageSize)
+	if msg.PageSize > cmn.DefaultPageSize {
+		glog.Warningf("list-bucket page size %d for bucket %s exceeds the default maximum %d ",
+			msg.PageSize, bck, cmn.DefaultPageSize)
 	}
 	pageSize := msg.PageSize
 	if pageSize == 0 {

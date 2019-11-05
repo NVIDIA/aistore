@@ -632,7 +632,6 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		return
 	}
 
-	// TODO: we should probably support offset != 0 even if goi.length == 0
 	w := goi.w
 	if goi.length == 0 {
 		reader = file
@@ -644,17 +643,15 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		}
 	} else {
 		buf, slab = nodeCtx.mm.AllocForSize(goi.length)
+		reader = io.NewSectionReader(file, goi.offset, goi.length)
 		if cksumRange {
-			var (
-				cksumValue string
-			)
-			cksumValue, sgl, reader, err = goi.t.rangeCksum(file, fqn, goi.offset, goi.length, buf)
-			if err != nil {
+			var cksumValue string
+			sgl = nodeCtx.mm.NewSGL(goi.length, slab.Size())
+			if _, cksumValue, err = cmn.WriteWithHash(sgl, reader, buf); err != nil {
 				return
 			}
 			hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
 			hdr.Set(cmn.HeaderObjCksumType, cksumConf.Type)
-		} else {
 			reader = io.NewSectionReader(file, goi.offset, goi.length)
 		}
 	}

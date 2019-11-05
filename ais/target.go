@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/filter"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/stats/statsd"
@@ -33,9 +32,6 @@ import (
 )
 
 const (
-	maxPageSize   = 64 * 1024     // max number of objects in a page (warn when req. size exceeds this limit)
-	maxBytesInMem = 256 * cmn.KiB // objects with smaller size than this will be read to memory when checksumming
-
 	bucketMDFixup    = "fixup"
 	bucketMDReceive  = "receive"
 	bucketMDRegister = "register"
@@ -493,29 +489,6 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 	}
-}
-
-func (t *targetrunner) rangeCksum(r io.ReaderAt, fqn string, offset, length int64,
-	buf []byte) (cksumValue string, sgl *memsys.SGL, rangeReader io.ReadSeeker, err error) {
-	rangeReader = io.NewSectionReader(r, offset, length)
-	if length <= maxBytesInMem {
-		sgl = nodeCtx.mm.NewSGL(length)
-		if _, cksumValue, err = cmn.WriteWithHash(sgl, rangeReader, buf); err != nil {
-			err = fmt.Errorf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)
-			t.fshc(err, fqn)
-			return
-		}
-		// overriding rangeReader here to read from the sgl
-		rangeReader = memsys.NewReader(sgl)
-	}
-
-	if _, err = rangeReader.Seek(0, io.SeekStart); err != nil {
-		err = fmt.Errorf("failed to seek file %s to beginning, err: %v", fqn, err)
-		t.fshc(err, fqn)
-		return
-	}
-
-	return
 }
 
 func (t *targetrunner) offsetAndLength(query url.Values) (offset, length int64, err error) {
