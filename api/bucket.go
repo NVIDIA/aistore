@@ -539,11 +539,10 @@ func handleAsyncReqAccepted(resp *http.Response, action string, origMsg *cmn.Sel
 //
 // ListBucket returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
-func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numObjects int,
-	query ...url.Values) (*cmn.BucketList, error) {
+func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
+	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
 	q := url.Values{}
 	if len(query) > 0 {
 		q = query[0]
@@ -568,11 +567,6 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 			}
 		}
 
-		b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
-		if err != nil {
-			return nil, err
-		}
-
 		optParams := OptionalParams{
 			Header: http.Header{"Content-Type": []string{"application/json"}},
 			Query:  q,
@@ -583,27 +577,21 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 			return nil, err
 		}
 
-		respBody, err := ioutil.ReadAll(resp.Body)
+		page := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
+		if err = jsoniter.NewDecoder(resp.Body).Decode(&page); err != nil {
+			resp.Body.Close()
+			return nil, fmt.Errorf("failed to json-unmarshal, err: %v", err)
+		}
 		resp.Body.Close()
-		if err != nil {
-			return nil, err
-		}
 
-		page := &cmn.BucketList{}
-		page.Entries = make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)
-
-		if err = jsoniter.Unmarshal(respBody, page); err != nil {
-			return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(b))
-		}
-
-		reslist.Entries = append(reslist.Entries, page.Entries...)
+		bckList.Entries = append(bckList.Entries, page.Entries...)
 		if page.PageMarker == "" {
 			msg.PageMarker = ""
 			break
 		}
 
 		if numObjects != 0 {
-			if len(reslist.Entries) >= numObjects {
+			if len(bckList.Entries) >= numObjects {
 				break
 			}
 			toRead -= len(page.Entries)
@@ -612,7 +600,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 		msg.PageMarker = page.PageMarker
 	}
 
-	return reslist, nil
+	return bckList, nil
 }
 
 // ListBucketPage returns the first page of bucket objects
@@ -621,6 +609,11 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 func ListBucketPage(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+
+	if msg == nil {
+		msg = &cmn.SelectMsg{}
+	}
+
 	q := url.Values{}
 	if len(query) > 0 {
 		q = query[0]
@@ -637,19 +630,15 @@ func ListBucketPage(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 	if err != nil {
 		return nil, err
 	}
-	respBody, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
 
-	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
-	if err = jsoniter.Unmarshal(respBody, reslist); err != nil {
-		return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(respBody))
+	page := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
+	if err = jsoniter.NewDecoder(resp.Body).Decode(&page); err != nil {
+		return nil, fmt.Errorf("failed to json-unmarshal, err: %v", err)
 	}
-	msg.PageMarker = reslist.PageMarker
+	msg.PageMarker = page.PageMarker
 
-	return reslist, nil
+	return page, nil
 }
 
 // ListBucketFast returns list of objects in a bucket.
@@ -657,13 +646,8 @@ func ListBucketPage(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 // All SelectMsg fields except prefix do not work and are skipped.
 // Function always returns the whole list of objects without paging
 func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
-	var (
-		b   []byte
-		err error
-	)
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	reslist := &cmn.BucketList{}
 
 	if msg == nil {
 		msg = &cmn.SelectMsg{}
@@ -671,10 +655,6 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 
 	msg.Fast = true
 	msg.Cached = true
-	b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
-	if err != nil {
-		return nil, err
-	}
 
 	q := url.Values{}
 	if len(query) > 0 {
@@ -690,16 +670,13 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 		return nil, err
 	}
 	defer resp.Body.Close()
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+
+	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
+	if err = jsoniter.NewDecoder(resp.Body).Decode(&bckList); err != nil {
+		return nil, fmt.Errorf("failed to json-unmarshal, err: %v", err)
 	}
 
-	if err = jsoniter.Unmarshal(respBody, reslist); err != nil {
-		return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(b))
-	}
-
-	return reslist, nil
+	return bckList, nil
 }
 
 // Handles the List/Range operations (delete, prefetch)

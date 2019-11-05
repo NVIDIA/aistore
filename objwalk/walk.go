@@ -148,7 +148,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 
 	// combine results into one long list
 	// real size of page is set in newFileWalk, so read it from any of results inside loop
-	objLists := make([][]*cmn.BucketEntry, 0)
+	objLists := make([]*cmn.BucketList, 0, len(ch))
 	for r := range ch {
 		if r.err != nil {
 			if !os.IsNotExist(r.err) {
@@ -157,18 +157,14 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 			}
 			continue
 		}
-		objLists = append(objLists, r.infos.objs)
+		objLists = append(objLists, &cmn.BucketList{Entries: r.infos.objs})
 	}
 
 	maxSize := cmn.DefaultListPageSize
 	if w.msg.Fast {
 		maxSize = 0
 	}
-	bckEntries, marker := ConcatObjLists(objLists, maxSize)
-	bucketList := &cmn.BucketList{
-		Entries:    bckEntries,
-		PageMarker: marker,
-	}
+	bucketList := ConcatObjLists(objLists, maxSize)
 
 	if w.msg.WantProp(cmn.GetTargetURL) {
 		for _, e := range bucketList.Entries {

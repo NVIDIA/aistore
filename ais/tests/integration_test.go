@@ -173,7 +173,7 @@ func (m *ioContext) cloudPuts() {
 	for i := 0; i < leftToFill; i++ {
 		r, err := tutils.NewRandReader(512 /*size*/, true /*withHash*/)
 		tassert.CheckFatal(m.t, err)
-		objName := fmt.Sprintf("%s%d", "copy/cloud_", i)
+		objName := fmt.Sprintf("%s%s%d", "copy/cloud_", cmn.RandString(4), i)
 		wg.Add(1)
 		go tutils.PutAsync(wg, m.proxyURL, m.bucket, objName, r, errCh)
 	}
@@ -184,7 +184,7 @@ func (m *ioContext) cloudPuts() {
 	objList, err = api.ListBucket(baseParams, m.bucket, msg, 0)
 	tassert.CheckFatal(m.t, err)
 	if len(objList.Entries) != m.num {
-		m.t.Errorf("list-bucket err: %d != %d", len(objList.Entries), m.num)
+		m.t.Fatalf("list-bucket err: %d != %d", len(objList.Entries), m.num)
 	}
 
 	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bucket, m.num)

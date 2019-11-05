@@ -18,7 +18,6 @@ import (
 	"os"
 	"path"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1967,7 +1966,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 	results = p.bcastPost(args)
 
 	// combine results
-	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
+	bckLists := make([]*cmn.BucketList, 0, len(results))
 	for res := range results {
 		if res.err != nil {
 			return nil, 0, res.err
@@ -1985,42 +1984,15 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 			continue
 		}
 
-		allEntries.Entries = append(allEntries.Entries, bucketList.Entries...)
-		bucketList.Entries = nil
-		bucketList = nil
+		bckLists = append(bckLists, bucketList)
 	}
 
-	// For regular object list request:
-	//   - return the list always sorted in alphabetical order
-	//   - prioritize items with Status=OK
-	// For fast listing:
-	//   - return the entire list unsorted(sorting may take upto 10-15
-	//     second for big data sets - millions of objects - eventually it may
-	//     result in timeout between target and waiting for response proxy)
-	//   - the only valid value for every object in resulting list is `Name`,
-	//     all other fields(including `Status`) have zero value
-	if !msg.Fast {
-		entryLess := func(i, j int) bool {
-			if allEntries.Entries[i].Name == allEntries.Entries[j].Name {
-				return allEntries.Entries[i].Flags&cmn.EntryStatusMask < allEntries.Entries[j].Flags&cmn.EntryStatusMask
-			}
-			return allEntries.Entries[i].Name < allEntries.Entries[j].Name
-		}
-		sort.Slice(allEntries.Entries, entryLess)
-
-		// shrink the result to `pageSize` entries. If the page is full than
-		// mark the result incomplete by setting PageMarker
-		if pageSize > 0 && len(allEntries.Entries) >= pageSize {
-			for i := pageSize; i < len(allEntries.Entries); i++ {
-				allEntries.Entries[i] = nil
-			}
-
-			allEntries.Entries = allEntries.Entries[:pageSize]
-			allEntries.PageMarker = allEntries.Entries[pageSize-1].Name
-		}
+	// When listing fast we need to return all entries (without page)
+	if msg.Fast {
+		pageSize = 0
 	}
 
-	// no active tasks - return TaskID=0
+	allEntries = objwalk.ConcatObjLists(bckLists, pageSize)
 	return allEntries, 0, nil
 }
 
@@ -2106,8 +2078,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 	results = p.bcastTo(args)
 
 	// combine results
-	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-	var pageMarker string
+	bckLists := make([]*cmn.BucketList, 0, len(results))
 	for res := range results {
 		if res.status == http.StatusNotFound { // TODO -- FIXME
 			continue
@@ -2119,7 +2090,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 			continue
 		}
 		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-		if err = jsoniter.Unmarshal(res.outjson, bucketList); err != nil {
+		if err = jsoniter.Unmarshal(res.outjson, &bucketList); err != nil {
 			return
 		}
 		res.outjson = nil
@@ -2128,19 +2099,14 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 			continue
 		}
 
-		if msg.Cached {
-			allEntries.Entries, pageMarker = objwalk.ConcatObjLists(
-				[][]*cmn.BucketEntry{allEntries.Entries, bucketList.Entries}, pageSize)
-		} else {
-			allEntries, pageMarker = objwalk.MergeObjLists(
-				[]*cmn.BucketList{allEntries, bucketList}, pageSize)
-		}
-
-		bucketList.Entries = bucketList.Entries[:0]
-		bucketList.Entries = nil
-		bucketList = nil
+		bckLists = append(bckLists, bucketList)
 	}
-	allEntries.PageMarker = pageMarker
+
+	if msg.Cached {
+		allEntries = objwalk.ConcatObjLists(bckLists, pageSize)
+	} else {
+		allEntries = objwalk.MergeObjLists(bckLists, pageSize)
+	}
 
 	if msg.WantProp(cmn.GetTargetURL) {
 		for _, e := range allEntries.Entries {

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -1127,6 +1128,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, pr
 		for bucket := range bmd.LBmap {
 			bucketNames.AIS = append(bucketNames.AIS, bucket)
 		}
+		sort.Strings(bucketNames.AIS) // sort by name
 	}
 
 	buckets, err, errcode := t.cloud.getBucketNames(t.contextWithAuth(r.Header))
@@ -1136,6 +1138,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, pr
 		return
 	}
 	bucketNames.Cloud = buckets
+	sort.Strings(bucketNames.Cloud) // sort by name
 
 	body := cmn.MustMarshal(bucketNames)
 	t.writeJSON(w, r, body, "getbucketnames")

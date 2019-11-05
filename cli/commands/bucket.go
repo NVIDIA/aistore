@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -270,7 +269,11 @@ func bucketDetailsSync(c *cli.Context, bucket, provider string) error {
 	if err != nil {
 		return err
 	}
-	return templates.DisplayOutput(summaries, c.App.Writer, templates.BucketsSummariesTmpl)
+	tmpl := templates.BucketsSummariesTmpl
+	if msg.Fast {
+		tmpl = templates.BucketsSummariesFastTmpl
+	}
+	return templates.DisplayOutput(summaries, c.App.Writer, tmpl)
 }
 
 // replace user-friendly properties like `access=ro` with real values
@@ -482,9 +485,8 @@ func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, provi
 	isAISBck := cmn.IsProviderAIS(provider)
 	if isAISBck || provider == "" {
 		aisBuckets := regexFilter(regex, bucketNames.AIS)
-		sort.Strings(aisBuckets) // sort by name
 		if showHeaders {
-			fmt.Fprintf(c.App.Writer, "AIS Buckets (%d)\n\\_\n", len(aisBuckets))
+			fmt.Fprintf(c.App.Writer, "AIS Buckets (%d)\n", len(aisBuckets))
 		}
 		for _, bucket := range aisBuckets {
 			fmt.Fprintf(c.App.Writer, "  %s\n", bucket)
@@ -498,9 +500,8 @@ func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, provi
 	}
 
 	cloudBuckets := regexFilter(regex, bucketNames.Cloud)
-	sort.Strings(cloudBuckets) // sort by name
 	if showHeaders {
-		fmt.Fprintf(c.App.Writer, "Cloud Buckets (%d)\n\\_\n", len(cloudBuckets))
+		fmt.Fprintf(c.App.Writer, "Cloud Buckets (%d)\n", len(cloudBuckets))
 	}
 	for _, bucket := range cloudBuckets {
 		fmt.Fprintf(c.App.Writer, "  %s\n", bucket)
