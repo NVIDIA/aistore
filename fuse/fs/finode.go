@@ -7,6 +7,7 @@ package fs
 import (
 	"io"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/ais"
 	"github.com/jacobsa/fuse/fuseops"
 )
@@ -42,6 +43,11 @@ func (file *FileInode) Size() uint64 {
 	return file.attrs.Size
 }
 
+// REQUIRES_LOCK(file)
+func (file *FileInode) SetSize(size uint64) {
+	file.attrs.Size = size
+}
+
 /////////////
 // READING //
 /////////////
@@ -60,8 +66,8 @@ func (file *FileInode) Load(w io.Writer, offset int64, length int64) (n int64, e
 /////////////
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) Write(data []byte, handle string) (string, error) {
-	return file.object.Append(data, handle)
+func (file *FileInode) Write(r cmn.ReadOpenCloser, handle string) (string, error) {
+	return file.object.Append(r, handle)
 }
 
 // REQUIRES_LOCK(file)

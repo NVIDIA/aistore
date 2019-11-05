@@ -65,7 +65,7 @@ type AppendArgs struct {
 	Provider   string
 	Object     string
 	Handle     string
-	Body       []byte
+	Reader     cmn.ReadOpenCloser
 }
 
 // HeadObject API
@@ -327,21 +327,48 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 //
 // NOTE: Until `FlushObject` is called one cannot access the object yet as
 // it is yet not fully operational.
-func AppendObject(args AppendArgs) (handle string, err error) {
+func AppendObject(args AppendArgs) (handle string, n int, err error) {
 	query := url.Values{}
 	query.Add(cmn.URLParamAppendType, cmn.AppendOp)
 	query.Add(cmn.URLParamAppendHandle, args.Handle)
 	query.Add(cmn.URLParamProvider, args.Provider)
-	params := OptionalParams{Query: query}
-
-	args.BaseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
-	resp, err := doHTTPRequestGetResp(args.BaseParams, path, args.Body, params)
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodPut,
+		Base:   args.BaseParams.URL,
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object),
+		Query:  query,
+		BodyR:  args.Reader,
+	}
+	req, err := reqArgs.Req()
 	if err != nil {
-		return "", err
+		return "", 0, fmt.Errorf("failed to create new HTTP request, err: %v", err)
+	}
+
+	// The HTTP package doesn't automatically set this for files, so it has to be done manually
+	// If it wasn't set, we would need to deal with the redirect manually.
+	req.GetBody = func() (io.ReadCloser, error) {
+		return args.Reader.Open()
+	}
+	setAuthToken(req, args.BaseParams)
+	resp, err := args.BaseParams.Client.Do(req)
+	if err != nil {
+		sleep := httpRetrySleep
+		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
+			for i := 0; i < httpMaxRetries && err != nil; i++ {
+				time.Sleep(sleep)
+				resp, err = args.BaseParams.Client.Do(req)
+				sleep += sleep / 2
+			}
+		}
+	}
+
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
 	defer resp.Body.Close()
-	return resp.Header.Get(cmn.HeaderAppendHandle), nil
+
+	_, err = checkBadStatus(req, resp)
+	return resp.Header.Get(cmn.HeaderAppendHandle), 0, err
 }
 
 // FlushObject API

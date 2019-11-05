@@ -38,20 +38,21 @@ func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, e
 	return
 }
 
-func (obj *Object) Append(data []byte, prevHandle string) (handle string, err error) {
+func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string) (handle string, err error) {
 	appendArgs := api.AppendArgs{
 		BaseParams: obj.apiParams,
 		Bucket:     obj.bucket,
 		Object:     obj.Name,
 		Handle:     prevHandle,
-		Body:       data,
+		Reader:     r,
 	}
-	handle, err = api.AppendObject(appendArgs)
+	var n int
+	handle, n, err = api.AppendObject(appendArgs)
 	if err != nil {
 		return handle, newObjectIOError(err, "Append", obj.Name)
 	}
 
-	obj.Size += uint64(len(data))
+	obj.Size += uint64(n)
 	return handle, nil
 }
 

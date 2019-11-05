@@ -272,7 +272,7 @@ func appMain(c *cli.Context) (err error) {
 		FSName:                  fs.Name,
 		ErrorLogger:             errorLog,
 		DebugLogger:             debugLog,
-		DisableWritebackCaching: false,
+		DisableWritebackCaching: true,
 		Options:                 flags.AdditionalMountOptions,
 	}
 
