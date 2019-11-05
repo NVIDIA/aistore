@@ -540,6 +540,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
+	// TODO: AllowAppend permission for appending to an existing object
 	if err = lom.AllowPUT(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -1123,11 +1124,15 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 	aoi := &appendObjInfo{
 		started: started,
 		t:       t,
+		lom:     lom,
+		r:       r.Body,
 		op:      r.URL.Query().Get(cmn.URLParamAppendType),
-
-		lom:    lom,
-		r:      r.Body,
-		handle: r.URL.Query().Get(cmn.URLParamAppendHandle),
+		handle:  r.URL.Query().Get(cmn.URLParamAppendHandle),
+	}
+	if sizeStr := r.Header.Get("Content-Length"); sizeStr != "" {
+		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
+			aoi.size = size
+		}
 	}
 	return aoi.appendObject()
 }

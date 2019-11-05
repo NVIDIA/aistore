@@ -80,8 +80,11 @@ type (
 
 		// Reader with the content of the object.
 		r io.ReadCloser
-
-		op     string
+		// Object size aka Content-Length.
+		size int64
+		// Append operation.
+		op string
+		// Append handle.
 		handle string
 	}
 
@@ -725,7 +728,21 @@ func (aoi *appendObjInfo) appendObject() (handle string, err error, errCode int)
 		if err != nil {
 			return "", err, http.StatusInternalServerError
 		}
-		_, err = io.Copy(f, aoi.r)
+
+		// append
+		var (
+			buf  []byte
+			slab *memsys.Slab2
+		)
+		if aoi.size == 0 {
+			buf, slab = nodeCtx.mm.AllocDefault()
+		} else {
+			buf, slab = nodeCtx.mm.AllocForSize(aoi.size)
+		}
+		_, err = io.CopyBuffer(f, aoi.r, buf)
+
+		// cleanup
+		slab.Free(buf)
 		f.Close()
 		if err != nil {
 			return "", err, http.StatusInternalServerError
