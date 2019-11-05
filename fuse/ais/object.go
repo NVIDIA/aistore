@@ -18,7 +18,7 @@ type Object struct {
 	apiParams *api.BaseParams
 	bucket    string
 	Name      string
-	Size      int64
+	Size      uint64
 	Atime     time.Time
 }
 
@@ -38,21 +38,33 @@ func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, e
 	return
 }
 
-func (obj *Object) Put(data []byte, size uint64) (err error) {
-	putArgs := api.PutObjectArgs{
+func (obj *Object) Append(data []byte, prevHandle string) (handle string, err error) {
+	appendArgs := api.AppendArgs{
 		BaseParams: obj.apiParams,
 		Bucket:     obj.bucket,
 		Object:     obj.Name,
-		Reader:     cmn.NewByteHandle(data),
-		Size:       size,
+		Handle:     prevHandle,
+		Body:       data,
 	}
-
-	err = api.PutObject(putArgs)
+	handle, err = api.AppendObject(appendArgs)
 	if err != nil {
-		return newObjectIOError(err, "Put", obj.Name)
+		return handle, newObjectIOError(err, "Append", obj.Name)
 	}
 
-	obj.Size = int64(size)
+	obj.Size += uint64(len(data))
+	return handle, nil
+}
+
+func (obj *Object) Flush(handle string) (err error) {
+	appendArgs := api.AppendArgs{
+		BaseParams: obj.apiParams,
+		Bucket:     obj.bucket,
+		Object:     obj.Name,
+		Handle:     handle,
+	}
+	if err = api.FlushObject(appendArgs); err != nil {
+		return newObjectIOError(err, "Flush", obj.Name)
+	}
 	obj.Atime = time.Now()
 	return nil
 }

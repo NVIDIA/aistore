@@ -81,7 +81,8 @@ type (
 		// Reader with the content of the object.
 		r io.ReadCloser
 
-		op string
+		op     string
+		handle string
 	}
 
 	writerOnly struct {
@@ -712,28 +713,32 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 // APPEND OBJECT //
 ///////////////////
 
-func (aoi *appendObjInfo) appendObject() (err error, errCode int) {
-	cmn.Assert(aoi.op == cmn.AppendOp || aoi.op == cmn.FlushOp)
-
-	// TODO: not using fs.WorkfileType since it will generate unique fqn because we add tie breakers.
-	// TODO: for now assuming that new mountpath has not been added (HRW did not change)
-	workFQN := fs.CSM.GenContentParsedFQN(aoi.lom.ParsedFQN, fs.ObjectType, fs.WorkfileAppend)
-
+func (aoi *appendObjInfo) appendObject() (handle string, err error, errCode int) {
+	handle = aoi.handle
 	switch aoi.op {
 	case cmn.AppendOp:
-		f, err := os.OpenFile(workFQN, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if handle == "" {
+			handle = fs.CSM.GenContentParsedFQN(aoi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfileAppend)
+		}
+
+		f, err := os.OpenFile(handle, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
-			return err, 0
+			return "", err, http.StatusInternalServerError
 		}
 		defer f.Close()
 		if _, err := io.Copy(f, aoi.r); err != nil {
-			return err, 0
+			return "", err, http.StatusInternalServerError
 		}
 	case cmn.FlushOp:
-		if err := aoi.t.PromoteFile(workFQN, aoi.lom.Bck(), aoi.lom.Objname, false /*overwrite*/, false /*verbose*/); err != nil {
+		if handle == "" {
+			err = errors.New("handle not provided")
+			return "", err, http.StatusBadRequest
+		}
+
+		if err := aoi.t.PromoteFile(handle, aoi.lom.Bck(), aoi.lom.Objname, true /*overwrite*/, false /*verbose*/); err != nil {
 			// TODO: stats
 			glog.Error(err)
-			return err, 0
+			return "", err, 0
 		}
 	default:
 		cmn.AssertMsg(false, aoi.op)

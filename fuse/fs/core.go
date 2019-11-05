@@ -154,7 +154,7 @@ func (fs *aisfs) fileAttrs(mode os.FileMode, object *ais.Object) fuseops.InodeAt
 	return fuseops.InodeAttributes{
 		Mode:  mode,
 		Nlink: 1,
-		Size:  uint64(object.Size),
+		Size:  object.Size,
 		Uid:   fs.owner.UID,
 		Gid:   fs.owner.GID,
 		Atime: object.Atime,

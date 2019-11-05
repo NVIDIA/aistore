@@ -548,16 +548,16 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		lom.Load() // need to know the current version if versioning enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
-	if query.Get(cmn.URLParamPutType) == "" {
+	if query.Get(cmn.URLParamAppendType) == "" {
 		if err, errCode := t.doPut(r, lom, started); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 	} else {
-		if err, errCode := t.doAppend(r, lom, started); err != nil {
+		if handle, err, errCode := t.doAppend(r, lom, started); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		} else {
 			// return node id as append handle
-			w.Header().Set(cmn.HeaderNodeID, t.si.DaemonID)
+			w.Header().Set(cmn.HeaderAppendHandle, handle)
 		}
 	}
 }
@@ -1120,13 +1120,15 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, pr
 	t.writeJSON(w, r, body, "getbucketnames")
 }
 
-func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (err error, errcode int) {
+func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (handle string, err error, errCode int) {
 	aoi := &appendObjInfo{
 		started: started,
 		t:       t,
-		lom:     lom,
-		r:       r.Body,
-		op:      r.URL.Query().Get(cmn.URLParamPutType),
+		op:      r.URL.Query().Get(cmn.URLParamAppendType),
+
+		lom:    lom,
+		r:      r.Body,
+		handle: r.URL.Query().Get(cmn.URLParamAppendHandle),
 	}
 	return aoi.appendObject()
 }

@@ -47,7 +47,7 @@ func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {
 		apiParams: apiParams(bck.apiParams.URL),
 		bucket:    bck.name,
 		Name:      objName,
-		Size:      obj.Size,
+		Size:      uint64(obj.Size),
 		Atime:     obj.Atime,
 	}
 	return

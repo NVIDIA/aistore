@@ -28,9 +28,9 @@ type fileHandle struct {
 	readBuffer *BlockBuffer
 
 	// Writing - Note: not yet fully implemented
-	dirty       bool
-	wsize       uint64
-	writeBuffer []byte
+	dirty        bool
+	wsize        uint64
+	appendHandle string
 }
 
 // REQUIRES_LOCK(file)
@@ -131,24 +131,25 @@ func (fh *fileHandle) readChunk(dst []byte, offset int64) (n int, err error) {
 	return
 }
 
-///////////
-// WRITING
-///////////
+/////////////
+// WRITING //
+/////////////
 
-func (fh *fileHandle) writeChunk(data []byte, offset uint64) error {
+func (fh *fileHandle) writeChunk(data []byte, offset uint64) (err error) {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
-	// Allow only appending for now
 	if offset != fh.wsize {
 		return fmt.Errorf("write file (inode %d): random access write not yet implemented", fh.file.ID())
 	}
 
+	if fh.appendHandle, err = fh.file.Write(data, fh.appendHandle); err != nil {
+		return err
+	}
+
 	if fh.wsize == 0 {
-		fh.writeBuffer = make([]byte, 0, len(data))
 		fh.dirty = true
 	}
-	fh.writeBuffer = append(fh.writeBuffer, data...)
 	fh.wsize += uint64(len(data))
 	return nil
 }
@@ -160,5 +161,10 @@ func (fh *fileHandle) flush() error {
 	if !fh.dirty {
 		return nil
 	}
-	return fh.file.Write(fh.writeBuffer, fh.wsize)
+
+	handle := fh.appendHandle
+	fh.dirty = false
+	fh.wsize = 0
+	fh.appendHandle = ""
+	return fh.file.Flush(handle)
 }

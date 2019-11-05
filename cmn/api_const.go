@@ -159,6 +159,9 @@ const (
 	HeaderNodeID  = "node.id"
 	HeaderNodeURL = "node.url"
 
+	// custom
+	HeaderAppendHandle = "append.handle"
+
 	// intra-cluster: streams
 	HeaderSessID   = "session.id"
 	HeaderCompress = "compress" // LZ4Compression, etc.
@@ -196,8 +199,9 @@ const (
 	URLParamTaskID           = "tsk" // ID of a task to return its state/result
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 
-	URLParamPutType    = "putt"
-	URLParamAppendNode = "node"
+	URLParamAppendType   = "appendty"
+	URLParamAppendNode   = "node" // TODO: must be remvoed and put into handle
+	URLParamAppendHandle = "handle"
 
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"

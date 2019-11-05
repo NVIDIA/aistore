@@ -42,9 +42,9 @@ func (file *FileInode) Size() uint64 {
 	return file.attrs.Size
 }
 
-///////////
-// Reading
-///////////
+/////////////
+// READING //
+/////////////
 
 // REQUIRES_LOCK(file)
 func (file *FileInode) Load(w io.Writer, offset int64, length int64) (n int64, err error) {
@@ -55,11 +55,16 @@ func (file *FileInode) Load(w io.Writer, offset int64, length int64) (n int64, e
 	return n, nil
 }
 
-///////////
-// Writing
-///////////
+/////////////
+// WRITING //
+/////////////
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) Write(data []byte, size uint64) (err error) {
-	return file.object.Put(data, size)
+func (file *FileInode) Write(data []byte, handle string) (string, error) {
+	return file.object.Append(data, handle)
+}
+
+// REQUIRES_LOCK(file)
+func (file *FileInode) Flush(handle string) error {
+	return file.object.Flush(handle)
 }

@@ -65,6 +65,7 @@ type AppendArgs struct {
 	Provider   string
 	Object     string
 	Handle     string
+	Body       []byte
 }
 
 // HeadObject API
@@ -320,37 +321,43 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 
 // AppendObject API
 //
-// TODO
-func AppendObject(args *AppendArgs) (handle string, err error) {
+// Append builds the object which should be finished with `FlushObject` request.
+// It returns handle which works as id for subsequent append requests so the
+// correct object can be identified.
+//
+// NOTE: Until `FlushObject` is called one cannot access the object yet as
+// it is yet not fully operational.
+func AppendObject(args AppendArgs) (handle string, err error) {
 	query := url.Values{}
-	query.Add(cmn.URLParamPutType, cmn.AppendOp)
-	query.Add(cmn.URLParamAppendNode, args.Handle)
+	query.Add(cmn.URLParamAppendType, cmn.AppendOp)
+	query.Add(cmn.URLParamAppendHandle, args.Handle)
 	query.Add(cmn.URLParamProvider, args.Provider)
 	params := OptionalParams{Query: query}
 
 	args.BaseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
-	resp, err := doHTTPRequestGetResp(args.BaseParams, path, nil, params)
+	resp, err := doHTTPRequestGetResp(args.BaseParams, path, args.Body, params)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-	return resp.Header.Get(cmn.HeaderNodeID), nil
+	return resp.Header.Get(cmn.HeaderAppendHandle), nil
 }
 
 // FlushObject API
 //
-// TODO
-func FlushObject(args *AppendArgs) (err error) {
+// Flushing should occur once all appends have finished successfully.
+// This call will create a fully operational object and requires handle to be set.
+func FlushObject(args AppendArgs) (err error) {
 	query := url.Values{}
-	query.Add(cmn.URLParamPutType, cmn.FlushOp)
-	query.Add(cmn.URLParamAppendNode, args.Handle)
+	query.Add(cmn.URLParamAppendType, cmn.FlushOp)
+	query.Add(cmn.URLParamAppendHandle, args.Handle)
 	query.Add(cmn.URLParamProvider, args.Provider)
 	params := OptionalParams{Query: query}
 
 	args.BaseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
-	_, err := DoHTTPRequest(args.BaseParams, path, nil, params)
+	_, err = DoHTTPRequest(args.BaseParams, path, nil, params)
 	return err
 }
 
