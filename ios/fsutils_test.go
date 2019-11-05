@@ -6,7 +6,12 @@
 package ios
 
 import (
+	"io/ioutil"
+	"os"
+	"path"
 	"testing"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 func TestGetFSUsedPercentage(t *testing.T) {
@@ -20,21 +25,61 @@ func TestGetFSUsedPercentage(t *testing.T) {
 }
 
 func TestGetDirSize(t *testing.T) {
-	size, err := GetDirSize("/tmp")
+	name, err := ioutil.TempDir("/tmp", t.Name())
 	if err != nil {
-		t.Error("Unable to get the directory size")
+		t.Error(err)
 	}
-	if size == 0 {
-		t.Fatal("The size of the directory was not determined correctly")
+	defer os.RemoveAll(name)
+
+	mkFile(t, name)
+
+	totalSize, err := GetDirSize(name)
+	if err != nil {
+		t.Error(err)
+	}
+	if totalSize == 0 {
+		t.Fatal("Directory size was not determined correctly")
 	}
 }
 
 func TestGetFilesCount(t *testing.T) {
-	fileCount, err := GetFileCount("/tmp")
+	name, err := ioutil.TempDir("/tmp", t.Name())
 	if err != nil {
-		t.Error("Unable to get the number of files inside the directory")
+		t.Error(err)
 	}
-	if fileCount == 0 {
-		t.Fatal("The number of files inside the directory was not determined correctly")
+	defer os.RemoveAll(name)
+
+	checkFileCount(t, name, 0)
+
+	nameInside, err := ioutil.TempDir(name, "")
+	if err != nil {
+		t.Error(err)
+	}
+
+	checkFileCount(t, name, 0)
+
+	mkFile(t, name)
+	checkFileCount(t, name, 1)
+
+	mkFile(t, nameInside)
+	checkFileCount(t, name, 2)
+}
+
+func mkFile(t *testing.T, dir string) {
+	f, err := os.Create(path.Join(dir, "file.txt"))
+	if err != nil {
+		t.Error(err)
+	}
+	f.Write(make([]byte, cmn.KiB))
+	f.Close()
+}
+
+func checkFileCount(t *testing.T, dir string, n int) {
+	fileCount, err := GetFileCount(dir)
+	if err != nil {
+		t.Error(err)
+	}
+	if fileCount != n {
+		t.Fatalf("Expected %d files inside the directories", n)
 	}
 }

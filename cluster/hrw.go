@@ -115,6 +115,26 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 	return
 }
 
+// Returns target which should be responsible for given task. Eg. used when
+// it is required to list cloud bucket objects (we want only one target to do it).
+func HrwTargetTask(taskID uint64, smap *Smap) (si *Snode, err error) {
+	var (
+		max uint64
+	)
+	for _, sinfo := range smap.Tmap {
+		// Assumes that sinfo.idDigest is initialized
+		cs := xoshiro256.Hash(sinfo.idDigest ^ taskID)
+		if cs > max {
+			max = cs
+			si = sinfo
+		}
+	}
+	if si == nil {
+		err = errNoTargets
+	}
+	return
+}
+
 func hrwMpath(bucket, objName string) (mi *fs.MountpathInfo, digest uint64, err error) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 0 {

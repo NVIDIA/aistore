@@ -150,16 +150,18 @@ func (m *ioContext) puts(dontFail ...bool) int {
 func (m *ioContext) cloudPuts() {
 	var (
 		baseParams = tutils.DefaultBaseAPIParams(m.t)
-		msg        = &cmn.SelectMsg{Props: cmn.GetPropsIsCached, Cached: true}
-		query      = make(url.Values)
+		msg        = &cmn.SelectMsg{}
 	)
 
-	srcBckList, err := api.ListBucket(baseParams, m.bucket, msg, 0, query)
+	tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bucket)
+
+	objList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
-	leftToFill := len(srcBckList.Entries) - m.num
+	leftToFill := m.num - len(objList.Entries)
 	if leftToFill <= 0 {
-		m.num = len(srcBckList.Entries)
+		tutils.Logf("cloud PUT %d (%d) objects already in bucket %s...\n", m.num, len(objList.Entries), m.bucket)
+		m.num = len(objList.Entries)
 		return
 	}
 
@@ -169,7 +171,7 @@ func (m *ioContext) cloudPuts() {
 		wg    = &sync.WaitGroup{}
 	)
 	for i := 0; i < leftToFill; i++ {
-		r, err := tutils.NewRandReader(1024 /*size */, true /* withHash */)
+		r, err := tutils.NewRandReader(512 /*size*/, true /*withHash*/)
 		tassert.CheckFatal(m.t, err)
 		objName := fmt.Sprintf("%s%d", "copy/cloud_", i)
 		wg.Add(1)
@@ -177,15 +179,65 @@ func (m *ioContext) cloudPuts() {
 	}
 	wg.Wait()
 	selectErr(errCh, "put", m.t, true)
-	tutils.Logf("cloud PUT done.\n")
+	tutils.Logln("cloud PUT done")
 
-	srcBckList, err = api.ListBucket(baseParams, m.bucket, msg, 0, query)
+	objList, err = api.ListBucket(baseParams, m.bucket, msg, 0)
 	tassert.CheckFatal(m.t, err)
-	if len(srcBckList.Entries) != m.num {
-		m.t.Errorf("list-bucket err: %d != %d", len(srcBckList.Entries), m.num)
+	if len(objList.Entries) != m.num {
+		m.t.Errorf("list-bucket err: %d != %d", len(objList.Entries), m.num)
 	}
 
 	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bucket, m.num)
+}
+
+func (m *ioContext) cloudPrefetch(prefetchCnt int) {
+	var (
+		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		msg        = &cmn.SelectMsg{}
+	)
+
+	objList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	tassert.CheckFatal(m.t, err)
+
+	tutils.Logf("cloud PREFETCH %d objects...\n", prefetchCnt)
+
+	wg := &sync.WaitGroup{}
+	for idx, obj := range objList.Entries {
+		if idx >= prefetchCnt {
+			break
+		}
+
+		wg.Add(1)
+		go func(obj *cmn.BucketEntry) {
+			_, err := tutils.GetDiscard(m.proxyURL, m.bucket, cmn.Cloud, obj.Name, false /*validate*/, 0, 0)
+			tassert.CheckError(m.t, err)
+			wg.Done()
+		}(obj)
+	}
+	wg.Wait()
+}
+
+func (m *ioContext) cloudDelete() {
+	var (
+		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		msg        = &cmn.SelectMsg{}
+	)
+
+	objList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	tassert.CheckFatal(m.t, err)
+
+	tutils.Logln("deleting cloud objects...")
+
+	wg := &sync.WaitGroup{}
+	for _, obj := range objList.Entries {
+		wg.Add(1)
+		go func(obj *cmn.BucketEntry) {
+			err := api.DeleteObject(baseParams, m.bucket, obj.Name, cmn.Cloud)
+			tassert.CheckError(m.t, err)
+			wg.Done()
+		}(obj)
+	}
+	wg.Wait()
 }
 
 func (m *ioContext) gets() {

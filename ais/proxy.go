@@ -1018,7 +1018,8 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg, h
 	q.Add(cmn.URLParamProvider, bck.Provider)
 
 	var (
-		msgInt = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &msg}, nil, nil)
+		smap   = p.smapowner.get()
+		msgInt = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &msg}, smap, nil)
 		body   = cmn.MustMarshal(msgInt)
 
 		args = bcastArgs{
@@ -1027,6 +1028,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg, h
 				Query: q,
 				Body:  body,
 			},
+			smap:    smap,
 			timeout: cmn.GCO.Get().Timeout.ListBucket,
 		}
 	)

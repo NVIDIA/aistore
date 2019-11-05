@@ -847,6 +847,18 @@ func (r *xactBckSummaryTask) Run() {
 		return
 	}
 
+	si, err := cluster.HrwTargetTask(uint64(r.msg.TaskID), r.t.smapowner.Get())
+	if err != nil {
+		r.UpdateResult(nil, err)
+		return
+	}
+
+	// When we are target which should not list CB we should only list cached objects.
+	shouldListCB := si.DaemonID == r.t.si.DaemonID && !r.msg.Cached
+	if !shouldListCB {
+		r.msg.Cached = true
+	}
+
 	for _, bck := range buckets {
 		go func(bck *cluster.Bck) {
 			defer wg.Done()
@@ -904,7 +916,12 @@ func (r *xactBckSummaryTask) Run() {
 
 					for _, v := range list.Entries {
 						summary.Size += uint64(v.Size)
-						summary.ObjCount++
+
+						// We should not include object count as other target will
+						// do that for us. We just need to report the size on the disk.
+						if !bck.IsAIS() && (shouldListCB || r.msg.Cached) {
+							summary.ObjCount++
+						}
 					}
 
 					if list.PageMarker == "" {

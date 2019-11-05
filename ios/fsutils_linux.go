@@ -56,6 +56,8 @@ func GetDirSize(dirPath string) (uint64, error) {
 		return 0, fmt.Errorf("invalid output format from 'du' command")
 	}
 	out = out[:idx]
+	// `du` can return ',' as float separator what cannot be parsed properly.
+	out = strings.ReplaceAll(out, ",", ".")
 	size, err := cmn.S2B(out)
 	if err != nil || size < 0 {
 		return 0, fmt.Errorf("invalid output format from 'du' command, err: %v", err)
@@ -64,7 +66,7 @@ func GetDirSize(dirPath string) (uint64, error) {
 }
 
 func GetFileCount(dirPath string) (int, error) {
-	outputBytes, err := exec.Command("bash", "-c", fmt.Sprintf("ls -1 %s | wc -l", dirPath)).Output()
+	outputBytes, err := exec.Command("bash", "-c", fmt.Sprintf("find %s -type f | wc -l", dirPath)).Output()
 	out := string(outputBytes)
 	if err != nil || out == "" {
 		return 0, fmt.Errorf("failed to get the number of files in the directory %q, err: %v", dirPath, err)

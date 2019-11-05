@@ -381,6 +381,107 @@ func TestListObjectFast(t *testing.T) {
 	}
 }
 
+func TestListAndSummaryCloudObjects(t *testing.T) {
+	tests := []struct {
+		cached  bool
+		fast    bool
+		summary bool
+	}{
+		{summary: false, cached: false, fast: false},
+		{summary: false, cached: false, fast: true},
+		{summary: false, cached: true, fast: false},
+		{summary: false, cached: true, fast: true},
+
+		{summary: true, cached: false, fast: false},
+		{summary: true, cached: false, fast: true},
+		{summary: true, cached: true, fast: false},
+		{summary: true, cached: true, fast: true},
+	}
+
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	for _, test := range tests {
+		p := make([]string, 3)
+		p[0] = "list"
+		if test.summary {
+			p[0] = "summary"
+		}
+		p[1] = "all"
+		if test.cached {
+			p[1] = "cached"
+		}
+		p[2] = "slow"
+		if test.fast {
+			p[2] = "fast"
+		}
+
+		t.Run(strings.Join(p, "/"), func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: clibucket,
+
+					num: 2234,
+				}
+				cacheSize  = 1234 // determines number of objects which should be cached
+				baseParams = tutils.DefaultBaseAPIParams(t)
+			)
+
+			m.saveClusterState()
+			if m.originalTargetCount < 2 {
+				t.Fatalf("must have at least 2 target in the cluster")
+			}
+
+			if !isCloudBucket(t, m.proxyURL, m.bucket) {
+				t.Skipf("%s requires a cloud bucket", t.Name())
+			}
+
+			m.cloudPuts()
+			defer m.cloudDelete()
+
+			tutils.Logln("evicting cloud bucket...")
+			err := api.EvictCloudBucket(baseParams, m.bucket)
+			tassert.CheckFatal(t, err)
+
+			expectedFiles := m.num
+			if test.cached {
+				m.cloudPrefetch(cacheSize)
+				expectedFiles = cacheSize
+			}
+
+			tutils.Logln("checking objects...")
+
+			msg := &cmn.SelectMsg{
+				Cached: test.cached,
+				Fast:   test.fast,
+			}
+
+			if test.summary {
+				summaries, err := api.GetBucketsSummaries(baseParams, m.bucket, cmn.Cloud, msg)
+				tassert.CheckFatal(t, err)
+
+				if len(summaries) != 1 {
+					t.Fatalf("number of summaries (%d) is larger than 1", len(summaries))
+				}
+
+				summary := summaries[m.bucket]
+				if summary.ObjCount != uint64(expectedFiles) {
+					t.Errorf("number of objects in summary (%d) after eviction is different than expected (%d)", summary.ObjCount, expectedFiles)
+				}
+			} else {
+				objList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+				tassert.CheckFatal(t, err)
+
+				if len(objList.Entries) != expectedFiles {
+					t.Errorf("number of listed objects (%d) after eviction is different than expected (%d)", len(objList.Entries), expectedFiles)
+				}
+			}
+		})
+	}
+}
+
 func TestBucketSingleProp(t *testing.T) {
 	const (
 		dataSlices      = 1
@@ -1020,8 +1121,6 @@ func TestCopyBucket(t *testing.T) {
 				if !isCloudBucket(t, proxyURL, srcm.bucket) {
 					t.Skip("test requires a cloud bucket")
 				}
-
-				defer api.EvictCloudBucket(baseParams, srcm.bucket)
 			}
 
 			// Initialize ioContext
@@ -1063,9 +1162,11 @@ func TestCopyBucket(t *testing.T) {
 				tassert.CheckFatal(t, err)
 			} else if test.provider == cmn.Cloud {
 				srcm.cloudPuts()
+				defer srcm.cloudDelete()
 
-				msg := &cmn.SelectMsg{Props: cmn.GetPropsIsCached}
-				srcBckList, err = api.ListBucket(baseParams, srcm.bucket, msg, 0)
+				srcm.cloudPrefetch(srcm.num) // cache everything
+
+				srcBckList, err = api.ListBucket(baseParams, srcm.bucket, nil, 0)
 				tassert.CheckFatal(t, err)
 			}
 
