@@ -112,7 +112,7 @@ func copyBucket(c *cli.Context, bucket, newBucket string) (err error) {
 	}
 
 	msgFmt := "Copying bucket %s to %s in progress.\nTo check the status, run: ais show xaction %s %s\n"
-	fmt.Fprintf(c.App.Writer, msgFmt, bucket, newBucket, cmn.ActCopyBucket, bucket)
+	fmt.Fprintf(c.App.Writer, msgFmt, bucket, newBucket, cmn.ActCopyBucket, newBucket)
 	return
 }
 
