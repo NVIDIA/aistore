@@ -857,7 +857,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucketProps cmn.SimpleKVs
 		query       = r.URL.Query()
-		errCode     int
+		tname       = t.si.Name()
+		inBMD       = true
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -871,6 +872,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
+		inBMD = false
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
@@ -878,15 +880,27 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	config := cmn.GCO.Get()
 	if bck.IsCloud() {
-		bucketProps, err, errCode = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
+		var code int
+		bucketProps, err, code = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
 		if err != nil {
-			if errCode == http.StatusNotFound {
-				err = cmn.NewErrorCloudBucketDoesNotExist(bucket)
-			} else {
-				err = fmt.Errorf("%s: bucket %s, err: %v", t.si.Name(), bucket, err)
+			if !inBMD {
+				if code == http.StatusNotFound {
+					err = cmn.NewErrorCloudBucketDoesNotExist(bucket)
+				} else {
+					err = fmt.Errorf("%s: bucket %s, err: %v", t.si.Name(), bucket, err)
+				}
+				t.invalmsghdlr(w, r, err.Error(), code)
+				return
 			}
-			t.invalmsghdlr(w, r, err.Error(), errCode)
-			return
+			bucketProps = make(cmn.SimpleKVs)
+			if config.CloudProvider == "" {
+				glog.Warningf("%s: %v(%d) - provider is not configured", tname, err, code)
+				bucketProps[cmn.HeaderCloudProvider] = cmn.Cloud
+			} else {
+				glog.Warningf("%s: %s bucket %s, err: %v(%d)", tname, config.CloudProvider, bucket, err, code)
+				bucketProps[cmn.HeaderCloudProvider] = config.CloudProvider
+			}
+			bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
 		}
 	} else {
 		bucketProps = make(cmn.SimpleKVs)
@@ -1299,6 +1313,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	const fmtErr = "%s: %s failed: "
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Objects)
+	tname := t.si.Name()
 	if err != nil {
 		return
 	}
@@ -1310,19 +1325,19 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 
 	if params.Target != "" && params.Target != t.si.DaemonID {
-		glog.Errorf("%s: unexpected target ID %s mismatch", t.si.Name(), params.Target)
+		glog.Errorf("%s: unexpected target ID %s mismatch", tname, params.Target)
 	}
 
 	// 2. init & validate
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	srcFQN := msg.Name
 	if srcFQN == "" {
-		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
+		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+"missing source filename")
 		return
 	}
 	if err = cmn.ValidateOmitBase(srcFQN, params.OmitBase); err != nil {
-		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
+		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
 		return
 	}
@@ -1346,7 +1361,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	// 3a. promote dir
 	if finfo.IsDir() {
 		if params.Verbose {
-			glog.Infof("%s: promote %+v", t.si.Name(), params)
+			glog.Infof("%s: promote %+v", tname, params)
 		}
 		var xact *mirror.XactDirPromote
 		xact, err = t.xactions.renewDirPromote(srcFQN, bck, t, &params)
@@ -1359,7 +1374,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 	// 3b. promote file
 	if err = t.PromoteFile(srcFQN, bck, params.Objname, params.Overwrite, params.Verbose); err != nil {
-		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
+		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
 	}
 }

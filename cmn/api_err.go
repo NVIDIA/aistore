@@ -8,57 +8,70 @@ import (
 	"fmt"
 )
 
-// Common errors
+type (
+	ErrorBucketAlreadyExists     struct{ bucket string }
+	ErrorCloudBucketDoesNotExist struct{ bucket string }
+	ErrorCloudBucketOffline      struct{ bucket, provider string }
+	ErrorBucketDoesNotExist      struct{ bucket string }
 
-type ErrorBucketAlreadyExists struct {
-	bucket string
-}
+	ErrorCapacityExceeded struct {
+		prefix string
+		high   int64
+		used   int32
+		oos    bool
+	}
+
+	BucketAccessDenied struct{ errAccessDenied }
+	ObjectAccessDenied struct{ errAccessDenied }
+	errAccessDenied    struct {
+		entity      string
+		operation   string
+		accessAttrs uint64
+	}
+)
 
 func NewErrorBucketAlreadyExists(bucket string) *ErrorBucketAlreadyExists {
 	return &ErrorBucketAlreadyExists{bucket: bucket}
 }
-
 func (e *ErrorBucketAlreadyExists) Error() string {
 	return fmt.Sprintf("bucket %q already exists", e.bucket)
-}
-
-type ErrorCloudBucketDoesNotExist struct {
-	bucket string
 }
 
 func NewErrorCloudBucketDoesNotExist(bucket string) *ErrorCloudBucketDoesNotExist {
 	return &ErrorCloudBucketDoesNotExist{bucket: bucket}
 }
-
 func (e *ErrorCloudBucketDoesNotExist) Error() string {
 	return fmt.Sprintf("cloud bucket %q does not exist", e.bucket)
 }
 
-type ErrorBucketDoesNotExist struct {
-	bucket string
+func NewErrorCloudBucketOffline(bucket, provider string) *ErrorCloudBucketOffline {
+	return &ErrorCloudBucketOffline{bucket: bucket, provider: provider}
+}
+func (e *ErrorCloudBucketOffline) Error() string {
+	return fmt.Sprintf("%s bucket %q is currently unreachable", e.provider, e.bucket)
 }
 
 func NewErrorBucketDoesNotExist(bucket string) *ErrorBucketDoesNotExist {
 	return &ErrorBucketDoesNotExist{bucket: bucket}
 }
-
 func (e *ErrorBucketDoesNotExist) Error() string {
 	return fmt.Sprintf("%q does not appear to be an ais bucket or does not exist", e.bucket)
 }
 
-type errAccessDenied struct {
-	entity      string
-	operation   string
-	accessAttrs uint64
+func IsErrBucketUnreachable(err error) bool {
+	if _, ok := err.(*ErrorBucketDoesNotExist); ok {
+		return true
+	}
+	if _, ok := err.(*ErrorCloudBucketDoesNotExist); ok {
+		return true
+	}
+	_, ok := err.(*ErrorCloudBucketOffline)
+	return ok
 }
 
 func (e *errAccessDenied) String() string {
 	return fmt.Sprintf("%s: %s access denied (%#x)", e.entity, e.operation, e.accessAttrs)
 }
-
-type BucketAccessDenied struct{ errAccessDenied }
-type ObjectAccessDenied struct{ errAccessDenied }
-
 func (e *BucketAccessDenied) Error() string { return "bucket " + e.String() }
 func (e *ObjectAccessDenied) Error() string { return "object " + e.String() }
 
@@ -67,21 +80,6 @@ func NewBucketAccessDenied(bucket, oper string, aattrs uint64) *BucketAccessDeni
 }
 func NewObjectAccessDenied(name, oper string, aattrs uint64) *ObjectAccessDenied {
 	return &ObjectAccessDenied{errAccessDenied{name, oper, aattrs}}
-}
-
-func IsErrBucketDoesNotExist(err error) bool {
-	if _, ok := err.(*ErrorBucketDoesNotExist); ok {
-		return true
-	}
-	_, ok := err.(*ErrorCloudBucketDoesNotExist)
-	return ok
-}
-
-type ErrorCapacityExceeded struct {
-	prefix string
-	high   int64
-	used   int32
-	oos    bool
 }
 
 func NewErrorCapacityExceeded(prefix string, high int64, used int32, oos bool) *ErrorCapacityExceeded {

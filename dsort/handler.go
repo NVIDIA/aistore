@@ -840,7 +840,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	//	Client: http.DefaultClient,
 	//	URL:    ctx.smap.Get().ProxySI.URL(cmn.NetworkIntraControl),
 	//}
-	//msg := &cmn.SelectMsg{Props: "size,status", PageSize: cmn.DefaultPageSize}
+	//msg := &cmn.SelectMsg{Props: "size,status", PageSize: cmn.DefaultListPageSize}
 	//objList, err := api.ListBucket(baseParams, parsedRS.Bucket, msg, 0)
 	//if err != nil {
 	//	return "", err

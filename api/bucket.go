@@ -257,7 +257,8 @@ func GetBucketNames(baseParams *BaseParams, provider string) (*cmn.BucketNames, 
 //
 // Cloud provider takes one of "", "cloud", "ais", "gcp", "aws".
 // Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
-func GetBucketsSummaries(baseParams *BaseParams, bucket, provider string, msg *cmn.SelectMsg) (summaries cmn.BucketsSummaries, err error) {
+func GetBucketsSummaries(baseParams *BaseParams, bucket, provider string,
+	msg *cmn.SelectMsg) (summaries cmn.BucketsSummaries, err error) {
 	var (
 		q    = url.Values{}
 		path = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
@@ -456,81 +457,93 @@ func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values
 // 3. Breaks loop on error
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
-func waitForAsyncReqComplete(baseParams *BaseParams, action, path string, origMsg *cmn.SelectMsg, optParams OptionalParams) (*http.Response, error) {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: action, Value: origMsg})
+func waitForAsyncReqComplete(baseParams *BaseParams, action, path string,
+	origMsg *cmn.SelectMsg, optParams OptionalParams) (*http.Response, error) {
+	var (
+		resp         *http.Response
+		sleep        = initialPollInterval
+		b, err       = jsoniter.Marshal(cmn.ActionMsg{Action: action, Value: origMsg})
+		changeOfTask bool
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	resp, err := doHTTPRequestGetResp(baseParams, path, b, optParams)
-	if err != nil {
+	if resp, err = doHTTPRequestGetResp(baseParams, path, b, optParams); err != nil {
 		return nil, err
 	}
-
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		return nil, fmt.Errorf("Invalid response code: %d", resp.StatusCode)
 	}
-
-	var id int64
-	// the destination started async task and returned its ID
 	if resp.StatusCode == http.StatusAccepted {
-		respBody, err := ioutil.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
+		// receiver started async task and returned the task ID
+		if b, err = handleAsyncReqAccepted(resp, action, origMsg, optParams); err != nil {
 			return nil, err
-		}
-		idstr := string(respBody)
-		id, err = strconv.ParseInt(idstr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-
-		if origMsg != nil {
-			msg := cmn.SelectMsg{}
-			msg = *origMsg
-			msg.TaskID = id
-			b, err = jsoniter.Marshal(cmn.ActionMsg{Action: action, Value: &msg})
-			if err != nil {
-				return nil, err
-			}
 		}
 	}
 
-	sleep := initialPollInterval
-	optParams.Query.Set(cmn.URLParamTaskID, strconv.FormatInt(id, 10))
 	defer optParams.Query.Del(cmn.URLParamTaskID)
 
-	// poll the task status until it completes
-	for resp.StatusCode != http.StatusOK {
+	// poll async task for http.StatusOK completion
+	for {
 		resp, err = doHTTPRequestGetResp(baseParams, path, b, optParams)
 		if err != nil {
 			return nil, err
 		}
-
+		if !changeOfTask && resp.StatusCode == http.StatusAccepted {
+			// NOTE: async task changed on the fly
+			if b, err = handleAsyncReqAccepted(resp, action, origMsg, optParams); err != nil {
+				return nil, err
+			}
+			changeOfTask = true
+		}
 		if resp.StatusCode == http.StatusOK {
 			break
 		}
-
 		resp.Body.Close()
 		time.Sleep(sleep)
 		if sleep < maxPollInterval {
 			sleep += sleep / 2
 		}
 	}
-
-	// now resp should contain the real data returned by the destination
 	return resp, err
+}
+
+func handleAsyncReqAccepted(resp *http.Response, action string, origMsg *cmn.SelectMsg,
+	optParams OptionalParams) (b []byte, err error) {
+	var (
+		id       int64
+		respBody []byte
+	)
+	respBody, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return
+	}
+	if id, err = strconv.ParseInt(string(respBody), 10, 64); err != nil {
+		return
+	}
+	if origMsg != nil {
+		msg := cmn.SelectMsg{}
+		msg = *origMsg
+		msg.TaskID = id
+		if b, err = jsoniter.Marshal(cmn.ActionMsg{Action: action, Value: &msg}); err != nil {
+			return
+		}
+	}
+	optParams.Query.Set(cmn.URLParamTaskID, strconv.FormatInt(id, 10))
+	return
 }
 
 // ListBucket API
 //
 // ListBucket returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
-func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
+func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numObjects int,
+	query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
+	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
 	q := url.Values{}
 	if len(query) > 0 {
 		q = query[0]
@@ -549,7 +562,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 	msg.TaskID = 0
 	for {
 		if toRead != 0 {
-			if (msg.PageSize == 0 && toRead < cmn.DefaultPageSize) ||
+			if (msg.PageSize == 0 && toRead < cmn.DefaultListPageSize) ||
 				(msg.PageSize != 0 && msg.PageSize > toRead) {
 				msg.PageSize = toRead
 			}
@@ -577,7 +590,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 		}
 
 		page := &cmn.BucketList{}
-		page.Entries = make([]*cmn.BucketEntry, 0, 1000)
+		page.Entries = make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)
 
 		if err = jsoniter.Unmarshal(respBody, page); err != nil {
 			return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(b))
@@ -630,7 +643,7 @@ func ListBucketPage(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 		return nil, err
 	}
 
-	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
+	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
 	if err = jsoniter.Unmarshal(respBody, reslist); err != nil {
 		return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(respBody))
 	}

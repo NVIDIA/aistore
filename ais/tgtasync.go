@@ -59,11 +59,13 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 // - returns status of a running task by its ID
 // - returns the result of a task by its ID
 func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck, msg *cmn.SelectMsg) bool {
-	query := r.URL.Query()
-	taskAction := query.Get(cmn.URLParamTaskAction)
-	silent, _ := cmn.ParseBool(query.Get(cmn.URLParamSilent))
-	ctx := t.contextWithAuth(r.Header)
-	// create task call
+	var (
+		query      = r.URL.Query()
+		taskAction = query.Get(cmn.URLParamTaskAction)
+		silent, _  = cmn.ParseBool(query.Get(cmn.URLParamSilent))
+		ctx        = t.contextWithAuth(r.Header)
+		// create task call
+	)
 	if taskAction == cmn.TaskStart {
 		var (
 			err error
@@ -91,10 +93,11 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	xactStats := t.xactions.GetTaskXact(msg.TaskID)
 	// task never started
 	if xactStats == nil {
+		s := fmt.Sprintf("Task %d not found", msg.TaskID)
 		if silent {
-			t.invalmsghdlrsilent(w, r, "Task not found", http.StatusNotFound)
+			t.invalmsghdlrsilent(w, r, s, http.StatusNotFound)
 		} else {
-			t.invalmsghdlr(w, r, "Task not found", http.StatusNotFound)
+			t.invalmsghdlr(w, r, s, http.StatusNotFound)
 		}
 		return false
 	}
@@ -106,7 +109,11 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	// task has finished
 	result, err := xactStats.Get().Result()
 	if err != nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Task failed: %v", err), http.StatusInternalServerError)
+		if cmn.IsErrBucketUnreachable(err) {
+			t.invalmsghdlr(w, r, err.Error(), http.StatusGone)
+		} else {
+			t.invalmsghdlr(w, r, err.Error())
+		}
 		return false
 	}
 

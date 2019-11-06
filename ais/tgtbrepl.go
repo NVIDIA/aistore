@@ -73,7 +73,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 			copied = true
 			return
 		}
-	} else if cmn.IsErrBucketDoesNotExist(err) {
+	} else if cmn.IsErrBucketUnreachable(err) {
 		return
 	}
 

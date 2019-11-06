@@ -47,7 +47,7 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 	ci := &allfinfos{
 		t:            w.t, // targetrunner
 		smap:         w.t.GetSmap(),
-		objs:         make([]*cmn.BucketEntry, 0, cmn.DefaultPageSize),
+		objs:         make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize),
 		prefix:       msg.Prefix,
 		marker:       msg.PageMarker,
 		markerDir:    markerDir,
@@ -56,7 +56,7 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 		bucket:       bucket,
 		fileCount:    0,
 		rootLength:   0,
-		limit:        cmn.DefaultPageSize, // maximum number files to return
+		limit:        cmn.DefaultListPageSize, // maximum number files to return
 		needAtime:    msg.WantProp(cmn.GetPropsAtime),
 		needChkSum:   msg.WantProp(cmn.GetPropsChecksum),
 		needVersion:  msg.WantProp(cmn.GetPropsVersion),
@@ -160,7 +160,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 		objLists = append(objLists, r.infos.objs)
 	}
 
-	maxSize := cmn.DefaultPageSize
+	maxSize := cmn.DefaultListPageSize
 	if w.msg.Fast {
 		maxSize = 0
 	}
@@ -188,21 +188,21 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	if w.msg.Cached {
 		return w.LocalObjPage()
 	}
-
 	bucketList, err, _ := w.t.Cloud().ListBucket(w.ctx, w.bck.Name, w.msg)
 	if err != nil {
 		return nil, err
 	}
-
-	needURL := w.msg.WantProp(cmn.GetTargetURL)
-	needAtime := w.msg.WantProp(cmn.GetPropsAtime)
-	needChkSum := w.msg.WantProp(cmn.GetPropsChecksum)
-	needVersion := w.msg.WantProp(cmn.GetPropsVersion)
-	needCopies := w.msg.WantProp(cmn.GetPropsCopies)
-	config := cmn.GCO.Get()
-	localURL := w.t.Snode().URL(cmn.NetworkPublic)
-	localID := w.t.Snode().DaemonID
-	smap := w.t.GetSmap()
+	var (
+		needURL     = w.msg.WantProp(cmn.GetTargetURL)
+		needAtime   = w.msg.WantProp(cmn.GetPropsAtime)
+		needChkSum  = w.msg.WantProp(cmn.GetPropsChecksum)
+		needVersion = w.msg.WantProp(cmn.GetPropsVersion)
+		needCopies  = w.msg.WantProp(cmn.GetPropsCopies)
+		config      = cmn.GCO.Get()
+		localURL    = w.t.Snode().URL(cmn.NetworkPublic)
+		localID     = w.t.Snode().DaemonID
+		smap        = w.t.GetSmap()
+	)
 	for _, e := range bucketList.Entries {
 		si, _ := cluster.HrwTarget(w.bck, e.Name, smap)
 		if si.DaemonID != localID {

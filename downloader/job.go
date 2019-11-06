@@ -157,7 +157,7 @@ func (j *CloudBucketDlJob) GetNextObjs() error {
 		Prefix:     j.prefix,
 		PageMarker: j.pageMarker,
 		Fast:       true,
-		PageSize:   cmn.DefaultPageSize,
+		PageSize:   cmn.DefaultListPageSize,
 	}
 
 	bckList, err, _ := j.t.Cloud().ListBucket(j.ctx, j.bck.Name, msg)
@@ -166,7 +166,7 @@ func (j *CloudBucketDlJob) GetNextObjs() error {
 	}
 	j.pageMarker = msg.PageMarker
 
-	objects := make(cmn.SimpleKVs, cmn.DefaultPageSize)
+	objects := make(cmn.SimpleKVs, cmn.DefaultListPageSize)
 	smap := j.t.GetSmap()
 	for _, entry := range bckList.Entries {
 		si, err := cluster.HrwTarget(j.bck, entry.Name, smap)

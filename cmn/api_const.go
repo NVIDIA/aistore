@@ -109,6 +109,7 @@ const (
 // - if a property is nested, then its value is propertie's parent and propery name separated with a dash
 const (
 	HeaderCloudProvider = "cloud_provider" // ProviderAmazon et al. - see provider.go
+	HeaderCloudOffline  = "cloud.offline"  // when accessing cached cloud bucket with no Cloud connectivity
 	HeaderGuestAccess   = "guest"          // AuthN is enabled and proxy gets a request without token
 
 	// tiering
@@ -274,7 +275,7 @@ const (
 
 // list-bucket default page size
 const (
-	DefaultPageSize = 1000
+	DefaultListPageSize = 1000
 )
 
 // RESTful URL path: l1/l2/l3

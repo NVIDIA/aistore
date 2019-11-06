@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that show details about entities in the cluster.
+// This file contains implementation of the top-level `show` command.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -68,7 +68,7 @@ var (
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdShowBucket,
-					Usage:        "shows details about a bucket",
+					Usage:        "shows bucket details",
 					ArgsUsage:    optionalBucketArgument,
 					Flags:        showCmdsFlags[subcmdShowBucket],
 					Action:       showBucketHandler,
@@ -100,7 +100,7 @@ var (
 				},
 				{
 					Name:         subcmdShowObject,
-					Usage:        "shows details about an object",
+					Usage:        "shows object details",
 					ArgsUsage:    objectArgument,
 					Flags:        showCmdsFlags[subcmdShowObject],
 					Action:       showObjectHandler,
@@ -108,7 +108,7 @@ var (
 				},
 				{
 					Name:         subcmdShowNode,
-					Usage:        "shows details about a node",
+					Usage:        "shows node details",
 					ArgsUsage:    optionalDaemonIDArgument,
 					Flags:        showCmdsFlags[subcmdShowNode],
 					Action:       showNodeHandler,
@@ -116,7 +116,7 @@ var (
 				},
 				{
 					Name:         subcmdShowXaction,
-					Usage:        "shows details about an xaction",
+					Usage:        "shows xaction details",
 					ArgsUsage:    optionalXactionWithOptionalBucketArgument,
 					Description:  xactKindsMsg,
 					Flags:        showCmdsFlags[subcmdShowXaction],
@@ -125,7 +125,7 @@ var (
 				},
 				{
 					Name:         subcmdShowRebalance,
-					Usage:        "shows details about global rebalance",
+					Usage:        "shows rebalance details",
 					ArgsUsage:    noArguments,
 					Flags:        showCmdsFlags[subcmdShowRebalance],
 					Action:       showRebalanceHandler,

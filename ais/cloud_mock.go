@@ -23,11 +23,12 @@ var (
 
 func newEmptyCloud() cloudProvider { return &emptyCloudProvider{} }
 
-func (m *emptyCloudProvider) ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
-	return nil, cmn.NewErrorCloudBucketDoesNotExist(bucket), http.StatusNotFound
+func (m *emptyCloudProvider) ListBucket(ctx context.Context, bucket string,
+	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+	return nil, cmn.NewErrorCloudBucketOffline(bucket, cmn.Cloud), http.StatusNotFound
 }
 func (m *emptyCloudProvider) headBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
-	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketDoesNotExist(bucket), http.StatusNotFound
+	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketOffline(bucket, cmn.Cloud), http.StatusNotFound
 }
 
 // the function must not fail - it should return empty list

@@ -74,21 +74,19 @@ type (
 	}
 	xactBckListTask struct {
 		cmn.XactBase
-		ctx    context.Context
-		res    atomic.Pointer
-		t      *targetrunner
-		bck    *cluster.Bck
-		msg    *cmn.SelectMsg
-		cached bool
+		ctx context.Context
+		res atomic.Pointer
+		t   *targetrunner
+		bck *cluster.Bck
+		msg *cmn.SelectMsg
 	}
 	xactBckSummaryTask struct {
 		cmn.XactBase
-		ctx    context.Context
-		t      *targetrunner
-		bck    *cluster.Bck
-		msg    *cmn.SelectMsg
-		cached bool
-		res    atomic.Pointer
+		ctx context.Context
+		t   *targetrunner
+		bck *cluster.Bck
+		msg *cmn.SelectMsg
+		res atomic.Pointer
 	}
 	xactionEntry interface {
 		Start(id int64) error // supposed to start an xaction, will be called when entry is stored to into registry
@@ -729,7 +727,8 @@ func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bck *cluster.Bck, msg *cmn.SelectMsg) (*xactBckListTask, error) {
+func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bck *cluster.Bck,
+	msg *cmn.SelectMsg) (*xactBckListTask, error) {
 	id := msg.TaskID
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
@@ -780,7 +779,7 @@ func (r *xactBckListTask) IsMountpathXact() bool { return false }
 
 func (r *xactBckListTask) Run() {
 	walk := objwalk.NewWalk(r.ctx, r.t, r.bck, r.msg)
-	if r.bck.IsAIS() {
+	if r.bck.IsAIS() || r.msg.Cached {
 		r.UpdateResult(walk.LocalObjPage())
 	} else {
 		r.UpdateResult(walk.CloudObjPage())

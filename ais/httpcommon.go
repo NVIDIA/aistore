@@ -595,7 +595,8 @@ func (h *httprunner) call(args callArgs) callResult {
 	}
 
 	if err != nil {
-		details = fmt.Sprintf("unexpected failure to create HTTP request %s %s, err: %v", args.req.Method, args.req.URL(), err)
+		details = fmt.Sprintf("unexpected failure to create HTTP request %s %s, err: %v",
+			args.req.Method, args.req.URL(), err)
 		return callResult{args.si, outjson, err, details, status}
 	}
 
@@ -618,7 +619,8 @@ func (h *httprunner) call(args callArgs) callResult {
 	}
 
 	if outjson, err = ioutil.ReadAll(resp.Body); err != nil {
-		details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): read response err: %v", sid, args.req.Method, args.req.URL(), err)
+		details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): read response err: %v",
+			sid, args.req.Method, args.req.URL(), err)
 		if err == io.EOF {
 			trailer := resp.Trailer.Get("Error")
 			if trailer != "" {
@@ -895,7 +897,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
 	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
-		msg += " from " + caller
+		msg += " (from " + caller + ")"
 	}
 	cmn.InvalidHandlerDetailed(w, r, msg, errCode...)
 	h.statsif.AddErrorHTTP(r.Method, 1)

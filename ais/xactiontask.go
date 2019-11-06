@@ -15,13 +15,12 @@ import (
 
 type bckListTaskEntry struct {
 	baseEntry
-	ctx    context.Context
-	xact   *xactBckListTask
-	t      *targetrunner
-	id     int64
-	msg    *cmn.SelectMsg
-	bck    *cluster.Bck
-	cached bool
+	ctx  context.Context
+	xact *xactBckListTask
+	t    *targetrunner
+	id   int64
+	msg  *cmn.SelectMsg
+	bck  *cluster.Bck
 }
 
 func (e *bckListTaskEntry) Start(_ int64) error {
@@ -31,7 +30,6 @@ func (e *bckListTaskEntry) Start(_ int64) error {
 		t:        e.t,
 		msg:      e.msg,
 		bck:      e.bck,
-		cached:   e.cached,
 	}
 	e.xact = xact
 	go xact.Run()
@@ -49,13 +47,12 @@ func (e *bckListTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
 
 type bckSummaryTaskEntry struct {
 	baseEntry
-	ctx    context.Context
-	xact   *xactBckSummaryTask
-	t      *targetrunner
-	id     int64
-	msg    *cmn.SelectMsg
-	bck    *cluster.Bck
-	cached bool
+	ctx  context.Context
+	xact *xactBckSummaryTask
+	t    *targetrunner
+	id   int64
+	msg  *cmn.SelectMsg
+	bck  *cluster.Bck
 }
 
 func (e *bckSummaryTaskEntry) Start(_ int64) error {
@@ -65,7 +62,6 @@ func (e *bckSummaryTaskEntry) Start(_ int64) error {
 		msg:      e.msg,
 		bck:      e.bck,
 		ctx:      e.ctx,
-		cached:   e.cached,
 	}
 	e.xact = xact
 	go xact.Run()

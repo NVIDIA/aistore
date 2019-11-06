@@ -32,7 +32,7 @@ const (
 	gcpChecksumType = "x-goog-meta-ais-cksum-type"
 	gcpChecksumVal  = "x-goog-meta-ais-cksum-val"
 
-	gcpPageSize = 1000
+	gcpPageSize = cmn.DefaultListPageSize
 )
 
 // To get projectID from gcp auth json file, to get rid of reading projectID

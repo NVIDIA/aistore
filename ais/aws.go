@@ -28,7 +28,7 @@ const (
 	awsChecksumType   = "x-amz-meta-ais-cksum-type"
 	awsChecksumVal    = "x-amz-meta-ais-cksum-val"
 	awsMultipartDelim = "-"
-	awsMaxPageSize    = 1000
+	awsMaxPageSize    = 1000 // AWS limitation, see also cmn.DefaultListPageSize
 )
 
 type (
