@@ -34,7 +34,7 @@ type fileHandle struct {
 	appendHandle string
 }
 
-// REQUIRES_LOCK(file)
+// REQUIRES_READ_LOCK(file)
 func newFileHandle(id fuseops.HandleID, file *FileInode) *fileHandle {
 	return &fileHandle{
 		id:       id,

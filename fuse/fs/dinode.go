@@ -64,7 +64,7 @@ func (dir *DirectoryInode) TryDeleteLocalSubdirEntry(entryName string) (ok bool)
 	return
 }
 
-// REQUIRES_LOCK(dir)
+// REQUIRES_READ_LOCK(dir)
 func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) {
 	var offset fuseops.DirOffset = 1
 

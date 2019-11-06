@@ -22,13 +22,15 @@ func (fs *aisfs) OpenDir(ctx context.Context, req *fuseops.OpenDirOp) (err error
 }
 
 func (fs *aisfs) ReadDir(ctx context.Context, req *fuseops.ReadDirOp) (err error) {
-	fs.mu.Lock()
+	fs.mu.RLock()
 	dh := fs.lookupDhandleMustExist(req.Handle)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
+
 	req.BytesRead, err = dh.readEntries(req.Offset, req.Dst)
 	if err != nil {
 		return fs.handleIOError(err)
 	}
+
 	return
 }
 
@@ -44,9 +46,9 @@ func (fs *aisfs) ReleaseDirHandle(ctx context.Context, req *fuseops.ReleaseDirHa
 func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	var newDir Inode
 
-	fs.mu.Lock()
+	fs.mu.RLock()
 	parent := fs.lookupDirMustExist(req.Parent)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	parent.Lock()
 	defer func() {
@@ -74,19 +76,19 @@ func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	parent.LinkLocalSubdir(req.Name, newDir.ID())
 	parent.NewEntry(req.Name, newDir.ID())
 
-	// Locking this inode with parent doesn't break the valid locking order
-	// since (currently) child inodes have higher ID than their respective
-	// parent inodes.
-	newDir.Lock()
+	// Locking this inode with parent already locked doesn't break
+	// the valid locking order since (currently) child inodes
+	// have higher ID than their respective parent inodes.
+	newDir.RLock()
 	req.Entry = newDir.AsChildEntry()
-	newDir.Unlock()
+	newDir.RUnlock()
 	return
 }
 
 func (fs *aisfs) RmDir(ctx context.Context, req *fuseops.RmDirOp) (err error) {
-	fs.mu.Lock()
+	fs.mu.RLock()
 	parent := fs.lookupDirMustExist(req.Parent)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	parent.Lock()
 	defer parent.Unlock()

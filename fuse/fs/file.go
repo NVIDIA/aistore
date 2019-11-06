@@ -27,9 +27,9 @@ func (fs *aisfs) OpenFile(ctx context.Context, req *fuseops.OpenFileOp) (err err
 func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err error) {
 	var newFile Inode
 
-	fs.mu.Lock()
+	fs.mu.RLock()
 	parent := fs.lookupDirMustExist(req.Parent)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	parent.Lock()
 	defer func() {
@@ -62,19 +62,19 @@ func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err
 
 	parent.NewEntry(req.Name, newFile.ID())
 
-	// Locking this inode with parent doesn't break the valid locking order
-	// since (currently) child inodes have higher ID than their respective
-	// parent inodes.
-	newFile.Lock()
+	// Locking this inode with parent already locked doesn't break
+	// the valid locking order since (currently) child inodes
+	// have higher ID than their respective parent inodes.
+	newFile.RLock()
 	req.Entry = newFile.AsChildEntry()
-	newFile.Unlock()
+	newFile.RUnlock()
 	return
 }
 
 func (fs *aisfs) ReadFile(ctx context.Context, req *fuseops.ReadFileOp) (err error) {
-	fs.mu.Lock()
+	fs.mu.RLock()
 	fhandle := fs.lookupFhandleMustExist(req.Handle)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	req.BytesRead, err = fhandle.readChunk(req.Dst, req.Offset)
 
@@ -91,9 +91,9 @@ func (fs *aisfs) ReadFile(ctx context.Context, req *fuseops.ReadFileOp) (err err
 }
 
 func (fs *aisfs) WriteFile(ctx context.Context, req *fuseops.WriteFileOp) (err error) {
-	fs.mu.Lock()
+	fs.mu.RLock()
 	handle := fs.lookupFhandleMustExist(req.Handle)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	err = handle.writeChunk(req.Data, uint64(req.Offset))
 	if err != nil {
@@ -104,9 +104,9 @@ func (fs *aisfs) WriteFile(ctx context.Context, req *fuseops.WriteFileOp) (err e
 }
 
 func (fs *aisfs) FlushFile(ctx context.Context, req *fuseops.FlushFileOp) (err error) {
-	fs.mu.Lock()
+	fs.mu.RLock()
 	handle := fs.lookupFhandleMustExist(req.Handle)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	if err = handle.flush(); err != nil {
 		return fs.handleIOError(err)
@@ -130,9 +130,9 @@ func (fs *aisfs) ReleaseFileHandle(ctx context.Context, req *fuseops.ReleaseFile
 }
 
 func (fs *aisfs) Unlink(ctx context.Context, req *fuseops.UnlinkOp) (err error) {
-	fs.mu.Lock()
+	fs.mu.RLock()
 	parent := fs.lookupDirMustExist(req.Parent)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	parent.Lock()
 	defer parent.Unlock()

@@ -38,7 +38,7 @@ func (file *FileInode) IsDir() bool {
 	return false
 }
 
-// REQUIRES_LOCK(file)
+// REQUIRES_READ_LOCK(file)
 func (file *FileInode) Size() uint64 {
 	return file.attrs.Size
 }
@@ -52,7 +52,7 @@ func (file *FileInode) SetSize(size uint64) {
 // READING //
 /////////////
 
-// REQUIRES_LOCK(file)
+// REQUIRES_READ_LOCK(file)
 func (file *FileInode) Load(w io.Writer, offset int64, length int64) (n int64, err error) {
 	n, err = file.object.GetChunk(w, offset, length)
 	if err != nil {

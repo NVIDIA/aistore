@@ -8,17 +8,9 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"net"
-	"net/http"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-)
-
-const (
-	httpTransportTimeout = 60 * time.Second  // FIXME: Too long?
-	httpClientTimeout    = 300 * time.Second // FIXME: Too long?
 )
 
 //////////
@@ -74,20 +66,9 @@ func emptyBuffer() cmn.ReadOpenCloser {
 	)
 }
 
-func apiParams(clusterURL string) *api.BaseParams {
-	httpTransport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: httpTransportTimeout,
-		}).DialContext,
-	}
-
-	httpClient := &http.Client{
-		Timeout:   httpClientTimeout,
-		Transport: httpTransport,
-	}
-
+func cloneAPIParams(apiParams *api.BaseParams) *api.BaseParams {
 	return &api.BaseParams{
-		Client: httpClient,
-		URL:    clusterURL,
+		Client: apiParams.Client,
+		URL:    apiParams.URL,
 	}
 }

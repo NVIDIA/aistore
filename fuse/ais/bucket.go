@@ -10,14 +10,14 @@ import (
 )
 
 type Bucket struct {
-	apiParams *api.BaseParams
 	name      string
+	apiParams *api.BaseParams
 }
 
-func OpenBucket(clusterURL string, name string) *Bucket {
+func NewBucket(name string, apiParams *api.BaseParams) *Bucket {
 	return &Bucket{
-		apiParams: apiParams(clusterURL),
 		name:      name,
+		apiParams: apiParams,
 	}
 }
 
@@ -44,7 +44,7 @@ func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {
 	}
 
 	object = &Object{
-		apiParams: apiParams(bck.apiParams.URL),
+		apiParams: cloneAPIParams(bck.apiParams),
 		bucket:    bck.name,
 		Name:      objName,
 		Size:      uint64(obj.Size),

@@ -24,11 +24,18 @@ type dirHandle struct {
 	entries []fuseutil.Dirent
 }
 
+func newDirHandle(id fuseops.HandleID, dir *DirectoryInode) *dirHandle {
+	return &dirHandle{
+		id:  id,
+		dir: dir,
+	}
+}
+
 // REQUIRES_LOCK(dh.mu)
 func (dh *dirHandle) fillEntries() error {
-	dh.dir.Lock()
+	dh.dir.RLock()
 	entries, err := dh.dir.ReadEntries()
-	dh.dir.Unlock()
+	dh.dir.RUnlock()
 	if err != nil {
 		return err
 	}

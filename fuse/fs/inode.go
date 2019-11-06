@@ -12,24 +12,34 @@ import (
 )
 
 type Inode interface {
+	// Locking
 	sync.Locker
+	RLock()
+	RUnlock()
+
+	// General
 	Parent() Inode
 	ID() fuseops.InodeID
+	Path() string
+	IsDir() bool
+
+	// Attributes
 	Attributes() fuseops.InodeAttributes
 	SetAttributes(fuseops.InodeAttributes)
 	AsChildEntry() fuseops.ChildInodeEntry
+
+	// Lookup count
 	IncLookupCount()
 	DecLookupCountN(n uint64) uint64
-	Path() string
-	IsDir() bool
 }
 
 type baseInode struct {
+	sync.RWMutex
+
 	id          fuseops.InodeID
 	attrs       fuseops.InodeAttributes
 	path        string
 	lookupCount atomic.Uint64
-	mu          sync.Mutex
 }
 
 func newBaseInode(id fuseops.InodeID, attrs fuseops.InodeAttributes, path string) baseInode {
@@ -38,14 +48,6 @@ func newBaseInode(id fuseops.InodeID, attrs fuseops.InodeAttributes, path string
 		attrs: attrs,
 		path:  path,
 	}
-}
-
-func (in *baseInode) Lock() {
-	in.mu.Lock()
-}
-
-func (in *baseInode) Unlock() {
-	in.mu.Unlock()
 }
 
 // ID returns inode number (ID).
@@ -62,24 +64,24 @@ func (in *baseInode) Path() string {
 }
 
 // Attributes returns inode's attributes (mode, size, atime...).
-// REQUIRES_LOCK(in)
+// REQUIRES_READ_LOCK(in)
 func (in *baseInode) Attributes() (attrs fuseops.InodeAttributes) {
 	return in.attrs
+}
+
+// AsChildEntry returns a fuseops.ChildInodeEntry struct
+// constructed from the current inode state.
+// REQUIRES_READ_LOCK(in)
+func (in *baseInode) AsChildEntry() (en fuseops.ChildInodeEntry) {
+	en.Child = in.ID()
+	en.Attributes = in.Attributes()
+	return
 }
 
 // SetAttributes sets inode attributes.
 // REQUIRES_LOCK(in)
 func (in *baseInode) SetAttributes(attrs fuseops.InodeAttributes) {
 	in.attrs = attrs
-}
-
-// AsChildEntry returns a fuseops.ChildInodeEntry struct
-// constructed from the current inode state.
-// REQUIRES_LOCK(in)
-func (in *baseInode) AsChildEntry() (en fuseops.ChildInodeEntry) {
-	en.Child = in.ID()
-	en.Attributes = in.Attributes()
-	return
 }
 
 // IncLookupCount atomically increments inode's lookup count.

@@ -7,11 +7,15 @@ package fs
 import (
 	"context"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"path"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/fuse/ais"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/jacobsa/fuse"
@@ -54,6 +58,9 @@ const (
 
 	rootPath       = ""
 	invalidInodeID = fuseops.InodeID(fuseops.RootInodeID + 1)
+
+	httpTransportTimeout = 60 * time.Second  // FIXME: Too long?
+	httpClientTimeout    = 300 * time.Second // FIXME: Too long?
 )
 
 var (
@@ -73,8 +80,9 @@ type aisfs struct {
 	fuseutil.NotImplementedFileSystem
 
 	// Cluster
-	aisURL string
-	bucket *ais.Bucket
+	aisURL     string
+	bucketName string
+	httpClient *http.Client
 
 	// File System
 	mountPath   string
@@ -94,17 +102,28 @@ type aisfs struct {
 	// Logging
 	errLog *log.Logger
 
-	// Guards
-	mu sync.Mutex
+	// Guard
+	mu sync.RWMutex
 }
 
 func NewAISFileSystemServer(mountPath, aisURL, bucketName string, owner *Owner, errLog *log.Logger) fuse.Server {
-	bucket := ais.OpenBucket(aisURL, bucketName)
+	// Init HTTP client.
+	httpTransport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: httpTransportTimeout,
+		}).DialContext,
+	}
+	httpClient := &http.Client{
+		Timeout:   httpClientTimeout,
+		Transport: httpTransport,
+	}
 
+	// Create an aisfs instance.
 	aisfs := &aisfs{
 		// Cluster
-		bucket: bucket,
-		aisURL: aisURL,
+		aisURL:     aisURL,
+		httpClient: httpClient,
+		bucketName: bucketName,
 
 		// File System
 		mountPath:  mountPath,
@@ -127,6 +146,10 @@ func NewAISFileSystemServer(mountPath, aisURL, bucketName string, owner *Owner, 
 		errLog: errLog,
 	}
 
+	// Create a bucket.
+	apiParams := aisfs.aisAPIParams()
+	bucket := ais.NewBucket(bucketName, apiParams)
+
 	// Create the root inode.
 	aisfs.root = NewDirectoryInode(
 		fuseops.RootInodeID,
@@ -141,6 +164,14 @@ func NewAISFileSystemServer(mountPath, aisURL, bucketName string, owner *Owner, 
 	return fuseutil.NewFileSystemServer(aisfs)
 }
 
+// API parameters needed to talk to the cluster
+func (fs *aisfs) aisAPIParams() *api.BaseParams {
+	return &api.BaseParams{
+		Client: fs.httpClient,
+		URL:    fs.aisURL,
+	}
+}
+
 func (fs *aisfs) nextInodeID() fuseops.InodeID {
 	return fuseops.InodeID(atomic.AddUint64(&fs.lastInodeID, 1))
 }
@@ -151,6 +182,7 @@ func (fs *aisfs) nextHandleID() fuseops.HandleID {
 
 // Assumes that object != nil
 func (fs *aisfs) fileAttrs(mode os.FileMode, object *ais.Object) fuseops.InodeAttributes {
+	// Nlink will always be 1, the filesystem does not support hard links.
 	return fuseops.InodeAttributes{
 		Mode:  mode,
 		Nlink: 1,
@@ -164,10 +196,12 @@ func (fs *aisfs) fileAttrs(mode os.FileMode, object *ais.Object) fuseops.InodeAt
 }
 
 func (fs *aisfs) dirAttrs(mode os.FileMode) fuseops.InodeAttributes {
-	// The size of the directory will be 0. Size greater than 0 only makes
+	// Size of the directory will be 0. Size greater than 0 only makes
 	// sense if directory entries are persisted somewhere, which is not
 	// the case here. It's similar with virtual file systems like /proc:
 	// `ls -ld /proc` shows directory size to be 0.
+	//
+	// Nlink will always be 1, the filesystem does not support hard links.
 	return fuseops.InodeAttributes{
 		Mode:  mode,
 		Nlink: 1,
@@ -180,23 +214,20 @@ func (fs *aisfs) dirAttrs(mode os.FileMode) fuseops.InodeAttributes {
 // REQUIRES_LOCK(fs.mu)
 func (fs *aisfs) allocateDirHandle(dir *DirectoryInode) fuseops.HandleID {
 	id := fs.nextHandleID()
-	fs.dirHandles[id] = &dirHandle{
-		id:  id,
-		dir: dir,
-	}
+	fs.dirHandles[id] = newDirHandle(id, dir)
 	return id
 }
 
-// REQUIRES_LOCK(fs.mu), LOCKS(file)
+// REQUIRES_LOCK(fs.mu), READ_LOCKS(file)
 func (fs *aisfs) allocateFileHandle(file *FileInode) fuseops.HandleID {
 	id := fs.nextHandleID()
-	file.Lock()
+	file.RLock()
 	fs.fileHandles[id] = newFileHandle(id, file)
-	file.Unlock()
+	file.RUnlock()
 	return id
 }
 
-// REQUIRES_LOCK(fs.mu)
+// REQUIRES_READ_LOCK(fs.mu)
 func (fs *aisfs) lookupMustExist(id fuseops.InodeID) Inode {
 	inode, ok := fs.inodeTable[id]
 	if !ok {
@@ -205,7 +236,7 @@ func (fs *aisfs) lookupMustExist(id fuseops.InodeID) Inode {
 	return inode
 }
 
-// REQUIRES_LOCK(fs.mu)
+// REQUIRES_READ_LOCK(fs.mu)
 func (fs *aisfs) lookupDirMustExist(id fuseops.InodeID) *DirectoryInode {
 	inode := fs.lookupMustExist(id)
 	dirInode, ok := inode.(*DirectoryInode)
@@ -215,7 +246,7 @@ func (fs *aisfs) lookupDirMustExist(id fuseops.InodeID) *DirectoryInode {
 	return dirInode
 }
 
-// REQUIRES_LOCK(fs.mu)
+// REQUIRES_READ_LOCK(fs.mu)
 func (fs *aisfs) lookupFileMustExist(id fuseops.InodeID) *FileInode {
 	inode := fs.lookupMustExist(id)
 	fileInode, ok := inode.(*FileInode)
@@ -225,7 +256,7 @@ func (fs *aisfs) lookupFileMustExist(id fuseops.InodeID) *FileInode {
 	return fileInode
 }
 
-// REQUIRES_LOCK(fs.mu)
+// REQUIRES_READ_LOCK(fs.mu)
 func (fs *aisfs) lookupDhandleMustExist(id fuseops.HandleID) *dirHandle {
 	handle, ok := fs.dirHandles[id]
 	if !ok {
@@ -234,7 +265,7 @@ func (fs *aisfs) lookupDhandleMustExist(id fuseops.HandleID) *dirHandle {
 	return handle
 }
 
-// REQUIRES_LOCK(fs.mu)
+// REQUIRES_READ_LOCK(fs.mu)
 func (fs *aisfs) lookupFhandleMustExist(id fuseops.HandleID) *fileHandle {
 	handle, ok := fs.fileHandles[id]
 	if !ok {
@@ -243,7 +274,7 @@ func (fs *aisfs) lookupFhandleMustExist(id fuseops.HandleID) *fileHandle {
 	return handle
 }
 
-// REQUIRES_LOCKS(fs.mu, parent)
+// REQUIRES_LOCK(fs.mu)
 func (fs *aisfs) createFileInode(parent *DirectoryInode, mode os.FileMode, object *ais.Object) Inode {
 	inodeID := fs.nextInodeID()
 	attrs := fs.fileAttrs(mode, object)
@@ -252,12 +283,13 @@ func (fs *aisfs) createFileInode(parent *DirectoryInode, mode os.FileMode, objec
 	return inode
 }
 
-// REQUIRES_LOCKS(fs.mu, parent)
+// REQUIRES_LOCK(fs.mu)
 func (fs *aisfs) createDirectoryInode(parent *DirectoryInode, mode os.FileMode, entryName string) Inode {
 	inodeID := fs.nextInodeID()
 	attrs := fs.dirAttrs(mode)
 	fspath := path.Join(parent.Path(), entryName) + separator
-	inode := NewDirectoryInode(inodeID, attrs, fspath, parent, fs.bucket)
+	bucket := ais.NewBucket(fs.bucketName, fs.aisAPIParams())
+	inode := NewDirectoryInode(inodeID, attrs, fspath, parent, bucket)
 	fs.inodeTable[inodeID] = inode
 	return inode
 }
@@ -267,20 +299,20 @@ func (fs *aisfs) createDirectoryInode(parent *DirectoryInode, mode os.FileMode, 
 ////////////////////////////////
 
 func (fs *aisfs) GetInodeAttributes(ctx context.Context, req *fuseops.GetInodeAttributesOp) (err error) {
-	fs.mu.Lock()
+	fs.mu.RLock()
 	inode := fs.lookupMustExist(req.Inode)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
-	inode.Lock()
+	inode.RLock()
 	req.Attributes = inode.Attributes()
-	inode.Unlock()
+	inode.RUnlock()
 	return
 }
 
 func (fs *aisfs) SetInodeAttributes(ctx context.Context, req *fuseops.SetInodeAttributesOp) (err error) {
-	fs.mu.Lock()
+	fs.mu.RLock()
 	inode := fs.lookupMustExist(req.Inode)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	inode.Lock()
 	attrs := inode.Attributes()
@@ -311,9 +343,9 @@ func (fs *aisfs) SetInodeAttributes(ctx context.Context, req *fuseops.SetInodeAt
 func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (err error) {
 	var inode Inode
 
-	fs.mu.Lock()
+	fs.mu.RLock()
 	parent := fs.lookupDirMustExist(req.Parent)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	parent.Lock()
 	defer func() {
@@ -346,19 +378,19 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 
 	parent.NewEntry(req.Name, inode.ID())
 
-	// Locking this inode with parent doesn't break the valid locking order
-	// since (currently) child inodes have higher ID than their respective
-	// parent inodes.
-	inode.Lock()
+	// Locking this inode with parent already locked doesn't break
+	// the valid locking order since (currently) child inodes
+	// have higher ID than their respective parent inodes.
+	inode.RLock()
 	req.Entry = inode.AsChildEntry()
-	inode.Unlock()
+	inode.RUnlock()
 	return
 }
 
 func (fs *aisfs) ForgetInode(ctx context.Context, req *fuseops.ForgetInodeOp) (err error) {
-	fs.mu.Lock()
+	fs.mu.RLock()
 	inode := fs.lookupMustExist(req.Inode)
-	fs.mu.Unlock()
+	fs.mu.RUnlock()
 
 	inode.DecLookupCountN(req.N)
 	// TODO: Destroy inode if lookup count dropped to 0.
