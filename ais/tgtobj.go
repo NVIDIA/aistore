@@ -82,10 +82,9 @@ type (
 		r io.ReadCloser
 		// Object size aka Content-Length.
 		size int64
-		// Append operation.
-		op string
-		// Append handle.
-		handle string
+		// Append/Flush operation.
+		op       string
+		filePath string
 	}
 
 	writerOnly struct {
@@ -716,15 +715,15 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 // APPEND OBJECT //
 ///////////////////
 
-func (aoi *appendObjInfo) appendObject() (handle string, err error, errCode int) {
-	handle = aoi.handle
+func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode int) {
+	filePath = aoi.filePath
 	switch aoi.op {
 	case cmn.AppendOp:
-		if handle == "" {
-			handle = fs.CSM.GenContentParsedFQN(aoi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfileAppend)
+		if filePath == "" {
+			filePath = fs.CSM.GenContentParsedFQN(aoi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfileAppend)
 		}
 
-		f, err := os.OpenFile(handle, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			return "", err, http.StatusInternalServerError
 		}
@@ -748,19 +747,25 @@ func (aoi *appendObjInfo) appendObject() (handle string, err error, errCode int)
 			return "", err, http.StatusInternalServerError
 		}
 	case cmn.FlushOp:
-		if handle == "" {
+		if filePath == "" {
 			err = errors.New("handle not provided")
 			return "", err, http.StatusBadRequest
 		}
 
-		if err := aoi.t.PromoteFile(handle, aoi.lom.Bck(), aoi.lom.Objname, true /*overwrite*/, false /*verbose*/); err != nil {
-			// TODO: stats
-			glog.Error(err)
+		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.Objname, true /*overwrite*/, false /*verbose*/); err != nil {
 			return "", err, 0
 		}
 	default:
 		cmn.AssertMsg(false, aoi.op)
 	}
-	// TODO: stats
+
+	delta := time.Since(aoi.started)
+	aoi.t.statsif.AddMany(
+		stats.NamedVal64{Name: stats.AppendCount, Val: 1},
+		stats.NamedVal64{Name: stats.AppendLatency, Val: int64(delta)},
+	)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("PUT %s: %d µs", aoi.lom, int64(delta/time.Microsecond))
+	}
 	return
 }

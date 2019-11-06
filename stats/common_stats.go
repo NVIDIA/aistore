@@ -44,6 +44,7 @@ const (
 	// KindCounter
 	GetCount         = "get.n"
 	PutCount         = "put.n"
+	AppendCount      = "append.n"
 	PostCount        = "pst.n"
 	DeleteCount      = "del.n"
 	RenameCount      = "ren.n"
@@ -339,6 +340,7 @@ func (tracker statsTracker) register(key string, kind string, isCommon ...bool) 
 func (tracker statsTracker) registerCommonStats() {
 	tracker.register(GetCount, KindCounter, true)
 	tracker.register(PutCount, KindCounter, true)
+	tracker.register(AppendCount, KindCounter, true)
 	tracker.register(PostCount, KindCounter, true)
 	tracker.register(DeleteCount, KindCounter, true)
 	tracker.register(RenameCount, KindCounter, true)

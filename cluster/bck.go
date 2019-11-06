@@ -90,6 +90,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 func (b *Bck) AllowGET() error     { return b.allow("GET", cmn.AccessGET) }
 func (b *Bck) AllowHEAD() error    { return b.allow("HEAD", cmn.AccessHEAD) }
 func (b *Bck) AllowPUT() error     { return b.allow("PUT", cmn.AccessPUT) }
+func (b *Bck) AllowAPPEND() error  { return b.allow("APPEND", cmn.AccessAPPEND) }
 func (b *Bck) AllowColdGET() error { return b.allow("cold-GET", cmn.AccessColdGET) }
 func (b *Bck) AllowDELETE() error  { return b.allow("DELETE", cmn.AccessDELETE) }
 func (b *Bck) AllowRENAME() error  { return b.allow("RENAME", cmn.AccessRENAME) }

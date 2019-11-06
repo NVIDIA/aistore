@@ -102,6 +102,7 @@ func (lom *LOM) Exists() bool              { return lom.exists }
 func (lom *LOM) AllowGET() error     { return lom.bck.AllowGET() }
 func (lom *LOM) AllowHEAD() error    { return lom.bck.AllowHEAD() }
 func (lom *LOM) AllowPUT() error     { return lom.bck.AllowPUT() }
+func (lom *LOM) AllowAPPEND() error  { return lom.bck.AllowAPPEND() }
 func (lom *LOM) AllowColdGET() error { return lom.bck.AllowColdGET() }
 func (lom *LOM) AllowDELETE() error  { return lom.bck.AllowDELETE() }
 func (lom *LOM) AllowRENAME() error  { return lom.bck.AllowRENAME() }

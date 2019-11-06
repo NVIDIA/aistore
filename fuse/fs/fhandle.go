@@ -139,7 +139,7 @@ func (fh *fileHandle) readChunk(dst []byte, offset int64) (n int, err error) {
 // WRITING //
 /////////////
 
-func (fh *fileHandle) _writeChunk(data []byte, offset uint64, force bool) (err error) {
+func (fh *fileHandle) _writeChunk(data []byte, force bool) (err error) {
 	if fh.writeBuffer == nil {
 		fh.writeBuffer = newWriteBuffer()
 	}
@@ -148,7 +148,7 @@ func (fh *fileHandle) _writeChunk(data []byte, offset uint64, force bool) (err e
 		return err
 	}
 
-	if fh.writeBuffer.size() > maxBlockSize {
+	if fh.writeBuffer.size() > maxBlockSize || force {
 		if fh.appendHandle, err = fh.file.Write(fh.writeBuffer.reader(), fh.appendHandle); err != nil {
 			return err
 		}
@@ -170,7 +170,7 @@ func (fh *fileHandle) writeChunk(data []byte, offset uint64) (err error) {
 		return fmt.Errorf("write file (inode %d): random access write not yet implemented", fh.file.ID())
 	}
 
-	return fh._writeChunk(data, offset, false)
+	return fh._writeChunk(data, false)
 }
 
 /////////////////////////
@@ -186,7 +186,7 @@ func (fh *fileHandle) flush() (err error) {
 	}
 
 	if fh.writeBuffer != nil && fh.writeBuffer.size() > 0 {
-		err = fh._writeChunk(nil, 0, true)
+		err = fh._writeChunk(nil, true)
 	}
 
 	if err == nil {
@@ -201,5 +201,7 @@ func (fh *fileHandle) flush() (err error) {
 	fh.dirty = false
 	fh.wsize = 0
 	fh.appendHandle = ""
+	fh.writeBuffer.free()
+	fh.writeBuffer = nil
 	return
 }

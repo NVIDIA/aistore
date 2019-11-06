@@ -200,7 +200,6 @@ const (
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 
 	URLParamAppendType   = "appendty"
-	URLParamAppendNode   = "node" // TODO: must be remvoed and put into handle
 	URLParamAppendHandle = "handle"
 
 	// dsort
@@ -341,6 +340,7 @@ const (
 	AccessColdGET
 	AccessDELETE
 	AccessRENAME
+	AccessAPPEND
 
 	AllowAnyAccess = 0
 	AllowAllAccess = ^uint64(0)

@@ -305,6 +305,7 @@ func (t *targetrunner) initRebManager(config *cmn.Config) {
 // target-only stats
 func (t *targetrunner) registerStats() {
 	t.statsif.Register(stats.PutLatency, stats.KindLatency)
+	t.statsif.Register(stats.AppendLatency, stats.KindLatency)
 	t.statsif.Register(stats.GetColdCount, stats.KindCounter)
 	t.statsif.Register(stats.GetColdSize, stats.KindCounter)
 	t.statsif.Register(stats.GetThroughput, stats.KindThroughput)
@@ -514,7 +515,8 @@ func (t *targetrunner) offsetAndLength(query url.Values) (offset, length int64, 
 // PUT /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	var (
-		query = r.URL.Query()
+		query    = r.URL.Query()
+		appendTy = query.Get(cmn.URLParamAppendType)
 	)
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
@@ -540,8 +542,12 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	// TODO: AllowAppend permission for appending to an existing object
-	if err = lom.AllowPUT(); err != nil {
+	if appendTy == "" {
+		err = lom.AllowPUT()
+	} else {
+		err = lom.AllowAPPEND()
+	}
+	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -549,14 +555,15 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		lom.Load() // need to know the current version if versioning enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
-	if query.Get(cmn.URLParamAppendType) == "" {
+	if appendTy == "" {
 		if err, errCode := t.doPut(r, lom, started); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 	} else {
-		if handle, err, errCode := t.doAppend(r, lom, started); err != nil {
+		if filePath, err, errCode := t.doAppend(r, lom, started); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		} else {
+			handle := combineAppendHandle(t.si.DaemonID, filePath)
 			w.Header().Set(cmn.HeaderAppendHandle, handle)
 		}
 	}
@@ -1120,14 +1127,15 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, pr
 	t.writeJSON(w, r, body, "getbucketnames")
 }
 
-func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (handle string, err error, errCode int) {
+func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (filePath string, err error, errCode int) {
+	_, userFilePath := parseAppendHandle(r.URL.Query().Get(cmn.URLParamAppendHandle))
 	aoi := &appendObjInfo{
-		started: started,
-		t:       t,
-		lom:     lom,
-		r:       r.Body,
-		op:      r.URL.Query().Get(cmn.URLParamAppendType),
-		handle:  r.URL.Query().Get(cmn.URLParamAppendHandle),
+		started:  started,
+		t:        t,
+		lom:      lom,
+		r:        r.Body,
+		op:       r.URL.Query().Get(cmn.URLParamAppendType),
+		filePath: userFilePath,
 	}
 	if sizeStr := r.Header.Get("Content-Length"); sizeStr != "" {
 		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {

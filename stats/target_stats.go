@@ -43,6 +43,7 @@ const (
 
 	// KindLatency
 	PutLatency      = "put.µs"
+	AppendLatency   = "append.µs"
 	GetRedirLatency = "get.redir.µs"
 	PutRedirLatency = "put.redir.µs"
 	DownloadLatency = "dl.µs"

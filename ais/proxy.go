@@ -421,12 +421,12 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
 	query := r.URL.Query()
-	bucket, objName := apitems[0], apitems[1]
+	bucket, objName := apiItems[0], apiItems[1]
 	provider := query.Get(cmn.URLParamProvider)
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(p.bmdowner); err != nil {
@@ -434,20 +434,25 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := bck.AllowPUT(); err != nil {
+
+	var (
+		si       *cluster.Snode
+		smap     = p.smapowner.get()
+		appendTy = query.Get(cmn.URLParamAppendType)
+		nodeID   string
+	)
+	if appendTy == "" {
+		err = bck.AllowPUT()
+	} else {
+		nodeID, _ = parseAppendHandle(query.Get(cmn.URLParamAppendHandle))
+		err = bck.AllowAPPEND()
+	}
+
+	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
-	var (
-		si         *cluster.Snode
-		smap       = p.smapowner.get()
-		appendType = query.Get(cmn.URLParamAppendType)
-		nodeID     string
-	)
-	if appendType != "" {
-		nodeID = query.Get(cmn.URLParamAppendNode)
-	}
 	if nodeID == "" {
 		si, err = cluster.HrwTarget(bck, objName, &smap.Smap)
 		if err != nil {
@@ -463,13 +468,15 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
+		glog.Infof("%s %s/%s => %s (append: %v)", r.Method, bucket, objName, si, appendTy != "")
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
-	if appendType == "" {
+	if appendTy == "" {
 		p.statsif.Add(stats.PutCount, 1)
+	} else {
+		p.statsif.Add(stats.AppendCount, 1)
 	}
 }
 
