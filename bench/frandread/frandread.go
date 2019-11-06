@@ -24,21 +24,32 @@ import (
 
 type (
 	cliVars struct {
-		fileList     string        // name of the file that contains filenames to read
-		dirs         string        // comma-separated list of directories to read
-		pattern      string        // filename matching wildcard; used when reading directories ind gnored with -l
-		seed         int64         // random seed; current time (nanoseconds) if omitted
-		maxTime      time.Duration // max time to run (run forever if both -t and -e (epochs) are not defined
-		numWorkers   int           // number of concurrently reading goroutines (workers)
-		numEpochs    uint          // number of "epochs" whereby each epoch entails a full random pass through all filenames
-		verbose      bool          // verbose output
-		superVerbose bool          // super-verbose output
-		usage        bool          // print usage and exit
+		fileList   string        // name of the file that contains filenames to read
+		dirs       string        // comma-separated list of directories to read
+		pattern    string        // filename matching wildcard; used when reading directories ind gnored with -l
+		pctPut     int           // percentage of PUTs in the generated workload
+		minSize    int           // minimum size of the object which will be created during PUT
+		maxSize    int           // maximum size of the object which will be created during PUT
+		seed       int64         // random seed; current time (nanoseconds) if omitted
+		maxTime    time.Duration // max time to run (run forever if both -t and -e (epochs) are not defined
+		numWorkers int           // number of concurrently reading goroutines (workers)
+		numEpochs  uint          // number of "epochs" whereby each epoch entails a full random pass through all filenames
+		verbose    bool          // super-verbose output
+		usage      bool          // print usage and exit
 	}
 	statsVars struct {
 		sizeEpoch int64
 		sizeTotal int64
 		timeTotal time.Duration
+	}
+
+	bench struct {
+		sema chan struct{}
+		wg   *sync.WaitGroup
+		rnd  *rand.Rand
+
+		fileNames []string
+		perm      []int
 	}
 )
 
@@ -51,25 +62,28 @@ func main() {
 	flag.StringVar(&cliv.fileList, "l", "files.txt", "name of the file that lists filenames to read")
 	flag.StringVar(&cliv.dirs, "d", "", "comma-separated list of directories to read (an alternative to list (-l) option)")
 	flag.StringVar(&cliv.pattern, "p", "", "filename matching wildcard when reading directories (ignored when -l is used)")
+	flag.IntVar(&cliv.pctPut, "pctput", 0, "percentage of PUTs in the generated workload")
+	flag.IntVar(&cliv.minSize, "minsize", 1024, "minimum size of the object which will be created during PUT")
+	flag.IntVar(&cliv.maxSize, "maxsize", 10*1024*1024, "maximum size of the object which will be created during PUT")
 	flag.Int64Var(&cliv.seed, "s", 0, "random seed; current time (nanoseconds) if omitted")
 	flag.DurationVar(&cliv.maxTime, "t", 0, "max time to run (run forever if both -t and -e (epochs) are not defined)")
 	flag.IntVar(&cliv.numWorkers, "w", 8, "number of concurrently reading goroutines (workers)")
 	flag.UintVar(&cliv.numEpochs, "e", 0, "number of \"epochs\" to run whereby each epoch entails a full random pass through all filenames")
 	flag.BoolVar(&cliv.verbose, "v", false, "verbose output")
-	flag.BoolVar(&cliv.superVerbose, "vv", false, "super-verbose output")
 	flag.BoolVar(&cliv.usage, "h", false, "print usage and exit")
 	flag.Parse()
 
-	if cliv.usage {
+	if cliv.usage || len(os.Args[1:]) == 0 {
 		flag.Usage()
 		fmt.Println("Build:")
-		fmt.Println("# go build -o frandread")
+		fmt.Println("\tgo install frandread.go")
 		fmt.Println("Examples:")
-		fmt.Printf("# frandread -h\t\t\t\t\t- show usage\n")
-		fmt.Printf("# frandread -d /tmp/work -v -t 10m\t\t- read from /tmp/work, run for 10 minutes\n")
-		fmt.Printf("# frandread -d /tmp/work -vv -t 10m -p *.tgz\t- super-verbose and filter by tgz extension\n")
-		fmt.Printf("# frandread -d /tmp/a,/tmp/work/b -e 999\t- read two directories, run for 999 epochs\n")
-
+		fmt.Printf("\tfrandread -h\t\t\t\t\t- show usage\n")
+		fmt.Printf("\tfrandread -d /tmp/work -t 10m\t\t\t- read from /tmp/work, run for 10 minutes\n")
+		fmt.Printf("\tfrandread -d /tmp/work -v -t 10m -p *.tgz\t- filter by tgz extension\n")
+		fmt.Printf("\tfrandread -d /tmp/a,/tmp/work/b -e 999\t\t- read two directories, run for 999 epochs\n")
+		fmt.Printf("\tfrandread -d ~/smth -pctput 1\t\t\t- put files into ~/smth directory")
+		fmt.Println()
 		os.Exit(0)
 	}
 	if cliv.fileList != "files.txt" && cliv.dirs != "" {
@@ -78,52 +92,52 @@ func main() {
 	if cliv.numEpochs == 0 {
 		cliv.numEpochs = math.MaxUint32
 	}
-	if cliv.superVerbose {
-		cliv.verbose = true
-	}
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, syscall.SIGHUP)
 
-	// 1. open and read prepared list of file names
 	fileNames := make([]string, 0, 1024)
-	if cliv.dirs != "" {
-		dirs := strings.Split(cliv.dirs, ",")
-		for _, dir := range dirs {
-			fileNames = filenamesFromDir(dir, fileNames)
+	if cliv.pctPut == 0 {
+		// 1. open and read prepared list of file names
+		if cliv.dirs != "" {
+			dirs := strings.Split(cliv.dirs, ",")
+			for _, dir := range dirs {
+				fileNames = fileNamesFromDir(dir, fileNames)
+			}
+		} else {
+			fileNames = fileNamesFromList(fileNames)
 		}
 	} else {
-		fileNames = filenamesFromList(fileNames)
+		if cliv.dirs == "" {
+			panic("In PUT mode one needs to specify directory to which files will be written")
+		}
+
+		for i := 0; i < 1024; i++ {
+			fileNames = append(fileNames, randString(10))
+		}
 	}
 
 	// 2. read them all at a given concurrency
 	now := time.Now()
 	fmt.Printf("Starting to run: %d filenames, %d workers\n", len(fileNames), cliv.numWorkers)
 
-	sema := make(chan struct{}, cliv.numWorkers)
-	wg := &sync.WaitGroup{}
-	seed := cliv.seed
-	if seed == 0 {
-		seed = now.UnixNano()
-	}
-	rnd := rand.New(rand.NewSource(seed))
+	b := newBench(fileNames)
+
 	en := uint(1)
 ml:
 	for ; en <= cliv.numEpochs; en++ {
-		perm := rnd.Perm(len(fileNames))
 		started := time.Now()
-		epoch(fileNames, perm, wg, sema) // do the work
-		wg.Wait()
+		b.reset()
+		b.epoch()
 
 		epochWritten := atomic.LoadInt64(&stats.sizeEpoch)
 		stats.sizeTotal += epochWritten
 		epochTime := time.Since(started)
 		stats.timeTotal += epochTime
 
-		if cliv.verbose {
-			sthr := formatThroughput(epochWritten, epochTime)
-			fmt.Printf("Epoch #%d:\t%s\n", en, sthr)
-		}
+		sthr := formatThroughput(epochWritten, epochTime)
+		fmt.Printf("Epoch #%d:\t%s\n", en, sthr)
+
 		if cliv.maxTime != 0 {
 			if time.Since(now) > cliv.maxTime {
 				break
@@ -141,6 +155,20 @@ ml:
 	fmt.Println("ok", elapsed)
 	fmt.Printf("%-12s%-18s%-30s\n", "Epochs", "Time", "Average Throughput")
 	fmt.Printf("%-12d%-18v%-30s\n", en, stats.timeTotal, sthr)
+}
+
+func newBench(fileNames []string) *bench {
+	if cliv.seed == 0 {
+		cliv.seed = time.Now().UnixNano()
+	}
+	rnd := rand.New(rand.NewSource(cliv.seed))
+	return &bench{
+		rnd:  rnd,
+		sema: make(chan struct{}, cliv.numWorkers),
+		wg:   &sync.WaitGroup{},
+
+		fileNames: fileNames,
+	}
 }
 
 func formatThroughput(bytes int64, duration time.Duration) (sthr string) {
@@ -162,33 +190,67 @@ func formatThroughput(bytes int64, duration time.Duration) (sthr string) {
 	return
 }
 
-func epoch(fileNames []string, perm []int, wg *sync.WaitGroup, sema chan struct{}) {
-	atomic.StoreInt64(&stats.sizeEpoch, 0)
-	for _, idx := range perm {
-		fname := fileNames[idx]
-		wg.Add(1)
-		sema <- struct{}{}
-		go func(fn string) {
-			file, err := os.Open(fn)
-			if err != nil {
-				panic(err)
-			}
-			written, err := io.Copy(ioutil.Discard, file) // drain the reader
-			if err != nil {
-				panic(err)
-			}
-			atomic.AddInt64(&stats.sizeEpoch, written)
-			file.Close()
-			if cliv.superVerbose {
-				fmt.Println("\t", fn)
-			}
-			<-sema
-			wg.Done()
-		}(fname)
-	}
+func (b *bench) reset() {
+	b.perm = b.rnd.Perm(len(b.fileNames))
 }
 
-func filenamesFromList(fileNames []string) []string {
+func (b *bench) epoch() {
+	atomic.StoreInt64(&stats.sizeEpoch, 0)
+	for _, idx := range b.perm {
+		fname := b.fileNames[idx]
+		b.wg.Add(1)
+		b.sema <- struct{}{}
+		go func(fname string) {
+			defer func() {
+				<-b.sema
+				b.wg.Done()
+			}()
+
+			if cliv.pctPut > 0 {
+				// PUT
+				f, err := os.Create(filepath.Join(cliv.dirs, fname))
+				if err != nil {
+					panic(err)
+				}
+
+				size := b.rnd.Intn(cliv.maxSize-cliv.minSize) + cliv.minSize
+				r := io.LimitReader(&nopReadCloser{}, int64(size))
+				written, err := io.Copy(f, r)
+				if err != nil {
+					panic(err)
+				}
+				atomic.AddInt64(&stats.sizeEpoch, written)
+				f.Close()
+			} else {
+				// GET
+				file, err := os.Open(fname)
+				if err != nil {
+					panic(err)
+				}
+				read, err := io.Copy(ioutil.Discard, file) // drain the reader
+				if err != nil {
+					panic(err)
+				}
+				atomic.AddInt64(&stats.sizeEpoch, read)
+				file.Close()
+			}
+
+			if cliv.verbose {
+				fmt.Println("\t", fname)
+			}
+		}(fname)
+	}
+
+	if cliv.pctPut > 0 {
+		for _, fname := range b.fileNames {
+			os.Remove(filepath.Join(cliv.dirs, fname))
+		}
+	}
+
+	b.wg.Wait()
+}
+
+func fileNamesFromList(fileNames []string) []string {
 	list, err := os.Open(cliv.fileList)
 	if err != nil {
 		panic(err)
@@ -201,13 +263,13 @@ func filenamesFromList(fileNames []string) []string {
 	return fileNames
 }
 
-func filenamesFromDir(dir string, fileNames []string) []string {
+func fileNamesFromDir(dir string, fileNames []string) []string {
 	dentries, err := ioutil.ReadDir(dir)
 	if err != nil {
 		panic(err)
 	}
 	for _, finfo := range dentries {
-		if finfo.IsDir() {
+		if !finfo.Mode().IsRegular() {
 			continue
 		}
 		if cliv.pattern != "" {
@@ -220,3 +282,17 @@ func filenamesFromDir(dir string, fileNames []string) []string {
 	}
 	return fileNames
 }
+
+func randString(n int) string {
+	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+type nopReadCloser struct{}
+
+func (r *nopReadCloser) Read(p []byte) (n int, err error) { return len(p), nil }
+func (r *nopReadCloser) Close() error                     { return nil }
