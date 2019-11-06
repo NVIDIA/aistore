@@ -126,14 +126,16 @@ func main() {
 	en := uint(1)
 ml:
 	for ; en <= cliv.numEpochs; en++ {
-		started := time.Now()
 		b.reset()
+		started := time.Now()
 		b.epoch()
 
 		epochWritten := atomic.LoadInt64(&stats.sizeEpoch)
 		stats.sizeTotal += epochWritten
 		epochTime := time.Since(started)
 		stats.timeTotal += epochTime
+
+		b.cleanup()
 
 		sthr := formatThroughput(epochWritten, epochTime)
 		fmt.Printf("Epoch #%d:\t%s\n", en, sthr)
@@ -220,19 +222,20 @@ func (b *bench) epoch() {
 					panic(err)
 				}
 				atomic.AddInt64(&stats.sizeEpoch, written)
+
 				f.Close()
 			} else {
 				// GET
-				file, err := os.Open(fname)
+				f, err := os.Open(fname)
 				if err != nil {
 					panic(err)
 				}
-				read, err := io.Copy(ioutil.Discard, file) // drain the reader
+				read, err := io.Copy(ioutil.Discard, f) // drain the reader
 				if err != nil {
 					panic(err)
 				}
 				atomic.AddInt64(&stats.sizeEpoch, read)
-				file.Close()
+				f.Close()
 			}
 
 			if cliv.verbose {
@@ -241,13 +244,15 @@ func (b *bench) epoch() {
 		}(fname)
 	}
 
+	b.wg.Wait()
+}
+
+func (b *bench) cleanup() {
 	if cliv.pctPut > 0 {
 		for _, fname := range b.fileNames {
 			os.Remove(filepath.Join(cliv.dirs, fname))
 		}
 	}
-
-	b.wg.Wait()
 }
 
 func fileNamesFromList(fileNames []string) []string {

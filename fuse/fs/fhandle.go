@@ -139,16 +139,19 @@ func (fh *fileHandle) readChunk(dst []byte, offset int64) (n int, err error) {
 // WRITING //
 /////////////
 
-func (fh *fileHandle) _writeChunk(data []byte, force bool) (err error) {
+func (fh *fileHandle) _writeChunk(data []byte, maxWriteBufSize int64, force bool) (err error) {
 	if fh.writeBuffer == nil {
 		fh.writeBuffer = newWriteBuffer()
 	}
 
+	// Buffer the writes to make sure we don't send an append request for small data chunks.
 	if _, err := fh.writeBuffer.write(data); err != nil {
 		return err
 	}
 
-	if fh.writeBuffer.size() > maxBlockSize || force {
+	// Once we have filled writing buffer to enough size (determined by `maxWriteBufSize`)
+	// we need to issue an append request.
+	if fh.writeBuffer.size() > maxWriteBufSize || force {
 		if fh.appendHandle, err = fh.file.Write(fh.writeBuffer.reader(), fh.appendHandle); err != nil {
 			return err
 		}
@@ -162,7 +165,7 @@ func (fh *fileHandle) _writeChunk(data []byte, force bool) (err error) {
 	return nil
 }
 
-func (fh *fileHandle) writeChunk(data []byte, offset uint64) (err error) {
+func (fh *fileHandle) writeChunk(data []byte, offset uint64, maxWriteBufSize int64) (err error) {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
@@ -170,7 +173,7 @@ func (fh *fileHandle) writeChunk(data []byte, offset uint64) (err error) {
 		return fmt.Errorf("write file (inode %d): random access write not yet implemented", fh.file.ID())
 	}
 
-	return fh._writeChunk(data, false)
+	return fh._writeChunk(data, maxWriteBufSize, false /*force*/)
 }
 
 /////////////////////////
@@ -186,7 +189,7 @@ func (fh *fileHandle) flush() (err error) {
 	}
 
 	if fh.writeBuffer != nil && fh.writeBuffer.size() > 0 {
-		err = fh._writeChunk(nil, true)
+		err = fh._writeChunk(nil, 0, true /*force*/)
 	}
 
 	if err == nil {

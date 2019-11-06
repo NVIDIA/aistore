@@ -31,36 +31,20 @@ func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
 
-	parent.Lock()
-	defer func() {
-		parent.Unlock()
-		if newFile != nil {
-			newFile.IncLookupCount()
-		}
-	}()
-
-	result, err := parent.LookupEntry(req.Name)
-	if err != nil {
-		return fs.handleIOError(err)
-	}
-
-	if !result.NoEntry() {
-		return fuse.EEXIST
-	}
-
 	fileName := path.Join(parent.Path(), req.Name)
-
 	object, err := parent.LinkEmptyFile(fileName)
 	if err != nil {
 		return fs.handleIOError(err)
 	}
 
-	fs.mu.Lock()
-	newFile = fs.createFileInode(parent, req.Mode, object)
-	req.Handle = fs.allocateFileHandle(newFile.(*FileInode))
-	fs.mu.Unlock()
+	parent.Lock()
+	inodeID := fs.nextInodeID()
+	parent.NewEntry(req.Name, inodeID)
+	parent.Unlock()
 
-	parent.NewEntry(req.Name, newFile.ID())
+	fs.mu.Lock()
+	newFile = fs.createFileInode(inodeID, parent, object, req.Mode)
+	req.Handle = fs.allocateFileHandle(newFile.(*FileInode))
 
 	// Locking this inode with parent already locked doesn't break
 	// the valid locking order since (currently) child inodes
@@ -68,6 +52,8 @@ func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err
 	newFile.RLock()
 	req.Entry = newFile.AsChildEntry()
 	newFile.RUnlock()
+	newFile.IncLookupCount()
+	fs.mu.Unlock()
 	return
 }
 
@@ -95,7 +81,7 @@ func (fs *aisfs) WriteFile(ctx context.Context, req *fuseops.WriteFileOp) (err e
 	handle := fs.lookupFhandleMustExist(req.Handle)
 	fs.mu.RUnlock()
 
-	err = handle.writeChunk(req.Data, uint64(req.Offset))
+	err = handle.writeChunk(req.Data, uint64(req.Offset), fs.tunables.MaxWriteBufSize)
 	if err != nil {
 		return fs.handleIOError(err)
 	}
@@ -133,9 +119,6 @@ func (fs *aisfs) Unlink(ctx context.Context, req *fuseops.UnlinkOp) (err error) 
 	fs.mu.RLock()
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
-
-	parent.Lock()
-	defer parent.Unlock()
 
 	lookupRes, err := parent.LookupEntry(req.Name)
 	if err != nil {

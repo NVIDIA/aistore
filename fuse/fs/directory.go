@@ -50,14 +50,6 @@ func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
 
-	parent.Lock()
-	defer func() {
-		parent.Unlock()
-		if newDir != nil {
-			newDir.IncLookupCount()
-		}
-	}()
-
 	result, err := parent.LookupEntry(req.Name)
 	if err != nil {
 		return fs.handleIOError(err)
@@ -70,11 +62,12 @@ func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	}
 
 	fs.mu.Lock()
-	newDir = fs.createDirectoryInode(parent, req.Mode, req.Name)
+	inodeID := fs.nextInodeID()
+	newDir = fs.createDirectoryInode(inodeID, parent, req.Name, req.Mode)
 	fs.mu.Unlock()
 
-	parent.LinkLocalSubdir(req.Name, newDir.ID())
-	parent.NewEntry(req.Name, newDir.ID())
+	parent.LinkLocalSubdir(req.Name, inodeID)
+	parent.NewEntry(req.Name, inodeID)
 
 	// Locking this inode with parent already locked doesn't break
 	// the valid locking order since (currently) child inodes
@@ -82,6 +75,8 @@ func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	newDir.RLock()
 	req.Entry = newDir.AsChildEntry()
 	newDir.RUnlock()
+	newDir.IncLookupCount()
+	parent.Unlock()
 	return
 }
 
@@ -89,9 +84,6 @@ func (fs *aisfs) RmDir(ctx context.Context, req *fuseops.RmDirOp) (err error) {
 	fs.mu.RLock()
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
-
-	parent.Lock()
-	defer parent.Unlock()
 
 	result, err := parent.LookupEntry(req.Name)
 	if err != nil {

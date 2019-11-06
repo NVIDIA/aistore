@@ -71,42 +71,52 @@ func init() {
 	glMem2 = memsys.GMM()
 }
 
-// File system implementation.
-type aisfs struct {
-	// Embedding this struct ensures that fuseutil.FileSystem is implemented.
-	// Every method implementation simply returns fuse.ENOSYS.
-	// This struct overrides a subset of methods.
-	// If at any time in the future all methods are implemented, this can be removed.
-	fuseutil.NotImplementedFileSystem
+type (
+	Tunables struct {
+		MaxWriteBufSize int64
+	}
 
-	// Cluster
-	aisURL     string
-	bucketName string
-	httpClient *http.Client
+	// File system implementation.
+	aisfs struct {
 
-	// File System
-	mountPath   string
-	root        *DirectoryInode
-	inodeTable  map[fuseops.InodeID]Inode
-	lastInodeID uint64
+		// Embedding this struct ensures that fuseutil.FileSystem is implemented.
+		// Every method implementation simply returns fuse.ENOSYS.
+		// This struct overrides a subset of methods.
+		// If at any time in the future all methods are implemented, this can be removed.
+		fuseutil.NotImplementedFileSystem
 
-	// Handles
-	fileHandles  map[fuseops.HandleID]*fileHandle
-	dirHandles   map[fuseops.HandleID]*dirHandle
-	lastHandleID uint64
+		// Cluster
+		aisURL     string
+		bucketName string
+		httpClient *http.Client
 
-	// Access
-	owner    *Owner
-	modeBits *ModeBits
+		// File System
+		mountPath   string
+		root        *DirectoryInode
+		inodeTable  map[fuseops.InodeID]Inode
+		lastInodeID uint64
 
-	// Logging
-	errLog *log.Logger
+		// Handles
+		fileHandles  map[fuseops.HandleID]*fileHandle
+		dirHandles   map[fuseops.HandleID]*dirHandle
+		lastHandleID uint64
 
-	// Guard
-	mu sync.RWMutex
-}
+		// Access
+		owner    *Owner
+		modeBits *ModeBits
 
-func NewAISFileSystemServer(mountPath, aisURL, bucketName string, owner *Owner, errLog *log.Logger) fuse.Server {
+		// Logging
+		errLog *log.Logger
+
+		// Misc
+		tunables *Tunables
+
+		// Guard
+		mu sync.RWMutex
+	}
+)
+
+func NewAISFileSystemServer(mountPath, aisURL, bucketName string, owner *Owner, errLog *log.Logger, tunables *Tunables) fuse.Server {
 	// Init HTTP client.
 	httpTransport := &http.Transport{
 		DialContext: (&net.Dialer{
@@ -144,6 +154,9 @@ func NewAISFileSystemServer(mountPath, aisURL, bucketName string, owner *Owner, 
 
 		// Logging
 		errLog: errLog,
+
+		// Misc
+		tunables: tunables,
 	}
 
 	// Create a bucket.
@@ -181,7 +194,7 @@ func (fs *aisfs) nextHandleID() fuseops.HandleID {
 }
 
 // Assumes that object != nil
-func (fs *aisfs) fileAttrs(mode os.FileMode, object *ais.Object) fuseops.InodeAttributes {
+func (fs *aisfs) fileAttrs(object *ais.Object, mode os.FileMode) fuseops.InodeAttributes {
 	// Nlink will always be 1, the filesystem does not support hard links.
 	return fuseops.InodeAttributes{
 		Mode:  mode,
@@ -275,17 +288,15 @@ func (fs *aisfs) lookupFhandleMustExist(id fuseops.HandleID) *fileHandle {
 }
 
 // REQUIRES_LOCK(fs.mu)
-func (fs *aisfs) createFileInode(parent *DirectoryInode, mode os.FileMode, object *ais.Object) Inode {
-	inodeID := fs.nextInodeID()
-	attrs := fs.fileAttrs(mode, object)
+func (fs *aisfs) createFileInode(inodeID fuseops.InodeID, parent *DirectoryInode, object *ais.Object, mode os.FileMode) Inode {
+	attrs := fs.fileAttrs(object, mode)
 	inode := NewFileInode(inodeID, attrs, parent, object)
 	fs.inodeTable[inodeID] = inode
 	return inode
 }
 
 // REQUIRES_LOCK(fs.mu)
-func (fs *aisfs) createDirectoryInode(parent *DirectoryInode, mode os.FileMode, entryName string) Inode {
-	inodeID := fs.nextInodeID()
+func (fs *aisfs) createDirectoryInode(inodeID fuseops.InodeID, parent *DirectoryInode, entryName string, mode os.FileMode) Inode {
 	attrs := fs.dirAttrs(mode)
 	fspath := path.Join(parent.Path(), entryName) + separator
 	bucket := ais.NewBucket(fs.bucketName, fs.aisAPIParams())
@@ -347,14 +358,6 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
 
-	parent.Lock()
-	defer func() {
-		parent.Unlock()
-		if inode != nil {
-			inode.IncLookupCount()
-		}
-	}()
-
 	result, err := parent.LookupEntry(req.Name)
 	if err != nil {
 		return fs.handleIOError(err)
@@ -364,12 +367,15 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 		return fuse.ENOENT
 	}
 
+	parent.Lock()
+
 	fs.mu.Lock()
 	if result.NoInode() {
+		inodeID := fs.nextInodeID()
 		if result.IsDir() {
-			inode = fs.createDirectoryInode(parent, fs.modeBits.Directory, result.Entry.Name)
+			inode = fs.createDirectoryInode(inodeID, parent, result.Entry.Name, fs.modeBits.Directory)
 		} else {
-			inode = fs.createFileInode(parent, fs.modeBits.File, result.Object)
+			inode = fs.createFileInode(inodeID, parent, result.Object, fs.modeBits.File)
 		}
 	} else {
 		inode = fs.lookupMustExist(result.Entry.Inode)
@@ -377,6 +383,7 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 	fs.mu.Unlock()
 
 	parent.NewEntry(req.Name, inode.ID())
+	parent.Unlock()
 
 	// Locking this inode with parent already locked doesn't break
 	// the valid locking order since (currently) child inodes
@@ -384,6 +391,7 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 	inode.RLock()
 	req.Entry = inode.AsChildEntry()
 	inode.RUnlock()
+	inode.IncLookupCount()
 	return
 }
 

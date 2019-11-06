@@ -165,6 +165,12 @@ func newApp() *cli.App {
 				Name:  "o",
 				Usage: "additional mount options (see 'man 8 mount')",
 			},
+
+			cli.Int64Flag{
+				Name:  "write-buf-size",
+				Value: maxWriteBufSize,
+				Usage: "determines the size of chunks which are send to server during writing",
+			},
 		},
 	}
 }
@@ -265,7 +271,10 @@ func appMain(c *cli.Context) (err error) {
 		cluURL, bucket, mountPath, fsowner.UID, fsowner.GID)
 
 	// Create a file system server.
-	server = fs.NewAISFileSystemServer(mountPath, cluURL, bucket, fsowner, errorLog)
+	tunables := &fs.Tunables{
+		MaxWriteBufSize: flags.MaxWriteBufSize,
+	}
+	server = fs.NewAISFileSystemServer(mountPath, cluURL, bucket, fsowner, errorLog, tunables)
 
 	// Init a mount configuration object.
 	mountCfg = &fuse.MountConfig{

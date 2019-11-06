@@ -31,7 +31,7 @@ func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, e
 		Query:  query,
 	}
 
-	n, err = api.GetObject(obj.apiParams, obj.bucket, obj.Name, objArgs)
+	n, err = api.GetObject(cloneAPIParams(obj.apiParams), obj.bucket, obj.Name, objArgs)
 	if err != nil {
 		return 0, newObjectIOError(err, "GetChunk", obj.Name)
 	}
@@ -40,7 +40,7 @@ func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, e
 
 func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string) (handle string, err error) {
 	appendArgs := api.AppendArgs{
-		BaseParams: obj.apiParams,
+		BaseParams: cloneAPIParams(obj.apiParams),
 		Bucket:     obj.bucket,
 		Object:     obj.Name,
 		Handle:     prevHandle,
@@ -58,7 +58,7 @@ func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string) (handle strin
 
 func (obj *Object) Flush(handle string) (err error) {
 	appendArgs := api.AppendArgs{
-		BaseParams: obj.apiParams,
+		BaseParams: cloneAPIParams(obj.apiParams),
 		Bucket:     obj.bucket,
 		Object:     obj.Name,
 		Handle:     handle,

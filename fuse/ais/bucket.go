@@ -5,6 +5,8 @@
 package ais
 
 import (
+	"time"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -23,22 +25,29 @@ func NewBucket(name string, apiParams *api.BaseParams) *Bucket {
 
 func (bck *Bucket) NewEmptyObject(objName string) (object *Object, err error) {
 	putArgs := api.PutObjectArgs{
-		BaseParams: bck.apiParams,
+		BaseParams: cloneAPIParams(bck.apiParams),
 		Bucket:     bck.name,
 		Object:     objName,
 		Reader:     emptyBuffer(),
 	}
-
 	err = api.PutObject(putArgs)
 	if err != nil {
 		return nil, newBucketIOError(err, "NewEmptyObject", objName)
 	}
 
-	return bck.HeadObject(objName)
+	object = &Object{
+		apiParams: cloneAPIParams(bck.apiParams),
+		bucket:    bck.name,
+		Name:      objName,
+		Size:      uint64(0),
+		Atime:     time.Now(),
+	}
+	return
+
 }
 
 func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {
-	obj, err := api.HeadObject(bck.apiParams, bck.name, "", objName)
+	obj, err := api.HeadObject(cloneAPIParams(bck.apiParams), bck.name, "", objName)
 	if err != nil {
 		return nil, newBucketIOError(err, "HeadObject", objName)
 	}
@@ -55,7 +64,7 @@ func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {
 
 // HasObjectWithPrefix checks if object with given prefix exists in a bucket.
 func (bck *Bucket) HasObjectWithPrefix(prefix string) (exists bool, err error) {
-	list, err := api.ListBucket(bck.apiParams, bck.name, &cmn.SelectMsg{Prefix: prefix}, 1)
+	list, err := api.ListBucket(cloneAPIParams(bck.apiParams), bck.name, &cmn.SelectMsg{Prefix: prefix}, 1)
 	if err != nil {
 		return false, newBucketIOError(err, "HasObjectWithPrefix")
 	}
@@ -67,7 +76,6 @@ func (bck *Bucket) ListObjectNames(prefix string) (names []string, err error) {
 		Prefix: prefix,
 		Fast:   true,
 	}
-
 	listResult, err := api.ListBucketFast(bck.apiParams, bck.name, selectMsg)
 	if err != nil {
 		return nil, newBucketIOError(err, "ListObjectNames")

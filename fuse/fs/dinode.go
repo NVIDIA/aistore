@@ -65,11 +65,13 @@ func (dir *DirectoryInode) LinkLocalSubdir(entryName string, id fuseops.InodeID)
 	dir.localDirectories[entryName] = id
 }
 
-// REQUIRES_LOCK(dir)
+// LOCKS(dir)
 func (dir *DirectoryInode) TryDeleteLocalSubdirEntry(entryName string) (ok bool) {
+	dir.Lock()
 	_, ok = dir.localDirectories[entryName]
 	delete(dir.localDirectories, entryName)
 	dir.ForgetEntry(entryName)
+	dir.Unlock()
 	return
 }
 
@@ -93,7 +95,9 @@ func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) 
 		en.Name, en.Type = direntNameAndType(taggedName)
 
 		if en.Type == fuseutil.DT_Directory {
+			dir.RUnlock()
 			dir.TryDeleteLocalSubdirEntry(en.Name)
+			dir.RLock()
 		}
 
 		entries = append(entries, en)
@@ -116,20 +120,25 @@ func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) 
 	return
 }
 
-// REQUIRES_LOCK(dir)
+// LOCKS(dir)
 func (dir *DirectoryInode) UnlinkEntry(entryName string) error {
 	objName := path.Join(dir.Path(), entryName)
 	if err := dir.bucket.DeleteObject(objName); err != nil {
 		return err
 	}
+	dir.Lock()
 	dir.ForgetEntry(entryName)
+	dir.Unlock()
 	return nil
 }
 
-// REQUIRES_LOCK(dir)
+// READ_LOCKS(dir)
 func (dir *DirectoryInode) LookupEntry(entryName string) (res EntryLookupResult, err error) {
 	// Maybe it's an empty (local) directory.
-	if id, ok := dir.localDirectories[entryName]; ok {
+	dir.RLock()
+	id, ok := dir.localDirectories[entryName]
+	dir.RUnlock()
+	if ok {
 		res.Entry = &fuseutil.Dirent{
 			Inode: id,
 			Name:  entryName,
@@ -143,9 +152,11 @@ func (dir *DirectoryInode) LookupEntry(entryName string) (res EntryLookupResult,
 	if object != nil {
 		res.Object = object
 		inodeID := invalidInodeID
+		dir.RLock()
 		if id, ok := dir.entries[entryName]; ok {
 			inodeID = id
 		}
+		dir.RUnlock()
 		res.Entry = &fuseutil.Dirent{
 			Inode: inodeID,
 			Name:  entryName,
@@ -163,9 +174,11 @@ func (dir *DirectoryInode) LookupEntry(entryName string) (res EntryLookupResult,
 	}
 	if exists {
 		inodeID := invalidInodeID
+		dir.RLock()
 		if id, ok := dir.entries[entryName]; ok {
 			inodeID = id
 		}
+		dir.RUnlock()
 		res.Entry = &fuseutil.Dirent{
 			Inode: inodeID,
 			Name:  entryName,

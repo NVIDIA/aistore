@@ -25,6 +25,9 @@ type flags struct {
 
 	// Cluster
 	URL string
+
+	// Tunables
+	MaxWriteBufSize int64
 }
 
 func parseFlags(c *cli.Context) *flags {
@@ -43,6 +46,9 @@ func parseFlags(c *cli.Context) *flags {
 
 		// Cluster
 		URL: c.String("url"),
+
+		// Tunables
+		MaxWriteBufSize: c.Int64("write-buf-size"),
 	}
 
 	return flags
