@@ -43,8 +43,16 @@ func (dir *DirectoryInode) IsDir() bool {
 }
 
 // REQUIRES_LOCK(dir)
-func (dir *DirectoryInode) NewEntry(name string, id fuseops.InodeID) {
-	dir.entries[name] = id
+func (dir *DirectoryInode) NewEntry(entryName string, id fuseops.InodeID) {
+	dir.entries[entryName] = id
+}
+
+// REQUIRES_LOCK(dir)
+// Note: Ignores non-existent entryName. This is because ForgetEntry
+// is called when an inode is being destroyed, but may also be called
+// before that (e.g. Unlink, RmDir), deleting an entry earlier.
+func (dir *DirectoryInode) ForgetEntry(entryName string) {
+	delete(dir.entries, entryName)
 }
 
 // REQUIRES_LOCK(dir)
@@ -61,6 +69,7 @@ func (dir *DirectoryInode) LinkLocalSubdir(entryName string, id fuseops.InodeID)
 func (dir *DirectoryInode) TryDeleteLocalSubdirEntry(entryName string) (ok bool) {
 	_, ok = dir.localDirectories[entryName]
 	delete(dir.localDirectories, entryName)
+	dir.ForgetEntry(entryName)
 	return
 }
 
@@ -113,8 +122,7 @@ func (dir *DirectoryInode) UnlinkEntry(entryName string) error {
 	if err := dir.bucket.DeleteObject(objName); err != nil {
 		return err
 	}
-
-	delete(dir.entries, entryName)
+	dir.ForgetEntry(entryName)
 	return nil
 }
 

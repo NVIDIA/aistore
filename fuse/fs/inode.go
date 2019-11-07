@@ -22,6 +22,7 @@ type Inode interface {
 	ID() fuseops.InodeID
 	Path() string
 	IsDir() bool
+	Destroy() error
 
 	// Attributes
 	Attributes() fuseops.InodeAttributes
@@ -92,4 +93,9 @@ func (in *baseInode) IncLookupCount() {
 // DecLookupCountN atomically decrements inode's lookup count by n.
 func (in *baseInode) DecLookupCountN(n uint64) uint64 {
 	return in.lookupCount.Sub(n)
+}
+
+// Destroy releases all resources allocated by the inode.
+func (in *baseInode) Destroy() error {
+	return nil
 }

@@ -392,7 +392,30 @@ func (fs *aisfs) ForgetInode(ctx context.Context, req *fuseops.ForgetInodeOp) (e
 	inode := fs.lookupMustExist(req.Inode)
 	fs.mu.RUnlock()
 
-	inode.DecLookupCountN(req.N)
-	// TODO: Destroy inode if lookup count dropped to 0.
+	if lookupCnt := inode.DecLookupCountN(req.N); lookupCnt == 0 {
+		// The kernel will never use this inode again, we can destroy it.
+
+		// Acquire locks in the correct order.
+		parent := inode.Parent().(*DirectoryInode)
+		parent.Lock()
+		inode.Lock()
+
+		fs.mu.Lock()
+		// Remove it from the inode table.
+		delete(fs.inodeTable, req.Inode)
+		fs.mu.Unlock()
+
+		// Remove entryName to inode ID mapping in parent.
+		parent.ForgetEntry(path.Base(inode.Path()))
+		parent.Unlock()
+
+		// Any future cleanup related to inode goes here.
+		if err := inode.Destroy(); err != nil {
+			fs.logf("error destroying inode %d: %v", req.Inode, err)
+		}
+
+		inode.Unlock()
+	}
+
 	return
 }
