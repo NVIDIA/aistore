@@ -221,6 +221,7 @@ func (m *ioContext) cloudDelete() {
 	var (
 		baseParams = tutils.DefaultBaseAPIParams(m.t)
 		msg        = &cmn.SelectMsg{}
+		sema       = make(chan struct{}, 40)
 	)
 
 	objList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
@@ -232,6 +233,10 @@ func (m *ioContext) cloudDelete() {
 	for _, obj := range objList.Entries {
 		wg.Add(1)
 		go func(obj *cmn.BucketEntry) {
+			sema <- struct{}{}
+			defer func() {
+				<-sema
+			}()
 			err := api.DeleteObject(baseParams, m.bucket, obj.Name, cmn.Cloud)
 			tassert.CheckError(m.t, err)
 			wg.Done()
