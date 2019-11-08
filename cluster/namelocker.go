@@ -30,8 +30,9 @@ type (
 )
 
 const (
-	pollInterval = 100 * time.Millisecond
-	initCapacity = 128
+	initPollInterval = 10 * time.Microsecond
+	maxPollInterval  = 100 * time.Millisecond
+	initCapacity     = 128
 )
 
 //
@@ -81,20 +82,17 @@ func (nlc *nlc) TryLock(uname string, exclusive bool) bool {
 	return true
 }
 
-// NOTE: Lock() stays in the loop for as long as needed to
-// acquire the lock.
-// The implementation is intentionally simple as we currently
-// don't need cancellation (via context.Context), timeout,
-// increasing/random polling intervals, sync.Cond -based wait
-// for Unlock - none of the above.
-// Use TryLock() to support any such semantics that makes sense.
-
+// NOTE: Lock() stays in the loop for as long as needed to acquire the lock.
+//
+// The implementation is intentionally simple as we currently don't need
+// cancellation (via context.Context), timeout, sync.Cond.
 func (nlc *nlc) Lock(uname string, exclusive bool) {
 	if nlc.TryLock(uname, exclusive) {
 		return
 	}
+	sleep := initPollInterval
 	for {
-		time.Sleep(pollInterval)
+		time.Sleep(sleep)
 		if nlc.TryLock(uname, exclusive) {
 			if glog.FastV(4, glog.SmoduleCluster) {
 				glog.Infof("Lock %s(%t) - success", uname, exclusive)
@@ -103,6 +101,11 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 		}
 		if glog.FastV(4, glog.SmoduleCluster) {
 			glog.Infof("Lock %s(%t) - retrying...", uname, exclusive)
+		}
+
+		sleep *= 2
+		if sleep > maxPollInterval {
+			sleep = maxPollInterval
 		}
 	}
 }

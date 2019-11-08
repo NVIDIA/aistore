@@ -959,22 +959,20 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucket, objName string
-		objmeta         cmn.SimpleKVs
-		query           = r.URL.Query()
+		errCode int
+		exists  bool
 
-		errCode           int
-		exists            bool
+		query             = r.URL.Query()
 		checkExists, _    = cmn.ParseBool(query.Get(cmn.URLParamCheckExists))
 		checkExistsAny, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckExistsAny))
 		silent, _         = cmn.ParseBool(query.Get(cmn.URLParamSilent))
 	)
 
-	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objName = apitems[0], apitems[1]
+	bucket, objName := apiItems[0], apiItems[1]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	invalidHandler := t.invalmsghdlr
 	if silent {
@@ -988,7 +986,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lom.Lock(false)
-	if err = lom.Load(); err != nil { // (doesnotexist -> ok, other)
+	if err = lom.Load(true); err != nil { // (doesnotexist -> ok, other)
 		lom.Unlock(false)
 		invalidHandler(w, r, err.Error())
 		return
@@ -1011,6 +1009,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		exists = lom.RestoreObjectFromAny() // lookup and restore the object to its default location
 	}
 
+	hdr := w.Header()
 	if lom.IsAIS() || checkExists {
 		if !exists {
 			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
@@ -1019,37 +1018,35 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		if checkExists {
 			return
 		}
-		objmeta = make(cmn.SimpleKVs)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size(), 1), lom.Version())
 		}
 	} else {
-		objmeta, err, errCode = t.cloud.headObj(t.contextWithAuth(r.Header), lom)
+		var objMeta cmn.SimpleKVs
+		objMeta, err, errCode = t.cloud.headObj(t.contextWithAuth(r.Header), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)
 			return
 		}
+		for k, v := range objMeta {
+			hdr.Set(k, v)
+		}
 	}
 
 	if exists {
-		objmeta[cmn.HeaderObjSize] = strconv.FormatInt(lom.Size(), 10)
-		objmeta[cmn.HeaderObjVersion] = lom.Version()
+		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(lom.Size(), 10))
+		hdr.Set(cmn.HeaderObjVersion, lom.Version())
 		if lom.AtimeUnix() != 0 {
-			objmeta[cmn.HeaderObjAtime] = lom.Atime().Format(time.RFC822)
+			hdr.Set(cmn.HeaderObjAtime, lom.Atime().Format(time.RFC822))
 		}
-		objmeta[cmn.HeaderObjNumCopies] = strconv.Itoa(lom.NumCopies())
+		hdr.Set(cmn.HeaderObjNumCopies, strconv.Itoa(lom.NumCopies()))
 		if cksum := lom.Cksum(); cksum != nil {
-			objmeta[cmn.HeaderObjCksumVal] = cksum.Value()
+			hdr.Set(cmn.HeaderObjCksumVal, cksum.Value())
 		}
 	}
-	objmeta[cmn.HeaderObjBckIsAIS] = strconv.FormatBool(lom.IsAIS())
-	objmeta[cmn.HeaderObjPresent] = strconv.FormatBool(exists)
-
-	hdr := w.Header()
-	for k, v := range objmeta {
-		hdr.Set(k, v)
-	}
+	hdr.Set(cmn.HeaderObjBckIsAIS, strconv.FormatBool(lom.IsAIS()))
+	hdr.Set(cmn.HeaderObjPresent, strconv.FormatBool(exists))
 }
 
 // GET /v1/rebalance (cmn.Rebalance)
