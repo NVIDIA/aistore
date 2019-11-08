@@ -75,7 +75,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		cmn.AssertNoErr(err)
 		objName = fname
 	}
-	err := r.Target().PromoteFile(fqn, r.bck, objName, r.params.Overwrite, r.params.Verbose)
+	err := r.Target().PromoteFile(fqn, r.bck, objName, r.params.Overwrite, true /*safe*/, r.params.Verbose)
 	if err != nil {
 		if finfo, ers := os.Stat(fqn); ers == nil {
 			if finfo.Mode().IsRegular() {

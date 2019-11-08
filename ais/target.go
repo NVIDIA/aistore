@@ -1374,7 +1374,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	// 3b. promote file
-	if err = t.PromoteFile(srcFQN, bck, params.Objname, params.Overwrite, params.Verbose); err != nil {
+	if err = t.PromoteFile(srcFQN, bck, params.Objname, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
 		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
 	}

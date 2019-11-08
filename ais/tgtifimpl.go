@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -227,7 +228,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	return
 }
 
-func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string, overwrite, verbose bool) (err error) {
+func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string, overwrite, safe, verbose bool) (err error) {
 	if err = bck.AllowPUT(); err != nil {
 		return
 	}
@@ -271,18 +272,33 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		glog.Infof("promote%s %s => %s", s, srcFQN, lom)
 	}
 	var (
-		cksum     *cmn.Cksum
-		written   int64
-		buf, slab = nodeCtx.mm.AllocDefault()
-		workFQN   = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
-		poi       = &putObjInfo{t: t, lom: lom, workFQN: workFQN}
+		cksum   *cmn.Cksum
+		written int64
+		workFQN string
+		poi     = &putObjInfo{t: t, lom: lom}
 	)
-	written, cksum, err = cmn.CopyFile(srcFQN, workFQN, buf, true)
-	slab.Free(buf)
-	if err != nil {
-		return
+
+	if safe {
+		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+
+		buf, slab := nodeCtx.mm.AllocDefault()
+		written, cksum, err = cmn.CopyFile(srcFQN, workFQN, buf, true)
+		slab.Free(buf)
+		if err != nil {
+			return
+		}
+		lom.SetCksum(cksum)
+	} else {
+		workFQN = srcFQN // use the file as it would be intermediate (work) file
+		fi, err := os.Stat(srcFQN)
+		if err != nil {
+			return err
+		}
+		written = fi.Size()
 	}
-	lom.SetCksum(cksum)
+	cmn.Assert(workFQN != "")
+	poi.workFQN = workFQN
+
 	lom.SetSize(written)
 	lom.SetBID(lom.Bprops().BID)
 	err, _ = poi.finalize()

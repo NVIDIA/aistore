@@ -752,7 +752,7 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 			return "", err, http.StatusBadRequest
 		}
 
-		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.Objname, true /*overwrite*/, false /*verbose*/); err != nil {
+		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.Objname, true /*overwrite*/, false /*safe*/, false /*verbose*/); err != nil {
 			return "", err, 0
 		}
 	default:
