@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/reedsolomon"
@@ -93,6 +94,14 @@ const (
 	ecRebBatchSize = 8
 	// a target wait for the first slice(not a full replica) to come
 	anySliceID = math.MaxInt16
+)
+
+// A "default" target wait state when it does not have full object
+const (
+	// full object exists but on another target, wait until that target sends it
+	waitFullObject = iota
+	// full object does exist, wait other targets send their slices
+	waitSlices
 )
 
 type (
@@ -169,8 +178,8 @@ type (
 		// list of all objects of local target that must be restored and
 		// then some slices send to other targets
 		// UID <-> type of wait:
-		// 0 - wait for someone sends the full object/replica
-		// 1 - wait for all targets sends all existing slices as full object is gone
+		// waitFullObject - wait for someone sends the full object/replica
+		// waitSlice - wait for all targets sends all existing slices
 		waitNrebuild map[string]int
 		// the batch ID a target has processed. DaemonID <-> BatchID
 		tgtBatch map[string]int
@@ -392,14 +401,27 @@ func (s *ecRebalancer) sendObjFromDisk(slice *ecRebSlice, targets ...*cluster.Sn
 		RebID:    s.mgr.globRebID.Load(),
 		Extra:    cmn.MustMarshal(slice.meta),
 	}
+	lom := cluster.LOM{T: s.t, FQN: slice.realFQN}
+	if err := lom.Init(slice.Bucket, cmn.ProviderFromBool(slice.IsAIS)); err != nil {
+		return err
+	}
+	if err := lom.Load(false); err != nil {
+		return err
+	}
+
 	hdr := transport.Header{
 		Bucket:   slice.Bucket,
 		Objname:  slice.Objname,
 		BckIsAIS: slice.IsAIS,
 		ObjAttrs: transport.ObjectAttrs{
-			Size: slice.ObjSize,
+			Size:    slice.ObjSize,
+			Atime:   lom.AtimeUnix(),
+			Version: lom.Version(),
 		},
 		Opaque: cmn.MustMarshal(req),
+	}
+	if cksum := lom.Cksum(); cksum != nil {
+		hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = cksum.Get()
 	}
 	if slice.SliceID != 0 {
 		hdr.ObjAttrs.Size = ec.SliceSize(slice.ObjSize, int(slice.DataSlices))
@@ -415,19 +437,23 @@ func (s *ecRebalancer) sendObjFromDisk(slice *ecRebSlice, targets ...*cluster.Sn
 		glog.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].DaemonID, err)
 		return err
 	}
+	s.t.statsif.AddMany(
+		stats.NamedVal64{stats.TxRebCount, 1},
+		stats.NamedVal64{stats.TxRebSize, hdr.ObjAttrs.Size})
 
 	return nil
 }
 
 // Sends reconstructed slice along with EC metadata to remote target.
 // EC metadata is of main object, so its internal field SliceID must be
-// fixed prior to sending
+// fixed prior to sending.
+// Use the function to send only slices (not for replicas/full object)
 func (s *ecRebalancer) sendObjFromReader(reader cmn.ReadOpenCloser,
-	slice *ecRebSlice, sliceID int, target *cluster.Snode) error {
-	cmn.Assert(slice.meta != nil)
+	slice *ecRebSlice, sliceID int, xxhash string, target *cluster.Snode) error {
+	cmn.AssertMsg(slice.meta != nil, slice.Objname)
 	newMeta := *slice.meta // copy meta (it does not contain pointers)
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-		glog.Infof("Sending slice %d of %s to %s", sliceID, slice.Objname, target.Name())
+		glog.Infof("Sending slice %d[%s] of %s to %s", sliceID, xxhash, slice.Objname, target.Name())
 	}
 	newMeta.SliceID = sliceID
 	req := pushReq{
@@ -436,20 +462,29 @@ func (s *ecRebalancer) sendObjFromReader(reader cmn.ReadOpenCloser,
 		RebID:    s.mgr.globRebID.Load(),
 		Extra:    cmn.MustMarshal(&newMeta),
 	}
+	cmn.AssertMsg(slice.ObjSize != 0, slice.Objname)
+	size := ec.SliceSize(slice.ObjSize, int(slice.DataSlices))
 	hdr := transport.Header{
 		Bucket:   slice.Bucket,
 		Objname:  slice.Objname,
 		BckIsAIS: slice.IsAIS,
 		ObjAttrs: transport.ObjectAttrs{
-			Size: ec.SliceSize(slice.ObjSize, int(slice.DataSlices)),
+			Size: size,
 		},
 		Opaque: cmn.MustMarshal(req),
+	}
+	if xxhash != "" {
+		hdr.ObjAttrs.CksumValue = xxhash
+		hdr.ObjAttrs.CksumType = cmn.ChecksumXXHash
 	}
 
 	if err := s.data.SendV(hdr, reader, nil, nil, target); err != nil {
 		glog.Errorf("Failed to send slices to node %s: %v", target.Name(), err)
 		return err
 	}
+	s.t.statsif.AddMany(
+		stats.NamedVal64{stats.TxRebCount, 1},
+		stats.NamedVal64{stats.TxRebSize, size})
 	return nil
 }
 
@@ -465,11 +500,11 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 	if !needSave {
 		// slice is saved only if this target is not "main" one.
 		// Main one receives slices as well but it uses them only to rebuild "full"
-		b := &cluster.Bck{Name: hdr.Bucket, Provider: provider}
-		if err := b.Init(s.t.GetBowner()); err != nil {
+		bck := &cluster.Bck{Name: hdr.Bucket, Provider: provider}
+		if err := bck.Init(s.t.GetBowner()); err != nil {
 			return err
 		}
-		tgt, err := cluster.HrwTarget(b, hdr.Objname, s.t.smapowner.Get())
+		tgt, err := cluster.HrwTarget(bck, hdr.Objname, s.t.smapowner.Get())
 		if err != nil {
 			return err
 		}
@@ -483,7 +518,30 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 	if err != nil {
 		return err
 	}
-	// TODO: use name locker
+
+	var sliceFQN string
+	if md.SliceID == 0 {
+		sliceFQN = mpath.MakePathBucketObject(fs.ObjectType, hdr.Bucket, provider, hdr.Objname)
+	} else {
+		sliceFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, provider, hdr.Objname)
+	}
+	var lom = &cluster.LOM{T: s.t, FQN: sliceFQN}
+	if err := lom.Init(hdr.Bucket, provider); err != nil {
+		return err
+	}
+	lom.SetSize(hdr.ObjAttrs.Size)
+	if hdr.ObjAttrs.Version != "" {
+		lom.SetVersion(hdr.ObjAttrs.Version)
+	}
+	if hdr.ObjAttrs.CksumType != "" {
+		lom.SetCksum(cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue))
+	}
+	if hdr.ObjAttrs.Atime != 0 {
+		lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
+	}
+	lom.Lock(true)
+	defer lom.Unlock(true)
+
 	buffer, slab := nodeCtx.mm.AllocDefault()
 	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bucket, provider, hdr.Objname)
 	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.Extra), buffer, false)
@@ -491,16 +549,15 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 		slab.Free(buffer)
 		return err
 	}
-	var sliceFQN string
-	if md.SliceID == 0 {
-		sliceFQN = mpath.MakePathBucketObject(fs.ObjectType, hdr.Bucket, provider, hdr.Objname)
-	} else {
-		sliceFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, provider, hdr.Objname)
-	}
 	tmpFQN := mpath.MakePathBucketObject(fs.WorkfileType, hdr.Bucket, provider, hdr.Objname)
-	// TODO: checksum
-	_, err = cmn.SaveReaderSafe(tmpFQN, sliceFQN, memsys.NewReader(data), buffer, false)
+	cksum, err := cmn.SaveReaderSafe(tmpFQN, sliceFQN, memsys.NewReader(data), buffer, true)
+	if md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
+		// TODO: only logging an error for now
+		glog.Errorf("Mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
+			hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, md.ObjChecksum)
+	}
 	slab.Free(buffer)
+	lom.Persist()
 
 	if err != nil {
 		os.Remove(metaFQN)
@@ -535,16 +592,26 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	cmn.Assert(!waitSlice.recv)
 
 	waitSlice.meta = req.Extra
-	_, err := io.Copy(waitSlice.sgl, reader)
+	n, err := io.Copy(waitSlice.sgl, reader)
 	if err != nil {
 		glog.Errorf("Failed to read slice %d for %s/%s: %v", sliceID, hdr.Bucket, hdr.Objname, err)
 		return err
 	}
+	s.t.statsif.AddMany(
+		stats.NamedVal64{stats.RxRebCount, 1},
+		stats.NamedVal64{stats.RxRebSize, n})
+	ckval, _ := cksumForSlice(memsys.NewReader(waitSlice.sgl), waitSlice.sgl.Size())
+	if hdr.ObjAttrs.CksumValue != "" && hdr.ObjAttrs.CksumValue != ckval {
+		return fmt.Errorf("Received checksum mismatches checksum in header %s vs %s",
+			hdr.ObjAttrs.CksumValue, ckval)
+	}
 	waitSlice.recv = true
 
-	if err := s.saveSliceToDisk(waitSlice.sgl, req, &md, hdr); err != nil {
-		glog.Errorf("Failed to save slice %d of %s: %v", sliceID, hdr.Objname, err)
-		s.ra.xreb.Abort()
+	if _, ok := s.waitNrebuild[uid]; !ok {
+		if err := s.saveSliceToDisk(waitSlice.sgl, req, &md, hdr); err != nil {
+			glog.Errorf("Failed to save slice %d of %s: %v", sliceID, hdr.Objname, err)
+			s.ra.xreb.Abort()
+		}
 	}
 
 	// notify that another slice is received successfully
@@ -578,7 +645,7 @@ func (s *ecRebalancer) OnData(w http.ResponseWriter, hdr transport.Header, reade
 	// a remote target sent object/slice
 	if req.Stage == rebStageECGlobRepair {
 		if err := s.receiveSlice(&req, hdr, reader); err != nil {
-			glog.Errorf("Failed to receive slice for %s/%s", hdr.Bucket, hdr.Objname)
+			glog.Errorf("Failed to receive slice for %s/%s: %v", hdr.Bucket, hdr.Objname, err)
 			return
 		}
 		return
@@ -923,6 +990,9 @@ func (s *ecRebalancer) exchange() error {
 				glog.Errorf("Failed to send slices to node %s: %v", node.DaemonID, err)
 				failed = append(failed, node)
 			}
+			s.t.statsif.AddMany(
+				stats.NamedVal64{stats.TxRebCount, 1},
+				stats.NamedVal64{stats.TxRebSize, int64(len(body))})
 		}
 
 		if len(failed) == 0 {
@@ -1220,7 +1290,7 @@ func (s *ecRebalancer) waitForSlicesRecv(broken []*ecRebObject, start int) (bool
 			}
 
 			canRebuild := false
-			if tp == 0 {
+			if tp == waitFullObject {
 				for _, sl := range sliceList {
 					if sl.sliceID == 0 && sl.recv {
 						canRebuild = true
@@ -1260,7 +1330,7 @@ func (s *ecRebalancer) waitForSlicesRecv(broken []*ecRebObject, start int) (bool
 
 		// must be the last check, because even if a target has all slices
 		// it may need to rebuild and send repaired slices
-		if s.waiter.waitSliceCnt() == 0 {
+		if s.waiter.waitSliceCnt() == 0 && len(s.waitNrebuild) == 0 {
 			// all local slices and objects are received/restored
 			break
 		}
@@ -1408,7 +1478,7 @@ func (s *ecRebalancer) repairGlobal(broken []*ecRebObject) (err error) {
 					glog.Infof("#5.4 Waiting for an object %s", obj.uid)
 				}
 				s.waiter.lookupCreate(obj.uid, 0)
-				s.waitNrebuild[obj.uid] = 0
+				s.waitNrebuild[obj.uid] = waitFullObject
 				continue
 			}
 
@@ -1423,7 +1493,7 @@ func (s *ecRebalancer) repairGlobal(broken []*ecRebObject) (err error) {
 					}
 					s.waiter.lookupCreate(obj.uid, sl.SliceID)
 				}
-				s.waitNrebuild[obj.uid] = 1
+				s.waitNrebuild[obj.uid] = waitSlices
 				continue
 			}
 
@@ -1568,7 +1638,12 @@ func (s *ecRebalancer) rebuildFromDisk(obj *ecRebObject, slices []*ecRebSlice) (
 			}
 			reader := readerSend[idx-1]
 			reader.Open()
-			if err := s.sendObjFromReader(reader, ecSliceMD, idx, si); err != nil {
+			ckval, err := cksumForSlice(reader, obj.sliceSize)
+			if err != nil {
+				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+			}
+			reader.Open()
+			if err := s.sendObjFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
 				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName(), si.Name())
 				// continue to fix as many as possible
 				continue
@@ -1578,8 +1653,12 @@ func (s *ecRebalancer) rebuildFromDisk(obj *ecRebObject, slices []*ecRebSlice) (
 			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName(), idx, sglIdx, si.Name())
 			}
+			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize)
+			if err != nil {
+				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+			}
 			reader := memsys.NewReader(obj.rebuildSGLs[sglIdx])
-			if err := s.sendObjFromReader(reader, ecSliceMD, idx, si); err != nil {
+			if err := s.sendObjFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
 				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName(), si.Name())
 				// continue to fix as many as possible
 				continue
@@ -1678,8 +1757,12 @@ func (s *ecRebalancer) rebuildFromMem(obj *ecRebObject, slices []*ecWaitSlice) (
 				glog.Infof("Sending %s data slice %d to %s", obj.objName(), idx, si.Name())
 			}
 			reader := readerSGLs[idx-1]
+			ckval, err := cksumForSlice(readerSGLs[idx-1], obj.sliceSize)
+			if err != nil {
+				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+			}
 			reader.Open()
-			if err := s.sendObjFromReader(reader, ecSliceMD, idx, si); err != nil {
+			if err := s.sendObjFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
 				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName(), si.Name())
 				// keep on working to restore as many as possible
 				continue
@@ -1689,8 +1772,12 @@ func (s *ecRebalancer) rebuildFromMem(obj *ecRebObject, slices []*ecWaitSlice) (
 			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName(), idx, sglIdx, si.Name())
 			}
+			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize)
+			if err != nil {
+				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+			}
 			reader := memsys.NewReader(obj.rebuildSGLs[sglIdx])
-			if err := s.sendObjFromReader(reader, ecSliceMD, idx, si); err != nil {
+			if err := s.sendObjFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
 				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName(), si.Name())
 				// keep on working to restore as many as possible
 				continue
@@ -1711,6 +1798,8 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 	sliceCnt := obj.dataSlices() + obj.paritySlices()
 	obj.rebuildSGLs = make([]*memsys.SGL, sliceCnt)
 	readers := make([]io.Reader, sliceCnt)
+	// since io.Reader cannot be reopened, we need to have a copy for saving object
+	rereaders := make([]io.Reader, sliceCnt)
 	writers := make([]io.Writer, sliceCnt)
 
 	// put existing slices to readers list, and create SGL as writers for missing ones
@@ -1723,6 +1812,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		id := sl.sliceID - 1
 		cmn.Assert(readers[id] == nil)
 		readers[id] = memsys.NewReader(sl.sgl)
+		rereaders[id] = memsys.NewReader(sl.sgl)
 		slicesFound++
 		if meta == nil {
 			meta = sl.meta
@@ -1758,7 +1848,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 	srcReaders := make([]io.Reader, srcCnt)
 	for i := 0; i < srcCnt; i++ {
 		if readers[i] != nil {
-			srcReaders[i] = readers[i]
+			srcReaders[i] = rereaders[i]
 			continue
 		}
 		cmn.Assert(obj.rebuildSGLs[i] != nil)
@@ -1800,6 +1890,10 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 			continue
 		}
 		sliceID := i + 1
+		ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[i]), obj.sliceSize)
+		if err != nil {
+			return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+		}
 		reader := memsys.NewReader(obj.rebuildSGLs[i])
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
@@ -1811,6 +1905,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		sl := &ecRebSlice{
 			Bucket:       obj.bucket(),
 			Objname:      obj.objName(),
+			ObjSize:      sliceMD.Size,
 			DaemonID:     s.t.si.DaemonID,
 			SliceID:      int16(sliceID),
 			IsAIS:        obj.isAIS,
@@ -1819,7 +1914,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 			meta:         &sliceMD,
 		}
 
-		if err := s.sendObjFromReader(reader, sl, i+1, si); err != nil {
+		if err := s.sendObjFromReader(reader, sl, i+1, ckval, si); err != nil {
 			return fmt.Errorf("Failed to send slice %d to %s: %v", i, si.Name(), err)
 		}
 	}
@@ -1885,6 +1980,14 @@ func (s *ecRebalancer) batchNotify(batchID int) error {
 		return err
 	}
 	return nil
+}
+
+// Returns XXHash calculated for the reader
+func cksumForSlice(reader cmn.ReadOpenCloser, sliceSize int64) (string, error) {
+	reader.Open()
+	buf, slab := nodeCtx.mm.AllocForSize(sliceSize)
+	defer slab.Free(buf)
+	return cmn.ComputeXXHash(reader, buf)
 }
 
 //

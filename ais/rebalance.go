@@ -509,10 +509,6 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 		md.ecUsed = props.EC.Enabled
 	}
 
-	// TODO: remove after everything is done (it is for debugging EC rebalance)
-	if md.ecUsed {
-		md.dryRun = true
-	}
 	if !reb.globalRebPrecheck(md, globRebID) {
 		return
 	}

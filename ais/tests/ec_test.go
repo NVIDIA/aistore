@@ -2187,14 +2187,25 @@ func TestECRebalance(t *testing.T) {
 	if len(oldBucketList) != len(newBucketList) {
 		for _, ent := range res.Entries {
 			if ent.IsStatusOK() {
-				tutils.Logf("%s - GOOD\n", ent.Name)
+				tutils.Logf("%s[%d] - GOOD\n", ent.Name, ent.Size)
 			} else {
-				tutils.Logf("%s - MISPLACED\n", ent.Name)
+				tutils.Logf("%s[%d] - MISPLACED\n", ent.Name, ent.Size)
 			}
 		}
 
 		t.Fatalf("%d objects before rebalance, %d objects after",
 			len(oldBucketList), len(newBucketList))
+	}
+
+	for _, entry := range newBucketList {
+		n, err := api.GetObject(baseParams, bucket, entry.Name)
+		if err != nil {
+			t.Errorf("Failed to read %s: %v", entry.Name, err)
+			continue // to avoid printing other error in this case
+		}
+		if n != entry.Size {
+			t.Errorf("%s size mismatch read %d, props %d", entry.Name, n, entry.Size)
+		}
 	}
 }
 

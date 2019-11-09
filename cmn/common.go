@@ -639,7 +639,6 @@ func (f *FileSectionHandle) Open() (io.ReadCloser, error) {
 
 // Reads a file slice. When the slice finishes but the buffer is not filled yet,
 // act as if it reads a few more bytes from somewhere
-// NOTE: padded byte values are random
 func (f *FileSectionHandle) Read(buf []byte) (n int, err error) {
 	var fromPad int64
 
@@ -651,7 +650,7 @@ func (f *FileSectionHandle) Read(buf []byte) (n int, err error) {
 		if f.padding == 0 || n == len(buf) || (err != nil && err != io.EOF) {
 			return n, err
 		}
-		fromPad = int64(len(buf) - n)
+		fromPad = MinI64(int64(len(buf)-n), f.padding)
 	} else {
 		// slice is already read, keep reading padding bytes
 		fromPad = MinI64(int64(len(buf)), f.padding-f.padOffset)
@@ -663,16 +662,15 @@ func (f *FileSectionHandle) Read(buf []byte) (n int, err error) {
 	}
 
 	// the number of remained bytes in padding is enough to complete read request
-	if fromPad <= (f.padding - f.padOffset) {
-		n += int(fromPad)
-		f.padOffset += fromPad
+	for idx := n; idx < n+int(fromPad); idx++ {
+		buf[idx] = 0
+	}
+	n += int(fromPad)
+	f.padOffset += fromPad
+
+	if f.padOffset < f.padding {
 		return n, nil
 	}
-
-	// the number of bytes remained in padding is less than required. "Read" as
-	// many as possible and return io.EOF
-	n += int(f.padding - f.padOffset)
-	f.padOffset = f.padding
 	return n, io.EOF
 }
 
