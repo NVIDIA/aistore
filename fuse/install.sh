@@ -15,7 +15,7 @@ if [[ -x "${FILE}" ]]; then
     rm ${FILE}
 fi
 
-VERSION="0.1"
+VERSION="0.2"
 BUILD=`git rev-parse --short HEAD`
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
