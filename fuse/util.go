@@ -32,9 +32,9 @@ const (
 // URL HANDLING
 ////////////////
 
-func determineClusterURL(c *cli.Context, flags *flags, bucket string) (clusterURL string, err error) {
+func determineClusterURL(c *cli.Context, cfg *Config, bucket string) (clusterURL string, err error) {
 	// Determine which cluster URL will be used
-	clusterURL = flags.URL
+	clusterURL = cfg.Cluster.URL
 	if clusterURL == "" {
 		clusterURL = discoverClusterURL(c)
 	}
@@ -201,6 +201,14 @@ func splitOnFirst(str string, sep string) (string, string) {
 		return str[:split], str[split+1:]
 	}
 	return str, ""
+}
+
+func homeDir() (dir string, err error) {
+	currentUser, err := user.Current()
+	if err != nil {
+		return
+	}
+	return currentUser.HomeDir, nil
 }
 
 func initOwner(flags *flags) (owner *fs.Owner, err error) {

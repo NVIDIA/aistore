@@ -18,16 +18,6 @@ type flags struct {
 	AdditionalMountOptions map[string]string
 	UID                    int32
 	GID                    int32
-
-	// Logging
-	ErrorLogFile string
-	DebugLogFile string
-
-	// Cluster
-	URL string
-
-	// Tunables
-	MaxWriteBufSize int64
 }
 
 func parseFlags(c *cli.Context) *flags {
@@ -39,16 +29,6 @@ func parseFlags(c *cli.Context) *flags {
 		AdditionalMountOptions: parseAdditionalMountOptions(c),
 		UID:                    int32(c.Int("uid")),
 		GID:                    int32(c.Int("gid")),
-
-		// Logging
-		ErrorLogFile: c.String("error-log"),
-		DebugLogFile: c.String("debug-log"),
-
-		// Cluster
-		URL: c.String("url"),
-
-		// Tunables
-		MaxWriteBufSize: c.Int64("write-buf-size"),
 	}
 
 	return flags

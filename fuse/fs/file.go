@@ -83,7 +83,7 @@ func (fs *aisfs) WriteFile(ctx context.Context, req *fuseops.WriteFileOp) (err e
 	handle := fs.lookupFhandleMustExist(req.Handle)
 	fs.mu.RUnlock()
 
-	err = handle.writeChunk(req.Data, uint64(req.Offset), fs.tunables.MaxWriteBufSize)
+	err = handle.writeChunk(req.Data, uint64(req.Offset), fs.cfg.MaxWriteBufSize)
 	if err != nil {
 		return fs.handleIOError(err)
 	}

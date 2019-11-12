@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/ais"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/jacobsa/fuse"
@@ -58,9 +59,6 @@ const (
 
 	rootPath       = ""
 	invalidInodeID = fuseops.InodeID(fuseops.RootInodeID + 1)
-
-	httpTransportTimeout = 60 * time.Second  // FIXME: Too long?
-	httpClientTimeout    = 300 * time.Second // FIXME: Too long?
 )
 
 var (
@@ -72,7 +70,20 @@ func init() {
 }
 
 type (
-	Tunables struct {
+	ServerConfig struct {
+		// Mount
+		MountPath string
+
+		// Cluster
+		AISURL     string
+		BucketName string
+
+		// Access
+		Owner *Owner
+
+		// Timeouts, tunables...
+		TCPTimeout      time.Duration
+		HTTPTimeout     time.Duration
 		MaxWriteBufSize int64
 	}
 
@@ -85,13 +96,13 @@ type (
 		// If at any time in the future all methods are implemented, this can be removed.
 		fuseutil.NotImplementedFileSystem
 
-		// Cluster
-		aisURL     string
-		bucketName string
+		// Config
+		cfg *ServerConfig
+
+		// HTTP client
 		httpClient *http.Client
 
 		// File System
-		mountPath   string
 		root        *DirectoryInode
 		inodeTable  map[fuseops.InodeID]Inode
 		lastInodeID uint64
@@ -102,51 +113,48 @@ type (
 		lastHandleID uint64
 
 		// Access
-		owner    *Owner
 		modeBits *ModeBits
 
 		// Logging
 		errLog *log.Logger
-
-		// Misc
-		tunables *Tunables
 
 		// Guard
 		mu sync.RWMutex
 	}
 )
 
-func NewAISFileSystemServer(mountPath, aisURL, bucketName string, owner *Owner, errLog *log.Logger, tunables *Tunables) fuse.Server {
+func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) fuse.Server {
+	cmn.Assert(cfg != nil)
+
 	// Init HTTP client.
 	httpTransport := &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout: httpTransportTimeout,
+			Timeout: cfg.TCPTimeout,
 		}).DialContext,
 	}
 	httpClient := &http.Client{
-		Timeout:   httpClientTimeout,
+		Timeout:   cfg.HTTPTimeout,
 		Transport: httpTransport,
 	}
 
 	// Create an aisfs instance.
 	aisfs := &aisfs{
-		// Cluster
-		aisURL:     aisURL,
+		// Config
+		cfg: cfg,
+
+		// HTTP client
 		httpClient: httpClient,
-		bucketName: bucketName,
 
 		// File System
-		mountPath:  mountPath,
-		inodeTable: make(map[fuseops.InodeID]Inode),
+		inodeTable:  make(map[fuseops.InodeID]Inode),
+		lastInodeID: uint64(invalidInodeID),
 
 		// Handles
 		fileHandles:  make(map[fuseops.HandleID]*fileHandle),
 		dirHandles:   make(map[fuseops.HandleID]*dirHandle),
-		lastInodeID:  uint64(invalidInodeID),
 		lastHandleID: uint64(0),
 
-		// Permissions
-		owner: owner,
+		// Access
 		modeBits: &ModeBits{
 			File:      FilePermissionBits,
 			Directory: DirectoryPermissionBits | os.ModeDir,
@@ -154,14 +162,11 @@ func NewAISFileSystemServer(mountPath, aisURL, bucketName string, owner *Owner, 
 
 		// Logging
 		errLog: errLog,
-
-		// Misc
-		tunables: tunables,
 	}
 
 	// Create a bucket.
 	apiParams := aisfs.aisAPIParams()
-	bucket := ais.NewBucket(bucketName, apiParams)
+	bucket := ais.NewBucket(cfg.BucketName, apiParams)
 
 	// Create the root inode.
 	aisfs.root = NewDirectoryInode(
@@ -181,7 +186,7 @@ func NewAISFileSystemServer(mountPath, aisURL, bucketName string, owner *Owner, 
 func (fs *aisfs) aisAPIParams() *api.BaseParams {
 	return &api.BaseParams{
 		Client: fs.httpClient,
-		URL:    fs.aisURL,
+		URL:    fs.cfg.AISURL,
 	}
 }
 
@@ -200,8 +205,8 @@ func (fs *aisfs) fileAttrs(object *ais.Object, mode os.FileMode) fuseops.InodeAt
 		Mode:  mode,
 		Nlink: 1,
 		Size:  object.Size,
-		Uid:   fs.owner.UID,
-		Gid:   fs.owner.GID,
+		Uid:   fs.cfg.Owner.UID,
+		Gid:   fs.cfg.Owner.GID,
 		Atime: object.Atime,
 		Mtime: object.Atime,
 		Ctime: object.Atime,
@@ -219,8 +224,8 @@ func (fs *aisfs) dirAttrs(mode os.FileMode) fuseops.InodeAttributes {
 		Mode:  mode,
 		Nlink: 1,
 		Size:  0,
-		Uid:   fs.owner.UID,
-		Gid:   fs.owner.GID,
+		Uid:   fs.cfg.Owner.UID,
+		Gid:   fs.cfg.Owner.GID,
 	}
 }
 
@@ -299,7 +304,7 @@ func (fs *aisfs) createFileInode(inodeID fuseops.InodeID, parent *DirectoryInode
 func (fs *aisfs) createDirectoryInode(inodeID fuseops.InodeID, parent *DirectoryInode, entryName string, mode os.FileMode) Inode {
 	attrs := fs.dirAttrs(mode)
 	fspath := path.Join(parent.Path(), entryName) + separator
-	bucket := ais.NewBucket(fs.bucketName, fs.aisAPIParams())
+	bucket := ais.NewBucket(fs.cfg.BucketName, fs.aisAPIParams())
 	inode := NewDirectoryInode(inodeID, attrs, fspath, parent, bucket)
 	fs.inodeTable[inodeID] = inode
 	return inode

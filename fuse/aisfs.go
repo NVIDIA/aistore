@@ -129,11 +129,6 @@ func newApp() *cli.App {
 			// Add global -h,--help flag, otherwise it will remain hidden.
 			cli.HelpFlag,
 
-			cli.StringFlag{
-				Name:  "url",
-				Usage: "cluster URL",
-			},
-
 			cli.BoolFlag{
 				Name:  "wait",
 				Usage: "wait for file system to be unmounted",
@@ -151,25 +146,9 @@ func newApp() *cli.App {
 				Usage: "gid of mount owner",
 			},
 
-			cli.StringFlag{
-				Name:  "error-log",
-				Usage: "log file for errors (placed in temp dir by default)",
-			},
-
-			cli.StringFlag{
-				Name:  "debug-log",
-				Usage: "log file for debug info",
-			},
-
 			cli.StringSliceFlag{
 				Name:  "o",
 				Usage: "additional mount options (see 'man 8 mount')",
-			},
-
-			cli.Int64Flag{
-				Name:  "write-buf-size",
-				Value: maxWriteBufSize,
-				Usage: "determines the size of chunks which are send to server during writing",
 			},
 		},
 	}
@@ -179,6 +158,7 @@ func newApp() *cli.App {
 func appMain(c *cli.Context) (err error) {
 	var (
 		flags     *flags
+		cfg       *Config
 		cluURL    string
 		bucket    string
 		mountDir  string
@@ -238,29 +218,31 @@ func appMain(c *cli.Context) (err error) {
 	}
 	defer signal()
 
-	// Validate and test cluster URL.
-	cluURL, err = determineClusterURL(c, flags, bucket)
-	if err != nil {
-		return
-	}
-
 	fsowner, err = initOwner(flags)
 	if err != nil {
 		return
 	}
 
-	// FIXME: Use absolute paths when working with logs. If daemon is invoked,
-	// it will run in a different working directory. Currently, specifying log
-	// files works well only if --wait flag is provided.
-
-	errorLog, err = prepareLogFile(flags.ErrorLogFile, "ERROR: ", bucket)
+	// Try to load existing config from file or use default one.
+	cfg, err = tryLoadConfig(bucket)
 	if err != nil {
 		return
 	}
 
-	// If flags.DebugLogFile == "" no debug logging is performed.
-	if flags.DebugLogFile != "" {
-		debugLog, err = prepareLogFile(flags.DebugLogFile, "DEBUG: ", bucket)
+	// Validate and test cluster URL.
+	cluURL, err = determineClusterURL(c, cfg, bucket)
+	if err != nil {
+		return
+	}
+
+	errorLog, err = prepareLogFile(cfg.Log.ErrorLogFile, "ERROR: ", bucket)
+	if err != nil {
+		return
+	}
+
+	// If cfg.Log.DebugLogFile == "" no debug logging is performed.
+	if cfg.Log.DebugLogFile != "" {
+		debugLog, err = prepareLogFile(cfg.Log.DebugLogFile, "DEBUG: ", bucket)
 		if err != nil {
 			return
 		}
@@ -270,11 +252,19 @@ func appMain(c *cli.Context) (err error) {
 	fmt.Fprintf(c.App.Writer, "Connecting to proxy at %q\nMounting bucket %q to %q\nuid %d\ngid %d\n",
 		cluURL, bucket, mountPath, fsowner.UID, fsowner.GID)
 
-	// Create a file system server.
-	tunables := &fs.Tunables{
-		MaxWriteBufSize: flags.MaxWriteBufSize,
+	// Init a server configuration object.
+	serverCfg := &fs.ServerConfig{
+		MountPath:       mountPath,
+		AISURL:          cluURL,
+		BucketName:      bucket,
+		Owner:           fsowner,
+		TCPTimeout:      cfg.Timeout.TCPTimeout,
+		HTTPTimeout:     cfg.Timeout.HTTPTimeout,
+		MaxWriteBufSize: cfg.IO.WriteBufSize,
 	}
-	server = fs.NewAISFileSystemServer(mountPath, cluURL, bucket, fsowner, errorLog, tunables)
+
+	// Init a file system server.
+	server = fs.NewAISFileSystemServer(serverCfg, errorLog)
 
 	// Init a mount configuration object.
 	mountCfg = &fuse.MountConfig{

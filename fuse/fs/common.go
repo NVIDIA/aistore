@@ -58,7 +58,7 @@ func (fs *aisfs) fatalf(fmt string, v ...interface{}) {
 	errFmt := "FATAL: " + fmt +
 		"\n*** CONNECTION LOST, BUT THE FILE SYSTEM REMAINS MOUNTED ON %s ***\n" +
 		"CALL STACK ---> %s\n"
-	v = append(v, fs.mountPath, debug.Stack())
+	v = append(v, fs.cfg.MountPath, debug.Stack())
 	fs.errLog.Fatalf(errFmt, v...)
 }
 
