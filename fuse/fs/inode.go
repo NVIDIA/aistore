@@ -5,11 +5,22 @@
 package fs
 
 import (
+	"os"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/jacobsa/fuse/fuseops"
 )
+
+// AttrUpdateReq is a request struct for updating inode attributes
+// corresponding to non-nil struct fields.
+type AttrUpdateReq struct {
+	Mode  *os.FileMode
+	Size  *uint64
+	Atime *time.Time
+	Mtime *time.Time
+}
 
 type Inode interface {
 	// Locking
@@ -26,7 +37,7 @@ type Inode interface {
 
 	// Attributes
 	Attributes() fuseops.InodeAttributes
-	SetAttributes(fuseops.InodeAttributes)
+	UpdateAttributes(*AttrUpdateReq) fuseops.InodeAttributes
 	AsChildEntry() fuseops.ChildInodeEntry
 
 	// Lookup count
@@ -70,6 +81,12 @@ func (in *baseInode) Attributes() (attrs fuseops.InodeAttributes) {
 	return in.attrs
 }
 
+// SetAttributes sets inode attributes.
+// REQUIRES_LOCK(in)
+func (in *baseInode) SetAttributes(attrs fuseops.InodeAttributes) {
+	in.attrs = attrs
+}
+
 // AsChildEntry returns a fuseops.ChildInodeEntry struct
 // constructed from the current inode state.
 // REQUIRES_READ_LOCK(in)
@@ -77,12 +94,6 @@ func (in *baseInode) AsChildEntry() (en fuseops.ChildInodeEntry) {
 	en.Child = in.ID()
 	en.Attributes = in.Attributes()
 	return
-}
-
-// SetAttributes sets inode attributes.
-// REQUIRES_LOCK(in)
-func (in *baseInode) SetAttributes(attrs fuseops.InodeAttributes) {
-	in.attrs = attrs
 }
 
 // IncLookupCount atomically increments inode's lookup count.

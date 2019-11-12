@@ -6,6 +6,7 @@ package fs
 
 import (
 	"io"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/ais"
@@ -46,6 +47,47 @@ func (file *FileInode) Size() uint64 {
 // REQUIRES_LOCK(file)
 func (file *FileInode) SetSize(size uint64) {
 	file.attrs.Size = size
+}
+
+// REQUIRES_LOCK(file)
+func (file *FileInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAttributes {
+	attrs := file.Attributes()
+
+	modified := false
+	if req.Mode != nil {
+		attrs.Mode = *req.Mode
+		modified = true
+	}
+	if req.Size != nil {
+		attrs.Size = *req.Size
+		modified = true
+	}
+	if req.Atime != nil {
+		attrs.Atime = *req.Atime
+		modified = true
+	}
+	if req.Mtime != nil {
+		attrs.Mtime = *req.Mtime
+		modified = true
+	}
+
+	if modified {
+		attrs.Ctime = time.Now()
+		file.SetAttributes(attrs)
+	}
+	return attrs
+}
+
+// REQUIRES_LOCK(file)
+func (file *FileInode) UpdateMetadata(obj *ais.Object) {
+	cmn.Assert(obj != nil)
+	updReq := &AttrUpdateReq{
+		Size:  &obj.Size,
+		Atime: &obj.Atime,
+		Mtime: &obj.Atime,
+	}
+	file.UpdateAttributes(updReq)
+	file.object = obj
 }
 
 /////////////

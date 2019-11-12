@@ -43,7 +43,6 @@ func (bck *Bucket) NewEmptyObject(objName string) (object *Object, err error) {
 		Atime:     time.Now(),
 	}
 	return
-
 }
 
 func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {

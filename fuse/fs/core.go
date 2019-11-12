@@ -326,28 +326,14 @@ func (fs *aisfs) SetInodeAttributes(ctx context.Context, req *fuseops.SetInodeAt
 	fs.mu.RUnlock()
 
 	inode.Lock()
-	attrs := inode.Attributes()
-
-	if req.Mtime != nil {
-		attrs.Mtime = *req.Mtime
+	updReq := &AttrUpdateReq{
+		Mode:  req.Mode,
+		Size:  req.Size,
+		Atime: req.Atime,
+		Mtime: req.Mtime,
 	}
-
-	if req.Size != nil {
-		attrs.Size = *req.Size
-	}
-
-	if req.Atime != nil {
-		attrs.Atime = *req.Atime
-	}
-
-	if req.Mode != nil {
-		attrs.Mode = *req.Mode
-	}
-
-	inode.SetAttributes(attrs)
+	req.Attributes = inode.UpdateAttributes(updReq)
 	inode.Unlock()
-
-	req.Attributes = attrs
 	return
 }
 
@@ -378,7 +364,14 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 			inode = fs.createFileInode(inodeID, parent, result.Object, fs.modeBits.File)
 		}
 	} else {
+		// lookup inode and update if needed
 		inode = fs.lookupMustExist(result.Entry.Inode)
+		if !inode.IsDir() {
+			inode.Lock()
+			file := inode.(*FileInode)
+			file.UpdateMetadata(result.Object)
+			inode.Unlock()
+		}
 	}
 	fs.mu.Unlock()
 

@@ -6,6 +6,7 @@ package fs
 
 import (
 	"path"
+	"time"
 
 	"github.com/NVIDIA/aistore/fuse/ais"
 	"github.com/jacobsa/fuse/fuseops"
@@ -40,6 +41,17 @@ func (dir *DirectoryInode) Parent() Inode {
 
 func (dir *DirectoryInode) IsDir() bool {
 	return true
+}
+
+// REQUIRES_LOCK(dir)
+func (dir *DirectoryInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAttributes {
+	attrs := dir.Attributes()
+	if req.Mode != nil {
+		attrs.Mode = *req.Mode
+		attrs.Ctime = time.Now()
+		dir.SetAttributes(attrs)
+	}
+	return attrs
 }
 
 // REQUIRES_LOCK(dir)
