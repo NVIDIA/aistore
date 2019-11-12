@@ -6,7 +6,9 @@ package ais
 
 import (
 	"flag"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"testing"
@@ -27,7 +29,26 @@ const (
 
 var (
 	t *targetrunner
+
+	// interface guard
+	_ http.ResponseWriter = &discardRW{}
 )
+
+type (
+	discardRW struct {
+		w io.Writer
+	}
+)
+
+func newDiscardRW() *discardRW {
+	return &discardRW{
+		w: ioutil.Discard,
+	}
+}
+
+func (drw *discardRW) Write(p []byte) (int, error) { return drw.w.Write(p) }
+func (drw *discardRW) Header() http.Header         { return make(http.Header) }
+func (drw *discardRW) WriteHeader(statusCode int)  {}
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -106,7 +127,7 @@ func BenchmarkObjPut(b *testing.B) {
 	}
 }
 
-func BenchmarkObjGetDiscard(b *testing.B) {
+func BenchmarkObjAppend(b *testing.B) {
 	benches := []struct {
 		fileSize int64
 	}{
@@ -115,11 +136,72 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 		{cmn.MiB},
 		{2 * cmn.MiB},
 		{4 * cmn.MiB},
+		{8 * cmn.MiB},
 		{16 * cmn.MiB},
 	}
 
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
+			lom := &cluster.LOM{T: t, Objname: "objname"}
+			err := lom.Init(testBucket, cmn.AIS)
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			var filePath string
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				r, _ := tutils.NewRandReader(bench.fileSize, false)
+				aoi := &appendObjInfo{
+					started:  time.Now(),
+					t:        t,
+					lom:      lom,
+					r:        r,
+					op:       cmn.AppendOp,
+					filePath: filePath,
+				}
+				os.Remove(lom.FQN)
+				b.StartTimer()
+
+				filePath, err, _ = aoi.appendObject()
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.StopTimer()
+			os.Remove(lom.FQN)
+			os.Remove(filePath)
+		})
+	}
+}
+
+func BenchmarkObjGetDiscard(b *testing.B) {
+	benches := []struct {
+		fileSize int64
+		chunked  bool
+	}{
+		{fileSize: cmn.KiB, chunked: false},
+		{fileSize: 512 * cmn.KiB, chunked: false},
+		{fileSize: cmn.MiB, chunked: false},
+		{fileSize: 2 * cmn.MiB, chunked: false},
+		{fileSize: 4 * cmn.MiB, chunked: false},
+		{fileSize: 16 * cmn.MiB, chunked: false},
+
+		{fileSize: cmn.KiB, chunked: true},
+		{fileSize: 512 * cmn.KiB, chunked: true},
+		{fileSize: cmn.MiB, chunked: true},
+		{fileSize: 2 * cmn.MiB, chunked: true},
+		{fileSize: 4 * cmn.MiB, chunked: true},
+		{fileSize: 16 * cmn.MiB, chunked: true},
+	}
+
+	for _, bench := range benches {
+		benchName := cmn.B2S(bench.fileSize, 2)
+		if bench.chunked {
+			benchName += "-chunked"
+		}
+		b.Run(benchName, func(b *testing.B) {
 			lom := &cluster.LOM{T: t, Objname: "objname"}
 			err := lom.Init(testBucket, cmn.AIS)
 			if err != nil {
@@ -145,16 +227,16 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			}
 
 			w := ioutil.Discard
+			if !bench.chunked {
+				w = newDiscardRW()
+			}
+
 			goi := &getObjInfo{
 				started: time.Now(),
 				t:       t,
 				lom:     lom,
 				w:       w,
-				ctx:     nil,
-				chunked: true,
-				offset:  0,
-				length:  0,
-				isGFN:   false,
+				chunked: bench.chunked,
 			}
 
 			b.ResetTimer()

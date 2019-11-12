@@ -719,13 +719,18 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 	filePath = aoi.filePath
 	switch aoi.op {
 	case cmn.AppendOp:
+		var f *os.File
 		if filePath == "" {
 			filePath = fs.CSM.GenContentParsedFQN(aoi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfileAppend)
-		}
-
-		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			return "", err, http.StatusInternalServerError
+			f, err = cmn.CreateFile(filePath)
+			if err != nil {
+				return "", err, http.StatusInternalServerError
+			}
+		} else {
+			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				return "", err, http.StatusInternalServerError
+			}
 		}
 
 		// append
