@@ -38,15 +38,11 @@ Last but not the least, AIS features open format and, therefore, freedom to copy
 ## Prerequisites
 
 * Linux (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+)
-* [Go 1.12.5 or later](https://golang.org/dl/)
+* [Go 1.13 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 
-Depending on your Linux distribution you may or may not have `gcc`, `sysstat`, and/or `attr` packages - to install, use `apt-get` (Debian), `yum` (RPM), or other applicable package management tool, e.g.:
-
-```shell
-$ apt-get install sysstat
-```
+Depending on your Linux distribution you may or may not have `gcc`, `sysstat`, and/or `attr` packages.
 
 The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is a long time POSIX legacy and is supported by all mainstream filesystems with no exceptions. Unfortunately, extended attributes (xattrs) may not always be enabled (by the Linux distribution you are using) in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
 

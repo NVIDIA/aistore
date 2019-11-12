@@ -11,7 +11,7 @@ This README documents the steps to build and run AIS.
 ### BUILD AIS DOCKER IMAGE
 
 PREREQUISITES:
-- Expects Golang to be installed (min requirement: go1.12) and added to PATH environment variable.
+- Expects Golang to be installed (min requirement: go1.13) and added to PATH environment variable.
 
 1. Create the AIS executable using the build_ais_binary.sh
 ```
