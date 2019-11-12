@@ -5,8 +5,6 @@
 package ais
 
 import (
-	"time"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -21,28 +19,6 @@ func NewBucket(name string, apiParams *api.BaseParams) *Bucket {
 		name:      name,
 		apiParams: apiParams,
 	}
-}
-
-func (bck *Bucket) NewEmptyObject(objName string) (object *Object, err error) {
-	putArgs := api.PutObjectArgs{
-		BaseParams: cloneAPIParams(bck.apiParams),
-		Bucket:     bck.name,
-		Object:     objName,
-		Reader:     emptyBuffer(),
-	}
-	err = api.PutObject(putArgs)
-	if err != nil {
-		return nil, newBucketIOError(err, "NewEmptyObject", objName)
-	}
-
-	object = &Object{
-		apiParams: cloneAPIParams(bck.apiParams),
-		bucket:    bck.name,
-		Name:      objName,
-		Size:      uint64(0),
-		Atime:     time.Now(),
-	}
-	return
 }
 
 func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {

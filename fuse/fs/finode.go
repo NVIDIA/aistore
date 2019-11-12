@@ -79,7 +79,7 @@ func (file *FileInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAttribu
 }
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) UpdateMetadata(obj *ais.Object) {
+func (file *FileInode) UpdateBackingObject(obj *ais.Object) {
 	cmn.Assert(obj != nil)
 	updReq := &AttrUpdateReq{
 		Size:  &obj.Size,

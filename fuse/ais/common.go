@@ -5,12 +5,9 @@
 package ais
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 //////////
@@ -57,14 +54,6 @@ func newObjectIOError(err error, op string, object string) error {
 ///////////
 // HELPERS
 ///////////
-
-func emptyBuffer() cmn.ReadOpenCloser {
-	return cmn.NopOpener(
-		ioutil.NopCloser(
-			bytes.NewReader([]byte{}),
-		),
-	)
-}
 
 func cloneAPIParams(apiParams *api.BaseParams) *api.BaseParams {
 	return &api.BaseParams{

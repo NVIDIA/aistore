@@ -369,7 +369,7 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 		if !inode.IsDir() {
 			inode.Lock()
 			file := inode.(*FileInode)
-			file.UpdateMetadata(result.Object)
+			file.UpdateBackingObject(result.Object)
 			inode.Unlock()
 		}
 	}

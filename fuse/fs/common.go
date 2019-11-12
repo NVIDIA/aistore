@@ -35,14 +35,14 @@ func (res EntryLookupResult) NoEntry() bool {
 }
 
 // IsDir checks if an entry maps to a directory.
-// Assumes that res.Entry != nil.
 func (res EntryLookupResult) IsDir() bool {
+	cmn.Assert(res.Entry != nil)
 	return res.Entry.Type == fuseutil.DT_Directory
 }
 
 // NoInode checks if inode number is known for an entry.
-// Assumes that res.Entry != nil.
 func (res EntryLookupResult) NoInode() bool {
+	cmn.Assert(res.Entry != nil)
 	return res.Entry.Inode == invalidInodeID
 }
 

@@ -22,6 +22,30 @@ type Object struct {
 	Atime     time.Time
 }
 
+func NewObject(objName string, bucket *Bucket) *Object {
+	return &Object{
+		apiParams: cloneAPIParams(bucket.apiParams),
+		bucket:    bucket.name,
+		Name:      objName,
+		Size:      uint64(0),
+		Atime:     time.Now(),
+	}
+}
+
+func (obj *Object) Put(r cmn.ReadOpenCloser) (err error) {
+	putArgs := api.PutObjectArgs{
+		BaseParams: cloneAPIParams(obj.apiParams),
+		Bucket:     obj.bucket,
+		Object:     obj.Name,
+		Reader:     r,
+	}
+	err = api.PutObject(putArgs)
+	if err != nil {
+		err = newObjectIOError(err, "Put", obj.Name)
+	}
+	return
+}
+
 func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, err error) {
 	query := url.Values{}
 	query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))

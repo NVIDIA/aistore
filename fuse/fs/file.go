@@ -32,13 +32,15 @@ func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err
 	fs.mu.RUnlock()
 
 	fileName := path.Join(parent.Path(), req.Name)
-	object, err := parent.LinkEmptyFile(fileName)
+	object, err := parent.LinkNewFile(fileName)
 	if err != nil {
 		return fs.handleIOError(err)
 	}
 
-	parent.Lock()
+	// Allocate an inodeID for this file inode
 	inodeID := fs.nextInodeID()
+
+	parent.Lock()
 	parent.NewEntry(req.Name, inodeID)
 	parent.Unlock()
 

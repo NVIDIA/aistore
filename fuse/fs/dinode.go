@@ -5,9 +5,12 @@
 package fs
 
 import (
+	"bytes"
+	"io/ioutil"
 	"path"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/ais"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
@@ -68,8 +71,13 @@ func (dir *DirectoryInode) ForgetEntry(entryName string) {
 }
 
 // REQUIRES_LOCK(dir)
-func (dir *DirectoryInode) LinkEmptyFile(fileName string) (*ais.Object, error) {
-	return dir.bucket.NewEmptyObject(fileName)
+func (dir *DirectoryInode) LinkNewFile(fileName string) (*ais.Object, error) {
+	obj := ais.NewObject(fileName, dir.bucket)
+	err := obj.Put(cmn.NopOpener(ioutil.NopCloser(bytes.NewReader([]byte{}))))
+	if err != nil {
+		obj = nil
+	}
+	return obj, err
 }
 
 // REQUIRES_LOCK(dir)
