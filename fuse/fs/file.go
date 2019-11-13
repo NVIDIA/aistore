@@ -41,7 +41,7 @@ func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err
 	inodeID := fs.nextInodeID()
 
 	parent.Lock()
-	parent.NewEntry(req.Name, inodeID)
+	parent.NewFileEntry(req.Name, inodeID, object.Size)
 	parent.Unlock()
 
 	fs.mu.Lock()
@@ -74,7 +74,6 @@ func (fs *aisfs) ReadFile(ctx context.Context, req *fuseops.ReadFileOp) (err err
 	if err != nil {
 		return fs.handleIOError(err)
 	}
-
 	return
 }
 
@@ -87,7 +86,6 @@ func (fs *aisfs) WriteFile(ctx context.Context, req *fuseops.WriteFileOp) (err e
 	if err != nil {
 		return fs.handleIOError(err)
 	}
-
 	return
 }
 
@@ -99,7 +97,6 @@ func (fs *aisfs) FlushFile(ctx context.Context, req *fuseops.FlushFileOp) (err e
 	if err = handle.flush(); err != nil {
 		return fs.handleIOError(err)
 	}
-
 	return
 }
 
@@ -122,16 +119,12 @@ func (fs *aisfs) Unlink(ctx context.Context, req *fuseops.UnlinkOp) (err error) 
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
 
-	lookupRes, err := parent.LookupEntry(req.Name)
-	if err != nil {
-		return fs.handleIOError(err)
-	}
-
-	if lookupRes.NoEntry() || lookupRes.NoInode() {
+	result := parent.LookupEntry(req.Name)
+	if result.NoEntry() || result.NoInode() {
 		return fuse.ENOENT
 	}
 
-	if lookupRes.IsDir() {
+	if result.IsDir() {
 		fs.logf("tried to unlink directory: %q in %d", req.Name, req.Parent)
 		return syscall.EISDIR
 	}
@@ -140,6 +133,5 @@ func (fs *aisfs) Unlink(ctx context.Context, req *fuseops.UnlinkOp) (err error) 
 	if err != nil {
 		return fs.handleIOError(err)
 	}
-
 	return
 }

@@ -69,7 +69,7 @@ func (fh *fileHandle) ensureReadBuffer() int64 {
 	} else if fh.fileSize > maxBlockSize {
 		blockSize = maxBlockSize
 	} else {
-		blockSize = (fh.fileSize + cmn.PageSize - 1) & cmn.PageSize
+		blockSize = ((fh.fileSize + cmn.PageSize - 1) / cmn.PageSize) * cmn.PageSize
 	}
 
 	fh.readBuffer = newBlockBuffer(blockSize)
@@ -152,7 +152,7 @@ func (fh *fileHandle) _writeChunk(data []byte, maxWriteBufSize int64, force bool
 	// Once we have filled writing buffer to enough size (determined by `maxWriteBufSize`)
 	// we need to issue an append request.
 	if fh.writeBuffer.size() > maxWriteBufSize || force {
-		if fh.appendHandle, err = fh.file.Write(fh.writeBuffer.reader(), fh.appendHandle); err != nil {
+		if fh.appendHandle, err = fh.file.Write(fh.writeBuffer.reader(), fh.appendHandle, fh.writeBuffer.size()); err != nil {
 			return err
 		}
 		fh.writeBuffer.reset()

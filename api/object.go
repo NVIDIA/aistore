@@ -66,6 +66,7 @@ type AppendArgs struct {
 	Object     string
 	Handle     string
 	Reader     cmn.ReadOpenCloser
+	Size       int64
 }
 
 // HeadObject API
@@ -327,21 +328,29 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 //
 // NOTE: Until `FlushObject` is called one cannot access the object yet as
 // it is yet not fully operational.
-func AppendObject(args AppendArgs) (handle string, n int, err error) {
+func AppendObject(args AppendArgs) (handle string, err error) {
 	query := url.Values{}
 	query.Add(cmn.URLParamAppendType, cmn.AppendOp)
 	query.Add(cmn.URLParamAppendHandle, args.Handle)
 	query.Add(cmn.URLParamProvider, args.Provider)
+
+	var header http.Header
+	if args.Size > 0 {
+		header := make(http.Header)
+		header.Add("Content-Length", strconv.FormatInt(args.Size, 10))
+	}
+
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object),
+		Header: header,
 		Query:  query,
 		BodyR:  args.Reader,
 	}
 	req, err := reqArgs.Req()
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to create new HTTP request, err: %v", err)
+		return "", fmt.Errorf("failed to create new HTTP request, err: %v", err)
 	}
 
 	// The HTTP package doesn't automatically set this for files, so it has to be done manually
@@ -363,12 +372,12 @@ func AppendObject(args AppendArgs) (handle string, n int, err error) {
 	}
 
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
+		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
 	defer resp.Body.Close()
 
 	_, err = checkBadStatus(req, resp)
-	return resp.Header.Get(cmn.HeaderAppendHandle), 0, err
+	return resp.Header.Get(cmn.HeaderAppendHandle), err
 }
 
 // FlushObject API

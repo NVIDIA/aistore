@@ -81,8 +81,9 @@ func (file *FileInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAttribu
 // REQUIRES_LOCK(file)
 func (file *FileInode) UpdateBackingObject(obj *ais.Object) {
 	cmn.Assert(obj != nil)
+	size := uint64(obj.Size)
 	updReq := &AttrUpdateReq{
-		Size:  &obj.Size,
+		Size:  &size,
 		Atime: &obj.Atime,
 		Mtime: &obj.Atime,
 	}
@@ -108,8 +109,8 @@ func (file *FileInode) Load(w io.Writer, offset int64, length int64) (n int64, e
 /////////////
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) Write(r cmn.ReadOpenCloser, handle string) (string, error) {
-	return file.object.Append(r, handle)
+func (file *FileInode) Write(r cmn.ReadOpenCloser, handle string, size int64) (string, error) {
+	return file.object.Append(r, handle, size)
 }
 
 // REQUIRES_LOCK(file)

@@ -264,7 +264,10 @@ func appMain(c *cli.Context) (err error) {
 	}
 
 	// Init a file system server.
-	server = fs.NewAISFileSystemServer(serverCfg, errorLog)
+	server, err = fs.NewAISFileSystemServer(serverCfg, errorLog)
+	if err != nil {
+		return
+	}
 
 	// Init a mount configuration object.
 	mountCfg = &fuse.MountConfig{

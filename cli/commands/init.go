@@ -3,8 +3,6 @@ package commands
 
 import (
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -48,14 +46,13 @@ func initClusterParams() {
 
 	clusterURL = determineClusterURL(cfg)
 
-	defaultHTTPClient = &http.Client{
-		Timeout: cfg.Timeout.HTTPTimeout,
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: cfg.Timeout.TCPTimeout,
-			}).DialContext,
-		},
-	}
+	defaultHTTPClient = cmn.NewClient(cmn.TransportArgs{
+		DialTimeout: cfg.Timeout.TCPTimeout,
+		Timeout:     cfg.Timeout.HTTPTimeout,
+
+		IdleConnsPerHost: 100,
+		MaxIdleConns:     100,
+	})
 
 	defaultAPIParams = &api.BaseParams{
 		Client: defaultHTTPClient,

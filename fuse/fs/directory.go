@@ -9,37 +9,41 @@ import (
 
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
+	"github.com/jacobsa/fuse/fuseutil"
 )
 
-// OpenDir creates a directory handle to be used in subsequent directory operations
-// that provide a valid handle ID (also genereted here).
 func (fs *aisfs) OpenDir(ctx context.Context, req *fuseops.OpenDirOp) (err error) {
-	fs.mu.Lock()
-	dir := fs.lookupDirMustExist(req.Inode)
-	req.Handle = fs.allocateDirHandle(dir)
-	fs.mu.Unlock()
 	return
 }
 
 func (fs *aisfs) ReadDir(ctx context.Context, req *fuseops.ReadDirOp) (err error) {
 	fs.mu.RLock()
-	dh := fs.lookupDhandleMustExist(req.Handle)
+	dir := fs.lookupDirMustExist(req.Inode)
 	fs.mu.RUnlock()
 
-	req.BytesRead, err = dh.readEntries(req.Offset, req.Dst)
+	dir.Lock()
+	entries, err := dir.ReadEntries()
+	dir.Unlock()
 	if err != nil {
 		return fs.handleIOError(err)
 	}
 
+	if req.Offset > fuseops.DirOffset(len(entries)) {
+		err = fuse.EIO
+		return
+	}
+
+	for _, en := range entries[req.Offset:] {
+		n := fuseutil.WriteDirent(req.Dst[req.BytesRead:], en)
+		if n == 0 {
+			break
+		}
+		req.BytesRead += n
+	}
 	return
 }
 
-// ReleaseDirHandle removes a previously issued directory handle because the handle
-// will not be used in subsequent directory operations.
 func (fs *aisfs) ReleaseDirHandle(ctx context.Context, req *fuseops.ReleaseDirHandleOp) (err error) {
-	fs.mu.Lock()
-	delete(fs.dirHandles, req.Handle)
-	fs.mu.Unlock()
 	return
 }
 
@@ -50,11 +54,7 @@ func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
 
-	result, err := parent.LookupEntry(req.Name)
-	if err != nil {
-		return fs.handleIOError(err)
-	}
-
+	result := parent.LookupEntry(req.Name)
 	// If parent directory already contains an entry with req.Name
 	// it is not possible to create a new directory with the same name.
 	if !result.NoEntry() {
@@ -66,8 +66,9 @@ func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	newDir = fs.createDirectoryInode(inodeID, parent, req.Name, req.Mode)
 	fs.mu.Unlock()
 
-	parent.LinkLocalSubdir(req.Name, inodeID)
-	parent.NewEntry(req.Name, inodeID)
+	parent.Lock()
+	parent.NewDirEntry(req.Name, inodeID)
+	parent.Unlock()
 
 	// Locking this inode with parent already locked doesn't break
 	// the valid locking order since (currently) child inodes
@@ -76,7 +77,6 @@ func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	req.Entry = newDir.AsChildEntry()
 	newDir.RUnlock()
 	newDir.IncLookupCount()
-	parent.Unlock()
 	return
 }
 
@@ -85,11 +85,7 @@ func (fs *aisfs) RmDir(ctx context.Context, req *fuseops.RmDirOp) (err error) {
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
 
-	result, err := parent.LookupEntry(req.Name)
-	if err != nil {
-		return fs.handleIOError(err)
-	}
-
+	result := parent.LookupEntry(req.Name)
 	if result.NoEntry() {
 		return fuse.ENOENT
 	}
@@ -98,10 +94,22 @@ func (fs *aisfs) RmDir(ctx context.Context, req *fuseops.RmDirOp) (err error) {
 		return fuse.ENOTDIR
 	}
 
-	if ok := parent.TryDeleteLocalSubdirEntry(req.Name); !ok {
-		// if directory is not local, then it is not empty
+	fs.mu.RLock()
+	dir := fs.lookupDirMustExist(result.Entry.Inode)
+	fs.mu.RUnlock()
+
+	parent.Lock()
+	defer parent.Unlock()
+
+	dir.Lock()
+	entries, err := dir.ReadEntries()
+	dir.Unlock()
+	if err != nil {
+		return fs.handleIOError(err)
+	}
+	if len(entries) > 0 {
 		return fuse.ENOTEMPTY
 	}
-
+	parent.ForgetDir(req.Name)
 	return
 }

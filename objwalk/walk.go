@@ -57,11 +57,13 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 		fileCount:    0,
 		rootLength:   0,
 		limit:        cmn.DefaultListPageSize, // maximum number files to return
-		needAtime:    msg.WantProp(cmn.GetPropsAtime),
-		needChkSum:   msg.WantProp(cmn.GetPropsChecksum),
-		needVersion:  msg.WantProp(cmn.GetPropsVersion),
-		needStatus:   msg.WantProp(cmn.GetPropsStatus),
-		needCopies:   msg.WantProp(cmn.GetPropsCopies),
+
+		needSize:    msg.WantProp(cmn.GetPropsSize),
+		needAtime:   msg.WantProp(cmn.GetPropsAtime),
+		needChkSum:  msg.WantProp(cmn.GetPropsChecksum),
+		needVersion: msg.WantProp(cmn.GetPropsVersion),
+		needStatus:  msg.WantProp(cmn.GetPropsStatus),
+		needCopies:  msg.WantProp(cmn.GetPropsCopies),
 	}
 
 	if msg.PageSize != 0 {

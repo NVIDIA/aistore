@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/ais"
+	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
 )
@@ -22,19 +23,17 @@ var _ Inode = &DirectoryInode{}
 type DirectoryInode struct {
 	baseInode
 
-	parent           *DirectoryInode
-	entries          map[string]fuseops.InodeID
-	localDirectories map[string]fuseops.InodeID
-	bucket           *ais.Bucket
+	parent *DirectoryInode
+	bucket *ais.Bucket
+
+	entries []fuseutil.Dirent
 }
 
 func NewDirectoryInode(id fuseops.InodeID, attrs fuseops.InodeAttributes, path string, parent *DirectoryInode, bucket *ais.Bucket) Inode {
 	return &DirectoryInode{
-		baseInode:        newBaseInode(id, attrs, path),
-		parent:           parent,
-		bucket:           bucket,
-		entries:          make(map[string]fuseops.InodeID),
-		localDirectories: make(map[string]fuseops.InodeID),
+		baseInode: newBaseInode(id, attrs, path),
+		parent:    parent,
+		bucket:    bucket,
 	}
 }
 
@@ -58,16 +57,39 @@ func (dir *DirectoryInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAtt
 }
 
 // REQUIRES_LOCK(dir)
-func (dir *DirectoryInode) NewEntry(entryName string, id fuseops.InodeID) {
-	dir.entries[entryName] = id
+func (dir *DirectoryInode) NewFileEntry(entryName string, id fuseops.InodeID, size int64) {
+	entryName = path.Join(dir.Path(), entryName)
+	nsCache.add(entryFileTy, dtAttrs{id: id, path: entryName, size: size})
+
+	// TODO: improve caching entries for `ReadEntries`
+	dir.entries = nil
 }
 
 // REQUIRES_LOCK(dir)
-// Note: Ignores non-existent entryName. This is because ForgetEntry
-// is called when an inode is being destroyed, but may also be called
-// before that (e.g. Unlink, RmDir), deleting an entry earlier.
-func (dir *DirectoryInode) ForgetEntry(entryName string) {
-	delete(dir.entries, entryName)
+func (dir *DirectoryInode) ForgetFile(entryName string) {
+	entryName = path.Join(dir.Path(), entryName)
+	nsCache.remove(entryName)
+
+	// TODO: improve caching entries for `ReadEntries`
+	dir.entries = nil
+}
+
+// REQUIRES_LOCK(dir)
+func (dir *DirectoryInode) NewDirEntry(entryName string, id fuseops.InodeID) {
+	entryName = path.Join(dir.Path(), entryName) + separator
+	nsCache.add(entryDirTy, dtAttrs{id: id, path: entryName})
+
+	// TODO: improve caching entries for `ReadEntries`
+	dir.entries = nil
+}
+
+// REQUIRES_LOCK(dir)
+func (dir *DirectoryInode) ForgetDir(entryName string) {
+	entryName = path.Join(dir.Path(), entryName) + separator
+	nsCache.remove(entryName)
+
+	// TODO: improve caching entries for `ReadEntries`
+	dir.entries = nil
 }
 
 // REQUIRES_LOCK(dir)
@@ -81,63 +103,28 @@ func (dir *DirectoryInode) LinkNewFile(fileName string) (*ais.Object, error) {
 }
 
 // REQUIRES_LOCK(dir)
-func (dir *DirectoryInode) LinkLocalSubdir(entryName string, id fuseops.InodeID) {
-	dir.localDirectories[entryName] = id
-}
-
-// LOCKS(dir)
-func (dir *DirectoryInode) TryDeleteLocalSubdirEntry(entryName string) (ok bool) {
-	dir.Lock()
-	_, ok = dir.localDirectories[entryName]
-	delete(dir.localDirectories, entryName)
-	dir.ForgetEntry(entryName)
-	dir.Unlock()
-	return
-}
-
-// REQUIRES_READ_LOCK(dir)
 func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) {
-	var offset fuseops.DirOffset = 1
-
-	// List objects from the bucket that belong to this directory.
-	// (i.e. list object names starting with dir.Path())
-	objectNames, err := dir.bucket.ListObjectNames(dir.Path())
-	if err != nil {
-		return
-	}
-
 	// Traverse files and subdirectories of dir read from the bucket.
-	for _, taggedName := range getTaggedNames(objectNames, dir.Path()) {
-		var en = fuseutil.Dirent{
-			Inode:  invalidInodeID,
-			Offset: offset,
-		}
-		en.Name, en.Type = direntNameAndType(taggedName)
-
-		if en.Type == fuseutil.DT_Directory {
-			dir.RUnlock()
-			dir.TryDeleteLocalSubdirEntry(en.Name)
-			dir.RLock()
-		}
-
-		entries = append(entries, en)
-		offset++
+	exists, _, entry := nsCache.exists(dir.Path())
+	if !exists {
+		return nil, fuse.ENOENT
 	}
 
-	// Add remaining local directories.
-	for entryName, id := range dir.localDirectories {
-		var en = fuseutil.Dirent{
-			Inode:  id,
-			Offset: offset,
-			Name:   entryName,
-			Type:   fuseutil.DT_Directory,
-		}
-
-		entries = append(entries, en)
-		offset++
+	if dir.entries != nil {
+		return dir.entries, nil
 	}
 
-	return
+	var offset fuseops.DirOffset = 1
+	for _, child := range entry.ListChildren() {
+		dir.entries = append(dir.entries, fuseutil.Dirent{
+			Inode:  child.ID(),
+			Offset: offset,
+			Name:   path.Base(child.Name()),
+			Type:   fuseutil.DirentType(child.Ty()),
+		})
+		offset++
+	}
+	return dir.entries, nil
 }
 
 // LOCKS(dir)
@@ -146,66 +133,26 @@ func (dir *DirectoryInode) UnlinkEntry(entryName string) error {
 	if err := dir.bucket.DeleteObject(objName); err != nil {
 		return err
 	}
+
 	dir.Lock()
-	dir.ForgetEntry(entryName)
+	dir.ForgetFile(entryName)
 	dir.Unlock()
 	return nil
 }
 
-// READ_LOCKS(dir)
-func (dir *DirectoryInode) LookupEntry(entryName string) (res EntryLookupResult, err error) {
-	// Maybe it's an empty (local) directory.
-	dir.RLock()
-	id, ok := dir.localDirectories[entryName]
-	dir.RUnlock()
-	if ok {
-		res.Entry = &fuseutil.Dirent{
-			Inode: id,
-			Name:  entryName,
-			Type:  fuseutil.DT_Directory,
-		}
-		return
-	}
+func (dir *DirectoryInode) LookupEntry(entryName string) (res EntryLookupResult) {
+	var (
+		exists       bool
+		objEntryName = path.Join(dir.Path(), entryName)
+		dirEntryName = objEntryName + separator
+	)
 
-	// Fast path, assume this is an object: dir.Name()/name
-	object, err := dir.bucket.HeadObject(path.Join(dir.Path(), entryName))
-	if object != nil {
-		res.Object = object
-		inodeID := invalidInodeID
-		dir.RLock()
-		if id, ok := dir.entries[entryName]; ok {
-			inodeID = id
-		}
-		dir.RUnlock()
-		res.Entry = &fuseutil.Dirent{
-			Inode: inodeID,
-			Name:  entryName,
-			Type:  fuseutil.DT_File,
-		}
-		return
-	}
-
-	// If there is at least one object starting with dir.Name()/name/
-	// then name is also a (non-empty) directory.
-	prefix := path.Join(dir.Path(), entryName) + separator
-	exists, err := dir.bucket.HasObjectWithPrefix(prefix)
-	if err != nil {
-		return
-	}
+	// First check for directories
+	exists, res, _ = nsCache.exists(dirEntryName)
 	if exists {
-		inodeID := invalidInodeID
-		dir.RLock()
-		if id, ok := dir.entries[entryName]; ok {
-			inodeID = id
-		}
-		dir.RUnlock()
-		res.Entry = &fuseutil.Dirent{
-			Inode: inodeID,
-			Name:  entryName,
-			Type:  fuseutil.DT_Directory,
-		}
-		return
+		return res
 	}
-	// res.Entry == nil
-	return
+
+	_, res, _ = nsCache.exists(objEntryName)
+	return res
 }

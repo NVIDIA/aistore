@@ -5,6 +5,7 @@
 package objwalk
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -29,11 +30,13 @@ type (
 		fileCount    int
 		rootLength   int
 		limit        int
-		needAtime    bool
-		needChkSum   bool
-		needVersion  bool
-		needStatus   bool
-		needCopies   bool
+
+		needSize    bool
+		needAtime   bool
+		needChkSum  bool
+		needVersion bool
+		needStatus  bool
+		needCopies  bool
 	}
 )
 
@@ -127,6 +130,13 @@ func (ci *allfinfos) listwalkfFast(fqn string, de fs.DirEntry) error {
 		Name:  relname,
 		Flags: cmn.ObjStatusOK,
 	}
+	if ci.needSize {
+		fi, err := os.Stat(fqn)
+		if err == nil {
+			fileInfo.Size = fi.Size()
+		}
+	}
+
 	ci.objs = append(ci.objs, fileInfo)
 	return nil
 }

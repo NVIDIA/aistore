@@ -7,7 +7,6 @@ package fs
 import (
 	"context"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"path"
@@ -62,6 +61,8 @@ const (
 )
 
 var (
+	nsCache *namespaceCache // Namespace cache for files and directories.
+
 	glMem2 *memsys.Mem2 // Global memory manager
 )
 
@@ -109,7 +110,6 @@ type (
 
 		// Handles
 		fileHandles  map[fuseops.HandleID]*fileHandle
-		dirHandles   map[fuseops.HandleID]*dirHandle
 		lastHandleID uint64
 
 		// Access
@@ -123,19 +123,16 @@ type (
 	}
 )
 
-func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) fuse.Server {
+func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Server, err error) {
 	cmn.Assert(cfg != nil)
-
 	// Init HTTP client.
-	httpTransport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: cfg.TCPTimeout,
-		}).DialContext,
-	}
-	httpClient := &http.Client{
-		Timeout:   cfg.HTTPTimeout,
-		Transport: httpTransport,
-	}
+	httpClient := cmn.NewClient(cmn.TransportArgs{
+		DialTimeout: cfg.TCPTimeout,
+		Timeout:     cfg.HTTPTimeout,
+
+		IdleConnsPerHost: 100,
+		MaxIdleConns:     100,
+	})
 
 	// Create an aisfs instance.
 	aisfs := &aisfs{
@@ -151,7 +148,6 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) fuse.Server {
 
 		// Handles
 		fileHandles:  make(map[fuseops.HandleID]*fileHandle),
-		dirHandles:   make(map[fuseops.HandleID]*dirHandle),
 		lastHandleID: uint64(0),
 
 		// Access
@@ -179,7 +175,11 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) fuse.Server {
 	aisfs.root.IncLookupCount()
 	aisfs.inodeTable[fuseops.RootInodeID] = aisfs.root
 
-	return fuseutil.NewFileSystemServer(aisfs)
+	nsCache, err = newNsCache(bucket)
+	if err != nil {
+		return nil, err
+	}
+	return fuseutil.NewFileSystemServer(aisfs), nil
 }
 
 // API parameters needed to talk to the cluster
@@ -204,7 +204,7 @@ func (fs *aisfs) fileAttrs(object *ais.Object, mode os.FileMode) fuseops.InodeAt
 	return fuseops.InodeAttributes{
 		Mode:  mode,
 		Nlink: 1,
-		Size:  object.Size,
+		Size:  uint64(object.Size),
 		Uid:   fs.cfg.Owner.UID,
 		Gid:   fs.cfg.Owner.GID,
 		Atime: object.Atime,
@@ -227,13 +227,6 @@ func (fs *aisfs) dirAttrs(mode os.FileMode) fuseops.InodeAttributes {
 		Uid:   fs.cfg.Owner.UID,
 		Gid:   fs.cfg.Owner.GID,
 	}
-}
-
-// REQUIRES_LOCK(fs.mu)
-func (fs *aisfs) allocateDirHandle(dir *DirectoryInode) fuseops.HandleID {
-	id := fs.nextHandleID()
-	fs.dirHandles[id] = newDirHandle(id, dir)
-	return id
 }
 
 // REQUIRES_LOCK(fs.mu), READ_LOCKS(file)
@@ -272,15 +265,6 @@ func (fs *aisfs) lookupFileMustExist(id fuseops.InodeID) *FileInode {
 		fs.fatalf("file inode lookup: %d not a file\n", id)
 	}
 	return fileInode
-}
-
-// REQUIRES_READ_LOCK(fs.mu)
-func (fs *aisfs) lookupDhandleMustExist(id fuseops.HandleID) *dirHandle {
-	handle, ok := fs.dirHandles[id]
-	if !ok {
-		fs.fatalf("directory handle lookup: failed to find %d\n", id)
-	}
-	return handle
 }
 
 // REQUIRES_READ_LOCK(fs.mu)
@@ -349,25 +333,27 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
 
-	result, err := parent.LookupEntry(req.Name)
-	if err != nil {
-		return fs.handleIOError(err)
-	}
-
+	result := parent.LookupEntry(req.Name)
 	if result.NoEntry() {
 		return fuse.ENOENT
 	}
 
-	parent.Lock()
-
 	fs.mu.Lock()
 	if result.NoInode() {
 		inodeID := fs.nextInodeID()
-		if result.IsDir() {
-			inode = fs.createDirectoryInode(inodeID, parent, result.Entry.Name, fs.modeBits.Directory)
-		} else {
+		if !result.IsDir() {
 			inode = fs.createFileInode(inodeID, parent, result.Object, fs.modeBits.File)
+		} else {
+			inode = fs.createDirectoryInode(inodeID, parent, result.Entry.Name, fs.modeBits.Directory)
 		}
+
+		parent.Lock()
+		if !result.IsDir() {
+			parent.NewFileEntry(req.Name, inode.ID(), result.Object.Size)
+		} else {
+			parent.NewDirEntry(req.Name, inode.ID())
+		}
+		parent.Unlock()
 	} else {
 		// lookup inode and update if needed
 		inode = fs.lookupMustExist(result.Entry.Inode)
@@ -379,9 +365,6 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 		}
 	}
 	fs.mu.Unlock()
-
-	parent.NewEntry(req.Name, inode.ID())
-	parent.Unlock()
 
 	// Locking this inode with parent already locked doesn't break
 	// the valid locking order since (currently) child inodes
@@ -403,7 +386,6 @@ func (fs *aisfs) ForgetInode(ctx context.Context, req *fuseops.ForgetInodeOp) (e
 
 		// Acquire locks in the correct order.
 		parent := inode.Parent().(*DirectoryInode)
-		parent.Lock()
 		inode.Lock()
 
 		fs.mu.Lock()
@@ -412,7 +394,13 @@ func (fs *aisfs) ForgetInode(ctx context.Context, req *fuseops.ForgetInodeOp) (e
 		fs.mu.Unlock()
 
 		// Remove entryName to inode ID mapping in parent.
-		parent.ForgetEntry(path.Base(inode.Path()))
+		name := path.Base(inode.Path())
+		parent.Lock()
+		if !inode.IsDir() {
+			parent.ForgetFile(name)
+		} else {
+			parent.ForgetDir(name)
+		}
 		parent.Unlock()
 
 		// Any future cleanup related to inode goes here.

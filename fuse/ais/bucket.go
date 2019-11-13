@@ -31,36 +31,26 @@ func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {
 		apiParams: cloneAPIParams(bck.apiParams),
 		bucket:    bck.name,
 		Name:      objName,
-		Size:      uint64(obj.Size),
+		Size:      obj.Size,
 		Atime:     obj.Atime,
 	}
 	return
 }
 
-// HasObjectWithPrefix checks if object with given prefix exists in a bucket.
-func (bck *Bucket) HasObjectWithPrefix(prefix string) (exists bool, err error) {
-	list, err := api.ListBucket(cloneAPIParams(bck.apiParams), bck.name, &cmn.SelectMsg{Prefix: prefix}, 1)
-	if err != nil {
-		return false, newBucketIOError(err, "HasObjectWithPrefix")
-	}
-	return len(list.Entries) > 0, nil
-}
-
-func (bck *Bucket) ListObjectNames(prefix string) (names []string, err error) {
+func (bck *Bucket) ListObjects(prefix string) (objs []*Object, err error) {
 	selectMsg := &cmn.SelectMsg{
 		Prefix: prefix,
-		Fast:   true,
+		Props:  cmn.GetPropsSize,
 	}
 	listResult, err := api.ListBucketFast(bck.apiParams, bck.name, selectMsg)
 	if err != nil {
-		return nil, newBucketIOError(err, "ListObjectNames")
+		return nil, newBucketIOError(err, "ListObjects")
 	}
 
-	names = make([]string, 0, len(listResult.Entries))
-	for _, object := range listResult.Entries {
-		names = append(names, object.Name)
+	objs = make([]*Object, 0, len(listResult.Entries))
+	for _, obj := range listResult.Entries {
+		objs = append(objs, NewObject(obj.Name, bck, obj.Size))
 	}
-
 	return
 }
 

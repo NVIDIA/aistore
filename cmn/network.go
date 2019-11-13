@@ -30,6 +30,7 @@ type (
 		Timeout          time.Duration
 		SndRcvBufSize    int
 		IdleConnsPerHost int
+		MaxIdleConns     int
 		WriteBufferSize  int
 		ReadBufferSize   int
 		UseHTTPS         bool
@@ -79,7 +80,7 @@ func NewTransport(args TransportArgs) *http.Transport {
 		MaxIdleConnsPerHost:   args.IdleConnsPerHost,
 		WriteBufferSize:       args.WriteBufferSize,
 		ReadBufferSize:        args.ReadBufferSize,
-		MaxIdleConns:          0, // no limit
+		MaxIdleConns:          args.MaxIdleConns,
 	}
 	if args.UseHTTPS {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
