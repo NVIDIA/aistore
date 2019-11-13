@@ -76,6 +76,8 @@ A bucket inherits EC settings from global configuration. But it can be overridde
 
 Choose the number data and parity slices depending on required level of protection and the cluster configuration. The number of storage targets must be greater than sum of the number of data and parity slices. If the cluster uses only replication (by setting `objsize_limit` to a very high value), the number of storage targets must exceed the number of parity slices.
 
+Global rebalance supports erasure coded buckets. Besides moving existing objects between targets, it repairs damaged objects and their slices if possible. As of version 2.6, global rebalance running in EC mode skips buckets which have EC disabled. Before start, global rebalance checks properties of all buckets to be rebalanced and automatically enters EC mode if it detects an erasure coded bucket.
+
 Notes:
 
 - Every data and parity slice is stored on a separate storage target. To reconstruct a damaged object, AIStore requires at least `ec.data_slices` slices in total out of data and parity sets
@@ -121,8 +123,6 @@ Tiering         Disabled
 ### Limitations
 
 In version 2.1, once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
-
-Secondly, only ais buckets are currently supported. Both limitations will be removed in the subsequent releases.
 
 ## N-way mirror
 Yet another supported storage service is n-way mirroring providing for bucket-level data redundancy and data protection. The service makes sure that each object in a given distributed (local or Cloud) bucket has exactly **n** object replicas, where n is an arbitrary user-defined integer greater or equal 1.

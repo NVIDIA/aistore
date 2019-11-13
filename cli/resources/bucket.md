@@ -71,6 +71,7 @@ Lists objects in the cloud bucket `BUCKET_NAME`.
 | `--all-items` | `bool` | Show all items, including all, duplicated, etc. (ignored in fast mode) | `false` |
 | `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically (ignored in fast mode) | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
+| `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
 
 ### Evict
 

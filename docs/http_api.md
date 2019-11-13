@@ -85,7 +85,6 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Read range (proxy) | GET /v1/objects/bucket-name/object-name?offset=&length= | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?offset=1024&length=512' -o myobject` |
 | Get [bucket](bucket.md) names | GET /v1/buckets/\* | `curl -X GET 'http://G/v1/buckets/*'` |
 | List objects in a given [bucket](bucket.md) | POST {"action": "listobjects", "value":{  properties-and-options... }} /v1/buckets/bucket-name | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size"}}' 'http://G/v1/buckets/myS3bucket'` <sup id="a2">[2](#ft2)</sup> |
-| List object names in a given [bucket](bucket.md) fast<br>(returns only object names) | POST /v1/buckets/bucket-name/listobjects?prefix= <br> or <br> POST {"action": "listobjects", "value":{ "fast": true }} /v1/buckets/bucket-name | `curl -X POST -L 'http://G/v1/buckets/myS3bucket/listobjects?prefix=image01'` <sup id="a8">[8](#ft8)<br>or<br> </sup> `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size", "fast": true}}' 'http://G/v1/buckets/myS3bucket'` |
 | Get [bucket properties](bucket.md#properties-and-options) | HEAD /v1/buckets/bucket-name | `curl -L --head 'http://G/v1/buckets/mybucket'` |
 | Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject'` |
 | Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject' -T filenameToUpload` |
@@ -107,6 +106,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Enable mountpath (target) | POST {"action": "enable", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "enable", "value":"/mount/path"}' 'http://T/v1/daemon/mountpaths'`<sup>[5](#ft5)</sup> |
 | Add mountpath (target) | PUT {"action": "add", "value": "/new/mountpath"} /v1/daemon/mountpaths | `curl -X PUT -L -H 'Content-Type: application/json' -d '{"action": "add", "value":"/mount/path"}' 'http://T/v1/daemon/mountpaths'` |
 | Remove mountpath from target | DELETE {"action": "remove", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "remove", "value":"/mount/path"}' 'http://T/v1/daemon/mountpaths'` |
+| Promote file/directory(proxy) | POST {"action": "promote", "name": "/home/user/dirname", "value": {"target": "234ed78", "omit_base": "/home/user/", "recurs": true}} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote", "name":"/user/dir", "value": {"target": "234ed78", "omit_base": "/user/", "recurs": true} }' 'http://G/v1/buckets/abc'` <sup>[8](#ft8)</sup>|
 ___
 <a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
@@ -122,7 +122,7 @@ ___
 
 <a name="ft7">7</a>: The difference between "Set all bucket properties" and "Set bucket properties" is that the "Set bucket properties" action takes in key-value pairs of properties via URL query string. In the case of "Set all bucket properties", the `value` must be correctly-filled `cmn.BucketProps` structure (all fields must be set!). For the list of supported properties, see [API constants](/cmn/api.go) and look for a section titled 'Header Key enum'[↩](#a7)
 
-<a name="ft8">8</a>: This request does not use payload and returns only object names and sizes sorted in alphabetical order. It makes the request much faster for ais buckets comparing to getting a list of objects using URL `/v1/buckets/bucket-name` and payload. Requests to cloud buckets do not get any performance boost. The only supported parameter is URL query value `prefix` that filters out from the result objects which names do not start with the prefix. NOTE for ais buckets: the request does not do extra checks for object correct location, that may result in the list containing moved or deleted objects that are not accessible any longer. [↩](#a8)
+<a name="ft8">8</a>: The request promotes files to objects; note that the files must be present inside AIStore targets and be referenceable via local directories or fully qualified names. The example request promotes recursively all files of a directory `/user/dir` that is on the target with ID `234ed78` to objects of a bucket `abc`. As `omit_base` is set, the names of objects are the file paths with the base trimmed: `dir/file1`, `dir/file2`, `dir/subdir/file3` etc.
 
 ### Bucket Provider
 

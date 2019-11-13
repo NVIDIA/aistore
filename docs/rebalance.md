@@ -2,7 +2,6 @@
 
 - [Global Rebalancing](#global-rebalancing)
 - [Local Rebalancing](#local-rebalancing)
-- [Limitations](#limitations)
 
 ## Global Rebalancing
 
