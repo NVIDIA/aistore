@@ -8,6 +8,7 @@
 - [Getting Started](#getting-started)
   - [Installation](#installation)
   - [Quick Local Setup](#quick-local-setup)
+  - [Configuration](#configuration)
   - [Mounting](#mounting)
   - [Unmounting](#unmounting)
 
@@ -141,6 +142,39 @@ $ fusermount -u localdir/
 $ rmdir localdir
 ```
 
+### Configuration
+
+Some parameters of AISFS can be tuned through a JSON configuration file
+that is loaded at startup. Only one JSON configuration will be loaded,
+but multiple JSON files named `<bucket>_mount.json` can exist, allowing
+separate configuration of each bucket mount. If the corresponding
+JSON file is not found during startup, one will be generated with
+default parameter values. By default, configuration files will be
+placed in `$HOME/.config/aisfs`, but if `XDG_CONFIG_HOME` environment
+variable is set, the location of these files will instead be
+`$XDG_CONFIG_HOME/aisfs`.
+
+An example of one configuration file:
+
+```
+{
+  "cluster": {
+    "url": "http://127.0.0.1:8080"
+  },
+  "timeout": {
+    "tcp_timeout": "60s",
+    "http_timeout": "300s"
+  },
+  "log": {
+    "error_log_file": "",
+    "debug_log_file": ""
+  },
+  "io": {
+    "write_buf_size": 1048576
+  }
+}
+```
+
 ### Mounting
 
 It is not necessary to use a separate utility in order to mount a filesystem,
@@ -164,13 +198,39 @@ To run the filesystem server in the foreground, pass the `--wait ` option to
 $ aisfs --wait mybucket localdir/
 ```
 
-Although `aisfs` will attempt to discover an AIStore cluster on the local
-machine, it is possible to explicitly provide proxy's URL as a command-line
-`--url` option:
+A complete list of command-line options is given in the table below:
 
-```shell
-$ aisfs --url 'http://127.0.0.1:8080' mybucket localdir/
-```
+| Option        | Description |
+| -----------   | ----------- |
+| `--wait`      | Run a filesystem server in the foreground |
+| `--uid`       | Mount owner's UID |
+| `--gid`       | Mount owner's GID |
+| `-o`          | Additional mount options to be passed to `mount` (see `man 8 mount`) |
+| `--help,-h`   | Print help and exit |
+| `--version,-v`| Print version and exit |
+
+> Note: Mount owner is the user who does the mounting, not necessarily
+the user who will perform filesystem operations.
+
+#### FUSE control filesystem
+
+A control filesystem for FUSE should be mounted under
+`/sys/fs/fuse/connections`. Under this filesystem each FUSE connection
+has a directory named by a unique number, containing the following files:
+
+| File | Usage |
+| ---- | ----- |
+| `abort` | Writing anything into this file will abort the filesystem connection. Note that the filesystem will not respond to requests but it will remain mounted. |
+| `waiting` | Reading from this file shows the number of requests which are waiting to be transferred to userspace or being processed by the filesystem server. |
+| `max_background` | Reading from this file shows the maximum number of asynchronous requests residing in the pending queue. |
+| `congestion_threshold` | Reading from this file shows the number of asynchronous requests in the pending queue and processed by the filesystem server that, if reached, will cause FUSE to inform the Linux VFS that it is congested. |
+
+> Note: The control filesystem is managed by the kernel, meaning that file
+reading/writing, maintaining directory tree etc, is done by the kernel.
+
+For more information about implementation details of FUSE, visit this
+[page](https://www.kernel.org/doc/Documentation/filesystems/fuse.txt), or
+read the paper ["To FUSE or Not to FUSE: Performance of User-Space File Systems"](https://www.usenix.org/system/files/conference/fast17/fast17-vangoor.pdf).
 
 ### Unmounting
 
