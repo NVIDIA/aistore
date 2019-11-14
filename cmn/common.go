@@ -56,6 +56,9 @@ const (
 	SizeofI64 = int(unsafe.Sizeof(uint64(0)))
 	SizeofI32 = int(unsafe.Sizeof(uint32(0)))
 	SizeofI16 = int(unsafe.Sizeof(uint16(0)))
+
+	configHomeEnvVar = "XDG_CONFIG_HOME" // https://wiki.archlinux.org/index.php/XDG_Base_Directory
+	configDirMode    = 0755 | os.ModeDir
 )
 
 var toBiBytes = map[string]int64{
@@ -696,7 +699,7 @@ func ExpandPath(path string) string {
 // CreateDir creates directory if does not exists. Does not return error when
 // directory already exists.
 func CreateDir(dir string) error {
-	return os.MkdirAll(dir, 0755)
+	return os.MkdirAll(dir, configDirMode)
 }
 
 // CreateFile creates file and ensures that the directories for the file will be
@@ -954,7 +957,10 @@ func LocalSave(path string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	if err = jsoniter.NewEncoder(file).Encode(v); err != nil {
+
+	encoder := jsoniter.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	if err = encoder.Encode(v); err != nil {
 		file.Close()
 		os.Remove(file.Name())
 		return err
@@ -973,6 +979,50 @@ func LocalLoad(path string, v interface{}) (err error) {
 	err = jsoniter.NewDecoder(file).Decode(v)
 	_ = file.Close()
 	return
+}
+
+func homeDir() string {
+	currentUser, err := user.Current()
+	if err != nil {
+		return os.Getenv("HOME")
+	}
+	return currentUser.HomeDir
+}
+
+func AppConfigPath(appName string) (configDir string) {
+	// Determine the location of config directory
+	if cfgHome := os.Getenv(configHomeEnvVar); cfgHome != "" {
+		// $XDG_CONFIG_HOME/appName
+		configDir = filepath.Join(cfgHome, appName)
+	} else {
+		configDir = filepath.Join(homeDir(), ".config", appName)
+	}
+	return
+}
+
+// LoadAppConfig reads a config object from the config file.
+func LoadAppConfig(appName, configFileName string, v interface{}) (err error) {
+	// Check if config file exists.
+	configDir := AppConfigPath(appName)
+	configFilePath := filepath.Join(configDir, configFileName)
+	if _, err = os.Stat(configFilePath); err != nil {
+		return err
+	}
+
+	// Load config from file.
+	err = LocalLoad(configFilePath, v)
+	if err != nil {
+		return fmt.Errorf("failed to load config file %q: %v", configFilePath, err)
+	}
+	return
+}
+
+// SaveAppConfig writes the config object to the config file.
+func SaveAppConfig(appName, configFileName string, v interface{}) (err error) {
+	// Check if config dir exists; if not, create one with default config.
+	configDir := AppConfigPath(appName)
+	configFilePath := filepath.Join(configDir, configFileName)
+	return LocalSave(configFilePath, v)
 }
 
 func Ratio(high, low, curr int64) float32 {

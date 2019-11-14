@@ -203,14 +203,6 @@ func splitOnFirst(str string, sep string) (string, string) {
 	return str, ""
 }
 
-func homeDir() (dir string, err error) {
-	currentUser, err := user.Current()
-	if err != nil {
-		return
-	}
-	return currentUser.HomeDir, nil
-}
-
 func initOwner(flags *flags) (owner *fs.Owner, err error) {
 	var (
 		currentUser      *user.User

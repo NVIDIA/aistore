@@ -224,7 +224,7 @@ func appMain(c *cli.Context) (err error) {
 	}
 
 	// Try to load existing config from file or use default one.
-	cfg, err = tryLoadConfig(bucket)
+	cfg, err = loadConfig(bucket)
 	if err != nil {
 		return
 	}

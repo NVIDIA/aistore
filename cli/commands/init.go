@@ -2,7 +2,6 @@
 package commands
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -11,32 +10,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func loadConfig() (*config.Config, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		// Use default config in case of error.
-		cfg = config.Default()
-
-		// If config file wasn't found, create one.
-		// Otherwise, warn the user.
-		if os.IsNotExist(err) {
-			err = config.SaveDefault()
-			if err != nil {
-				err = fmt.Errorf("failed to generate config file: %v", err)
-			}
-		} else {
-			err = fmt.Errorf("failed to read config file (%v), using default config", err)
-		}
-	}
-	return cfg, err
-}
-
 func initAuthParams() {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return
 	}
 
+	// TODO: `credDir` should be `home/.config/ais/`
 	tokenPath := filepath.Join(home, credDir, credFile)
 	cmn.LocalLoad(tokenPath, &loggedUserToken)
 }
@@ -62,7 +42,7 @@ func initClusterParams() {
 }
 
 func Init() (err error) {
-	cfg, err = loadConfig()
+	cfg, err = config.Load()
 	initClusterParams()
 	return err
 }

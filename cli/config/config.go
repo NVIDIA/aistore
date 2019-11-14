@@ -14,21 +14,13 @@ import (
 )
 
 const (
-	configHomeEnvVar             = "XDG_CONFIG_HOME"
-	configDirName                = "ais"
-	configFileName               = "config.json"
-	configDirMode    os.FileMode = 0755 | os.ModeDir
+	configDirName  = "ais"
+	configFileName = "config.json"
 )
 
-func init() {
-	if dir := os.Getenv(configHomeEnvVar); dir != "" {
-		configDirPath = filepath.Join(dir, configDirName)
-	} else {
-		configDirPath = filepath.Join(os.Getenv("HOME"), ".config", configDirName)
-	}
-	configFilePath = filepath.Join(configDirPath, configFileName)
-
-	defaultConfig = Config{
+var (
+	configFilePath string
+	defaultConfig  = Config{
 		Cluster: ClusterConfig{
 			URL:               "http://127.0.0.1:8080",
 			DefaultAISHost:    "http://127.0.0.1:8080",
@@ -41,6 +33,11 @@ func init() {
 			HTTPTimeout:    300 * time.Second,
 		},
 	}
+)
+
+func init() {
+	configDirPath := cmn.AppConfigPath(configDirName)
+	configFilePath = filepath.Join(configDirPath, configFileName)
 }
 
 type Config struct {
@@ -61,12 +58,6 @@ type TimeoutConfig struct {
 	HTTPTimeout    time.Duration `json:"-"`
 }
 
-var (
-	configDirPath  string
-	configFilePath string
-	defaultConfig  Config
-)
-
 func (c *Config) validate() (err error) {
 	if c.Timeout.TCPTimeout, err = time.ParseDuration(c.Timeout.TCPTimeoutStr); err != nil {
 		return fmt.Errorf("invalid timeout.tcp_timeout format %q: %v", c.Timeout.TCPTimeoutStr, err)
@@ -77,66 +68,29 @@ func (c *Config) validate() (err error) {
 	return nil
 }
 
-func saveDefault() error {
-	return cmn.LocalSave(configFilePath, &defaultConfig)
-}
-
-func createDirAndSaveDefault() (err error) {
-	err = os.MkdirAll(configDirPath, configDirMode)
-	if err != nil {
-		return
-	}
-	return saveDefault()
-}
-
 // Location returns an absolute path to the config file.
 func Location() string {
 	return configFilePath
 }
 
-// Default returns the default config object.
-func Default() *Config {
-	return &defaultConfig
-}
+func Load() (*Config, error) {
+	cfg := &Config{}
+	if err := cmn.LoadAppConfig(configDirName, configFileName, &cfg); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to load config: %v", err)
+		}
 
-// Load reads a config object from the config file.
-func Load() (cfg *Config, err error) {
-	// First, check if config file exists.
-	if _, err = os.Stat(configFilePath); err != nil {
-		return
+		// Use default config in case of error.
+		cfg = &defaultConfig
+		err = cmn.SaveAppConfig(configDirName, configFileName, cfg)
+		if err != nil {
+			err = fmt.Errorf("failed to generate config file: %v", err)
+		}
+		return cfg, err
 	}
 
-	// Load config from file.
-	cfg = &Config{}
-	err = cmn.LocalLoad(configFilePath, &cfg)
-	if err != nil {
+	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
-
-	err = cfg.validate()
-	if err != nil {
-		return nil, err
-	}
-
-	return
-}
-
-// SaveDefault writes the default config object to the config file.
-func SaveDefault() (err error) {
-	// Check if config dir exists; if not, create one with default config.
-	if _, err = os.Stat(configDirPath); os.IsNotExist(err) {
-		return createDirAndSaveDefault()
-	}
-
-	// It is some error other than NotExist.
-	if err != nil {
-		return
-	}
-
-	// Check if config file exists; if not, create one with default config.
-	if _, err = os.Stat(configFilePath); os.IsNotExist(err) {
-		return saveDefault()
-	}
-
-	return
+	return cfg, nil
 }
