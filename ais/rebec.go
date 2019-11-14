@@ -376,18 +376,25 @@ func (s *ecRebalancer) init(ra *globalRebArgs, netd string) {
 	s.data = transport.NewStreamBundle(s.t.smapowner, s.t.Snode(), client, dataArgs)
 }
 
-// Returns true if this target has slice list collected by `si`
-func (s *ecRebalancer) hasNodeData(si *cluster.Snode) bool {
+// Returns a slice list collected by `si` target
+func (s *ecRebalancer) nodeData(daemonID string) ([]*ecRebSlice, bool) {
 	s.mtx.Lock()
-	_, ok := s.slices[si.DaemonID]
+	slices, ok := s.slices[daemonID]
 	s.mtx.Unlock()
-	return ok
+	return slices, ok
 }
 
 // Store a slice list received from `daemonID` target
 func (s *ecRebalancer) setNodeData(daemonID string, slices []*ecRebSlice) {
 	s.mtx.Lock()
 	s.slices[daemonID] = slices
+	s.mtx.Unlock()
+}
+
+// Add a slice to list of slices of a given target
+func (s *ecRebalancer) appendNodeData(daemonID string, slice *ecRebSlice) {
+	s.mtx.Lock()
+	s.slices[daemonID] = append(s.slices[daemonID], slice)
 	s.mtx.Unlock()
 }
 
@@ -607,7 +614,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	}
 	waitSlice.recv = true
 
-	if _, ok := s.waitNrebuild[uid]; !ok {
+	if _, ok := s.waitNrebuild[uid]; !ok || sliceID == 0 {
 		if err := s.saveSliceToDisk(waitSlice.sgl, req, &md, hdr); err != nil {
 			glog.Errorf("Failed to save slice %d of %s: %v", sliceID, hdr.Objname, err)
 			s.ra.xreb.Abort()
@@ -888,9 +895,7 @@ func (s *ecRebalancer) walk(fqn string, de fs.DirEntry) (err error) {
 		hrwFQN:       hrwFQN,
 		meta:         md,
 	}
-	s.mtx.Lock()
-	s.slices[id] = append(s.slices[id], rec)
-	s.mtx.Unlock()
+	s.appendNodeData(id, rec)
 
 	return nil
 }
@@ -968,7 +973,7 @@ func (s *ecRebalancer) exchange() error {
 				return fmt.Errorf("%d: aborted", globRebID)
 			}
 
-			slices, ok := s.slices[s.t.si.DaemonID]
+			slices, ok := s.nodeData(s.t.si.DaemonID)
 			if !ok {
 				// no data collected for the target, send empty notification
 				slices = emptySlice
@@ -1005,16 +1010,6 @@ func (s *ecRebalancer) exchange() error {
 	}
 
 	return fmt.Errorf("Could not sent data to %d nodes", len(failed))
-}
-
-// Return list of slices collected by local target for a given one
-func (s *ecRebalancer) targetSlices(daemonID string) []*ecRebSlice {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	if slices, ok := s.slices[daemonID]; ok {
-		return slices
-	}
-	return nil
 }
 
 // Generates LOMs for slice/replica and corresponding metadata
@@ -1054,8 +1049,9 @@ func (s *ecRebalancer) repairLocal() error {
 		}
 		sliceLOM.Lock(true) // locks slices and metadata copying
 		buf, slab := nodeCtx.mm.AllocDefault()
-		_, err = metaLOM.CopyObject(metaDstLOM.FQN, buf)
+		_, _, err = cmn.CopyFile(metaLOM.FQN, metaDstLOM.FQN, buf, false)
 		if err == nil {
+			os.Remove(metaLOM.FQN)
 			_, err = sliceLOM.CopyObject(fqnDst, buf)
 		}
 		sliceLOM.Unlock(true)
@@ -1467,7 +1463,7 @@ func (s *ecRebalancer) repairGlobal(broken []*ecRebObject) (err error) {
 
 			// Case #5.4: main has a slice instead of a full object, send local
 			// slice to a free target and wait for another target sends the full obj
-			if obj.isMain && obj.mainHasAny && obj.mainSliceID != 0 {
+			if obj.isMain && obj.mainHasAny && obj.mainSliceID != 0 && obj.fullObjFound {
 				// send slice
 				tgt := s.firstEmptyTgt(obj)
 				cmn.Assert(tgt != nil) // must not happen
@@ -1483,7 +1479,7 @@ func (s *ecRebalancer) repairGlobal(broken []*ecRebObject) (err error) {
 			}
 
 			// Case #5.5: it is main target and full object is missing
-			if obj.isMain && !obj.mainHasAny {
+			if obj.isMain && !obj.fullObjFound {
 				// wait for all existing slices
 				for _, sl := range slices {
 					// case with sliceID == 0 must be processed in the beginning

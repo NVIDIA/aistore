@@ -2090,7 +2090,6 @@ func TestECRebalance(t *testing.T) {
 		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
-
 	o := ecOptions{
 		objCount:  30,
 		concurr:   8,
@@ -2183,16 +2182,19 @@ func TestECRebalance(t *testing.T) {
 	res, err = api.ListBucket(baseParams, bucket, msg, 0)
 	tassert.CheckError(t, err)
 	newBucketList := filterObjListOK(res.Entries)
-	tutils.Logf("%d objects after rebalance\n", len(newBucketList))
 	if len(oldBucketList) != len(newBucketList) {
-		for _, ent := range res.Entries {
-			if ent.IsStatusOK() {
-				tutils.Logf("%s[%d] - GOOD\n", ent.Name, ent.Size)
-			} else {
-				tutils.Logf("%s[%d] - MISPLACED\n", ent.Name, ent.Size)
+		for _, o := range oldBucketList {
+			found := false
+			for _, n := range newBucketList {
+				if n.Name == o.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Old %s[%d] not found", o.Name, o.Size)
 			}
 		}
-
 		t.Fatalf("%d objects before rebalance, %d objects after",
 			len(oldBucketList), len(newBucketList))
 	}

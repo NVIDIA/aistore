@@ -365,6 +365,7 @@ func (reb *rebManager) globalRebSyncAndRun(md *globalRebArgs) error {
 	reb.stage.Store(rebStageTraverse)
 	if md.ecUsed {
 		glog.Infof("EC detected - starting EC-friendly rebalance")
+		md.dryRun = true // TODO: enabled just for debugging jenkins, it only increases log output for EC rebalance operations
 		return reb.globalRebRunEC(md)
 	}
 

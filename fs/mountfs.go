@@ -140,6 +140,9 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	counter := mi.removeDirCounter.Inc()
 	nonExistingBucket := fmt.Sprintf("removing-%d", counter)
 	tmpDir := CSM.FQN(mi, WorkfileType, nonExistingBucket, cmn.AIS, "")
+	if err := cmn.CreateDir(filepath.Dir(tmpDir)); err != nil {
+		return err
+	}
 	if err := os.Rename(dir, tmpDir); err != nil {
 		return err
 	}

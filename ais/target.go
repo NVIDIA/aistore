@@ -1078,9 +1078,9 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// ask rebalance manager the list of all local slices
-	slices := t.rebManager.ecReb.targetSlices(t.si.DaemonID)
+	slices, ok := t.rebManager.ecReb.nodeData(t.si.DaemonID)
 	// no local slices found. It is possible if the number of object is small
-	if slices == nil {
+	if !ok {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

@@ -124,7 +124,8 @@ func (reb *rebManager) nodesNotInStage(stage uint32) int {
 		if si.DaemonID == reb.t.si.DaemonID {
 			continue
 		}
-		if stage == rebStageECDetect && !reb.ecReb.hasNodeData(si) {
+		_, exists := reb.ecReb.nodeData(si.DaemonID)
+		if stage == rebStageECDetect && !exists {
 			count++
 			continue
 		}
@@ -420,7 +421,8 @@ func (reb *rebManager) waitECData(si *cluster.Snode, md *globalRebArgs) bool {
 		timeout: defaultTimeout,
 	}
 	for curwt < maxwt {
-		if reb.isNodeInStage(si, locStage) && reb.ecReb.hasNodeData(si) {
+		_, exists := reb.ecReb.nodeData(si.DaemonID)
+		if reb.isNodeInStage(si, locStage) && exists {
 			return true
 		}
 
