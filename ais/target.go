@@ -116,6 +116,12 @@ func (gfn *globalGFN) activateTimed() {
 	timedInterval := cmn.GCO.Get().Timeout.Startup
 
 	gfn.mtx.Lock()
+	// If gfn is already activated we should not start timed.
+	if gfn.lookup.Load() {
+		gfn.mtx.Unlock()
+		return
+	}
+
 	if active := gfn.timedLookup.Swap(true); active {
 		// There is no need to start goroutine since we know that one is already
 		// running at it should take care about deactivating.
