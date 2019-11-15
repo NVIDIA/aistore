@@ -1,4 +1,4 @@
-# AIStore: scalable storage for AI
+**AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning.**
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
@@ -11,27 +11,33 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 
 > The capability to linearly scale-out for millions of stored objects (often also referred to as *shards*) was, and remains, one of the main incentives to build AIStore. But not the only one.
 
-Further, AIS:
+## Features
 
-* scales-out with no downtime and no limitation;
-* supports n-way mirroring (RAID-1), m/k erasure coding, end-to-end data protection;
-* includes Map/Reduce extension to speed-up shuffle/resize for large datasets;
-* runs on commodity hardware with no limitations and no special requirements;
-* provides a proper subset of S3-like REST API;
-* leverages Linux 4.15+ storage stack;
-* natively supports Amazon S3 and Google Cloud backends;
-* focuses on AI and, specifically, on the performance of large-scale deep learning.
+* S3-like HTTP REST API to GET/PUT objects, and create, destroy, list and configure buckets;
+* FUSE client (called `aisfs`) to access AIS objects as files;
+* multiple access points via AIS gateways (aka *proxies*) that are extremely lightweight and can run anywhere;
+* convenient and easy-to-use command-line interface (CLI);
+* runs natively on Kubernetes;
+* scale-out with no downtime and no limitation;
+* automated rebalancing upon changes in cluster membership, drive failures, bucket renaming, etc.;
+* n-way mirroring (RAID-1), m/k erasure coding, end-to-end data protection;
+* can be deployed on any commodity hardware;
+* Amazon S3 and Google Cloud Storage backends, and all GCS and S3-compliant object storages;
+* can be used as a fast tier or a cache for GCS and S3; can be populated on-demand and/or via separate `prefetch` and `download` APIs;
+* can be used as a standalone highly-available protected storage;
+* includes MapReduce extension for massively parallel resharding of very large datasets.
 
-Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `scp(1)` and `rsync(1)`. For general description, design philosophy, key concepts, and system components, please see [AIS overview](docs/overview.md).
+Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar. For general description, design philosophy and components, please see [AIS overview](docs/overview.md).
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
-    - [Local non-Containerized](#local-non-containerized)
-    - [Local Docker-Compose](#local-docker-compose)
-    - [Local Kubernetes](#local-kubernetes)
-- [Containerized Deployment and Host Resource Sharing](#containerized-deployment-and-host-resource-sharing)
+    - [Deployment: Local non-Containerized](#deployment-local-non-containerized)
+    - [Deployment: Local Docker-Compose](#deployment-local-docker-compose)
+    - [Deployment: Local Kubernetes](#deployment-local-kubernetes)
+- [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
     - [Performance Monitoring](#performance-monitoring)
+- [Configuration](#configuration)
 - [Guides and References](#guides-and-references)
 - [Selected Package READMEs](#selected-package-readmes)
 
@@ -57,7 +63,7 @@ AIStore runs on commodity Linux machines with no special hardware requirements.
 The implication is that the number of [possible deployment options](deploy) is practically unlimited.
 This section covers 3 (three) ways to deploy AIS on a single Linux machine and is intended for developers and development, and/or for a quick trial.
 
-### Local non-Containerized
+### Deployment: Local non-Containerized
 
 Assuming that [Go](https://golang.org/dl/) is already installed, the remaining getting-started steps are:
 
@@ -125,19 +131,17 @@ This command runs test that matches the specified string ("download"). The test 
 
 > For helpful links and background on Go, AWS, GCP, and Deep Learning, please see [helpful links](docs/helpful-links.md).
 
-### Local Docker-Compose
+### Deployment: Local Docker-Compose
 
 The 2nd option to run AIS on your local machine requires [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It also allows for multi-clusters deployment with multiple separate networks. You can deploy a simple AIS cluster within seconds or deploy a multi-container cluster for development.
 
-> AIS v2.1 supports up to 3 (three) logical networks: user (or public), intra-cluster control and intra-cluster data networks.
-
 To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md).
 
-### Local Kubernetes
+### Deployment: Local Kubernetes
 
 The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/kubernetes).
 
-## Containerized Deployment and Host Resource Sharing
+## Containerized Deployments: Host Resource Sharing
 
 The following **applies to all containerized deployments**: local and non-local - the latter including those that are "kubernetized".
 
@@ -185,10 +189,27 @@ In both of these cases, Grafana will be accessible at [localhost:3000](http://lo
 
 > For information on AIS statistics, please see [Statistics, Collected Metrics, Visualization](docs/metrics.md)
 
+## Configuration
+
+AIS configuration is consolidated in a single [JSON template](ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, whereby the majority of those (except maybe just a few) have pre-assigned default values. The configuration template serves as a **single source for all deployment-specific configurations**, examples of which can be found under the folder that consolidates both [containerized-development and production deployment scripts](deploy).
+
+AIS production deployment, in particular, requires a careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
+
+* user (aka public)
+* intra-cluster control
+* intra-cluster data
+
+with the corresponding JSON names, respectively:
+
+* `ipv4`
+* `ipv4_intra_control`
+* `ipv4_intra_data`
+
 ## Guides and References
-- [AIS: Detailed Overview](docs/overview.md)
+- [AIS Overview](docs/overview.md)
+- [CLI](cli/README.md)
 - [Command line parameters](docs/command_line.md)
-- [AIS Load Generator (integrated benchmark tool)](bench/aisloader/README.md)
+- [AIS Load Generator: integrated benchmark tool](bench/aisloader/README.md)
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
 - [Object checksums: Brief Theory of Operations](docs/checksum.md)
 - [Configuration](docs/configuration.md)
@@ -196,21 +217,23 @@ In both of these cases, Grafana will be accessible at [localhost:3000](http://lo
 - [Highly available control plane](docs/ha.md)
 - [How to benchmark](docs/howto_benchmark.md)
 - [RESTful API](docs/http_api.md)
+- [File access](fuse/README.md)
 - [Joining AIS cluster](docs/join_cluster.md)
-- [Bucket (definition, operations, properties)](docs/bucket.md#bucket)
+- [AIS Buckets: definition, operations, properties](docs/bucket.md#bucket)
 - [Statistics, Collected Metrics, Visualization](docs/metrics.md)
-- [Performance Tuning and Testing](docs/performance.md)
+- [Performance: Tuning and Testing](docs/performance.md)
 - [Cluster-wide Rebalancing](docs/rebalance.md)
 - [Storage Services](docs/storage_svcs.md)
 - [Extended Actions](docs/xaction.md)
 - [Integrated Internet Downloader](downloader/README.md)
 - [Docker for AIS developers](docs/docker_main.md)
-- [Experimental](docs/experimental.md)
 
 ## Selected Package READMEs
+- [Package `api`](api/README.md)
+- [Package `cli`](cli/README.md)
+- [Package `fuse`](fuse/README.md)
 - [Package `downloader`](downloader/README.md)
 - [Package `memsys`](memsys/README.md)
 - [Package `transport`](transport/README.md)
-- [Package `api`](api/README.md)
 - [Package `dSort`](dsort/README.md)
 - [Package `openapi`](openapi/README.md)

@@ -11,15 +11,17 @@
 - [Curl examples](#curl-examples)
 - [CLI examples](#cli-examples)
 
-AIStore configuration is consolidated in a single [JSON file](/ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
+AIS configuration is consolidated in a single [JSON template](/ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The configuration template serves as a single source for all deployment-specific configurations, examples of which can be found under [/deploy](the folder that consolidates containerized-development and production deployment scripts).
+
+AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are: user (aka public), intra-cluster control, and intra-cluster data - the corresponding JSON names are, respectively: `ipv4`, `ipv4_intra_control`, and `ipv4_intra_data`.
+
+The following picture illustrates one section of the confuration template that, in part, includes listening port:
 
 <img src="images/ais-config-1.png" alt="Configuration: TCP port and URL" width="600">
 
-and
+Further, `test_fspaths` section (see below) corresponds to a **single local filesystem being partitioned** between both *local* and *Cloud* buckets. In other words, the `test_fspaths` configuration option is intended strictly for development.
 
 <img src="images/ais-config-2-commented.png" alt="Configuration: local filesystems" width="600">
-
-As shown above, the `test_fspaths` section of the configuration corresponds to a **single local filesystem being partitioned** between both *local* and *Cloud* buckets. In other words, the `test_fspaths` configuration option is intended strictly for development.
 
 In production we use an alternative configuration called `fspaths`: the section of the [config](/ais/setup/config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
 
