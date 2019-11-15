@@ -68,6 +68,14 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		dst.Lock(true)
 		defer dst.Unlock(true)
 	}
+
+	// If before initializing the `dst` all mountpaths would be removed except
+	// the one on which the `lom` is placed then both `lom` and `dst` will have
+	// the same FQN in which case we should not copy.
+	if lom.FQN == dst.FQN {
+		return
+	}
+
 	if err = dst.Load(false); err == nil && dst.Exists() {
 		if dst.Size() == lom.Size() && cmn.EqCksum(lom.Cksum(), dst.Cksum()) {
 			copied = true
