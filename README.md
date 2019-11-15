@@ -27,7 +27,7 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 * can be used as a standalone highly-available protected storage;
 * includes MapReduce extension for massively parallel resharding of very large datasets.
 
-Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar. For general description, design philosophy and components, please see [AIS overview](docs/overview.md).
+Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar. For general description, design philosophy, and components, please see the [AIS overview](docs/overview.md).
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
@@ -48,7 +48,7 @@ Last but not the least, AIS features open format and, therefore, freedom to copy
 * Extended attributes (`xattrs` - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 
-Depending on your Linux distribution you may or may not have `gcc`, `sysstat`, and/or `attr` packages.
+Depending on your Linux distribution, you may or may not have `gcc`, `sysstat`, and/or `attr` packages.
 
 The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is a long time POSIX legacy and is supported by all mainstream filesystems with no exceptions. Unfortunately, extended attributes (xattrs) may not always be enabled (by the Linux distribution you are using) in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
 
@@ -102,11 +102,11 @@ Or, you can run all of the above with a single command:
 
 > `make kill` will terminate local AIStore if it's already running.
 
-> To enable optional AIStore authentication server, execute instead `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
+> To enable an optional AIStore authentication server, execute instead `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
 
 Finally, the `go test` (above) will create an ais bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
 
-Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding bucket name when running `go test` For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
+Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running `go test` commands. For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
 
 ```shell
 $ BUCKET=myS3bucket go test ./tests -v -run=download
@@ -118,14 +118,14 @@ Here's a minor variation of the above:
 $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
 ```
 
-This command runs test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match `a\d+` regex.
+This command runs a test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match `a\d+` regex.
 
-> In addition to the AIS cluster itself you can deploy [AIS CLI](cli/README.md) - an easy-to-use AIS-integrated command-line management tool. The tool supports multiple commands and options; the first one that you may want to try is `ais status` to show state and status of the AIS cluster and its nodes. AIS CLI deployment is documented in the [CLI readme](cli/README.md) and includes two easy steps: building the binary (via `cli/install.sh`) and sourcing Bash auto-completions.
+> In addition to the AIS cluster itself, you can deploy [AIS CLI](cli/README.md) - an easy-to-use AIS-integrated command-line management tool. The tool supports multiple commands and options; the first one that you may want to try is `ais status` to show the state and status of the AIS cluster and its nodes. AIS CLI deployment is documented in the [CLI readme](cli/README.md) and includes two easy steps: building the binary (via `cli/install.sh`) and sourcing Bash auto-completions.
 
-> For more testing commands and command line options, please refer to the corresponding [README](ais/tests/README.md) and/or the [test sources](ais/tests/).
+> For more testing commands and command-line options, please refer to the corresponding [README](ais/tests/README.md) and/or the [test sources](ais/tests/).
 > For other useful commands, see the [Makefile](ais/Makefile).
 
-> For tips and help pertaining to local non-containerized deployment, please see [the tips](docs/local_tips.md).
+> For tips and help on local non-containerized deployment, please see [the tips](docs/local_tips.md).
 
 > For info on how to run AIS executables, see [command-line arguments](docs/command_line.md).
 
@@ -143,7 +143,7 @@ The 3rd and final local-deployment option makes use of [Kubeadm](https://kuberne
 
 ## Containerized Deployments: Host Resource Sharing
 
-The following **applies to all containerized deployments**: local and non-local - the latter including those that are "kubernetized".
+The following **applies to all containerized deployments**:
 
 1. AIS nodes always automatically detect *containerization*.
 2. If deployed as a container, each AIS node independently discovers whether its own container's memory and/or CPU resources are restricted.
@@ -153,7 +153,9 @@ To that end, each AIS node at startup loads and parses [cgroup](https://www.kern
 
 > This adjustment is accomplished via the Go runtime [GOMAXPROCS variable](https://golang.org/pkg/runtime/). For in-depth information on CPU bandwidth control and scheduling in a multi-container environment, please refer to the [CFS Bandwidth Control](https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt) document.
 
-Further, given the container's cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself. Note, however, that memory in particular may affect dSort and erasure coding performance "forcing" those two to, effectively, "spill" their temporary content onto local drives, etc.
+Further, given the container's cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself.
+
+> Limits on memory may affect [dSort](dsort/README.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.
 
 > For technical details on AIS memory management, please see [this readme](memsys/README.md).
 
@@ -161,9 +163,9 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 
 As is usually the case with storage clusters, there are multiple ways to monitor their performance.
 
-> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options and usage, please see [AIS Load Generator](docs/howto_benchmark.md).
+> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [AIS Load Generator](docs/howto_benchmark.md).
 
-For starters, AIS collects and logs a fairly large and constantly growing number of counters that describe all aspects of its operation including (but not limited to) those that reflect cluster recovery/rebalancing, all [extended long-running operations](docs/xaction.md), and, of course, object storage transactions.
+For starters, AIS collects and logs a fairly large and constantly growing number of counters that describe all aspects of its operation, including (but not limited to) those that reflect cluster recovery/rebalancing, all [extended long-running operations](docs/xaction.md), and, of course, object storage transactions.
 
 In particular:
 
@@ -177,11 +179,11 @@ However. Speaking of ways to monitor AIS remotely, the two most obvious ones wou
 * [AIS CLI](cli/README.md)
 * Graphite/Grafana
 
-As far as Graphite/Grafana, AIS integrates with these popular backends via [StatsD](https://github.com/etsy/statsd) - the *daemon for easy but powerful stats aggregation*. StatsD can be connected to Graphite which then can be used as a data-source for Grafana to get visual overview of the statistics and metrics.
+As far as Graphite/Grafana, AIS integrates with these popular backends via [StatsD](https://github.com/etsy/statsd) - the *daemon for easy but powerful stats aggregation*. StatsD can be connected to Graphite, which then can be used as a data source for Grafana to get a visual overview of the statistics and metrics.
 
 > The scripts for easy deployment of both Graphite and Grafana are included (see below).
 
-> For [local non-containerized deployments](#local-non-containerized), use `./ais/setup/deploy_grafana.sh` to start Graphite and Grafana containers. Local deployment will automatically notice the presence of the containers and will send statistics to the Graphite.
+> For [local non-containerized deployments](#local-non-containerized), use `./ais/setup/deploy_grafana.sh` to start Graphite and Grafana containers. Local deployment scripts will automatically "notice" the presence of the containers and will send statistics to the Graphite.
 
 > For [local docker-compose based deployments](#local-docker-compose), make sure to use `-grafana` command-line option. The `deploy_docker.sh` script will then spin-up Graphite and Grafana containers.
 
@@ -193,7 +195,7 @@ In both of these cases, Grafana will be accessible at [localhost:3000](http://lo
 
 AIS configuration is consolidated in a single [JSON template](ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, whereby the majority of those (except maybe just a few) have pre-assigned default values. The configuration template serves as a **single source for all deployment-specific configurations**, examples of which can be found under the folder that consolidates both [containerized-development and production deployment scripts](deploy).
 
-AIS production deployment, in particular, requires a careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
+AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
 
 * user (aka public)
 * intra-cluster control
