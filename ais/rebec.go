@@ -1043,6 +1043,12 @@ func (s *ecRebalancer) repairLocal() error {
 		if err != nil {
 			return err
 		}
+		if act.SliceID == 0 {
+			err = sliceLOM.Load()
+			if err != nil {
+				return err
+			}
+		}
 
 		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 			glog.Infof("%s Repair local %s -> %s", s.t.si.Name(), sliceLOM.FQN, fqnDst)
@@ -1062,6 +1068,9 @@ func (s *ecRebalancer) repairLocal() error {
 			s.t.FSHC(err, fqnDst)
 			return err
 		}
+
+		sliceLOM.Uncache()
+		os.Remove(fqnSrc)
 	}
 
 	return nil
@@ -1800,7 +1809,10 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 
 	// put existing slices to readers list, and create SGL as writers for missing ones
 	slicesFound := int16(0)
-	var meta []byte
+	var (
+		meta  []byte
+		cksum *cmn.Cksum
+	)
 	for _, sl := range slices {
 		if !sl.recv {
 			continue
@@ -1855,9 +1867,12 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 	objMD.SliceID = 0
 
 	provider := cmn.ProviderFromBool(obj.isAIS)
-	// TODO: fill lom and call Persist
 	lom := &cluster.LOM{T: s.t, Objname: obj.objName()}
 	err = lom.Init(obj.bucket(), provider)
+	if err != nil {
+		return err
+	}
+	err = lom.Load()
 	if err != nil {
 		return err
 	}
@@ -1866,11 +1881,14 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 	}
 	tmpFQN := fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec")
 	buffer, slab := nodeCtx.mm.AllocDefault()
-	if _, err := cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize()); err != nil {
+	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize()); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
 		return err
 	}
+
+	lom.SetSize(obj.objSize())
+	lom.SetCksum(cksum)
 	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket(), provider, obj.objName())
 	metaBuf := cmn.MustMarshal(&objMD)
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
@@ -1914,6 +1932,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 			return fmt.Errorf("Failed to send slice %d to %s: %v", i, si.Name(), err)
 		}
 	}
+	lom.Persist()
 
 	return nil
 }
