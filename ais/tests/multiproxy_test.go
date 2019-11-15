@@ -901,9 +901,6 @@ func getPID(port string) (string, error) {
 		return "", fmt.Errorf("error executing LSOF command: %v", err)
 	}
 
-	// The output of 'lsof' might contain extra message in the beginning like this one:
-	// lsof: WARNING: can't stat() webdav file system /Volumes/10.2.161.46
-	//       Output information may be incomplete.
 	// Skip lines before first appearance of "COMMAND"
 	lines := strings.Split(string(output), "\n")
 	i := 0

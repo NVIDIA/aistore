@@ -98,7 +98,6 @@ run:
 
   skip-dirs:
     - openapi
-    - 3rdparty/webdav
 
   concurrency: 4
   deadline: 5m
