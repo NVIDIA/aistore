@@ -183,9 +183,9 @@ As far as Graphite/Grafana, AIS integrates with these popular backends via [Stat
 
 > The scripts for easy deployment of both Graphite and Grafana are included (see below).
 
-> For [local non-containerized deployments](#local-non-containerized), use `./ais/setup/deploy_grafana.sh` to start Graphite and Grafana containers. Local deployment scripts will automatically "notice" the presence of the containers and will send statistics to the Graphite.
+> For [local non-containerized deployments](#deployment-local-non-containerized), use `./ais/setup/deploy_grafana.sh` to start Graphite and Grafana containers. Local deployment scripts will automatically "notice" the presence of the containers and will send statistics to the Graphite.
 
-> For [local docker-compose based deployments](#local-docker-compose), make sure to use `-grafana` command-line option. The `deploy_docker.sh` script will then spin-up Graphite and Grafana containers.
+> For [local docker-compose based deployments](#deployment-local-docker-compose), make sure to use `-grafana` command-line option. The `deploy_docker.sh` script will then spin-up Graphite and Grafana containers.
 
 In both of these cases, Grafana will be accessible at [localhost:3000](http://localhost:3000).
 
@@ -201,7 +201,7 @@ AIS production deployment, in particular, requires careful consideration of at l
 * intra-cluster control
 * intra-cluster data
 
-with the corresponding JSON names, respectively:
+with the corresponding [JSON names](ais/setup/config.sh), respectively:
 
 * `ipv4`
 * `ipv4_intra_control`
