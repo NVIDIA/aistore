@@ -15,7 +15,7 @@
 - [AIS Limitations](#ais-limitations)
 
 ## AIS Design Philosophy
-AIS is a *specialized* storage system. The design philosophy behind AIS is based on the simple truth that AI datasets are pre-sharded. More exactly, AI datasets (in particular, very large datasets) are pre-sharded, post-sharded, and otherwise transformed to facilitate training, inference, and simulation by the AI apps.
+The design philosophy behind AIS is based on the simple truth that it is often more optimal to let applications control how and whether the stored content is stored in chunks. In particular, AI datasets are often pre-sharded, whereby the content and boundaries of those shards are based on AI-specific optimization criteria. More exactly, the datasets could be pre-sharded, post-sharded, and otherwise transformed to facilitate training, inference, and simulation by the AI apps.
 
 The corollary of this statement is two-fold:
 
@@ -72,19 +72,15 @@ AIS targets utilize local Linux filesystems - examples including (but not limite
 
 ## Existing Datasets
 
-One common way to start making use of AIStore includes the two most basic steps:
-
-1. Populate AIS with an existing dataset
-2. Read and write this dataset directly from/to AIStore
-
-To this end, AIS provides 4 (four) easy ways to accomplish the first step:
+One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets. To this end, AIS provides 5 (five) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
 
 1. [Cold GET](#existing-datasets-cold-get)
 2. [Prefetch](#existing-datasets-batch-prefetch)
 3. [Internet Downloader](#existing-datasets-internet-downloader)
 4. [Reverse Proxy](#existing-datasets-reverse-proxy)
+5. [Promote (API and CLI)](#existing-datasets-promote-api-and-cli)
 
-More precisely:
+In particular:
 
 ### Existing Datasets: Cold GET
 If the dataset in question is accessible via S3-like object API, start working with it via GET primitive of the [AIS API](http_api.md). Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
@@ -107,7 +103,7 @@ For these and similar use cases we have [AIS Downloader](downloader/README.md) -
 
 ### Existing Datasets: Reverse Proxy
 
-Finally, AIS can be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation is limited to Google Cloud Storage (GCS) and requires:
+AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation is limited to Google Cloud Storage (GCS) and requires:
 
 1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment
 2. AIS configuration: set `rproxy=cloud` in the [configuration](ais/setup/config.sh)
@@ -121,6 +117,18 @@ $ export http_proxy=<AIS proxy IPv4 or hostname>
 In combination, these two settings have an effect of redirecting all **unmodified** client-issued HTTP(S) requests to the AIS proxy/gateway with subsequent execution transparently from the client perspective.
 
 Further details and examples are available [in this readme](rproxy.md).
+
+### Existing Datasets: Promote (API and CLI)
+
+Finally, AIS can *promote* files and directories to objects. The only requirement is that the files and directories in question are colocated within AIS storage target machines.
+
+Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
+
+```sh
+$ ais promote /tmp/mydata mybucket/ -r
+```
+
+In this example, `mybucket` would be the designated (destination) bucket.
 
 ## Data Protection
 AIS [supports](storage_svcs.md) end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon [erasure coding](storage_svcs.md#erasure-coding) - thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
@@ -251,7 +259,7 @@ print(daemon_api.get(openapi_models.GetWhat.SMAP))
 There's a lot more that the python client package can do. Be sure to read [the complete guide on using the package](openapi/README.md#how-to-use-package).
 
 ## AIS Limitations
-There are no designed-in limitations on the:
+There are **no** designed-in limitations on the:
 
 * object sizes
 * total number of objects and buckets in AIS cluster

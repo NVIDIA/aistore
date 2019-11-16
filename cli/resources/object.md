@@ -49,7 +49,9 @@ Puts a file or a directory content into the bucket. If `ais` detects that a user
 
 `ais promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>
 
-Promote **AIS-local** files and directories to AIS objects in a given bucket. For instance, let's say some (or all) of deployed storage nodes contain a directory called `/tmp/examples`. To make AIS objects out of this directory's files (**one file - one object**), run:
+Promote **AIS-colocated** files and directories to AIS objects in a specified bucket. Colocation in the context simply means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
+
+For instance, let's say some (or all) of the deployed storage nodes contain a directory called `/tmp/examples`. To make AIS objects out of this directory's files (**one file = one object**), run:
 
 ```sh
 $ ais promote /tmp/examples mybucket/ -r

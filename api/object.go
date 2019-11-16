@@ -416,7 +416,7 @@ func RenameObject(baseParams *BaseParams, bucket, oldName, newName string) error
 
 // PromoteFileOrDir API
 //
-// promote AIS-local files and directories to objects (NOTE: advanced usage only)
+// promote AIS-colocated files and directories to objects (NOTE: advanced usage only)
 func PromoteFileOrDir(args *PromoteArgs) error {
 	msg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN}
 	msg.Value = &cmn.ActValPromote{

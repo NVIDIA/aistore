@@ -27,7 +27,9 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 * can be used as a standalone highly-available protected storage;
 * includes MapReduce extension for massively parallel resharding of very large datasets.
 
-Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar. For general description, design philosophy, and components, please see the [AIS overview](docs/overview.md).
+Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
+
+For detailed overview, design philosophy, and components, please see this [document](docs/overview.md) where you can also find 5 (five) alternative ways to populate AIStore with existing datasets.
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
