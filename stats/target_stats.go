@@ -251,9 +251,9 @@ func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {
 // NOTE the naming conventions (above)
 func (r *Trunner) doAdd(nv NamedVal64) {
 	var (
-		s    = r.Core
-		name = nv.Name
-		val  = nv.Val
+		s     = r.Core
+		name  = nv.Name
+		value = nv.Value
 	)
 
 	v, ok := s.Tracker[name]
@@ -263,7 +263,7 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	// stats that track data IO are unique to target and are handled here
 	// .size stats, as of 2.x and beyond, is one of them
 	if !strings.HasSuffix(name, ".size") {
-		s.doAdd(name, val)
+		s.doAdd(name, value)
 		return
 	}
 
@@ -276,12 +276,12 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	}
 
 	s.statsdC.Send(nroot, 1,
-		metric{Type: metricType, Name: "bytes", Value: val},
+		metric{Type: metricType, Name: "bytes", Value: value},
 		metric{Type: metricType, Name: "count", Value: 1},
 	)
 
 	v.Lock()
-	v.Value += val
+	v.Value += value
 	v.Unlock()
 }
 

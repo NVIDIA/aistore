@@ -120,7 +120,10 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 	}
 
 	delta := time.Since(poi.started)
-	poi.t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
+	poi.t.statsif.AddMany(
+		stats.NamedVal64{Name: stats.PutCount, Value: 1},
+		stats.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
+	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("PUT %s: %d µs", lom, int64(delta/time.Microsecond))
 	}
@@ -298,7 +301,10 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
 		if !cmn.EqCksum(expectedCksum, computedCksum) {
 			err = cmn.NewBadDataCksumError(expectedCksum, computedCksum, poi.lom.StringEx())
-			poi.t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
+			poi.t.statsif.AddMany(
+				stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
+				stats.NamedVal64{Name: stats.ErrCksumSize, Value: written},
+			)
 			return
 		}
 	}
@@ -617,8 +623,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		}
 		delta := time.Since(goi.started)
 		goi.t.statsif.AddMany(
-			stats.NamedVal64{Name: stats.GetCount, Val: 1},
-			stats.NamedVal64{Name: stats.GetLatency, Val: int64(delta)},
+			stats.NamedVal64{Name: stats.GetCount, Value: 1},
+			stats.NamedVal64{Name: stats.GetLatency, Value: int64(delta)},
 		)
 		return
 	}
@@ -704,9 +710,9 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		glog.Infoln(s)
 	}
 	goi.t.statsif.AddMany(
-		stats.NamedVal64{Name: stats.GetThroughput, Val: written},
-		stats.NamedVal64{Name: stats.GetLatency, Val: int64(delta)},
-		stats.NamedVal64{Name: stats.GetCount, Val: 1},
+		stats.NamedVal64{Name: stats.GetThroughput, Value: written},
+		stats.NamedVal64{Name: stats.GetLatency, Value: int64(delta)},
+		stats.NamedVal64{Name: stats.GetCount, Value: 1},
 	)
 	return
 }
@@ -766,8 +772,8 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 
 	delta := time.Since(aoi.started)
 	aoi.t.statsif.AddMany(
-		stats.NamedVal64{Name: stats.AppendCount, Val: 1},
-		stats.NamedVal64{Name: stats.AppendLatency, Val: int64(delta)},
+		stats.NamedVal64{Name: stats.AppendCount, Value: 1},
+		stats.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("PUT %s: %d µs", aoi.lom, int64(delta/time.Microsecond))

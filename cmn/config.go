@@ -247,6 +247,7 @@ var (
 	pkgDebug = make(map[string]glog.Level)
 )
 
+//nolint:maligned
 type Config struct {
 	Confdir          string          `json:"confdir"`
 	CloudProvider    string          `json:"cloudprovider"`

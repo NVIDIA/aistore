@@ -86,8 +86,8 @@ type (
 		Register(name string, kind string)
 	}
 	NamedVal64 struct {
-		Name string
-		Val  int64
+		Name  string
+		Value int64
 	}
 	CoreStats struct {
 		Tracker   statsTracker
@@ -194,7 +194,11 @@ func (s *CoreStats) doAdd(name string, val int64) {
 	case KindLatency:
 		if strings.HasSuffix(name, ".µs") {
 			nroot := strings.TrimSuffix(name, ".µs")
-			s.statsdC.Send(nroot, 1, metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+			s.statsdC.Send(nroot, 1, metric{
+				Type:  statsd.Timer,
+				Name:  "latency",
+				Value: float64(time.Duration(val) / time.Millisecond),
+			})
 		}
 		v.Lock()
 		v.numSamples++
@@ -210,7 +214,7 @@ func (s *CoreStats) doAdd(name string, val int64) {
 	case KindCounter:
 		if strings.HasSuffix(name, ".n") {
 			nroot := strings.TrimSuffix(name, ".n")
-			s.statsdC.Send(nroot, 1, metric{statsd.Counter, "count", val})
+			s.statsdC.Send(nroot, 1, metric{Type: statsd.Counter, Name: "count", Value: val})
 			v.Lock()
 			v.Value += val
 			v.Unlock()

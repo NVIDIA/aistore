@@ -85,7 +85,7 @@ func Test_CompressedOne(t *testing.T) {
 			var reader io.ReadCloser
 			if num%3 == 0 {
 				hdr.ObjAttrs.Size = int64(random.Intn(100))
-				reader = ioutil.NopCloser(&io.LimitedReader{random, hdr.ObjAttrs.Size}) // fully random to hinder compression
+				reader = ioutil.NopCloser(&io.LimitedReader{R: random, N: hdr.ObjAttrs.Size}) // fully random to hinder compression
 			} else {
 				hdr.ObjAttrs.Size = int64(random.Intn(cmn.GiB))
 				reader = &randReader{buf: buf, hdr: hdr, clone: true}

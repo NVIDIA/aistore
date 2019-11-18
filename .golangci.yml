@@ -78,10 +78,6 @@ issues:
       text: "don't use an underscore in package name"
 
     - linters:
-        - govet
-      text: "composite literal uses unkeyed fields" # FIXME: disable this check using govet settings instead when supported
-
-    - linters:
         - unused
       text: "`noCopy` is unused"
 

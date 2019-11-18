@@ -742,8 +742,8 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		glog.Infof("%s: from %s %s", reb.t.si.Name(), tsid, lom)
 	}
 	reb.t.statsif.AddMany(
-		stats.NamedVal64{stats.RxRebCount, 1},
-		stats.NamedVal64{stats.RxRebSize, hdr.ObjAttrs.Size})
+		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
+		stats.NamedVal64{Name: stats.RxRebSize, Value: hdr.ObjAttrs.Size})
 	// ACK
 	if tsi == nil {
 		return
@@ -959,8 +959,8 @@ func (rj *globalRebJogger) objSentCallback(hdr transport.Header, r io.ReadCloser
 	}
 	cmn.AssertMsg(hdr.ObjAttrs.Size == lom.Size(), lom.String()) // TODO: remove
 	t.statsif.AddMany(
-		stats.NamedVal64{stats.TxRebCount, 1},
-		stats.NamedVal64{stats.TxRebSize, hdr.ObjAttrs.Size})
+		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
+		stats.NamedVal64{Name: stats.TxRebSize, Value: hdr.ObjAttrs.Size})
 }
 
 // the walking callback is executed by the LRU xaction

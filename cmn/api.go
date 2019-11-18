@@ -229,6 +229,7 @@ func MakeAccess(aattr uint64, action string, bits uint64) uint64 {
 // BucketProps defines the configuration of the bucket with regard to
 // its type, checksum, and LRU. These characteristics determine its behavior
 // in response to operations on the bucket itself or the objects inside the bucket.
+//nolint:maligned
 type BucketProps struct {
 	// CloudProvider can be "aws", "gcp" (clouds) - or "ais".
 	// If a bucket is local, CloudProvider must be "ais".

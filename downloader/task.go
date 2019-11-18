@@ -83,8 +83,8 @@ func (t *singleObjectTask) download() {
 	}
 
 	t.parent.stats.AddMany(
-		stats.NamedVal64{Name: stats.DownloadSize, Val: t.currentSize.Load()},
-		stats.NamedVal64{Name: stats.DownloadLatency, Val: int64(time.Since(t.started))},
+		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
+		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(time.Since(t.started))},
 	)
 	t.parent.XactDemandBase.ObjectsInc()
 	t.parent.XactDemandBase.BytesAdd(t.currentSize.Load())

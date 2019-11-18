@@ -767,7 +767,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		delta := time.Since(started)
-		t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
+		t.statsif.AddMany(
+			stats.NamedVal64{Name: stats.ListCount, Value: 1},
+			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
+		)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("LIST: %s, %d µs", bucket, int64(delta/time.Microsecond))
 		}
@@ -1259,8 +1262,9 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 		if evict {
 			cmn.Assert(!lom.IsAIS())
 			t.statsif.AddMany(
-				stats.NamedVal64{stats.LruEvictCount, 1},
-				stats.NamedVal64{stats.LruEvictSize, lom.Size()})
+				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
+				stats.NamedVal64{Name: stats.LruEvictSize, Value: lom.Size()},
+			)
 		}
 	}
 	if cloudErr != nil {
@@ -1423,6 +1427,6 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	}
 	keyName := mpathInfo.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
-	t.statsdC.Send(keyName+".io.errors", 1, metric{statsd.Counter, "count", 1})
+	t.statsdC.Send(keyName+".io.errors", 1, metric{Type: statsd.Counter, Name: "count", Value: 1})
 	getfshealthchecker().OnErr(filepath)
 }

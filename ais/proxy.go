@@ -961,7 +961,10 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 
 	if p.writeJSON(w, r, b, "listbucket") {
 		delta := time.Since(started)
-		p.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
+		p.statsif.AddMany(
+			stats.NamedVal64{Name: stats.ListCount, Value: 1},
+			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
+		)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			var (
 				lat = int64(delta / time.Microsecond)

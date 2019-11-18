@@ -445,9 +445,9 @@ func (s *ecRebalancer) sendObjFromDisk(slice *ecRebSlice, targets ...*cluster.Sn
 		return err
 	}
 	s.t.statsif.AddMany(
-		stats.NamedVal64{stats.TxRebCount, 1},
-		stats.NamedVal64{stats.TxRebSize, hdr.ObjAttrs.Size})
-
+		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
+		stats.NamedVal64{Name: stats.TxRebSize, Value: hdr.ObjAttrs.Size},
+	)
 	return nil
 }
 
@@ -490,8 +490,9 @@ func (s *ecRebalancer) sendObjFromReader(reader cmn.ReadOpenCloser,
 		return err
 	}
 	s.t.statsif.AddMany(
-		stats.NamedVal64{stats.TxRebCount, 1},
-		stats.NamedVal64{stats.TxRebSize, size})
+		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
+		stats.NamedVal64{Name: stats.TxRebSize, Value: size},
+	)
 	return nil
 }
 
@@ -605,8 +606,9 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 		return err
 	}
 	s.t.statsif.AddMany(
-		stats.NamedVal64{stats.RxRebCount, 1},
-		stats.NamedVal64{stats.RxRebSize, n})
+		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
+		stats.NamedVal64{Name: stats.RxRebSize, Value: n},
+	)
 	ckval, _ := cksumForSlice(memsys.NewReader(waitSlice.sgl), waitSlice.sgl.Size())
 	if hdr.ObjAttrs.CksumValue != "" && hdr.ObjAttrs.CksumValue != ckval {
 		return fmt.Errorf("Received checksum mismatches checksum in header %s vs %s",
@@ -996,8 +998,9 @@ func (s *ecRebalancer) exchange() error {
 				failed = append(failed, node)
 			}
 			s.t.statsif.AddMany(
-				stats.NamedVal64{stats.TxRebCount, 1},
-				stats.NamedVal64{stats.TxRebSize, int64(len(body))})
+				stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
+				stats.NamedVal64{Name: stats.TxRebSize, Value: int64(len(body))},
+			)
 		}
 
 		if len(failed) == 0 {
