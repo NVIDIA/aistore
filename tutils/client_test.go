@@ -24,7 +24,7 @@ import (
 
 var (
 	server     *httptest.Server
-	baseParams *api.BaseParams
+	baseParams api.BaseParams
 )
 
 func TestPutFile(t *testing.T) {

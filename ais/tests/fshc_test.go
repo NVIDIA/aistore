@@ -43,7 +43,7 @@ type checkerMD struct {
 	allMps     map[*cluster.Snode]*cmn.MountpathList
 	origAvail  int
 	fileSize   int64
-	baseParams *api.BaseParams
+	baseParams api.BaseParams
 	chstop     chan struct{}
 	chfail     chan struct{}
 	wg         *sync.WaitGroup

@@ -54,7 +54,7 @@ const (
 var (
 	clusterURL        string
 	defaultHTTPClient *http.Client
-	defaultAPIParams  *api.BaseParams
+	defaultAPIParams  api.BaseParams
 	mu                sync.Mutex
 )
 
@@ -529,8 +529,8 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]string, error) {
 	return nil, missingArgumentsError(c, "bucket name")
 }
 
-func cliAPIParams(proxyURL string) *api.BaseParams {
-	return &api.BaseParams{
+func cliAPIParams(proxyURL string) api.BaseParams {
+	return api.BaseParams{
 		Client: defaultHTTPClient,
 		URL:    proxyURL,
 		Token:  loggedUserToken.Token,

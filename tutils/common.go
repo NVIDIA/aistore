@@ -87,7 +87,7 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck *clust
 	return newName
 }
 
-func GenerateNonexistentBucketName(prefix string, baseParams *api.BaseParams) (string, error) {
+func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (string, error) {
 	for i := 0; i < 100; i++ {
 		name := prefix + FastRandomFilename(cmn.NowRand(), 8)
 		_, err := api.HeadBucket(baseParams, name)

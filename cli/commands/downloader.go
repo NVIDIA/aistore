@@ -34,7 +34,7 @@ type (
 
 	progressBar struct {
 		id          string
-		params      *api.BaseParams
+		params      api.BaseParams
 		refreshTime time.Duration
 
 		states map[string]*fileDownloadingState
@@ -79,7 +79,7 @@ func (d downloadingResult) String() string {
 	return sb.String()
 }
 
-func newProgressBar(baseParams *api.BaseParams, id string, refreshTime time.Duration) *progressBar {
+func newProgressBar(baseParams api.BaseParams, id string, refreshTime time.Duration) *progressBar {
 	return &progressBar{
 		id:          id,
 		params:      baseParams,

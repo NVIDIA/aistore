@@ -269,7 +269,7 @@ type dsortPhaseState struct {
 
 type dsortProgressBar struct {
 	id          string
-	params      *api.BaseParams
+	params      api.BaseParams
 	refreshTime time.Duration
 
 	p *mpb.Progress
@@ -290,7 +290,7 @@ func newPhases() map[string]*dsortPhaseState {
 	return phases
 }
 
-func newDSortProgressBar(baseParams *api.BaseParams, id string, refreshTime time.Duration) *dsortProgressBar {
+func newDSortProgressBar(baseParams api.BaseParams, id string, refreshTime time.Duration) *dsortProgressBar {
 	return &dsortProgressBar{
 		id:          id,
 		params:      baseParams,

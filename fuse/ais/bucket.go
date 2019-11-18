@@ -11,10 +11,10 @@ import (
 
 type Bucket struct {
 	name      string
-	apiParams *api.BaseParams
+	apiParams api.BaseParams
 }
 
-func NewBucket(name string, apiParams *api.BaseParams) *Bucket {
+func NewBucket(name string, apiParams api.BaseParams) *Bucket {
 	return &Bucket{
 		name:      name,
 		apiParams: apiParams,
@@ -22,13 +22,13 @@ func NewBucket(name string, apiParams *api.BaseParams) *Bucket {
 }
 
 func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {
-	obj, err := api.HeadObject(cloneAPIParams(bck.apiParams), bck.name, "", objName)
+	obj, err := api.HeadObject(bck.apiParams, bck.name, "", objName)
 	if err != nil {
 		return nil, newBucketIOError(err, "HeadObject", objName)
 	}
 
 	object = &Object{
-		apiParams: cloneAPIParams(bck.apiParams),
+		apiParams: bck.apiParams,
 		bucket:    bck.name,
 		Name:      objName,
 		Size:      obj.Size,

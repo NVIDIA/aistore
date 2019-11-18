@@ -95,7 +95,7 @@ func discoverClusterURL(c *cli.Context) string {
 }
 
 func tryAccessBucket(url string, bucket string) bool {
-	baseParams := &api.BaseParams{
+	baseParams := api.BaseParams{
 		Client: &http.Client{},
 		URL:    url,
 	}

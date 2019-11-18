@@ -20,7 +20,7 @@ import (
 // MakeXactGetRequest gets the response of the Xaction Query
 // Action can be one of: start, stop, stats
 // Kind will be one of the xactions
-func MakeXactGetRequest(baseParams *BaseParams, kind, action, bucket string, all bool) (map[string][]*stats.BaseXactStatsExt, error) {
+func MakeXactGetRequest(baseParams BaseParams, kind, action, bucket string, all bool) (map[string][]*stats.BaseXactStatsExt, error) {
 	var (
 		resp      *http.Response
 		xactStats = make(map[string][]*stats.BaseXactStatsExt)
@@ -62,7 +62,7 @@ func MakeXactGetRequest(baseParams *BaseParams, kind, action, bucket string, all
 // MakeNCopies API
 //
 // MakeNCopies starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies)
-func MakeNCopies(baseParams *BaseParams, bucket string, copies int) error {
+func MakeNCopies(baseParams BaseParams, bucket string, copies int) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies})
 	if err != nil {
 		return err

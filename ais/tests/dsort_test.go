@@ -66,7 +66,7 @@ type (
 		maxMemUsage     string
 		dryRun          bool
 
-		baseParams  *api.BaseParams
+		baseParams  api.BaseParams
 		managerUUID string
 	}
 

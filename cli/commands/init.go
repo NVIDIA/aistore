@@ -54,7 +54,7 @@ func initClusterParams() {
 		MaxIdleConns:     100,
 	})
 
-	defaultAPIParams = &api.BaseParams{
+	defaultAPIParams = api.BaseParams{
 		Client: defaultHTTPClient,
 		URL:    clusterURL,
 		Token:  loggedUserToken.Token,

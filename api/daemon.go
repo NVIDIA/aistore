@@ -19,7 +19,7 @@ import (
 // GetMountpaths API
 //
 // Given the direct public URL of the target, GetMountPaths returns its mountpaths and error, if any exists
-func GetMountpaths(baseParams *BaseParams, node *cluster.Snode) (*cmn.MountpathList, error) {
+func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (*cmn.MountpathList, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon)
 	params := OptionalParams{
@@ -40,7 +40,7 @@ func GetMountpaths(baseParams *BaseParams, node *cluster.Snode) (*cmn.MountpathL
 }
 
 // AddMountpath API
-func AddMountpath(baseParams *BaseParams, node *cluster.Snode, mountpath string) error {
+func AddMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
 	baseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths)
 	params := OptionalParams{
@@ -58,7 +58,7 @@ func AddMountpath(baseParams *BaseParams, node *cluster.Snode, mountpath string)
 }
 
 // RemoveMountpath API
-func RemoveMountpath(baseParams *BaseParams, nodeID string, mountpath string) error {
+func RemoveMountpath(baseParams BaseParams, nodeID string, mountpath string) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths)
 	params := OptionalParams{
@@ -73,7 +73,7 @@ func RemoveMountpath(baseParams *BaseParams, nodeID string, mountpath string) er
 }
 
 // EnableMountpath API
-func EnableMountpath(baseParams *BaseParams, node *cluster.Snode, mountpath string) error {
+func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths)
 	params := OptionalParams{
@@ -91,7 +91,7 @@ func EnableMountpath(baseParams *BaseParams, node *cluster.Snode, mountpath stri
 }
 
 // DisableMountpath API
-func DisableMountpath(baseParams *BaseParams, nodeID string, mountpath string) error {
+func DisableMountpath(baseParams BaseParams, nodeID string, mountpath string) error {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths)
 	params := OptionalParams{
@@ -108,7 +108,7 @@ func DisableMountpath(baseParams *BaseParams, nodeID string, mountpath string) e
 // GetConfig API
 //
 // Returns the configuration of a specific daemon in a cluster
-func GetDaemonConfig(baseParams *BaseParams, nodeID string) (config *cmn.Config, err error) {
+func GetDaemonConfig(baseParams BaseParams, nodeID string) (config *cmn.Config, err error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon)
 	params := OptionalParams{
@@ -136,7 +136,7 @@ func GetDaemonConfig(baseParams *BaseParams, nodeID string) (config *cmn.Config,
 //
 // Returns the system info of a specific daemon in the cluster
 // Note that FSCapacity will be zero if proxy
-func GetDaemonSysInfo(baseParams *BaseParams, nodeID string) (sysInfo *cmn.TSysInfo, err error) {
+func GetDaemonSysInfo(baseParams BaseParams, nodeID string) (sysInfo *cmn.TSysInfo, err error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon)
 	params := OptionalParams{
@@ -163,7 +163,7 @@ func GetDaemonSysInfo(baseParams *BaseParams, nodeID string) (sysInfo *cmn.TSysI
 // GetDaemonInfo API
 //
 // Returns the info of a specific Daemon in the cluster
-func GetDaemonStatus(baseParams *BaseParams, nodeID string) (daeInfo *stats.DaemonStatus, err error) {
+func GetDaemonStatus(baseParams BaseParams, nodeID string) (daeInfo *stats.DaemonStatus, err error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon)
 	params := OptionalParams{
@@ -192,7 +192,7 @@ func GetDaemonStatus(baseParams *BaseParams, nodeID string) (daeInfo *stats.Daem
 // SetDaemonConfig API
 //
 // Given key value pairs, this operation sets the configuration accordingly for a specific daemon
-func SetDaemonConfig(baseParams *BaseParams, nodeID string, nvs cmn.SimpleKVs) error {
+func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cmn.SimpleKVs) error {
 	baseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.ActSetConfig)
 	optParams := OptionalParams{

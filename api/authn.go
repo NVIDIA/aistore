@@ -28,7 +28,7 @@ type AuthCreds struct {
 	Token string `json:"token"`
 }
 
-func AddUser(baseParams *BaseParams, spec AuthnSpec) error {
+func AddUser(baseParams BaseParams, spec AuthnSpec) error {
 	req := userRec{Name: spec.UserName, Password: spec.UserPassword}
 	msg, err := jsoniter.Marshal(req)
 	if err != nil {
@@ -42,7 +42,7 @@ func AddUser(baseParams *BaseParams, spec AuthnSpec) error {
 	return err
 }
 
-func DeleteUser(baseParams *BaseParams, spec AuthnSpec) error {
+func DeleteUser(baseParams BaseParams, spec AuthnSpec) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Users, spec.UserName)
 	optParams := OptionalParams{User: spec.AdminName, Password: spec.AdminPassword}
@@ -50,7 +50,7 @@ func DeleteUser(baseParams *BaseParams, spec AuthnSpec) error {
 	return err
 }
 
-func LoginUser(baseParams *BaseParams, spec AuthnSpec) (*AuthCreds, error) {
+func LoginUser(baseParams BaseParams, spec AuthnSpec) (*AuthCreds, error) {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Users, spec.UserName)
 	optParams := OptionalParams{User: spec.AdminName, Password: spec.AdminPassword}

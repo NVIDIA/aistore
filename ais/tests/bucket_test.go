@@ -747,7 +747,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	m.ensureNumCopies(numCopies[len(numCopies)-1])
 }
 
-func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseParams) {
+func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams api.BaseParams) {
 	tutils.Logf("Set copies = %d\n", ncopies)
 	if err := api.MakeNCopies(baseParams, bucket, ncopies); err != nil {
 		t.Fatalf("Failed to start copies=%d xaction, err: %v", ncopies, err)

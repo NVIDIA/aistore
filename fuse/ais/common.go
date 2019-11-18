@@ -6,8 +6,6 @@ package ais
 
 import (
 	"fmt"
-
-	"github.com/NVIDIA/aistore/api"
 )
 
 //////////
@@ -49,15 +47,4 @@ func newBucketIOError(err error, op string, object ...string) error {
 
 func newObjectIOError(err error, op string, object string) error {
 	return newIOError(err, IOErrorKindObject, op, object)
-}
-
-///////////
-// HELPERS
-///////////
-
-func cloneAPIParams(apiParams *api.BaseParams) *api.BaseParams {
-	return &api.BaseParams{
-		Client: apiParams.Client,
-		URL:    apiParams.URL,
-	}
 }

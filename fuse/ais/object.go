@@ -15,7 +15,7 @@ import (
 )
 
 type Object struct {
-	apiParams *api.BaseParams
+	apiParams api.BaseParams
 	bucket    string
 	Name      string
 	Size      int64
@@ -29,7 +29,7 @@ func NewObject(objName string, bucket *Bucket, sizes ...int64) *Object {
 	}
 
 	return &Object{
-		apiParams: cloneAPIParams(bucket.apiParams),
+		apiParams: bucket.apiParams,
 		bucket:    bucket.name,
 		Name:      objName,
 		Size:      size,
@@ -39,7 +39,7 @@ func NewObject(objName string, bucket *Bucket, sizes ...int64) *Object {
 
 func (obj *Object) Put(r cmn.ReadOpenCloser) (err error) {
 	putArgs := api.PutObjectArgs{
-		BaseParams: cloneAPIParams(obj.apiParams),
+		BaseParams: obj.apiParams,
 		Bucket:     obj.bucket,
 		Object:     obj.Name,
 		Reader:     r,
@@ -60,7 +60,7 @@ func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, e
 		Query:  query,
 	}
 
-	n, err = api.GetObject(cloneAPIParams(obj.apiParams), obj.bucket, obj.Name, objArgs)
+	n, err = api.GetObject(obj.apiParams, obj.bucket, obj.Name, objArgs)
 	if err != nil {
 		return 0, newObjectIOError(err, "GetChunk", obj.Name)
 	}
@@ -69,7 +69,7 @@ func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, e
 
 func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (handle string, err error) {
 	appendArgs := api.AppendArgs{
-		BaseParams: cloneAPIParams(obj.apiParams),
+		BaseParams: obj.apiParams,
 		Bucket:     obj.bucket,
 		Object:     obj.Name,
 		Handle:     prevHandle,
@@ -87,7 +87,7 @@ func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (
 
 func (obj *Object) Flush(handle string) (err error) {
 	appendArgs := api.AppendArgs{
-		BaseParams: cloneAPIParams(obj.apiParams),
+		BaseParams: obj.apiParams,
 		Bucket:     obj.bucket,
 		Object:     obj.Name,
 		Handle:     handle,

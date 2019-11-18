@@ -1323,7 +1323,7 @@ func checkXactAPIErr(t *testing.T, err error) {
 }
 
 //nolint:unparam
-func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParams *api.BaseParams, timeout time.Duration) {
+func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParams api.BaseParams, timeout time.Duration) {
 	var (
 		wg    = &sync.WaitGroup{}
 		ch    = make(chan error, 1)
@@ -1357,7 +1357,7 @@ func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParam
 	}
 }
 
-func waitForBucketXactionToStart(t *testing.T, kind, bucket string, baseParams *api.BaseParams, timeouts ...time.Duration) {
+func waitForBucketXactionToStart(t *testing.T, kind, bucket string, baseParams api.BaseParams, timeouts ...time.Duration) {
 	var (
 		start   = time.Now()
 		timeout = time.Duration(0)
@@ -1400,7 +1400,7 @@ func waitForBucketXactionToStart(t *testing.T, kind, bucket string, baseParams *
 // If they were not started, this function treats them as completed
 // and returns. If timeout set, if any of rebalances doesn't complete before timeout
 // the function ends with fatal
-func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeouts ...time.Duration) {
+func waitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeouts ...time.Duration) {
 	start := time.Now()
 	time.Sleep(time.Second * 10)
 	wg := &sync.WaitGroup{}

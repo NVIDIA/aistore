@@ -43,7 +43,7 @@ func newProxy(configPath, defaultURL string) *proxy {
 	err := cmn.LocalLoad(configPath, p)
 	if err != nil {
 		// first run: read the current Smap and save to local file
-		baseParams := &api.BaseParams{
+		baseParams := api.BaseParams{
 			Client: HTTPClient,
 			URL:    defaultURL,
 		}
@@ -80,7 +80,7 @@ func (p *proxy) saveSmap() {
 //   config and saves new valid Smap
 // Returns error if the node failed to respond
 func (p *proxy) comparePrimaryURL(url string) error {
-	baseParams := &api.BaseParams{
+	baseParams := api.BaseParams{
 		Client: HTTPClient,
 		URL:    url,
 	}

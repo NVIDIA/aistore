@@ -349,7 +349,7 @@ func compareSlicesCount(t *testing.T, orig, found map[string]int) {
 	}
 }
 
-func doECPutsAndCheck(t *testing.T, bckName string, baseParams *api.BaseParams, o *ecOptions) {
+func doECPutsAndCheck(t *testing.T, bckName string, baseParams api.BaseParams, o *ecOptions) {
 	const (
 		smallEvery = 10 // Every N-th object is small
 		objPatt    = "obj-%s-%04d"
@@ -473,12 +473,12 @@ func doECPutsAndCheck(t *testing.T, bckName string, baseParams *api.BaseParams, 
 	}
 }
 
-func assertBucketSize(t *testing.T, baseParams *api.BaseParams, bckName string, objCount int) {
+func assertBucketSize(t *testing.T, baseParams api.BaseParams, bckName string, objCount int) {
 	bckObjectsCnt := bucketSize(t, baseParams, bckName)
 	tassert.Fatalf(t, bckObjectsCnt == objCount, "Invalid number of objects: %d, expected %d", bckObjectsCnt, objCount)
 }
 
-func bucketSize(t *testing.T, baseParams *api.BaseParams, bckName string) int {
+func bucketSize(t *testing.T, baseParams api.BaseParams, bckName string) int {
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, bckName, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -487,7 +487,7 @@ func bucketSize(t *testing.T, baseParams *api.BaseParams, bckName string) int {
 	return len(reslist.Entries)
 }
 
-func putRandomFile(t *testing.T, baseParams *api.BaseParams, bckName string, objPath string, size int) {
+func putRandomFile(t *testing.T, baseParams api.BaseParams, bckName string, objPath string, size int) {
 	r, err := tutils.NewRandReader(int64(size), false)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
@@ -497,7 +497,7 @@ func putRandomFile(t *testing.T, baseParams *api.BaseParams, bckName string, obj
 	tassert.CheckFatal(t, err)
 }
 
-func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, baseParams *api.BaseParams, o *ecOptions) {
+func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, baseParams api.BaseParams, o *ecOptions) {
 	tutils.CreateFreshBucket(t, proxyURLReadOnly, name)
 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
@@ -510,7 +510,7 @@ func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, b
 	tassert.CheckFatal(t, err)
 }
 
-func setBucketECProps(t *testing.T, name string, bckProps cmn.BucketProps, baseParams *api.BaseParams) {
+func setBucketECProps(t *testing.T, name string, bckProps cmn.BucketProps, baseParams api.BaseParams) {
 	tutils.Logf("Changing EC %d:%d\n", bckProps.EC.DataSlices, bckProps.EC.ParitySlices)
 	err := api.SetBucketPropsMsg(baseParams, name, bckProps)
 	tassert.CheckFatal(t, err)
@@ -550,7 +550,7 @@ func clearAllECObjects(t *testing.T, bucket string, failOnDelErr bool, o *ecOpti
 	wg.Wait()
 }
 
-func objectsExist(t *testing.T, baseParams *api.BaseParams, bckName, objPatt string, objCount int) {
+func objectsExist(t *testing.T, baseParams api.BaseParams, bckName, objPatt string, objCount int) {
 	wg := &sync.WaitGroup{}
 	getOneObj := func(objName string) {
 		defer wg.Done()
@@ -630,7 +630,7 @@ func TestECChange(t *testing.T) {
 	tassert.Errorf(t, err == nil, "Resetting properties should work")
 }
 
-func createECReplicas(t *testing.T, baseParams *api.BaseParams, bucket, objName string, fullPath string, o *ecOptions) {
+func createECReplicas(t *testing.T, baseParams api.BaseParams, bucket, objName string, fullPath string, o *ecOptions) {
 	o.sema <- struct{}{}
 	defer func() {
 		<-o.sema
@@ -658,7 +658,7 @@ func createECReplicas(t *testing.T, baseParams *api.BaseParams, bucket, objName 
 	tassert.Errorf(t, mainObjPath != "", "Full copy is not found")
 }
 
-func createECObject(t *testing.T, baseParams *api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) int {
+func createECObject(t *testing.T, baseParams api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) int {
 	const (
 		smallEvery = 7 // Every N-th object is small
 	)
@@ -697,7 +697,7 @@ func createECObject(t *testing.T, baseParams *api.BaseParams, bucket, objName st
 	return totalCnt
 }
 
-func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) {
+func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) {
 	const (
 		sleepRestoreTime = 5 * time.Second // wait time after GET restores slices
 		smallEvery       = 7               // Every N-th object is small
@@ -908,7 +908,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	clearAllECObjects(t, bucket, true, o)
 }
 
-func putECFile(baseParams *api.BaseParams, bucket, objName string) error {
+func putECFile(baseParams api.BaseParams, bucket, objName string) error {
 	objSize := int64(ecMinBigSize * 2)
 	objPath := ecTestDir + objName
 
@@ -923,7 +923,7 @@ func putECFile(baseParams *api.BaseParams, bucket, objName string) error {
 }
 
 // Returns path to main object and map of all object's slices and ioContext
-func createECFile(t *testing.T, bucket, objName, fullPath string, baseParams *api.BaseParams, o *ecOptions) (map[string]ecSliceMD, string) {
+func createECFile(t *testing.T, bucket, objName, fullPath string, baseParams api.BaseParams, o *ecOptions) (map[string]ecSliceMD, string) {
 	totalCnt := 2 + (o.sliceTotal())*2
 	objSize := int64(ecMinBigSize * 2)
 	sliceSize := ec.SliceSize(objSize, o.dataCnt)

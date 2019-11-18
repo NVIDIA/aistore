@@ -177,8 +177,8 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 }
 
 // API parameters needed to talk to the cluster
-func (fs *aisfs) aisAPIParams() *api.BaseParams {
-	return &api.BaseParams{
+func (fs *aisfs) aisAPIParams() api.BaseParams {
+	return api.BaseParams{
 		Client: fs.httpClient,
 		URL:    fs.cfg.AISURL,
 	}

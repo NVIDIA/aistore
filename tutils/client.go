@@ -340,7 +340,7 @@ func GetTraceDiscard(proxyURL, bucket, provider string, objName string, validate
 //
 func Put(proxyURL, bucket, provider, object, hash string, reader cmn.ReadOpenCloser) error {
 	var (
-		baseParams = &api.BaseParams{
+		baseParams = api.BaseParams{
 			Client: HTTPClientGetPut,
 			URL:    proxyURL,
 			Method: http.MethodPut,
@@ -677,7 +677,7 @@ func determineReaderType(sgl *memsys.SGL, readerPath, readerType, objName string
 	return
 }
 
-func WaitForObjectToBeDowloaded(objName, bucket string, params *api.BaseParams, timeout time.Duration) error {
+func WaitForObjectToBeDowloaded(objName, bucket string, params api.BaseParams, timeout time.Duration) error {
 	maxTime := time.Now().Add(timeout)
 
 	for {
@@ -700,7 +700,7 @@ func WaitForObjectToBeDowloaded(objName, bucket string, params *api.BaseParams, 
 	}
 }
 
-func EnsureObjectsExist(t *testing.T, params *api.BaseParams, bucket string, objectsNames ...string) {
+func EnsureObjectsExist(t *testing.T, params api.BaseParams, bucket string, objectsNames ...string) {
 	for _, objName := range objectsNames {
 		_, err := api.GetObject(params, bucket, objName)
 		if err != nil {
@@ -831,7 +831,7 @@ func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, object, bucket, p
 	EvictObjects(t, proxyURL, []string{object}, bucket)
 }
 
-func GetObjectAtime(t *testing.T, baseParams *api.BaseParams, object string, bucket string, timeFormat string) time.Time {
+func GetObjectAtime(t *testing.T, baseParams api.BaseParams, object string, bucket string, timeFormat string) time.Time {
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
 	bucketList, err := api.ListBucket(baseParams, bucket, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -879,14 +879,14 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 	return false, fmt.Errorf("deadline exceeded")
 }
 
-func DefaultBaseAPIParams(t *testing.T) *api.BaseParams {
+func DefaultBaseAPIParams(t *testing.T) api.BaseParams {
 	primary, err := GetPrimaryProxy(readProxyURL)
 	tassert.CheckFatal(t, err)
 	return BaseAPIParams(primary.URL(cmn.NetworkPublic))
 }
 
-func BaseAPIParams(url string) *api.BaseParams {
-	return &api.BaseParams{
+func BaseAPIParams(url string) api.BaseParams {
+	return api.BaseParams{
 		Client: HTTPClient, // TODO -- FIXME: make use of HTTPClientGetPut as well
 		URL:    url,
 	}
@@ -950,7 +950,7 @@ func EvictObjects(t *testing.T, proxyURL string, fileslist []string, bucket stri
 	}
 }
 
-func GetXactionStats(baseParams *api.BaseParams, kind string, buckets ...string) (map[string][]*stats.BaseXactStatsExt, error) {
+func GetXactionStats(baseParams api.BaseParams, kind string, buckets ...string) (map[string][]*stats.BaseXactStatsExt, error) {
 	bucket := ""
 	if len(buckets) > 0 {
 		bucket = buckets[0]

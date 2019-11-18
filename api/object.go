@@ -37,7 +37,7 @@ type ReplicateObjectInput struct {
 }
 
 type PutObjectArgs struct {
-	BaseParams *BaseParams
+	BaseParams BaseParams
 	Bucket     string
 	Provider   string
 	Object     string
@@ -47,7 +47,7 @@ type PutObjectArgs struct {
 }
 
 type PromoteArgs struct {
-	BaseParams *BaseParams
+	BaseParams BaseParams
 	Bucket     string
 	Provider   string
 	Object     string
@@ -60,7 +60,7 @@ type PromoteArgs struct {
 }
 
 type AppendArgs struct {
-	BaseParams *BaseParams
+	BaseParams BaseParams
 	Bucket     string
 	Provider   string
 	Object     string
@@ -72,7 +72,7 @@ type AppendArgs struct {
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
-func HeadObject(baseParams *BaseParams, bucket, provider, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
+func HeadObject(baseParams BaseParams, bucket, provider, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
 	checkIsCached := false
 	if len(checkExists) > 0 {
 		checkIsCached = checkExists[0]
@@ -139,7 +139,7 @@ func HeadObject(baseParams *BaseParams, bucket, provider, object string, checkEx
 // DeleteObject API
 //
 // Deletes an object specified by bucket/object
-func DeleteObject(baseParams *BaseParams, bucket, object, provider string) error {
+func DeleteObject(baseParams BaseParams, bucket, object, provider string) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
@@ -152,7 +152,7 @@ func DeleteObject(baseParams *BaseParams, bucket, object, provider string) error
 // EvictObject API
 //
 // Evicts an object specified by bucket/object
-func EvictObject(baseParams *BaseParams, bucket, object string) error {
+func EvictObject(baseParams BaseParams, bucket, object string) error {
 	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictObjects, Name: cmn.URLPath(bucket, object)})
 	if err != nil {
 		return err
@@ -170,7 +170,7 @@ func EvictObject(baseParams *BaseParams, bucket, object string) error {
 // Writes the response body to a writer if one is specified in the optional GetObjectInput.Writer.
 // Otherwise, it discards the response body read.
 //
-func GetObject(baseParams *BaseParams, bucket, object string, options ...GetObjectInput) (n int64, err error) {
+func GetObject(baseParams BaseParams, bucket, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w         = ioutil.Discard
 		q         url.Values
@@ -213,7 +213,7 @@ func GetObject(baseParams *BaseParams, bucket, object string, options ...GetObje
 // is allocated when reading from the response body to compute the object checksum.
 //
 // Returns InvalidCksumError when the expected and actual checksum values are different.
-func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, options ...GetObjectInput) (n int64, err error) {
+func GetObjectWithValidation(baseParams BaseParams, bucket, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		cksumVal  string
 		w         = ioutil.Discard
@@ -403,7 +403,7 @@ func FlushObject(args AppendArgs) (err error) {
 // and sends a POST HTTP Request to /v1/objects/bucket-name/object-name
 //
 // FIXME: handle cloud provider - here and elsewhere
-func RenameObject(baseParams *BaseParams, bucket, oldName, newName string) error {
+func RenameObject(baseParams BaseParams, bucket, oldName, newName string) error {
 	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newName})
 	if err != nil {
 		return err
@@ -444,7 +444,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 // ReplicateObject API
 //
 // ReplicateObject replicates given object in bucket using targetrunner's replicate endpoint.
-func ReplicateObject(baseParams *BaseParams, bucket, object string) error {
+func ReplicateObject(baseParams BaseParams, bucket, object string) error {
 	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActReplicate})
 	if err != nil {
 		return err
@@ -457,7 +457,7 @@ func ReplicateObject(baseParams *BaseParams, bucket, object string) error {
 
 // Downloader API
 
-func DownloadSingle(baseParams *BaseParams, description, bucket, objname, link string) (string, error) {
+func DownloadSingle(baseParams BaseParams, description, bucket, objname, link string) (string, error) {
 	dlBody := cmn.DlSingleBody{
 		DlObj: cmn.DlObj{
 			Objname: objname,
@@ -469,7 +469,7 @@ func DownloadSingle(baseParams *BaseParams, description, bucket, objname, link s
 	return DownloadSingleWithParam(baseParams, dlBody)
 }
 
-func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlSingleBody) (string, error) {
+func DownloadSingleWithParam(baseParams BaseParams, dlBody cmn.DlSingleBody) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
@@ -480,7 +480,7 @@ func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlSingleBody) (s
 	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
-func DownloadRange(baseParams *BaseParams, description string, bucket, template string) (string, error) {
+func DownloadRange(baseParams BaseParams, description string, bucket, template string) (string, error) {
 	dlBody := cmn.DlRangeBody{
 		Template: template,
 	}
@@ -489,7 +489,7 @@ func DownloadRange(baseParams *BaseParams, description string, bucket, template 
 	return DownloadRangeWithParam(baseParams, dlBody)
 }
 
-func DownloadRangeWithParam(baseParams *BaseParams, dlBody cmn.DlRangeBody) (string, error) {
+func DownloadRangeWithParam(baseParams BaseParams, dlBody cmn.DlRangeBody) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
@@ -500,7 +500,7 @@ func DownloadRangeWithParam(baseParams *BaseParams, dlBody cmn.DlRangeBody) (str
 	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
-func DownloadMulti(baseParams *BaseParams, description string, bucket string, m interface{}) (string, error) {
+func DownloadMulti(baseParams BaseParams, description string, bucket string, m interface{}) (string, error) {
 	dlBody := cmn.DlMultiBody{}
 	dlBody.Bucket = bucket
 	dlBody.Description = description
@@ -519,7 +519,7 @@ func DownloadMulti(baseParams *BaseParams, description string, bucket string, m 
 	return doDlDownloadRequest(baseParams, path, msg, optParams)
 }
 
-func DownloadCloud(baseParams *BaseParams, description string, bucket, prefix, suffix string) (string, error) {
+func DownloadCloud(baseParams BaseParams, description string, bucket, prefix, suffix string) (string, error) {
 	dlBody := cmn.DlCloudBody{
 		Prefix: prefix,
 		Suffix: suffix,
@@ -529,7 +529,7 @@ func DownloadCloud(baseParams *BaseParams, description string, bucket, prefix, s
 	return DownloadCloudWithParam(baseParams, dlBody)
 }
 
-func DownloadCloudWithParam(baseParams *BaseParams, dlBody cmn.DlCloudBody) (string, error) {
+func DownloadCloudWithParam(baseParams BaseParams, dlBody cmn.DlCloudBody) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
@@ -540,7 +540,7 @@ func DownloadCloudWithParam(baseParams *BaseParams, dlBody cmn.DlCloudBody) (str
 	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
-func DownloadStatus(baseParams *BaseParams, id string) (cmn.DlStatusResp, error) {
+func DownloadStatus(baseParams BaseParams, id string) (cmn.DlStatusResp, error) {
 	dlBody := cmn.DlAdminBody{
 		ID: id,
 	}
@@ -554,7 +554,7 @@ func DownloadStatus(baseParams *BaseParams, id string) (cmn.DlStatusResp, error)
 	return doDlStatusRequest(baseParams, path, optParams)
 }
 
-func DownloadGetList(baseParams *BaseParams, regex string) (map[string]cmn.DlJobInfo, error) {
+func DownloadGetList(baseParams BaseParams, regex string) (map[string]cmn.DlJobInfo, error) {
 	dlBody := cmn.DlAdminBody{
 		Regex: regex,
 	}
@@ -577,7 +577,7 @@ func DownloadGetList(baseParams *BaseParams, regex string) (map[string]cmn.DlJob
 	return parsedResp, nil
 }
 
-func DownloadAbort(baseParams *BaseParams, id string) error {
+func DownloadAbort(baseParams BaseParams, id string) error {
 	dlBody := cmn.DlAdminBody{
 		ID: id,
 	}
@@ -592,7 +592,7 @@ func DownloadAbort(baseParams *BaseParams, id string) error {
 	return err
 }
 
-func DownloadRemove(baseParams *BaseParams, id string) error {
+func DownloadRemove(baseParams BaseParams, id string) error {
 	dlBody := cmn.DlAdminBody{
 		ID: id,
 	}
@@ -607,7 +607,7 @@ func DownloadRemove(baseParams *BaseParams, id string) error {
 	return err
 }
 
-func doDlDownloadRequest(baseParams *BaseParams, path string, msg []byte, optParams OptionalParams) (string, error) {
+func doDlDownloadRequest(baseParams BaseParams, path string, msg []byte, optParams OptionalParams) (string, error) {
 	respBytes, err := DoHTTPRequest(baseParams, path, msg, optParams)
 	if err != nil {
 		return "", err
@@ -622,7 +622,7 @@ func doDlDownloadRequest(baseParams *BaseParams, path string, msg []byte, optPar
 	return resp.ID, nil
 }
 
-func doDlStatusRequest(baseParams *BaseParams, path string, optParams OptionalParams) (resp cmn.DlStatusResp, err error) {
+func doDlStatusRequest(baseParams BaseParams, path string, optParams OptionalParams) (resp cmn.DlStatusResp, err error) {
 	respBytes, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	if err != nil {
 		return resp, err

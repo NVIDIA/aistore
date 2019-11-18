@@ -25,7 +25,7 @@ const (
 //
 // Set the properties of a bucket using the bucket name and the entire bucket property structure to be set.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketPropsMsg(baseParams *BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
+func SetBucketPropsMsg(baseParams BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
 	if props.Cksum.Type == "" {
 		props.Cksum.Type = cmn.PropInherit
 	}
@@ -49,7 +49,7 @@ func SetBucketPropsMsg(baseParams *BaseParams, bucket string, props cmn.BucketPr
 //
 // Set properties of a bucket using the bucket name, and key value pairs.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketProps(baseParams *BaseParams, bucket string, nvs cmn.SimpleKVs, query ...url.Values) error {
+func SetBucketProps(baseParams BaseParams, bucket string, nvs cmn.SimpleKVs, query ...url.Values) error {
 	optParams := OptionalParams{}
 	q := url.Values{}
 	if len(query) > 0 {
@@ -70,7 +70,7 @@ func SetBucketProps(baseParams *BaseParams, bucket string, nvs cmn.SimpleKVs, qu
 // ResetBucketProps API
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
-func ResetBucketProps(baseParams *BaseParams, bucket string, query ...url.Values) error {
+func ResetBucketProps(baseParams BaseParams, bucket string, query ...url.Values) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActResetProps})
 	if err != nil {
 		return err
@@ -90,7 +90,7 @@ func ResetBucketProps(baseParams *BaseParams, bucket string, query ...url.Values
 // Returns the properties of a bucket specified by its name.
 // Converts the string type fields returned from the HEAD request to their
 // corresponding counterparts in the BucketProps struct
-func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *cmn.BucketProps, err error) {
+func HeadBucket(baseParams BaseParams, bucket string, query ...url.Values) (p *cmn.BucketProps, err error) {
 	var (
 		path      = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 		optParams = OptionalParams{}
@@ -232,7 +232,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 //
 // provider takes one of Cloud Provider enum names (see provider.go). If provider is empty, return all names.
 // Otherwise, return cloud or ais bucket names.
-func GetBucketNames(baseParams *BaseParams, provider string) (*cmn.BucketNames, error) {
+func GetBucketNames(baseParams BaseParams, provider string) (*cmn.BucketNames, error) {
 	bucketNames := &cmn.BucketNames{}
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)
@@ -257,7 +257,7 @@ func GetBucketNames(baseParams *BaseParams, provider string) (*cmn.BucketNames, 
 //
 // Cloud provider takes one of "", "cloud", "ais", "gcp", "aws".
 // Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
-func GetBucketsSummaries(baseParams *BaseParams, bucket, provider string,
+func GetBucketsSummaries(baseParams BaseParams, bucket, provider string,
 	msg *cmn.SelectMsg) (summaries cmn.BucketsSummaries, err error) {
 	var (
 		q    = url.Values{}
@@ -302,7 +302,7 @@ func GetBucketsSummaries(baseParams *BaseParams, bucket, provider string,
 // CreateBucket API
 //
 // CreateBucket sends a HTTP request to a proxy to create an ais bucket with the given name
-func CreateBucket(baseParams *BaseParams, bucket string) error {
+func CreateBucket(baseParams BaseParams, bucket string) error {
 	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCreateLB})
 	if err != nil {
 		return err
@@ -316,7 +316,7 @@ func CreateBucket(baseParams *BaseParams, bucket string) error {
 // DestroyBucket API
 //
 // DestroyBucket sends a HTTP request to a proxy to remove an ais bucket with the given name
-func DestroyBucket(baseParams *BaseParams, bucket string) error {
+func DestroyBucket(baseParams BaseParams, bucket string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActDestroyLB})
 	if err != nil {
 		return err
@@ -331,7 +331,7 @@ func DestroyBucket(baseParams *BaseParams, bucket string) error {
 //
 // DoesBucketExist queries a proxy or target to get a list of all ais buckets,
 // returns true if the bucket is present in the list.
-func DoesBucketExist(baseParams *BaseParams, bucket string) (bool, error) {
+func DoesBucketExist(baseParams BaseParams, bucket string) (bool, error) {
 	buckets, err := GetBucketNames(baseParams, cmn.AIS)
 	if err != nil {
 		return false, err
@@ -345,7 +345,7 @@ func DoesBucketExist(baseParams *BaseParams, bucket string) (bool, error) {
 //
 // CopyBucket creates a new ais bucket newName and
 // copies into it contents of the existing oldName bucket
-func CopyBucket(baseParams *BaseParams, oldName, newName string) error {
+func CopyBucket(baseParams BaseParams, oldName, newName string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Name: newName})
 	if err != nil {
 		return err
@@ -359,7 +359,7 @@ func CopyBucket(baseParams *BaseParams, oldName, newName string) error {
 // RenameBucket API
 //
 // RenameBucket changes the name of a bucket from oldName to newBucketName
-func RenameBucket(baseParams *BaseParams, oldName, newName string) error {
+func RenameBucket(baseParams BaseParams, oldName, newName string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newName})
 	if err != nil {
 		return err
@@ -373,7 +373,7 @@ func RenameBucket(baseParams *BaseParams, oldName, newName string) error {
 // DeleteList API
 //
 // DeleteList sends a HTTP request to remove a list of objects from a bucket
-func DeleteList(baseParams *BaseParams, bucket, provider string, fileslist []string, wait bool, deadline time.Duration) error {
+func DeleteList(baseParams BaseParams, bucket, provider string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	deleteMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeRequest(baseParams, bucket, provider, cmn.ActDelete, http.MethodDelete, deleteMsg)
@@ -382,7 +382,7 @@ func DeleteList(baseParams *BaseParams, bucket, provider string, fileslist []str
 // DeleteRange API
 //
 // DeleteRange sends a HTTP request to remove a range of objects from a bucket
-func DeleteRange(baseParams *BaseParams, bucket, provider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+func DeleteRange(baseParams BaseParams, bucket, provider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	deleteMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeRequest(baseParams, bucket, provider, cmn.ActDelete, http.MethodDelete, deleteMsg)
@@ -391,7 +391,7 @@ func DeleteRange(baseParams *BaseParams, bucket, provider, prefix, regex, rng st
 // PrefetchList API
 //
 // PrefetchList sends a HTTP request to prefetch a list of objects from a cloud bucket
-func PrefetchList(baseParams *BaseParams, bucket, provider string, fileslist []string, wait bool, deadline time.Duration) error {
+func PrefetchList(baseParams BaseParams, bucket, provider string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	prefetchMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeRequest(baseParams, bucket, provider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
@@ -400,7 +400,7 @@ func PrefetchList(baseParams *BaseParams, bucket, provider string, fileslist []s
 // PrefetchRange API
 //
 // PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket
-func PrefetchRange(baseParams *BaseParams, bucket, provider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+func PrefetchRange(baseParams BaseParams, bucket, provider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	prefetchMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	prefetchMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
 	return doListRangeRequest(baseParams, bucket, provider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
@@ -409,7 +409,7 @@ func PrefetchRange(baseParams *BaseParams, bucket, provider, prefix, regex, rng 
 // EvictList API
 //
 // EvictList sends a HTTP request to evict a list of objects from a cloud bucket
-func EvictList(baseParams *BaseParams, bucket, provider string, fileslist []string, wait bool, deadline time.Duration) error {
+func EvictList(baseParams BaseParams, bucket, provider string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeRequest(baseParams, bucket, provider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
@@ -418,7 +418,7 @@ func EvictList(baseParams *BaseParams, bucket, provider string, fileslist []stri
 // EvictRange API
 //
 // EvictRange sends a HTTP request to evict a range of objects from a cloud bucket
-func EvictRange(baseParams *BaseParams, bucket, provider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+func EvictRange(baseParams BaseParams, bucket, provider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeRequest(baseParams, bucket, provider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
@@ -428,7 +428,7 @@ func EvictRange(baseParams *BaseParams, bucket, provider, prefix, regex, rng str
 //
 // EvictCloudBucket sends a HTTP request to a proxy to evict an entire cloud bucket from the AIStore
 // - the operation results in eliminating all traces of the specified cloud bucket in the AIStore
-func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values) error {
+func EvictCloudBucket(baseParams BaseParams, bucket string, query ...url.Values) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictCB})
 	if err != nil {
 		return err
@@ -457,7 +457,7 @@ func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values
 // 3. Breaks loop on error
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
-func waitForAsyncReqComplete(baseParams *BaseParams, action, path string,
+func waitForAsyncReqComplete(baseParams BaseParams, action, path string,
 	origMsg *cmn.SelectMsg, optParams OptionalParams) (*http.Response, error) {
 	var (
 		resp         *http.Response
@@ -539,7 +539,7 @@ func handleAsyncReqAccepted(resp *http.Response, action string, origMsg *cmn.Sel
 //
 // ListBucket returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
-func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
+func ListBucket(baseParams BaseParams, bucket string, msg *cmn.SelectMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
@@ -606,7 +606,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 // ListBucketPage returns the first page of bucket objects
 // On success the function updates msg.PageMarker, so a client can reuse
 // the message to fetch the next page
-func ListBucketPage(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
+func ListBucketPage(baseParams BaseParams, bucket string, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 
@@ -645,7 +645,7 @@ func ListBucketPage(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 // Build an object list with minimal set of properties: name and size.
 // All SelectMsg fields except prefix do not work and are skipped.
 // Function always returns the whole list of objects without paging
-func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
+func ListBucketFast(baseParams BaseParams, bucket string, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 
@@ -680,7 +680,7 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 }
 
 // Handles the List/Range operations (delete, prefetch)
-func doListRangeRequest(baseParams *BaseParams, bucket, provider, action, method string, listrangemsg interface{}) error {
+func doListRangeRequest(baseParams BaseParams, bucket, provider, action, method string, listrangemsg interface{}) error {
 	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
 	b, err := jsoniter.Marshal(actionMsg)
 	if err != nil {
@@ -699,7 +699,7 @@ func doListRangeRequest(baseParams *BaseParams, bucket, provider, action, method
 	return err
 }
 
-func ECEncodeBucket(baseParams *BaseParams, bucket string) error {
+func ECEncodeBucket(baseParams BaseParams, bucket string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActECEncode})
 	if err != nil {
 		return err

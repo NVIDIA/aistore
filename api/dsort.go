@@ -13,7 +13,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func StartDSort(baseParams *BaseParams, rs dsort.RequestSpec) (string, error) {
+func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
 	msg, err := jsoniter.Marshal(rs)
 	if err != nil {
 		return "", err
@@ -29,7 +29,7 @@ func StartDSort(baseParams *BaseParams, rs dsort.RequestSpec) (string, error) {
 	return string(body), err
 }
 
-func AbortDSort(baseParams *BaseParams, managerUUID string) error {
+func AbortDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort)
 	query := url.Values{cmn.URLParamID: []string{managerUUID}}
@@ -38,7 +38,7 @@ func AbortDSort(baseParams *BaseParams, managerUUID string) error {
 	return err
 }
 
-func MetricsDSort(baseParams *BaseParams, managerUUID string) (map[string]*dsort.Metrics, error) {
+func MetricsDSort(baseParams BaseParams, managerUUID string) (map[string]*dsort.Metrics, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Sort)
 	query := url.Values{cmn.URLParamID: []string{managerUUID}}
@@ -53,7 +53,7 @@ func MetricsDSort(baseParams *BaseParams, managerUUID string) (map[string]*dsort
 	return metrics, err
 }
 
-func RemoveDSort(baseParams *BaseParams, managerUUID string) error {
+func RemoveDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Sort)
 	query := url.Values{cmn.URLParamID: []string{managerUUID}}
@@ -62,7 +62,7 @@ func RemoveDSort(baseParams *BaseParams, managerUUID string) error {
 	return err
 }
 
-func ListDSort(baseParams *BaseParams, regex string) ([]*dsort.JobInfo, error) {
+func ListDSort(baseParams BaseParams, regex string) ([]*dsort.JobInfo, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Sort)
 	query := url.Values{}

@@ -119,7 +119,7 @@ func downloaderCompleted(t *testing.T, targetID string, targetsStats map[string]
 
 // if targetID == "", waits until all targets have completed the downloader xaction
 // NOTE: this NOT the same as completing the job, downloader xaction might be running much longer
-func waitForDownloaderToFinish(t *testing.T, baseParams *api.BaseParams, targetID string, timeouts ...time.Duration) {
+func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID string, timeouts ...time.Duration) {
 	start := time.Now()
 	timeout := time.Duration(0)
 	if len(timeouts) > 0 {
