@@ -154,6 +154,7 @@ type (
 		Wg    *sync.WaitGroup
 		Stats *Stats2
 	}
+	//nolint:maligned
 	Mem2 struct {
 		time struct {
 			d time.Duration

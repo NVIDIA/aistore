@@ -68,20 +68,20 @@ type (
 
 	targetrunner struct {
 		httprunner
-		cloud          cloudProvider // multi-cloud backend
-		prefetchQueue  chan filesWithDeadline
-		authn          *authManager
-		clusterStarted atomic.Bool
-		fsprg          fsprungroup
-		readahead      readaheader
-		ecmanager      *ecManager
-		rebManager     *rebManager
-		capUsed        capUsed
-		gfn            struct {
+		cloud         cloudProvider // multi-cloud backend
+		prefetchQueue chan filesWithDeadline
+		authn         *authManager
+		fsprg         fsprungroup
+		readahead     readaheader
+		ecmanager     *ecManager
+		rebManager    *rebManager
+		capUsed       capUsed
+		gfn           struct {
 			local  localGFN
 			global globalGFN
 		}
-		regstate regstate // the state of being registered with the primary (can be en/disabled via API)
+		regstate       regstate // the state of being registered with the primary (can be en/disabled via API)
+		clusterStarted atomic.Bool
 	}
 )
 

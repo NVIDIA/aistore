@@ -79,8 +79,8 @@ type (
 	}
 
 	Xaction struct {
-		cmn.XactBase
 		cmn.MountpathXact
+		cmn.XactBase
 	}
 )
 

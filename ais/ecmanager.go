@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
+//nolint:maligned
 type ecManager struct {
 	sync.RWMutex
 

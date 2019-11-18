@@ -10,6 +10,7 @@ var (
 	Params SoakParams
 )
 
+//nolint:maligned
 type SoakParams struct {
 	// specifying the primary proxy
 	IP   string

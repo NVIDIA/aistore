@@ -54,8 +54,8 @@ type (
 		smapVersion int64 // Smap version on which this rebalance has started
 	}
 	xactLocalReb struct {
-		xactRebBase
 		cmn.MountpathXact
+		xactRebBase
 	}
 	xactPrefetch struct {
 		cmn.XactBase
@@ -63,8 +63,8 @@ type (
 		r *stats.Trunner
 	}
 	xactEvictDelete struct {
-		cmn.XactBase
 		cmn.NonmountpathXact
+		cmn.XactBase
 	}
 	xactElection struct {
 		cmn.XactBase

@@ -38,6 +38,7 @@ var (
 )
 
 type (
+	//nolint:maligned
 	dsortFramework struct {
 		m *ioContext
 

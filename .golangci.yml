@@ -21,10 +21,10 @@ linters:
     - goimports
     - whitespace
     - unparam
+    - maligned
     # following linters produce a lot false positives, enable only when needed:
     # - gosec
     # - scopelint
-    # - maligned
     # not using structcheck since it doesn't handle embedded structs
 
 linters-settings:

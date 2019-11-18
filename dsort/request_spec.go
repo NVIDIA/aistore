@@ -74,6 +74,7 @@ type parsedOutputTemplate struct {
 }
 
 // RequestSpec defines the user specification for requests to the endpoint /v1/sort.
+//nolint:maligned
 type RequestSpec struct {
 	// Required
 	Bucket          string `json:"bucket"`
@@ -101,6 +102,7 @@ type RequestSpec struct {
 	DryRun      bool   `json:"dry_run"` // Default: false
 }
 
+//nolint:maligned
 type ParsedRequestSpec struct {
 	Bucket           string                `json:"bucket"`
 	Description      string                `json:"description"`
