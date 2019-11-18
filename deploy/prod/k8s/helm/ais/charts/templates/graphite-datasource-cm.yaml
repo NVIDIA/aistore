@@ -10,7 +10,7 @@ data:
     # Based on https://github.com/helm/charts/tree/master/stable/grafana
     #
     # We deploy Grafana with the sidecar for datasources enabled and monitoring
-    # ConfigMap objects labelled with a key 'ais_grafana_datasource'. This ConfigMap
+    # ConfigMap objects labeled with a key 'ais_grafana_datasource'. This ConfigMap
     # serves to connect our new Grafana instance with our new Graphite instance.
     #
     # config file version

@@ -7,7 +7,7 @@
 
 # MY_NODE and MY_POD are filled in proxy daemonset spec, using Downward API
 #
-# If no node is suitably labelled, this script will not complete and the
+# If no node is suitably labeled, this script will not complete and the
 # and so, too, will the initContainer fail to complete.  A simple
 # kubectl logs <podname> won't show anything - to view logs, use
 # kubectl logs <podname> -c <init-container-name> - see the
@@ -17,7 +17,7 @@
 filter="{{ .Values.proxy.initialPrimaryProxyNodeLabel.name }}={{ .Values.proxy.initialPrimaryProxyNodeLabel.value }}"
 
 #
-# XXX TODO should check the primary node is also labelled as a proxy node
+# XXX TODO should check the primary node is also labeled as a proxy node
 # XXX TODO Defeats running multiple AIS helm app instances.
 #
 function listmatchingnodes {
@@ -29,7 +29,7 @@ do
     n=$(listmatchingnodes | wc -l)
     [[ $n -eq 1 ]] && break
 
-    echo "$n nodes labelled $filter, waiting for exactly 1"
+    echo "$n nodes labeled $filter, waiting for exactly 1"
     sleep 5
 done
 
@@ -47,7 +47,7 @@ if [[ "$primary" == "$MY_NODE" ]]; then
     echo "export AIS_PRIMARYPROXY=True" > $envfile
     
     #
-    # Labelling the pod creates a DNS entry for the initial proxy service (by completing
+    # Labeling the pod creates a DNS entry for the initial proxy service (by completing
     # the set of labels in the selector of the ais-initial-primary-proxy headless service).
     #
     kubectl label pod $MY_POD "$filter"

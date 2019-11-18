@@ -6,7 +6,7 @@ the cluster includes both AIS proxy/target nodes and other non-AIS nodes to act 
 chart, and the helm release name of the ais release passed as param as in example below (so
 that aisloader knows which proxy to contact).
 
-Pods will be created on nodes that match the nodeSelector labelling in values.yaml, the default
+Pods will be created on nodes that match the nodeSelector labeling in values.yaml, the default
 being aisloader=yes. Each container so created will run an aisloader instance with parameters
 as per the included ConfigMap which is parametrized from values.yaml.
 

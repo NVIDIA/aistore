@@ -20,25 +20,25 @@ mkdir /var/log/aismisc
 #
 # If this pod is part of the proxy daemonset then the initContainer in that
 # daemonset spec has run to completion and checked whether the node we're
-# hosted on is labelled as initial primary proxy. If it is, then the current
-# pod is labelled as initial primary proxy (satisfying the selection criteria
+# hosted on is labeled as initial primary proxy. If it is, then the current
+# pod is labeled as initial primary proxy (satisfying the selection criteria
 # for the primary proxy headless service, so creating the DNS entry we
 # require).
 #
 # It would be nice to consult metadata.labels in the Downward API to
-# see if this pod has been labelled as described. Alas, the Downward API
+# see if this pod has been labeled as described. Alas, the Downward API
 # offers only the value from before the pod started and the initContainer ran.
 # We also cannot use kubectl without granting this AIS pod more privs than
 # is suitable. So instead we continue to rely on a file passed in a mount
 # path.
 #
 if [[ -f /var/ais_env/env ]]; then
-    echo "The initContainer detected running on node labelled as initial primary proxy"
+    echo "The initContainer detected running on node labeled as initial primary proxy"
     export AIS_PRIMARYPROXY=True
     is_primary=true
 else
     # Caution - don't set AIS_PRIMARYPROXY false here, it just looks for any non-NULL value
-    echo "The initContainer determined our node is not labelled as initial primary proxy"
+    echo "The initContainer determined our node is not labeled as initial primary proxy"
     is_primary=false
 fi
 

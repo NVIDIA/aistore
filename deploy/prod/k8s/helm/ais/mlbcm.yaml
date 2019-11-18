@@ -7,7 +7,7 @@
 # (https://metallb.universe.tf/). Using metalLB with BGP in
 # the presence of Calico is tricky (see site) so the following
 # is the simple layer 2 alternative as also described on the
-# site. It does have the disadvantage of channelling all
+# site. It does have the disadvantage of channeling all
 # gateway traffic through a single node (from which it fans
 # out to all pods matching the selector, ie all proxy pods) -
 # as a simple redirection service the AIS proxy traffic is

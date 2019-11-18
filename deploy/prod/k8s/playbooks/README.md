@@ -14,7 +14,7 @@ These playbooks are intended both for standalone use and for supporting automati
 
 ### Playbooks Supporting AIS Installation
 
-The AIS application is installed using Helm, and proxy/target pods will start up on suitably labelled nodes. *Before* a target pod is started on a node, AIS filesystems (as will be enumerated in the helm install values.yaml or over-rides thereof) must be present and mounted. 
+The AIS application is installed using Helm, and proxy/target pods will start up on suitably labeled nodes. *Before* a target pod is started on a node, AIS filesystems (as will be enumerated in the helm install values.yaml or over-rides thereof) must be present and mounted. 
 1. `ais_datafs_mkfs.yml` - The playbooks *performs mkfs (all existing data lost!) on the requested devices and mounts them on standardized mountpoints (`/ais/<device>`)*. It should only be necessary prior to a first helm install of AIS - other times you most likely want to retain the data in these filesystems for the new AIS instance to inherit.
 2. `ais_datafs_mount.yml` - Mount AIS filesystems that were previously mkfs'd and added to /etc/fstab
 3. `ais_datafs_umount.yml` - Unmount AIS filesystems, but leave their /etc/fstab entries intact

@@ -26,7 +26,7 @@ PULLSECRETNAME=""
 
 #
 # Mountpaths in AIS target nodes for use by AIS (as hostPath volumes). You must specify this.
-# Target nodes are controlled by node labelling.
+# Target nodes are controlled by node labeling.
 #
 #MOUNTPATHS='{/ais/sda,/ais/sdb,/ais/sdc,/ais/sdd,/ais/sde,/ais/sdf,/ais/sdg,/ais/sdh,/ais/sdi,/ais/sdj}'
 #MOUNTPATHS='{/ais/sdb,/ais/sdc,/ais/sdd}'

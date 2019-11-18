@@ -76,7 +76,7 @@ class Ais:
         """ Query k8s for AIS state. """
 
         #
-        # Load nodes labelled as per nodeSelectors for proxy, ne-proxy, target
+        # Load nodes labeled as per nodeSelectors for proxy, ne-proxy, target
         #
         if not quiet:
             print("Querying AIS k8s cluster nodes ...")
@@ -85,7 +85,7 @@ class Ais:
         self.nodes_target = sorted(self.v1api.list_node(label_selector=self.nodeTargetLabel).items, key=attrgetter('metadata.name'))
 
         #
-        # Look for node labelled as initial primary proxy
+        # Look for node labeled as initial primary proxy
         #
         for node in self.nodes_proxy:
             if node.metadata.labels.get(u'initial_primary_proxy', None) == 'yes':
@@ -234,15 +234,15 @@ class Ais:
                 break
 
     def aisProxyNodes(self):
-        """Return list of nodes labelled for proxies."""
+        """Return list of nodes labeled for proxies."""
         return self.nodes_proxy
 
     def aisNeProxyNodes(self):
-        """Return list of nodes labelled for ne proxies."""
+        """Return list of nodes labeled for ne proxies."""
         return self.nodes_neproxy
 
     def aisTargetNodes(self):
-        """Return list of nodes labelled for targets."""
+        """Return list of nodes labeled for targets."""
         return self.nodes_target
 
     def walkProxyNodes(self, cbfunc):
@@ -289,7 +289,7 @@ class Ais:
         self._aisPodWalk(self.daemons['target'], cbfunc)
 
     def getInitialPrimaryNodeName(self):
-        """Return node name labelled initial primary, or '-' if none."""
+        """Return node name labeled initial primary, or '-' if none."""
         if self.initialPrimaryNodeName is not None:
             return self.initialPrimaryNodeName
         else:
@@ -317,9 +317,9 @@ def print_ais_topo(aishdl):
         'target':   0
     }
 
-    print("Node labelling:\n\tProxy node(s): %d\n\tNon-electable proxy node(s): %d\n\tTarget node(s): %d" %
+    print("Node labeling:\n\tProxy node(s): %d\n\tNon-electable proxy node(s): %d\n\tTarget node(s): %d" %
         (len(aishdl.aisProxyNodes()), len(aishdl.aisNeProxyNodes()), len(aishdl.aisTargetNodes()) ))
-    print("\tNode labelled as initial primary proxy: %s\n" % nodename_ipp)
+    print("\tNode labeled as initial primary proxy: %s\n" % nodename_ipp)
 
     ip, port = aishdl.getProxyClusterSvc()
     print("\tProxy ClusterIP service: %s:%s\n" % (ip, port))

@@ -356,7 +356,7 @@ Error from AIStore in completing the request
 ___
 
 #### GetObjectWithValidation
-Same behaviour as `GetObject`, but performs checksum validation of the object by comparing the checksum in the response header with the calculated checksum value derived from the returned object.
+Same behavior as `GetObject`, but performs checksum validation of the object by comparing the checksum in the response header with the calculated checksum value derived from the returned object.
 
 ##### Parameters
 | Name       | Type           | Description                                                                           |

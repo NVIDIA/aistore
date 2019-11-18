@@ -16,7 +16,7 @@ AIStore on Kubernetes utilizes a [local Docker repository](https://docs.docker.c
 ```sh
 $ sudo vim /etc/ssl/openssl.cnf
 ```
-Add the line `subjectAltName=IP:<YOUR_IPv4_ADDRESS>` below the section labelled `[ v3_ca ]`.
+Add the line `subjectAltName=IP:<YOUR_IPv4_ADDRESS>` below the section labeled `[ v3_ca ]`.
 
 2. Create a certificate directory
 ```sh

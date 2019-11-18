@@ -68,7 +68,7 @@ issues:
     - linters:
         - golint
       text: "should be consistent with previous receiver name"
-    
+
     - linters:
         - golint
       text: "and that stutters; consider calling this"
@@ -94,9 +94,6 @@ run:
 
   build-tags:
     - hrw # build hrw so that staticcheck doesn't complain about unused export functions
-
-  skip-dirs:
-    - openapi
 
   concurrency: 4
   deadline: 5m

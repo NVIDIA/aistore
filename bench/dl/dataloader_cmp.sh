@@ -149,7 +149,7 @@ function create_pod {
       protocol: TCP"
 	fi
 
-  # nodeAffinity and node labelling may be nicer, but this'll do
+  # nodeAffinity and node labeling may be nicer, but this'll do
   reqnodename=""
   if [[ $reqnode != "-" ]]; then
   reqnodename="\

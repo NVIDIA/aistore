@@ -2,7 +2,7 @@
 # Packages to install on all hosts. Most of these are for debug and convenience, none
 # essential for AIS.
 #
-# XXX TODO Need to separate this into Linux flavours - these assume Ubuntu
+# XXX TODO Need to separate this into Linux flavors - these assume Ubuntu
 #
 ais_packages:
   - dstat

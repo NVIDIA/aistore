@@ -1,9 +1,9 @@
 #!/bin/bash
 
-LOGROOT="/tmp/ais"
-TMPFILE=$LOGROOT/ais_cov
+LOG_ROOT="/tmp/ais"
+TMP_FILE="$LOG_ROOT/ais_cov"
 
-echo 'mode: count' > $TMPFILE
-tail -q -n +2 $LOGROOT/*.cov >> $TMPFILE
-go tool cover -html=$TMPFILE -o $LOGROOT/ais_cov.html
-rm $TMPFILE
+echo 'mode: count' > ${TMP_FILE}
+tail -q -n +2 "${LOG_ROOT}/*.cov" >> ${TMP_FILE}
+go tool cover -html=${TMP_FILE} -o "${LOG_ROOT}/ais_cov.html"
+rm ${TMP_FILE}

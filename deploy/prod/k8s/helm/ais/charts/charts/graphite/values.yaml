@@ -135,7 +135,7 @@ configMaps:
     #LOCAL_DATA_DIR = /opt/graphite/storage/whisper/
 
     # Specify the database library used to store metric data on disk. Each database
-    # may have configurable options to change the behaviour of how it writes to
+    # may have configurable options to change the behavior of how it writes to
     # persistent storage.
     #
     # whisper - Fixed-size database, similar in design and purpose to RRD. This is
