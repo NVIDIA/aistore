@@ -548,4 +548,30 @@ var _ = Describe("Common file", func() {
 			Entry("same number of elements but different content (swapped)", []string{"two", "three", "one"}, []string{"four", "two", "three"}, false),
 		)
 	})
+
+	Context("ExpandPath", func() {
+		It("should expand short path with current home", func() {
+			shortPath := "~"
+			path := cmn.ExpandPath(shortPath)
+			Expect(path).ToNot(Equal(shortPath))
+		})
+
+		It("should expand long path with current home", func() {
+			longPath := "~/tmp"
+			path := cmn.ExpandPath(longPath)
+			Expect(path).ToNot(Equal(longPath))
+		})
+
+		It("should not expand path when prefixed with more than one tilde", func() {
+			shortPath := "~~.tmp"
+			path := cmn.ExpandPath(shortPath)
+			Expect(path).To(Equal(shortPath))
+		})
+
+		It("should not expand empty path", func() {
+			emptyPath := ""
+			path := cmn.ExpandPath(emptyPath)
+			Expect(path).To(Equal(emptyPath))
+		})
+	})
 })
