@@ -940,7 +940,7 @@ func TestHeadObject(t *testing.T) {
 		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
 
-	propsExp := &cmn.ObjectProps{Size: objSize, Version: "", NumCopies: 1, Checksum: hash, Present: true, BckIsAIS: true}
+	propsExp := &cmn.ObjectProps{Size: objSize, Version: "1", NumCopies: 1, Checksum: hash, Present: true, BckIsAIS: true}
 	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestBucketName, "", objName)
 	if err != nil {
 		t.Errorf("api.HeadObject failed, err = %v", err)

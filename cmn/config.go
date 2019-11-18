@@ -261,7 +261,7 @@ type Config struct {
 	Rebalance        RebalanceConf   `json:"rebalance"`
 	Replication      ReplicationConf `json:"replication"`
 	Cksum            CksumConf       `json:"cksum"`
-	Ver              VersionConf     `json:"version"`
+	Versioning       VersionConf     `json:"versioning"`
 	FSpaths          FSPathsConf     `json:"fspaths"`
 	TestFSP          TestfspathConf  `json:"test_fspaths"`
 	Net              NetConf         `json:"net"`
@@ -390,31 +390,33 @@ type ReplicationConf struct {
 }
 
 type CksumConf struct {
-	// Type of hashing algorithm used to check for object corruption
-	// Values: none, xxhash, md5, inherit
-	// Value of 'none' disables hash checking
+	// Type of hashing algorithm used to check for object corruption.
+	// Values: "none", "xxhash", "md5", "inherit".
+	// Value "none" disables hash checking.
 	Type string `json:"type"`
 
 	// ValidateColdGet determines whether or not the checksum of received object
-	// is checked after downloading it from the cloud or next tier
+	// is checked after downloading it from the cloud or next tier.
 	ValidateColdGet bool `json:"validate_cold_get"`
 
 	// ValidateWarmGet: if enabled, the object's version (if in Cloud-based bucket)
 	// and checksum are checked. If either value fail to match, the object
-	// is removed from local storage
+	// is removed from local storage.
 	ValidateWarmGet bool `json:"validate_warm_get"`
 
-	// ValidateObjMove determines if migrated objects should have their checksum validated
+	// ValidateObjMove determines if migrated objects should have their checksum validated.
 	ValidateObjMove bool `json:"validate_obj_move"`
 
-	// EnableReadRange: Return read range checksum otherwise return entire object checksum
+	// EnableReadRange: Return read range checksum otherwise return entire object checksum.
 	EnableReadRange bool `json:"enable_read_range"`
 }
 
 type VersionConf struct {
-	Type            string `json:"type"`              // inherited/owned
-	Enabled         bool   `json:"enabled"`           // defined by the Versioning; can be redefined on a bucket level
-	ValidateWarmGet bool   `json:"validate_warm_get"` // validate object version upon warm GET
+	// Determines if the versioning is enabled.
+	Enabled bool `json:"enabled"`
+
+	// Validate object version upon warm GET.
+	ValidateWarmGet bool `json:"validate_warm_get"`
 }
 
 type TestfspathConf struct {
@@ -627,8 +629,8 @@ func (c *Config) TestingEnv() bool {
 
 func (c *Config) Validate() error {
 	validators := []Validator{
-		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum,
-		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net, &c.Ver,
+		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum, &c.Versioning,
+		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net,
 		&c.Downloader, &c.DSort, &c.TestFSP, &c.FSpaths, &c.Compression,
 	}
 	for _, validator := range validators {
@@ -692,10 +694,10 @@ func (c *DiskConf) Validate(_ *Config) (err error) {
 	}
 
 	if c.IostatTimeLong, err = time.ParseDuration(c.IostatTimeLongStr); err != nil {
-		return fmt.Errorf("bad disk.iostat_time_long format %s, err %v", c.IostatTimeLongStr, err)
+		return fmt.Errorf("invalid disk.iostat_time_long format %s, err %v", c.IostatTimeLongStr, err)
 	}
 	if c.IostatTimeShort, err = time.ParseDuration(c.IostatTimeShortStr); err != nil {
-		return fmt.Errorf("bad disk.iostat_time_short format %s, err %v", c.IostatTimeShortStr, err)
+		return fmt.Errorf("invalid disk.iostat_time_short format %s, err %v", c.IostatTimeShortStr, err)
 	}
 	if c.IostatTimeLong <= 0 {
 		return fmt.Errorf("disk.iostat_time_long is zero")
@@ -733,7 +735,8 @@ func (c *LRUConf) ValidateAsProps(args *ValidationArgs) (err error) {
 
 func (c *CksumConf) Validate(_ *Config) error {
 	if c.Type != ChecksumXXHash && c.Type != ChecksumNone {
-		return fmt.Errorf("invalid checksum.type: %s (expected one of [%s, %s])", c.Type, ChecksumXXHash, ChecksumNone)
+		return fmt.Errorf("invalid checksum.type: %s (expected one of [%s, %s])",
+			c.Type, ChecksumXXHash, ChecksumNone)
 	}
 	return nil
 }
@@ -747,8 +750,8 @@ func (c *CksumConf) ValidateAsProps(args *ValidationArgs) error {
 }
 
 func (c *VersionConf) Validate(_ *Config) error {
-	if c.ValidateWarmGet && !c.Enabled {
-		return errors.New("validate-warm-get requires versioning to be enabled")
+	if !c.Enabled && c.ValidateWarmGet {
+		return errors.New("versioning.validate_warm_get requires versioning to be enabled")
 	}
 	return nil
 }
@@ -756,13 +759,13 @@ func (c *VersionConf) ValidateAsProps() error { return c.Validate(nil) }
 
 func (c *MirrorConf) Validate(_ *Config) error {
 	if c.UtilThresh < 0 || c.UtilThresh > 100 {
-		return fmt.Errorf("bad mirror.util_thresh: %v (expected value in range [0, 100])", c.UtilThresh)
+		return fmt.Errorf("invalid mirror.util_thresh: %v (expected value in range [0, 100])", c.UtilThresh)
 	}
 	if c.Burst < 0 {
-		return fmt.Errorf("bad mirror.burst: %v (expected >0)", c.UtilThresh)
+		return fmt.Errorf("invalid mirror.burst: %v (expected >0)", c.UtilThresh)
 	}
 	if c.Copies < 2 || c.Copies > 32 {
-		return fmt.Errorf("bad mirror.copies: %d (expected value in range [2, 32])", c.Copies)
+		return fmt.Errorf("invalid mirror.copies: %d (expected value in range [2, 32])", c.Copies)
 	}
 	return nil
 }
@@ -776,14 +779,14 @@ func (c *MirrorConf) ValidateAsProps(args *ValidationArgs) error {
 
 func (c *ECConf) Validate(_ *Config) error {
 	if c.ObjSizeLimit < 0 {
-		return fmt.Errorf("bad ec.obj_size_limit: %d (expected >=0)", c.ObjSizeLimit)
+		return fmt.Errorf("invalid ec.obj_size_limit: %d (expected >=0)", c.ObjSizeLimit)
 	}
 	if c.DataSlices < MinSliceCount || c.DataSlices > MaxSliceCount {
-		return fmt.Errorf("bad ec.data_slices: %d (expected value in range [%d, %d])", c.DataSlices, MinSliceCount, MaxSliceCount)
+		return fmt.Errorf("invalid ec.data_slices: %d (expected value in range [%d, %d])", c.DataSlices, MinSliceCount, MaxSliceCount)
 	}
 	// TODO: warn about performance if number is OK but large?
 	if c.ParitySlices < MinSliceCount || c.ParitySlices > MaxSliceCount {
-		return fmt.Errorf("bad ec.parity_slices: %d (expected value in range [%d, %d])", c.ParitySlices, MinSliceCount, MaxSliceCount)
+		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])", c.ParitySlices, MinSliceCount, MaxSliceCount)
 	}
 	return nil
 }
@@ -806,61 +809,61 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 
 func (c *TimeoutConf) Validate(_ *Config) (err error) {
 	if c.Default, err = time.ParseDuration(c.DefaultStr); err != nil {
-		return fmt.Errorf("bad timeout.default format %s, err %v", c.DefaultStr, err)
+		return fmt.Errorf("invalid timeout.default format %s, err %v", c.DefaultStr, err)
 	}
 	if c.DefaultLong, err = time.ParseDuration(c.DefaultLongStr); err != nil {
-		return fmt.Errorf("bad timeout.default_long format %s, err %v", c.DefaultLongStr, err)
+		return fmt.Errorf("invalid timeout.default_long format %s, err %v", c.DefaultLongStr, err)
 	}
 	if c.ListBucket, err = time.ParseDuration(c.ListBucketStr); err != nil {
-		return fmt.Errorf("bad timeout.list_timeout format %s, err %v", c.ListBucketStr, err)
+		return fmt.Errorf("invalid timeout.list_timeout format %s, err %v", c.ListBucketStr, err)
 	}
 	if c.MaxKeepalive, err = time.ParseDuration(c.MaxKeepaliveStr); err != nil {
-		return fmt.Errorf("bad timeout.max_keepalive format %s, err %v", c.MaxKeepaliveStr, err)
+		return fmt.Errorf("invalid timeout.max_keepalive format %s, err %v", c.MaxKeepaliveStr, err)
 	}
 	if c.ProxyPing, err = time.ParseDuration(c.ProxyPingStr); err != nil {
-		return fmt.Errorf("bad timeout.proxy_ping format %s, err %v", c.ProxyPingStr, err)
+		return fmt.Errorf("invalid timeout.proxy_ping format %s, err %v", c.ProxyPingStr, err)
 	}
 	if c.CplaneOperation, err = time.ParseDuration(c.CplaneOperationStr); err != nil {
-		return fmt.Errorf("bad timeout.vote_request format %s, err %v", c.CplaneOperationStr, err)
+		return fmt.Errorf("invalid timeout.vote_request format %s, err %v", c.CplaneOperationStr, err)
 	}
 	if c.SendFile, err = time.ParseDuration(c.SendFileStr); err != nil {
-		return fmt.Errorf("bad timeout.send_file_time format %s, err %v", c.SendFileStr, err)
+		return fmt.Errorf("invalid timeout.send_file_time format %s, err %v", c.SendFileStr, err)
 	}
 	if c.Startup, err = time.ParseDuration(c.StartupStr); err != nil {
-		return fmt.Errorf("bad timeout.startup_time format %s, err %v", c.StartupStr, err)
+		return fmt.Errorf("invalid timeout.startup_time format %s, err %v", c.StartupStr, err)
 	}
 	return nil
 }
 
 func (c *RebalanceConf) Validate(_ *Config) (err error) {
 	if c.DestRetryTime, err = time.ParseDuration(c.DestRetryTimeStr); err != nil {
-		return fmt.Errorf("bad rebalance.dest_retry_time format %s, err %v", c.DestRetryTimeStr, err)
+		return fmt.Errorf("invalid rebalance.dest_retry_time format %s, err %v", c.DestRetryTimeStr, err)
 	}
 	return nil
 }
 
 func (c *PeriodConf) Validate(_ *Config) (err error) {
 	if c.StatsTime, err = time.ParseDuration(c.StatsTimeStr); err != nil {
-		return fmt.Errorf("bad periodic.stats_time format %s, err %v", c.StatsTimeStr, err)
+		return fmt.Errorf("invalid periodic.stats_time format %s, err %v", c.StatsTimeStr, err)
 	}
 	if c.RetrySyncTime, err = time.ParseDuration(c.RetrySyncTimeStr); err != nil {
-		return fmt.Errorf("bad periodic.retry_sync_time format %s, err %v", c.RetrySyncTimeStr, err)
+		return fmt.Errorf("invalid periodic.retry_sync_time format %s, err %v", c.RetrySyncTimeStr, err)
 	}
 	return nil
 }
 
 func (c *KeepaliveConf) Validate(_ *Config) (err error) {
 	if c.Proxy.Interval, err = time.ParseDuration(c.Proxy.IntervalStr); err != nil {
-		return fmt.Errorf("bad keepalivetracker.proxy.interval %s", c.Proxy.IntervalStr)
+		return fmt.Errorf("invalid keepalivetracker.proxy.interval %s", c.Proxy.IntervalStr)
 	}
 	if c.Target.Interval, err = time.ParseDuration(c.Target.IntervalStr); err != nil {
-		return fmt.Errorf("bad keepalivetracker.target.interval %s", c.Target.IntervalStr)
+		return fmt.Errorf("invalid keepalivetracker.target.interval %s", c.Target.IntervalStr)
 	}
 	if !validKeepaliveType(c.Proxy.Name) {
-		return fmt.Errorf("bad keepalivetracker.proxy.name %s", c.Proxy.Name)
+		return fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
 	}
 	if !validKeepaliveType(c.Target.Name) {
-		return fmt.Errorf("bad keepalivetracker.target.name %s", c.Target.Name)
+		return fmt.Errorf("invalid keepalivetracker.target.name %s", c.Target.Name)
 	}
 	return nil
 }
@@ -876,16 +879,16 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 
 	// Parse ports
 	if c.L4.Port, err = ParsePort(c.L4.PortStr); err != nil {
-		return fmt.Errorf("bad public port specified: %v", err)
+		return fmt.Errorf("invalid public port specified: %v", err)
 	}
 	if c.L4.PortIntraControl != 0 {
 		if c.L4.PortIntraControl, err = ParsePort(c.L4.PortIntraControlStr); err != nil {
-			return fmt.Errorf("bad intra control port specified: %v", err)
+			return fmt.Errorf("invalid intra control port specified: %v", err)
 		}
 	}
 	if c.L4.PortIntraData != 0 {
 		if c.L4.PortIntraData, err = ParsePort(c.L4.PortIntraDataStr); err != nil {
-			return fmt.Errorf("bad intra data port specified: %v", err)
+			return fmt.Errorf("invalid intra data port specified: %v", err)
 		}
 	}
 
@@ -921,33 +924,33 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 
 func (c *DownloaderConf) Validate(_ *Config) (err error) {
 	if c.Timeout, err = time.ParseDuration(c.TimeoutStr); err != nil {
-		return fmt.Errorf("bad downloader.timeout %s", c.TimeoutStr)
+		return fmt.Errorf("invalid downloader.timeout %s", c.TimeoutStr)
 	}
 	return nil
 }
 
 func (c *DSortConf) Validate(_ *Config) (err error) {
 	if !StringInSlice(c.DuplicatedRecords, SupportedReactions) {
-		return fmt.Errorf("bad distributed_sort.duplicated_records: %s (expecting one of: %s)",
+		return fmt.Errorf("invalid distributed_sort.duplicated_records: %s (expecting one of: %s)",
 			c.DuplicatedRecords, SupportedReactions)
 	}
 	if !StringInSlice(c.MissingShards, SupportedReactions) {
-		return fmt.Errorf("bad distributed_sort.missing_records: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
+		return fmt.Errorf("invalid distributed_sort.missing_records: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
 	}
 	if !StringInSlice(c.EKMMalformedLine, SupportedReactions) {
-		return fmt.Errorf("bad distributed_sort.ekm_malformed_line: %s (expecting one of: %s)", c.EKMMalformedLine, SupportedReactions)
+		return fmt.Errorf("invalid distributed_sort.ekm_malformed_line: %s (expecting one of: %s)", c.EKMMalformedLine, SupportedReactions)
 	}
 	if !StringInSlice(c.EKMMissingKey, SupportedReactions) {
-		return fmt.Errorf("bad distributed_sort.ekm_missing_key: %s (expecting one of: %s)", c.EKMMissingKey, SupportedReactions)
+		return fmt.Errorf("invalid distributed_sort.ekm_missing_key: %s (expecting one of: %s)", c.EKMMissingKey, SupportedReactions)
 	}
 	if _, err := ParseQuantity(c.DefaultMaxMemUsage); err != nil {
-		return fmt.Errorf("bad distributed_sort.default_max_mem_usage: %s (err: %s)", c.DefaultMaxMemUsage, err)
+		return fmt.Errorf("invalid distributed_sort.default_max_mem_usage: %s (err: %s)", c.DefaultMaxMemUsage, err)
 	}
 	if c.CallTimeout, err = time.ParseDuration(c.CallTimeoutStr); err != nil {
-		return fmt.Errorf("bad distributed_sort.call_timeout: %s", c.CallTimeoutStr)
+		return fmt.Errorf("invalid distributed_sort.call_timeout: %s", c.CallTimeoutStr)
 	}
 	if _, err := S2B(c.DSorterMemThreshold); err != nil {
-		return fmt.Errorf("bad distributed_sort.dsorter_mem_threshold: %s (err: %s)", c.DSorterMemThreshold, err)
+		return fmt.Errorf("invalid distributed_sort.dsorter_mem_threshold: %s (err: %s)", c.DSorterMemThreshold, err)
 	}
 	return nil
 }
@@ -1124,10 +1127,10 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return &conf.Cksum, updateValue(&conf.Cksum.EnableReadRange)
 
 	// VERSION
-	case "versioning_enabled", "ver_enabled", HeaderBucketVerEnabled:
-		return nil, updateValue(&conf.Ver.Enabled)
-	case "versioning_validate_warm_get", "ver_validate_warm_get", HeaderBucketVerValidateWarm:
-		return nil, updateValue(&conf.Ver.ValidateWarmGet)
+	case "versioning_enabled", HeaderBucketVerEnabled:
+		return nil, updateValue(&conf.Versioning.Enabled)
+	case "versioning_validate_warm_get", HeaderBucketVerValidateWarm:
+		return nil, updateValue(&conf.Versioning.ValidateWarmGet)
 
 	// MIRROR
 	case "mirror_enabled", HeaderBucketMirrorEnabled:

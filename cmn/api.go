@@ -426,7 +426,7 @@ func DefaultBucketProps() *BucketProps {
 		Cksum:       c.Cksum,
 		LRU:         c.LRU,
 		Mirror:      c.Mirror,
-		Versioning:  c.Ver,
+		Versioning:  c.Versioning,
 		AccessAttrs: AllowAllAccess,
 		EC:          c.EC,
 	}
@@ -448,13 +448,7 @@ func (to *BucketProps) CopyFrom(from *BucketProps) {
 			to.Cksum = from.Cksum
 		}
 	}
-	if from.Versioning.Type != "" {
-		if from.Versioning.Type != PropInherit {
-			to.Versioning = from.Versioning
-		} else {
-			to.Versioning.Type = from.Versioning.Type
-		}
-	}
+	to.Versioning = from.Versioning
 	to.LRU = from.LRU
 	to.Mirror = from.Mirror
 	to.EC = from.EC

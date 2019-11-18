@@ -69,10 +69,10 @@ var (
 
 func (c *Config) validate() (err error) {
 	if c.Timeout.TCPTimeout, err = time.ParseDuration(c.Timeout.TCPTimeoutStr); err != nil {
-		return fmt.Errorf("bad timeout.tcp_timeout format %q: %v", c.Timeout.TCPTimeoutStr, err)
+		return fmt.Errorf("invalid timeout.tcp_timeout format %q: %v", c.Timeout.TCPTimeoutStr, err)
 	}
 	if c.Timeout.HTTPTimeout, err = time.ParseDuration(c.Timeout.HTTPTimeoutStr); err != nil {
-		return fmt.Errorf("bad timeout.http_timeout format %q: %v", c.Timeout.HTTPTimeoutStr, err)
+		return fmt.Errorf("invalid timeout.http_timeout format %q: %v", c.Timeout.HTTPTimeoutStr, err)
 	}
 	return nil
 }

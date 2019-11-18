@@ -418,8 +418,8 @@ func propsMainTest(t *testing.T, versioning bool) {
 	chkVersion := true
 
 	config := getClusterConfig(t, proxyURL)
-	oldChkVersion := config.Ver.ValidateWarmGet
-	oldVersioning := config.Ver.Enabled
+	oldChkVersion := config.Versioning.ValidateWarmGet
+	oldVersioning := config.Versioning.Enabled
 
 	if oldChkVersion != chkVersion {
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerValidateWarm: fmt.Sprintf("%v", chkVersion)})

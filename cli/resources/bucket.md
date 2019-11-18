@@ -170,7 +170,6 @@ Setting **all** bucket attributes based on the provided JSON specification
 ais set props mybucket --jsonspec '{
     "cloud_provider": "ais",
     "versioning": {
-      "type": "own",
       "enabled": true,
       "validate_warm_get": false
     },
@@ -226,7 +225,6 @@ If not all properties are mentioned in the JSON, the missing ones are set to zer
 ais set props mybucket --jsonspec '{
     "cloud_provider": "ais",
     "versioning": {
-      "type": "own",
       "enabled": true,
       "validate_warm_get": true
     }

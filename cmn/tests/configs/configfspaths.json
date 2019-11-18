@@ -68,8 +68,8 @@
     "enable_read_range":          false
   },
   "versioning": {
-    "enabled":		"true",
-    "validate_warm_get":	false
+    "enabled":           true,
+    "validate_warm_get": false
   },
   "fspaths": {
     "/tmp/ais/1": " ",

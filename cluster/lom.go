@@ -121,13 +121,7 @@ func (lom *LOM) CksumConf() *cmn.CksumConf {
 	}
 	return conf
 }
-func (lom *LOM) VerConf() *cmn.VersionConf {
-	conf := &lom.Bprops().Versioning
-	if conf.Type == cmn.PropInherit {
-		conf = &lom.Config().Ver
-	}
-	return conf
-}
+func (lom *LOM) VerConf() *cmn.VersionConf { return &lom.Bprops().Versioning }
 
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil

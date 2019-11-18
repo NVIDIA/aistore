@@ -71,12 +71,12 @@ cat > $CONFFILE <<EOL
 		"enable_read_range":	false
 	},
 	"compression": {
-		"block_size":		${BLOCK_SIZE:-262144},
-		"checksum":		${CHECKSUM:-false}
+		"block_size": ${BLOCK_SIZE:-262144},
+		"checksum":   ${CHECKSUM:-false}
 	},
 	"versioning": {
-		"enabled":		"true",
-		"validate_warm_get":	false
+		"enabled":           true,
+		"validate_warm_get": false
 	},
 	"fspaths": {
 		$FSPATHS

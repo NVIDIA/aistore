@@ -1492,7 +1492,6 @@ func TestECXattrs(t *testing.T) {
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
-	bckProps.Versioning.Type = cmn.PropOwn
 	bckProps.Versioning.Enabled = true
 
 	newLocalBckWithProps(t, bucket, bckProps, baseParams, o)
