@@ -81,7 +81,7 @@ import (
 // 3. If the object is small, the main target broadcast the replicas.
 //    Otherwise, the target calculates data and parity slices, then sends them.
 //
-//Object GET:
+// Object GET:
 // 1. The main target - the target that is responsible for keeping the full object
 //	  data and for restoring the object becomes damaged - is determined by
 //	  HrwTarget algorithm. A proxy delegates object GET request to it.

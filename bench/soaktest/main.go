@@ -88,7 +88,7 @@ func printUsage(f *flag.FlagSet) {
 
 func parseCmdLine() {
 	// Command line options
-	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError) //Discard flags of imported packages
+	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError) // Discard flags of imported packages
 
 	f.StringVar(&soakcmn.Params.IP, "ip", "", "IP address for proxy server")
 	f.StringVar(&soakcmn.Params.Port, "port", "", "Port number for proxy server")
@@ -130,9 +130,9 @@ func parseCmdLine() {
 	}
 
 	os.Args = []string{os.Args[0]}
-	flag.Parse() //Called so that imported packages don't compain
+	flag.Parse() // Called so that imported packages don't compain
 
-	//Check commands (not args)
+	// Check commands (not args)
 	if f.NArg() != 0 {
 		switch f.Arg(0) {
 		case "usage":
@@ -187,7 +187,7 @@ func main() {
 			cmn.ExitInfof("RecipeID list empty")
 		}
 
-		//de-dup
+		// de-dup
 		soakcmn.Params.RecSet = make(map[int]struct{})
 		for _, x := range recipeList {
 			soakcmn.Params.RecSet[x] = struct{}{}

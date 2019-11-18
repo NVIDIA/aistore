@@ -284,7 +284,7 @@ func Test_CancelStream(t *testing.T) {
 	if !canceled {
 		tutils.Logln("Delayed cancelation...")
 	}
-	cancel() //does nothing if cancel() was called before, placed here to keep govet linter happy
+	cancel() // Does nothing if cancel() was called before, placed here to keep govet linter happy
 
 	termReason, termErr := stream.TermInfo()
 	stats := stream.GetStats()

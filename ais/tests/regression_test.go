@@ -496,12 +496,12 @@ func TestListObjectsPrefix(t *testing.T) {
 		{
 			"Full list - with prefix",
 			prefix + "/obj1", 0, 0,
-			11, //obj1 and obj10..obj19
+			11, // obj1 and obj10..obj19
 		},
 		{
 			"Full list - with prefix and limit",
 			prefix + "/obj1", 0, 2,
-			2, //obj1 and obj10
+			2, // obj1 and obj10
 		},
 		{
 			"Empty list - prefix",

@@ -414,7 +414,7 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		case cmn.ActLRU:
 			go t.RunLRU()
 		case cmn.ActLocalReb:
-			go t.rebManager.runLocalReb(false /*skipGlobMisplaced=false*/)
+			go t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
 		case cmn.ActPrefetch:
 			go t.Prefetch()
 		case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete:

@@ -130,7 +130,7 @@ func (m *regMap) mapType() string {
 }
 
 func parseCmdLine() (p params, err error) {
-	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError) //Discard flags of imported packages
+	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError) // Discard flags of imported packages
 
 	// Command line options
 	f.BoolVar(&flagUsage, "usage", false, "Show extensive help menu with examples and exit")
@@ -152,7 +152,7 @@ func parseCmdLine() (p params, err error) {
 	}
 
 	os.Args = []string{os.Args[0]}
-	flag.Parse() //Called so that imported packages don't compain
+	flag.Parse() // Called so that imported packages don't compain
 
 	if p.minSize > p.maxSize {
 		return params{}, fmt.Errorf("minsize %d greater than maxsize %d", p.minSize, p.maxSize)

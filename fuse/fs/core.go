@@ -23,8 +23,6 @@ import (
 	"github.com/jacobsa/fuse/fuseutil"
 )
 
-///////////////////////////////////////////////////////////////////////////////////
-//
 // Locking order:
 //  - Lock inodes before locking the file system.
 //  - When locking multiple inodes, lock them in the ascending
@@ -32,8 +30,6 @@ import (
 //  - Lock handles before locking inodes.
 //  - When locking multiple handles, lock them in the ascending
 //    order of their IDs.
-//
-///////////////////////////////////////////////////////////////////////////////////
 //
 // Explanation of some variable names:
 //  - separator  -- '/' (slash)
@@ -50,8 +46,6 @@ import (
 //                        as a prefix when listing objects in a bucket.
 //                  NOTE: For files, [fs]path is the same as objName of the
 //                        backing object.
-//
-///////////////////////////////////////////////////////////////////////////////////
 
 const (
 	Name = "aisfs"

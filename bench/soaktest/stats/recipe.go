@@ -10,9 +10,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-//This is intended to summarize primitives within a recipe
+// This is intended to summarize primitives within a recipe
 type RecipeStats struct {
-	//Report package assumes responsibility for filling these
+	// Report package assumes responsibility for filling these
 	RecipeName string    `json:"recipe_name"`
 	RecipeNum  int       `json:"recipe_num"`
 	OpType     string    `json:"type"`

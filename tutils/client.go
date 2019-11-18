@@ -908,7 +908,7 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	paramList := strings.Split(string(data), "\n")
 	for _, dat := range paramList {
 		datum := strings.Split(dat, dlim)
-		//key=val
+		// key=val
 		if len(datum) == 2 {
 			m[datum[0]] = datum[1]
 		}

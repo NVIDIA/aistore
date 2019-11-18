@@ -520,7 +520,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		Reader:     tutils.NewBytesReader(dataCloud),
 	}
 
-	//PUT/GET/DEL Without ais bucket
+	// PUT/GET/DEL Without ais bucket
 	tutils.Logf("Validating responses for non-existent ais bucket...\n")
 	err := api.PutObject(putArgsLocal)
 	if err == nil {
@@ -1330,7 +1330,7 @@ func Test_evictCloudBucket(t *testing.T) {
 
 	defer func() {
 		os.RemoveAll(LocalSrcDir)
-		//cleanup
+		// Cleanup
 		for _, fn := range filesList {
 			wg.Add(1)
 			go tutils.Del(proxyURL, bucket, fn, "", wg, errCh, !testing.Verbose())
@@ -1357,7 +1357,8 @@ func Test_evictCloudBucket(t *testing.T) {
 		}
 	}
 
-	//test property, mirror is disabled for cloud bucket that hasn't been accessed, even if system config says otherwise
+	// Test property, mirror is disabled for cloud bucket that hasn't been accessed,
+	// even if system config says otherwise
 	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
 	tassert.CheckFatal(t, err)
 	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)

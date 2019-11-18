@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-//For container naming
+// For container naming
 const (
 	prefixStr = "ais"
 	proxyStr  = "_proxy_"

@@ -209,7 +209,7 @@ func (r *fileReader) Description() string {
 func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, error) {
 	fn := path.Join(filepath, name)
 
-	f, err := os.OpenFile(fn, os.O_WRONLY|os.O_CREATE, 0666) //wr-wr-wr-
+	f, err := os.OpenFile(fn, os.O_WRONLY|os.O_CREATE, 0666) // wr-wr-wr-
 	if err != nil {
 		return nil, err
 	}

@@ -44,7 +44,6 @@ linters-settings:
       - ifElseChain
       - hugeParam # produces a lot of false positives (TODO: see if some errors are possible improvements)
       - commentFormatting
-      - commentedOutCode
       - unnamedResult
   misspell:
     # Correct spellings using locale preferences for US or UK.

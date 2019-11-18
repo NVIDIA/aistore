@@ -119,7 +119,7 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 		size := cmn.MinI64(z.slab.Size()-off, int64(wlen))
 		buf := z.sgl[idx]
 		src := p[poff : poff+int(size)]
-		copy(buf[off:], src) // assert(n == size)
+		copy(buf[off:], src)
 		z.woff += size
 		idx++
 		off = 0

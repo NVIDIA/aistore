@@ -75,7 +75,7 @@ func (rctx *ReportContext) EndRecipe() error {
 	summaryWriter.WriteStat(rctx.recipePutStats)
 
 	rctx.recipeCfgStats.EndTime = timestamp
-	//not all recipes get cfg, don't log if not used
+	// Not all recipes get cfg, don't log if not used
 	if rctx.recipeCfgStats.HasData() {
 		summaryWriter.WriteStat(rctx.recipeCfgStats)
 	}

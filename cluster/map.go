@@ -95,7 +95,7 @@ func (a *Snode) Equals(b *Snode) bool {
 		reflect.DeepEqual(a.IntraDataNet, b.IntraDataNet)
 }
 
-//see printname() in clustermap.go
+// See printname() in clustermap.go
 func (d *Snode) Name() string {
 	if d.DaemonType == cmn.Proxy {
 		return "p[" + d.DaemonID + "]"

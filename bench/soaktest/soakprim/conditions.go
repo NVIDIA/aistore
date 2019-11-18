@@ -111,7 +111,7 @@ func (rctx *RecipeContext) Post(conds *PostConds) {
 			report.Writef(report.SummaryLevel, "Post: wrong # of targets, exp: %v, actual %v\n", conds.NumTargets, numTargets)
 		}
 
-		updateSysInfo() //fetch new capacity since # of targets changed
+		updateSysInfo() // Fetch new capacity since # of targets changed
 	}
 }
 

@@ -20,7 +20,7 @@ type SysInfoStat struct {
 	cmn.SysInfo
 	cmn.FSInfo
 
-	Type      string    `json:"type"` //type (proxy|target)
+	Type      string    `json:"type"` // type (proxy|target)
 	DaemonID  string    `json:"daemonid"`
 	Timestamp time.Time `json:"timestamp"`
 }

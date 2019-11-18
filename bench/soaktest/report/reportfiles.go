@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-//Static file, used for logging errors and stuff to report logs
+// Static file, used for logging errors and stuff to report logs
 
 const (
 	DefaultDir = "/tmp/ais-soak/reports"

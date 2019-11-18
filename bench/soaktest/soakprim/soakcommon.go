@@ -69,7 +69,7 @@ func init() {
 
 func Terminate() {
 	defer func() {
-		recover() //Prevents panic from double close of RunningCh
+		recover() // Prevents panic from double close of RunningCh
 	}()
 	Terminated = true
 	close(RunningCh)
@@ -134,7 +134,7 @@ func (rctx *RecipeContext) PreRecipe(recipeName string) {
 		rctx.repCtx = report.NewReportContext()
 	}
 
-	//Do recipe level setup
+	// Do recipe level setup
 	rctx.primitiveCount = map[string]int{}
 	rctx.failedPrimitives = map[string]error{}
 	rctx.targetMutex = &sync.Mutex{}
@@ -157,7 +157,7 @@ func (rctx *RecipeContext) PreRecipe(recipeName string) {
 }
 
 func (rctx *RecipeContext) PostRecipe() error {
-	//Do recipe level cleanup
+	// Do recipe level cleanup
 	rctx.primitiveCount = map[string]int{}
 	rctx.failedPrimitives = map[string]error{}
 

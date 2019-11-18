@@ -12,16 +12,16 @@ type PrimitiveStat struct {
 	AISLoaderStat
 	Fatal  bool   `json:"fatal"`
 	OpType string `json:"op_type"`
-	ID     string `json:"id"` //Soakprim assumes responsibility for filling
+	ID     string `json:"id"` // Soakprim assumes responsibility for filling
 
-	RecipeName string `json:"recipe_name"` //Report package assumes responsibility for filling
-	RecipeNum  int    `json:"recipe_num"`  //Report package assumes responsibility for filling
+	RecipeName string `json:"recipe_name"` // Report package assumes responsibility for filling
+	RecipeNum  int    `json:"recipe_num"`  // Report package assumes responsibility for filling
 }
 
 // AISLoaderStat is a response from AISLoader, keep json consistent with the `jsonStats` struct in AISLoader
 type AISLoaderStat struct {
 	LatencyMin   time.Duration `json:"min_latency"`
-	Latency      time.Duration `json:"latency"` //Average
+	Latency      time.Duration `json:"latency"` // Average
 	LatencyMax   time.Duration `json:"max_latency"`
 	Throughput   int64         `json:"throughput"` // bytes
 	TotalSize    int64         `json:"bytes"`

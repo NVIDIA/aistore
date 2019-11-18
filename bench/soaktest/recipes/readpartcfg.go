@@ -30,6 +30,6 @@ func recReadPartCfg(rctx *soakprim.RecipeContext) {
 	rctx.Pre(conds)
 	rctx.GetCfg(time.Second * 10)
 	rctx.Get("b1", time.Second*10, false, 0, 60)
-	rctx.Get("b2", time.Second*10, false, 30, 100) //checksum=false because check doesn't factor in range
+	rctx.Get("b2", time.Second*10, false, 30, 100) // checksum=false because check doesn't factor in range
 	rctx.Post(nil)
 }

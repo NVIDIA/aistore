@@ -24,7 +24,7 @@ type (
 		parent *Downloader
 
 		joggers  map[string]*jogger       // mpath -> jogger
-		abortJob map[string]chan struct{} //jobID -> abort job chan
+		abortJob map[string]chan struct{} // jobID -> abort job chan
 
 		dispatchDownloadCh chan DlJob
 

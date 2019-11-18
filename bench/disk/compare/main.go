@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	devices = make(map[string]struct{}) //replace with the device name to track
+	devices = make(map[string]struct{}) // Replace with the device name to track
 
 	pctUtil = make(map[string]string)
 	avgQuSz = make(map[string]string)
@@ -98,7 +98,7 @@ func main() {
 }
 
 func pollIostat(responseCh chan string) {
-	refreshPeriod := "1"                                 //seconds
+	refreshPeriod := "1"                                 // seconds
 	cmd := exec.Command("iostat", "-dxm", refreshPeriod) // the iostat command
 	stdout, _ := cmd.StdoutPipe()
 	reader := bufio.NewReader(stdout)
@@ -117,7 +117,7 @@ func pollIostat(responseCh chan string) {
 	}
 }
 
-func generateComparison() { //to diskstats
+func generateComparison() { // to diskstats
 	newIOMs := make(map[string]int64)
 	newIOQueueMs := make(map[string]int64)
 	diskstats := GetDiskstats()

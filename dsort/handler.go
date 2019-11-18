@@ -184,7 +184,6 @@ func proxyGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/sort?regex=...
 func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
-	//validate regex
 	regexStr := r.URL.Query().Get(cmn.URLParamRegex)
 	if _, err := regexp.CompilePOSIX(regexStr); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
@@ -836,28 +835,28 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	// think of a way to get the total size of bucket without copy-and-paste
 	// the API code.
 	//
-	//baseParams := &api.BaseParams{
-	//	Client: http.DefaultClient,
-	//	URL:    ctx.smap.Get().ProxySI.URL(cmn.NetworkIntraControl),
-	//}
-	//msg := &cmn.SelectMsg{Props: "size,status", PageSize: cmn.DefaultListPageSize}
-	//objList, err := api.ListBucket(baseParams, parsedRS.Bucket, msg, 0)
-	//if err != nil {
-	//	return "", err
-	//}
+	// baseParams := &api.BaseParams{
+	// 	Client: http.DefaultClient,
+	// 	URL:    ctx.smap.Get().ProxySI.URL(cmn.NetworkIntraControl),
+	// }
+	// msg := &cmn.SelectMsg{Props: "size,status", PageSize: cmn.DefaultListPageSize}
+	// objList, err := api.ListBucket(baseParams, parsedRS.Bucket, msg, 0)
+	// if err != nil {
+	// 	return "", err
+	// }
 	//
-	//totalBucketSize := uint64(0)
-	//for _, obj := range objList.Entries {
-	//	if obj.IsStatusOK() {
-	//		totalBucketSize += uint64(obj.Size)
-	//	}
-	//}
+	// totalBucketSize := uint64(0)
+	// for _, obj := range objList.Entries {
+	// 	if obj.IsStatusOK() {
+	// 		totalBucketSize += uint64(obj.Size)
+	// 	}
+	// }
 	//
-	//if totalBucketSize < totalAvailMemory {
-	//	// "general type" is capable of extracting whole dataset into memory
-	//	// In this case the creation phase is super fast.
-	//	return DSorterGeneralType, nil
-	//}
+	// if totalBucketSize < totalAvailMemory {
+	// 	// "general type" is capable of extracting whole dataset into memory
+	// 	// In this case the creation phase is super fast.
+	// 	return DSorterGeneralType, nil
+	// }
 
 	if moreThanThreshold {
 		// If there is enough memory to use "memory type", we should do that.
