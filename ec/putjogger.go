@@ -121,11 +121,11 @@ func (c *putJogger) encode(req *Request) error {
 	ecConf := req.LOM.Bprops().EC
 	_, cksumValue := req.LOM.Cksum().Get()
 	meta := &Metadata{
-		Size:        req.LOM.Size(),
-		Data:        ecConf.DataSlices,
-		Parity:      ecConf.ParitySlices,
-		IsCopy:      req.IsCopy,
-		ObjChecksum: cksumValue,
+		Size:     req.LOM.Size(),
+		Data:     ecConf.DataSlices,
+		Parity:   ecConf.ParitySlices,
+		IsCopy:   req.IsCopy,
+		ObjCksum: cksumValue,
 	}
 
 	// calculate the number of targets required to encode the object
@@ -554,7 +554,9 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 		// Put in lom actual object's checksum. It will be stored in slice's xattrs on dest target
 		lom := *req.LOM
-		lom.SetCksum(slices[i].cksum)
+		if mcopy.SliceID != 0 && slices[i].cksum != nil {
+			mcopy.CksumType, mcopy.CksumValue = slices[i].cksum.Get()
+		}
 
 		err = c.parent.writeRemote([]string{targets[i+1].DaemonID}, &lom, src, nil)
 		if err != nil {

@@ -740,9 +740,10 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 		if glog.V(4) {
 			glog.Infof("Sending slice %d %s/%s to %s", sliceMeta.SliceID+1, req.LOM.Bucket(), req.LOM.Objname, tgt)
 		}
-		sliceLOM := *req.LOM
-		sliceLOM.SetCksum(sl.cksum)
-		if err := c.parent.writeRemote([]string{tgt}, &sliceLOM, dataSrc, cb); err != nil {
+		if sl.cksum != nil {
+			sliceMeta.CksumType, sliceMeta.CksumValue = sl.cksum.Get()
+		}
+		if err := c.parent.writeRemote([]string{tgt}, req.LOM, dataSrc, cb); err != nil {
 			glog.Errorf("Failed to send slice %d of %s/%s to %s", idx+1, req.LOM.Bucket(), req.LOM.Objname, tgt)
 		}
 
@@ -943,13 +944,13 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		}
 
 		metas[node.DaemonID] = &md
-		cnt := chk[md.ObjChecksum]
+		cnt := chk[md.ObjCksum]
 		cnt++
-		chk[md.ObjChecksum] = cnt
+		chk[md.ObjCksum] = cnt
 
 		if cnt > chkMax {
 			chkMax = cnt
-			chkVal = md.ObjChecksum
+			chkVal = md.ObjCksum
 		}
 	}
 
@@ -961,11 +962,11 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 	// cleanup: delete all metadatas that have "obsolete" information
 	nodes = make(map[string]*Metadata)
 	for k, v := range metas {
-		if v.ObjChecksum == chkVal {
+		if v.ObjCksum == chkVal {
 			meta = v
 			nodes[k] = v
 		} else {
-			glog.Warningf("Hashes of target %s[slice id %d] mismatch: %s == %s", k, v.SliceID, chkVal, v.ObjChecksum)
+			glog.Warningf("Hashes of target %s[slice id %d] mismatch: %s == %s", k, v.SliceID, chkVal, v.ObjCksum)
 		}
 	}
 

@@ -158,8 +158,14 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 
 		var cksumVal string
 
-		// Metafiles contain checksum inside but don't have a checksum in a lom
-		if sliceLom.Cksum() != nil {
+		if sliceLom.ParsedFQN.ContentType == ec.SliceType {
+			// extract checksum from metadata for slices
+			metaFQN := strings.Replace(path, ecSliceDir, ecMetaDir, 1)
+			md, err := ec.LoadMetadata(metaFQN)
+			if err == nil {
+				cksumVal = md.CksumValue
+			}
+		} else if sliceLom.Cksum() != nil {
 			_, cksumVal = sliceLom.Cksum().Get()
 		}
 
@@ -568,6 +574,16 @@ func objectsExist(t *testing.T, baseParams api.BaseParams, bckName, objPatt stri
 	wg.Wait()
 }
 
+// Simulates damaged slice by changing slice's checksum in metadata file
+func damageMetadataCksum(t *testing.T, slicePath string) {
+	metaFQN := strings.Replace(slicePath, ecSliceDir, ecMetaDir, 1)
+	md, err := ec.LoadMetadata(metaFQN)
+	tassert.CheckFatal(t, err)
+	md.CksumValue = "01234"
+	err = cmn.LocalSave(metaFQN, md)
+	tassert.CheckFatal(t, err)
+}
+
 // Short test to make sure that EC options cannot be changed after
 // EC is enabled
 func TestECChange(t *testing.T) {
@@ -950,7 +966,6 @@ func TestECChecksum(t *testing.T) {
 	var (
 		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		tMock    = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestBucketName))
 	)
 
 	o := ecOptions{
@@ -984,8 +999,7 @@ func TestECChecksum(t *testing.T) {
 	// Corrupt just one slice, EC should be able to restore the original object
 	for k := range foundParts1 {
 		if k != mainObjPath1 && strings.Contains(k, ecSliceDir) {
-			err := tutils.SetXattrCksum(k, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
-			tassert.CheckFatal(t, err)
+			damageMetadataCksum(t, k)
 			break
 		}
 	}
@@ -999,8 +1013,7 @@ func TestECChecksum(t *testing.T) {
 	// Corrupt all slices, EC should not be able to restore
 	for k := range foundParts2 {
 		if k != mainObjPath2 && strings.Contains(k, ecSliceDir) {
-			err := tutils.SetXattrCksum(k, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
-			tassert.CheckFatal(t, err)
+			damageMetadataCksum(t, k)
 		}
 	}
 

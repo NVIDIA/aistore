@@ -153,12 +153,15 @@ const (
 type (
 	// Metadata - EC information stored in metafiles for every encoded object
 	Metadata struct {
-		Size        int64  `json:"size"`              // size of original file (after EC'ing the total size of slices differs from original)
-		Data        int    `json:"data"`              // the number of data slices
-		Parity      int    `json:"parity"`            // the number of parity slices
-		SliceID     int    `json:"sliceid,omitempty"` // 0 for full replica, 1 to N for slices
-		ObjChecksum string `json:"obj_chk"`           // checksum of the original object
-		IsCopy      bool   `json:"copy"`              // object is replicated(true) or encoded(false)
+		Size       int64  `json:"size"`                      // size of original file (after EC'ing the total size of slices differs from original)
+		ObjCksum   string `json:"obj_chk"`                   // checksum of the original object
+		ObjVersion string `json:"obj_version,omitempty"`     // object version
+		CksumType  string `json:"slice_ck_type,omitempty"`   // slice checksum type
+		CksumValue string `json:"slice_chk_value,omitempty"` // slice checksum of the slice if EC is used
+		Data       int    `json:"data"`                      // the number of data slices
+		Parity     int    `json:"parity"`                    // the number of parity slices
+		SliceID    int    `json:"sliceid,omitempty"`         // 0 for full replica, 1 to N for slices
+		IsCopy     bool   `json:"copy"`                      // object is replicated(true) or encoded(false)
 	}
 
 	// request - structure to request an object to be EC'ed or restored

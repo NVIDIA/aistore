@@ -562,7 +562,7 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 	if md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
 		// TODO: only logging an error for now
 		glog.Errorf("Mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
-			hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, md.ObjChecksum)
+			hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, md.ObjCksum)
 	}
 	slab.Free(buffer)
 	lom.Persist()
@@ -887,7 +887,7 @@ func (s *ecRebalancer) walk(fqn string, de fs.DirEntry) (err error) {
 		Bucket:       lom.Bucket(),
 		Objname:      lom.Objname,
 		DaemonID:     id,
-		ObjHash:      md.ObjChecksum,
+		ObjHash:      md.ObjCksum,
 		ObjSize:      md.Size,
 		SliceID:      int16(md.SliceID),
 		DataSlices:   int16(md.Data),

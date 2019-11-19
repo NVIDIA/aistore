@@ -132,55 +132,90 @@ func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata) *IntraReq {
 	}
 }
 
+func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
+	attrs.Version = md.ObjVersion
+	attrs.CksumType = md.CksumType
+	attrs.CksumValue = md.CksumValue
+
+	stat, err := os.Stat(fqn)
+	if err != nil {
+		return nil, err
+	}
+	attrs.Size = stat.Size()
+	reader, err = cmn.NewFileHandle(fqn)
+	if err != nil {
+		glog.Warningf("Failed to read file stats: %s", err)
+		return nil, err
+	}
+	return reader, nil
+}
+
+func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
+	// local slice/metafile requested by another target to restore the object
+	lom := &cluster.LOM{T: r.t, FQN: fqn}
+	err = lom.Init("", "")
+	if err != nil {
+		glog.Warningf("Failed to read file stats #1: %s", err)
+		return nil, err
+	}
+	if err = lom.FromFS(); err != nil {
+		glog.Warningf("Failed to read file stats #2: %s", err)
+		return nil, err
+	}
+	reader, err = cmn.NewFileHandle(fqn)
+	if err != nil {
+		return nil, err
+	}
+	sz := lom.Size()
+	if sz == 0 {
+		if stat, err := os.Stat(fqn); err == nil {
+			sz = stat.Size()
+		}
+		if sz == 0 {
+			// empty file - no errors: send empty response
+			return nil, nil
+		}
+	}
+	attrs.Size = sz
+	attrs.Version = lom.Version()
+	attrs.Atime = lom.Atime().UnixNano()
+	if lom.Cksum() != nil {
+		attrs.CksumType, attrs.CksumValue = lom.Cksum().Get()
+	}
+	return reader, nil
+}
+
 // Sends the replica/meta/slice data: either to copy replicas/slices after
 // encoding or to send requested "object" to a client. In the latter case
 // if the local object does not exist, it sends an empty body and sets
 // exists=false in response header
-func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id string) error {
+func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck, objname, id string, md *Metadata) (err error) {
 	var (
-		reader cmn.ReadOpenCloser
-		sz     int64
+		reader   cmn.ReadOpenCloser
+		objAttrs transport.ObjectAttrs
 	)
 	ireq := r.newIntraReq(act, nil)
-	fh, err := cmn.NewFileHandle(fqn)
-	// this lom is for local slice/metafile requested by another target
-	// to restore the object. So, just create lom and call FromFS
-	// because LOM cache does not keep non-objects
-	lom := &cluster.LOM{T: r.t, FQN: fqn}
-	err1 := lom.Init("", "")
-	if err1 != nil {
-		glog.Warningf("Failed to read file stats #1: %s", err1)
-	}
-	if err1 := lom.FromFS(); err1 != nil {
-		glog.Warningf("Failed to read file stats #2: %s", err1)
-	}
-	if err == nil && lom.Size() != 0 {
-		sz = lom.Size()
-		reader = fh
+	if md != nil && md.SliceID != 0 {
+		// it is an EC slice - read everything from EC metadata
+		reader, err = r.newSliceResponse(md, &objAttrs, fqn)
+		ireq.Exists = err == nil
 	} else {
-		ireq.Exists = false
+		// replica/metafile requested by another target to restore the object
+		reader, err = r.newReplicaResponse(&objAttrs, fqn)
+		ireq.Exists = err == nil
 	}
-	cmn.Assert((sz == 0 && reader == nil) || (sz != 0 && reader != nil))
-	objAttrs := transport.ObjectAttrs{
-		Size:    sz,
-		Version: lom.Version(),
-		Atime:   lom.Atime().UnixNano(),
-	}
-
-	if lom.Cksum() != nil {
-		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum().Get()
-	}
+	cmn.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
 
 	rHdr := transport.Header{
-		Bucket:   bucket,
-		BckIsAIS: lom.IsAIS(),
+		Bucket:   bck.Name,
+		BckIsAIS: bck.IsAIS(),
 		Objname:  objname,
 		ObjAttrs: objAttrs,
 	}
 	rHdr.Opaque = ireq.Marshal()
 
 	r.ObjectsInc()
-	r.BytesAdd(lom.Size())
+	r.BytesAdd(objAttrs.Size)
 
 	cb := func(hdr transport.Header, c io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
@@ -328,7 +363,15 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		Version: lom.Version(),
 		Atime:   lom.Atime().UnixNano(),
 	}
-	if lom.Cksum() != nil {
+	if src.metadata != nil && src.metadata.SliceID != 0 {
+		// for a slice read everything from slice's metadata
+		if src.metadata.ObjVersion != "" {
+			objAttrs.Version = src.metadata.ObjVersion
+		}
+		if src.metadata.CksumType != "" && src.metadata.CksumValue != "" {
+			objAttrs.CksumType, objAttrs.CksumValue = src.metadata.CksumType, src.metadata.CksumValue
+		}
+	} else if lom.Cksum() != nil {
 		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum().Get()
 	}
 	hdr := transport.Header{

@@ -108,14 +108,23 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName strin
 	case reqGet:
 		// slice or replica request: send the object's data to the caller
 		var (
-			fqn string
-			err error
+			fqn, metaFQN string
+			md           *Metadata
+			err          error
 		)
 		if iReq.IsSlice {
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, objName)
 			}
 			fqn, _, err = cluster.HrwFQN(SliceType, bck, objName)
+			if err != nil {
+				glog.Error(err)
+				return
+			}
+			metaFQN, _, err = cluster.HrwFQN(MetaType, bck, objName)
+			if err == nil {
+				md, err = LoadMetadata(metaFQN)
+			}
 		} else {
 			if glog.V(4) {
 				glog.Infof("Received request for replica %s", objName)
@@ -129,7 +138,7 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName strin
 			return
 		}
 
-		if err := r.dataResponse(RespPut, fqn, bck.Name, objName, daemonID); err != nil {
+		if err := r.dataResponse(RespPut, fqn, bck, objName, daemonID, md); err != nil {
 			glog.Errorf("Failed to send back [GET req] %q: %v", fqn, err)
 		}
 	case ReqMeta:
@@ -140,7 +149,7 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName strin
 			return
 		}
 
-		if err := r.dataResponse(iReq.Act, fqn, bck.Name, objName, daemonID); err != nil {
+		if err := r.dataResponse(iReq.Act, fqn, bck, objName, daemonID, nil); err != nil {
 			glog.Errorf("Failed to send back [META req] %q: %v", fqn, err)
 		}
 	default:
@@ -197,7 +206,6 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 			if glog.V(4) {
 				glog.Infof("Got replica response from %s (%s/%s)", iReq.Sender, bck.Name, objName)
 			}
-			// FIXME: vs. lom.Fill() a few lines below
 			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bck, objName)
 			if err != nil {
 				drain()
@@ -210,7 +218,8 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 		tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
 		buf, slab := mm.AllocDefault()
 		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false)
-		if err == nil {
+		// save xattrs only for object replicas (slices have xattrs empty)
+		if err == nil && !iReq.IsSlice {
 			lom = &cluster.LOM{T: r.t, FQN: objFQN}
 			err = lom.Init(bck.Name, cmn.ProviderFromBool(bck.IsAIS()))
 			if err != nil {
@@ -221,12 +230,9 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 			lom.SetVersion(objAttrs.Version)
 			lom.SetAtimeUnix(objAttrs.Atime)
 			lom.SetSize(objAttrs.Size)
-
-			// LOM checksum is filled with checksum of a slice. Source object's checksum is stored in metadata
 			if objAttrs.CksumType != "" {
 				lom.SetCksum(cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue))
 			}
-
 			err = lom.Persist()
 		}
 
@@ -240,17 +246,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 		// save its metadata
 		metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
 		metaBuf := meta.marshal()
-		metaLen := len(metaBuf)
 		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false)
-
-		if err == nil {
-			lom = &cluster.LOM{T: r.t, FQN: metaFQN}
-			err = lom.Init(bck.Name, cmn.ProviderFromBool(bck.IsAIS()))
-			if err == nil {
-				lom.SetSize(int64(metaLen))
-				err = lom.Persist()
-			}
-		}
 
 		slab.Free(buf)
 		if err != nil {
