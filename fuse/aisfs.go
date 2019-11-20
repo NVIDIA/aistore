@@ -260,6 +260,7 @@ func appMain(c *cli.Context) (err error) {
 		Owner:           fsowner,
 		TCPTimeout:      cfg.Timeout.TCPTimeout,
 		HTTPTimeout:     cfg.Timeout.HTTPTimeout,
+		SyncInterval:    cfg.Periodic.SyncInterval,
 		MaxWriteBufSize: cfg.IO.WriteBufSize,
 	}
 

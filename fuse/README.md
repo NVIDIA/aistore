@@ -165,6 +165,9 @@ An example of one configuration file:
     "tcp_timeout": "60s",
     "http_timeout": "300s"
   },
+  "periodic": {
+    "sync_interval": "20m"
+  },
   "log": {
     "error_log_file": "",
     "debug_log_file": ""
@@ -174,6 +177,14 @@ An example of one configuration file:
   }
 }
 ```
+
+Setting `periodic.sync_interval` to `0` disables syncing with AIS.
+Disabling sync or setting it to high value can result in problems with
+consistency since AISFS can perceive the status of the objects differently.
+
+Setting `io.write_buf_size` to high value can result in higher memory usage
+but also in better performance when writing large files.
+
 
 ### Mounting
 

@@ -21,22 +21,6 @@ func NewBucket(name string, apiParams api.BaseParams) *Bucket {
 	}
 }
 
-func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {
-	obj, err := api.HeadObject(bck.apiParams, bck.name, "", objName)
-	if err != nil {
-		return nil, newBucketIOError(err, "HeadObject", objName)
-	}
-
-	object = &Object{
-		apiParams: bck.apiParams,
-		bucket:    bck.name,
-		Name:      objName,
-		Size:      obj.Size,
-		Atime:     obj.Atime,
-	}
-	return
-}
-
 func (bck *Bucket) ListObjects(prefix string) (objs []*Object, err error) {
 	selectMsg := &cmn.SelectMsg{
 		Prefix: prefix,

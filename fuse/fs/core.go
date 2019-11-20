@@ -79,6 +79,7 @@ type (
 		// Timeouts, tunables...
 		TCPTimeout      time.Duration
 		HTTPTimeout     time.Duration
+		SyncInterval    time.Duration
 		MaxWriteBufSize int64
 	}
 
@@ -169,7 +170,7 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 	aisfs.root.IncLookupCount()
 	aisfs.inodeTable[fuseops.RootInodeID] = aisfs.root
 
-	nsCache, err = newNsCache(bucket)
+	nsCache, err = newNsCache(bucket, aisfs.errLog, aisfs.cfg.SyncInterval)
 	if err != nil {
 		return nil, err
 	}

@@ -25,6 +25,10 @@ var defaultConfig = Config{
 		HTTPTimeoutStr: "300s",
 		HTTPTimeout:    300 * time.Second,
 	},
+	Periodic: PeriodicConfig{
+		SyncIntervalStr: "20m",
+		SyncInterval:    20 * time.Minute,
+	},
 	Log: LogConfig{
 		ErrorLogFile: "",
 		DebugLogFile: "",
@@ -38,10 +42,11 @@ var defaultConfig = Config{
 
 type (
 	Config struct {
-		Cluster ClusterConfig `json:"cluster"`
-		Timeout TimeoutConfig `json:"timeout"`
-		Log     LogConfig     `json:"log"`
-		IO      IOConfig      `json:"io"`
+		Cluster  ClusterConfig  `json:"cluster"`
+		Timeout  TimeoutConfig  `json:"timeout"`
+		Periodic PeriodicConfig `json:"periodic"`
+		Log      LogConfig      `json:"log"`
+		IO       IOConfig       `json:"io"`
 	}
 
 	ClusterConfig struct {
@@ -53,6 +58,11 @@ type (
 		TCPTimeout     time.Duration `json:"-"`
 		HTTPTimeoutStr string        `json:"http_timeout"`
 		HTTPTimeout    time.Duration `json:"-"`
+	}
+
+	PeriodicConfig struct {
+		SyncIntervalStr string        `json:"sync_interval"`
+		SyncInterval    time.Duration `json:"-"`
 	}
 
 	LogConfig struct {
@@ -72,8 +82,11 @@ func (c *Config) validate() (err error) {
 	if c.Timeout.HTTPTimeout, err = time.ParseDuration(c.Timeout.HTTPTimeoutStr); err != nil {
 		return fmt.Errorf("invalid timeout.http_timeout format %q: %v", c.Timeout.HTTPTimeoutStr, err)
 	}
+	if c.Periodic.SyncInterval, err = time.ParseDuration(c.Periodic.SyncIntervalStr); err != nil {
+		return fmt.Errorf("invalid periodic.sync_interval format %q: %v", c.Periodic.SyncInterval, err)
+	}
 	if c.IO.WriteBufSize < 0 {
-		return fmt.Errorf("bad io.write_buf_size value: %d, expected value non-negative", c.IO.WriteBufSize)
+		return fmt.Errorf("invalid io.write_buf_size value: %d, expected value non-negative", c.IO.WriteBufSize)
 	}
 	return nil
 }
