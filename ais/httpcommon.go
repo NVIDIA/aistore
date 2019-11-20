@@ -47,6 +47,7 @@ type (
 	callResult struct {
 		si      *cluster.Snode
 		outjson []byte
+		header  http.Header
 		err     error
 		details string
 		status  int
@@ -597,7 +598,7 @@ func (h *httprunner) call(args callArgs) callResult {
 	if err != nil {
 		details = fmt.Sprintf("unexpected failure to create HTTP request %s %s, err: %v",
 			args.req.Method, args.req.URL(), err)
-		return callResult{args.si, outjson, err, details, status}
+		return callResult{args.si, outjson, nil, err, details, status}
 	}
 
 	req.Header.Set(cmn.HeaderCallerID, h.si.DaemonID)
@@ -612,10 +613,10 @@ func (h *httprunner) call(args callArgs) callResult {
 			details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): status %s, err %v",
 				sid, args.req.Method, args.req.URL(), resp.Status, err)
 			status = resp.StatusCode
-			return callResult{args.si, outjson, err, details, status}
+			return callResult{args.si, outjson, nil, err, details, status}
 		}
 		details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err %v", sid, args.req.Method, args.req.URL(), err)
-		return callResult{args.si, outjson, err, details, status}
+		return callResult{args.si, outjson, nil, err, details, status}
 	}
 
 	if outjson, err = ioutil.ReadAll(resp.Body); err != nil {
@@ -630,7 +631,7 @@ func (h *httprunner) call(args callArgs) callResult {
 		}
 
 		resp.Body.Close()
-		return callResult{args.si, outjson, err, details, status}
+		return callResult{args.si, outjson, nil, err, details, status}
 	}
 	resp.Body.Close()
 
@@ -639,14 +640,14 @@ func (h *httprunner) call(args callArgs) callResult {
 		err = errors.New(string(outjson))
 		details = err.Error()
 		status = resp.StatusCode
-		return callResult{args.si, outjson, err, details, status}
+		return callResult{args.si, outjson, nil, err, details, status}
 	}
 
 	if sid != unknownDaemonID {
 		h.keepalive.heardFrom(sid, false /* reset */)
 	}
 
-	return callResult{args.si, outjson, err, details, resp.StatusCode}
+	return callResult{args.si, outjson, resp.Header, err, details, resp.StatusCode}
 }
 
 ///////////////

@@ -691,10 +691,13 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
+func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHeader ...http.Header) error {
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
 	bucketProps := cmn.DefaultBucketProps()
+	if len(cloudHeader) != 0 {
+		p.copyBckPropsFromHeader(bucketProps, cloudHeader[0])
+	}
 	if !clone.add(bck, bucketProps) {
 		p.bmdowner.Unlock()
 		return cmn.NewErrorBucketAlreadyExists(bck.Name)
@@ -1162,16 +1165,18 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) applyNewProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (nprops *cmn.BucketProps, err error) {
 	var (
-		cfg = cmn.GCO.Get()
+		cfg        = cmn.GCO.Get()
+		cloudProps http.Header
 	)
 
 	bprops, exists := p.bmdowner.get().Get(bck)
 	if !exists {
 		cmn.Assert(!bck.IsAIS())
-		if err := p.cbExists(bck.Name); err != nil {
+		if cloudProps, err = p.cbExists(bck.Name); err != nil {
 			return nil, err
 		}
 		bprops = cmn.DefaultBucketProps()
+		p.copyBckPropsFromHeader(bprops, cloudProps)
 	}
 
 	nprops = bprops.Clone()
@@ -1318,11 +1323,13 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (np
 	// Currently we just assume that the last wins.
 	if !exists {
 		cmn.Assert(!bck.IsAIS())
-		if err := p.cbExists(bck.Name); err != nil {
+		var cloudProps http.Header
+		if cloudProps, err = p.cbExists(bck.Name); err != nil {
 			p.bmdowner.Unlock()
 			return nil, err
 		}
 		bprops := cmn.DefaultBucketProps()
+		p.copyBckPropsFromHeader(bprops, cloudProps)
 		clone.add(bck, bprops)
 	}
 
@@ -1433,12 +1440,17 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	bprops, exists := clone.Get(bck)
 	if !exists {
 		cmn.Assert(!bck.IsAIS())
-		if err := p.cbExists(bucket); err != nil {
+		var (
+			err        error
+			cloudProps http.Header
+		)
+		if cloudProps, err = p.cbExists(bucket); err != nil {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 		bprops = cmn.DefaultBucketProps()
+		p.copyBckPropsFromHeader(bprops, cloudProps)
 		clone.add(bck, bprops)
 	}
 
@@ -1819,7 +1831,8 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 		err = errors.New("forwarded")
 		return
 	}
-	if err = p.cbExists(bucket); err != nil {
+	var cloudProps http.Header
+	if cloudProps, err = p.cbExists(bucket); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		} else {
@@ -1828,7 +1841,7 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 		return
 	}
 	bck = &cluster.Bck{Name: bucket, Provider: cmn.Cloud}
-	if err = p.createBucket(msg, bck); err != nil {
+	if err = p.createBucket(msg, bck, cloudProps); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusConflict)
 			return
@@ -1839,7 +1852,19 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 	return
 }
 
-func (p *proxyrunner) cbExists(bucket string) (err error) {
+func (p *proxyrunner) copyBckPropsFromHeader(props *cmn.BucketProps, header http.Header) {
+	if props == nil || len(header) == 0 {
+		return
+	}
+
+	if verStr := header.Get(cmn.HeaderBucketVerEnabled); verStr != "" {
+		if versioning, err := cmn.ParseBool(verStr); err == nil {
+			props.Versioning.Enabled = versioning
+		}
+	}
+}
+
+func (p *proxyrunner) cbExists(bucket string) (header http.Header, err error) {
 	var tsi *cluster.Snode
 	if tsi, err = p.smapowner.get().GetRandTarget(); err != nil {
 		return
@@ -1860,6 +1885,8 @@ func (p *proxyrunner) cbExists(bucket string) (err error) {
 		err = cmn.NewErrorCloudBucketOffline(bucket, cmn.Cloud) // TODO -- FIXME
 	} else if res.err != nil {
 		err = fmt.Errorf("%s: bucket %s, target %s, err: %v", p.si.Name(), bucket, tsi.Name(), res.err)
+	} else {
+		header = res.header
 	}
 	return
 }

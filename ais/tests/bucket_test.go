@@ -1142,13 +1142,15 @@ func TestCopyBucket(t *testing.T) {
 			if test.dstBckExist {
 				for _, dstm := range dstms {
 					tutils.CreateFreshBucket(t, dstm.proxyURL, dstm.bucket)
-					defer tutils.DestroyBucket(t, dstm.proxyURL, dstm.bucket)
 					dstm.setRandBucketProps()
 				}
 			} else { // cleanup
 				for _, dstm := range dstms {
 					tutils.DestroyBucket(t, dstm.proxyURL, dstm.bucket)
 				}
+			}
+			for _, dstm := range dstms {
+				defer tutils.DestroyBucket(t, dstm.proxyURL, dstm.bucket)
 			}
 
 			srcProps, err := api.HeadBucket(baseParams, srcm.bucket)
