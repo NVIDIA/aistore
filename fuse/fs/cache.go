@@ -33,7 +33,6 @@ import (
 // is directory or not (this requires doing ListObjects with prefix what is
 // super expensive).
 //
-// TODO: Remove cache entry when on GET we get 404 error.
 // TODO: Refresh the cache once in a while.
 // TODO: Refreshing the cache should remove entries that are not present in the objects.
 

@@ -18,23 +18,23 @@ const (
 )
 
 type IOError struct {
-	kind   string
-	object string
-	op     string
-	err    error
+	Kind   string
+	Op     string
+	Object string
+	Err    error
 }
 
 func (e *IOError) Error() string {
 	return fmt.Sprintf("IOError: %s op %s %s: %v",
-		e.kind, e.op, e.object, e.err)
+		e.Kind, e.Op, e.Object, e.Err)
 }
 
 func newIOError(err error, kind string, op string, object string) error {
 	return &IOError{
-		kind:   kind,
-		op:     op,
-		object: object,
-		err:    err,
+		Kind:   kind,
+		Op:     op,
+		Object: object,
+		Err:    err,
 	}
 }
 

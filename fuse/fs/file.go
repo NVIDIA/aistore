@@ -6,10 +6,15 @@ package fs
 
 import (
 	"context"
+	"errors"
 	"io"
+	"net/http"
 	"path"
+	"path/filepath"
 	"syscall"
 
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fuse/ais"
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
 )
@@ -65,6 +70,18 @@ func (fs *aisfs) ReadFile(ctx context.Context, req *fuseops.ReadFileOp) (err err
 	fs.mu.RUnlock()
 
 	req.BytesRead, err = fhandle.readChunk(req.Dst, req.Offset)
+
+	var (
+		ioErr   *ais.IOError
+		httpErr *cmn.HTTPError
+	)
+	if errors.As(err, &ioErr) && errors.As(ioErr.Err, &httpErr) {
+		// Forget file on 404 error
+		if httpErr.Status == http.StatusNotFound {
+			fhandle.file.parent.ForgetFile(filepath.Base(fhandle.file.Path()))
+			return syscall.ENOENT
+		}
+	}
 
 	// As required by FUSE, io.EOF should not be reported as an error.
 	if err == io.EOF {
