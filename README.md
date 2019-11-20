@@ -73,6 +73,7 @@ Assuming that [Go](https://golang.org/dl/) is already installed, the remaining g
 $ cd $GOPATH/src
 $ go get -v github.com/NVIDIA/aistore/ais
 $ cd github.com/NVIDIA/aistore/ais
+$ make mod-build
 $ make deploy
 $ go test ./tests -v -run=Mirror
 ```
