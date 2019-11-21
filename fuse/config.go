@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -84,6 +85,12 @@ func (c *Config) validate() (err error) {
 	}
 	if c.Periodic.SyncInterval, err = time.ParseDuration(c.Periodic.SyncIntervalStr); err != nil {
 		return fmt.Errorf("invalid periodic.sync_interval format %q: %v", c.Periodic.SyncInterval, err)
+	}
+	if c.Log.ErrorLogFile != "" && !filepath.IsAbs(c.Log.ErrorLogFile) {
+		return fmt.Errorf("invalid log.error_log_file format %q: path needs to be absolute", c.Log.ErrorLogFile)
+	}
+	if c.Log.DebugLogFile != "" && !filepath.IsAbs(c.Log.DebugLogFile) {
+		return fmt.Errorf("invalid log.debug_log_file format %q: path needs to be absolute", c.Log.DebugLogFile)
 	}
 	if c.IO.WriteBufSize < 0 {
 		return fmt.Errorf("invalid io.write_buf_size value: %d, expected value non-negative", c.IO.WriteBufSize)
