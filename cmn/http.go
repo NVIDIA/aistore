@@ -167,19 +167,19 @@ func InvalidHandlerWithMsg(w http.ResponseWriter, r *http.Request, msg string, e
 	}
 
 	err, _ := NewHTTPError(r, msg, status)
-	http.Error(w, err.Error(), status)
+	writeError(w, err, status)
 }
 
 func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, status int, silent bool) {
 	err, isHTTPError := NewHTTPError(r, msg, status)
 
 	if silent {
-		http.Error(w, err.Error(), status)
+		writeError(w, err, status)
 		return
 	}
 	if isHTTPError {
 		glog.Errorln(err.String())
-		http.Error(w, err.Error(), status)
+		writeError(w, err, status)
 		return
 	}
 	var errMsg bytes.Buffer
@@ -196,7 +196,17 @@ func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, 
 	}
 	err.Trace = errMsg.String()
 	glog.Errorln(err.String())
-	http.Error(w, err.Error(), status)
+	writeError(w, err, status)
+}
+
+// writeError is slightly updated `http.Error` to change `Content-Type` header.
+// Content type was adjusted to make sure that the caller is aware that we return
+// JSON error and not just a regular string message.
+func writeError(w http.ResponseWriter, err error, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(status)
+	fmt.Fprintln(w, err.Error())
 }
 
 // InvalidHandlerDetailed writes detailed error (includes line and file) to response writer.

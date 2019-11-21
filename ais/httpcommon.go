@@ -180,22 +180,27 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// TODO: add support for caching HTTPS requests
 	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		cmn.InvalidHandlerDetailed(w, r, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
-	// First, send that everything is OK. Trying to write a header after
-	// hijacking generates a warning and nothing works
-	w.WriteHeader(http.StatusOK)
+
 	// Second, hijack the connection. A kind of man-in-the-middle attack
 	// Since this moment this function is responsible of HTTP connection
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		http.Error(w, "Client does not support hijacking", http.StatusInternalServerError)
+		cmn.InvalidHandlerDetailed(w, r, "Client does not support hijacking", http.StatusInternalServerError)
 		return
 	}
+
+	// First, send that everything is OK. Trying to write a header after
+	// hijacking generates a warning and nothing works
+	w.WriteHeader(http.StatusOK)
+
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		// NOTE: cannot send error because we have already written a header.
+		glog.Error(err)
+		return
 	}
 
 	// Third, start transparently sending data between source and destination
