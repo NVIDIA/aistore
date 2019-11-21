@@ -2164,12 +2164,16 @@ func TestECRebalance(t *testing.T) {
 	}
 
 	// make troubles in mpaths
-	// 1. Remove an mpath
-	lostPath := filepath.Join(lostFSList.Available[0])
-	tutils.Logf("Removing mpath %q of target %s\n", lostPath, tgtLost.DaemonID)
-	tutils.CheckPathExists(t, lostPath, true /*dir*/)
-	tassert.CheckFatal(t, os.RemoveAll(lostPath))
-	cmn.CreateDir(lostPath)
+	// 1. Remove an mpath (only if parity is greater than 1, otherwise this
+	//    step and the next one running together can delete all object data in
+	//    case of the object is replicated)
+	if o.parityCnt > 1 {
+		lostPath := filepath.Join(lostFSList.Available[0])
+		tutils.Logf("Removing mpath %q of target %s\n", lostPath, tgtLost.DaemonID)
+		tutils.CheckPathExists(t, lostPath, true /*dir*/)
+		tassert.CheckFatal(t, os.RemoveAll(lostPath))
+		cmn.CreateDir(lostPath)
+	}
 
 	// 2. Delete one, and rename the second: simulate mpath dead + new mpath attached
 	// delete obj1 & delete meta1; rename obj2 -> ob1, and meta2 -> meta1
