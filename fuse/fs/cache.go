@@ -163,8 +163,8 @@ func (c *namespaceCache) newDirEntry(dta dtAttrs) *dirEntry {
 	}
 }
 
-func (c *namespaceCache) refresh() error {
-	objs, err := c.bck.ListObjects("")
+func (c *namespaceCache) refresh(prefix string) error {
+	objs, _, err := c.bck.ListObjects(prefix, "", 0)
 	if err != nil {
 		return err
 	}

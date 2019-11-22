@@ -386,58 +386,21 @@ func Test_putdelete(t *testing.T) {
 }
 
 func listObjects(t *testing.T, proxyURL string, msg *cmn.SelectMsg, bucket string, objLimit int) (*cmn.BucketList, error) {
-	var (
-		copy    bool
-		file    *os.File
-		err     error
-		reslist *cmn.BucketList
-	)
-	tutils.Logf("LIST %s [prefix %s]\n", bucket, msg.Prefix)
-	fname := filepath.Join(LocalDestDir, bucket)
-	if copy {
-		// Write list to a local filename = bucket
-		if err = cmn.CreateDir(LocalDestDir); err != nil {
-			t.Errorf("Failed to create dir %s, err: %v", LocalDestDir, err)
-			return nil, err
-		}
-		file, err = os.Create(fname)
-		if err != nil {
-			t.Errorf("Failed to create file %s, err: %v", fname, err)
-			return nil, err
-		}
+	resList := testListBucket(t, proxyURL, bucket, msg, objLimit)
+	if resList == nil {
+		return nil, fmt.Errorf("failed to list bucket %s", bucket)
 	}
-
-	totalObjs := 0
-	for {
-		reslist = testListBucket(t, proxyURL, bucket, msg, objLimit)
-		if reslist == nil {
-			return nil, fmt.Errorf("failed to list bucket %s", bucket)
-		}
-		if copy {
-			for _, m := range reslist.Entries {
-				fmt.Fprintln(file, m)
-			}
-			t.Logf("ls bucket %s written to %s", bucket, fname)
+	for _, m := range resList.Entries {
+		if len(m.Checksum) > 8 {
+			tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum[:8]+"...", m.CheckExists, m.Atime)
 		} else {
-			for _, m := range reslist.Entries {
-				if len(m.Checksum) > 8 {
-					tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum[:8]+"...", m.CheckExists, m.Atime)
-				} else {
-					tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum, m.CheckExists, m.Atime)
-				}
-			}
-			totalObjs += len(reslist.Entries)
+			tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum, m.CheckExists, m.Atime)
 		}
-
-		if reslist.PageMarker == "" {
-			break
-		}
-
-		msg.PageMarker = reslist.PageMarker
-		tutils.Logf("PageMarker for the next page: %s\n", reslist.PageMarker)
 	}
-	tutils.Logf("-----------------\nTotal objects listed: %v\n", totalObjs)
-	return reslist, nil
+
+	tutils.Logln("----------------")
+	tutils.Logf("Total objects listed: %v\n", len(resList.Entries))
+	return resList, nil
 }
 
 func Test_BucketNames(t *testing.T) {
@@ -1181,15 +1144,15 @@ func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []
 }
 
 func testListBucket(t *testing.T, proxyURL, bucket string, msg *cmn.SelectMsg, limit int) *cmn.BucketList {
-	tutils.Logf("LIST bucket %s (%s)\n", bucket, proxyURL)
+	tutils.Logf("LIST bucket %s [fast: %v, prefix: %q, page_size: %d, marker: %q]\n", bucket, msg.Fast, msg.Prefix, msg.PageSize, msg.PageMarker)
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	reslist, err := api.ListBucket(baseParams, bucket, msg, limit)
+	resList, err := api.ListBucket(baseParams, bucket, msg, limit)
 	if err != nil {
 		t.Errorf("List bucket %s failed, err = %v", bucket, err)
 		return nil
 	}
 
-	return reslist
+	return resList
 }
 
 // 1.	PUT file

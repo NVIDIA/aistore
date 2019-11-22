@@ -109,7 +109,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 		if w.msg.Fast {
 			err := fs.Walk(dir, &fs.Options{
 				Callback: r.infos.listwalkfFast,
-				Sorted:   false,
+				Sorted:   r.infos.marker != "",
 			})
 			if err != nil {
 				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
@@ -163,7 +163,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 	}
 
 	maxSize := cmn.DefaultListPageSize
-	if w.msg.Fast {
+	if w.msg.Fast && w.msg.PageSize == 0 {
 		maxSize = 0
 	}
 	bucketList := ConcatObjLists(objLists, maxSize)

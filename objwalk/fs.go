@@ -113,16 +113,21 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 }
 
 // fast alternative of generic listwalk: do not fetch any object information
-// Always returns all objects - no paging required. But the result may have
-// 'ghost' or duplicated  objects.
-// The only supported SelectMsg feature is 'Prefix' - it does not slow down.
+// Returns all objects if the `msg.PageSize` was not specified. But the result
+// may have 'ghost' or duplicated  objects.
 func (ci *allfinfos) listwalkfFast(fqn string, de fs.DirEntry) error {
+	if ci.fileCount >= ci.limit {
+		return filepath.SkipDir
+	}
 	if de.IsDir() {
 		return ci.processDir(fqn)
 	}
 
 	relname := fqn[ci.rootLength:]
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
+		return nil
+	}
+	if ci.marker != "" && relname <= ci.marker {
 		return nil
 	}
 	ci.fileCount++

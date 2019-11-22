@@ -246,54 +246,125 @@ func TestCloudListObjectVersions(t *testing.T) {
 }
 
 func TestListObjects(t *testing.T) {
+	type objEntry struct {
+		name string
+		size int64
+	}
+
 	var (
 		iterations  = 10
 		workerCount = 10
 		dirLen      = 5
-		objectSize  = 256
 
-		bucket   = t.Name() + "Bucket"
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		wg       = &sync.WaitGroup{}
-		random   = cmn.NowRand()
+		bucket = t.Name() + "Bucket"
+		wg     = &sync.WaitGroup{}
+		random = cmn.NowRand()
+
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	if testing.Short() {
 		iterations = 3
 	}
 
-	tutils.CreateFreshBucket(t, proxyURL, bucket)
-	defer tutils.DestroyBucket(t, proxyURL, bucket)
+	tests := []struct {
+		fast     bool
+		withSize bool
+	}{
+		{fast: false, withSize: true},
+		{fast: true, withSize: false},
+		{fast: true, withSize: true},
+	}
 
-	// Iterations of PUT
-	totalObjects := 0
-	for iter := 0; iter < iterations; iter++ {
-		objectCount := random.Intn(2048) + 2000
-		totalObjects += objectCount
-		for wid := 0; wid < workerCount; wid++ {
-			wg.Add(1)
-			go func(wid int) {
-				defer wg.Done()
+	for _, test := range tests {
+		name := "slow"
+		if test.fast {
+			name = "fast"
+		}
+		if test.withSize {
+			name += "/with_size"
+		} else {
+			name += "/without_size"
+		}
+		t.Run(name, func(t *testing.T) {
+			var (
+				objs sync.Map
+			)
 
-				reader, err := tutils.NewRandReader(int64(objectSize), true)
-				tassert.CheckFatal(t, err)
-				objDir := tutils.RandomObjDir(random, dirLen, 5)
-				objectsToPut := objectCount / workerCount
-				if wid == workerCount-1 { // last worker puts leftovers
-					objectsToPut += objectCount % workerCount
+			tutils.CreateFreshBucket(t, proxyURL, bucket)
+			defer tutils.DestroyBucket(t, proxyURL, bucket)
+
+			totalObjects := 0
+			for iter := 0; iter < iterations; iter++ {
+				tutils.Logf("listing iteration: %d/%d (total_objs: %d)\n", iter, iterations, totalObjects)
+				objectCount := random.Intn(2048) + 2000
+				totalObjects += objectCount
+				for wid := 0; wid < workerCount; wid++ {
+					wg.Add(1)
+					go func(wid int) {
+						defer wg.Done()
+
+						objectSize := int64(random.Intn(256) + 20)
+						reader, err := tutils.NewRandReader(objectSize, true)
+						tassert.CheckFatal(t, err)
+						objDir := tutils.RandomObjDir(random, dirLen, 5)
+						objectsToPut := objectCount / workerCount
+						if wid == workerCount-1 { // last worker puts leftovers
+							objectsToPut += objectCount % workerCount
+						}
+						objNames := putRR(t, reader, bucket, objDir, objectsToPut)
+						for _, objName := range objNames {
+							objs.Store(objName, objEntry{
+								name: objName,
+								size: objectSize,
+							})
+						}
+					}(wid)
 				}
-				putRR(t, reader, bucket, objDir, objectsToPut)
-			}(wid)
-		}
-		wg.Wait()
+				wg.Wait()
 
-		// Confirm PUTs
-		bckObjs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
-		tassert.CheckFatal(t, err)
+				// Confirm PUTs by listing objects.
+				var (
+					bckList *cmn.BucketList
+					err     error
+				)
+				if !test.fast {
+					bckList, err = api.ListBucket(baseParams, bucket, nil, 0)
+				} else {
+					msg := &cmn.SelectMsg{}
+					if test.withSize {
+						msg.Props = cmn.GetPropsSize
+					}
 
-		if len(bckObjs) != totalObjects {
-			t.Errorf("actual objects %d, expected: %d", len(bckObjs), totalObjects)
-		}
+					bckList, err = api.ListBucketFast(baseParams, bucket, msg)
+				}
+				tassert.CheckFatal(t, err)
+
+				if len(bckList.Entries) != totalObjects {
+					t.Errorf("actual objects %d, expected: %d", len(bckList.Entries), totalObjects)
+				}
+				if bckList.PageMarker != "" {
+					t.Errorf("page marker was unexpectedly set to: %s", bckList.PageMarker)
+				}
+
+				for _, entry := range bckList.Entries {
+					e, exists := objs.Load(entry.Name)
+					if !exists {
+						t.Errorf("object with name %s was listed but was not ever put", entry.Name)
+						continue
+					}
+
+					obj := e.(objEntry)
+					if test.withSize && obj.size != entry.Size {
+						t.Errorf(
+							"sizes do not match for object %s, expected: %d, got: %d",
+							obj.name, obj.size, entry.Size,
+						)
+					}
+				}
+			}
+		})
 	}
 }
 

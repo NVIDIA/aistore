@@ -470,58 +470,59 @@ func TestListObjectsPrefix(t *testing.T) {
 	close(filesPutCh)
 	selectErr(errCh, "list - put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
 	close(errCh)
-	type testParams struct {
-		title    string
+
+	tests := []struct {
+		name     string
 		prefix   string
 		pageSize int
 		limit    int
 		expected int
-	}
-	tests := []testParams{
+	}{
 		{
-			"Full list - default pageSize",
+			"full_list_default_pageSize_no_limit",
 			prefix, 0, 0,
 			numFiles,
 		},
 		{
-			"Full list - small pageSize - no limit",
+			"full_list_small_pageSize_no_limit",
 			prefix, numFiles / 7, 0,
 			numFiles,
 		},
 		{
-			"Full list - limited",
+			"full_list_limited",
 			prefix, 0, 8,
 			8,
 		},
 		{
-			"Full list - with prefix",
+			"full_list_prefixed",
 			prefix + "/obj1", 0, 0,
 			11, // obj1 and obj10..obj19
 		},
 		{
-			"Full list - with prefix and limit",
+			"full_list_limited_prefixed",
 			prefix + "/obj1", 0, 2,
 			2, // obj1 and obj10
 		},
 		{
-			"Empty list - prefix",
+			"empty_list_prefixed",
 			prefix + "/nothing", 0, 0,
 			0,
 		},
 	}
 
-	for idx, test := range tests {
-		tutils.Logf("%d. %s\n    Prefix: [%s], Expected objects: %d\n", idx+1, test.title, test.prefix, test.expected)
-		msg := &cmn.SelectMsg{PageSize: test.pageSize, Prefix: test.prefix}
-		reslist, err := listObjects(t, proxyURL, msg, bucket, test.limit)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-		if len(reslist.Entries) != test.expected {
-			t.Errorf("Test %d. %s failed: returned %d objects instead of %d",
-				idx+1, test.title, len(reslist.Entries), test.expected)
-		}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tutils.Logf("Prefix: %q, Expected objects: %d\n", test.prefix, test.expected)
+			tutils.Logf("------------\n")
+			msg := &cmn.SelectMsg{PageSize: test.pageSize, Prefix: test.prefix}
+			resList, err := listObjects(t, proxyURL, msg, bucket, test.limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(resList.Entries) != test.expected {
+				t.Errorf("returned %d objects instead of %d", len(resList.Entries), test.expected)
+			}
+		})
 	}
 }
 

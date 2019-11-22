@@ -1952,11 +1952,7 @@ func (p *proxyrunner) checkBckTaskResp(taskID int64, results chan callResult) (a
 //      * error
 func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 	headerID string) (allEntries *cmn.BucketList, taskID int64, err error) {
-	pageSize := cmn.DefaultListPageSize
-	if msg.PageSize != 0 {
-		pageSize = msg.PageSize
-	}
-	// start new async task if client did not provide taskID (neither in headers nor in SelectMsg)
+	// Start new async task if client did not provide taskID (neither in headers nor in SelectMsg).
 	isNew, q, err := p.initAsyncQuery(headerID, &msg)
 	if err != nil {
 		return nil, 0, err
@@ -1982,20 +1978,25 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 		return nil, 0, err
 	}
 
-	// some targets are still executing their tasks or it is request to start
-	// an async task. The proxy returns only taskID to a caller
+	// Some targets are still executing their tasks or it is request to start
+	// an async task. The proxy returns only taskID to a caller.
 	if !allOK || isNew {
 		return nil, msg.TaskID, nil
 	}
 
-	// all targets are ready, prepare the final result
+	// All targets are ready, prepare the final result.
 	q = url.Values{}
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
 	args.req.Query = q
 	results = p.bcastPost(args)
 
-	// combine results
+	preallocSize := cmn.DefaultListPageSize
+	if msg.PageSize != 0 {
+		preallocSize = msg.PageSize
+	}
+
+	// Combine the results.
 	bckLists := make([]*cmn.BucketList, 0, len(results))
 	for res := range results {
 		if res.err != nil {
@@ -2004,7 +2005,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 		if len(res.outjson) == 0 {
 			continue
 		}
-		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
+		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
 		if err = jsoniter.Unmarshal(res.outjson, &bucketList); err != nil {
 			return
 		}
@@ -2017,8 +2018,16 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 		bckLists = append(bckLists, bucketList)
 	}
 
-	// When listing fast we need to return all entries (without page)
-	if msg.Fast {
+	var pageSize int
+	if msg.PageSize != 0 {
+		// When `PageSize` is set, then regardless of the listing type (slow/fast)
+		// we need respect it.
+		pageSize = msg.PageSize
+	} else if !msg.Fast {
+		// When listing slow, we need to return a single page of default size.
+		pageSize = cmn.DefaultListPageSize
+	} else if msg.Fast {
+		// When listing fast, we need to return all entries (without paging).
 		pageSize = 0
 	}
 

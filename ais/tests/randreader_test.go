@@ -38,19 +38,26 @@ func TestRandomReaderPutStress(t *testing.T) {
 	tutils.DestroyBucket(t, proxyURL, bucket)
 }
 
-func putRR(t *testing.T, reader tutils.Reader, bucket, dir string, numobjects int) {
-	random := cmn.NowRand()
-	for i := 0; i < numobjects; i++ {
+func putRR(t *testing.T, reader tutils.Reader, bucket, dir string, objCount int) []string {
+	var (
+		random   = cmn.NowRand()
+		objNames = make([]string, objCount)
+	)
+	for i := 0; i < objCount; i++ {
 		fname := tutils.FastRandomFilename(random, fnlen)
-		objname := filepath.Join(dir, fname)
+		objName := filepath.Join(dir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: tutils.DefaultBaseAPIParams(t),
 			Bucket:     bucket,
-			Object:     objname,
+			Object:     objName,
 			Hash:       reader.XXHash(),
 			Reader:     reader,
 		}
 		err := api.PutObject(putArgs)
 		tassert.CheckFatal(t, err)
+
+		objNames[i] = objName
 	}
+
+	return objNames
 }

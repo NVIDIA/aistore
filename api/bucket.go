@@ -541,9 +541,17 @@ func handleAsyncReqAccepted(resp *http.Response, action string, origMsg *cmn.Sel
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
 func ListBucket(baseParams BaseParams, bucket string, msg *cmn.SelectMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
-	q := url.Values{}
+	var (
+		q       = url.Values{}
+		path    = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+		bckList = &cmn.BucketList{
+			Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize),
+		}
+
+		// Temporary page for intermediate results
+		tmpPage = &cmn.BucketList{}
+	)
+
 	if len(query) > 0 {
 		q = query[0]
 	}
@@ -553,18 +561,21 @@ func ListBucket(baseParams BaseParams, bucket string, msg *cmn.SelectMsg, numObj
 	}
 
 	// An optimization to read as few objects from bucket as possible.
-	// toRead is the current number of objects ListBucket must read before
+	// `toRead` is the current number of objects `ListBucket` must read before
 	// returning the list. Every cycle the loop reads objects by pages and
-	// decreases toRead by the number of received objects. When toRead gets less
-	// than pageSize, the loop does the final request with reduced pageSize
+	// decreases `toRead` by the number of received objects. When `toRead` gets less
+	// than `pageSize`, the loop does the final request with reduced `pageSize`.
 	toRead := numObjects
 	msg.TaskID = 0
-	for {
-		if toRead != 0 {
-			if (msg.PageSize == 0 && toRead < cmn.DefaultListPageSize) ||
-				(msg.PageSize != 0 && msg.PageSize > toRead) {
-				msg.PageSize = toRead
-			}
+
+	pageSize := msg.PageSize
+	if pageSize == 0 {
+		pageSize = cmn.DefaultListPageSize
+	}
+
+	for iter := 1; ; iter++ {
+		if toRead != 0 && toRead <= pageSize {
+			msg.PageSize = toRead
 		}
 
 		optParams := OptionalParams{
@@ -577,24 +588,42 @@ func ListBucket(baseParams BaseParams, bucket string, msg *cmn.SelectMsg, numObj
 			return nil, err
 		}
 
-		page := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
+		page := tmpPage
+		if iter == 1 {
+			// On first iteration use just `bckList` to prevent additional allocations.
+			page = bckList
+		} else if iter >= 2 {
+			// On later iterations just allocate temporary page.
+			//
+			// NOTE: do not try to optimize this code by allocating the page
+			// on the second iteration and reusing it - it will not work since
+			// the Unmarshaler/Decoder will reuse the entry pointers what will
+			// result in duplications and incorrect output.
+			page.Entries = make([]*cmn.BucketEntry, 0, pageSize)
+		}
+
 		if err = jsoniter.NewDecoder(resp.Body).Decode(&page); err != nil {
 			resp.Body.Close()
 			return nil, fmt.Errorf("failed to json-unmarshal, err: %v", err)
 		}
 		resp.Body.Close()
 
-		bckList.Entries = append(bckList.Entries, page.Entries...)
+		// First iteration uses `bckList` directly so there is no need to append.
+		if iter > 1 {
+			bckList.Entries = append(bckList.Entries, page.Entries...)
+			bckList.PageMarker = page.PageMarker
+		}
+
 		if page.PageMarker == "" {
 			msg.PageMarker = ""
 			break
 		}
 
-		if numObjects != 0 {
-			if len(bckList.Entries) >= numObjects {
+		if toRead != 0 {
+			toRead -= len(page.Entries)
+			if toRead <= 0 {
 				break
 			}
-			toRead -= len(page.Entries)
 		}
 
 		msg.PageMarker = page.PageMarker
