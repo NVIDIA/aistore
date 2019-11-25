@@ -101,6 +101,10 @@ type (
 		mpath string
 		cause string
 	}
+
+	TimeoutError struct {
+		cause string
+	}
 )
 
 func (e NoMountpathError) Error() string {
@@ -119,6 +123,9 @@ func NewInvalidaMountpathError(mpath, cause string) InvalidMountpathError {
 		cause: cause,
 	}
 }
+
+func NewTimeoutError(cause string) TimeoutError { return TimeoutError{cause} }
+func (e TimeoutError) Error() string            { return e.cause + " timed out" }
 
 type (
 	XactionNotFoundError struct {

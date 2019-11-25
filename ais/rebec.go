@@ -46,7 +46,7 @@ import (
 // 05. Each target waits for all other targets to receive the data and then
 //     rebalance moves to next stage (rebStageECDetect)
 // 06. Each target processes the list of slices and groups by isAIS/Bucket/Objname/ObjHash
-// 07. All other steps use the longest slice list of an object. Though it has
+// 07. All other steps use the newest slice list of an object. Though it has
 //     and issue. TODO: rare corner case: current object is EC'ed, after putting a
 //     new version, the object gets replicated. Replicated object requires less
 //     slices, so the algorithm chooses the list that belongs to older hash version
@@ -125,19 +125,25 @@ type (
 
 	ecSliceList     = map[string][]*ecRebSlice  // EC slices grouped by a rule
 	ecSliceWaitList = map[string][]*ecWaitSlice // object uid <-> list of slices
+	nodeSlices      = map[string]*ecRebSlice    // daemonID <-> its slice (for "newest" slice list only)
 	// a full info about an object that resides on the local target.
 	// Contains both global and calculated local info
 	ecRebObject struct {
 		slices       ecSliceList      // obj hash <-> list of slices with the same hash
-		slicesAt     cmn.StringSet    // which targets has slice/replica
 		hrwTargets   []*cluster.Snode // the list of targets that should have slices/replicas
 		rebuildSGLs  []*memsys.SGL    // temporary slices for [re]building EC
 		fh           *cmn.FileHandle  // file handle for main object when building slices from existing full object
 		sender       *cluster.Snode   // which target is responsible to send replicas over the cluster (first by HRW)
-		locSlice     *ecRebSlice      // an object slice/replica found on local target (points to a slice from `slices` field)
+		sliceAt      nodeSlices       // maps daemonID to slice for faster check what nodes have slices
+		sliceExist   []bool           // marks existing slices/replicas(first item is full object) for faster check if a slice exists
 		mainDaemon   string           // hrw target for an object
 		uid          string           // unique identifier for the object (Bucket#Object#IsAIS)
+		bucket       string           // bucket name for faster aceess
+		objName      string           // object name for faster access
+		objSize      int64            // object size
 		sliceSize    int64            // a size of an object slice
+		dataSlices   int16            // the number of data slices
+		paritySlices int16            // the number of parity slices
 		mainSliceID  int16            // sliceID on the main target
 		isECCopy     bool             // replicated or erasure coded
 		hasSlice     bool             // local target has any obj's slice/replica
@@ -216,9 +222,11 @@ func uniqueWaitID(bucket, objName string, isAIS bool) string {
 // added one, it is OK to read all info from the very first slice always
 //
 
-// Returns the list of slices with the same object hash that is the longest one.
+// Returns the list of slices with the same object hash that is the newest one.
 // In majority of cases the object will contain only one list.
-func (so *ecRebObject) longest() []*ecRebSlice {
+// TODO: implement better detection of the newest object version. Now the newest
+// is determined only by the number of slices: the newest has the biggest number
+func (so *ecRebObject) newest() []*ecRebSlice {
 	var l []*ecRebSlice
 	max := 0
 	for _, sliceList := range so.slices {
@@ -230,64 +238,27 @@ func (so *ecRebObject) longest() []*ecRebSlice {
 	return l
 }
 
-// All the functions below for ecRebObject work with the longest (kind of
-// "correct" one) slice list
-func (so *ecRebObject) bucket() string {
-	list := so.longest()
-	cmn.Assert(list != nil)
-	return list[0].Bucket
-}
-
-func (so *ecRebObject) objName() string {
-	list := so.longest()
-	cmn.Assert(list != nil)
-	return list[0].Objname
-}
-
-func (so *ecRebObject) objSize() int64 {
-	list := so.longest()
-	cmn.Assert(list != nil)
-	return list[0].ObjSize
-}
-
-func (so *ecRebObject) dataSlices() int16 {
-	list := so.longest()
-	cmn.Assert(list != nil)
-	return list[0].DataSlices
-}
-
-func (so *ecRebObject) paritySlices() int16 {
-	list := so.longest()
-	cmn.Assert(list != nil)
-	return list[0].ParitySlices
-}
-
 // Returns how many slices/replicas(including the original object) must exists
 func (so *ecRebObject) sliceRequired() int {
-	list := so.longest()
-	cmn.Assert(list != nil)
-	s := list[0]
 	if so.isECCopy {
-		return int(s.ParitySlices + 1)
+		return int(so.paritySlices + 1)
 	}
-	return int(s.DataSlices + s.ParitySlices + 1)
+	return int(so.dataSlices + so.paritySlices + 1)
 }
 
 // Returns how many slices/replicas found across all targets
 func (so *ecRebObject) sliceFound() int {
-	list := so.longest()
-	return len(list)
+	return len(so.sliceAt)
 }
 
-// Returns if a slice with ID is found on any target
-func (so *ecRebObject) sliceExists(id int16) bool {
-	list := so.longest()
-	for _, sl := range list {
-		if sl.SliceID == id {
-			return true
+// Returns a random slice which has metadata.
+func (so *ecRebObject) sliceForMD() *ecRebSlice {
+	for _, sl := range so.sliceAt {
+		if sl.meta != nil {
+			return sl
 		}
 	}
-	return false
+	return nil
 }
 
 // Returns the list of targets that does not have any slice/replica but
@@ -298,7 +269,7 @@ func (so *ecRebObject) emptyTargets(skip *cluster.Snode) []*cluster.Snode {
 		if skip != nil && skip.DaemonID == tgt.DaemonID {
 			continue
 		}
-		if so.slicesAt.Contains(tgt.DaemonID) {
+		if _, ok := so.sliceAt[tgt.DaemonID]; ok {
 			continue
 		}
 		freeTargets = append(freeTargets, tgt)
@@ -451,8 +422,7 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 
 	if err := s.data.Send(hdr, fh, nil, nil, targets); err != nil {
 		fh.Close()
-		glog.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].DaemonID, err)
-		return err
+		return fmt.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].DaemonID, err)
 	}
 	s.t.statsif.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
@@ -496,8 +466,7 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 	}
 
 	if err := s.data.SendV(hdr, reader, nil, nil, target); err != nil {
-		glog.Errorf("Failed to send slices to node %s: %v", target.Name(), err)
-		return err
+		return fmt.Errorf("Failed to send slices to node %s: %v", target.Name(), err)
 	}
 	s.t.statsif.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
@@ -537,28 +506,32 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 		return err
 	}
 
-	var sliceFQN string
-	if md.SliceID == 0 {
-		sliceFQN = mpath.MakePathBucketObject(fs.ObjectType, hdr.Bucket, provider, hdr.Objname)
-	} else {
+	var (
+		sliceFQN string
+		lom      *cluster.LOM
+	)
+	if md.SliceID != 0 {
 		sliceFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, provider, hdr.Objname)
+	} else {
+		sliceFQN = mpath.MakePathBucketObject(fs.ObjectType, hdr.Bucket, provider, hdr.Objname)
+		lom = &cluster.LOM{T: s.t, FQN: sliceFQN}
+		if err := lom.Init(hdr.Bucket, provider); err != nil {
+			return err
+		}
+		lom.SetSize(hdr.ObjAttrs.Size)
+		if hdr.ObjAttrs.Version != "" {
+			lom.SetVersion(hdr.ObjAttrs.Version)
+		}
+		if hdr.ObjAttrs.CksumType != "" {
+			lom.SetCksum(cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue))
+		}
+		if hdr.ObjAttrs.Atime != 0 {
+			lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
+		}
+		lom.Lock(true)
+		defer lom.Unlock(true)
+		lom.Uncache()
 	}
-	var lom = &cluster.LOM{T: s.t, FQN: sliceFQN}
-	if err := lom.Init(hdr.Bucket, provider); err != nil {
-		return err
-	}
-	lom.SetSize(hdr.ObjAttrs.Size)
-	if hdr.ObjAttrs.Version != "" {
-		lom.SetVersion(hdr.ObjAttrs.Version)
-	}
-	if hdr.ObjAttrs.CksumType != "" {
-		lom.SetCksum(cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue))
-	}
-	if hdr.ObjAttrs.Atime != 0 {
-		lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
-	}
-	lom.Lock(true)
-	defer lom.Unlock(true)
 
 	buffer, slab := nodeCtx.mm.AllocDefault()
 	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bucket, provider, hdr.Objname)
@@ -570,17 +543,25 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 	tmpFQN := mpath.MakePathBucketObject(fs.WorkfileType, hdr.Bucket, provider, hdr.Objname)
 	cksum, err := cmn.SaveReaderSafe(tmpFQN, sliceFQN, memsys.NewReader(data), buffer, true)
 	if md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
-		// TODO: only logging an error for now
-		glog.Errorf("Mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
+		err = fmt.Errorf("Mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
 			hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, md.ObjCksum)
 	}
 	slab.Free(buffer)
-	lom.Persist()
+	if err != nil {
+		// Persist may call FSHC, too. To avoid double FSHC call, do extra check now.
+		s.t.FSHC(err, sliceFQN)
+	} else if md.SliceID == 0 {
+		err = lom.Persist()
+	}
 
 	if err != nil {
-		os.Remove(metaFQN)
-		os.Remove(sliceFQN)
 		os.Remove(tmpFQN)
+		if rmErr := os.Remove(metaFQN); rmErr != nil && !os.IsNotExist(rmErr) {
+			glog.Errorf("Nested error: save replica -> remove metadata file: %v", rmErr)
+		}
+		if rmErr := os.Remove(sliceFQN); rmErr != nil && !os.IsNotExist(rmErr) {
+			glog.Errorf("Nested error: save replica -> remove replica: %v", rmErr)
+		}
 	}
 
 	return err
@@ -612,8 +593,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	waitSlice.meta = req.Extra
 	n, err := io.Copy(waitSlice.sgl, reader)
 	if err != nil {
-		glog.Errorf("Failed to read slice %d for %s/%s: %v", sliceID, hdr.Bucket, hdr.Objname, err)
-		return err
+		return fmt.Errorf("Failed to read slice %d for %s/%s: %v", sliceID, hdr.Bucket, hdr.Objname, err)
 	}
 	s.t.statsif.AddMany(
 		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
@@ -762,9 +742,8 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) []*ecRebObject {
 				continue
 			}
 			for objName, obj := range objs.objs {
-				obj.isECCopy = ec.IsECCopy(obj.objSize(), &bprops.EC)
-				if err := s.calcLocalProps(obj, smap); err != nil {
-					glog.Warningf("Detect %s failed, skipping: %v", obj.objName(), err)
+				if err := s.calcLocalProps(obj, smap, &bprops.EC); err != nil {
+					glog.Warningf("Detect %s failed, skipping: %v", obj.objName, err)
 					continue
 				}
 
@@ -794,12 +773,12 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) []*ecRebObject {
 		if broken[i].isAIS != broken[j].isAIS {
 			return broken[j].isAIS
 		}
-		bi := broken[i].bucket()
-		bj := broken[j].bucket()
+		bi := broken[i].bucket
+		bj := broken[j].bucket
 		if bi != bj {
 			return bi < bj
 		}
-		return broken[i].objName() < broken[j].objName()
+		return broken[i].objName < broken[j].objName
 	}
 	sort.Slice(broken, sliceLess)
 
@@ -1025,89 +1004,120 @@ func (s *ecRebalancer) exchange() error {
 	return fmt.Errorf("Could not sent data to %d nodes", len(failed))
 }
 
-// Generates LOMs for slice/replica and corresponding metadata
-func (s *ecRebalancer) getMetaAndSliceLOM(sliceFQN, bucket, provider string) (*cluster.LOM, *cluster.LOM, error) {
-	lom := &cluster.LOM{T: s.t, FQN: sliceFQN}
-	err := lom.Init(bucket, provider)
-	if err != nil {
-		return nil, nil, err
+func (s *ecRebalancer) rebalanceLocalSlice(fromFQN, toFQN string, buf []byte) error {
+	if _, _, err := cmn.CopyFile(fromFQN, toFQN, buf, false); err != nil {
+		s.t.FSHC(err, fromFQN)
+		s.t.FSHC(err, toFQN)
+		return err
 	}
-	cmn.Assert(lom.ParsedFQN.ContentType == ec.SliceType || lom.ParsedFQN.ContentType == fs.ObjectType)
-	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, bucket, provider, lom.Objname)
-	metaLOM := &cluster.LOM{T: s.t, FQN: metaFQN}
-	err = metaLOM.Init(bucket, provider)
-	if err != nil {
-		return nil, nil, err
+	if rmErr := os.Remove(fromFQN); rmErr != nil { // not severe error, can continue
+		glog.Errorf("Error cleaning up %q: %v", fromFQN, rmErr)
 	}
-	return lom, metaLOM, nil
+	return nil
 }
 
-// Copies local misplaced slices/replicas to correct mpath
-func (s *ecRebalancer) repairLocal() error {
+func (s *ecRebalancer) rebalanceLocalObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string, buf []byte) error {
+	lom := &cluster.LOM{T: s.t, FQN: fromFQN}
+	err := lom.Init(fromMpath.Bucket, fromMpath.Provider)
+	if err == nil {
+		err = lom.Load()
+	}
+	if err != nil {
+		return err
+	}
+
+	lom.Lock(true)
+	lom.Uncache()
+	_, err = lom.CopyObject(toFQN, buf)
+	lom.Unlock(true)
+	if err != nil {
+		s.t.FSHC(err, fromFQN)
+		s.t.FSHC(err, toFQN)
+		return err
+	}
+
+	if err := os.Remove(fromFQN); err != nil {
+		glog.Errorf("Failed to cleanup %q: %v", fromFQN, err)
+	}
+	return nil
+}
+
+// Moves local misplaced slices/replicas to correct mpath
+func (s *ecRebalancer) rebalanceLocal() error {
+	buf, slab := nodeCtx.mm.AllocDefault()
+	defer slab.Free(buf)
 	for _, act := range s.localActions {
-		provider := cmn.ProviderFromBool(act.IsAIS)
-		fqnSrc := act.realFQN
-		sliceLOM, metaLOM, err := s.getMetaAndSliceLOM(fqnSrc, act.Bucket, provider)
+		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			glog.Infof("%s Repair local %s -> %s", s.t.si.Name(), act.realFQN, act.hrwFQN)
+		}
+		mpathSrc, _, err := cluster.ResolveFQN(act.realFQN)
 		if err != nil {
 			return err
 		}
-		fqnDst := act.hrwFQN
-		_, metaDstLOM, err := s.getMetaAndSliceLOM(fqnDst, act.Bucket, provider)
+		mpathDst, _, err := cluster.ResolveFQN(act.hrwFQN)
 		if err != nil {
 			return err
 		}
-		if act.SliceID == 0 {
-			err = sliceLOM.Load()
-			if err != nil {
+
+		metaSrcFQN := mpathSrc.MpathInfo.MakePathBucketObject(ec.MetaType, mpathSrc.Bucket, mpathSrc.Provider, mpathSrc.ObjName)
+		metaDstFQN := mpathDst.MpathInfo.MakePathBucketObject(ec.MetaType, mpathDst.Bucket, mpathDst.Provider, mpathDst.ObjName)
+		_, _, err = cmn.CopyFile(metaSrcFQN, metaDstFQN, buf, false)
+		if err != nil {
+			return err
+		}
+
+		// slice case
+		if act.SliceID != 0 {
+			if err := s.rebalanceLocalSlice(act.realFQN, act.hrwFQN, buf); err != nil {
+				os.Remove(metaDstFQN)
 				return err
 			}
+			continue
 		}
 
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-			glog.Infof("%s Repair local %s -> %s", s.t.si.Name(), sliceLOM.FQN, fqnDst)
-		}
-		sliceLOM.Lock(true) // locks slices and metadata copying
-		buf, slab := nodeCtx.mm.AllocDefault()
-		_, _, err = cmn.CopyFile(metaLOM.FQN, metaDstLOM.FQN, buf, false)
-		if err == nil {
-			os.Remove(metaLOM.FQN)
-			_, err = sliceLOM.CopyObject(fqnDst, buf)
-		}
-		sliceLOM.Unlock(true)
-		slab.Free(buf)
-		if err != nil {
-			// check both mpath on error
-			s.t.FSHC(err, fqnSrc)
-			s.t.FSHC(err, fqnDst)
+		// object/replica case
+		if err := s.rebalanceLocalObject(mpathSrc, act.realFQN, act.hrwFQN, buf); err != nil {
+			if rmErr := os.Remove(metaDstFQN); rmErr != nil {
+				glog.Errorf("Error cleaning up %q: %v", metaDstFQN, rmErr)
+			}
 			return err
 		}
 
-		sliceLOM.Uncache()
-		os.Remove(fqnSrc)
+		if err := os.Remove(metaSrcFQN); err != nil {
+			glog.Errorf("Failed to cleanup %q: %v", metaSrcFQN, err)
+		}
 	}
 
 	return nil
 }
 
 // Fills the object properties with data that should be calculated locally
-func (s *ecRebalancer) calcLocalProps(obj *ecRebObject, smap *cluster.Smap) (err error) {
+func (s *ecRebalancer) calcLocalProps(obj *ecRebObject, smap *cluster.Smap, ecConfig *cmn.ECConf) (err error) {
 	localDaemon := s.t.si.DaemonID
-	slices := obj.longest()
+	slices := obj.newest()
 	cmn.Assert(len(slices) != 0) // cannot happen
 	mainSlice := slices[0]
+
+	obj.bucket = mainSlice.Bucket
+	obj.objName = mainSlice.Objname
+	obj.objSize = mainSlice.ObjSize
+	obj.isECCopy = ec.IsECCopy(obj.objSize, ecConfig)
+	obj.dataSlices = mainSlice.DataSlices
+	obj.paritySlices = mainSlice.ParitySlices
+	obj.sliceSize = ec.SliceSize(obj.objSize, int(obj.dataSlices))
+
 	sliceFound := obj.sliceFound()
 	sliceReq := obj.sliceRequired()
+	obj.sliceExist = make([]bool, sliceReq)
+	obj.sliceAt = make(nodeSlices, sliceFound)
 
-	obj.slicesAt = make(cmn.StringSet, sliceFound)
 	obj.uid = uniqueWaitID(mainSlice.Bucket, mainSlice.Objname, obj.isAIS)
-	obj.sliceSize = ec.SliceSize(obj.objSize(), int(obj.dataSlices()))
 	obj.isMain = obj.mainDaemon == localDaemon
 
 	for _, slice := range slices {
-		obj.slicesAt.Add(slice.DaemonID)
+		obj.sliceAt[slice.DaemonID] = slice
 		if slice.DaemonID == localDaemon {
 			obj.hasSlice = true
-			obj.locSlice = slice
 		}
 		if slice.DaemonID == obj.mainDaemon {
 			obj.mainHasAny = true
@@ -1116,10 +1126,11 @@ func (s *ecRebalancer) calcLocalProps(obj *ecRebObject, smap *cluster.Smap) (err
 		if slice.SliceID == 0 {
 			obj.fullObjFound = true
 		}
+		obj.sliceExist[slice.SliceID] = true
 	}
 
 	genCount := cmn.Max(sliceReq, len(smap.Tmap))
-	obj.hrwTargets, err = cluster.HrwTargetList(obj.bucket(), obj.objName(), smap, genCount)
+	obj.hrwTargets, err = cluster.HrwTargetList(obj.bucket, obj.objName, smap, genCount)
 	if err != nil {
 		return err
 	}
@@ -1133,7 +1144,7 @@ func (s *ecRebalancer) calcLocalProps(obj *ecRebObject, smap *cluster.Smap) (err
 			obj.inHrwList = true
 			break
 		}
-		if !obj.slicesAt.Contains(tgt.DaemonID) {
+		if _, ok := obj.sliceAt[tgt.DaemonID]; !ok {
 			toCheck--
 		}
 	}
@@ -1141,7 +1152,7 @@ func (s *ecRebalancer) calcLocalProps(obj *ecRebObject, smap *cluster.Smap) (err
 	// other target that miss their replicas
 	if obj.isECCopy {
 		for _, si := range obj.hrwTargets {
-			if obj.slicesAt.Contains(si.DaemonID) {
+			if _, ok := obj.sliceAt[si.DaemonID]; ok {
 				obj.sender = si
 				break
 			}
@@ -1174,7 +1185,7 @@ func (s *ecRebalancer) targetIndex(daemonID string, obj *ecRebObject) int {
 	cnt := 0
 	// always skip the "default" target
 	for _, tgt := range obj.hrwTargets[1:] {
-		if !obj.slicesAt.Contains(tgt.DaemonID) {
+		if _, ok := obj.sliceAt[tgt.DaemonID]; !ok {
 			continue
 		}
 		if tgt.DaemonID == daemonID {
@@ -1191,15 +1202,18 @@ func (s *ecRebalancer) targetIndex(daemonID string, obj *ecRebObject) int {
 // already 'dataSliceCount' targets are going to send their slices(by HRW).
 // Trading network traffic for main target's CPU.
 func (s *ecRebalancer) shouldSendSlice(obj *ecRebObject) (hasSlice bool, shouldSend bool) {
+	if obj.isMain {
+		return false, false
+	}
 	// First check if this target in the first 'dataSliceCount' slices.
 	// Skip the first target in list for it is the main one.
-	sliceCnt := obj.dataSlices()
+	sliceCnt := obj.dataSlices
 	tgtIndex := s.targetIndex(s.t.si.DaemonID, obj)
 	shouldSend = tgtIndex >= 0 && tgtIndex < int(sliceCnt)
-	hasSlice = obj.hasSlice && !obj.isMain && !obj.isECCopy &&
-		(!obj.mainHasAny || obj.mainSliceID != 0)
+	hasSlice = obj.hasSlice && !obj.isMain && !obj.isECCopy && !obj.fullObjFound
 	if hasSlice && (bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun) {
-		glog.Infof("Should send: %s[%d] - %d : %v / %v", obj.uid, obj.locSlice.SliceID, tgtIndex, hasSlice, shouldSend)
+		locSlice := obj.sliceAt[s.t.si.DaemonID]
+		glog.Infof("Should send: %s[%d] - %d : %v / %v", obj.uid, locSlice.SliceID, tgtIndex, hasSlice, shouldSend)
 	}
 	return hasSlice, shouldSend
 }
@@ -1207,14 +1221,9 @@ func (s *ecRebalancer) shouldSendSlice(obj *ecRebObject) (hasSlice bool, shouldS
 // true if the object is not replicated, and this target has full object, and the
 // target is not the default target, and default target does not have full object
 func (s *ecRebalancer) hasFullObjMisplaced(obj *ecRebObject) bool {
-	return !obj.isECCopy && obj.hasSlice && !obj.isMain && obj.locSlice.SliceID == 0 &&
+	locSlice, ok := obj.sliceAt[s.t.si.DaemonID]
+	return ok && !obj.isECCopy && !obj.isMain && locSlice.SliceID == 0 &&
 		(!obj.mainHasAny || obj.mainSliceID != 0)
-}
-
-// true if no target has full object, and object is encoded, and this target has
-// a slice, so the target must send its slice to default one to restore the object
-func (s *ecRebalancer) mainReplicaMissing(obj *ecRebObject) bool {
-	return !obj.isMain && !obj.fullObjFound && obj.hasSlice && !obj.isECCopy
 }
 
 // true if the target needs replica: if it is default one and replica is missing,
@@ -1228,8 +1237,8 @@ func (s *ecRebalancer) needsReplica(obj *ecRebObject) bool {
 // Read slice/replica from local drive and send to another target.
 // If destination is not defined the target sends its data to "default by HRW" target
 func (s *ecRebalancer) sendLocalData(obj *ecRebObject, si ...*cluster.Snode) error {
-	slice := obj.locSlice
-	cmn.Assert(slice != nil)
+	slice, ok := obj.sliceAt[s.t.si.DaemonID]
+	cmn.Assert(ok)
 	var target *cluster.Snode
 	if len(si) != 0 {
 		target = si[0]
@@ -1265,10 +1274,10 @@ func (s *ecRebalancer) bcastLocalReplica(obj *ecRebObject) error {
 		// of replicas is OK, we have to copy replica to main anyway
 		sliceDiff = 1
 	}
-	slice := obj.locSlice
-	cmn.Assert(slice != nil)
+	slice, ok := obj.sliceAt[s.t.si.DaemonID]
+	cmn.Assert(ok)
 	for _, si := range obj.hrwTargets {
-		if obj.slicesAt.Contains(si.DaemonID) {
+		if _, ok := obj.sliceAt[si.DaemonID]; ok {
 			continue
 		}
 		sendTo = append(sendTo, si)
@@ -1291,21 +1300,21 @@ func (s *ecRebalancer) bcastLocalReplica(obj *ecRebObject) error {
 func (s *ecRebalancer) firstEmptyTgt(obj *ecRebObject) *cluster.Snode {
 	localDaemon := s.t.si.DaemonID
 	for i, tgt := range obj.hrwTargets {
-		if obj.slicesAt.Contains(tgt.DaemonID) {
+		if _, ok := obj.sliceAt[tgt.DaemonID]; ok {
 			continue
 		}
 		// must not happen
 		cmn.Assert(tgt.DaemonID != localDaemon)
 		// first is main, we must reach this line only if main has something
 		cmn.Assert(i != 0)
-		slice := obj.locSlice
-		cmn.Assert(slice != nil && slice.SliceID != 0)
+		slice, ok := obj.sliceAt[s.t.si.DaemonID]
+		cmn.Assert(ok && slice.SliceID != 0)
 		return tgt
 	}
 	return nil
 }
 
-func (s *ecRebalancer) waitForSlicesRecv(broken []*ecRebObject, start int) (bool, error) {
+func (s *ecRebalancer) waitForSlicesRecv(broken []*ecRebObject, start int) error {
 	maxWait := 5 * time.Minute // TODO
 	currWait := time.Duration(0)
 	sleep := 5 * time.Second // TODO:
@@ -1314,7 +1323,7 @@ func (s *ecRebalancer) waitForSlicesRecv(broken []*ecRebObject, start int) (bool
 			glog.Infof("%s Wait for %d:%d more slices", s.t.si.Name(), s.waiter.waitSliceCnt(), len(s.waitNrebuild))
 		}
 		if s.ra.xreb.Aborted() {
-			return false, fmt.Errorf("Aborted")
+			return errors.New("Aborted")
 		}
 
 		for id, tp := range s.waitNrebuild {
@@ -1349,7 +1358,7 @@ func (s *ecRebalancer) waitForSlicesRecv(broken []*ecRebObject, start int) (bool
 				var obj *ecRebObject
 				for j := 0; j+start < len(broken) && j < ecRebBatchSize; j++ {
 					o := broken[start+j]
-					if id == uniqueWaitID(o.bucket(), o.objName(), o.isAIS) {
+					if id == uniqueWaitID(o.bucket, o.objName, o.isAIS) {
 						obj = o
 						break
 					}
@@ -1373,10 +1382,13 @@ func (s *ecRebalancer) waitForSlicesRecv(broken []*ecRebObject, start int) (bool
 		currWait += sleep
 		time.Sleep(sleep) // TODO:?
 	}
-	return currWait >= maxWait, nil
+	if currWait >= maxWait {
+		return cmn.NewTimeoutError("waiting for slices to be received")
+	}
+	return nil
 }
 
-func (s *ecRebalancer) waitBatchCompletion(start int) (bool, error) {
+func (s *ecRebalancer) waitBatchCompletion(start int) error {
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 		glog.Infof("%s batch %d - DONE", s.t.si.Name(), start)
 	}
@@ -1390,7 +1402,7 @@ func (s *ecRebalancer) waitBatchCompletion(start int) (bool, error) {
 			glog.Infof("%s Wait for targets to finish batch %d", s.t.si.Name(), start)
 		}
 		if s.ra.xreb.Aborted() {
-			return false, fmt.Errorf("Aborted")
+			return errors.New("Aborted")
 		}
 
 		s.mtx.Lock()
@@ -1409,28 +1421,172 @@ func (s *ecRebalancer) waitBatchCompletion(start int) (bool, error) {
 		currWait += sleep
 		time.Sleep(sleep)
 	}
-	return cnt < len(s.ra.smap.Tmap), nil
+	if cnt < len(s.ra.smap.Tmap) {
+		return cmn.NewTimeoutError("batch completion")
+	}
+	return nil
 }
 
-func (s *ecRebalancer) repairGlobal(broken []*ecRebObject) (err error) {
-	start := 0
-	doSGLCleanup := true
-	// to cleanup the last batch and allocated SGLs
-	defer func() {
-		s.waiter.cleanupBatch(broken)
-		if doSGLCleanup {
-			s.releaseSGLs(broken, 0, len(broken))
+func (s *ecRebalancer) waitForFullObject(obj *ecRebObject) error {
+	tgt := s.firstEmptyTgt(obj)
+	cmn.Assert(tgt != nil) // must not happen
+	if err := s.sendLocalData(obj, tgt); err != nil {
+		return err
+	}
+	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		glog.Infof("#5.4 Waiting for an object %s", obj.uid)
+	}
+	s.waiter.lookupCreate(obj.uid, 0)
+	s.waitNrebuild[obj.uid] = waitFullObject
+	return nil
+}
+
+func (s *ecRebalancer) waitForExistingSlices(obj *ecRebObject) (err error) {
+	for _, sl := range obj.sliceAt {
+		// case with sliceID == 0 must be processed in the beginning
+		cmn.Assert(sl.SliceID != 0)
+
+		// wait slices only from `dataSliceCount` first HRW targets
+		tgtIndex := s.targetIndex(sl.DaemonID, obj)
+		if tgtIndex < 0 || tgtIndex >= int(obj.dataSlices) {
+			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+				glog.Infof("#5.5 Waiting for slice %d %s - [SKIPPED %d]", sl.SliceID, obj.uid, tgtIndex)
+			}
+			continue
 		}
-	}()
+
+		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			glog.Infof("#5.5 Waiting for slice %d %s", sl.SliceID, obj.uid)
+		}
+		s.waiter.lookupCreate(obj.uid, sl.SliceID)
+	}
+	s.waitNrebuild[obj.uid] = waitSlices
+	return nil
+}
+
+func (s *ecRebalancer) restoreReplicas(obj *ecRebObject) (err error) {
+	if !s.needsReplica(obj) {
+		return s.bcastLocalReplica(obj)
+	}
+	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		glog.Infof("#4 Waiting for replica %s", obj.uid)
+	}
+	s.waiter.lookupCreate(obj.uid, 0)
+	return nil
+}
+
+func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
+	// Case #1: this target does not have to do anything
+	if s.shouldSkipObj(obj) {
+		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			glog.Infof("SKIPPING %s", obj.uid)
+		}
+		return nil
+	}
+
+	// Case #2: this target has someone's main object
+	if s.hasFullObjMisplaced(obj) {
+		return s.sendLocalData(obj)
+	}
+
+	// Case #3: this target has a slice while the main must be restored.
+	// Send local slice only if this target is in `dataSliceCount` first
+	// targets which have any slice.
+	hasSlice, shouldSend := s.shouldSendSlice(obj)
+	if !obj.fullObjFound && hasSlice {
+		if shouldSend {
+			return s.sendLocalData(obj)
+		}
+		return nil
+	}
+
+	// Case #4: object was replicated
+	if obj.isECCopy {
+		return s.restoreReplicas(obj)
+	}
+
+	// Case #5: the object is erasure coded
+
+	// Case #5.1: it is not main target and has slice or does not need any
+	if !obj.isMain && (obj.hasSlice || !obj.inHrwList) {
+		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			glog.Infof("#5.1 Object %s skipped", obj.uid)
+		}
+		return nil
+	}
+
+	// Case #5.2: it is not main target, has no slice, needs according to HRW
+	// but won't receive since there are few slices outside HRW
+	if !obj.isMain && !obj.hasSlice && obj.inHrwList {
+		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			glog.Infof("#5.2 Waiting for object %s", obj.uid)
+		}
+		s.waiter.lookupCreate(obj.uid, anySliceID)
+		return nil
+	}
+
+	// Case #5.4: main has a slice instead of a full object, send local
+	// slice to a free target and wait for another target sends the full obj
+	if obj.isMain && obj.mainHasAny && obj.mainSliceID != 0 && obj.fullObjFound {
+		return s.waitForFullObject(obj)
+	}
+
+	// Case #5.5: it is main target and full object is missing
+	if obj.isMain && !obj.fullObjFound {
+		return s.waitForExistingSlices(obj)
+	}
+
+	// The last case: must be main with object. Rebuild and send missing slices
+	cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
+		fmt.Sprintf("isMain %t - mainHasSome %t - mainID %d", obj.isMain, obj.mainHasAny, obj.mainSliceID))
+	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		glog.Infof("rebuilding slices of %s and send them", obj.objName)
+	}
+	return s.rebuildFromDisk(obj)
+}
+
+func (s *ecRebalancer) cleanupBatch(broken []*ecRebObject, start int) {
+	s.waiter.cleanupBatch(broken, start)
+	s.releaseSGLs(broken, start)
+}
+
+// Wait for all targets to finish the current batch and then free allocated resources
+func (s *ecRebalancer) finalizeBatch(broken []*ecRebObject, start int) error {
+	// First, wait for all slices the local target wants to receive
+	if err := s.waitForSlicesRecv(broken, start); err != nil {
+		return err
+	}
+
+	// mark batch done and notify other targets
+	s.batchDone(s.t.si.DaemonID, start)
+	if err := s.batchNotify(start); err != nil {
+		return err
+	}
+
+	// wait for all targets finish sending/receiving
+
+	if err := s.waitBatchCompletion(start); err != nil {
+		if _, ok := err.(*cmn.TimeoutError); ok {
+			s.waiter.waitFor.Store(0)
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (s *ecRebalancer) rebalanceGlobal(broken []*ecRebObject) (err error) {
+	start := 0
+	// to cleanup the last batch and allocated SGLs
 	for start < len(broken) {
 		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 			glog.Infof("Starting batch of %d from %d", ecRebBatchSize, start)
 		}
-		s.waitNrebuild = make(map[string]int)
 
 		// get batchSize next objects
 		for j := 0; j+start < len(broken) && j < ecRebBatchSize; j++ {
 			if s.ra.xreb.Aborted() {
+				s.cleanupBatch(broken, start)
 				return fmt.Errorf("Aborted")
 			}
 
@@ -1438,171 +1594,31 @@ func (s *ecRebalancer) repairGlobal(broken []*ecRebObject) (err error) {
 			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 				glog.Infof("--- Starting object [%d] %s ---", j+start, obj.uid)
 			}
-			slices := obj.longest()
-			cmn.Assert(len(slices) != 0) // cannot happen
+			cmn.Assert(len(obj.sliceAt) != 0) // cannot happen
 
-			// Case #1: this target does not have to do anything
-			if s.shouldSkipObj(obj) {
-				if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-					glog.Infof("SKIPPING %s", obj.uid)
-				}
-				continue
-			}
-
-			// Case #2: this target has someone's main object
-			if s.hasFullObjMisplaced(obj) {
-				if err := s.sendLocalData(obj); err != nil {
-					return err
-				}
-				continue
-			}
-
-			// Case #3: this target has a slice while the main must be restored.
-			// Send local slice only if this target is in `dataSliceCount` first
-			// targets which have any slice. Replica is sent always.
-			hasSlice, shouldSend := s.shouldSendSlice(obj)
-			if s.mainReplicaMissing(obj) || hasSlice {
-				if obj.isECCopy || shouldSend {
-					if err := s.sendLocalData(obj); err != nil {
-						return err
-					}
-				}
-				continue
-			}
-
-			// Case #4: object was replicated
-			if obj.isECCopy {
-				if s.needsReplica(obj) {
-					if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-						glog.Infof("#4 Waiting for replica %s", obj.uid)
-					}
-					s.waiter.lookupCreate(obj.uid, 0)
-					continue
-				}
-
-				if err := s.bcastLocalReplica(obj); err != nil {
-					return err
-				}
-				continue
-			}
-
-			// Case #5: the object is erasure coded
-
-			// Case #5.1: it is not main target and has slice or does not need any
-			if !obj.isMain && (obj.hasSlice || !obj.inHrwList) {
-				if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-					glog.Infof("#5.1 Object %s skipped", obj.uid)
-				}
-				continue
-			}
-
-			// Case #5.2: it is not main target, has no slice, needs according to HRW
-			// but won't receive since there are few slices outside HRW
-			if !obj.isMain && !obj.hasSlice && obj.inHrwList {
-				if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-					glog.Infof("#5.2 Waiting for object %s", obj.uid)
-				}
-				s.waiter.lookupCreate(obj.uid, anySliceID)
-				continue
-			}
-
-			// Case #5.4: main has a slice instead of a full object, send local
-			// slice to a free target and wait for another target sends the full obj
-			if obj.isMain && obj.mainHasAny && obj.mainSliceID != 0 && obj.fullObjFound {
-				// send slice
-				tgt := s.firstEmptyTgt(obj)
-				cmn.Assert(tgt != nil) // must not happen
-				if err := s.sendLocalData(obj, tgt); err != nil {
-					return err
-				}
-				if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-					glog.Infof("#5.4 Waiting for an object %s", obj.uid)
-				}
-				s.waiter.lookupCreate(obj.uid, 0)
-				s.waitNrebuild[obj.uid] = waitFullObject
-				continue
-			}
-
-			// Case #5.5: it is main target and full object is missing
-			if obj.isMain && !obj.fullObjFound {
-				// wait for all existing slices
-				for _, sl := range slices {
-					// case with sliceID == 0 must be processed in the beginning
-					cmn.Assert(sl.SliceID != 0)
-
-					// wait slices only from `dataSliceCount` first HRW targets
-					tgtIndex := s.targetIndex(sl.DaemonID, obj)
-					if tgtIndex < 0 || tgtIndex >= int(obj.dataSlices()) {
-						if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-							glog.Infof("#5.5 Waiting for slice %d %s - [SKIPPED %d]", sl.SliceID, obj.uid, tgtIndex)
-						}
-						continue
-					}
-
-					if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-						glog.Infof("#5.5 Waiting for slice %d %s", sl.SliceID, obj.uid)
-					}
-					s.waiter.lookupCreate(obj.uid, sl.SliceID)
-				}
-				s.waitNrebuild[obj.uid] = waitSlices
-				continue
-			}
-
-			// The last case: must be main with object. Rebuild and send missing slices
-			cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
-				fmt.Sprintf("isMain %t - mainHasSome %t - mainID %d", obj.isMain, obj.mainHasAny, obj.mainSliceID))
-			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-				glog.Infof("rebuilding slices of %s and send them", obj.objName())
-			}
-			if err := s.rebuildFromDisk(obj, slices); err != nil {
-				glog.Error(err)
-				continue
+			if err = s.rebalanceObject(obj); err != nil {
+				s.cleanupBatch(broken, start)
+				return err
 			}
 		}
 
-		// First, wait for all slices the local target wants to receive
-		timedout, err := s.waitForSlicesRecv(broken, start)
+		err = s.finalizeBatch(broken, start)
+		s.cleanupBatch(broken, start)
 		if err != nil {
 			return err
 		}
-		if timedout {
-			glog.Errorf("%s Timed out waiting for slices to be received", s.t.si.Name())
-		}
-
-		// mark batch done and notify other targets
-		s.batchDone(s.t.si.DaemonID, start)
-		if err := s.batchNotify(start); err != nil {
-			glog.Errorf("%s failed to send batch completion: %v", s.t.si.Name(), err)
-			return err
-		}
-
-		// wait for all targets finish sending/receiving
-		timedout, err = s.waitBatchCompletion(start)
-		if err != nil {
-			return err
-		}
-		if timedout {
-			s.waiter.waitFor.Store(0)
-			glog.Errorf("%s Timed out waiting for other targets", s.t.si.Name())
-		}
-
-		// remove all stuff allocated for the batch
-		s.waiter.cleanupBatch(broken, start, ecRebBatchSize)
-		s.releaseSGLs(broken, start, ecRebBatchSize)
-
 		start += ecRebBatchSize
 	}
-	doSGLCleanup = false
 	return nil
 }
 
 // Free allocated memory for EC reconstruction, close opened file handles of replicas.
 // Used to clean up memory after finishing a batch
-func (s *ecRebalancer) releaseSGLs(objList []*ecRebObject, startIdx, count int) {
+func (s *ecRebalancer) releaseSGLs(objList []*ecRebObject, startIdx int) {
 	if startIdx < 0 {
 		return
 	}
-	for i := startIdx; i < startIdx+count && i < len(objList); i++ {
+	for i := startIdx; i < startIdx+ecRebBatchSize && i < len(objList); i++ {
 		obj := objList[i]
 		for _, sg := range obj.rebuildSGLs {
 			if sg != nil {
@@ -1621,23 +1637,23 @@ func (s *ecRebalancer) releaseSGLs(objList []*ecRebObject, startIdx, count int) 
 // Just rebuild slices and send missing ones to other targets
 // TODO: rebuildFromDisk, rebuildFromMem, and rebuildFromSlices shares some
 // code. See what can be done to deduplicate it. Some code may go to EC package
-func (s *ecRebalancer) rebuildFromDisk(obj *ecRebObject, slices []*ecRebSlice) (err error) {
+func (s *ecRebalancer) rebuildFromDisk(obj *ecRebObject) (err error) {
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-		glog.Infof("%s rebuilding slices of %s and send them", s.t.si.Name(), obj.objName())
+		glog.Infof("%s rebuilding slices of %s and send them", s.t.si.Name(), obj.objName)
 	}
-	slice := obj.locSlice
-	cmn.Assert(slice != nil && slice.SliceID == 0)
-	padSize := obj.sliceSize*int64(obj.dataSlices()) - obj.objSize()
+	slice, ok := obj.sliceAt[s.t.si.DaemonID]
+	cmn.Assert(ok && slice.SliceID == 0)
+	padSize := obj.sliceSize*int64(obj.dataSlices) - obj.objSize
 	obj.fh, err = cmn.NewFileHandle(slice.hrwFQN)
 	if err != nil {
 		return fmt.Errorf("Failed to open local object from %q: %v", slice.hrwFQN, err)
 	}
-	readers := make([]io.Reader, obj.dataSlices())
-	readerSend := make([]cmn.ReadOpenCloser, obj.dataSlices())
-	obj.rebuildSGLs = make([]*memsys.SGL, obj.paritySlices())
-	writers := make([]io.Writer, obj.paritySlices())
-	sizeLeft := obj.objSize()
-	for i := 0; int16(i) < obj.dataSlices(); i++ {
+	readers := make([]io.Reader, obj.dataSlices)
+	readerSend := make([]cmn.ReadOpenCloser, obj.dataSlices)
+	obj.rebuildSGLs = make([]*memsys.SGL, obj.paritySlices)
+	writers := make([]io.Writer, obj.paritySlices)
+	sizeLeft := obj.objSize
+	for i := 0; int16(i) < obj.dataSlices; i++ {
 		var reader cmn.ReadOpenCloser
 		if sizeLeft < obj.sliceSize {
 			reader, err = cmn.NewFileSectionHandle(obj.fh, int64(i)*obj.sliceSize, sizeLeft, padSize)
@@ -1645,72 +1661,66 @@ func (s *ecRebalancer) rebuildFromDisk(obj *ecRebObject, slices []*ecRebSlice) (
 			reader, err = cmn.NewFileSectionHandle(obj.fh, int64(i)*obj.sliceSize, obj.sliceSize, 0)
 		}
 		if err != nil {
-			return fmt.Errorf("Failed to create file section reader for %q: %v", obj.objName(), err)
+			return fmt.Errorf("Failed to create file section reader for %q: %v", obj.objName, err)
 		}
 		readers[i] = reader
 		readerSend[i] = reader
 		sizeLeft -= obj.sliceSize
 	}
-	for i := 0; int16(i) < obj.paritySlices(); i++ {
+	for i := 0; int16(i) < obj.paritySlices; i++ {
 		obj.rebuildSGLs[i] = nodeCtx.mm.NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
 		writers[i] = obj.rebuildSGLs[i]
 	}
 
-	stream, err := reedsolomon.NewStreamC(int(obj.dataSlices()), int(obj.paritySlices()), true, true)
+	stream, err := reedsolomon.NewStreamC(int(obj.dataSlices), int(obj.paritySlices), true, true)
 	if err != nil {
-		return fmt.Errorf("Failed to create initialize EC for %q: %v", obj.objName(), err)
+		return fmt.Errorf("Failed to create initialize EC for %q: %v", obj.objName, err)
 	}
 	if err := stream.Encode(readers, writers); err != nil {
-		return fmt.Errorf("Failed to build EC for %q: %v", obj.objName(), err)
+		return fmt.Errorf("Failed to build EC for %q: %v", obj.objName, err)
 	}
 
-	// detect missing slices
-	var ecSliceMD *ecRebSlice // the main object that has metadata
-	existing := make([]int, obj.dataSlices()+obj.paritySlices()+1)
-	for _, sl := range slices {
-		existing[sl.SliceID] = 1
-		if sl.SliceID == 0 {
-			ecSliceMD = sl
-		}
-	}
+	// Detect missing slices.
+	// The main object that has metadata.
+	ecSliceMD := obj.sliceForMD()
 	cmn.Assert(ecSliceMD != nil)
 	freeTargets := obj.emptyTargets(s.t.si)
-	for idx, ex := range existing {
-		if ex != 0 {
+	for idx, exists := range obj.sliceExist {
+		if exists {
 			continue
 		}
 		cmn.Assert(idx != 0)              // because the full object must exist on local drive
 		cmn.Assert(len(freeTargets) != 0) // 0 - means we have issue in broken objects detection
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
-		if idx <= int(obj.dataSlices()) {
+		if idx <= int(obj.dataSlices) {
 			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-				glog.Infof("Sending %s data slice %d to %s", obj.objName(), idx, si.Name())
+				glog.Infof("Sending %s data slice %d to %s", obj.objName, idx, si.Name())
 			}
 			reader := readerSend[idx-1]
 			reader.Open()
 			ckval, err := cksumForSlice(reader, obj.sliceSize)
 			if err != nil {
-				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
 			reader.Open()
 			if err := s.sendFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
-				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName(), si.Name())
+				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName, si.Name())
 				// continue to fix as many as possible
 				continue
 			}
 		} else {
-			sglIdx := idx - int(obj.dataSlices()) - 1
+			sglIdx := idx - int(obj.dataSlices) - 1
 			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName(), idx, sglIdx, si.Name())
+				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si.Name())
 			}
 			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize)
 			if err != nil {
-				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
 			reader := memsys.NewReader(obj.rebuildSGLs[sglIdx])
 			if err := s.sendFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
-				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName(), si.Name())
+				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName, si.Name())
 				// continue to fix as many as possible
 				continue
 			}
@@ -1744,13 +1754,13 @@ func (s *ecRebalancer) metadataForSlice(slices []*ecWaitSlice, sliceID int) *ec.
 // receives the object into SGL, rebuilds missing slices, and sends them
 func (s *ecRebalancer) rebuildFromMem(obj *ecRebObject, slices []*ecWaitSlice) (err error) {
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-		glog.Infof("%s rebuilding slices of %s and send them", s.t.si.Name(), obj.objName())
+		glog.Infof("%s rebuilding slices of %s and send them", s.t.si.Name(), obj.objName)
 	}
 	cmn.Assert(len(slices) != 0)
 	slice := slices[0]
 	cmn.Assert(slice != nil && slice.sliceID == 0) // received slice must be object
 
-	padSize := obj.sliceSize*int64(obj.dataSlices()) - obj.objSize()
+	padSize := obj.sliceSize*int64(obj.dataSlices) - obj.objSize
 	if padSize > 0 {
 		cmn.Assert(padSize < 256)
 		padding := ecPadding[:padSize]
@@ -1759,77 +1769,67 @@ func (s *ecRebalancer) rebuildFromMem(obj *ecRebObject, slices []*ecWaitSlice) (
 		}
 	}
 
-	readers := make([]io.Reader, obj.dataSlices())
-	readerSGLs := make([]*memsys.SliceReader, obj.dataSlices())
-	obj.rebuildSGLs = make([]*memsys.SGL, obj.paritySlices())
-	writers := make([]io.Writer, obj.paritySlices())
-	for i := 0; int16(i) < obj.dataSlices(); i++ {
+	readers := make([]io.Reader, obj.dataSlices)
+	readerSGLs := make([]*memsys.SliceReader, obj.dataSlices)
+	obj.rebuildSGLs = make([]*memsys.SGL, obj.paritySlices)
+	writers := make([]io.Writer, obj.paritySlices)
+	for i := 0; int16(i) < obj.dataSlices; i++ {
 		readerSGLs[i] = memsys.NewSliceReader(slice.sgl, int64(i)*obj.sliceSize, obj.sliceSize)
 		readers[i] = readerSGLs[i]
 	}
-	for i := 0; int16(i) < obj.paritySlices(); i++ {
+	for i := 0; int16(i) < obj.paritySlices; i++ {
 		obj.rebuildSGLs[i] = nodeCtx.mm.NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
 		writers[i] = obj.rebuildSGLs[i]
 	}
 
-	stream, err := reedsolomon.NewStreamC(int(obj.dataSlices()), int(obj.paritySlices()), true, true)
+	stream, err := reedsolomon.NewStreamC(int(obj.dataSlices), int(obj.paritySlices), true, true)
 	if err != nil {
-		return fmt.Errorf("Failed to create initialize EC for %q: %v", obj.objName(), err)
+		return fmt.Errorf("Failed to create initialize EC for %q: %v", obj.objName, err)
 	}
 	if err := stream.Encode(readers, writers); err != nil {
-		return fmt.Errorf("Failed to build EC for %q: %v", obj.objName(), err)
+		return fmt.Errorf("Failed to build EC for %q: %v", obj.objName, err)
 	}
 
 	// detect missing slices
-	var ecSliceMD *ecRebSlice // the slice that must have metadata
-	existing := make([]int, obj.dataSlices()+obj.paritySlices()+1)
-	for _, sl := range slices {
-		existing[sl.sliceID] = 1
-	}
-	for _, sl := range obj.longest() {
-		existing[sl.SliceID] = 1
-		if sl.meta != nil {
-			ecSliceMD = sl
-		}
-	}
+	// The main object that has metadata.
+	ecSliceMD := obj.sliceForMD()
 	cmn.Assert(ecSliceMD != nil)
-
 	freeTargets := obj.emptyTargets(s.t.si)
-	for idx, ex := range existing {
-		if ex != 0 {
+	for idx, exists := range obj.sliceExist {
+		if exists {
 			continue
 		}
 		cmn.Assert(idx != 0) // full object must exists
 		cmn.Assert(len(freeTargets) != 0)
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
-		if idx <= int(obj.dataSlices()) {
+		if idx <= int(obj.dataSlices) {
 			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-				glog.Infof("Sending %s data slice %d to %s", obj.objName(), idx, si.Name())
+				glog.Infof("Sending %s data slice %d to %s", obj.objName, idx, si.Name())
 			}
 			reader := readerSGLs[idx-1]
 			ckval, err := cksumForSlice(readerSGLs[idx-1], obj.sliceSize)
 			if err != nil {
-				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
 			reader.Open()
 			if err := s.sendFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
-				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName(), si.Name())
+				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName, si.Name())
 				// keep on working to restore as many as possible
 				continue
 			}
 		} else {
-			sglIdx := idx - int(obj.dataSlices()) - 1
+			sglIdx := idx - int(obj.dataSlices) - 1
 			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName(), idx, sglIdx, si.Name())
+				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si.Name())
 			}
 			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize)
 			if err != nil {
-				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
 			reader := memsys.NewReader(obj.rebuildSGLs[sglIdx])
 			if err := s.sendFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
-				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName(), si.Name())
+				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName, si.Name())
 				// keep on working to restore as many as possible
 				continue
 			}
@@ -1843,10 +1843,10 @@ func (s *ecRebalancer) rebuildFromMem(obj *ecRebObject, slices []*ecWaitSlice) (
 // send missing slices to other targets
 func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice) (err error) {
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-		glog.Infof("%s rebuilding slices of %s and send them(mem)", s.t.si.Name(), obj.objName())
+		glog.Infof("%s rebuilding slices of %s and send them(mem)", s.t.si.Name(), obj.objName)
 	}
 
-	sliceCnt := obj.dataSlices() + obj.paritySlices()
+	sliceCnt := obj.dataSlices + obj.paritySlices
 	obj.rebuildSGLs = make([]*memsys.SGL, sliceCnt)
 	readers := make([]io.Reader, sliceCnt)
 	// since io.Reader cannot be reopened, we need to have a copy for saving object
@@ -1886,19 +1886,19 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		writers[i] = obj.rebuildSGLs[i]
 	}
 
-	stream, err := reedsolomon.NewStreamC(int(obj.dataSlices()), int(obj.paritySlices()), true, true)
+	stream, err := reedsolomon.NewStreamC(int(obj.dataSlices), int(obj.paritySlices), true, true)
 	if err != nil {
-		return fmt.Errorf("Failed to create initialize EC for %q: %v", obj.objName(), err)
+		return fmt.Errorf("Failed to create initialize EC for %q: %v", obj.objName, err)
 	}
 	if err := stream.Reconstruct(readers, writers); err != nil {
-		return fmt.Errorf("Failed to build EC for %q: %v", obj.objName(), err)
+		return fmt.Errorf("Failed to build EC for %q: %v", obj.objName, err)
 	}
 
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-		glog.Infof("Saving restored full object %s[%d]", obj.objName(), obj.objSize())
+		glog.Infof("Saving restored full object %s[%d]", obj.objName, obj.objSize)
 	}
 	// Save the object and its metadata first
-	srcCnt := int(obj.dataSlices())
+	srcCnt := int(obj.dataSlices)
 	srcReaders := make([]io.Reader, srcCnt)
 	for i := 0; i < srcCnt; i++ {
 		if readers[i] != nil {
@@ -1913,8 +1913,8 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 	objMD.SliceID = 0
 
 	provider := cmn.ProviderFromBool(obj.isAIS)
-	lom := &cluster.LOM{T: s.t, Objname: obj.objName()}
-	err = lom.Init(obj.bucket(), provider)
+	lom := &cluster.LOM{T: s.t, Objname: obj.objName}
+	err = lom.Init(obj.bucket, provider)
 	if err != nil {
 		return err
 	}
@@ -1923,26 +1923,40 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		return err
 	}
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-		glog.Infof("Saving restored full object %s to %q", obj.objName(), lom.FQN)
+		glog.Infof("Saving restored full object %s to %q", obj.objName, lom.FQN)
 	}
 	tmpFQN := fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec")
 	buffer, slab := nodeCtx.mm.AllocDefault()
-	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize()); err != nil {
+	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
+		s.t.FSHC(err, lom.FQN)
 		return err
 	}
 
-	lom.SetSize(obj.objSize())
+	lom.SetSize(obj.objSize)
 	lom.SetCksum(cksum)
-	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket(), provider, obj.objName())
+	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket, provider, obj.objName)
 	metaBuf := cmn.MustMarshal(&objMD)
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
+		if rmErr := os.Remove(lom.FQN); rmErr != nil {
+			glog.Errorf("Nested error while cleaning up: %v", rmErr)
+		}
+		s.t.FSHC(err, metaFQN)
 		return err
 	}
 	slab.Free(buffer)
+	if err := lom.Persist(); err != nil {
+		if rmErr := os.Remove(metaFQN); rmErr != nil && !os.IsNotExist(rmErr) {
+			glog.Errorf("Nested error: save LOM -> remove metadata file: %v", rmErr)
+		}
+		if rmErr := os.Remove(lom.FQN); rmErr != nil && !os.IsNotExist(rmErr) {
+			glog.Errorf("Nested error: save LOM -> remove replica: %v", rmErr)
+		}
+		return err
+	}
 
 	freeTargets := obj.emptyTargets(s.t.si)
 	for i, wr := range writers {
@@ -1950,7 +1964,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 			continue
 		}
 		sliceID := i + 1
-		if obj.sliceExists(int16(sliceID)) {
+		if exists := obj.sliceExist[sliceID]; exists {
 			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 				glog.Infof("Object %s slice %d: already exists", obj.uid, sliceID)
 			}
@@ -1961,7 +1975,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		}
 		ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[i]), obj.sliceSize)
 		if err != nil {
-			return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName(), err)
+			return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 		}
 		reader := memsys.NewReader(obj.rebuildSGLs[i])
 		si := freeTargets[0]
@@ -1972,8 +1986,8 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		sliceMD := ecMD // copy
 		sliceMD.SliceID = sliceID
 		sl := &ecRebSlice{
-			Bucket:       obj.bucket(),
-			Objname:      obj.objName(),
+			Bucket:       obj.bucket,
+			Objname:      obj.objName,
 			ObjSize:      sliceMD.Size,
 			DaemonID:     s.t.si.DaemonID,
 			SliceID:      int16(sliceID),
@@ -1987,7 +2001,6 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 			return fmt.Errorf("Failed to send slice %d of %s to %s: %v", i, obj.uid, si.Name(), err)
 		}
 	}
-	lom.Persist()
 
 	return nil
 }
@@ -2046,8 +2059,7 @@ func (s *ecRebalancer) batchNotify(batchID int) error {
 		targets = append(targets, node)
 	}
 	if err := s.mgr.pushes.Send(hdr, nil, nil, nil, targets); err != nil {
-		glog.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].DaemonID, err)
-		return err
+		return fmt.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].DaemonID, err)
 	}
 	return nil
 }
@@ -2102,12 +2114,13 @@ func (wt *ecWaiter) cleanup() {
 // otherwise cleanup only objects which names matches objects in range idx0..idx1
 func (wt *ecWaiter) cleanupBatch(broken []*ecRebObject, idx ...int) {
 	wt.mx.Lock()
-	if len(idx) < 2 {
+	if len(idx) == 0 {
 		for uid := range wt.objs {
 			wt.removeObjUnlocked(uid)
 		}
 	} else {
-		for objIdx := idx[0]; objIdx < idx[0]+idx[1]; objIdx++ {
+		start := idx[0]
+		for objIdx := start; objIdx < start+ecRebBatchSize; objIdx++ {
 			if objIdx >= len(broken) {
 				break
 			}

@@ -124,13 +124,14 @@ func (reb *rebManager) nodesNotInStage(stage uint32) int {
 		if si.DaemonID == reb.t.si.DaemonID {
 			continue
 		}
+		if _, ok := reb.nodeStages[si.DaemonID]; !ok {
+			count++
+			continue
+		}
 		_, exists := reb.ecReb.nodeData(si.DaemonID)
 		if stage == rebStageECDetect && !exists {
 			count++
 			continue
-		}
-		if _, ok := reb.nodeStages[si.DaemonID]; !ok {
-			count++
 		}
 	}
 	reb.stageMtx.Unlock()

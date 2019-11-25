@@ -256,7 +256,7 @@ func (reb *rebManager) generateECFixList(md *globalRebArgs) []*ecRebObject {
 }
 
 func (reb *rebManager) ecFixLocal(md *globalRebArgs) error {
-	if err := reb.ecReb.repairLocal(); err != nil {
+	if err := reb.ecReb.rebalanceLocal(); err != nil {
 		return fmt.Errorf("Failed to rebalance local slices/objects: %v", err)
 	}
 
@@ -269,7 +269,7 @@ func (reb *rebManager) ecFixLocal(md *globalRebArgs) error {
 }
 
 func (reb *rebManager) ecFixGlobal(md *globalRebArgs, broken []*ecRebObject) error {
-	if err := reb.ecReb.repairGlobal(broken); err != nil {
+	if err := reb.ecReb.rebalanceGlobal(broken); err != nil {
 		if !md.xreb.Aborted() {
 			glog.Errorf("EC rebalance failed: %v", err)
 			md.xreb.Abort()
