@@ -157,6 +157,22 @@ func (msg *SelectMsg) WantProp(propName string) bool {
 	return strings.Contains(msg.Props, propName)
 }
 
+func (msg *SelectMsg) AddProps(propNames ...string) {
+	var props strings.Builder
+	props.WriteString(msg.Props)
+	for _, propName := range propNames {
+		if msg.WantProp(propName) {
+			continue
+		}
+		if props.Len() > 0 {
+			props.WriteString(",")
+		}
+		props.WriteString(propName)
+	}
+
+	msg.Props = props.String()
+}
+
 // BucketEntry corresponds to a single entry in the BucketList and
 // contains file and directory metadata as per the SelectMsg
 // Flags is a bit field:

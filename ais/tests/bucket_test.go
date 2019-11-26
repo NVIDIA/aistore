@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -254,7 +255,7 @@ func TestListObjects(t *testing.T) {
 	var (
 		iterations  = 10
 		workerCount = 10
-		dirLen      = 5
+		dirLen      = 7
 
 		bucket = t.Name() + "Bucket"
 		wg     = &sync.WaitGroup{}
@@ -271,10 +272,13 @@ func TestListObjects(t *testing.T) {
 	tests := []struct {
 		fast     bool
 		withSize bool
+		pageSize int
 	}{
-		{fast: false, withSize: true},
-		{fast: true, withSize: false},
-		{fast: true, withSize: true},
+		{fast: false, withSize: true, pageSize: 0},
+
+		{fast: true, withSize: false, pageSize: 0},
+		{fast: true, withSize: true, pageSize: 0},
+		{fast: true, withSize: false, pageSize: 2000},
 	}
 
 	for _, test := range tests {
@@ -287,18 +291,24 @@ func TestListObjects(t *testing.T) {
 		} else {
 			name += "/without_size"
 		}
+		if test.fast && test.pageSize == 0 {
+			name += "/without_paging"
+		} else {
+			name += "/with_paging"
+		}
 		t.Run(name, func(t *testing.T) {
 			var (
-				objs sync.Map
+				objs     sync.Map
+				prefixes sync.Map
 			)
 
 			tutils.CreateFreshBucket(t, proxyURL, bucket)
 			defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 			totalObjects := 0
-			for iter := 0; iter < iterations; iter++ {
+			for iter := 1; iter <= iterations; iter++ {
 				tutils.Logf("listing iteration: %d/%d (total_objs: %d)\n", iter, iterations, totalObjects)
-				objectCount := random.Intn(2048) + 2000
+				objectCount := random.Intn(800) + 1010
 				totalObjects += objectCount
 				for wid := 0; wid < workerCount; wid++ {
 					wg.Add(1)
@@ -320,25 +330,21 @@ func TestListObjects(t *testing.T) {
 								size: objectSize,
 							})
 						}
+
+						if objDir != "" {
+							prefixes.Store(objDir, objectsToPut)
+						}
 					}(wid)
 				}
 				wg.Wait()
 
 				// Confirm PUTs by listing objects.
-				var (
-					bckList *cmn.BucketList
-					err     error
-				)
-				if !test.fast {
-					bckList, err = api.ListBucket(baseParams, bucket, nil, 0)
-				} else {
-					msg := &cmn.SelectMsg{}
-					if test.withSize {
-						msg.Props = cmn.GetPropsSize
-					}
-
-					bckList, err = api.ListBucketFast(baseParams, bucket, msg)
+				msg := &cmn.SelectMsg{Fast: test.fast}
+				msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion, cmn.GetPropsCopies)
+				if test.withSize {
+					msg.AddProps(cmn.GetPropsSize)
 				}
+				bckList, err := api.ListBucket(baseParams, bucket, msg, 0)
 				tassert.CheckFatal(t, err)
 
 				if len(bckList.Entries) != totalObjects {
@@ -348,6 +354,7 @@ func TestListObjects(t *testing.T) {
 					t.Errorf("page marker was unexpectedly set to: %s", bckList.PageMarker)
 				}
 
+				empty := &cmn.BucketEntry{}
 				for _, entry := range bckList.Entries {
 					e, exists := objs.Load(entry.Name)
 					if !exists {
@@ -361,94 +368,207 @@ func TestListObjects(t *testing.T) {
 							"sizes do not match for object %s, expected: %d, got: %d",
 							obj.name, obj.size, entry.Size,
 						)
+					} else if !test.withSize && entry.Size != 0 {
+						t.Errorf("expected the size to be set to 0 for obj: %s", obj.name)
+					}
+
+					if test.fast {
+						if entry.Checksum != empty.Checksum ||
+							entry.Atime != empty.Atime ||
+							entry.Version != empty.Version ||
+							entry.TargetURL != empty.TargetURL ||
+							entry.Flags != empty.Flags ||
+							entry.Copies != empty.Copies {
+							t.Errorf("some fields on object %q, do not have default values: %#v", entry.Name, entry)
+						}
+					} else {
+						if entry.Checksum == empty.Checksum ||
+							entry.Atime == empty.Atime ||
+							entry.Version == empty.Version ||
+							entry.Flags == empty.Flags ||
+							entry.Copies == empty.Copies {
+							t.Errorf("some fields on object %q, have default values: %#v", entry.Name, entry)
+						}
 					}
 				}
+
+				// Check if names in the entries are unique.
+				objs.Range(func(key, _ interface{}) bool {
+					objName := key.(string)
+					i := sort.Search(len(bckList.Entries), func(i int) bool {
+						return bckList.Entries[i].Name >= objName
+					})
+					if i == len(bckList.Entries) || bckList.Entries[i].Name != objName {
+						t.Errorf("object %s was not found in the result of bucket listing", objName)
+					}
+					return true
+				})
+
+				// Check listing bucket with predefined prefix.
+				prefixes.Range(func(key, value interface{}) bool {
+					prefix := key.(string)
+					expectedObjCount := value.(int)
+
+					msg := &cmn.SelectMsg{
+						Prefix: prefix,
+					}
+					if !test.fast {
+						bckList, err = api.ListBucket(baseParams, bucket, msg, 0)
+					} else {
+						bckList, err = api.ListBucketFast(baseParams, bucket, msg)
+					}
+					tassert.CheckFatal(t, err)
+
+					if expectedObjCount != len(bckList.Entries) {
+						t.Errorf(
+							"(prefix: %s), actual objects %d, expected: %d",
+							prefix, len(bckList.Entries), expectedObjCount,
+						)
+					}
+
+					for _, entry := range bckList.Entries {
+						if !strings.HasPrefix(entry.Name, prefix) {
+							t.Errorf("object %q does not have expected prefix: %q", entry.Name, prefix)
+						}
+					}
+					return true
+				})
 			}
 		})
 	}
 }
 
-// Tests URL to quickly get all objects in a bucket
-func TestListObjectFast(t *testing.T) {
+func TestListObjectsPrefix(t *testing.T) {
 	const (
-		bucket       = "quick-list-bucket"
-		numObjs      = 1234 // greater than default PageSize=1000
-		objSize      = 1024
-		commonPrefix = "quick"
+		fileSize = 1024
+		numFiles = 20
+		prefix   = "some_prefix"
 	)
+
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bucket)
-	defer tutils.DestroyBucket(t, proxyURL, bucket)
-	sgl := tutils.Mem2.NewSGL(objSize)
-	defer sgl.Free()
+	for _, provider := range []string{cmn.AIS, cmn.Cloud} {
+		t.Run(provider, func(t *testing.T) {
+			var (
+				bucket     string
+				errCh      = make(chan error, numFiles*5)
+				filesPutCh = make(chan string, numfiles)
+			)
 
-	tutils.Logf("Creating %d objects in %s bucket\n", numObjs, bucket)
-	errCh := make(chan error, numObjs)
-	objsPutCh := make(chan string, numObjs)
-	objList := make([]string, 0, numObjs)
-	for i := 0; i < numObjs; i++ {
-		fname := fmt.Sprintf("q-%04d", i)
-		objList = append(objList, fname)
-	}
-	tutils.PutObjsFromList(proxyURL, bucket, DeleteDir, readerType, commonPrefix, objSize, objList, errCh, objsPutCh, sgl)
-	selectErr(errCh, "put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
-	close(objsPutCh)
+			if cmn.IsProviderCloud(provider) {
+				bucket = clibucket
 
-	tutils.Logln("Reading objects...")
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	reslist, err := api.ListBucketFast(baseParams, bucket, nil)
-	if err != nil {
-		t.Fatalf("List bucket %s failed, err = %v", bucket, err)
-	}
-	tutils.Logf("Object count: %d\n", len(reslist.Entries))
-	if len(reslist.Entries) != numObjs {
-		t.Fatalf("Expected %d objects, received %d objects",
-			numObjs, len(reslist.Entries))
-	}
+				if !isCloudBucket(t, proxyURL, bucket) {
+					t.Skipf("test requires a cloud bucket")
+				}
 
-	// check that all props are zeros, except name
-	// check if all names are different
-	var empty cmn.BucketEntry
-	uniqueNames := make(map[string]bool, len(reslist.Entries))
-	for _, e := range reslist.Entries {
-		if e.Name == "" {
-			t.Errorf("Invalid size or name: %#v", *e)
-			continue
-		}
-		if strings.Contains(e.Name, "q-") {
-			uniqueNames[e.Name] = true
-		}
-		if e.Checksum != empty.Checksum ||
-			e.Size != empty.Size ||
-			e.Atime != empty.Atime ||
-			e.Version != empty.Version ||
-			e.TargetURL != empty.TargetURL ||
-			e.Flags != empty.Flags ||
-			e.Copies != empty.Copies {
-			t.Errorf("Some fields do not have default values: %#v", *e)
-		}
-	}
-	if len(reslist.Entries) != len(uniqueNames) {
-		t.Fatalf("Expected %d unique objects, found only %d unique objects",
-			len(reslist.Entries), len(uniqueNames))
-	}
+				tutils.Logf("Cleaning up the cloud bucket %s\n", bucket)
+				msg := &cmn.SelectMsg{Prefix: prefix}
+				bckList, err := listObjects(t, proxyURL, msg, bucket, 0)
+				tassert.CheckFatal(t, err)
+				for _, entry := range bckList.Entries {
+					err := tutils.Del(proxyURL, bucket, entry.Name, provider, nil, nil, false /*silent*/)
+					tassert.CheckFatal(t, err)
+				}
+			} else {
+				bucket = TestBucketName
+				tutils.CreateFreshBucket(t, proxyURL, bucket)
+				defer tutils.DestroyBucket(t, proxyURL, bucket)
+			}
 
-	query := make(url.Values)
-	prefix := commonPrefix + "/q-009"
-	query.Set(cmn.URLParamPrefix, prefix)
-	reslist, err = api.ListBucketFast(baseParams, bucket, nil, query)
-	if err != nil {
-		t.Fatalf("List bucket %s with prefix %s failed, err = %v",
-			bucket, prefix, err)
-	}
-	tutils.Logf("Object count (with prefix %s): %d\n", prefix, len(reslist.Entries))
-	// Get should return only objects from q-0090 through q-0099
-	if len(reslist.Entries) != 10 {
-		t.Fatalf("Expected %d objects with prefix %s, received %d objects",
-			numObjs, prefix, len(reslist.Entries))
+			sgl := tutils.Mem2.NewSGL(fileSize)
+			defer sgl.Free()
+			tutils.Logf("Create a list of %d objects\n", numFiles)
+
+			fileList := make([]string, 0, numFiles)
+			for i := 0; i < numFiles; i++ {
+				fname := fmt.Sprintf("obj%d", i+1)
+				fileList = append(fileList, fname)
+			}
+
+			tutils.PutObjsFromList(proxyURL, bucket, "", readerType, prefix, fileSize, fileList, errCh, filesPutCh, sgl)
+			defer func() {
+				// Cleanup objects created by the test
+				for _, fname := range fileList {
+					err := tutils.Del(proxyURL, bucket, prefix+"/"+fname, provider, nil, nil, true /*silent*/)
+					tassert.CheckError(t, err)
+				}
+			}()
+
+			close(filesPutCh)
+			selectErr(errCh, "put", t, true /*fatal*/)
+			close(errCh)
+
+			tests := []struct {
+				name     string
+				prefix   string
+				pageSize int
+				limit    int
+				expected int
+			}{
+				{
+					"full_list_default_pageSize_no_limit",
+					prefix, 0, 0,
+					numFiles,
+				},
+				{
+					"full_list_small_pageSize_no_limit",
+					prefix, numFiles / 7, 0,
+					numFiles,
+				},
+				{
+					"full_list_limited",
+					prefix, 0, 8,
+					8,
+				},
+				{
+					"full_list_prefixed",
+					prefix + "/obj1", 0, 0,
+					11, // obj1 and obj10..obj19
+				},
+				{
+					"full_list_limited_prefixed",
+					prefix + "/obj1", 0, 2,
+					2, // obj1 and obj10
+				},
+				{
+					"empty_list_prefixed",
+					prefix + "/nothing", 0, 0,
+					0,
+				},
+			}
+
+			for _, test := range tests {
+				for _, fast := range []bool{false /*slow*/, true /*fast*/} {
+					name := test.name
+					if !fast {
+						name += "/slow"
+					} else {
+						name += "/fast"
+					}
+					t.Run(name, func(t *testing.T) {
+						tutils.Logf("Prefix: %q, Expected objects: %d\n", test.prefix, test.expected)
+						msg := &cmn.SelectMsg{Fast: fast, PageSize: test.pageSize, Prefix: test.prefix}
+						tutils.Logf(
+							"LIST bucket %s [fast: %v, prefix: %q, page_size: %d]\n",
+							bucket, msg.Fast, msg.Prefix, msg.PageSize,
+						)
+
+						bckList, err := api.ListBucket(baseParams, bucket, msg, test.limit)
+						tassert.CheckFatal(t, err)
+
+						tutils.Logf("LIST output: %d objects\n", len(bckList.Entries))
+
+						if len(bckList.Entries) != test.expected {
+							t.Errorf("returned %d objects instead of %d", len(bckList.Entries), test.expected)
+						}
+					})
+				}
+			}
+		})
 	}
 }
 

@@ -592,7 +592,7 @@ func ListBucket(baseParams BaseParams, bucket string, msg *cmn.SelectMsg, numObj
 		if iter == 1 {
 			// On first iteration use just `bckList` to prevent additional allocations.
 			page = bckList
-		} else if iter >= 2 {
+		} else if iter > 1 {
 			// On later iterations just allocate temporary page.
 			//
 			// NOTE: do not try to optimize this code by allocating the page

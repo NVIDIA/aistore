@@ -351,10 +351,8 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 	}
 
 	// Read object versions
-	msg := &cmn.SelectMsg{
-		Prefix: versionDir,
-		Props:  cmn.GetPropsVersion + ", " + cmn.GetPropsIsCached + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus,
-	}
+	msg := &cmn.SelectMsg{Prefix: versionDir}
+	msg.AddProps(cmn.GetPropsVersion, cmn.GetPropsIsCached, cmn.GetPropsAtime, cmn.GetPropsStatus)
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {
 		t.Errorf("Unexpected error: no object in the bucket %s", bucket)

@@ -352,7 +352,8 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 
 	// List Bucket - primarily for the copies
 	query := make(url.Values)
-	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, Cached: true}
+	msg := &cmn.SelectMsg{Cached: true}
+	msg.AddProps(cmn.GetPropsCopies, cmn.GetPropsAtime, cmn.GetPropsStatus)
 	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0, query)
 	tassert.CheckFatal(m.t, err)
 
@@ -1707,9 +1708,11 @@ func TestAtimeRebalance(t *testing.T) {
 	// Put random files
 	m.puts()
 
-	// Get atime in a format that includes nanoseconds to properly check if it was updated in atime cache (if it wasn't,
-	// then the returned atime would be different from the original one, but the difference could be very small).
-	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, TimeFormat: time.StampNano}
+	// Get atime in a format that includes nanoseconds to properly check if it
+	// was updated in atime cache (if it wasn't, then the returned atime would
+	// be different from the original one, but the difference could be very small).
+	msg := &cmn.SelectMsg{TimeFormat: time.StampNano}
+	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	bucketList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -1735,7 +1738,8 @@ func TestAtimeRebalance(t *testing.T) {
 
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	msg = &cmn.SelectMsg{Props: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, TimeFormat: time.StampNano}
+	msg = &cmn.SelectMsg{TimeFormat: time.StampNano}
+	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
 	bucketListReb, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tassert.CheckFatal(t, err)
 
