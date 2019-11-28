@@ -568,10 +568,10 @@ var _ = Describe("Common file", func() {
 			Expect(path).To(Equal(shortPath))
 		})
 
-		It("should not expand empty path", func() {
+		It("should expand empty path to current directory (dot)", func() {
 			emptyPath := ""
 			path := cmn.ExpandPath(emptyPath)
-			Expect(path).To(Equal(emptyPath))
+			Expect(path).To(Equal("."))
 		})
 	})
 })

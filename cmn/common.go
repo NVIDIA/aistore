@@ -679,19 +679,19 @@ func (f *FileSectionHandle) Read(buf []byte) (n int, err error) {
 
 func (f *FileSectionHandle) Close() error { return nil }
 
-// ExpandPath replaces common abbreviations in file path:
-// - `~` with absolute path to the current user home directory
+// ExpandPath replaces common abbreviations in file path (eg. `~` with absolute
+// path to the current user home directory) and cleans the path.
 func ExpandPath(path string) string {
 	if path == "" || path[0] != '~' {
-		return path
+		return filepath.Clean(path)
 	}
 	if len(path) > 1 && path[1] != '/' {
-		return path
+		return filepath.Clean(path)
 	}
 
 	currentUser, err := user.Current()
 	if err != nil {
-		return path
+		return filepath.Clean(path)
 	}
 	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
 }
