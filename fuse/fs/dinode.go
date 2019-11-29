@@ -92,6 +92,16 @@ func (dir *DirectoryInode) ForgetDir(entryName string) {
 	dir.entries = nil
 }
 
+func (dir *DirectoryInode) InvalidateInode(entryName string, isDir bool) {
+	entryName = path.Join(dir.Path(), entryName)
+	ty := entryFileTy
+	if isDir {
+		entryName += separator
+		ty = entryDirTy
+	}
+	nsCache.add(ty, dtAttrs{id: invalidInodeID, path: entryName})
+}
+
 // REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) LinkNewFile(fileName string) (*ais.Object, error) {
 	obj := ais.NewObject(fileName, dir.bucket)

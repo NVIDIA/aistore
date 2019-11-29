@@ -21,15 +21,14 @@ func NewBucket(name string, apiParams api.BaseParams) *Bucket {
 	}
 }
 
-func (bck *Bucket) ListObjects(prefix, pageMarker string, numObjects int) (objs []*Object, newPageMarker string, err error) {
+func (bck *Bucket) ListObjects(prefix, pageMarker string, pageSize int) (objs []*Object, newPageMarker string, err error) {
 	selectMsg := &cmn.SelectMsg{
-		Fast:       true,
 		Prefix:     prefix,
 		Props:      cmn.GetPropsSize,
 		PageMarker: pageMarker,
-		PageSize:   0, // FIXME: set the `PageSize` explicitly
+		PageSize:   pageSize,
 	}
-	listResult, err := api.ListBucket(bck.apiParams, bck.name, selectMsg, numObjects)
+	listResult, err := api.ListBucketFast(bck.apiParams, bck.name, selectMsg)
 	if err != nil {
 		return nil, "", newBucketIOError(err, "ListObjects")
 	}
@@ -38,7 +37,7 @@ func (bck *Bucket) ListObjects(prefix, pageMarker string, numObjects int) (objs 
 	for _, obj := range listResult.Entries {
 		objs = append(objs, NewObject(obj.Name, bck, obj.Size))
 	}
-	newPageMarker = selectMsg.PageMarker
+	newPageMarker = listResult.PageMarker
 	return
 }
 

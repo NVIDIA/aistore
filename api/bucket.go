@@ -682,6 +682,11 @@ func ListBucketFast(baseParams BaseParams, bucket string, msg *cmn.SelectMsg, qu
 		msg = &cmn.SelectMsg{}
 	}
 
+	preallocSize := cmn.DefaultListPageSize
+	if msg.PageSize != 0 {
+		preallocSize = msg.PageSize
+	}
+
 	msg.Fast = true
 	msg.Cached = true
 
@@ -700,7 +705,7 @@ func ListBucketFast(baseParams BaseParams, bucket string, msg *cmn.SelectMsg, qu
 	}
 	defer resp.Body.Close()
 
-	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
+	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
 	if err = jsoniter.NewDecoder(resp.Body).Decode(&bckList); err != nil {
 		return nil, fmt.Errorf("failed to json-unmarshal, err: %v", err)
 	}

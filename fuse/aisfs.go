@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/fs"
 	"github.com/jacobsa/daemonize"
 	"github.com/jacobsa/fuse"
@@ -253,6 +254,7 @@ func appMain(c *cli.Context) (err error) {
 		cluURL, bucket, mountPath, fsowner.UID, fsowner.GID)
 
 	// Init a server configuration object.
+	memoryLimit, _ := cmn.S2B(cfg.MemoryLimit)
 	serverCfg := &fs.ServerConfig{
 		MountPath:       mountPath,
 		AISURL:          cluURL,
@@ -261,6 +263,7 @@ func appMain(c *cli.Context) (err error) {
 		TCPTimeout:      cfg.Timeout.TCPTimeout,
 		HTTPTimeout:     cfg.Timeout.HTTPTimeout,
 		SyncInterval:    cfg.Periodic.SyncInterval,
+		MemoryLimit:     uint64(memoryLimit),
 		MaxWriteBufSize: cfg.IO.WriteBufSize,
 	}
 

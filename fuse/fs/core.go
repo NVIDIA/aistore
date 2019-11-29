@@ -80,6 +80,7 @@ type (
 		TCPTimeout      time.Duration
 		HTTPTimeout     time.Duration
 		SyncInterval    time.Duration
+		MemoryLimit     uint64
 		MaxWriteBufSize int64
 	}
 
@@ -170,7 +171,7 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 	aisfs.root.IncLookupCount()
 	aisfs.inodeTable[fuseops.RootInodeID] = aisfs.root
 
-	nsCache, err = newNsCache(bucket, aisfs.errLog, aisfs.cfg.SyncInterval)
+	nsCache, err = newNsCache(bucket, aisfs.errLog, aisfs.cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -391,11 +392,7 @@ func (fs *aisfs) ForgetInode(ctx context.Context, req *fuseops.ForgetInodeOp) (e
 		// Remove entryName to inode ID mapping in parent.
 		name := path.Base(inode.Path())
 		parent.Lock()
-		if !inode.IsDir() {
-			parent.ForgetFile(name)
-		} else {
-			parent.ForgetDir(name)
-		}
+		parent.InvalidateInode(name, inode.IsDir())
 		parent.Unlock()
 
 		// Any future cleanup related to inode goes here.

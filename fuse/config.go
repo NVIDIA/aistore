@@ -43,11 +43,12 @@ var defaultConfig = Config{
 
 type (
 	Config struct {
-		Cluster  ClusterConfig  `json:"cluster"`
-		Timeout  TimeoutConfig  `json:"timeout"`
-		Periodic PeriodicConfig `json:"periodic"`
-		Log      LogConfig      `json:"log"`
-		IO       IOConfig       `json:"io"`
+		Cluster     ClusterConfig  `json:"cluster"`
+		Timeout     TimeoutConfig  `json:"timeout"`
+		Periodic    PeriodicConfig `json:"periodic"`
+		Log         LogConfig      `json:"log"`
+		IO          IOConfig       `json:"io"`
+		MemoryLimit string         `json:"memory_limit"`
 	}
 
 	ClusterConfig struct {
@@ -93,7 +94,12 @@ func (c *Config) validate() (err error) {
 		return fmt.Errorf("invalid log.debug_log_file format %q: path needs to be absolute", c.Log.DebugLogFile)
 	}
 	if c.IO.WriteBufSize < 0 {
-		return fmt.Errorf("invalid io.write_buf_size value: %d, expected value non-negative", c.IO.WriteBufSize)
+		return fmt.Errorf("invalid io.write_buf_size value: %d: expected non-negative value", c.IO.WriteBufSize)
+	}
+	if v, err := cmn.S2B(c.MemoryLimit); err != nil {
+		return fmt.Errorf("invalid memory_limit value: %q: %v", c.MemoryLimit, err)
+	} else if v < 0 {
+		return fmt.Errorf("invalid memory_limit value: %q: expected non-negative value", c.MemoryLimit)
 	}
 	return nil
 }

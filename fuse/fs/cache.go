@@ -7,6 +7,7 @@ package fs
 import (
 	"log"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -86,14 +87,22 @@ type (
 		rootDirent *fuseutil.Dirent // contains (constant/cached) dirent for root
 
 		bck *ais.Bucket
+
+		cfg *ServerConfig
+
+		// Determines if the cache was able to read whole namespace into memory.
+		// In case we do have all objects in memory we can enable some of the
+		// performance improvements.
+		containsAllObjects bool
 	}
 )
 
 func (e *fileEntry) Ty() entryType { return entryFileTy }
 func (e *fileEntry) updateAttrs(dta dtAttrs) {
-	if e.id != invalidInodeID {
-		e.id = dta.id
-	}
+	// NOTE: Updating invalid inode with another invalid inode is equivalent
+	// to invalidating invalid entry and should be considered a bug.
+	cmn.Assert(e.id == invalidInodeID || dta.id == invalidInodeID)
+	e.id = dta.id
 	e.object.Size = dta.size
 }
 func (e *fileEntry) ID() fuseops.InodeID        { return e.id }
@@ -103,9 +112,10 @@ func (e *fileEntry) ListChildren() []cacheEntry { panic(e) }
 
 func (e *dirEntry) Ty() entryType { return entryDirTy }
 func (e *dirEntry) updateAttrs(dta dtAttrs) {
-	if e.id != invalidInodeID {
-		e.id = dta.id
-	}
+	// NOTE: Updating invalid inode with another invalid inode is equivalent
+	// to invalidating invalid entry and should be considered a bug.
+	cmn.Assert(e.id == invalidInodeID || dta.id == invalidInodeID)
+	e.id = dta.id
 }
 func (e *dirEntry) ID() fuseops.InodeID { return e.id }
 func (e *dirEntry) Name() string        { return e.name }
@@ -118,9 +128,10 @@ func (e *dirEntry) ListChildren() []cacheEntry {
 	return entries
 }
 
-func newNsCache(bck *ais.Bucket, logger *log.Logger, syncInterval time.Duration) (*namespaceCache, error) {
+func newNsCache(bck *ais.Bucket, logger *log.Logger, cfg *ServerConfig) (*namespaceCache, error) {
 	c := &namespaceCache{
 		bck: bck,
+		cfg: cfg,
 	}
 	c.root = c.newDirEntry(dtAttrs{id: fuseops.RootInodeID, path: ""})
 	c.rootDirent = &fuseutil.Dirent{
@@ -131,10 +142,10 @@ func newNsCache(bck *ais.Bucket, logger *log.Logger, syncInterval time.Duration)
 
 	err := c.refresh()
 
-	if syncInterval > 0 {
+	if cfg.SyncInterval > 0 {
 		go func() {
 			for {
-				time.Sleep(syncInterval)
+				time.Sleep(cfg.SyncInterval)
 				logger.Printf("syncing with AIS...")
 				if err := c.refresh(); err != nil {
 					logger.Printf("failed to sync, err: %v", err)
@@ -164,30 +175,50 @@ func (c *namespaceCache) newDirEntry(dta dtAttrs) *dirEntry {
 }
 
 func (c *namespaceCache) refresh() error {
-	objs, _, err := c.bck.ListObjects("", "", 0)
-	if err != nil {
-		return err
-	}
-
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.containsAllObjects = true
 	newCache := &namespaceCache{
 		root: c.newDirEntry(dtAttrs{id: fuseops.RootInodeID, path: ""}),
+		bck:  c.bck,
 	}
 
-	for _, obj := range objs {
-		exists, _, entry := c.exists(obj.Name)
-		id := invalidInodeID
-		if exists {
-			id = entry.ID()
+	var (
+		objs       []*ais.Object
+		err        error
+		pageMarker string
+	)
+	for {
+		objs, pageMarker, err = c.bck.ListObjects("", pageMarker, 50_000)
+		if err != nil {
+			return err
 		}
 
-		newCache._add(entryFileTy, dtAttrs{
-			id:   id,
-			path: obj.Name,
-			size: obj.Size,
-		})
+		for _, obj := range objs {
+			exists, _, entry := c._exists(obj.Name)
+			id := invalidInodeID
+			if exists {
+				id = entry.ID()
+			}
+
+			newCache._add(entryFileTy, dtAttrs{
+				id:   id,
+				path: obj.Name,
+				size: obj.Size,
+			})
+		}
+
+		if pageMarker == "" {
+			break
+		}
+
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
+		if mem.HeapAlloc > c.cfg.MemoryLimit {
+			c.containsAllObjects = false
+			break
+		}
 	}
 
 	c.root = newCache.root
@@ -261,7 +292,7 @@ func (c *namespaceCache) _remove(p string) {
 	delete(root.children, arms[len(arms)-1])
 }
 
-func (c *namespaceCache) exists(p string) (exists bool, res EntryLookupResult, entry cacheEntry) {
+func (c *namespaceCache) _exists(p string) (exists bool, res EntryLookupResult, entry cacheEntry) {
 	root := c.root
 	if p == "" {
 		res.Entry = c.rootDirent
@@ -269,9 +300,6 @@ func (c *namespaceCache) exists(p string) (exists bool, res EntryLookupResult, e
 	}
 
 	arms := splitEntryName(p)
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	for _, arm := range arms[:len(arms)-1] {
 		oldDir, ok := root.children[arm]
 		if !ok {
@@ -291,6 +319,13 @@ func (c *namespaceCache) exists(p string) (exists bool, res EntryLookupResult, e
 		Type:  fuseutil.DirentType(e.Ty()),
 	}
 	return true, res, e
+}
+
+func (c *namespaceCache) exists(p string) (exists bool, res EntryLookupResult, entry cacheEntry) {
+	c.mu.RLock()
+	exists, res, entry = c._exists(p)
+	c.mu.RUnlock()
+	return
 }
 
 // splitEntryName splits the POSIX name into hierarchical arms. Each directory
