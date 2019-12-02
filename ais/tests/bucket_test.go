@@ -6,6 +6,7 @@ package ais_test
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -255,11 +256,10 @@ func TestListObjects(t *testing.T) {
 	var (
 		iterations  = 10
 		workerCount = 10
-		dirLen      = 7
+		dirLen      = 10
 
 		bucket = t.Name() + "Bucket"
 		wg     = &sync.WaitGroup{}
-		random = cmn.NowRand()
 
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -308,17 +308,17 @@ func TestListObjects(t *testing.T) {
 			totalObjects := 0
 			for iter := 1; iter <= iterations; iter++ {
 				tutils.Logf("listing iteration: %d/%d (total_objs: %d)\n", iter, iterations, totalObjects)
-				objectCount := random.Intn(800) + 1010
+				objectCount := rand.Intn(800) + 1010
 				totalObjects += objectCount
 				for wid := 0; wid < workerCount; wid++ {
 					wg.Add(1)
 					go func(wid int) {
 						defer wg.Done()
 
-						objectSize := int64(random.Intn(256) + 20)
+						objectSize := int64(rand.Intn(256) + 20)
 						reader, err := tutils.NewRandReader(objectSize, true)
 						tassert.CheckFatal(t, err)
-						objDir := tutils.RandomObjDir(random, dirLen, 5)
+						objDir := tutils.RandomObjDir(dirLen, 5)
 						objectsToPut := objectCount / workerCount
 						if wid == workerCount-1 { // last worker puts leftovers
 							objectsToPut += objectCount % workerCount

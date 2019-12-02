@@ -9,7 +9,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
-	mrand "math/rand"
 	"os"
 	"path"
 	"testing"
@@ -114,8 +113,7 @@ func createAndAddMountpath(path string) {
 }
 
 func getRandomFileName(fileCounter int) string {
-	randomGen := mrand.New(mrand.NewSource(time.Now().UTC().UnixNano()))
-	return fmt.Sprintf("%v-%v.txt", tutils.FastRandomFilename(randomGen, 13), fileCounter)
+	return fmt.Sprintf("%v-%v.txt", tutils.GenRandomString(13), fileCounter)
 }
 
 func saveRandomFile(t cluster.Target, filename string, size int64) {

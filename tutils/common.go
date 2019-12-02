@@ -16,18 +16,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/OneOfOne/xxhash"
 )
 
 const (
-	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-
 	SkipMsg = "skipping test in short mode."
 )
 
@@ -53,21 +47,15 @@ func Progress(id int, period int) {
 	}
 }
 
-func FastRandomFilename(src *rand.Rand, fnlen int) string {
-	b := make([]byte, fnlen)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := fnlen-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
+// Generates strong random string or fallbacks to weak if error occurred
+// during generation.
+func GenRandomString(fnLen int) string {
+	bytes := make([]byte, fnLen)
+	rand.Read(bytes)
+	for i, b := range bytes {
+		bytes[i] = cmn.LetterBytes[b%byte(len(cmn.LetterBytes))]
 	}
-	return string(b)
+	return string(bytes)
 }
 
 // Generates an object name that hashes to a different target than `baseName`.
@@ -89,7 +77,7 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck *clust
 
 func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (string, error) {
 	for i := 0; i < 100; i++ {
-		name := prefix + FastRandomFilename(cmn.NowRand(), 8)
+		name := prefix + GenRandomString(8)
 		_, err := api.HeadBucket(baseParams, name)
 		if err == nil {
 			continue

@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -66,7 +65,7 @@ func init() {
 }
 
 func AISExec(ch chan *stats.PrimitiveStat, opType string, bucket string, numWorkers int, params *AISLoaderExecParams) {
-	filebasename := tutils.FastRandomFilename(cmn.NowRand(), 13)
+	filebasename := cmn.RandString(13)
 	filename := path.Join(soaktestDirname, filebasename+".json")
 	defer os.Remove(filename)
 

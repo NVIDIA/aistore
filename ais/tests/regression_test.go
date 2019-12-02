@@ -152,8 +152,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		bucketName = clibucket
 		targets    = make(map[string]struct{})
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
-		random     = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-		prefix     = tutils.FastRandomFilename(random, 32)
+		prefix     = tutils.GenRandomString(32)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {

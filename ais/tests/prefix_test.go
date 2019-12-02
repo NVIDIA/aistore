@@ -6,7 +6,6 @@ package ais_test
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
 	"testing"
@@ -60,14 +59,12 @@ func numberOfFilesWithPrefix(fileNames []string, namePrefix string, commonDir st
 }
 
 func prefixCreateFiles(t *testing.T, proxyURL string) {
-	src := rand.NewSource(baseseed + 1000)
-	random := rand.New(src)
 	fileNames = make([]string, 0, prefixFileNumber)
 	errCh := make(chan error, numfiles)
 	wg := &sync.WaitGroup{}
 
 	for i := 0; i < prefixFileNumber; i++ {
-		fileName := tutils.FastRandomFilename(random, fnlen)
+		fileName := tutils.GenRandomString(fnlen)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
@@ -81,9 +78,9 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		fileNames = append(fileNames, fileName)
 	}
 
-	// create specific files to test corner cases
-	extranames := []string{"dir/obj01", "dir/obj02", "dir/obj03", "dir1/dir2/obj04", "dir1/dir2/obj05"}
-	for _, fName := range extranames {
+	// Create specific files to test corner cases.
+	extraNames := []string{"dir/obj01", "dir/obj02", "dir/obj03", "dir1/dir2/obj04", "dir1/dir2/obj05"}
+	for _, fName := range extraNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
 		r, err := tutils.NewRandReader(fileSize, true /* withHash */)

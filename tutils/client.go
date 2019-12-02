@@ -811,11 +811,10 @@ func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, o
 func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, numPuts int, errCh chan error, objsPutCh chan string, sgl *memsys.SGL, fixedSize ...bool) {
 	var (
 		fNameLen = 16
-		random   = cmn.NowRand()
 		objList  = make([]string, 0, numPuts)
 	)
 	for i := 0; i < numPuts; i++ {
-		fname := FastRandomFilename(random, fNameLen)
+		fname := GenRandomString(fNameLen)
 		objList = append(objList, fname)
 	}
 	PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath, objSize, objList, errCh, objsPutCh, sgl, fixedSize...)

@@ -6,7 +6,6 @@ package ais_test
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"sync"
 	"testing"
@@ -115,13 +114,10 @@ func unlockFile(idx int, fileExists bool) {
 }
 
 // generates a list of random file names and a buffer to keep random data for filling up files
-func generateRandomData(seed int64, fileCount int) {
-	src := rand.NewSource(seed)
-	random := rand.New(src)
+func generateRandomData(fileCount int) {
 	fileNames = make([]string, fileCount)
-
 	for i := 0; i < fileCount; i++ {
-		fileNames[i] = tutils.FastRandomFilename(random, fnlen)
+		fileNames[i] = tutils.GenRandomString(fnlen)
 	}
 }
 
@@ -332,7 +328,7 @@ func rwstress(t *testing.T) {
 	created := createBucketIfNotExists(t, proxyURL, clibucket)
 	filelock.files = make([]fileLock, numFiles)
 
-	generateRandomData(baseseed+10000, numFiles)
+	generateRandomData(numFiles)
 
 	var wg sync.WaitGroup
 	doneCh := make(chan int, 2)

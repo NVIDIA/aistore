@@ -6,6 +6,7 @@ package ais_test
 
 import (
 	"flag"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -121,5 +122,6 @@ func TestMain(m *testing.M) {
 		cmn.ExitInfof("Proxy URL for first and next tier cluster cannot be the same")
 	}
 
+	rand.Seed(time.Now().UnixNano())
 	os.Exit(m.Run())
 }

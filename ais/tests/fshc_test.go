@@ -313,7 +313,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	defer sgl.Free()
 
 	// generate some filenames to PUT to them in a loop
-	generateRandomData(md.seed, md.numObjs)
+	generateRandomData(md.numObjs)
 
 	// Checking detection on object PUT
 	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, sgl)

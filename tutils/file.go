@@ -219,7 +219,7 @@ func (f *dummyFile) IsDir() bool        { return false }
 func (f *dummyFile) Sys() interface{}   { return nil }
 
 // GetFileInfosFromTarBuffer returns all file infos contained in buffer which
-// assumably is tar or gzipped tar.
+// presumably is tar or gzipped tar.
 func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo, error) {
 	var tr *tar.Reader
 	if gzipped {
@@ -232,7 +232,7 @@ func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo
 		tr = tar.NewReader(&buffer)
 	}
 
-	files := []os.FileInfo{}
+	var files []os.FileInfo
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -250,11 +250,11 @@ func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo
 }
 
 // GetFilesFromTarBuffer returns all file infos contained in buffer which
-// assumably is tar or gzipped tar.
+// presumably is tar or gzipped tar.
 func GetFilesFromTarBuffer(buffer bytes.Buffer, extension string) ([]FileContent, error) {
 	tr := tar.NewReader(&buffer)
 
-	files := []FileContent{}
+	var files []FileContent
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -280,7 +280,7 @@ func GetFilesFromTarBuffer(buffer bytes.Buffer, extension string) ([]FileContent
 }
 
 // GetFileInfosFromZipBuffer returns all file infos contained in buffer which
-// assumably is zip.
+// presumably is zip.
 func GetFileInfosFromZipBuffer(buffer bytes.Buffer) ([]os.FileInfo, error) {
 	reader := bytes.NewReader(buffer.Bytes())
 	zr, err := zip.NewReader(reader, int64(buffer.Len()))
@@ -288,18 +288,18 @@ func GetFileInfosFromZipBuffer(buffer bytes.Buffer) ([]os.FileInfo, error) {
 		return nil, err
 	}
 
-	files := []os.FileInfo{}
-	for _, file := range zr.File {
-		files = append(files, file.FileInfo())
+	files := make([]os.FileInfo, len(zr.File))
+	for idx, file := range zr.File {
+		files[idx] = file.FileInfo()
 	}
 
 	return files, nil
 }
 
-func RandomObjDir(src *rand.Rand, dirLen, maxDepth int) (dir string) {
-	depth := src.Intn(maxDepth)
+func RandomObjDir(dirLen, maxDepth int) (dir string) {
+	depth := rand.Intn(maxDepth)
 	for i := 0; i < depth; i++ {
-		dir = filepath.Join(dir, FastRandomFilename(src, dirLen))
+		dir = filepath.Join(dir, GenRandomString(dirLen))
 	}
 	return
 }

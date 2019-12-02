@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -40,11 +39,10 @@ func TestRandomReaderPutStress(t *testing.T) {
 
 func putRR(t *testing.T, reader tutils.Reader, bucket, dir string, objCount int) []string {
 	var (
-		random   = cmn.NowRand()
 		objNames = make([]string, objCount)
 	)
 	for i := 0; i < objCount; i++ {
-		fname := tutils.FastRandomFilename(random, fnlen)
+		fname := tutils.GenRandomString(fnlen)
 		objName := filepath.Join(dir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: tutils.DefaultBaseAPIParams(t),

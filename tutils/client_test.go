@@ -45,7 +45,7 @@ func TestPutSG(t *testing.T) {
 }
 
 func putFile(size int64, withHash bool) error {
-	fn := "ais-client-test-" + tutils.FastRandomFilename(cmn.NowRand(), 32)
+	fn := "ais-client-test-" + tutils.GenRandomString(32)
 	dir := "/tmp"
 	r, err := tutils.NewFileReader(dir, fn, size, withHash)
 	if err != nil {

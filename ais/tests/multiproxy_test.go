@@ -7,7 +7,6 @@ package ais_test
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -560,14 +559,12 @@ func concurrentPutGetDel(t *testing.T) {
 	// otherwise it is easy to run into a trouble when 2 goroutines do:
 	//   1PUT 2PUT 1DEL 2DEL
 	// And the second goroutine fails with error "object does not exist"
-	cid := int64(0)
 	for _, v := range smap.Pmap {
-		cid++
 		wg.Add(1)
-		go func(url string, cid int64) {
+		go func(url string) {
 			defer wg.Done()
-			errCh <- proxyPutGetDelete(baseseed+cid, 100, url)
-		}(v.PublicNet.DirectURL, cid)
+			errCh <- proxyPutGetDelete(100, url)
+		}(v.PublicNet.DirectURL)
 	}
 
 	wg.Wait()
@@ -580,15 +577,14 @@ func concurrentPutGetDel(t *testing.T) {
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
-func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
-	random := rand.New(rand.NewSource(seed))
+func proxyPutGetDelete(count int, proxyURL string) error {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for i := 0; i < count; i++ {
 		reader, err := tutils.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			return fmt.Errorf("error creating reader: %v", err)
 		}
-		fname := tutils.FastRandomFilename(random, fnlen)
+		fname := tutils.GenRandomString(fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -614,21 +610,19 @@ func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 // putGetDelWorker does put/get/del in sequence; if primary proxy change happens, it checks the failed delete
 // channel and route the deletes to the new primary proxy
 // stops when told to do so via the stop channel
-func putGetDelWorker(proxyURL string, seed int64, stopch <-chan struct{}, proxyurlch <-chan string,
-	errCh chan error, wg *sync.WaitGroup) {
+func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan string, errCh chan error, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	random := rand.New(rand.NewSource(seed))
 	missedDeleteCh := make(chan string, 100)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 loop:
 	for {
 		select {
-		case <-stopch:
+		case <-stopCh:
 			close(errCh)
 			break loop
 
-		case url := <-proxyurlch:
+		case url := <-proxyURLCh:
 			// send failed deletes to the new primary proxy
 		deleteLoop:
 			for {
@@ -653,7 +647,7 @@ loop:
 			continue
 		}
 
-		fname := tutils.FastRandomFilename(random, fnlen)
+		fname := tutils.GenRandomString(fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -735,10 +729,9 @@ loop:
 // the process is repeated until a pre-defined time duration is reached.
 func proxyStress(t *testing.T) {
 	var (
-		bs          = baseseed
 		errChs      = make([]chan error, numworkers+1)
-		stopchs     = make([]chan struct{}, numworkers+1)
-		proxyurlchs = make([]chan string, numworkers)
+		stopChs     = make([]chan struct{}, numworkers+1)
+		proxyURLChs = make([]chan string, numworkers)
 		wg          sync.WaitGroup
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 	)
@@ -748,22 +741,21 @@ func proxyStress(t *testing.T) {
 	// start all workers
 	for i := 0; i < numworkers; i++ {
 		errChs[i] = make(chan error, defaultChanSize)
-		stopchs[i] = make(chan struct{}, defaultChanSize)
-		proxyurlchs[i] = make(chan string, defaultChanSize)
+		stopChs[i] = make(chan struct{}, defaultChanSize)
+		proxyURLChs[i] = make(chan string, defaultChanSize)
 
 		wg.Add(1)
-		go putGetDelWorker(proxyURL, bs, stopchs[i], proxyurlchs[i], errChs[i], &wg)
+		go putGetDelWorker(proxyURL, stopChs[i], proxyURLChs[i], errChs[i], &wg)
 
 		// stagger the workers so they don't always do the same operation at the same time
 		n := cmn.NowRand().Intn(999)
 		time.Sleep(time.Duration(n+1) * time.Millisecond)
-		bs++
 	}
 
 	errChs[numworkers] = make(chan error, defaultChanSize)
-	stopchs[numworkers] = make(chan struct{}, defaultChanSize)
+	stopChs[numworkers] = make(chan struct{}, defaultChanSize)
 	wg.Add(1)
-	go primaryKiller(t, proxyURL, stopchs[numworkers], proxyurlchs, errChs[numworkers], &wg)
+	go primaryKiller(t, proxyURL, stopChs[numworkers], proxyURLChs, errChs[numworkers], &wg)
 
 	timer := time.After(multiProxyTestDuration)
 loop:
@@ -782,9 +774,9 @@ loop:
 	}
 
 	// stop all workers
-	for _, stopch := range stopchs {
-		stopch <- struct{}{}
-		close(stopch)
+	for _, stopCh := range stopChs {
+		stopCh <- struct{}{}
+		close(stopCh)
 	}
 
 	wg.Wait()

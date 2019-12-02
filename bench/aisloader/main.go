@@ -876,7 +876,7 @@ func generatePutObjectName() (string, error) {
 	}
 
 	if useRandomObjName {
-		comps[idx] = tutils.FastRandomFilename(rnd, randomObjNameLen)
+		comps[idx] = cmn.RandStringWithSrc(rnd, randomObjNameLen)
 		idx++
 	} else {
 		objectNumber := (cnt - 1) << suffixIDMaskLen
