@@ -21,15 +21,12 @@ const (
 	maxPollInterval     = 10 * time.Second
 )
 
-// SetBucketPropsMsg API
+// SetBucketProps API
 //
-// Set the properties of a bucket using the bucket name and the entire bucket property structure to be set.
+// Set the properties of a bucket using the bucket name and the entire bucket
+// property structure to be set.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketPropsMsg(baseParams BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
-	if props.Cksum.Type == "" {
-		props.Cksum.Type = cmn.PropInherit
-	}
-
+func SetBucketProps(baseParams BaseParams, bucket string, props cmn.BucketPropsToUpdate, query ...url.Values) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Value: props})
 	if err != nil {
 		return err
@@ -39,31 +36,9 @@ func SetBucketPropsMsg(baseParams BaseParams, bucket string, props cmn.BucketPro
 	if len(query) > 0 {
 		optParams.Query = query[0]
 	}
-	baseParams.Method = http.MethodPut
+	baseParams.Method = http.MethodPatch
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	_, err = DoHTTPRequest(baseParams, path, b, optParams)
-	return err
-}
-
-// SetBucketProps API
-//
-// Set properties of a bucket using the bucket name, and key value pairs.
-// Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketProps(baseParams BaseParams, bucket string, nvs cmn.SimpleKVs, query ...url.Values) error {
-	optParams := OptionalParams{}
-	q := url.Values{}
-	if len(query) > 0 {
-		q = query[0]
-	}
-
-	for key, val := range nvs {
-		q.Add(key, val)
-	}
-
-	optParams.Query = q
-	baseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket, cmn.ActSetProps)
-	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }
 
@@ -90,7 +65,7 @@ func ResetBucketProps(baseParams BaseParams, bucket string, query ...url.Values)
 // Returns the properties of a bucket specified by its name.
 // Converts the string type fields returned from the HEAD request to their
 // corresponding counterparts in the BucketProps struct
-func HeadBucket(baseParams BaseParams, bucket string, query ...url.Values) (p *cmn.BucketProps, err error) {
+func HeadBucket(baseParams BaseParams, bucket string, query ...url.Values) (p cmn.BucketProps, err error) {
 	var (
 		path      = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 		optParams = OptionalParams{}
@@ -215,7 +190,7 @@ func HeadBucket(baseParams BaseParams, bucket string, query ...url.Values) (p *c
 	} else {
 		return
 	}
-	p = &cmn.BucketProps{
+	p = cmn.BucketProps{
 		CloudProvider: r.Header.Get(cmn.HeaderCloudProvider),
 		Versioning:    verProps,
 		Tiering:       tierProps,

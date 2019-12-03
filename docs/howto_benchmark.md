@@ -92,7 +92,7 @@ For the most recently updated command-line options and examples, please run `ais
 | --- | --- |
 | -batchsize | Batch size to list and delete (default 100) |
 | -provider | ais - for AIS, cloud - for Cloud bucket; other supported values include "gcp" and "aws", for Amazon and Google clouds, respectively (default "ais") |
-| -bprops | JSON string formatted as per the SetBucketPropsMsg API and containing bucket properties to apply |
+| -bprops | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply |
 | -bucket | Bucket name (default "nvais") |
 | -check-statsd | true: prior to benchmark make sure that StatsD is reachable |
 | -cleanup | true: remove all created objects upon benchmark termination (default true) |

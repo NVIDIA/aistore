@@ -26,16 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-func testBucketProps(t *testing.T) *cmn.BucketProps {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	globalConfig := getClusterConfig(t, proxyURL)
-
-	return &cmn.BucketProps{
-		Cksum: cmn.CksumConf{Type: cmn.PropInherit},
-		LRU:   globalConfig.LRU,
-	}
-}
-
 func TestDefaultBucketProps(t *testing.T) {
 	const dataSlices = 7
 	var (
@@ -68,8 +58,8 @@ func TestDefaultBucketProps(t *testing.T) {
 func TestResetBucketProps(t *testing.T) {
 	var (
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
-		globalProps  cmn.BucketProps
 		globalConfig = getClusterConfig(t, proxyURL)
+		baseParams   = tutils.DefaultBaseAPIParams(t)
 	)
 
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"ec_enabled": "true"})
@@ -82,77 +72,88 @@ func TestResetBucketProps(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
 	defer tutils.DestroyBucket(t, proxyURL, TestBucketName)
 
-	bucketProps := defaultBucketProps()
-	bucketProps.Cksum.Type = cmn.ChecksumNone
-	bucketProps.Cksum.ValidateWarmGet = true
-	bucketProps.Cksum.EnableReadRange = true
-	bucketProps.EC.DataSlices = 1
-	bucketProps.EC.ParitySlices = 2
-	bucketProps.EC.Enabled = false
-
-	globalProps.CloudProvider = cmn.ProviderAIS
-	globalProps.Cksum = globalConfig.Cksum
-	globalProps.LRU = testBucketProps(t).LRU
-	globalProps.EC.ParitySlices = 1
-
-	bParams := tutils.DefaultBaseAPIParams(t)
-	err := api.SetBucketPropsMsg(bParams, TestBucketName, bucketProps)
+	defaultProps, err := api.HeadBucket(baseParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
-	p, err := api.HeadBucket(bParams, TestBucketName)
+	propsToUpdate := cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			Type:            api.String(cmn.ChecksumNone),
+			ValidateWarmGet: api.Bool(true),
+			EnableReadRange: api.Bool(true),
+		},
+		EC: &cmn.ECConfToUpdate{
+			Enabled:      api.Bool(false),
+			DataSlices:   api.Int(1),
+			ParitySlices: api.Int(2),
+		},
+	}
+
+	err = api.SetBucketProps(baseParams, TestBucketName, propsToUpdate)
+	tassert.CheckFatal(t, err)
+
+	p, err := api.HeadBucket(baseParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
 	// check that bucket props do get set
-	validateBucketProps(t, bucketProps, *p)
-	err = api.ResetBucketProps(bParams, TestBucketName)
+	validateBucketProps(t, propsToUpdate, p)
+	err = api.ResetBucketProps(baseParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
-	p, err = api.HeadBucket(bParams, TestBucketName)
+	p, err = api.HeadBucket(baseParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
-	// check that bucket props are reset
-	validateBucketProps(t, globalProps, *p)
+	if !reflect.DeepEqual(defaultProps, p) {
+		t.Errorf("props have not been reset properly: expected: %+v, got: %+v", defaultProps, p)
+	}
 }
 
 func TestSetInvalidBucketProps(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	tests := []struct {
-		name string
-		nvs  cmn.SimpleKVs
+		name  string
+		props cmn.BucketPropsToUpdate
 	}{
 		{
 			name: "humongous number of copies",
-			nvs: cmn.SimpleKVs{
-				"mirror.enabled": "true",
-				"mirror.copies":  "120",
+			props: cmn.BucketPropsToUpdate{
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(true),
+					Copies:  api.Int64(120),
+				},
 			},
 		},
 		{
 			name: "too many copies",
-			nvs: cmn.SimpleKVs{
-				"mirror.enabled": "true",
-				"mirror.copies":  "12",
+			props: cmn.BucketPropsToUpdate{
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(true),
+					Copies:  api.Int64(12),
+				},
 			},
 		},
 		{
 			name: "humongous number of slices",
-			nvs: cmn.SimpleKVs{
-				"ec.enabled":       "true",
-				"ec.parity_slices": "120",
+			props: cmn.BucketPropsToUpdate{
+				EC: &cmn.ECConfToUpdate{
+					Enabled:      api.Bool(true),
+					ParitySlices: api.Int(120),
+				},
 			},
 		},
 		{
 			name: "too many slices",
-			nvs: cmn.SimpleKVs{
-				"ec.enabled":       "true",
-				"ec.parity_slices": "12",
+			props: cmn.BucketPropsToUpdate{
+				EC: &cmn.ECConfToUpdate{
+					Enabled:      api.Bool(true),
+					ParitySlices: api.Int(12),
+				},
 			},
 		},
 		{
 			name: "enable both ec and mirroring",
-			nvs: cmn.SimpleKVs{
-				"mirror.enabled": "true",
-				"ec.enabled":     "true",
+			props: cmn.BucketPropsToUpdate{
+				EC:     &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
+				Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 			},
 		},
 	}
@@ -162,7 +163,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := api.SetBucketProps(baseParams, TestBucketName, test.nvs)
+			err := api.SetBucketProps(baseParams, TestBucketName, test.props)
 			if err == nil {
 				t.Error("expected error when setting bad input")
 			}
@@ -191,12 +192,15 @@ func TestCloudListObjectVersions(t *testing.T) {
 
 	// Enable local versioning management
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	err := api.SetBucketProps(baseParams, bucket,
-		cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: "true"})
+	err := api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+		Versioning: &cmn.VersionConfToUpdate{Enabled: api.Bool(true)},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: "false"})
+	defer api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+		Versioning: &cmn.VersionConfToUpdate{Enabled: api.Bool(false)},
+	})
 
 	// Enabling local versioning may not work if the cloud bucket has
 	// versioning disabled. So, request props and do double check
@@ -698,7 +702,9 @@ func TestBucketSingleProp(t *testing.T) {
 	tutils.Logf("Changing bucket %q properties...\n", m.bucket)
 
 	// Enabling EC should set default value for number of slices if it is 0
-	err := api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
+	err := api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
+	})
 	tassert.CheckError(t, err)
 	p, err := api.HeadBucket(baseParams, m.bucket)
 	tassert.CheckFatal(t, err)
@@ -713,11 +719,15 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable EC first
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+	})
 	tassert.CheckError(t, err)
 
 	// Enabling mirroring should set default value for number of copies if it is 0
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
+	})
 	tassert.CheckError(t, err)
 	p, err = api.HeadBucket(baseParams, m.bucket)
 	tassert.CheckFatal(t, err)
@@ -729,22 +739,25 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable mirroring first
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(false)},
+	})
 	tassert.CheckError(t, err)
 
 	// Change a few more bucket properties
-	err = api.SetBucketProps(
-		baseParams, m.bucket,
-		cmn.SimpleKVs{
-			cmn.HeaderBucketECData:         strconv.Itoa(dataSlices),
-			cmn.HeaderBucketECParity:       strconv.Itoa(paritySlices),
-			cmn.HeaderBucketECObjSizeLimit: strconv.Itoa(objLimit),
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{
+			DataSlices:   api.Int(dataSlices),
+			ParitySlices: api.Int(paritySlices),
+			ObjSizeLimit: api.Int64(objLimit),
 		},
-	)
+	})
 	tassert.CheckError(t, err)
 
 	// Enable EC again
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
+	})
 	tassert.CheckError(t, err)
 	p, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), m.bucket)
 	tassert.CheckFatal(t, err)
@@ -759,11 +772,15 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable EC first
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+	})
 	tassert.CheckError(t, err)
 
 	// Change mirroring threshold
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorThresh: strconv.Itoa(mirrorThreshold)})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{UtilThresh: api.Int64(mirrorThreshold)}},
+	)
 	tassert.CheckError(t, err)
 	p, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), m.bucket)
 	tassert.CheckFatal(t, err)
@@ -772,7 +789,9 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Disable mirroring
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(false)},
+	})
 	tassert.CheckError(t, err)
 }
 
@@ -788,7 +807,9 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
 	tassert.CheckFatal(t, err)
 
-	err = api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"}, query)
+	err = api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
+	})
 	if err == nil {
 		t.Fatalf("Expected SetBucketProps error, but got none.")
 	}
@@ -807,7 +828,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 		bucket string
 
 		baseParams  = tutils.DefaultBaseAPIParams(t)
-		bucketProps = defaultBucketProps()
+		bucketProps = cmn.BucketPropsToUpdate{}
 		query       = url.Values{}
 	)
 	query.Set(cmn.URLParamProvider, cmn.Cloud)
@@ -815,9 +836,9 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
 	tassert.CheckFatal(t, err)
 
-	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps, query)
+	err = api.SetBucketProps(baseParams, bucket, bucketProps, query)
 	if err == nil {
-		t.Fatalf("Expected SetBucketPropsMsg error, but got none.")
+		t.Fatalf("Expected SetBucketProps error, but got none.")
 	}
 
 	errAsHTTPError, ok := err.(*cmn.HTTPError)
@@ -897,20 +918,12 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 	{
-		var (
-			bucketProps = defaultBucketProps()
-		)
-		primary, err := tutils.GetPrimaryProxy(proxyURLReadOnly)
-		tassert.CheckFatal(t, err)
-
 		baseParams := tutils.DefaultBaseAPIParams(t)
-		config, err := api.GetDaemonConfig(baseParams, primary.ID())
-		tassert.CheckFatal(t, err)
-
-		// copy default config and change one field
-		bucketProps.Mirror = config.Mirror
-		bucketProps.Mirror.Enabled = true
-		err = api.SetBucketPropsMsg(baseParams, m.bucket, bucketProps)
+		err := api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+			Mirror: &cmn.MirrorConfToUpdate{
+				Enabled: api.Bool(true),
+			},
+		})
 		tassert.CheckFatal(t, err)
 
 		p, err := api.HeadBucket(baseParams, m.bucket)
@@ -987,9 +1000,13 @@ func TestCloudMirror(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// enable mirror
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
+	})
 	tassert.CheckFatal(t, err)
-	defer api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"})
+	defer api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(false)},
+	})
 
 	// list
 	objectList, err := api.ListBucket(baseParams, m.bucket, nil, 0)
@@ -1050,8 +1067,7 @@ func TestBucketReadOnly(t *testing.T) {
 
 	// make bucket read-only
 	aattrs := cmn.MakeAccess(p.AccessAttrs, cmn.DenyAccess, cmn.AccessPUT|cmn.AccessDELETE)
-	s := strconv.FormatUint(aattrs, 10)
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketAccessAttrs: s})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{AccessAttrs: api.Uint64(aattrs)})
 	tassert.CheckFatal(t, err)
 
 	m.init()
@@ -1061,8 +1077,7 @@ func TestBucketReadOnly(t *testing.T) {
 	}
 
 	// restore write access
-	s = strconv.FormatUint(p.AccessAttrs, 10)
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketAccessAttrs: s})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{AccessAttrs: api.Uint64(p.AccessAttrs)})
 	tassert.CheckFatal(t, err)
 
 	// write some more and destroy

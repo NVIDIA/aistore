@@ -78,14 +78,14 @@ func (o *ecOptions) sliceTotal() int {
 // 	ecParitySliceCnt = 2
 // )
 
-func defaultECBckProps(o *ecOptions) cmn.BucketProps {
-	return cmn.BucketProps{
-		Cksum: cmn.CksumConf{Type: "inherit"},
-		EC: cmn.ECConf{
-			Enabled:      true,
-			ObjSizeLimit: ecObjLimit,
-			DataSlices:   o.dataCnt,
-			ParitySlices: o.parityCnt,
+func defaultECBckProps(o *ecOptions) cmn.BucketPropsToUpdate {
+	return cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{Type: api.String(cmn.PropInherit)},
+		EC: &cmn.ECConfToUpdate{
+			Enabled:      api.Bool(true),
+			ObjSizeLimit: api.Int64(ecObjLimit),
+			DataSlices:   api.Int(o.dataCnt),
+			ParitySlices: api.Int(o.parityCnt),
 		},
 	}
 }
@@ -503,12 +503,12 @@ func putRandomFile(t *testing.T, baseParams api.BaseParams, bckName string, objP
 	tassert.CheckFatal(t, err)
 }
 
-func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, baseParams api.BaseParams, o *ecOptions) {
+func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, name string, bckProps cmn.BucketPropsToUpdate, o *ecOptions) {
 	tutils.CreateFreshBucket(t, proxyURLReadOnly, name)
 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		o.dataCnt, o.parityCnt, o.seed, o.concurr)
-	err := api.SetBucketPropsMsg(baseParams, name, bckProps)
+	err := api.SetBucketProps(baseParams, name, bckProps)
 
 	if err != nil {
 		tutils.DestroyBucket(t, proxyURLReadOnly, name)
@@ -516,9 +516,9 @@ func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, b
 	tassert.CheckFatal(t, err)
 }
 
-func setBucketECProps(t *testing.T, name string, bckProps cmn.BucketProps, baseParams api.BaseParams) {
+func setBucketECProps(t *testing.T, baseParams api.BaseParams, name string, bckProps cmn.BucketPropsToUpdate) {
 	tutils.Logf("Changing EC %d:%d\n", bckProps.EC.DataSlices, bckProps.EC.ParitySlices)
-	err := api.SetBucketPropsMsg(baseParams, name, bckProps)
+	err := api.SetBucketProps(baseParams, name, bckProps)
 	tassert.CheckFatal(t, err)
 }
 
@@ -588,20 +588,23 @@ func damageMetadataCksum(t *testing.T, slicePath string) {
 // EC is enabled
 func TestECChange(t *testing.T) {
 	var (
-		bucket      = TestBucketName
-		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
-		bucketProps cmn.BucketProps
+		bucket   = TestBucketName
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bucket)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
-	bucketProps.Cksum.Type = "inherit"
-	bucketProps.EC = cmn.ECConf{
-		Enabled:      true,
-		ObjSizeLimit: ecObjLimit,
-		DataSlices:   1,
-		ParitySlices: 1,
+	bucketProps := cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			Type: api.String(cmn.PropInherit),
+		},
+		EC: &cmn.ECConfToUpdate{
+			Enabled:      api.Bool(true),
+			ObjSizeLimit: api.Int64(ecObjLimit),
+			DataSlices:   api.Int(1),
+			ParitySlices: api.Int(1),
+		},
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
@@ -610,35 +613,35 @@ func TestECChange(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.Logln("Trying to set too many slices")
-	bucketProps.EC.DataSlices = 25
-	bucketProps.EC.ParitySlices = 25
-	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
+	bucketProps.EC.DataSlices = api.Int(25)
+	bucketProps.EC.ParitySlices = api.Int(25)
+	err = api.SetBucketProps(baseParams, bucket, bucketProps)
 	tassert.Errorf(t, err != nil, "Enabling EC must fail in case of the number of targets fewer than the number of slices")
 
 	tutils.Logln("Enabling EC")
-	bucketProps.EC.DataSlices = 1
-	bucketProps.EC.ParitySlices = 1
-	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
+	bucketProps.EC.DataSlices = api.Int(1)
+	bucketProps.EC.ParitySlices = api.Int(1)
+	err = api.SetBucketProps(baseParams, bucket, bucketProps)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logln("Trying to set EC options to the same values")
-	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
+	err = api.SetBucketProps(baseParams, bucket, bucketProps)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logln("Trying to disable EC")
-	bucketProps.EC.Enabled = false
-	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
+	bucketProps.EC.Enabled = api.Bool(false)
+	err = api.SetBucketProps(baseParams, bucket, bucketProps)
 	tassert.Errorf(t, err == nil, "Disabling EC failed: %v", err)
 
 	tutils.Logln("Trying to re-enable EC")
-	bucketProps.EC.Enabled = true
-	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
+	bucketProps.EC.Enabled = api.Bool(true)
+	err = api.SetBucketProps(baseParams, bucket, bucketProps)
 	tassert.Errorf(t, err == nil, "Enabling EC failed: %v", err)
 
 	tutils.Logln("Trying to modify EC options when EC is enabled")
-	bucketProps.EC.Enabled = true
-	bucketProps.EC.ObjSizeLimit = 300000
-	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
+	bucketProps.EC.Enabled = api.Bool(true)
+	bucketProps.EC.ObjSizeLimit = api.Int64(300000)
+	err = api.SetBucketProps(baseParams, bucket, bucketProps)
 	tassert.Errorf(t, err != nil, "Modifiying EC properties must fail")
 
 	tutils.Logln("Resetting bucket properties")
@@ -823,8 +826,9 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bucket, 
 // Simple stress testing EC for Cloud buckets
 func TestECRestoreObjAndSliceCloud(t *testing.T) {
 	var (
-		bucket   = clibucket
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket     = clibucket
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -846,12 +850,11 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 	defer sgl.Free()
 
 	fullPath := fmt.Sprintf("cloud/%s/%s", bucket, ecTestDir)
-	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	origProps, err := api.HeadBucket(baseParams, bucket)
-	tassert.CheckFatal(t, err)
-	setBucketECProps(t, bucket, defaultECBckProps(o), baseParams)
-	defer setBucketECProps(t, bucket, *origProps, baseParams)
+	setBucketECProps(t, baseParams, bucket, defaultECBckProps(o))
+	defer api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+	})
 
 	wg := sync.WaitGroup{}
 
@@ -901,7 +904,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	newLocalBckWithProps(t, bucket, defaultECBckProps(o), baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := sync.WaitGroup{}
@@ -982,7 +985,7 @@ func TestECChecksum(t *testing.T) {
 	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	newLocalBckWithProps(t, bucket, defaultECBckProps(o), baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	objName1 := fmt.Sprintf(o.pattern, 1)
@@ -1048,7 +1051,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	newLocalBckWithProps(t, bucket, defaultECBckProps(o), baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	// End of preparation, create files with EC enabled, check if are restored properly
@@ -1071,7 +1074,9 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	assertBucketSize(t, baseParams, bucket, o.objCount)
 
 	// Disable EC, put normal files, check if were created properly
-	err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
+	err := api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+	})
 	tassert.CheckError(t, err)
 
 	wg.Add(o.objCount)
@@ -1092,7 +1097,9 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	assertBucketSize(t, baseParams, bucket, o.objCount*2)
 
 	// Enable EC again, check if EC was started properly and creates files with EC correctly
-	err = api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
+	err = api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
+	})
 	tassert.CheckError(t, err)
 
 	wg.Add(o.objCount)
@@ -1139,7 +1146,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	newLocalBckWithProps(t, bucket, defaultECBckProps(o), baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	// End of preparation, create files with EC enabled, check if are restored properly
@@ -1179,35 +1186,45 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	// Create different disable/enable actions to test if system persists behaving well
 	go func() {
-		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
+		err := api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
+		})
 		tassert.CheckError(t, err)
 	}()
 
 	time.Sleep(5 * time.Millisecond)
 
 	go func() {
-		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
+		err := api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
+		})
 		tassert.CheckError(t, err)
 	}()
 
 	time.Sleep(5 * time.Millisecond)
 
 	go func() {
-		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
+		err := api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+		})
 		tassert.CheckError(t, err)
 	}()
 
 	time.Sleep(5 * time.Millisecond)
 
 	go func() {
-		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
+		err := api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+		})
 		tassert.CheckError(t, err)
 	}()
 
 	time.Sleep(300 * time.Millisecond)
 
 	go func() {
-		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
+		err := api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
+		})
 		tassert.CheckError(t, err)
 	}()
 
@@ -1272,7 +1289,7 @@ func TestECStress(t *testing.T) {
 	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	newLocalBckWithProps(t, bucket, defaultECBckProps(o), baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
@@ -1320,8 +1337,8 @@ func TestECStressManyBuckets(t *testing.T) {
 	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	newLocalBckWithProps(t, bck1Name, defaultECBckProps(o1), baseParams, o1)
-	newLocalBckWithProps(t, bck2Name, defaultECBckProps(o2), baseParams, o2)
+	newLocalBckWithProps(t, baseParams, bck1Name, defaultECBckProps(o1), o1)
+	newLocalBckWithProps(t, baseParams, bck2Name, defaultECBckProps(o2), o2)
 	defer tutils.DestroyBucket(t, proxyURL, bck1Name)
 	defer tutils.DestroyBucket(t, proxyURL, bck2Name)
 
@@ -1391,7 +1408,7 @@ func TestECExtraStress(t *testing.T) {
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	newLocalBckWithProps(t, bucket, defaultECBckProps(o), baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	started := time.Now()
@@ -1505,9 +1522,11 @@ func TestECXattrs(t *testing.T) {
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
-	bckProps.Versioning.Enabled = true
+	bckProps.Versioning = &cmn.VersionConfToUpdate{
+		Enabled: api.Bool(true),
+	}
 
-	newLocalBckWithProps(t, bucket, bckProps, baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, bckProps, o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	oneObj := func(idx int, objName string) {
@@ -1657,7 +1676,7 @@ func TestECDestroyBucket(t *testing.T) {
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
-	newLocalBckWithProps(t, bucket, bckProps, baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, bckProps, o)
 
 	wg := &sync.WaitGroup{}
 	errCnt := atomic.NewInt64(0)
@@ -1704,7 +1723,7 @@ func TestECDestroyBucket(t *testing.T) {
 	tutils.Logf("EC put files resulted in error in %d out of %d files\n", errCnt.Load(), o.objCount)
 
 	// create bucket with the same name and check if puts are successful
-	newLocalBckWithProps(t, bucket, bckProps, baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, bckProps, o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 	doECPutsAndCheck(t, bucket, baseParams, o)
 
@@ -1756,8 +1775,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	bckProps := defaultECBckProps(o)
-	newLocalBckWithProps(t, bucket, bckProps, baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := &sync.WaitGroup{}
@@ -1871,7 +1889,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
-	newLocalBckWithProps(t, bucket, bckProps, baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, bckProps, o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := sync.WaitGroup{}
@@ -2013,7 +2031,7 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
 	bckProps := defaultECBckProps(o)
-	newLocalBckWithProps(t, bucket, bckProps, baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, bckProps, o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := &sync.WaitGroup{}
@@ -2122,7 +2140,7 @@ func TestECRebalance(t *testing.T) {
 	fullPath := fmt.Sprintf("%s/%s/%s", aisDir, bucket, ecTestDir)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	newLocalBckWithProps(t, bucket, defaultECBckProps(o), baseParams, o)
+	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := sync.WaitGroup{}
@@ -2277,16 +2295,19 @@ func TestECBucketEncode(t *testing.T) {
 		t.Fatalf("List bucket %s invalid number of files %d, expected %d", bucket, len(reslist.Entries), m.num)
 	}
 
-	var bucketProps cmn.BucketProps
 	tutils.Logf("Enabling EC\n")
-	bucketProps.Cksum.Type = "inherit"
-	bucketProps.EC = cmn.ECConf{
-		Enabled:      true,
-		ObjSizeLimit: ecObjLimit,
-		DataSlices:   1,
-		ParitySlices: parityCnt,
+	bckPropsToUpate := cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			Type: api.String(cmn.PropInherit),
+		},
+		EC: &cmn.ECConfToUpdate{
+			Enabled:      api.Bool(true),
+			ObjSizeLimit: api.Int64(ecObjLimit),
+			DataSlices:   api.Int(1),
+			ParitySlices: api.Int(parityCnt),
+		},
 	}
-	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
+	err = api.SetBucketProps(baseParams, bucket, bckPropsToUpate)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Starting making EC\n")

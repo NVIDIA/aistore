@@ -323,7 +323,7 @@ func setBucketProps(c *cli.Context) (err error) {
 	if len(propsArgs) == 0 {
 		return missingArgumentsError(c, "property key-value pairs")
 	}
-	if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	if bucket, provider, err = validateBucket(c, bucket, "", false /*optional*/); err != nil {
 		return
 	}
 
@@ -337,7 +337,12 @@ func setBucketProps(c *cli.Context) (err error) {
 	if err = reformatBucketProps(bucket, query, nvs); err != nil {
 		return
 	}
-	if err = api.SetBucketProps(defaultAPIParams, bucket, nvs, query); err != nil {
+
+	props, err := cmn.NewBucketPropsToUpdate(nvs)
+	if err != nil {
+		return
+	}
+	if err = api.SetBucketProps(defaultAPIParams, bucket, props, query); err != nil {
 		return
 	}
 	fmt.Fprintln(c.App.Writer, "Bucket props have been successfully updated.")
@@ -347,18 +352,18 @@ func setBucketProps(c *cli.Context) (err error) {
 func setBucketPropsJSON(c *cli.Context) (err error) {
 	var (
 		provider   string
-		props      cmn.BucketProps
+		props      cmn.BucketPropsToUpdate
 		bucket     = c.Args().First()
 		inputProps = parseStrFlag(c, jsonspecFlag)
 	)
-	if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	if bucket, provider, err = validateBucket(c, bucket, "", false /*optional*/); err != nil {
 		return
 	}
 	if err := json.Unmarshal([]byte(inputProps), &props); err != nil {
 		return err
 	}
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
-	if err := api.SetBucketPropsMsg(defaultAPIParams, bucket, props, query); err != nil {
+	if err := api.SetBucketProps(defaultAPIParams, bucket, props, query); err != nil {
 		return err
 	}
 
@@ -410,7 +415,7 @@ func listBucketProps(c *cli.Context) (err error) {
 	return printBckHeadTable(c, bckProps)
 }
 
-func printBckHeadTable(c *cli.Context, props *cmn.BucketProps) error {
+func printBckHeadTable(c *cli.Context, props cmn.BucketProps) error {
 	// List instead of map to keep properties in the same order always.
 	// All names are one word ones - for easier parsing
 	propList := []struct {

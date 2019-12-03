@@ -866,6 +866,17 @@ func (h *httprunner) parseValidateNCopies(value interface{}) (copies int, err er
 	return
 }
 
+func (h *httprunner) checkAction(msg cmn.ActionMsg, expectedActions ...string) (err error) {
+	found := false
+	for _, action := range expectedActions {
+		found = found || msg.Action == action
+	}
+	if !found {
+		err = fmt.Errorf("invalid action %q, expected one of: %v", msg.Action, expectedActions)
+	}
+	return
+}
+
 //////////////////////////////
 // Common HTTP req handlers //
 //////////////////////////////

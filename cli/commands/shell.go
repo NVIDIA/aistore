@@ -210,8 +210,8 @@ func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, se
 }
 
 func propCompletions(c *cli.Context) {
-	for prop, readonly := range cmn.BucketPropList {
-		if !readonly && !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
+	for _, prop := range cmn.BucketPropList {
+		if !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
 		}
 	}

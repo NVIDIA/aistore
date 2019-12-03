@@ -588,9 +588,9 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bucket)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
-	bucketProps := defaultBucketProps()
-	bucketProps.Cksum.ValidateWarmGet = true
-	err := api.SetBucketPropsMsg(baseParams, TestBucketName, bucketProps)
+	err := api.SetBucketProps(baseParams, TestBucketName, cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
+	})
 	tassert.CheckFatal(t, err)
 
 	id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bucket, objnameFirst, linkFirst)
@@ -631,9 +631,9 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bucket)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
-	bucketProps := defaultBucketProps()
-	bucketProps.Cksum.ValidateWarmGet = true
-	err := api.SetBucketPropsMsg(baseParams, TestBucketName, bucketProps)
+	err := api.SetBucketProps(baseParams, TestBucketName, cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
+	})
 	tassert.CheckFatal(t, err)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bucket, m)
@@ -665,9 +665,9 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bucket)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
-	bucketProps := defaultBucketProps()
-	bucketProps.Cksum.ValidateWarmGet = true
-	err := api.SetBucketPropsMsg(baseParams, TestBucketName, bucketProps)
+	err := api.SetBucketProps(baseParams, TestBucketName, cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
+	})
 	tassert.CheckFatal(t, err)
 
 	id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bucket, template)

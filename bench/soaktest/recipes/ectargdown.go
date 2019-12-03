@@ -7,6 +7,7 @@ package recipes
 import (
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -23,7 +24,14 @@ func recECTargetDown(rctx *soakprim.RecipeContext) {
 
 	conds.ExpBuckets = []string{"ec1", "b2"}
 	rctx.Pre(conds)
-	rctx.SetBucketProps("ec1", cmn.BucketProps{EC: cmn.ECConf{Enabled: true, ObjSizeLimit: 1, DataSlices: 2, ParitySlices: 1}})
+	rctx.SetBucketProps("ec1", cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{
+			Enabled:      api.Bool(true),
+			ObjSizeLimit: api.Int64(1),
+			DataSlices:   api.Int(2),
+			ParitySlices: api.Int(1),
+		},
+	})
 	rctx.Post(nil)
 
 	rctx.Pre(conds)

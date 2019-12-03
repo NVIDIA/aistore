@@ -19,6 +19,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -578,21 +579,21 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	}
 }
 
-func Test_sameAISandCloudBucketName(t *testing.T) {
+func Test_SameAISAndCloudBucketName(t *testing.T) {
 	var (
-		bucketName    = clibucket
-		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
-		fileName      = "mytestobj1.txt"
-		baseParams    = tutils.DefaultBaseAPIParams(t)
-		queryLocal    = url.Values{}
-		queryCloud    = url.Values{}
-		dataLocal     = []byte("im local")
-		dataCloud     = []byte("I'm from the cloud!")
-		defLocalProps cmn.BucketProps
-		defCloudProps cmn.BucketProps
-		globalConfig  = getClusterConfig(t, proxyURL)
-		msg           = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
-		found         = false
+		defLocalProps cmn.BucketPropsToUpdate
+		defCloudProps cmn.BucketPropsToUpdate
+
+		bucketName = clibucket
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		fileName   = "mytestobj1.txt"
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		queryLocal = url.Values{}
+		queryCloud = url.Values{}
+		dataLocal  = []byte("im local")
+		dataCloud  = []byte("I'm from the cloud!")
+		msg        = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
+		found      = false
 	)
 
 	if !isCloudBucket(t, proxyURL, bucketName) {
@@ -605,20 +606,12 @@ func Test_sameAISandCloudBucketName(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bucketName)
 	defer tutils.DestroyBucket(t, proxyURL, bucketName)
 
-	// Common
-	defCloudProps.Cksum = globalConfig.Cksum
-	defCloudProps.LRU = testBucketProps(t).LRU
-	defLocalProps.Cksum = globalConfig.Cksum
-	defLocalProps.LRU = testBucketProps(t).LRU
-	defLocalProps.CloudProvider = cmn.ProviderAIS
-
-	// ais bucket props
-	bucketPropsLocal := defaultBucketProps()
-	bucketPropsLocal.Cksum.Type = cmn.ChecksumNone
-
-	// Cloud bucket props
-	bucketPropsCloud := defaultBucketProps()
-	bucketPropsCloud.CloudProvider = cmn.ProviderAmazon
+	bucketPropsLocal := cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			Type: api.String(cmn.ChecksumNone),
+		},
+	}
+	bucketPropsCloud := cmn.BucketPropsToUpdate{}
 
 	// Put
 	tutils.Logf("Putting object (%s) into ais bucket %s...\n", fileName, bucketName)
@@ -694,46 +687,45 @@ func Test_sameAISandCloudBucketName(t *testing.T) {
 	}
 
 	// Set Props Object
-	err = api.SetBucketPropsMsg(baseParams, bucketName, bucketPropsLocal, queryLocal)
+	err = api.SetBucketProps(baseParams, bucketName, bucketPropsLocal, queryLocal)
 	tassert.CheckFatal(t, err)
 
-	err = api.SetBucketPropsMsg(baseParams, bucketName, bucketPropsCloud, queryCloud)
+	err = api.SetBucketProps(baseParams, bucketName, bucketPropsCloud, queryCloud)
 	tassert.CheckFatal(t, err)
 
 	// Validate ais bucket props are set
 	localProps, err := api.HeadBucket(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, bucketPropsLocal, *localProps)
+	validateBucketProps(t, bucketPropsLocal, localProps)
 
 	// Validate cloud bucket props are set
 	cloudProps, err := api.HeadBucket(baseParams, bucketName, queryCloud)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, bucketPropsCloud, *cloudProps)
+	validateBucketProps(t, bucketPropsCloud, cloudProps)
 
 	// Reset ais bucket props and validate they are reset
 	err = api.ResetBucketProps(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
 	localProps, err = api.HeadBucket(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, defLocalProps, *localProps)
+	validateBucketProps(t, defLocalProps, localProps)
 
 	// Check if cloud bucket props remain the same
 	cloudProps, err = api.HeadBucket(baseParams, bucketName, queryCloud)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, bucketPropsCloud, *cloudProps)
+	validateBucketProps(t, bucketPropsCloud, cloudProps)
 
 	// Reset cloud bucket props
-	defCloudProps.CloudProvider = cmn.ProviderAmazon
 	err = api.ResetBucketProps(baseParams, bucketName, queryCloud)
 	tassert.CheckFatal(t, err)
 	cloudProps, err = api.HeadBucket(baseParams, bucketName, queryCloud)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, defCloudProps, *cloudProps)
+	validateBucketProps(t, defCloudProps, cloudProps)
 
 	// Check if ais bucket props remain the same
 	localProps, err = api.HeadBucket(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, defLocalProps, *localProps)
+	validateBucketProps(t, defLocalProps, localProps)
 }
 
 func Test_coldgetmd5(t *testing.T) {
@@ -814,17 +806,21 @@ func TestHeadBucket(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
 	defer tutils.DestroyBucket(t, proxyURL, TestBucketName)
 
-	bucketProps := defaultBucketProps()
-	bucketProps.Cksum.ValidateWarmGet = true
-	bucketProps.LRU.Enabled = true
-
-	err := api.SetBucketPropsMsg(baseParams, TestBucketName, bucketProps)
+	bckPropsToUpdate := cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			ValidateWarmGet: api.Bool(true),
+		},
+		LRU: &cmn.LRUConfToUpdate{
+			Enabled: api.Bool(true),
+		},
+	}
+	err := api.SetBucketProps(baseParams, TestBucketName, bckPropsToUpdate)
 	tassert.CheckFatal(t, err)
 
 	p, err := api.HeadBucket(baseParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
-	validateBucketProps(t, bucketProps, *p)
+	validateBucketProps(t, bckPropsToUpdate, p)
 }
 
 func TestHeadCloudBucket(t *testing.T) {
@@ -836,19 +832,23 @@ func TestHeadCloudBucket(t *testing.T) {
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip(fmt.Sprintf("%s requires a cloud bucket", t.Name()))
 	}
-	bucketProps := defaultBucketProps()
-	bucketProps.CloudProvider = cmn.ProviderAmazon
-	bucketProps.Cksum.ValidateWarmGet = true
-	bucketProps.Cksum.ValidateColdGet = true
-	bucketProps.LRU.Enabled = true
 
-	err := api.SetBucketPropsMsg(baseParams, clibucket, bucketProps)
+	bckPropsToUpdate := cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			ValidateWarmGet: api.Bool(true),
+			ValidateColdGet: api.Bool(true),
+		},
+		LRU: &cmn.LRUConfToUpdate{
+			Enabled: api.Bool(true),
+		},
+	}
+	err := api.SetBucketProps(baseParams, clibucket, bckPropsToUpdate)
 	tassert.CheckFatal(t, err)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	p, err := api.HeadBucket(baseParams, clibucket)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, bucketProps, *p)
+	validateBucketProps(t, bckPropsToUpdate, p)
 }
 
 func TestHeadNonexistentBucket(t *testing.T) {
@@ -1271,15 +1271,16 @@ cleanup:
 
 func Test_evictCloudBucket(t *testing.T) {
 	var (
+		err error
+
 		numPuts    = 5
 		filesPutCh = make(chan string, numPuts)
 		filesList  = make([]string, 0, 100)
 		errCh      = make(chan error, 100)
-		err        error
 		wg         = &sync.WaitGroup{}
 		bucket     = clibucket
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
-		bProps     *cmn.BucketProps
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -1322,14 +1323,16 @@ func Test_evictCloudBucket(t *testing.T) {
 
 	// Test property, mirror is disabled for cloud bucket that hasn't been accessed,
 	// even if system config says otherwise
-	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
+	err = api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
+	})
 	tassert.CheckFatal(t, err)
-	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+	bProps, err := api.HeadBucket(baseParams, bucket)
 	tassert.CheckFatal(t, err)
 	if !bProps.Mirror.Enabled {
 		t.Fatalf("Test property hasn't changed")
 	}
-	err = api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket)
+	err = api.EvictCloudBucket(baseParams, bucket)
 	tassert.CheckFatal(t, err)
 
 	for _, fname := range filesList {
@@ -1337,7 +1340,7 @@ func Test_evictCloudBucket(t *testing.T) {
 			t.Errorf("%s remains cached", fname)
 		}
 	}
-	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+	bProps, err = api.HeadBucket(baseParams, bucket)
 	tassert.CheckFatal(t, err)
 	if bProps.Mirror.Enabled {
 		t.Fatalf("Test property not reset ")
@@ -1816,64 +1819,13 @@ func getPrimaryURL(t *testing.T, proxyURL string) string {
 	return primary.URL(cmn.NetworkPublic)
 }
 
-func validateBucketProps(t *testing.T, expected, actual cmn.BucketProps) {
-	if actual.CloudProvider != expected.CloudProvider {
-		t.Errorf("Expected cloud provider: %s, received cloud provider: %s",
-			expected.CloudProvider, actual.CloudProvider)
-	}
-	if actual.Cksum.Type != expected.Cksum.Type {
-		t.Errorf("Expected checksum type: %s, received checksum type: %s",
-			expected.Cksum.Type, actual.Cksum.Type)
-	}
-	if actual.Cksum.ValidateColdGet != expected.Cksum.ValidateColdGet {
-		t.Errorf("Expected cold GET validation setting: %t, received: %t",
-			expected.Cksum.ValidateColdGet, actual.Cksum.ValidateColdGet)
-	}
-	if actual.Cksum.ValidateWarmGet != expected.Cksum.ValidateWarmGet {
-		t.Errorf("Expected warm GET validation setting: %t, received: %t",
-			expected.Cksum.ValidateWarmGet, actual.Cksum.ValidateWarmGet)
-	}
-	if actual.Cksum.EnableReadRange != expected.Cksum.EnableReadRange {
-		t.Errorf("Expected byte range validation setting: %t, received: %t",
-			expected.Cksum.EnableReadRange, actual.Cksum.EnableReadRange)
-	}
-	if actual.LRU.LowWM != expected.LRU.LowWM {
-		t.Errorf("Expected LowWM setting: %d, received %d", expected.LRU.LowWM, actual.LRU.LowWM)
-	}
-	if actual.LRU.HighWM != expected.LRU.HighWM {
-		t.Errorf("Expected HighWM setting: %d, received %d", expected.LRU.HighWM, actual.LRU.HighWM)
-	}
-	if actual.LRU.DontEvictTimeStr != expected.LRU.DontEvictTimeStr {
-		t.Errorf("Expected DontEvictTimeStr setting: %s, received %s",
-			expected.LRU.DontEvictTimeStr, actual.LRU.DontEvictTimeStr)
-	}
-	if actual.LRU.CapacityUpdTimeStr != expected.LRU.CapacityUpdTimeStr {
-		t.Errorf("Expected CapacityUpdTimeStr setting: %s, received %s",
-			expected.LRU.CapacityUpdTimeStr, actual.LRU.CapacityUpdTimeStr)
-	}
-	if actual.LRU.Enabled != expected.LRU.Enabled {
-		t.Errorf("Expected LRU enabled setting: %t, received: %t",
-			expected.LRU.Enabled, actual.LRU.Enabled)
-	}
-}
-
-func defaultBucketProps() cmn.BucketProps {
-	return cmn.BucketProps{
-		CloudProvider: cmn.ProviderAIS,
-		Cksum: cmn.CksumConf{
-			Type:            cmn.ChecksumXXHash,
-			ValidateColdGet: false,
-			ValidateWarmGet: false,
-			EnableReadRange: false,
-		},
-		LRU: cmn.LRUConf{
-			LowWM:              int64(10),
-			HighWM:             int64(50),
-			OOS:                int64(90),
-			DontEvictTimeStr:   "1m",
-			CapacityUpdTimeStr: "2m",
-			Enabled:            false,
-		},
+func validateBucketProps(t *testing.T, expected cmn.BucketPropsToUpdate, actual cmn.BucketProps) {
+	// Apply changes on props that we have received. If after applying anything
+	// has changed it means that the props were not applied.
+	tmpProps := *actual.Clone()
+	tmpProps.Apply(expected)
+	if !reflect.DeepEqual(tmpProps, actual) {
+		t.Errorf("bucket props are not equal, expected: %+v, got: %+v", tmpProps, actual)
 	}
 }
 

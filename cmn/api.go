@@ -1,12 +1,15 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package provides common low-level types and utilities for all aistore projects
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,31 +62,24 @@ var XactKind = XactKindType{
 }
 
 // BucketPropList is a map bucket property <-> readonly, groupped by type
-var BucketPropList = map[string]bool{
-	HeaderCloudProvider:         true,
-	HeaderBucketChecksumType:    true,
-	HeaderBucketDontEvictTime:   true,
-	HeaderBucketCapUpdTime:      true,
-	HeaderNextTierURL:           false,
-	HeaderReadPolicy:            false,
-	HeaderWritePolicy:           false,
-	HeaderBucketValidateColdGet: false,
-	HeaderBucketValidateWarmGet: false,
-	HeaderBucketEnableReadRange: false,
-	HeaderBucketValidateObjMove: false,
-	HeaderBucketVerEnabled:      false,
-	HeaderBucketVerValidateWarm: false,
-	HeaderBucketLRUEnabled:      false,
-	HeaderBucketLRULowWM:        false,
-	HeaderBucketLRUHighWM:       false,
-	HeaderBucketMirrorEnabled:   false,
-	HeaderBucketMirrorThresh:    false,
-	HeaderBucketCopies:          false,
-	HeaderBucketECEnabled:       false,
-	HeaderBucketECData:          false,
-	HeaderBucketECParity:        false,
-	HeaderBucketECObjSizeLimit:  false,
-	HeaderBucketAccessAttrs:     false,
+var BucketPropList = []string{
+	HeaderBucketValidateColdGet,
+	HeaderBucketValidateWarmGet,
+	HeaderBucketEnableReadRange,
+	HeaderBucketValidateObjMove,
+	HeaderBucketVerEnabled,
+	HeaderBucketVerValidateWarm,
+	HeaderBucketLRUEnabled,
+	HeaderBucketLRULowWM,
+	HeaderBucketLRUHighWM,
+	HeaderBucketMirrorEnabled,
+	HeaderBucketMirrorThresh,
+	HeaderBucketCopies,
+	HeaderBucketECEnabled,
+	HeaderBucketECData,
+	HeaderBucketECParity,
+	HeaderBucketECObjSizeLimit,
+	HeaderBucketAccessAttrs,
 }
 
 // SelectMsg represents properties and options for requests which fetch entities
@@ -250,13 +246,13 @@ type BucketProps struct {
 	// CloudProvider can be "aws", "gcp" (clouds) - or "ais".
 	// If a bucket is local, CloudProvider must be "ais".
 	// Otherwise, it must be "aws" or "gcp".
-	CloudProvider string `json:"cloud_provider,omitempty"`
+	CloudProvider string `json:"cloud_provider"`
 
 	// Versioning can be enabled or disabled on a per-bucket basis
-	Versioning VersionConf `json:"versioning,omitempty"`
+	Versioning VersionConf `json:"versioning"`
 
 	// Tier location and tier/cloud policies
-	Tiering TierConf `json:"tier,omitempty"`
+	Tiering TierConf `json:"tier"`
 
 	// Cksum is the embedded struct of the same name
 	Cksum CksumConf `json:"cksum"`
@@ -281,21 +277,30 @@ type BucketProps struct {
 
 	// Determines if the bucket has been binded to some action and currently
 	// cannot be updated or changed in anyway until the action finishes.
-	InProgress bool `json:"in_progress"`
+	InProgress bool `json:"in_progress,omitempty"`
+}
+
+type BucketPropsToUpdate struct {
+	Versioning  *VersionConfToUpdate `json:"versioning"`
+	Cksum       *CksumConfToUpdate   `json:"cksum"`
+	LRU         *LRUConfToUpdate     `json:"lru"`
+	Mirror      *MirrorConfToUpdate  `json:"mirror"`
+	EC          *ECConfToUpdate      `json:"ec"`
+	AccessAttrs *uint64              `json:"attrs,string"`
 }
 
 type TierConf struct {
 	// NextTierURL is an absolute URI corresponding to the primary proxy
 	// of the next tier configured for the bucket specified
-	NextTierURL string `json:"next_url,omitempty"`
+	NextTierURL string `json:"next_url"`
 
 	// ReadPolicy determines if a read will be from cloud or next tier
 	// specified by NextTierURL. Default: "next_tier"
-	ReadPolicy string `json:"read_policy,omitempty"`
+	ReadPolicy string `json:"read_policy"`
 
 	// WritePolicy determines if a write will be to cloud or next tier
 	// specified by NextTierURL. Default: "cloud"
-	WritePolicy string `json:"write_policy,omitempty"`
+	WritePolicy string `json:"write_policy"`
 }
 
 // ECConfig - per-bucket erasure coding configuration
@@ -305,6 +310,14 @@ type ECConf struct {
 	ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
 	Compression  string `json:"compression"`   // see CompressAlways, etc. enum
 	Enabled      bool   `json:"enabled"`       // EC is enabled
+}
+
+type ECConfToUpdate struct {
+	Enabled      *bool   `json:"enabled"`
+	ObjSizeLimit *int64  `json:"objsize_limit"`
+	DataSlices   *int    `json:"data_slices"`
+	ParitySlices *int    `json:"parity_slices"`
+	Compression  *string `json:"compression"`
 }
 
 func (c *VersionConf) String() string {
@@ -407,12 +420,6 @@ func (c *ECConf) String() string {
 	}
 	objSizeLimit := c.ObjSizeLimit
 	return fmt.Sprintf("%d:%d (%s)", c.DataSlices, c.ParitySlices, B2S(objSizeLimit, 0))
-}
-
-func (c *ECConf) Updatable(field string) bool {
-	return (c.Enabled && !(field == HeaderBucketECData ||
-		field == HeaderBucketECParity ||
-		field == HeaderBucketECObjSizeLimit)) || !c.Enabled
 }
 
 func (c *ECConf) RequiredEncodeTargets() int {
@@ -528,8 +535,39 @@ func (bp *BucketProps) Validate(bckIsAIS bool, targetCnt int, urlOutsideCluster 
 	if bp.Mirror.Enabled && bp.EC.Enabled {
 		return fmt.Errorf("cannot enable mirroring and ec at the same time for the same bucket")
 	}
-
 	return nil
+}
+
+func copyProps(src, dst interface{}) {
+	var (
+		srcTy  = reflect.TypeOf(src)
+		srcVal = reflect.ValueOf(src)
+		dstVal = reflect.ValueOf(dst)
+	)
+
+	for i := 0; i < srcVal.NumField(); i++ {
+		var (
+			srcTyField  = srcTy.Field(i)
+			srcValField = srcVal.Field(i)
+			dstValField = dstVal.Elem().FieldByName(srcTyField.Name)
+		)
+
+		if srcValField.IsNil() {
+			continue
+		}
+
+		if dstValField.Kind() != reflect.Struct {
+			// Set value for the field
+			dstValField.Set(srcValField.Elem())
+		} else {
+			// Recurse into struct
+			copyProps(srcValField.Elem().Interface(), dstValField.Addr().Interface())
+		}
+	}
+}
+
+func (bp *BucketProps) Apply(propsToUpdate BucketPropsToUpdate) {
+	copyProps(propsToUpdate, bp)
 }
 
 func ReadXactionRequestMessage(actionMsg *ActionMsg) (*XactionExtMsg, error) {
@@ -553,4 +591,83 @@ func (k XactKindType) IsGlobalKind(kind string) (bool, error) {
 	}
 
 	return kindMeta.IsGlobal, nil
+}
+
+func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error) {
+	props = BucketPropsToUpdate{
+		Versioning: &VersionConfToUpdate{},
+		Cksum:      &CksumConfToUpdate{},
+		LRU:        &LRUConfToUpdate{},
+		Mirror:     &MirrorConfToUpdate{},
+		EC:         &ECConfToUpdate{},
+	}
+
+	updateValue := func(key, value string, to interface{}) error {
+		// `to` parameter needs to pointer so we can set it
+		Assert(reflect.ValueOf(to).Kind() == reflect.Ptr)
+
+		tmpValue := value
+		switch to.(type) {
+		case *string:
+			// Strings must be quoted so that Unmarshal treat it well
+			tmpValue = strconv.Quote(tmpValue)
+		default:
+			break
+		}
+
+		// Unmarshal not only tries to parse `tmpValue` but since `to` is pointer,
+		// it will set value of it.
+		if err := json.Unmarshal([]byte(tmpValue), to); err != nil {
+			return fmt.Errorf("failed to parse %q, %s err: %v", key, value, err)
+		}
+
+		return nil
+	}
+
+	for key, val := range nvs {
+		name, value := strings.ToLower(key), val
+		if !StringInSlice(name, BucketPropList) {
+			return props, fmt.Errorf("unknown property '%s'", name)
+		}
+
+		switch name {
+		case HeaderBucketECEnabled:
+			err = updateValue(name, value, &props.EC.Enabled)
+		case HeaderBucketECData:
+			err = updateValue(name, value, &props.EC.DataSlices)
+		case HeaderBucketECParity:
+			err = updateValue(name, value, &props.EC.ParitySlices)
+		case HeaderBucketECObjSizeLimit:
+			err = updateValue(name, value, &props.EC.ObjSizeLimit)
+		case HeaderBucketMirrorEnabled:
+			err = updateValue(name, value, &props.Mirror.Enabled)
+		case HeaderBucketCopies:
+			err = updateValue(name, value, &props.Mirror.Copies)
+		case HeaderBucketMirrorThresh:
+			err = updateValue(name, value, &props.Mirror.UtilThresh)
+		case HeaderBucketVerEnabled:
+			err = updateValue(name, value, &props.Versioning.Enabled)
+		case HeaderBucketVerValidateWarm:
+			err = updateValue(name, value, &props.Versioning.ValidateWarmGet)
+		case HeaderBucketLRUEnabled:
+			err = updateValue(name, value, &props.LRU.Enabled)
+		case HeaderBucketLRULowWM:
+			err = updateValue(name, value, &props.LRU.LowWM)
+		case HeaderBucketLRUHighWM:
+			err = updateValue(name, value, &props.LRU.HighWM)
+		case HeaderBucketValidateColdGet:
+			err = updateValue(name, value, &props.Cksum.ValidateColdGet)
+		case HeaderBucketValidateWarmGet:
+			err = updateValue(name, value, &props.Cksum.ValidateWarmGet)
+		case HeaderBucketValidateObjMove:
+			err = updateValue(name, value, &props.Cksum.ValidateObjMove)
+		case HeaderBucketEnableReadRange: // true: Return range checksum, false: return the obj's
+			err = updateValue(name, value, &props.Cksum.EnableReadRange)
+		case HeaderBucketAccessAttrs:
+			err = updateValue(name, value, &props.AccessAttrs)
+		default:
+			AssertMsg(false, fmt.Sprintf("unknown property %q with value: %v", name, value))
+		}
+	}
+	return
 }

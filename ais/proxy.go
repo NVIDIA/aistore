@@ -6,7 +6,6 @@ package ais
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
@@ -278,6 +278,8 @@ func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpbckhead(w, r)
 	case http.MethodPut:
 		p.httpbckput(w, r)
+	case http.MethodPatch:
+		p.httpbckpatch(w, r)
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /buckets path")
 	}
@@ -1164,7 +1166,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
-func (p *proxyrunner) applyNewProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (nprops *cmn.BucketProps, err error) {
+func (p *proxyrunner) applyNewProps(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate) (nprops *cmn.BucketProps, err error) {
 	var (
 		cfg        = cmn.GCO.Get()
 		cloudProps http.Header
@@ -1174,129 +1176,39 @@ func (p *proxyrunner) applyNewProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (nprops
 	if !exists {
 		cmn.Assert(!bck.IsAIS())
 		if cloudProps, err = p.cbExists(bck.Name); err != nil {
-			return nil, err
+			return nprops, err
 		}
 		bprops = cmn.DefaultBucketProps()
 		p.copyBckPropsFromHeader(bprops, cloudProps)
 	}
 
 	nprops = bprops.Clone()
-	updateValue := func(key, value string, to interface{}) error {
-		// `to` parameter needs to pointer so we can set it
-		cmn.Assert(reflect.ValueOf(to).Kind() == reflect.Ptr)
+	nprops.Apply(propsToUpdate)
 
-		tmpValue := value
-		switch to.(type) {
-		case *string:
-			// Strings must be quoted so that Unmarshal treat it well
-			tmpValue = strconv.Quote(tmpValue)
-		default:
-			break
-		}
-
-		// Unmarshal not only tries to parse `tmpValue` but since `to` is pointer,
-		// it will set value of it.
-		if err := json.Unmarshal([]byte(tmpValue), to); err != nil {
-			return fmt.Errorf("failed to parse %q, %s err: %v", key, value, err)
-		}
-
-		return nil
-	}
-
-	// HTTP headers display property names title-cased so that LRULowWM becomes Lrulowwm, etc.
-	// - make sure to lowercase therefore
-	for key, val := range nvs {
-		name, value := strings.ToLower(key), val
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Updating bucket %s property %s => %s", bck, name, value)
-		}
-		// Disable ability to set EC properties once enabled
-		if !bprops.EC.Updatable(name) {
+	if bprops.EC.Enabled && nprops.EC.Enabled {
+		if !reflect.DeepEqual(bprops.EC, nprops.EC) {
 			err = errors.New("cannot change EC configuration after it is enabled")
 			return
 		}
+	} else if nprops.EC.Enabled {
+		if nprops.EC.DataSlices == 0 {
+			nprops.EC.DataSlices = 1
+		}
+		if nprops.EC.ParitySlices == 0 {
+			nprops.EC.ParitySlices = 1
+		}
+	}
 
-		readonly, ok := cmn.BucketPropList[name]
-		if !ok {
-			return nil, fmt.Errorf("unknown property '%s'", name)
+	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
+		if nprops.Mirror.Copies == 1 {
+			nprops.Mirror.Copies = cmn.MaxI64(cfg.Mirror.Copies, 2)
 		}
-		if ok && readonly {
-			return nil, fmt.Errorf("property '%s' is read-only", name)
-		}
-
-		switch name {
-		case cmn.HeaderBucketECEnabled:
-			if err = updateValue(name, value, &nprops.EC.Enabled); err == nil {
-				if !nprops.EC.Enabled {
-					break
-				}
-				if nprops.EC.DataSlices == 0 {
-					nprops.EC.DataSlices = 1
-				}
-				if nprops.EC.ParitySlices == 0 {
-					nprops.EC.ParitySlices = 1
-				}
-			}
-		case cmn.HeaderBucketECData:
-			err = updateValue(name, value, &nprops.EC.DataSlices)
-		case cmn.HeaderBucketECParity:
-			err = updateValue(name, value, &nprops.EC.ParitySlices)
-		case cmn.HeaderBucketECObjSizeLimit:
-			err = updateValue(name, value, &nprops.EC.ObjSizeLimit)
-		case cmn.HeaderBucketMirrorEnabled:
-			if err = updateValue(name, value, &nprops.Mirror.Enabled); err == nil {
-				if nprops.Mirror.Enabled && nprops.Mirror.Copies == 1 {
-					nprops.Mirror.Copies = cmn.MaxI64(cfg.Mirror.Copies, 2)
-				}
-			}
-		case cmn.HeaderBucketCopies:
-			if err = updateValue(name, value, &nprops.Mirror.Copies); err == nil {
-				if nprops.Mirror.Copies == 1 {
-					nprops.Mirror.Enabled = false
-				}
-			}
-		case cmn.HeaderBucketMirrorThresh:
-			err = updateValue(name, value, &nprops.Mirror.UtilThresh)
-		case cmn.HeaderBucketVerEnabled:
-			err = updateValue(name, value, &nprops.Versioning.Enabled)
-		case cmn.HeaderBucketVerValidateWarm:
-			err = updateValue(name, value, &nprops.Versioning.ValidateWarmGet)
-		case cmn.HeaderBucketLRUEnabled:
-			err = updateValue(name, value, &nprops.LRU.Enabled)
-		case cmn.HeaderBucketLRULowWM:
-			err = updateValue(name, value, &nprops.LRU.LowWM)
-		case cmn.HeaderBucketLRUHighWM:
-			err = updateValue(name, value, &nprops.LRU.HighWM)
-		case cmn.HeaderBucketValidateColdGet:
-			err = updateValue(name, value, &nprops.Cksum.ValidateColdGet)
-		case cmn.HeaderBucketValidateWarmGet:
-			err = updateValue(name, value, &nprops.Cksum.ValidateWarmGet)
-		case cmn.HeaderBucketValidateObjMove:
-			err = updateValue(name, value, &nprops.Cksum.ValidateObjMove)
-		case cmn.HeaderBucketEnableReadRange: // true: Return range checksum, false: return the obj's
-			err = updateValue(name, value, &nprops.Cksum.EnableReadRange)
-		case cmn.HeaderBucketAccessAttrs:
-			err = updateValue(name, value, &nprops.AccessAttrs)
-		default:
-			cmn.AssertMsg(false, fmt.Sprintf("unknown property %q with value: %v", name, value))
-		}
-
-		if err != nil {
-			return
-		}
+	} else if nprops.Mirror.Copies == 1 {
+		nprops.Mirror.Enabled = false
 	}
 
 	if nprops.Cksum.Type == cmn.PropInherit {
 		nprops.Cksum.Type = cfg.Cksum.Type
-	}
-
-	// forbid changing EC properties if EC is already enabled (for now)
-	if bprops.EC.Enabled && nprops.EC.Enabled &&
-		(bprops.EC.ParitySlices != nprops.EC.ParitySlices ||
-			bprops.EC.DataSlices != nprops.EC.DataSlices ||
-			bprops.EC.ObjSizeLimit != nprops.EC.ObjSizeLimit) {
-		err = errors.New("cannot change EC configuration after it is enabled")
-		return
 	}
 
 	targetCnt := p.smapowner.Get().CountTargets()
@@ -1304,15 +1216,15 @@ func (p *proxyrunner) applyNewProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (nprops
 	return
 }
 
-func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (nprops *cmn.BucketProps, err error) {
-	nprops, err = p.applyNewProps(bck, nvs)
+func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate) (nprops *cmn.BucketProps, err error) {
+	nprops, err = p.applyNewProps(bck, propsToUpdate)
 	if err != nil {
 		return
 	}
 
 	// 1. Begin update
 	if err := p.beginUpdateBckProps(bck, nprops); err != nil {
-		return nil, err
+		return nprops, err
 	}
 
 	// 2. Commit update
@@ -1327,7 +1239,7 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (np
 		var cloudProps http.Header
 		if cloudProps, err = p.cbExists(bck.Name); err != nil {
 			p.bmdowner.Unlock()
-			return nil, err
+			return nprops, err
 		}
 		bprops := cmn.DefaultBucketProps()
 		p.copyBckPropsFromHeader(bprops, cloudProps)
@@ -1368,7 +1280,6 @@ func (p *proxyrunner) beginUpdateBckProps(bck *cluster.Bck, nprops *cmn.BucketPr
 }
 
 // PUT /v1/buckets/bucket-name
-// PUT /v1/buckets/bucket-name/setprops
 func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -1386,59 +1297,23 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Setting bucket props using URL query strings
-	if len(apitems) > 1 {
-		if apitems[1] != cmn.ActSetProps {
-			s := fmt.Sprintf("Invalid request [%s] - expecting '%s'", apitems[1], cmn.ActSetProps)
-			p.invalmsghdlr(w, r, s)
-			return
-		}
-
-		prevMirrorConf := bck.Props.Mirror
-
-		query := r.URL.Query()
-		query.Del(cmn.URLParamProvider)
-		kvs := cmn.NewSimpleKVsFromQuery(query)
-
-		nprops, err := p.updateBucketProps(bck, kvs)
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
-			return
-		}
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-
-		if requiresRemirroring(prevMirrorConf, nprops.Mirror) {
-			msg := &cmn.ActionMsg{
-				Action: cmn.ActMakeNCopies,
-				Value:  fmt.Sprintf("%d", nprops.Mirror.Copies),
-			}
-			p.makeNCopies(w, r, bck, msg, false /*updateBckProps*/)
-		}
-
-		return
-	}
-
 	// otherwise, handle the general case: unmarshal into cmn.BucketProps and treat accordingly
 	// Note: this use case is for setting all bucket props
-	nprops := cmn.DefaultBucketProps()
-	msg := cmn.ActionMsg{Value: nprops}
+	msg := cmn.ActionMsg{}
 	if err = cmn.ReadJSON(w, r, &msg); err != nil {
 		s := fmt.Sprintf("Failed to unmarshal: %v", err)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-	if msg.Action != cmn.ActSetProps && msg.Action != cmn.ActResetProps {
-		s := fmt.Sprintf("Invalid cmn.ActionMsg [%v] - expecting '%s' or '%s' action",
-			msg, cmn.ActSetProps, cmn.ActResetProps)
-		p.invalmsghdlr(w, r, s)
+
+	if err := p.checkAction(msg, cmn.ActResetProps); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
+
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	bprops, exists := clone.Get(bck)
+	_, exists := clone.Get(bck)
 	if !exists {
 		cmn.Assert(!bck.IsAIS())
 		var (
@@ -1450,43 +1325,70 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		bprops = cmn.DefaultBucketProps()
+		bprops := cmn.DefaultBucketProps()
 		p.copyBckPropsFromHeader(bprops, cloudProps)
 		clone.add(bck, bprops)
 	}
 
-	switch msg.Action {
-	case cmn.ActSetProps:
-		// TODO: This requires proper validation as it is done in `updateBucketProps`.
-		// Need to revisit this code and see if this particular path is really
-		// required (#538)
-		targetCnt := p.smapowner.Get().CountTargets()
-		if err := nprops.Validate(bck.IsAIS(), targetCnt, p.urlOutsideCluster); err != nil {
-			p.bmdowner.Unlock()
-			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// forbid changing EC properties if EC is already enabled (for now)
-		if bprops.EC.Enabled && nprops.EC.Enabled &&
-			(bprops.EC.ParitySlices != nprops.EC.ParitySlices ||
-				bprops.EC.DataSlices != nprops.EC.DataSlices ||
-				bprops.EC.ObjSizeLimit != nprops.EC.ObjSizeLimit) {
-			p.bmdowner.Unlock()
-			p.invalmsghdlr(w, r, "Cannot change EC configuration after it is enabled", http.StatusBadRequest)
-			return
-		}
-
-		bprops.CopyFrom(nprops)
-	case cmn.ActResetProps:
-		bprops = cmn.DefaultBucketProps()
-	}
+	bprops := cmn.DefaultBucketProps()
 	clone.set(bck, bprops)
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
 
 	msgInt := p.newActionMsgInternal(&msg, nil, clone)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
+}
+
+// PATCH /v1/buckets/bucket-name
+func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
+	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
+	if err != nil {
+		return
+	}
+	bucket := apitems[0]
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
+	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
+			return
+		}
+	}
+	if p.forwardCP(w, r, &cmn.ActionMsg{}, "httpbckpatch", nil) {
+		return
+	}
+
+	prevMirrorConf := bck.Props.Mirror
+
+	var propsToUpdate cmn.BucketPropsToUpdate
+	msg := cmn.ActionMsg{Value: &propsToUpdate}
+	if err = cmn.ReadJSON(w, r, &msg); err != nil {
+		s := fmt.Sprintf("Failed to unmarshal: %v", err)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	if err := p.checkAction(msg, cmn.ActSetProps); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	nprops, err := p.updateBucketProps(bck, propsToUpdate)
+	if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	if requiresRemirroring(prevMirrorConf, nprops.Mirror) {
+		msg := &cmn.ActionMsg{
+			Action: cmn.ActMakeNCopies,
+			Value:  fmt.Sprintf("%d", nprops.Mirror.Copies),
+		}
+		p.makeNCopies(w, r, bck, msg, false /*updateBckProps*/)
+	}
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1719,17 +1621,21 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *c
 	}
 
 	if updateBckProps {
-		// Enable/disable accordingly and finalize via updating the bucket's
-		// mirror configuration (compare with httpbckput)
-		nvs := cmn.SimpleKVs{
-			cmn.HeaderBucketCopies:        fmt.Sprintf("%d", copies),
-			cmn.HeaderBucketMirrorEnabled: strconv.FormatBool(copies > 1),
+		if err := bck.Init(p.bmdowner); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
+
 		cmn.Assert(copies >= 1)
-		//
-		// NOTE: cmn.ActMakeNCopies automatically does (copies > 1) ? enable : disable on the bucket's MirrorConf
-		//
-		if _, err := p.updateBucketProps(bck, nvs); err != nil {
+		nprops := cmn.BucketPropsToUpdate{
+			Mirror: &cmn.MirrorConfToUpdate{
+				Enabled: api.Bool(true),
+				Copies:  api.Int64(int64(copies)),
+			},
+		}
+		// NOTE: cmn.ActMakeNCopies automatically does
+		// (copies > 1 ? enable : disable) on the bucket's MirrorConf
+		if _, err := p.updateBucketProps(bck, nprops); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	}

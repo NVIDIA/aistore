@@ -261,7 +261,7 @@ func parseCmdLine() (params, error) {
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port")
 	f.BoolVar(&p.statsdRequired, "check-statsd", false, "true: prior to benchmark make sure that StatsD is reachable")
 	f.IntVar(&p.batchSize, "batchsize", 100, "Batch size to list and delete")
-	f.StringVar(&p.bPropsStr, "bprops", "", "JSON string formatted as per the SetBucketPropsMsg API and containing bucket properties to apply")
+	f.StringVar(&p.bPropsStr, "bprops", "", "JSON string formatted as per the SetBucketProps API and containing bucket properties to apply")
 	f.Int64Var(&p.seed, "seed", 0, "Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds)")
 	f.BoolVar(&p.jsonFormat, "json", false, "true: print the output in JSON")
 	f.StringVar(&p.readOffStr, "readoff", "", "Read range offset (can contain multiplicative suffix K, MB, GiB, etc.)")
@@ -559,6 +559,8 @@ func setupBucket(runParams *params) error {
 	if runParams.bPropsStr == "" {
 		return nil
 	}
+
+	propsToUpdate := cmn.BucketPropsToUpdate{}
 	// update bucket props if bPropsStr is set
 	oldProps, err := api.HeadBucket(baseParams, runParams.bucket)
 	if err != nil {
@@ -566,30 +568,24 @@ func setupBucket(runParams *params) error {
 	}
 	change := false
 	if runParams.bProps.EC.Enabled != oldProps.EC.Enabled {
-		if !runParams.bProps.EC.Enabled {
-			oldProps.EC.Enabled = false
-		} else {
-			oldProps.EC = cmn.ECConf{
-				Enabled:      true,
-				ObjSizeLimit: runParams.bProps.EC.ObjSizeLimit,
-				DataSlices:   runParams.bProps.EC.DataSlices,
-				ParitySlices: runParams.bProps.EC.ParitySlices,
-			}
+		propsToUpdate.EC = &cmn.ECConfToUpdate{
+			Enabled:      api.Bool(runParams.bProps.EC.Enabled),
+			ObjSizeLimit: api.Int64(runParams.bProps.EC.ObjSizeLimit),
+			DataSlices:   api.Int(runParams.bProps.EC.DataSlices),
+			ParitySlices: api.Int(runParams.bProps.EC.ParitySlices),
 		}
 		change = true
 	}
 	if runParams.bProps.Mirror.Enabled != oldProps.Mirror.Enabled {
-		if runParams.bProps.Mirror.Enabled {
-			oldProps.Mirror.Enabled = runParams.bProps.Mirror.Enabled
-			oldProps.Mirror.Copies = runParams.bProps.Mirror.Copies
-			oldProps.Mirror.UtilThresh = runParams.bProps.Mirror.UtilThresh
-		} else {
-			oldProps.Mirror.Enabled = false
+		propsToUpdate.Mirror = &cmn.MirrorConfToUpdate{
+			Enabled:    api.Bool(runParams.bProps.Mirror.Enabled),
+			Copies:     api.Int64(runParams.bProps.Mirror.Copies),
+			UtilThresh: api.Int64(runParams.bProps.Mirror.UtilThresh),
 		}
 		change = true
 	}
 	if change {
-		if err = api.SetBucketPropsMsg(baseParams, runParams.bucket, *oldProps); err != nil {
+		if err = api.SetBucketProps(baseParams, runParams.bucket, propsToUpdate); err != nil {
 			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bucket, err)
 		}
 	}

@@ -341,6 +341,7 @@ const (
 	AccessDELETE
 	AccessRENAME
 	AccessAPPEND
+	AccessPATCH
 
 	AllowAnyAccess = 0
 	AllowAllAccess = ^uint64(0)

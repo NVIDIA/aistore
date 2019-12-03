@@ -432,12 +432,13 @@ func (m *ioContext) setRandBucketProps() {
 	baseParams := tutils.DefaultBaseAPIParams(m.t)
 
 	// Set some weird bucket props to see if they were changed or not.
-	nvs := cmn.SimpleKVs{
-		"lru.lowwm":  fmt.Sprintf("%d", rand.Intn(35)+1),
-		"lru.highwm": fmt.Sprintf("%d", rand.Intn(15)+40),
+	props := cmn.BucketPropsToUpdate{
+		LRU: &cmn.LRUConfToUpdate{
+			LowWM:  api.Int64(int64(rand.Intn(35) + 1)),
+			HighWM: api.Int64(int64(rand.Intn(15) + 40)),
+		},
 	}
-
-	err := api.SetBucketProps(baseParams, m.bucket, nvs)
+	err := api.SetBucketProps(baseParams, m.bucket, props)
 	tassert.CheckFatal(m.t, err)
 }
 
@@ -2087,9 +2088,11 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 	// Step 2: Make the bucket redundant
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{
-		cmn.HeaderBucketMirrorEnabled: "true",
-		cmn.HeaderBucketCopies:        fmt.Sprintf("%d", copies),
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{
+			Enabled: api.Bool(true),
+			Copies:  api.Int64(int64(copies)),
+		},
 	})
 	if err != nil {
 		t.Fatalf("Failed to make the bucket redundant: %v", err)
@@ -2150,9 +2153,11 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 	// Step 2: Make the bucket redundant
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{
-		cmn.HeaderBucketMirrorEnabled: "true",
-		cmn.HeaderBucketCopies:        fmt.Sprintf("%d", mpathCount),
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{
+			Enabled: api.Bool(true),
+			Copies:  api.Int64(int64(mpathCount)),
+		},
 	})
 	if err != nil {
 		t.Fatalf("Failed to make the bucket redundant: %v", err)

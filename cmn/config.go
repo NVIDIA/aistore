@@ -283,6 +283,14 @@ type MirrorConf struct {
 	Enabled     bool  `json:"enabled"`      // will only generate local copies when set to true
 }
 
+type MirrorConfToUpdate struct {
+	Copies      *int64 `json:"copies"`
+	Burst       *int64 `json:"burst_buffer"`
+	UtilThresh  *int64 `json:"util_thresh"`
+	OptimizePUT *bool  `json:"optimize_put"`
+	Enabled     *bool  `json:"enabled"`
+}
+
 type RahConf struct {
 	ObjectMem int64 `json:"object_mem"`
 	TotalMem  int64 `json:"total_mem"`
@@ -365,6 +373,13 @@ type LRUConf struct {
 	Enabled bool `json:"enabled"`
 }
 
+type LRUConfToUpdate struct {
+	LowWM   *int64 `json:"lowwm"`
+	HighWM  *int64 `json:"highwm"`
+	OOS     *int64 `json:"out_of_space"`
+	Enabled *bool  `json:"enabled"`
+}
+
 type DiskConf struct {
 	DiskUtilLowWM   int64         `json:"disk_util_low_wm"`  // Low watermark below which no throttling is required
 	DiskUtilHighWM  int64         `json:"disk_util_high_wm"` // High watermark above which throttling is required for longer duration
@@ -412,12 +427,25 @@ type CksumConf struct {
 	EnableReadRange bool `json:"enable_read_range"`
 }
 
+type CksumConfToUpdate struct {
+	Type            *string `json:"type"`
+	ValidateColdGet *bool   `json:"validate_cold_get"`
+	ValidateWarmGet *bool   `json:"validate_warm_get"`
+	ValidateObjMove *bool   `json:"validate_obj_move"`
+	EnableReadRange *bool   `json:"enable_read_range"`
+}
+
 type VersionConf struct {
 	// Determines if the versioning is enabled.
 	Enabled bool `json:"enabled"`
 
 	// Validate object version upon warm GET.
 	ValidateWarmGet bool `json:"validate_warm_get"`
+}
+
+type VersionConfToUpdate struct {
+	Enabled         *bool `json:"enabled"`
+	ValidateWarmGet *bool `json:"validate_warm_get"`
 }
 
 type TestfspathConf struct {
