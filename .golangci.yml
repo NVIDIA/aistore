@@ -22,6 +22,7 @@ linters:
     - whitespace
     - unparam
     - maligned
+    - gofmt
     # following linters produce a lot false positives, enable only when needed:
     # - gosec
     # - scopelint
@@ -38,7 +39,7 @@ linters-settings:
   gocritic:
     enabled-tags:
       - performance
-      # - style
+#      - style
       - experimental
     disabled-checks:
       - ifElseChain

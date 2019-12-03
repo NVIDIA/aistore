@@ -20,14 +20,14 @@ before_script:
   - mkdir -p /go/src/github.com/NVIDIA /go/src/_/builds
   - cp -r $CI_PROJECT_DIR /go/src/github.com/NVIDIA/aistore
   - ln -s /go/src/github.com/NVIDIA/aistore /go/src/_/builds/NVIDIA
-  - cd /go/src/github.com/NVIDIA/aistore/ais
+  - cd /go/src/github.com/NVIDIA/aistore
 
 build:
   stage: build
   script:
-    - go build -tags="aws" setup/aisnode.go
-    - go build -tags="gcp" setup/aisnode.go
-    - go build -tags="" setup/aisnode.go
+    - go build -tags="aws" ais/setup/aisnode.go
+    - go build -tags="gcp" ais/setup/aisnode.go
+    - go build -tags="" ais/setup/aisnode.go
 
 lint:
   stage: build

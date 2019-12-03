@@ -72,8 +72,7 @@ Assuming that [Go](https://golang.org/dl/) is already installed, the remaining g
 ```shell
 $ cd $GOPATH/src
 $ go get -v github.com/NVIDIA/aistore/ais
-$ cd github.com/NVIDIA/aistore/ais
-$ make mod-build
+$ cd github.com/NVIDIA/aistore
 $ make deploy
 $ go test ./tests -v -run=Mirror
 ```
@@ -82,7 +81,7 @@ The `go get` command installs AIS sources and all the versioned dependencies und
 The `make deploy` command deploys AIStore daemons locally based on a few prompted Q&A. The example shown below deploys 10 targets (each with 2 local simulated filesystems) and 3 gateways, and will not require (or expect) to access Cloud storage (notice the "Cloud Provider" prompt below):
 
 ```shell
-# make deploy
+$ make deploy
 Enter number of storage targets:
 10
 Enter number of proxies (gateways):
@@ -100,7 +99,7 @@ Enter your choice:
 Or, you can run all of the above with a single command:
 
 ```shell
-# make kill; ./setup/deploy.sh <<< $'10\n3\n2\n3'
+$ make kill; ./ais/setup/deploy.sh <<< $'10\n3\n2\n3'
 ```
 
 > `make kill` will terminate local AIStore if it's already running.

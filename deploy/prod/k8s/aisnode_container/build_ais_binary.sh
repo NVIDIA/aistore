@@ -39,7 +39,7 @@ set -e
 AIS_SRC=github.com/NVIDIA/aistore/ais
 
 if [[ -n "$JENKINS_URL" ]]; then
-    PATH=$PATH:/usr/local/go/bin 
+    PATH=$PATH:/usr/local/go/bin
 
     check_go_version
 
@@ -51,11 +51,10 @@ if [[ -n "$JENKINS_URL" ]]; then
     mkdir $GOPATH/{bin,pkg,src}
     export GOBIN=$GOPATH/bin
 
-    echo 'Go get AIStore source from $AIS_SRC'
+    echo "Go get AIStore source from ${AIS_SRC}"
     /usr/local/go/bin/go get -v $AIS_SRC
-    cd $GOPATH/src/$AIS_SRC && make mod-init
 else
-    # Use go in existing PATH, assume AIS source already present, mod-init run
+    # Use go in existing PATH, assume AIS source already present
     check_go_version
     GOPATH=${GOPATH:=$HOME/go}
     GOBIN=${GOBIN:=$GOPATH/bin}

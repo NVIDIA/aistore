@@ -78,8 +78,8 @@ fusermount version: 2.9.7
 In order to install `aisfs` on your system, execute the following commands:
 
 ```shell
-$ cd $GOPATH/src/github.com/NVIDIA/aistore/fuse
-$ ./install.sh
+$ cd $GOPATH/src/github.com/NVIDIA/aistore
+$ make fuse
 ```
 
 Verify that `aisfs` has been successfully installed:
@@ -101,7 +101,7 @@ In order to quickly set up and try `aisfs` on your local machine, first
 deploy an AIStore cluster (for more info see AIStore [README](../README.md)):
 
 ```shell
-$ cd $GOPATH/src/github.com/NVIDIA/aistore/ais
+$ cd $GOPATH/src/github.com/NVIDIA/aistore
 $ make deploy
 ```
 

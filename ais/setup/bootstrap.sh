@@ -1,11 +1,9 @@
 #!/bin/bash
 
-function aistore_dir {
-  realpath ..
-}
+AISTORE_DIR=$(cd "$(dirname "$0")"; realpath ../../)
 
 function list_all_go_dirs {
-  go list -f '{{.Dir}}' "$(aistore_dir)/..."
+  go list -f '{{.Dir}}' "${AISTORE_DIR}/..."
 }
 
 # This script is used by Makefile to run commands.
@@ -13,7 +11,7 @@ function list_all_go_dirs {
 case $1 in
 lint)
   echo "Running lint..." >&2
-  ${GOPATH}/bin/golangci-lint run -v $(list_all_go_dirs)
+  ${GOPATH}/bin/golangci-lint run $(list_all_go_dirs)
   exit $?
   ;;
 
@@ -22,11 +20,11 @@ fmt)
   echo "Running style check..." >&2
   case $2 in
   --fix)
-    gofmt -w $(aistore_dir)
+    gofmt -w ${AISTORE_DIR}
     ;;
   *)
-    out=$(gofmt -l -e $(aistore_dir))
-    if [[ ! -z ${out} ]]; then
+    out=$(gofmt -l -e ${AISTORE_DIR})
+    if [[ -n ${out} ]]; then
       echo ${out} >&2
       exit 1
     fi
@@ -38,10 +36,10 @@ spell)
   echo "Running spell check..." >&2
   case $2 in
   --fix)
-    ${GOPATH}/bin/misspell -w -locale=US $(aistore_dir)
+    ${GOPATH}/bin/misspell -w -locale=US ${AISTORE_DIR}
     ;;
   *)
-    ${GOPATH}/bin/misspell -error -locale=US $(aistore_dir)
+    ${GOPATH}/bin/misspell -error -locale=US ${AISTORE_DIR}
     ;;
   esac
   ;;
@@ -62,7 +60,7 @@ test-env)
       exit 0
     fi
   fi
-  if [[ ! -z ${KUBERNETES_SERVICE_HOST} ]]; then
+  if [[ -n ${KUBERNETES_SERVICE_HOST} ]]; then
     echo "AIStore running on Kubernetes..." >&2
     if [[ "${AISURL}" != "" ]]; then
       ip=${AISURL%:*} # extract IP from format IP:PORT
@@ -90,9 +88,9 @@ test-env)
 
 test-short)
   echo "Running short tests..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 30m -short ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 30m -short "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
-  if [[ ! -z ${errs} ]]; then
+  if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
     echo "test-short: ${err_count} failed" >&2
     exit 1
@@ -102,9 +100,9 @@ test-short)
 
 test-long)
   echo "Running long tests..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 2h ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 2h "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
-  if [[ ! -z ${errs} ]]; then
+  if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
     echo "test-short: ${err_count} failed" >&2
     exit 1
@@ -114,9 +112,9 @@ test-long)
 
 test-run)
   echo "Running test with regex..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 2h  -run="${RE}" ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 2h  -run="${RE}" "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
-  if [[ ! -z ${errs} ]]; then
+  if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
     echo "test-run: ${err_count} failed" >&2
     exit 1
@@ -133,9 +131,9 @@ test-docker)
 
   echo "Running test in Docker..." >&2
   branch=$(git branch | grep \* | cut -d ' ' -f2)
-  errs=$(../deploy/test/docker/test.sh --name=${branch} 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$("${AISTORE_DIR}/deploy/test/docker/test.sh" --name=${branch} 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
-  if [[ ! -z ${errs} ]]; then
+  if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
     echo "test-run: ${err_count} failed" >&2
     exit 1
@@ -149,7 +147,7 @@ dev-init)
     exit
   fi
 
-  if [[ -z $(which git) ]]; then
+  if [[ -z $(command -v git) ]]; then
     echo "'git' command not installed"
     exit 1
   elif [[ -z $(git remote -v | grep origin) ]]; then
