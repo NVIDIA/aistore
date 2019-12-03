@@ -165,7 +165,7 @@ func (reb *rebManager) bcast(md *globalRebArgs, cb rebSyncCallback) (errCnt int)
 // TODO: reuse keepalive
 func (reb *rebManager) pingTarget(tsi *cluster.Snode, md *globalRebArgs) (ok bool) {
 	var (
-		ver   = md.smap.version()
+		ver   = md.smap.Version
 		sleep = md.config.Timeout.CplaneOperation
 		args  = callArgs{
 			si: tsi,
@@ -200,7 +200,7 @@ func (reb *rebManager) pingTarget(tsi *cluster.Snode, md *globalRebArgs) (ok boo
 // wait for target to get ready to receive objects (type rebSyncCallback)
 func (reb *rebManager) rxReady(tsi *cluster.Snode, md *globalRebArgs) (ok bool) {
 	var (
-		ver    = md.smap.version()
+		ver    = md.smap.Version
 		sleep  = md.config.Timeout.CplaneOperation * 2
 		maxwt  = md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
 		curwt  time.Duration
@@ -229,7 +229,7 @@ func (reb *rebManager) rxReady(tsi *cluster.Snode, md *globalRebArgs) (ok bool) 
 // separately check whether it is waiting for my ACKs
 func (reb *rebManager) waitFinExtended(tsi *cluster.Snode, md *globalRebArgs) (ok bool) {
 	var (
-		ver        = md.smap.version()
+		ver        = md.smap.Version
 		sleep      = md.config.Timeout.CplaneOperation
 		maxwt      = md.config.Rebalance.DestRetryTime
 		sleepRetry = keepaliveRetryDuration(md.config)

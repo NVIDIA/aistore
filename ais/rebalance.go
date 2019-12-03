@@ -89,7 +89,7 @@ type (
 	}
 	globalRebJogger struct {
 		rebJoggerBase
-		smap  *smapX
+		smap  *cluster.Smap
 		sema  chan struct{}
 		errCh chan error
 		ver   int64
@@ -105,7 +105,7 @@ type (
 		q  map[string]*cluster.LOM // on the wire, waiting for ACK
 	}
 	globalRebArgs struct {
-		smap    *smapX
+		smap    *cluster.Smap
 		config  *cmn.Config
 		xreb    *xactGlobalReb
 		paths   fs.MPI
@@ -134,12 +134,12 @@ var rebStage = map[uint32]string{
 //
 func (reb *rebManager) lomAcks() *[fs.LomCacheMask + 1]*LomAcks { return &reb.lomacks }
 
-func (reb *rebManager) loghdr(globRebID int64, smap *smapX) string {
+func (reb *rebManager) loghdr(globRebID int64, smap *cluster.Smap) string {
 	var (
 		tname = reb.t.si.Name()
 		stage = rebStage[reb.stage.Load()]
 	)
-	return fmt.Sprintf("%s[g%d,v%d,%s]", tname, globRebID, smap.version(), stage)
+	return fmt.Sprintf("%s[g%d,v%d,%s]", tname, globRebID, smap.Version, stage)
 }
 
 func (reb *rebManager) globalRebPrecheck(md *globalRebArgs, globRebID int64) bool {
@@ -152,8 +152,8 @@ func (reb *rebManager) globalRebPrecheck(md *globalRebArgs, globRebID int64) boo
 	if errCnt := reb.bcast(md, reb.pingTarget); errCnt > 0 {
 		return false
 	}
-	if md.smap.version() == 0 {
-		md.smap = reb.t.smapowner.get()
+	if md.smap.Version == 0 {
+		md.smap = reb.t.smapowner.Get()
 	}
 
 	// 2. serialize (rebalancing operations - one at a time post this point)
@@ -161,8 +161,8 @@ func (reb *rebManager) globalRebPrecheck(md *globalRebArgs, globRebID int64) boo
 	if newerSmap, alreadyRunning := reb.serialize(md.smap, md.config, globRebID); newerSmap || alreadyRunning {
 		return false
 	}
-	if md.smap.version() == 0 {
-		md.smap = reb.t.smapowner.get()
+	if md.smap.Version == 0 {
+		md.smap = reb.t.smapowner.Get()
 	}
 
 	md.paths, _ = fs.Mountpaths.Get()
@@ -172,7 +172,7 @@ func (reb *rebManager) globalRebPrecheck(md *globalRebArgs, globRebID int64) boo
 func (reb *rebManager) globalRebInit(md *globalRebArgs, globRebID int64, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
 	reb.stage.Store(rebStageInit)
-	md.xreb = reb.t.xactions.renewGlobalReb(md.smap.version(), globRebID, len(md.paths)*2)
+	md.xreb = reb.t.xactions.renewGlobalReb(md.smap.Version, globRebID, len(md.paths)*2)
 	cmn.Assert(md.xreb != nil) // must renew given the CAS and checks above
 
 	if len(buckets) > 0 {
@@ -319,7 +319,7 @@ func (reb *rebManager) globalRebRunEC(md *globalRebArgs) error {
 // when no bucket has EC enabled
 func (reb *rebManager) globalRebRun(md *globalRebArgs) error {
 	wg := &sync.WaitGroup{}
-	ver := md.smap.version()
+	ver := md.smap.Version
 	globRebID := reb.globRebID.Load()
 	multiplier := md.config.Rebalance.Multiplier
 	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
@@ -395,7 +395,7 @@ func (reb *rebManager) globalRebWaitAck(md *globalRebArgs) (errCnt int) {
 					cnt += l
 					if !logged {
 						for _, lom := range lomack.q {
-							tsi, err := cluster.HrwTarget(lom.Bck(), lom.Objname, &md.smap.Smap)
+							tsi, err := cluster.HrwTarget(lom.Bck(), lom.Objname, md.smap)
 							if err == nil {
 								glog.Infof("waiting for %s ACK from %s", lom, tsi)
 								logged = true
@@ -492,7 +492,7 @@ func (reb *rebManager) globalRebFini(md *globalRebArgs) {
 }
 
 // main method: 10 stages
-func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...string) {
+func (reb *rebManager) runGlobalReb(smap *cluster.Smap, globRebID int64, buckets ...string) {
 	md := &globalRebArgs{
 		smap:   smap,
 		config: cmn.GCO.Get(),
@@ -540,9 +540,9 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 	reb.nodeStages = make(map[string]uint32) // cleanup after run
 }
 
-func (reb *rebManager) serialize(smap *smapX, config *cmn.Config, globRebID int64) (newerSmap, alreadyRunning bool) {
+func (reb *rebManager) serialize(smap *cluster.Smap, config *cmn.Config, globRebID int64) (newerSmap, alreadyRunning bool) {
 	var (
-		ver    = smap.version()
+		ver    = smap.Version
 		sleep  = config.Timeout.CplaneOperation
 		canRun bool
 	)
@@ -868,10 +868,10 @@ func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objR
 }
 
 func (reb *rebManager) retransmit(xreb *xactGlobalReb, globRebID int64) (cnt int) {
-	smap := (*smapX)(reb.smap.Load())
+	smap := (*cluster.Smap)(reb.smap.Load())
 	aborted := func() (yes bool) {
 		yes = xreb.Aborted()
-		yes = yes || (smap.version() != reb.t.smapowner.get().version())
+		yes = yes || (smap.Version != reb.t.smapowner.get().version())
 		return
 	}
 	if aborted() {
@@ -895,7 +895,7 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, globRebID int64) (cnt int
 				delete(lomack.q, uname)
 				continue
 			}
-			tsi, _ := cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap)
+			tsi, _ := cluster.HrwTarget(lom.Bck(), lom.Objname, smap)
 			if reb.t.lookupRemoteSingle(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi.Name())
@@ -985,7 +985,7 @@ func (rj *globalRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 	// rebalance, maybe
-	tsi, err = cluster.HrwTarget(lom.Bck(), lom.Objname, &rj.smap.Smap)
+	tsi, err = cluster.HrwTarget(lom.Bck(), lom.Objname, rj.smap)
 	if err != nil {
 		return err
 	}

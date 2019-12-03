@@ -470,7 +470,7 @@ func (r *xactFastRen) run(globRebID int64) {
 		r.t.rebManager.runLocalReb(true /*skipGlobMisplaced*/, lbucket)
 		wg.Done()
 	}()
-	r.t.rebManager.runGlobalReb(r.t.smapowner.get(), globRebID, gbucket)
+	r.t.rebManager.runGlobalReb(r.t.smapowner.Get(), globRebID, gbucket)
 	wg.Wait()
 
 	r.t.bmdVersionFixup(r.Bucket(), false) // piggyback bucket renaming (last step) on getting updated BMD
