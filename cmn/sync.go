@@ -12,6 +12,11 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 )
 
+const (
+	// Number of sync maps
+	MultiSyncMapCount = 0x40
+)
+
 type (
 	// TimeoutGroup is similar to sync.WaitGroup with the difference on Wait
 	// where we only allow timing out.
@@ -42,6 +47,10 @@ type (
 		cur  int
 		c    *sync.Cond
 		mu   sync.Mutex
+	}
+
+	MultiSyncMap struct {
+		M [MultiSyncMapCount]sync.Map
 	}
 )
 
@@ -162,4 +171,13 @@ func (s *DynSemaphore) Release() {
 	s.cur--
 	s.c.Signal()
 	s.mu.Unlock()
+}
+
+func (msm *MultiSyncMap) Get(idx int) *sync.Map {
+	Assert(idx >= 0 && idx < MultiSyncMapCount)
+	return &msm.M[idx]
+}
+
+func (msm *MultiSyncMap) GetByHash(hash uint32) *sync.Map {
+	return &msm.M[hash%MultiSyncMapCount]
 }

@@ -61,7 +61,7 @@ type (
 		streams    *transport.StreamBundle
 		acks       *transport.StreamBundle
 		pushes     *transport.StreamBundle
-		lomacks    [fs.LomCacheMask + 1]*LomAcks
+		lomacks    [cmn.MultiSyncMapCount]*LomAcks
 		tcache     struct { // not to recompute very often
 			tmap cluster.NodeMap
 			ts   time.Time
@@ -127,7 +127,7 @@ var rebStage = map[uint32]string{
 //
 // rebManager
 //
-func (reb *rebManager) lomAcks() *[fs.LomCacheMask + 1]*LomAcks { return &reb.lomacks }
+func (reb *rebManager) lomAcks() *[cmn.MultiSyncMapCount]*LomAcks { return &reb.lomacks }
 
 func (reb *rebManager) loghdr(globRebID int64, smap *cluster.Smap) string {
 	var (

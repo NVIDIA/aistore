@@ -32,11 +32,6 @@ const (
 	Disable = "disable-mp"
 )
 
-// lomcache mask & number of those caches
-const (
-	LomCacheMask = 0x3f
-)
-
 // globals
 var (
 	Mountpaths *MountedFS
@@ -76,10 +71,7 @@ type (
 		removeDirCounter atomic.Uint64
 
 		// LOM caches
-		lomcaches [LomCacheMask + 1]LomCache
-	}
-	LomCache struct {
-		M sync.Map
+		lomCaches cmn.MultiSyncMap
 	}
 
 	// MountedFS holds all mountpaths for the target.
@@ -127,13 +119,13 @@ func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *Mou
 	}
 }
 
-func (mi *MountpathInfo) LomCache(idx int) *LomCache { x := &mi.lomcaches; return &x[idx] }
+func (mi *MountpathInfo) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
 
 func (mi *MountpathInfo) evictLomCache() {
-	for idx := range mi.lomcaches {
+	for idx := range mi.lomCaches.M {
 		cache := mi.LomCache(idx)
-		cache.M.Range(func(key interface{}, _ interface{}) bool {
-			cache.M.Delete(key)
+		cache.Range(func(key interface{}, _ interface{}) bool {
+			cache.Delete(key)
 			return true
 		})
 	}

@@ -115,7 +115,7 @@ func (dir *DirectoryInode) LinkNewFile(fileName string) (*ais.Object, error) {
 // REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) {
 	// Traverse files and subdirectories of dir read from the bucket.
-	exists, _, entry := nsCache.exists(dir.Path())
+	exists, _, _ := nsCache.exists(dir.Path())
 	if !exists {
 		return nil, fuse.ENOENT
 	}
@@ -125,7 +125,7 @@ func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) 
 	}
 
 	var offset fuseops.DirOffset = 1
-	for _, child := range entry.ListChildren() {
+	nsCache.listEntries(dir.Path(), func(child cacheEntry) {
 		dir.entries = append(dir.entries, fuseutil.Dirent{
 			Inode:  child.ID(),
 			Offset: offset,
@@ -133,7 +133,7 @@ func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) 
 			Type:   fuseutil.DirentType(child.Ty()),
 		})
 		offset++
-	}
+	})
 	return dir.entries, nil
 }
 

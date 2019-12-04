@@ -11,25 +11,27 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/ais"
+	"github.com/OneOfOne/xxhash"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
 )
 
 // Theory of operation
 //
-// Cache is tree structure that keeps all information about current files and
+// Cache is a flat structure that keeps all information about current files and
 // directories. It works like an oracle - it knows whether the file/directory
-// exists or not. The cache should be updated/refreshed once in while to keep
-// everything in sync with the AIS state.
+// exists or not. The cache updates/refreshes once in while to keep everything
+// in sync with the AIS state.
 //
-// Cache is hierarchical structure built on recursive map where the key is current
-// name of file or directory and the value is `cacheEntry`. Directories' entries
-// have again map with their children. To get a certain nested entry eg: "a/b/c",
-// we need to visit "a/" directory, then "b/" directory and check for "c" file.
-// See `splitEntryName` function to check how arms are produced.
+// The cache itself is built on top of N sync.Maps which we access by hash of
+// the key (name/path). The values in the maps are `cacheEntry`. When we
+// insert `/a/b/c` file we also need to insert information about parent
+// directories: `/a/` and `/a/b/`.
 //
 // The reason for creating the cache was to eliminate unnecessary calls to the
 // AIS proxies eg. HEAD request to check if object exists or if given path
@@ -65,9 +67,6 @@ type (
 
 		// Valid only for files
 		Object() *ais.Object
-
-		// Valid only for directories
-		ListChildren() []cacheEntry
 	}
 
 	fileEntry struct {
@@ -76,13 +75,13 @@ type (
 	}
 
 	dirEntry struct {
-		id       fuseops.InodeID
-		name     string
-		children map[string]cacheEntry
+		id   fuseops.InodeID
+		name string
 	}
 
 	namespaceCache struct {
-		mu         sync.RWMutex
+		m atomic.Pointer // keeps `*cmn.MultiSyncMap` type
+
 		root       *dirEntry
 		rootDirent *fuseutil.Dirent // contains (constant/cached) dirent for root
 
@@ -105,10 +104,9 @@ func (e *fileEntry) updateAttrs(dta dtAttrs) {
 	e.id = dta.id
 	e.object.Size = dta.size
 }
-func (e *fileEntry) ID() fuseops.InodeID        { return e.id }
-func (e *fileEntry) Name() string               { return e.object.Name }
-func (e *fileEntry) Object() *ais.Object        { return e.object }
-func (e *fileEntry) ListChildren() []cacheEntry { panic(e) }
+func (e *fileEntry) ID() fuseops.InodeID { return e.id }
+func (e *fileEntry) Name() string        { return e.object.Name }
+func (e *fileEntry) Object() *ais.Object { return e.object }
 
 func (e *dirEntry) Ty() entryType { return entryDirTy }
 func (e *dirEntry) updateAttrs(dta dtAttrs) {
@@ -120,19 +118,13 @@ func (e *dirEntry) updateAttrs(dta dtAttrs) {
 func (e *dirEntry) ID() fuseops.InodeID { return e.id }
 func (e *dirEntry) Name() string        { return e.name }
 func (e *dirEntry) Object() *ais.Object { return nil }
-func (e *dirEntry) ListChildren() []cacheEntry {
-	entries := make([]cacheEntry, 0, len(e.children))
-	for _, entry := range e.children {
-		entries = append(entries, entry)
-	}
-	return entries
-}
 
 func newNsCache(bck *ais.Bucket, logger *log.Logger, cfg *ServerConfig) (*namespaceCache, error) {
 	c := &namespaceCache{
 		bck: bck,
 		cfg: cfg,
 	}
+	c.m.Store(unsafe.Pointer(&cmn.MultiSyncMap{}))
 	c.root = c.newDirEntry(dtAttrs{id: fuseops.RootInodeID, path: ""})
 	c.rootDirent = &fuseutil.Dirent{
 		Inode: c.root.ID(),
@@ -168,21 +160,17 @@ func (c *namespaceCache) newFileEntry(dta dtAttrs) cacheEntry {
 
 func (c *namespaceCache) newDirEntry(dta dtAttrs) *dirEntry {
 	return &dirEntry{
-		id:       dta.id,
-		name:     dta.path,
-		children: make(map[string]cacheEntry),
+		id:   dta.id,
+		name: dta.path,
 	}
 }
 
 func (c *namespaceCache) refresh() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.containsAllObjects = true
 	newCache := &namespaceCache{
-		root: c.newDirEntry(dtAttrs{id: fuseops.RootInodeID, path: ""}),
-		bck:  c.bck,
+		bck: c.bck,
 	}
+	newCache.m.Store(unsafe.Pointer(&cmn.MultiSyncMap{}))
 
 	var (
 		objs       []*ais.Object
@@ -196,13 +184,13 @@ func (c *namespaceCache) refresh() error {
 		}
 
 		for _, obj := range objs {
-			exists, _, entry := c._exists(obj.Name)
+			exists, _, entry := c.exists(obj.Name)
 			id := invalidInodeID
 			if exists {
 				id = entry.ID()
 			}
 
-			newCache._add(entryFileTy, dtAttrs{
+			newCache.add(entryFileTy, dtAttrs{
 				id:   id,
 				path: obj.Name,
 				size: obj.Size,
@@ -221,97 +209,77 @@ func (c *namespaceCache) refresh() error {
 		}
 	}
 
-	c.root = newCache.root
+	c.m.Store(newCache.m.Load())
 	return nil
 }
 
 func (c *namespaceCache) add(ty entryType, dta dtAttrs) {
-	c.mu.Lock()
-	c._add(ty, dta)
-	c.mu.Unlock()
-}
-
-// REQUIRES_LOCK
-func (c *namespaceCache) _add(ty entryType, dta dtAttrs) {
-	root := c.root
-	arms := splitEntryName(dta.path)
-
-	for idx, arm := range arms[:len(arms)-1] {
-		if oldDir, ok := root.children[arm]; !ok {
-			dir := c.newDirEntry(dtAttrs{id: invalidInodeID, path: path.Join(arms[:idx+1]...) + separator})
-			root.children[arm] = dir
-			root = dir
-		} else {
-			root = oldDir.(*dirEntry)
-		}
-	}
-
 	var (
 		entry cacheEntry
-		arm   = arms[len(arms)-1]
 	)
 
-	// If entry already exists, just set `id`
-	if _, exists := root.children[arm]; exists {
-		root.children[arm].updateAttrs(dta)
-		return
+	arms := splitEntryName(dta.path)
+	for idx := 0; idx < len(arms)-1; idx++ {
+		dir := c.newDirEntry(dtAttrs{id: invalidInodeID, path: path.Join(arms[:idx+1]...) + separator})
+		m := c.getCache(dir.name)
+		m.LoadOrStore(dir.name, dir)
 	}
 
 	switch ty {
 	case entryFileTy:
+		cmn.Assert(!strings.HasSuffix(dta.path, separator))
 		entry = c.newFileEntry(dta)
 	case entryDirTy:
-		cmn.Assert(strings.HasSuffix(arm, separator))
 		cmn.Assert(strings.HasSuffix(dta.path, separator))
 		entry = c.newDirEntry(dta)
 	default:
 		panic(ty)
 	}
-	root.children[arm] = entry
+
+	m := c.getCache(dta.path)
+	m.Store(dta.path, entry)
 }
 
 func (c *namespaceCache) remove(p string) {
-	c.mu.Lock()
-	c._remove(p)
-	c.mu.Unlock()
-}
-
-// REQUIRES_LOCK
-func (c *namespaceCache) _remove(p string) {
-	arms := splitEntryName(p)
-	root := c.root
-
-	for _, arm := range arms[:len(arms)-1] {
-		dir, ok := root.children[arm]
-		if !ok {
-			return
-		}
-		root = dir.(*dirEntry)
+	// Fast path for file
+	if !strings.HasSuffix(p, separator) {
+		m := c.getCache(p)
+		m.Delete(p)
+		return
 	}
 
-	delete(root.children, arms[len(arms)-1])
+	// Slow path for directory - we also need to remove all entries with prefix `p`.
+	wg := &sync.WaitGroup{}
+	for i := 0; i < cmn.MultiSyncMapCount; i++ {
+		wg.Add(1)
+		go func(i int) {
+			m := c.getCacheByIdx(i)
+			m.Range(func(k, v interface{}) bool {
+				name := k.(string)
+				if strings.HasPrefix(name, p) {
+					m.Delete(k)
+				}
+				return true
+			})
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
 }
 
-func (c *namespaceCache) _exists(p string) (exists bool, res EntryLookupResult, entry cacheEntry) {
+func (c *namespaceCache) exists(p string) (exists bool, res EntryLookupResult, entry cacheEntry) {
 	root := c.root
 	if p == "" {
 		res.Entry = c.rootDirent
 		return true, res, root
 	}
 
-	arms := splitEntryName(p)
-	for _, arm := range arms[:len(arms)-1] {
-		oldDir, ok := root.children[arm]
-		if !ok {
-			return false, res, entry
-		}
-		root = oldDir.(*dirEntry)
-	}
-
-	e, exists := root.children[arms[len(arms)-1]]
+	m := c.getCache(p)
+	v, exists := m.Load(p)
 	if !exists {
 		return false, res, entry
 	}
+	e := v.(cacheEntry)
 	res.Object = e.Object()
 	res.Entry = &fuseutil.Dirent{
 		Inode: e.ID(),
@@ -321,11 +289,49 @@ func (c *namespaceCache) _exists(p string) (exists bool, res EntryLookupResult, 
 	return true, res, e
 }
 
-func (c *namespaceCache) exists(p string) (exists bool, res EntryLookupResult, entry cacheEntry) {
-	c.mu.RLock()
-	exists, res, entry = c._exists(p)
-	c.mu.RUnlock()
-	return
+func (c *namespaceCache) listEntries(p string, cb func(cacheEntry)) {
+	var (
+		mtx sync.Mutex
+		wg  = &sync.WaitGroup{}
+	)
+	for i := 0; i < cmn.MultiSyncMapCount; i++ {
+		wg.Add(1)
+		go func(i int) {
+			m := c.getCacheByIdx(i)
+			m.Range(func(k, v interface{}) bool {
+				name := k.(string)
+				if !strings.HasPrefix(name, p) {
+					return true
+				}
+
+				name = name[len(p):]
+				if name == "" { // directory itself
+					return true
+				}
+
+				idx := strings.Index(name, separator)
+				// Either name does not contain separator (file) or contains
+				// it at the end of the name (directory).
+				if idx == -1 || idx == (len(name)-1) {
+					mtx.Lock()
+					cb(v.(cacheEntry))
+					mtx.Unlock()
+				}
+				return true
+			})
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+}
+
+func (c *namespaceCache) getCache(p string) *sync.Map {
+	h := xxhash.ChecksumString32(p)
+	return (*cmn.MultiSyncMap)(c.m.Load()).GetByHash(h)
+}
+
+func (c *namespaceCache) getCacheByIdx(i int) *sync.Map {
+	return (*cmn.MultiSyncMap)(c.m.Load()).Get(i)
 }
 
 // splitEntryName splits the POSIX name into hierarchical arms. Each directory
@@ -333,7 +339,6 @@ func (c *namespaceCache) exists(p string) (exists bool, res EntryLookupResult, e
 // whereas "a/b/c/" will be split into: ["a/", "b/", "c/"].
 func splitEntryName(name string) []string {
 	cmn.AssertMsg(name != "", name)
-
 	arms := make([]string, 0, strings.Count(name, separator))
 	for {
 		idx := strings.Index(name, separator)

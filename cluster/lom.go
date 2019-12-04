@@ -65,7 +65,7 @@ var (
 )
 
 func init() {
-	lomLocker = make(nameLocker, fs.LomCacheMask+1)
+	lomLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	lomLocker.init()
 	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
 		glog.SetV(glog.SmoduleCluster, logLvl)
@@ -626,7 +626,7 @@ func (lom *LOM) Clone(fqn string) *LOM {
 // =======================================================================================
 func (lom *LOM) Hkey() (string, int) {
 	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName)
-	return lom.md.uname, int(lom.ParsedFQN.Digest & fs.LomCacheMask)
+	return lom.md.uname, int(lom.ParsedFQN.Digest & (cmn.MultiSyncMapCount - 1))
 }
 func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error) {
 	if lom.FQN != "" {
@@ -672,7 +672,7 @@ func (lom *LOM) IsLoaded() (ok bool) {
 		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
 	)
-	_, ok = cache.M.Load(hkey)
+	_, ok = cache.Load(hkey)
 	return
 }
 
@@ -688,7 +688,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	}
 	lom.loaded = true
 	if lom.FQN == lom.HrwFQN {
-		if md, ok := cache.M.Load(hkey); ok {
+		if md, ok := cache.Load(hkey); ok {
 			lom.exists = true
 			lmeta := md.(*lmeta)
 			lom.md = *lmeta
@@ -713,7 +713,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 		}
 		md := &lmeta{}
 		*md = lom.md
-		cache.M.Store(hkey, md)
+		cache.Store(hkey, md)
 	}
 	return
 }
@@ -751,7 +751,7 @@ func (lom *LOM) ReCache() {
 	)
 	*md = lom.md
 	md.bckID = lom.Bprops().BID
-	cache.M.Store(hkey, md)
+	cache.Store(hkey, md)
 	lom.loaded = true
 }
 
@@ -761,7 +761,7 @@ func (lom *LOM) Uncache() {
 		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
 	)
-	cache.M.Delete(hkey)
+	cache.Delete(hkey)
 }
 
 func (lom *LOM) FromFS() error {
@@ -822,16 +822,15 @@ func EvictCache(bucket string) {
 	)
 	for _, cache := range caches {
 		wg.Add(1)
-		go func(cache *fs.LomCache) {
-			fevict := func(hkey, _ interface{}) bool {
+		go func(cache *sync.Map) {
+			cache.Range(func(hkey, _ interface{}) bool {
 				uname := hkey.(string)
 				b, _ := Uname2Bo(uname)
 				if bucket == b {
-					cache.M.Delete(hkey)
+					cache.Delete(hkey)
 				}
 				return true
-			}
-			cache.M.Range(fevict)
+			})
 			wg.Done()
 		}(cache)
 	}
@@ -868,7 +867,7 @@ func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
 
 	for _, cache := range caches {
 		wg.Add(1)
-		go func(cache *fs.LomCache) {
+		go func(cache *sync.Map) {
 			feviat := func(hkey, value interface{}) bool {
 				var (
 					md    = value.(*lmeta)
@@ -884,11 +883,11 @@ func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
 					}
 					// TODO: throttle via mountpath.IsIdle(), etc.
 				}
-				cache.M.Delete(hkey)
+				cache.Delete(hkey)
 				evicted.Add(1)
 				return true
 			}
-			cache.M.Range(feviat)
+			cache.Range(feviat)
 			wg.Done()
 		}(cache)
 	}
@@ -965,17 +964,16 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, err error) {
 	return
 }
 
-func lomCaches() []*fs.LomCache {
-	availablePaths, _ := fs.Mountpaths.Get()
+func lomCaches() []*sync.Map {
 	var (
-		l      = len(availablePaths) * (fs.LomCacheMask + 1)
-		caches = make([]*fs.LomCache, l)
+		availablePaths, _ = fs.Mountpaths.Get()
+		cachesCnt         = len(availablePaths) * cmn.MultiSyncMapCount
+		caches            = make([]*sync.Map, cachesCnt)
+		i                 = 0
 	)
-	i := 0
 	for _, mpathInfo := range availablePaths {
-		for idx := 0; idx <= fs.LomCacheMask; idx++ {
-			cache := mpathInfo.LomCache(idx)
-			caches[i] = cache
+		for idx := 0; idx < cmn.MultiSyncMapCount; idx++ {
+			caches[i] = mpathInfo.LomCache(idx)
 			i++
 		}
 	}

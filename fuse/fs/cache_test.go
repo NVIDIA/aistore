@@ -155,6 +155,64 @@ var _ = Describe("Cache", func() {
 				}
 			})
 		})
+
+		Describe("listEntries", func() {
+			It("should list no entries", func() {
+				var entries []cacheEntry
+				cache.listEntries("", func(v cacheEntry) {
+					entries = append(entries, v)
+				})
+				Expect(entries).To(HaveLen(0))
+			})
+
+			It("should list entries for given directory", func() {
+				var (
+					entries []cacheEntry
+
+					filesPaths = []string{
+						"a",
+						dpath + "c",
+						dpath + "d",
+						dpath + "e/f",
+					}
+				)
+
+				cache.add(entryDirTy, dtAttrs{
+					id:   invalidInodeID,
+					path: dpath,
+				})
+				exists, _, _ := cache.exists(dpath)
+				Expect(exists).To(BeTrue())
+
+				for _, filePath := range filesPaths {
+					cache.add(entryFileTy, dtAttrs{
+						id:   invalidInodeID,
+						path: filePath,
+					})
+					exists, _, _ := cache.exists(filePath)
+					Expect(exists).To(BeTrue())
+				}
+
+				cache.listEntries(dpath, func(v cacheEntry) {
+					entries = append(entries, v)
+				})
+				Expect(entries).To(HaveLen(3))
+
+				var files, dirs []string
+				for _, entry := range entries {
+					Expect(entry.Name()).To(HavePrefix(dpath))
+					switch entry.Ty() {
+					case entryFileTy:
+						files = append(files, entry.Name())
+					case entryDirTy:
+						dirs = append(dirs, entry.Name())
+					}
+				}
+
+				Expect(files).To(HaveLen(2))
+				Expect(dirs).To(HaveLen(1))
+			})
+		})
 	})
 
 	Describe("splitEntryName", func() {
