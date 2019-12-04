@@ -1,5 +1,7 @@
 ## Table of Contents
 - [Extended Actions (xactions)](#extended-actions-xactions)
+    - [Start & Stop](#start-stop)
+	- [Stats](#stats)
 
 ## Extended Actions (xactions)
 
@@ -32,7 +34,7 @@ There are different actions which may be taken upon xaction. Actions include sta
 List of supported actions can be found in the [API](/cmn/api.go)
 
 Xaction requests are generic for all xactions, but responses from each xaction are different. See [below](#start-&-stop).
-The request looks as follows:  
+The request looks as follows:
 1.Single target request:
 ```shell
 curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://T/v1/daemon?what=xaction'
@@ -63,8 +65,8 @@ The corresponding [RESTful API](/docs/http_api.md) includes support for querying
 Stats request results in list of requested xactions. Statistics of each xaction share a common base format which looks as follow:
 
 ```json
-[  
-   {  
+[
+   {
       "id":1,
       "kind":"ecget",
       "bucket":"test",
@@ -72,7 +74,7 @@ Stats request results in list of requested xactions. Statistics of each xaction 
       "endTime":"0001-01-01T00:00:00Z",
       "status":"InProgress"
    },
-   {  
+   {
       "id":2,
       "kind":"ecput",
       "bucket":"test",
@@ -105,5 +107,5 @@ Example rebalance stats response:
 ]
 ```
 
-If flag `--all` is provided, stats command will display old, finished xactions, along with currently running ones. If `--all` is not set (default), only  
+If flag `--all` is provided, stats command will display old, finished xactions, along with currently running ones. If `--all` is not set (default), only
 the most recent xactions will be displayed, for each bucket, kind or (bucket, kind)

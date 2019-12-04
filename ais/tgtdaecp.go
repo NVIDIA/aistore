@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -215,7 +216,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				t.invalmsghdlr(w, r, err.Error())
 			}
 		} else {
-			t.xactions.doAbort(kind, bucket)
+			xaction.Registry.DoAbort(kind, bucket)
 		}
 		return
 	default:
@@ -232,10 +233,10 @@ func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) {
 
 	config := cmn.GCO.Get()
 	if prevConfig.LRU.Enabled && !config.LRU.Enabled {
-		lruRunning := t.xactions.globalXactRunning(cmn.ActLRU)
+		lruRunning := xaction.Registry.GlobalXactRunning(cmn.ActLRU)
 		if lruRunning {
 			glog.V(3).Infof("Aborting LRU due to lru.enabled config change")
-			t.xactions.abortGlobalXact(cmn.ActLRU)
+			xaction.Registry.AbortGlobalXact(cmn.ActLRU)
 		}
 	}
 	return
@@ -358,7 +359,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		tstats := getstorstatsrunner()
 
 		var globalRebStats *stats.RebalanceTargetStats
-		entry := t.xactions.GetL(cmn.ActGlobalReb)
+		entry := xaction.Registry.GetL(cmn.ActGlobalReb)
 		if entry != nil {
 			if xact := entry.Get(); xact != nil {
 				var ok bool
@@ -388,7 +389,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) xactStatsRequest(kind, bucket string, onlyRecent bool) ([]byte, error) {
-	xactStatsMap, err := t.xactions.getStats(kind, bucket, onlyRecent)
+	xactStatsMap, err := xaction.Registry.GetStats(kind, bucket, onlyRecent)
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +415,7 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		case cmn.ActLRU:
 			go t.RunLRU()
 		case cmn.ActLocalReb:
-			go t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
+			go t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
 		case cmn.ActPrefetch:
 			go t.Prefetch()
 		case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete:
@@ -591,7 +592,7 @@ func (t *targetrunner) handleUnregisterReq() {
 	dsort.Managers.AbortAll(errors.New("target was removed from the cluster"))
 
 	// Stop all xactions
-	t.xactions.abortAll()
+	xaction.Registry.AbortAll()
 }
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
@@ -734,14 +735,14 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 			bucketsToDelete = append(bucketsToDelete, bucket)
 		} else if bprops, ok := bucketmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
 			if bprops.Mirror.Enabled && !nprops.Mirror.Enabled {
-				t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
+				xaction.Registry.AbortBucketXact(cmn.ActPutCopies, bucket)
 			}
 		}
 	}
 
 	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
 	//       disable mirroring (needed in part for cloud buckets)
-	t.xactions.abortAllBuckets(true, bucketsToDelete...)
+	xaction.Registry.AbortAllBuckets(true, bucketsToDelete...)
 
 	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", false /*false=destroy*/, cmn.AIS, bucketsToDelete...)
 
@@ -805,7 +806,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		return
 	}
 	if msgInt.Action == cmn.ActGlobalReb { // manual
-		go t.rebManager.runGlobalReb(&newsmap.Smap, msgInt.GlobRebID)
+		go t.rebManager.RunGlobalReb(&newsmap.Smap, msgInt.GlobRebID)
 		return
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
@@ -816,7 +817,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		return
 	}
 	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si.Name(), newTargetID)
-	go t.rebManager.runGlobalReb(&newsmap.Smap, msgInt.GlobRebID)
+	go t.rebManager.RunGlobalReb(&newsmap.Smap, msgInt.GlobRebID)
 	return
 }
 
@@ -1275,12 +1276,12 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 
 	switch action {
 	case cmn.ActRenameLB:
-		_, err = t.xactions.renewBckFastRename(t, bckFrom, bckTo, cmn.ActBegin)
+		_, err = xaction.Registry.RenewBckFastRename(t, bckFrom, bckTo, cmn.ActBegin, t.rebManager)
 		if err == nil {
 			err = fs.Mountpaths.CreateBucketDirs(bckTo.Name, bckTo.Provider, true /*destroy*/)
 		}
 	case cmn.ActCopyBucket:
-		_, err = t.xactions.renewBckCopy(t, bckFrom, bckTo, cmn.ActBegin)
+		_, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActBegin)
 	default:
 		cmn.Assert(false)
 	}
@@ -1293,7 +1294,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	if !ok {
 		return
 	}
-	b := t.xactions.bucketsXacts(bckFrom)
+	b := xaction.Registry.BucketsXacts(bckFrom)
 	if b == nil {
 		return
 	}
@@ -1301,8 +1302,8 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	if e == nil {
 		return
 	}
-	ee := e.(*fastRenEntry)
-	if ee.bck.Name != bckFrom.Name {
+	ee := e.(*xaction.FastRenEntry)
+	if ee.Bucket() != bckFrom.Name {
 		return
 	}
 	e.Get().Abort()
@@ -1316,8 +1317,8 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 
 	switch msgInt.Action {
 	case cmn.ActRenameLB:
-		var xact *xactFastRen
-		xact, err = t.xactions.renewBckFastRename(t, bckFrom, bckTo, cmn.ActCommit)
+		var xact *xaction.FastRen
+		xact, err = xaction.Registry.RenewBckFastRename(t, bckFrom, bckTo, cmn.ActCommit, t.rebManager)
 		if err != nil {
 			glog.Error(err) // must not happen at commit time
 			break
@@ -1330,11 +1331,11 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 
 		t.gfn.local.activate()
 		t.gfn.global.activateTimed()
-		go xact.run(msgInt.GlobRebID)      // do the work
+		go xact.Run(msgInt.GlobRebID)      // do the work
 		time.Sleep(100 * time.Millisecond) // FIXME: likely no need
 	case cmn.ActCopyBucket:
 		var xact *mirror.XactBckCopy
-		xact, err = t.xactions.renewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)
+		xact, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)
 		if err != nil {
 			glog.Error(err) // unexpected at commit time
 			break
@@ -1357,13 +1358,13 @@ func (t *targetrunner) beginECEncode(bck *cluster.Bck) (err error) {
 		return fmt.Errorf("Cannot start bucket %q encoding while rebalance is running", bck.Name)
 	}
 
-	_, err = t.xactions.renewECEncodeXact(t, bck, cmn.ActBegin)
+	_, err = xaction.Registry.RenewECEncodeXact(t, bck, cmn.ActBegin)
 	return err
 }
 
 func (t *targetrunner) commitECEncode(bckFrom *cluster.Bck) (err error) {
 	var xact *ec.XactBckEncode
-	xact, err = t.xactions.renewECEncodeXact(t, bckFrom, cmn.ActCommit)
+	xact, err = xaction.Registry.RenewECEncodeXact(t, bckFrom, cmn.ActCommit)
 	if err != nil {
 		glog.Error(err) // must not happen at commit time
 		return err

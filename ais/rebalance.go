@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -25,12 +24,8 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
-)
-
-const (
-	globRebMarker  = ".global_rebalancing"
-	localRebMarker = ".resilvering"
 )
 
 const (
@@ -83,7 +78,7 @@ type (
 	}
 	rebJoggerBase struct {
 		m     *rebManager
-		xreb  *xactRebBase
+		xreb  *xaction.RebBase
 		mpath string
 		wg    *sync.WaitGroup
 	}
@@ -107,7 +102,7 @@ type (
 	globalRebArgs struct {
 		smap    *cluster.Smap
 		config  *cmn.Config
-		xreb    *xactGlobalReb
+		xreb    *xaction.GlobalReb
 		paths   fs.MPI
 		pmarker string
 		ecUsed  bool
@@ -169,14 +164,20 @@ func (reb *rebManager) globalRebPrecheck(md *globalRebArgs, globRebID int64) boo
 	return true
 }
 
+// Add the pass-through method to rebManager to avoid bloating cluster.Target
+// interface and its mocks with too specific methods
+func (reb *rebManager) BMDVersionFixup(bucket string, sleep bool) {
+	reb.t.bmdVersionFixup(bucket, sleep)
+}
+
 func (reb *rebManager) globalRebInit(md *globalRebArgs, globRebID int64, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
 	reb.stage.Store(rebStageInit)
-	md.xreb = reb.t.xactions.renewGlobalReb(md.smap.Version, globRebID, len(md.paths)*2)
+	md.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, globRebID, len(md.paths)*2, getstorstatsrunner())
 	cmn.Assert(md.xreb != nil) // must renew given the CAS and checks above
 
 	if len(buckets) > 0 {
-		md.xreb.bucket = buckets[0] // for better identity (limited usage)
+		md.xreb.SetBucket(buckets[0]) // for better identity (limited usage)
 	}
 
 	// 3. init streams and data structures
@@ -191,7 +192,7 @@ func (reb *rebManager) globalRebInit(md *globalRebArgs, globRebID int64, buckets
 	}
 
 	// 4. create persistent mark
-	md.pmarker = persistentMarker(cmn.ActGlobalReb)
+	md.pmarker = cmn.PersistentMarker(cmn.ActGlobalReb)
 	file, err := cmn.CreateFile(md.pmarker)
 	if err != nil {
 		glog.Errorln("Failed to create", md.pmarker, err)
@@ -336,7 +337,7 @@ func (reb *rebManager) globalRebRun(md *globalRebArgs) error {
 		if multiplier > 1 {
 			sema = make(chan struct{}, multiplier)
 		}
-		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: &md.xreb.xactRebBase, wg: wg},
+		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: &md.xreb.RebBase, wg: wg},
 			smap: md.smap, sema: sema, ver: ver}
 		wg.Add(1)
 		go rl.jog()
@@ -347,7 +348,7 @@ func (reb *rebManager) globalRebRun(md *globalRebArgs) error {
 		if multiplier > 1 {
 			sema = make(chan struct{}, multiplier)
 		}
-		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: &md.xreb.xactRebBase, wg: wg},
+		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: &md.xreb.RebBase, wg: wg},
 			smap: md.smap, sema: sema, ver: ver}
 		wg.Add(1)
 		go rc.jog()
@@ -415,7 +416,7 @@ func (reb *rebManager) globalRebWaitAck(md *globalRebArgs) (errCnt int) {
 				break
 			}
 			glog.Warningf("%s: waiting for %d ACKs", loghdr, cnt)
-			if md.xreb.abortedAfter(sleep) {
+			if md.xreb.AbortedAfter(sleep) {
 				glog.Infof("%s: abrt", loghdr)
 				return
 			}
@@ -466,7 +467,7 @@ func (reb *rebManager) globalRebFini(md *globalRebArgs) {
 		} else {
 			quiescent = 0
 		}
-		aborted = md.xreb.abortedAfter(sleep)
+		aborted = md.xreb.AbortedAfter(sleep)
 	}
 	if !aborted {
 		if err := cmn.RemoveFile(md.pmarker); err != nil {
@@ -492,7 +493,7 @@ func (reb *rebManager) globalRebFini(md *globalRebArgs) {
 }
 
 // main method: 10 stages
-func (reb *rebManager) runGlobalReb(smap *cluster.Smap, globRebID int64, buckets ...string) {
+func (reb *rebManager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ...string) {
 	md := &globalRebArgs{
 		smap:   smap,
 		config: cmn.GCO.Get(),
@@ -576,7 +577,7 @@ func (reb *rebManager) serialize(smap *cluster.Smap, config *cmn.Config, globReb
 		//
 		// vs current xaction
 		//
-		entry := reb.t.xactions.GetL(cmn.ActGlobalReb)
+		entry := xaction.Registry.GetL(cmn.ActGlobalReb)
 		if entry == nil {
 			if canRun {
 				return
@@ -584,12 +585,12 @@ func (reb *rebManager) serialize(smap *cluster.Smap, config *cmn.Config, globReb
 			glog.Warningf("%s: waiting for ???...", loghdr)
 		} else {
 			xact := entry.Get()
-			otherXreb := xact.(*xactGlobalReb) // running or previous
+			otherXreb := xact.(*xaction.GlobalReb) // running or previous
 			if canRun {
 				cmn.Assert(otherXreb.Finished())
 				return
 			}
-			if otherXreb.smapVersion < ver && !otherXreb.Finished() {
+			if otherXreb.SmapVersion < ver && !otherXreb.Finished() {
 				otherXreb.Abort()
 				glog.Warningf("%s: aborting older Smap [%s]", loghdr, otherXreb)
 			}
@@ -707,7 +708,7 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		glog.Error(err)
 		return
 	}
-	aborted, running := reb.t.xactions.isRebalancing(cmn.ActGlobalReb)
+	aborted, running := xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
 	if aborted || !running {
 		io.Copy(ioutil.Discard, objReader) // drain the reader
 		return
@@ -867,7 +868,7 @@ func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objR
 	lom.Unlock(true)
 }
 
-func (reb *rebManager) retransmit(xreb *xactGlobalReb, globRebID int64) (cnt int) {
+func (reb *rebManager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt int) {
 	smap := (*cluster.Smap)(reb.smap.Load())
 	aborted := func() (yes bool) {
 		yes = xreb.Aborted()
@@ -878,7 +879,7 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, globRebID int64) (cnt int
 		return
 	}
 	var (
-		rj    = &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, xreb: &xreb.xactRebBase, wg: &sync.WaitGroup{}}, smap: smap}
+		rj    = &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, xreb: &xreb.RebBase, wg: &sync.WaitGroup{}}, smap: smap}
 		query = url.Values{}
 	)
 	query.Add(cmn.URLParamSilent, "true")
@@ -942,7 +943,7 @@ func (rj *globalRebJogger) jog() {
 			glog.Errorf("%s: failed to traverse %s, err: %v", rj.m.t.si.Name(), rj.mpath, err)
 		}
 	}
-	rj.xreb.confirmCh <- struct{}{}
+	rj.xreb.NotifyDone()
 	rj.wg.Done()
 }
 
@@ -1093,11 +1094,11 @@ rerr:
 //======================================================================================
 
 // TODO: support non-object content types
-func (reb *rebManager) runLocalReb(skipGlobMisplaced bool, buckets ...string) {
+func (reb *rebManager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	var (
-		xreb              *xactLocalReb
+		xreb              *xaction.LocalReb
 		availablePaths, _ = fs.Mountpaths.Get()
-		pmarker           = persistentMarker(cmn.ActLocalReb)
+		pmarker           = cmn.PersistentMarker(cmn.ActLocalReb)
 		file, err         = cmn.CreateFile(pmarker)
 		bucket            string
 		wg                = &sync.WaitGroup{}
@@ -1112,10 +1113,10 @@ func (reb *rebManager) runLocalReb(skipGlobMisplaced bool, buckets ...string) {
 		bucket = buckets[0] // special case: ais bucket
 	}
 	if bucket != "" {
-		xreb = reb.t.xactions.renewLocalReb(len(availablePaths))
-		xreb.bucket = bucket
+		xreb = xaction.Registry.RenewLocalReb(len(availablePaths))
+		xreb.SetBucket(bucket)
 	} else {
-		xreb = reb.t.xactions.renewLocalReb(len(availablePaths) * 2)
+		xreb = xaction.Registry.RenewLocalReb(len(availablePaths) * 2)
 	}
 	slab, err := nodeCtx.mm.GetSlab2(memsys.MaxSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
@@ -1127,7 +1128,7 @@ func (reb *rebManager) runLocalReb(skipGlobMisplaced bool, buckets ...string) {
 		} else {
 			mpathL = mpathInfo.MakePathBucket(fs.ObjectType, bucket, cmn.AIS)
 		}
-		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: &xreb.xactRebBase, wg: wg},
+		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: &xreb.RebBase, wg: wg},
 			slab:              slab,
 			skipGlobMisplaced: skipGlobMisplaced,
 		}
@@ -1139,7 +1140,7 @@ func (reb *rebManager) runLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	}
 	for _, mpathInfo := range availablePaths {
 		mpathC := mpathInfo.MakePath(fs.ObjectType, cmn.Cloud)
-		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: &xreb.xactRebBase, wg: wg},
+		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: &xreb.RebBase, wg: wg},
 			slab:              slab,
 			skipGlobMisplaced: skipGlobMisplaced,
 		}
@@ -1178,7 +1179,7 @@ func (rj *localRebJogger) jog() {
 			glog.Errorf("%s: failed to traverse %s, err: %v", rj.m.t.si.Name(), rj.mpath, err)
 		}
 	}
-	rj.xreb.confirmCh <- struct{}{}
+	rj.xreb.NotifyDone()
 	rj.slab.Free(rj.buf)
 	rj.wg.Done()
 }
@@ -1228,21 +1229,4 @@ func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	}
 	lom.Unlock(true)
 	return nil
-}
-
-//
-// helpers
-//
-
-// persistent mark indicating rebalancing in progress
-func persistentMarker(kind string) (pm string) {
-	switch kind {
-	case cmn.ActLocalReb:
-		pm = filepath.Join(cmn.GCO.Get().Confdir, localRebMarker)
-	case cmn.ActGlobalReb:
-		pm = filepath.Join(cmn.GCO.Get().Confdir, globRebMarker)
-	default:
-		cmn.Assert(false)
-	}
-	return
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 type Vote string
@@ -276,7 +277,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 		glog.Infoln("Already in primary state")
 		return
 	}
-	xele := p.xactions.renewElection(p, vr)
+	xele := xaction.Registry.RenewElection()
 	if xele == nil {
 		return
 	}
@@ -285,7 +286,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 	xele.EndTime(time.Now())
 }
 
-func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact *xactElection) {
+func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact *xaction.Election) {
 	// First, ping current proxy with a short timeout: (Primary? State)
 	primaryURL := curPrimary.IntraControlNet.DirectURL
 	proxyup, err := p.pingWithTimeout(curPrimary, cmn.GCO.Get().Timeout.ProxyPing)
@@ -324,7 +325,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 	}
 }
 
-func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact *xactElection) (winner bool, errors map[string]bool) {
+func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact *xaction.Election) (winner bool, errors map[string]bool) {
 	// Simple Majority Vote
 	resch := p.requestVotes(vr)
 	errors = make(map[string]bool)

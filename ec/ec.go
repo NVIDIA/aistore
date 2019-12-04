@@ -228,6 +228,12 @@ type (
 		isSlice  bool               // is it slice or replica
 		reqType  intraReqType       // request's type, slice/meta request/response
 	}
+
+	Manager interface {
+		NewGetXact(bucket string) *XactGet
+		NewPutXact(bucket string) *XactPut
+		NewRespondXact(bucket string) *XactRespond
+	}
 )
 
 // frees all allocated memory and removes slice's temporary file

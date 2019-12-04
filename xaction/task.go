@@ -1,14 +1,13 @@
-// Package ais provides core functionality for the AIStore object storage.
+// Package xaction provides core functionality for the AIStore extended actions.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package xaction
 
 import (
 	"context"
 
 	"github.com/NVIDIA/aistore/cluster"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -16,15 +15,15 @@ import (
 type bckListTaskEntry struct {
 	baseEntry
 	ctx  context.Context
-	xact *xactBckListTask
-	t    *targetrunner
+	xact *bckListTask
+	t    cluster.Target
 	id   int64
 	msg  *cmn.SelectMsg
 	bck  *cluster.Bck
 }
 
 func (e *bckListTaskEntry) Start(_ int64) error {
-	xact := &xactBckListTask{
+	xact := &bckListTask{
 		XactBase: *cmn.NewXactBase(e.id, cmn.ActAsyncTask),
 		ctx:      e.ctx,
 		t:        e.t,
@@ -48,15 +47,15 @@ func (e *bckListTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
 type bckSummaryTaskEntry struct {
 	baseEntry
 	ctx  context.Context
-	xact *xactBckSummaryTask
-	t    *targetrunner
+	xact *bckSummaryTask
+	t    cluster.Target
 	id   int64
 	msg  *cmn.SelectMsg
 	bck  *cluster.Bck
 }
 
 func (e *bckSummaryTaskEntry) Start(_ int64) error {
-	xact := &xactBckSummaryTask{
+	xact := &bckSummaryTask{
 		XactBase: *cmn.NewXactBase(e.id, cmn.ActAsyncTask),
 		t:        e.t,
 		msg:      e.msg,

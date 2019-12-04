@@ -917,19 +917,19 @@ func (s *ecRebalancer) run() {
 	wg := sync.WaitGroup{}
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
-		if s.ra.xreb.bucket == "" {
+		if s.ra.xreb.Bucket() == "" {
 			mpath = mpathInfo.MakePath(ec.MetaType, cmn.AIS)
 		} else {
-			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.ra.xreb.bucket, cmn.AIS)
+			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.ra.xreb.Bucket(), cmn.AIS)
 		}
 		wg.Add(1)
 		go s.jog(mpath, &wg)
 	}
 	for _, mpathInfo := range availablePaths {
-		if s.ra.xreb.bucket == "" {
+		if s.ra.xreb.Bucket() == "" {
 			mpath = mpathInfo.MakePath(ec.MetaType, cmn.Cloud)
 		} else {
-			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.ra.xreb.bucket, cmn.Cloud)
+			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.ra.xreb.Bucket(), cmn.Cloud)
 		}
 		wg.Add(1)
 		go s.jog(mpath, &wg)

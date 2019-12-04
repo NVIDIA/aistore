@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/stats/statsd"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -111,7 +112,6 @@ type (
 		keepalive          keepaliver
 		smapowner          *smapowner
 		bmdowner           bmdOwner
-		xactions           *xactionsRegistry
 		statsif            stats.Tracker
 		statsdC            statsd.Client
 	}
@@ -378,7 +378,6 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	}
 
 	h.smapowner = newSmapowner()
-	h.xactions = newXactions() // extended actions
 }
 
 // initSI initializes this cluster.Snode
@@ -884,7 +883,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatBMD:
 		body = cmn.MustMarshal(h.bmdowner.get())
 	case cmn.GetWhatSmapVote:
-		voteInProgress := h.xactions.globalXactRunning(cmn.ActElection)
+		voteInProgress := xaction.Registry.GlobalXactRunning(cmn.ActElection)
 		msg := SmapVoteMsg{VoteInProgress: voteInProgress, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
 		body = cmn.MustMarshal(msg)
 	case cmn.GetWhatSnode:

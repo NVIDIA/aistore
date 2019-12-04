@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -73,9 +74,9 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 		switch action {
 		case cmn.ActListObjects:
-			_, err = t.xactions.renewBckListXact(ctx, t, bck, msg)
+			_, err = xaction.Registry.RenewBckListXact(ctx, t, bck, msg)
 		case cmn.ActSummaryBucket:
-			_, err = t.xactions.renewBckSummaryXact(ctx, t, bck, msg)
+			_, err = xaction.Registry.RenewBckSummaryXact(ctx, t, bck, msg)
 		default:
 			t.invalmsghdlr(w, r, fmt.Sprintf("invalid action: %s", action))
 			return false
@@ -90,7 +91,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		return true
 	}
 
-	xactStats := t.xactions.GetTaskXact(msg.TaskID)
+	xactStats := xaction.Registry.GetTaskXact(msg.TaskID)
 	// task never started
 	if xactStats == nil {
 		s := fmt.Sprintf("Task %d not found", msg.TaskID)
@@ -146,7 +147,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 						glog.Errorf("%s: loaded %d/%d, renew=%t", t.si, loaded, minLoaded, renew)
 					}
 					if renew {
-						t.xactions.renewBckLoadLomCache(t, bck)
+						xaction.Registry.RenewBckLoadLomCache(t, bck)
 					}
 				}(bckList.Entries)
 			}

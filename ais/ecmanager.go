@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 //nolint:maligned
@@ -39,7 +40,10 @@ type ecManager struct {
 	respBundle    *transport.StreamBundle
 }
 
-var ECM *ecManager
+var (
+	_   ec.Manager = &ecManager{}
+	ECM *ecManager
+)
 
 func newECM(t *targetrunner) *ecManager {
 	config := cmn.GCO.Get()
@@ -137,17 +141,17 @@ func (mgr *ecManager) closeECBundles() {
 	mgr.respBundle = nil
 }
 
-func (mgr *ecManager) newGetXact(bucket string) *ec.XactGet {
+func (mgr *ecManager) NewGetXact(bucket string) *ec.XactGet {
 	return ec.NewGetXact(mgr.t, mgr.t.smapowner, mgr.t.si,
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) newPutXact(bucket string) *ec.XactPut {
+func (mgr *ecManager) NewPutXact(bucket string) *ec.XactPut {
 	return ec.NewPutXact(mgr.t, mgr.t.smapowner, mgr.t.si,
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) newRespondXact(bucket string) *ec.XactRespond {
+func (mgr *ecManager) NewRespondXact(bucket string) *ec.XactRespond {
 	return ec.NewRespondXact(mgr.t, mgr.t.smapowner, mgr.t.si,
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
@@ -155,7 +159,7 @@ func (mgr *ecManager) newRespondXact(bucket string) *ec.XactRespond {
 func (mgr *ecManager) restoreBckGetXact(bck *cluster.Bck) *ec.XactGet {
 	xact := mgr.getBckXacts(bck.Name).Get()
 	if xact == nil || xact.Finished() {
-		xact = mgr.t.xactions.renewGetEC(bck)
+		xact = xaction.Registry.RenewGetEC(bck, mgr)
 		mgr.getBckXacts(bck.Name).SetGet(xact)
 	}
 
@@ -165,7 +169,7 @@ func (mgr *ecManager) restoreBckGetXact(bck *cluster.Bck) *ec.XactGet {
 func (mgr *ecManager) restoreBckPutXact(bck *cluster.Bck) *ec.XactPut {
 	xact := mgr.getBckXacts(bck.Name).Put()
 	if xact == nil || xact.Finished() {
-		xact = mgr.t.xactions.renewPutEC(bck)
+		xact = xaction.Registry.RenewPutEC(bck, mgr)
 		mgr.getBckXacts(bck.Name).SetPut(xact)
 	}
 
@@ -175,7 +179,7 @@ func (mgr *ecManager) restoreBckPutXact(bck *cluster.Bck) *ec.XactPut {
 func (mgr *ecManager) restoreBckRespXact(bck *cluster.Bck) *ec.XactRespond {
 	xact := mgr.getBckXacts(bck.Name).Req()
 	if xact == nil || xact.Finished() {
-		xact = mgr.t.xactions.renewRespondEC(bck)
+		xact = xaction.Registry.RenewRespondEC(bck, mgr)
 		mgr.getBckXacts(bck.Name).SetReq(xact)
 	}
 

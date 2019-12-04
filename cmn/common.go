@@ -1400,3 +1400,21 @@ func ValidateOmitBase(fqn, omitBase string) (err error) {
 	}
 	return
 }
+
+// persistent mark indicating rebalancing in progress
+func PersistentMarker(kind string) (pm string) {
+	const (
+		globRebMarker  = ".global_rebalancing"
+		localRebMarker = ".resilvering"
+	)
+
+	switch kind {
+	case ActLocalReb:
+		pm = filepath.Join(GCO.Get().Confdir, localRebMarker)
+	case ActGlobalReb:
+		pm = filepath.Join(GCO.Get().Confdir, globRebMarker)
+	default:
+		Assert(false)
+	}
+	return
+}

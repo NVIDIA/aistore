@@ -23,6 +23,7 @@ type (
 		ID() int64
 		Kind() string
 		Bucket() string
+		SetBucket(bucket string)
 		StartTime(s ...time.Time) time.Time
 		EndTime(e ...time.Time) time.Time
 		String() string
@@ -92,12 +93,13 @@ func NewXactBaseWithBucket(id int64, kind string, bucket string, bckIsAIS bool) 
 	return xact
 }
 
-func (xact *XactBase) ID() int64        { return xact.id }
-func (xact *XactBase) ShortID() uint32  { return ShortID(xact.id) }
-func (xact *XactBase) SetGID(gid int64) { xact.gid = gid }
-func (xact *XactBase) Kind() string     { return xact.kind }
-func (xact *XactBase) Bucket() string   { return xact.bucket }
-func (xact *XactBase) BckIsAIS() bool   { return xact.bckIsAIS }
+func (xact *XactBase) ID() int64               { return xact.id }
+func (xact *XactBase) ShortID() uint32         { return ShortID(xact.id) }
+func (xact *XactBase) SetGID(gid int64)        { xact.gid = gid }
+func (xact *XactBase) Kind() string            { return xact.kind }
+func (xact *XactBase) Bucket() string          { return xact.bucket }
+func (xact *XactBase) SetBucket(bucket string) { xact.bucket = bucket }
+func (xact *XactBase) BckIsAIS() bool          { return xact.bckIsAIS }
 
 func (xact *XactBase) Provider() string {
 	if xact.bckIsAIS {

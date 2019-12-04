@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -264,11 +265,11 @@ func (t *targetrunner) Run() error {
 	ec.Init()
 	t.ecmanager = newECM(t)
 
-	aborted, _ := t.xactions.isRebalancing(cmn.ActLocalReb)
+	aborted, _ := xaction.Registry.IsRebalancing(cmn.ActLocalReb)
 	if aborted {
 		go func() {
 			glog.Infoln("resuming local rebalance...")
-			t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
+			t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
 		}()
 	}
 
@@ -344,7 +345,7 @@ func (t *targetrunner) registerStats() {
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.Getname(), err)
-	sleep := t.xactions.abortAll()
+	sleep := xaction.Registry.AbortAll()
 	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
 	}
@@ -791,8 +792,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			break // nothing to do
 		case cmn.ActCommit:
 			copies, _ := t.parseValidateNCopies(msgInt.Value)
-			t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
-			t.xactions.renewBckMakeNCopies(bck, t, copies)
+			xaction.Registry.AbortBucketXact(cmn.ActPutCopies, bucket)
+			xaction.Registry.RenewBckMakeNCopies(bck, t, copies)
 		default:
 			cmn.Assert(false)
 		}
@@ -1212,7 +1213,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		glog.Warningf("insufficient ## mountpaths %d (bucket %s, ## copies %d)", nmp, lom.Bucket(), mirrConf.Copies)
 	}
 	for i := 0; i < retries; i++ {
-		xputlrep := t.xactions.renewPutLocReplicas(lom)
+		xputlrep := xaction.Registry.RenewPutLocReplicas(lom)
 		if xputlrep == nil {
 			return
 		}
@@ -1375,7 +1376,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 			glog.Infof("%s: promote %+v", tname, params)
 		}
 		var xact *mirror.XactDirPromote
-		xact, err = t.xactions.renewDirPromote(srcFQN, bck, t, &params)
+		xact, err = xaction.Registry.RenewDirPromote(srcFQN, bck, t, &params)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return

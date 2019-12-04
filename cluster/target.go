@@ -59,3 +59,9 @@ type RebalanceInfo struct {
 	IsRebalancing bool
 	GlobalRebID   int64
 }
+
+type RebManager interface {
+	RunLocalReb(skipMisplaced bool, bucket ...string)
+	RunGlobalReb(smap *Smap, rebID int64, bucket ...string)
+	BMDVersionFixup(bucket string, sleep bool)
+}

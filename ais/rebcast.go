@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -54,7 +55,7 @@ func (reb *rebManager) getGlobStatus(status *rebStatus) {
 		rsmap      = (*smapX)(reb.smap.Load())
 		tsmap      = reb.t.smapowner.get()
 	)
-	status.Aborted, status.Running = reb.t.xactions.isRebalancing(cmn.ActGlobalReb)
+	status.Aborted, status.Running = xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
 	status.Stage = reb.stage.Load()
 	status.GlobRebID = reb.globRebID.Load()
 	status.SmapVersion = tsmap.version()
@@ -214,7 +215,7 @@ func (reb *rebManager) rxReady(tsi *cluster.Snode, md *globalRebArgs) (ok bool) 
 		if _, ok = reb.checkGlobStatus(tsi, ver, rebStageTraverse, md); ok {
 			return
 		}
-		if md.xreb.Aborted() || md.xreb.abortedAfter(sleep) {
+		if md.xreb.Aborted() || md.xreb.AbortedAfter(sleep) {
 			glog.Infof("%s: abrt rx-ready", loghdr)
 			return
 		}
@@ -238,7 +239,7 @@ func (reb *rebManager) waitFinExtended(tsi *cluster.Snode, md *globalRebArgs) (o
 		status     *rebStatus
 	)
 	for curwt < maxwt {
-		if md.xreb.abortedAfter(sleep) {
+		if md.xreb.AbortedAfter(sleep) {
 			glog.Infof("%s: abrt wack", loghdr)
 			return
 		}
@@ -308,7 +309,7 @@ func (reb *rebManager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 	}
 	res := reb.t.call(args)
 	if res.err != nil {
-		if md.xreb.abortedAfter(sleepRetry) {
+		if md.xreb.AbortedAfter(sleepRetry) {
 			glog.Infof("%s: abrt", loghdr)
 			return
 		}
@@ -371,7 +372,7 @@ func (reb *rebManager) waitStage(si *cluster.Snode, md *globalRebArgs, stage uin
 			return true
 		}
 
-		if md.xreb.Aborted() || md.xreb.abortedAfter(sleep) {
+		if md.xreb.Aborted() || md.xreb.AbortedAfter(sleep) {
 			glog.Infof("g%d: abrt %s", reb.globRebID.Load(), rebStage[stage])
 			return false
 		}

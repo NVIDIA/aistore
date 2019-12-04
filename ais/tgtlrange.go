@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 const (
@@ -81,7 +82,7 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 
 func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []string,
 	bck *cluster.Bck, deadline time.Duration, done chan struct{}) error {
-	xdel := t.xactions.renewEvictDelete(evict)
+	xdel := xaction.Registry.RenewEvictDelete(evict)
 	defer func() {
 		if done != nil {
 			done <- struct{}{}

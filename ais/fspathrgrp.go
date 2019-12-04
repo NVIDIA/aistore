@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 const (
@@ -125,7 +126,7 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 }
 
 func (g *fsprungroup) newMountpathEvent(action, mpath string) {
-	g.t.xactions.stopMountpathXactions()
+	xaction.Registry.StopMountpathXactions()
 	for _, r := range g.runners {
 		switch action {
 		case enableMpathAct:
@@ -136,12 +137,12 @@ func (g *fsprungroup) newMountpathEvent(action, mpath string) {
 			cmn.AssertMsg(false, action)
 		}
 	}
-	go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
+	go g.t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
 	g.checkEnable(action, mpath)
 }
 
 func (g *fsprungroup) lostMountpathEvent(action, mpath string) {
-	g.t.xactions.stopMountpathXactions()
+	xaction.Registry.StopMountpathXactions()
 	for _, r := range g.runners {
 		switch action {
 		case disableMpathAct:
@@ -157,8 +158,8 @@ func (g *fsprungroup) lostMountpathEvent(action, mpath string) {
 	}
 
 	go func() {
-		g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
-		g.t.xactions.renewObjsRedundancy(g.t)
+		g.t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
+		xaction.Registry.RenewObjsRedundancy(g.t)
 	}()
 }
 

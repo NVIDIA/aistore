@@ -1,8 +1,8 @@
-// Package ais provides core functionality for the AIStore object storage.
+// Package xaction provides core functionality for the AIStore extended actions.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package xaction
 
 import (
 	"context"
@@ -42,53 +42,50 @@ type (
 		Err    error       `json:"error"`
 	}
 
-	xactRebBase struct {
+	RebBase struct {
 		cmn.XactBase
 		confirmCh chan struct{}
-		bucket    string
 		runnerCnt int
 	}
-	xactGlobalReb struct {
-		xactRebBase
+	GlobalReb struct {
+		RebBase
 		cmn.NonmountpathXact
-		smapVersion int64 // Smap version on which this rebalance has started
+		SmapVersion int64 // Smap version on which this rebalance has started
 	}
-	xactLocalReb struct {
+	LocalReb struct {
 		cmn.MountpathXact
-		xactRebBase
+		RebBase
 	}
-	xactPrefetch struct {
+	prefetch struct {
 		cmn.XactBase
 		cmn.NonmountpathXact
 		r *stats.Trunner
 	}
-	xactEvictDelete struct {
+	evictDelete struct {
 		cmn.NonmountpathXact
 		cmn.XactBase
 	}
-	xactElection struct {
-		cmn.XactBase
+	Election struct {
 		cmn.NonmountpathXact
-		proxyrunner *proxyrunner
-		vr          *VoteRecord
+		cmn.XactBase
 	}
-	xactBckListTask struct {
+	bckListTask struct {
 		cmn.XactBase
 		ctx context.Context
 		res atomic.Pointer
-		t   *targetrunner
+		t   cluster.Target
 		bck *cluster.Bck
 		msg *cmn.SelectMsg
 	}
-	xactBckSummaryTask struct {
+	bckSummaryTask struct {
 		cmn.XactBase
 		ctx context.Context
-		t   *targetrunner
+		t   cluster.Target
 		bck *cluster.Bck
 		msg *cmn.SelectMsg
 		res atomic.Pointer
 	}
-	xactionEntry interface {
+	entry interface {
 		Start(id int64) error // supposed to start an xaction, will be called when entry is stored to into registry
 		Kind() string
 		Get() cmn.Xact
@@ -96,9 +93,9 @@ type (
 		IsGlobal() bool
 		IsTask() bool
 	}
-	xactionsRegistry struct {
+	registry struct {
 		sync.RWMutex
-		globalXacts   map[string]xactionGlobalEntry
+		globalXacts   map[string]globalEntry
 		taskXacts     sync.Map // map[string]xactionEntry
 		bucketXacts   sync.Map // map[string]*bucketXactions; FIXME: bucket name (key) cannot be considered unique
 		byID          sync.Map // map[int64]xactionEntry
@@ -107,54 +104,57 @@ type (
 	}
 )
 
+var Registry *registry
+
 //
 // global descriptions
 //
 
-func (xact *xactRebBase) Description() string        { return "base for rebalance xactions" }
-func (xact *xactGlobalReb) Description() string      { return "cluster-wide global rebalancing" }
-func (xact *xactBckListTask) Description() string    { return "asynchronous bucket list task" }
-func (xact *xactBckSummaryTask) Description() string { return "asynchronous bucket summary task" }
-func (xact *xactEvictDelete) Description() string    { return "evict or delete objects" }
-func (xact *xactElection) Description() string       { return "elect new primary proxy/gateway" }
-func (xact *xactLocalReb) Description() string {
+func (xact *RebBase) NotifyDone()                { xact.confirmCh <- struct{}{} }
+func (xact *RebBase) Description() string        { return "base for rebalance xactions" }
+func (xact *GlobalReb) Description() string      { return "cluster-wide global rebalancing" }
+func (xact *bckListTask) Description() string    { return "asynchronous bucket list task" }
+func (xact *bckSummaryTask) Description() string { return "asynchronous bucket summary task" }
+func (xact *evictDelete) Description() string    { return "evict or delete objects" }
+func (xact *Election) Description() string       { return "elect new primary proxy/gateway" }
+func (xact *LocalReb) Description() string {
 	return "resilver local storage upon mountpath-change events"
 }
-func (xact *xactPrefetch) Description() string {
+func (xact *prefetch) Description() string {
 	return "prefetch a list or a range of objects from Cloud bucket"
 }
 
 //
 // misc methods
 //
-func (xact *xactPrefetch) ObjectsCnt() int64 {
+func (xact *prefetch) ObjectsCnt() int64 {
 	v := xact.r.Core.Tracker[stats.PrefetchCount]
 	v.RLock()
 	defer v.RUnlock()
 	return xact.r.Core.Tracker[stats.PrefetchCount].Value
 }
-func (xact *xactPrefetch) BytesCnt() int64 {
+func (xact *prefetch) BytesCnt() int64 {
 	v := xact.r.Core.Tracker[stats.PrefetchCount]
 	v.RLock()
 	defer v.RUnlock()
 	return xact.r.Core.Tracker[stats.PrefetchCount].Value
 }
 
-func (xact *xactRebBase) String() string {
+func (xact *RebBase) String() string {
 	s := xact.XactBase.String()
-	if xact.bucket != "" {
-		s += ", bucket " + xact.bucket
+	if xact.Bucket() != "" {
+		s += ", bucket " + xact.Bucket()
 	}
 	return s
 }
-func (xact *xactGlobalReb) String() string {
-	return fmt.Sprintf("%s(%d), Smap v%d", xact.xactRebBase.String(), xact.runnerCnt, xact.smapVersion)
+func (xact *GlobalReb) String() string {
+	return fmt.Sprintf("%s(%d), Smap v%d", xact.RebBase.String(), xact.runnerCnt, xact.SmapVersion)
 }
-func (xact *xactLocalReb) String() string {
-	return fmt.Sprintf("%s(%d)", xact.xactRebBase.String(), xact.runnerCnt)
+func (xact *LocalReb) String() string {
+	return fmt.Sprintf("%s(%d)", xact.RebBase.String(), xact.runnerCnt)
 }
 
-func (xact *xactGlobalReb) abortedAfter(d time.Duration) (aborted bool) {
+func (xact *GlobalReb) AbortedAfter(d time.Duration) (aborted bool) {
 	sleep := time.Second / 2
 	steps := (d + sleep/2) / sleep
 	for i := 0; i < int(steps); i++ {
@@ -167,36 +167,36 @@ func (xact *xactGlobalReb) abortedAfter(d time.Duration) (aborted bool) {
 }
 
 //
-// xactionsRegistry
+// registry
 //
 
-func newXactions() *xactionsRegistry {
-	xar := &xactionsRegistry{
-		globalXacts: make(map[string]xactionGlobalEntry),
+func newXactions() *registry {
+	xar := &registry{
+		globalXacts: make(map[string]globalEntry),
 	}
 	hk.Housekeeper.Register("xactions", xar.cleanUpFinished)
 	return xar
 }
 
-func (r *xactionsRegistry) GetTaskXact(id int64) xactionEntry {
+func (r *registry) GetTaskXact(id int64) entry {
 	val, loaded := r.byID.Load(id)
 
 	if loaded {
-		return val.(xactionEntry)
+		return val.(entry)
 	}
 	return nil
 }
 
-func (r *xactionsRegistry) GetL(kind string) xactionGlobalEntry {
+func (r *registry) GetL(kind string) globalEntry {
 	r.RLock()
 	res := r.globalXacts[kind]
 	r.RUnlock()
 	return res
 }
 
-// xactionsRegistry - private methods
+// registry - private methods
 
-func (r *xactionsRegistry) abortAllBuckets(removeFromRegistry bool, buckets ...string) {
+func (r *registry) AbortAllBuckets(removeFromRegistry bool, buckets ...string) {
 	wg := &sync.WaitGroup{}
 	for _, b := range buckets {
 		wg.Add(1)
@@ -219,7 +219,7 @@ func (r *xactionsRegistry) abortAllBuckets(removeFromRegistry bool, buckets ...s
 }
 
 //nolint:unused
-func (r *xactionsRegistry) abortAllGlobal() bool {
+func (r *registry) AbortAllGlobal() bool {
 	sleep := false
 	wg := &sync.WaitGroup{}
 
@@ -240,12 +240,12 @@ func (r *xactionsRegistry) abortAllGlobal() bool {
 
 // AbortAll waits until abort of all xactions is finished
 // Every abort is done asynchronously
-func (r *xactionsRegistry) abortAll() bool {
+func (r *registry) AbortAll() bool {
 	sleep := false
 	wg := &sync.WaitGroup{}
 
 	r.byID.Range(func(_, val interface{}) bool {
-		entry := val.(xactionEntry)
+		entry := val.(entry)
 		if !entry.Get().Finished() {
 			sleep = true
 			wg.Add(1)
@@ -262,9 +262,9 @@ func (r *xactionsRegistry) abortAll() bool {
 	return sleep
 }
 
-func (r *xactionsRegistry) isRebalancing(kind string) (aborted, running bool) {
+func (r *registry) IsRebalancing(kind string) (aborted, running bool) {
 	cmn.Assert(kind == cmn.ActGlobalReb || kind == cmn.ActLocalReb)
-	pmarker := persistentMarker(kind)
+	pmarker := cmn.PersistentMarker(kind)
 	if err := fs.Access(pmarker); err == nil {
 		aborted = true
 	}
@@ -280,15 +280,15 @@ func (r *xactionsRegistry) isRebalancing(kind string) (aborted, running bool) {
 	return
 }
 
-func (r *xactionsRegistry) uniqueID() int64 {
+func (r *registry) uniqueID() int64 {
 	n, err := cmn.GenUUID64()
 	cmn.AssertNoErr(err)
 	return n
 }
 
-func (r *xactionsRegistry) stopMountpathXactions() {
+func (r *registry) StopMountpathXactions() {
 	r.byID.Range(func(_, value interface{}) bool {
-		entry := value.(xactionEntry)
+		entry := value.(entry)
 
 		if entry.Get().IsMountpathXact() {
 			if !entry.Get().Finished() {
@@ -300,7 +300,7 @@ func (r *xactionsRegistry) stopMountpathXactions() {
 	})
 }
 
-func (r *xactionsRegistry) abortBucketXact(kind, bucket string) {
+func (r *registry) AbortBucketXact(kind, bucket string) {
 	val, ok := r.bucketXacts.Load(bucket)
 
 	if !ok {
@@ -323,7 +323,7 @@ func (r *xactionsRegistry) abortBucketXact(kind, bucket string) {
 	}
 }
 
-func (r *xactionsRegistry) globalXactRunning(kind string) bool {
+func (r *registry) GlobalXactRunning(kind string) bool {
 	entry := r.GetL(kind)
 	if entry == nil {
 		return false
@@ -331,7 +331,7 @@ func (r *xactionsRegistry) globalXactRunning(kind string) bool {
 	return !entry.Get().Finished()
 }
 
-func (r *xactionsRegistry) globalXactStats(kind string, onlyRecent bool) (map[int64]stats.XactStats, error) {
+func (r *registry) globalXactStats(kind string, onlyRecent bool) (map[int64]stats.XactStats, error) {
 	if _, ok := cmn.ValidXact(kind); !ok {
 		return nil, errors.New("unknown xaction " + kind)
 	}
@@ -351,7 +351,7 @@ func (r *xactionsRegistry) globalXactStats(kind string, onlyRecent bool) (map[in
 	}), nil
 }
 
-func (r *xactionsRegistry) abortGlobalXact(kind string) (aborted bool) {
+func (r *registry) AbortGlobalXact(kind string) (aborted bool) {
 	entry := r.GetL(kind)
 	if entry == nil {
 		return
@@ -364,7 +364,7 @@ func (r *xactionsRegistry) abortGlobalXact(kind string) (aborted bool) {
 }
 
 // Returns stats of xaction with given 'kind' on a given bucket
-func (r *xactionsRegistry) bucketSingleXactStats(kind, bucket string, onlyRecent bool) (map[int64]stats.XactStats, error) {
+func (r *registry) bucketSingleXactStats(kind, bucket string, onlyRecent bool) (map[int64]stats.XactStats, error) {
 	if onlyRecent {
 		bucketXats, ok := r.getBucketsXacts(bucket)
 		if !ok {
@@ -385,7 +385,7 @@ func (r *xactionsRegistry) bucketSingleXactStats(kind, bucket string, onlyRecent
 }
 
 // Returns stats of all present xactions
-func (r *xactionsRegistry) allXactsStats(onlyRecent bool) map[int64]stats.XactStats {
+func (r *registry) allXactsStats(onlyRecent bool) map[int64]stats.XactStats {
 	if !onlyRecent {
 		return r.matchingXactsStats(func(_ cmn.Xact) bool { return true })
 	}
@@ -421,11 +421,11 @@ func (r *xactionsRegistry) allXactsStats(onlyRecent bool) map[int64]stats.XactSt
 	return matching
 }
 
-func (r *xactionsRegistry) matchingXactsStats(xactMatches func(xact cmn.Xact) bool) map[int64]stats.XactStats {
+func (r *registry) matchingXactsStats(xactMatches func(xact cmn.Xact) bool) map[int64]stats.XactStats {
 	sts := make(map[int64]stats.XactStats, 20)
 
 	r.byID.Range(func(_, value interface{}) bool {
-		entry := value.(xactionEntry)
+		entry := value.(entry)
 		if !xactMatches(entry.Get()) {
 			return true
 		}
@@ -437,7 +437,7 @@ func (r *xactionsRegistry) matchingXactsStats(xactMatches func(xact cmn.Xact) bo
 	return sts
 }
 
-func (r *xactionsRegistry) getNonBucketSpecificStats(kind string, onlyRecent bool) (map[int64]stats.XactStats, error) {
+func (r *registry) getNonBucketSpecificStats(kind string, onlyRecent bool) (map[int64]stats.XactStats, error) {
 	// no bucket and no kind - request for all xactions
 	if kind == "" {
 		return r.allXactsStats(onlyRecent), nil
@@ -457,7 +457,7 @@ func (r *xactionsRegistry) getNonBucketSpecificStats(kind string, onlyRecent boo
 }
 
 // Returns stats of all xactions of a given bucket
-func (r *xactionsRegistry) bucketAllXactsStats(bucket string, onlyRecent bool) map[int64]stats.XactStats {
+func (r *registry) bucketAllXactsStats(bucket string, onlyRecent bool) map[int64]stats.XactStats {
 	bucketsXacts, ok := r.getBucketsXacts(bucket)
 
 	// bucketsXacts is not present, bucket might have never existed
@@ -474,7 +474,7 @@ func (r *xactionsRegistry) bucketAllXactsStats(bucket string, onlyRecent bool) m
 	return bucketsXacts.Stats()
 }
 
-func (r *xactionsRegistry) getStats(kind, bucket string, onlyRecent bool) (map[int64]stats.XactStats, error) {
+func (r *registry) GetStats(kind, bucket string, onlyRecent bool) (map[int64]stats.XactStats, error) {
 	if bucket == "" {
 		// no bucket - either all xactions or a global xaction
 		return r.getNonBucketSpecificStats(kind, onlyRecent)
@@ -489,26 +489,26 @@ func (r *xactionsRegistry) getStats(kind, bucket string, onlyRecent bool) (map[i
 	return r.bucketAllXactsStats(bucket, onlyRecent), nil
 }
 
-func (r *xactionsRegistry) doAbort(kind, bucket string) {
+func (r *registry) DoAbort(kind, bucket string) {
 	// no bucket and no kind - request for all available xactions
 	if bucket == "" && kind == "" {
-		r.abortAll()
+		r.AbortAll()
 	}
 	// bucket present and no kind - request for all available bucket's xactions
 	if bucket != "" && kind == "" {
-		r.abortAllBuckets(false, bucket)
+		r.AbortAllBuckets(false, bucket)
 	}
 	// both bucket and kind present - request for specific bucket's xaction
 	if bucket != "" && kind != "" {
-		r.abortBucketXact(kind, bucket)
+		r.AbortBucketXact(kind, bucket)
 	}
 	// no bucket, but kind present - request for specific global xaction
 	if bucket == "" && kind != "" {
-		r.abortGlobalXact(kind)
+		r.AbortGlobalXact(kind)
 	}
 }
 
-func (r *xactionsRegistry) getBucketsXacts(bucket string) (xactions *bucketXactions, ok bool) {
+func (r *registry) getBucketsXacts(bucket string) (xactions *bucketXactions, ok bool) {
 	val, ok := r.bucketXacts.Load(bucket) // TODO -- FIXME: support same-name Cloud and AIS
 	if !ok {
 		return nil, false
@@ -516,7 +516,7 @@ func (r *xactionsRegistry) getBucketsXacts(bucket string) (xactions *bucketXacti
 	return val.(*bucketXactions), true
 }
 
-func (r *xactionsRegistry) bucketsXacts(bck *cluster.Bck) *bucketXactions {
+func (r *registry) BucketsXacts(bck *cluster.Bck) *bucketXactions {
 	// NOTE: Load and then LoadOrStore saves us creating new object with
 	// newBucketXactions every time this function is called, putting additional,
 	// unnecessary stress on GC
@@ -529,13 +529,13 @@ func (r *xactionsRegistry) bucketsXacts(bck *cluster.Bck) *bucketXactions {
 	return val.(*bucketXactions)
 }
 
-func (r *xactionsRegistry) removeFinishedByID(id int64) error {
+func (r *registry) removeFinishedByID(id int64) error {
 	item, ok := r.byID.Load(id)
 	if !ok {
 		return nil
 	}
 
-	xact := item.(xactionEntry)
+	xact := item.(entry)
 	if !xact.Get().Finished() {
 		return fmt.Errorf("xaction %s(%d, %T) is running - duplicate ID?", xact.Kind(), id, xact.Get())
 	}
@@ -547,7 +547,7 @@ func (r *xactionsRegistry) removeFinishedByID(id int64) error {
 	return nil
 }
 
-func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
+func (r *registry) storeByID(id int64, entry entry) {
 	r.byID.Store(id, entry)
 
 	// Increase after cleanup to not force trigger it. If it was just added, for
@@ -562,7 +562,7 @@ func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
 // or change in structure of byID
 // cleanup is made when size of r.byID is bigger then entriesSizeHW
 // but not more often than cleanupInterval
-func (r *xactionsRegistry) cleanUpFinished() time.Duration {
+func (r *registry) cleanUpFinished() time.Duration {
 	startTime := time.Now()
 	if r.byIDTaskCount.Load() == 0 {
 		if r.byIDSize.Inc() <= entriesSizeHW {
@@ -571,7 +571,7 @@ func (r *xactionsRegistry) cleanUpFinished() time.Duration {
 	}
 	anyTaskDeleted := false
 	r.byID.Range(func(k, v interface{}) bool {
-		entry := v.(xactionEntry)
+		entry := v.(entry)
 		if !entry.Get().Finished() {
 			return true
 		}
@@ -624,7 +624,7 @@ func (r *xactionsRegistry) cleanUpFinished() time.Duration {
 // renew methods
 //
 
-func (r *xactionsRegistry) renewGlobalXaction(e xactionGlobalEntry) (ee xactionGlobalEntry, keep bool, err error) {
+func (r *registry) renewGlobalXaction(e globalEntry) (ee globalEntry, keep bool, err error) {
 	r.RLock()
 	previousEntry := r.globalXacts[e.Kind()]
 
@@ -659,7 +659,7 @@ func (r *xactionsRegistry) renewGlobalXaction(e xactionGlobalEntry) (ee xactionG
 	return
 }
 
-func (r *xactionsRegistry) renewPrefetch(tr *stats.Trunner) *xactPrefetch {
+func (r *registry) RenewPrefetch(tr *stats.Trunner) *prefetch {
 	e := &prefetchEntry{r: tr}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*prefetchEntry)
@@ -669,7 +669,7 @@ func (r *xactionsRegistry) renewPrefetch(tr *stats.Trunner) *xactPrefetch {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewLRU() *lru.Xaction {
+func (r *registry) RenewLRU() *lru.Xaction {
 	e := &lruEntry{}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*lruEntry)
@@ -679,8 +679,8 @@ func (r *xactionsRegistry) renewLRU() *lru.Xaction {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewGlobalReb(smapVersion, globRebID int64, runnerCnt int) *xactGlobalReb {
-	e := &globalRebEntry{smapVersion: smapVersion, globRebID: globRebID, runnerCnt: runnerCnt}
+func (r *registry) RenewGlobalReb(smapVersion, globRebID int64, runnerCnt int, statRunner *stats.Trunner) *GlobalReb {
+	e := &globalRebEntry{smapVersion: smapVersion, globRebID: globRebID, runnerCnt: runnerCnt, statRunner: statRunner}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*globalRebEntry)
 	if keep { // previous global rebalance is still running
@@ -689,7 +689,7 @@ func (r *xactionsRegistry) renewGlobalReb(smapVersion, globRebID int64, runnerCn
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactLocalReb {
+func (r *registry) RenewLocalReb(runnerCnt int) *LocalReb {
 	e := &localRebEntry{runnerCnt: runnerCnt}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*localRebEntry)
@@ -700,8 +700,8 @@ func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactLocalReb {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
-	e := &electionEntry{p: p, vr: vr}
+func (r *registry) RenewElection() *Election {
+	e := &electionEntry{}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*electionEntry)
 	if keep { // previous election is still running
@@ -710,8 +710,8 @@ func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactEl
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewDownloader(t *targetrunner) (*downloader.Downloader, error) {
-	e := &downloaderEntry{t: t}
+func (r *registry) RenewDownloader(t cluster.Target, stat stats.Tracker) (*downloader.Downloader, error) {
+	e := &downloaderEntry{t: t, stat: stat}
 	ee, _, err := r.renewGlobalXaction(e)
 	if err != nil {
 		return nil, err
@@ -720,15 +720,15 @@ func (r *xactionsRegistry) renewDownloader(t *targetrunner) (*downloader.Downloa
 	return entry.xact, nil
 }
 
-func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
+func (r *registry) RenewEvictDelete(evict bool) *evictDelete {
 	e := &evictDeleteEntry{evict: evict}
 	ee, _, _ := r.renewGlobalXaction(e)
 	entry := ee.(*evictDeleteEntry)
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bck *cluster.Bck,
-	msg *cmn.SelectMsg) (*xactBckListTask, error) {
+func (r *registry) RenewBckListXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,
+	msg *cmn.SelectMsg) (*bckListTask, error) {
 	id := msg.TaskID
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
@@ -748,8 +748,8 @@ func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner
 	return e.xact, nil
 }
 
-func (r *xactionsRegistry) renewBckSummaryXact(ctx context.Context, t *targetrunner, bck *cluster.Bck,
-	msg *cmn.SelectMsg) (*xactBckSummaryTask, error) {
+func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,
+	msg *cmn.SelectMsg) (*bckSummaryTask, error) {
 	id := msg.TaskID
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
@@ -770,14 +770,14 @@ func (r *xactionsRegistry) renewBckSummaryXact(ctx context.Context, t *targetrun
 }
 
 //
-// xactBckListTask
+// bckListTask
 //
 
-func (r *xactBckListTask) IsGlobal() bool        { return false }
-func (r *xactBckListTask) IsTask() bool          { return true }
-func (r *xactBckListTask) IsMountpathXact() bool { return false }
+func (r *bckListTask) IsGlobal() bool        { return false }
+func (r *bckListTask) IsTask() bool          { return true }
+func (r *bckListTask) IsMountpathXact() bool { return false }
 
-func (r *xactBckListTask) Run() {
+func (r *bckListTask) Run() {
 	walk := objwalk.NewWalk(r.ctx, r.t, r.bck, r.msg)
 	if r.bck.IsAIS() || r.msg.Cached {
 		r.UpdateResult(walk.LocalObjPage())
@@ -786,7 +786,7 @@ func (r *xactBckListTask) Run() {
 	}
 }
 
-func (r *xactBckListTask) UpdateResult(result interface{}, err error) {
+func (r *bckListTask) UpdateResult(result interface{}, err error) {
 	res := &taskState{Err: err}
 	if err == nil {
 		res.Result = result
@@ -795,7 +795,7 @@ func (r *xactBckListTask) UpdateResult(result interface{}, err error) {
 	r.EndTime(time.Now())
 }
 
-func (r *xactBckListTask) Result() (interface{}, error) {
+func (r *bckListTask) Result() (interface{}, error) {
 	ts := (*taskState)(r.res.Load())
 	if ts == nil {
 		return nil, errors.New("no result to load")
@@ -804,17 +804,17 @@ func (r *xactBckListTask) Result() (interface{}, error) {
 }
 
 //
-// xactBckSummaryTask
+// bckSummaryTask
 //
 
-func (r *xactBckSummaryTask) IsGlobal() bool        { return false }
-func (r *xactBckSummaryTask) IsTask() bool          { return true }
-func (r *xactBckSummaryTask) IsMountpathXact() bool { return false }
+func (r *bckSummaryTask) IsGlobal() bool        { return false }
+func (r *bckSummaryTask) IsTask() bool          { return true }
+func (r *bckSummaryTask) IsMountpathXact() bool { return false }
 
-func (r *xactBckSummaryTask) Run() {
+func (r *bckSummaryTask) Run() {
 	var (
 		buckets []*cluster.Bck
-		bmd     = r.t.bmdowner.get()
+		bmd     = r.t.GetBowner().Get()
 	)
 	if r.bck.Name != "" {
 		buckets = append(buckets, r.bck)
@@ -846,14 +846,14 @@ func (r *xactBckSummaryTask) Run() {
 		return
 	}
 
-	si, err := cluster.HrwTargetTask(uint64(r.msg.TaskID), r.t.smapowner.Get())
+	si, err := cluster.HrwTargetTask(uint64(r.msg.TaskID), r.t.GetSmap())
 	if err != nil {
 		r.UpdateResult(nil, err)
 		return
 	}
 
 	// When we are target which should not list CB we should only list cached objects.
-	shouldListCB := si.DaemonID == r.t.si.DaemonID && !r.msg.Cached
+	shouldListCB := si.DaemonID == r.t.Snode().DaemonID && !r.msg.Cached
 	if !shouldListCB {
 		r.msg.Cached = true
 	}
@@ -862,7 +862,7 @@ func (r *xactBckSummaryTask) Run() {
 		go func(bck *cluster.Bck) {
 			defer wg.Done()
 
-			if err := bck.Init(r.t.bmdowner); err != nil {
+			if err := bck.Init(r.t.GetBowner()); err != nil {
 				errCh <- err
 				return
 			}
@@ -945,7 +945,7 @@ func (r *xactBckSummaryTask) Run() {
 	r.UpdateResult(summaries, nil)
 }
 
-func (r *xactBckSummaryTask) UpdateResult(result interface{}, err error) {
+func (r *bckSummaryTask) UpdateResult(result interface{}, err error) {
 	res := &taskState{Err: err}
 	if err == nil {
 		res.Result = result
@@ -954,10 +954,14 @@ func (r *xactBckSummaryTask) UpdateResult(result interface{}, err error) {
 	r.EndTime(time.Now())
 }
 
-func (r *xactBckSummaryTask) Result() (interface{}, error) {
+func (r *bckSummaryTask) Result() (interface{}, error) {
 	ts := (*taskState)(r.res.Load())
 	if ts == nil {
 		return nil, errors.New("no result to load")
 	}
 	return ts.Result, ts.Err
+}
+
+func init() {
+	Registry = newXactions()
 }

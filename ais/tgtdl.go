@@ -13,10 +13,10 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/xaction"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // NOTE: This request is internal so we can have asserts there.
@@ -32,7 +32,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		statusCode int
 	)
 
-	downloaderXact, err := t.xactions.renewDownloader(t)
+	downloaderXact, err := xaction.Registry.RenewDownloader(t, t.statsif)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return

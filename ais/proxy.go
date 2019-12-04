@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -232,7 +233,7 @@ func (p *proxyrunner) Stop(err error) {
 		isPrimary = smap.isPrimary(p.si)
 	}
 	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.Getname(), p.si.Name(), isPrimary, err)
-	p.xactions.abortAll()
+	xaction.Registry.AbortAll()
 
 	if isPrimary {
 		// give targets and non primary proxies some time to unregister
@@ -603,7 +604,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
 	smap := p.smapowner.get()
 	if smap.isPrimary(p.si) {
-		vote := p.xactions.globalXactRunning(cmn.ActElection)
+		vote := xaction.Registry.GlobalXactRunning(cmn.ActElection)
 		s := fmt.Sprintf("Primary %s cannot receive cluster meta (election=%t)", p.si, vote)
 		p.invalmsghdlr(w, r, s)
 		return

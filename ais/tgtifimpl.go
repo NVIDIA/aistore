@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 //
@@ -38,8 +39,8 @@ func (t *targetrunner) PrefetchQueueLen() int        { return len(t.prefetchQueu
 func (t *targetrunner) ECM() cluster.ECManager       { return ECM }
 
 func (t *targetrunner) RebalanceInfo() cluster.RebalanceInfo {
-	_, running := t.xactions.isRebalancing(cmn.ActGlobalReb)
-	_, runningLocal := t.xactions.isRebalancing(cmn.ActLocalReb)
+	_, running := xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
+	_, runningLocal := xaction.Registry.IsRebalancing(cmn.ActLocalReb)
 	return cluster.RebalanceInfo{
 		IsRebalancing: running || runningLocal,
 		GlobalRebID:   t.rebManager.globRebID.Load(),
@@ -79,7 +80,7 @@ func (t *targetrunner) RunLRU() {
 		glog.Infoln("Warning: rebalancing (local or global) is in progress, skipping LRU run")
 		return
 	}
-	xlru := t.xactions.renewLRU()
+	xlru := xaction.Registry.RenewLRU()
 	if xlru == nil {
 		return
 	}
@@ -96,7 +97,7 @@ func (t *targetrunner) RunLRU() {
 }
 
 func (t *targetrunner) Prefetch() {
-	xpre := t.xactions.renewPrefetch(getstorstatsrunner())
+	xpre := xaction.Registry.RenewPrefetch(getstorstatsrunner())
 
 	if xpre == nil {
 		return

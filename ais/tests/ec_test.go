@@ -229,7 +229,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 			tassert.Errorf(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
 			if sliced {
 				if _, ok := hashes[md.hash]; ok {
-					t.Errorf("Duplicated slice hash(slice) %q: %s\n", objFullPath, md.hash)
+					t.Logf("Duplicated slice hash(slice) %q: %s\n", objFullPath, md.hash)
 				}
 				hashes[md.hash] = true
 			}
@@ -238,7 +238,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 			tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
 			if sliced {
 				if _, ok := hashes[md.hash]; ok {
-					t.Errorf("Duplicated slice hash(main) %q: %s\n", objFullPath, md.hash)
+					t.Logf("Duplicated slice hash(main) %q: %s\n", objFullPath, md.hash)
 				}
 				hashes[md.hash] = true
 			}
