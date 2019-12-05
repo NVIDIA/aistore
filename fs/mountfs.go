@@ -129,6 +129,16 @@ func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *Mou
 
 func (mi *MountpathInfo) LomCache(idx int) *LomCache { x := &mi.lomcaches; return &x[idx] }
 
+func (mi *MountpathInfo) evictLomCache() {
+	for idx := range mi.lomcaches {
+		cache := mi.LomCache(idx)
+		cache.M.Range(func(key interface{}, _ interface{}) bool {
+			cache.M.Delete(key)
+			return true
+		})
+	}
+}
+
 // FastRemoveDir removes directory in steps:
 // 1. Synchronously gets temporary directory name
 // 2. Synchronously renames old folder to temporary directory
@@ -362,6 +372,9 @@ func (mfs *MountedFS) Remove(mpath string) error {
 	delete(availablePaths, cleanMpath)
 	mfs.ios.RemoveMpath(cleanMpath)
 	delete(mfs.fsIDs, mp.Fsid)
+
+	go mp.evictLomCache()
+
 	if l := len(availablePaths); l == 0 {
 		glog.Errorf("removed the last available mountpath %s", mp)
 	} else {
@@ -421,6 +434,7 @@ func (mfs *MountedFS) Disable(mpath string) (disabled bool, err error) {
 		} else {
 			glog.Infof("disabled mountpath %s (%d remain(s) active)", mpathInfo, l)
 		}
+		go mpathInfo.evictLomCache()
 		return true, nil
 	}
 	if _, ok := disabledPaths[cleanMpath]; ok {
