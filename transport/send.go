@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -792,6 +793,7 @@ func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	var (
 		sendoff = &lz4s.s.sendoff
 		last    = sendoff.obj.hdr.IsLast()
+		retry   = 64 // insist on returning n > 0
 	)
 	if lz4s.sgl.Len() > 0 {
 		n, err = lz4s.sgl.Read(b)
@@ -800,15 +802,22 @@ func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 		}
 		goto ex
 	}
+re:
 	n, err = lz4s.s.Read(b)
 	_, _ = lz4s.zw.Write(b[:n])
-	// NOTE: lz4s.zw.Flush() vs compression ratio
 	if last {
 		lz4s.zw.Close()
-	} else if lz4s.s.sendoff.obj.reader == nil { // eoObj happened
+		retry = 0
+	} else if lz4s.s.sendoff.obj.reader == nil /*eoObj*/ || err != nil {
 		lz4s.zw.Flush()
+		retry = 0
 	}
 	n, _ = lz4s.sgl.Read(b)
+	if n == 0 && retry > 0 {
+		runtime.Gosched()
+		retry--
+		goto re
+	}
 ex:
 	lz4s.s.stats.CompressedSize.Add(int64(n))
 
