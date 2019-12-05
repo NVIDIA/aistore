@@ -25,7 +25,7 @@ const (
 type (
 	// implements fs.PathRunGroup interface
 	fsprungroup struct {
-		sync.Mutex
+		sync.RWMutex
 		t       *targetrunner
 		runners map[int64]fs.PathRunner // subgroup of the nodeCtx.runners rungroup
 		nextid  atomic.Int64
@@ -127,6 +127,7 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 
 func (g *fsprungroup) newMountpathEvent(action, mpath string) {
 	xaction.Registry.StopMountpathXactions()
+	g.RLock()
 	for _, r := range g.runners {
 		switch action {
 		case enableMpathAct:
@@ -137,12 +138,14 @@ func (g *fsprungroup) newMountpathEvent(action, mpath string) {
 			cmn.AssertMsg(false, action)
 		}
 	}
+	g.RUnlock()
 	go g.t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
 	g.checkEnable(action, mpath)
 }
 
 func (g *fsprungroup) lostMountpathEvent(action, mpath string) {
 	xaction.Registry.StopMountpathXactions()
+	g.RLock()
 	for _, r := range g.runners {
 		switch action {
 		case disableMpathAct:
@@ -153,6 +156,7 @@ func (g *fsprungroup) lostMountpathEvent(action, mpath string) {
 			cmn.AssertMsg(false, action)
 		}
 	}
+	g.RUnlock()
 	if g.checkZeroMountpaths(action) {
 		return
 	}
