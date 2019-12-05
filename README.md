@@ -76,9 +76,10 @@ $ cd github.com/NVIDIA/aistore
 $ make deploy
 $ go test ./tests -v -run=Mirror
 ```
-The `go get` command installs AIS sources and all the versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
+where:
 
-The `make deploy` command deploys AIStore daemons locally based on a few prompted Q&A. The example shown below deploys 10 targets (each with 2 local simulated filesystems) and 3 gateways, and will not require (or expect) to access Cloud storage (notice the "Cloud Provider" prompt below):
+* `go get` installs sources and dependencies under your [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
+* `make deploy` deploys AIStore daemons locally and interactively, for example:
 
 ```shell
 $ make deploy
@@ -96,11 +97,13 @@ Enter your choice:
 3
 ```
 
-Or, you can run all of the above with a single command:
+Or, you can run all of the above non-interactively:
 
 ```shell
-$ make kill; ./ais/setup/deploy.sh <<< $'10\n3\n2\n3'
+$ make kill; make deploy <<< $'10\n3\n2\n3'
 ```
+
+>  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud Provider" prompt above, and the fact that access to Cloud storage is specified at the deployment time.
 
 > `make kill` will terminate local AIStore if it's already running.
 

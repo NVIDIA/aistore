@@ -60,10 +60,11 @@ deploy: node authn ## Build and locally deploys AIS cluster
 .PHONY: kill rmcache clean
 
 kill: ## Kill all locally deployed targets and proxies
-	@echo "Killing target and proxies..."
+	@echo -n "AIS shutdown... "
 	@pkill -SIGINT aisnode 2>/dev/null; sleep 1; true
 	@pkill authn 2>/dev/null; sleep 1; true
 	@pkill -SIGKILL aisnode 2>/dev/null; true
+	@echo "done."
 
 # delete only caches, not logs
 rmcache: ## Delete AIS related caches
