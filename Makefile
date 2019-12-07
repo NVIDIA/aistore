@@ -51,7 +51,7 @@ aisloader: ## Build 'aisloader' binary
 #
 .PHONY: deploy
 
-deploy: node authn ## Build and locally deploys AIS cluster
+deploy: ## Build and locally deploys AIS cluster
 	@"$(BUILD_DIR)/deploy.sh"
 
 #

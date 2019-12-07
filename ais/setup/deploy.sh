@@ -126,7 +126,7 @@ END=$((TARGET_CNT + PROXY_CNT - 1))
 
 echo "Number of local cache directories (enter 0 for preconfigured filesystems):"
 read test_fspath_cnt
-if ! [[ ${test_fspath_cnt} =~ ^[0-9]+$ ]] ; then
+if ! [[ ${test_fspath_cnt} =~ ^[0-9]+$ ]]; then
   printError "${test_fspath_cnt} is not a number"
 fi
 TEST_FSPATH_COUNT=${test_fspath_cnt}
@@ -146,6 +146,10 @@ if [[ ${cld_provider} -eq 1 ]]; then
   CLDPROVIDER="aws"
 elif [[ ${cld_provider} -eq 2 ]]; then
   CLDPROVIDER="gcp"
+fi
+
+if ! CLDPROVIDER=${CLDPROVIDER} make -C ${AISTORE_DIR} node; then
+  printError "failed to compile 'aisnode' binary"
 fi
 
 mkdir -p $CONFDIR
@@ -203,6 +207,9 @@ if [[ $AUTHENABLED = "true" ]]; then
   LOGDIR="$LOGROOT/authn/log"
   source "${AISTORE_DIR}/ais/setup/authn.sh"
 
+  if ! make -C ${AISTORE_DIR} authn; then
+    printError "failed to compile 'authn' binary"
+  fi
   runCmd "${GOPATH}/bin/authn -config=${CONFFILE}"
 fi
 
