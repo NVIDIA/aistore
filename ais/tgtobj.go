@@ -631,6 +631,10 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	}
 
 	if goi.lom.Size() == 0 {
+		if !goi.lom.Exists() {
+			err = os.ErrNotExist
+			errCode = http.StatusNotFound
+		}
 		return
 	}
 

@@ -102,13 +102,13 @@ func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath st
 	md.wg.Add(1)
 	go runAsyncJob(md.t, md.wg, method, mpath, fileNames, md.chfail, md.chstop, sgl, md.bucket)
 	// let the job run for a while and then make a mountpath broken
-	time.Sleep(time.Second * 2)
+	time.Sleep(2 * time.Second)
 	md.chfail <- struct{}{}
 	if detected := waitForMountpathChanges(md.t, target, len(mpathList.Available)-1, len(mpathList.Disabled)+1, true); detected {
 		// let the job run for a while with broken mountpath, so FSHC detects the trouble
-		time.Sleep(time.Second * 2)
+		time.Sleep(2 * time.Second)
+		md.chstop <- struct{}{}
 	}
-	md.chstop <- struct{}{}
 	md.wg.Wait()
 
 	repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled))
@@ -173,8 +173,7 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 	detectTime := time.Since(detectStart)
 	tutils.Logf("passed %v\n", detectTime)
 
-	if len(newMpaths.Disabled) == disabledLen &&
-		len(newMpaths.Available) == availLen {
+	if len(newMpaths.Disabled) == disabledLen && len(newMpaths.Available) == availLen {
 		tutils.Logf("Check is successful in %v\n", detectTime)
 		return true
 	}
@@ -185,10 +184,10 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 
 	tutils.Logf("Current mpath list: %v\n", newMpaths)
 	if len(newMpaths.Disabled) != disabledLen {
-		t.Errorf("Failed mpath count mismatch.\nOld count: %v\nNew list:%v\n",
+		t.Errorf("Disabled mpath count mismatch, old count: %v, new list: %v",
 			disabledLen, newMpaths.Disabled)
 	} else if len(newMpaths.Available) != availLen {
-		t.Errorf("Available mpath count mismatch.\nOld count: %v\nNew list:%v\n",
+		t.Errorf("Available mpath count mismatch, old count: %v, new list: %v",
 			availLen, newMpaths.Available)
 	}
 	return false
@@ -207,7 +206,7 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list
 	api.EnableMountpath(baseParams, target, mpath)
-	tutils.Logf("Recheck mountpaths\n")
+	tutils.Logln("Recheck mountpaths")
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
 	var mpaths *cmn.MountpathList
@@ -262,7 +261,6 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 				}
 				f.Close()
 			case <-chstop:
-
 				return
 			default:
 				// do nothing and just start the next loop
@@ -306,7 +304,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
 	defer tutils.DestroyBucket(t, md.proxyURL, md.bucket)
 
-	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
+	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 
 	sgl := tutils.Mem2.NewSGL(md.fileSize)
@@ -316,9 +314,9 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	generateRandomData(md.numObjs)
 
 	// Checking detection on object PUT
-	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, sgl)
+	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMpathList, sgl)
 	// Checking detection on object GET
-	md.runTestAsync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, sgl)
+	md.runTestAsync(http.MethodGet, selectedTarget, selectedMpath, selectedMpathList, sgl)
 
 	// Checking that reading "bad" objects does not disable mpath if the mpath is OK
 	tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
@@ -328,9 +326,9 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 			t.Error("Should not be able to GET non-existing objects")
 		}
 	}
-	if detected := waitForMountpathChanges(t, selectedTarget, len(selectedMap.Available)-1, len(selectedMap.Disabled)+1, false); detected {
+	if detected := waitForMountpathChanges(t, selectedTarget, len(selectedMpathList.Available), len(selectedMpathList.Disabled), false); !detected {
 		t.Error("GETting non-existing objects should not disable mountpath")
-		repairMountpath(t, selectedTarget, selectedMpath, len(selectedMap.Available), len(selectedMap.Disabled))
+		repairMountpath(t, selectedTarget, selectedMpath, len(selectedMpathList.Available), len(selectedMpathList.Disabled))
 	}
 
 	waitForRebalanceToComplete(t, tutils.BaseAPIParams(md.proxyURL), rebalanceTimeout)
