@@ -31,14 +31,16 @@ var defaultConfig = Config{
 		SyncInterval:    20 * time.Minute,
 	},
 	Log: LogConfig{
-		ErrorLogFile: "",
-		DebugLogFile: "",
+		ErrorFile: "",
+		DebugFile: "",
 	},
 	IO: IOConfig{
 		// Determines the size of chunks that we write with append. The only exception
 		// when we write less is Flush (end-of-file).
 		WriteBufSize: cmn.MiB,
 	},
+	// By default we allow unlimited memory to be used by the cache.
+	MemoryLimit: "0B",
 }
 
 type (
@@ -68,8 +70,8 @@ type (
 	}
 
 	LogConfig struct {
-		ErrorLogFile string `json:"error_log_file"`
-		DebugLogFile string `json:"debug_log_file"`
+		ErrorFile string `json:"error_file"`
+		DebugFile string `json:"debug_file"`
 	}
 
 	IOConfig struct {
@@ -87,11 +89,11 @@ func (c *Config) validate() (err error) {
 	if c.Periodic.SyncInterval, err = time.ParseDuration(c.Periodic.SyncIntervalStr); err != nil {
 		return fmt.Errorf("invalid periodic.sync_interval format %q: %v", c.Periodic.SyncInterval, err)
 	}
-	if c.Log.ErrorLogFile != "" && !filepath.IsAbs(c.Log.ErrorLogFile) {
-		return fmt.Errorf("invalid log.error_log_file format %q: path needs to be absolute", c.Log.ErrorLogFile)
+	if c.Log.ErrorFile != "" && !filepath.IsAbs(c.Log.ErrorFile) {
+		return fmt.Errorf("invalid log.error_log_file format %q: path needs to be absolute", c.Log.ErrorFile)
 	}
-	if c.Log.DebugLogFile != "" && !filepath.IsAbs(c.Log.DebugLogFile) {
-		return fmt.Errorf("invalid log.debug_log_file format %q: path needs to be absolute", c.Log.DebugLogFile)
+	if c.Log.DebugFile != "" && !filepath.IsAbs(c.Log.DebugFile) {
+		return fmt.Errorf("invalid log.debug_log_file format %q: path needs to be absolute", c.Log.DebugFile)
 	}
 	if c.IO.WriteBufSize < 0 {
 		return fmt.Errorf("invalid io.write_buf_size value: %d: expected non-negative value", c.IO.WriteBufSize)

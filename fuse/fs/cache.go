@@ -203,7 +203,7 @@ func (c *namespaceCache) refresh() error {
 
 		var mem runtime.MemStats
 		runtime.ReadMemStats(&mem)
-		if mem.HeapAlloc > c.cfg.MemoryLimit {
+		if c.cfg.MemoryLimit > 0 && mem.HeapAlloc > c.cfg.MemoryLimit {
 			c.containsAllObjects = false
 			break
 		}

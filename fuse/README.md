@@ -169,21 +169,28 @@ An example of one configuration file:
     "sync_interval": "20m"
   },
   "log": {
-    "error_log_file": "",
-    "debug_log_file": ""
+    "error_file": "/var/log/aisfs.log",
+    "debug_file": ""
   },
   "io": {
     "write_buf_size": 1048576
-  }
+  },
+  "memory_limit": "1GB"
 }
 ```
 
-Setting `periodic.sync_interval` to `0` disables syncing with AIS.
-Disabling sync or setting it to high value can result in problems with
-consistency since AISFS can perceive the status of the objects differently.
+| Config key | Description | Additional information  |
+| ---------- | -------- | ------- |
+| `cluster.url` | HTTP URL to AIS cluster. | |
+| `timeout.tcp_timeout` | Determines how long AISFS will wait for TCP to establish connection to the cluster. | |
+| `timouet.http_timeout` | Determines how long AISFS will wait for AIS to respond with initial data. | |
+| `periodic.sync_interval` | Determines how often locally cached metadata is synced with AIS cluster. | Setting this value to `0` disables syncing with AIS. Disabling sync or setting it to high value can result in problems with consistency since AISFS can perceive the status of the objects differently. |
+| `log.error_file` | Location where errors are written to. Must be an absolute path. | Empty value/string will result in writing errors to STDERR. |
+| `log.debug_file` | Location where debug logs are written to. Must be an absolute path. | Empty value/string disables writing debug logs. |
+| `io.write_buf_size` | Size of the buffer used to cache data during PUT/write operation. | High value can result in higher memory usage but also in better performance when writing large files. |
+| `memory_limit` | Determines how much memory AISFS can use to cache metadata locally (like structure and filenames). Can be in format of raw numbers (`1024`) or with suffix `10MB`. | High value can result in much better performance for the most frequent operations. We recommend allowing as much memory to AISFS as it is possible. |
 
-Setting `io.write_buf_size` to high value can result in higher memory usage
-but also in better performance when writing large files.
+
 
 
 ### Mounting

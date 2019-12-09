@@ -6,10 +6,8 @@ package fs
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/ais"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -17,11 +15,6 @@ import (
 )
 
 var _ = Describe("Cache", func() {
-	cfg := &ServerConfig{
-		SyncInterval: time.Duration(0),
-		MemoryLimit:  10 * cmn.GiB,
-	}
-
 	Describe("internal", func() {
 		var (
 			cache *namespaceCache
@@ -38,7 +31,7 @@ var _ = Describe("Cache", func() {
 				Client: http.DefaultClient,
 				URL:    "",
 			})
-			cache, _ = newNsCache(bck, nil, cfg)
+			cache, _ = newNsCache(bck, nil, &ServerConfig{})
 		})
 
 		Describe("add", func() {

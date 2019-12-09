@@ -236,14 +236,14 @@ func appMain(c *cli.Context) (err error) {
 		return
 	}
 
-	errorLog, err = prepareLogFile(cfg.Log.ErrorLogFile, "ERROR: ", bucket)
+	errorLog, err = prepareLogFile(cfg.Log.ErrorFile, "ERROR: ", bucket)
 	if err != nil {
 		return
 	}
 
-	// If cfg.Log.DebugLogFile == "" no debug logging is performed.
-	if cfg.Log.DebugLogFile != "" {
-		debugLog, err = prepareLogFile(cfg.Log.DebugLogFile, "DEBUG: ", bucket)
+	// If cfg.Log.DebugFile == "" no debug logging is performed.
+	if cfg.Log.DebugFile != "" {
+		debugLog, err = prepareLogFile(cfg.Log.DebugFile, "DEBUG: ", bucket)
 		if err != nil {
 			return
 		}
