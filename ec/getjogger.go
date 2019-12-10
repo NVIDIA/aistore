@@ -198,7 +198,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 		iReqBuf := c.parent.newIntraReq(reqGet, nil).Marshal()
 
 		w := mm.NewSGL(cmn.KiB)
-		if err := c.parent.readRemote(req.LOM, node, uname, iReqBuf, w); err != nil {
+		if _, err := c.parent.readRemote(req.LOM, node, uname, iReqBuf, w); err != nil {
 			glog.Errorf("Failed to read from %s", node)
 			w.Free()
 			w = nil
@@ -250,7 +250,10 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 }
 
 func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, nodes map[string]*Metadata, buffer []byte) error {
-	var writer *os.File
+	var (
+		writer *os.File
+		n      int64
+	)
 	// try read a replica from targets one by one until the replica is got
 	objFQN := req.LOM.FQN
 	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec-restore-repl")
@@ -265,11 +268,12 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 			break
 		}
 		req.LOM.FQN = tmpFQN
-		err = c.parent.readRemote(req.LOM, node, uname, iReqBuf, w)
+		n, err = c.parent.readRemote(req.LOM, node, uname, iReqBuf, w)
 		w.Close()
 
-		if err == nil && req.LOM.Size() != 0 {
+		if err == nil && n != 0 {
 			// a valid replica is found - break and do not free SGL
+			req.LOM.SetSize(n)
 			writer = w
 			break
 		}

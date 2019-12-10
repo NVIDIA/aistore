@@ -124,12 +124,16 @@ func (r *xactReqBase) ecRequestsEnabled() bool {
 // Later `Exists` can be changed to `false` if local file is unreadable or does
 // not exist
 func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata) *IntraReq {
-	return &IntraReq{
+	req := &IntraReq{
 		Act:    act,
 		Sender: r.si.DaemonID,
 		Meta:   meta,
 		Exists: true,
 	}
+	if act == reqGet && meta != nil {
+		req.IsSlice = !meta.IsCopy
+	}
+	return req
 }
 
 func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
@@ -271,7 +275,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 //		name, it puts the data to its writer and notifies when download is done
 // * request - request to send
 // * writer - an opened writer that will receive the replica/slice/meta
-func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) error {
+func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
 	hdr := transport.Header{
 		Bucket:   lom.Bucket(),
 		BckIsAIS: lom.IsAIS(),
@@ -295,19 +299,19 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, hdr, reader, nil, true); err != nil {
 		r.unregWriter(uname)
-		return err
+		return 0, err
 	}
 	c := cmn.GCO.Get()
 	if sw.wg.WaitTimeout(c.Timeout.SendFile) {
 		r.unregWriter(uname)
-		return fmt.Errorf("timed out waiting for %s is read", uname)
+		return 0, fmt.Errorf("timed out waiting for %s is read", uname)
 	}
 	r.unregWriter(uname)
-	_ = lom.Load() // FIXME: handle errors
+	lom.Uncache()
 	if glog.V(4) {
 		glog.Infof("Received object %s/%s from %s", lom.Bucket(), lom.Objname, daemonID)
 	}
-	return nil
+	return sw.n, nil
 }
 
 // Registers a new slice that will wait for the data to come from
