@@ -42,6 +42,39 @@ func (listeners *slisteners) Reg(sl cluster.Slistener)  {}
 func (listeners *slisteners) Unreg(cluster.Slistener)   {}
 
 func Test_Bundle(t *testing.T) {
+	tests := []struct {
+		name string
+		nvs  cmn.SimpleKVs
+	}{
+		{
+			name: "not-compressed",
+			nvs: cmn.SimpleKVs{
+				"compression": cmn.CompressNever,
+			},
+		},
+		{
+			name: "compress-block-1M",
+			nvs: cmn.SimpleKVs{
+				"compression": cmn.CompressAlways,
+				"block":       "1MiB",
+			},
+		},
+		{
+			name: "compress-block-256K",
+			nvs: cmn.SimpleKVs{
+				"compression": cmn.CompressAlways,
+				"block":       "256KiB",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testBundle(t, test.nvs)
+		})
+	}
+}
+
+func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	var (
 		numCompleted atomic.Int64
 		Mem2         = tutils.Mem2
@@ -81,16 +114,20 @@ func Test_Bundle(t *testing.T) {
 		lsnode         = cluster.Snode{DaemonID: "local"}
 		random         = newRand(time.Now().UnixNano())
 		wbuf           = slab.Alloc()
-		extra          = &transport.Extra{Compression: cmn.CompressAlways, Mem2: Mem2}
+		extra          = &transport.Extra{Compression: nvs["compression"], Mem2: Mem2}
 		size, prevsize int64
 		multiplier     = int(random.Int63()%13) + 4
 		num            int
 	)
-	config := cmn.GCO.BeginUpdate()
-	config.Compression.BlockMaxSize = cmn.MiB
-	cmn.GCO.CommitUpdate(config)
-	if err := config.Compression.Validate(config); err != nil {
-		tassert.CheckFatal(t, err)
+	if nvs["compression"] != cmn.CompressNever {
+		v, _ := cmn.S2B(nvs["block"])
+		cmn.Assert(v == cmn.MiB || v == cmn.KiB*256 || v == cmn.KiB*64)
+		config := cmn.GCO.BeginUpdate()
+		config.Compression.BlockMaxSize = int(v)
+		cmn.GCO.CommitUpdate(config)
+		if err := config.Compression.Validate(config); err != nil {
+			tassert.CheckFatal(t, err)
+		}
 	}
 	_, _ = random.Read(wbuf)
 	sb := transport.NewStreamBundle(sowner, &lsnode, httpclient,
@@ -124,9 +161,16 @@ func Test_Bundle(t *testing.T) {
 
 	slab.Free(wbuf)
 
-	for id, tstat := range stats {
-		fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), compression-ratio=%.2f\n",
-			id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.CompressionRatio())
+	if nvs["compression"] != cmn.CompressNever {
+		for id, tstat := range stats {
+			fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), compression-ratio=%.2f\n",
+				id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.CompressionRatio())
+		}
+	} else {
+		for id, tstat := range stats {
+			fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d)\n",
+				id, trname, tstat.Offset.Load(), tstat.Num.Load(), num)
+		}
 	}
 	fmt.Printf("send$: num-sent=%d, num-completed=%d\n", num, numCompleted.Load())
 }
