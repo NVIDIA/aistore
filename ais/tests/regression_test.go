@@ -59,12 +59,12 @@ var (
 	LowWaterMark     = int32(60)
 	UpdTime          = time.Second * 20
 	configRegression = map[string]string{
-		"stats_time":        fmt.Sprintf("%v", UpdTime),
-		"dont_evict_time":   fmt.Sprintf("%v", UpdTime),
-		"capacity_upd_time": fmt.Sprintf("%v", UpdTime),
-		"lowwm":             fmt.Sprintf("%d", LowWaterMark),
-		"highwm":            fmt.Sprintf("%d", HighWaterMark),
-		"lru.enabled":       "true",
+		"periodic.stats_time":   fmt.Sprintf("%v", UpdTime),
+		"lru.enabled":           "true",
+		"lru.lowwm":             fmt.Sprintf("%d", LowWaterMark),
+		"lru.highwm":            fmt.Sprintf("%d", HighWaterMark),
+		"lru.capacity_upd_time": fmt.Sprintf("%v", UpdTime),
+		"lru.dont_evict_time":   fmt.Sprintf("%v", UpdTime),
 	}
 )
 
@@ -629,26 +629,26 @@ func TestConfig(t *testing.T) {
 	nlruconfig := nconfig.LRU
 	nperiodic := nconfig.Periodic
 
-	if nperiodic.StatsTimeStr != configRegression["stats_time"] {
+	if nperiodic.StatsTimeStr != configRegression["periodic.stats_time"] {
 		t.Errorf("StatsTime was not set properly: %v, should be: %v",
-			nperiodic.StatsTimeStr, configRegression["stats_time"])
+			nperiodic.StatsTimeStr, configRegression["periodic.stats_time"])
 	} else {
 		o := operiodic.StatsTimeStr
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"stats_time": o})
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"periodic.stats_time": o})
 	}
-	if nlruconfig.DontEvictTimeStr != configRegression["dont_evict_time"] {
+	if nlruconfig.DontEvictTimeStr != configRegression["lru.dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
-			nlruconfig.DontEvictTimeStr, configRegression["dont_evict_time"])
+			nlruconfig.DontEvictTimeStr, configRegression["lru.dont_evict_time"])
 	} else {
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"dont_evict_time": olruconfig.DontEvictTimeStr})
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"lru.dont_evict_time": olruconfig.DontEvictTimeStr})
 	}
-	if nlruconfig.CapacityUpdTimeStr != configRegression["capacity_upd_time"] {
+	if nlruconfig.CapacityUpdTimeStr != configRegression["lru.capacity_upd_time"] {
 		t.Errorf("CapacityUpdTime was not set properly: %v, should be: %v",
-			nlruconfig.CapacityUpdTimeStr, configRegression["capacity_upd_time"])
+			nlruconfig.CapacityUpdTimeStr, configRegression["lru.capacity_upd_time"])
 	} else {
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"capacity_upd_time": olruconfig.CapacityUpdTimeStr})
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"lru.capacity_upd_time": olruconfig.CapacityUpdTimeStr})
 	}
-	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
+	if hw, err := strconv.Atoi(configRegression["lru.highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
 	} else if nlruconfig.HighWM != int64(hw) {
 		t.Errorf("HighWatermark was not set properly: %d, should be: %d",
@@ -658,9 +658,9 @@ func TestConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error parsing HighWM: %v", err)
 		}
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"highwm": oldhwmStr})
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"lru.highwm": oldhwmStr})
 	}
-	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
+	if lw, err := strconv.Atoi(configRegression["lru.lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
 	} else if nlruconfig.LowWM != int64(lw) {
 		t.Errorf("LowWatermark was not set properly: %d, should be: %d",
@@ -670,7 +670,7 @@ func TestConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error parsing LowWM: %v", err)
 		}
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"lowwm": oldlwmStr})
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"lru.lowwm": oldlwmStr})
 	}
 	if pt, err := cmn.ParseBool(configRegression["lru.enabled"]); err != nil {
 		t.Fatalf("Error parsing lru.enabled: %v", err)
@@ -750,10 +750,10 @@ func TestLRU(t *testing.T) {
 		oldhwm, _ := cmn.ConvertToString(olruconfig.HighWM)
 		oldlwm, _ := cmn.ConvertToString(olruconfig.LowWM)
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-			"dont_evict_time":   olruconfig.DontEvictTimeStr,
-			"capacity_upd_time": olruconfig.CapacityUpdTimeStr,
-			"highwm":            oldhwm,
-			"lowwm":             oldlwm,
+			"lru.dont_evict_time":   olruconfig.DontEvictTimeStr,
+			"lru.capacity_upd_time": olruconfig.CapacityUpdTimeStr,
+			"lru.highwm":            oldhwm,
+			"lru.lowwm":             oldlwm,
 		})
 		for k, di := range smap.Tmap {
 			hwmStr, err := cmn.ConvertToString(hwms[k])
@@ -773,10 +773,10 @@ func TestLRU(t *testing.T) {
 	lowwmStr, _ := cmn.ConvertToString(lowwm)
 	hwmStr, _ := cmn.ConvertToString(highwm)
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-		"dont_evict_time":   "30s",
-		"capacity_upd_time": "5s",
-		"lowwm":             lowwmStr,
-		"highwm":            hwmStr,
+		"lru.dont_evict_time":   "30s",
+		"lru.capacity_upd_time": "5s",
+		"lru.lowwm":             lowwmStr,
+		"lru.highwm":            hwmStr,
 	})
 	if t.Failed() {
 		return

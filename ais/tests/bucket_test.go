@@ -34,13 +34,13 @@ func TestDefaultBucketProps(t *testing.T) {
 	)
 
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-		"ec_enabled":     "true",
-		"ec_data_slices": strconv.FormatUint(dataSlices, 10),
+		"ec.enabled":     "true",
+		"ec.data_slices": strconv.FormatUint(dataSlices, 10),
 	})
 	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-		"ec_enabled":       "false",
-		"ec_data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
-		"ec_parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
+		"ec.enabled":       "false",
+		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
+		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
 	})
 
 	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
@@ -62,11 +62,11 @@ func TestResetBucketProps(t *testing.T) {
 		baseParams   = tutils.DefaultBaseAPIParams(t)
 	)
 
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"ec_enabled": "true"})
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"ec.enabled": "true"})
 	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-		"ec_enabled":       "false",
-		"ec_data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
-		"ec_parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
+		"ec.enabled":       "false",
+		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
+		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
 	})
 
 	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)

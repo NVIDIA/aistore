@@ -350,8 +350,8 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	}
 
 	tutils.Logf("*** Testing with disabled FSHC***\n")
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc_enabled": "false"})
-	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc_enabled": "true"})
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc.enabled": "false"})
+	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc.enabled": "true"})
 
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
 	defer tutils.DestroyBucket(t, md.proxyURL, md.bucket)

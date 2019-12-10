@@ -883,57 +883,35 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			}
 			bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
 		}
-	} else {
-		bucketProps = make(cmn.SimpleKVs)
-		bucketProps[cmn.HeaderCloudProvider] = cmn.ProviderAIS
 	}
 	hdr := w.Header()
 	for k, v := range bucketProps {
 		hdr.Set(k, v)
 	}
-	// include bucket's own config override
-	props := bck.Props
-	cksumConf := &config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
-	if props.Cksum.Type != cmn.PropInherit {
-		cksumConf = &props.Cksum
+
+	finalProps := bck.Props.Clone()
+	cksumConf := config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
+	if finalProps.Cksum.Type == cmn.PropInherit {
+		finalProps.Cksum = cksumConf
 	}
-	verConf := &props.Versioning
-	// transfer bucket props via http header
-	// (it is ok for Cloud buckets not to have locally cached props)
-	hdr.Set(cmn.HeaderReadPolicy, props.Tiering.ReadPolicy)
-	hdr.Set(cmn.HeaderWritePolicy, props.Tiering.WritePolicy)
-	hdr.Set(cmn.HeaderBucketChecksumType, cksumConf.Type)
-	hdr.Set(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumConf.ValidateColdGet))
-	hdr.Set(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumConf.ValidateWarmGet))
-	hdr.Set(cmn.HeaderBucketValidateObjMove, strconv.FormatBool(cksumConf.ValidateObjMove))
-	hdr.Set(cmn.HeaderBucketEnableReadRange, strconv.FormatBool(cksumConf.EnableReadRange))
-	hdr.Set(cmn.HeaderBucketVerValidateWarm, strconv.FormatBool(verConf.ValidateWarmGet))
-	// for Cloud buckets, correct Versioning.Enabled is combination of
-	// local and cloud settings and it is true only if versioning
-	// is enabled at both sides: Cloud and for local usage
-	if bck.IsAIS() || !verConf.Enabled {
-		hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verConf.Enabled))
-	} else if enabled, err := cmn.ParseBool(bucketProps[cmn.HeaderBucketVerEnabled]); !enabled && err == nil {
-		hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(false))
-	}
-	hdr.Set(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
-	hdr.Set(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
-	hdr.Set(cmn.HeaderBucketLRUOOS, strconv.FormatInt(props.LRU.OOS, 10))
-	hdr.Set(cmn.HeaderBucketDontEvictTime, props.LRU.DontEvictTimeStr)
-	hdr.Set(cmn.HeaderBucketCapUpdTime, props.LRU.CapacityUpdTimeStr)
-	hdr.Set(cmn.HeaderBucketMirrorEnabled, strconv.FormatBool(props.Mirror.Enabled))
-	hdr.Set(cmn.HeaderBucketMirrorThresh, strconv.FormatInt(props.Mirror.UtilThresh, 10))
-	hdr.Set(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRU.Enabled))
-	if props.Mirror.Enabled {
-		hdr.Set(cmn.HeaderBucketCopies, strconv.FormatInt(props.Mirror.Copies, 10))
-	} else {
-		hdr.Set(cmn.HeaderBucketCopies, "0")
-	}
-	hdr.Set(cmn.HeaderBucketECEnabled, strconv.FormatBool(props.EC.Enabled))
-	hdr.Set(cmn.HeaderBucketECObjSizeLimit, strconv.FormatUint(uint64(props.EC.ObjSizeLimit), 10))
-	hdr.Set(cmn.HeaderBucketECData, strconv.FormatUint(uint64(props.EC.DataSlices), 10))
-	hdr.Set(cmn.HeaderBucketECParity, strconv.FormatUint(uint64(props.EC.ParitySlices), 10))
-	hdr.Set(cmn.HeaderBucketAccessAttrs, strconv.FormatUint(props.AccessAttrs, 10))
+
+	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
+		if fieldName == cmn.HeaderBucketVerEnabled {
+			// For Cloud buckets, correct `versioning.enabled` is combination of
+			// local and cloud settings and it is true only if versioning
+			// is enabled at both sides: Cloud and for local usage
+			verEnabled := field.Value().(bool)
+			if bck.IsAIS() || !verEnabled {
+				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verEnabled))
+			} else if enabled, err := cmn.ParseBool(bucketProps[cmn.HeaderBucketVerEnabled]); !enabled && err == nil {
+				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(false))
+			}
+			return nil, false
+		}
+
+		hdr.Set(fieldName, fmt.Sprintf("%v", field.Value()))
+		return nil, false
+	})
 }
 
 // HEAD /v1/objects/bucket-name/object-name

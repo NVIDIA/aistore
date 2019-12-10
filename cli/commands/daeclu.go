@@ -252,8 +252,8 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	// 1. Key-value pair separated with '=': `ais set log.level=5`
 	// 2. Key-value pair separated with space: `ais set log.level 5`. In this case
 	//		the first word is looked up in cmn.ConfigPropList
-	_, isProperty := cmn.ConfigPropList[args.First()]
-	if isProperty || strings.Contains(args.First(), keyAndValueSeparator) {
+	propList := cmn.ConfigPropList()
+	if cmn.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
 		daemonID = ""
 		kvs = args
 	}
@@ -265,6 +265,12 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	nvs, err = makePairs(kvs)
 	if err != nil {
 		return "", nil, err
+	}
+
+	for k := range nvs {
+		if !cmn.StringInSlice(k, propList) {
+			return "", nil, fmt.Errorf("invalid key %q, not found in available prop list", k)
+		}
 	}
 
 	return daemonID, nvs, nil

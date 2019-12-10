@@ -125,8 +125,8 @@ func suggestConfigSection(c *cli.Context, optional bool) {
 }
 
 func suggestUpdatableConfig(c *cli.Context) {
-	for prop, readonly := range cmn.ConfigPropList {
-		if !readonly && !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
+	for _, prop := range cmn.ConfigPropList() {
+		if !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
 		}
 	}
@@ -210,11 +210,12 @@ func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, se
 }
 
 func propCompletions(c *cli.Context) {
-	for _, prop := range cmn.BucketPropList {
-		if !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
-			fmt.Println(prop)
+	cmn.IterFields(cmn.BucketPropsToUpdate{}, func(tag string, _ cmn.IterField) (error, bool) {
+		if !cmn.AnyHasPrefixInSlice(tag, c.Args()) {
+			fmt.Println(tag)
 		}
-	}
+		return nil, false
+	})
 }
 
 func suggestBucket(c *cli.Context, separator bool, provider ...string) {

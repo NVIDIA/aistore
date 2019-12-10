@@ -5,11 +5,8 @@
 package cmn
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
-	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -59,27 +56,6 @@ var XactKind = XactKindType{
 	ActRenameLB:    {},
 	ActCopyBucket:  {},
 	ActECEncode:    {},
-}
-
-// BucketPropList is a map bucket property <-> readonly, groupped by type
-var BucketPropList = []string{
-	HeaderBucketValidateColdGet,
-	HeaderBucketValidateWarmGet,
-	HeaderBucketEnableReadRange,
-	HeaderBucketValidateObjMove,
-	HeaderBucketVerEnabled,
-	HeaderBucketVerValidateWarm,
-	HeaderBucketLRUEnabled,
-	HeaderBucketLRULowWM,
-	HeaderBucketLRUHighWM,
-	HeaderBucketMirrorEnabled,
-	HeaderBucketMirrorThresh,
-	HeaderBucketCopies,
-	HeaderBucketECEnabled,
-	HeaderBucketECData,
-	HeaderBucketECParity,
-	HeaderBucketECObjSizeLimit,
-	HeaderBucketAccessAttrs,
 }
 
 // SelectMsg represents properties and options for requests which fetch entities
@@ -241,12 +217,16 @@ func MakeAccess(aattr uint64, action string, bits uint64) uint64 {
 // BucketProps defines the configuration of the bucket with regard to
 // its type, checksum, and LRU. These characteristics determine its behavior
 // in response to operations on the bucket itself or the objects inside the bucket.
+//
+// Naming convention for setting/getting the particular props is defined as
+// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
+// one would need to write `ec.enabled`. For more info refer to `IterFields`.
 //nolint:maligned
 type BucketProps struct {
 	// CloudProvider can be "aws", "gcp" (clouds) - or "ais".
 	// If a bucket is local, CloudProvider must be "ais".
 	// Otherwise, it must be "aws" or "gcp".
-	CloudProvider string `json:"cloud_provider"`
+	CloudProvider string `json:"cloud_provider" list:"readonly"`
 
 	// Versioning can be enabled or disabled on a per-bucket basis
 	Versioning VersionConf `json:"versioning"`
@@ -270,14 +250,14 @@ type BucketProps struct {
 	AccessAttrs uint64 `json:"aattrs,string"`
 
 	// unique bucket ID
-	BID uint64
+	BID uint64 `list:"omit"`
 
 	// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
-	Renamed string
+	Renamed string `list:"omit"`
 
 	// Determines if the bucket has been binded to some action and currently
 	// cannot be updated or changed in anyway until the action finishes.
-	InProgress bool `json:"in_progress,omitempty"`
+	InProgress bool `json:"in_progress,omitempty" list:"omit"`
 }
 
 type BucketPropsToUpdate struct {
@@ -538,34 +518,6 @@ func (bp *BucketProps) Validate(bckIsAIS bool, targetCnt int, urlOutsideCluster 
 	return nil
 }
 
-func copyProps(src, dst interface{}) {
-	var (
-		srcTy  = reflect.TypeOf(src)
-		srcVal = reflect.ValueOf(src)
-		dstVal = reflect.ValueOf(dst)
-	)
-
-	for i := 0; i < srcVal.NumField(); i++ {
-		var (
-			srcTyField  = srcTy.Field(i)
-			srcValField = srcVal.Field(i)
-			dstValField = dstVal.Elem().FieldByName(srcTyField.Name)
-		)
-
-		if srcValField.IsNil() {
-			continue
-		}
-
-		if dstValField.Kind() != reflect.Struct {
-			// Set value for the field
-			dstValField.Set(srcValField.Elem())
-		} else {
-			// Recurse into struct
-			copyProps(srcValField.Elem().Interface(), dstValField.Addr().Interface())
-		}
-	}
-}
-
 func (bp *BucketProps) Apply(propsToUpdate BucketPropsToUpdate) {
 	copyProps(propsToUpdate, bp)
 }
@@ -602,71 +554,11 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 		EC:         &ECConfToUpdate{},
 	}
 
-	updateValue := func(key, value string, to interface{}) error {
-		// `to` parameter needs to pointer so we can set it
-		Assert(reflect.ValueOf(to).Kind() == reflect.Ptr)
-
-		tmpValue := value
-		switch to.(type) {
-		case *string:
-			// Strings must be quoted so that Unmarshal treat it well
-			tmpValue = strconv.Quote(tmpValue)
-		default:
-			break
-		}
-
-		// Unmarshal not only tries to parse `tmpValue` but since `to` is pointer,
-		// it will set value of it.
-		if err := json.Unmarshal([]byte(tmpValue), to); err != nil {
-			return fmt.Errorf("failed to parse %q, %s err: %v", key, value, err)
-		}
-
-		return nil
-	}
-
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val
-		if !StringInSlice(name, BucketPropList) {
-			return props, fmt.Errorf("unknown property '%s'", name)
-		}
 
-		switch name {
-		case HeaderBucketECEnabled:
-			err = updateValue(name, value, &props.EC.Enabled)
-		case HeaderBucketECData:
-			err = updateValue(name, value, &props.EC.DataSlices)
-		case HeaderBucketECParity:
-			err = updateValue(name, value, &props.EC.ParitySlices)
-		case HeaderBucketECObjSizeLimit:
-			err = updateValue(name, value, &props.EC.ObjSizeLimit)
-		case HeaderBucketMirrorEnabled:
-			err = updateValue(name, value, &props.Mirror.Enabled)
-		case HeaderBucketCopies:
-			err = updateValue(name, value, &props.Mirror.Copies)
-		case HeaderBucketMirrorThresh:
-			err = updateValue(name, value, &props.Mirror.UtilThresh)
-		case HeaderBucketVerEnabled:
-			err = updateValue(name, value, &props.Versioning.Enabled)
-		case HeaderBucketVerValidateWarm:
-			err = updateValue(name, value, &props.Versioning.ValidateWarmGet)
-		case HeaderBucketLRUEnabled:
-			err = updateValue(name, value, &props.LRU.Enabled)
-		case HeaderBucketLRULowWM:
-			err = updateValue(name, value, &props.LRU.LowWM)
-		case HeaderBucketLRUHighWM:
-			err = updateValue(name, value, &props.LRU.HighWM)
-		case HeaderBucketValidateColdGet:
-			err = updateValue(name, value, &props.Cksum.ValidateColdGet)
-		case HeaderBucketValidateWarmGet:
-			err = updateValue(name, value, &props.Cksum.ValidateWarmGet)
-		case HeaderBucketValidateObjMove:
-			err = updateValue(name, value, &props.Cksum.ValidateObjMove)
-		case HeaderBucketEnableReadRange: // true: Return range checksum, false: return the obj's
-			err = updateValue(name, value, &props.Cksum.EnableReadRange)
-		case HeaderBucketAccessAttrs:
-			err = updateValue(name, value, &props.AccessAttrs)
-		default:
-			AssertMsg(false, fmt.Sprintf("unknown property %q with value: %v", name, value))
+		if err := UpdateFieldValue(&props, name, value); err != nil {
+			return props, fmt.Errorf("unknown property '%s'", name)
 		}
 	}
 	return

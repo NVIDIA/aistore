@@ -70,9 +70,6 @@ func HeadBucket(baseParams BaseParams, bucket string, query ...url.Values) (p cm
 		path      = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 		optParams = OptionalParams{}
 		r         *http.Response
-		n         int64
-		u, aattrs uint64
-		b         bool
 	)
 	baseParams.Method = http.MethodHead
 	if len(query) > 0 {
@@ -83,122 +80,11 @@ func HeadBucket(baseParams BaseParams, bucket string, query ...url.Values) (p cm
 	}
 	defer r.Body.Close()
 
-	cksumProps := cmn.CksumConf{
-		Type: r.Header.Get(cmn.HeaderBucketChecksumType),
-	}
-	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketValidateColdGet)); err == nil {
-		cksumProps.ValidateColdGet = b
-	} else {
-		return
-	}
-	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketValidateWarmGet)); err == nil {
-		cksumProps.ValidateWarmGet = b
-	} else {
-		return
-	}
-	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketValidateObjMove)); err == nil {
-		cksumProps.ValidateObjMove = b
-	} else {
-		return
-	}
-	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketEnableReadRange)); err == nil {
-		cksumProps.EnableReadRange = b
-	} else {
-		return
-	}
-
-	verProps := cmn.VersionConf{}
-	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketVerEnabled)); err == nil {
-		verProps.Enabled = b
-	} else {
-		return
-	}
-	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketVerValidateWarm)); err == nil {
-		verProps.ValidateWarmGet = b
-	} else {
-		return
-	}
-
-	lruProps := cmn.LRUConf{
-		DontEvictTimeStr:   r.Header.Get(cmn.HeaderBucketDontEvictTime),
-		CapacityUpdTimeStr: r.Header.Get(cmn.HeaderBucketCapUpdTime),
-	}
-	if u, err = strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRULowWM), 10, 32); err == nil {
-		lruProps.LowWM = int64(u)
-	} else {
-		return
-	}
-	if u, err = strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRUHighWM), 10, 32); err == nil {
-		lruProps.HighWM = int64(u)
-	} else {
-		return
-	}
-	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketLRUEnabled)); err == nil {
-		lruProps.Enabled = b
-	} else {
-		return
-	}
-	if u, err = strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRUOOS), 10, 32); err == nil {
-		lruProps.OOS = int64(u)
-	} else {
-		return
-	}
-
-	mirrorProps := cmn.MirrorConf{}
-	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketCopies), 10, 32); err == nil {
-		mirrorProps.Copies = n
-	} else {
-		return
-	}
-	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketMirrorEnabled)); err == nil {
-		mirrorProps.Enabled = b
-	} else {
-		return
-	}
-	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketMirrorThresh), 10, 32); err == nil {
-		mirrorProps.UtilThresh = n
-	} else {
-		return
-	}
-
-	ecProps := cmn.ECConf{}
-	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketECEnabled)); err == nil {
-		ecProps.Enabled = b
-	} else {
-		return
-	}
-	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECObjSizeLimit), 10, 64); err == nil {
-		ecProps.ObjSizeLimit = n
-	} else {
-		return
-	}
-	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECData), 10, 32); err == nil {
-		ecProps.DataSlices = int(n)
-	}
-	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECParity), 10, 32); err == nil {
-		ecProps.ParitySlices = int(n)
-	} else {
-		return
-	}
-	tierProps := cmn.TierConf{
-		NextTierURL: r.Header.Get(cmn.HeaderNextTierURL),
-		ReadPolicy:  r.Header.Get(cmn.HeaderReadPolicy),
-		WritePolicy: r.Header.Get(cmn.HeaderWritePolicy),
-	}
-	if u, err = strconv.ParseUint(r.Header.Get(cmn.HeaderBucketAccessAttrs), 10, 64); err == nil {
-		aattrs = u
-	} else {
-		return
-	}
-	p = cmn.BucketProps{
-		CloudProvider: r.Header.Get(cmn.HeaderCloudProvider),
-		Versioning:    verProps,
-		Tiering:       tierProps,
-		Cksum:         cksumProps,
-		LRU:           lruProps,
-		Mirror:        mirrorProps,
-		EC:            ecProps,
-		AccessAttrs:   aattrs,
+	err = cmn.IterFields(&p, func(tag string, field cmn.IterField) (error, bool) {
+		return field.SetValue(r.Header.Get(tag), true /*force*/), false
+	})
+	if err != nil {
+		return p, err
 	}
 	return
 }

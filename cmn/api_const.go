@@ -111,33 +111,9 @@ const (
 	HeaderCloudOffline  = "cloud.offline"  // when accessing cached cloud bucket with no Cloud connectivity
 	HeaderGuestAccess   = "guest"          // AuthN is enabled and proxy gets a request without token
 
-	// tiering
-	HeaderNextTierURL = "tier.next_url"     // URL of the next tier in a AIStore multi-tier environment
-	HeaderReadPolicy  = "tier.read_policy"  // Policy used for reading in a AIStore multi-tier environment
-	HeaderWritePolicy = "tier.write_policy" // Policy used for writing in a AIStore multi-tier environment
-
 	// bucket props
-	HeaderBucketChecksumType    = "cksum.type"                   // Checksum type used for objects in the bucket
-	HeaderBucketValidateColdGet = "cksum.validate_cold_get"      // Validate checksum on cold GET
-	HeaderBucketValidateWarmGet = "cksum.validate_warm_get"      // Validate checksum on warm GET
-	HeaderBucketValidateObjMove = "cksum.validate_obj_move"      // Validate checksum upon intra-cluster migration
-	HeaderBucketEnableReadRange = "cksum.enable_read_range"      // Return range checksum (otherwise, return the obj's)
 	HeaderBucketVerEnabled      = "versioning.enabled"           // Enable/disable object versioning in a bucket
 	HeaderBucketVerValidateWarm = "versioning.validate_warm_get" // Validate version on warm GET
-	HeaderBucketLRUEnabled      = "lru.enabled"                  // LRU is run on a bucket only if this field is true
-	HeaderBucketLRULowWM        = "lru.lowwm"                    // Capacity usage low water mark
-	HeaderBucketLRUHighWM       = "lru.highwm"                   // Capacity usage high water mark
-	HeaderBucketLRUOOS          = "lru.out_of_space"             // Out-of-Space: if exceeded, the target starts failing new PUTs
-	HeaderBucketDontEvictTime   = "lru.dont_evict_time"          // eviction-free time period [atime, atime+dontevicttime]
-	HeaderBucketCapUpdTime      = "lru.capacity_upd_time"        // Minimum time to update the capacity
-	HeaderBucketMirrorEnabled   = "mirror.enabled"               // will only generate local copies when set to true
-	HeaderBucketCopies          = "mirror.copies"                // # local copies
-	HeaderBucketMirrorThresh    = "mirror.util_thresh"           // same util when below this threshold
-	HeaderBucketECEnabled       = "ec.enabled"                   // EC is on for a bucket
-	HeaderBucketECObjSizeLimit  = "ec.objsize_limit"             // Objects under MinSize copied instead of being EC'ed
-	HeaderBucketECData          = "ec.data_slices"               // number of data chunks for EC
-	HeaderBucketECParity        = "ec.parity_slices"             // number of parity chunks for EC/copies for small files
-	HeaderBucketECCompression   = "ec.compression"               // EC stream compression settings
 	HeaderBucketAccessAttrs     = "aattrs"                       // Bucket access attributes
 
 	// object meta

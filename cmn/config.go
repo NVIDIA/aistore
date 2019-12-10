@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -247,6 +246,9 @@ var (
 	pkgDebug = make(map[string]glog.Level)
 )
 
+// Naming convention for setting/getting the particular fields is defined as
+// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
+// one would need to write `ec.enabled`. For more info refer to `IterFields`.
 //nolint:maligned
 type Config struct {
 	Confdir          string          `json:"confdir"`
@@ -1087,244 +1089,32 @@ func SetGLogVModule(v string) error {
 	return err
 }
 
-func (conf *Config) update(key, value string) (Validator, error) {
-	// updateValue sets `to` value (required to be pointer) and runs number of
-	// provided validators which would check if the value which was just set is
-	// correct.
-	updateValue := func(to interface{}) error {
-		// `to` parameter needs to pointer so we can set it
-		Assert(reflect.ValueOf(to).Kind() == reflect.Ptr)
+func ConfigPropList() []string {
+	propList := []string{"vmodule", "log_level", "log.level"}
+	IterFields(Config{}, func(tag string, field IterField) (error, bool) {
+		propList = append(propList, tag)
+		return nil, false
+	})
+	return propList
+}
 
-		tmpValue := value
-		switch to.(type) {
-		case *string:
-			// Strings must be quoted so that Unmarshal treat it well
-			tmpValue = strconv.Quote(tmpValue)
-		default:
-			break
-		}
-
-		// Unmarshal not only tries to parse `tmpValue` but since `to` is pointer,
-		// it will set value of it.
-		if err := json.Unmarshal([]byte(tmpValue), to); err != nil {
-			return fmt.Errorf("failed to parse %q, %s err: %v", key, value, err)
-		}
-
-		return nil
-	}
-
+func (conf *Config) update(key, value string) (err error) {
 	switch key {
 	//
 	// 1. TOP LEVEL CONFIG
 	//
 	case "vmodule":
 		if err := SetGLogVModule(value); err != nil {
-			return nil, fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
+			return fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
 		}
 	case "log_level", "log.level":
 		if err := SetLogLevel(conf, value); err != nil {
-			return nil, fmt.Errorf("failed to set log level = %s, err: %v", value, err)
+			return fmt.Errorf("failed to set log level = %s, err: %v", value, err)
 		}
-
-	//
-	// 2. CONFIG SECTIONS THAT CAN BE OVERRIDDEN via cmn.BucketProps
-	//    (that in turn include VersionConf, TierConf, CksumConf, LRUConf, MirrorConf, ECConf)
-	//
-
-	// LRU
-	case "lru_enabled", HeaderBucketLRUEnabled:
-		return &conf.LRU, updateValue(&conf.LRU.Enabled)
-	case "lowwm", HeaderBucketLRULowWM:
-		return &conf.LRU, updateValue(&conf.LRU.LowWM)
-	case "highwm", HeaderBucketLRUHighWM:
-		return &conf.LRU, updateValue(&conf.LRU.HighWM)
-	case "dont_evict_time", HeaderBucketDontEvictTime:
-		return &conf.LRU, updateValue(&conf.LRU.DontEvictTimeStr)
-	case "capacity_upd_time", HeaderBucketCapUpdTime:
-		return &conf.LRU, updateValue(&conf.LRU.CapacityUpdTimeStr)
-
-	// CHECKSUM
-	case "checksum", HeaderBucketChecksumType:
-		return &conf.Cksum, updateValue(&conf.Cksum.Type)
-	case "validate_checksum_cold_get", HeaderBucketValidateColdGet:
-		return &conf.Cksum, updateValue(&conf.Cksum.ValidateColdGet)
-	case "validate_checksum_warm_get", HeaderBucketValidateWarmGet:
-		return &conf.Cksum, updateValue(&conf.Cksum.ValidateWarmGet)
-	case "validate_obj_move", HeaderBucketValidateObjMove:
-		return &conf.Cksum, updateValue(&conf.Cksum.ValidateObjMove)
-	case "enable_read_range_checksum", HeaderBucketEnableReadRange:
-		return &conf.Cksum, updateValue(&conf.Cksum.EnableReadRange)
-
-	// VERSION
-	case "versioning_enabled", HeaderBucketVerEnabled:
-		return nil, updateValue(&conf.Versioning.Enabled)
-	case "versioning_validate_warm_get", HeaderBucketVerValidateWarm:
-		return nil, updateValue(&conf.Versioning.ValidateWarmGet)
-
-	// MIRROR
-	case "mirror_enabled", HeaderBucketMirrorEnabled:
-		return &conf.Mirror, updateValue(&conf.Mirror.Enabled)
-	case "mirror_burst_buffer", "mirror.burst_buffer":
-		return &conf.Mirror, updateValue(&conf.Mirror.Burst)
-	case "mirror_util_thresh", HeaderBucketMirrorThresh:
-		return &conf.Mirror, updateValue(&conf.Mirror.UtilThresh)
-	case "mirror_copies", HeaderBucketCopies:
-		return &conf.Mirror, updateValue(&conf.Mirror.Copies)
-
-	// EC
-	case "ec_enabled", HeaderBucketECEnabled:
-		return &conf.EC, updateValue(&conf.EC.Enabled)
-	case "ec_data_slices", HeaderBucketECData:
-		return &conf.EC, updateValue(&conf.EC.DataSlices)
-	case "ec_parity_slices", HeaderBucketECParity:
-		return &conf.EC, updateValue(&conf.EC.ParitySlices)
-	case "ec_objsize_limit", HeaderBucketECObjSizeLimit:
-		return &conf.EC, updateValue(&conf.EC.ObjSizeLimit)
-	case "ec_compression", HeaderBucketECCompression:
-		return &conf.EC, updateValue(&conf.EC.Compression)
-
-	//
-	// 3. CONFIG SECTIONS
-	//
-
-	// PERIODIC
-	case "stats_time", "periodic.stats_time":
-		return &conf.Periodic, updateValue(&conf.Periodic.StatsTimeStr)
-
-	// DISK
-	case "disk_util_low_wm", "disk.disk_util_low_wm":
-		return &conf.Disk, updateValue(&conf.Disk.DiskUtilLowWM)
-	case "disk_util_high_wm", "disk.disk_util_high_wm":
-		return &conf.Disk, updateValue(&conf.Disk.DiskUtilHighWM)
-	case "disk_util_max_wm", "disk.disk_util_max_wm":
-		return &conf.Disk, updateValue(&conf.Disk.DiskUtilMaxWM)
-	case "iostat_time_long", "disk.iostat_time_long":
-		return &conf.Disk, updateValue(&conf.Disk.IostatTimeLongStr)
-	case "iostat_time_short", "disk.iostat_time_short":
-		return &conf.Disk, updateValue(&conf.Disk.IostatTimeShortStr)
-
-	// REBALANCE
-	case "dest_retry_time", "rebalance.dest_retry_time":
-		return &conf.Rebalance, updateValue(&conf.Rebalance.DestRetryTimeStr)
-	case "rebalance_multiplier", "rebalance.multiplier":
-		return &conf.Rebalance, updateValue(&conf.Rebalance.Multiplier)
-	case "rebalance_enabled", "rebalance.enabled":
-		return &conf.Rebalance, updateValue(&conf.Rebalance.Enabled)
-
-	// TIMEOUT
-	case "default_timeout", "timeout.default_timeout":
-		return &conf.Timeout, updateValue(&conf.Timeout.DefaultStr)
-	case "default_long_timeout", "timeout.default_long_timeout":
-		return &conf.Timeout, updateValue(&conf.Timeout.DefaultLongStr)
-	case "max_keepalive", "timeout.max_keepalive":
-		return &conf.Timeout, updateValue(&conf.Timeout.MaxKeepaliveStr)
-	case "proxy_ping", "timeout.proxy_ping":
-		return &conf.Timeout, updateValue(&conf.Timeout.ProxyPingStr)
-	case "cplane_operation", "timeout.cplane_operation":
-		return &conf.Timeout, updateValue(&conf.Timeout.CplaneOperationStr)
-	case "send_file_time", "timeout.send_file_time":
-		return &conf.Timeout, updateValue(&conf.Timeout.SendFileStr)
-	case "startup_time", "timeout.startup_time":
-		return &conf.Timeout, updateValue(&conf.Timeout.StartupStr)
-	case "list_timeout", "timeout.list_timeout":
-		return &conf.Timeout, updateValue(&conf.Timeout.ListBucketStr)
-
-	// FSHC
-	case "fshc_enabled", "fshc.enabled":
-		return nil, updateValue(&conf.FSHC.Enabled)
-
-	// KEEPALIVE
-	case "keepalivetracker.proxy.interval":
-		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Proxy.IntervalStr)
-	case "keepalivetracker.proxy.factor":
-		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Proxy.Factor)
-	case "keepalivetracker.target.interval":
-		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Target.IntervalStr)
-	case "keepalivetracker.target.factor":
-		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Target.Factor)
-
-	// DISTRIBUTED SORT
-	case "distributed_sort.duplicated_records":
-		return &conf.DSort, updateValue(&conf.DSort.DuplicatedRecords)
-	case "distributed_sort.missing_shards":
-		return &conf.DSort, updateValue(&conf.DSort.MissingShards)
-	case "distributed_sort.ekm_invalid_line":
-		return &conf.DSort, updateValue(&conf.DSort.EKMMalformedLine)
-	case "distributed_sort.ekm_missing_key":
-		return &conf.DSort, updateValue(&conf.DSort.EKMMissingKey)
-	case "distributed_sort.default_max_mem_usage":
-		return &conf.DSort, updateValue(&conf.DSort.DefaultMaxMemUsage)
-	case "distributed_sort.call_timeout":
-		return &conf.DSort, updateValue(&conf.DSort.CallTimeoutStr)
-	case "distributed_sort.compression":
-		return &conf.DSort, updateValue(&conf.DSort.Compression)
-
-	// COMPRESSION
-	case "compression.block_size":
-		return &conf.Compression, updateValue(&conf.Compression.BlockMaxSize)
-	case "compression.checksum":
-		return &conf.Compression, updateValue(&conf.Compression.Checksum)
-
 	default:
-		return nil, fmt.Errorf("cannot set config key: %q - is readonly or unsupported", key)
+		return UpdateFieldValue(conf, key, value)
 	}
-	return nil, nil
-}
-
-// ConfigPropList is config property name <-> readonly
-var ConfigPropList = map[string]bool{
-	"vmodule":                                false,
-	"log.level":                              false,
-	HeaderBucketLRUEnabled:                   false,
-	HeaderBucketLRULowWM:                     false,
-	HeaderBucketLRUHighWM:                    false,
-	HeaderBucketDontEvictTime:                false,
-	HeaderBucketCapUpdTime:                   true,
-	HeaderBucketChecksumType:                 false,
-	HeaderBucketValidateColdGet:              false,
-	HeaderBucketValidateWarmGet:              false,
-	HeaderBucketValidateObjMove:              false,
-	HeaderBucketEnableReadRange:              false,
-	HeaderBucketVerEnabled:                   false,
-	HeaderBucketVerValidateWarm:              false,
-	HeaderBucketMirrorEnabled:                false,
-	"mirror.burst_buffer":                    true,
-	HeaderBucketMirrorThresh:                 false,
-	HeaderBucketCopies:                       false,
-	"periodic.stats_time":                    false,
-	"disk.disk_util_low_wm":                  false,
-	"disk.disk_util_high_wm":                 false,
-	"disk.disk_util_max_wm":                  false,
-	"disk.iostat_time_long":                  false,
-	"disk.iostat_time_short":                 false,
-	"rebalance.dest_retry_time":              false,
-	"rebalance.multiplier":                   false,
-	"rebalance.enabled":                      false,
-	"timeout.default_timeout":                false,
-	"timeout.default_long_timeout":           false,
-	"timeout.max_keepalive":                  false,
-	"timeout.proxy_ping":                     false,
-	"timeout.cplane_operation":               false,
-	"timeout.send_file_time":                 false,
-	"timeout.startup_time":                   false,
-	"timeout.list_timeout":                   false,
-	"fshc.enabled":                           false,
-	"keepalivetracker.proxy.interval":        false,
-	"keepalivetracker.proxy.factor":          false,
-	"keepalivetracker.target.interval":       false,
-	"keepalivetracker.target.factor":         false,
-	"distributed_sort.duplicated_records":    false,
-	"distributed_sort.missing_shards":        false,
-	"distributed_sort.default_max_mem_usage": false,
-	"distributed_sort.call_timeout":          false,
-	"compression.block_size":                 false,
-	"compression.checksum":                   false,
-	"distributed_sort.compression":           false,
-	HeaderBucketECEnabled:                    false,
-	HeaderBucketECData:                       false,
-	HeaderBucketECParity:                     false,
-	HeaderBucketECObjSizeLimit:               false,
-	HeaderBucketECCompression:                false,
+	return nil
 }
 
 func SetConfigMany(nvmap SimpleKVs) (err error) {
@@ -1332,13 +1122,10 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 		return errors.New("setConfig: empty nvmap")
 	}
 
-	conf := GCO.BeginUpdate()
-
 	var (
 		persist bool
+		conf    = GCO.BeginUpdate()
 	)
-
-	validators := make(map[Validator]struct{})
 
 	for name, value := range nvmap {
 		if name == ActPersist {
@@ -1348,26 +1135,20 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 				return
 			}
 		} else {
-			validator, err := conf.update(name, value)
+			err := conf.update(name, value)
 			if err != nil {
 				GCO.DiscardUpdate()
 				return err
-			}
-			if validator != nil {
-				validators[validator] = struct{}{}
 			}
 		}
 
 		glog.Infof("%s: %s=%s", ActSetConfig, name, value)
 	}
 
-	// validate after everything is set
-	for val := range validators {
-		err := val.Validate(conf)
-		if err != nil {
-			GCO.DiscardUpdate()
-			return err
-		}
+	// Validate config after everything is set
+	if err := conf.Validate(); err != nil {
+		GCO.DiscardUpdate()
+		return err
 	}
 
 	GCO.CommitUpdate(conf)
