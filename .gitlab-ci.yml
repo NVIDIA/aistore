@@ -15,7 +15,7 @@ cache:
 
 before_script:
   - apt-get clean && apt-get update
-  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof
+  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse
   - apt-get -y clean all
   - mkdir -p /go/src/github.com/NVIDIA /go/src/_/builds
   - cp -r $CI_PROJECT_DIR /go/src/github.com/NVIDIA/aistore
@@ -28,6 +28,10 @@ build:
     - go build -tags="aws" ais/setup/aisnode.go
     - go build -tags="gcp" ais/setup/aisnode.go
     - go build -tags="" ais/setup/aisnode.go
+    - make authn
+    - make fuse
+    - make cli
+    - make aisloader
 
 lint:
   stage: build
