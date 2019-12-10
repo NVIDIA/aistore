@@ -9,6 +9,7 @@
   - [Installation](#installation)
   - [Quick Local Setup](#quick-local-setup)
   - [Configuration](#configuration)
+    - [Updating configuration at runtime](#updating-configuration-at-runtime)
   - [Mounting](#mounting)
   - [Unmounting](#unmounting)
 
@@ -191,7 +192,23 @@ An example of one configuration file:
 | `memory_limit` | Determines how much memory AISFS can use to cache metadata locally (like structure and filenames). Can be in format of raw numbers (`1024`) or with suffix `10MB`. | High value can result in much better performance for the most frequent operations. We recommend allowing as much memory to AISFS as it is possible. |
 
 
+### Updating configuration at runtime
 
+Even though loading [configuration](#configuration) takes an effect at [mount](#mounting) time it is still possible to reconfigure AISFS at runtime - without remounting.
+This can be achieved by sending `SIGHUP` signal to `aisfs` daemon, e.g.:
+
+```bash
+$ kill -HUP $(pidof aisfs)
+```
+
+`SIGHUP` causes running `aisfs` daemon to reload its configuration and apply updates to the following config variables:
+
+* `periodic.sync_interval`
+* `io.write_buf_size`
+* `memory_limit`
+
+In other words, if you'd want to, for instance, update AISFS memory limit, you can simply write a new value into AISFS configuration and apply it via `SIGHUP`.
+Success or failure of the operation is reflected in the debug logs (if enabled).
 
 ### Mounting
 

@@ -11,9 +11,9 @@ import (
 	"os"
 	"path"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/ais"
@@ -79,9 +79,9 @@ type (
 		// Timeouts, tunables...
 		TCPTimeout      time.Duration
 		HTTPTimeout     time.Duration
-		SyncInterval    time.Duration
-		MemoryLimit     uint64
-		MaxWriteBufSize int64
+		SyncInterval    atomic.Duration
+		MemoryLimit     atomic.Uint64
+		MaxWriteBufSize atomic.Int64
 	}
 
 	// File system implementation.
@@ -102,11 +102,11 @@ type (
 		// File System
 		root        *DirectoryInode
 		inodeTable  map[fuseops.InodeID]Inode
-		lastInodeID uint64
+		lastInodeID atomic.Uint64
 
 		// Handles
 		fileHandles  map[fuseops.HandleID]*fileHandle
-		lastHandleID uint64
+		lastHandleID atomic.Uint64
 
 		// Access
 		modeBits *ModeBits
@@ -140,11 +140,11 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 
 		// File System
 		inodeTable:  make(map[fuseops.InodeID]Inode),
-		lastInodeID: uint64(invalidInodeID),
+		lastInodeID: *atomic.NewUint64(uint64(invalidInodeID)),
 
 		// Handles
 		fileHandles:  make(map[fuseops.HandleID]*fileHandle),
-		lastHandleID: uint64(0),
+		lastHandleID: *atomic.NewUint64(0),
 
 		// Access
 		modeBits: &ModeBits{
@@ -187,11 +187,11 @@ func (fs *aisfs) aisAPIParams() api.BaseParams {
 }
 
 func (fs *aisfs) nextInodeID() fuseops.InodeID {
-	return fuseops.InodeID(atomic.AddUint64(&fs.lastInodeID, 1))
+	return fuseops.InodeID(fs.lastInodeID.Inc())
 }
 
 func (fs *aisfs) nextHandleID() fuseops.HandleID {
-	return fuseops.HandleID(atomic.AddUint64(&fs.lastHandleID, 1))
+	return fuseops.HandleID(fs.lastHandleID.Inc())
 }
 
 // Assumes that object != nil

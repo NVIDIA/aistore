@@ -106,6 +106,15 @@ func (c *Config) validate() (err error) {
 	return nil
 }
 
+func (c *Config) writeTo(srvCfg *fs.ServerConfig) {
+	memoryLimit, _ := cmn.S2B(c.MemoryLimit)
+	srvCfg.TCPTimeout = c.Timeout.TCPTimeout
+	srvCfg.HTTPTimeout = c.Timeout.HTTPTimeout
+	srvCfg.SyncInterval.Store(c.Periodic.SyncInterval)
+	srvCfg.MemoryLimit.Store(uint64(memoryLimit))
+	srvCfg.MaxWriteBufSize.Store(c.IO.WriteBufSize)
+}
+
 func loadConfig(bucket string) (cfg *Config, err error) {
 	cfg = &Config{}
 	configFileName := bucket + "_mount.json"

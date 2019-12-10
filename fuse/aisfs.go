@@ -13,8 +13,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"syscall"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fuse/fs"
 	"github.com/jacobsa/daemonize"
 	"github.com/jacobsa/fuse"
@@ -91,17 +91,36 @@ func runDaemon(mountPath string, errorSink io.Writer) (err error) {
 	return
 }
 
-func dispatchInterruptHandler(mountPath string, errLog *log.Logger) {
+func dispatchSignalHandlers(mountPath string, mntCfg *fuse.MountConfig, serverCfg *fs.ServerConfig) {
 	signalCh := make(chan os.Signal, 1)
-	signal.Notify(signalCh, os.Interrupt)
+	signal.Notify(signalCh, os.Interrupt, syscall.SIGHUP)
 	go func() {
 		for {
-			<-signalCh
-			err := fuse.Unmount(mountPath)
-			if err == nil {
-				return
+			s := <-signalCh
+			switch s {
+			case os.Interrupt:
+				// If this executable is not run as a daemon, then allow Ctrl-C
+				// to interrupt and unmount the file system.
+				// Useful only if --wait flag was given by the user.
+
+				err := fuse.Unmount(mountPath)
+				if err == nil {
+					return
+				}
+				mntCfg.ErrorLogger.Printf("Failed to unmount upon SIGINT: %v", err)
+			case syscall.SIGHUP:
+				cfg, err := loadConfig(serverCfg.BucketName)
+				if err != nil {
+					mntCfg.ErrorLogger.Printf("Failed to reload config upon SIGHUP: %v", err)
+					break
+				}
+				cfg.writeTo(serverCfg)
+				if mntCfg.DebugLogger != nil {
+					mntCfg.DebugLogger.Printf("Config successfully reloaded upon SIGHUP")
+				}
+			default:
+				panic(s)
 			}
-			errLog.Printf("Failed to unmount upon SIGINT: %v", err)
 		}
 	}()
 }
@@ -254,18 +273,13 @@ func appMain(c *cli.Context) (err error) {
 		cluURL, bucket, mountPath, fsowner.UID, fsowner.GID)
 
 	// Init a server configuration object.
-	memoryLimit, _ := cmn.S2B(cfg.MemoryLimit)
 	serverCfg := &fs.ServerConfig{
-		MountPath:       mountPath,
-		AISURL:          cluURL,
-		BucketName:      bucket,
-		Owner:           fsowner,
-		TCPTimeout:      cfg.Timeout.TCPTimeout,
-		HTTPTimeout:     cfg.Timeout.HTTPTimeout,
-		SyncInterval:    cfg.Periodic.SyncInterval,
-		MemoryLimit:     uint64(memoryLimit),
-		MaxWriteBufSize: cfg.IO.WriteBufSize,
+		MountPath:  mountPath,
+		AISURL:     cluURL,
+		BucketName: bucket,
+		Owner:      fsowner,
 	}
+	cfg.writeTo(serverCfg)
 
 	// Init a file system server.
 	server, err = fs.NewAISFileSystemServer(serverCfg, errorLog)
@@ -291,10 +305,9 @@ func appMain(c *cli.Context) (err error) {
 	// Signal the calling process that mounting was successful.
 	signal()
 
-	// If this executable is not run as a daemon, then allow Ctrl-C
-	// to interrupt and unmount the file system.
-	// Useful only if --wait flag was given by the user.
-	dispatchInterruptHandler(mountPath, errorLog)
+	// Start signal dispatcher which catches different signals and reacts upon
+	// receiving them.
+	dispatchSignalHandlers(mountPath, mountCfg, serverCfg)
 
 	// Wait for the file system to be unmounted.
 	err = mfs.Join(context.Background())

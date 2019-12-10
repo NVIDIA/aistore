@@ -134,10 +134,16 @@ func newNsCache(bck *ais.Bucket, logger *log.Logger, cfg *ServerConfig) (*namesp
 
 	err := c.refresh()
 
-	if cfg.SyncInterval > 0 {
+	if cfg.SyncInterval.Load() > 0 {
 		go func() {
 			for {
-				time.Sleep(cfg.SyncInterval)
+				interval := cfg.SyncInterval.Load()
+				if interval == 0 {
+					// Someone disabled the syncing.
+					return
+				}
+
+				time.Sleep(interval)
 				logger.Printf("syncing with AIS...")
 				if err := c.refresh(); err != nil {
 					logger.Printf("failed to sync, err: %v", err)
@@ -203,7 +209,8 @@ func (c *namespaceCache) refresh() error {
 
 		var mem runtime.MemStats
 		runtime.ReadMemStats(&mem)
-		if c.cfg.MemoryLimit > 0 && mem.HeapAlloc > c.cfg.MemoryLimit {
+		memLimit := c.cfg.MemoryLimit.Load()
+		if memLimit > 0 && mem.HeapAlloc > memLimit {
 			c.containsAllObjects = false
 			break
 		}
