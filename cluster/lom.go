@@ -338,8 +338,10 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 			continue
 		}
 		// restore at default location
-		_, err := src.CopyObject(lom.FQN, buf)
+		dst, err := src.CopyObject(lom.FQN, buf)
 		if err == nil {
+			lom.md = dst.md
+			lom.exists = true
 			exists = true
 			break
 		}
@@ -386,6 +388,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 		return
 	}
+	dst.exists = true
 
 	if lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck()) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {

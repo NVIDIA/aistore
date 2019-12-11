@@ -608,6 +608,8 @@ var _ = Describe("LOM", func() {
 			dst, err = lom.CopyObject(fqn, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(dst.FQN).To(BeARegularFile())
+			Expect(dst.Exists()).To(BeTrue())
+			Expect(dst.Size()).To(BeEquivalentTo(testFileSize))
 			lom.Uncache()
 
 			// Reload copy, to make sure it is fresh
