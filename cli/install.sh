@@ -30,11 +30,12 @@ GOBIN=${GOPATH}/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X '
 if [[ $? -eq 0 ]]; then
     echo "AIS CLI executable has been successfully installed."
     if [[ $1 == "--ignore-autocomplete" ]]; then
-        exit
+        exit 0
     fi
 
     # Install autocompletions
     bash ${AUTOCOMPLETE_INSTALL_SCRIPT}
 else
     echo "Error installing AIS CLI"
+    exit 1
 fi
