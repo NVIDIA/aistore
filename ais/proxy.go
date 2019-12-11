@@ -219,7 +219,7 @@ func (p *proxyrunner) unregisterSelf() (int, error) {
 			Method: http.MethodDelete,
 			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, p.si.DaemonID),
 		},
-		timeout: defaultTimeout,
+		timeout: cmn.DefaultTimeout,
 	}
 	res := p.call(args)
 	return res.status, res.err
@@ -1680,7 +1680,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, pro
 			Query:  r.URL.Query(),
 			Header: r.Header,
 		},
-		timeout: defaultTimeout,
+		timeout: cmn.DefaultTimeout,
 	}
 	res := p.call(args)
 	if res.err != nil {
@@ -1783,7 +1783,7 @@ func (p *proxyrunner) cbExists(bucket string) (header http.Header, err error) {
 			Base:   tsi.URL(cmn.NetworkIntraData),
 			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 		},
-		timeout: defaultTimeout,
+		timeout: cmn.DefaultTimeout,
 	}
 	res := p.call(args)
 	if res.status == http.StatusNotFound {
@@ -2145,7 +2145,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 			Query: query,
 			Body:  body,
 		},
-		timeout: defaultTimeout,
+		timeout: cmn.DefaultTimeout,
 	})
 
 	for res := range results {
@@ -2178,7 +2178,7 @@ func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query
 	if wait {
 		timeout = cmn.GCO.Get().Timeout.ListBucket
 	} else {
-		timeout = defaultTimeout
+		timeout = cmn.DefaultTimeout
 	}
 
 	results = p.bcastTo(bcastArgs{
@@ -2509,7 +2509,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 		Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
 		Query:  query,
 	}
-	args := callArgs{req: req, timeout: defaultTimeout}
+	args := callArgs{req: req, timeout: cmn.DefaultTimeout}
 	res := p.call(args)
 	if res.err != nil {
 		return nil, fmt.Errorf("failed to get smap from %s: %v", baseURL, res.err)
@@ -2566,7 +2566,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	// notify metasync to cancel all pending sync requests
 	p.metasyncer.becomeNonPrimary()
 	p.smapowner.put(newSmap)
-	res := p.registerToURL(newSmap.ProxySI.IntraControlNet.DirectURL, newSmap.ProxySI, defaultTimeout, nil, false)
+	res := p.registerToURL(newSmap.ProxySI.IntraControlNet.DirectURL, newSmap.ProxySI, cmn.DefaultTimeout, nil, false)
 	if res.err != nil {
 		p.invalmsghdlr(w, r, res.err.Error())
 		return

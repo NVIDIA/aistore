@@ -847,7 +847,7 @@ func (r *bckSummaryTask) Run() {
 		return
 	}
 
-	si, err := cluster.HrwTargetTask(uint64(r.msg.TaskID), r.t.GetSmap())
+	si, err := cluster.HrwTargetTask(uint64(r.msg.TaskID), r.t.GetSowner().Get())
 	if err != nil {
 		r.UpdateResult(nil, err)
 		return

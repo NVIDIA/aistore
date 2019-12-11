@@ -1426,3 +1426,13 @@ func WaitStartup(config *Config, startedUp *atomic.Bool) {
 		}
 	}
 }
+
+func KeepaliveRetryDuration(cs ...*Config) time.Duration {
+	var c *Config
+	if len(cs) != 0 {
+		c = cs[0]
+	} else {
+		c = GCO.Get()
+	}
+	return c.Timeout.CplaneOperation * time.Duration(c.KeepaliveTracker.RetryFactor)
+}

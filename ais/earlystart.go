@@ -158,7 +158,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			args = callArgs{
 				si:      p.si,
 				req:     req,
-				timeout: defaultTimeout,
+				timeout: cmn.DefaultTimeout,
 			}
 		)
 		for i := 0; i < maxRetrySeconds; i++ {
@@ -449,11 +449,11 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 }
 
 func (p *proxyrunner) registerWithRetry() error {
-	if status, err := p.register(false, defaultTimeout); err != nil {
+	if status, err := p.register(false, cmn.DefaultTimeout); err != nil {
 		if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 			glog.Warningf("%s: retrying registration...", p.si.Name())
 			time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
-			if _, err = p.register(false, defaultTimeout); err != nil {
+			if _, err = p.register(false, cmn.DefaultTimeout); err != nil {
 				glog.Errorf("%s: failed the 2nd attempt to register, err: %v", p.si.Name(), err)
 				return err
 			}

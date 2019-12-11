@@ -30,13 +30,11 @@ type replicInfo struct {
 
 func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied bool, err error) {
 	si := ri.t.si
-	if ri.smap != nil {
-		cmn.Assert(!ri.localOnly)
+	if !ri.localOnly {
+		cmn.Assert(ri.smap != nil)
 		if si, err = cluster.HrwTarget(ri.bckTo, objnameTo, &ri.smap.Smap); err != nil {
 			return
 		}
-	} else {
-		cmn.Assert(ri.localOnly)
 	}
 	lom.Lock(false)
 	defer lom.Unlock(false)

@@ -60,10 +60,10 @@ func (g *fsprungroup) Unreg(r fs.PathRunner) {
 // enableMountpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
-	gfnActive := g.t.gfn.local.activate()
+	gfnActive := g.t.gfn.local.Activate()
 	if enabled, err = fs.Mountpaths.Enable(mpath); err != nil || !enabled {
 		if !gfnActive {
-			g.t.gfn.local.deactivate()
+			g.t.gfn.local.Deactivate()
 		}
 		return
 	}
@@ -75,10 +75,10 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
 // disableMountpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) {
-	gfnActive := g.t.gfn.local.activate()
+	gfnActive := g.t.gfn.local.Activate()
 	if disabled, err = fs.Mountpaths.Disable(mpath); err != nil || !disabled {
 		if !gfnActive {
-			g.t.gfn.local.deactivate()
+			g.t.gfn.local.Deactivate()
 		}
 		return disabled, err
 	}
@@ -90,17 +90,17 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) 
 // addMountpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
 func (g *fsprungroup) addMountpath(mpath string) (err error) {
-	gfnActive := g.t.gfn.local.activate()
+	gfnActive := g.t.gfn.local.Activate()
 	if err = fs.Mountpaths.Add(mpath); err != nil {
 		if !gfnActive {
-			g.t.gfn.local.deactivate()
+			g.t.gfn.local.Deactivate()
 		}
 		return
 	}
 	for _, provider := range []string{cmn.AIS, cmn.Cloud} {
 		if err = fs.Mountpaths.CreateBucketDir(provider); err != nil {
 			if !gfnActive {
-				g.t.gfn.local.deactivate()
+				g.t.gfn.local.Deactivate()
 			}
 			return
 		}
@@ -113,10 +113,10 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 // removeMountpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
 func (g *fsprungroup) removeMountpath(mpath string) (err error) {
-	gfnActive := g.t.gfn.local.activate()
+	gfnActive := g.t.gfn.local.Activate()
 	if err = fs.Mountpaths.Remove(mpath); err != nil {
 		if !gfnActive {
-			g.t.gfn.local.deactivate()
+			g.t.gfn.local.Deactivate()
 		}
 		return
 	}

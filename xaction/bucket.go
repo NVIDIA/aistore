@@ -475,10 +475,10 @@ func (r *FastRen) Run(globRebID int64) {
 		r.rebManager.RunLocalReb(true /*skipGlobMisplaced*/, lbucket)
 		wg.Done()
 	}()
-	r.rebManager.RunGlobalReb(r.t.GetSmap(), globRebID, gbucket)
+	r.rebManager.RunGlobalReb(r.t.GetSowner().Get(), globRebID, gbucket)
 	wg.Wait()
 
-	r.rebManager.BMDVersionFixup(r.Bucket(), false) // piggyback bucket renaming (last step) on getting updated BMD
+	r.t.BMDVersionFixup(r.Bucket(), false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.EndTime(time.Now())
 }
 

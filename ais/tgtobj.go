@@ -463,7 +463,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 	}
 	gfnActive = goi.t.gfn.global.active()
 	if running && tsi.DaemonID != goi.t.si.DaemonID {
-		if goi.t.lookupRemoteSingle(goi.lom, tsi) {
+		if goi.t.LookupRemoteSingle(goi.lom, tsi) {
 			gfnNode = tsi
 			goto gfn
 		}
@@ -698,7 +698,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	// have to resend them in global rebalance. In case of race between rebalance
 	// and GFN, the former wins and it will result in double send.
 	if goi.isGFN {
-		goi.t.rebManager.filterGFN.Insert([]byte(goi.lom.Uname()))
+		goi.t.rebManager.FilterAdd([]byte(goi.lom.Uname()))
 	}
 
 	delta := time.Since(goi.started)

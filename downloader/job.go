@@ -167,7 +167,7 @@ func (j *CloudBucketDlJob) GetNextObjs() error {
 	j.pageMarker = msg.PageMarker
 
 	objects := make(cmn.SimpleKVs, cmn.DefaultListPageSize)
-	smap := j.t.GetSmap()
+	smap := j.t.GetSowner().Get()
 	for _, entry := range bckList.Entries {
 		si, err := cluster.HrwTarget(j.bck, entry.Name, smap)
 		if err != nil {

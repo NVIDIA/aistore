@@ -173,21 +173,6 @@ func (m *bucketMD) upgrade(bck *cluster.Bck) {
 	m.toggleInProgress(bck, false)
 }
 
-func (m *bucketMD) ecUsed() bool {
-	for _, bck := range m.LBmap {
-		if bck.EC.Enabled {
-			return true
-		}
-	}
-	for _, bck := range m.CBmap {
-		if bck.EC.Enabled {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (m *bucketMD) clone() *bucketMD {
 	dst := &bucketMD{}
 	m.deepCopy(dst)

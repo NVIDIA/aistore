@@ -87,7 +87,7 @@ func (r *XactBckEncode) init() (int, error) {
 			parent:    r,
 			mpathInfo: mpathInfo,
 			config:    config,
-			smap:      r.t.GetSmap(),
+			smap:      r.t.GetSowner().Get(),
 			daemonID:  r.t.Snode().DaemonID,
 			stopCh:    cmn.NewStopCh(),
 			ecm:       r.t.ECM(),

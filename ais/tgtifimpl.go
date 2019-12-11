@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -29,21 +31,32 @@ import (
 var _ cluster.Target = &targetrunner{}
 
 func (t *targetrunner) GetBowner() cluster.Bowner    { return t.bmdowner }
+func (t *targetrunner) GetSowner() cluster.Sowner    { return t.smapowner }
 func (t *targetrunner) FSHC(err error, path string)  { t.fshc(err, path) }
 func (t *targetrunner) GetMem2() *memsys.Mem2        { return nodeCtx.mm }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup    { return &t.fsprg }
-func (t *targetrunner) GetSmap() *cluster.Smap       { return t.smapowner.Get() }
 func (t *targetrunner) Snode() *cluster.Snode        { return t.si }
 func (t *targetrunner) Cloud() cluster.CloudProvider { return t.cloud }
 func (t *targetrunner) PrefetchQueueLen() int        { return len(t.prefetchQueue) }
 func (t *targetrunner) ECM() cluster.ECManager       { return ECM }
+
+func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
+	switch gfnType {
+	case cluster.GFNLocal:
+		return &t.gfn.local
+	case cluster.GFNGlobal:
+		return &t.gfn.global
+	}
+	cmn.AssertMsg(false, "Invalid GFN type")
+	return nil
+}
 
 func (t *targetrunner) RebalanceInfo() cluster.RebalanceInfo {
 	_, running := xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
 	_, runningLocal := xaction.Registry.IsRebalancing(cmn.ActLocalReb)
 	return cluster.RebalanceInfo{
 		IsRebalancing: running || runningLocal,
-		GlobalRebID:   t.rebManager.globRebID.Load(),
+		GlobalRebID:   t.rebManager.GlobRebID(),
 	}
 }
 
@@ -153,7 +166,10 @@ func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *clus
 		workFQN: workFQN,
 		ctx:     context.Background(),
 	}
-	if recvType == cluster.ColdGet {
+	if recvType == cluster.Migrated {
+		poi.cksumToCheck = cksum
+		poi.migrated = true
+	} else if recvType == cluster.ColdGet {
 		poi.cold = true
 		poi.cksumToCheck = cksum
 	}
@@ -161,16 +177,16 @@ func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *clus
 	return err
 }
 
-func (t *targetrunner) CopyObject(lom *cluster.LOM, bckTo *cluster.Bck, buf []byte) (err error) {
+func (t *targetrunner) CopyObject(lom *cluster.LOM, bckTo *cluster.Bck, buf []byte, localOnly bool) (copied bool, err error) {
 	ri := &replicInfo{smap: t.smapowner.get(),
 		bckTo:     bckTo,
 		t:         t,
 		buf:       buf,
-		localOnly: false,
+		localOnly: localOnly,
 		uncache:   false,
 		finalize:  false,
 	}
-	_, err = ri.copyObject(lom, lom.Objname)
+	copied, err = ri.copyObject(lom, lom.Objname)
 	return
 }
 
@@ -319,4 +335,44 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 func (t *targetrunner) DisableMountpath(mountpath string, reason string) (disabled bool, err error) {
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, reason)
 	return t.fsprg.disableMountpath(mountpath)
+}
+
+func (t *targetrunner) Health(si *cluster.Snode, includeReb bool, timeout time.Duration) ([]byte, error) {
+	query := url.Values{}
+	if includeReb {
+		query.Add(cmn.URLParamRebStatus, "true")
+	}
+	args := callArgs{
+		si: si,
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Base:   si.URL(cmn.NetworkIntraControl),
+			Path:   cmn.URLPath(cmn.Version, cmn.Health),
+			Query:  query,
+		},
+		timeout: timeout,
+	}
+	res := t.call(args)
+	return res.outjson, res.err
+}
+
+func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) ([]byte, int, error) {
+	// pull the data
+	query := url.Values{}
+	header := make(http.Header)
+	header.Set(cmn.HeaderCallerID, t.si.DaemonID)
+	query.Add(cmn.URLParamRebData, "true")
+	args := callArgs{
+		si: si,
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Header: header,
+			Base:   si.URL(cmn.NetworkIntraData),
+			Path:   cmn.URLPath(cmn.Version, cmn.Rebalance),
+			Query:  query,
+		},
+		timeout: cmn.DefaultTimeout,
+	}
+	res := t.call(args)
+	return res.outjson, res.status, res.err
 }

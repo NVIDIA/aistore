@@ -46,7 +46,7 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 	// doing string search(strings.Contains) for every entry.
 	ci := &allfinfos{
 		t:            w.t, // targetrunner
-		smap:         w.t.GetSmap(),
+		smap:         w.t.GetSowner().Get(),
 		objs:         make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize),
 		prefix:       msg.Prefix,
 		marker:       msg.PageMarker,
@@ -195,7 +195,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 		config   = cmn.GCO.Get()
 		localURL = w.t.Snode().URL(cmn.NetworkPublic)
 		localID  = w.t.Snode().DaemonID
-		smap     = w.t.GetSmap()
+		smap     = w.t.GetSowner().Get()
 
 		needURL     = w.msg.WantProp(cmn.GetTargetURL)
 		needAtime   = w.msg.WantProp(cmn.GetPropsAtime)

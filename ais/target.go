@@ -23,9 +23,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/filter"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
+	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/transport"
@@ -75,7 +75,7 @@ type (
 		fsprg         fsprungroup
 		readahead     readaheader
 		ecmanager     *ecManager
-		rebManager    *rebManager
+		rebManager    *reb.Manager
 		capUsed       capUsed
 		gfn           struct {
 			local  localGFN
@@ -89,12 +89,12 @@ type (
 // BASE GFN
 
 func (gfn *baseGFN) active() bool { return gfn.lookup.Load() }
-func (gfn *baseGFN) activate() bool {
+func (gfn *baseGFN) Activate() bool {
 	previous := gfn.lookup.Swap(true)
 	glog.Infoln(gfn.tag, "activated")
 	return previous
 }
-func (gfn *baseGFN) deactivate() { gfn.lookup.Store(false); glog.Infoln(gfn.tag, "deactivated") }
+func (gfn *baseGFN) Deactivate() { gfn.lookup.Store(false); glog.Infoln(gfn.tag, "deactivated") }
 
 // GLOBAL GFN
 
@@ -102,7 +102,7 @@ func (gfn *globalGFN) active() bool {
 	return gfn.lookup.Load() || gfn.timedLookup.Load()
 }
 
-func (gfn *globalGFN) activate() bool {
+func (gfn *globalGFN) Activate() bool {
 	gfn.mtx.Lock()
 	previous := gfn.lookup.Swap(true)
 	gfn.timedLookup.Store(false)
@@ -182,7 +182,7 @@ func (t *targetrunner) Run() error {
 	}
 	for i := 0; i < maxRetrySeconds; i++ {
 		var status int
-		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
+		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
 				glog.Errorf("%s: retrying registration...", t.si.Name())
 				time.Sleep(time.Second)
@@ -260,7 +260,7 @@ func (t *targetrunner) Run() error {
 	}
 	t.registerNetworkHandlers(networkHandlers)
 
-	t.initRebManager(config)
+	t.rebManager = reb.NewManager(t, config, getstorstatsrunner(), t.statsif)
 
 	ec.Init()
 	t.ecmanager = newECM(t)
@@ -278,36 +278,6 @@ func (t *targetrunner) Run() error {
 		return err
 	}
 	return nil
-}
-
-func (t *targetrunner) initRebManager(config *cmn.Config) {
-	reb := &rebManager{t: t, filterGFN: filter.NewDefaultFilter(), nodeStages: make(map[string]uint32)}
-	reb.ecReb = newECRebalancer(t, reb)
-	// Rx endpoints
-	reb.netd, reb.netc = cmn.NetworkPublic, cmn.NetworkPublic
-	if config.Net.UseIntraData {
-		reb.netd = cmn.NetworkIntraData
-	}
-	if config.Net.UseIntraControl {
-		reb.netc = cmn.NetworkIntraControl
-	}
-	if _, err := transport.Register(reb.netd, rebalanceStreamName, reb.recvObj); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-	if _, err := transport.Register(reb.netc, rebalanceAcksName, reb.recvAck); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-	if _, err := transport.Register(reb.netc, rebalancePushName, reb.recvPush); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-	if _, err := transport.Register(reb.netc, dataECRebStreamName, reb.ecReb.OnData); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-	// serialization: one at a time
-	reb.semaCh = make(chan struct{}, 1)
-	reb.semaCh <- struct{}{}
-
-	t.rebManager = reb
 }
 
 // target-only stats
@@ -467,7 +437,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	lom := &cluster.LOM{T: t, Objname: objName}
 	if err = lom.Init(bucket, provider, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			t.bmdVersionFixup("", true /* sleep */)
+			t.BMDVersionFixup("", true /* sleep */)
 			err = lom.Init(bucket, provider, config)
 		}
 		if err != nil {
@@ -722,7 +692,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			t.bmdVersionFixup("", true /* sleep */)
+			t.BMDVersionFixup("", true /* sleep */)
 			err = bck.Init(t.bmdowner)
 		}
 		if err != nil {
@@ -1078,24 +1048,13 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	status := &rebStatus{}
-	t.rebManager.getGlobStatus(status)
+	body, status := t.rebManager.GlobECDataStatus()
 
-	// the target is still collecting the data, reply that the result is not ready
-	if status.Stage < rebStageECDetect {
-		w.WriteHeader(http.StatusAccepted)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
 		return
 	}
 
-	// ask rebalance manager the list of all local slices
-	slices, ok := t.rebManager.ecReb.nodeData(t.si.DaemonID)
-	// no local slices found. It is possible if the number of object is small
-	if !ok {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	body := cmn.MustMarshal(slices)
 	if ok := t.writeJSON(w, r, body, "rebalance-data"); !ok {
 		glog.Errorf("Failed to send data to %s", callerID)
 	}
@@ -1362,7 +1321,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			t.bmdVersionFixup("", true /* sleep */)
+			t.BMDVersionFixup("", true /* sleep */)
 			err = bck.Init(t.bmdowner)
 		}
 		if err != nil {

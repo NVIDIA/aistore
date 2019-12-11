@@ -70,7 +70,7 @@ func newECM(t *targetrunner) *ecManager {
 
 	t.smapowner.listeners.Reg(ECM)
 
-	if ECM.bckMD.ecUsed() {
+	if ECM.bckMD.IsECUsed() {
 		ECM.initECBundles()
 	}
 
@@ -367,12 +367,12 @@ func (mgr *ecManager) BucketsMDChanged() {
 	mgr.bckMD = newBckMD
 	mgr.Unlock()
 
-	if newBckMD.ecUsed() && !oldBckMD.ecUsed() {
+	if newBckMD.IsECUsed() && !oldBckMD.IsECUsed() {
 		// init EC streams if there were not initialized on the start
 		// no need to close them when last EC bucket is disabled
 		// as they close itself on idle
 		mgr.initECBundles()
-	} else if !newBckMD.ecUsed() {
+	} else if !newBckMD.IsECUsed() {
 		mgr.closeECBundles()
 	}
 

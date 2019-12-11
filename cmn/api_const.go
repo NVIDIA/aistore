@@ -362,3 +362,9 @@ const (
 	HeaderAuthorization = "Authorization"
 	HeaderBearer        = "Bearer"
 )
+
+// timeouts for intra-cluster requests
+const (
+	DefaultTimeout = time.Duration(-1)
+	LongTimeout    = time.Duration(0)
+)

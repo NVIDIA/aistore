@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
+	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
@@ -119,7 +120,7 @@ func (t *targetrunner) unregister() (int, error) {
 			Method: http.MethodDelete,
 			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.DaemonID),
 		},
-		timeout: defaultTimeout,
+		timeout: cmn.DefaultTimeout,
 	}
 	res := t.call(args)
 	return res.status, res.err
@@ -500,7 +501,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if status, err := t.register(false, defaultTimeout); err != nil {
+	if status, err := t.register(false, cmn.DefaultTimeout); err != nil {
 		s := fmt.Sprintf("%s failed to register with proxy, status %d, err: %v", t.si, status, err)
 		t.invalmsghdlr(w, r, s)
 		return
@@ -839,7 +840,7 @@ func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
 	if bucketmd.Version < bmdVersion {
 		glog.Errorf("own bucket-metadata version %d < %d - fetching latest for %v", bucketmd.Version, bmdVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
-		t.bmdVersionFixup("", false)
+		t.BMDVersionFixup("", false)
 	} else if bucketmd.Version > bmdVersion {
 		//if metasync outraces the request, we end up here, just log it and continue
 		glog.Errorf("own bucket-metadata version %d > %d - encountered during %v", bucketmd.Version, bmdVersion, msgInt.Action)
@@ -969,7 +970,7 @@ func (t *targetrunner) smapVersionFixup() {
 	t.receiveSmap(newSmap, msgInt, "")
 }
 
-func (t *targetrunner) bmdVersionFixup(renamed string, sleep bool) {
+func (t *targetrunner) BMDVersionFixup(renamed string, sleep bool) {
 	if sleep {
 		time.Sleep(200 * time.Millisecond) // FIXME: request proxy to execute syncCBmeta()
 	}
@@ -1106,8 +1107,8 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	getRebStatus, _ := cmn.ParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
-		status := &rebStatus{}
-		t.rebManager.getGlobStatus(status)
+		status := &reb.Status{}
+		t.rebManager.GetGlobStatus(status)
 		body := cmn.MustMarshal(status)
 		if ok := t.writeJSON(w, r, body, "rebalance-status"); !ok {
 			return
@@ -1221,7 +1222,7 @@ func (t *targetrunner) enable() error {
 
 	glog.Infof("Enabling %s", t.si.Name())
 	for i := 0; i < maxRetrySeconds; i++ {
-		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
+		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
 				glog.Errorf("%s: retrying registration...", t.si.Name())
 				time.Sleep(time.Second)
@@ -1329,7 +1330,7 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 			break
 		}
 
-		t.gfn.local.activate()
+		t.gfn.local.Activate()
 		t.gfn.global.activateTimed()
 		go xact.Run(msgInt.GlobRebID)      // do the work
 		time.Sleep(100 * time.Millisecond) // FIXME: likely no need
@@ -1408,7 +1409,7 @@ func (t *targetrunner) validateBckProps(bck *cluster.Bck, msgInt *actionMsgInter
 }
 
 // lookupRemoteSingle sends the message to the given target to see if it has the specific object.
-func (t *targetrunner) lookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
+func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamSilent, "true")
 	args := callArgs{

@@ -43,7 +43,7 @@ func (p *proxyrunner) targetDownloadRequest(method string, path string, body []b
 			Query:  fullQuery,
 			Body:   body,
 		},
-		timeout: defaultTimeout,
+		timeout: cmn.DefaultTimeout,
 	}
 	res := p.call(args)
 	return dlResponse{

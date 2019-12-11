@@ -35,9 +35,6 @@ import (
 )
 
 const ( //  h.call(timeout)
-	defaultTimeout = time.Duration(-1)
-	longTimeout    = time.Duration(0)
-
 	unknownDaemonID = "unknown"
 )
 
@@ -570,14 +567,14 @@ func (h *httprunner) call(args callArgs) callResult {
 	}
 
 	switch args.timeout {
-	case defaultTimeout:
+	case cmn.DefaultTimeout:
 		req, err = args.req.Req()
 		if err != nil {
 			break
 		}
 
 		client = h.httpclient
-	case longTimeout:
+	case cmn.LongTimeout:
 		req, err = args.req.Req()
 		if err != nil {
 			break
@@ -1067,14 +1064,14 @@ func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList,
 // ================================== Background =========================================
 func (h *httprunner) join(query url.Values) (res callResult) {
 	url, psi := h.getPrimaryURLAndSI()
-	res = h.registerToURL(url, psi, defaultTimeout, query, false)
+	res = h.registerToURL(url, psi, cmn.DefaultTimeout, query, false)
 	if res.err == nil {
 		return
 	}
 	config := cmn.GCO.Get()
 	if config.Proxy.DiscoveryURL != "" && config.Proxy.DiscoveryURL != url {
 		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, config.Proxy.DiscoveryURL)
-		resAlt := h.registerToURL(config.Proxy.DiscoveryURL, psi, defaultTimeout, query, false)
+		resAlt := h.registerToURL(config.Proxy.DiscoveryURL, psi, cmn.DefaultTimeout, query, false)
 		if resAlt.err == nil {
 			res = resAlt
 			return
@@ -1083,7 +1080,7 @@ func (h *httprunner) join(query url.Values) (res callResult) {
 	if config.Proxy.OriginalURL != "" && config.Proxy.OriginalURL != url &&
 		config.Proxy.OriginalURL != config.Proxy.DiscoveryURL {
 		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, config.Proxy.OriginalURL)
-		resAlt := h.registerToURL(config.Proxy.OriginalURL, psi, defaultTimeout, query, false)
+		resAlt := h.registerToURL(config.Proxy.OriginalURL, psi, cmn.DefaultTimeout, query, false)
 		if resAlt.err == nil {
 			res = resAlt
 			return

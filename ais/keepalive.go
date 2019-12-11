@@ -101,16 +101,6 @@ type KeepaliveTracker interface {
 	TimedOut(id string) bool
 }
 
-func keepaliveRetryDuration(cs ...*cmn.Config) time.Duration {
-	var c *cmn.Config
-	if len(cs) > 0 {
-		c = cs[0]
-	} else {
-		c = cmn.GCO.Get()
-	}
-	return c.Timeout.CplaneOperation * time.Duration(c.KeepaliveTracker.RetryFactor)
-}
-
 func newTargetKeepaliveRunner(t *targetrunner, startedUp *atomic.Bool) *targetKeepaliveRunner {
 	config := cmn.GCO.Get()
 
@@ -224,7 +214,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 				if !ok {
 					toRemoveCh <- si.DaemonID
 				}
-				if lat != defaultTimeout {
+				if lat != cmn.DefaultTimeout {
 					latencyCh <- lat
 				}
 				wg.Done()
@@ -319,14 +309,14 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 	}
 	glog.Warningf("initial keepalive failed, err: %v(%d), retrying...", res.err, res.status)
 	ok, stopped = pkr.retry(to, args)
-	return ok, stopped, defaultTimeout
+	return ok, stopped, cmn.DefaultTimeout
 }
 
 func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, stopped bool) {
 	var (
 		i       int
 		timeout = time.Duration(pkr.timeoutStatsForDaemon(si.DaemonID).timeout)
-		ticker  = time.NewTicker(keepaliveRetryDuration())
+		ticker  = time.NewTicker(cmn.KeepaliveRetryDuration())
 	)
 	defer ticker.Stop()
 	for {
@@ -384,7 +374,7 @@ func (k *keepalive) Run() error {
 				ticker.Stop()
 				return nil
 			case someError:
-				if time.Since(lastCheck) >= keepaliveRetryDuration() {
+				if time.Since(lastCheck) >= cmn.KeepaliveRetryDuration() {
 					lastCheck = time.Now()
 					glog.Infof("keepalive triggered by err: %v", sig.err)
 					if stopped := k.k.doKeepalive(); stopped {
@@ -411,7 +401,7 @@ func (k *keepalive) register(r registerer, statsif stats.Tracker, primaryProxyID
 	glog.Infof("daemon -> primary proxy keepalive failed, err: %v, status: %d", err, s)
 
 	var i int
-	ticker := time.NewTicker(keepaliveRetryDuration())
+	ticker := time.NewTicker(cmn.KeepaliveRetryDuration())
 	defer ticker.Stop()
 	for {
 		select {

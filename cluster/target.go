@@ -19,6 +19,14 @@ type RecvType int
 const (
 	ColdGet RecvType = iota
 	WarmGet
+	Migrated
+)
+
+type GFNType int
+
+const (
+	GFNGlobal GFNType = iota
+	GFNLocal
 )
 
 type CloudProvider interface {
@@ -32,13 +40,18 @@ type ECManager interface {
 	EncodeObject(lom *LOM, cb ...OnFinishObj) error
 }
 
+type GFN interface {
+	Activate() bool
+	Deactivate()
+}
+
 // NOTE: For implementations, please refer to ais/tgtifimpl.go
 type Target interface {
 	GetBowner() Bowner
+	GetSowner() Sowner
 	FSHC(err error, path string)
 	GetMem2() *memsys.Mem2
 	GetFSPRG() fs.PathRunGroup
-	GetSmap() *Smap
 	Snode() *Snode
 	Cloud() CloudProvider
 	ECM() ECManager
@@ -50,9 +63,15 @@ type Target interface {
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum *cmn.Cksum, started time.Time) error
-	CopyObject(lom *LOM, bckTo *Bck, buf []byte) error
+	CopyObject(lom *LOM, bckTo *Bck, buf []byte, localOnly bool) (bool, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(srcFQN string, bck *Bck, objName string, overwrite, safe, verbose bool) (err error)
+	LookupRemoteSingle(lom *LOM, si *Snode) bool
+
+	GetGFN(gfnType GFNType) GFN
+	Health(si *Snode, includeReb bool, timeout time.Duration) ([]byte, error)
+	RebalanceNamespace(si *Snode) ([]byte, int, error)
+	BMDVersionFixup(bucket string, sleep bool)
 }
 
 type RebalanceInfo struct {
@@ -63,5 +82,4 @@ type RebalanceInfo struct {
 type RebManager interface {
 	RunLocalReb(skipMisplaced bool, bucket ...string)
 	RunGlobalReb(smap *Smap, rebID int64, bucket ...string)
-	BMDVersionFixup(bucket string, sleep bool)
 }

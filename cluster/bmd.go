@@ -122,3 +122,18 @@ func (m *BMD) ValidateBucket(bucket, provider string) (isLocal bool, err error) 
 	}
 	return
 }
+
+func (m *BMD) IsECUsed() bool {
+	for _, bck := range m.LBmap {
+		if bck.EC.Enabled {
+			return true
+		}
+	}
+	for _, bck := range m.CBmap {
+		if bck.EC.Enabled {
+			return true
+		}
+	}
+
+	return false
+}
