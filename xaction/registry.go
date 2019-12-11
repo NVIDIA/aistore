@@ -916,9 +916,10 @@ func (r *bckSummaryTask) Run() {
 					for _, v := range list.Entries {
 						summary.Size += uint64(v.Size)
 
-						// We should not include object count as other target will
-						// do that for us. We just need to report the size on the disk.
-						if !bck.IsAIS() && (shouldListCB || r.msg.Cached) {
+						// We should not include object count for cloud buckets
+						// as other target will do that for us. We just need to
+						// report the size on the disk.
+						if bck.IsAIS() || (!bck.IsAIS() && (shouldListCB || r.msg.Cached)) {
 							summary.ObjCount++
 						}
 					}
