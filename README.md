@@ -13,21 +13,23 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 
 ## Features
 
-* S3-like HTTP REST API to GET/PUT objects, and create, destroy, list and configure buckets;
-* FUSE client (called `aisfs`) to access AIS objects as files;
-* multiple access points via AIS gateways (aka *proxies*) that are extremely lightweight and can run anywhere;
-* convenient and easy-to-use command-line interface (CLI);
-* runs natively on Kubernetes;
+* S3-like HTTP REST API to GET/PUT objects, and create, destroy, list and configure buckets, and more;
+* FUSE client (called `aisfs`), to access AIS objects as files;
+* arbitrary number of access points - AIS gateways (aka *proxies*) that are extremely lightweight and can run anywhere;
+* easy-to-use command-line interface (CLI);
 * scale-out with no downtime and no limitation;
 * automated rebalancing upon changes in cluster membership, drive failures, bucket renaming, etc.;
-* n-way mirroring (RAID-1), m/k erasure coding, end-to-end data protection;
+* n-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
+
+In addition, AIStore:
+
 * can be deployed on any commodity hardware;
-* Amazon S3 and Google Cloud Storage backends, and all GCS and S3-compliant object storages;
+* supports Amazon S3 and Google Cloud Storage backends (and all GCS and S3-compliant object storages);
 * can be used as a fast tier or a cache for GCS and S3; can be populated on-demand and/or via separate `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;
 * includes MapReduce extension for massively parallel resharding of very large datasets.
 
-Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
+Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
 For detailed overview, design philosophy, and components, please see this [document](docs/overview.md) where you can also find 5 (five) alternative ways to populate AIStore with existing datasets.
 
@@ -107,6 +109,8 @@ $ make kill; make deploy <<< $'10\n3\n2\n3'
 
 > `make kill` will terminate local AIStore if it's already running.
 
+> Run `make help` for many other useful commands, including those that **build** AIS CLI, FUSE, and benchmarks (binaries), **deploy** AIS cluster, and **run** some/all tests.
+
 > To enable an optional AIStore authentication server, execute instead `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
 
 Finally, the `go test` (above) will create an ais bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
@@ -125,16 +129,19 @@ $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match=
 
 This command runs a test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match `a\d+` regex.
 
-> In addition to the AIS cluster itself, you can deploy [AIS CLI](cli/README.md) - an easy-to-use AIS-integrated command-line management tool. The tool supports multiple commands and options; the first one that you may want to try is `ais status` to show the state and status of the AIS cluster and its nodes. AIS CLI deployment is documented in the [CLI readme](cli/README.md) and includes two easy steps: building the binary (via `cli/install.sh`) and sourcing Bash auto-completions.
+> In addition to AIStore - the storage cluster, you can also deploy [aisfs](fuse/README.md) - to access AIS objects as files, and [AIS CLI](cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
 
-> For more testing commands and command-line options, please refer to the corresponding [README](ais/tests/README.md) and/or the [test sources](ais/tests/).
-> For other useful commands, see the [Makefile](ais/Makefile).
+> AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais status` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
+
+> For more testing commands and command-line options, please refer to the [corresponding README](ais/tests/README.md).
 
 > For tips and help on local non-containerized deployment, please see [the tips](docs/local_tips.md).
 
 > For info on how to run AIS executables, see [command-line arguments](docs/command_line.md).
 
 > For helpful links and background on Go, AWS, GCP, and Deep Learning, please see [helpful links](docs/helpful-links.md).
+
+> And again, run `make help` to find out how to build and run AIS executables and tests.
 
 ### Deployment: Local Docker-Compose
 

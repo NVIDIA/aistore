@@ -13,7 +13,8 @@ term-reset = $(shell { tput sgr0 || tput me; } 2>/dev/null)
 $(call make-lazy,cyan)
 $(call make-lazy,term-reset)
 
-
+# make flags
+MAKEFLAGS += --no-print-directory
 
 .PHONY: all node cli fuse authn cli-autocomplete
 
@@ -47,11 +48,11 @@ aisloader: ## Build 'aisloader' binary
 	@cd bench/aisloader && ./install.sh
 
 #
-# local deployment
+# local deployment (intended for developers)
 #
 .PHONY: deploy
 
-deploy: ## Build and locally deploys AIS cluster
+deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies and targets
 	@"$(BUILD_DIR)/deploy.sh"
 
 #
