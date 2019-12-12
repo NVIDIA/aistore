@@ -1,0 +1,3 @@
+Renaming bucket $BUCKET_1 to $BUCKET_2 in progress.
+To check the status, run: ais show xaction renamelb $BUCKET_1
+$BUCKET_2 bucket destroyed

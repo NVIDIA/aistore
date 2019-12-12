@@ -1,0 +1,3 @@
+ais create bucket $BUCKET_1
+ais create bucket $BUCKET_1
+ais rm bucket $BUCKET_1

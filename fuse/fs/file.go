@@ -46,7 +46,7 @@ func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err
 	inodeID := fs.nextInodeID()
 
 	parent.Lock()
-	parent.NewFileEntry(req.Name, inodeID, object.Size)
+	parent.NewFileEntry(req.Name, inodeID, object)
 	parent.Unlock()
 
 	fs.mu.Lock()

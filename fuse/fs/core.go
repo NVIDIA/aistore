@@ -345,7 +345,7 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 
 		parent.Lock()
 		if !result.IsDir() {
-			parent.NewFileEntry(req.Name, inode.ID(), result.Object.Size)
+			parent.NewFileEntry(req.Name, inode.ID(), result.Object)
 		} else {
 			parent.NewDirEntry(req.Name, inode.ID())
 		}

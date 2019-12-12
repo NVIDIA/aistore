@@ -73,6 +73,7 @@ docker run -it ${RUN_FLAGS} \
     -v ${CONTAINER_NAME}:/tmp \
     --ulimit nofile=100000:100000 \
     --name=${CONTAINER_NAME} \
+    --privileged \
     test-docker # image
 
 echo -e "\n${GIT_COMMIT}"

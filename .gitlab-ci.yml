@@ -42,5 +42,6 @@ lint:
 test-short:
   stage: test-short
   script:
+    - make cli aisfs
     - make deploy <<< $'5\n5\n3\n0'
     - BUCKET="test" make test-short

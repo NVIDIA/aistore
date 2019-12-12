@@ -2,7 +2,7 @@ FROM ubuntu:18.04
 
 RUN apt-get clean && apt-get update &&\
   set -eux &&\
-  apt-get --no-install-recommends -y install curl git ca-certificates wget vim python3-setuptools python3 python3-pip sysstat attr net-tools iproute2 build-essential lsof iputils-ping &&\
+  apt-get --no-install-recommends -y install curl git ca-certificates wget vim python3-setuptools python3 python3-pip sysstat attr net-tools iproute2 build-essential lsof iputils-ping fuse &&\
   apt-get -y clean all
 
 RUN pip3 install awscli

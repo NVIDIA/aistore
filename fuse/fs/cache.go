@@ -54,14 +54,13 @@ type (
 	dtAttrs struct {
 		id   fuseops.InodeID
 		path string
-		size int64
+		obj  *ais.Object
 	}
 
 	entryType uint8
 
 	cacheEntry interface {
 		Ty() entryType
-		updateAttrs(dta dtAttrs)
 		ID() fuseops.InodeID
 		Name() string
 
@@ -96,25 +95,12 @@ type (
 	}
 )
 
-func (e *fileEntry) Ty() entryType { return entryFileTy }
-func (e *fileEntry) updateAttrs(dta dtAttrs) {
-	// NOTE: Updating invalid inode with another invalid inode is equivalent
-	// to invalidating invalid entry and should be considered a bug.
-	cmn.Assert(e.id == invalidInodeID || dta.id == invalidInodeID)
-	e.id = dta.id
-	e.object.Size = dta.size
-}
+func (e *fileEntry) Ty() entryType       { return entryFileTy }
 func (e *fileEntry) ID() fuseops.InodeID { return e.id }
 func (e *fileEntry) Name() string        { return e.object.Name }
 func (e *fileEntry) Object() *ais.Object { return e.object }
 
-func (e *dirEntry) Ty() entryType { return entryDirTy }
-func (e *dirEntry) updateAttrs(dta dtAttrs) {
-	// NOTE: Updating invalid inode with another invalid inode is equivalent
-	// to invalidating invalid entry and should be considered a bug.
-	cmn.Assert(e.id == invalidInodeID || dta.id == invalidInodeID)
-	e.id = dta.id
-}
+func (e *dirEntry) Ty() entryType       { return entryDirTy }
 func (e *dirEntry) ID() fuseops.InodeID { return e.id }
 func (e *dirEntry) Name() string        { return e.name }
 func (e *dirEntry) Object() *ais.Object { return nil }
@@ -158,9 +144,12 @@ func newNsCache(bck *ais.Bucket, logger *log.Logger, cfg *ServerConfig) (*namesp
 }
 
 func (c *namespaceCache) newFileEntry(dta dtAttrs) cacheEntry {
+	if dta.obj == nil {
+		dta.obj = ais.NewObject(dta.path, c.bck, 0)
+	}
 	return &fileEntry{
 		id:     dta.id,
-		object: ais.NewObject(dta.path, c.bck, dta.size),
+		object: dta.obj,
 	}
 }
 
@@ -199,7 +188,7 @@ func (c *namespaceCache) refresh() error {
 			newCache.add(entryFileTy, dtAttrs{
 				id:   id,
 				path: obj.Name,
-				size: obj.Size,
+				obj:  obj,
 			})
 		}
 

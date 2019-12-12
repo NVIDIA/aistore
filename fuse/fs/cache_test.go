@@ -17,6 +17,7 @@ import (
 var _ = Describe("Cache", func() {
 	Describe("internal", func() {
 		var (
+			bck   *ais.Bucket
 			cache *namespaceCache
 		)
 
@@ -27,7 +28,7 @@ var _ = Describe("Cache", func() {
 		)
 
 		BeforeEach(func() {
-			bck := ais.NewBucket("empty", api.BaseParams{
+			bck = ais.NewBucket("empty", api.BaseParams{
 				Client: http.DefaultClient,
 				URL:    "",
 			})
@@ -39,7 +40,7 @@ var _ = Describe("Cache", func() {
 				cache.add(entryFileTy, dtAttrs{
 					id:   invalidInodeID,
 					path: fpath,
-					size: 1024,
+					obj:  ais.NewObject(fpath, bck, 1024),
 				})
 				exists, res, entry := cache.exists(fpath)
 				Expect(exists).To(BeTrue())
@@ -81,7 +82,7 @@ var _ = Describe("Cache", func() {
 				cache.add(entryFileTy, dtAttrs{
 					id:   invalidInodeID,
 					path: fpath,
-					size: 1024,
+					obj:  ais.NewObject(fpath, bck, 1024),
 				})
 				exists, _, _ := cache.exists(fpath)
 				Expect(exists).To(BeTrue())
@@ -203,6 +204,65 @@ var _ = Describe("Cache", func() {
 				}
 
 				Expect(files).To(HaveLen(2))
+				Expect(dirs).To(HaveLen(1))
+			})
+
+			It("should only list directories after files are removed", func() {
+				var (
+					entries []cacheEntry
+
+					filesPaths = []string{
+						"a",
+						dpath + "c",
+						dpath + "d",
+						dpath + "e/f",
+					}
+				)
+
+				cache.add(entryDirTy, dtAttrs{
+					id:   invalidInodeID,
+					path: dpath,
+				})
+				exists, _, _ := cache.exists(dpath)
+				Expect(exists).To(BeTrue())
+
+				for _, filePath := range filesPaths {
+					cache.add(entryFileTy, dtAttrs{
+						id:   invalidInodeID,
+						path: filePath,
+					})
+					exists, _, _ := cache.exists(filePath)
+					Expect(exists).To(BeTrue())
+				}
+
+				cache.listEntries(dpath, func(v cacheEntry) {
+					entries = append(entries, v)
+				})
+				Expect(entries).To(HaveLen(3))
+
+				for _, filePath := range filesPaths {
+					cache.remove(filePath)
+					exists, _, _ := cache.exists(filePath)
+					Expect(exists).To(BeFalse())
+				}
+
+				entries = nil
+				cache.listEntries(dpath, func(v cacheEntry) {
+					entries = append(entries, v)
+				})
+
+				var files, dirs []string
+				for _, entry := range entries {
+					Expect(entry.Name()).To(HavePrefix(dpath))
+					switch entry.Ty() {
+					case entryFileTy:
+						files = append(files, entry.Name())
+					case entryDirTy:
+						dirs = append(dirs, entry.Name())
+					}
+				}
+
+				Expect(files).To(HaveLen(0))
 				Expect(dirs).To(HaveLen(1))
 			})
 		})

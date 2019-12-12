@@ -1,0 +1,17 @@
+echo "some content" > $DIR/abc.txt
+ls $DIR
+cat $DIR/abc.txt
+cat $DIR/txt.txt // FAIL "no such file or directory"
+
+mv $DIR/abc.txt $DIR/def.txt // FAIL "function not implemented"
+cp $DIR/abc.txt $DIR/def.txt
+
+ls $DIR | sort
+
+rm -f $DIR/abc.txt
+
+cat $DIR/abc.txt // FAIL "no such file or directory"
+cat $DIR/def.txt
+
+rm -f $DIR/def.txt
+ls $DIR

@@ -57,9 +57,9 @@ func (dir *DirectoryInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAtt
 }
 
 // REQUIRES_LOCK(dir)
-func (dir *DirectoryInode) NewFileEntry(entryName string, id fuseops.InodeID, size int64) {
+func (dir *DirectoryInode) NewFileEntry(entryName string, id fuseops.InodeID, object *ais.Object) {
 	entryName = path.Join(dir.Path(), entryName)
-	nsCache.add(entryFileTy, dtAttrs{id: id, path: entryName, size: size})
+	nsCache.add(entryFileTy, dtAttrs{id: id, path: entryName, obj: object})
 
 	// TODO: improve caching entries for `ReadEntries`
 	dir.entries = nil
@@ -98,6 +98,10 @@ func (dir *DirectoryInode) InvalidateInode(entryName string, isDir bool) {
 	if isDir {
 		entryName += separator
 		ty = entryDirTy
+	}
+	exists, _, _ := nsCache.exists(entryName)
+	if !exists {
+		return
 	}
 	nsCache.add(ty, dtAttrs{id: invalidInodeID, path: entryName})
 }

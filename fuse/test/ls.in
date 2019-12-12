@@ -1,0 +1,6 @@
+touch $DIR/a.txt
+mkdir $DIR/b
+touch $DIR/b/c.txt
+touch $DIR/b/d.txt
+
+ls -R $DIR
