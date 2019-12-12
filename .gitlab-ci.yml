@@ -2,7 +2,6 @@ image: golang:1.13
 
 stages:
   - build
-  - lint
   - test-short
 
 cache:
@@ -25,9 +24,9 @@ before_script:
 build:
   stage: build
   script:
-    - go build -tags="aws" ais/setup/aisnode.go
-    - go build -tags="gcp" ais/setup/aisnode.go
-    - go build -tags="" ais/setup/aisnode.go
+    - CLDPROVIDER="aws" make node
+    - CLDPROVIDER="gcp" make node
+    - CLDPROVIDER="" make node
     - make authn
     - make fuse
     - make cli
@@ -43,5 +42,5 @@ lint:
 test-short:
   stage: test-short
   script:
-    - printf '5\n5\n2\n0' | make deploy
-    - BUCKET=test make test-short
+    - make deploy <<< $'5\n5\n3\n0'
+    - BUCKET="test" make test-short

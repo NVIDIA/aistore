@@ -102,7 +102,7 @@ Enter your choice:
 Or, you can run all of the above non-interactively:
 
 ```shell
-$ make kill; make deploy <<< $'10\n3\n2\n3'
+$ make kill; make deploy <<< $'10\n3\n2\n0'
 ```
 
 >  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud Provider" prompt above, and the fact that access to Cloud storage is specified at the deployment time.

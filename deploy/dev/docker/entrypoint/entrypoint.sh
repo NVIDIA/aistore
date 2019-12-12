@@ -10,22 +10,19 @@ export GOCACHE=/tmp/.gocache
 touch ${LOGDIR}/statsd.log
 
 if [ -n "${QUICK}" ]; then
-    go get -u -v github.com/NVIDIA/aistore/ais && /bin/bash
+  go get -u -v github.com/NVIDIA/aistore && /bin/bash
 else
-    cd ${GOPATH}/src/github.com/NVIDIA/aistore/ais
-    source /config.sh
+  cd ${GOPATH}/src/github.com/NVIDIA/aistore
+  source /config.sh
 
-    exec node /statsd/stats.js ${CONFFILE_STATSD} 2>&1 | tee -a ${LOGDIR}/statsd.log &
+  exec node /statsd/stats.js ${CONFFILE_STATSD} 2>&1 | tee -a ${LOGDIR}/statsd.log &
 
-    VERSION=`git rev-parse --short HEAD`
-    BUILD=`date +%FT%T%z`
-    go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/aisnode.go
-
-    AIS_DAEMONID=`echo ${HOSTNAME}` ${GOBIN}/aisnode \
-        -config=${CONFFILE} \
-        -role=${ROLE} \
-        -ntargets=${TARGET_CNT} \
-        -nodiskio=${NODISKIO} \
-        -dryobjsize=${DRYOBJSIZE} \
-        -alsologtostderr=true
+  make node
+  AIS_DAEMONID=$(echo ${HOSTNAME}) ${GOBIN}/aisnode \
+      -config=${CONFFILE} \
+      -role=${ROLE} \
+      -ntargets=${TARGET_CNT} \
+      -nodiskio=${NODISKIO} \
+      -dryobjsize=${DRYOBJSIZE} \
+      -alsologtostderr=true
 fi

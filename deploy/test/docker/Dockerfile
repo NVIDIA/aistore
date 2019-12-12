@@ -22,7 +22,7 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
 
 RUN mkdir -p /tmp/ais && go get -u github.com/rakyll/gotest
 
-ARG cld_provider=3
+ARG cld_provider=0
 ENV CLD_PROVIDER ${cld_provider}
 
 COPY . $GOPATH/src/github.com/NVIDIA/aistore/

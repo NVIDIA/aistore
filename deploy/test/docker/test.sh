@@ -3,7 +3,7 @@
 S_PATH=$(cd "$(dirname "$0")"; pwd -P)
 AISTORE_PATH=$(cd "$S_PATH/../../.."; pwd -P)
 CONTAINER_NAME=docker_test
-CLD_PROVIDER=3
+CLD_PROVIDER=0
 RUN_FLAGS=""
 GIT_COMMIT=""
 

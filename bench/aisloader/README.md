@@ -1,11 +1,13 @@
 # AIS Loader
+
 `aisloader` is a command-line tool that is included with AIS and that can be immediately used to generate load and evaluate cluster performance.
 
 ## Setup
-Run `go build` to create an executable for `aisloader` or run
 
-```
-$ go run main.go worker.go [ARGS ...]
+To build `aisloader`, run `make aisloader` from the root of the aistore repo:
+```bash
+$ cd $GOPATH/src/github.com/NVIDIA/aistore
+$ make aisloader
 ```
 
 ## Bytes Multiplicative Suffix
@@ -55,7 +57,7 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
 The following performs a 10-seconds performance test of 50% PUT and 50% GET requests:
 
 ```sh
-$ ./aisloader -bucket=my_ais_bucket -duration=10s -pctput=50 -provider=ais -cleanup=true -readertype=sg -numworkers=3
+$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=50 -provider=ais -cleanup=true -readertype=sg -numworkers=3
 ```
 
 Example output follows below:
@@ -91,19 +93,19 @@ Time      OP    Count                 	Total Bytes           	Latency(min, avg, 
 Loader ID:
 
 ```sh
-$ ./aisloader -getloaderid
+$ aisloader -getloaderid
 0x0
-$ ./aisloader -getloaderid -loaderid=loaderstring -loaderidhashlen=8
+$ aisloader -getloaderid -loaderid=loaderstring -loaderidhashlen=8
 0xdb
 ```
 
 PUT 2000 objects with names that look like hex({0..2000}{loaderid}):
 
 ```sh
-$ ./aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
+$ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
 ```
 
-***Warning:*** Performance tests generate a heavy load on your local system, please save your work.
+**Warning:** Performance tests generate a heavy load on your local system, please save your work.
 
 ## Dry-Run Performance Tests
 
@@ -112,7 +114,7 @@ AIStore support two variations of "dry" deployment: AIS_NODISKIO.
 Example of deploying a cluster with disk IO disabled and object size 256KB:
 
 ```bash
-/aistore/ais$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
+$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
 ```
 
 **Note:** These are passed in either as environment variables or command line arguments when deploying the AIStore clusters.
@@ -122,7 +124,7 @@ Example of deploying a cluster with disk IO disabled and object size 256KB:
 | nodiskio | AIS_NODISKIO | `false` | If `true` - disables disk IO. For GET requests, a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests, it reads the request's body to `/dev/null`. <br> Valid values are `true` or `1`, and `false` or `0`. |
 | dryobjsize | AIS_DRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. <br> Default value is '8m' - the size of an object is 8 megabytes |
 
-***Warning:*** The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.
+**Warning:** The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.
 
 ## Collecting stats
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BUCKET=docker_local_bucket
-AIS=$GOPATH/src/github.com/NVIDIA/aistore
+AISTORE_PATH=$GOPATH/src/github.com/NVIDIA/aistore
 
 if [ ${CLD_PROVIDER} == 1 ]; then
     BUCKET=${HOSTNAME}
@@ -19,15 +19,11 @@ function cleanup {
 }
 trap cleanup EXIT
 
-pushd $AIS > /dev/null
-
-# try to build and deploy
-pushd $AIS > /dev/null
-echo -e "4\n4\n3\n${CLD_PROVIDER}" > deploy.tmp && make deploy < deploy.tmp && sleep 5
-popd > /dev/null
+pushd $AISTORE_PATH > /dev/null
+(echo -e "4\n4\n3\n${CLD_PROVIDER}" | make deploy) && sleep 5
 
 # test
-BUCKET=${BUCKET} gotest -v -p 1 -count 1 -timeout 2h ./...
+BUCKET=${BUCKET} make test-long
 EXIT_CODE=$?
 popd > /dev/null
 

@@ -5,7 +5,16 @@ BUILD_DIR = ./ais/setup
 VERSION = $(shell git rev-parse --short HEAD)
 BUILD = $(shell date +%FT%T%z)
 FLAGS = $(if $(strip $(GORACE)),-race,)
-LDFLAGS = -ldflags "-w -s -X 'main.version=$(VERSION)' -X 'main.build=$(BUILD)'"
+
+ifeq ($(MODE),debug)
+	# Debug mode
+	GCFLAGS = -gcflags="all=-N -l"
+	LDFLAGS = -ldflags "-X 'main.version=$(VERSION)' -X 'main.build=$(BUILD)'"
+else
+	# Production mode
+	GCFLAGS =
+	LDFLAGS = -ldflags "-w -s -X 'main.version=$(VERSION)' -X 'main.build=$(BUILD)'"
+endif
 
 # Colors
 cyan = $(shell { tput setaf 6 || tput AF 6; } 2>/dev/null)
@@ -16,19 +25,19 @@ $(call make-lazy,term-reset)
 # make flags
 MAKEFLAGS += --no-print-directory
 
-.PHONY: all node cli fuse authn cli-autocomplete
+.PHONY: all node cli aisfs authn cli-autocomplete
 
-all: node cli fuse authn ## Build all main binaries
+all: node cli aisfs authn ## Build all main binaries
 
 node: ## Build 'aisnode' binary
-	@echo "Building aisnode..."
+	@echo -n "Building aisnode (version: $(VERSION) build: $(BUILD))... "
 	@GORACE="$(GORACE)" \
 		GODEBUG="madvdontneed=1" \
-		GOBIN=$(GOPATH)/bin \
-		go install $(FLAGS) -tags="$(CLDPROVIDER)" $(LDFLAGS) $(BUILD_DIR)/aisnode.go
+		go install $(FLAGS) -tags="$(CLDPROVIDER)" $(GCFLAGS) $(LDFLAGS) $(BUILD_DIR)/aisnode.go
+	@echo "done."
 
-fuse: ## Build 'aisfuse' binary
-	@echo "Building aisfuse..."
+aisfs: ## Build 'aisfs' binary
+	@echo "Building aisfs..."
 	@cd fuse && ./install.sh
 
 cli: ## Build CLI ('ais' binary)
@@ -40,12 +49,14 @@ cli-autocomplete: ## Add CLI autocompletions
 	@cd cli/autocomplete && ./install.sh
 
 authn: ## Build 'authn' binary
-	@echo "Building authn..."
-	@GOBIN=$(GOPATH)/bin go install $(FLAGS) $(LDFLAGS) ./authn
+	@echo -n "Building authn... "
+	@go install $(FLAGS) $(LDFLAGS) ./authn
+	@echo "done."
 
 aisloader: ## Build 'aisloader' binary
-	@echo "Building aisloader..."
-	@cd bench/aisloader && ./install.sh
+	@echo -n "Building aisloader... "
+	@go install $(LDFLAGS) ./bench/aisloader
+	@echo "done."
 
 #
 # local deployment (intended for developers)
@@ -61,9 +72,9 @@ deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies
 .PHONY: kill rmcache clean
 
 kill: ## Kill all locally deployed targets and proxies
-	@echo -n "AIS shutdown... "
-	@pkill -SIGINT aisnode 2>/dev/null; sleep 1; true
-	@pkill authn 2>/dev/null; sleep 1; true
+	@echo -n "Local AIS shutdown... "
+	@pkill -SIGINT aisnode 2>/dev/null; true
+	@pkill authn 2>/dev/null; true
 	@pkill -SIGKILL aisnode 2>/dev/null; true
 	@echo "done."
 
@@ -72,11 +83,12 @@ rmcache: ## Delete AIS related caches
 	@"$(BUILD_DIR)/rmcache.sh"
 
 clean: ## Remove all AIS related files and binaries
-	@echo "Cleaning..."
+	@echo -n "Cleaning... "
 	@rm -rf ~/.ais* && \
 		rm -rf /tmp/ais* && \
 		rm -f $(GOPATH)/bin/ais* # cleans 'ais' (CLI), 'aisnode' (TARGET/PROXY), 'aisfs' (FUSE), 'aisloader' && \
 		rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/aistore/aisnode.a
+	@echo "done."
 
 #
 # go modules
@@ -204,6 +216,7 @@ help:
 		"make deploy" "Deploy cluster locally" \
 		"make kill clean" "Stop locally deployed cluster and cleans any cluster related files" \
 		"GORACE='log_path=race' make deploy" "Deploy cluster locally with race detector" \
+		"MODE='debug' make deploy" "Deploy cluster locally with binary build in debug mode" \
 		"BUCKET='tmp' make test-short" "Run all short tests" \
 		"BUCKET='cloud_bucket' make test-long" "Run all tests" \
 		"BUCKET='tmp' make ci" "Run all checks and short tests"

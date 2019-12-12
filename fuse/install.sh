@@ -19,7 +19,7 @@ VERSION="0.2"
 BUILD=$(git rev-parse --short HEAD)
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-GOBIN=${GOPATH}/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" ${DIR}/*.go
+go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" ${DIR}/*.go
 
 if [[ $? -eq 0 ]]; then
     echo "Executable ${BIN} has been successfully installed."

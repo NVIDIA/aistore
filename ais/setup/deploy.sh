@@ -13,18 +13,24 @@
 # releasing memory to the system.
 export GODEBUG=madvdontneed=1
 
-printError () {
+printError() {
   echo "Error: $1."
   exit 1
 }
 
-isCommandAvailable () {
+is_number() {
+  if ! [[ "$1" =~ ^[0-9]+$ ]] ; then
+    printError "'$1' is not a number"
+  fi
+}
+
+isCommandAvailable() {
   if [[ -z $(command -v "$1") ]]; then
     printError "command '$1' not available"
   fi
 }
 
-runCmd () {
+runCmd() {
   set -x
   $@ &
   { set +x; } 2>/dev/null
@@ -40,8 +46,7 @@ USE_HTTPS=false
 CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
 HTTP_READ_BUFFER_SIZE=65536
-if [ "$DEPLOY_AS_NEXT_TIER" == "" ]
-then
+if [[ -z $DEPLOY_AS_NEXT_TIER ]]; then
   PORT=${PORT:-8080}
   PORT_INTRA_CONTROL=${PORT_INTRA_CONTROL:-9080}
   PORT_INTRA_DATA=${PORT_INTRA_DATA:-10080}
@@ -72,8 +77,7 @@ CONFDIR="$HOME/.ais$NEXT_TIER"
 TEST_FSPATH_COUNT=1
 
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
-  echo "Error: TCP port $PORT is not open (check if AIStore is already running)"
-  exit 1
+  printError "TCP port $PORT is not open (check if AIStore is already running)"
 fi
 TMPF=$(mktemp /tmp/ais$NEXT_TIER.XXXXXXXXX)
 touch $TMPF;
@@ -87,30 +91,26 @@ case $OS in
     xattr -w user.comment comment $TMPF
     ;;
   *)
-    echo "Error: '$OS' is not supported"
     rm $TMPF 2>/dev/null
-    exit 1
+    printError "'${OS}' is not supported"
+    ;;
 esac
 if [ $? -ne 0 ]; then
-  echo "Error: bad kernel configuration: extended attributes are not enabled"
   rm $TMPF 2>/dev/null
-  exit 1
+  printError "bad kernel configuration: extended attributes are not enabled"
 fi
 rm $TMPF 2>/dev/null
 
 # Read target count
 echo "Enter number of storage targets:"
-read TARGET_CNT
-if ! [[ ${TARGET_CNT} =~ ^[0-9]+$ ]] ; then
-  printError "${TARGET_CNT} is not a number"
-fi
+read -r TARGET_CNT
+is_number ${TARGET_CNT}
 
 # Read proxy count
 echo "Enter number of proxies (gateways):"
-read PROXY_CNT
-if ! [[ ${PROXY_CNT} =~ ^[0-9]+$ ]] ; then
-  printError "${PROXY_CNT} is not a number"
-elif  [[ ${PROXY_CNT} -lt 1 ]] ; then
+read -r PROXY_CNT
+is_number ${PROXY_CNT}
+if  [[ ${PROXY_CNT} -lt 1 ]] ; then
   printError "${PROXY_CNT} must be at least 1"
 fi
 if [[ ${PROXY_CNT} -gt 1 ]] ; then
@@ -126,9 +126,7 @@ END=$((TARGET_CNT + PROXY_CNT - 1))
 
 echo "Number of local cache directories (enter 0 for preconfigured filesystems):"
 read test_fspath_cnt
-if ! [[ ${test_fspath_cnt} =~ ^[0-9]+$ ]]; then
-  printError "${test_fspath_cnt} is not a number"
-fi
+is_number ${test_fspath_cnt}
 TEST_FSPATH_COUNT=${test_fspath_cnt}
 
 # If not specified, CLDPROVIDER it will be empty and build
@@ -136,16 +134,22 @@ TEST_FSPATH_COUNT=${test_fspath_cnt}
 # is not equal to `aws` nor `gcp` it will be assumed to be empty.
 CLDPROVIDER=""
 
-echo Select Cloud Provider:
-echo  1: Amazon Cloud
-echo  2: Google Cloud
-echo  3: None
-echo Enter your choice:
-read cld_provider
-if [[ ${cld_provider} -eq 1 ]]; then
+echo "Select:"
+echo " 0: No cloud provider"
+echo " 1: Amazon Cloud"
+echo " 2: Google Cloud"
+echo "Enter your provider choice (0, 1 or 2):"
+read -r cld_provider
+is_number ${cld_provider}
+
+if [[ ${cld_provider} -eq 0 ]]; then
+  CLDPROVIDER=""
+elif [[ ${cld_provider} -eq 1 ]]; then
   CLDPROVIDER="aws"
 elif [[ ${cld_provider} -eq 2 ]]; then
   CLDPROVIDER="gcp"
+else
+  printError "${cld_provider} is not a valid entry"
 fi
 
 if ! CLDPROVIDER=${CLDPROVIDER} make -C ${AISTORE_DIR} node; then

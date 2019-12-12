@@ -1,5 +1,8 @@
 #!/bin/bash
-name=`basename "$0"`
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+name=$(basename "$0")
+
 usage() {
     echo "Usage: $name [-a=AWS_DIR] [-c=NUM] [-d=NUM] [-f=LIST] [-g] [-h] [-l] [-m] [-p=NUM] [-s] [-t=NUM] [-qs=AWS_DIR (Optional)]"
     echo "  -a=AWS_DIR or --aws=AWS_DIR             : to use AWS, where AWS_DIR is the location of AWS configuration and credential files"
@@ -118,7 +121,6 @@ deploy_mode() {
 }
 
 deploy_quickstart() {
-    DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     cp $DIR/../../../ais/setup/config.sh config.sh
 
     QS_AWSDIR=${1:-'~/.aws/'}
@@ -149,7 +151,7 @@ if ! [ -x "$(command -v docker-compose)" ]; then
   exit 1
 fi
 
-CLOUD=0
+CLOUD=""
 CLUSTER_CNT=0
 PROXY_CNT=0
 TARGET_CNT=0
@@ -186,7 +188,7 @@ case $i in
         ;;
 
     -nocloud)
-        CLOUD=3
+        CLOUD=0
         shift # past argument
         ;;
 
@@ -284,15 +286,15 @@ if [ $DRYRUN -ne 0 ]; then
     is_size $DRYOBJSIZE
 fi
 
-if [ $CLOUD -eq 0 ]; then
+if [[ -z $CLOUD ]]; then
     echo "Select"
+    echo " 0: No cloud provider"
     echo " 1: Use AWS"
     echo " 2: Use GCP"
-    echo " 3: No cloud provider"
-    echo "Enter your provider choice (1, 2 or 3):"
-    read CLOUD
+    echo "Enter your provider choice (0, 1 or 2):"
+    read -r CLOUD
     is_number $CLOUD
-    if [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ] && [ $CLOUD -ne 3 ]; then
+    if [ $CLOUD -ne 0 ] && [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ]; then
         echo "Not a valid entry. Exiting..."
         exit 1
     fi
@@ -422,7 +424,6 @@ if [ "${NETWORK}" = "multi" ]; then
     composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.multinet.yml"
 fi
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cp $DIR/../../../ais/setup/config.sh config.sh
 
 docker network create docker_default
@@ -534,9 +535,8 @@ fi
 rm config.sh
 docker ps
 
-# Install the CLI and enable auto-complete
-echo "n" | ../../../cli/install.sh
-source ../../../cli/autocomplete/bash
+# Install the CLI
+cd $DIR/../../../ && make cli
 
 deploy_mode
 echo done
