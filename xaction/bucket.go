@@ -99,16 +99,15 @@ func (b *bucketXactions) renewBucketXaction(e bucketEntry) (bucketEntry, error) 
 	b.RUnlock()
 
 	b.Lock()
+	defer b.Unlock()
 	previousEntry = b.entries[e.Kind()]
 	running = previousEntry != nil && !previousEntry.Get().Finished()
 	if running {
 		if keep, err := e.preRenewHook(previousEntry); keep || err != nil {
-			b.Unlock()
 			return previousEntry, err
 		}
 	}
 	if err := e.Start(b.uniqueID()); err != nil {
-		b.Unlock()
 		return nil, err
 	}
 	b.entries[e.Kind()] = e
@@ -116,7 +115,6 @@ func (b *bucketXactions) renewBucketXaction(e bucketEntry) (bucketEntry, error) 
 	if running {
 		e.postRenewHook(previousEntry)
 	}
-	b.Unlock()
 	return e, nil
 }
 

@@ -640,7 +640,8 @@ func (r *registry) renewGlobalXaction(e globalEntry) (ee globalEntry, keep bool,
 	r.Lock()
 	defer r.Unlock()
 	previousEntry = r.globalXacts[e.Kind()]
-	if previousEntry != nil && !previousEntry.Get().Finished() {
+	running := previousEntry != nil && !previousEntry.Get().Finished()
+	if running {
 		if e.preRenewHook(previousEntry) {
 			ee, keep = previousEntry, true
 			return
@@ -652,7 +653,7 @@ func (r *registry) renewGlobalXaction(e globalEntry) (ee globalEntry, keep bool,
 	r.globalXacts[e.Kind()] = e
 	r.storeByID(e.Get().ID(), e)
 
-	if previousEntry != nil && !previousEntry.Get().Finished() {
+	if running {
 		e.postRenewHook(previousEntry)
 	}
 	ee = e

@@ -136,6 +136,10 @@ func (j *mncJogger) jog() {
 }
 
 func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
+	if j.parent.Aborted() {
+		return fmt.Errorf("makenaction xaction was aborted")
+	}
+
 	var size int64
 	if n := lom.NumCopies(); n == j.parent.copies {
 		return nil

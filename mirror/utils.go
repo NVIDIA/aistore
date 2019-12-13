@@ -57,8 +57,11 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 }
 
 func addCopies(lom *cluster.LOM, copies int, mpathers map[string]mpather, buf []byte) (size int64, err error) {
-	lom.Lock(false)
-	defer lom.Unlock(false)
+	// TODO: We could potentially change it to `lom.Lock(false)` if we would
+	//  take an exclusive lock for updating metadata (but for now we dont have
+	//  mechanism for locking only metadata so we need to lock exclusively).
+	lom.Lock(true)
+	defer lom.Unlock(true)
 
 	// Reload metadata, it is necessary to have it fresh.
 	lom.Uncache()
@@ -71,7 +74,12 @@ func addCopies(lom *cluster.LOM, copies int, mpathers map[string]mpather, buf []
 		return 0, nil
 	}
 
-	for i := lom.NumCopies() + 1; i <= copies; i++ {
+	// NOTE: During copying we may notice that some of the copies may not exist.
+	//  These copies will be removed from `lom.md` and `NumCopies()` will
+	//  decrease. Therefore, we cannot just iterate `copies - lom.NumCopies()`
+	//  times because this may not be sufficient - and this is why we iterate
+	//  until `NumCopies() == copies`.
+	for lom.NumCopies() < copies {
 		if mpather := findLeastUtilized(lom, mpathers); mpather != nil {
 			var clone *cluster.LOM
 			if clone, err = copyTo(lom, mpather.mountpathInfo(), buf); err != nil {
@@ -87,6 +95,7 @@ func addCopies(lom *cluster.LOM, copies int, mpathers map[string]mpather, buf []
 			return
 		}
 	}
+	lom.ReCache()
 	return
 }
 
@@ -120,6 +129,14 @@ func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpath
 		if u, ok := mpathUtils[jpath]; ok && u < util {
 			out = j
 			util = u
+		} else if !ok && out == nil {
+			// Since we cannot relay on the fact that `mpathUtils` has all
+			// mountpaths (because it might not refresh it now) we randomly
+			// pick a mountpath.
+			availMpaths, _ := fs.Mountpaths.Get()
+			if _, ok := availMpaths[jpath]; ok { // ensure that mountpath actually exists
+				out = j
+			}
 		}
 	}
 	return
@@ -135,7 +152,6 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 	if err != nil {
 		return
 	}
-	lom.ReCache()
 	return
 }
 

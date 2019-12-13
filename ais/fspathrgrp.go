@@ -139,7 +139,10 @@ func (g *fsprungroup) newMountpathEvent(action, mpath string) {
 		}
 	}
 	g.RUnlock()
-	go g.t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
+	go func() {
+		g.t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
+		xaction.Registry.RenewObjsRedundancy(g.t)
+	}()
 	g.checkEnable(action, mpath)
 }
 
