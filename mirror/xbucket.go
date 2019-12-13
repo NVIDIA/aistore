@@ -129,7 +129,7 @@ func (j *joggerBckBase) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	if !j.skipLoad {
-		if err := lom.Load(); err != nil || !lom.Exists() {
+		if err := lom.Load(); err != nil {
 			return nil
 		}
 		if lom.IsCopy() {

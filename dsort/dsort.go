@@ -158,10 +158,11 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			err = lom.Load(false)
 		}
 		if err != nil {
+			if os.IsNotExist(err) {
+				msg := fmt.Sprintf("shard %q does not exist (is missing)", shardName)
+				return m.react(cfg.MissingShards, msg)
+			}
 			return err
-		} else if !lom.Exists() {
-			msg := fmt.Sprintf("shard %q does not exist (is missing)", shardName)
-			return m.react(cfg.MissingShards, msg)
 		}
 
 		phaseInfo.adjuster.acquireSema(lom.ParsedFQN.MpathInfo)

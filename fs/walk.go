@@ -47,7 +47,7 @@ func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.Err
 	if ew.counter.Load() > errThreshold {
 		return godirwalk.Halt
 	}
-	if cmn.IsErrLOMLevel(err) {
+	if cmn.IsErrObjLevel(err) {
 		ew.counter.Add(1)
 		return godirwalk.SkipNode
 	}

@@ -166,7 +166,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 	if err != nil {
 		return nil
 	}
-	if err := lom.Load(); err != nil || !lom.Exists() {
+	if err := lom.Load(); err != nil {
 		return nil
 	}
 

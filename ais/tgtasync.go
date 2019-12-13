@@ -110,7 +110,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	// task has finished
 	result, err := xactStats.Get().Result()
 	if err != nil {
-		if cmn.IsErrBucketUnreachable(err) {
+		if cmn.IsErrBucketNought(err) {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusGone)
 		} else {
 			t.invalmsghdlr(w, r, err.Error())

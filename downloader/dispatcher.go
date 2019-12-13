@@ -7,6 +7,7 @@ package downloader
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"sync"
 
@@ -188,10 +189,10 @@ func (d *dispatcher) createTasksLom(job DlJob, obj cmn.DlObj) (*cluster.LOM, err
 	if err == nil {
 		err = lom.Load()
 	}
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	if lom.Exists() { // FIXME: add versioning
+	if err == nil { // TODO -- FIXME: check version
 		if glog.V(4) {
 			glog.Infof("object %q already exists - skipping", obj.Objname)
 		}

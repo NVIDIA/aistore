@@ -353,7 +353,7 @@ func (reb *rebManager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 		ok = true
 		return
 	}
-	glog.Infof("%s: %s[%s] not yet at the right stage, wait more...", loghdr, tsi.Name(), rebStage[status.Stage])
+	glog.Infof("%s: %s[%s] not yet at the right stage", loghdr, tsi.Name(), rebStage[status.Stage])
 	return
 }
 

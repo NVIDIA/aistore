@@ -266,7 +266,8 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 	}
 
 	// local
-	if lom.Exists() && !overwrite {
+	err = lom.Load(false)
+	if err == nil && !overwrite {
 		err = fmt.Errorf("%s already exists", lom)
 		return
 	}

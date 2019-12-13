@@ -80,7 +80,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 		return nil
 	}
 
-	if _ = lom.Load(); !lom.Exists() {
+	if err := lom.Load(); os.IsNotExist(err) { // NOTE: all other errors: proceed to list this object anyway
 		return nil
 	}
 
@@ -161,10 +161,10 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 		return err
 	}
 	if err := lom.Load(); err != nil {
+		if cmn.IsErrObjNought(err) {
+			return nil
+		}
 		return err
-	}
-	if !lom.Exists() {
-		return nil
 	}
 	if lom.IsCopy() {
 		return nil

@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 	"unsafe"
@@ -636,17 +637,16 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		if err = lom.Init(hdr.Bucket, provider); err == nil {
 			err = lom.Load()
 		}
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			m.abort(err)
 			return
 		}
-		if lom.Exists() {
+		if err == nil {
 			if lom.Cksum() != nil && cmn.EqCksum(lom.Cksum(), cksum) {
 				glog.Infof("shard (%s) already exists and checksums are equal, skipping", lom)
 				io.Copy(ioutil.Discard, object) // drain the reader
 				return
 			}
-
 			glog.Warningf("shard (%s) already exists, overriding", lom)
 		}
 		workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileRecvShard)

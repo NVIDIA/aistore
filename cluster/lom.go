@@ -7,6 +7,7 @@ package cluster
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
@@ -32,6 +33,7 @@ import (
 
 const pkgName = "cluster"
 const fmtNestedErr = "nested err: %v"
+const lomInitialVersion = "1"
 
 type (
 	// NOTE: sizeof(lmeta) = 72 as of 4/16
@@ -55,7 +57,6 @@ type (
 		T         Target
 		config    *cmn.Config
 		ParsedFQN fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
-		exists    bool         // determines if the object exists or not (initially set by fstat)
 		loaded    bool
 	}
 )
@@ -94,7 +95,6 @@ func (lom *LOM) Bucket() string            { return lom.bck.Name }
 func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
 func (lom *LOM) IsAIS() bool               { return lom.bck.IsAIS() }
 func (lom *LOM) Bck() *Bck                 { return lom.bck }
-func (lom *LOM) Exists() bool              { return lom.exists }
 
 //
 // access perms
@@ -306,15 +306,12 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 // RestoreObjectFromAny tries to restore the object at its default location.
 // Returns true if object exists, false otherwise
 func (lom *LOM) RestoreObjectFromAny() (exists bool) {
-	// locking vs concurrent restore, for instance; TODO: (read-lock object + write-lock meta)
+	// locking vs concurrent restore; TODO: consider (read-lock object + write-lock meta) split
 	lom.Lock(true)
 
-	// check existence under lock
 	if err := lom.Load(false); err == nil {
-		if lom.Exists() {
-			lom.Unlock(true)
-			return true // nothing to do
-		}
+		lom.Unlock(true)
+		return true // nothing to do
 	}
 
 	availablePaths, _ := fs.Mountpaths.Get()
@@ -334,14 +331,10 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		if err := src.Load(false); err != nil {
 			continue
 		}
-		if !src.Exists() {
-			continue
-		}
 		// restore at default location
 		dst, err := src.CopyObject(lom.FQN, buf)
 		if err == nil {
 			lom.md = dst.md
-			lom.exists = true
 			exists = true
 			break
 		}
@@ -388,7 +381,6 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 		return
 	}
-	dst.exists = true
 
 	if lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck()) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
@@ -424,8 +416,6 @@ func (lom *LOM) _string(b string) string {
 	}
 	if !lom.loaded {
 		a = "(-)"
-	} else if !lom.exists {
-		a = "(x)"
 	} else {
 		if !lom.IsHRW() {
 			a += "(misplaced)"
@@ -440,27 +430,19 @@ func (lom *LOM) _string(b string) string {
 	return s + a + "]"
 }
 
-// IncObjectVersion increments the current version xattrs and returns the new value.
-// If the current version is empty (ais bucket versioning (re)enabled, new file)
-// the version is set to "1"
-func (lom *LOM) IncObjectVersion() (newVersion string, err error) {
-	const initialVersion = "1"
-	if !lom.exists {
-		newVersion = initialVersion
-		return
+// increment ais LOM's version
+func (lom *LOM) IncVersion() error {
+	cmn.Assert(lom.IsAIS())
+	if lom.Version() == "" {
+		lom.SetVersion(lomInitialVersion)
+		return nil
 	}
-	md, err := lom.lmfs(false)
+	ver, err := strconv.Atoi(lom.Version())
 	if err != nil {
-		return "", err
+		return err
 	}
-	if md.version == "" {
-		return initialVersion, nil
-	}
-	numVersion, err := strconv.Atoi(md.version)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%d", numVersion+1), nil
+	lom.SetVersion(strconv.Itoa(ver + 1))
+	return nil
 }
 
 // best-effort GET load balancing (see also mirror.findLeastUtilized())
@@ -617,7 +599,7 @@ func (lom *LOM) Clone(fqn string) *LOM {
 // 2) load persistent state (aka lmeta) from one of the LOM caches or the underlying
 //    filesystem: lom.Load(); Load(false) also entails *not adding* LOM to caches
 //    (useful when deleting or moving objects
-// 3) use: via lom.Atime(), lom.Cksum(), lom.Exists() and numerous other accessors
+// 3) usage: lom.Atime(), lom.Cksum(), and other accessors
 //    It is illegal to check LOM's existence and, generally, do almost anything
 //    with it prior to loading - see previous
 // 4) update persistent state in memory: lom.Set*() methods
@@ -690,33 +672,20 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 		add = adds[0]
 	}
 	lom.loaded = true
-	if lom.FQN == lom.HrwFQN {
-		if md, ok := cache.Load(hkey); ok {
-			lom.exists = true
-			lmeta := md.(*lmeta)
-			lom.md = *lmeta
-			if err := lom.checkBucket(); err != nil {
-				return err
-			}
-
-			// If correct bucket still exists we can assume this is good.
-			if lom.Exists() {
-				return
-			}
-		}
-	} else {
-		add = false
+	if md, ok := cache.Load(hkey); ok { // fast path
+		lmeta := md.(*lmeta)
+		lom.md = *lmeta
+		err = lom.checkBucket()
+		return
 	}
-	// slow path
-	err = lom.FromFS()
-	if err == nil && lom.exists {
-		lom.md.bckID = lom.Bprops().BID
-		if !add {
-			return
+	err = lom.FromFS() // slow path
+	if err == nil {
+		err = lom.checkBucket()
+		if err == nil && add {
+			md := &lmeta{}
+			*md = lom.md
+			cache.Store(hkey, md)
 		}
-		md := &lmeta{}
-		*md = lom.md
-		cache.Store(hkey, md)
 	}
 	return
 }
@@ -728,21 +697,20 @@ func (lom *LOM) checkBucket() error {
 		bmd     = lom.T.GetBowner().Get()
 	)
 	lom.bck.Props, present = bmd.Get(lom.bck)
-	if !present {
-		// Report non-existing bucket error to prevent numerous errors and panics
-		// which could happen when `lom.bck.Props` is nil.
+	if !present { // bucket does not exist
 		if lom.bck.IsCloud() {
 			return cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket())
 		}
 		return cmn.NewErrorBucketDoesNotExist(lom.Bucket())
 	}
-	if lom.md.bckID == lom.bck.Props.BID {
-		return nil
+	if lom.md.bckID == 0 {
+		lom.md.bckID = lom.bck.Props.BID // scenario e.g.: rename bucket
 	}
-	// glog.Errorf("%s: md.BID %x != %x bprops.BID", lom, lom.md.bckID, lom.BckProps.BID) TODO -- FIXME vs copybck | renamelb
+	if lom.md.bckID == lom.bck.Props.BID {
+		return nil // ok
+	}
 	lom.Uncache()
-	lom.exists = false
-	return nil
+	return cmn.NewObjDefunctError(lom.String(), lom.md.bckID, lom.bck.Props.BID)
 }
 
 func (lom *LOM) ReCache() {
@@ -767,41 +735,40 @@ func (lom *LOM) Uncache() {
 	cache.Delete(hkey)
 }
 
-func (lom *LOM) FromFS() error {
-	lom.exists = true
-	if _, err := lom.lmfs(true); err != nil {
-		lom.exists = false
-		if os.IsNotExist(err) {
-			return nil
+func (lom *LOM) FromFS() (err error) {
+	var (
+		finfo os.FileInfo
+		retry = true
+	)
+beg:
+	finfo, err = os.Stat(lom.FQN)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			err = fmt.Errorf("%s: errstat %v", lom.StringEx(), err)
+			lom.T.FSHC(err, lom.FQN)
 		}
+		return
+	}
+	if _, err = lom.lmfs(true); err != nil {
 		if err == syscall.ENODATA || err == syscall.ENOENT {
-			return nil
-		}
-		if _, errex := os.Stat(lom.FQN); os.IsNotExist(errex) {
-			return nil
+			if retry {
+				runtime.Gosched()
+				retry = false
+				goto beg
+			}
 		}
 		err = fmt.Errorf("%s: errmeta %v, %T", lom.StringEx(), err, err)
 		lom.T.FSHC(err, lom.FQN)
-		return err
+		return
 	}
 	// fstat & atime
-	finfo, err1 := os.Stat(lom.FQN)
-	if err1 != nil {
-		lom.exists = false
-		if !os.IsNotExist(err1) {
-			err := fmt.Errorf("%s: errstat %v", lom.StringEx(), err1)
-			lom.T.FSHC(err, lom.FQN)
-			return err
-		}
-		return nil
-	}
 	if lom.md.size != finfo.Size() { // corruption or tampering
 		return fmt.Errorf("%s: errsize (%d != %d)", lom.StringEx(), lom.md.size, finfo.Size())
 	}
 	atime := ios.GetATime(finfo)
 	lom.md.atime = atime.UnixNano()
 	lom.md.atimefs = lom.md.atime
-	return nil
+	return
 }
 
 func (lom *LOM) Remove() (err error) {
@@ -881,10 +848,10 @@ func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
 					return true
 				}
 				if md.atime != md.atimefs {
-					if lom, err := lomFromLmeta(md, bmd); err == nil {
+					if lom, bucketExists := lomFromLmeta(md, bmd); bucketExists {
 						lom.flushAtime(atime)
 					}
-					// TODO: throttle via mountpath.IsIdle(), etc.
+					// TODO: throttle via mountpath.IsIdle()
 				}
 				cache.Delete(hkey)
 				evicted.Add(1)
@@ -948,21 +915,25 @@ func (lom *LOM) flushAtime(atime time.Time) {
 //
 // static helpers
 //
-func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, err error) {
+func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
 	var (
 		bucket, objName = Uname2Bo(md.uname)
-		local, exists   bool
+		err             error
+		local           bool
 	)
 	lom = &LOM{Objname: objName, bck: &Bck{Name: bucket}}
 	if bmd.Exists(&Bck{Name: bucket, Provider: cmn.AIS}, md.bckID) {
-		local, exists = true, true
+		local, bucketExists = true, true
 	} else if bmd.Exists(&Bck{Name: bucket, Provider: cmn.Cloud}, md.bckID) {
-		local, exists = false, true
+		local, bucketExists = false, true
 	}
-	lom.exists = exists
-	if exists {
+	if bucketExists {
 		lom.bck.Provider = cmn.ProviderFromBool(local)
 		lom.FQN, _, err = HrwFQN(fs.ObjectType, lom.Bck(), lom.Objname)
+		if err != nil {
+			glog.Errorf("%s: hrw err: %v", lom, err)
+			bucketExists = false
+		}
 	}
 	return
 }

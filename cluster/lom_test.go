@@ -25,12 +25,12 @@ var _ = Describe("LOM", func() {
 		tmpDir    = "/tmp/lom_test"
 		numMpaths = 3
 
-		bucketLocalA = "LOM_TEST_Local_1"
-		bucketLocalB = "LOM_TEST_Local_2"
-		bucketLocalC = "LOM_TEST_Local_3"
+		bucketLocalA = "LOM_TEST_Local_A"
+		bucketLocalB = "LOM_TEST_Local_B"
+		bucketLocalC = "LOM_TEST_Local_C"
 
-		bucketCloudA = "LOM_TEST_Cloud_1"
-		bucketCloudB = "LOM_TEST_Cloud_2"
+		bucketCloudA = "LOM_TEST_Cloud_A"
+		bucketCloudB = "LOM_TEST_Cloud_B"
 
 		sameBucketName = "LOM_TEST_Local_and_Cloud"
 	)
@@ -39,7 +39,6 @@ var _ = Describe("LOM", func() {
 		mpaths []string
 		mis    []*fs.MountpathInfo
 
-		bmd              = &cluster.BMD{}
 		oldCloudProvider = cmn.GCO.Get().CloudProvider
 		config           = cmn.GCO.BeginUpdate()
 	)
@@ -111,6 +110,7 @@ var _ = Describe("LOM", func() {
 		When("run for an ais bucket", func() {
 			It("Should populate fields from Bucket and Objname", func() {
 				fs.Mountpaths.Disable(mpaths[1]) // Ensure that it matches desiredLocalFQN
+				fs.Mountpaths.Disable(mpaths[2]) // Ensure that it matches desiredLocalFQN
 
 				lom := &cluster.LOM{T: tMock, Objname: testObject}
 				err := lom.Init(bucketLocalA, cmn.AIS)
@@ -128,6 +128,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.ParsedFQN.ContentType).To(BeEquivalentTo(fs.ObjectType))
 
 				fs.Mountpaths.Enable(mpaths[1])
+				fs.Mountpaths.Enable(mpaths[2])
 			})
 
 			It("Should populate fields from a FQN", func() {
@@ -250,18 +251,16 @@ var _ = Describe("LOM", func() {
 			testObjectName := "fstat-foldr/test-obj.ext"
 			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObjectName)
 
-			It("should be able to mark object as Non-existent", func() {
+			It("should find out that object does not exist", func() {
 				os.Remove(localFQN)
 				lom := &cluster.LOM{T: tMock, FQN: localFQN}
 				err := lom.Init("", "")
 				Expect(err).NotTo(HaveOccurred())
 				err = lom.Load(false)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(lom.Exists()).To(BeFalse())
+				Expect(cmn.IsNotObjExist(err)).To(BeTrue())
 			})
 
-			It("should be able to mark object as Existent", func() {
+			It("should find out that object exists", func() {
 				createTestFile(localFQN, testFileSize)
 				lom := &cluster.LOM{T: tMock, FQN: localFQN}
 				err := lom.Init("", "")
@@ -270,9 +269,6 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 				err = lom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
-
-				addBucket(bmd, lom)
-				Expect(lom.Exists()).To(BeTrue())
 				Expect(lom.Size()).To(BeEquivalentTo(testFileSize))
 			})
 		})
@@ -498,12 +494,12 @@ var _ = Describe("LOM", func() {
 			})
 
 			Describe("FromFS", func() {
-				It("should not error if file does not exist", func() {
+				It("should error if file does not exist", func() {
 					testObject := "foldr/test-obj-doesnt-exist.ext"
 					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObject)
 					lom := NewBasicLom(noneFQN, tMock)
 
-					Expect(lom.FromFS()).NotTo(HaveOccurred())
+					Expect(lom.FromFS()).To(HaveOccurred())
 				})
 
 				It("should fill object with correct meta", func() {
@@ -608,7 +604,6 @@ var _ = Describe("LOM", func() {
 			dst, err = lom.CopyObject(fqn, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(dst.FQN).To(BeARegularFile())
-			Expect(dst.Exists()).To(BeTrue())
 			Expect(dst.Size()).To(BeEquivalentTo(testFileSize))
 			lom.Uncache()
 
@@ -865,7 +860,7 @@ var _ = Describe("LOM", func() {
 		})
 	})
 
-	Describe("local and cloud bucket with same name", func() {
+	Describe("local and cloud bucket with the same name", func() {
 		It("should have different fqn", func() {
 			testObject := "foldr/test-obj.ext"
 			desiredLocalFQN := mis[0].MakePathBucketObject(fs.ObjectType, sameBucketName, cmn.AIS, testObject)
@@ -877,7 +872,7 @@ var _ = Describe("LOM", func() {
 			err := lomEmpty.Init(sameBucketName, "")
 			Expect(err).NotTo(HaveOccurred())
 			err = lomEmpty.Load(false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(cmn.IsNotObjExist(err)).To(BeTrue())
 			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomEmpty.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
 			Expect(lomEmpty.IsAIS()).To(BeTrue())
@@ -891,7 +886,7 @@ var _ = Describe("LOM", func() {
 			err = lomLocal.Init(sameBucketName, cmn.AIS)
 			Expect(err).NotTo(HaveOccurred())
 			err = lomLocal.Load(false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(cmn.IsNotObjExist(err)).To(BeTrue())
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomLocal.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
 			Expect(lomLocal.IsAIS()).To(BeTrue())
@@ -905,7 +900,7 @@ var _ = Describe("LOM", func() {
 			err = lomCloud.Init(sameBucketName, cmn.Cloud)
 			Expect(err).NotTo(HaveOccurred())
 			err = lomCloud.Load(false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(cmn.IsNotObjExist(err)).To(BeTrue())
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
 			Expect(lomCloud.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
 			Expect(lomCloud.IsAIS()).To(BeFalse())
@@ -936,7 +931,7 @@ func filePut(fqn string, size int, t cluster.Target) *cluster.LOM {
 	createTestFile(fqn, size)
 	lom := NewBasicLom(fqn, t)
 	lom.SetSize(int64(size))
-	lom.IncObjectVersion()
+	lom.IncVersion()
 	Expect(lom.Persist()).NotTo(HaveOccurred())
 	lom.Uncache()
 	return lom
@@ -963,12 +958,4 @@ func getTestFileHash(fqn string) (hash string) {
 	hash, err = cmn.ComputeXXHash(hashReader, nil)
 	Expect(err).NotTo(HaveOccurred())
 	return
-}
-
-func addBucket(bmd *cluster.BMD, lom *cluster.LOM) {
-	bmd.LBmap = make(map[string]*cmn.BucketProps)
-	bmd.Version++
-	p := cmn.DefaultBucketProps()
-	p.BID = bmd.GenBucketID(true)
-	lom.SetBID(p.BID)
 }

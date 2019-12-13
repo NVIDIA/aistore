@@ -996,7 +996,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lom.Lock(false)
-	if err = lom.Load(true); err != nil { // (doesnotexist -> ok, other)
+	if err = lom.Load(true); err != nil && !cmn.IsNotObjExist(err) { // (doesnotexist -> ok, other)
 		lom.Unlock(false)
 		invalidHandler(w, r, err.Error())
 		return
@@ -1008,7 +1008,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, lom.StringEx(), pid)
 	}
 
-	exists = lom.Exists()
+	exists = err == nil
 
 	// NOTE: DEFINITION
 	// * checkExists and checkExistsAny establish local presence of the object by looking up all mountpaths
@@ -1231,18 +1231,19 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 
 func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bool) error {
 	var (
-		cloudErr error
-		errRet   error
+		cloudErr   error
+		errRet     error
+		delFromAIS bool
 	)
-
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
 	delFromCloud := !lom.IsAIS() && !evict
-	if err := lom.Load(false); err != nil {
+	if err := lom.Load(false); err == nil {
+		delFromAIS = true
+	} else if !cmn.IsNotObjExist(err) {
 		return err
 	}
-	delFromAIS := lom.Exists()
 
 	if delFromCloud {
 		if err, _ := t.cloud.deleteObj(ctx, lom); err != nil {

@@ -1,3 +1,7 @@
+// Package ec provides erasure coding (EC) based data protection for AIStore.
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ */
 package ec
 
 import (
@@ -154,6 +158,23 @@ func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs
 	return reader, nil
 }
 
+func (r *xactECBase) newMetafileResponse(attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
+	reader, err = cmn.NewFileHandle(fqn)
+	if err != nil {
+		return nil, err
+	}
+	var sz int64
+	if stat, err := os.Stat(fqn); err == nil {
+		sz = stat.Size()
+	}
+	if sz == 0 {
+		// empty file - no errors: send empty response
+		return nil, nil
+	}
+	attrs.Size = sz
+	return reader, nil
+}
+
 func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
 	// local slice/metafile requested by another target to restore the object
 	lom := &cluster.LOM{T: r.t, FQN: fqn}
@@ -199,12 +220,15 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 		objAttrs transport.ObjectAttrs
 	)
 	ireq := r.newIntraReq(act, nil)
-	if md != nil && md.SliceID != 0 {
-		// it is an EC slice - read everything from EC metadata
+	if md == nil {
+		// metadata request
+		reader, _ = r.newMetafileResponse(&objAttrs, fqn)
+	} else if md.SliceID != 0 {
+		// slice request
 		reader, err = r.newSliceResponse(md, &objAttrs, fqn)
 		ireq.Exists = err == nil
 	} else {
-		// replica/metafile requested by another target to restore the object
+		// replica/full object request
 		reader, err = r.newReplicaResponse(&objAttrs, fqn)
 		ireq.Exists = err == nil
 	}

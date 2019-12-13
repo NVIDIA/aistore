@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -51,12 +52,12 @@ func (t *singleObjectTask) download() {
 	if err == nil {
 		err = lom.Load()
 	}
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		t.abort(internalErrorMessage(), err)
 		return
 	}
-	if lom.Exists() {
-		t.abort(internalErrorMessage(), errors.New("object with the same bucket and objname already exists"))
+	if err == nil {
+		t.abort(internalErrorMessage(), errors.New(lom.String()+" already exists"))
 		return
 	}
 

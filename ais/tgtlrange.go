@@ -100,7 +100,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if xdel.Aborted() {
 			return nil
 		}
-		// skip when deadline has expired
+		// skip if deadline has expired
 		if !absdeadline.IsZero() && time.Now().After(absdeadline) {
 			continue
 		}
@@ -114,11 +114,8 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if err != nil {
 			return err
 		}
-
-		if lom.Exists() && evict {
-			xdel.ObjectsInc()
-			xdel.BytesAdd(lom.Size())
-		}
+		xdel.ObjectsInc()
+		xdel.BytesAdd(lom.Size())
 	}
 
 	return nil
@@ -151,10 +148,12 @@ func (t *targetrunner) prefetchMissing(ctx context.Context, objName string, bck 
 		return
 	}
 	if err = lom.Load(); err != nil {
-		glog.Error(err)
-		return
+		coldGet = cmn.IsErrObjNought(err)
+		if !coldGet {
+			glog.Error(err)
+			return
+		}
 	}
-	coldGet = !lom.Exists()
 	if lom.IsAIS() { // must not come here
 		if coldGet {
 			glog.Errorf("prefetch: %s", lom)

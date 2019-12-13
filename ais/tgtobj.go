@@ -47,8 +47,8 @@ type (
 		// FQN which is used only temporarily for receiving file. After
 		// successful receive is renamed to actual FQN.
 		workFQN string
-		// Determines if the object was already in cluster and was received
-		// because some kind of migration.
+		// Determines if the object was already in cluster and is being PUT due to
+		// migration or replication of some sort.
 		migrated bool
 		// Determines if the recv is cold recv: either from another cluster or cloud.
 		cold bool
@@ -188,11 +188,10 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	if lom.IsAIS() && lom.VerConf().Enabled {
-		if ver, err = lom.IncObjectVersion(); err != nil {
+	if lom.IsAIS() && lom.VerConf().Enabled && !poi.migrated {
+		if err = lom.IncVersion(); err != nil {
 			return
 		}
-		lom.SetVersion(ver)
 	}
 
 	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
@@ -324,23 +323,22 @@ func (poi *putObjInfo) writeToFile() (err error) {
 ////////////////
 
 func (goi *getObjInfo) getObject() (err error, errCode int) {
-	var doubleCheck, retry, retried bool
+	var doubleCheck, retry, retried, coldGet bool
 	// under lock: lom init, restore from cluster
 	goi.lom.Lock(false)
 do:
-	// all the next checks work with disks - skip all if dryRun.disk=true
-	coldGet := false
+	// all subsequent checks work with disks - skip all if dryRun.disk=true
 	if dryRun.disk {
 		goto get
 	}
-
 	err = goi.lom.Load()
 	if err != nil {
-		goi.lom.Unlock(false)
-		return err, http.StatusInternalServerError
+		coldGet = cmn.IsNotObjExist(err)
+		if !coldGet {
+			goi.lom.Unlock(false)
+			return err, http.StatusInternalServerError
+		}
 	}
-
-	coldGet = !goi.lom.Exists()
 	if coldGet && goi.lom.IsAIS() {
 		// try lookup and restore
 		goi.lom.Unlock(false)
@@ -350,7 +348,7 @@ do:
 			er2 := lom2.Init(goi.lom.Bucket(), goi.lom.Bck().Provider)
 			if er2 == nil {
 				er2 = lom2.Load()
-				if er2 == nil && lom2.Exists() {
+				if er2 == nil {
 					goi.lom = lom2
 					err = nil
 				}
@@ -631,10 +629,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	}
 
 	if goi.lom.Size() == 0 {
-		if !goi.lom.Exists() {
-			err = os.ErrNotExist
-			errCode = http.StatusNotFound
-		}
+		// TODO -- FIXME
 		return
 	}
 

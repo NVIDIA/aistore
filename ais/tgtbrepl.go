@@ -42,10 +42,9 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	defer lom.Unlock(false)
 
 	if err = lom.Load(false); err != nil {
-		err = fmt.Errorf("%s: err: %v", lom, err)
-		return
-	}
-	if !lom.Exists() {
+		if !cmn.IsNotObjExist(err) {
+			err = fmt.Errorf("%s: err: %v", lom, err)
+		}
 		return
 	}
 	if ri.uncache {
@@ -76,12 +75,12 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		return
 	}
 
-	if err = dst.Load(false); err == nil && dst.Exists() {
+	if err = dst.Load(false); err == nil {
 		if dst.Size() == lom.Size() && cmn.EqCksum(lom.Cksum(), dst.Cksum()) {
 			copied = true
 			return
 		}
-	} else if cmn.IsErrBucketUnreachable(err) {
+	} else if cmn.IsErrBucketNought(err) {
 		return
 	}
 
