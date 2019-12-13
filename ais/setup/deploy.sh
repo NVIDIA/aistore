@@ -152,7 +152,7 @@ else
   printError "${cld_provider} is not a valid entry"
 fi
 
-if ! CLDPROVIDER=${CLDPROVIDER} make -C ${AISTORE_DIR} node; then
+if ! CLDPROVIDER=${CLDPROVIDER} make --no-print-directory -C ${AISTORE_DIR} node; then
   printError "failed to compile 'aisnode' binary"
 fi
 
@@ -211,7 +211,7 @@ if [[ $AUTHENABLED = "true" ]]; then
   LOGDIR="$LOGROOT/authn/log"
   source "${AISTORE_DIR}/ais/setup/authn.sh"
 
-  if ! make -C ${AISTORE_DIR} authn; then
+  if ! make --no-print-directory -C ${AISTORE_DIR} authn; then
     printError "failed to compile 'authn' binary"
   fi
   runCmd "${GOPATH}/bin/authn -config=${CONFFILE}"

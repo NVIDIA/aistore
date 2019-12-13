@@ -1,6 +1,9 @@
 SHELL := /bin/bash
 BUILD_DIR = ./ais/setup
 
+# Do not print enter/leave directory when doing 'make -C DIR <target>'
+MAKEFLAGS += --no-print-directory
+
 # Build version and flags
 VERSION = $(shell git rev-parse --short HEAD)
 BUILD = $(shell date +%FT%T%z)
@@ -21,9 +24,6 @@ cyan = $(shell { tput setaf 6 || tput AF 6; } 2>/dev/null)
 term-reset = $(shell { tput sgr0 || tput me; } 2>/dev/null)
 $(call make-lazy,cyan)
 $(call make-lazy,term-reset)
-
-# make flags
-MAKEFLAGS += --no-print-directory
 
 .PHONY: all node cli aisfs authn cli-autocomplete
 
