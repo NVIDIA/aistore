@@ -28,7 +28,7 @@ build:
     - CLDPROVIDER="gcp" make node
     - CLDPROVIDER="" make node
     - make authn
-    - make fuse
+    - make aisfs
     - make cli
     - make aisloader
 

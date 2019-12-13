@@ -80,7 +80,7 @@ In order to install `aisfs` on your system, execute the following commands:
 
 ```shell
 $ cd $GOPATH/src/github.com/NVIDIA/aistore
-$ make fuse
+$ make aisfs
 ```
 
 Verify that `aisfs` has been successfully installed:
