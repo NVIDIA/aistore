@@ -7,14 +7,14 @@
 
 function usage {
     cat > /dev/stderr <<-EOM
-    $1 <path-to-new-ais-binary> [debug]
+$0 <path-to-new-ais-binary> [debug]
 
-    Builds the ais binary, ready for inclusion in a docker image. If run as part
-    of a Jenkins job, this script will go get the current AIS bits from github;
-    otherwise we work with AIS source bits in your GOPATH.
+Builds the ais binary, ready for inclusion in a docker image. If run as part
+of a Jenkins job, this script will go get the current AIS bits from github;
+otherwise we work with AIS source bits in your GOPATH.
 
-    If the optional "debug" argument is included then we pass gcflags to include
-    debug info in the binary (to make delve happy).
+If the optional "debug" argument is included then we pass gcflags to include
+debug info in the binary (to make delve happy).
 EOM
 }
 
@@ -32,11 +32,16 @@ function check_go_version {
     [[ $ver =~ go1.13 ]] || whinge "Go version 1.13.* is required"
 }
 
+if (( $# < 1 )); then
+    usage
+    exit 1
+fi
+
 DEST=$(readlink -f $1)     # need an absolute path for subshell below
 
 set -e
 
-AIS_SRC=github.com/NVIDIA/aistore/ais
+AISTORE_SRC=github.com/NVIDIA/aistore
 
 if [[ -n "$JENKINS_URL" ]]; then
     PATH=$PATH:/usr/local/go/bin
@@ -51,27 +56,20 @@ if [[ -n "$JENKINS_URL" ]]; then
     mkdir $GOPATH/{bin,pkg,src}
     export GOBIN=$GOPATH/bin
 
-    echo "Go get AIStore source from ${AIS_SRC}"
-    /usr/local/go/bin/go get -v $AIS_SRC
+    echo "Go get AIStore source from ${AISTORE_SRC}"
+    go get -v ${AISTORE_SRC}/ais
 else
     # Use go in existing PATH, assume AIS source already present
     check_go_version
     GOPATH=${GOPATH:=$HOME/go}
     GOBIN=${GOBIN:=$GOPATH/bin}
-    [[ -d $GOPATH/src/$AIS_SRC ]] || whinge "$AIS_SRC not found in $GOPATH/src"
+    [[ -d "${GOPATH}/src/${AISTORE_SRC}" ]] || whinge "${AISTORE_SRC} not found in ${GOPATH}/src"
 fi
 
-VERSION=$(cd $GOPATH/src/$AIS_SRC && git rev-parse --short HEAD)
-BUILD=$(date +'%FT%T%z')
-
-if [[ "X$2" == "Xdebug" ]]; then
-    GCFLAGS="-gcflags='all=-N -l'"
-    LDEXTRAFLAGS=""
-    echo "Build type: debug"
+if [[ $2 == "debug" ]]; then
+  echo "Build type: debug"
 else
-    GCFLAGS=""
-    LDEXTRAFLAGS="-w -s"
-    echo "Build type: production"
+  echo "Build type: production"
 fi
 
 #
@@ -82,17 +80,7 @@ fi
 # image that is then also cloud-specific).
 #
 echo "Cloud provider set to: ${CLDPROVIDER}"
-
-(
-    cd $GOPATH/src/$AIS_SRC &&
-    go build \
-      -o $DEST \
-      -tags="${CLDPROVIDER}" \
-      -ldflags "$LDEXTRAFLAGS -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" \
-      ${GCFLAGS:+"$GCFLAGS"} \
-      setup/aisnode.go
-)
-
-[[ $? -eq 0 ]] || whinge "go build failed"
+cd "${GOPATH}/src/${AISTORE_SRC}" && MODE=$2 GOBIN=${DEST} make node
+[[ $? -eq 0 ]] || whinge "failed to compile 'node'"
 
 exit 0

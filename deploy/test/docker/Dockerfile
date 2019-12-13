@@ -12,7 +12,6 @@ ENV GOLANG_VERSION 1.13
 ENV GOPATH /go
 ENV GOBIN $GOPATH/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
-ENV WORKDIR $GOPATH/src/github.com/NVIDIA/aistore/ais
 
 # Installing go
 RUN mkdir -p "$GOPATH/bin" && chmod -R 777 "$GOPATH"

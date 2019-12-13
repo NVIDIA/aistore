@@ -30,7 +30,7 @@ ARG GOBASE
 ENV GOPATH $GOBASE
 ENV GOBIN $GOPATH/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
-ENV WORKDIR $GOPATH/src/github.com/NVIDIA/aistore/ais
+ENV WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
 
 RUN mkdir /etc/ais
 RUN mkdir /usr/nvidia
@@ -59,13 +59,10 @@ COPY ais.json $CONFFILE
 
 EXPOSE 8080
 
-ENV VERSION `git rev-parse --short HEAD`
-ENV BUILD `date +%FT%T%z`
-
 RUN cd $GOPATH/src/github.com/NVIDIA && git clone https://github.com/NVIDIA/aistore.git && cd $WORKDIR
 
 RUN echo "\
-cd $WORKDIR && GODEBUG=madvdontneed=1 go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/aisnode.go  \n \
+cd $WORKDIR && CLDPROVIDER=${CLD} make node \n \
 cd $GOBIN && $GOBIN/aisnode -config=\$1 -role=\$2 -ntargets=\$3 -nodiskio=\$4 -nonetio=\$5 -dryobjsize=\$6 -alsologtostderr=true  \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
