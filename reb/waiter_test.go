@@ -1,10 +1,14 @@
+// Package reb provides resilvering and rebalancing functionality for the AIStore object storage.
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package reb
 
 import (
-	"testing"
-
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/tutils/tassert"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 type testObject struct {
@@ -13,96 +17,109 @@ type testObject struct {
 	ais    bool
 }
 
-func TestECWaiter(t *testing.T) {
-	const (
-		sliceCnt     = 3
-		sliceDone    = 2
-		toCleanLastN = 3
-	)
-	wt := newWaiter(memsys.GMM())
-	// must be longer than ecRebBatchSize
-	objs := []testObject{
-		{"bck1", "obj1", false},
-		{"bck1", "obj2", false},
-		{"bck1", "obj2", true},
-		{"bck1", "obj3", true},
-		{"bck2", "obj1", false},
-		{"bck2", "obj4", true},
-		{"bck5", "obj1", false},
-		{"bck5", "obj2", false},
-		{"bck5", "obj3", true},
-		{"bck5", "obj4", true},
-		{"bck5", "obj5", false},
-		{"bck5", "obj6", false},
-		{"bck5", "obj8", true},
-		{"bck5", "obj9", true},
-	}
-	rebObjs := make([]*ecRebObject, 0)
-	// check that generated uids are unique
-	objSet := make(map[string]struct{})
-	for _, o := range objs {
-		uname := uniqueWaitID(o.bucket, o.name, o.ais)
-		objSet[uname] = struct{}{}
-		rebObjs = append(rebObjs, &ecRebObject{uid: uname})
-	}
-	tassert.Fatalf(t, len(objSet) == len(rebObjs), "uniqueWaitID failed: %d unique of %d", len(objSet), len(rebObjs))
-
-	// check that for every unique uid the unique waitSlice is created
-	created := make([]*ecWaitSlice, 0, len(rebObjs))
-	for _, o := range rebObjs {
-		for i := 0; i < sliceCnt; i++ {
-			ws := wt.lookupCreate(o.uid, int16(i))
-			for _, s := range created {
-				tassert.Errorf(t, s != ws, "Lookup create returned duplicated pointer for %s[%d]", o.uid, i)
-			}
-			created = append(created, ws)
+var _ = Describe("ECWaiter", func() {
+	It("Checking EC slice waiter", func() {
+		const (
+			sliceCnt     = 3
+			sliceDone    = 2
+			toCleanLastN = 2
+		)
+		wt := newWaiter(memsys.GMM())
+		// must have more than ecRebBatchSize items
+		objs := []testObject{
+			{"bck1", "obj1", false},
+			{"bck1", "obj2", false},
+			{"bck1", "obj2", true},
+			{"bck1", "obj3", true},
+			{"bck2", "obj1", false},
+			{"bck2", "obj4", true},
+			{"bck5", "obj1", false},
+			{"bck5", "obj2", false},
+			{"bck5", "obj3", true},
+			{"bck5", "obj4", true},
+			{"bck5", "obj5", false},
+			{"bck5", "obj6", false},
+			{"bck5", "obj8", true},
+			{"bck5", "obj9", true},
 		}
-	}
-	tassert.Fatalf(t, len(created) == len(rebObjs)*sliceCnt, "lookupCreate failed: %d unique of %d", len(created), len(rebObjs)*sliceCnt)
+		rebObjs := make([]*ecRebObject, 0)
+		created := make([]*ecWaitSlice, 0, len(rebObjs))
 
-	// check that generating waitSlice for existing item returns existing waitSlice
-	for _, o := range rebObjs {
-		for i := 0; i < sliceCnt; i++ {
-			ws := wt.lookupCreate(o.uid, int16(i))
-			found := false
-			for _, s := range created {
-				if s == ws {
-					found = true
-					break
+		By("all unames must be unique")
+		objSet := make(map[string]struct{})
+		for _, o := range objs {
+			uname := uniqueWaitID(o.bucket, o.name, o.ais)
+			objSet[uname] = struct{}{}
+			rebObjs = append(rebObjs, &ecRebObject{uid: uname})
+		}
+		// Here and below it should be Expect(objSet).To(HaveLen(N)) but it
+		// makes ginkgo to print the entire list on error that generates
+		// megabytes of zeros in my case - because it prints even SGL's put
+		// and get byte slices
+		Expect(len(objSet)).To(Equal(len(rebObjs)), "Some objects did not get unique ID")
+
+		By("created unique waiter for each slice")
+		for _, o := range rebObjs {
+			for i := 0; i < sliceCnt; i++ {
+				ws := wt.lookupCreate(o.uid, int16(i))
+				// Make sure this pointer is unique
+				for _, s := range created {
+					// NotTo(Equal) does not work since it must compare pointers
+					Expect(s).NotTo(BeIdenticalTo(ws), o.uid)
 				}
+				created = append(created, ws)
 			}
-			tassert.Errorf(t, found, "Lookup created waitSlice for %s instead of returning existing one", o.uid)
 		}
-	}
-	tassert.Fatalf(t, int(wt.waitSliceCnt()) == len(rebObjs)*sliceCnt, "Waiting for different number of slices %d instead of %d", wt.waitSliceCnt(), len(rebObjs)*sliceCnt)
+		Expect(len(created)).To(Equal(len(rebObjs)*sliceCnt), "Some slices did not get unique ID")
 
-	// done must decrease the number of waiting slices
-	for i := 0; i < sliceDone; i++ {
-		wt.done()
-	}
-	tassert.Fatalf(t, int(wt.waitSliceCnt()) == len(rebObjs)*sliceCnt-sliceDone, "done must decrease the number of waiting slices to %d, but it is of %d", len(rebObjs)*sliceCnt-sliceDone, wt.waitSliceCnt())
+		By("adding the same slices should return existing waiters")
+		for _, o := range rebObjs {
+			for i := 0; i < sliceCnt; i++ {
+				ws := wt.lookupCreate(o.uid, int16(i))
+				found := false
+				// make sure that it returns a pointer created at previoius step
+				for _, s := range created {
+					if s == ws {
+						found = true
+						break
+					}
+				}
+				Expect(found).Should(BeTrue(), o.uid)
+			}
+		}
+		// `int` conversion required because `waitSliceCnt` returns a value
+		// of an atomic variable, and atomic variable cannot be just `int`
+		Expect(wt.waitSliceCnt()).To(BeEquivalentTo(len(rebObjs) * sliceCnt))
 
-	// cleanup invalid batch must not change waitSlice list
-	wt.cleanupBatch(rebObjs, len(rebObjs)+10)
-	tassert.Fatalf(t, len(wt.objs) == len(rebObjs), "cleanup batch with invalid start index must not clean up amnything, but the number of slices changed to %d, must be %d", len(wt.objs), len(rebObjs))
+		By("marking a few waiters done must decrease waiter counter")
+		for i := 0; i < sliceDone; i++ {
+			wt.done()
+		}
+		Expect(wt.waitSliceCnt()).To(BeEquivalentTo(len(rebObjs)*sliceCnt - sliceDone))
 
-	tassert.Fatalf(t, len(objs) > ecRebBatchSize, "Number of objects is insufficient: %d, must be greater than %d", len(objs), ecRebBatchSize)
+		By("cleaning up invalid batch should not change waiter list")
+		wt.cleanupBatch(rebObjs, len(rebObjs)+10)
+		Expect(len(wt.objs)).To(Equal(len(rebObjs)))
 
-	// cleanup in the middle
-	wt.cleanupBatch(rebObjs, len(rebObjs)-ecRebBatchSize-3)
-	tassert.Fatalf(t, len(wt.objs) == len(rebObjs)-ecRebBatchSize, "cleanup middle batch must remove %d items, actually it is %d instead of %d", ecRebBatchSize, len(wt.objs), len(rebObjs)-ecRebBatchSize)
-	// after that first and last item should exist
-	currLen := len(wt.objs)
-	_ = wt.lookupCreate(rebObjs[0].uid, 1)
-	_ = wt.lookupCreate(rebObjs[len(rebObjs)-1].uid, 1)
-	tassert.Fatalf(t, currLen == len(wt.objs), "first and last items must be preserved")
+		By("cleanup in the middle")
+		Expect(len(objs)).Should(BeNumerically(">", ecRebBatchSize+4))
+		wt.cleanupBatch(rebObjs, len(rebObjs)-ecRebBatchSize-3)
+		Expect(len(wt.objs)).To(Equal(len(rebObjs) - ecRebBatchSize))
+		// after that first and last item should still exist, so "creating"
+		// waitSlice for them once more should return existing ones and
+		// must not change the size of waitSlice length
+		currLen := len(wt.objs)
+		_ = wt.lookupCreate(rebObjs[0].uid, 1)
+		_ = wt.lookupCreate(rebObjs[len(rebObjs)-1].uid, 1)
+		Expect(len(wt.objs)).To(Equal(currLen))
 
-	// cleanup last incomplete batch
-	wt.cleanupBatch(rebObjs, len(rebObjs)-2)
-	tassert.Fatalf(t, currLen-2 == len(wt.objs), "Must cleanup the last two items but the actual size is %d, must be %d", len(wt.objs), currLen-2)
+		By("cleanup last incomplete batch (a few last items)")
+		wt.cleanupBatch(rebObjs, len(rebObjs)-toCleanLastN)
+		Expect(len(wt.objs)).To(Equal(len(rebObjs) - ecRebBatchSize - toCleanLastN))
 
-	// cleanup everything
-	wt.cleanup()
-	tassert.Errorf(t, wt.waitSliceCnt() == 0, "waiting slice count must be 0")
-	tassert.Errorf(t, len(wt.objs) == 0, "slice list must be empty")
-}
+		By("cleanup everything")
+		wt.cleanup()
+		Expect(wt.waitSliceCnt()).To(BeZero())
+		Expect(len(wt.objs)).To(BeZero())
+	})
+})
