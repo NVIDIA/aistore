@@ -260,7 +260,7 @@ func (t *targetrunner) Run() error {
 	}
 	t.registerNetworkHandlers(networkHandlers)
 
-	t.rebManager = reb.NewManager(t, config, getstorstatsrunner(), t.statsif)
+	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
 
 	ec.Init()
 	t.ecmanager = newECM(t)

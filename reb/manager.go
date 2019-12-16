@@ -58,17 +58,16 @@ type (
 	}
 
 	Manager struct {
-		t           cluster.Target
-		statRunner  *stats.Trunner
-		statTracker stats.Tracker
-		filterGFN   *filter.Filter
-		netd, netc  string
-		smap        atomic.Pointer // new smap which will be soon live
-		streams     *transport.StreamBundle
-		acks        *transport.StreamBundle
-		pushes      *transport.StreamBundle
-		lomacks     [cmn.MultiSyncMapCount]*LomAcks
-		tcache      struct { // not to recompute very often
+		t          cluster.Target
+		statRunner *stats.Trunner
+		filterGFN  *filter.Filter
+		netd, netc string
+		smap       atomic.Pointer // new smap which will be soon live
+		streams    *transport.StreamBundle
+		acks       *transport.StreamBundle
+		pushes     *transport.StreamBundle
+		lomacks    [cmn.MultiSyncMapCount]*LomAcks
+		tcache     struct { // not to recompute very often
 			tmap cluster.NodeMap
 			ts   time.Time
 			mu   *sync.Mutex
@@ -105,8 +104,7 @@ var stages = map[uint32]string{
 //
 // Manager
 //
-func NewManager(t cluster.Target, config *cmn.Config,
-	strunner *stats.Trunner, stracker stats.Tracker) *Manager {
+func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *Manager {
 	netd, netc := cmn.NetworkPublic, cmn.NetworkPublic
 	if config.Net.UseIntraData {
 		netd = cmn.NetworkIntraData
@@ -115,15 +113,14 @@ func NewManager(t cluster.Target, config *cmn.Config,
 		netc = cmn.NetworkIntraControl
 	}
 	reb := &Manager{
-		t:           t,
-		filterGFN:   filter.NewDefaultFilter(),
-		netd:        netd,
-		netc:        netc,
-		nodeStages:  make(map[string]uint32),
-		statRunner:  strunner,
-		statTracker: stracker,
+		t:          t,
+		filterGFN:  filter.NewDefaultFilter(),
+		netd:       netd,
+		netc:       netc,
+		nodeStages: make(map[string]uint32),
+		statRunner: strunner,
 	}
-	reb.ecReb = newECRebalancer(t, reb, stracker)
+	reb.ecReb = newECRebalancer(t, reb, strunner)
 	reb.initStreams()
 	return reb
 }
@@ -360,9 +357,10 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: from %s %s", reb.t.Snode().Name(), tsid, lom)
 	}
-	reb.statTracker.AddMany(
+	reb.statRunner.AddMany(
 		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
-		stats.NamedVal64{Name: stats.RxRebSize, Value: hdr.ObjAttrs.Size})
+		stats.NamedVal64{Name: stats.RxRebSize, Value: hdr.ObjAttrs.Size},
+	)
 	// ACK
 	if tsi == nil {
 		return
