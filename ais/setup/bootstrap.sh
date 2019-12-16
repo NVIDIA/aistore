@@ -1,6 +1,6 @@
 #!/bin/bash
 
-AISTORE_DIR=$(cd "$(dirname "$0")"; realpath ../../)
+AISTORE_DIR=$(cd "$(dirname "$0")/../../"; pwd -P)
 
 function list_all_go_dirs {
   go list -f '{{.Dir}}' "${AISTORE_DIR}/..."

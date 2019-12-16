@@ -21,7 +21,7 @@ before_script:
   - ln -s /go/src/github.com/NVIDIA/aistore /go/src/_/builds/NVIDIA
   - cd /go/src/github.com/NVIDIA/aistore
 
-build:
+build:linux:
   stage: build
   script:
     - CLDPROVIDER="aws" make node
@@ -32,14 +32,32 @@ build:
     - make cli
     - make aisloader
 
-lint:
+build:darwin:
+  stage: build
+  script:
+    - GOOS="darwin" CLDPROVIDER="aws" make node
+    - GOOS="darwin" CLDPROVIDER="gcp" make node
+    - GOOS="darwin" CLDPROVIDER="" make node
+    - GOOS="darwin" make authn
+    - GOOS="darwin" make aisfs
+    - GOOS="darwin" make cli
+    - GOOS="darwin" make aisloader
+
+lint:linux:
   stage: build
   script:
     - make lint
     - make fmt-check
     - make spell-check
 
-test-short:
+lint:darwin:
+  stage: build
+  script:
+    - GOOS="darwin" make lint
+    - GOOS="darwin" make fmt-check
+    - GOOS="darwin" make spell-check
+
+test:short:
   stage: test-short
   script:
     - make cli aisfs

@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 ////////////
@@ -25,7 +27,7 @@ func GetXattr(fqn, attrName string) ([]byte, error) {
 // GetXattr gets xattr by name via provided buffer
 func GetXattrBuf(fqn, attrName string, buf []byte) (b []byte, err error) {
 	var n int
-	n, err = syscall.Getxattr(fqn, attrName, buf)
+	n, err = unix.Getxattr(fqn, attrName, buf)
 	if err == nil { // returns ERANGE if len(buf) is not enough
 		b = buf[:n]
 	}
@@ -34,7 +36,7 @@ func GetXattrBuf(fqn, attrName string, buf []byte) (b []byte, err error) {
 
 // SetXattr sets xattr name = value
 func SetXattr(fqn, attrName string, data []byte) (err error) {
-	return syscall.Setxattr(fqn, attrName, data, 0)
+	return unix.Setxattr(fqn, attrName, data, 0)
 }
 
 func CopyXattr(srcFQN, dstFQN, attrName string) error {

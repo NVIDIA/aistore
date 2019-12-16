@@ -13,6 +13,10 @@ import (
 
 const maxProcsEnvVar = "GOMAXPROCS"
 
+type LoadAvg struct {
+	One, Five, Fifteen float64
+}
+
 // NumCPU detects if the app is running inside a container and returns
 // the number of available CPUs (number of hardware CPU for host OS and
 // number of CPU allocated for the container), and if the CPU usage is limited

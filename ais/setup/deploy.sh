@@ -36,10 +36,7 @@ runCmd() {
   { set +x; } 2>/dev/null
 }
 
-isCommandAvailable "lsblk" "--version"
-isCommandAvailable "df" "--version"
-
-AISTORE_DIR=$(cd "$(dirname "$0")"; realpath ../../) # absolute path to aistore directory
+AISTORE_DIR=$(cd "$(dirname "$0")/../../"; pwd -P) # absolute path to aistore directory
 
 export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
 USE_HTTPS=false
@@ -83,12 +80,16 @@ TMPF=$(mktemp /tmp/ais$NEXT_TIER.XXXXXXXXX)
 touch $TMPF;
 OS=$(uname -s)
 case $OS in
-  Linux) #Linux
+  Linux) # Linux
     isCommandAvailable "iostat" "-V"
+    isCommandAvailable "lsblk" "--version"
+    isCommandAvailable "df" "--version"
     setfattr -n user.comment -v comment $TMPF
     ;;
-  Darwin) #macOS
+  Darwin) # macOS
+    isCommandAvailable "df" "--version"
     xattr -w user.comment comment $TMPF
+    echo "WARNING: Darwin architecture is not yet fully supported. You may stumble upon bugs and issues when testing on Mac."
     ;;
   *)
     rm $TMPF 2>/dev/null

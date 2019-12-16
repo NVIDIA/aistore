@@ -90,10 +90,6 @@ func ContainerNumCPU() (int, error) {
 	return int(cmn.MaxU64(approx, 1)), nil
 }
 
-type LoadAvg struct {
-	One, Five, Fifteen float64
-}
-
 // LoadAverage returns the system load average
 func LoadAverage() (avg LoadAvg, err error) {
 	avg = LoadAvg{}

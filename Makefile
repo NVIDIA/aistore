@@ -191,11 +191,11 @@ fmt-fix: ## Fix code formatting
 	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" fmt --fix
 
 spell-check: ## Run spell checker on the project
-	@GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell
+	@GOOS="" GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell
 	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" spell
 
 spell-fix: ## Fix spell checking issues
-	@GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell
+	@GOOS="" GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell
 	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" spell --fix
 
 

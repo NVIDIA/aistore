@@ -13,7 +13,7 @@ import (
 
 func GetATime(osfi os.FileInfo) time.Time {
 	stat := osfi.Sys().(*syscall.Stat_t)
-	atime := time.Unix(stat.Atim.Sec, stat.Atim.Nsec)
+	atime := time.Unix(stat.Atimespec.Sec, stat.Atimespec.Nsec)
 	// NOTE: see https://en.wikipedia.org/wiki/Stat_(system_call)#Criticism_of_atime
 	return atime
 }

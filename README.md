@@ -47,16 +47,25 @@ For detailed overview, design philosophy, and components, please see this [docum
 
 ## Prerequisites
 
-* Linux (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+)
+* [Linux](#Linux) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) and [MacOS](#MacOS)
 * [Go 1.13 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
+
+### Linux
 
 Depending on your Linux distribution, you may or may not have `gcc`, `sysstat`, and/or `attr` packages.
 
 The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is a long time POSIX legacy and is supported by all mainstream filesystems with no exceptions. Unfortunately, extended attributes (xattrs) may not always be enabled (by the Linux distribution you are using) in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
 
 > If disabled, please make sure to enable xattrs in your Linux kernel configuration.
+
+### MacOS
+
+MacOS/Darwin platform is also supported albeit for development only (for production we strongly recommend Linux).
+
+Certain capabilities are still missing, like reading mem/cpu/disks stats which are essential for the correct cluster operation.
+Therefore, bugs are expected and can occur when trying to use different features.
 
 ## Getting Started
 

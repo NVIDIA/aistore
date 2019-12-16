@@ -18,8 +18,6 @@ type LsBlk struct {
 	BlockDevices []*BlockDevice `json:"blockdevices"`
 }
 
-type fsDisks map[string]int64 // disk name => sector size
-
 // `lsblk -Jt` structure
 type BlockDevice struct {
 	Name         string          `json:"name"`
