@@ -497,12 +497,12 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		beforeSend time.Time
 	)
 	fullContentPath := ds.m.recManager.FullContentPath(obj)
-	lom := &cluster.LOM{T: ds.m.ctx.t, Objname: fullContentPath}
-	if err = lom.Init(ds.m.rs.OutputBucket, ds.m.rs.OutputProvider); err != nil {
+	ct, err := cluster.NewCTFromBO(ds.m.rs.OutputBucket, ds.m.rs.OutputProvider, fullContentPath, nil)
+	if err != nil {
 		return
 	}
-	ds.creationPhase.adjuster.read.acquireSema(lom.ParsedFQN.MpathInfo)
-	defer ds.creationPhase.adjuster.read.releaseSema(lom.ParsedFQN.MpathInfo)
+	ds.creationPhase.adjuster.read.acquireSema(ct.ParsedFQN().MpathInfo)
+	defer ds.creationPhase.adjuster.read.releaseSema(ct.ParsedFQN().MpathInfo)
 
 	// Check if aborted
 	if ds.m.aborted() {

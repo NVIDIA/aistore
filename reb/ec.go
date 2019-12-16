@@ -869,23 +869,22 @@ func (s *ecRebalancer) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	lom := &cluster.LOM{T: s.t, FQN: fqn}
-	err = lom.Init("", "")
+	ct, err := cluster.NewCTFromFQN(fqn, s.t.GetBowner())
 	if err != nil {
 		return nil
 	}
 	// do not touch directories for buckets with EC disabled (for now)
 	// TODO: what to do if we found metafile on a bucket with EC disabled?
-	if !lom.ECEnabled() {
+	if !ct.Bprops().EC.Enabled {
 		return filepath.SkipDir
 	}
 
 	// generate slice path in the same mpath that metadata is, and detect slice/replica
 	isReplica := true
-	fileFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(fs.ObjectType, lom.Bucket(), lom.Bck().Provider, lom.Objname)
+	fileFQN := ct.Make(fs.ObjectType)
 	if _, err := os.Stat(fileFQN); err != nil {
 		isReplica = false
-		fileFQN = lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.SliceType, lom.Bucket(), lom.Bck().Provider, lom.Objname)
+		fileFQN = ct.Make(ec.SliceType)
 		_, err = os.Stat(fileFQN)
 		// found metadata without a corresponding slice
 		if err != nil {
@@ -897,30 +896,30 @@ func (s *ecRebalancer) walk(fqn string, de fs.DirEntry) (err error) {
 	// calculate correct FQN
 	var hrwFQN string
 	if isReplica {
-		hrwFQN, _, err = cluster.HrwFQN(fs.ObjectType, lom.Bck(), lom.Objname)
+		hrwFQN, _, err = cluster.HrwFQN(fs.ObjectType, ct.Bck(), ct.ObjName())
 	} else {
-		hrwFQN, _, err = cluster.HrwFQN(ec.SliceType, lom.Bck(), lom.Objname)
+		hrwFQN, _, err = cluster.HrwFQN(ec.SliceType, ct.Bck(), ct.ObjName())
 	}
 	if err != nil {
 		return err
 	}
-	lom = &cluster.LOM{T: s.t, FQN: fileFQN}
-	err = lom.Init("", "")
+
+	ct, err = cluster.NewCTFromFQN(fileFQN, s.t.GetBowner())
 	if err != nil {
 		return nil
 	}
 
 	id := s.t.Snode().DaemonID
 	rec := &ecRebSlice{
-		Bucket:       lom.Bucket(),
-		Objname:      lom.Objname,
+		Bucket:       ct.Bucket(),
+		Objname:      ct.ObjName(),
 		DaemonID:     id,
 		ObjHash:      md.ObjCksum,
 		ObjSize:      md.Size,
 		SliceID:      int16(md.SliceID),
 		DataSlices:   int16(md.Data),
 		ParitySlices: int16(md.Parity),
-		IsAIS:        lom.IsAIS(),
+		IsAIS:        ct.Bck().IsAIS(),
 		realFQN:      fileFQN,
 		hrwFQN:       hrwFQN,
 		meta:         md,
