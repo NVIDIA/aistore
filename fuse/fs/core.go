@@ -30,22 +30,6 @@ import (
 //  - Lock handles before locking inodes.
 //  - When locking multiple handles, lock them in the ascending
 //    order of their IDs.
-//
-// Explanation of some variable names:
-//  - separator  -- '/' (slash)
-//  - objName    -- Full name of an object in a cluster (example: "a/b/c").
-//  - entryName  -- Name tied to a directory entry, i.e. file or directory name.
-//                  Example: "a" (directory), "b" (directory), "c" (file).
-//  - taggedName -- Files: entryName -- Directories: entryName + separator
-//                  Example: "a/" (directory), "b/" (directory), "c" (file)
-//  - [fs]path   -- Path from root directory to another directory or file.
-//                  (i.e. parent.path + taggedName)
-//                  Root path: ""
-//                  Examples: "a/" (directory), "a/b/" (directory), "a/b/c" (file)
-//                  NOTE: path does NOT start with a separator, and can be used
-//                        as a prefix when listing objects in a bucket.
-//                  NOTE: For files, [fs]path is the same as objName of the
-//                        backing object.
 
 const (
 	Name = "aisfs"

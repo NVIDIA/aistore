@@ -15,8 +15,8 @@ import (
 )
 
 type Object struct {
-	apiParams api.BaseParams
-	bucket    string
+	apiParams api.BaseParams // FIXME: it is quite a big struct and should be removed
+	bucket    string         // FIXME: bucket name is static so we should not have it as a field
 	Name      string
 	Size      int64
 	Atime     time.Time
@@ -81,7 +81,6 @@ func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (
 	if err != nil {
 		return handle, newObjectIOError(err, "Append", obj.Name)
 	}
-	obj.Size += size
 	return handle, nil
 }
 
@@ -95,6 +94,5 @@ func (obj *Object) Flush(handle string) (err error) {
 	if err = api.FlushObject(appendArgs); err != nil {
 		return newObjectIOError(err, "Flush", obj.Name)
 	}
-	obj.Atime = time.Now()
 	return nil
 }

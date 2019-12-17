@@ -106,7 +106,6 @@ func (dir *DirectoryInode) InvalidateInode(entryName string, isDir bool) {
 	nsCache.add(ty, dtAttrs{id: invalidInodeID, path: entryName})
 }
 
-// REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) LinkNewFile(fileName string) (*ais.Object, error) {
 	obj := ais.NewObject(fileName, dir.bucket)
 	err := obj.Put(cmn.NopOpener(ioutil.NopCloser(bytes.NewReader([]byte{}))))

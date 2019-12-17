@@ -20,14 +20,17 @@ type FileInode struct {
 	baseInode
 
 	parent *DirectoryInode
-	object *ais.Object
+
+	// Object used by current inode. When possible it should be updated with
+	// newer version.
+	object ais.Object
 }
 
 func NewFileInode(id fuseops.InodeID, attrs fuseops.InodeAttributes, parent *DirectoryInode, object *ais.Object) Inode {
 	return &FileInode{
 		baseInode: newBaseInode(id, attrs, object.Name),
 		parent:    parent,
-		object:    object,
+		object:    *object,
 	}
 }
 
@@ -81,14 +84,17 @@ func (file *FileInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAttribu
 // REQUIRES_LOCK(file)
 func (file *FileInode) UpdateBackingObject(obj *ais.Object) {
 	cmn.Assert(obj != nil)
+	// Only update object if it is newer
+	if file.object.Atime.After(obj.Atime) {
+		return
+	}
+
 	size := uint64(obj.Size)
 	updReq := &AttrUpdateReq{
-		Size:  &size,
-		Atime: &obj.Atime,
-		Mtime: &obj.Atime,
+		Size: &size,
 	}
 	file.UpdateAttributes(updReq)
-	file.object = obj
+	file.object = *obj
 }
 
 /////////////
@@ -101,6 +107,9 @@ func (file *FileInode) Load(w io.Writer, offset int64, length int64) (n int64, e
 	if err != nil {
 		return 0, err
 	}
+	now := time.Now()
+	file.attrs.Atime = now
+	file.object.Atime = now
 	return n, nil
 }
 
@@ -110,10 +119,23 @@ func (file *FileInode) Load(w io.Writer, offset int64, length int64) (n int64, e
 
 // REQUIRES_LOCK(file)
 func (file *FileInode) Write(r cmn.ReadOpenCloser, handle string, size int64) (string, error) {
-	return file.object.Append(r, handle, size)
+	newHandle, err := file.object.Append(r, handle, size)
+	if err != nil {
+		return newHandle, err
+	}
+	file.object.Size += size
+	return newHandle, nil
 }
 
 // REQUIRES_LOCK(file)
 func (file *FileInode) Flush(handle string) error {
-	return file.object.Flush(handle)
+	err := file.object.Flush(handle)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	file.object.Atime = now
+	file.attrs.Atime = now
+	file.attrs.Mtime = now
+	return nil
 }

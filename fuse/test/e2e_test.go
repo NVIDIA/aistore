@@ -7,11 +7,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
@@ -41,6 +43,7 @@ func TestE2E(t *testing.T) {
 		t.Skip("'aisfs' is already running")
 	}
 
+	config.DefaultReporterConfig.SlowSpecThreshold = 10 * time.Second.Seconds()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "E2E")
 }

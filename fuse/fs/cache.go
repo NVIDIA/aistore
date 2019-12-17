@@ -144,6 +144,8 @@ func newNsCache(bck *ais.Bucket, logger *log.Logger, cfg *ServerConfig) (*namesp
 }
 
 func (c *namespaceCache) newFileEntry(dta dtAttrs) cacheEntry {
+	// Allow `nil` object only for `invalidInodeID`
+	cmn.Assert(dta.obj != nil || dta.id == invalidInodeID)
 	if dta.obj == nil {
 		dta.obj = ais.NewObject(dta.path, c.bck, 0)
 	}
