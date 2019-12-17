@@ -615,19 +615,21 @@ func (lom *LOM) Hkey() (string, int) {
 }
 func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error) {
 	if lom.FQN != "" {
-		cmn.Dassert(bucket == "", pkgName) // either/or
 		lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN)
 		if err != nil {
 			return
 		}
-		bucket = lom.ParsedFQN.Bucket
+		if bucket == "" {
+			bucket = lom.ParsedFQN.Bucket
+		} else if bucket != lom.ParsedFQN.Bucket {
+			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, bucket, lom.ParsedFQN.Bucket)
+		}
 		lom.Objname = lom.ParsedFQN.ObjName
 		prov := lom.ParsedFQN.Provider
 		if provider == "" {
 			provider = prov
 		} else if prov1, _ := cmn.ProviderFromStr(provider); prov1 != prov {
-			err = fmt.Errorf("unexpected provider %s for FQN [%s]", provider, lom.FQN)
-			return
+			return fmt.Errorf("lom-init %s: provider mismatch (%s != %s)", lom.FQN, provider, prov)
 		}
 	}
 	bowner := lom.T.GetBowner()

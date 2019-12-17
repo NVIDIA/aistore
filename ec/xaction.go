@@ -175,33 +175,26 @@ func (r *xactECBase) newMetafileResponse(attrs *transport.ObjectAttrs, fqn strin
 	return reader, nil
 }
 
+// replica/full object request
 func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
-	// local slice/metafile requested by another target to restore the object
 	lom := &cluster.LOM{T: r.t, FQN: fqn}
 	err = lom.Init("", "")
 	if err != nil {
-		glog.Warningf("Failed to read file stats #1: %s", err)
+		glog.Warning(err)
 		return nil, err
 	}
-	if err = lom.FromFS(); err != nil {
-		glog.Warningf("Failed to read file stats #2: %s", err)
+	if err = lom.Load(); err != nil {
+		glog.Warning(err)
 		return nil, err
 	}
 	reader, err = cmn.NewFileHandle(fqn)
 	if err != nil {
 		return nil, err
 	}
-	sz := lom.Size()
-	if sz == 0 {
-		if stat, err := os.Stat(fqn); err == nil {
-			sz = stat.Size()
-		}
-		if sz == 0 {
-			// empty file - no errors: send empty response
-			return nil, nil
-		}
+	if lom.Size() == 0 {
+		return nil, nil
 	}
-	attrs.Size = sz
+	attrs.Size = lom.Size()
 	attrs.Version = lom.Version()
 	attrs.Atime = lom.Atime().UnixNano()
 	if lom.Cksum() != nil {
