@@ -6,6 +6,8 @@ package cluster
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -14,6 +16,20 @@ type Bck struct {
 	Name     string
 	Provider string
 	Props    *cmn.BucketProps
+}
+
+func (b *Bck) MakeUname(objName string) string {
+	const sep = string(filepath.Separator)
+	prov, _ := cmn.ProviderFromStr(b.Provider)
+	return prov + sep + b.Name + sep + objName
+}
+func ParseUname(uname string) (b Bck, objName string) {
+	const sep = byte(filepath.Separator)
+	i := strings.IndexByte(uname, sep)
+	b.Provider = uname[:i]
+	j := strings.IndexByte(uname[i+1:], sep)
+	b.Name, objName = uname[i+1:i+j+1], uname[i+j+2:]
+	return
 }
 
 func (b *Bck) String() string {
@@ -29,8 +45,10 @@ func (b *Bck) String() string {
 }
 func (b *Bck) IsAIS() bool { return b.Provider == cmn.AIS || b.Provider == cmn.ProviderAIS }
 func (b *Bck) IsCloud() bool {
-	return b.Provider == cmn.Cloud || b.Provider == cmn.ProviderAmazon || b.Provider == cmn.ProviderGoogle
+	prov, _ := cmn.ProviderFromStr(b.Provider)
+	return prov == cmn.Cloud
 }
+
 func (b *Bck) Equal(other *Bck) bool {
 	if b.Name != other.Name {
 		return false

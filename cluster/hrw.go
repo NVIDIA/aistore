@@ -7,9 +7,7 @@ package cluster
 import (
 	"errors"
 	"fmt"
-	"path"
 	"sort"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -17,25 +15,24 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+// A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
+// aka highest random weight (HRW)
+
 var (
 	errNoTargets = errors.New("no targets registered in the cluster")
 )
 
-// A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
-// aka highest random weight (HRW)
-func Bo2Uname(bucket, objName string) string { return path.Join(bucket, objName) }
-func Uname2Bo(uname string) (bucket, objName string) {
-	i := strings.Index(uname, "/")
-	bucket, objName = uname[:i], uname[i+1:]
-	return
+type tsi struct {
+	node *Snode
+	hash uint64
 }
 
 // Requires elements of smap.Tmap to have their idDigest initialized
 func HrwTarget(bck *Bck, objName string, smap *Smap) (si *Snode, err error) {
 	var (
 		max    uint64
-		name   = Bo2Uname(bck.Name, objName)
-		digest = xxhash.ChecksumString64S(name, cmn.MLCG32)
+		uname  = bck.MakeUname(objName)
+		digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
 	)
 	for _, sinfo := range smap.Tmap {
 		// Assumes that sinfo.idDigest is initialized
@@ -51,34 +48,30 @@ func HrwTarget(bck *Bck, objName string, smap *Smap) (si *Snode, err error) {
 	return
 }
 
-// Returns count number of first targets with highest random weight. The list
-// of targets is sorted from the greatest to least.
-// Returns error if the cluster does not have enough targets
-func HrwTargetList(bucket, objName string, smap *Smap, count int) (si []*Snode, err error) {
+// Sorts all targets in a cluster by their respective HRW (weights) in a descending order;
+// returns resulting subset (aka slice) that has the requested length = count.
+// Returns error if the cluster does not have enough targets.
+func HrwTargetList(bck *Bck, objName string, smap *Smap, count int) (si []*Snode, err error) {
 	if count <= 0 {
 		return nil, fmt.Errorf("invalid number of targets requested: %d", count)
 	}
-	if smap.CountTargets() < count {
+	cnt := smap.CountTargets()
+	if cnt < count {
 		err = fmt.Errorf("number of targets %d is fewer than requested %d", smap.CountTargets(), count)
 		return
 	}
-
-	type tsi struct {
-		node *Snode
-		hash uint64
-	}
-	arr := make([]tsi, smap.CountTargets())
+	var (
+		arr    = make([]tsi, cnt)
+		uname  = bck.MakeUname(objName)
+		digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
+		i      int
+	)
 	si = make([]*Snode, count)
-	name := Bo2Uname(bucket, objName)
-	digest := xxhash.ChecksumString64S(name, cmn.MLCG32)
-
-	i := 0
 	for _, sinfo := range smap.Tmap {
 		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
 		arr[i] = tsi{sinfo, cs}
 		i++
 	}
-
 	sort.Slice(arr, func(i, j int) bool { return arr[i].hash > arr[j].hash })
 	for i := 0; i < count; i++ {
 		si[i] = arr[i].node
@@ -135,17 +128,17 @@ func HrwTargetTask(taskID uint64, smap *Smap) (si *Snode, err error) {
 	return
 }
 
-func HrwMpath(bucket, objName string) (mi *fs.MountpathInfo, digest uint64, err error) {
+func HrwMpath(bck *Bck, objName string) (mi *fs.MountpathInfo, digest uint64, err error) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 0 {
-		err = fmt.Errorf("%s: cannot hrw(%s/%s)", cmn.NoMountpaths, bucket, objName)
+		err = fmt.Errorf("%s: cannot hrw(%s/%s)", cmn.NoMountpaths, bck.Name, objName)
 		return
 	}
 	var (
-		max  uint64
-		name = Bo2Uname(bucket, objName)
+		max   uint64
+		uname = bck.MakeUname(objName)
 	)
-	digest = xxhash.ChecksumString64S(name, cmn.MLCG32)
+	digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
 	for _, mpathInfo := range availablePaths {
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
 		if cs > max {

@@ -159,7 +159,7 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName strin
 }
 
 func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
-	uname := unique(iReq.Sender, bck.Name, objName)
+	uname := unique(iReq.Sender, bck, objName)
 
 	drain := func() {
 		if err := cmn.DrainReader(object); err != nil {

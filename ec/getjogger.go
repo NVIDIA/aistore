@@ -119,7 +119,7 @@ func (c *getJogger) ec(req *Request) {
 // * nodes - targets that have metadata and replica - filled by requestMeta
 // * replicaCnt - total number of replicas including main one
 func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenCloser, metadata *Metadata, nodes map[string]*Metadata, replicaCnt int) {
-	targets, err := cluster.HrwTargetList(lom.Bucket(), lom.Objname, c.parent.smap.Get(), replicaCnt)
+	targets, err := cluster.HrwTargetList(lom.Bck(), lom.Objname, c.parent.smap.Get(), replicaCnt)
 	if err != nil {
 		freeObject(reader)
 		glog.Errorf("failed to get list of %d targets: %s", replicaCnt, err)
@@ -194,7 +194,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	var writer *memsys.SGL
 	// try read a replica from targets one by one until the replica is got
 	for node := range nodes {
-		uname := unique(node, req.LOM.Bucket(), req.LOM.Objname)
+		uname := unique(node, req.LOM.Bck(), req.LOM.Objname)
 		iReqBuf := c.parent.newIntraReq(reqGet, nil).Marshal()
 
 		w := mm.NewSGL(cmn.KiB)
@@ -259,7 +259,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec-restore-repl")
 
 	for node := range nodes {
-		uname := unique(node, req.LOM.Bucket(), req.LOM.Objname)
+		uname := unique(node, req.LOM.Bck(), req.LOM.Objname)
 		iReqBuf := c.parent.newIntraReq(reqGet, nil).Marshal()
 
 		w, err := cmn.CreateFile(tmpFQN)
@@ -365,7 +365,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 		slices[v.SliceID-1] = writer
 		idToNode[v.SliceID] = k
 		wgSlices.Add(1)
-		uname := unique(k, req.LOM.Bucket(), req.LOM.Objname)
+		uname := unique(k, req.LOM.Bck(), req.LOM.Objname)
 		if c.parent.regWriter(uname, writer) {
 			daemons = append(daemons, k)
 		}
@@ -669,7 +669,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 	// generate the list of targets that should have a slice and find out
 	// the targets without any one
 	// FIXME: when fewer targets than sliceCnt+1, send slices to those available anyway
-	targets, err := cluster.HrwTargetList(req.LOM.Bucket(), req.LOM.Objname, c.parent.smap.Get(), sliceCnt+1)
+	targets, err := cluster.HrwTargetList(req.LOM.Bck(), req.LOM.Objname, c.parent.smap.Get(), sliceCnt+1)
 	if err != nil {
 		glog.Warning(err)
 		return
@@ -777,7 +777,7 @@ func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[strin
 	// unregister all SGLs from a list of waiting slices for the data to come
 	freeWriters := func() {
 		for k := range nodes {
-			uname := unique(k, req.LOM.Bucket(), req.LOM.Objname)
+			uname := unique(k, req.LOM.Bck(), req.LOM.Objname)
 			c.parent.unregWriter(uname)
 		}
 	}
@@ -888,7 +888,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 			wg:     metaWG,
 		}
 		metaWG.Add(1)
-		uname := unique(node.DaemonID, req.LOM.Bucket(), req.LOM.Objname)
+		uname := unique(node.DaemonID, req.LOM.Bck(), req.LOM.Objname)
 		if c.parent.regWriter(uname, writer) {
 			writers = append(writers, writer)
 		}
@@ -922,7 +922,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 			continue
 		}
 
-		uname := unique(node.DaemonID, req.LOM.Bucket(), req.LOM.Objname)
+		uname := unique(node.DaemonID, req.LOM.Bck(), req.LOM.Objname)
 		wr, ok := c.parent.unregWriter(uname)
 		if !ok || wr == nil || wr.writer == nil {
 			continue

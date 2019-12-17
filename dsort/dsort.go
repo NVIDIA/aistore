@@ -144,8 +144,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		defer phaseInfo.adjuster.releaseGoroutineSema()
 
 		shardName := name + m.rs.Extension
-		// TODO -- FIXME: must be inited and checked elsewhere
-		bck := &cluster.Bck{Name: m.rs.Bucket, Provider: "" /* FIXME */}
+		bck := &cluster.Bck{Name: m.rs.Bucket, Provider: m.rs.Provider}
 		si, err := cluster.HrwTarget(bck, shardName, m.smap)
 		if err != nil {
 			return err

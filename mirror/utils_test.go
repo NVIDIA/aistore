@@ -18,7 +18,7 @@ import (
 
 var _ = Describe("Mirror", func() {
 	const (
-		testDir = "/tmp/mirror-test/"
+		testDir = "/tmp/mirror-test_q/"
 
 		testBucketName = "TEST_LOCAL_MIRROR_BUCKET"
 		mpath          = testDir + "mirrortest_mpath/1"

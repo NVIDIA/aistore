@@ -743,9 +743,17 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 
 	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
 	//       disable mirroring (needed in part for cloud buckets)
-	xaction.Registry.AbortAllBuckets(true, bucketsToDelete...)
-
-	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", false /*false=destroy*/, cmn.AIS, bucketsToDelete...)
+	if len(bucketsToDelete) > 0 {
+		xaction.Registry.AbortAllBuckets(true, bucketsToDelete...)
+		go func(buckets ...string) {
+			b := &cluster.Bck{Provider: cmn.AIS}
+			for _, n := range buckets {
+				b.Name = n
+				cluster.EvictLomCache(b)
+			}
+		}(bucketsToDelete...)
+		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", false /*false=destroy*/, cmn.AIS, bucketsToDelete...)
+	}
 
 	// Create buckets that have been added
 	bucketsToCreate := make([]string, 0, len(newbucketmd.LBmap))

@@ -12,6 +12,44 @@ import (
 )
 
 var _ = Describe("Bck", func() {
+	Describe("Uname", func() {
+		DescribeTable("should convert bucket and objname to uname and back",
+			func(bckName, bckProvider, objName, expectedBckProvider string) {
+				bck := &Bck{Name: bckName, Provider: bckProvider}
+				uname := bck.MakeUname(objName)
+
+				gotBck, gotObjName := ParseUname(uname)
+				Expect(gotBck.Name).To(Equal(bckName))
+				Expect(gotBck.Provider).To(Equal(expectedBckProvider))
+				Expect(gotObjName).To(Equal(objName))
+			},
+			Entry(
+				"regular ais bucket with simple object name",
+				"bck", cmn.ProviderAIS, "obj", cmn.ProviderAIS,
+			),
+			Entry(
+				"regular ais bucket with long object name",
+				"bck", cmn.ProviderAIS, "obj/tmp1/tmp2", cmn.ProviderAIS,
+			),
+			Entry(
+				"empty provider",
+				"bck", "", "obj", "",
+			),
+			Entry(
+				"aws provider",
+				"bck", cmn.ProviderAmazon, "obj", cmn.Cloud,
+			),
+			Entry(
+				"gcp provider",
+				"bck", cmn.ProviderGoogle, "obj", cmn.Cloud,
+			),
+			Entry(
+				"cloud provider",
+				"bck", cmn.Cloud, "obj", cmn.Cloud,
+			),
+		)
+	})
+
 	Describe("Equal", func() {
 		DescribeTable("should not be equal",
 			func(a, b *Bck) {

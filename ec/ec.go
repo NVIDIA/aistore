@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -300,8 +301,8 @@ func SliceSize(fileSize int64, slices int) int64 {
 // a unique ID for each of them. Because of all replicas/slices of an object have
 // the same names, cluster.Uname is not enough to generate unique ID. Adding an
 // extra prefix - an identifier of the destination - solves the issue
-func unique(prefix, bucket, objname string) string {
-	return prefix + "/" + cluster.Bo2Uname(bucket, objname)
+func unique(prefix string, bck *cluster.Bck, objname string) string {
+	return prefix + string(filepath.Separator) + bck.MakeUname(objname)
 }
 
 // Reads local file to SGL

@@ -206,7 +206,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	)
 
 	// generate a list of target to send the replica (all excluding this one)
-	targets, err := cluster.HrwTargetList(req.LOM.Bucket(), req.LOM.Objname, c.parent.smap.Get(), copies+1)
+	targets, err := cluster.HrwTargetList(req.LOM.Bck(), req.LOM.Objname, c.parent.smap.Get(), copies+1)
 	if err != nil {
 		return err
 	}
@@ -465,7 +465,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 	// totalCnt+1: first node gets the full object, other totalCnt nodes
 	// gets a slice each
-	targets, err := cluster.HrwTargetList(req.LOM.Bucket(), req.LOM.Objname, c.parent.smap.Get(), totalCnt+1)
+	targets, err := cluster.HrwTargetList(req.LOM.Bck(), req.LOM.Objname, c.parent.smap.Get(), totalCnt+1)
 	if err != nil {
 		return nil, err
 	}

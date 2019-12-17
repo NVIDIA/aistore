@@ -61,7 +61,7 @@ func NewGetXact(t cluster.Target, smap cluster.Sowner,
 }
 
 func (r *XactGet) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
-	uname := unique(iReq.Sender, bck.Name, objName)
+	uname := unique(iReq.Sender, bck, objName)
 
 	switch iReq.Act {
 	// a remote target sent/responded object's metadata. A slice should be waiting

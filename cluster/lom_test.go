@@ -117,7 +117,7 @@ var _ = Describe("LOM", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.FQN).To(BeEquivalentTo(desiredLocalFQN))
 
-				Expect(lom.Uname()).To(BeEquivalentTo(cluster.Bo2Uname(bucketLocalA, testObject)))
+				Expect(lom.Uname()).To(BeEquivalentTo(lom.Bck().MakeUname(testObject)))
 				Expect(lom.IsAIS()).To(BeTrue())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
@@ -139,7 +139,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Bucket()).To(BeEquivalentTo(bucketLocalA))
 				Expect(lom.Objname).To(BeEquivalentTo(testObject))
 
-				Expect(lom.Uname()).To(BeEquivalentTo(cluster.Bo2Uname(bucketLocalA, testObject)))
+				Expect(lom.Uname()).To(BeEquivalentTo(lom.Bck().MakeUname(testObject)))
 				Expect(lom.IsAIS()).To(BeTrue())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
@@ -177,7 +177,7 @@ var _ = Describe("LOM", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.FQN).To(BeEquivalentTo(desiredCloudFQN))
 
-				Expect(lom.Uname()).To(BeEquivalentTo(cluster.Bo2Uname(bucketCloudA, testObject)))
+				Expect(lom.Uname()).To(BeEquivalentTo(lom.Bck().MakeUname(testObject)))
 				Expect(lom.IsAIS()).To(BeFalse())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
@@ -198,7 +198,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Bucket()).To(BeEquivalentTo(bucketCloudA))
 				Expect(lom.Objname).To(BeEquivalentTo(testObject))
 
-				Expect(lom.Uname()).To(BeEquivalentTo(cluster.Bo2Uname(bucketCloudA, testObject)))
+				Expect(lom.Uname()).To(BeEquivalentTo(lom.Bck().MakeUname(testObject)))
 				Expect(lom.IsAIS()).To(BeFalse())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
@@ -867,6 +867,7 @@ var _ = Describe("LOM", func() {
 			desiredCloudFQN := mis[0].MakePathBucketObject(fs.ObjectType, sameBucketName, cmn.Cloud, testObject)
 
 			fs.Mountpaths.Disable(mpaths[1]) // Ensure that it matches desiredCloudFQN
+			fs.Mountpaths.Disable(mpaths[2]) // ditto
 
 			lomEmpty := &cluster.LOM{T: tMock, Objname: testObject}
 			err := lomEmpty.Init(sameBucketName, "")
@@ -874,7 +875,7 @@ var _ = Describe("LOM", func() {
 			err = lomEmpty.Load(false)
 			Expect(cmn.IsNotObjExist(err)).To(BeTrue())
 			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
-			Expect(lomEmpty.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
+			Expect(lomEmpty.Uname()).To(Equal(lomEmpty.Bck().MakeUname(testObject)))
 			Expect(lomEmpty.IsAIS()).To(BeTrue())
 			Expect(lomEmpty.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
 			Expect(lomEmpty.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
@@ -888,7 +889,7 @@ var _ = Describe("LOM", func() {
 			err = lomLocal.Load(false)
 			Expect(cmn.IsNotObjExist(err)).To(BeTrue())
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
-			Expect(lomLocal.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
+			Expect(lomLocal.Uname()).To(Equal(lomLocal.Bck().MakeUname(testObject)))
 			Expect(lomLocal.IsAIS()).To(BeTrue())
 			Expect(lomLocal.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
 			Expect(lomLocal.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
@@ -902,7 +903,7 @@ var _ = Describe("LOM", func() {
 			err = lomCloud.Load(false)
 			Expect(cmn.IsNotObjExist(err)).To(BeTrue())
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
-			Expect(lomCloud.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
+			Expect(lomCloud.Uname()).To(Equal(lomCloud.Bck().MakeUname(testObject)))
 			Expect(lomCloud.IsAIS()).To(BeFalse())
 			Expect(lomCloud.ParsedFQN.Provider).To(BeEquivalentTo(cmn.Cloud))
 			Expect(lomCloud.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
@@ -911,6 +912,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomCloud.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
 			fs.Mountpaths.Enable(mpaths[1])
+			fs.Mountpaths.Enable(mpaths[2])
 		})
 	})
 })

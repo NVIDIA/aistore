@@ -179,10 +179,11 @@ func (lom *LOM) GetCopies() fs.MPI {
 }
 
 func (lom *LOM) IsCopy() bool {
-	if !lom.bck.Props.Mirror.Enabled {
+	if lom.IsHRW() {
 		return false
 	}
-	return !lom.IsHRW()
+	_, ok := lom.md.copies[lom.FQN]
+	return ok
 }
 
 func (lom *LOM) setCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
@@ -638,7 +639,7 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 		return
 	}
 	if lom.FQN == "" {
-		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = HrwMpath(bucket, lom.Objname)
+		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = HrwMpath(lom.bck, lom.Objname)
 		if err != nil {
 			return
 		}
@@ -648,7 +649,7 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 		lom.ParsedFQN.Provider = lom.bck.Provider
 		lom.ParsedFQN.Bucket, lom.ParsedFQN.ObjName = bucket, lom.Objname
 	}
-	lom.md.uname = Bo2Uname(bucket, lom.Objname)
+	lom.md.uname = lom.bck.MakeUname(lom.Objname)
 	if len(config) > 0 {
 		lom.config = config[0]
 	}
@@ -787,18 +788,20 @@ func (lom *LOM) Remove() (err error) {
 //
 // evict lom cache
 //
-func EvictCache(bucket string) {
+func EvictLomCache(b *Bck) {
 	var (
-		caches = lomCaches()
-		wg     = &sync.WaitGroup{}
+		caches    = lomCaches()
+		wg        = &sync.WaitGroup{}
+		prov, err = cmn.ProviderFromStr(b.Provider)
 	)
+	cmn.AssertNoErr(err)
 	for _, cache := range caches {
 		wg.Add(1)
 		go func(cache *sync.Map) {
 			cache.Range(func(hkey, _ interface{}) bool {
 				uname := hkey.(string)
-				b, _ := Uname2Bo(uname)
-				if bucket == b {
+				bck, _ := ParseUname(uname)
+				if bck.Name == b.Name && bck.Provider == prov {
 					cache.Delete(hkey)
 				}
 				return true
@@ -919,18 +922,12 @@ func (lom *LOM) flushAtime(atime time.Time) {
 //
 func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
 	var (
-		bucket, objName = Uname2Bo(md.uname)
-		err             error
-		local           bool
+		bck, objName = ParseUname(md.uname)
+		err          error
 	)
-	lom = &LOM{Objname: objName, bck: &Bck{Name: bucket}}
-	if bmd.Exists(&Bck{Name: bucket, Provider: cmn.AIS}, md.bckID) {
-		local, bucketExists = true, true
-	} else if bmd.Exists(&Bck{Name: bucket, Provider: cmn.Cloud}, md.bckID) {
-		local, bucketExists = false, true
-	}
+	lom = &LOM{Objname: objName, bck: &bck}
+	bucketExists = bmd.Exists(&bck, md.bckID)
 	if bucketExists {
-		lom.bck.Provider = cmn.ProviderFromBool(local)
 		lom.FQN, _, err = HrwFQN(fs.ObjectType, lom.Bck(), lom.Objname)
 		if err != nil {
 			glog.Errorf("%s: hrw err: %v", lom, err)

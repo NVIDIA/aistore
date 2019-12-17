@@ -589,7 +589,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 	switch msgInt.Action {
 	case cmn.ActEvictCB:
-		cluster.EvictCache(bucket)
+		cluster.EvictLomCache(bck)
 		fs.Mountpaths.EvictCloudBucket(bucket) // validation handled in proxy.go
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) > 0 { // must be a List/Range request

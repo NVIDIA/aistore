@@ -26,7 +26,6 @@ const (
 	WorkfileAppend  = "append" // object APPEND
 	WorkfileFSHC    = "fshc"   // FSHC test file
 )
-const sep = string(filepath.Separator)
 
 type ParsedFQN struct {
 	MpathInfo   *MountpathInfo
@@ -45,7 +44,7 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 	if err != nil {
 		return
 	}
-	items := strings.SplitN(rel, sep, 4)
+	items := strings.SplitN(rel, string(filepath.Separator), 4)
 	if len(items) < 4 {
 		err = fmt.Errorf("fqn %s is invalid: %+v", fqn, items)
 	} else if _, ok := CSM.RegisteredContentTypes[items[0]]; !ok {

@@ -31,7 +31,7 @@ func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 
 func HrwFQN(contentType string, bck *Bck, objName string) (fqn string, digest uint64, err error) {
 	var mpathInfo *fs.MountpathInfo
-	if mpathInfo, digest, err = HrwMpath(bck.Name, objName); err == nil {
+	if mpathInfo, digest, err = HrwMpath(bck, objName); err == nil {
 		fqn = fs.CSM.FQN(mpathInfo, contentType, bck.Name, bck.Provider, objName)
 	}
 	return

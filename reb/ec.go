@@ -490,13 +490,16 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 //      means that the slices came from default target after EC had been rebuilt)
 func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata, hdr transport.Header) error {
 	cmn.Assert(req.Extra != nil)
-	// full object is saved always
-	needSave := md.SliceID == 0
-	provider := cmn.ProviderFromBool(hdr.BckIsAIS)
+	var (
+		sliceFQN string
+		lom      *cluster.LOM
+		provider = cmn.ProviderFromBool(hdr.BckIsAIS)
+		bck      = &cluster.Bck{Name: hdr.Bucket, Provider: provider}
+		needSave = md.SliceID == 0 // full object always saved
+	)
 	if !needSave {
 		// slice is saved only if this target is not "main" one.
 		// Main one receives slices as well but it uses them only to rebuild "full"
-		bck := &cluster.Bck{Name: hdr.Bucket, Provider: provider}
 		if err := bck.Init(s.t.GetBowner()); err != nil {
 			return err
 		}
@@ -509,16 +512,10 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 	if !needSave {
 		return nil
 	}
-
-	mpath, _, err := cluster.HrwMpath(hdr.Bucket, hdr.Objname)
+	mpath, _, err := cluster.HrwMpath(bck, hdr.Objname)
 	if err != nil {
 		return err
 	}
-
-	var (
-		sliceFQN string
-		lom      *cluster.LOM
-	)
 	if md.SliceID != 0 {
 		sliceFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, provider, hdr.Objname)
 	} else {
@@ -751,7 +748,7 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) []*ecRebObject {
 				continue
 			}
 			for objName, obj := range objs.objs {
-				if err := s.calcLocalProps(obj, smap, &bprops.EC); err != nil {
+				if err := s.calcLocalProps(bck, obj, smap, &bprops.EC); err != nil {
 					glog.Warningf("Detect %s failed, skipping: %v", obj.objName, err)
 					continue
 				}
@@ -1100,8 +1097,8 @@ func (s *ecRebalancer) rebalanceLocal() error {
 	return nil
 }
 
-// Fills the object properties with data that should be calculated locally
-func (s *ecRebalancer) calcLocalProps(obj *ecRebObject, smap *cluster.Smap, ecConfig *cmn.ECConf) (err error) {
+// Fills object properties with props that must be calculated locally
+func (s *ecRebalancer) calcLocalProps(bck *cluster.Bck, obj *ecRebObject, smap *cluster.Smap, ecConfig *cmn.ECConf) (err error) {
 	localDaemon := s.t.Snode().DaemonID
 	slices := obj.newest()
 	cmn.Assert(len(slices) != 0) // cannot happen
@@ -1139,7 +1136,7 @@ func (s *ecRebalancer) calcLocalProps(obj *ecRebObject, smap *cluster.Smap, ecCo
 	}
 
 	genCount := cmn.Max(sliceReq, len(smap.Tmap))
-	obj.hrwTargets, err = cluster.HrwTargetList(obj.bucket, obj.objName, smap, genCount)
+	obj.hrwTargets, err = cluster.HrwTargetList(bck, obj.objName, smap, genCount)
 	if err != nil {
 		return err
 	}

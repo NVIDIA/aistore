@@ -281,12 +281,11 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 // Add adds new mountpath to the target's mountpaths.
 // FIXME: unify error messages for original and clean mountpath
 func (mfs *MountedFS) Add(mpath string) error {
+	const separator = string(filepath.Separator)
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
 		return err
 	}
-
-	separator := string(filepath.Separator)
 	for _, bucket := range []string{aisPath, cloudPath} {
 		invalidMpath := separator + bucket
 		if strings.HasSuffix(cleanMpath, invalidMpath) {
