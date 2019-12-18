@@ -31,7 +31,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		statusCode int
 	)
 
-	downloaderXact, err := xaction.Registry.RenewDownloader(t, t.statsif)
+	downloaderXact, err := xaction.Registry.RenewDownloader(t, t.statsT)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return

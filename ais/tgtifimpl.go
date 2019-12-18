@@ -97,9 +97,9 @@ func (t *targetrunner) RunLRU() {
 		return
 	}
 	ini := lru.InitLRU{
-		Xlru:                xlru,
-		Statsif:             t.statsif,
 		T:                   t,
+		Xaction:             xlru,
+		StatsT:              t.statsT,
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
 		GetFSStats:          ios.GetFSStats,
 	}
@@ -232,14 +232,14 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		lom.Unlock(true)
 	} else {
 		if vchanged {
-			t.statsif.AddMany(
+			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.GetColdCount, Value: 1},
 				stats.NamedVal64{Name: stats.GetColdSize, Value: lom.Size()},
 				stats.NamedVal64{Name: stats.VerChangeSize, Value: lom.Size()},
 				stats.NamedVal64{Name: stats.VerChangeCount, Value: 1},
 			)
 		} else if !crace {
-			t.statsif.AddMany(
+			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.GetColdCount, Value: 1},
 				stats.NamedVal64{Name: stats.GetColdSize, Value: lom.Size()},
 			)

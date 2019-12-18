@@ -175,7 +175,7 @@ func (p *proxyrunner) Run() error {
 		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", config.Net.HTTP.RevProxy)
 	}
 
-	dsort.RegisterNode(p.smapowner, p.bmdowner, p.si, nil, p.statsif)
+	dsort.RegisterNode(p.smapowner, p.bmdowner, p.si, nil, p.statsT)
 	return p.httprunner.run()
 }
 
@@ -411,7 +411,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 		p.reverseNodeRequest(w, r, si)
 		delta := time.Since(started)
-		p.statsif.Add(stats.GetLatency, int64(delta))
+		p.statsT.Add(stats.GetLatency, int64(delta))
 	} else {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
@@ -419,7 +419,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 	}
-	p.statsif.Add(stats.GetCount, 1)
+	p.statsT.Add(stats.GetCount, 1)
 }
 
 // PUT /v1/objects/bucket-name/object-name
@@ -478,9 +478,9 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	if appendTy == "" {
-		p.statsif.Add(stats.PutCount, 1)
+		p.statsT.Add(stats.PutCount, 1)
 	} else {
-		p.statsif.Add(stats.AppendCount, 1)
+		p.statsT.Add(stats.AppendCount, 1)
 	}
 }
 
@@ -515,7 +515,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
-	p.statsif.Add(stats.DeleteCount, 1)
+	p.statsT.Add(stats.DeleteCount, 1)
 }
 
 // DELETE { action } /v1/buckets
@@ -968,7 +968,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 
 	if p.writeJSON(w, r, b, "listbucket") {
 		delta := time.Since(started)
-		p.statsif.AddMany(
+		p.statsT.AddMany(
 			stats.NamedVal64{Name: stats.ListCount, Value: 1},
 			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
 		)
@@ -2095,7 +2095,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
-	p.statsif.Add(stats.RenameCount, 1)
+	p.statsT.Add(stats.RenameCount, 1)
 }
 
 func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
@@ -3064,7 +3064,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.statsif.Add(stats.PostCount, 1)
+	p.statsT.Add(stats.PostCount, 1)
 
 	p.smapowner.Lock()
 	smap := p.smapowner.get()

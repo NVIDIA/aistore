@@ -206,7 +206,7 @@ type (
 
 	ecRebalancer struct {
 		t      cluster.Target
-		stat   stats.Tracker
+		statsT stats.Tracker
 		slices ecSliceList // maps daemonID <-> Slice List
 		ra     *globArgs
 		data   *transport.StreamBundle // to send slices, replicas, and namespaces
@@ -384,7 +384,7 @@ func (rr *ecRebResult) addSlice(slice *ecRebSlice, tgt cluster.Target) error {
 //  EC Rebalancer methods and utilities
 //
 
-func newECRebalancer(t cluster.Target, mgr *Manager, stat stats.Tracker) *ecRebalancer {
+func newECRebalancer(t cluster.Target, mgr *Manager, statsT stats.Tracker) *ecRebalancer {
 	return &ecRebalancer{
 		t:            t,
 		mgr:          mgr,
@@ -392,8 +392,8 @@ func newECRebalancer(t cluster.Target, mgr *Manager, stat stats.Tracker) *ecReba
 		slices:       make(ecSliceList),
 		localActions: make([]*ecRebSlice, 0),
 		tgtBatch:     make(map[string]int),
-		stat:         stat,
 		ackCTs:       ackCT{ct: make(map[string]*retransmitCT)},
+		statsT:       statsT,
 	}
 }
 
@@ -507,8 +507,7 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 		s.ackCTs.mtx.Unlock()
 		return fmt.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].DaemonID, err)
 	}
-
-	s.stat.AddMany(
+	s.statsT.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.TxRebSize, Value: hdr.ObjAttrs.Size},
 	)
@@ -571,7 +570,7 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 		return fmt.Errorf("Failed to send slices to node %s: %v", target.Name(), err)
 	}
 
-	s.stat.AddMany(
+	s.statsT.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.TxRebSize, Value: size},
 	)
@@ -697,7 +696,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	if err != nil {
 		return fmt.Errorf("Failed to read slice %d for %s/%s: %v", sliceID, hdr.Bucket, hdr.Objname, err)
 	}
-	s.stat.AddMany(
+	s.statsT.AddMany(
 		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.RxRebSize, Value: n},
 	)
@@ -1101,7 +1100,7 @@ func (s *ecRebalancer) exchange() error {
 				glog.Errorf("Failed to send slices to node %s: %v", node.DaemonID, err)
 				failed = append(failed, node)
 			}
-			s.stat.AddMany(
+			s.statsT.AddMany(
 				stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
 				stats.NamedVal64{Name: stats.TxRebSize, Value: int64(len(body))},
 			)
@@ -1681,8 +1680,10 @@ func (s *ecRebalancer) retransmit() (cnt int) {
 		cnt++
 		// update stats with retransmitted data
 		delete(s.ackCTs.ct, id)
-		s.stat.AddMany(stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
-			stats.NamedVal64{Name: stats.TxRebSize, Value: dest.header.ObjAttrs.Size})
+		s.statsT.AddMany(
+			stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
+			stats.NamedVal64{Name: stats.TxRebSize, Value: dest.header.ObjAttrs.Size},
+		)
 	}
 
 	return cnt

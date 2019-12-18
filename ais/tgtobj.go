@@ -121,7 +121,7 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 	}
 
 	delta := time.Since(poi.started)
-	poi.t.statsif.AddMany(
+	poi.t.statsT.AddMany(
 		stats.NamedVal64{Name: stats.PutCount, Value: 1},
 		stats.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
 	)
@@ -301,7 +301,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
 		if !cmn.EqCksum(expectedCksum, computedCksum) {
 			err = cmn.NewBadDataCksumError(expectedCksum, computedCksum, poi.lom.StringEx())
-			poi.t.statsif.AddMany(
+			poi.t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
 				stats.NamedVal64{Name: stats.ErrCksumSize, Value: written},
 			)
@@ -615,11 +615,11 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		if _, err = io.Copy(goi.w, rd); err != nil {
 			err = fmt.Errorf("dry-run: failed to send random response, err: %v", err)
 			errCode = http.StatusInternalServerError
-			goi.t.statsif.Add(stats.ErrGetCount, 1)
+			goi.t.statsT.Add(stats.ErrGetCount, 1)
 			return
 		}
 		delta := time.Since(goi.started)
-		goi.t.statsif.AddMany(
+		goi.t.statsT.AddMany(
 			stats.NamedVal64{Name: stats.GetCount, Value: 1},
 			stats.NamedVal64{Name: stats.GetLatency, Value: int64(delta)},
 		)
@@ -682,7 +682,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		goi.t.fshc(err, fqn)
 		err = fmt.Errorf("failed to GET %s, err: %v", fqn, err)
 		errCode = http.StatusInternalServerError
-		goi.t.statsif.Add(stats.ErrGetCount, 1)
+		goi.t.statsT.Add(stats.ErrGetCount, 1)
 		return
 	}
 
@@ -707,7 +707,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		}
 		glog.Infoln(s)
 	}
-	goi.t.statsif.AddMany(
+	goi.t.statsT.AddMany(
 		stats.NamedVal64{Name: stats.GetThroughput, Value: written},
 		stats.NamedVal64{Name: stats.GetLatency, Value: int64(delta)},
 		stats.NamedVal64{Name: stats.GetCount, Value: 1},
@@ -769,7 +769,7 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 	}
 
 	delta := time.Since(aoi.started)
-	aoi.t.statsif.AddMany(
+	aoi.t.statsT.AddMany(
 		stats.NamedVal64{Name: stats.AppendCount, Value: 1},
 		stats.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
 	)

@@ -137,7 +137,7 @@ type (
 
 		t          cluster.Target
 		mountpaths *fs.MountedFS
-		stats      stats.Tracker
+		statsT     stats.Tracker
 
 		mpathReqCh chan fs.ChangeReq
 		adminCh    chan *request
@@ -246,11 +246,11 @@ func (d *Downloader) Description() string {
 /*
  * Downloader constructors
  */
-func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id int64, kind string) (d *Downloader) {
+func NewDownloader(t cluster.Target, statsT stats.Tracker, f *fs.MountedFS, id int64, kind string) (d *Downloader) {
 	downloader := &Downloader{
 		XactDemandBase: *cmn.NewXactDemandBase(id, kind, "" /* no bucket */, false),
 		t:              t,
-		stats:          stats,
+		statsT:         statsT,
 		mountpaths:     f,
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),

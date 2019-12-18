@@ -24,23 +24,23 @@ import (
 // contextual LRU "jogger" traverses a given (cloud/ or local/) subdirectory to
 // evict or delete selected objects and workfiles
 
-func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh chan struct{}) {
+func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh chan struct{}) {
 	defer wg.Done()
 	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.provider)
 	if err := lctx.evictSize(); err != nil {
 		return
 	}
-	if lctx.totsize < minEvictThresh {
+	if lctx.totalSize < minEvictThresh {
 		glog.Infof("%s: below threshold, nothing to do", lctx.mpathInfo)
 		return
 	}
 	lctx.joggers = joggers
 	now := time.Now()
 
-	lctx.dontevictime = now.Add(-lctx.config.LRU.DontEvictTime)
+	lctx.dontEvictTime = now.Add(-lctx.config.LRU.DontEvictTime)
 	lctx.heap = &fileInfoMinHeap{}
 	heap.Init(lctx.heap)
-	glog.Infof("%s: evicting %s", lctx.mpathInfo, cmn.B2S(lctx.totsize, 2))
+	glog.Infof("%s: evicting %s", lctx.mpathInfo, cmn.B2S(lctx.totalSize, 2))
 	// phase 1: collect
 	opts := &fs.Options{
 		Callback: lctx.walk,
@@ -64,7 +64,7 @@ func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh ch
 	}
 }
 
-func (lctx *lructx) walk(fqn string, de fs.DirEntry) error {
+func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
 	}
@@ -79,7 +79,7 @@ func (lctx *lructx) walk(fqn string, de fs.DirEntry) error {
 		_, base := filepath.Split(fqn)
 		_, old, ok := lctx.contentResolver.ParseUniqueFQN(base)
 		if ok && old {
-			lctx.oldwork = append(lctx.oldwork, fqn)
+			lctx.oldWork = append(lctx.oldWork, fqn)
 		}
 		return nil
 	}
@@ -99,7 +99,7 @@ func (lctx *lructx) walk(fqn string, de fs.DirEntry) error {
 
 	// objects
 	cmn.Assert(lctx.contentType == fs.ObjectType) // see also lrumain.go
-	if lom.Atime().After(lctx.dontevictime) {
+	if lom.Atime().After(lctx.dontEvictTime) {
 		return nil
 	}
 	if lom.IsCopy() {
@@ -118,7 +118,7 @@ func (lctx *lructx) walk(fqn string, de fs.DirEntry) error {
 	// do nothing if the heap's cursize >= totsize &&
 	// the file is more recent then the the heap's newest
 	// full optimization (TODO) entails compacting the heap when its cursize >> totsize
-	if lctx.cursize >= lctx.totsize && lom.Atime().After(lctx.newest) {
+	if lctx.curSize >= lctx.totalSize && lom.Atime().After(lctx.newest) {
 		return nil
 	}
 	// push and update the context
@@ -126,26 +126,26 @@ func (lctx *lructx) walk(fqn string, de fs.DirEntry) error {
 		glog.Infof("old-obj: %s, fqn=%s", lom, fqn)
 	}
 	heap.Push(h, lom)
-	lctx.cursize += lom.Size()
+	lctx.curSize += lom.Size()
 	if lom.Atime().After(lctx.newest) {
 		lctx.newest = lom.Atime()
 	}
 	return nil
 }
 
-func (lctx *lructx) evict() (err error) {
+func (lctx *lruCtx) evict() (err error) {
 	var (
 		fevicted, bevicted int64
 		capCheck           int64
 		h                  = lctx.heap
 	)
 	// 1.
-	for _, workfqn := range lctx.oldwork {
+	for _, workfqn := range lctx.oldWork {
 		if err = cmn.RemoveFile(workfqn); err != nil {
 			glog.Warningf("Failed to remove old work %q: %v", workfqn, err)
 		}
 	}
-	lctx.oldwork = lctx.oldwork[:0]
+	lctx.oldWork = lctx.oldWork[:0]
 	// 2.
 	for _, lom := range lctx.misplaced {
 		if lctx.ini.T.RebalanceInfo().IsRebalancing {
@@ -174,7 +174,7 @@ func (lctx *lructx) evict() (err error) {
 	}
 	lctx.misplaced = lctx.misplaced[:0]
 	// 3.
-	for h.Len() > 0 && lctx.totsize > 0 {
+	for h.Len() > 0 && lctx.totalSize > 0 {
 		lom := heap.Pop(h).(*cluster.LOM)
 		if lctx.evictObj(lom) {
 			bevicted += lom.Size()
@@ -184,15 +184,15 @@ func (lctx *lructx) evict() (err error) {
 			}
 		}
 	}
-	lctx.ini.Statsif.Add(stats.LruEvictSize, bevicted)
-	lctx.ini.Statsif.Add(stats.LruEvictCount, fevicted)
-	lctx.ini.Xlru.ObjectsAdd(fevicted)
-	lctx.ini.Xlru.BytesAdd(bevicted)
+	lctx.ini.StatsT.Add(stats.LruEvictSize, bevicted)
+	lctx.ini.StatsT.Add(stats.LruEvictCount, fevicted)
+	lctx.ini.Xaction.ObjectsAdd(fevicted)
+	lctx.ini.Xaction.BytesAdd(bevicted)
 	return nil
 }
 
-func (lctx *lructx) postRemove(capCheck int64, lom *cluster.LOM) (int64, error) {
-	lctx.totsize -= lom.Size()
+func (lctx *lruCtx) postRemove(capCheck int64, lom *cluster.LOM) (int64, error) {
+	lctx.totalSize -= lom.Size()
 	capCheck += lom.Size()
 	if err := lctx.yieldTerm(); err != nil {
 		return 0, err
@@ -203,7 +203,7 @@ func (lctx *lructx) postRemove(capCheck int64, lom *cluster.LOM) (int64, error) 
 		lctx.throttle = false
 		lctx.config = cmn.GCO.Get()
 		now := time.Now()
-		lctx.dontevictime = now.Add(-lctx.config.LRU.DontEvictTime)
+		lctx.dontEvictTime = now.Add(-lctx.config.LRU.DontEvictTime)
 		if ok && usedpct < lctx.config.LRU.HighWM {
 			if !lctx.mpathInfo.IsIdle(lctx.config, now) {
 				// throttle self
@@ -221,7 +221,7 @@ func (lctx *lructx) postRemove(capCheck int64, lom *cluster.LOM) (int64, error) 
 }
 
 // remove local copies that "belong" to different LRU joggers; hence, space accounting may be temporarily not precise
-func (lctx *lructx) evictObj(lom *cluster.LOM) (ok bool) {
+func (lctx *lruCtx) evictObj(lom *cluster.LOM) (ok bool) {
 	lom.Lock(true)
 	if err := lom.Remove(); err == nil {
 		ok = true
@@ -232,27 +232,27 @@ func (lctx *lructx) evictObj(lom *cluster.LOM) (ok bool) {
 	return
 }
 
-func (lctx *lructx) evictSize() (err error) {
+func (lctx *lruCtx) evictSize() (err error) {
 	hwm, lwm := lctx.config.LRU.HighWM, lctx.config.LRU.LowWM
 	blocks, bavail, bsize, err := lctx.ini.GetFSStats(lctx.bckTypeDir)
 	if err != nil {
 		return err
 	}
 	used := blocks - bavail
-	usedpct := used * 100 / blocks
+	usedPct := used * 100 / blocks
 	if glog.V(4) {
-		glog.Infof("%s: Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%", lctx.mpathInfo, blocks, bavail, usedpct, hwm, lwm)
+		glog.Infof("%s: Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%", lctx.mpathInfo, blocks, bavail, usedPct, hwm, lwm)
 	}
-	if usedpct < uint64(hwm) {
+	if usedPct < uint64(hwm) {
 		return
 	}
-	lwmblocks := blocks * uint64(lwm) / 100
-	lctx.totsize = int64(used-lwmblocks) * bsize
+	lwmBlocks := blocks * uint64(lwm) / 100
+	lctx.totalSize = int64(used-lwmBlocks) * bsize
 	return
 }
 
-func (lctx *lructx) yieldTerm() error {
-	xlru := lctx.ini.Xlru
+func (lctx *lruCtx) yieldTerm() error {
+	xlru := lctx.ini.Xaction
 	select {
 	case <-xlru.ChanAbort():
 		stopAll(lctx.joggers, lctx.mpathInfo.Path)

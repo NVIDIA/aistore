@@ -76,7 +76,7 @@ func TestMain(m *testing.M) {
 		},
 	})
 	t.bmdowner.put(bmd)
-	t.statsif = stats.NewTrackerMock()
+	t.statsT = stats.NewTrackerMock()
 
 	os.Exit(m.Run())
 }

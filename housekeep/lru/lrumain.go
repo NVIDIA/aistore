@@ -44,36 +44,36 @@ const (
 
 type (
 	InitLRU struct {
-		Xlru                *Xaction
-		Statsif             stats.Tracker
 		T                   cluster.Target
+		Xaction             *Xaction
+		StatsT              stats.Tracker
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
 		GetFSStats          func(path string) (blocks uint64, bavail uint64, bsize int64, err error)
 	}
 	fileInfoMinHeap []*cluster.LOM
 
-	// lructx represents a single LRU context that runs in a single goroutine (worker)
+	// lruCtx represents a single LRU context that runs in a single goroutine (worker)
 	// that traverses and evicts a single given filesystem, or more exactly,
 	// subtree in this filesystem identified by the bucketdir
-	lructx struct {
+	lruCtx struct {
 		// runtime
-		cursize   int64
-		totsize   int64
+		curSize   int64
+		totalSize int64
 		newest    time.Time
 		heap      *fileInfoMinHeap
-		oldwork   []string
+		oldWork   []string
 		misplaced []*cluster.LOM
 		// init-time
 		ini             InitLRU
 		stopCh          chan struct{}
-		joggers         map[string]*lructx
+		joggers         map[string]*lruCtx
 		mpathInfo       *fs.MountpathInfo
 		contentType     string
 		provider        string
 		bckTypeDir      string
 		contentResolver fs.ContentResolver
 		config          *cmn.Config
-		dontevictime    time.Time
+		dontEvictTime   time.Time
 		throttle        bool
 		aborted         bool
 	}
@@ -94,7 +94,7 @@ type (
 func InitAndRun(ini *InitLRU) {
 	wg := &sync.WaitGroup{}
 	config := cmn.GCO.Get()
-	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, config.LRU.DontEvictTime)
+	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xaction, config.LRU.DontEvictTime)
 
 	availablePaths, _ := fs.Mountpaths.Get()
 	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
@@ -106,15 +106,14 @@ func InitAndRun(ini *InitLRU) {
 			glog.Warningf("Skipping content type %q", contentType)
 			continue
 		}
-		//
-		// NOTE the sequence: Cloud buckets first, ais buckets second
-		//
+
+		// NOTE: the sequence: Cloud buckets first, ais buckets second
 		startLRUJoggers := func(provider string) (aborted bool) {
-			joggers := make(map[string]*lructx, len(availablePaths))
+			joggers := make(map[string]*lruCtx, len(availablePaths))
 			errCh := make(chan struct{}, len(availablePaths))
 
 			for mpath, mpathInfo := range availablePaths {
-				joggers[mpath] = newlru(ini, mpathInfo, contentType, provider, contentResolver, config)
+				joggers[mpath] = newLRU(ini, mpathInfo, contentType, provider, contentResolver, config)
 			}
 			for _, j := range joggers {
 				wg.Add(1)
@@ -141,9 +140,9 @@ func InitAndRun(ini *InitLRU) {
 	}
 }
 
-func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType, provider string, contentResolver fs.ContentResolver, config *cmn.Config) *lructx {
-	lctx := &lructx{
-		oldwork:         make([]string, 0, 64),
+func newLRU(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType, provider string, contentResolver fs.ContentResolver, config *cmn.Config) *lruCtx {
+	return &lruCtx{
+		oldWork:         make([]string, 0, 64),
 		misplaced:       make([]*cluster.LOM, 0, 64),
 		ini:             *ini,
 		stopCh:          make(chan struct{}, 1),
@@ -153,10 +152,9 @@ func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType, provider str
 		contentResolver: contentResolver,
 		config:          config,
 	}
-	return lctx
 }
 
-func stopAll(joggers map[string]*lructx, exceptMpath string) {
+func stopAll(joggers map[string]*lruCtx, exceptMpath string) {
 	for _, j := range joggers {
 		if j.mpathInfo.Path == exceptMpath {
 			continue

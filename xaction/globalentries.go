@@ -200,13 +200,13 @@ func (e *evictDeleteEntry) preRenewHook(previousEntry globalEntry) bool { return
 
 type downloaderEntry struct {
 	baseGlobalEntry
-	xact *downloader.Downloader
-	t    cluster.Target
-	stat stats.Tracker
+	xact   *downloader.Downloader
+	t      cluster.Target
+	statsT stats.Tracker
 }
 
 func (e *downloaderEntry) Start(id int64) error {
-	xdl := downloader.NewDownloader(e.t, e.stat, fs.Mountpaths, id, cmn.Download)
+	xdl := downloader.NewDownloader(e.t, e.statsT, fs.Mountpaths, id, cmn.Download)
 	e.xact = xdl
 	go xdl.Run()
 	return nil

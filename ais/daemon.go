@@ -227,7 +227,7 @@ func aisinit(version, build string) {
 		psStartedUp := ps.Init("aisproxy", p.si.DaemonID, &p.startedUp)
 		nodeCtx.rg.add(ps, xproxystats)
 
-		nodeCtx.rg.add(newProxyKeepaliveRunner(p, psStartedUp), xproxykeepalive)
+		nodeCtx.rg.add(newProxyKeepaliveRunner(p, ps, psStartedUp), xproxykeepalive)
 		nodeCtx.rg.add(newmetasyncer(p), xmetasyncer)
 	} else {
 		t := &targetrunner{}
@@ -238,7 +238,8 @@ func aisinit(version, build string) {
 		ts := &stats.Trunner{T: t} // iostat below
 		tsStartedUp := ts.Init("aistarget", t.si.DaemonID, &t.clusterStarted)
 		nodeCtx.rg.add(ts, xstorstats)
-		nodeCtx.rg.add(newTargetKeepaliveRunner(t, tsStartedUp), xtargetkeepalive)
+
+		nodeCtx.rg.add(newTargetKeepaliveRunner(t, ts, tsStartedUp), xtargetkeepalive)
 
 		t.fsprg.init(t) // subgroup of the nodeCtx.rg rungroup
 

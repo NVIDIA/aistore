@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -31,9 +32,13 @@ type (
 
 // newDiscoverServerPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newDiscoverServerPrimary() *proxyrunner {
-	p := proxyrunner{}
+	var (
+		p       = &proxyrunner{}
+		tracker = stats.NewTrackerMock()
+	)
 	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.httpclientGetPut = &http.Client{}
+
 	config := cmn.GCO.BeginUpdate()
 	config.KeepaliveTracker.Proxy.Name = "heartbeat"
 	config.Timeout.Startup = time.Second
@@ -44,8 +49,8 @@ func newDiscoverServerPrimary() *proxyrunner {
 	owner := newBMDOwnerPrx(config)
 	owner._put(newBucketMD())
 	p.bmdowner = owner
-	p.keepalive = newProxyKeepaliveRunner(&p, &p.startedUp)
-	return &p
+	p.keepalive = newProxyKeepaliveRunner(p, tracker, &p.startedUp)
+	return p
 }
 
 // discoverServerDefaultHandler returns the Smap and BMD with the given version

@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/stats/statsd"
 )
 
 const (
@@ -66,6 +65,7 @@ type keepalive struct {
 	k                          keepaliver
 	kt                         KeepaliveTracker
 	tt                         *timeoutTracker
+	statsT                     stats.Tracker
 	controlCh                  chan controlSignal
 	primaryKeepaliveInProgress atomic.Int64 // A toggle used only by the primary proxy.
 	interval                   time.Duration
@@ -102,13 +102,14 @@ type KeepaliveTracker interface {
 	TimedOut(id string) bool
 }
 
-func newTargetKeepaliveRunner(t *targetrunner, startedUp *atomic.Bool) *targetKeepaliveRunner {
+func newTargetKeepaliveRunner(t *targetrunner, statsT stats.Tracker, startedUp *atomic.Bool) *targetKeepaliveRunner {
 	config := cmn.GCO.Get()
 
 	tkr := &targetKeepaliveRunner{t: t}
 	tkr.keepalive.k = tkr
+	tkr.statsT = statsT
 	tkr.keepalive.startedUp = startedUp
-	tkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Target, &t.statsdC)
+	tkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Target)
 	tkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
 	tkr.controlCh = make(chan controlSignal, 1)
 	tkr.interval = config.KeepaliveTracker.Target.Interval
@@ -116,13 +117,14 @@ func newTargetKeepaliveRunner(t *targetrunner, startedUp *atomic.Bool) *targetKe
 	return tkr
 }
 
-func newProxyKeepaliveRunner(p *proxyrunner, startedUp *atomic.Bool) *proxyKeepaliveRunner {
+func newProxyKeepaliveRunner(p *proxyrunner, statsT stats.Tracker, startedUp *atomic.Bool) *proxyKeepaliveRunner {
 	config := cmn.GCO.Get()
 
 	pkr := &proxyKeepaliveRunner{p: p}
 	pkr.keepalive.k = pkr
+	pkr.statsT = statsT
 	pkr.keepalive.startedUp = startedUp
-	pkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Proxy, &p.statsdC)
+	pkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Proxy)
 	pkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
 	pkr.controlCh = make(chan controlSignal, 1)
 	pkr.interval = config.KeepaliveTracker.Proxy.Interval
@@ -132,7 +134,7 @@ func newProxyKeepaliveRunner(p *proxyrunner, startedUp *atomic.Bool) *proxyKeepa
 
 func (tkr *targetKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	if !reflect.DeepEqual(oldConf.KeepaliveTracker.Target, newConf.KeepaliveTracker.Target) {
-		tkr.kt = newKeepaliveTracker(newConf.KeepaliveTracker.Target, &tkr.t.statsdC)
+		tkr.kt = newKeepaliveTracker(newConf.KeepaliveTracker.Target)
 		tkr.interval = newConf.KeepaliveTracker.Target.Interval
 	}
 	tkr.maxKeepaliveTime = float64(newConf.Timeout.MaxKeepalive.Nanoseconds())
@@ -143,7 +145,7 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 	if smap == nil || !smap.isValid() {
 		return
 	}
-	if stopped = tkr.register(tkr.t, tkr.t.statsif, smap.ProxySI.DaemonID, tkr.t.si.Name()); stopped {
+	if stopped = tkr.register(tkr.t, smap.ProxySI.DaemonID, tkr.t.si.Name()); stopped {
 		tkr.t.onPrimaryProxyFailure()
 	}
 	return
@@ -151,7 +153,7 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 
 func (pkr *proxyKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	if !reflect.DeepEqual(oldConf.KeepaliveTracker.Proxy, newConf.KeepaliveTracker.Proxy) {
-		pkr.kt = newKeepaliveTracker(newConf.KeepaliveTracker.Proxy, &pkr.p.statsdC)
+		pkr.kt = newKeepaliveTracker(newConf.KeepaliveTracker.Proxy)
 		pkr.interval = newConf.KeepaliveTracker.Proxy.Interval
 	}
 	pkr.maxKeepaliveTime = float64(newConf.Timeout.MaxKeepalive.Nanoseconds())
@@ -169,7 +171,7 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 		return
 	}
 
-	if stopped = pkr.register(pkr.p, pkr.p.statsif, smap.ProxySI.DaemonID, pkr.p.si.Name()); stopped {
+	if stopped = pkr.register(pkr.p, smap.ProxySI.DaemonID, pkr.p.si.Name()); stopped {
 		pkr.p.onPrimaryProxyFailure()
 	}
 	return
@@ -281,10 +283,10 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 		}
 	}
 	if min != time.Hour {
-		pkr.p.statsif.Add(stats.KeepAliveMinLatency, int64(min))
+		pkr.statsT.Add(stats.KeepAliveMinLatency, int64(min))
 	}
 	if max != 0 {
-		pkr.p.statsif.Add(stats.KeepAliveMaxLatency, int64(max))
+		pkr.statsT.Add(stats.KeepAliveMaxLatency, int64(max))
 	}
 }
 
@@ -303,7 +305,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 	res := pkr.p.call(args)
 	delta = time.Since(t)
 	pkr.updateTimeoutForDaemon(to.DaemonID, delta)
-	pkr.p.statsif.Add(stats.KeepAliveLatency, int64(delta))
+	pkr.statsT.Add(stats.KeepAliveLatency, int64(delta))
 
 	if res.err == nil {
 		return true, false, delta
@@ -388,15 +390,15 @@ func (k *keepalive) Run() error {
 }
 
 // register is called by non-primary proxies and targets to send a keepalive to the primary proxy.
-func (k *keepalive) register(r registerer, statsif stats.Tracker, primaryProxyID, hname string) (stopped bool) {
+func (k *keepalive) register(r registerer, primaryProxyID, hname string) (stopped bool) {
 	var (
 		timeout     = time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
 		now         = time.Now()
 		status, err = r.register(true, timeout) // register
 		delta       = time.Since(now)
 	)
-	statsif.Add(stats.KeepAliveLatency, int64(delta))
-	timeout = k.updateTimeoutForDaemon(primaryProxyID, delta)
+
+	k.statsT.Add(stats.KeepAliveLatency, int64(delta))
 	if err == nil {
 		return
 	}
@@ -503,26 +505,24 @@ type HeartBeatTracker struct {
 	ch       chan struct{}
 	last     map[string]time.Time
 	interval time.Duration // expected to hear from the server within the interval
-	statsdC  *statsd.Client
 }
 
 // NewKeepaliveTracker returns a keepalive tracker based on the parameters given.
-func newKeepaliveTracker(c cmn.KeepaliveTrackerConf, statsdC *statsd.Client) KeepaliveTracker {
+func newKeepaliveTracker(c cmn.KeepaliveTrackerConf) KeepaliveTracker {
 	switch c.Name {
 	case cmn.KeepaliveHeartbeatType:
-		return newHeartBeatTracker(c.Interval, statsdC)
+		return newHeartBeatTracker(c.Interval)
 	case cmn.KeepaliveAverageType:
-		return newAverageTracker(c.Factor, statsdC)
+		return newAverageTracker(c.Factor)
 	}
 	return nil
 }
 
 // newHeartBeatTracker returns a HeartBeatTracker.
-func newHeartBeatTracker(interval time.Duration, statsdC *statsd.Client) *HeartBeatTracker {
+func newHeartBeatTracker(interval time.Duration) *HeartBeatTracker {
 	hb := &HeartBeatTracker{
 		last:     make(map[string]time.Time),
 		ch:       make(chan struct{}, 1),
-		statsdC:  statsdC,
 		interval: interval,
 	}
 
@@ -541,20 +541,8 @@ func (hb *HeartBeatTracker) unlock() {
 // HeardFrom is called to indicate a keepalive message (or equivalent) has been received from a server.
 func (hb *HeartBeatTracker) HeardFrom(id string, reset bool) {
 	hb.lock()
-	last, ok := hb.last[id]
-	t := time.Now()
-	hb.last[id] = t
+	hb.last[id] = time.Now()
 	hb.unlock()
-
-	if ok {
-		delta := t.Sub(last)
-		hb.statsdC.Send("keepalive.heartbeat."+id, 1,
-			metric{Type: statsd.Gauge, Name: "delta", Value: int64(delta / time.Millisecond)},
-			metric{Type: statsd.Counter, Name: "count", Value: 1})
-	} else {
-		hb.statsdC.Send("keepalive.heartbeat."+id, 1,
-			metric{Type: statsd.Counter, Name: "count", Value: 1})
-	}
 }
 
 // TimedOut returns true if it has determined that it has not heard from the server.
@@ -568,10 +556,9 @@ func (hb *HeartBeatTracker) TimedOut(id string) bool {
 // AverageTracker keeps track of the average latency of all messages.
 // Timeout: last received is more than the 'factor' of current average.
 type AverageTracker struct {
-	ch      chan struct{}
-	rec     map[string]averageTrackerRecord
-	factor  uint8
-	statsdC *statsd.Client
+	ch     chan struct{}
+	rec    map[string]averageTrackerRecord
+	factor uint8
 }
 
 type averageTrackerRecord struct {
@@ -585,12 +572,11 @@ func (rec *averageTrackerRecord) avg() int64 {
 }
 
 // newAverageTracker returns an AverageTracker.
-func newAverageTracker(factor uint8, statsdC *statsd.Client) *AverageTracker {
+func newAverageTracker(factor uint8) *AverageTracker {
 	a := &AverageTracker{
-		rec:     make(map[string]averageTrackerRecord),
-		ch:      make(chan struct{}, 1),
-		statsdC: statsdC,
-		factor:  factor,
+		rec:    make(map[string]averageTrackerRecord),
+		ch:     make(chan struct{}, 1),
+		factor: factor,
 	}
 
 	a.unlock()
@@ -613,8 +599,6 @@ func (a *AverageTracker) HeardFrom(id string, reset bool) {
 	if reset || !ok {
 		a.rec[id] = averageTrackerRecord{count: 0, totalMS: 0, last: time.Now()}
 		a.unlock()
-		a.statsdC.Send("keepalive.average."+id, 1,
-			metric{Type: statsd.Counter, Name: "reset", Value: 1})
 		return
 	}
 
@@ -625,10 +609,6 @@ func (a *AverageTracker) HeardFrom(id string, reset bool) {
 	rec.totalMS += int64(delta / time.Millisecond)
 	a.rec[id] = rec
 	a.unlock()
-
-	a.statsdC.Send("keepalive.average."+id, 1,
-		metric{Type: statsd.Counter, Name: "delta", Value: int64(delta / time.Millisecond)},
-		metric{Type: statsd.Counter, Name: "count", Value: 1})
 }
 
 // TimedOut returns true if it has determined that is has not heard from the server.

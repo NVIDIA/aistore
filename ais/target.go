@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
@@ -277,7 +276,7 @@ func (t *targetrunner) Run() error {
 		}()
 	}
 
-	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, t, t.statsif)
+	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, t, t.statsT)
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}
@@ -286,34 +285,35 @@ func (t *targetrunner) Run() error {
 
 // target-only stats
 func (t *targetrunner) registerStats() {
-	t.statsif.Register(stats.PutLatency, stats.KindLatency)
-	t.statsif.Register(stats.AppendLatency, stats.KindLatency)
-	t.statsif.Register(stats.GetColdCount, stats.KindCounter)
-	t.statsif.Register(stats.GetColdSize, stats.KindCounter)
-	t.statsif.Register(stats.GetThroughput, stats.KindThroughput)
-	t.statsif.Register(stats.LruEvictSize, stats.KindCounter)
-	t.statsif.Register(stats.LruEvictCount, stats.KindCounter)
-	t.statsif.Register(stats.TxRebCount, stats.KindCounter)
-	t.statsif.Register(stats.TxRebSize, stats.KindCounter)
-	t.statsif.Register(stats.RxRebCount, stats.KindCounter)
-	t.statsif.Register(stats.RxRebSize, stats.KindCounter)
-	t.statsif.Register(stats.PrefetchCount, stats.KindCounter)
-	t.statsif.Register(stats.PrefetchSize, stats.KindCounter)
-	t.statsif.Register(stats.VerChangeCount, stats.KindCounter)
-	t.statsif.Register(stats.VerChangeSize, stats.KindCounter)
-	t.statsif.Register(stats.ErrCksumCount, stats.KindCounter)
-	t.statsif.Register(stats.ErrCksumSize, stats.KindCounter)
-	t.statsif.Register(stats.ErrMetadataCount, stats.KindCounter)
-	t.statsif.Register(stats.GetRedirLatency, stats.KindLatency)
-	t.statsif.Register(stats.PutRedirLatency, stats.KindLatency)
+	t.statsT.Register(stats.PutLatency, stats.KindLatency)
+	t.statsT.Register(stats.AppendLatency, stats.KindLatency)
+	t.statsT.Register(stats.GetColdCount, stats.KindCounter)
+	t.statsT.Register(stats.GetColdSize, stats.KindCounter)
+	t.statsT.Register(stats.GetThroughput, stats.KindThroughput)
+	t.statsT.Register(stats.LruEvictSize, stats.KindCounter)
+	t.statsT.Register(stats.LruEvictCount, stats.KindCounter)
+	t.statsT.Register(stats.TxRebCount, stats.KindCounter)
+	t.statsT.Register(stats.TxRebSize, stats.KindCounter)
+	t.statsT.Register(stats.RxRebCount, stats.KindCounter)
+	t.statsT.Register(stats.RxRebSize, stats.KindCounter)
+	t.statsT.Register(stats.PrefetchCount, stats.KindCounter)
+	t.statsT.Register(stats.PrefetchSize, stats.KindCounter)
+	t.statsT.Register(stats.VerChangeCount, stats.KindCounter)
+	t.statsT.Register(stats.VerChangeSize, stats.KindCounter)
+	t.statsT.Register(stats.ErrCksumCount, stats.KindCounter)
+	t.statsT.Register(stats.ErrCksumSize, stats.KindCounter)
+	t.statsT.Register(stats.ErrMetadataCount, stats.KindCounter)
+	t.statsT.Register(stats.ErrIOCount, stats.KindCounter)
+	t.statsT.Register(stats.GetRedirLatency, stats.KindLatency)
+	t.statsT.Register(stats.PutRedirLatency, stats.KindLatency)
 	// download
-	t.statsif.Register(stats.DownloadSize, stats.KindCounter)
-	t.statsif.Register(stats.DownloadLatency, stats.KindLatency)
+	t.statsT.Register(stats.DownloadSize, stats.KindCounter)
+	t.statsT.Register(stats.DownloadLatency, stats.KindLatency)
 	// dsort
-	t.statsif.Register(stats.DSortCreationReqCount, stats.KindCounter)
-	t.statsif.Register(stats.DSortCreationReqLatency, stats.KindLatency)
-	t.statsif.Register(stats.DSortCreationRespCount, stats.KindCounter)
-	t.statsif.Register(stats.DSortCreationRespLatency, stats.KindLatency)
+	t.statsT.Register(stats.DSortCreationReqCount, stats.KindCounter)
+	t.statsT.Register(stats.DSortCreationReqLatency, stats.KindLatency)
+	t.statsT.Register(stats.DSortCreationRespCount, stats.KindCounter)
+	t.statsT.Register(stats.DSortCreationRespLatency, stats.KindLatency)
 }
 
 // stop gracefully
@@ -440,7 +440,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	provider := query.Get(cmn.URLParamProvider)
 	started := time.Now()
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
-		t.statsif.Add(stats.GetRedirLatency, redirDelta)
+		t.statsT.Add(stats.GetRedirLatency, redirDelta)
 	}
 	rangeOff, rangeLen, err := t.offsetAndLength(query)
 	if err != nil {
@@ -517,7 +517,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	provider := query.Get(cmn.URLParamProvider)
 	started := time.Now()
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
-		t.statsif.Add(stats.PutRedirLatency, redelta)
+		t.statsT.Add(stats.PutRedirLatency, redelta)
 	}
 	// PUT
 	if !t.verifyProxyRedirection(w, r) {
@@ -757,7 +757,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		delta := time.Since(started)
-		t.statsif.AddMany(
+		t.statsT.AddMany(
 			stats.NamedVal64{Name: stats.ListCount, Value: 1},
 			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
 		)
@@ -1211,7 +1211,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	if delFromCloud {
 		if err, _ := t.cloud.deleteObj(ctx, lom); err != nil {
 			cloudErr = fmt.Errorf("%s: DELETE failed, err: %v", lom, err)
-			t.statsif.Add(stats.DeleteCount, 1)
+			t.statsT.Add(stats.DeleteCount, 1)
 		}
 	}
 	if delFromAIS {
@@ -1226,7 +1226,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 		}
 		if evict {
 			cmn.Assert(!lom.IsAIS())
-			t.statsif.AddMany(
+			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
 				stats.NamedVal64{Name: stats.LruEvictSize, Value: lom.Size()},
 			)
@@ -1392,6 +1392,6 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	}
 	keyName := mpathInfo.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
-	t.statsdC.Send(keyName+".io.errors", 1, metric{Type: statsd.Counter, Name: "count", Value: 1})
+	t.statsT.AddMany(stats.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})
 	getfshealthchecker().OnErr(filepath)
 }

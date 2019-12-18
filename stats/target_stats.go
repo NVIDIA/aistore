@@ -39,6 +39,7 @@ const (
 	ErrCksumCount    = "err.cksum.n"
 	ErrCksumSize     = "err.cksum.size"
 	ErrMetadataCount = "err.md.n"
+	ErrIOCount       = "err.io.n"
 	DownloadSize     = "dl.size"
 
 	// KindLatency
@@ -263,7 +264,7 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	// stats that track data IO are unique to target and are handled here
 	// .size stats, as of 2.x and beyond, is one of them
 	if !strings.HasSuffix(name, ".size") {
-		s.doAdd(name, value)
+		s.doAdd(name, nv.NameSuffix, value)
 		return
 	}
 

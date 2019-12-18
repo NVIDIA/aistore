@@ -177,12 +177,12 @@ func (t *targetrunner) prefetchMissing(ctx context.Context, objName string, bck 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("prefetch: %s", lom)
 	}
-	t.statsif.Add(stats.PrefetchCount, 1)
-	t.statsif.Add(stats.PrefetchSize, lom.Size())
+	t.statsT.Add(stats.PrefetchCount, 1)
+	t.statsT.Add(stats.PrefetchSize, lom.Size())
 
 	if vchanged {
-		t.statsif.Add(stats.VerChangeSize, lom.Size())
-		t.statsif.Add(stats.VerChangeCount, 1)
+		t.statsT.Add(stats.VerChangeSize, lom.Size())
+		t.statsT.Add(stats.VerChangeCount, 1)
 	}
 }
 
@@ -299,7 +299,7 @@ func (t *targetrunner) listOperation(r *http.Request, bck *cluster.Bck, listMsg 
 			err := f(t.contextWithAuth(r.Header), objs, bck, listMsg.Deadline, done)
 			if err != nil {
 				glog.Errorf("Error performing list function: %v", err)
-				t.statsif.Add(stats.ErrListCount, 1)
+				t.statsT.Add(stats.ErrListCount, 1)
 			}
 			if errCh != nil {
 				errCh <- err

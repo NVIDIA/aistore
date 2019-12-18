@@ -86,8 +86,8 @@ func newTargetLRUMock() *cluster.TargetMock {
 func newInitLRU(t cluster.Target) *InitLRU {
 	xlru := &Xaction{}
 	return &InitLRU{
-		Xlru:                xlru,
-		Statsif:             &statsLRUMock{},
+		Xaction:             xlru,
+		StatsT:              stats.NewTrackerMock(),
 		T:                   t,
 		GetFSUsedPercentage: mockGetFSUsedPercentage,
 		GetFSStats:          getMockGetFSStats(numberOfCreatedFiles),
@@ -279,15 +279,3 @@ var _ = Describe("LRU tests", func() {
 		})
 	})
 })
-
-// MOCK TYPES
-// TODO: Maybe this should be in stats_mock.go
-
-type statsLRUMock struct{}
-
-func (s *statsLRUMock) StartedUp() bool                        { return true }
-func (s *statsLRUMock) Add(name string, val int64)             {}
-func (s *statsLRUMock) Get(name string) int64                  { return 0 }
-func (s *statsLRUMock) AddErrorHTTP(method string, val int64)  {}
-func (s *statsLRUMock) AddMany(namedVal64 ...stats.NamedVal64) {}
-func (s *statsLRUMock) Register(name string, kind string)      {}

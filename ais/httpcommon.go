@@ -28,7 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
@@ -39,8 +38,6 @@ const ( //  h.call(timeout)
 )
 
 type (
-	metric = statsd.Metric // type alias
-
 	// callResult contains http response
 	callResult struct {
 		si      *cluster.Snode
@@ -109,8 +106,7 @@ type (
 		keepalive          keepaliver
 		smapowner          *smapowner
 		bmdowner           bmdOwner
-		statsif            stats.Tracker
-		statsdC            statsd.Client
+		statsT             stats.Tracker
 	}
 
 	// AWS and GCP provider interface
@@ -343,7 +339,7 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 }
 
 func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
-	h.statsif = s
+	h.statsT = s
 	h.httpclient = cmn.NewClient(cmn.TransportArgs{
 		Timeout:  config.Timeout.Default,
 		UseHTTPS: config.Net.HTTP.UseHTTPS,
@@ -520,8 +516,6 @@ func (h *httprunner) run() error {
 func (h *httprunner) stop(err error) {
 	config := cmn.GCO.Get()
 	glog.Infof("Stopping %s, err: %v", h.Getname(), err)
-
-	h.statsdC.Close()
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -850,7 +844,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
 		glog.Errorln(s)
-		h.statsif.AddErrorHTTP(r.Method, 1)
+		h.statsT.AddErrorHTTP(r.Method, 1)
 		return
 	}
 	msg := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
@@ -924,7 +918,7 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 		msg += " (from " + caller + ")"
 	}
 	cmn.InvalidHandlerDetailed(w, r, msg, errCode...)
-	h.statsif.AddErrorHTTP(r.Method, 1)
+	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
 func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {

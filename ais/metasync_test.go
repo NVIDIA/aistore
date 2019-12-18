@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -76,10 +77,15 @@ func serverTCPAddr(u string) *net.TCPAddr {
 
 // newPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newPrimary() *proxyrunner {
-	p := proxyrunner{}
+	var (
+		p       = &proxyrunner{}
+		tracker = stats.NewTrackerMock()
+		smap    = newSmap()
+	)
+
 	p.smapowner = newSmapowner()
 	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
-	smap := newSmap()
+
 	smap.addProxy(p.si)
 	smap.ProxySI = p.si
 	p.smapowner.put(smap)
@@ -91,11 +97,11 @@ func newPrimary() *proxyrunner {
 	cmn.GCO.CommitUpdate(config)
 
 	p.httpclientGetPut = &http.Client{}
-	p.keepalive = newProxyKeepaliveRunner(&p, &p.startedUp)
+	p.keepalive = newProxyKeepaliveRunner(p, tracker, &p.startedUp)
 
 	p.bmdowner = newBMDOwnerPrx(config)
 	p.bmdowner.put(newBucketMD())
-	return &p
+	return p
 }
 
 // newTransportServer creates a http test server to simulate a proxy or a target, it is used to test the

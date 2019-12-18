@@ -39,6 +39,10 @@ const (
 	KindSpecial    = "special"
 )
 
+var (
+	kinds = []string{KindCounter, KindLatency, KindThroughput, KindSpecial}
+)
+
 // CoreStats stats
 const (
 	// KindCounter
@@ -86,8 +90,9 @@ type (
 		Register(name string, kind string)
 	}
 	NamedVal64 struct {
-		Name  string
-		Value int64
+		Name       string
+		NameSuffix string
+		Value      int64
 	}
 	CoreStats struct {
 		Tracker   statsTracker
@@ -107,6 +112,13 @@ type (
 		SmapVersion int64                  `json:"smap_version,string"`
 		TStatus     *TargetStatus          `json:"target,omitempty"`
 	}
+)
+
+var (
+	// Compile-time checks
+	_ Tracker = &statsRunner{}
+	_ Tracker = &Prunner{}
+	_ Tracker = &Trunner{}
 )
 
 //
@@ -187,13 +199,16 @@ func (s *CoreStats) get(name string) (val int64) {
 //
 // NOTE naming convention: ".n" for the count and ".µs" for microseconds
 //
-func (s *CoreStats) doAdd(name string, val int64) {
+func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	v, ok := s.Tracker[name]
 	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
 	switch v.kind {
 	case KindLatency:
 		if strings.HasSuffix(name, ".µs") {
 			nroot := strings.TrimSuffix(name, ".µs")
+			if nameSuffix != "" {
+				nroot += "." + nameSuffix
+			}
 			s.statsdC.Send(nroot, 1, metric{
 				Type:  statsd.Timer,
 				Name:  "latency",
@@ -214,11 +229,16 @@ func (s *CoreStats) doAdd(name string, val int64) {
 	case KindCounter:
 		if strings.HasSuffix(name, ".n") {
 			nroot := strings.TrimSuffix(name, ".n")
+			if nameSuffix != "" {
+				nroot += "." + nameSuffix
+			}
 			s.statsdC.Send(nroot, 1, metric{Type: statsd.Counter, Name: "count", Value: val})
 			v.Lock()
 			v.Value += val
 			v.Unlock()
 		}
+	default:
+		cmn.AssertMsg(false, v.kind)
 	}
 }
 
@@ -260,7 +280,7 @@ func (s *CoreStats) copyT(ctracker copyTracker) (updatedCnt int) {
 			}
 			v.RUnlock()
 		default:
-			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
+			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial/KindDelta as is and wo/ lock
 		}
 	}
 	return
@@ -331,9 +351,8 @@ func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmars
 //
 
 func (tracker statsTracker) register(key string, kind string, isCommon ...bool) {
-	if ok := kind == KindCounter || kind == KindLatency || kind == KindThroughput || kind == KindSpecial; !ok {
-		cmn.AssertMsg(false, "Invalid stats kind '"+kind+"'")
-	}
+	cmn.AssertMsg(cmn.StringInSlice(kind, kinds), "invalid stats kind '"+kind+"'")
+
 	tracker[key] = &statsValue{kind: kind}
 	if len(isCommon) > 0 {
 		tracker[key].isCommon = isCommon[0]
@@ -442,7 +461,7 @@ func (r *statsRunner) Stop(err error) {
 
 // common impl
 func (r *statsRunner) Register(name string, kind string) { cmn.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
-func (r *statsRunner) Add(name string, val int64)        { r.workCh <- NamedVal64{name, val} }
+func (r *statsRunner) Add(name string, val int64)        { r.workCh <- NamedVal64{Name: name, Value: val} }
 func (r *statsRunner) Get(name string) int64             { cmn.Assert(false); return 0 }
 func (r *statsRunner) AddMany(nvs ...NamedVal64) {
 	for _, nv := range nvs {
@@ -525,16 +544,16 @@ func (r *statsRunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype strin
 func (r *statsRunner) AddErrorHTTP(method string, val int64) {
 	switch method {
 	case http.MethodGet:
-		r.workCh <- NamedVal64{ErrGetCount, val}
+		r.workCh <- NamedVal64{Name: ErrGetCount, Value: val}
 	case http.MethodDelete:
-		r.workCh <- NamedVal64{ErrDeleteCount, val}
+		r.workCh <- NamedVal64{Name: ErrDeleteCount, Value: val}
 	case http.MethodPost:
-		r.workCh <- NamedVal64{ErrPostCount, val}
+		r.workCh <- NamedVal64{Name: ErrPostCount, Value: val}
 	case http.MethodPut:
-		r.workCh <- NamedVal64{ErrPutCount, val}
+		r.workCh <- NamedVal64{Name: ErrPutCount, Value: val}
 	case http.MethodHead:
-		r.workCh <- NamedVal64{ErrHeadCount, val}
+		r.workCh <- NamedVal64{Name: ErrHeadCount, Value: val}
 	default:
-		r.workCh <- NamedVal64{ErrCount, val}
+		r.workCh <- NamedVal64{Name: ErrCount, Value: val}
 	}
 }

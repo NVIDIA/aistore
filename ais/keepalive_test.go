@@ -6,8 +6,6 @@ package ais
 import (
 	"testing"
 	"time"
-
-	"github.com/NVIDIA/aistore/stats/statsd"
 )
 
 const (
@@ -84,7 +82,7 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 }
 
 func TestKeepaliveTrackerHeartBeat(t *testing.T) {
-	hb := newHeartBeatTracker(time.Millisecond*10, &statsd.Client{})
+	hb := newHeartBeatTracker(time.Millisecond * 10)
 
 	if !hb.TimedOut("unknown server") {
 		t.Fatal("None existing server should return timed out")

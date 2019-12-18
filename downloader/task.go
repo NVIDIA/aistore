@@ -83,7 +83,7 @@ func (t *singleObjectTask) download() {
 		glog.Errorf(err.Error())
 	}
 
-	t.parent.stats.AddMany(
+	t.parent.statsT.AddMany(
 		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
 		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(time.Since(t.started))},
 	)
@@ -174,7 +174,7 @@ func (t *singleObjectTask) cancel() {
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
 func (t *singleObjectTask) abort(statusMsg string, err error) {
-	t.parent.stats.Add(stats.ErrDownloadCount, 1)
+	t.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
 	dlStore.persistError(t.id, t.obj.Objname, statusMsg)
 	dlStore.incErrorCnt(t.id)

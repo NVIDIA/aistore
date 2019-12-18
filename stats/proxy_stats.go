@@ -85,7 +85,7 @@ func (r *Prunner) log(uptime time.Duration) (runlru bool) {
 
 func (r *Prunner) doAdd(nv NamedVal64) {
 	s := r.Core
-	s.doAdd(nv.Name, nv.Value)
+	s.doAdd(nv.Name, nv.NameSuffix, nv.Value)
 }
 
 func (r *Prunner) housekeep(runlru bool) {

@@ -711,8 +711,8 @@ func (r *registry) RenewElection() *Election {
 	return entry.xact
 }
 
-func (r *registry) RenewDownloader(t cluster.Target, stat stats.Tracker) (*downloader.Downloader, error) {
-	e := &downloaderEntry{t: t, stat: stat}
+func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*downloader.Downloader, error) {
+	e := &downloaderEntry{t: t, statsT: statsT}
 	ee, _, err := r.renewGlobalXaction(e)
 	if err != nil {
 		return nil, err
