@@ -172,7 +172,7 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 	if !lom.IsHRW() {
 		objStatus = cmn.ObjStatusMoved
 	} else {
-		si, err := cluster.HrwTarget(lom.Bck(), lom.Objname, ci.smap)
+		si, err := cluster.HrwTarget(lom.Uname(), ci.smap)
 		if err != nil {
 			return err
 		}

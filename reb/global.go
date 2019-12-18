@@ -293,7 +293,7 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 					cnt += l
 					if !logged {
 						for _, lom := range lomack.q {
-							tsi, err := cluster.HrwTarget(lom.Bck(), lom.Objname, md.smap)
+							tsi, err := cluster.HrwTarget(lom.Uname(), md.smap)
 							if err == nil {
 								glog.Infof("waiting for %s ACK from %s", lom, tsi)
 								logged = true
@@ -525,7 +525,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 	// rebalance, maybe
-	tsi, err = cluster.HrwTarget(lom.Bck(), lom.Objname, rj.smap)
+	tsi, err = cluster.HrwTarget(lom.Uname(), rj.smap)
 	if err != nil {
 		return err
 	}

@@ -132,7 +132,7 @@ func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	// optionally, skip those that must be globally rebalanced
 	if rj.skipGlobMisplaced {
 		smap := t.GetSowner().Get()
-		if tsi, err := cluster.HrwTarget(lom.Bck(), lom.Objname, smap); err == nil {
+		if tsi, err := cluster.HrwTarget(lom.Uname(), smap); err == nil {
 			if tsi.DaemonID != t.Snode().DaemonID {
 				return nil
 			}

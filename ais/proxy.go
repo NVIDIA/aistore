@@ -348,7 +348,7 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -397,7 +397,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -456,7 +456,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if nodeID == "" {
-		si, err = cluster.HrwTarget(bck, objName, &smap.Smap)
+		si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -502,7 +502,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -1413,7 +1413,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
@@ -2056,7 +2056,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 
 	if msg.WantProp(cmn.GetTargetURL) {
 		for _, e := range allEntries.Entries {
-			si, err := cluster.HrwTarget(bck, e.Name, &smap.Smap)
+			si, err := cluster.HrwTarget(bck.MakeUname(e.Name), &smap.Smap)
 			if err == nil {
 				e.TargetURL = si.URL(cmn.NetworkPublic)
 			}
@@ -2075,7 +2075,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 	}
 	objname := apitems[1]
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return

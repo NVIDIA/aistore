@@ -40,7 +40,7 @@ func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bck *cluster.Bck, 
 		// Make sure that link contains protocol (absence of protocol can result in errors).
 		link = cmn.PrependProtocol(link)
 
-		si, err := cluster.HrwTarget(bck, objName, smap)
+		si, err := cluster.HrwTarget(bck.MakeUname(objName), smap)
 		if err != nil {
 			return nil, err
 		}

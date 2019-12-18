@@ -205,7 +205,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	)
 
 	for _, e := range bucketList.Entries {
-		si, _ := cluster.HrwTarget(w.bck, e.Name, smap)
+		si, _ := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)
 		if si.DaemonID != localID {
 			continue
 		}
@@ -216,9 +216,10 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 		lom := &cluster.LOM{T: w.t, Objname: e.Name}
 		err := lom.Init(w.bck.Name, cmn.Cloud, config)
 		if err != nil {
-			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
-				continue
+			if cmn.IsErrBucketNought(err) {
+				return nil, err
 			}
+			continue
 		}
 		err = lom.Load()
 		if err != nil {

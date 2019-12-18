@@ -28,16 +28,15 @@ type tsi struct {
 }
 
 // Requires elements of smap.Tmap to have their idDigest initialized
-func HrwTarget(bck *Bck, objName string, smap *Smap) (si *Snode, err error) {
+func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
 	var (
 		max    uint64
-		uname  = bck.MakeUname(objName)
 		digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
 	)
 	for _, sinfo := range smap.Tmap {
 		// Assumes that sinfo.idDigest is initialized
 		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
-		if cs > max {
+		if cs >= max {
 			max = cs
 			si = sinfo
 		}
@@ -51,18 +50,15 @@ func HrwTarget(bck *Bck, objName string, smap *Smap) (si *Snode, err error) {
 // Sorts all targets in a cluster by their respective HRW (weights) in a descending order;
 // returns resulting subset (aka slice) that has the requested length = count.
 // Returns error if the cluster does not have enough targets.
-func HrwTargetList(bck *Bck, objName string, smap *Smap, count int) (si []*Snode, err error) {
-	if count <= 0 {
-		return nil, fmt.Errorf("invalid number of targets requested: %d", count)
-	}
+func HrwTargetList(uname string, smap *Smap, count int) (si []*Snode, err error) {
+	cmn.Assert(count > 0)
 	cnt := smap.CountTargets()
 	if cnt < count {
-		err = fmt.Errorf("number of targets %d is fewer than requested %d", smap.CountTargets(), count)
+		err = fmt.Errorf("insufficient targets (%d > %d)", count, smap.CountTargets())
 		return
 	}
 	var (
 		arr    = make([]tsi, cnt)
-		uname  = bck.MakeUname(objName)
 		digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
 		i      int
 	)
@@ -80,10 +76,6 @@ func HrwTargetList(bck *Bck, objName string, smap *Smap, count int) (si []*Snode
 }
 
 func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
-	if smap.CountProxies() == 0 {
-		err = errors.New("cluster map is empty: no proxies")
-		return
-	}
 	var (
 		max     uint64
 		skipped int
@@ -97,13 +89,13 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 			skipped++
 			continue
 		}
-		if sinfo.idDigest > max {
+		if sinfo.idDigest >= max {
 			max = sinfo.idDigest
 			pi = sinfo
 		}
 	}
 	if pi == nil {
-		err = fmt.Errorf("cannot HRW-select proxy: current count=%d, skipped=%d", smap.CountProxies(), skipped)
+		err = fmt.Errorf("insufficient proxies (%d, %d)", smap.CountProxies(), skipped)
 	}
 	return
 }
@@ -111,13 +103,11 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 // Returns target which should be responsible for given task. Eg. used when
 // it is required to list cloud bucket objects (we want only one target to do it).
 func HrwTargetTask(taskID uint64, smap *Smap) (si *Snode, err error) {
-	var (
-		max uint64
-	)
+	var max uint64
 	for _, sinfo := range smap.Tmap {
 		// Assumes that sinfo.idDigest is initialized
 		cs := xoshiro256.Hash(sinfo.idDigest ^ taskID)
-		if cs > max {
+		if cs >= max {
 			max = cs
 			si = sinfo
 		}
@@ -128,20 +118,19 @@ func HrwTargetTask(taskID uint64, smap *Smap) (si *Snode, err error) {
 	return
 }
 
-func HrwMpath(bck *Bck, objName string) (mi *fs.MountpathInfo, digest uint64, err error) {
-	availablePaths, _ := fs.Mountpaths.Get()
+func HrwMpath(uname string) (mi *fs.MountpathInfo, digest uint64, err error) {
+	var (
+		max               uint64
+		availablePaths, _ = fs.Mountpaths.Get()
+	)
 	if len(availablePaths) == 0 {
-		err = fmt.Errorf("%s: cannot hrw(%s/%s)", cmn.NoMountpaths, bck.Name, objName)
+		err = errors.New(cmn.NoMountpaths)
 		return
 	}
-	var (
-		max   uint64
-		uname = bck.MakeUname(objName)
-	)
 	digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
 	for _, mpathInfo := range availablePaths {
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
-		if cs > max {
+		if cs >= max {
 			max = cs
 			mi = mpathInfo
 		}

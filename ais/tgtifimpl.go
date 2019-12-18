@@ -263,7 +263,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		si   *cluster.Snode
 		smap = t.smapowner.get()
 	)
-	if si, err = cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap); err != nil {
+	if si, err = cluster.HrwTarget(lom.Uname(), &smap.Smap); err != nil {
 		return
 	}
 	// remote

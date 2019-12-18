@@ -169,7 +169,7 @@ func (j *CloudBucketDlJob) GetNextObjs() error {
 	objects := make(cmn.SimpleKVs, cmn.DefaultListPageSize)
 	smap := j.t.GetSowner().Get()
 	for _, entry := range bckList.Entries {
-		si, err := cluster.HrwTarget(j.bck, entry.Name, smap)
+		si, err := cluster.HrwTarget(j.bck.MakeUname(entry.Name), smap)
 		if err != nil {
 			return err
 		}

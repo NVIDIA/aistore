@@ -271,7 +271,7 @@ func (t *targetrunner) listOperation(r *http.Request, bck *cluster.Bck, listMsg 
 		smap = t.smapowner.get()
 	)
 	for _, obj := range listMsg.Objnames {
-		si, err := cluster.HrwTarget(bck, obj, &smap.Smap)
+		si, err := cluster.HrwTarget(bck.MakeUname(obj), &smap.Smap)
 		if err != nil {
 			return err
 		}

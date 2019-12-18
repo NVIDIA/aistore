@@ -638,8 +638,9 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 	if err = lom.bck.Init(bowner); err != nil {
 		return
 	}
+	lom.md.uname = lom.bck.MakeUname(lom.Objname)
 	if lom.FQN == "" {
-		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = HrwMpath(lom.bck, lom.Objname)
+		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = HrwMpath(lom.md.uname)
 		if err != nil {
 			return
 		}
@@ -649,7 +650,6 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 		lom.ParsedFQN.Provider = lom.bck.Provider
 		lom.ParsedFQN.Bucket, lom.ParsedFQN.ObjName = bucket, lom.Objname
 	}
-	lom.md.uname = lom.bck.MakeUname(lom.Objname)
 	if len(config) > 0 {
 		lom.config = config[0]
 	}

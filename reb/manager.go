@@ -523,7 +523,7 @@ func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt in
 				delete(lomack.q, uname)
 				continue
 			}
-			tsi, _ := cluster.HrwTarget(lom.Bck(), lom.Objname, smap)
+			tsi, _ := cluster.HrwTarget(lom.Uname(), smap)
 			if reb.t.LookupRemoteSingle(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi.Name())

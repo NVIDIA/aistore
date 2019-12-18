@@ -401,7 +401,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 						if err := bck.Init(ds.m.ctx.bmdowner); err != nil {
 							return err
 						}
-						toNode, err := cluster.HrwTarget(bck, shard.Name, ds.m.ctx.smap.Get())
+						toNode, err := cluster.HrwTarget(bck.MakeUname(shard.Name), ds.m.ctx.smap.Get())
 						if err != nil {
 							return err
 						}

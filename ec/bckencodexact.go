@@ -174,8 +174,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 	if !lom.IsHRW() {
 		return nil
 	}
-
-	si, err := cluster.HrwTarget(lom.Bck(), lom.Objname, j.smap)
+	si, err := cluster.HrwTarget(lom.Uname(), j.smap)
 	if err != nil {
 		glog.Errorf("%s: %s", lom, err)
 		return nil

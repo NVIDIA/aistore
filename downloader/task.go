@@ -146,6 +146,9 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (e
 	if err := t.parent.t.PutObject(postFQN, progressReader, lom, cluster.ColdGet, cksum, started); err != nil {
 		return internalErrorMessage(), err
 	}
+	if err := lom.Load(); err != nil {
+		return internalErrorMessage(), err
+	}
 	return "", nil
 }
 

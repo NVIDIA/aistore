@@ -436,7 +436,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 		aborted, running = xaction.Registry.IsRebalancing(cmn.ActLocalReb)
 		gfnActive        = goi.t.gfn.local.active()
 	)
-	tsi, err = cluster.HrwTarget(goi.lom.Bck(), goi.lom.Objname, &smap.Smap)
+	tsi, err = cluster.HrwTarget(goi.lom.Uname(), &smap.Smap)
 	if err != nil {
 		return
 	}

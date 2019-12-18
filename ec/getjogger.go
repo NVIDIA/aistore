@@ -119,7 +119,7 @@ func (c *getJogger) ec(req *Request) {
 // * nodes - targets that have metadata and replica - filled by requestMeta
 // * replicaCnt - total number of replicas including main one
 func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenCloser, metadata *Metadata, nodes map[string]*Metadata, replicaCnt int) {
-	targets, err := cluster.HrwTargetList(lom.Bck(), lom.Objname, c.parent.smap.Get(), replicaCnt)
+	targets, err := cluster.HrwTargetList(lom.Uname(), c.parent.smap.Get(), replicaCnt)
 	if err != nil {
 		freeObject(reader)
 		glog.Errorf("failed to get list of %d targets: %s", replicaCnt, err)
@@ -669,7 +669,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 	// generate the list of targets that should have a slice and find out
 	// the targets without any one
 	// FIXME: when fewer targets than sliceCnt+1, send slices to those available anyway
-	targets, err := cluster.HrwTargetList(req.LOM.Bck(), req.LOM.Objname, c.parent.smap.Get(), sliceCnt+1)
+	targets, err := cluster.HrwTargetList(req.LOM.Uname(), c.parent.smap.Get(), sliceCnt+1)
 	if err != nil {
 		glog.Warning(err)
 		return

@@ -32,7 +32,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	si := ri.t.si
 	if !ri.localOnly {
 		cmn.Assert(ri.smap != nil)
-		if si, err = cluster.HrwTarget(ri.bckTo, objnameTo, &ri.smap.Smap); err != nil {
+		if si, err = cluster.HrwTarget(ri.bckTo.MakeUname(objnameTo), &ri.smap.Smap); err != nil {
 			return
 		}
 	}

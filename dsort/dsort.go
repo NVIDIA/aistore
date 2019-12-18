@@ -143,24 +143,20 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		defer phaseInfo.adjuster.releaseGoroutineSema()
 
 		shardName := name + m.rs.Extension
-		bck := &cluster.Bck{Name: m.rs.Bucket, Provider: m.rs.Provider}
-		if err := bck.Init(m.ctx.bmdowner); err != nil {
+		lom := &cluster.LOM{T: m.ctx.t, Objname: shardName}
+		if err := lom.Init(m.rs.Bucket, m.rs.Provider); err != nil {
 			return err
 		}
 
-		si, err := cluster.HrwTarget(bck, shardName, m.smap)
+		si, err := cluster.HrwTarget(lom.Uname(), m.smap)
 		if err != nil {
 			return err
 		}
 		if si.DaemonID != m.ctx.node.DaemonID {
 			return nil
 		}
-		lom := &cluster.LOM{T: m.ctx.t, Objname: shardName}
-		if err = lom.Init(m.rs.Bucket, m.rs.Provider); err == nil {
-			err = lom.Load(false)
-		}
-		if err != nil {
-			if os.IsNotExist(err) {
+		if err = lom.Load(false); err != nil {
+			if cmn.IsErrObjNought(err) {
 				msg := fmt.Sprintf("shard %q does not exist (is missing)", shardName)
 				return m.react(cfg.MissingShards, msg)
 			}
@@ -385,7 +381,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return err
 	}
 
-	si, err := cluster.HrwTarget(lom.Bck(), shardName, m.smap)
+	si, err := cluster.HrwTarget(lom.Uname(), m.smap)
 	cmn.AssertNoErr(err) // TODO -- FIXME: remove this assert, handle errors
 
 	// If the newly created shard belongs on a different target
@@ -769,7 +765,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	}
 
 	for _, s := range shards {
-		si, err := cluster.HrwTarget(bck, s.Name, m.smap)
+		si, err := cluster.HrwTarget(bck.MakeUname(s.Name), m.smap)
 		cmn.AssertNoErr(err)
 		shardsToTarget[si] = append(shardsToTarget[si], s)
 

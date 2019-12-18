@@ -304,7 +304,7 @@ func (rr *ecRebResult) addSlice(slice *ecRebSlice, tgt cluster.Target) error {
 		if err := b.Init(tgt.GetBowner()); err != nil {
 			return err
 		}
-		si, err := cluster.HrwTarget(b, slice.Objname, tgt.GetSowner().Get())
+		si, err := cluster.HrwTarget(b.MakeUname(slice.Objname), tgt.GetSowner().Get())
 		if err != nil {
 			return err
 		}
@@ -497,13 +497,14 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 		bck      = &cluster.Bck{Name: hdr.Bucket, Provider: provider}
 		needSave = md.SliceID == 0 // full object always saved
 	)
+	if err := bck.Init(s.t.GetBowner()); err != nil {
+		return err
+	}
+	uname := bck.MakeUname(hdr.Objname)
 	if !needSave {
 		// slice is saved only if this target is not "main" one.
 		// Main one receives slices as well but it uses them only to rebuild "full"
-		if err := bck.Init(s.t.GetBowner()); err != nil {
-			return err
-		}
-		tgt, err := cluster.HrwTarget(bck, hdr.Objname, s.t.GetSowner().Get())
+		tgt, err := cluster.HrwTarget(uname, s.t.GetSowner().Get())
 		if err != nil {
 			return err
 		}
@@ -512,18 +513,18 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 	if !needSave {
 		return nil
 	}
-	mpath, _, err := cluster.HrwMpath(bck, hdr.Objname)
+	mpath, _, err := cluster.HrwMpath(uname)
 	if err != nil {
 		return err
 	}
 	if md.SliceID != 0 {
 		sliceFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, provider, hdr.Objname)
 	} else {
-		sliceFQN = mpath.MakePathBucketObject(fs.ObjectType, hdr.Bucket, provider, hdr.Objname)
-		lom = &cluster.LOM{T: s.t, FQN: sliceFQN}
+		lom = &cluster.LOM{T: s.t, Objname: hdr.Objname}
 		if err := lom.Init(hdr.Bucket, provider); err != nil {
 			return err
 		}
+		sliceFQN = lom.FQN
 		lom.SetSize(hdr.ObjAttrs.Size)
 		if hdr.ObjAttrs.Version != "" {
 			lom.SetVersion(hdr.ObjAttrs.Version)
@@ -701,7 +702,7 @@ func (s *ecRebalancer) mergeSlices() *ecRebResult {
 					s.mgr.abortGlobal()
 					return nil
 				}
-				t, err := cluster.HrwTarget(b, slice.Objname, smap)
+				t, err := cluster.HrwTarget(b.MakeUname(slice.Objname), smap)
 				cmn.Assert(err == nil)
 				if t.DaemonID == localDaemon {
 					glog.Infof("Skipping slice %d of %s (it must have main object)", slice.SliceID, slice.Objname)
@@ -1136,7 +1137,7 @@ func (s *ecRebalancer) calcLocalProps(bck *cluster.Bck, obj *ecRebObject, smap *
 	}
 
 	genCount := cmn.Max(sliceReq, len(smap.Tmap))
-	obj.hrwTargets, err = cluster.HrwTargetList(bck, obj.objName, smap, genCount)
+	obj.hrwTargets, err = cluster.HrwTargetList(bck.MakeUname(obj.objName), smap, genCount)
 	if err != nil {
 		return err
 	}
