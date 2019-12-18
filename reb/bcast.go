@@ -205,7 +205,7 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *globArgs) (ok bool) {
 		if _, ok = reb.checkGlobStatus(tsi, ver, rebStageTraverse, md); ok {
 			return
 		}
-		if md.xreb.Aborted() || md.xreb.AbortedAfter(sleep) {
+		if reb.xreb.Aborted() || reb.xreb.AbortedAfter(sleep) {
 			glog.Infof("%s: abrt rx-ready", loghdr)
 			return
 		}
@@ -229,7 +229,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 		status     *Status
 	)
 	for curwt < maxwt {
-		if md.xreb.AbortedAfter(sleep) {
+		if reb.xreb.AbortedAfter(sleep) {
 			glog.Infof("%s: abrt wack", loghdr)
 			return
 		}
@@ -241,7 +241,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 		if status, ok = reb.checkGlobStatus(tsi, ver, rebStageFin, md); ok {
 			return
 		}
-		if md.xreb.Aborted() {
+		if reb.xreb.Aborted() {
 			glog.Infof("%s: abrt wack", loghdr)
 			return
 		}
@@ -288,7 +288,7 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 
 	outjson, err := reb.t.Health(tsi, true, cmn.DefaultTimeout)
 	if err != nil {
-		if md.xreb.AbortedAfter(sleepRetry) {
+		if reb.xreb.AbortedAfter(sleepRetry) {
 			glog.Infof("%s: abrt", loghdr)
 			return
 		}
@@ -296,27 +296,27 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 	}
 	if err != nil {
 		glog.Errorf("%s: failed to call %s, err: %v", loghdr, tsi.Name(), err)
-		md.xreb.Abort()
+		reb.abortGlobal()
 		return
 	}
 	status = &Status{}
 	err = jsoniter.Unmarshal(outjson, status)
 	if err != nil {
 		glog.Errorf("%s: unexpected: failed to unmarshal %s response, err: %v", loghdr, tsi.Name(), err)
-		md.xreb.Abort()
+		reb.abortGlobal()
 		return
 	}
 	// enforce Smap consistency across this xreb
 	tver, rver := status.SmapVersion, status.RebVersion
 	if tver > ver || rver > ver {
 		glog.Errorf("%s: %s has newer Smap (v%d, v%d) - aborting...", loghdr, tsi.Name(), tver, rver)
-		md.xreb.Abort()
+		reb.abortGlobal()
 		return
 	}
 	// enforce same global transaction ID
 	if status.GlobRebID > reb.globRebID.Load() {
 		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", loghdr, tsi.Name(), status.GlobRebID)
-		md.xreb.Abort()
+		reb.abortGlobal()
 		return
 	}
 	// let the target to catch-up
@@ -351,7 +351,7 @@ func (reb *Manager) waitStage(si *cluster.Snode, md *globArgs, stage uint32) boo
 			return true
 		}
 
-		if md.xreb.Aborted() || md.xreb.AbortedAfter(sleep) {
+		if reb.xreb.Aborted() || reb.xreb.AbortedAfter(sleep) {
 			glog.Infof("g%d: abrt %s", reb.globRebID.Load(), stages[stage])
 			return false
 		}
@@ -395,7 +395,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 		if err != nil {
 			// something bad happened, aborting
 			glog.Errorf("[g%d]: failed to call %s, err: %v", reb.globRebID.Load(), si.Name(), err)
-			md.xreb.Abort()
+			reb.abortGlobal()
 			return false
 		}
 		if status == http.StatusAccepted {
@@ -437,7 +437,7 @@ func (reb *Manager) waitForPushReqs(md *globArgs, stage uint32, timeout ...time.
 		maxWait = timeout[0]
 	}
 	for curWait < maxWait {
-		if md.xreb.Aborted() {
+		if reb.xreb.Aborted() {
 			return false
 		}
 		cnt := reb.nodesNotInStage(stage)

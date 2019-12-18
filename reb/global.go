@@ -33,7 +33,6 @@ type (
 	globArgs struct {
 		smap    *cluster.Smap
 		config  *cmn.Config
-		xreb    *xaction.GlobalReb
 		paths   fs.MPI
 		pmarker string
 		ecUsed  bool
@@ -71,11 +70,11 @@ func (reb *Manager) globalRebPrecheck(md *globArgs, globRebID int64) bool {
 func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
 	reb.stage.Store(rebStageInit)
-	md.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, globRebID, len(md.paths)*2, reb.statRunner)
-	cmn.Assert(md.xreb != nil) // must renew given the CAS and checks above
+	reb.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, globRebID, len(md.paths)*2, reb.statRunner)
+	cmn.Assert(reb.xreb != nil) // must renew given the CAS and checks above
 
 	if len(buckets) > 0 {
-		md.xreb.SetBucket(buckets[0]) // for better identity (limited usage)
+		reb.xreb.SetBucket(buckets[0]) // for better identity (limited usage)
 	}
 
 	// 3. init streams and data structures
@@ -102,7 +101,7 @@ func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...stri
 	// 5. ready - can receive objects
 	reb.smap.Store(unsafe.Pointer(md.smap))
 	reb.globRebID.Store(globRebID)
-	glog.Infof("%s: %s", reb.loghdr(globRebID, md.smap), md.xreb.String())
+	glog.Infof("%s: %s", reb.loghdr(globRebID, md.smap), reb.xreb.String())
 
 	return true
 }
@@ -169,9 +168,9 @@ func (reb *Manager) ecFixLocal(md *globArgs) error {
 
 func (reb *Manager) ecFixGlobal(md *globArgs, broken []*ecRebObject) error {
 	if err := reb.ecReb.rebalanceGlobal(broken); err != nil {
-		if !md.xreb.Aborted() {
+		if !reb.xreb.Aborted() {
 			glog.Errorf("EC rebalance failed: %v", err)
-			md.xreb.Abort()
+			reb.abortGlobal()
 		}
 		return err
 	}
@@ -222,7 +221,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	globRebID := reb.globRebID.Load()
 	multiplier := md.config.Rebalance.Multiplier
 	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
-	if md.xreb.Aborted() {
+	if reb.xreb.Aborted() {
 		err := fmt.Errorf("%s: aborted", reb.loghdr(globRebID, md.smap))
 		return err
 	}
@@ -235,7 +234,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 		if multiplier > 1 {
 			sema = make(chan struct{}, multiplier)
 		}
-		rl := &globalJogger{joggerBase: joggerBase{m: reb, mpath: mpathL, xreb: &md.xreb.RebBase, wg: wg},
+		rl := &globalJogger{joggerBase: joggerBase{m: reb, mpath: mpathL, xreb: &reb.xreb.RebBase, wg: wg},
 			smap: md.smap, sema: sema, ver: ver}
 		wg.Add(1)
 		go rl.jog()
@@ -246,13 +245,13 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 		if multiplier > 1 {
 			sema = make(chan struct{}, multiplier)
 		}
-		rc := &globalJogger{joggerBase: joggerBase{m: reb, mpath: mpathC, xreb: &md.xreb.RebBase, wg: wg},
+		rc := &globalJogger{joggerBase: joggerBase{m: reb, mpath: mpathC, xreb: &reb.xreb.RebBase, wg: wg},
 			smap: md.smap, sema: sema, ver: ver}
 		wg.Add(1)
 		go rc.jog()
 	}
 	wg.Wait()
-	if md.xreb.Aborted() {
+	if reb.xreb.Aborted() {
 		err := fmt.Errorf("%s: aborted", reb.loghdr(globRebID, md.smap))
 		return err
 	}
@@ -304,7 +303,7 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 					}
 				}
 				lomack.mu.Unlock()
-				if md.xreb.Aborted() {
+				if reb.xreb.Aborted() {
 					glog.Infof("%s: abrt", loghdr)
 					return
 				}
@@ -314,7 +313,7 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 				break
 			}
 			glog.Warningf("%s: waiting for %d ACKs", loghdr, cnt)
-			if md.xreb.AbortedAfter(sleep) {
+			if reb.xreb.AbortedAfter(sleep) {
 				glog.Infof("%s: abrt", loghdr)
 				return
 			}
@@ -323,7 +322,7 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 		if cnt > 0 {
 			glog.Warningf("%s: timed-out waiting for %d ACK(s)", loghdr, cnt)
 		}
-		if md.xreb.Aborted() {
+		if reb.xreb.Aborted() {
 			return
 		}
 
@@ -339,13 +338,13 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 			// no need to broadcast if all targets have sent notifications
 			errCnt = reb.bcast(md, reb.waitFinExtended)
 		}
-		if md.xreb.Aborted() {
+		if reb.xreb.Aborted() {
 			return
 		}
 
 		// 9. retransmit if needed
-		cnt = reb.retransmit(md.xreb, globRebID)
-		if cnt == 0 || md.xreb.Aborted() {
+		cnt = reb.retransmit(reb.xreb, globRebID)
+		if cnt == 0 || reb.xreb.Aborted() {
 			break
 		}
 		glog.Warningf("%s: retransmitted %d, more wack...", loghdr, cnt)
@@ -358,14 +357,14 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
 	// 10.5. keep at it... (can't close the streams as long as)
 	quiescent, maxquiet := 0, 10 // e.g., 10 * 2s (Cplane) = 20 seconds of /quiet/ time - see laterx
-	aborted := md.xreb.Aborted()
+	aborted := reb.xreb.Aborted()
 	for quiescent < maxquiet && !aborted {
 		if !reb.laterx.CAS(true, false) {
 			quiescent++
 		} else {
 			quiescent = 0
 		}
-		aborted = md.xreb.AbortedAfter(sleep)
+		aborted = reb.xreb.AbortedAfter(sleep)
 	}
 	if !aborted {
 		if err := cmn.RemoveFile(md.pmarker); err != nil {
@@ -373,10 +372,10 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 		}
 	}
 	reb.endStreams()
-	if !md.xreb.Finished() {
-		md.xreb.EndTime(time.Now())
+	if !reb.xreb.Finished() {
+		reb.xreb.EndTime(time.Now())
 	} else {
-		glog.Infoln(md.xreb.String())
+		glog.Infoln(reb.xreb.String())
 	}
 	{
 		status := &Status{}
@@ -428,7 +427,7 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		glog.Warning(err)
 	}
 	reb.stage.Store(rebStageFin)
-	for errCnt != 0 && !md.xreb.Aborted() {
+	for errCnt != 0 && !reb.xreb.Aborted() {
 		errCnt = reb.bcast(md, reb.waitFinExtended)
 	}
 	reb.globalRebFini(md)
@@ -535,7 +534,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	}
 	nver := t.GetSowner().Get().Version
 	if nver > rj.ver {
-		rj.xreb.Abort()
+		rj.m.abortGlobal()
 		return fmt.Errorf("%s: Smap v%d < v%d, path %s", rj.xreb, rj.ver, nver, rj.mpath)
 	}
 

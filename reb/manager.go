@@ -46,6 +46,7 @@ const (
 	rebStageFin
 	rebStageFinStreams
 	rebStageDone
+	rebStageAbort // one of targets aborts the rebalancing (never set, only sent)
 )
 
 type (
@@ -74,6 +75,7 @@ type (
 		}
 		semaCh     chan struct{}
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
+		xreb       *xaction.GlobalReb
 		ecReb      *ecRebalancer
 		stageMtx   sync.Mutex
 		nodeStages map[string]uint32
@@ -437,6 +439,16 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 		glog.Errorf("Invalid push notification: %v", err)
 		return
 	}
+
+	if req.Stage == rebStageAbort {
+		// a target aborted its xaction and sent the signal to others
+		glog.Warningf("Got rebalance abort notification from %s", req.DaemonID)
+		if reb.xreb != nil {
+			reb.xreb.Abort()
+		}
+		return
+	}
+
 	// a target was too late in sending(rebID is obsolete) its data or too early (md == nil)
 	if req.RebID < reb.globRebID.Load() {
 		// TODO: warning
@@ -537,4 +549,39 @@ func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt in
 		}
 	}
 	return
+}
+
+// Aborts local global rebalance xaction and notifies all other targets
+// that they has to abort rebalance as well.
+// Useful for EC rebalance: after each batch EC rebalance waits in a loop
+// for all targets to finish their batches. No stream interactions in this loop,
+// except listening to push notifications. So, if any target stops its xaction
+// and closes all its streams, others wouldn't notice that. That is why the
+// target should send notification.
+func (reb *Manager) abortGlobal() {
+	if reb.xreb == nil || reb.xreb.Aborted() || reb.xreb.Finished() {
+		return
+	}
+	glog.Info("Aborting global rebalance...")
+	reb.xreb.Abort()
+	req := pushReq{
+		DaemonID: reb.t.Snode().DaemonID,
+		RebID:    reb.GlobRebID(),
+		Stage:    rebStageAbort,
+	}
+	hdr := transport.Header{
+		ObjAttrs: transport.ObjectAttrs{Size: 0},
+		Opaque:   cmn.MustMarshal(req),
+	}
+	smap := reb.t.GetSowner().Get()
+	sendTo := make([]*cluster.Snode, 0, len(smap.Tmap))
+	for _, node := range smap.Tmap {
+		if node.DaemonID == req.DaemonID {
+			continue
+		}
+		sendTo = append(sendTo, node)
+	}
+	if err := reb.pushes.Send(hdr, nil, nil, nil, sendTo); err != nil {
+		glog.Errorf("Failed to send abort notification to nodes %+v: %v", sendTo, err)
+	}
 }

@@ -615,7 +615,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	if _, ok := s.waitNrebuild[uid]; !ok || sliceID == 0 {
 		if err := s.saveSliceToDisk(waitSlice.sgl, req, &md, hdr); err != nil {
 			glog.Errorf("Failed to save slice %d of %s: %v", sliceID, hdr.Objname, err)
-			s.ra.xreb.Abort()
+			s.mgr.abortGlobal()
 		}
 	}
 
@@ -698,7 +698,7 @@ func (s *ecRebalancer) mergeSlices() *ecRebResult {
 			if slice.SliceID != 0 && local {
 				b := &cluster.Bck{Name: slice.Bucket, Provider: cmn.ProviderFromBool(slice.IsAIS)}
 				if err := b.Init(s.t.GetBowner()); err != nil {
-					s.ra.xreb.Abort()
+					s.mgr.abortGlobal()
 					return nil
 				}
 				t, err := cluster.HrwTarget(b, slice.Objname, smap)
@@ -807,7 +807,7 @@ func (s *ecRebalancer) jog(path string, wg *sync.WaitGroup) {
 		Sorted:   false,
 	}
 	if err := fs.Walk(path, opts); err != nil {
-		if s.ra.xreb.Aborted() || s.ra.xreb.Finished() {
+		if s.mgr.xreb.Aborted() || s.mgr.xreb.Finished() {
 			glog.Infof("Aborting %s traversal", path)
 		} else {
 			glog.Warningf("failed to traverse %q, err: %v", path, err)
@@ -821,7 +821,7 @@ func (s *ecRebalancer) jog(path string, wg *sync.WaitGroup) {
 // - calculates where "main" object for the slice/replica is
 // - store all the info above to memory
 func (s *ecRebalancer) walk(fqn string, de fs.DirEntry) (err error) {
-	if s.ra.xreb.Aborted() {
+	if s.mgr.xreb.Aborted() {
 		// notify `dir.Walk` to stop iterations
 		return errors.New("Interrupt walk")
 	}
@@ -923,19 +923,19 @@ func (s *ecRebalancer) run() {
 	wg := sync.WaitGroup{}
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
-		if s.ra.xreb.Bucket() == "" {
+		if s.mgr.xreb.Bucket() == "" {
 			mpath = mpathInfo.MakePath(ec.MetaType, cmn.AIS)
 		} else {
-			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.ra.xreb.Bucket(), cmn.AIS)
+			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cmn.AIS)
 		}
 		wg.Add(1)
 		go s.jog(mpath, &wg)
 	}
 	for _, mpathInfo := range availablePaths {
-		if s.ra.xreb.Bucket() == "" {
+		if s.mgr.xreb.Bucket() == "" {
 			mpath = mpathInfo.MakePath(ec.MetaType, cmn.Cloud)
 		} else {
-			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.ra.xreb.Bucket(), cmn.Cloud)
+			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cmn.Cloud)
 		}
 		wg.Add(1)
 		go s.jog(mpath, &wg)
@@ -966,7 +966,7 @@ func (s *ecRebalancer) exchange() error {
 	for i := 0; i < retries; i++ {
 		failed = failed[:0]
 		for _, node := range sendTo {
-			if s.ra.xreb.Aborted() {
+			if s.mgr.xreb.Aborted() {
 				return fmt.Errorf("%d: aborted", globRebID)
 			}
 
@@ -1328,7 +1328,7 @@ func (s *ecRebalancer) waitForSlicesRecv(broken []*ecRebObject, start int) error
 		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 			glog.Infof("%s Wait for %d:%d more slices", s.t.Snode().Name(), s.waiter.waitSliceCnt(), len(s.waitNrebuild))
 		}
-		if s.ra.xreb.Aborted() {
+		if s.mgr.xreb.Aborted() {
 			return errors.New("Aborted")
 		}
 
@@ -1407,7 +1407,7 @@ func (s *ecRebalancer) waitBatchCompletion(start int) error {
 		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 			glog.Infof("%s Wait for targets to finish batch %d", s.t.Snode().Name(), start)
 		}
-		if s.ra.xreb.Aborted() {
+		if s.mgr.xreb.Aborted() {
 			return errors.New("Aborted")
 		}
 
@@ -1591,7 +1591,7 @@ func (s *ecRebalancer) rebalanceGlobal(broken []*ecRebObject) (err error) {
 
 		// get batchSize next objects
 		for j := 0; j+start < len(broken) && j < ecRebBatchSize; j++ {
-			if s.ra.xreb.Aborted() {
+			if s.mgr.xreb.Aborted() {
 				s.cleanupBatch(broken, start)
 				return fmt.Errorf("Aborted")
 			}
