@@ -11,19 +11,18 @@ import (
 
 // BuildDownloaderInput takes payload, extracted from user's request and returnes DlBody
 // which contains metadata of objects supposed to be downloaded by target t
-func BuildDownloaderInput(t cluster.Target, id string, payload *cmn.DlBase, objects cmn.SimpleKVs, cloud bool) (*cmn.DlBody, error) {
+func BuildDownloaderInput(t cluster.Target, id string, bck *cluster.Bck,
+	payload *cmn.DlBase, objects cmn.SimpleKVs, cloud bool) (*cmn.DlBody, error) {
 	var (
 		err    error
 		dlBody = &cmn.DlBody{ID: id}
 	)
-	dlBody.Bucket = payload.Bucket     // TODO -- FIXME: must use cluster.Bck{} - inited and error-handled
-	dlBody.Provider = payload.Provider // ditto
+	dlBody.Bucket = bck.Name
+	dlBody.Provider = bck.Provider
 	dlBody.Timeout = payload.Timeout
 	dlBody.Description = payload.Description
 
-	bck := &cluster.Bck{Name: payload.Bucket, Provider: payload.Provider}
 	dlBody.Objs, err = GetTargetDlObjs(t, objects, bck, cloud)
-
 	return dlBody, err
 }
 

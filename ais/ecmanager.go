@@ -227,6 +227,12 @@ func (mgr *ecManager) recvRequest(w http.ResponseWriter, hdr transport.Header, o
 		}
 	}
 	bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
+	if err = bck.Init(mgr.t.bmdowner); err != nil {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
+			glog.Errorf("Failed to init bucket %s: %v", bck, err)
+			return
+		}
+	}
 	mgr.restoreBckRespXact(bck).DispatchReq(iReq, bck, hdr.Objname)
 }
 
@@ -248,6 +254,12 @@ func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, 
 		return
 	}
 	bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
+	if err = bck.Init(mgr.t.bmdowner); err != nil {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
+			glog.Errorf("Failed to init bucket %s: %v", bck, err)
+			return
+		}
+	}
 	switch iReq.Act {
 	case ec.ReqPut:
 		mgr.restoreBckRespXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)

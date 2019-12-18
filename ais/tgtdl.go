@@ -198,14 +198,16 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 		payload.Description = description
 	}
 
-	input, err := downloader.BuildDownloaderInput(t, id, payload, objects, fromCloud)
+	bck := &cluster.Bck{Name: payload.Bucket, Provider: payload.Provider}
+	if err = bck.Init(t.bmdowner); err != nil {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
+			return nil, err
+		}
+	}
+	input, err := downloader.BuildDownloaderInput(t, id, bck, payload, objects, fromCloud)
 	if err != nil {
 		return nil, err
 	}
 
-	//
-	// TODO -- FIXME: bckIsAIS must be removed; init bck (below) and check conditions&errors
-	//
-	bck := &cluster.Bck{Name: payload.Bucket, Provider: payload.Provider}
 	return downloader.NewSliceDlJob(input.ID, input.Objs, bck, payload.Timeout, payload.Description), nil
 }
