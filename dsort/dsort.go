@@ -144,6 +144,10 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 
 		shardName := name + m.rs.Extension
 		bck := &cluster.Bck{Name: m.rs.Bucket, Provider: m.rs.Provider}
+		if err := bck.Init(m.ctx.bmdowner); err != nil {
+			return err
+		}
+
 		si, err := cluster.HrwTarget(bck, shardName, m.smap)
 		if err != nil {
 			return err
@@ -759,8 +763,10 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	// 	// target.
 	// }
 
-	// TODO -- FIXME: must be inited and checked elsewhere
-	bck := &cluster.Bck{Name: m.rs.OutputBucket, Provider: "" /* FIXME */}
+	bck := &cluster.Bck{Name: m.rs.OutputBucket, Provider: m.rs.OutputProvider}
+	if err := bck.Init(m.ctx.bmdowner); err != nil {
+		return err
+	}
 
 	for _, s := range shards {
 		si, err := cluster.HrwTarget(bck, s.Name, m.smap)
