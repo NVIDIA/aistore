@@ -245,18 +245,21 @@ func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, 
 	// check if the request is valid
 	if len(hdr.Opaque) == 0 {
 		glog.Error("Empty request")
+		cmn.DrainReader(object)
 		return
 	}
 
 	iReq := ec.IntraReq{}
 	if err := iReq.Unmarshal(hdr.Opaque); err != nil {
 		glog.Errorf("Failed to unmarshal request: %v", err)
+		cmn.DrainReader(object)
 		return
 	}
 	bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
 	if err = bck.Init(mgr.t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			glog.Errorf("Failed to init bucket %s: %v", bck, err)
+			cmn.DrainReader(object)
 			return
 		}
 	}
@@ -269,6 +272,7 @@ func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, 
 		mgr.restoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
 	default:
 		glog.Errorf("Unknown EC response action %d", iReq.Act)
+		cmn.DrainReader(object)
 	}
 }
 
