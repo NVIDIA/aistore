@@ -102,8 +102,8 @@ func extractSpeed(lines []string) int64 {
 func TestRProxyGCS(t *testing.T) {
 	const coeff = 3 // cached download speed must be at least coeff times faster
 
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	config := getClusterConfig(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	config := tutils.GetClusterConfig(t)
 
 	// the test requires very specific configuration that cannot be enabled
 	// on the fly. That is why it is not Fatal error

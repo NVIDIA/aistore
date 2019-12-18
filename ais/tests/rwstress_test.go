@@ -324,7 +324,7 @@ func rwstress(t *testing.T) {
 		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, rwdir, err)
 	}
 
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
+	proxyURL := tutils.GetPrimaryURL()
 	created := createBucketIfNotExists(t, proxyURL, clibucket)
 	filelock.files = make([]fileLock, numFiles)
 

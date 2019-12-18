@@ -22,7 +22,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		objSize              = int64(cmn.KiB)
 		totalObjs            = objectCountPerWorker * workerCount
 		bucket               = t.Name() + "Bucket"
-		proxyURL             = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL             = tutils.GetPrimaryURL()
 		wg                   = &sync.WaitGroup{}
 	)
 
@@ -63,7 +63,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		objSize         = int64(cmn.KiB)
 
 		bucket   = t.Name() + "Bucket"
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL = tutils.GetPrimaryURL()
 		wg       = &sync.WaitGroup{}
 	)
 

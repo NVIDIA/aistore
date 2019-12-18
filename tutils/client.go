@@ -9,6 +9,8 @@
 package tutils
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils/tassert"
+	jsoniter "github.com/json-iterator/go"
 )
 
 var (
@@ -40,7 +43,6 @@ var (
 	// 	1. local instance (no docker) 	- works
 	//	2. local docker instance		- works
 	// 	3. AWS-deployed cluster 		- not tested (but runs mainly with Ansible)
-	readProxyURL       = "http://localhost:8080" // Just setting a default, will get actual value later
 	mockDaemonID       = "MOCK"
 	proxyChangeLatency = time.Minute * 2
 )
@@ -583,16 +585,22 @@ func GetConfig(server string) (HTTPLatencies, error) {
 	return l, err
 }
 
+func GetPrimaryURL() string {
+	primary, err := GetPrimaryProxy(proxyURLReadOnly)
+	if err != nil {
+		return proxyURLReadOnly
+	}
+	return primary.URL(cmn.NetworkPublic)
+}
+
 // GetPrimaryProxy returns the primary proxy's url of a cluster
 func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
-	readProxyURL = proxyURL // Sets the appropriate proxy url based on local, docker or AISURL environment var
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
 		return nil, err
 	}
-
-	return smap.ProxySI, nil
+	return smap.ProxySI, err
 }
 
 func CreateFreshBucket(t *testing.T, proxyURL, bucketFQN string) {
@@ -879,7 +887,7 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 }
 
 func DefaultBaseAPIParams(t *testing.T) api.BaseParams {
-	primary, err := GetPrimaryProxy(readProxyURL)
+	primary, err := GetPrimaryProxy(proxyURLReadOnly)
 	tassert.CheckFatal(t, err)
 	return BaseAPIParams(primary.URL(cmn.NetworkPublic))
 }
@@ -956,4 +964,253 @@ func GetXactionStats(baseParams api.BaseParams, kind string, buckets ...string) 
 	}
 
 	return api.MakeXactGetRequest(baseParams, kind, cmn.ActXactStats, bucket, true)
+}
+
+func allCompleted(targetsStats map[string][]*stats.BaseXactStatsExt) bool {
+	for target, targetStats := range targetsStats {
+		for _, xaction := range targetStats {
+			if xaction.Running() {
+				Logf("%s(%d) in progress for %s\n", xaction.Kind(), xaction.ShortID(), target)
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func CheckXactAPIErr(t *testing.T, err error) {
+	if err != nil {
+		if httpErr, ok := err.(*cmn.HTTPError); !ok {
+			t.Fatalf("Unrecognized error from xactions request: [%v]", err)
+		} else if httpErr.Status != http.StatusNotFound {
+			t.Fatalf("Unable to get global rebalance stats. Error: [%v]", err)
+		}
+	}
+}
+
+// nolint:unparam // for now timeout is always the same but it is better to keep it generalized
+func WaitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParams api.BaseParams, timeout time.Duration) {
+	var (
+		wg    = &sync.WaitGroup{}
+		ch    = make(chan error, 1)
+		sleep = 3 * time.Second
+		i     time.Duration
+	)
+	wg.Add(1)
+	go func() {
+		for {
+			time.Sleep(sleep)
+			i++
+			stats, err := GetXactionStats(baseParams, kind, bucket)
+			CheckXactAPIErr(t, err)
+			if allCompleted(stats) {
+				break
+			}
+			if i == 1 {
+				Logf("waiting for %s\n", kind)
+			}
+			if i*sleep > timeout {
+				ch <- errors.New(kind + ": timeout")
+				break
+			}
+		}
+		wg.Done()
+	}()
+	wg.Wait()
+	close(ch)
+	for err := range ch {
+		t.Fatal(err)
+	}
+}
+
+func WaitForBucketXactionToStart(t *testing.T, kind, bucket string, baseParams api.BaseParams, timeouts ...time.Duration) {
+	var (
+		start   = time.Now()
+		timeout = time.Duration(0)
+		logged  = false
+	)
+
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	}
+
+	for {
+		stats, err := GetXactionStats(baseParams, kind, bucket)
+		CheckXactAPIErr(t, err)
+		for _, targetStats := range stats {
+			for _, xaction := range targetStats {
+				if xaction.Running() {
+					return // xaction started
+				}
+			}
+		}
+		if len(stats) > 0 {
+			return // all xaction finished
+		}
+
+		if !logged {
+			Logf("waiting for %s to start\n", kind)
+			logged = true
+		}
+
+		if timeout != 0 && time.Since(start) > timeout {
+			t.Fatalf("%s has not started before %s", kind, timeout)
+			return
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+}
+
+// Waits for both local and global rebalances to complete
+// If they were not started, this function treats them as completed
+// and returns. If timeout set, if any of rebalances doesn't complete before timeout
+// the function ends with fatal
+func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeouts ...time.Duration) {
+	start := time.Now()
+	time.Sleep(time.Second * 10)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	ch := make(chan error, 2)
+
+	timeout := time.Duration(0)
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	}
+	sleep := time.Second * 10
+	go func() {
+		var logged bool
+		defer wg.Done()
+		for {
+			time.Sleep(sleep)
+			globalRebalanceStats, err := GetXactionStats(baseParams, cmn.ActGlobalReb)
+			CheckXactAPIErr(t, err)
+
+			if allCompleted(globalRebalanceStats) {
+				return
+			}
+			if !logged {
+				Logf("waiting for global rebalance\n")
+				logged = true
+			}
+
+			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
+				ch <- errors.New("global rebalance has not completed before " + timeout.String())
+				return
+			}
+		}
+	}()
+
+	go func() {
+		var logged bool
+		defer wg.Done()
+		for {
+			time.Sleep(sleep)
+			localRebalanceStats, err := GetXactionStats(baseParams, cmn.ActLocalReb)
+			CheckXactAPIErr(t, err)
+
+			if allCompleted(localRebalanceStats) {
+				return
+			}
+			if !logged {
+				Logf("waiting for local rebalance\n")
+				logged = true
+			}
+
+			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
+				ch <- errors.New("global rebalance has not completed before " + timeout.String())
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+	close(ch)
+
+	for err := range ch {
+		t.Fatal(err)
+	}
+}
+
+func GetClusterStats(t *testing.T, proxyURL string) (stats stats.ClusterStats) {
+	baseParams := BaseAPIParams(proxyURL)
+	clusterStats, err := api.GetClusterStats(baseParams)
+	tassert.CheckFatal(t, err)
+	return clusterStats
+}
+
+func GetNamedTargetStats(trunner *stats.Trunner, name string) int64 {
+	v, ok := trunner.Core.Tracker[name]
+	if !ok {
+		return 0
+	}
+	return v.Value
+}
+
+func GetDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
+	q := GetWhatRawQuery(cmn.GetWhatStats, "")
+	url = fmt.Sprintf("%s?%s", url+cmn.URLPath(cmn.Version, cmn.Daemon), q)
+	resp, err := DefaultHTTPClient.Get(url)
+	if err != nil {
+		t.Fatalf("Failed to perform get, err = %v", err)
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body, err = %v", err)
+	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		t.Fatalf("HTTP error = %d, message = %s", err, string(b))
+	}
+
+	dec := jsoniter.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	// If this isn't used, json.Unmarshal converts uint32s to floats, losing precision
+	err = dec.Decode(&stats)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal config: %v", err)
+	}
+
+	return
+}
+
+func GetClusterMap(t *testing.T, url string) *cluster.Smap {
+	baseParams := BaseAPIParams(url)
+	time.Sleep(time.Second * 2)
+	smap, err := api.GetClusterMap(baseParams)
+	tassert.CheckFatal(t, err)
+	return smap
+}
+
+func GetClusterConfig(t *testing.T) (config *cmn.Config) {
+	proxyURL := GetPrimaryURL()
+	primary, err := GetPrimaryProxy(proxyURL)
+	tassert.CheckFatal(t, err)
+	return GetDaemonConfig(t, primary.ID())
+}
+
+func GetDaemonConfig(t *testing.T, nodeID string) (config *cmn.Config) {
+	var (
+		err        error
+		proxyURL   = GetPrimaryURL()
+		baseParams = BaseAPIParams(proxyURL)
+	)
+	config, err = api.GetDaemonConfig(baseParams, nodeID)
+	tassert.CheckFatal(t, err)
+	return
+}
+
+func SetDaemonConfig(t *testing.T, proxyURL string, nodeID string, nvs cmn.SimpleKVs) {
+	baseParams := BaseAPIParams(proxyURL)
+	err := api.SetDaemonConfig(baseParams, nodeID, nvs)
+	tassert.CheckFatal(t, err)
+}
+
+func SetClusterConfig(t *testing.T, nvs cmn.SimpleKVs) {
+	proxyURL := GetPrimaryURL()
+	baseParams := BaseAPIParams(proxyURL)
+	err := api.SetClusterConfig(baseParams, nvs)
+	tassert.CheckFatal(t, err)
 }

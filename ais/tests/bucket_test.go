@@ -25,15 +25,15 @@ import (
 func TestDefaultBucketProps(t *testing.T) {
 	const dataSlices = 7
 	var (
-		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
-		globalConfig = getClusterConfig(t, proxyURL)
+		proxyURL     = tutils.GetPrimaryURL()
+		globalConfig = tutils.GetClusterConfig(t)
 	)
 
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{
 		"ec.enabled":     "true",
 		"ec.data_slices": strconv.FormatUint(dataSlices, 10),
 	})
-	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{
 		"ec.enabled":       "false",
 		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
@@ -53,13 +53,13 @@ func TestDefaultBucketProps(t *testing.T) {
 
 func TestResetBucketProps(t *testing.T) {
 	var (
-		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
-		globalConfig = getClusterConfig(t, proxyURL)
+		proxyURL     = tutils.GetPrimaryURL()
+		globalConfig = tutils.GetClusterConfig(t)
 		baseParams   = tutils.DefaultBaseAPIParams(t)
 	)
 
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"ec.enabled": "true"})
-	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{"ec.enabled": "true"})
+	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{
 		"ec.enabled":       "false",
 		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
@@ -104,7 +104,11 @@ func TestResetBucketProps(t *testing.T) {
 }
 
 func TestSetInvalidBucketProps(t *testing.T) {
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	var (
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
+
 	tests := []struct {
 		name  string
 		props cmn.BucketPropsToUpdate
@@ -175,7 +179,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		objectCount = 1340 // must be greater than 1000(AWS page size)
 
 		bucket   = clibucket
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL = tutils.GetPrimaryURL()
 		wg       = &sync.WaitGroup{}
 		sema     = make(chan struct{}, 40) // throttle DELETE
 	)
@@ -264,7 +268,7 @@ func TestListObjects(t *testing.T) {
 		bucket = t.Name() + "Bucket"
 		wg     = &sync.WaitGroup{}
 
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -449,7 +453,7 @@ func TestListObjectsPrefix(t *testing.T) {
 	)
 
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -502,7 +506,7 @@ func TestListObjectsPrefix(t *testing.T) {
 			}()
 
 			close(filesPutCh)
-			selectErr(errCh, "put", t, true /*fatal*/)
+			tassert.SelectErr(t, errCh, "put", true /*fatal*/)
 			close(errCh)
 
 			tests := []struct {
@@ -627,6 +631,7 @@ func TestBucketListAndSummary(t *testing.T) {
 					num: 2234,
 				}
 				cacheSize  = 1234 // determines number of objects which should be cached
+				proxyURL   = tutils.GetPrimaryURL()
 				baseParams = tutils.DefaultBaseAPIParams(t)
 			)
 
@@ -869,7 +874,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 
 func TestBucketInvalidName(t *testing.T) {
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
@@ -1033,7 +1038,7 @@ func TestCloudMirror(t *testing.T) {
 	if l < m.num {
 		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s, required %d", t.Name(), m.bucket, m.num)
 	}
-	smap := getClusterMap(t, baseParams.URL)
+	smap := tutils.GetClusterMap(t, baseParams.URL)
 	{
 		target := tutils.ExtractTargetNodes(smap)[0]
 		mpList, err := api.GetMountpaths(baseParams, target)
@@ -1198,7 +1203,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	err = api.RenameBucket(baseParams, srcBckName, m.bucket)
 	tassert.CheckFatal(t, err)
 
-	waitForBucketXactionToComplete(t, cmn.ActRenameLB /*kind*/, srcBckName, baseParams, rebalanceTimeout)
+	tutils.WaitForBucketXactionToComplete(t, cmn.ActRenameLB /*kind*/, srcBckName, baseParams, rebalanceTimeout)
 
 	// Gets on renamed ais bucket
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1328,6 +1333,7 @@ func TestCopyBucket(t *testing.T) {
 					},
 				}
 				baseParams = tutils.DefaultBaseAPIParams(t)
+				proxyURL   = tutils.GetPrimaryURL()
 			)
 
 			if test.multipleDests {
@@ -1407,7 +1413,7 @@ func TestCopyBucket(t *testing.T) {
 			}
 
 			for _, dstm := range dstms {
-				waitForBucketXactionToComplete(t, cmn.ActCopyBucket /*kind*/, dstm.bucket, baseParams, rebalanceTimeout)
+				tutils.WaitForBucketXactionToComplete(t, cmn.ActCopyBucket /*kind*/, dstm.bucket, baseParams, rebalanceTimeout)
 			}
 
 			tutils.Logln("checking and comparing bucket props")

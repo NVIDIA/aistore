@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -18,21 +17,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func getPrimaryURL(t *testing.T) string {
-	primary, err := tutils.GetPrimaryProxy("http://localhost:8080")
-	if err != nil {
-		t.Fatalf("Failed to get primary proxy URL: %v", err)
-	}
-	return primary.URL(cmn.NetworkPublic)
-}
-
-var (
-	proxyURL string
-)
-
 func TestE2E(t *testing.T) {
-	proxyURL = getPrimaryURL(t)
-
 	cmd := exec.Command("which", "aisfs")
 	if err := cmd.Run(); err != nil {
 		t.Skip("'aisfs' binary not found")
@@ -66,6 +51,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 	BeforeEach(func() {
 		var err error
 
+		proxyURL := tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bucket = tutils.GenRandomString(10)
 		fuseDir, err = ioutil.TempDir("/tmp", "")

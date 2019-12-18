@@ -54,7 +54,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		t:        t,
 		seed:     baseseed + 300,
 		numObjs:  100,
-		proxyURL: getPrimaryURL(t, proxyURLReadOnly),
+		proxyURL: tutils.GetPrimaryURL(),
 		bucket:   TestBucketName,
 		fileSize: 64 * cmn.KiB,
 		mpList:   make(cluster.NodeMap, 10),
@@ -71,7 +71,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 
 func (md *checkerMD) init() {
 	md.baseParams = tutils.BaseAPIParams(md.proxyURL)
-	md.smap = getClusterMap(md.t, md.proxyURL)
+	md.smap = tutils.GetClusterMap(md.t, md.proxyURL)
 
 	for targetID, tinfo := range md.smap.Tmap {
 		tutils.Logf("Target: %s\n", targetID)
@@ -238,7 +238,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 	defer wg.Done()
 
 	const fileSize = 64 * cmn.KiB
-	var proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+	var proxyURL = tutils.GetPrimaryURL()
 
 	tutils.Logf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
@@ -315,7 +315,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
 		}
 
-		waitForRebalanceToComplete(t, md.baseParams, rebalanceTimeout)
+		tutils.WaitForRebalanceToComplete(t, md.baseParams, rebalanceTimeout)
 	}()
 
 	// generate some filenames to PUT to them in a loop
@@ -349,15 +349,17 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 		t.Skipf("%s requires direct filesystem access, doesn't work with docker", t.Name())
 	}
 
-	md := newCheckerMD(t)
+	var (
+		md = newCheckerMD(t)
+	)
 
 	if md.origAvail == 0 {
 		t.Fatal("No available mountpaths found")
 	}
 
 	tutils.Logf("*** Testing with disabled FSHC***\n")
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc.enabled": "false"})
-	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc.enabled": "true"})
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{"fshc.enabled": "false"})
+	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"fshc.enabled": "true"})
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
@@ -373,11 +375,11 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
 		}
 
-		waitForRebalanceToComplete(t, md.baseParams, rebalanceTimeout)
+		tutils.WaitForRebalanceToComplete(t, md.baseParams, rebalanceTimeout)
 	}()
 
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
-	objList := []string{}
+	var objList []string
 	for n := 0; n < 5; n++ {
 		objName := fmt.Sprintf("obj-fshc-%d", n)
 		objList = append(objList, objName)
@@ -388,14 +390,14 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	// Checking detection on object GET
 	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, objList, sgl)
 
-	waitForRebalanceToComplete(t, tutils.BaseAPIParams(md.proxyURL), rebalanceTimeout)
+	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(md.proxyURL), rebalanceTimeout)
 }
 
 func TestFSCheckerEnablingMpath(t *testing.T) {
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		smap       = getClusterMap(t, proxyURL)
+		smap       = tutils.GetClusterMap(t, proxyURL)
 		mpList     = make(cluster.NodeMap, 10)
 		allMps     = make(map[*cluster.Snode]*cmn.MountpathList, 10)
 		origAvail  = 0
@@ -454,9 +456,9 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 	var (
 		target *cluster.Snode
 
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		smap       = getClusterMap(t, proxyURL)
+		smap       = tutils.GetClusterMap(t, proxyURL)
 		proxyCnt   = smap.CountProxies()
 		targetCnt  = smap.CountTargets()
 	)

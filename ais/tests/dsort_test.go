@@ -1808,8 +1808,8 @@ func TestDistributedSortMissingShards(t *testing.T) {
 					// Create ais bucket
 					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
 					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
-					defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.AbortReaction})
-					setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
+					defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.AbortReaction})
+					tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
 
 					tutils.Logf("changed `missing_shards` config to: %s\n", reaction)
 
@@ -1867,8 +1867,8 @@ func TestDistributedSortDuplications(t *testing.T) {
 					// Create ais bucket
 					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
 					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
-					defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
-					setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
+					defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
+					tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
 
 					df.init()
 					df.clearDSortList()
@@ -1914,6 +1914,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					"input-%d-pref",
 					"smth-%d",
 				}
+				proxyURL = tutils.GetPrimaryURL()
 			)
 
 			// Initialize ioContext

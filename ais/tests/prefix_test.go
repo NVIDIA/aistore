@@ -33,7 +33,7 @@ var (
 // the names starting with the prefix;
 // otherwise, the test creates (PUT) random files and executes 'a*' through 'z*' listings.
 func TestPrefix(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
+	proxyURL := tutils.GetPrimaryURL()
 
 	tutils.Logf("Looking for files with prefix [%s]\n", prefix)
 	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {

@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/containers"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -34,9 +32,6 @@ const (
 	SmokeDir                = "/tmp/ais/smoke" // smoke test dir
 	SmokeStr                = "smoke"
 	largeFileSize           = 4 * cmn.MiB
-	proxyURL                = "http://localhost:8080"      // the url for the cluster's proxy (local)
-	proxyURLNext            = "http://localhost:11080"     // the url for the next cluster's proxy (local)
-	dockerEnvFile           = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 	readerType              = tutils.ReaderTypeSG
 	rebalanceTimeout        = 5 * time.Minute
 	rebalanceStartTimeout   = 10 * time.Second
@@ -58,18 +53,10 @@ var (
 	clichecksum            string
 	cycles                 int
 
-	clibucket                string
-	proxyURLReadOnly         string // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
-	proxyNextTierURLReadOnly string // user-defined primary proxy URL for the second cluster - it is read-only variable and tests mustn't change it
-
-	envVars        = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
-	primaryHostIP  = envVars["PRIMARY_HOST_IP"]              // Host IP of primary cluster
-	nextTierHostIP = envVars["NEXT_TIER_HOST_IP"]            // IP of the next tier cluster
-	port           = envVars["PORT"]
+	clibucket string
 )
 
 func TestMain(m *testing.M) {
-	flag.StringVar(&proxyNextTierURLReadOnly, "urlnext", proxyURLNext, "Proxy URL Next Tier")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 	flag.StringVar(&match, "match", ".*", "object name regex")
@@ -91,35 +78,9 @@ func TestMain(m *testing.M) {
 
 	flag.Parse()
 
-	proxyURLReadOnly = proxyURL
-	if containers.DockerRunning() && proxyURLReadOnly == proxyURL {
-		proxyURLReadOnly = "http://" + primaryHostIP + ":" + port
-	}
-	if containers.DockerRunning() && proxyNextTierURLReadOnly == proxyURLNext {
-		proxyNextTierURLReadOnly = "http://" + nextTierHostIP + ":" + port
-	}
-
 	clibucket = os.Getenv("BUCKET")
 	if clibucket == "" {
 		cmn.ExitInfof("Bucket name is empty")
-	}
-
-	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'
-	// Many of the other packages do not accept the 'url' flag
-	cliAISURL := os.Getenv("AISURL")
-	if cliAISURL != "" {
-		proxyURLReadOnly = "http://" + cliAISURL
-	}
-	// primary proxy can change if proxy tests are run and no new cluster is re-deployed before each test.
-	// finds who is the current primary proxy
-	primary, err := tutils.GetPrimaryProxy(proxyURLReadOnly)
-	if err != nil {
-		cmn.ExitInfof("Failed to get primary proxy, err = %v", err)
-	}
-	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
-
-	if proxyURLReadOnly == proxyNextTierURLReadOnly {
-		cmn.ExitInfof("Proxy URL for first and next tier cluster cannot be the same")
 	}
 
 	rand.Seed(time.Now().UnixNano())

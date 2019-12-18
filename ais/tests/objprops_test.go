@@ -18,13 +18,13 @@ import (
 )
 
 func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged int64) {
-	cstats := getClusterStats(t, proxyURL)
+	cstats := tutils.GetClusterStats(t, proxyURL)
 	objChanged = 0
 	bytesChanged = 0
 
 	for _, v := range cstats.Target {
-		objChanged += getNamedTargetStats(v, stats.VerChangeCount)
-		bytesChanged += getNamedTargetStats(v, stats.VerChangeSize)
+		objChanged += tutils.GetNamedTargetStats(v, stats.VerChangeCount)
+		bytesChanged += tutils.GetNamedTargetStats(v, stats.VerChangeSize)
 	}
 	return
 }
@@ -224,7 +224,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bucket, objects)
 
-	smap := getClusterMap(t, proxyURL)
+	smap := tutils.GetClusterMap(t, proxyURL)
 	l := smap.CountTargets()
 	if l < 2 {
 		t.Skipf("Only %d targets found, need at least 2", l)
@@ -260,7 +260,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		smap.CountTargets()+1,
 	)
 	tassert.CheckFatal(t, err)
-	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	tutils.Logf("Reading file versions...\n")
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
@@ -314,7 +314,7 @@ func propsCleanupObjects(t *testing.T, proxyURL, bucket string, newVersions map[
 		go tutils.Del(proxyURL, bucket, objname, "", wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
-	selectErr(errCh, "delete", t, abortonerr)
+	tassert.SelectErr(t, errCh, "delete", abortonerr)
 	close(errCh)
 }
 
@@ -330,7 +330,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 		numPuts    = objCountToTest
 		bucket     = clibucket
 		versionDir = "versionid"
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 	)
 
 	sgl := tutils.Mem2.NewSGL(filesize)
@@ -340,7 +340,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 	tutils.Logf("Creating %d objects...\n", numPuts)
 	ldir := LocalSrcDir + "/" + versionDir
 	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, versionDir, filesize, numPuts, errCh, filesPutCh, sgl)
-	selectErr(errCh, "put", t, false)
+	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh)
 	close(errCh)
 	for fname := range filesPutCh {
@@ -411,10 +411,10 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 }
 
 func propsMainTest(t *testing.T, versioning bool) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
+	proxyURL := tutils.GetPrimaryURL()
 	chkVersion := true
 
-	config := getClusterConfig(t, proxyURL)
+	config := tutils.GetClusterConfig(t)
 	oldChkVersion := config.Versioning.ValidateWarmGet
 	oldVersioning := config.Versioning.Enabled
 
@@ -427,7 +427,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 		newConfig[cmn.HeaderBucketVerValidateWarm] = strconv.FormatBool(warmCheck)
 	}
 	if len(newConfig) != 0 {
-		setClusterConfig(t, proxyURL, newConfig)
+		tutils.SetClusterConfig(t, newConfig)
 	}
 	created := createBucketIfNotExists(t, proxyURL, clibucket)
 
@@ -442,7 +442,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 			newConfig[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(oldVersioning)
 		}
 		if len(newConfig) != 0 {
-			setClusterConfig(t, proxyURL, newConfig)
+			tutils.SetClusterConfig(t, newConfig)
 		}
 		if created {
 			tutils.DestroyBucket(t, proxyURL, clibucket)

@@ -138,7 +138,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 	for {
 		time.Sleep(sleep)
 		downloaderStats, err := tutils.GetXactionStats(baseParams, cmn.ActDownload)
-		checkXactAPIErr(t, err)
+		tutils.CheckXactAPIErr(t, err)
 
 		if downloaderCompleted(t, targetID, downloaderStats) {
 			tutils.Logf("downloader has finished\n")
@@ -154,7 +154,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 
 func TestDownloadSingle(t *testing.T) {
 	var (
-		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL      = tutils.GetPrimaryURL()
 		bucket        = TestBucketName
 		objname       = "object"
 		objnameSecond = "object-second"
@@ -228,7 +228,7 @@ func TestDownloadSingle(t *testing.T) {
 
 func TestDownloadRange(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL = tutils.GetPrimaryURL()
 		bucket   = TestBucketName
 
 		template = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000000..000007}.tgz"
@@ -253,7 +253,7 @@ func TestDownloadRange(t *testing.T) {
 
 func TestDownloadMultiRange(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL = tutils.GetPrimaryURL()
 		bucket   = TestBucketName
 
 		template = "storage.googleapis.com/lpr-imagenet-augmented/imagenet_train-{0000..0007}-{001..009}.tgz"
@@ -278,7 +278,7 @@ func TestDownloadMultiRange(t *testing.T) {
 
 func TestDownloadMultiMap(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL = tutils.GetPrimaryURL()
 		bucket   = TestBucketName
 		m        = map[string]string{
 			"ais": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
@@ -308,7 +308,7 @@ func TestDownloadMultiMap(t *testing.T) {
 
 func TestDownloadMultiList(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL = tutils.GetPrimaryURL()
 		bucket   = TestBucketName
 		l        = []string{
 			"https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
@@ -339,7 +339,7 @@ func TestDownloadMultiList(t *testing.T) {
 
 func TestDownloadTimeout(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL = tutils.GetPrimaryURL()
 		bucket   = TestBucketName
 		objname  = "object"
 		link     = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
@@ -389,7 +389,7 @@ func TestDownloadCloud(t *testing.T) {
 	}
 
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		bucket     = clibucket
 
@@ -523,7 +523,7 @@ func TestDownloadStatusError(t *testing.T) {
 
 	var (
 		bucket     = TestBucketName
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		files      = map[string]string{
 			"invalidURL":   "http://some.invalid.url",
@@ -573,7 +573,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	}
 
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
 		bucket        = TestBucketName
@@ -614,7 +614,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	}
 
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
 		bucket        = TestBucketName
@@ -654,7 +654,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	}
 
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
 		bucket   = TestBucketName
@@ -707,7 +707,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 
 func TestDownloadMpathEvents(t *testing.T) {
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		bucket     = TestBucketName
 		objsCnt    = 100
@@ -729,7 +729,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tutils.Logf("Started large download job %s, meant to be aborted\n", id)
 
-	smap := getClusterMap(t, proxyURL)
+	smap := tutils.GetClusterMap(t, proxyURL)
 	removeTarget := tutils.ExtractTargetNodes(smap)[0]
 
 	mpathList, err := api.GetMountpaths(baseParams, removeTarget)

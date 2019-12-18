@@ -36,3 +36,15 @@ func Errorf(t *testing.T, cond bool, msg string, args ...interface{}) {
 		t.Errorf(msg, args...)
 	}
 }
+
+func SelectErr(t *testing.T, errCh chan error, verb string, errIsFatal bool) {
+	select {
+	case err := <-errCh:
+		if errIsFatal {
+			t.Fatalf("Failed to %s objects: %v", verb, err)
+		} else {
+			t.Errorf("Failed to %s objects: %v", verb, err)
+		}
+	default:
+	}
+}

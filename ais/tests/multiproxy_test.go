@@ -60,8 +60,8 @@ func TestMultiProxy(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountProxies() < 3 {
 		t.Fatal("Not enough proxies to run proxy tests, must be more than 2")
 	}
@@ -83,8 +83,8 @@ func TestMultiProxy(t *testing.T) {
 // clusterHealthCheck verifies the cluster has the same servers after tests
 // note: add verify primary if primary is reset
 func clusterHealthCheck(t *testing.T, smapBefore *cluster.Smap) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smapAfter := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smapAfter := tutils.GetClusterMap(t, proxyURL)
 	if smapAfter.CountTargets() != smapBefore.CountTargets() {
 		t.Fatalf("Number of targets mismatch, before = %d, after = %d",
 			smapBefore.CountTargets(), smapAfter.CountTargets())
@@ -144,8 +144,8 @@ func clusterHealthCheck(t *testing.T, smapBefore *cluster.Smap) {
 // primaryCrashElectRestart kills the current primary proxy, wait for the new primary proxy is up and verifies it,
 // restores the original primary proxy as non primary
 func primaryCrashElectRestart(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 	checkPmapVersions(t, proxyURL)
@@ -186,8 +186,8 @@ func primaryAndTargetCrash(t *testing.T) {
 		t.Skip("Skipped because setting new primary URL in command line for docker is not supported")
 	}
 
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 
@@ -236,8 +236,8 @@ func primaryAndTargetCrash(t *testing.T) {
 // A very simple test to check if a primary proxy can detect non-primary one
 // dies and then update and sync SMap
 func proxyCrash(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 
 	oldPrimaryURL, oldPrimaryID := smap.ProxySI.PublicNet.DirectURL, smap.ProxySI.ID()
 	tutils.Logf("Primary proxy: %s\n", oldPrimaryURL)
@@ -280,8 +280,8 @@ func proxyCrash(t *testing.T) {
 // primaryAndProxyCrash kills primary proxy and one another proxy(not the next in line primary)
 // and restore them afterwards
 func primaryAndProxyCrash(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 
@@ -348,8 +348,8 @@ func targetRejoin(t *testing.T) {
 		port string
 	)
 
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	for _, v := range smap.Tmap {
 		id = v.ID()
 		port = v.PublicNet.DaemonPort
@@ -378,8 +378,8 @@ func targetRejoin(t *testing.T) {
 
 // crashAndFastRestore kills the primary and restores it before a new leader is elected
 func crashAndFastRestore(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 
 	id := smap.ProxySI.ID()
 	tutils.Logf("The current primary %s, Smap version %d\n", id, smap.Version)
@@ -410,8 +410,8 @@ func joinWhileVoteInProgress(t *testing.T) {
 		t.Skip("Skipping because mocking is not supported for docker cluster")
 	}
 
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	oldTargetCnt := smap.CountTargets()
 	oldProxyCnt := smap.CountProxies()
@@ -442,7 +442,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 	// check if the previous primary proxy has not yet rejoined the cluster
 	// it should be waiting for the mock target to return voteInProgress=false
 	time.Sleep(5 * time.Second)
-	smap = getClusterMap(t, newPrimaryURL)
+	smap = tutils.GetClusterMap(t, newPrimaryURL)
 	if smap.ProxySI.ID() != newPrimaryID {
 		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.ID(), newPrimaryID)
 	}
@@ -479,7 +479,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 }
 
 func minorityTargetMapVersionMismatch(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
+	proxyURL := tutils.GetPrimaryURL()
 	targetMapVersionMismatch(
 		func(i int) int {
 			return i/4 + 1
@@ -487,7 +487,7 @@ func minorityTargetMapVersionMismatch(t *testing.T) {
 }
 
 func majorityTargetMapVersionMismatch(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
+	proxyURL := tutils.GetPrimaryURL()
 	targetMapVersionMismatch(
 		func(i int) int {
 			return i/2 + 1
@@ -497,7 +497,7 @@ func majorityTargetMapVersionMismatch(t *testing.T) {
 // targetMapVersionMismatch updates map version of a few targets, kill the primary proxy
 // wait for the new leader to come online
 func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL string) {
-	smap := getClusterMap(t, proxyURL)
+	smap := tutils.GetClusterMap(t, proxyURL)
 	oldVer := smap.Version
 	oldProxyCnt := smap.CountProxies()
 
@@ -545,8 +545,8 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently
 func concurrentPutGetDel(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 
 	createBucketIfNotExists(t, proxyURL, clibucket)
 
@@ -698,7 +698,7 @@ loop:
 		default:
 		}
 
-		smap := getClusterMap(t, proxyURL)
+		smap := tutils.GetClusterMap(t, proxyURL)
 		_, nextProxyURL, err := chooseNextProxy(smap)
 		tassert.CheckFatal(t, err)
 
@@ -733,7 +733,7 @@ func proxyStress(t *testing.T) {
 		stopChs     = make([]chan struct{}, numworkers+1)
 		proxyURLChs = make([]chan string, numworkers)
 		wg          sync.WaitGroup
-		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
+		proxyURL    = tutils.GetPrimaryURL()
 	)
 
 	createBucketIfNotExists(t, proxyURL, localBucketName)
@@ -934,12 +934,12 @@ func getProcess(port string) (string, string, []string, error) {
 // Read Pmap from all proxies and checks versions. If any proxy's smap version
 // differs from primary's one then an error returned
 func checkPmapVersions(t *testing.T, proxyURL string) {
-	smapPrimary := getClusterMap(t, proxyURL)
+	smapPrimary := tutils.GetClusterMap(t, proxyURL)
 	for proxyID, proxyInfo := range smapPrimary.Pmap {
 		if proxyURL == proxyInfo.PublicNet.DirectURL {
 			continue
 		}
-		smap := getClusterMap(t, proxyInfo.PublicNet.DirectURL)
+		smap := tutils.GetClusterMap(t, proxyInfo.PublicNet.DirectURL)
 		if smap.Version != smapPrimary.Version {
 			err := fmt.Errorf("proxy %s has version %d, but primary proxy has version %d of Pmap",
 				proxyID, smap.Version, smapPrimary.Version)
@@ -954,8 +954,8 @@ func checkPmapVersions(t *testing.T, proxyURL string) {
 // primary proxy was down and retuned back. So, the test should be executed
 // after primaryCrashElectRestart test
 func primarySetToOriginal(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	var (
 		currID, currURL       string
 		byURL, byPort, origID string
@@ -967,7 +967,7 @@ func primarySetToOriginal(t *testing.T) {
 	}
 	tutils.Logf("Setting primary proxy %s back to the original, Smap version %d\n", currID, smap.Version)
 
-	config := getClusterConfig(t, proxyURL)
+	config := tutils.GetClusterConfig(t)
 	proxyconf := config.Proxy
 	origURL := proxyconf.OriginalURL
 
@@ -1040,8 +1040,8 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 }
 
 func networkFailureTarget(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountTargets() == 0 {
 		t.Fatal("At least 1 target required")
 	}
@@ -1081,8 +1081,8 @@ func networkFailureTarget(t *testing.T) {
 }
 
 func networkFailureProxy(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountProxies() < 2 {
 		t.Fatal("At least 2 proxy required")
 	}
@@ -1125,8 +1125,8 @@ func networkFailureProxy(t *testing.T) {
 }
 
 func networkFailurePrimary(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountProxies() < 2 {
 		t.Fatal("At least 2 proxy required")
 	}
@@ -1171,7 +1171,7 @@ func networkFailurePrimary(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 
-	oldSmap := getClusterMap(t, oldPrimaryURL)
+	oldSmap := tutils.GetClusterMap(t, oldPrimaryURL)
 	// the original primary still thinks that it is the primary, so its smap
 	// should not change after the network is back
 	if oldSmap.ProxySI.ID() != oldPrimaryID {
@@ -1214,8 +1214,8 @@ func networkFailure(t *testing.T) {
 // after the current primary dies, verifies the second in line proxy becomes
 // the new primary, restore all proxies
 func primaryAndNextCrash(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
+	proxyURL := tutils.GetPrimaryURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
 	origProxyCount := smap.CountProxies()
 
 	if origProxyCount < 4 {
@@ -1227,7 +1227,7 @@ func primaryAndNextCrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	// Cluster map is re-read to have a clone of original smap that the test
 	// can modify in any way it needs. Because original smap got must be preserved
-	smapNext := getClusterMap(t, proxyURL)
+	smapNext := tutils.GetClusterMap(t, proxyURL)
 	// get next next primary
 	firstPrimary := smapNext.Pmap[firstPrimaryID]
 	delete(smapNext.Pmap, firstPrimaryID)
