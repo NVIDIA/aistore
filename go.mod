@@ -5,11 +5,10 @@ go 1.13
 require (
 	cloud.google.com/go v0.30.0
 	github.com/OneOfOne/xxhash v1.2.5
-	github.com/aws/aws-sdk-go v1.15.57
+	github.com/aws/aws-sdk-go v1.26.5
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc // indirect
 	github.com/frankban/quicktest v1.5.0 // indirect
-	github.com/go-ini/ini v1.39.0 // indirect
 	github.com/google/martian v2.1.0+incompatible // indirect
 	github.com/googleapis/gax-go v2.0.0+incompatible // indirect
 	github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f
@@ -27,7 +26,6 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/sdomino/scribble v0.0.0-20190805145214-552710ac067a
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
-	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
 	github.com/urfave/cli v1.20.0
@@ -39,5 +37,4 @@ require (
 	google.golang.org/appengine v1.2.0 // indirect
 	google.golang.org/genproto v0.0.0-20181016170114-94acd270e44e // indirect
 	google.golang.org/grpc v1.15.0 // indirect
-	gopkg.in/ini.v1 v1.48.0 // indirect
 )
