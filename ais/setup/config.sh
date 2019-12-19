@@ -59,6 +59,7 @@ cat > $CONFFILE <<EOL
 	},
 	"rebalance": {
 		"dest_retry_time":	"2m",
+		"quiescent":		"20s",
 		"compression":		"${COMPRESSION:-never}",
 		"multiplier":		${REBALANCE_MULTIPLIER:-4},
 		"enabled":		true

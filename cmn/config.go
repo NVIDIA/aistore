@@ -395,7 +395,9 @@ type DiskConf struct {
 
 type RebalanceConf struct {
 	DestRetryTimeStr string        `json:"dest_retry_time"` // max time to wait for ACKs and for neighbors to complete
+	QuiesceStr       string        `json:"quiescent"`       // max time to wait for no object is received before moving to the next stage/batch
 	Compression      string        `json:"compression"`     // see CompressAlways, etc. enum
+	Quiesce          time.Duration `json:"-"`               // (runtime)
 	DestRetryTime    time.Duration `json:"-"`               // (runtime)
 	Multiplier       uint8         `json:"multiplier"`      // stream-bundle-and-jogger multiplier
 	Enabled          bool          `json:"enabled"`         // true: auto-rebalance, false: manual rebalancing
@@ -869,6 +871,9 @@ func (c *TimeoutConf) Validate(_ *Config) (err error) {
 func (c *RebalanceConf) Validate(_ *Config) (err error) {
 	if c.DestRetryTime, err = time.ParseDuration(c.DestRetryTimeStr); err != nil {
 		return fmt.Errorf("invalid rebalance.dest_retry_time format %s, err %v", c.DestRetryTimeStr, err)
+	}
+	if c.Quiesce, err = time.ParseDuration(c.QuiesceStr); err != nil {
+		return fmt.Errorf("invalid rebalance.quiesce format %s, err %v", c.QuiesceStr, err)
 	}
 	return nil
 }

@@ -88,6 +88,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | rebalance.enabled | true | Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(`PUT {"action": "rebalance" v1/cluster`) to initiate cluster-wide rebalancing operation |
 | rebalance.dest_retry_time | 2m | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | rebalance.multiplier | 4 | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
+| rebalance.quiescent | 20s | Rebalace moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
 | timeout.send_file_time | 5m | Timeout for getting object from neighbor target or for sending an object to the correct target while rebalance is in progress |
 | timeout.default_timeout | 30s | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
 | timeout.default_long_timeout | 30m | Default timeout for long intra-cluster requests, e.g. reading an object from neighbor target while rebalancing |

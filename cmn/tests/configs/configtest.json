@@ -58,6 +58,9 @@
   },
   "rebalance": {
     "enabled":         true,
+	"quiescent":       "20s",
+	"compression":     "never",
+	"multiplier":       4,
     "dest_retry_time": "2m"
   },
   "cksum": {

@@ -178,6 +178,7 @@ type (
 		mtx    sync.Mutex
 		mgr    *Manager
 		waiter *ecWaiter // helper to manage a list of slices for current batch to wait by local target
+		broken []*ecRebObject
 
 		// list of slices/replicas that should be moved between local mpaths
 		localActions []*ecRebSlice
@@ -189,6 +190,8 @@ type (
 		waitNrebuild map[string]int
 		// the batch ID a target has processed. DaemonID <-> BatchID
 		tgtBatch map[string]int
+		// the current batch ID
+		batchID int
 	}
 
 	// a description of a slice that local target awaits from another target
@@ -587,6 +590,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 		return err
 	}
 
+	s.mgr.laterx.Store(true)
 	sliceID := md.SliceID
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 		glog.Infof(">>> %s got slice %d for %s/%s[%t]", s.t.Snode().Name(), sliceID, hdr.Bucket, hdr.Objname, hdr.BckIsAIS)
@@ -727,8 +731,8 @@ func (s *ecRebalancer) mergeSlices() *ecRebResult {
 // Find objects that have either missing or misplaced parts. If a part is a
 // slice or replica(not the "default" object) and mpath is correct the object
 // is not considered as broken one even if its target is not in HRW list
-func (s *ecRebalancer) detectBroken(res *ecRebResult) []*ecRebObject {
-	broken := make([]*ecRebObject, 0)
+func (s *ecRebalancer) detectBroken(res *ecRebResult) {
+	s.broken = make([]*ecRebObject, 0)
 	bowner := s.t.GetBowner()
 	bmd := bowner.Get()
 	smap := s.t.GetSowner().Get()
@@ -769,7 +773,7 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) []*ecRebObject {
 					glog.Infof("[%s] BROKEN: %s [Main %d on %s], slices %d of %d",
 						s.t.Snode().Name(), objName, obj.mainSliceID, obj.mainDaemon, obj.sliceFound(), obj.sliceRequired())
 				}
-				broken = append(broken, obj)
+				s.broken = append(s.broken, obj)
 			}
 		}
 	}
@@ -777,27 +781,24 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) []*ecRebObject {
 	// sort the list of broken object to have deterministic order on all targets
 	// sort order: IsAIS/Bucket name/Object name
 	sliceLess := func(i, j int) bool {
-		if broken[i].isAIS != broken[j].isAIS {
-			return broken[j].isAIS
+		if s.broken[i].isAIS != s.broken[j].isAIS {
+			return s.broken[j].isAIS
 		}
-		bi := broken[i].bucket
-		bj := broken[j].bucket
+		bi := s.broken[i].bucket
+		bj := s.broken[j].bucket
 		if bi != bj {
 			return bi < bj
 		}
-		return broken[i].objName < broken[j].objName
+		return s.broken[i].objName < s.broken[j].objName
 	}
-	sort.Slice(broken, sliceLess)
-
-	return broken
+	sort.Slice(s.broken, sliceLess)
 }
 
 // merge, sort, and detect what to fix and how
-func (s *ecRebalancer) checkSlices() []*ecRebObject {
+func (s *ecRebalancer) checkSlices() {
 	slices := s.mergeSlices()
-	broken := s.detectBroken(slices)
+	s.detectBroken(slices)
 	s.mgr.changeStage(rebStageECDetect)
-	return broken
 }
 
 // mountpath walker - walks through files in /meta/ directory
@@ -905,6 +906,7 @@ func (s *ecRebalancer) cleanup() {
 	s.localActions = make([]*ecRebSlice, 0)
 	s.tgtBatch = make(map[string]int)
 	s.waitNrebuild = make(map[string]int)
+	s.broken = nil
 	s.mtx.Unlock()
 	s.waiter.cleanup()
 }
@@ -1321,114 +1323,79 @@ func (s *ecRebalancer) firstEmptyTgt(obj *ecRebObject) *cluster.Snode {
 	return nil
 }
 
-func (s *ecRebalancer) waitForSlicesRecv(broken []*ecRebObject, start int) error {
-	maxWait := 5 * time.Minute // TODO
-	currWait := time.Duration(0)
-	sleep := 5 * time.Second // TODO:
-	for currWait < maxWait {
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-			glog.Infof("%s Wait for %d:%d more slices", s.t.Snode().Name(), s.waiter.waitSliceCnt(), len(s.waitNrebuild))
-		}
-		if s.mgr.xreb.Aborted() {
-			return errors.New("Aborted")
-		}
-
-		for id, tp := range s.waitNrebuild {
-			s.waiter.mx.Lock()
-			sliceList, ok := s.waiter.objs[id]
-			if !ok {
-				s.waiter.mx.Unlock()
-				continue
-			}
-
-			canRebuild := false
-			if tp == waitFullObject {
-				for _, sl := range sliceList {
-					if sl.sliceID == 0 && sl.recv {
-						canRebuild = true
-						break
-					}
-				}
-			} else {
-				canRebuild = true
-				for _, sl := range sliceList {
-					if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-						glog.Infof("%s %s - sliceID %d, recv: %t", s.t.Snode().Name(), id, sl.sliceID, sl.recv)
-					}
-					if !sl.recv {
-						canRebuild = false
-						break
-					}
-				}
-			}
-			if canRebuild {
-				var obj *ecRebObject
-				for j := 0; j+start < len(broken) && j < ecRebBatchSize; j++ {
-					o := broken[start+j]
-					if id == uniqueWaitID(o.bucket, o.objName, o.isAIS) {
-						obj = o
-						break
-					}
-				}
-				cmn.Assert(obj != nil)
-				if err := s.rebuildAndSend(obj, sliceList); err != nil {
-					glog.Errorf("Failed to rebuild %s: %v", id, err)
-				}
-				delete(s.waitNrebuild, id)
-			}
-
+func (s *ecRebalancer) allSliceReceived() bool {
+	for id, tp := range s.waitNrebuild {
+		s.waiter.mx.Lock()
+		sliceList, ok := s.waiter.objs[id]
+		if !ok {
 			s.waiter.mx.Unlock()
+			continue
 		}
 
-		// must be the last check, because even if a target has all slices
-		// it may need to rebuild and send repaired slices
-		if s.waiter.waitSliceCnt() == 0 && len(s.waitNrebuild) == 0 {
-			// all local slices and objects are received/restored
-			break
+		canRebuild := false
+		if tp == waitFullObject {
+			for _, sl := range sliceList {
+				if sl.sliceID == 0 && sl.recv {
+					canRebuild = true
+					break
+				}
+			}
+		} else {
+			canRebuild = true
+			for _, sl := range sliceList {
+				if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+					glog.Infof("%s %s - sliceID %d, recv: %t", s.t.Snode().Name(), id, sl.sliceID, sl.recv)
+				}
+				if !sl.recv {
+					canRebuild = false
+					break
+				}
+			}
 		}
-		currWait += sleep
-		time.Sleep(sleep) // TODO:?
+		if canRebuild {
+			var obj *ecRebObject
+			for j := 0; j+s.batchID < len(s.broken) && j < ecRebBatchSize; j++ {
+				o := s.broken[s.batchID+j]
+				if id == uniqueWaitID(o.bucket, o.objName, o.isAIS) {
+					obj = o
+					break
+				}
+			}
+			cmn.Assert(obj != nil)
+			if err := s.rebuildAndSend(obj, sliceList); err != nil {
+				glog.Errorf("Failed to rebuild %s: %v", id, err)
+			}
+			delete(s.waitNrebuild, id)
+		}
+
+		s.waiter.mx.Unlock()
 	}
-	if currWait >= maxWait {
-		return cmn.NewTimeoutError("waiting for slices to be received")
-	}
-	return nil
+
+	// must be the last check, because even if a target has all slices
+	// it may need to rebuild and send repaired slices
+	return s.waiter.waitSliceCnt() == 0 && len(s.waitNrebuild) == 0
 }
 
-func (s *ecRebalancer) waitBatchCompletion(start int) error {
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-		glog.Infof("%s batch %d - DONE", s.t.Snode().Name(), start)
-	}
-	maxWait := 5 * time.Minute // TODO
-	currWait := time.Duration(0)
-	sleep := 5 * time.Second // TODO:
+func (s *ecRebalancer) allNodesCompletedBatch() bool {
 	cnt := 0
-	for currWait < maxWait {
-		cnt = 0
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-			glog.Infof("%s Wait for targets to finish batch %d", s.t.Snode().Name(), start)
-		}
-		if s.mgr.xreb.Aborted() {
-			return errors.New("Aborted")
-		}
-
-		s.mtx.Lock()
-		for sid := range s.ra.smap.Tmap {
-			btch, ok := s.tgtBatch[sid]
-			if !ok || btch < start {
-				continue
-			}
+	s.mtx.Lock()
+	for sid := range s.ra.smap.Tmap {
+		btch, ok := s.tgtBatch[sid]
+		if ok && btch >= s.batchID {
 			cnt++
 		}
-		s.mtx.Unlock()
-		if cnt == len(s.ra.smap.Tmap) {
-			break
-		}
-
-		currWait += sleep
-		time.Sleep(sleep)
 	}
-	if cnt < len(s.ra.smap.Tmap) {
+	s.mtx.Unlock()
+	return cnt == len(s.ra.smap.Tmap)
+}
+
+func (s *ecRebalancer) waitQuiesce(cb func() bool) error {
+	maxWait := s.ra.config.Rebalance.Quiesce
+	aborted, timedout := s.mgr.waitQuiesce(s.ra, maxWait, cb)
+	if aborted {
+		return errors.New("Aborted")
+	}
+	if timedout {
 		return cmn.NewTimeoutError("batch completion")
 	}
 	return nil
@@ -1552,27 +1519,29 @@ func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
 	return s.rebuildFromDisk(obj)
 }
 
-func (s *ecRebalancer) cleanupBatch(broken []*ecRebObject, start int) {
-	s.waiter.cleanupBatch(broken, start)
-	s.releaseSGLs(broken, start)
+func (s *ecRebalancer) cleanupBatch() {
+	s.waiter.cleanupBatch(s.broken, s.batchID)
+	s.releaseSGLs(s.broken)
 }
 
 // Wait for all targets to finish the current batch and then free allocated resources
-func (s *ecRebalancer) finalizeBatch(broken []*ecRebObject, start int) error {
+func (s *ecRebalancer) finalizeBatch() error {
 	// First, wait for all slices the local target wants to receive
-	if err := s.waitForSlicesRecv(broken, start); err != nil {
+	if err := s.waitQuiesce(s.allSliceReceived); err != nil {
 		return err
 	}
 
 	// mark batch done and notify other targets
-	s.batchDone(s.t.Snode().DaemonID, start)
-	if err := s.batchNotify(start); err != nil {
+	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		glog.Infof("%s batch %d done", s.t.Snode().Name(), s.batchID)
+	}
+	s.batchDone(s.t.Snode().DaemonID, s.batchID)
+	if err := s.batchNotify(); err != nil {
 		return err
 	}
 
-	// wait for all targets finish sending/receiving
-
-	if err := s.waitBatchCompletion(start); err != nil {
+	// wait for all targets to finish sending/receiving
+	if err := s.waitQuiesce(s.allNodesCompletedBatch); err != nil {
 		if _, ok := err.(*cmn.TimeoutError); ok {
 			s.waiter.waitFor.Store(0)
 		}
@@ -1582,50 +1551,47 @@ func (s *ecRebalancer) finalizeBatch(broken []*ecRebObject, start int) error {
 	return nil
 }
 
-func (s *ecRebalancer) rebalanceGlobal(broken []*ecRebObject) (err error) {
-	start := 0
+func (s *ecRebalancer) rebalanceGlobal() (err error) {
+	s.batchID = 0
 	// to cleanup the last batch and allocated SGLs
-	for start < len(broken) {
+	for s.batchID < len(s.broken) {
 		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-			glog.Infof("Starting batch of %d from %d", ecRebBatchSize, start)
+			glog.Infof("Starting batch of %d from %d", ecRebBatchSize, s.batchID)
 		}
 
 		// get batchSize next objects
-		for j := 0; j+start < len(broken) && j < ecRebBatchSize; j++ {
+		for j := 0; j+s.batchID < len(s.broken) && j < ecRebBatchSize; j++ {
 			if s.mgr.xreb.Aborted() {
-				s.cleanupBatch(broken, start)
+				s.cleanupBatch()
 				return fmt.Errorf("Aborted")
 			}
 
-			obj := broken[start+j]
+			obj := s.broken[s.batchID+j]
 			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-				glog.Infof("--- Starting object [%d] %s ---", j+start, obj.uid)
+				glog.Infof("--- Starting object [%d] %s ---", j+s.batchID, obj.uid)
 			}
 			cmn.Assert(len(obj.sliceAt) != 0) // cannot happen
 
 			if err = s.rebalanceObject(obj); err != nil {
-				s.cleanupBatch(broken, start)
+				s.cleanupBatch()
 				return err
 			}
 		}
 
-		err = s.finalizeBatch(broken, start)
-		s.cleanupBatch(broken, start)
+		err = s.finalizeBatch()
+		s.cleanupBatch()
 		if err != nil {
 			return err
 		}
-		start += ecRebBatchSize
+		s.batchID += ecRebBatchSize
 	}
 	return nil
 }
 
 // Free allocated memory for EC reconstruction, close opened file handles of replicas.
 // Used to clean up memory after finishing a batch
-func (s *ecRebalancer) releaseSGLs(objList []*ecRebObject, startIdx int) {
-	if startIdx < 0 {
-		return
-	}
-	for i := startIdx; i < startIdx+ecRebBatchSize && i < len(objList); i++ {
+func (s *ecRebalancer) releaseSGLs(objList []*ecRebObject) {
+	for i := s.batchID; i < s.batchID+ecRebBatchSize && i < len(objList); i++ {
 		obj := objList[i]
 		for _, sg := range obj.rebuildSGLs {
 			if sg != nil {
@@ -2046,12 +2012,12 @@ func (s *ecRebalancer) batchDone(daemonID string, batchID int) {
 }
 
 // send push notification to other targets that local one has completed batch
-func (s *ecRebalancer) batchNotify(batchID int) error {
+func (s *ecRebalancer) batchNotify() error {
 	req := &pushReq{
 		DaemonID: s.t.Snode().DaemonID,
 		Stage:    rebStageECBatch,
 		RebID:    s.mgr.globRebID.Load(),
-		Batch:    batchID,
+		Batch:    s.batchID,
 	}
 	hdr := transport.Header{
 		Opaque: cmn.MustMarshal(req),

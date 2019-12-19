@@ -144,13 +144,12 @@ func (reb *Manager) distributeECNamespace(md *globArgs) error {
 }
 
 // find out which objects are broken and how to fix them
-func (reb *Manager) generateECFixList(md *globArgs) []*ecRebObject {
-	broken := reb.ecReb.checkSlices()
+func (reb *Manager) generateECFixList(md *globArgs) {
+	reb.ecReb.checkSlices()
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || md.dryRun {
 		glog.Infof("Number of objects misplaced locally: %d", len(reb.ecReb.localActions))
-		glog.Infof("Number of objects needs to be reconstructed/resent: %d", len(broken))
+		glog.Infof("Number of objects needs to be reconstructed/resent: %d", len(reb.ecReb.broken))
 	}
-	return broken
 }
 
 func (reb *Manager) ecFixLocal(md *globArgs) error {
@@ -166,8 +165,8 @@ func (reb *Manager) ecFixLocal(md *globArgs) error {
 	return nil
 }
 
-func (reb *Manager) ecFixGlobal(md *globArgs, broken []*ecRebObject) error {
-	if err := reb.ecReb.rebalanceGlobal(broken); err != nil {
+func (reb *Manager) ecFixGlobal(md *globArgs) error {
+	if err := reb.ecReb.rebalanceGlobal(); err != nil {
 		if !reb.xreb.Aborted() {
 			glog.Errorf("EC rebalance failed: %v", err)
 			reb.abortGlobal()
@@ -185,12 +184,8 @@ func (reb *Manager) ecFixGlobal(md *globArgs, broken []*ecRebObject) error {
 
 // when at least one bucket has EC enabled
 func (reb *Manager) globalRebRunEC(md *globArgs) error {
-	var (
-		cnt    int            // the number of targets failed to reach some stage
-		broken []*ecRebObject // objects with missing or misplaced parts
-	)
 	// collect all local slices
-	if cnt = reb.buildECNamespace(md); cnt != 0 {
+	if cnt := reb.buildECNamespace(md); cnt != 0 {
 		return fmt.Errorf("%d targets failed to build namespace", cnt)
 	}
 	// wait for all targets send their lists of slices to other nodes
@@ -198,7 +193,7 @@ func (reb *Manager) globalRebRunEC(md *globArgs) error {
 		return err
 	}
 	// detect objects with misplaced or missing parts
-	broken = reb.generateECFixList(md)
+	reb.generateECFixList(md)
 
 	// fix objects that are on local target but they are misplaced
 	if err := reb.ecFixLocal(md); err != nil {
@@ -206,7 +201,7 @@ func (reb *Manager) globalRebRunEC(md *globArgs) error {
 	}
 
 	// fix objects that needs network transfers and/or object rebuild
-	if err := reb.ecFixGlobal(md, broken); err != nil {
+	if err := reb.ecFixGlobal(md); err != nil {
 		return err
 	}
 
@@ -353,19 +348,38 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 	return
 }
 
-func (reb *Manager) globalRebFini(md *globArgs) {
-	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
-	// 10.5. keep at it... (can't close the streams as long as)
-	quiescent, maxquiet := 0, 10 // e.g., 10 * 2s (Cplane) = 20 seconds of /quiet/ time - see laterx
-	aborted := reb.xreb.Aborted()
-	for quiescent < maxquiet && !aborted {
+// Waits until the following condition is true: no objects are received
+// during certain configurable (quiescent) interval of time.
+// if `cb` returns true the wait loop interrupts immediately. It is used,
+// e.g., to wait for EC batch to finish: no need to wait until timeout if
+// all targets have sent push notification that they are done with the batch.
+func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func() bool) (
+	aborted bool, timedout bool) {
+	cmn.Assert(maxWait > 0)
+	sleep := md.config.Timeout.CplaneOperation
+	maxQuiet := int(maxWait/sleep) + 1
+	quiescent := 0
+
+	aborted = reb.xreb.Aborted()
+	for quiescent < maxQuiet && !aborted {
 		if !reb.laterx.CAS(true, false) {
 			quiescent++
 		} else {
 			quiescent = 0
 		}
+		if cb != nil && cb() {
+			break
+		}
 		aborted = reb.xreb.AbortedAfter(sleep)
 	}
+
+	return aborted, quiescent >= maxQuiet
+}
+
+func (reb *Manager) globalRebFini(md *globArgs) {
+	// 10.5. keep at it... (can't close the streams as long as)
+	maxWait := md.config.Rebalance.Quiesce
+	aborted, _ := reb.waitQuiesce(md, maxWait, nil)
 	if !aborted {
 		if err := cmn.RemoveFile(md.pmarker); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(reb.globRebID.Load(), md.smap), md.pmarker, err)
