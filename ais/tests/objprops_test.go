@@ -5,7 +5,6 @@
 package ais_test
 
 import (
-	"fmt"
 	"path"
 	"strconv"
 	"sync"
@@ -419,21 +418,31 @@ func propsMainTest(t *testing.T, versioning bool) {
 	oldChkVersion := config.Versioning.ValidateWarmGet
 	oldVersioning := config.Versioning.Enabled
 
-	if oldChkVersion != chkVersion {
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerValidateWarm: fmt.Sprintf("%v", chkVersion)})
-	}
+	newConfig := make(cmn.SimpleKVs)
 	if oldVersioning != versioning {
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: strconv.FormatBool(versioning)})
+		newConfig[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(versioning)
+	}
+	warmCheck := chkVersion && versioning
+	if oldChkVersion != warmCheck {
+		newConfig[cmn.HeaderBucketVerValidateWarm] = strconv.FormatBool(warmCheck)
+	}
+	if len(newConfig) != 0 {
+		setClusterConfig(t, proxyURL, newConfig)
 	}
 	created := createBucketIfNotExists(t, proxyURL, clibucket)
 
 	defer func() {
 		// restore configuration
-		if oldChkVersion != chkVersion {
-			setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerValidateWarm: fmt.Sprintf("%v", oldChkVersion)})
+		newConfig := make(cmn.SimpleKVs)
+		oldWarmCheck := oldChkVersion && oldVersioning
+		if oldWarmCheck != warmCheck {
+			newConfig[cmn.HeaderBucketVerValidateWarm] = strconv.FormatBool(oldWarmCheck)
 		}
 		if oldVersioning != versioning {
-			setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: strconv.FormatBool(oldVersioning)})
+			newConfig[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(oldVersioning)
+		}
+		if len(newConfig) != 0 {
+			setClusterConfig(t, proxyURL, newConfig)
 		}
 		if created {
 			tutils.DestroyBucket(t, proxyURL, clibucket)
