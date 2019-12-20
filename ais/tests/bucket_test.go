@@ -181,6 +181,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		bucket   = clibucket
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		wg       = &sync.WaitGroup{}
+		sema     = make(chan struct{}, 40) // throttle DELETE
 	)
 
 	if testing.Short() {
@@ -243,9 +244,11 @@ func TestCloudListObjectVersions(t *testing.T) {
 		}
 		wg.Add(1)
 		go func(name string) {
-			defer wg.Done()
+			sema <- struct{}{}
 			err := api.DeleteObject(baseParams, bucket, name, cmn.Cloud)
+			<-sema
 			tassert.CheckError(t, err)
+			wg.Done()
 		}(entry.Name)
 	}
 	wg.Wait()
