@@ -127,12 +127,11 @@ func (b *bucketXactions) renewBucketXaction(e bucketEntry) (bucketEntry, error) 
 //
 type ecGetEntry struct {
 	baseBckEntry
-	mgr  ec.Manager
 	xact *ec.XactGet
 }
 
 func (e *ecGetEntry) Start(id int64) error {
-	xec := e.mgr.NewGetXact(e.bck.Name)
+	xec := ec.ECM.NewGetXact(e.bck.Name)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, e.bck.Name, e.bck.IsAIS())
 	e.xact = xec
 	go xec.Run()
@@ -142,9 +141,9 @@ func (e *ecGetEntry) Start(id int64) error {
 
 func (*ecGetEntry) Kind() string    { return cmn.ActECGet }
 func (e *ecGetEntry) Get() cmn.Xact { return e.xact }
-func (r *registry) RenewGetEC(bck *cluster.Bck, mgr ec.Manager) *ec.XactGet {
+func (r *registry) RenewGetEC(bck *cluster.Bck) *ec.XactGet {
 	b := r.BucketsXacts(bck)
-	e := &ecGetEntry{baseBckEntry: baseBckEntry{bck: bck}, mgr: mgr}
+	e := &ecGetEntry{baseBckEntry: baseBckEntry{bck: bck}}
 	ee, _ := b.renewBucketXaction(e) // TODO: handle error
 	return ee.Get().(*ec.XactGet)
 }
@@ -154,12 +153,11 @@ func (r *registry) RenewGetEC(bck *cluster.Bck, mgr ec.Manager) *ec.XactGet {
 //
 type ecPutEntry struct {
 	baseBckEntry
-	mgr  ec.Manager
 	xact *ec.XactPut
 }
 
 func (e *ecPutEntry) Start(id int64) error {
-	xec := e.mgr.NewPutXact(e.bck.Name)
+	xec := ec.ECM.NewPutXact(e.bck.Name)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, e.bck.Name, e.bck.IsAIS())
 	go xec.Run()
 	e.xact = xec
@@ -167,9 +165,9 @@ func (e *ecPutEntry) Start(id int64) error {
 }
 func (*ecPutEntry) Kind() string    { return cmn.ActECPut }
 func (e *ecPutEntry) Get() cmn.Xact { return e.xact }
-func (r *registry) RenewPutEC(bck *cluster.Bck, mgr ec.Manager) *ec.XactPut {
+func (r *registry) RenewPutEC(bck *cluster.Bck) *ec.XactPut {
 	b := r.BucketsXacts(bck)
-	e := &ecPutEntry{baseBckEntry: baseBckEntry{bck: bck}, mgr: mgr}
+	e := &ecPutEntry{baseBckEntry: baseBckEntry{bck: bck}}
 	ee, _ := b.renewBucketXaction(e) // TODO: handle error
 	return ee.Get().(*ec.XactPut)
 }
@@ -179,12 +177,11 @@ func (r *registry) RenewPutEC(bck *cluster.Bck, mgr ec.Manager) *ec.XactPut {
 //
 type ecRespondEntry struct {
 	baseBckEntry
-	mgr  ec.Manager
 	xact *ec.XactRespond
 }
 
 func (e *ecRespondEntry) Start(id int64) error {
-	xec := e.mgr.NewRespondXact(e.bck.Name)
+	xec := ec.ECM.NewRespondXact(e.bck.Name)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, e.bck.Name, e.bck.IsAIS())
 	go xec.Run()
 	e.xact = xec
@@ -192,9 +189,9 @@ func (e *ecRespondEntry) Start(id int64) error {
 }
 func (*ecRespondEntry) Kind() string    { return cmn.ActECRespond }
 func (e *ecRespondEntry) Get() cmn.Xact { return e.xact }
-func (r *registry) RenewRespondEC(bck *cluster.Bck, mgr ec.Manager) *ec.XactRespond {
+func (r *registry) RenewRespondEC(bck *cluster.Bck) *ec.XactRespond {
 	b := r.BucketsXacts(bck)
-	e := &ecRespondEntry{baseBckEntry: baseBckEntry{bck: bck}, mgr: mgr}
+	e := &ecRespondEntry{baseBckEntry: baseBckEntry{bck: bck}}
 	ee, _ := b.renewBucketXaction(e)
 	return ee.Get().(*ec.XactRespond)
 }

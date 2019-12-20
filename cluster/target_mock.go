@@ -38,7 +38,6 @@ func (t *TargetMock) GetBowner() Bowner                                        {
 func (t *TargetMock) GetSowner() Sowner                                        { return nil }
 func (*TargetMock) FSHC(err error, path string)                                {}
 func (*TargetMock) GetMem2() *memsys.Mem2                                      { return memsys.GMM() }
-func (*TargetMock) ECM() ECManager                                             { return nil }
 func (*TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error           { return nil }
 func (*TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte, _ bool) (bool, error)  { return false, nil }
 func (*TargetMock) PromoteFile(_ string, _ *Bck, _ string, _, _, _ bool) error { return nil }

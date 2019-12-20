@@ -74,7 +74,6 @@ type (
 		authn         *authManager
 		fsprg         fsprungroup
 		readahead     readaheader
-		ecmanager     ec.Manager
 		rebManager    *reb.Manager
 		capUsed       capUsed
 		gfn           struct {
@@ -261,9 +260,7 @@ func (t *targetrunner) Run() error {
 	t.registerNetworkHandlers(networkHandlers)
 
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
-
-	ec.Init()
-	t.ecmanager = newECM(t, xaction.Registry)
+	ec.Init(t, xaction.Registry)
 
 	aborted, _ := xaction.Registry.IsRebalancing(cmn.ActLocalReb)
 	if aborted {
@@ -650,7 +647,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// EC cleanup if EC is enabled
-	t.ecmanager.CleanupObject(lom)
+	ec.ECM.CleanupObject(lom)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("DELETE: %s, %d µs", lom.StringEx(), int64(time.Since(started)/time.Microsecond))
 	}

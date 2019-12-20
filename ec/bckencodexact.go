@@ -36,7 +36,6 @@ type (
 		provider string
 		smap     *cluster.Smap
 		daemonID string
-		ecm      cluster.ECManager
 	}
 )
 
@@ -90,7 +89,6 @@ func (r *XactBckEncode) init() (int, error) {
 			smap:      r.t.GetSowner().Get(),
 			daemonID:  r.t.Snode().DaemonID,
 			stopCh:    cmn.NewStopCh(),
-			ecm:       r.t.ECM(),
 		}
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
 		r.mpathers[mpathLC] = jogger
@@ -203,7 +201,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 	// After Walk finishes, the xaction waits until counter drops to zero.
 	// That means all objects have been processed and xaction can finalize.
 	j.parent.beforeECObj()
-	if err = j.ecm.EncodeObject(lom, j.parent.afterECObj); err != nil {
+	if err = ECM.EncodeObject(lom, j.parent.afterECObj); err != nil {
 		// something wrong with EC, interrupt file walk - it is critical
 		return fmt.Errorf("Failed to EC object %q: %v", fqn, err)
 	}

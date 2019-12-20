@@ -38,7 +38,6 @@ func (t *targetrunner) GetFSPRG() fs.PathRunGroup    { return &t.fsprg }
 func (t *targetrunner) Snode() *cluster.Snode        { return t.si }
 func (t *targetrunner) Cloud() cluster.CloudProvider { return t.cloud }
 func (t *targetrunner) PrefetchQueueLen() int        { return len(t.prefetchQueue) }
-func (t *targetrunner) ECM() cluster.ECManager       { return ECM }
 
 func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
 	switch gfnType {

@@ -437,11 +437,11 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 	}
 	switch kind {
 	case cmn.ActECPut:
-		t.ecmanager.RestoreBckPutXact(bck)
+		ec.ECM.RestoreBckPutXact(bck)
 	case cmn.ActECGet:
-		t.ecmanager.RestoreBckGetXact(bck)
+		ec.ECM.RestoreBckGetXact(bck)
 	case cmn.ActECRespond:
-		t.ecmanager.RestoreBckRespXact(bck)
+		ec.ECM.RestoreBckRespXact(bck)
 	case cmn.ActMakeNCopies, cmn.ActECEncode:
 		return fmt.Errorf("%s supported by /buckets/bucket-name endpoint", kind)
 	case cmn.ActPutCopies:
@@ -726,7 +726,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	if tag != bucketMDRegister {
 		// Don't call ecmanager as it has not been initialized just yet
 		// ecmanager will pick up fresh bucketMD when initialized
-		t.ecmanager.BucketsMDChanged()
+		ec.ECM.BucketsMDChanged()
 	}
 
 	// Delete buckets that do not exist in the new bucket metadata

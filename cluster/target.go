@@ -36,9 +36,6 @@ type CloudProvider interface {
 // a callback called by EC PUT jogger after the object is processed and
 // all its slices/replicas are sent to other targets
 type OnFinishObj = func(lom *LOM, err error)
-type ECManager interface {
-	EncodeObject(lom *LOM, cb ...OnFinishObj) error
-}
 
 type GFN interface {
 	Activate() bool
@@ -54,7 +51,6 @@ type Target interface {
 	GetFSPRG() fs.PathRunGroup
 	Snode() *Snode
 	Cloud() CloudProvider
-	ECM() ECManager
 	PrefetchQueueLen() int
 	RebalanceInfo() RebalanceInfo
 	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)

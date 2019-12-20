@@ -230,23 +230,10 @@ type (
 		reqType  intraReqType       // request's type, slice/meta request/response
 	}
 
-	Manager interface {
-		NewGetXact(bucket string) *XactGet
-		NewPutXact(bucket string) *XactPut
-		NewRespondXact(bucket string) *XactRespond
-		CleanupObject(lom *cluster.LOM)
-		EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) error
-		RestoreObject(lom *cluster.LOM) error
-		BucketsMDChanged()
-		RestoreBckGetXact(bck *cluster.Bck) *XactGet
-		RestoreBckPutXact(bck *cluster.Bck) *XactPut
-		RestoreBckRespXact(bck *cluster.Bck) *XactRespond
-	}
-
 	XactRegistry interface {
-		RenewGetEC(bck *cluster.Bck, mgr Manager) *XactGet
-		RenewPutEC(bck *cluster.Bck, mgr Manager) *XactPut
-		RenewRespondEC(bck *cluster.Bck, mgr Manager) *XactRespond
+		RenewGetEC(bck *cluster.Bck) *XactGet
+		RenewPutEC(bck *cluster.Bck) *XactPut
+		RenewRespondEC(bck *cluster.Bck) *XactRespond
 	}
 )
 
@@ -297,12 +284,15 @@ var (
 	ErrorInsufficientTargets = errors.New("insufficient targets")
 )
 
-func Init() {
+func Init(t cluster.Target, reg XactRegistry) {
 	if err := mm.Init(false /*panicOnErr*/); err != nil {
 		glog.Fatalf("Failed to initialize EC: %v", err)
 	}
 	fs.CSM.RegisterFileType(SliceType, &SliceSpec{})
 	fs.CSM.RegisterFileType(MetaType, &MetaSpec{})
+	if err := initManager(t, reg); err != nil {
+		glog.Fatal(err)
+	}
 }
 
 // SliceSize returns the size of one slice that EC will create for the object

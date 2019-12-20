@@ -145,7 +145,7 @@ func (poi *putObjInfo) finalize() (err error, errCode int) {
 		poi.lom.Uncache()
 		return
 	}
-	if ecErr := poi.t.ecmanager.EncodeObject(poi.lom); ecErr != nil && ecErr != ec.ErrorECDisabled {
+	if ecErr := ec.ECM.EncodeObject(poi.lom); ecErr != nil && ecErr != ec.ErrorECDisabled {
 		err = ecErr
 		return
 	}
@@ -483,7 +483,7 @@ gfn:
 	}
 
 	// restore from existing EC slices if possible
-	if ecErr := goi.t.ecmanager.RestoreObject(goi.lom); ecErr == nil {
+	if ecErr := ec.ECM.RestoreObject(goi.lom); ecErr == nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: EC-recovered %s", tname, goi.lom)
 		}

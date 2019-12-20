@@ -1,10 +1,11 @@
-// Package ais provides core functionality for the AIStore object storage.
+// Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package ec
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -15,22 +16,21 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 )
 
 //nolint:maligned
-type ecManager struct {
+type Manager struct {
 	sync.RWMutex
 
 	t         cluster.Target
-	reg       ec.XactRegistry
+	reg       XactRegistry
 	smap      *cluster.Smap
 	targetCnt atomic.Int32 // atomic, to avoid races between read/write on smap
 	bmd       *cluster.BMD // bmd owner
 
-	xacts map[string]*ec.BckXacts // bckName -> xact map, only ais buckets allowed, no naming collisions
+	xacts map[string]*BckXacts // bckName -> xact map, only ais buckets allowed, no naming collisions
 
 	bundleEnabled atomic.Bool // to disable and enable on the fly
 	netReq        string      // network used to send object request
@@ -40,11 +40,10 @@ type ecManager struct {
 }
 
 var (
-	_   ec.Manager = &ecManager{}
-	ECM *ecManager
+	ECM *Manager
 )
 
-func newECM(t cluster.Target, reg ec.XactRegistry) *ecManager {
+func initManager(t cluster.Target, reg XactRegistry) error {
 	config := cmn.GCO.Get()
 	netReq, netResp := cmn.NetworkIntraControl, cmn.NetworkIntraData
 	if !config.Net.UseIntraControl {
@@ -57,7 +56,7 @@ func newECM(t cluster.Target, reg ec.XactRegistry) *ecManager {
 	sowner := t.GetSowner()
 	smap := sowner.Get()
 
-	ECM = &ecManager{
+	ECM = &Manager{
 		netReq:    netReq,
 		netResp:   netResp,
 		t:         t,
@@ -65,7 +64,7 @@ func newECM(t cluster.Target, reg ec.XactRegistry) *ecManager {
 		smap:      smap,
 		targetCnt: *atomic.NewInt32(int32(smap.CountTargets())),
 		bmd:       t.GetBowner().Get(),
-		xacts:     make(map[string]*ec.BckXacts),
+		xacts:     make(map[string]*BckXacts),
 	}
 
 	sowner.Listeners().Reg(ECM)
@@ -75,19 +74,16 @@ func newECM(t cluster.Target, reg ec.XactRegistry) *ecManager {
 	}
 
 	var err error
-	if _, err = transport.Register(ECM.netReq, ec.ReqStreamName, ECM.recvRequest); err != nil {
-		glog.Errorf("Failed to register recvRequest: %v", err)
-		return nil
+	if _, err = transport.Register(ECM.netReq, ReqStreamName, ECM.recvRequest); err != nil {
+		return fmt.Errorf("Failed to register recvRequest: %v", err)
 	}
-	if _, err = transport.Register(ECM.netResp, ec.RespStreamName, ECM.recvResponse); err != nil {
-		glog.Errorf("Failed to register respResponse: %v", err)
-		return nil
+	if _, err = transport.Register(ECM.netResp, RespStreamName, ECM.recvResponse); err != nil {
+		return fmt.Errorf("Failed to register respResponse: %v", err)
 	}
-
-	return ECM
+	return nil
 }
 
-func (mgr *ecManager) initECBundles() {
+func (mgr *Manager) initECBundles() {
 	if !mgr.bundleEnabled.CAS(false, true) {
 		return
 	}
@@ -110,12 +106,12 @@ func (mgr *ecManager) initECBundles() {
 		Multiplier: transport.IntraBundleMultiplier,
 		Extra:      &extraReq,
 		Network:    mgr.netReq,
-		Trname:     ec.ReqStreamName,
+		Trname:     ReqStreamName,
 	}
 
 	respSbArgs := transport.SBArgs{
 		Multiplier: transport.IntraBundleMultiplier,
-		Trname:     ec.RespStreamName,
+		Trname:     RespStreamName,
 		Network:    mgr.netResp,
 		Extra:      &transport.Extra{Compression: compression},
 	}
@@ -125,12 +121,12 @@ func (mgr *ecManager) initECBundles() {
 	mgr.respBundle = transport.NewStreamBundle(sowner, mgr.t.Snode(), client, respSbArgs)
 }
 
-func (mgr *ecManager) closeECBundles() {
+func (mgr *Manager) closeECBundles() {
 	// XactCount is the number of currently active xaction. It increases
 	// on every xaction(ECPut,ECGet,ECRespond ones) creation, and decreases
 	// when an xaction is stopping(on abort or after some idle time(by default
 	// 3*timeout.Sendfile = 15 minutes).
-	if ec.XactCount.Load() > 0 {
+	if XactCount.Load() > 0 {
 		return
 	}
 	if !mgr.bundleEnabled.CAS(true, false) {
@@ -142,59 +138,59 @@ func (mgr *ecManager) closeECBundles() {
 	mgr.respBundle = nil
 }
 
-func (mgr *ecManager) NewGetXact(bucket string) *ec.XactGet {
-	return ec.NewGetXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
+func (mgr *Manager) NewGetXact(bucket string) *XactGet {
+	return NewGetXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) NewPutXact(bucket string) *ec.XactPut {
-	return ec.NewPutXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
+func (mgr *Manager) NewPutXact(bucket string) *XactPut {
+	return NewPutXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) NewRespondXact(bucket string) *ec.XactRespond {
-	return ec.NewRespondXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
+func (mgr *Manager) NewRespondXact(bucket string) *XactRespond {
+	return NewRespondXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) RestoreBckGetXact(bck *cluster.Bck) *ec.XactGet {
+func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {
 	xact := mgr.getBckXacts(bck.Name).Get()
 	if xact == nil || xact.Finished() {
-		xact = mgr.reg.RenewGetEC(bck, mgr)
+		xact = mgr.reg.RenewGetEC(bck)
 		mgr.getBckXacts(bck.Name).SetGet(xact)
 	}
 
 	return xact
 }
 
-func (mgr *ecManager) RestoreBckPutXact(bck *cluster.Bck) *ec.XactPut {
+func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) *XactPut {
 	xact := mgr.getBckXacts(bck.Name).Put()
 	if xact == nil || xact.Finished() {
-		xact = mgr.reg.RenewPutEC(bck, mgr)
+		xact = mgr.reg.RenewPutEC(bck)
 		mgr.getBckXacts(bck.Name).SetPut(xact)
 	}
 
 	return xact
 }
 
-func (mgr *ecManager) RestoreBckRespXact(bck *cluster.Bck) *ec.XactRespond {
+func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) *XactRespond {
 	xact := mgr.getBckXacts(bck.Name).Req()
 	if xact == nil || xact.Finished() {
-		xact = mgr.reg.RenewRespondEC(bck, mgr)
+		xact = mgr.reg.RenewRespondEC(bck)
 		mgr.getBckXacts(bck.Name).SetReq(xact)
 	}
 
 	return xact
 }
 
-func (mgr *ecManager) getBckXacts(bckName string) *ec.BckXacts {
+func (mgr *Manager) getBckXacts(bckName string) *BckXacts {
 	mgr.RLock()
 	defer mgr.RUnlock()
 
 	xacts, ok := mgr.xacts[bckName]
 
 	if !ok {
-		xacts = &ec.BckXacts{}
+		xacts = &BckXacts{}
 		mgr.xacts[bckName] = xacts
 	}
 
@@ -202,7 +198,7 @@ func (mgr *ecManager) getBckXacts(bckName string) *ec.BckXacts {
 }
 
 // A function to process command requests from other targets
-func (mgr *ecManager) recvRequest(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 	if err != nil {
 		glog.Errorf("Request failed: %v", err)
 		return
@@ -213,7 +209,7 @@ func (mgr *ecManager) recvRequest(w http.ResponseWriter, hdr transport.Header, o
 		return
 	}
 
-	iReq := ec.IntraReq{}
+	iReq := IntraReq{}
 	if err := iReq.Unmarshal(hdr.Opaque); err != nil {
 		glog.Errorf("Failed to unmarshal request: %v", err)
 		return
@@ -238,7 +234,7 @@ func (mgr *ecManager) recvRequest(w http.ResponseWriter, hdr transport.Header, o
 }
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
-func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 	if err != nil {
 		glog.Errorf("Receive failed: %v", err)
 		return
@@ -250,7 +246,7 @@ func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, 
 		return
 	}
 
-	iReq := ec.IntraReq{}
+	iReq := IntraReq{}
 	if err := iReq.Unmarshal(hdr.Opaque); err != nil {
 		glog.Errorf("Failed to unmarshal request: %v", err)
 		cmn.DrainReader(object)
@@ -265,9 +261,9 @@ func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, 
 		}
 	}
 	switch iReq.Act {
-	case ec.ReqPut:
+	case ReqPut:
 		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
-	case ec.ReqMeta, ec.RespPut:
+	case ReqMeta, RespPut:
 		// Process this request even if there might not be enough targets. It might have been started when there was,
 		// so there is a chance to complete restore successfully
 		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
@@ -279,19 +275,19 @@ func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, 
 
 // Encode the object. `wg` is optional - a caller passes WaitGroup when it
 // wants to be notified after the object is done
-func (mgr *ecManager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) error {
+func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) error {
 	if !lom.Bprops().EC.Enabled {
-		return ec.ErrorECDisabled
+		return ErrorECDisabled
 	}
 
-	isECCopy := ec.IsECCopy(lom.Size(), &lom.Bprops().EC)
+	isECCopy := IsECCopy(lom.Size(), &lom.Bprops().EC)
 	targetCnt := mgr.targetCnt.Load()
 
 	// tradeoff: encoding small object might require just 1 additional target available
 	// we will start xaction to satisfy this request
 	if required := lom.Bprops().EC.RequiredEncodeTargets(); !isECCopy && int(targetCnt) < required {
 		glog.Warningf("not enough targets to encode the object; actual: %v, required: %v", targetCnt, required)
-		return ec.ErrorInsufficientTargets
+		return ErrorInsufficientTargets
 	}
 
 	cmn.Assert(lom.FQN != "")
@@ -306,9 +302,9 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) 
 		return nil
 	}
 
-	req := &ec.Request{
-		Action: ec.ActSplit,
-		IsCopy: ec.IsECCopy(lom.Size(), &lom.Bprops().EC),
+	req := &Request{
+		Action: ActSplit,
+		IsCopy: IsECCopy(lom.Size(), &lom.Bprops().EC),
 		LOM:    lom,
 	}
 	if len(cb) != 0 {
@@ -320,35 +316,35 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) 
 	return nil
 }
 
-func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
+func (mgr *Manager) CleanupObject(lom *cluster.LOM) {
 	if !lom.Bprops().EC.Enabled {
 		return
 	}
 	cmn.Assert(lom.FQN != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
-	req := &ec.Request{
-		Action: ec.ActDelete,
+	req := &Request{
+		Action: ActDelete,
 		LOM:    lom,
 	}
 
 	mgr.RestoreBckPutXact(lom.Bck()).Cleanup(req)
 }
 
-func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
+func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 	if !lom.Bprops().EC.Enabled {
-		return ec.ErrorECDisabled
+		return ErrorECDisabled
 	}
 
 	targetCnt := mgr.targetCnt.Load()
 	// note: restore replica object is done with GFN, safe to always abort
 	if required := lom.Bprops().EC.RequiredRestoreTargets(); int(targetCnt) < required {
 		glog.Warningf("not enough targets to restore the object; actual: %v, required: %v", targetCnt, required)
-		return ec.ErrorInsufficientTargets
+		return ErrorInsufficientTargets
 	}
 
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
-	req := &ec.Request{
-		Action: ec.ActRestore,
+	req := &Request{
+		Action: ActRestore,
 		LOM:    lom,
 		ErrCh:  make(chan error), // unbuffered
 	}
@@ -360,7 +356,7 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 }
 
 // disableBck starts to reject new EC requests, rejects pending ones
-func (mgr *ecManager) disableBck(bck *cluster.Bck) {
+func (mgr *Manager) disableBck(bck *cluster.Bck) {
 	mgr.RestoreBckGetXact(bck).ClearRequests()
 	mgr.RestoreBckPutXact(bck).ClearRequests()
 }
@@ -368,12 +364,12 @@ func (mgr *ecManager) disableBck(bck *cluster.Bck) {
 // enableBck aborts xact disable and starts to accept new EC requests
 // enableBck uses the same channel as disableBck, so order of executing them is the same as
 // order which they arrived to a target in
-func (mgr *ecManager) enableBck(bck *cluster.Bck) {
+func (mgr *Manager) enableBck(bck *cluster.Bck) {
 	mgr.RestoreBckGetXact(bck).EnableRequests()
 	mgr.RestoreBckPutXact(bck).EnableRequests()
 }
 
-func (mgr *ecManager) BucketsMDChanged() {
+func (mgr *Manager) BucketsMDChanged() {
 	newBckMD := mgr.t.GetBowner().Get()
 	oldBckMD := mgr.bmd
 	if newBckMD.Version <= mgr.bmd.Version {
@@ -407,7 +403,7 @@ func (mgr *ecManager) BucketsMDChanged() {
 	}
 }
 
-func (mgr *ecManager) ListenSmapChanged(newSmapVersionChannel chan int64) {
+func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 	for {
 		newSmapVersion, ok := <-newSmapVersionChannel
 
@@ -432,7 +428,7 @@ func (mgr *ecManager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 
 		mgr.RLock()
 
-		// ecManager is initialized before being registered for smap changes
+		// Manager is initialized before being registered for smap changes
 		// bckMD will be present at this point
 		// stopping relevant EC xactions which can't be satisfied with current number of targets
 		// respond xaction is never stopped as it should respond regardless of the other targets
@@ -460,6 +456,6 @@ func (mgr *ecManager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 }
 
 // implementing cluster.Slistener interface
-func (mgr *ecManager) String() string {
+func (mgr *Manager) String() string {
 	return "ecmanager"
 }
