@@ -30,9 +30,11 @@ $(call make-lazy,term-reset)
 all: node cli aisfs authn ## Build all main binaries
 
 node: ## Build 'aisnode' binary
-	@echo -n "Building aisnode (version: $(VERSION) build: $(BUILD))... "
-	@GORACE="$(GORACE)" \
-		GODEBUG="madvdontneed=1" \
+	@echo "Building aisnode: version=$(VERSION) provider=$(CLDPROVIDER)"
+ifneq ($(strip $(GORACE)),)
+	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
+endif
+	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
 		go install $(FLAGS) -tags="$(CLDPROVIDER)" $(GCFLAGS) $(LDFLAGS) $(BUILD_DIR)/aisnode.go
 	@echo "done."
 
@@ -211,11 +213,11 @@ help:
 	@echo "Useful commands:"
 	@grep -Eh '^[a-zA-Z._-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(cyan)%-30s$(term-reset) %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Typical usage:"
+	@echo "Examples:"
 	@printf "  $(cyan)%s$(term-reset)\n    %s\n\n" \
 		"make deploy" "Deploy cluster locally" \
-		"make kill clean" "Stop locally deployed cluster and cleans any cluster related files" \
-		"GORACE='log_path=race' make deploy" "Deploy cluster locally with race detector" \
+		"make kill clean" "Stop locally deployed cluster and cleanup all cluster-related data and metadata" \
+		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster locally with race detector, write reports to /tmp/race.pid" \
 		"MODE='debug' make deploy" "Deploy cluster locally with binary build in debug mode" \
 		"BUCKET='tmp' make test-short" "Run all short tests" \
 		"BUCKET='cloud_bucket' make test-long" "Run all tests" \
