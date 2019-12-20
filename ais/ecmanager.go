@@ -25,11 +25,10 @@ import (
 type ecManager struct {
 	sync.RWMutex
 
-	t         *targetrunner
+	t         cluster.Target
 	smap      *cluster.Smap
 	targetCnt atomic.Int32 // atomic, to avoid races between read/write on smap
-	bowner    bmdOwner     // bmd owner
-	bckMD     *bucketMD    // bmd (bucket metadata) used to get EC enabled/disabled information
+	bmd       *cluster.BMD // bmd owner
 
 	xacts map[string]*ec.BckXacts // bckName -> xact map, only ais buckets allowed, no naming collisions
 
@@ -45,7 +44,7 @@ var (
 	ECM *ecManager
 )
 
-func newECM(t *targetrunner) *ecManager {
+func newECM(t cluster.Target) *ecManager {
 	config := cmn.GCO.Get()
 	netReq, netResp := cmn.NetworkIntraControl, cmn.NetworkIntraData
 	if !config.Net.UseIntraControl {
@@ -55,7 +54,8 @@ func newECM(t *targetrunner) *ecManager {
 		netResp = cmn.NetworkPublic
 	}
 
-	smap := t.smapowner.Get()
+	sowner := t.GetSowner()
+	smap := sowner.Get()
 
 	ECM = &ecManager{
 		netReq:    netReq,
@@ -63,14 +63,13 @@ func newECM(t *targetrunner) *ecManager {
 		t:         t,
 		smap:      smap,
 		targetCnt: *atomic.NewInt32(int32(smap.CountTargets())),
-		bowner:    t.bmdowner,
+		bmd:       t.GetBowner().Get(),
 		xacts:     make(map[string]*ec.BckXacts),
-		bckMD:     t.bmdowner.get(),
 	}
 
-	t.smapowner.listeners.Reg(ECM)
+	sowner.Listeners().Reg(ECM)
 
-	if ECM.bckMD.IsECUsed() {
+	if ECM.bmd.IsECUsed() {
 		ECM.initECBundles()
 	}
 
@@ -120,8 +119,9 @@ func (mgr *ecManager) initECBundles() {
 		Extra:      &transport.Extra{Compression: compression},
 	}
 
-	mgr.reqBundle = transport.NewStreamBundle(mgr.t.smapowner, mgr.t.si, client, reqSbArgs)
-	mgr.respBundle = transport.NewStreamBundle(mgr.t.smapowner, mgr.t.si, client, respSbArgs)
+	sowner := mgr.t.GetSowner()
+	mgr.reqBundle = transport.NewStreamBundle(sowner, mgr.t.Snode(), client, reqSbArgs)
+	mgr.respBundle = transport.NewStreamBundle(sowner, mgr.t.Snode(), client, respSbArgs)
 }
 
 func (mgr *ecManager) closeECBundles() {
@@ -142,17 +142,17 @@ func (mgr *ecManager) closeECBundles() {
 }
 
 func (mgr *ecManager) NewGetXact(bucket string) *ec.XactGet {
-	return ec.NewGetXact(mgr.t, mgr.t.smapowner, mgr.t.si,
+	return ec.NewGetXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
 func (mgr *ecManager) NewPutXact(bucket string) *ec.XactPut {
-	return ec.NewPutXact(mgr.t, mgr.t.smapowner, mgr.t.si,
+	return ec.NewPutXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
 func (mgr *ecManager) NewRespondXact(bucket string) *ec.XactRespond {
-	return ec.NewRespondXact(mgr.t, mgr.t.smapowner, mgr.t.si,
+	return ec.NewRespondXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
@@ -227,7 +227,7 @@ func (mgr *ecManager) recvRequest(w http.ResponseWriter, hdr transport.Header, o
 		}
 	}
 	bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
-	if err = bck.Init(mgr.t.bmdowner); err != nil {
+	if err = bck.Init(mgr.t.GetBowner()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			glog.Errorf("Failed to init bucket %s: %v", bck, err)
 			return
@@ -256,7 +256,7 @@ func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, 
 		return
 	}
 	bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
-	if err = bck.Init(mgr.t.bmdowner); err != nil {
+	if err = bck.Init(mgr.t.GetBowner()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			glog.Errorf("Failed to init bucket %s: %v", bck, err)
 			cmn.DrainReader(object)
@@ -373,14 +373,14 @@ func (mgr *ecManager) enableBck(bck *cluster.Bck) {
 }
 
 func (mgr *ecManager) BucketsMDChanged() {
-	newBckMD := mgr.bowner.get()
-	oldBckMD := mgr.bckMD
-	if newBckMD.Version <= mgr.bckMD.Version {
+	newBckMD := mgr.t.GetBowner().Get()
+	oldBckMD := mgr.bmd
+	if newBckMD.Version <= mgr.bmd.Version {
 		return
 	}
 
 	mgr.Lock()
-	mgr.bckMD = newBckMD
+	mgr.bmd = newBckMD
 	mgr.Unlock()
 
 	if newBckMD.IsECUsed() && !oldBckMD.IsECUsed() {
@@ -425,7 +425,7 @@ func (mgr *ecManager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 			continue
 		}
 
-		mgr.smap = mgr.t.smapowner.Get()
+		mgr.smap = mgr.t.GetSowner().Get()
 		targetCnt := mgr.smap.CountTargets()
 		mgr.targetCnt.Store(int32(targetCnt))
 
@@ -435,7 +435,7 @@ func (mgr *ecManager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 		// bckMD will be present at this point
 		// stopping relevant EC xactions which can't be satisfied with current number of targets
 		// respond xaction is never stopped as it should respond regardless of the other targets
-		for bckName, bckProps := range mgr.bckMD.LBmap {
+		for bckName, bckProps := range mgr.bmd.LBmap {
 			bckXacts := mgr.getBckXacts(bckName)
 			if !bckProps.EC.Enabled {
 				continue
