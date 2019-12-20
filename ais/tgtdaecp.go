@@ -437,11 +437,11 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 	}
 	switch kind {
 	case cmn.ActECPut:
-		t.ecmanager.restoreBckPutXact(bck)
+		t.ecmanager.RestoreBckPutXact(bck)
 	case cmn.ActECGet:
-		t.ecmanager.restoreBckGetXact(bck)
+		t.ecmanager.RestoreBckGetXact(bck)
 	case cmn.ActECRespond:
-		t.ecmanager.restoreBckRespXact(bck)
+		t.ecmanager.RestoreBckRespXact(bck)
 	case cmn.ActMakeNCopies, cmn.ActECEncode:
 		return fmt.Errorf("%s supported by /buckets/bucket-name endpoint", kind)
 	case cmn.ActPutCopies:

@@ -74,7 +74,7 @@ type (
 		authn         *authManager
 		fsprg         fsprungroup
 		readahead     readaheader
-		ecmanager     *ecManager
+		ecmanager     ec.Manager
 		rebManager    *reb.Manager
 		capUsed       capUsed
 		gfn           struct {
@@ -263,7 +263,7 @@ func (t *targetrunner) Run() error {
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
 
 	ec.Init()
-	t.ecmanager = newECM(t)
+	t.ecmanager = newECM(t, xaction.Registry)
 
 	aborted, _ := xaction.Registry.IsRebalancing(cmn.ActLocalReb)
 	if aborted {

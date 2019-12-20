@@ -35,6 +35,10 @@ type (
 	}
 )
 
+var (
+	_ ec.XactRegistry = &registry{}
+)
+
 //
 // bucketXactions
 //
