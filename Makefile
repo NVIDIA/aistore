@@ -96,7 +96,7 @@ clean: ## Remove all AIS related files and binaries
 # go modules
 #
 
-.PHONY: mod mod-clean mod_-tidy
+.PHONY: mod mod-clean mod-tidy
 
 mod: mod-clean mod-tidy ## Do Go modules chores
 
