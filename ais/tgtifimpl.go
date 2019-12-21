@@ -323,7 +323,6 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 	poi.workFQN = workFQN
 
 	lom.SetSize(written)
-	lom.SetBID(lom.Bprops().BID)
 	err, _ = poi.finalize()
 	return
 }

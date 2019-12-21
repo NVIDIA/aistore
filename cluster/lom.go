@@ -90,7 +90,6 @@ func (lom *LOM) SetAtimeUnix(tu int64)     { lom.md.atime = tu }
 func (lom *LOM) ECEnabled() bool           { return lom.Bprops().EC.Enabled }
 func (lom *LOM) LRUEnabled() bool          { return lom.Bprops().LRU.Enabled }
 func (lom *LOM) IsHRW() bool               { return lom.HrwFQN == lom.FQN } // subj to resilvering
-func (lom *LOM) SetBID(bid uint64)         { lom.md.bckID, lom.bck.Props.BID = bid, bid }
 func (lom *LOM) Bucket() string            { return lom.bck.Name }
 func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
 func (lom *LOM) IsAIS() bool               { return lom.bck.IsAIS() }
@@ -361,6 +360,9 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	if err = dst.Init("", "", lom.Config()); err != nil {
 		return
 	}
+	dst.CopyMetadata(lom)
+	dst.SetCksum(dstCksum)
+
 	if err = cmn.Rename(workFQN, dstFQN); err != nil {
 		if errRemove := cmn.RemoveFile(workFQN); errRemove != nil {
 			glog.Errorf(fmtNestedErr, errRemove)
@@ -374,8 +376,6 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 	}
 
-	dst.CopyMetadata(lom)
-	dst.SetCksum(dstCksum)
 	if err = dst.Persist(); err != nil {
 		if errRemove := os.Remove(dst.FQN); errRemove != nil {
 			glog.Errorf("nested err: %v", errRemove)
@@ -586,11 +586,7 @@ func (lom *LOM) Clone(fqn string) *LOM {
 	dst := &LOM{}
 	*dst = *lom
 	dst.md = lom.md
-	if fqn == lom.FQN {
-		dst.ParsedFQN = lom.ParsedFQN
-	} else {
-		dst.FQN = fqn
-	}
+	dst.FQN = fqn
 	return dst
 }
 
@@ -683,6 +679,10 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	}
 	err = lom.FromFS() // slow path
 	if err == nil {
+		if lom.Bprops().BID == 0 {
+			return
+		}
+		lom.md.bckID = lom.Bprops().BID
 		err = lom.checkBucket()
 		if err == nil && add {
 			md := &lmeta{}
@@ -706,9 +706,6 @@ func (lom *LOM) checkBucket() error {
 		}
 		return cmn.NewErrorBucketDoesNotExist(lom.Bucket())
 	}
-	if lom.md.bckID == 0 {
-		lom.md.bckID = lom.bck.Props.BID // scenario e.g.: rename bucket
-	}
 	if lom.md.bckID == lom.bck.Props.BID {
 		return nil // ok
 	}
@@ -725,8 +722,9 @@ func (lom *LOM) ReCache() {
 	)
 	*md = lom.md
 	md.bckID = lom.Bprops().BID
-	cache.Store(hkey, md)
-	lom.loaded = true
+	if md.bckID != 0 {
+		cache.Store(hkey, md)
+	}
 }
 
 func (lom *LOM) Uncache() {
