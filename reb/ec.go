@@ -97,10 +97,22 @@ const (
 
 // A "default" target wait state when it does not have full object
 const (
+	// target wait for a single slice that would be just saved to local drives
+	waitForSingleSlice = iota
 	// full object exists but on another target, wait until that target sends it
-	waitFullObject = iota
-	// full object does exist, wait other targets send their slices
-	waitSlices
+	waitForReplica
+	// full object does exist, wait other targets send their slices and then rebuild
+	waitForAllSlices
+)
+
+// status of an object which slices/replica the target awaits
+const (
+	// not enough local slices/replicas to rebuild the object
+	objWaiting = iota
+	// all slices/replicas have been received, can start rebuilding
+	objReceived
+	// object has been rebuilt and all new slices were sent to other targets
+	objDone
 )
 
 type (
@@ -123,9 +135,19 @@ type (
 		IsAIS        bool   `json:"ais,omitempty"`
 	}
 
-	ecSliceList     = map[string][]*ecRebSlice  // EC slices grouped by a rule
-	ecSliceWaitList = map[string][]*ecWaitSlice // object uid <-> list of slices
-	nodeSlices      = map[string]*ecRebSlice    // daemonID <-> its slice (for "newest" slice list only)
+	// A single object description which slices/replica the targets waits for
+	waitObject struct {
+		// list of slices/replicas to wait
+		slices []*ecWaitSlice
+		// wait type: see waitFor* enum
+		wt int
+		// object wait status: objWaiting, objReceived, objDone
+		status int
+	}
+
+	ecSliceList     = map[string][]*ecRebSlice // EC slices grouped by a rule
+	ecSliceWaitList = map[string]*waitObject   // object uid <-> list of slices
+	nodeSlices      = map[string]*ecRebSlice   // daemonID <-> its slice (for "newest" slice list only)
 	// a full info about an object that resides on the local target.
 	// Contains both global and calculated local info
 	ecRebObject struct {
@@ -182,12 +204,6 @@ type (
 
 		// list of slices/replicas that should be moved between local mpaths
 		localActions []*ecRebSlice
-		// list of all objects of local target that must be restored and
-		// then some slices send to other targets
-		// UID <-> type of wait:
-		// waitFullObject - wait for someone sends the full object/replica
-		// waitSlice - wait for all targets sends all existing slices
-		waitNrebuild map[string]int
 		// the batch ID a target has processed. DaemonID <-> BatchID
 		tgtBatch map[string]int
 		// the current batch ID
@@ -199,14 +215,15 @@ type (
 		sgl     *memsys.SGL // SGL to save the received slice
 		meta    []byte      // slice/replica EC metadata
 		sliceID int16       // slice ID to wait (special value `anySliceID` - wait for the first slice for the object)
-		recv    bool        // if this slice has been received already (for proper clean, rebuild, and check)
+		recv    atomic.Bool // if this slice has been received already (for proper clean, rebuild, and check)
 	}
 	// helper object that manages slices the local target waits for from remote targets
 	ecWaiter struct {
-		mx      sync.Mutex
-		waitFor *atomic.Int32   // the current number of slices local target awaits
-		objs    ecSliceWaitList // the slices for the current batch
-		mem     *memsys.Mem2
+		mx        sync.Mutex
+		waitFor   atomic.Int32    // the current number of slices local target awaits
+		toRebuild atomic.Int32    // the current number of objects the target has to rebuild
+		objs      ecSliceWaitList // the slices for the current batch
+		mem       *memsys.Mem2
 	}
 )
 
@@ -395,10 +412,13 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 		RebID:    s.mgr.globRebID.Load(),
 		Extra:    cmn.MustMarshal(slice.meta),
 	}
-	// TODO -- FIXME: use LOM only for ContentType=fs.ObjectType, need a method
-	// to detect type without creating LOM and calling Init for FQN
-	lom := cluster.LOM{T: s.t, FQN: slice.realFQN}
-	if err := lom.Init(slice.Bucket, cmn.ProviderFromBool(slice.IsAIS)); err != nil {
+
+	fqn := slice.realFQN
+	if slice.hrwFQN != "" {
+		fqn = slice.hrwFQN
+	}
+	resolved, _, err := cluster.ResolveFQN(fqn)
+	if err != nil {
 		return err
 	}
 
@@ -412,7 +432,11 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 		Opaque: cmn.MustMarshal(req),
 	}
 
-	if lom.ParsedFQN.ContentType == fs.ObjectType {
+	if resolved.ContentType == fs.ObjectType {
+		lom := cluster.LOM{T: s.t, FQN: fqn}
+		if err := lom.Init(slice.Bucket, cmn.ProviderFromBool(slice.IsAIS)); err != nil {
+			return err
+		}
 		if err := lom.Load(false); err != nil {
 			return err
 		}
@@ -596,10 +620,10 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 		glog.Infof(">>> %s got slice %d for %s/%s[%t]", s.t.Snode().Name(), sliceID, hdr.Bucket, hdr.Objname, hdr.BckIsAIS)
 	}
 	uid := uniqueWaitID(hdr.Bucket, hdr.Objname, hdr.BckIsAIS)
-	waitSlice := s.waiter.lookupCreate(uid, int16(sliceID))
+	waitSlice := s.waiter.lookupCreate(uid, int16(sliceID), waitForSingleSlice)
 	cmn.Assert(waitSlice != nil)
 	cmn.Assert(waitSlice.sgl != nil)
-	cmn.Assert(!waitSlice.recv)
+	cmn.Assert(!waitSlice.recv.Load())
 
 	waitSlice.meta = req.Extra
 	n, err := io.Copy(waitSlice.sgl, reader)
@@ -615,9 +639,10 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 		return fmt.Errorf("Received checksum mismatches checksum in header %s vs %s",
 			hdr.ObjAttrs.CksumValue, ckval)
 	}
-	waitSlice.recv = true
+	waitSlice.recv.Store(true)
+	waitRebuild := s.waiter.updateRebuildInfo(uid)
 
-	if _, ok := s.waitNrebuild[uid]; !ok || sliceID == 0 {
+	if !waitRebuild || sliceID == 0 {
 		if err := s.saveSliceToDisk(waitSlice.sgl, req, &md, hdr); err != nil {
 			glog.Errorf("Failed to save slice %d of %s: %v", sliceID, hdr.Objname, err)
 			s.mgr.abortGlobal()
@@ -625,7 +650,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	}
 
 	// notify that another slice is received successfully
-	remains := s.waiter.done()
+	remains := s.waiter.waitFor.Dec()
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 		glog.Infof("Slices to get remains: %d", remains)
 	}
@@ -697,8 +722,12 @@ func (s *ecRebalancer) mergeSlices() *ecRebResult {
 	// process all received slices
 	localDaemon := s.t.Snode().DaemonID
 	smap := s.t.GetSowner().Get()
-	for sid, sliceList := range s.slices {
+	for sid := range smap.Tmap {
 		local := sid == localDaemon
+		sliceList, ok := s.nodeData(sid)
+		if !ok {
+			continue
+		}
 		for _, slice := range sliceList {
 			if slice.SliceID != 0 && local {
 				b := &cluster.Bck{Name: slice.Bucket, Provider: cmn.ProviderFromBool(slice.IsAIS)}
@@ -797,8 +826,10 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) {
 // merge, sort, and detect what to fix and how
 func (s *ecRebalancer) checkSlices() {
 	slices := s.mergeSlices()
+	if slices == nil {
+		return
+	}
 	s.detectBroken(slices)
-	s.mgr.changeStage(rebStageECDetect)
 }
 
 // mountpath walker - walks through files in /meta/ directory
@@ -905,7 +936,6 @@ func (s *ecRebalancer) cleanup() {
 	s.slices = make(ecSliceList)
 	s.localActions = make([]*ecRebSlice, 0)
 	s.tgtBatch = make(map[string]int)
-	s.waitNrebuild = make(map[string]int)
 	s.broken = nil
 	s.mtx.Unlock()
 	s.waiter.cleanup()
@@ -1246,6 +1276,7 @@ func (s *ecRebalancer) needsReplica(obj *ecRebObject) bool {
 // Read slice/replica from local drive and send to another target.
 // If destination is not defined the target sends its data to "default by HRW" target
 func (s *ecRebalancer) sendLocalData(obj *ecRebObject, si ...*cluster.Snode) error {
+	s.mgr.laterx.Store(true)
 	slice, ok := obj.sliceAt[s.t.Snode().DaemonID]
 	cmn.Assert(ok)
 	var target *cluster.Snode
@@ -1324,56 +1355,33 @@ func (s *ecRebalancer) firstEmptyTgt(obj *ecRebObject) *cluster.Snode {
 }
 
 func (s *ecRebalancer) allSliceReceived() bool {
-	for id, tp := range s.waitNrebuild {
-		s.waiter.mx.Lock()
-		sliceList, ok := s.waiter.objs[id]
-		if !ok {
-			s.waiter.mx.Unlock()
-			continue
+	for {
+		if s.mgr.xreb.Aborted() {
+			return false
 		}
-
-		canRebuild := false
-		if tp == waitFullObject {
-			for _, sl := range sliceList {
-				if sl.sliceID == 0 && sl.recv {
-					canRebuild = true
-					break
-				}
-			}
-		} else {
-			canRebuild = true
-			for _, sl := range sliceList {
-				if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-					glog.Infof("%s %s - sliceID %d, recv: %t", s.t.Snode().Name(), id, sl.sliceID, sl.recv)
-				}
-				if !sl.recv {
-					canRebuild = false
-					break
-				}
+		uid, wObj := s.waiter.nextReadyObj()
+		if wObj == nil {
+			break
+		}
+		var obj *ecRebObject
+		for j := 0; j+s.batchID < len(s.broken) && j < ecRebBatchSize; j++ {
+			o := s.broken[s.batchID+j]
+			if uid == uniqueWaitID(o.bucket, o.objName, o.isAIS) {
+				obj = o
+				break
 			}
 		}
-		if canRebuild {
-			var obj *ecRebObject
-			for j := 0; j+s.batchID < len(s.broken) && j < ecRebBatchSize; j++ {
-				o := s.broken[s.batchID+j]
-				if id == uniqueWaitID(o.bucket, o.objName, o.isAIS) {
-					obj = o
-					break
-				}
-			}
-			cmn.Assert(obj != nil)
-			if err := s.rebuildAndSend(obj, sliceList); err != nil {
-				glog.Errorf("Failed to rebuild %s: %v", id, err)
-			}
-			delete(s.waitNrebuild, id)
+		cmn.Assert(obj != nil)
+		if err := s.rebuildAndSend(obj, wObj.slices); err != nil {
+			glog.Errorf("Failed to rebuild %s: %v", uid, err)
 		}
-
-		s.waiter.mx.Unlock()
+		wObj.status = objDone
+		s.waiter.toRebuild.Dec()
 	}
 
 	// must be the last check, because even if a target has all slices
 	// it may need to rebuild and send repaired slices
-	return s.waiter.waitSliceCnt() == 0 && len(s.waitNrebuild) == 0
+	return s.waiter.waitFor.Load() == 0 && s.waiter.toRebuild.Load() == 0
 }
 
 func (s *ecRebalancer) allNodesCompletedBatch() bool {
@@ -1410,8 +1418,9 @@ func (s *ecRebalancer) waitForFullObject(obj *ecRebObject) error {
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 		glog.Infof("#5.4 Waiting for an object %s", obj.uid)
 	}
-	s.waiter.lookupCreate(obj.uid, 0)
-	s.waitNrebuild[obj.uid] = waitFullObject
+	s.waiter.lookupCreate(obj.uid, 0, waitForReplica)
+	s.waiter.updateRebuildInfo(obj.uid)
+	s.waiter.toRebuild.Inc()
 	return nil
 }
 
@@ -1432,9 +1441,10 @@ func (s *ecRebalancer) waitForExistingSlices(obj *ecRebObject) (err error) {
 		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 			glog.Infof("#5.5 Waiting for slice %d %s", sl.SliceID, obj.uid)
 		}
-		s.waiter.lookupCreate(obj.uid, sl.SliceID)
+		s.waiter.lookupCreate(obj.uid, sl.SliceID, waitForAllSlices)
 	}
-	s.waitNrebuild[obj.uid] = waitSlices
+	s.waiter.updateRebuildInfo(obj.uid)
+	s.waiter.toRebuild.Inc()
 	return nil
 }
 
@@ -1445,7 +1455,7 @@ func (s *ecRebalancer) restoreReplicas(obj *ecRebObject) (err error) {
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 		glog.Infof("#4 Waiting for replica %s", obj.uid)
 	}
-	s.waiter.lookupCreate(obj.uid, 0)
+	s.waiter.lookupCreate(obj.uid, 0, waitForSingleSlice)
 	return nil
 }
 
@@ -1495,7 +1505,7 @@ func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
 		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 			glog.Infof("#5.2 Waiting for object %s", obj.uid)
 		}
-		s.waiter.lookupCreate(obj.uid, anySliceID)
+		s.waiter.lookupCreate(obj.uid, anySliceID, waitForSingleSlice)
 		return nil
 	}
 
@@ -1709,7 +1719,7 @@ func (s *ecRebalancer) rebuildFromDisk(obj *ecRebObject) (err error) {
 // received slice
 func (s *ecRebalancer) metadataForSlice(slices []*ecWaitSlice, sliceID int) *ec.Metadata {
 	for _, sl := range slices {
-		if !sl.recv {
+		if !sl.recv.Load() {
 			continue
 		}
 		var md ec.Metadata
@@ -1833,7 +1843,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		cksum *cmn.Cksum
 	)
 	for _, sl := range slices {
-		if !sl.recv {
+		if !sl.recv.Load() {
 			continue
 		}
 		id := sl.sliceID - 1
@@ -1989,7 +1999,7 @@ func (s *ecRebalancer) rebuildAndSend(obj *ecRebObject, slices []*ecWaitSlice) e
 		if s.sliceID == 0 {
 			replica = s
 		}
-		if s.recv {
+		if s.recv.Load() {
 			recv++
 		}
 	}
@@ -2051,9 +2061,8 @@ func cksumForSlice(reader cmn.ReadOpenCloser, sliceSize int64, mem *memsys.Mem2)
 
 func newWaiter(mem *memsys.Mem2) *ecWaiter {
 	return &ecWaiter{
-		waitFor: atomic.NewInt32(0),
-		objs:    make(ecSliceWaitList),
-		mem:     mem,
+		objs: make(ecSliceWaitList),
+		mem:  mem,
 	}
 }
 
@@ -2067,7 +2076,7 @@ func (wt *ecWaiter) removeObj(uid string) {
 func (wt *ecWaiter) removeObjUnlocked(uid string) {
 	wo, ok := wt.objs[uid]
 	if ok {
-		for _, slice := range wo {
+		for _, slice := range wo.slices {
 			if slice.sgl != nil {
 				slice.sgl.Free()
 			}
@@ -2082,6 +2091,7 @@ func (wt *ecWaiter) cleanup() {
 		wt.removeObj(uid)
 	}
 	wt.waitFor.Store(0)
+	wt.toRebuild.Store(0)
 }
 
 // Range freeing: if idx is not defined, cleanup all waiting objects,
@@ -2104,37 +2114,34 @@ func (wt *ecWaiter) cleanupBatch(broken []*ecRebObject, idx ...int) {
 	wt.mx.Unlock()
 }
 
-// Target received a slice it was waiting for
-func (wt *ecWaiter) done() int32 {
-	return wt.waitFor.Dec()
-}
-
-// Returns how many slices/replicas target is waiting for
-func (wt *ecWaiter) waitSliceCnt() int32 {
-	return wt.waitFor.Load()
-}
-
 // Looks through the list of slices to wait and returns the one
 // with given uid. If nothing found, it creates a new wait object and
 // returns it. This case is possible when another target is faster than this
 // one and starts sending slices before this target builds its list
-func (wt *ecWaiter) lookupCreate(uid string, sliceID int16) *ecWaitSlice {
+func (wt *ecWaiter) lookupCreate(uid string, sliceID int16, waitType int) *ecWaitSlice {
 	wt.mx.Lock()
 	defer wt.mx.Unlock()
 
-	sliceList, ok := wt.objs[uid]
+	wObj, ok := wt.objs[uid]
 	if !ok {
 		// first slice of the object, initialize everything
 		slice := &ecWaitSlice{
 			sliceID: sliceID,
 			sgl:     wt.mem.NewSGL(32 * cmn.KiB),
 		}
-		wt.objs[uid] = []*ecWaitSlice{slice}
+		wt.objs[uid] = &waitObject{wt: waitType, slices: []*ecWaitSlice{slice}}
 		wt.waitFor.Inc()
 		return slice
 	}
+
+	// in case of other target sent a slice before this one had initialized
+	// wait structure, replace current waitType if it is not a generic one
+	if waitType != waitForSingleSlice {
+		wObj.wt = waitType
+	}
+
 	// check if the slice is already initialized and return it
-	for _, slice := range sliceList {
+	for _, slice := range wObj.slices {
 		if slice.sliceID == anySliceID || slice.sliceID == sliceID || sliceID == anySliceID {
 			return slice
 		}
@@ -2145,7 +2152,63 @@ func (wt *ecWaiter) lookupCreate(uid string, sliceID int16) *ecWaitSlice {
 		sliceID: sliceID,
 		sgl:     wt.mem.NewSGL(32 * cmn.KiB),
 	}
-	wt.objs[uid] = append(wt.objs[uid], slice)
+	wt.objs[uid].slices = append(wt.objs[uid].slices, slice)
 	wt.waitFor.Inc()
 	return slice
+}
+
+// Updates object readiness to be rebuild (i.e., the target has received all
+// required slices/replicas).
+// Returns `true` if a target waits for slices only to rebuild the object,
+// so the received slices should not be saved to local drives.
+func (wt *ecWaiter) updateRebuildInfo(uid string) bool {
+	wt.mx.Lock()
+	defer wt.mx.Unlock()
+
+	wObj, ok := wt.objs[uid]
+	cmn.Assert(ok)
+	if wObj.wt == waitForSingleSlice || wObj.status != objWaiting {
+		// object should not be rebuilt, or it is already done: nothing to do
+		return wObj.wt != waitForSingleSlice
+	}
+
+	if wObj.wt == waitForReplica {
+		// For replica case, a target needs only 1 replica to start rebuilding
+		for _, sl := range wObj.slices {
+			if sl.sliceID == 0 && sl.recv.Load() {
+				wObj.status = objReceived
+				break
+			}
+		}
+	} else {
+		// For EC case, a target needs all slices to start rebuilding
+		done := true
+		for _, sl := range wObj.slices {
+			if !sl.recv.Load() {
+				done = false
+				break
+			}
+		}
+		if done {
+			wObj.status = objReceived
+		}
+	}
+	return wObj.wt != waitForSingleSlice
+}
+
+// Returns UID and data for the next object that has all slices/replicas
+// received and can be rebuild.
+// The number of object in `wt.objs` map is less than the number of object
+// in a batch (ecRebBatchSize). So, linear algorihtm is fast enough.
+func (wt *ecWaiter) nextReadyObj() (uid string, wObj *waitObject) {
+	wt.mx.Lock()
+	defer wt.mx.Unlock()
+
+	for uid, obj := range wt.objs {
+		if obj.status == objReceived && obj.wt != waitForSingleSlice {
+			return uid, obj
+		}
+	}
+
+	return "", nil
 }

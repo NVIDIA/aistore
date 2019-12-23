@@ -486,7 +486,6 @@ gfn:
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: EC-recovered %s", tname, goi.lom)
 		}
-		goi.lom.Load()
 		return
 	} else if ecErr != ec.ErrorECDisabled {
 		err = fmt.Errorf("%s: failed to EC-recover %s: %v", tname, goi.lom, ecErr)

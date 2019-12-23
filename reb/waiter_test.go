@@ -61,7 +61,7 @@ var _ = Describe("ECWaiter", func() {
 		By("created unique waiter for each slice")
 		for _, o := range rebObjs {
 			for i := 0; i < sliceCnt; i++ {
-				ws := wt.lookupCreate(o.uid, int16(i))
+				ws := wt.lookupCreate(o.uid, int16(i), waitForSingleSlice)
 				// Make sure this pointer is unique
 				for _, s := range created {
 					// NotTo(Equal) does not work since it must compare pointers
@@ -75,7 +75,7 @@ var _ = Describe("ECWaiter", func() {
 		By("adding the same slices should return existing waiters")
 		for _, o := range rebObjs {
 			for i := 0; i < sliceCnt; i++ {
-				ws := wt.lookupCreate(o.uid, int16(i))
+				ws := wt.lookupCreate(o.uid, int16(i), waitForSingleSlice)
 				found := false
 				// make sure that it returns a pointer created at previoius step
 				for _, s := range created {
@@ -89,13 +89,12 @@ var _ = Describe("ECWaiter", func() {
 		}
 		// `int` conversion required because `waitSliceCnt` returns a value
 		// of an atomic variable, and atomic variable cannot be just `int`
-		Expect(wt.waitSliceCnt()).To(BeEquivalentTo(len(rebObjs) * sliceCnt))
+		Expect(wt.waitFor.Load()).To(BeEquivalentTo(len(rebObjs) * sliceCnt))
 
 		By("marking a few waiters done must decrease waiter counter")
 		for i := 0; i < sliceDone; i++ {
-			wt.done()
+			wt.waitFor.Dec()
 		}
-		Expect(wt.waitSliceCnt()).To(BeEquivalentTo(len(rebObjs)*sliceCnt - sliceDone))
 
 		By("cleaning up invalid batch should not change waiter list")
 		wt.cleanupBatch(rebObjs, len(rebObjs)+10)
@@ -109,8 +108,8 @@ var _ = Describe("ECWaiter", func() {
 		// waitSlice for them once more should return existing ones and
 		// must not change the size of waitSlice length
 		currLen := len(wt.objs)
-		_ = wt.lookupCreate(rebObjs[0].uid, 1)
-		_ = wt.lookupCreate(rebObjs[len(rebObjs)-1].uid, 1)
+		_ = wt.lookupCreate(rebObjs[0].uid, 1, waitForSingleSlice)
+		_ = wt.lookupCreate(rebObjs[len(rebObjs)-1].uid, 1, waitForSingleSlice)
 		Expect(len(wt.objs)).To(Equal(currLen))
 
 		By("cleanup last incomplete batch (a few last items)")
@@ -119,7 +118,7 @@ var _ = Describe("ECWaiter", func() {
 
 		By("cleanup everything")
 		wt.cleanup()
-		Expect(wt.waitSliceCnt()).To(BeZero())
+		Expect(wt.waitFor.Load()).To(BeZero())
 		Expect(len(wt.objs)).To(BeZero())
 	})
 })

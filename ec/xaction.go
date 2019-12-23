@@ -470,44 +470,46 @@ func (r *xactECBase) ReqDisableMountpath(mpath string) { /* do nothing */ }
 
 type (
 	BckXacts struct {
-		get *XactGet
-		put *XactPut
-		req *XactRespond
+		get atomic.Pointer // *XactGet
+		put atomic.Pointer // *XactPut
+		req atomic.Pointer // *XactRespond
 	}
 )
 
 func (xacts *BckXacts) Get() *XactGet {
-	return xacts.get
+	return (*XactGet)(xacts.get.Load())
 }
 
 func (xacts *BckXacts) Put() *XactPut {
-	return xacts.put
+	return (*XactPut)(xacts.put.Load())
 }
 
 func (xacts *BckXacts) Req() *XactRespond {
-	return xacts.req
+	return (*XactRespond)(xacts.req.Load())
 }
 
 func (xacts *BckXacts) SetGet(xact *XactGet) {
-	xacts.get = xact
+	xacts.get.Store(unsafe.Pointer(xact))
 }
 
 func (xacts *BckXacts) SetPut(xact *XactPut) {
-	xacts.put = xact
+	xacts.put.Store(unsafe.Pointer(xact))
 }
 
 func (xacts *BckXacts) SetReq(xact *XactRespond) {
-	xacts.req = xact
+	xacts.req.Store(unsafe.Pointer(xact))
 }
 
 func (xacts *BckXacts) StopGet() {
-	if xacts.get != nil && !xacts.get.Finished() {
-		xacts.get.stop()
+	xact := (*XactGet)(xacts.get.Load())
+	if xact != nil && !xact.Finished() {
+		xact.stop()
 	}
 }
 
 func (xacts *BckXacts) StopPut() {
-	if xacts.put != nil && !xacts.put.Finished() {
-		xacts.put.stop()
+	xact := (*XactPut)(xacts.put.Load())
+	if xact != nil && !xact.Finished() {
+		xact.stop()
 	}
 }
