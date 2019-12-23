@@ -903,7 +903,7 @@ func (t *targetrunner) detectMpathChanges() {
 		newfs.Disabled[mpath] = struct{}{}
 	}
 
-	if err := cmn.LocalLoad(mpathconfigfqn, &oldfs); err != nil {
+	if err := cmn.LocalLoad(mpathconfigfqn, &oldfs, false /* compression */); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
 		}
@@ -927,7 +927,7 @@ func (t *targetrunner) detectMpathChanges() {
 		glog.Errorln(newfsPprint)
 	}
 	// persist
-	if err := cmn.LocalSave(mpathconfigfqn, newfs); err != nil {
+	if err := cmn.LocalSave(mpathconfigfqn, newfs, false /* compression */); err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
 }

@@ -345,7 +345,7 @@ func parseCmdLine() (params, error) {
 	if !p.duration.IsSet && p.putSizeUpperBound != 0 {
 		// user specified putSizeUpperBound, but not duration, override default 1 minute
 		// and run aisloader until putSizeUpperBound is reached
-		p.duration.Val = time.Duration(cmn.MaxInt64)
+		p.duration.Val = time.Duration(math.MaxInt64)
 	}
 
 	// Sanity check
@@ -698,7 +698,7 @@ func main() {
 
 	var statsTicker *time.Ticker
 	if runParams.statsShowInterval == 0 {
-		statsTicker = time.NewTicker(time.Duration(math.MaxInt64))
+		statsTicker = time.NewTicker(math.MaxInt64)
 	} else {
 		statsTicker = time.NewTicker(time.Second * time.Duration(runParams.statsShowInterval))
 	}

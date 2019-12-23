@@ -580,7 +580,7 @@ func LoadConfigErr(clivars *ConfigCLI) (config *Config, changed bool, err error)
 	config = GCO.BeginUpdate()
 	defer GCO.CommitUpdate(config)
 
-	err = LocalLoad(clivars.ConfFile, &config)
+	err = LocalLoad(clivars.ConfFile, &config, false /*compression*/)
 
 	// NOTE: glog.Errorf + os.Exit is used instead of glog.Fatalf to not crash
 	// with dozens of backtraces on screen - this is user error not some
@@ -1160,7 +1160,7 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 
 	if persist {
 		conf := GCO.Get()
-		if err := LocalSave(GCO.GetConfigFile(), conf); err != nil {
+		if err := LocalSave(GCO.GetConfigFile(), conf, false /*compression*/); err != nil {
 			glog.Errorf("%s: failed to write, err: %v", ActSetConfig, err)
 		} else {
 			glog.Infof("%s: stored", ActSetConfig)

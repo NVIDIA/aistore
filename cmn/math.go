@@ -5,10 +5,11 @@
 package cmn
 
 import (
-	"math"
 	"math/rand"
 	"time"
 )
+
+type Bits uint8
 
 func MaxInArray(xs ...int) int {
 	Assert(len(xs) > 0)
@@ -20,8 +21,6 @@ func MaxInArray(xs ...int) int {
 	}
 	return curMax
 }
-
-const MaxInt64 = int64(math.MaxInt64)
 
 // MinU64 returns min value of a and b for uint64 types
 func MinU64(a, b uint64) uint64 {
@@ -183,8 +182,6 @@ func FastLog2Ceil(c uint64) uint {
 	return FastLog2(c-1) + 1
 }
 
-type Bits uint8
-
 func (b *Bits) Set(flag Bits)      { x := *b; x |= flag; *b = x }
 func (b *Bits) Clear(flag Bits)    { x := *b; x &^= flag; *b = x }
 func (b *Bits) Toggle(flag Bits)   { x := *b; x ^= flag; *b = x }
@@ -192,4 +189,26 @@ func (b *Bits) Has(flag Bits) bool { return *b&flag != 0 }
 
 func NowRand() *rand.Rand {
 	return rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+func Ratio(high, low, curr int64) float32 {
+	Assert(high > low && high <= 100 && low > 0)
+	if curr <= low {
+		return 0
+	}
+	if curr >= high {
+		return 1
+	}
+	return float32(curr-low) / float32(high-low)
+}
+
+func RatioPct(high, low, curr int64) int64 {
+	Assert(high > low && high <= 100 && low > 0)
+	if curr <= low {
+		return 0
+	}
+	if curr >= high {
+		return 100
+	}
+	return (curr - low) * 100 / (high - low)
 }

@@ -41,10 +41,10 @@ import (
 //
 
 const (
-	bmdFname    = "bucket-metadata" // BMD basename on disk
-	bmdFext     = ".prev"           // suffix: previous version
-	bmdTermName = "BMD"             // display name
-	bmdCopies   = 2                 // local copies
+	bmdFname    = ".ais.bmd" // BMD basename on disk
+	bmdFext     = ".prev"    // suffix: previous version
+	bmdTermName = "BMD"      // display name
+	bmdCopies   = 2          // local copies
 )
 
 type (
@@ -281,12 +281,12 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 
 func (bo *bmdOwnerPrx) init() {
 	var bmd = newBucketMD()
-	err := cmn.LocalLoad(bo.fpath, bmd)
+	err := cmn.LocalLoad(bo.fpath, bmd, true /*compression*/)
 	if err != nil && !os.IsNotExist(err) {
 		old := &oldBMD{LBmap: bmd.LBmap, CBmap: bmd.CBmap}
 		ers := err
 		// backward-compat
-		if err := cmn.LocalLoad(bo.fpath, old); err != nil {
+		if err := cmn.LocalLoad(bo.fpath, old, true /*compression*/); err != nil {
 			glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bo.fpath, ers)
 			bmd = newBucketMD()
 		} else {
@@ -302,7 +302,7 @@ func (bo *bmdOwnerPrx) init() {
 
 func (bo *bmdOwnerPrx) put(bmd *bucketMD) {
 	bo._put(bmd)
-	err := cmn.LocalSave(bo.fpath, bmd)
+	err := cmn.LocalSave(bo.fpath, bmd, true /*compression*/)
 	if err != nil {
 		glog.Errorf("failed to store %s as %s, err: %v", bmdTermName, bo.fpath, err)
 	}
@@ -340,11 +340,11 @@ func (bo *bmdOwnerTgt) init() {
 			if suffix {
 				fpath += bmdFext
 			}
-			if err := cmn.LocalLoad(fpath, bmd); err != nil {
+			if err := cmn.LocalLoad(fpath, bmd, true /*compression*/); err != nil {
 				old := &oldBMD{LBmap: bmd.LBmap, CBmap: bmd.CBmap}
 				ers := err
 				// backward-compat
-				if err := cmn.LocalLoad(fpath, old); err != nil {
+				if err := cmn.LocalLoad(fpath, old, true /*compression*/); err != nil {
 					glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, fpath, ers)
 					bmd = nil
 				} else {
@@ -386,7 +386,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	// write new
 	for mpath := range avail {
 		fpath := filepath.Join(mpath, bmdFname)
-		if err := cmn.LocalSave(fpath, bmd); err != nil {
+		if err := cmn.LocalSave(fpath, bmd, true /*compression*/); err != nil {
 			glog.Errorf("failed to store %s as %s, err: %v", bmdTermName, fpath, err)
 			continue
 		}

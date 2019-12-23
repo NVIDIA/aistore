@@ -18,7 +18,7 @@ func initAuthParams() {
 
 	// TODO: `credDir` should be `home/.config/ais/`
 	tokenPath := filepath.Join(home, credDir, credFile)
-	cmn.LocalLoad(tokenPath, &loggedUserToken)
+	cmn.LocalLoad(tokenPath, &loggedUserToken, false /* compression */)
 }
 
 func initClusterParams() {

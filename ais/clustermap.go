@@ -285,7 +285,7 @@ func (r *smapowner) persist(newSmap *smapX, saveSmap bool) error {
 
 	origURL := config.Proxy.PrimaryURL
 	config.Proxy.PrimaryURL = newSmap.ProxySI.PublicNet.DirectURL
-	if err := cmn.LocalSave(confFile, config); err != nil {
+	if err := cmn.LocalSave(confFile, config, false /* compression */); err != nil {
 		err = fmt.Errorf("failed writing config file %s, err: %v", confFile, err)
 		config.Proxy.PrimaryURL = origURL
 		return err
@@ -293,7 +293,7 @@ func (r *smapowner) persist(newSmap *smapX, saveSmap bool) error {
 
 	if saveSmap {
 		smapPathName := filepath.Join(config.Confdir, smapFname)
-		if err := cmn.LocalSave(smapPathName, newSmap); err != nil {
+		if err := cmn.LocalSave(smapPathName, newSmap, false /* compression */); err != nil {
 			glog.Errorf("failed writing smapX %s, err: %v", smapPathName, err)
 		}
 	}

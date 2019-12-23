@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -32,8 +33,8 @@ import (
 // transport defaults
 const (
 	maxHeaderSize  = 1024
-	lastMarker     = cmn.MaxInt64
-	tickMarker     = cmn.MaxInt64 ^ 0xa5a5a5a5
+	lastMarker     = math.MaxInt64
+	tickMarker     = math.MaxInt64 ^ 0xa5a5a5a5
 	tickUnit       = time.Second
 	defaultIdleOut = time.Second * 2
 	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure

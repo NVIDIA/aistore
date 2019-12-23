@@ -175,7 +175,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 		return fmt.Errorf(tokenSaveFailFmt, err)
 	}
 	tokenPath := filepath.Join(tokenDir, credFile)
-	err = cmn.LocalSave(tokenPath, token)
+	err = cmn.LocalSave(tokenPath, token, false /* compression */)
 	if err != nil {
 		return fmt.Errorf(tokenSaveFailFmt, err)
 	}

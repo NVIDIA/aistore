@@ -65,7 +65,7 @@ func main() {
 	if glog.V(4) {
 		glog.Infof("Reading configuration from %s", configPath)
 	}
-	if err = cmn.LocalLoad(configPath, conf); err != nil {
+	if err = cmn.LocalLoad(configPath, conf, false /* compression */); err != nil {
 		glog.Fatalf("Failed to load configuration: %v", err)
 	}
 	if err = conf.validate(); err != nil {

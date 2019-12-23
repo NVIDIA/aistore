@@ -580,7 +580,7 @@ func damageMetadataCksum(t *testing.T, slicePath string) {
 	md, err := ec.LoadMetadata(metaFQN)
 	tassert.CheckFatal(t, err)
 	md.CksumValue = "01234"
-	err = cmn.LocalSave(metaFQN, md)
+	err = cmn.LocalSave(metaFQN, md, false /* compression */)
 	tassert.CheckFatal(t, err)
 }
 

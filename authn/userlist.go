@@ -75,7 +75,7 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 		return mgr
 	}
 
-	if err = cmn.LocalLoad(dbPath, &mgr.Users); err != nil {
+	if err = cmn.LocalLoad(dbPath, &mgr.Users, false /* compression */); err != nil {
 		glog.Fatalf("Failed to load user list: %v\n", err)
 	}
 
@@ -114,7 +114,7 @@ func (m *userManager) saveUsers() (err error) {
 		}
 	}
 
-	if err = cmn.LocalSave(m.Path, &filtered); err != nil {
+	if err = cmn.LocalSave(m.Path, &filtered, false /* compression */); err != nil {
 		err = fmt.Errorf("UserManager: Failed to save user list: %v", err)
 	}
 	return err

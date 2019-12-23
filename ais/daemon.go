@@ -179,7 +179,7 @@ func aisinit(version, build string) {
 	}
 	config, confChanged = cmn.LoadConfig(&clivars.config)
 	if confChanged {
-		if err := cmn.LocalSave(cmn.GCO.GetConfigFile(), config); err != nil {
+		if err := cmn.LocalSave(cmn.GCO.GetConfigFile(), config, false /* compression */); err != nil {
 			cmn.ExitLogf("CLI %s: failed to write, err: %s", cmn.ActSetConfig, err)
 		}
 		glog.Infof("CLI %s: stored", cmn.ActSetConfig)

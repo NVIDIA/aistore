@@ -40,7 +40,7 @@ var (
 // If primary proxy change is detected then the current Smap is saved
 func newProxy(configPath, defaultURL string) *proxy {
 	p := &proxy{}
-	err := cmn.LocalLoad(configPath, p)
+	err := cmn.LocalLoad(configPath, p, false /* compression */)
 	if err != nil {
 		// first run: read the current Smap and save to local file
 		baseParams := api.BaseParams{
@@ -68,7 +68,7 @@ func newProxy(configPath, defaultURL string) *proxy {
 }
 
 func (p *proxy) saveSmap() {
-	err := cmn.LocalSave(p.configPath, p)
+	err := cmn.LocalSave(p.configPath, p, false /* compression */)
 	if err != nil {
 		glog.Errorf("Failed to save configuration: %v", err)
 	}

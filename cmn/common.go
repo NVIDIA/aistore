@@ -32,6 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/pierrec/lz4/v3"
 	"github.com/teris-io/shortid"
 )
 
@@ -60,22 +61,9 @@ const (
 	configHomeEnvVar = "XDG_CONFIG_HOME" // https://wiki.archlinux.org/index.php/XDG_Base_Directory
 	configDirMode    = 0755 | os.ModeDir
 )
-
-var toBiBytes = map[string]int64{
-	"K":   KiB,
-	"KB":  KiB,
-	"KIB": KiB,
-	"M":   MiB,
-	"MB":  MiB,
-	"MIB": MiB,
-	"G":   GiB,
-	"GB":  GiB,
-	"GIB": GiB,
-	"T":   TiB,
-	"TB":  TiB,
-	"TIB": TiB,
-}
-
+const (
+	assertMsg = "assertion failed"
+)
 const (
 	DoesNotExist = "does not exist"
 	NoMountpaths = "no mountpaths"
@@ -83,6 +71,13 @@ const (
 	GcsUA     = "gcloud-golang-storage/20151204" // NOTE: taken from cloud.google.com/go/storage/storage.go (userAgent)
 	GcsURL    = "http://storage.googleapis.com"
 	GcsURLAlt = "http://www.googleapis.com"
+)
+const (
+	LetterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+)
+const (
+	QuantityPercent = "percent"
+	QuantityBytes   = "bytes"
 )
 
 type (
@@ -126,6 +121,61 @@ type (
 		High    bool
 		OOS     bool
 	}
+	ParsedQuantity struct {
+		Type  string
+		Value uint64
+	}
+	ReadOpenCloser interface {
+		io.ReadCloser
+		Open() (io.ReadCloser, error)
+	}
+
+	// ReadSizer is the interface that adds Size method to the basic reader.
+	ReadSizer interface {
+		io.Reader
+		Size() int64
+	}
+
+	FileHandle struct {
+		*os.File
+		fqn string
+	}
+
+	// FileSectionHandle is a slice of already opened file with optional padding
+	// that implements ReadOpenCloser interface
+	FileSectionHandle struct {
+		s         *io.SectionReader
+		padding   int64 // padding size
+		padOffset int64 // offset iniside padding when reading a file
+	}
+
+	// ByteHandle is a byte buffer(made from []byte) that implements
+	// ReadOpenCloser interface
+	ByteHandle struct {
+		*bytes.Reader
+	}
+
+	// SizedReader is simple struct which implements ReadSizer interface.
+	SizedReader struct {
+		io.Reader
+		size int64
+	}
+
+	nopOpener struct {
+		io.ReadCloser
+	}
+
+	TemplateRange struct {
+		Start      int
+		End        int
+		Step       int
+		DigitCount int
+		Gap        string // characters after range (either to next range or end of string)
+	}
+	ParsedTemplate struct {
+		Prefix string
+		Ranges []TemplateRange
+	}
 )
 
 var (
@@ -133,9 +183,42 @@ var (
 	sid64     *shortid.Shortid
 	bucketReg *regexp.Regexp
 )
+var (
+	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010..1}suffix'")
+	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix@00100suffix'")
 
-const (
-	LetterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	ErrStartAfterEnd   = errors.New("'start' cannot be greater than 'end'")
+	ErrNegativeStart   = errors.New("'start' is negative")
+	ErrNonPositiveStep = errors.New("'step' is non positive number")
+)
+var (
+	ErrInvalidQuantityUsage       = errors.New("invalid quantity, format should be '81%' or '1GB'")
+	errInvalidQuantityNonNegative = errors.New("quantity should not be negative")
+	ErrInvalidQuantityPercent     = errors.New("percent must be in the range (0, 100)")
+	ErrInvalidQuantityBytes       = errors.New("value (bytes) must be non-negative")
+)
+var (
+	toBiBytes = map[string]int64{
+		"K":   KiB,
+		"KB":  KiB,
+		"KIB": KiB,
+		"M":   MiB,
+		"MB":  MiB,
+		"MIB": MiB,
+		"G":   GiB,
+		"GB":  GiB,
+		"GIB": GiB,
+		"T":   TiB,
+		"TB":  TiB,
+		"TIB": TiB,
+	}
+)
+var (
+	_ ReadOpenCloser = &FileHandle{}
+	_ ReadSizer      = &SizedReader{}
+	_ ReadOpenCloser = &FileSectionHandle{}
+	_ ReadOpenCloser = &nopOpener{}
+	_ ReadOpenCloser = &ByteHandle{}
 )
 
 func init() {
@@ -253,7 +336,7 @@ func (fpair PairF32) String() string {
 }
 
 //
-// common utils
+// misc utils
 //
 
 func GenUUID() (uuid string, err error) {
@@ -411,8 +494,6 @@ func Either(lhs, rhs string) string {
 	return rhs
 }
 
-const assertMsg = "assertion failed"
-
 // NOTE: not to be used in the datapath - consider instead one of the 3 flavors below
 func AssertFmt(cond bool, args ...interface{}) {
 	if cond {
@@ -556,59 +637,9 @@ func FreeMemToOS(d ...time.Duration) {
 	debug.FreeOSMemory()
 }
 
-//
-// files, IO, hash
-//
-
-var (
-	_ ReadOpenCloser = &FileHandle{}
-	_ ReadSizer      = &SizedReader{}
-	_ ReadOpenCloser = &FileSectionHandle{}
-	_ ReadOpenCloser = &nopOpener{}
-	_ ReadOpenCloser = &ByteHandle{}
-)
-
-type (
-	ReadOpenCloser interface {
-		io.ReadCloser
-		Open() (io.ReadCloser, error)
-	}
-
-	// ReadSizer is the interface that adds Size method to the basic reader.
-	ReadSizer interface {
-		io.Reader
-		Size() int64
-	}
-
-	FileHandle struct {
-		*os.File
-		fqn string
-	}
-
-	// FileSectionHandle is a slice of already opened file with optional padding
-	// that implements ReadOpenCloser interface
-	FileSectionHandle struct {
-		s         *io.SectionReader
-		padding   int64 // padding size
-		padOffset int64 // offset iniside padding when reading a file
-	}
-
-	// ByteHandle is a byte buffer(made from []byte) that implements
-	// ReadOpenCloser interface
-	ByteHandle struct {
-		*bytes.Reader
-	}
-
-	// SizedReader is simple struct which implements ReadSizer interface.
-	SizedReader struct {
-		io.Reader
-		size int64
-	}
-
-	nopOpener struct {
-		io.ReadCloser
-	}
-)
+/////////////////////
+// files, IO, hash //
+/////////////////////
 
 func NewByteHandle(bt []byte) *ByteHandle {
 	return &ByteHandle{
@@ -718,6 +749,34 @@ func ExpandPath(path string) string {
 		return filepath.Clean(path)
 	}
 	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
+}
+
+func ValidateOmitBase(fqn, omitBase string) (err error) {
+	const a = "does not represent an absolute path"
+	if omitBase != "" && !filepath.IsAbs(omitBase) {
+		return fmt.Errorf("pathname prefix '%s' %s", omitBase, a)
+	}
+	if !filepath.IsAbs(fqn) {
+		return fmt.Errorf("pathname '%s' %s", fqn, a)
+	}
+	if omitBase != "" && !strings.HasPrefix(fqn, omitBase) {
+		return fmt.Errorf("pathname '%s' does not begin with '%s'", fqn, omitBase)
+	}
+	return
+}
+
+func ValidateBucketName(bucket string) (err error) {
+	const nameErr = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
+	if bucket == "" {
+		return errors.New("bucket name is empty")
+	}
+	if !bucketReg.MatchString(bucket) {
+		return fmt.Errorf("bucket name %s is invalid: %s", bucket, nameErr)
+	}
+	if strings.Contains(bucket, "..") {
+		return fmt.Errorf("bucket name %s cannot contain '..'", bucket)
+	}
+	return
 }
 
 // CreateDir creates directory if does not exists. Does not return error when
@@ -975,19 +1034,30 @@ func CheckI64Range(v, low, high int64) (int64, error) {
 // local save and restore //
 ////////////////////////////
 
-func LocalSave(path string, v interface{}) error {
-	tmp := path + ".tmp"
-	file, err := CreateFile(tmp)
+func LocalSave(path string, v interface{}, compress bool) error {
+	var (
+		zw        *lz4.Writer
+		encoder   *jsoniter.Encoder
+		tmp       = path + ".tmp"
+		file, err = CreateFile(tmp)
+	)
 	if err != nil {
 		return err
 	}
-
-	encoder := jsoniter.NewEncoder(file)
+	if compress {
+		zw = lz4.NewWriter(file)
+		encoder = jsoniter.NewEncoder(zw)
+	} else {
+		encoder = jsoniter.NewEncoder(file)
+	}
 	encoder.SetIndent("", "  ")
 	if err = encoder.Encode(v); err != nil {
 		file.Close()
 		os.Remove(file.Name())
 		return err
+	}
+	if compress {
+		_ = zw.Close()
 	}
 	if err := file.Close(); err != nil {
 		return err
@@ -995,15 +1065,29 @@ func LocalSave(path string, v interface{}) error {
 	return os.Rename(tmp, path)
 }
 
-func LocalLoad(path string, v interface{}) (err error) {
-	file, err := os.Open(path)
+func LocalLoad(path string, v interface{}, decompress bool) error {
+	var (
+		decoder   *jsoniter.Decoder
+		zr        *lz4.Reader
+		file, err = os.Open(path)
+	)
 	if err != nil {
-		return
+		return err
 	}
-	err = jsoniter.NewDecoder(file).Decode(v)
+	if decompress {
+		zr = lz4.NewReader(file)
+		decoder = jsoniter.NewDecoder(zr)
+	} else {
+		decoder = jsoniter.NewDecoder(file)
+	}
+	err = decoder.Decode(v)
 	_ = file.Close()
-	return
+	return err
 }
+
+//////////////////////////////
+// config: path, load, save //
+//////////////////////////////
 
 func homeDir() string {
 	currentUser, err := user.Current()
@@ -1034,7 +1118,7 @@ func LoadAppConfig(appName, configFileName string, v interface{}) (err error) {
 	}
 
 	// Load config from file.
-	err = LocalLoad(configFilePath, v)
+	err = LocalLoad(configFilePath, v, false /*compression*/)
 	if err != nil {
 		return fmt.Errorf("failed to load config file %q: %v", configFilePath, err)
 	}
@@ -1046,57 +1130,12 @@ func SaveAppConfig(appName, configFileName string, v interface{}) (err error) {
 	// Check if config dir exists; if not, create one with default config.
 	configDir := AppConfigPath(appName)
 	configFilePath := filepath.Join(configDir, configFileName)
-	return LocalSave(configFilePath, v)
+	return LocalSave(configFilePath, v, false /*compression*/)
 }
 
-func Ratio(high, low, curr int64) float32 {
-	Assert(high > low && high <= 100 && low > 0)
-	if curr <= low {
-		return 0
-	}
-	if curr >= high {
-		return 1
-	}
-	return float32(curr-low) / float32(high-low)
-}
-
-func RatioPct(high, low, curr int64) int64 {
-	Assert(high > low && high <= 100 && low > 0)
-	if curr <= low {
-		return 0
-	}
-	if curr >= high {
-		return 100
-	}
-	return (curr - low) * 100 / (high - low)
-}
-
-//
-// TEMPLATES/PARSING
-//
-
-type (
-	TemplateRange struct {
-		Start      int
-		End        int
-		Step       int
-		DigitCount int
-		Gap        string // characters after range (either to next range or end of string)
-	}
-	ParsedTemplate struct {
-		Prefix string
-		Ranges []TemplateRange
-	}
-)
-
-var (
-	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010..1}suffix'")
-	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix@00100suffix'")
-
-	ErrStartAfterEnd   = errors.New("'start' cannot be greater than 'end'")
-	ErrNegativeStart   = errors.New("'start' is negative")
-	ErrNonPositiveStep = errors.New("'step' is non positive number")
-)
+///////////////////////
+// templates/parsing //
+///////////////////////
 
 func (pt *ParsedTemplate) Count() int64 {
 	count := int64(1)
@@ -1279,25 +1318,6 @@ func validateBoundaries(start, end, step int) error {
 	return nil
 }
 
-type (
-	ParsedQuantity struct {
-		Type  string
-		Value uint64
-	}
-)
-
-const (
-	QuantityPercent = "percent"
-	QuantityBytes   = "bytes"
-)
-
-var (
-	ErrInvalidQuantityUsage       = errors.New("invalid quantity, format should be '81%' or '1GB'")
-	errInvalidQuantityNonNegative = errors.New("quantity should not be negative")
-	ErrInvalidQuantityPercent     = errors.New("percent must be in the range (0, 100)")
-	ErrInvalidQuantityBytes       = errors.New("value (bytes) must be non-negative")
-)
-
 func ParseQuantity(quantity string) (ParsedQuantity, error) {
 	quantity = strings.ReplaceAll(quantity, " ", "")
 	idx := 0
@@ -1349,9 +1369,9 @@ func (pq ParsedQuantity) String() string {
 	}
 }
 
-//
-// time formatting
-//
+/////////////////////
+// time formatting //
+/////////////////////
 
 func FormatTime(t time.Time, format string) string {
 	switch format {
@@ -1364,40 +1384,6 @@ func FormatTime(t time.Time, format string) string {
 
 func S2TimeUnix(timeStr string) (tunix int64, err error) {
 	tunix, err = strconv.ParseInt(timeStr, 10, 64)
-	return
-}
-
-//
-// bucket
-//
-func ValidateBucketName(bucket string) (err error) {
-	const nameErr = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
-	if bucket == "" {
-		return errors.New("bucket name is empty")
-	}
-	if !bucketReg.MatchString(bucket) {
-		return fmt.Errorf("bucket name %s is invalid: %s", bucket, nameErr)
-	}
-	if strings.Contains(bucket, "..") {
-		return fmt.Errorf("bucket name %s cannot contain '..'", bucket)
-	}
-	return
-}
-
-//
-// miscellaneous
-//
-func ValidateOmitBase(fqn, omitBase string) (err error) {
-	const a = "does not represent an absolute path"
-	if omitBase != "" && !filepath.IsAbs(omitBase) {
-		return fmt.Errorf("pathname prefix '%s' %s", omitBase, a)
-	}
-	if !filepath.IsAbs(fqn) {
-		return fmt.Errorf("pathname '%s' %s", fqn, a)
-	}
-	if omitBase != "" && !strings.HasPrefix(fqn, omitBase) {
-		return fmt.Errorf("pathname '%s' does not begin with '%s'", fqn, omitBase)
-	}
 	return
 }
 
