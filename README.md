@@ -91,12 +91,12 @@ Enter number of proxies (gateways):
 3
 Number of local cache directories (enter 0 to use preconfigured filesystems):
 2
-Select Cloud Provider:
-1: Amazon Cloud
-2: Google Cloud
-3: None
-Enter your choice:
-3
+Select:
+ 0: No cloud provider
+ 1: Amazon Cloud
+ 2: Google Cloud
+Enter your provider choice (0, 1 or 2):
+0
 ```
 
 Or, you can run all of the above non-interactively:

@@ -58,13 +58,13 @@ esac
 done
 
 create_local_repo() {
-    if docker ps | grep registry:2 &> /dev/null; then 
+    if docker ps | grep registry:2 &> /dev/null; then
         echo "Local repository already exists ..."
         docker-compose down
     fi
     echo "Creating local repository and building image..."
     docker-compose up -d --force-recreate
-    
+
     echo "Pushing to repository..."
     docker push localhost:5000/ais:v1
 }
@@ -165,11 +165,11 @@ FSPATHS=$fspath
 TEST_FSPATH_COUNT=$testfspathcnt
 LOCAL_AWS="/aisconfig/aws.env"
 CLDPROVIDER="" # See deploy.sh for more informations about empty CLDPROVIDER
-echo Select Cloud Provider:
-echo  1: Amazon Cloud
-echo  2: Google Cloud
-echo  3: None
-echo Enter your choice:
+echo "Select:"
+echo " 0: No cloud provider"
+echo " 1: Amazon Cloud"
+echo " 2: Google Cloud"
+echo "Enter your provider choice (0, 1 or 2):"
 read cldprovider
 if [ $cldprovider -eq 1 ]; then
     CLDPROVIDER="aws"
