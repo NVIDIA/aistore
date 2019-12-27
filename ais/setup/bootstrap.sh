@@ -3,7 +3,7 @@
 AISTORE_DIR=$(cd "$(dirname "$0")"; realpath ../../)
 
 function list_all_go_dirs {
-  go list -f '{{.Dir}}' "${AISTORE_DIR}/..."
+  go list -f '{{.Dir}}' "${AISTORE_DIR}/..." | fgrep -v ais/setup
 }
 
 # This script is used by Makefile to run commands.

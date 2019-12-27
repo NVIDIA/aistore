@@ -133,8 +133,8 @@ func decryptToken(tokenStr string) (*authRec, error) {
 	return rec, nil
 }
 
-// Retreives a string from context field or empty string if nothing found or
-//   the field is not of string type
+// Retrieves a string from context field or empty string if nothing found or
+// the field is not of string type
 //nolint:unused, deadcode
 func getStringFromContext(ct context.Context, fieldName contextID) string {
 	fieldIf := ct.Value(fieldName)

@@ -66,9 +66,9 @@ func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cm
 	if len(used) > 0 {
 		t.capUsed.Lock()
 		t.capUsed.used = used[0]
-		if t.capUsed.oos && t.capUsed.used < int32(config.LRU.HighWM) {
+		if t.capUsed.oos && int64(t.capUsed.used) < config.LRU.HighWM {
 			t.capUsed.oos = false
-		} else if !t.capUsed.oos && t.capUsed.used > int32(config.LRU.OOS) {
+		} else if !t.capUsed.oos && int64(t.capUsed.used) > config.LRU.OOS {
 			t.capUsed.oos = true
 		}
 		capInfo.UsedPct, capInfo.OOS = t.capUsed.used, t.capUsed.oos
@@ -78,7 +78,7 @@ func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cm
 		capInfo.UsedPct, capInfo.OOS = t.capUsed.used, t.capUsed.oos
 		t.capUsed.RUnlock()
 	}
-	capInfo.High = capInfo.UsedPct > int32(config.LRU.HighWM)
+	capInfo.High = int64(capInfo.UsedPct) > config.LRU.HighWM
 	if capInfo.OOS || capInfo.High {
 		capInfo.Err = cmn.NewErrorCapacityExceeded(t.si.Name(), config.LRU.HighWM, capInfo.UsedPct, capInfo.OOS)
 	}

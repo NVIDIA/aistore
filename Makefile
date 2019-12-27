@@ -9,6 +9,16 @@ VERSION = $(shell git rev-parse --short HEAD)
 BUILD = $(shell date +%FT%T%z)
 FLAGS = $(if $(strip $(GORACE)),-race,)
 
+# Profiling
+# Example usage: MEMPROFILE=/tmp/mem make kill clean deploy <<< $'4\n4\n4\n0'
+# Note that MEMPROFILE (memprofile) option requires graceful shutdown (see `kill:`)
+ifdef MEMPROFILE
+	export PROFILE = -memprofile=$(MEMPROFILE)
+endif
+ifdef CPUPROFILE
+	export PROFILE += -cpuprofile=$(CPUPROFILE)
+endif
+
 ifeq ($(MODE),debug)
 	# Debug mode
 	GCFLAGS = -gcflags="all=-N -l"
@@ -34,8 +44,14 @@ node: ## Build 'aisnode' binary
 ifneq ($(strip $(GORACE)),)
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
+ifdef PROFILE
+	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
+	go install $(FLAGS) -tags="$(CLDPROVIDER)" $(GCFLAGS) $(LDFLAGS) $(BUILD_DIR)/aisnode_profile.go
+	@mv $(GOPATH)/bin/aisnode_profile $(GOPATH)/bin/aisnode
+else
 	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
 		go install $(FLAGS) -tags="$(CLDPROVIDER)" $(GCFLAGS) $(LDFLAGS) $(BUILD_DIR)/aisnode.go
+endif
 	@echo "done."
 
 aisfs: ## Build 'aisfs' binary
@@ -73,6 +89,8 @@ deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies
 #
 .PHONY: kill rmcache clean
 
+# when profiling, make sure to let it flush accumulated stats
+# e.g., insert sleep prior to SIGKILL or remove it altogether
 kill: ## Kill all locally deployed targets and proxies
 	@echo -n "Local AIS shutdown... "
 	@pkill -SIGINT aisnode 2>/dev/null; true

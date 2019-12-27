@@ -199,7 +199,7 @@ for (( c=START; c<=END; c++ )); do
   elif [[ $c -lt ${PROXY_CNT} ]]; then
     runCmd "${CMD} ${PROXY_PARAM}"
   else
-    runCmd "${CMD} ${TARGET_PARAM}"
+    runCmd "${CMD} ${TARGET_PARAM} ${PROFILE}"
   fi
 done
 
