@@ -80,7 +80,6 @@ func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...stri
 	// 3. init streams and data structures
 	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))
 	reb.beginStreams(md)
-	reb.filterGFN.Reset() // start with empty filters
 	reb.tcache.tmap = make(cluster.NodeMap, md.smap.CountTargets()-1)
 	reb.tcache.mu = &sync.Mutex{}
 	acks := reb.lomAcks()
@@ -386,6 +385,8 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 		}
 	}
 	reb.endStreams()
+	reb.filterGFN.Reset()
+
 	if !reb.xreb.Finished() {
 		reb.xreb.EndTime(time.Now())
 	} else {
