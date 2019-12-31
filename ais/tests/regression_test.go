@@ -1218,7 +1218,7 @@ func checkXactAPIErr(t *testing.T, err error) {
 	}
 }
 
-//nolint:unparam
+// nolint:unparam // for now timeout is always the same but it is better to keep it generalized
 func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParams api.BaseParams, timeout time.Duration) {
 	var (
 		wg    = &sync.WaitGroup{}

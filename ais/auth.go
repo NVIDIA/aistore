@@ -134,8 +134,9 @@ func decryptToken(tokenStr string) (*authRec, error) {
 }
 
 // Retrieves a string from context field or empty string if nothing found or
-// the field is not of string type
-//nolint:unused, deadcode
+// the field is not of string type.
+//
+// nolint:unused,deadcode // used by `aws` and `gcp` but needs to compiled by tags
 func getStringFromContext(ct context.Context, fieldName contextID) string {
 	fieldIf := ct.Value(fieldName)
 	if fieldIf == nil {
@@ -151,7 +152,8 @@ func getStringFromContext(ct context.Context, fieldName contextID) string {
 }
 
 // Retreives a userCreds from context or nil if nothing found
-//nolint:unused, deadcode
+//
+// nolint:unused,deadcode // used by `aws` and `gcp` but needs to compiled by tags
 func userCredsFromContext(ct context.Context) cmn.SimpleKVs {
 	userIf := ct.Value(ctxUserCreds)
 	if userIf == nil {

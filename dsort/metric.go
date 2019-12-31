@@ -179,7 +179,8 @@ type ShardCreation struct {
 }
 
 // Metrics is general struct which contains all stats about DSort run.
-//nolint:maligned
+//
+// nolint:maligned // no performance critical code
 type Metrics struct {
 	Extraction *LocalExtraction `json:"local_extraction,omitempty"`
 	Sorting    *MetaSorting     `json:"meta_sorting,omitempty"`

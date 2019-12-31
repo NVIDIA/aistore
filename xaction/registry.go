@@ -218,7 +218,7 @@ func (r *registry) AbortAllBuckets(removeFromRegistry bool, buckets ...string) {
 	wg.Wait()
 }
 
-//nolint:unused
+// nolint:unused // implemented but currently no use case
 func (r *registry) AbortAllGlobal() bool {
 	sleep := false
 	wg := &sync.WaitGroup{}

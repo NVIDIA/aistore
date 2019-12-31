@@ -221,7 +221,8 @@ func MakeAccess(aattr uint64, action string, bits uint64) uint64 {
 // Naming convention for setting/getting the particular props is defined as
 // joining the json tags with dot. Eg. when referring to `EC.Enabled` field
 // one would need to write `ec.enabled`. For more info refer to `IterFields`.
-//nolint:maligned
+//
+// nolint:maligned // no performance critical code
 type BucketProps struct {
 	// CloudProvider can be "aws", "gcp" (clouds) - or "ais".
 	// If a bucket is local, CloudProvider must be "ais".

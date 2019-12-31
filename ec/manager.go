@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-//nolint:maligned
+// nolint:maligned // no performance critical code
 type Manager struct {
 	sync.RWMutex
 

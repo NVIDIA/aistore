@@ -38,7 +38,7 @@ var (
 )
 
 type (
-	//nolint:maligned
+	// nolint:maligned // no performance critical code
 	dsortFramework struct {
 		m *ioContext
 

@@ -249,7 +249,8 @@ var (
 // Naming convention for setting/getting the particular fields is defined as
 // joining the json tags with dot. Eg. when referring to `EC.Enabled` field
 // one would need to write `ec.enabled`. For more info refer to `IterFields`.
-//nolint:maligned
+//
+// nolint:maligned // no performance critical code
 type Config struct {
 	Confdir          string          `json:"confdir"`
 	CloudProvider    string          `json:"cloudprovider"`

@@ -134,7 +134,8 @@ type (
 )
 
 const (
-	initialBucketListSize = 128 //nolint:unused,varcheck,deadcode
+	// nolint:unused,varcheck,deadcode // used by `aws` and `gcp` but needs to compiled by tags
+	initialBucketListSize = 128
 )
 
 /////////////////////

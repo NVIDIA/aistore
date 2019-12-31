@@ -220,7 +220,7 @@ func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {
 		}
 		fsCap := newFSCapacity(statfs)
 		capacities[mpath] = fsCap
-		if fsCap.Usedpct >= int32(config.LRU.HighWM) {
+		if int64(fsCap.Usedpct) >= config.LRU.HighWM {
 			runlru = true
 		}
 		usedNow += fsCap.Usedpct

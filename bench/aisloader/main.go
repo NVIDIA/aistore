@@ -92,7 +92,7 @@ type (
 		latencies tutils.HTTPLatencies
 	}
 
-	//nolint:maligned
+	// nolint:maligned // no performance critical code
 	params struct {
 		seed              int64 // random seed; UnixNano() if omitted
 		putSizeUpperBound int64

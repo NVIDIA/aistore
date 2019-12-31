@@ -543,7 +543,7 @@ type baseBckEntry struct {
 func (*baseBckEntry) IsGlobal() bool { return false }
 func (*baseBckEntry) IsTask() bool   { return false }
 
-//nolint:unparam
+// nolint:unparam // `err` is set in different implementations
 func (b *baseBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
 	e := previousEntry.Get()
 	if demandEntry, ok := e.(cmn.XactDemand); ok {
