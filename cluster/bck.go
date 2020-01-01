@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -20,9 +21,19 @@ type Bck struct {
 
 func (b *Bck) MakeUname(objName string) string {
 	const sep = string(filepath.Separator)
-	prov, _ := cmn.ProviderFromStr(b.Provider)
-	return prov + sep + b.Name + sep + objName
+	var (
+		prov, _ = cmn.ProviderFromStr(b.Provider)
+		l       = len(prov) + 2*len(sep) + len(b.Name) + len(objName)
+		buf     = make([]byte, 0, l)
+	)
+	buf = append(buf, prov...)
+	buf = append(buf, sep...)
+	buf = append(buf, b.Name...)
+	buf = append(buf, sep...)
+	buf = append(buf, objName...)
+	return *(*string)(unsafe.Pointer(&buf))
 }
+
 func ParseUname(uname string) (b Bck, objName string) {
 	const sep = byte(filepath.Separator)
 	i := strings.IndexByte(uname, sep)

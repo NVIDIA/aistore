@@ -729,7 +729,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 		ec.ECM.BucketsMDChanged()
 	}
 
-	// Delete buckets that do not exist in the new bucket metadata
+	// Delete buckets that do not exist in the new BMD
 	bucketsToDelete := make([]string, 0, len(bucketmd.LBmap))
 	for bucket := range bucketmd.LBmap {
 		if nprops, ok := newbucketmd.LBmap[bucket]; !ok {
@@ -846,12 +846,12 @@ func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
 	bucketmd := t.bmdowner.Get()
 	bmdVersion := msgInt.BMDVersion
 	if bucketmd.Version < bmdVersion {
-		glog.Errorf("own bucket-metadata version %d < %d - fetching latest for %v", bucketmd.Version, bmdVersion, msgInt.Action)
+		glog.Errorf("own BMD version %d < %d - fetching latest for %v", bucketmd.Version, bmdVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
 		t.BMDVersionFixup("", false)
 	} else if bucketmd.Version > bmdVersion {
 		//if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("own bucket-metadata version %d > %d - encountered during %v", bucketmd.Version, bmdVersion, msgInt.Action)
+		glog.Errorf("own BMD version %d > %d - encountered during %v", bucketmd.Version, bmdVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
 	}
 }

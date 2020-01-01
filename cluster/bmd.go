@@ -15,7 +15,7 @@ const (
 	BisLocalBit = uint64(1 << 63)
 )
 
-// interface to Get current bucket-metadata instance
+// interface to Get current BMD instance
 // (for implementation, see ais/bucketmeta.go)
 type Bowner interface {
 	Get() (bmd *BMD)

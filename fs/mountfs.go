@@ -23,6 +23,8 @@ import (
 
 const pkgName = "fs"
 const uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
+const sepa = string(filepath.Separator)
+const lsepa = len(sepa)
 
 // mountpath lifecycle-change enum
 const (
@@ -146,7 +148,14 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 		return err
 	}
 	if err := os.Rename(dir, tmpDir); err != nil {
-		return err
+		if os.IsExist(err) {
+			if os.Remove(tmpDir) == nil {
+				err = os.Rename(dir, tmpDir)
+			}
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	// Schedule removing temporary directory which is our old `dir`
@@ -174,24 +183,55 @@ func (mi *MountpathInfo) String() string {
 	return fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.FileSystem)
 }
 
-// returns top directory for a given content-type
-func (mi *MountpathInfo) MakePath(contentType, provider string) (fqn string) {
+///////////////
+// make-path //
+///////////////
+
+func (mi *MountpathInfo) makePathBuf(contentType, provider string, extra int) (buf []byte) {
+	var (
+		provPath string
+		l        = len(mi.Path) + lsepa + len(contentType) + lsepa + extra
+	)
 	switch provider {
 	case cmn.AIS:
-		fqn = filepath.Join(mi.Path, contentType, aisPath)
+		l += len(aisPath)
+		provPath = aisPath
 	case cmn.Cloud, cmn.ProviderAmazon, cmn.ProviderGoogle:
-		fqn = filepath.Join(mi.Path, contentType, cloudPath)
+		l += len(cloudPath)
+		provPath = cloudPath
 	default:
-		cmn.AssertMsg(false, fmt.Sprintf("tried to MakePath with unknown provider: %s", provider))
+		cmn.AssertMsg(false, "invalid provider: "+provider)
 	}
+	buf = make([]byte, 0, l)
+	buf = append(buf, mi.Path...)
+	buf = append(buf, sepa...)
+	buf = append(buf, contentType...)
+	buf = append(buf, sepa...)
+	buf = append(buf, provPath...)
 	return
 }
 
+func (mi *MountpathInfo) makePathBucketBuf(contentType, bucket, provider string, extra int) (buf []byte) {
+	buf = mi.makePathBuf(contentType, provider, lsepa+len(bucket)+extra)
+	buf = append(buf, sepa...)
+	buf = append(buf, bucket...)
+	return
+}
+
+func (mi *MountpathInfo) MakePath(contentType, provider string) string {
+	buf := mi.makePathBuf(contentType, provider, 0)
+	return *(*string)(unsafe.Pointer(&buf))
+}
+
 func (mi *MountpathInfo) MakePathBucket(contentType, bucket, provider string) string {
-	return filepath.Join(mi.MakePath(contentType, provider), bucket)
+	buf := mi.makePathBucketBuf(contentType, bucket, provider, 0)
+	return *(*string)(unsafe.Pointer(&buf))
 }
 func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, provider, objName string) string {
-	return filepath.Join(mi.MakePath(contentType, provider), bucket, objName)
+	buf := mi.makePathBucketBuf(contentType, bucket, provider, lsepa+len(objName))
+	buf = append(buf, sepa...)
+	buf = append(buf, objName...)
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 //

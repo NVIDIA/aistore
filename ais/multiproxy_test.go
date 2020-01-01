@@ -42,7 +42,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 	return &p
 }
 
-// discoverServerDefaultHandler returns the Smap and bucket-metadata with the given version
+// discoverServerDefaultHandler returns the Smap and BMD with the given version
 func discoverServerDefaultHandler(sv int64, lv int64) *httptest.Server {
 	smapVersion := sv
 	bmdVersion := lv
@@ -60,7 +60,7 @@ func discoverServerDefaultHandler(sv int64, lv int64) *httptest.Server {
 }
 
 // discoverServerVoteOnceHandler returns vote in progress on the first time it is call, returns
-// Smap and bucket-metadata on subsequent calls
+// Smap and BMD on subsequent calls
 func discoverServerVoteOnceHandler(sv int64, lv int64) *httptest.Server {
 	cnt := 0
 	smapVersion := sv
@@ -80,7 +80,7 @@ func discoverServerVoteOnceHandler(sv int64, lv int64) *httptest.Server {
 }
 
 // discoverServerFailTwiceHandler fails the first two calls and returns
-// Smap abd bucket-metadata on subsequent calls
+// Smap abd BMD on subsequent calls
 func discoverServerFailTwiceHandler(sv int64, lv int64) *httptest.Server {
 	cnt := 0
 	smapVersion := sv
@@ -133,7 +133,7 @@ func TestDiscoverServers(t *testing.T) {
 		servers     []discoverServer
 		duration    time.Duration // how long to wait for discover servers call
 		smapVersion int64         // expected return from discover servers
-		bmdVersion  int64         // use '0' if expecting nil Smap or bucket-metadata
+		bmdVersion  int64         // use '0' if expecting nil Smap or BMD
 	}{
 		{
 			"empty discovery Smap",
@@ -234,7 +234,7 @@ func TestDiscoverServers(t *testing.T) {
 			4,
 		},
 		{
-			"zero bucket-metadata version",
+			"zero BMD version",
 			[]discoverServer{
 				{"p1", true, 1, 0, discoverServerDefaultHandler},
 				{"t1", false, 1, 0, discoverServerDefaultHandler},
@@ -274,11 +274,11 @@ func TestDiscoverServers(t *testing.T) {
 
 		if tc.bmdVersion == 0 {
 			if bucketmd != nil && bucketmd.version() > 0 {
-				t.Errorf("test case %s: expecting nil bucket-metadata", tc.name)
+				t.Errorf("test case %s: expecting nil BMD", tc.name)
 			}
 		} else {
 			if bucketmd == nil || bucketmd.version() == 0 {
-				t.Errorf("test case %s: expecting non-empty bucket-metadata", tc.name)
+				t.Errorf("test case %s: expecting non-empty BMD", tc.name)
 			} else if tc.bmdVersion != bucketmd.Version {
 				t.Errorf("test case %s: expecting %d, got %d", tc.name, tc.bmdVersion, bucketmd.Version)
 			}

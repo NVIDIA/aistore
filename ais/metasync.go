@@ -70,7 +70,7 @@ const (
 // simple serialization of the versioned updates.
 //
 // The usage is easy - there is a single sync() method that accepts variable
-// number of parameters. Example sync-ing Smap and bucket-metadata
+// number of parameters. Example sync-ing Smap and BMD
 // asynchronously:
 //
 // metasyncer.sync(false, smapowner.get(), action1, bmdowner.get(), action2)

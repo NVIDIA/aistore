@@ -419,13 +419,13 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 			tassert.CheckFatal(m.t, err)
 			// T3
 			if cmn.StrSlicesEqual(proxyLBNames.AIS, targetLBNames.AIS) {
-				tutils.Logf("T3: registered target %s got updated with the new bucket-metadata\n", target.DaemonID)
+				tutils.Logf("T3: registered target %s got updated with the new BMD\n", target.DaemonID)
 				return
 			}
 		}
 	}
 
-	m.t.Fatalf("failed to register target %s: not in the Smap or did not receive bucket-metadata", target.DaemonID)
+	m.t.Fatalf("failed to register target %s: not in the Smap or did not receive BMD", target.DaemonID)
 }
 
 func (m *ioContext) setRandBucketProps() {

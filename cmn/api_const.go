@@ -166,7 +166,7 @@ const (
 	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary and the entire cluster)
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
 	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role
-	URLParamBMDVersion       = "vbm" // version of the bucket-metadata
+	URLParamBMDVersion       = "vbm" // version of the BMD
 	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC
 	URLParamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
 	URLParamSilent           = "sln" // true: destination should not log errors (HEAD request)

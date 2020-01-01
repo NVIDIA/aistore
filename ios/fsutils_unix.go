@@ -16,6 +16,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+//nolint:unconvert // fsStats.Bsize is uint32 in Darwin, int64 in Linux
 func GetFSStats(path string) (blocks uint64, bavail uint64, bsize int64, err error) {
 	fsStats := unix.Statfs_t{}
 	if err = unix.Statfs(path, &fsStats); err != nil {
