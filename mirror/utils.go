@@ -74,11 +74,11 @@ func addCopies(lom *cluster.LOM, copies int, mpathers map[string]mpather, buf []
 		return 0, nil
 	}
 
-	// NOTE: During copying we may notice that some of the copies may not exist.
-	//  These copies will be removed from `lom.md` and `NumCopies()` will
-	//  decrease. Therefore, we cannot just iterate `copies - lom.NumCopies()`
-	//  times because this may not be sufficient - and this is why we iterate
-	//  until `NumCopies() == copies`.
+	// Duplicate lom.md.copies for write access.
+	lom.CloneCopiesMd()
+
+	//  While copying we may find out that some copies do not exist -
+	//  these copies will be removed and `NumCopies()` will decrease.
 	for lom.NumCopies() < copies {
 		if mpather := findLeastUtilized(lom, mpathers); mpather != nil {
 			var clone *cluster.LOM

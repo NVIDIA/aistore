@@ -125,7 +125,7 @@ func (lom *LOM) VerConf() *cmn.VersionConf { return &lom.Bprops().Versioning }
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil
 	if lom.MirrorConf().Enabled && lom.Bck().Equal(from.Bck()) {
-		lom.setCopyMd(from.FQN, from.ParsedFQN.MpathInfo)
+		lom.setCopiesMd(from.FQN, from.ParsedFQN.MpathInfo)
 		for fqn, mpathInfo := range from.GetCopies() {
 			lom.addCopyMd(fqn, mpathInfo)
 		}
@@ -136,6 +136,18 @@ func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.size = from.md.size
 	lom.md.version = from.md.version
 	lom.md.atime = from.md.atime
+}
+
+func (lom *LOM) CloneCopiesMd() int {
+	var (
+		num    = len(lom.md.copies)
+		copies = lom.md.copies
+	)
+	lom.md.copies = make(fs.MPI, num)
+	for fqn, mpi := range copies {
+		lom.md.copies[fqn] = mpi
+	}
+	return num
 }
 
 ////////////////////////////
@@ -162,9 +174,11 @@ func (lom *LOM) NumCopies() int {
 	if len(lom.md.copies) == 0 {
 		return 1
 	}
-	if _, ok := lom.md.copies[lom.FQN]; !ok {
-		msg := fmt.Sprintf("md.copies does not contain itself %s, copies: %v", lom.FQN, lom.md.copies)
-		cmn.DassertMsg(false, msg, pkgName)
+	if _, ok := cmn.CheckDebug(pkgName); ok {
+		if _, ok = lom.md.copies[lom.FQN]; !ok {
+			msg := fmt.Sprintf("md.copies does not contain itself %s, copies: %v", lom.FQN, lom.md.copies)
+			cmn.AssertMsg(false, msg)
+		}
 	}
 	return len(lom.md.copies)
 }
@@ -185,7 +199,7 @@ func (lom *LOM) IsCopy() bool {
 	return ok
 }
 
-func (lom *LOM) setCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
+func (lom *LOM) setCopiesMd(copyFQN string, mpi *fs.MountpathInfo) {
 	lom.md.copies = make(fs.MPI, 2)
 	lom.md.copies[copyFQN] = mpi
 	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
@@ -696,17 +710,16 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 func (lom *LOM) checkBucket() error {
 	cmn.Dassert(lom.loaded, pkgName) // cannot check bucket without first calling lom.Load()
 	var (
-		present bool
-		bmd     = lom.T.GetBowner().Get()
+		bmd             = lom.T.GetBowner().Get()
+		bprops, present = bmd.Get(lom.bck)
 	)
-	lom.bck.Props, present = bmd.Get(lom.bck)
 	if !present { // bucket does not exist
 		if lom.bck.IsCloud() {
 			return cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket())
 		}
 		return cmn.NewErrorBucketDoesNotExist(lom.Bucket())
 	}
-	if lom.md.bckID == lom.bck.Props.BID {
+	if lom.md.bckID == bprops.BID {
 		return nil // ok
 	}
 	lom.Uncache()

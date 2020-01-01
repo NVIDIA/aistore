@@ -1137,14 +1137,17 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 
 func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	const retries = 2
-	var err error
-
-	mirrConf := lom.MirrorConf()
+	var (
+		err      error
+		mirrConf = lom.MirrorConf()
+		nmp      = fs.Mountpaths.NumAvail()
+	)
 	if !mirrConf.Enabled {
 		return
 	}
-	if nmp := fs.Mountpaths.NumAvail(); nmp < int(mirrConf.Copies) {
-		glog.Warningf("insufficient ## mountpaths %d (bucket %s, ## copies %d)", nmp, lom.Bucket(), mirrConf.Copies)
+	if nmp < 2 {
+		glog.Errorf("%s: insufficient mountpaths (%d)", lom, nmp)
+		return
 	}
 	for i := 0; i < retries; i++ {
 		xputlrep := xaction.Registry.RenewPutLocReplicas(lom)
@@ -1155,7 +1158,6 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		if cmn.IsErrXactExpired(err) {
 			break
 		}
-
 		// retry upon race vs (just finished/timed_out)
 	}
 	if err != nil {

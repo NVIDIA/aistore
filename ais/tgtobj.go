@@ -407,8 +407,7 @@ do:
 		if err, errCode := goi.t.GetCold(goi.ctx, goi.lom, false); err != nil {
 			return err, errCode
 		}
-		lom := goi.lom.Clone(goi.lom.FQN)
-		goi.t.putMirror(lom)
+		goi.t.putMirror(goi.lom)
 	}
 
 	// 4. get locally and stream back

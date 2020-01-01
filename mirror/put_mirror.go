@@ -76,7 +76,8 @@ func (r *XactPutLRepl) Run() error {
 	glog.Infoln(r.String())
 	for {
 		select {
-		case lom := <-r.workCh:
+		case src := <-r.workCh:
+			lom := src.Clone(src.FQN)
 			if err := lom.Load(); err != nil {
 				glog.Error(err)
 				break
@@ -193,7 +194,8 @@ func (j *xputJogger) jog() {
 
 	for {
 		select {
-		case lom := <-j.workCh:
+		case src := <-j.workCh:
+			lom := src.Clone(src.FQN)
 			copies := int(lom.Bprops().Mirror.Copies)
 			if _, err := addCopies(lom, copies, j.parent.mpathers, buf); err != nil {
 				glog.Error(err)
