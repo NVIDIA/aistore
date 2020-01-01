@@ -38,7 +38,10 @@ runCmd() {
 
 AISTORE_DIR=$(cd "$(dirname "$0")/../../"; pwd -P) # absolute path to aistore directory
 
-export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
+# Used to determine ProjectID field for *your* Google Cloud project.
+# Must be set iff CLDPROVIDER (see below) is Google (aka GCP or "gcp").
+export GOOGLE_CLOUD_PROJECT="random-word-123456"
+
 USE_HTTPS=false
 CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
@@ -130,11 +133,10 @@ read test_fspath_cnt
 is_number ${test_fspath_cnt}
 TEST_FSPATH_COUNT=${test_fspath_cnt}
 
-# If not specified, CLDPROVIDER it will be empty and build
-# will not include neither AWS nor GCP. As long as CLDPROVIDER
-# is not equal to `aws` nor `gcp` it will be assumed to be empty.
-CLDPROVIDER=""
+# If not specified, CLDPROVIDER will remain empty (or `0`) and
+# aisnode build will include neither AWS ("aws") nor GCP ("gcp").
 
+CLDPROVIDER=""
 echo "Select:"
 echo " 0: No cloud provider"
 echo " 1: Amazon Cloud"

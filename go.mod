@@ -3,14 +3,13 @@ module github.com/NVIDIA/aistore
 go 1.13
 
 require (
-	cloud.google.com/go v0.30.0
+	cloud.google.com/go v0.50.0 // indirect
+	cloud.google.com/go/storage v1.0.0
 	github.com/OneOfOne/xxhash v1.2.5
 	github.com/aws/aws-sdk-go v1.26.5
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc // indirect
 	github.com/frankban/quicktest v1.5.0 // indirect
-	github.com/google/martian v2.1.0+incompatible // indirect
-	github.com/googleapis/gax-go v2.0.0+incompatible // indirect
 	github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f
 	github.com/jacobsa/fuse v0.0.0-20190923155423-081e9f4bc7d4
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
@@ -30,12 +29,7 @@ require (
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
 	github.com/urfave/cli v1.20.0
 	github.com/vbauerster/mpb/v4 v4.10.1
-	go.opencensus.io v0.17.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20181017192945-9dcd33a902f4 // indirect
-	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20190927073244-c990c680b611
-	google.golang.org/api v0.0.0-20181017004218-3f6e8463aa1d
-	google.golang.org/appengine v1.2.0 // indirect
-	google.golang.org/genproto v0.0.0-20181016170114-94acd270e44e // indirect
-	google.golang.org/grpc v1.15.0 // indirect
+	google.golang.org/api v0.14.0
 )

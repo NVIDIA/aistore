@@ -414,7 +414,7 @@ func Test_BucketNames(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	buckets, err := api.GetBucketNames(baseParams, "")
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logf("cloud bucket names: %s\n", strings.Join(buckets.Cloud, ", "))
 	tutils.Logf("ais bucket names:\n")
