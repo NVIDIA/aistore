@@ -834,8 +834,11 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucketProps cmn.SimpleKVs
+		hdr         = w.Header()
 		query       = r.URL.Query()
 		tname       = t.si.Name()
+		config      = cmn.GCO.Get()
+		code        int
 		inBMD       = true
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
@@ -854,61 +857,38 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
-		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
+		glog.Infof("%s %s <= %s", r.Method, bck, pid)
 	}
-	config := cmn.GCO.Get()
-	if bck.IsCloud() {
-		var code int
-		bucketProps, err, code = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
-		if err != nil {
-			if !inBMD {
-				if code == http.StatusNotFound {
-					err = cmn.NewErrorCloudBucketDoesNotExist(bucket)
-				} else {
-					err = fmt.Errorf("%s: bucket %s, err: %v", t.si.Name(), bucket, err)
-				}
-				t.invalmsghdlr(w, r, err.Error(), code)
-				return
-			}
-			bucketProps = make(cmn.SimpleKVs)
-			if config.CloudProvider == "" {
-				glog.Warningf("%s: %v(%d) - provider is not configured", tname, err, code)
-				bucketProps[cmn.HeaderCloudProvider] = cmn.Cloud
+	if bck.IsAIS() {
+		t.bucketPropsToHdr(bck, hdr, config, "")
+		return
+	}
+	// + cloud
+	bucketProps, err, code = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
+	if err != nil {
+		if !inBMD {
+			if code == http.StatusNotFound {
+				err = cmn.NewErrorCloudBucketDoesNotExist(bucket)
 			} else {
-				glog.Warningf("%s: %s bucket %s, err: %v(%d)", tname, config.CloudProvider, bucket, err, code)
-				bucketProps[cmn.HeaderCloudProvider] = config.CloudProvider
+				err = fmt.Errorf("%s: bucket %s, err: %v", t.si.Name(), bucket, err)
 			}
-			bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
+			t.invalmsghdlr(w, r, err.Error(), code)
+			return
 		}
+		bucketProps = make(cmn.SimpleKVs)
+		if config.CloudProvider == "" {
+			glog.Warningf("%s: %v(%d) - provider is not configured", tname, err, code)
+			bucketProps[cmn.HeaderCloudProvider] = cmn.Cloud
+		} else {
+			glog.Warningf("%s: %s bucket %s, err: %v(%d)", tname, config.CloudProvider, bucket, err, code)
+			bucketProps[cmn.HeaderCloudProvider] = config.CloudProvider
+		}
+		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
 	}
-	hdr := w.Header()
 	for k, v := range bucketProps {
 		hdr.Set(k, v)
 	}
-
-	finalProps := bck.Props.Clone()
-	cksumConf := config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
-	if finalProps.Cksum.Type == cmn.PropInherit {
-		finalProps.Cksum = cksumConf
-	}
-
-	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
-		if fieldName == cmn.HeaderBucketVerEnabled {
-			// For Cloud buckets, correct `versioning.enabled` is combination of
-			// local and cloud settings and it is true only if versioning
-			// is enabled at both sides: Cloud and for local usage
-			verEnabled := field.Value().(bool)
-			if bck.IsAIS() || !verEnabled {
-				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verEnabled))
-			} else if enabled, err := cmn.ParseBool(bucketProps[cmn.HeaderBucketVerEnabled]); !enabled && err == nil {
-				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(false))
-			}
-			return nil, false
-		}
-
-		hdr.Set(fieldName, fmt.Sprintf("%v", field.Value()))
-		return nil, false
-	})
+	t.bucketPropsToHdr(bck, hdr, config, bucketProps[cmn.HeaderBucketVerEnabled])
 }
 
 // HEAD /v1/objects/bucket-name/object-name

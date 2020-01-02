@@ -78,6 +78,7 @@ var _ = Describe("IterFields", func() {
 					"lru.capacity_upd_time": "",
 
 					"aattrs": uint64(0),
+					"bid":    uint64(0),
 				},
 			),
 			Entry("check for omit tag",

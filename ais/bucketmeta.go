@@ -120,6 +120,7 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 	m.Version++
 	p.BID = m.GenBucketID(bck.IsAIS())
 	mm[bck.Name] = p
+	bck.Props = p
 	return true
 }
 

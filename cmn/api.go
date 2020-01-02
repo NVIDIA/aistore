@@ -251,7 +251,7 @@ type BucketProps struct {
 	AccessAttrs uint64 `json:"aattrs,string"`
 
 	// unique bucket ID
-	BID uint64 `list:"omit"`
+	BID uint64 `json:"bid,string" list:"readonly"`
 
 	// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
 	Renamed string `list:"omit"`
@@ -437,33 +437,29 @@ func DefaultBucketProps() *BucketProps {
 	}
 }
 
-// FIXME: *to = *from
 func (to *BucketProps) CopyFrom(from *BucketProps) {
-	to.Tiering.NextTierURL = from.Tiering.NextTierURL
-	to.CloudProvider = from.CloudProvider
-	if from.Tiering.ReadPolicy != "" {
-		to.Tiering.ReadPolicy = from.Tiering.ReadPolicy
-	}
-	if from.Tiering.WritePolicy != "" {
-		to.Tiering.WritePolicy = from.Tiering.WritePolicy
-	}
-	if from.Cksum.Type != "" {
-		to.Cksum.Type = from.Cksum.Type
-		if from.Cksum.Type != PropInherit {
-			to.Cksum = from.Cksum
-		}
-	}
-	to.Versioning = from.Versioning
-	to.LRU = from.LRU
-	to.Mirror = from.Mirror
-	to.EC = from.EC
-	to.AccessAttrs = from.AccessAttrs
+	src, err := jsoniter.Marshal(from)
+	AssertNoErr(err)
+	err = jsoniter.Unmarshal(src, to)
+	AssertNoErr(err)
 }
 
 func (from *BucketProps) Clone() *BucketProps {
 	to := &BucketProps{}
 	to.CopyFrom(from)
 	return to
+}
+
+func (p1 *BucketProps) Equal(p2 *BucketProps) bool {
+	var (
+		jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+		p11        = p1.Clone()
+	)
+	p11.BID = p2.BID
+
+	s1, _ := jsonCompat.Marshal(p11)
+	s2, _ := jsonCompat.Marshal(p2)
+	return string(s1) == string(s2)
 }
 
 func (bp *BucketProps) Validate(bckIsAIS bool, targetCnt int, urlOutsideCluster func(string) bool) error {

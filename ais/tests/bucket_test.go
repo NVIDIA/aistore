@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -102,7 +101,7 @@ func TestResetBucketProps(t *testing.T) {
 	p, err = api.HeadBucket(baseParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
-	if !reflect.DeepEqual(defaultProps, p) {
+	if !p.Equal(&defaultProps) {
 		t.Errorf("props have not been reset properly: expected: %+v, got: %+v", defaultProps, p)
 	}
 }
@@ -1153,7 +1152,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 	tutils.Logln("checking bucket props...")
 	dstProps, err := api.HeadBucket(baseParams, dstBckName)
 	tassert.CheckFatal(t, err)
-	if !reflect.DeepEqual(srcProps, dstProps) {
+	if !srcProps.Equal(&dstProps) {
 		t.Fatalf("source and destination bucket props do not match: %v - %v", srcProps, dstProps)
 	}
 
@@ -1213,7 +1212,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	tutils.Logln("checking bucket props...")
 	dstProps, err := api.HeadBucket(baseParams, dstBckName)
 	tassert.CheckFatal(t, err)
-	if !reflect.DeepEqual(srcProps, dstProps) {
+	if !srcProps.Equal(&dstProps) {
 		t.Fatalf("source and destination bucket props do not match: %v - %v", srcProps, dstProps)
 	}
 }
@@ -1266,7 +1265,7 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 	dstProps, err := api.HeadBucket(baseParams, tmpBckName)
 	tassert.CheckFatal(t, err)
 
-	if reflect.DeepEqual(srcProps, dstProps) {
+	if srcProps.Equal(&dstProps) {
 		t.Fatalf("source and destination bucket props match, even though they should not: %v - %v", srcProps, dstProps)
 	}
 }
@@ -1343,7 +1342,7 @@ func TestCopyBucket(t *testing.T) {
 				})
 			}
 
-			if cmn.IsProviderCloud(cmn.Cloud) {
+			if cmn.IsProviderCloud(test.provider) {
 				srcm.bucket = clibucket
 
 				if !isCloudBucket(t, proxyURL, srcm.bucket) {
@@ -1428,14 +1427,14 @@ func TestCopyBucket(t *testing.T) {
 
 				// If bucket existed before, we need to ensure that the bucket
 				// props were **not** copied over.
-				if test.dstBckExist && reflect.DeepEqual(srcProps, dstProps) {
+				if test.dstBckExist && srcProps.Equal(&dstProps) {
 					t.Fatalf("source and destination bucket props match, even though they should not:\n%#v\n%#v",
 						srcProps, dstProps)
 				}
 
 				// If bucket did not exist before, we need to ensure that
 				// the bucket props match the source bucket props (except provider).
-				if !test.dstBckExist && !reflect.DeepEqual(srcProps, dstProps) {
+				if !test.dstBckExist && !srcProps.Equal(&dstProps) {
 					t.Fatalf("source and destination bucket props do not match:\n%#v\n%#v", srcProps, dstProps)
 				}
 			}

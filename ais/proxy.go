@@ -1154,6 +1154,10 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if bck.IsAIS() {
+		p.bucketPropsToHdr(bck, w.Header(), cmn.GCO.Get(), "")
+		return
+	}
 	si, err := p.smapowner.get().GetRandTarget()
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
