@@ -13,15 +13,15 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 
 ## Features
 
-* S3-like HTTP REST API to GET/PUT objects, and create, destroy, list and configure buckets, and more;
-* FUSE client (called `aisfs`), to access AIS objects as files;
-* arbitrary number of access points - AIS gateways (aka *proxies*) that are extremely lightweight and can run anywhere;
-* easy-to-use command-line interface (CLI);
 * scale-out with no downtime and no limitation;
-* automated rebalancing upon changes in cluster membership, drive failures, bucket renaming, etc.;
-* n-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
+* HTTP REST API to GET/PUT objects, create, destroy, list and configure buckets;
+* FUSE client (`aisfs`) to access AIS objects as files;
+* arbitrary number of access points via AIS gateways (aka *proxies*);
+* easy-to-use CLI based on command-line (TAB) completions;
+* automated rebalancing upon changes in cluster membership, drive failures, bucket renames;
+* N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
 
-In addition, AIStore:
+Also, AIStore:
 
 * can be deployed on any commodity hardware;
 * supports Amazon S3 and Google Cloud Storage backends (and all GCS and S3-compliant object storages);
@@ -31,7 +31,7 @@ In addition, AIStore:
 
 Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For detailed overview, design philosophy, and components, please see this [document](docs/overview.md) where you can also find 5 (five) alternative ways to populate AIStore with existing datasets.
+For a detailed overview, design philosophy, and components, please see this [document](docs/overview.md), where you can also find 5 (five) alternative ways to populate AIStore with existing datasets.
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
@@ -62,18 +62,14 @@ The capability called [extended attributes](https://en.wikipedia.org/wiki/Extend
 
 ### MacOS
 
-MacOS/Darwin platform is also supported albeit for development only (for production we strongly recommend Linux).
-
-Certain capabilities are still missing, like reading mem/cpu/disks stats which are essential for the correct cluster operation.
-Therefore, bugs are expected and can occur when trying to use different features.
+MacOS/Darwin is also supported, albeit for development only. Certain capabilities related to querying the state-and-status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
 
 ## Getting Started
 
-AIStore runs on commodity Linux machines with no special hardware requirements.
+AIStore runs on commodity Linux machines with no special hardware requirements whatsoever. Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
 
-> It is expected, though, that all AIS target machines are identical, hardware-wise.
+> It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.
 
-The implication is that the number of [possible deployment options](deploy) is practically unlimited.
 This section covers 3 (three) ways to deploy AIS on a single Linux machine and is intended for developers and development, and/or for a quick trial.
 
 ### Deployment: Local non-Containerized
@@ -114,7 +110,7 @@ Or, you can run all of the above non-interactively:
 $ make kill; make deploy <<< $'10\n3\n2\n0'
 ```
 
->  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud Provider" prompt above, and the fact that access to Cloud storage is specified at the deployment time.
+>  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud Provider" prompt above and the fact that access to Cloud storage is specified at the deployment time.
 
 > `make kill` will terminate local AIStore if it's already running.
 
