@@ -302,13 +302,21 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	}
 
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
-	defer tutils.DestroyBucket(t, md.proxyURL, md.bucket)
-
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
-
 	sgl := tutils.Mem2.NewSGL(md.fileSize)
-	defer sgl.Free()
+	defer func() {
+		tutils.DestroyBucket(t, md.proxyURL, md.bucket)
+		sgl.Free()
+		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
+			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
+		}
+		if err := api.AddMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
+			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
+		}
+
+		waitForRebalanceToComplete(t, md.baseParams, rebalanceTimeout)
+	}()
 
 	// generate some filenames to PUT to them in a loop
 	generateRandomData(md.numObjs)
@@ -330,8 +338,6 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		t.Error("GETting non-existing objects should not disable mountpath")
 		repairMountpath(t, selectedTarget, selectedMpath, len(selectedMpathList.Available), len(selectedMpathList.Disabled))
 	}
-
-	waitForRebalanceToComplete(t, tutils.BaseAPIParams(md.proxyURL), rebalanceTimeout)
 }
 
 func TestFSCheckerDetectionDisabled(t *testing.T) {

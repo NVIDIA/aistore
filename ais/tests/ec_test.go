@@ -2140,9 +2140,26 @@ func TestECRebalance(t *testing.T) {
 
 	fullPath := fmt.Sprintf("%s/%s/%s", aisDir, bucket, ecTestDir)
 	baseParams := tutils.BaseAPIParams(proxyURL)
+	mpathTouched := make(map[*cluster.Snode][]string)
 
 	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bucket)
+	defer func() {
+		// First, delete bucket
+		tutils.DestroyBucket(t, proxyURL, bucket)
+		// Second, reattach mpaths to recreate all directories
+		for si, mpaths := range mpathTouched {
+			for _, mp := range mpaths {
+				if err := api.RemoveMountpath(baseParams, si.ID(), mp); err != nil {
+					t.Logf("Failed to remove mpath %s of %s: %v", mp, si.Name(), err)
+				}
+				if err := api.AddMountpath(baseParams, si, mp); err != nil {
+					t.Logf("Failed to add mpath %s of %s: %v", mp, si.Name(), err)
+				}
+			}
+		}
+		// Third, wait for local rebalance finishes(just in case)
+		waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	}()
 
 	wg := sync.WaitGroup{}
 
@@ -2187,31 +2204,28 @@ func TestECRebalance(t *testing.T) {
 	//    step and the next one running together can delete all object data in
 	//    case of the object is replicated)
 	if o.parityCnt > 1 {
-		lostPath := filepath.Join(lostFSList.Available[0])
+		lostPath := lostFSList.Available[0]
+		mpathTouched[tgtLost] = []string{lostFSList.Available[0]}
 		tutils.Logf("Removing mpath %q of target %s\n", lostPath, tgtLost.DaemonID)
 		tutils.CheckPathExists(t, lostPath, true /*dir*/)
 		tassert.CheckFatal(t, os.RemoveAll(lostPath))
 		cmn.CreateDir(lostPath)
-		cmn.CreateDir(lostPath + "/obj/cloud") // temp fix TODO: #576
-		cmn.CreateDir(lostPath + "/ec/cloud")
-		cmn.CreateDir(lostPath + "/meta/cloud")
 	}
 
 	// 2. Delete one, and rename the second: simulate mpath dead + new mpath attached
 	// delete obj1 & delete meta1; rename obj2 -> ob1, and meta2 -> meta1
-	swapPathObj1 := filepath.Join(swapFSList.Available[0])
+	swapPathObj1 := swapFSList.Available[0]
 	tutils.Logf("Removing mpath %q of target %s\n", swapPathObj1, tgtSwap.DaemonID)
 	tutils.CheckPathExists(t, swapPathObj1, true /*dir*/)
+	mpathTouched[tgtSwap] = []string{swapFSList.Available[0]}
 	tassert.CheckFatal(t, os.RemoveAll(swapPathObj1))
 
-	swapPathObj2 := filepath.Join(swapFSList.Available[1])
+	swapPathObj2 := swapFSList.Available[1]
 	tutils.Logf("Renaming mpath %q -> %q of target %s\n", swapPathObj2, swapPathObj1, tgtSwap.DaemonID)
 	tutils.CheckPathExists(t, swapPathObj2, true /*dir*/)
+	mpathTouched[tgtSwap] = append(mpathTouched[tgtSwap], swapFSList.Available[1])
 	tassert.CheckFatal(t, os.Rename(swapPathObj2, swapPathObj1))
 	cmn.CreateDir(swapPathObj2)
-	cmn.CreateDir(swapPathObj2 + "/obj/cloud") // temp fix TODO: #576
-	cmn.CreateDir(swapPathObj2 + "/ec/cloud")
-	cmn.CreateDir(swapPathObj2 + "/meta/cloud")
 
 	// Kill a random target
 	var removedTarget *cluster.Snode
