@@ -2192,6 +2192,9 @@ func TestECRebalance(t *testing.T) {
 		tutils.CheckPathExists(t, lostPath, true /*dir*/)
 		tassert.CheckFatal(t, os.RemoveAll(lostPath))
 		cmn.CreateDir(lostPath)
+		cmn.CreateDir(lostPath + "/obj/cloud") // temp fix TODO: #576
+		cmn.CreateDir(lostPath + "/ec/cloud")
+		cmn.CreateDir(lostPath + "/meta/cloud")
 	}
 
 	// 2. Delete one, and rename the second: simulate mpath dead + new mpath attached
@@ -2206,6 +2209,9 @@ func TestECRebalance(t *testing.T) {
 	tutils.CheckPathExists(t, swapPathObj2, true /*dir*/)
 	tassert.CheckFatal(t, os.Rename(swapPathObj2, swapPathObj1))
 	cmn.CreateDir(swapPathObj2)
+	cmn.CreateDir(swapPathObj2 + "/obj/cloud") // temp fix TODO: #576
+	cmn.CreateDir(swapPathObj2 + "/ec/cloud")
+	cmn.CreateDir(swapPathObj2 + "/meta/cloud")
 
 	// Kill a random target
 	var removedTarget *cluster.Snode
