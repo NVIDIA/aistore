@@ -1,5 +1,6 @@
 SHELL := /bin/bash
 BUILD_DIR = ./ais/setup
+BUILD_SRC = $(BUILD_DIR)/aisnode.go
 
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
@@ -14,9 +15,11 @@ FLAGS = $(if $(strip $(GORACE)),-race,)
 # Note that MEMPROFILE (memprofile) option requires graceful shutdown (see `kill:`)
 ifdef MEMPROFILE
 	export PROFILE = -memprofile=$(MEMPROFILE)
+	BUILD_SRC = ./ais/setup/profile/aisnode.go
 endif
 ifdef CPUPROFILE
 	export PROFILE += -cpuprofile=$(CPUPROFILE)
+	BUILD_SRC = ./ais/setup/profile/aisnode.go
 endif
 
 ifeq ($(MODE),debug)
@@ -44,14 +47,8 @@ node: ## Build 'aisnode' binary
 ifneq ($(strip $(GORACE)),)
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
-ifdef PROFILE
 	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
-	go install $(FLAGS) -tags="$(CLDPROVIDER)" $(GCFLAGS) $(LDFLAGS) $(BUILD_DIR)/aisnode_profile.go
-	@mv $(GOPATH)/bin/aisnode_profile $(GOPATH)/bin/aisnode
-else
-	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
-		go install $(FLAGS) -tags="$(CLDPROVIDER)" $(GCFLAGS) $(LDFLAGS) $(BUILD_DIR)/aisnode.go
-endif
+		go install $(FLAGS) -tags="$(CLDPROVIDER)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
 	@echo "done."
 
 aisfs: ## Build 'aisfs' binary
@@ -179,10 +176,10 @@ lint-update: ## Update the linter version (removes previous one and downloads a 
 	@rm -f $(GOPATH)/bin/golangci-lint
 	@curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b $(GOPATH)/bin latest
 
+# TODO: For now golangci-lint is broken and we need to retry it couple times until it works correctly.
 lint: ## Run linter on whole project
 	@([[ ! -f $(GOPATH)/bin/golangci-lint ]] && curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b $(GOPATH)/bin latest) || true
-	# TODO: For now golangci-lint is broken and we need to retry it couple times until it works correctly.
-	@for i in $(seq 1 5); do $(SHELL) "$(BUILD_DIR)/bootstrap.sh" lint && r=0 && break || r=$? && sleep 0.5; done; (exit $r)
+	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" lint
 
 fmt-check: ## Check code formatting
 	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" fmt
