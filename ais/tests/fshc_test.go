@@ -359,14 +359,22 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc.enabled": "false"})
 	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc.enabled": "true"})
 
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
-	defer tutils.DestroyBucket(t, md.proxyURL, md.bucket)
-
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
-
 	sgl := tutils.Mem2.NewSGL(md.fileSize)
-	defer sgl.Free()
+	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
+	defer func() {
+		sgl.Free()
+		tutils.DestroyBucket(t, md.proxyURL, md.bucket)
+		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
+			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
+		}
+		if err := api.AddMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
+			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
+		}
+
+		waitForRebalanceToComplete(t, md.baseParams, rebalanceTimeout)
+	}()
 
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
 	objList := []string{}
