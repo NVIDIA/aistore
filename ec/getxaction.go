@@ -64,20 +64,6 @@ func (r *XactGet) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, 
 	uname := unique(iReq.Sender, bck, objName)
 
 	switch iReq.Act {
-	// a remote target sent/responded object's metadata. A slice should be waiting
-	// for the information and be registered with `regWriter` beforehand
-	case ReqMeta:
-		r.dOwner.mtx.Lock()
-		writer, ok := r.dOwner.slices[uname]
-		r.dOwner.mtx.Unlock()
-		if !ok {
-			glog.Errorf("No writer for %s", uname)
-			return
-		}
-		if err := r.writerReceive(writer, iReq.Exists, objAttrs, object); err != nil && err != ErrorNotFound {
-			glog.Errorf("Failed to receive data for %s: %v", iReq.Sender, err)
-		}
-
 	// It is response to slice/replica request by an object
 	// restoration process. In this case there should exists
 	// a slice waiting for the data to come(registered with `regWriter`.

@@ -141,17 +141,6 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName strin
 		if err := r.dataResponse(RespPut, fqn, bck, objName, daemonID, md); err != nil {
 			glog.Errorf("Failed to send back [GET req] %q: %v", fqn, err)
 		}
-	case ReqMeta:
-		// metadata request: send the metadata to the caller
-		fqn, _, err := cluster.HrwFQN(MetaType, bck, objName)
-		if err != nil {
-			glog.Error(err)
-			return
-		}
-
-		if err := r.dataResponse(iReq.Act, fqn, bck, objName, daemonID, nil); err != nil {
-			glog.Errorf("Failed to send back [META req] %q: %v", fqn, err)
-		}
 	default:
 		// invalid request detected
 		glog.Errorf("Invalid request type %d", iReq.Act)

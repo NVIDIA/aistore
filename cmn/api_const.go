@@ -126,6 +126,7 @@ const (
 	HeaderObjPresent   = "ObjPresent"   // Is object present in the cluster
 	HeaderObjNumCopies = "ObjNumCopies" // Number of copies of the object
 	HeaderObjBckIsAIS  = "ObjBckIsAIS"  // Is object from an ais bucket
+	HeaderObjECMeta    = "ObjECMeta"    // Info about EC object/slice/replica
 
 	// intra-cluster: control
 	HeaderCallerID          = "caller.id"
@@ -174,6 +175,7 @@ const (
 	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	URLParamTaskID           = "tsk" // ID of a task to return its state/result
 	URLParamTaskAction       = "tac" // "start", "status", "result"
+	URLParamECMeta           = "ecm" // true: EC metadata request
 
 	URLParamAppendType   = "appendty"
 	URLParamAppendHandle = "handle"

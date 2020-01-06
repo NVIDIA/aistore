@@ -9,7 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -22,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/OneOfOne/xxhash"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/reedsolomon"
 )
 
@@ -855,111 +855,70 @@ func (c *getJogger) restore(req *Request, toDisk bool, buffer []byte) error {
 	return c.restoreEncoded(req, meta, nodes, toDisk, buffer)
 }
 
-// broadcast request for object's metadata
-// After all target respond, the metadata filtered: the number of different
-// object hashes is calculated. The most frequent has wins, and all metadatas
-// with different hashes are considered obsolete and will be discarded
-//
-// NOTE: metafiles are tiny things - less than 100 bytes, that is why they
-// always use SGL. No `toDisk` check required
+// broadcast request for object's metadata. The function returns the list of
+// nodes(with their EC metadata) that have the lastest object version
 func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]*Metadata, err error) {
-	metaWG := cmn.NewTimeoutGroup()
-	request := c.parent.newIntraReq(ReqMeta, nil).Marshal()
-	hdr := transport.Header{
-		Bucket:   req.LOM.Bucket(),
-		BckIsAIS: req.LOM.IsAIS(),
-		Objname:  req.LOM.Objname,
-		Opaque:   request,
-		ObjAttrs: transport.ObjectAttrs{
-			Size: 0,
-		},
-	}
-
-	writers := make([]*slice, 0)
-
 	tmap := c.parent.smap.Get().Tmap
-	for _, node := range tmap {
-		if node.DaemonID == c.parent.si.DaemonID {
-			continue
-		}
-
-		writer := &slice{
-			writer: mm.NewSGL(cmn.KiB),
-			wg:     metaWG,
-		}
-		metaWG.Add(1)
-		uname := unique(node.DaemonID, req.LOM.Bck(), req.LOM.Objname)
-		if c.parent.regWriter(uname, writer) {
-			writers = append(writers, writer)
-		}
-	}
-
-	// broadcase the request to every target and wait for them to respond
-	if err := c.parent.reqBundle.SendV(hdr, nil, nil /* cmpl ptr */, nil); err != nil {
-		glog.Errorf("Failed to request metafile for %s/%s: %v", req.LOM.Bucket(), req.LOM.Objname, err)
-		for _, wr := range writers {
-			if wr != nil && wr.writer != nil {
-				freeObject(wr.writer)
-				wr.writer = nil
-			}
-		}
-		return nil, nil, err
-	}
-
-	conf := cmn.GCO.Get()
-	if metaWG.WaitTimeout(conf.Timeout.SendFile) {
-		glog.Errorf("Timed out waiting for %s/%s metafiles", req.LOM.Bucket(), req.LOM.Objname)
-	}
-
-	// build the map of existing replicas: metas map (DaemonID <-> metadata)
-	// and detect the metadata with the most frequent hash in it
-	chk := make(map[string]int, len(tmap))
+	wg := &sync.WaitGroup{}
+	mtx := &sync.Mutex{}
+	path := cmn.URLPath(cmn.Version, cmn.Objects, req.LOM.Bucket(), req.LOM.Objname)
+	query := url.Values{}
+	query.Add(cmn.URLParamProvider, req.LOM.Bck().Provider)
+	query.Add(cmn.URLParamECMeta, "true")
+	query.Add(cmn.URLParamSilent, "true")
 	metas := make(map[string]*Metadata, len(tmap))
+	chk := make(map[string]int, len(tmap))
 	chkMax := 0
 	chkVal := ""
 	for _, node := range tmap {
 		if node.DaemonID == c.parent.si.DaemonID {
 			continue
 		}
-
-		uname := unique(node.DaemonID, req.LOM.Bck(), req.LOM.Objname)
-		wr, ok := c.parent.unregWriter(uname)
-		if !ok || wr == nil || wr.writer == nil {
-			continue
-		}
-		sgl, ok := wr.writer.(*memsys.SGL)
-		cmn.Assert(ok)
-		if sgl.Size() == 0 {
-			freeObject(wr.writer)
-			continue
-		}
-
-		b, err := ioutil.ReadAll(memsys.NewReader(sgl))
-		freeObject(wr.writer)
-		if err != nil {
-			glog.Errorf("Error reading metadata from %s: %v", node.DaemonID, err)
-			continue
-		}
-
-		var md Metadata
-		if err := jsoniter.Unmarshal(b, &md); err != nil {
-			glog.Errorf("Failed to unmarshal %s metadata: %v", node.DaemonID, err)
-			continue
-		}
-
-		metas[node.DaemonID] = &md
-		cnt := chk[md.ObjCksum]
-		cnt++
-		chk[md.ObjCksum] = cnt
-
-		if cnt > chkMax {
-			chkMax = cnt
-			chkVal = md.ObjCksum
-		}
+		wg.Add(1)
+		go func(si *cluster.Snode) {
+			defer wg.Done()
+			// TODO: use `call` from target (that is private at this moment)
+			url := si.URL(cmn.NetworkIntraData) + path
+			rq, err := http.NewRequest(http.MethodHead, url, nil)
+			if err != nil {
+				glog.Errorf("failed to create request, err: %v", err)
+				return
+			}
+			rq.URL.RawQuery = query.Encode()
+			resp, err := http.DefaultClient.Do(rq)
+			if err != nil {
+				if resp.StatusCode != http.StatusNotFound {
+					glog.Errorf("Failed to read %s HEAD request: %v", req.LOM.Objname, err)
+				}
+				return
+			}
+			mdStr := resp.Header.Get(cmn.HeaderObjECMeta)
+			if mdStr == "" {
+				return
+			}
+			if md, err := StringToMeta(mdStr); err == nil {
+				mtx.Lock()
+				metas[si.DaemonID] = md
+				// detect the metadata with the latest version on the fly.
+				// At this moment it is the most frequent hash in the list.
+				// TODO: fix when an EC Metadata versioning is introduced
+				cnt := chk[md.ObjCksum]
+				cnt++
+				chk[md.ObjCksum] = cnt
+				if cnt > chkMax {
+					chkMax = cnt
+					chkVal = md.ObjCksum
+				}
+				mtx.Unlock()
+			} else {
+				glog.Errorf("Failed to unmarshal %s HEAD request: %v", req.LOM.Objname, err)
+			}
+		}(node)
 	}
+	wg.Wait()
 
-	// no target returned its metadata
-	if chkMax == 0 {
+	// no target has object's metadata
+	if len(metas) == 0 {
 		return meta, nodes, ErrorNoMetafile
 	}
 

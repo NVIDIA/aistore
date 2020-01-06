@@ -350,6 +350,7 @@ var (
 		"atime":    "{{ if IsUnsetTime .Atime }}-{{else}}{{ FormatObjTime .Atime }}{{end}}\t",
 		"copies":   "{{ if .NumCopies }}{{ .NumCopies }}{{else}}-{{end}}\t",
 		"checksum": "{{ if .Checksum }}{{ .Checksum }}{{else}}-{{end}}\t",
+		"ec":       "{{ if (eq .DataSlices 0) }}-{{else}}{{ FormatEC .DataSlices .ParitySlices .IsECCopy}}{{end}}\t",
 	}
 
 	funcMap = template.FuncMap{
@@ -360,6 +361,7 @@ var (
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
 		"FormatObjTime":       fmtObjTime,
+		"FormatEC":            fmtEC,
 		"FormatDur":           fmtDuration,
 		"FormatXactStatus":    fmtXactStatus,
 		"FormatObjStatus":     fmtObjStatus,
@@ -481,6 +483,16 @@ func fmtTime(t time.Time) string {
 
 func fmtObjTime(t time.Time) string {
 	return t.Format(time.RFC822)
+}
+
+func fmtEC(data, parity int, isCopy bool) string {
+	info := fmt.Sprintf("%d:%d", data, parity)
+	if isCopy {
+		info += "[replicated]"
+	} else {
+		info += "[encoded]"
+	}
+	return info
 }
 
 func fmtDuration(d int64) string {

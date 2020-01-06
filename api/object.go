@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/ec"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -125,7 +126,8 @@ func HeadObject(baseParams BaseParams, bucket, provider, object string, checkExi
 	if err != nil {
 		return nil, err
 	}
-	return &cmn.ObjectProps{
+
+	objProps := &cmn.ObjectProps{
 		Size:      size,
 		Version:   r.Header.Get(cmn.HeaderObjVersion),
 		Atime:     atime,
@@ -133,7 +135,16 @@ func HeadObject(baseParams BaseParams, bucket, provider, object string, checkExi
 		Checksum:  r.Header.Get(cmn.HeaderObjCksumVal),
 		Present:   present,
 		BckIsAIS:  isais,
-	}, nil
+	}
+
+	if ecStr := r.Header.Get(cmn.HeaderObjECMeta); ecStr != "" {
+		if md, err := ec.StringToMeta(ecStr); err == nil {
+			objProps.DataSlices = md.Data
+			objProps.ParitySlices = md.Parity
+			objProps.IsECCopy = md.IsCopy
+		}
+	}
+	return objProps, nil
 }
 
 // DeleteObject API

@@ -25,6 +25,45 @@ Gets the object from the bucket.
 | `ais get --is-cached mybucket/myobj.txt` | Checks if object `myobj.txt` from bucket `mybucket` is cached locally |
 | `ais get mybucket/myobj.txt '~/obj.txt' --offset 1024 --length 1024` | Gets contents of object `myobj.txt` starting from offset `1024` and having length `1024B` |
 
+### SHOW
+
+`ais show BUCKET_NAME/OBJECT_NAME [PROP_LIST]`
+
+Gets object detailed information. `PROP_LIST` is a comma separated list of properties to display.
+If `PROP_LIST` is omitted default properties are shown(all except `ais` property).
+
+Supported properties:
+
+- `ais` - whether the object is on an AIS bucket, or on a Cloud one
+- `iscached` - is the object cached on local drives (always `true` for AIS buckets)
+- `size` - object size
+- `version` - object version (it is empty if versioning is disabled for the bucket)
+- `atime` - object's last access time
+- `copies` - the number of object replicas per target (empty if bucket mirroring is disabled)
+- `checksum` - object's checksum
+- `ec` - object's EC info (empty if EC is disabled for the bucket, if EC is enabled it looks like `DATA:PARITY[MODE]`, where `DATA` - the number of data slices, `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets, `encoded`  the object is erasure coded and other targets contains only encoded slices
+
+#### Examples
+
+`ais show mybucket/myobj.txt`
+
+Display all properties of object `myobj.txt` from bucket `mybucket`. Output example:
+
+```shell
+$ ais show object mybucket/myobj.txt
+Checksum                Size    Atime                   Iscached        Version Copies  Ec
+2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     true            1       1       2:2[encoded]
+```
+
+Show only selected properties:
+
+```
+$ ais show mybucket/myobj2.txt -props size,version,ec`
+Size    Version Ec
+7.63MiB 1       2:2[replicated]
+```
+
+
 ### PUT
 
 `ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>

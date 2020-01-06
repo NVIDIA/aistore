@@ -263,7 +263,7 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 	switch iReq.Act {
 	case ReqPut:
 		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
-	case ReqMeta, RespPut:
+	case RespPut:
 		// Process this request even if there might not be enough targets. It might have been started when there was,
 		// so there is a chance to complete restore successfully
 		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)

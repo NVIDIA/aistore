@@ -415,13 +415,16 @@ func (c *ECConf) RequiredRestoreTargets() int {
 
 // ObjectProps
 type ObjectProps struct {
-	Size      int64
-	Version   string
-	Atime     time.Time
-	NumCopies int
-	Checksum  string
-	Present   bool
-	BckIsAIS  bool
+	Size         int64
+	Version      string
+	Atime        time.Time
+	Checksum     string
+	NumCopies    int
+	DataSlices   int
+	ParitySlices int
+	IsECCopy     bool
+	Present      bool
+	BckIsAIS     bool
 }
 
 func DefaultBucketProps() *BucketProps {

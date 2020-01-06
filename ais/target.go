@@ -913,6 +913,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		query             = r.URL.Query()
 		checkExists, _    = cmn.ParseBool(query.Get(cmn.URLParamCheckExists))
 		checkExistsAny, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckExistsAny))
+		checkEC, _        = cmn.ParseBool(query.Get(cmn.URLParamECMeta))
 		silent, _         = cmn.ParseBool(query.Get(cmn.URLParamSilent))
 	)
 
@@ -925,6 +926,26 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	invalidHandler := t.invalmsghdlr
 	if silent {
 		invalidHandler = t.invalmsghdlrsilent
+	}
+
+	hdr := w.Header()
+	if checkEC {
+		// should do it before LOM is initialized because the target may
+		// have a slice instead of object/replica
+		bck := &cluster.Bck{Name: bucket, Provider: provider}
+		if err = bck.Init(t.bmdowner); err != nil {
+			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
+				t.invalmsghdlr(w, r, err.Error())
+				return
+			}
+		}
+		md, err := ec.ObjectMetadata(bck, objName)
+		if err != nil {
+			invalidHandler(w, r, err.Error(), http.StatusNotFound)
+			return
+		}
+		hdr.Set(cmn.HeaderObjECMeta, ec.MetaToString(md))
+		return
 	}
 
 	lom := &cluster.LOM{T: t, Objname: objName}
@@ -957,7 +978,6 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		exists = lom.RestoreObjectFromAny() // lookup and restore the object to its default location
 	}
 
-	hdr := w.Header()
 	if lom.IsAIS() || checkExists {
 		if !exists {
 			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
@@ -991,6 +1011,11 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		hdr.Set(cmn.HeaderObjNumCopies, strconv.Itoa(lom.NumCopies()))
 		if cksum := lom.Cksum(); cksum != nil {
 			hdr.Set(cmn.HeaderObjCksumVal, cksum.Value())
+		}
+		if lom.Bck().Props.EC.Enabled {
+			if md, err := ec.ObjectMetadata(lom.Bck(), objName); err == nil {
+				hdr.Set(cmn.HeaderObjECMeta, ec.MetaToString(md))
+			}
 		}
 	}
 	hdr.Set(cmn.HeaderObjBckIsAIS, strconv.FormatBool(lom.IsAIS()))

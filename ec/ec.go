@@ -145,10 +145,6 @@ const (
 	// a target cleans up the object and notifies all other targets to do
 	// cleanup as well. Destinations do not have to respond
 	reqDel
-	// a target requests a metadata of an object
-	// if the destination has the object/slice it sends it back, otherwise
-	//    it sets Exists=false in response header
-	ReqMeta
 )
 
 type (
@@ -273,6 +269,22 @@ func (m *Metadata) marshal() []byte {
 	return cmn.MustMarshal(m)
 }
 
+func MetaToString(m *Metadata) string {
+	if m == nil {
+		return ""
+	}
+	return string(m.marshal())
+}
+
+func StringToMeta(s string) (*Metadata, error) {
+	var md Metadata
+	err := jsoniter.Unmarshal([]byte(s), &md)
+	if err == nil {
+		return &md, nil
+	}
+	return nil, err
+}
+
 var (
 	mm           = &memsys.Mem2{Name: "ec", MinPctFree: 10}
 	slicePadding = make([]byte, 64) // for padding EC slices
@@ -390,4 +402,13 @@ func LoadMetadata(fqn string) (*Metadata, error) {
 	}
 
 	return md, nil
+}
+
+// ObjectMetadata returns metadata for an object or its slice if any exists
+func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
+	fqn, _, err := cluster.HrwFQN(MetaType, bck, objName)
+	if err != nil {
+		return nil, err
+	}
+	return LoadMetadata(fqn)
 }
