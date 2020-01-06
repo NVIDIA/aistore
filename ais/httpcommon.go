@@ -456,9 +456,16 @@ func (h *httprunner) initSI(daemonType string) {
 	daemonID := os.Getenv("AIS_DAEMONID")
 	if daemonID == "" {
 		cs := xxhash.ChecksumString32S(publicAddr.String(), cmn.MLCG32)
-		daemonID = strconv.Itoa(int(cs & 0xfffff))
 		if config.TestingEnv() {
-			daemonID += "_" + config.Net.L4.PortStr
+			daemonID = strconv.Itoa(int(cs & 0xfffff))
+			if daemonType == cmn.Target {
+				daemonID = daemonID + "t" + config.Net.L4.PortStr
+			} else {
+				cmn.Assert(daemonType == cmn.Proxy)
+				daemonID = daemonID + "p" + config.Net.L4.PortStr
+			}
+		} else {
+			daemonID = strconv.Itoa(int(cs & 0xffffffff))
 		}
 	}
 
@@ -941,37 +948,40 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newSmap *smapX, msgInt 
 			return
 		}
 	}
-	localsmap := h.smapowner.get()
-	myver := localsmap.version()
-	isManualReb := msgInt.Action == cmn.ActGlobalReb && msgInt.Value != nil
+	var (
+		s           string
+		hname       = h.si.Name()
+		smap        = h.smapowner.get()
+		myver       = smap.version()
+		isManualReb = msgInt.Action == cmn.ActGlobalReb && msgInt.Value != nil
+	)
 	if newSmap.version() == myver && !isManualReb {
 		newSmap = nil
 		return
 	}
 	if !newSmap.isValid() {
-		err = fmt.Errorf("invalid Smap v%d - lacking or missing the primary", newSmap.version())
+		err = fmt.Errorf("%s: invalid %s - lacking or missing primary", hname, newSmap)
 		newSmap = nil
 		return
 	}
-	if newSmap.version() < myver {
-		if h.si != nil && localsmap.GetTarget(h.si.DaemonID) == nil {
-			err = fmt.Errorf("%s: attempt to downgrade Smap v%d to v%d", h.si, myver, newSmap.version())
-			newSmap = nil
-			return
-		}
-		if h.si != nil && localsmap.GetTarget(h.si.DaemonID) != nil {
-			glog.Errorf("target %s: receive Smap v%d < v%d local - proceeding anyway",
-				h.si.DaemonID, newSmap.version(), localsmap.version())
-		} else {
-			err = fmt.Errorf("attempt to downgrade Smap v%d to v%d", myver, newSmap.version())
-			return
-		}
-	}
-	s := ""
 	if msgInt.Action != "" {
 		s = ", action " + msgInt.Action
 	}
-	glog.Infof("receive Smap v%d (local v%d), ntargets %d%s", newSmap.version(), localsmap.version(), newSmap.CountTargets(), s)
+	glog.Infof("%s: receive %s (local %s)%s", hname, newSmap.StringEx(), smap.StringEx(), s)
+	if newSmap.version() < myver {
+		smap.Smap.Version = newSmap.version()
+		eq := smap.Equals(&newSmap.Smap)
+		smap.Smap.Version = myver
+		if eq {
+			glog.Warningf("%s: %s and %s are otherwise identical", hname, newSmap.StringEx(), smap.StringEx())
+			newSmap = nil
+		} else {
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", hname, smap.StringEx(), newSmap.StringEx())
+			glog.Error(err)
+			newSmap = nil
+			return
+		}
+	}
 	return
 }
 
@@ -1094,6 +1104,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	req := targetRegMeta{SI: h.si}
 	if h.si.IsTarget() && !keepalive {
 		req.BMD = h.bmdowner.get()
+		req.Smap = h.smapowner.get()
 	}
 	info := cmn.MustMarshal(req)
 

@@ -39,7 +39,7 @@ import (
 //
 //=====================================================================
 
-const smapFname = "smap.json"
+const smapFname = ".ais.smap" // Smap basename
 
 type smapX struct {
 	cluster.Smap
@@ -203,9 +203,19 @@ func (m *smapX) merge(dst *smapX) {
 	}
 }
 
+/* TODO -- FIXME: make use
+func (m *smapX) lostTargets(check *smapX) (lost []string) {
+	for id := range m.Tmap {
+		if _, ok := check.Tmap[id]; !ok {
+			lost = append(lost, id)
+		}
+	}
+	return
+}
+*/
 func (m *smapX) pp() string {
 	s, _ := jsoniter.MarshalIndent(m, "", " ")
-	return fmt.Sprintf("smapX v%d:\n%s", m.Version, string(s))
+	return string(s)
 }
 
 //=====================================================================
@@ -227,6 +237,10 @@ func newSmapowner() *smapowner {
 	return &smapowner{
 		listeners: newSmapListeners(),
 	}
+}
+
+func (r *smapowner) load(smap *smapX, config *cmn.Config) error {
+	return cmn.LocalLoad(filepath.Join(config.Confdir, smapFname), smap, true /* compression */)
 }
 
 func (r *smapowner) Get() *cluster.Smap {
@@ -254,7 +268,7 @@ func (r *smapowner) get() (smap *smapX) {
 	return (*smapX)(r.smap.Load())
 }
 
-func (r *smapowner) synchronize(newsmap *smapX, saveSmap, lesserVersionIsErr bool) (err error) {
+func (r *smapowner) synchronize(newsmap *smapX, lesserVersionIsErr bool) (err error) {
 	if !newsmap.isValid() {
 		err = fmt.Errorf("invalid smapX: %s", newsmap.pp())
 		return
@@ -271,14 +285,14 @@ func (r *smapowner) synchronize(newsmap *smapX, saveSmap, lesserVersionIsErr boo
 			return
 		}
 	}
-	if err = r.persist(newsmap, saveSmap); err == nil {
+	if err = r.persist(newsmap); err == nil {
 		r.put(newsmap)
 	}
 	r.Unlock()
 	return
 }
 
-func (r *smapowner) persist(newSmap *smapX, saveSmap bool) error {
+func (r *smapowner) persist(newSmap *smapX) error {
 	confFile := cmn.GCO.GetConfigFile()
 	config := cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
@@ -290,12 +304,9 @@ func (r *smapowner) persist(newSmap *smapX, saveSmap bool) error {
 		config.Proxy.PrimaryURL = origURL
 		return err
 	}
-
-	if saveSmap {
-		smapPathName := filepath.Join(config.Confdir, smapFname)
-		if err := cmn.LocalSave(smapPathName, newSmap, false /* compression */); err != nil {
-			glog.Errorf("failed writing smapX %s, err: %v", smapPathName, err)
-		}
+	smapPathName := filepath.Join(config.Confdir, smapFname)
+	if err := cmn.LocalSave(smapPathName, newSmap, true /* compression */); err != nil {
+		glog.Errorf("failed writing smapX %s, err: %v", smapPathName, err)
 	}
 	return nil
 }

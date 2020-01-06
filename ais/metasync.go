@@ -292,7 +292,7 @@ outer:
 		// vs current Smap
 		if tag == smaptag {
 			if revsReqType == revsReqSync && revs.version() > smap.version() {
-				ers := fmt.Sprintf("FATAL: %s is newer than the current Smap v%d", s, smap.version())
+				ers := fmt.Sprintf("FATAL: %s is newer than the current %s", s, smap)
 				cmn.AssertMsg(false, ers)
 			}
 		}
@@ -532,7 +532,7 @@ func (y *metasyncer) checkPrimary() bool {
 	if smap.ProxySI != nil {
 		lead = smap.ProxySI.DaemonID
 	}
-	glog.Errorf("%s self is not %s (primary=%s, Smap v%d) - failing the 'sync' request", y.p.si, reason, lead, smap.version())
+	glog.Errorf("%s self is not %s (primary=%s, %s) - failing the 'sync' request", y.p.si, reason, lead, smap)
 	return false
 }
 

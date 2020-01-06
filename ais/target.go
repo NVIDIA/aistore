@@ -159,8 +159,12 @@ func (gfn *globalGFN) activateTimed() {
 func (t *targetrunner) Run() error {
 	var (
 		config = cmn.GCO.Get()
+		tname  = t.si.Name()
 		ereg   error
 	)
+	if err := t.si.Validate(); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
 	t.httprunner.init(getstorstatsrunner(), config)
 	t.bmdowner = newBMDOwnerTgt()
 
@@ -170,20 +174,23 @@ func (t *targetrunner) Run() error {
 	dryinit()
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
-	t.bmdowner.init() // initialize owner and load BMD
-
-	smap := newSmap()
-	smap.Tmap[t.si.DaemonID] = t.si
-	t.smapowner.put(smap)
-
-	if err := t.si.Validate(); err != nil {
-		cmn.ExitLogf("%v", err)
+	// init meta-owners and load local instances
+	t.bmdowner.init() // BMD
+	smap := newSmap() // Smap
+	if err := t.smapowner.load(smap, config); err == nil {
+		smap.Tmap[t.si.DaemonID] = t.si
+	} else if !os.IsNotExist(err) {
+		glog.Errorf("%s: cannot load Smap (- corruption?), err: %v", tname, err)
 	}
+	//
+	// join cluster
+	//
+	t.smapowner.put(smap)
 	for i := 0; i < maxRetrySeconds; i++ {
 		var status int
 		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying registration...", t.si.Name())
+				glog.Errorf("%s: retrying registration...", tname)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -191,8 +198,8 @@ func (t *targetrunner) Run() error {
 		break
 	}
 	if ereg != nil {
-		glog.Errorf("%s failed to register, err: %v", t.si.Name(), ereg)
-		glog.Errorf("%s is terminating", t.si.Name())
+		glog.Errorf("%s failed to register, err: %v", tname, ereg)
+		glog.Errorf("%s is terminating", tname)
 		return ereg
 	}
 
@@ -514,7 +521,13 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	lom := &cluster.LOM{T: t, Objname: objname}
 	if err = lom.Init(bucket, provider, config); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+			t.BMDVersionFixup("", true /* sleep */)
+			err = lom.Init(bucket, provider, config)
+		}
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
 		return
 	}
 	if appendTy == "" {

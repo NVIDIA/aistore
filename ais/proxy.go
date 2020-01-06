@@ -625,9 +625,9 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	if newSmap != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			caller := r.Header.Get(cmn.HeaderCallerName)
-			glog.Infof("new Smap v%d from %s", newSmap.version(), caller)
+			glog.Infof("new %s from %s", newSmap.StringEx(), caller)
 		}
-		err = p.smapowner.synchronize(newSmap, true /*saveSmap*/, true /* lesserIsErr */)
+		err = p.smapowner.synchronize(newSmap, true /* lesserIsErr */)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -2451,11 +2451,11 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, s)
 				return
 			}
-			if err := p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */); err != nil {
+			if err := p.smapowner.synchronize(newsmap, true /* lesserIsErr */); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
-			glog.Infof("%s: %s v%d done", p.si.Name(), cmn.SyncSmap, newsmap.version())
+			glog.Infof("%s: %s %s done", p.si.Name(), cmn.SyncSmap, newsmap)
 			return
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 			kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
@@ -2639,7 +2639,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	p.smapowner.Lock()
 	clone := smap.clone()
 	clone.ProxySI = psi
-	if err := p.smapowner.persist(clone, true); err != nil {
+	if err := p.smapowner.persist(clone); err != nil {
 		p.smapowner.Unlock()
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -2663,7 +2663,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 
 	clone.ProxySI = p.si
 	clone.Version += 100
-	if err = p.smapowner.persist(clone, true); err != nil {
+	if err = p.smapowner.persist(clone); err != nil {
 		p.smapowner.Unlock()
 		glog.Error(err)
 		return
@@ -2675,8 +2675,8 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 
 	bmd := p.bmdowner.get()
 	if glog.V(3) {
-		glog.Infof("Distributing Smap v%d with the newly elected primary %s(self)", clone.version(), p.si.Name())
-		glog.Infof("Distributing %s v%d as well", bmdTermName, bmd.version())
+		glog.Infof("%s: distributing %s with the newly elected primary (self)", p.si.Name(), clone)
+		glog.Infof("%s: distributing %s v%d as well", p.si.Name(), bmdTermName, bmd.version())
 	}
 	p.metasyncer.sync(true, revspair{clone, msgInt}, revspair{bmd, msgInt})
 	return
@@ -2733,7 +2733,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	clone := p.smapowner.get().clone()
 	clone.ProxySI = psi
 	p.metasyncer.becomeNonPrimary()
-	if err := p.smapowner.persist(clone, true); err != nil {
+	if err := p.smapowner.persist(clone); err != nil {
 		glog.Errorf("Failed to save Smap locally after having transitioned to non-primary:\n%s", err)
 	}
 	p.smapowner.put(clone)
@@ -3119,12 +3119,16 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		clone.putNode(nsi, nonElectable)
 		p.smapowner.put(clone)
 		p.smapowner.Unlock()
+		if !isProxy && selfRegister {
+			glog.Infof("%s: joining %s (%s)", p.si, nsi, regReq.Smap)
+		}
 		return
 	}
 	p.smapowner.Unlock()
 
 	// Return current metadata to registering target
 	if !isProxy && selfRegister { // case: self-registering target
+		glog.Infof("%s: joining %s (%s)", p.si, nsi, regReq.Smap)
 		bmd := p.bmdowner.get()
 		meta := &targetRegMeta{smap, bmd, p.si}
 		body := cmn.MustMarshal(meta)
@@ -3151,7 +3155,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		p.smapowner.put(clone)
-		if err := p.smapowner.persist(clone, true); err != nil {
+		if err := p.smapowner.persist(clone); err != nil {
 			glog.Error(err)
 		}
 		msgInt := p.newActionMsgInternal(msg, clone, nil)
@@ -3274,7 +3278,7 @@ func (p *proxyrunner) unregisterNode(sid string, msg *cmn.ActionMsg) (status int
 		p.smapowner.put(clone)
 		return
 	}
-	if err = p.smapowner.persist(clone, true); err != nil {
+	if err = p.smapowner.persist(clone); err != nil {
 		return
 	}
 	p.smapowner.put(clone)

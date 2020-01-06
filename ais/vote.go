@@ -117,11 +117,10 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 	smap := h.smapowner.get()
 	if smap.ProxySI == nil {
-		h.invalmsghdlr(w, r, fmt.Sprintf("Cannot vote: current primary undefined, local Smap v%d", smap.version()))
+		h.invalmsghdlr(w, r, fmt.Sprintf("Cannot vote: current primary undefined, local %s", smap))
 		return
 	}
 	currPrimaryID := smap.ProxySI.DaemonID
-	isproxy := smap.GetProxy(h.si.DaemonID) != nil
 	if candidate == currPrimaryID {
 		h.invalmsghdlr(w, r, fmt.Sprintf("Candidate %s == the current primary '%s'", candidate, currPrimaryID))
 		return
@@ -137,8 +136,8 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.smapowner.synchronize(newsmap, isproxy /*saveSmap*/, false /* lesserIsErr */); err != nil {
-		glog.Errorf("Failed to synchronize VoteRecord Smap v%d, err %s - voting No", newsmap.version(), err)
+	if err := h.smapowner.synchronize(newsmap, false /* lesserIsErr */); err != nil {
+		glog.Errorf("Failed to synchronize VoteRecord %s, err %s - voting No", newsmap, err)
 		if _, err := w.Write([]byte(VoteNo)); err != nil {
 			glog.Errorf("Error writing a No vote: %v", err)
 		}
@@ -189,7 +188,6 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	defer h.smapowner.Unlock()
 
 	smap := h.smapowner.get()
-	isproxy := smap.GetProxy(h.si.DaemonID) != nil
 	psi := smap.GetProxy(newprimary)
 	if psi == nil {
 		s := fmt.Sprintf("New primary proxy %s not present in the local %s", newprimary, smap.pp())
@@ -198,10 +196,10 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	}
 	clone := smap.clone()
 	clone.ProxySI = psi
-	if oldprimary != "" {
+	if oldprimary != "" && clone.GetProxy(oldprimary) != nil {
 		clone.delProxy(oldprimary)
 	}
-	if err := h.smapowner.persist(clone, isproxy /*saveSmap*/); err != nil {
+	if err := h.smapowner.persist(clone); err != nil {
 		h.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -231,7 +229,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := p.smapowner.synchronize(newsmap, true /*saveSmap*/, false /* lesserIsErr */); err != nil {
+	if err := p.smapowner.synchronize(newsmap, false /* lesserIsErr */); err != nil {
 		glog.Error(err)
 	}
 

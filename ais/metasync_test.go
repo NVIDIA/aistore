@@ -774,6 +774,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		primary.smapowner.put(clone)
 
 		proxy1 := proxyrunner{}
+		proxy1.si = newSnode("p1", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 		proxy1.smapowner = newSmapowner()
 		proxy1.smapowner.put(newSmap())
 		proxy1.bmdowner = newBMDOwnerPrx(cmn.GCO.Get())

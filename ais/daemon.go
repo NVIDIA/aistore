@@ -190,13 +190,10 @@ func aisinit(version, build string) {
 	containerized := sys.Containerized()
 	cpus, limited := sys.NumCPU()
 	memStat, _ := sys.Mem()
-	if containerized {
-		glog.Infof("AIS started containerized")
-	}
 	if limited {
-		glog.Infof("Number of CPUs is restricted to %d CPUs", cpus)
+		glog.Infof("containerized=%t, number of CPUs is limited to %d", containerized, cpus)
 	} else {
-		glog.Infof("AIS use all available %d CPUs", cpus)
+		glog.Infof("containerized=%t, using all available %d CPUs", containerized, cpus)
 	}
 	glog.Infof("Memory total: %s, free: %s(actual free %s)",
 		cmn.B2S(int64(memStat.Total), 0), cmn.B2S(int64(memStat.Free), 0), cmn.B2S(int64(memStat.ActualFree), 0))

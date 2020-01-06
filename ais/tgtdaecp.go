@@ -63,6 +63,7 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	var (
 		res      callResult
 		meta     targetRegMeta
+		tname    = t.si.Name()
 		url, psi = t.getPrimaryURLAndSI()
 	)
 	if !keepalive {
@@ -92,19 +93,19 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	// bmd
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
 	if err = t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
-		glog.Errorf("error registering %s: %v", t.si.Name(), err)
+		glog.Errorf("%s: bad BMD, err: %v", tname, err)
 		if _, incompat := err.(*errPrxBmdOriginDiffer); incompat {
 			return
 		}
 		err = nil
 	} else {
-		glog.Infof("registered %s: %s v%d", t.si.Name(), bmdTermName, t.bmdowner.get().version())
+		glog.Infof("%s: %s v%d", tname, bmdTermName, t.bmdowner.get().version())
 	}
 	// smap
-	if err := t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */); err != nil {
-		glog.Errorf("registered %s: %s", t.si.Name(), err)
+	if err := t.smapowner.synchronize(meta.Smap, true /* lesserIsErr */); err != nil {
+		glog.Errorf("%s: sync Smap err %v", tname, err)
 	} else {
-		glog.Infof("registered %s: Smap v%d", t.si.Name(), t.smapowner.get().version())
+		glog.Infof("%s: sync %s", tname, t.smapowner.get())
 	}
 	return
 }
@@ -158,10 +159,10 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if cmn.ReadJSON(w, r, newsmap) != nil {
 				return
 			}
-			if err := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); err != nil {
+			if err := t.smapowner.synchronize(newsmap, true /* lesserIsErr */); err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", err))
 			}
-			glog.Infof("%s: %s v%d done", t.si.Name(), cmn.SyncSmap, newsmap.version())
+			glog.Infof("%s: %s %s done", t.si.Name(), cmn.SyncSmap, newsmap)
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -281,7 +282,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	if smap.ProxySI.DaemonID != psi.DaemonID {
 		clone := smap.clone()
 		clone.ProxySI = psi
-		if err := t.smapowner.persist(clone, false /*saveSmap*/); err != nil {
+		if err := t.smapowner.persist(clone); err != nil {
 			t.smapowner.Unlock()
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -490,7 +491,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */)
+			t.smapowner.synchronize(meta.Smap, true /* lesserIsErr */)
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -778,6 +779,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, caller string) (err error) {
 	var (
 		newTargetID, s, from       string
+		tname                      = t.si.Name()
 		iPresent, newTargetPresent bool
 	)
 	if caller != "" {
@@ -791,8 +793,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 	} else if msgInt.Action != "" {
 		s = ", action " + msgInt.Action
 	}
-	glog.Infof("%s: receive Smap v%d%s, ntargets %d, primary %s%s",
-		t.si.Name(), newsmap.version(), from, newsmap.CountTargets(), newsmap.ProxySI.Name(), s)
+	glog.Infof("%s: receive %s%s, primary %s%s", tname, newsmap.StringEx(), from, newsmap.ProxySI.Name(), s)
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			iPresent = true
@@ -804,14 +805,16 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		}
 	}
 	if !iPresent {
-		err = fmt.Errorf("Not finding %s(self) in the new %s", t.si.Name(), newsmap.pp())
+		err = fmt.Errorf("%s: not finding self in the new %s", tname, newsmap.StringEx())
+		glog.Warningf("Error: %s\n%s", err, newsmap.pp())
 		return
 	}
 	if newTargetID != "" && newTargetID != t.si.DaemonID && !newTargetPresent {
-		err = fmt.Errorf("Not finding %s(new target) in the new %s", newTargetID, newsmap.pp())
+		err = fmt.Errorf("not finding %s(new target) in the new v%d", newTargetID, newsmap.version())
+		glog.Warningf("Error: %s\n%s", err, newsmap.pp())
 		return
 	}
-	if err = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); err != nil {
+	if err = t.smapowner.synchronize(newsmap, true /* lesserIsErr */); err != nil {
 		return
 	}
 	if msgInt.Action == cmn.ActGlobalReb { // manual
@@ -825,7 +828,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 	if newTargetID == "" {
 		return
 	}
-	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si.Name(), newTargetID)
+	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", tname, newTargetID)
 	go t.rebManager.RunGlobalReb(&newsmap.Smap, msgInt.GlobRebID)
 	return
 }
@@ -834,12 +837,12 @@ func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
 	smap := t.smapowner.Get()
 	smapVersion := msgInt.SmapVersion
 	if smap.Version < smapVersion {
-		glog.Errorf("own smap version %d < %d - fetching latest for %v", smap.Version, smapVersion, msgInt.Action)
+		glog.Errorf("own %s < %d - fetching latest for %v", smap, smapVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
 		t.smapVersionFixup()
 	} else if smap.Version > smapVersion {
 		//if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("own smap version %d > %d - encountered during %v", smap.Version, smapVersion, msgInt.Action)
+		glog.Errorf("own %s > %d - encountered during %v", smap, smapVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
 	}
 

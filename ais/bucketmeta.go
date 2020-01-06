@@ -41,7 +41,7 @@ import (
 //
 
 const (
-	bmdFname    = ".ais.bmd" // BMD basename on disk
+	bmdFname    = ".ais.bmd" // BMD basename
 	bmdFext     = ".prev"    // suffix: previous version
 	bmdTermName = "BMD"      // display name
 	bmdCopies   = 2          // local copies

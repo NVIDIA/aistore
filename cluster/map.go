@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -146,6 +147,19 @@ func (m *Smap) InitDigests() {
 	for _, node := range m.Pmap {
 		node.Digest()
 	}
+}
+
+func (m *Smap) String() string {
+	if m == nil {
+		return "Smap <nil>"
+	}
+	return "Smap v" + strconv.FormatInt(m.Version, 10)
+}
+func (m *Smap) StringEx() string {
+	if m == nil {
+		return "Smap <nil>"
+	}
+	return fmt.Sprintf("Smap v%d (%d/%d)", m.Version, m.CountTargets(), m.CountProxies())
 }
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }

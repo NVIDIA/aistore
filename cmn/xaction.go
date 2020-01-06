@@ -113,20 +113,24 @@ func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
 
 func (xact *XactBase) String() string {
-	stime := xact.StartTime()
-	stimestr := stime.Format(timeStampFormat)
-	prefix := xact.Kind()
+	var (
+		prefix = xact.Kind()
+	)
 	if xact.bucket != "" {
 		prefix += "@" + xact.bucket
 	}
 	if !xact.Finished() {
 		if xact.gid == 0 {
-			return fmt.Sprintf("%s(%d) started %s", prefix, xact.ShortID(), stimestr)
+			return fmt.Sprintf("%s(%d)", prefix, xact.ShortID())
 		}
-		return fmt.Sprintf("%s[%d, g%d] started %s", prefix, xact.ShortID(), xact.gid, stimestr)
+		return fmt.Sprintf("%s[%d, g%d]", prefix, xact.ShortID(), xact.gid)
 	}
-	etime := xact.EndTime()
-	d := etime.Sub(stime)
+	var (
+		stime    = xact.StartTime()
+		stimestr = stime.Format(timeStampFormat)
+		etime    = xact.EndTime()
+		d        = etime.Sub(stime)
+	)
 	if xact.gid == 0 {
 		return fmt.Sprintf("%s(%d) started %s ended %s (%v)", prefix, xact.ShortID(), stimestr, etime.Format(timeStampFormat), d)
 	}

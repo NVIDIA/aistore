@@ -27,12 +27,13 @@ const (
 )
 
 var (
-	// Used as a compile-time check for correct interface implementation.
+	// compile-time interface checks
 	_ cmn.ConfigListener = &targetKeepaliveRunner{}
 	_ cmn.ConfigListener = &proxyKeepaliveRunner{}
-
-	_ keepaliver = &targetKeepaliveRunner{}
-	_ keepaliver = &proxyKeepaliveRunner{}
+	_ keepaliver         = &targetKeepaliveRunner{}
+	_ keepaliver         = &proxyKeepaliveRunner{}
+	_ registerer         = &proxyrunner{}
+	_ registerer         = &targetrunner{}
 
 	minKeepaliveTime = float64(time.Second.Nanoseconds())
 )
@@ -142,7 +143,7 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 	if smap == nil || !smap.isValid() {
 		return
 	}
-	if stopped = tkr.register(tkr.t, tkr.t.statsif, smap.ProxySI.DaemonID); stopped {
+	if stopped = tkr.register(tkr.t, tkr.t.statsif, smap.ProxySI.DaemonID, tkr.t.si.Name()); stopped {
 		tkr.t.onPrimaryProxyFailure()
 	}
 	return
@@ -168,7 +169,7 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 		return
 	}
 
-	if stopped = pkr.register(pkr.p, pkr.p.statsif, smap.ProxySI.DaemonID); stopped {
+	if stopped = pkr.register(pkr.p, pkr.p.statsif, smap.ProxySI.DaemonID, pkr.p.si.Name()); stopped {
 		pkr.p.onPrimaryProxyFailure()
 	}
 	return
@@ -258,7 +259,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	metaction += " ]"
 
 	pkr.p.smapowner.put(clone)
-	if err := pkr.p.smapowner.persist(clone, true); err != nil {
+	if err := pkr.p.smapowner.persist(clone); err != nil {
 		glog.Error(err)
 	}
 	pkr.p.smapowner.Unlock()
@@ -334,8 +335,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 			}
 			i++
 			if i == 3 {
-				glog.Warningf("keepalive failed after retrying again three times"+
-					", removing daemon %s from smap", si.DaemonID)
+				glog.Warningf("keepalive failed after %d attempts, removing %s from Smap", i, si.Name())
 				return false, false
 			}
 			if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
@@ -388,43 +388,43 @@ func (k *keepalive) Run() error {
 }
 
 // register is called by non-primary proxies and targets to send a keepalive to the primary proxy.
-func (k *keepalive) register(r registerer, statsif stats.Tracker, primaryProxyID string) (stopped bool) {
-	timeout := time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
-	now := time.Now()
-	s, err := r.register(true, timeout)
-	delta := time.Since(now)
+func (k *keepalive) register(r registerer, statsif stats.Tracker, primaryProxyID, hname string) (stopped bool) {
+	var (
+		timeout     = time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
+		now         = time.Now()
+		status, err = r.register(true, timeout) // register
+		delta       = time.Since(now)
+	)
 	statsif.Add(stats.KeepAliveLatency, int64(delta))
 	timeout = k.updateTimeoutForDaemon(primaryProxyID, delta)
 	if err == nil {
 		return
 	}
-	glog.Infof("daemon -> primary proxy keepalive failed, err: %v, status: %d", err, s)
-
-	var i int
-	ticker := time.NewTicker(cmn.KeepaliveRetryDuration())
+	glog.Warningf("%s => [%s]primary keepalive failed (err %v, status %d)", hname, primaryProxyID, err, status)
+	var (
+		ticker = time.NewTicker(cmn.KeepaliveRetryDuration())
+		i      int
+	)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			i++
 			now = time.Now()
-			s, err = r.register(true, timeout)
+			status, err = r.register(true, timeout)
 			timeout = k.updateTimeoutForDaemon(primaryProxyID, time.Since(now))
 			if err == nil {
-				glog.Infof(
-					"daemon successfully registered after retrying %d times", i)
+				glog.Infof("%s: keepalive OK after %d attempt(s)", hname, i)
 				return
 			}
 			if i == 3 {
-				glog.Warningf(
-					"daemon failed to register after retrying three times, removing from smap")
+				glog.Warningf("%s: keepalive failed after %d attempts, removing from Smap", hname, i)
 				return true
 			}
-			if cmn.IsErrConnectionRefused(err) || s == http.StatusRequestTimeout {
+			if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 				continue
 			}
-			glog.Warningf(
-				"daemon received unexpected response from register, status %d, err: %v", s, err)
+			glog.Warningf("%s: unexpected response (err %v, status %d)", hname, err, status)
 		case sig := <-k.controlCh:
 			if sig.msg == stop {
 				return true
