@@ -60,7 +60,7 @@ DOCKER_CTXDIR:=$(shell mktemp -d)
 # Targets to build a container
 #
 aisnode_image:
-	$(BUILD_AISNODE) $(DOCKER_CTXDIR)/aisnode
+	$(BUILD_AISNODE) $(DOCKER_CTXDIR)
 	cp $(DOCKERFILE_AISNODE) $(DOCKER_CTXDIR)/Dockerfile
 	cp $(DOCKER_START) $(DOCKER_CTXDIR)
 	git show-branch --more=10 > $(DOCKER_CTXDIR)/git-showbranch.out

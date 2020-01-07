@@ -91,10 +91,11 @@
         "retry_sync_time":      {{ .periodic.retry_sync_time | quote }}
 },
 "rebalance": {
-        "compression":          {{ .rebalance.compression | quote }},
-        "dest_retry_time":      {{ .rebalance.dest_retry_time | quote}},
-        "enabled":              {{ .rebalance.enabled }},
-        "multiplier":           {{ .rebalance.multiplier }}
+        "enabled":         {{ .rebalance.enabled }},
+        "compression":     {{ .rebalance.compression | quote }},
+        "quiescent":       {{ .rebalance.quiescent | quote }},
+        "dest_retry_time": {{ .rebalance.dest_retry_time | quote}},
+        "multiplier":      {{ .rebalance.multiplier }}
 },
 "timeout": {
         "default_timeout":      {{ .timeout.default_timeout | quote }},

@@ -54,12 +54,11 @@ ais_config_common:
   downloader:
     timeout: 1h
   ec:
-    compression:   never
+    enabled:       false
     objsize_limit: 262144
     data_slices:   2
     parity_slices: 2
     compression:   never
-    enabled:       false
   fshc:
     enabled:       true
     test_files:    4
@@ -97,9 +96,10 @@ ais_config_common:
     stats_time:      10s
     retry_sync_time: 2s
   rebalance:
+    enabled:         true
     compression:     never
     dest_retry_time: 2m
-    enabled:         true
+    quiescent:       20s
     multiplier:      4
   timeout:
     default_timeout:      10s
