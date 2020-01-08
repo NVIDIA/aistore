@@ -181,7 +181,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.IsAIS()).To(BeFalse())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.Cloud))
+				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAmazon))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpaths[0]))
 				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketCloudA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
@@ -905,7 +905,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
 			Expect(lomCloud.Uname()).To(Equal(lomCloud.Bck().MakeUname(testObject)))
 			Expect(lomCloud.IsAIS()).To(BeFalse())
-			Expect(lomCloud.ParsedFQN.Provider).To(BeEquivalentTo(cmn.Cloud))
+			Expect(lomCloud.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAmazon))
 			Expect(lomCloud.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
 			Expect(lomCloud.ParsedFQN.Bucket).To(Equal(sameBucketName))
 			Expect(lomCloud.ParsedFQN.ObjName).To(Equal(testObject))

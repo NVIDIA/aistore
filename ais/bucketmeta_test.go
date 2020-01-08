@@ -33,7 +33,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		cfg = cmn.GCO.Get()
 
 		bmd = newBucketMD()
-		for _, provider := range []string{cmn.AIS, cmn.Cloud} {
+		for _, provider := range []string{cmn.ProviderAIS, cmn.ProviderAmazon} {
 			for i := 0; i < 10; i++ {
 				bmd.add(&cluster.Bck{
 					Name:     fmt.Sprintf("local%d", i),

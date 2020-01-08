@@ -137,35 +137,35 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 }
 
 func TestMetaSyncDeepCopy(t *testing.T) {
-	bucketmd := newBucketMD()
-	bucketmd.add(&cluster.Bck{Name: "bucket1", Provider: cmn.AIS}, &cmn.BucketProps{
+	bmd := newBucketMD()
+	bmd.add(&cluster.Bck{Name: "bucket1", Provider: cmn.ProviderAIS}, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bucketmd.add(&cluster.Bck{Name: "bucket2", Provider: cmn.AIS}, &cmn.BucketProps{
+	bmd.add(&cluster.Bck{Name: "bucket2", Provider: cmn.ProviderAIS}, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bucketmd.add(&cluster.Bck{Name: "bucket3", Provider: cmn.Cloud}, &cmn.BucketProps{
-		CloudProvider: cmn.ProviderAIS,
+	bmd.add(&cluster.Bck{Name: "bucket3", Provider: cmn.ProviderAmazon}, &cmn.BucketProps{
+		CloudProvider: cmn.ProviderAmazon,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bucketmd.add(&cluster.Bck{Name: "bucket4", Provider: cmn.Cloud}, &cmn.BucketProps{
+	bmd.add(&cluster.Bck{Name: "bucket4", Provider: cmn.ProviderAmazon}, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
 
 	clone := &bucketMD{}
-	bucketmd.deepCopy(clone)
+	bmd.deepCopy(clone)
 
 	var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
-	b1, _ := jsonCompat.Marshal(bucketmd)
+	b1, _ := jsonCompat.Marshal(bmd)
 	s1 := string(b1)
 	b2, _ := jsonCompat.Marshal(clone)
 	s2 := string(b2)

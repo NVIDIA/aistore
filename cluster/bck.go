@@ -89,7 +89,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 		if bmd.IsAIS(b.Name) {
 			b.Provider = cmn.AIS
 		} else if bmd.IsCloud(b.Name) {
-			b.Provider = cmn.Cloud
+			b.Provider = cmn.GCO.Get().CloudProvider
 		} else {
 			b.Provider = cmn.Cloud
 			err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
@@ -98,8 +98,12 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 		if b.IsAIS() && !bmd.IsAIS(b.Name) {
 			return cmn.NewErrorBucketDoesNotExist(b.Name)
 		}
-		if b.IsCloud() && !bmd.IsCloud(b.Name) {
-			err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
+		if b.IsCloud() {
+			if bmd.IsCloud(b.Name) {
+				b.Provider = cmn.GCO.Get().CloudProvider
+			} else {
+				err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
+			}
 		}
 	}
 	if b.IsCloud() && b.Provider != cmn.Cloud {

@@ -856,7 +856,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		bck.Provider = cmn.Cloud
+		bck.Provider = cmn.GCO.Get().CloudProvider
 		if err := p.createBucket(&msg, bck); err != nil {
 			errCode := http.StatusInternalServerError
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
@@ -1751,7 +1751,7 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 		}
 		return
 	}
-	bck = &cluster.Bck{Name: bucket, Provider: cmn.Cloud}
+	bck = &cluster.Bck{Name: bucket, Provider: cmn.GCO.Get().CloudProvider}
 	if err = p.createBucket(msg, bck, cloudProps); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusConflict)

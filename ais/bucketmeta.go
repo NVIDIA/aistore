@@ -110,9 +110,10 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 	mm := m.LBmap
 	if !bck.IsAIS() {
 		mm = m.CBmap
-	} else {
-		p.CloudProvider = cmn.AIS
 	}
+	p.CloudProvider = bck.Provider
+	cmn.AssertMsg(cmn.StringInSlice(p.CloudProvider, cmn.Providers), p.CloudProvider)
+
 	if _, exists := mm[bck.Name]; exists {
 		return false
 	}
@@ -141,9 +142,10 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 	mm := m.LBmap
 	if !bck.IsAIS() {
 		mm = m.CBmap
-	} else {
-		p.CloudProvider = cmn.AIS
 	}
+	p.CloudProvider = bck.Provider
+	cmn.AssertMsg(cmn.StringInSlice(p.CloudProvider, cmn.Providers), p.CloudProvider)
+
 	prevProps, ok := mm[bck.Name]
 	cmn.Assert(ok)
 	cmn.Assert(!p.InProgress)

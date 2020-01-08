@@ -24,6 +24,10 @@ const (
 )
 
 var (
+	Providers = []string{ProviderAmazon, ProviderGoogle, ProviderAIS}
+)
+
+var (
 	providerMap = map[string]string{
 		Cloud:          Cloud,
 		ProviderAmazon: Cloud,
