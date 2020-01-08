@@ -819,7 +819,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		return
 	}
 	if msgInt.Action == cmn.ActGlobalReb { // manual
-		go t.rebManager.RunGlobalReb(&newsmap.Smap, msgInt.GlobRebID)
+		go t.rebManager.RunGlobalReb(t.smapowner.Get(), msgInt.GlobRebID)
 		return
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
@@ -830,7 +830,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		return
 	}
 	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", tname, newTargetID)
-	go t.rebManager.RunGlobalReb(&newsmap.Smap, msgInt.GlobRebID)
+	go t.rebManager.RunGlobalReb(t.smapowner.Get(), msgInt.GlobRebID)
 	return
 }
 

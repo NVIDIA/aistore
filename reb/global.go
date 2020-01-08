@@ -630,6 +630,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 		lomack.mu.Unlock()
 		goto rerr
 	}
+	rj.m.laterx.Store(true)
 	return nil
 rerr:
 	lom.Unlock(false)

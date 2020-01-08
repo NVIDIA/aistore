@@ -9,8 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -861,11 +859,6 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 	tmap := c.parent.smap.Get().Tmap
 	wg := &sync.WaitGroup{}
 	mtx := &sync.Mutex{}
-	path := cmn.URLPath(cmn.Version, cmn.Objects, req.LOM.Bucket(), req.LOM.Objname)
-	query := url.Values{}
-	query.Add(cmn.URLParamProvider, req.LOM.Bck().Provider)
-	query.Add(cmn.URLParamECMeta, "true")
-	query.Add(cmn.URLParamSilent, "true")
 	metas := make(map[string]*Metadata, len(tmap))
 	chk := make(map[string]int, len(tmap))
 	chkMax := 0
@@ -877,42 +870,27 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		wg.Add(1)
 		go func(si *cluster.Snode) {
 			defer wg.Done()
-			// TODO: use `call` from target (that is private at this moment)
-			url := si.URL(cmn.NetworkIntraData) + path
-			rq, err := http.NewRequest(http.MethodHead, url, nil)
+			md, err := RequestECMeta(req.LOM.Bucket(), req.LOM.Objname, req.LOM.Bck().Provider, si)
 			if err != nil {
-				glog.Errorf("failed to create request, err: %v", err)
-				return
-			}
-			rq.URL.RawQuery = query.Encode()
-			resp, err := http.DefaultClient.Do(rq)
-			if err != nil {
-				if resp.StatusCode != http.StatusNotFound {
-					glog.Errorf("Failed to read %s HEAD request: %v", req.LOM.Objname, err)
+				if glog.FastV(4, glog.SmoduleAIS) {
+					glog.Infof("No EC meta %s from %s: %v", req.LOM.Objname, si.Name(), err)
 				}
 				return
 			}
-			mdStr := resp.Header.Get(cmn.HeaderObjECMeta)
-			if mdStr == "" {
-				return
+
+			mtx.Lock()
+			metas[si.DaemonID] = md
+			// detect the metadata with the latest version on the fly.
+			// At this moment it is the most frequent hash in the list.
+			// TODO: fix when an EC Metadata versioning is introduced
+			cnt := chk[md.ObjCksum]
+			cnt++
+			chk[md.ObjCksum] = cnt
+			if cnt > chkMax {
+				chkMax = cnt
+				chkVal = md.ObjCksum
 			}
-			if md, err := StringToMeta(mdStr); err == nil {
-				mtx.Lock()
-				metas[si.DaemonID] = md
-				// detect the metadata with the latest version on the fly.
-				// At this moment it is the most frequent hash in the list.
-				// TODO: fix when an EC Metadata versioning is introduced
-				cnt := chk[md.ObjCksum]
-				cnt++
-				chk[md.ObjCksum] = cnt
-				if cnt > chkMax {
-					chkMax = cnt
-					chkVal = md.ObjCksum
-				}
-				mtx.Unlock()
-			} else {
-				glog.Errorf("Failed to unmarshal %s HEAD request: %v", req.LOM.Objname, err)
-			}
+			mtx.Unlock()
 		}(node)
 	}
 	wg.Wait()

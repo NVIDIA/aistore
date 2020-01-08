@@ -17,6 +17,7 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -160,7 +161,7 @@ type (
 		sliceExist   []bool           // marks existing slices/replicas(first item is full object) for faster check if a slice exists
 		mainDaemon   string           // hrw target for an object
 		uid          string           // unique identifier for the object (Bucket#Object#IsAIS)
-		bucket       string           // bucket name for faster aceess
+		bucket       string           // bucket name for faster acceess
 		objName      string           // object name for faster access
 		objSize      int64            // object size
 		sliceSize    int64            // a size of an object slice
@@ -184,6 +185,18 @@ type (
 		cloud map[string]*ecRebBck // maps BucketName <-> map of objects
 	}
 
+	// CT destination (to use later for retransmitting lost slices/replicas)
+	retransmitCT struct {
+		daemonID string
+		header   transport.Header
+	}
+
+	// a list of CTs waiting for receive acknowledge from remote targets
+	ackCT struct {
+		mtx sync.Mutex
+		ct  map[string]*retransmitCT
+	}
+
 	// Callback is called if a target did not report that it is in `stage` or
 	// its notification was lost. Callback either request the current state
 	// directly or makes the target to resend.
@@ -201,6 +214,8 @@ type (
 		mgr    *Manager
 		waiter *ecWaiter // helper to manage a list of slices for current batch to wait by local target
 		broken []*ecRebObject
+		ackCTs ackCT
+		onAir  atomic.Int64 // the number of slices/replicas passed to transport but not yet sent to a remote target
 
 		// list of slices/replicas that should be moved between local mpaths
 		localActions []*ecRebSlice
@@ -231,9 +246,21 @@ var (
 	ecPadding = make([]byte, 256) // more than enough for max number of slices
 )
 
-// generate unique ID for an object
+// Generate unique ID for an object
 func uniqueWaitID(bucket, objName string, isAIS bool) string {
 	return fmt.Sprintf("%s#%s#%t", bucket, objName, isAIS)
+}
+
+// Generate unique ID for a CT (id is a slice or replica ordinal number).
+// The combination of id and daemonID is unique as a target can contain
+// only one item (either replica or slice)
+func ctUID(id int, daemonID string) string {
+	return fmt.Sprintf("@%d/%s", id, daemonID)
+}
+
+// Generate unique ID for a CT acknowledge.
+func ackID(bucket, objname, provider, ctUID string) string {
+	return fmt.Sprintf("%s#%s#%s#%s", bucket, objname, provider, ctUID)
 }
 
 //
@@ -366,6 +393,7 @@ func newECRebalancer(t cluster.Target, mgr *Manager, stat stats.Tracker) *ecReba
 		localActions: make([]*ecRebSlice, 0),
 		tgtBatch:     make(map[string]int),
 		stat:         stat,
+		ackCTs:       ackCT{ct: make(map[string]*retransmitCT)},
 	}
 }
 
@@ -432,9 +460,10 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 		Opaque: cmn.MustMarshal(req),
 	}
 
+	provider := cmn.ProviderFromBool(slice.IsAIS)
 	if resolved.ContentType == fs.ObjectType {
 		lom := cluster.LOM{T: s.t, FQN: fqn}
-		if err := lom.Init(slice.Bucket, cmn.ProviderFromBool(slice.IsAIS)); err != nil {
+		if err := lom.Init(slice.Bucket, provider); err != nil {
 			return err
 		}
 		if err := lom.Load(false); err != nil {
@@ -456,15 +485,39 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 		return err
 	}
 
-	if err := s.data.Send(hdr, fh, nil, nil, targets); err != nil {
+	// temporary list of UIDs for proper cleanup if SendV fails
+	rebUIDs := make([]string, 0, len(targets))
+	for _, tgt := range targets {
+		dest := &retransmitCT{daemonID: tgt.ID(), header: hdr}
+		ctUID := ctUID(int(slice.SliceID), tgt.ID())
+		uid := ackID(slice.Bucket, slice.Objname, provider, ctUID)
+		s.ackCTs.mtx.Lock()
+		s.ackCTs.ct[uid] = dest
+		s.ackCTs.mtx.Unlock()
+		rebUIDs = append(rebUIDs, uid)
+	}
+	s.onAir.Inc()
+	if err := s.data.Send(hdr, fh, s.transportCB, nil, targets); err != nil {
+		s.onAir.Dec()
 		fh.Close()
+		s.ackCTs.mtx.Lock()
+		for _, uid := range rebUIDs {
+			delete(s.ackCTs.ct, uid)
+		}
+		s.ackCTs.mtx.Unlock()
 		return fmt.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].DaemonID, err)
 	}
+
 	s.stat.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.TxRebSize, Value: hdr.ObjAttrs.Size},
 	)
 	return nil
+}
+
+// Track the number of sent slices/replicas
+func (s *ecRebalancer) transportCB(_ transport.Header, reader io.ReadCloser, _ unsafe.Pointer, _ error) {
+	s.onAir.Dec()
 }
 
 // Sends reconstructed slice along with EC metadata to remote target.
@@ -501,9 +554,23 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 		hdr.ObjAttrs.CksumType = cmn.ChecksumXXHash
 	}
 
-	if err := s.data.SendV(hdr, reader, nil, nil, target); err != nil {
+	provider := cmn.ProviderFromBool(slice.IsAIS)
+	sliceUID := ctUID(sliceID, target.ID())
+	uid := ackID(slice.Bucket, slice.Objname, provider, sliceUID)
+	dest := &retransmitCT{daemonID: target.ID(), header: hdr}
+	s.ackCTs.mtx.Lock()
+	s.ackCTs.ct[uid] = dest
+	s.ackCTs.mtx.Unlock()
+
+	s.onAir.Inc()
+	if err := s.data.SendV(hdr, reader, s.transportCB, nil, target); err != nil {
+		s.onAir.Dec()
+		s.ackCTs.mtx.Lock()
+		delete(s.ackCTs.ct, uid)
+		s.ackCTs.mtx.Unlock()
 		return fmt.Errorf("Failed to send slices to node %s: %v", target.Name(), err)
 	}
+
 	s.stat.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.TxRebSize, Value: size},
@@ -654,6 +721,16 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 		glog.Infof("Slices to get remains: %d", remains)
 	}
+
+	// send acknowledge back to the caller
+	smap := (*cluster.Smap)(s.mgr.smap.Load())
+	tsi := smap.GetTarget(req.DaemonID)
+	hdr.Opaque = []byte(ctUID(sliceID, s.mgr.t.Snode().ID()))
+	hdr.ObjAttrs.Size = 0
+	if err := s.mgr.acks.SendV(hdr, nil /*reader*/, nil /*callback*/, nil /*ptr*/, tsi); err != nil {
+		glog.Error(err)
+	}
+
 	return nil
 }
 
@@ -1531,6 +1608,11 @@ func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
 func (s *ecRebalancer) cleanupBatch() {
 	s.waiter.cleanupBatch(s.broken, s.batchID)
 	s.releaseSGLs(s.broken)
+	s.ackCTs.mtx.Lock()
+	for id := range s.ackCTs.ct {
+		delete(s.ackCTs.ct, id)
+	}
+	s.ackCTs.mtx.Unlock()
 }
 
 // Wait for all targets to finish the current batch and then free allocated resources
@@ -1539,6 +1621,8 @@ func (s *ecRebalancer) finalizeBatch() error {
 	if err := s.waitQuiesce(s.allSliceReceived); err != nil {
 		return err
 	}
+	// wait until all rebiult slices are sent
+	s.waitECAck()
 
 	// mark batch done and notify other targets
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
@@ -1560,6 +1644,98 @@ func (s *ecRebalancer) finalizeBatch() error {
 	return nil
 }
 
+// Check the list of sent slices/replicas and resent ones that did not
+// receive and acknowledge from a destination target.
+// Returns the number of resent slices/replicas
+func (s *ecRebalancer) retransmit() (cnt int) {
+	s.ackCTs.mtx.Lock()
+	defer s.ackCTs.mtx.Unlock()
+	if len(s.ackCTs.ct) == 0 {
+		return 0
+	}
+
+	for id, dest := range s.ackCTs.ct {
+		if s.mgr.xreb.Aborted() {
+			return 0
+		}
+		si, ok := s.ra.smap.Tmap[dest.daemonID]
+		if !ok {
+			glog.Errorf("Target %s not found in smap", dest.daemonID)
+			continue
+		}
+
+		_, err := ec.RequestECMeta(dest.header.Bucket, dest.header.Objname,
+			cmn.ProviderFromBool(dest.header.BckIsAIS), si)
+		if err == nil {
+			// the destination got new slice/replica, but failed to send
+			// ACK, cleanup ACK wait right now
+			delete(s.ackCTs.ct, id)
+			continue
+		}
+
+		// destination still waits for the data, resend
+		glog.Errorf("Did not receive ACK from %s for %s/%s. Retransmit",
+			dest.daemonID, dest.header.Bucket, dest.header.Objname)
+		// TODO: resend the slice/replica with s.data.SendV
+
+		cnt++
+		// update stats with retransmitted data
+		delete(s.ackCTs.ct, id)
+		s.stat.AddMany(stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
+			stats.NamedVal64{Name: stats.TxRebSize, Value: dest.header.ObjAttrs.Size})
+	}
+
+	return cnt
+}
+
+func (s *ecRebalancer) allAckReceived() bool {
+	if s.mgr.xreb.Aborted() {
+		return false
+	}
+	s.ackCTs.mtx.Lock()
+	cnt := len(s.ackCTs.ct)
+	s.ackCTs.mtx.Unlock()
+	return cnt == 0
+}
+
+func (s *ecRebalancer) waitECAck() {
+	globRebID := s.mgr.globRebID.Load()
+	loghdr := s.mgr.loghdr(globRebID, s.ra.smap)
+	sleep := s.ra.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
+
+	// loop without timeout - wait until all slices/replicas put into transport
+	// queue are processed (either sent or failed)
+	for s.onAir.Load() > 0 {
+		if s.mgr.xreb.AbortedAfter(sleep) {
+			s.onAir.Store(0)
+			glog.Infof("%s: abrt", loghdr)
+			return
+		}
+	}
+
+	// ignore erros and continue
+	s.waitQuiesce(s.allAckReceived)
+	if s.mgr.xreb.Aborted() {
+		return
+	}
+	maxwt := s.ra.config.Rebalance.DestRetryTime
+	maxwt += time.Duration(int64(time.Minute) * int64(s.ra.smap.CountTargets()/10))
+	maxwt = cmn.MinDur(maxwt, s.ra.config.Rebalance.DestRetryTime*2)
+	curwt := time.Duration(0)
+	for curwt < maxwt {
+		cnt := s.retransmit()
+		if cnt == 0 || s.mgr.xreb.Aborted() {
+			return
+		}
+		if s.mgr.xreb.AbortedAfter(sleep) {
+			glog.Infof("%s: abrt", loghdr)
+			return
+		}
+		curwt += sleep
+		glog.Warningf("%s: retransmitted %d, more wack...", loghdr, cnt)
+	}
+}
+
 func (s *ecRebalancer) rebalanceGlobal() (err error) {
 	s.batchID = 0
 	// to cleanup the last batch and allocated SGLs
@@ -1570,6 +1746,7 @@ func (s *ecRebalancer) rebalanceGlobal() (err error) {
 
 		// get batchSize next objects
 		for j := 0; j+s.batchID < len(s.broken) && j < ecRebBatchSize; j++ {
+			s.onAir.Store(0)
 			if s.mgr.xreb.Aborted() {
 				s.cleanupBatch()
 				return fmt.Errorf("Aborted")
@@ -1587,6 +1764,7 @@ func (s *ecRebalancer) rebalanceGlobal() (err error) {
 			}
 		}
 
+		s.waitECAck()
 		err = s.finalizeBatch()
 		s.cleanupBatch()
 		if err != nil {
@@ -1900,10 +2078,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 	if err != nil {
 		return err
 	}
-	err = lom.Load()
-	if err != nil {
-		return err
-	}
+	lom.Uncache()
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 		glog.Infof("Saving restored full object %s to %q", obj.objName, lom.FQN)
 	}

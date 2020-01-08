@@ -442,8 +442,9 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 
 	if req.Stage == rebStageAbort {
 		// a target aborted its xaction and sent the signal to others
-		glog.Warningf("Got rebalance abort notification from %s", req.DaemonID)
-		if reb.xreb != nil {
+		glog.Warningf("Got rebalance %d abort notification from %s (local RebID: %d)",
+			req.RebID, req.DaemonID, reb.GlobRebID())
+		if reb.xreb != nil && reb.GlobRebID() == req.RebID {
 			reb.xreb.Abort()
 		}
 		return
@@ -467,18 +468,37 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 	reb.setStage(req.DaemonID, req.Stage)
 }
 
+func (reb *Manager) recvECAck(hdr transport.Header) {
+	opaque := string(hdr.Opaque)
+	uid := ackID(hdr.Bucket, hdr.Objname, cmn.ProviderFromBool(hdr.BckIsAIS), string(hdr.Opaque))
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s: EC ack from %s on %s/%s", reb.t.Snode().Name(), opaque, hdr.Bucket, hdr.Objname)
+	}
+	reb.ecReb.ackCTs.mtx.Lock()
+	delete(reb.ecReb.ackCTs.ct, uid)
+	reb.ecReb.ackCTs.mtx.Unlock()
+}
+
 func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 	if err != nil {
 		glog.Error(err)
 		return
 	}
+	// regular rebalance sends "daemonID" as opaque
+	// EC rebalance sends "@sliceID/daemonID" as opaque
+	opaque := string(hdr.Opaque)
+	if strings.HasPrefix(opaque, "@") {
+		reb.recvECAck(hdr)
+		return
+	}
+
 	lom := &cluster.LOM{T: reb.t, Objname: hdr.Objname}
 	if err = lom.Init(hdr.Bucket, cmn.ProviderFromBool(hdr.BckIsAIS)); err != nil {
 		glog.Error(err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: ack from %s on %s", reb.t.Snode().Name(), string(hdr.Opaque), lom)
+		glog.Infof("%s: ack from %s on %s", reb.t.Snode().Name(), opaque, lom)
 	}
 	var (
 		_, idx = lom.Hkey()
