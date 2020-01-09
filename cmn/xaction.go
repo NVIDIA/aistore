@@ -103,9 +103,9 @@ func (xact *XactBase) BckIsAIS() bool          { return xact.bckIsAIS }
 
 func (xact *XactBase) Provider() string {
 	if xact.bckIsAIS {
-		return AIS
+		return ProviderAIS
 	}
-	return Cloud
+	return GCO.Get().CloudProvider
 }
 
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }

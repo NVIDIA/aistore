@@ -272,9 +272,14 @@ func (r *registry) RenewObjsRedundancy(t cluster.Target) {
 		}
 	}
 
-	bowner := t.GetBowner().Get()
-	renewBckRedundacy(bowner.LBmap, cmn.AIS)
-	renewBckRedundacy(bowner.CBmap, cmn.Cloud)
+	var (
+		cfg    = cmn.GCO.Get()
+		bowner = t.GetBowner().Get()
+	)
+	renewBckRedundacy(bowner.LBmap, cmn.ProviderAIS)
+	if cfg.CloudEnabled {
+		renewBckRedundacy(bowner.CBmap, cfg.CloudProvider)
+	}
 }
 
 func (r *registry) RenewBckMakeNCopies(bck *cluster.Bck, t cluster.Target, copies int) {
@@ -498,7 +503,7 @@ func (r *FastRenEntry) Bucket() string { return r.bck.Name }
 
 func (e *FastRenEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
 	if e.phase == cmn.ActBegin {
-		bckTo := &cluster.Bck{Name: e.bucketTo, Provider: cmn.ProviderFromBool(true)}
+		bckTo := &cluster.Bck{Name: e.bucketTo, Provider: cmn.ProviderAIS}
 		bb := Registry.BucketsXacts(bckTo)
 		if num := bb.len(); num > 0 {
 			err = fmt.Errorf("%s: cannot(%s=>%s) with %d in progress", e.Kind(), e.bck.Name, e.bucketTo, num)

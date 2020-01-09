@@ -503,7 +503,7 @@ gfn:
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, cmn.ProviderFromBool(lom.IsAIS()))
+	query.Add(cmn.URLParamProvider, lom.Bck().Provider)
 	query.Add(cmn.URLParamIsGFNRequest, "true")
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,

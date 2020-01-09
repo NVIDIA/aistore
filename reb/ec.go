@@ -841,9 +841,14 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) {
 	bowner := s.t.GetBowner()
 	bmd := bowner.Get()
 	smap := s.t.GetSowner().Get()
-	for idx, tp := range []map[string]*ecRebBck{res.ais, res.cloud} {
+
+	providers := map[string]map[string]*ecRebBck{
+		cmn.ProviderAIS:             res.ais,
+		cmn.GCO.Get().CloudProvider: res.cloud,
+	}
+	for provider, tp := range providers {
 		for bckName, objs := range tp {
-			bck := &cluster.Bck{Name: bckName, Provider: cmn.ProviderFromBool(idx == 0)}
+			bck := &cluster.Bck{Name: bckName, Provider: provider}
 			if err := bck.Init(bowner); err != nil {
 				// bucket might be deleted while rebalancing - skip it
 				glog.Errorf("Invalid bucket %s: %v", bckName, err)
@@ -1027,26 +1032,34 @@ func (s *ecRebalancer) endStreams() {
 // changes internal stage after that to 'traverse done', so the caller may continue
 // rebalancing: send collected data to other targets, rebuild slices etc
 func (s *ecRebalancer) run() {
-	var mpath string
-	wg := sync.WaitGroup{}
-	availablePaths, _ := fs.Mountpaths.Get()
+	var (
+		mpath string
+
+		wg                = sync.WaitGroup{}
+		availablePaths, _ = fs.Mountpaths.Get()
+		cfg               = cmn.GCO.Get()
+	)
+
 	for _, mpathInfo := range availablePaths {
 		if s.mgr.xreb.Bucket() == "" {
-			mpath = mpathInfo.MakePath(ec.MetaType, cmn.AIS)
+			mpath = mpathInfo.MakePath(ec.MetaType, cmn.ProviderAIS)
 		} else {
-			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cmn.AIS)
+			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cmn.ProviderAIS)
 		}
 		wg.Add(1)
 		go s.jog(mpath, &wg)
 	}
-	for _, mpathInfo := range availablePaths {
-		if s.mgr.xreb.Bucket() == "" {
-			mpath = mpathInfo.MakePath(ec.MetaType, cmn.Cloud)
-		} else {
-			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cmn.Cloud)
+
+	if cfg.CloudEnabled {
+		for _, mpathInfo := range availablePaths {
+			if s.mgr.xreb.Bucket() == "" {
+				mpath = mpathInfo.MakePath(ec.MetaType, cfg.CloudProvider)
+			} else {
+				mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cfg.CloudProvider)
+			}
+			wg.Add(1)
+			go s.jog(mpath, &wg)
 		}
-		wg.Add(1)
-		go s.jog(mpath, &wg)
 	}
 	wg.Wait()
 	s.mgr.changeStage(rebStageECNameSpace)

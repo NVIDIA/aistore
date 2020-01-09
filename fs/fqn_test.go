@@ -30,31 +30,31 @@ func TestFQN2Info(t *testing.T) {
 			"cloud as bucket type",
 			"/tmp/obj/cloud/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", "obj", "bucket", cmn.Cloud, "objname", false,
+			"/tmp", "obj", "bucket", cmn.ProviderAmazon, "objname", false,
 		},
 		{
 			"long mount path name",
 			"/tmp/super/long/obj/cloud/bucket/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", "obj", "bucket", cmn.Cloud, "objname", false,
+			"/tmp/super/long", "obj", "bucket", cmn.ProviderAmazon, "objname", false,
 		},
 		{
 			"long mount path name and objname in folder",
 			"/tmp/super/long/obj/cloud/bucket/folder/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", "obj", "bucket", cmn.Cloud, "folder/objname", false,
+			"/tmp/super/long", "obj", "bucket", cmn.ProviderAmazon, "folder/objname", false,
 		},
 		{
 			"multiple mpaths matching, choose the longest",
 			"/tmp/super/long/long/obj/cloud/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/super/long/long"},
-			"/tmp/super/long/long", "obj", "bucket", cmn.Cloud, "folder/objname", false,
+			"/tmp/super/long/long", "obj", "bucket", cmn.ProviderAmazon, "folder/objname", false,
 		},
 		{
 			"dirty mpath",
 			"/tmp/super/long/long/obj/cloud/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/.////super/../super//./long///////////long"},
-			"/tmp/super/long/long", "obj", "bucket", cmn.Cloud, "folder/objname", false,
+			"/tmp/super/long/long", "obj", "bucket", cmn.ProviderAmazon, "folder/objname", false,
 		},
 
 		// bad
@@ -62,45 +62,49 @@ func TestFQN2Info(t *testing.T) {
 			"too short name",
 			"/tmp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", cmn.Cloud, "", true,
+			"", "", "", cmn.ProviderAmazon, "", true,
 		},
 		{
 			"empty bucket name",
 			"/tmp/local//objname",
 			[]string{"/tmp"},
-			"", "", "", cmn.Cloud, "", true,
+			"", "", "", cmn.ProviderAmazon, "", true,
 		},
 		{
 			"empty object name",
 			"/tmp/local//objname",
 			[]string{"/tmp"},
-			"", "", "", cmn.Cloud, "", true,
+			"", "", "", cmn.ProviderAmazon, "", true,
 		},
 		{
 			"empty bucket type",
 			"/tmp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", cmn.Cloud, "", true,
+			"", "", "", cmn.ProviderAmazon, "", true,
 		},
 		{
 			"bad bucket type",
 			"/tmp/local_or_cloud/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", cmn.Cloud, "", true,
+			"", "", "", cmn.ProviderAmazon, "", true,
 		},
 		{
 			"no matching mountpath",
 			"/tmp/local/bucket/objname",
 			[]string{"/tmp/a", "/tmp/b"},
-			"", "", "", cmn.Cloud, "", true,
+			"", "", "", cmn.ProviderAmazon, "", true,
 		},
 		{
 			"fqn is mpath",
 			"/tmp/mpath",
 			[]string{"/tmp/mpath"},
-			"", "", "", cmn.Cloud, "", true,
+			"", "", "", cmn.ProviderAmazon, "", true,
 		},
 	}
+
+	cfg := cmn.GCO.BeginUpdate()
+	cfg.CloudProvider = cmn.ProviderAmazon
+	cmn.GCO.CommitUpdate(cfg)
 
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {

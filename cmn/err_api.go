@@ -75,6 +75,9 @@ func NewErrorCloudBucketOffline(bucket, provider string) *ErrorCloudBucketOfflin
 	return &ErrorCloudBucketOffline{bucket: bucket, provider: provider}
 }
 func (e *ErrorCloudBucketOffline) Error() string {
+	if e.provider == "" {
+		return fmt.Sprintf("cloud bucket %q is unreachable", e.bucket)
+	}
 	return fmt.Sprintf("%s bucket %q is currently unreachable", e.provider, e.bucket)
 }
 

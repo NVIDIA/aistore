@@ -97,7 +97,11 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 		}
 		return
 	}
-	for _, provider := range []string{cmn.AIS, cmn.Cloud} {
+	for _, provider := range []string{cmn.ProviderAIS, cmn.GCO.Get().CloudProvider} {
+		if provider == "" {
+			// Cloud provider can be empty so we do not need to create a directory.
+			continue
+		}
 		if err = fs.Mountpaths.CreateBucketDir(provider); err != nil {
 			if !gfnActive {
 				g.t.gfn.local.Deactivate()

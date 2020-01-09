@@ -390,7 +390,7 @@ func (mgr *Manager) BucketsMDChanged() {
 	}
 
 	for bckName, newBck := range newBckMD.LBmap {
-		bck := &cluster.Bck{Name: bckName, Provider: cmn.ProviderFromBool(true /* is ais */)}
+		bck := &cluster.Bck{Name: bckName, Provider: cmn.ProviderAIS}
 		// Disable EC for buckets that existed and have changed EC.Enabled to false
 		// Enable EC for buckets that existed and have change EC.Enabled to true
 		if oldBck, existed := oldBckMD.LBmap[bckName]; existed {

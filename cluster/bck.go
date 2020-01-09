@@ -91,7 +91,6 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 		} else if bmd.IsCloud(b.Name) {
 			b.Provider = cmn.GCO.Get().CloudProvider
 		} else {
-			b.Provider = cmn.Cloud
 			err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
 		}
 	} else {
@@ -107,9 +106,8 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 		}
 	}
 	if b.IsCloud() && b.Provider != cmn.Cloud {
-		config := cmn.GCO.Get()
-		if b.Provider != config.CloudProvider {
-			err = fmt.Errorf("provider mismatch: %q vs bucket (%s, %s)", config.CloudProvider, b.Name, b.Provider)
+		if cloudProvider := cmn.GCO.Get().CloudProvider; b.Provider != cloudProvider {
+			err = fmt.Errorf("provider mismatch: %q vs bucket (%s, %s)", cloudProvider, b.Name, b.Provider)
 		}
 	}
 	b.Props, _ = bmd.Get(b)

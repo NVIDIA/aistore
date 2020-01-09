@@ -820,15 +820,14 @@ func (r *bckSummaryTask) Run() {
 	if r.bck.Name != "" {
 		buckets = append(buckets, r.bck)
 	} else {
-		// all buckets
 		if r.bck.Provider == "" || cmn.IsProviderAIS(r.bck.Provider) {
 			for name := range bmd.LBmap {
-				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.AIS})
+				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.ProviderAIS})
 			}
 		}
 		if r.bck.Provider == "" || cmn.IsProviderCloud(r.bck.Provider) {
 			for name := range bmd.CBmap {
-				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.Cloud})
+				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.GCO.Get().CloudProvider})
 			}
 		}
 	}

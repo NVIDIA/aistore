@@ -31,6 +31,7 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	var (
 		xreb              *xaction.LocalReb
 		availablePaths, _ = fs.Mountpaths.Get()
+		cfg               = cmn.GCO.Get()
 		pmarker           = cmn.PersistentMarker(cmn.ActLocalReb)
 		file, err         = cmn.CreateFile(pmarker)
 		bucket            string
@@ -57,11 +58,12 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	for _, mpathInfo := range availablePaths {
 		var mpathL string
 		if bucket == "" {
-			mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.AIS)
+			mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.ProviderAIS)
 		} else {
-			mpathL = mpathInfo.MakePathBucket(fs.ObjectType, bucket, cmn.AIS)
+			mpathL = mpathInfo.MakePathBucket(fs.ObjectType, bucket, cmn.ProviderAIS)
 		}
-		jogger := &localJogger{joggerBase: joggerBase{m: reb, mpath: mpathL, xreb: &xreb.RebBase, wg: wg},
+		jogger := &localJogger{
+			joggerBase:        joggerBase{m: reb, mpath: mpathL, xreb: &xreb.RebBase, wg: wg},
 			slab:              slab,
 			skipGlobMisplaced: skipGlobMisplaced,
 		}
@@ -71,14 +73,17 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	if bucket != "" {
 		goto wait
 	}
-	for _, mpathInfo := range availablePaths {
-		mpathC := mpathInfo.MakePath(fs.ObjectType, cmn.Cloud)
-		jogger := &localJogger{joggerBase: joggerBase{m: reb, mpath: mpathC, xreb: &xreb.RebBase, wg: wg},
-			slab:              slab,
-			skipGlobMisplaced: skipGlobMisplaced,
+	if cfg.CloudEnabled {
+		for _, mpathInfo := range availablePaths {
+			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.CloudProvider)
+			jogger := &localJogger{
+				joggerBase:        joggerBase{m: reb, mpath: mpathC, xreb: &xreb.RebBase, wg: wg},
+				slab:              slab,
+				skipGlobMisplaced: skipGlobMisplaced,
+			}
+			wg.Add(1)
+			go jogger.jog()
 		}
-		wg.Add(1)
-		go jogger.jog()
 	}
 wait:
 	glog.Infoln(xreb.String())

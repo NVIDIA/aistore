@@ -639,7 +639,7 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 		prov := lom.ParsedFQN.Provider
 		if provider == "" {
 			provider = prov
-		} else if prov1, _ := cmn.ProviderFromStr(provider); prov1 != prov {
+		} else if provider != prov {
 			return fmt.Errorf("lom-init %s: provider mismatch (%s != %s)", lom.FQN, provider, prov)
 		}
 	}
@@ -936,6 +936,15 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
 		bck, objName = ParseUname(md.uname)
 		err          error
 	)
+	if bck.Provider == cmn.Cloud {
+		// TODO: once the on-disk structure is changed this must be removed.
+		bck.Provider = cmn.GCO.Get().CloudProvider
+	} else {
+		// TODO: once the on-disk structure is changed this must be removed.
+		// This assert is only to not forget this code (should fail when structure changes).
+		cmn.Assert(bck.Provider == cmn.AIS)
+	}
+
 	lom = &LOM{Objname: objName, bck: &bck}
 	bucketExists = bmd.Exists(&bck, md.bckID)
 	if bucketExists {

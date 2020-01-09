@@ -212,11 +212,13 @@ func (t *targetrunner) Run() error {
 		cmn.ExitLogf("%v", err)
 	}
 
-	if err := fs.Mountpaths.CreateBucketDir(cmn.AIS); err != nil {
+	if err := fs.Mountpaths.CreateBucketDir(cmn.ProviderAIS); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	if err := fs.Mountpaths.CreateBucketDir(cmn.Cloud); err != nil {
-		cmn.ExitLogf("%v", err)
+	if cloudProvider := config.CloudProvider; cloudProvider != "" {
+		if err := fs.Mountpaths.CreateBucketDir(cloudProvider); err != nil {
+			cmn.ExitLogf("%v", err)
+		}
 	}
 	t.detectMpathChanges()
 
@@ -226,6 +228,7 @@ func (t *targetrunner) Run() error {
 	} else if config.CloudProvider == cmn.ProviderGoogle {
 		t.cloud = newGCPProvider(t)
 	} else {
+		cmn.AssertMsg(config.CloudProvider == "", fmt.Sprintf("unsupported cloud provider: %s", config.CloudProvider))
 		t.cloud = newEmptyCloud() // mock
 	}
 
@@ -898,13 +901,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketProps = make(cmn.SimpleKVs)
-		if config.CloudProvider == "" {
-			glog.Warningf("%s: %v(%d) - provider is not configured", tname, err, code)
-			bucketProps[cmn.HeaderCloudProvider] = cmn.Cloud
-		} else {
-			glog.Warningf("%s: %s bucket %s, err: %v(%d)", tname, config.CloudProvider, bucket, err, code)
-			bucketProps[cmn.HeaderCloudProvider] = config.CloudProvider
-		}
+		glog.Warningf("%s: %s bucket %s, err: %v(%d)", tname, bck.Provider, bucket, err, code)
+		bucketProps[cmn.HeaderCloudProvider] = bck.Provider
 		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
 	}
 	for k, v := range bucketProps {
@@ -1093,21 +1091,22 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, pr
 		}
 	)
 
-	if provider != cmn.Cloud {
+	if provider == "" || cmn.IsProviderAIS(provider) {
 		for bucket := range bmd.LBmap {
 			bucketNames.AIS = append(bucketNames.AIS, bucket)
 		}
 		sort.Strings(bucketNames.AIS) // sort by name
 	}
-
-	buckets, err, errcode := t.cloud.getBucketNames(t.contextWithAuth(r.Header))
-	if err != nil {
-		errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)
-		t.invalmsghdlr(w, r, errMsg, errcode)
-		return
+	if provider == "" || cmn.IsProviderCloud(provider) {
+		buckets, err, errcode := t.cloud.getBucketNames(t.contextWithAuth(r.Header))
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)
+			t.invalmsghdlr(w, r, errMsg, errcode)
+			return
+		}
+		bucketNames.Cloud = buckets
+		sort.Strings(bucketNames.Cloud) // sort by name
 	}
-	bucketNames.Cloud = buckets
-	sort.Strings(bucketNames.Cloud) // sort by name
 
 	body := cmn.MustMarshal(bucketNames)
 	t.writeJSON(w, r, body, "getbucketnames")

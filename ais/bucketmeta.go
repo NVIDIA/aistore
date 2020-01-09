@@ -111,7 +111,7 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 		mm = m.CBmap
 	}
 	p.CloudProvider = bck.Provider
-	cmn.AssertMsg(cmn.StringInSlice(p.CloudProvider, cmn.Providers), p.CloudProvider)
+	cmn.AssertMsg(cmn.IsValidProvider(p.CloudProvider), p.CloudProvider)
 
 	if _, exists := mm[bck.Name]; exists {
 		return false
@@ -143,7 +143,7 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 		mm = m.CBmap
 	}
 	p.CloudProvider = bck.Provider
-	cmn.AssertMsg(cmn.StringInSlice(p.CloudProvider, cmn.Providers), p.CloudProvider)
+	cmn.AssertMsg(cmn.IsValidProvider(p.CloudProvider), p.CloudProvider)
 
 	prevProps, ok := mm[bck.Name]
 	cmn.Assert(ok)

@@ -40,7 +40,6 @@ var _ = Describe("LOM", func() {
 		mis    []*fs.MountpathInfo
 
 		oldCloudProvider = cmn.GCO.Get().CloudProvider
-		config           = cmn.GCO.BeginUpdate()
 	)
 
 	for i := 0; i < numMpaths; i++ {
@@ -50,6 +49,7 @@ var _ = Describe("LOM", func() {
 		_ = cmn.CreateDir(mpath)
 	}
 
+	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
@@ -90,7 +90,9 @@ var _ = Describe("LOM", func() {
 
 	BeforeEach(func() {
 		// Dummy cloud provider for tests involving cloud buckets
-		cmn.GCO.Get().CloudProvider = cmn.ProviderAmazon
+		config := cmn.GCO.BeginUpdate()
+		config.CloudProvider = cmn.ProviderAmazon
+		cmn.GCO.CommitUpdate(config)
 
 		for _, mpath := range mpaths {
 			_ = fs.Mountpaths.Add(mpath)
@@ -100,7 +102,9 @@ var _ = Describe("LOM", func() {
 	AfterEach(func() {
 		_ = os.RemoveAll(tmpDir)
 
-		cmn.GCO.Get().CloudProvider = oldCloudProvider
+		config := cmn.GCO.BeginUpdate()
+		config.CloudProvider = oldCloudProvider
+		cmn.GCO.CommitUpdate(config)
 	})
 
 	Describe("FQN Resolution", func() {
@@ -143,7 +147,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.IsAIS()).To(BeTrue())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
+				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAIS))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpaths[0]))
 				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketLocalA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
@@ -165,7 +169,7 @@ var _ = Describe("LOM", func() {
 
 		When("run for a cloud bucket", func() {
 			testObject := "foldr/test-obj.ext"
-			desiredCloudFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketCloudA, cmn.Cloud, testObject)
+			desiredCloudFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketCloudA, cmn.ProviderAmazon, testObject)
 
 			It("Should populate fields from Bucket and Objname", func() {
 				// Ensure that it matches desiredCloudFQN
@@ -202,7 +206,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.IsAIS()).To(BeFalse())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.Cloud))
+				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAmazon))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpaths[0]))
 				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketCloudA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
@@ -863,8 +867,8 @@ var _ = Describe("LOM", func() {
 	Describe("local and cloud bucket with the same name", func() {
 		It("should have different fqn", func() {
 			testObject := "foldr/test-obj.ext"
-			desiredLocalFQN := mis[0].MakePathBucketObject(fs.ObjectType, sameBucketName, cmn.AIS, testObject)
-			desiredCloudFQN := mis[0].MakePathBucketObject(fs.ObjectType, sameBucketName, cmn.Cloud, testObject)
+			desiredLocalFQN := mis[0].MakePathBucketObject(fs.ObjectType, sameBucketName, cmn.ProviderAIS, testObject)
+			desiredCloudFQN := mis[0].MakePathBucketObject(fs.ObjectType, sameBucketName, cmn.ProviderAmazon, testObject)
 
 			fs.Mountpaths.Disable(mpaths[1]) // Ensure that it matches desiredCloudFQN
 			fs.Mountpaths.Disable(mpaths[2]) // ditto

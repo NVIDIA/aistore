@@ -435,7 +435,7 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		return nil
 	}
 	// henceforth supporting only ais buckets
-	bck := &cluster.Bck{Name: bucket, Provider: cmn.ProviderFromBool(true /* is ais */)}
+	bck := &cluster.Bck{Name: bucket, Provider: cmn.ProviderAIS}
 	if err := bck.Init(t.bmdowner); err != nil {
 		return err
 	}
@@ -757,7 +757,7 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 				cluster.EvictLomCache(b)
 			}
 		}(bucketsToDelete...)
-		fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false /*false=destroy*/, cmn.AIS, bucketsToDelete...)
+		fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false /*false=destroy*/, cmn.ProviderAIS, bucketsToDelete...)
 	}
 
 	// Create buckets that have been added
@@ -767,16 +767,18 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 			bucketsToCreate = append(bucketsToCreate, bckName)
 		}
 	}
-	fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*true=create*/, cmn.AIS, bucketsToCreate...)
+	fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*true=create*/, cmn.ProviderAIS, bucketsToCreate...)
 
-	bucketsToCreate = make([]string, 0, len(newBMD.CBmap))
-	for bckName := range newBMD.CBmap {
-		if _, ok := bmd.CBmap[bckName]; !ok {
-			bucketsToCreate = append(bucketsToCreate, bckName)
+	cfg := cmn.GCO.Get()
+	if cfg.CloudEnabled {
+		bucketsToCreate = make([]string, 0, len(newBMD.CBmap))
+		for bckName := range newBMD.CBmap {
+			if _, ok := bmd.CBmap[bckName]; !ok {
+				bucketsToCreate = append(bucketsToCreate, bckName)
+			}
 		}
+		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cfg.CloudProvider, bucketsToCreate...)
 	}
-	fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*true=create*/, cmn.Cloud, bucketsToCreate...)
-
 	return
 }
 
@@ -1279,7 +1281,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 		return
 	}
 
-	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
+	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.ProviderAIS}
 	if err = bckTo.Init(t.bmdowner); err != nil {
 		return
 	}

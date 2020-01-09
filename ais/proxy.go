@@ -570,6 +570,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				Method: http.MethodDelete,
 				Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 				Body:   cmn.MustMarshal(msgInt),
+				Query:  url.Values{cmn.URLParamProvider: []string{bck.Provider}},
 			},
 		})
 		for res := range results {
@@ -1972,7 +1973,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	q.Set(cmn.URLParamProvider, cmn.Cloud)
+	q.Set(cmn.URLParamProvider, bck.Provider)
 
 	var (
 		smap          = p.smapowner.get()
@@ -2024,7 +2025,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 	q = url.Values{}
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
-	q.Set(cmn.URLParamProvider, cmn.Cloud)
+	q.Set(cmn.URLParamProvider, bck.Provider)
 	args.req.Query = q
 	results = p.bcastTo(args)
 

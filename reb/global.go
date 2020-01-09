@@ -210,10 +210,13 @@ func (reb *Manager) globalRebRunEC(md *globArgs) error {
 
 // when no bucket has EC enabled
 func (reb *Manager) globalRebRun(md *globArgs) error {
-	wg := &sync.WaitGroup{}
-	ver := md.smap.Version
-	globRebID := reb.globRebID.Load()
-	multiplier := md.config.Rebalance.Multiplier
+	var (
+		wg         = &sync.WaitGroup{}
+		ver        = md.smap.Version
+		globRebID  = reb.globRebID.Load()
+		multiplier = md.config.Rebalance.Multiplier
+		cfg        = cmn.GCO.Get()
+	)
 	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
 	if reb.xreb.Aborted() {
 		err := fmt.Errorf("%s: aborted", reb.loghdr(globRebID, md.smap))
@@ -224,25 +227,31 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 			sema   chan struct{}
 			mpathL string
 		)
-		mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.AIS)
+		mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.ProviderAIS)
 		if multiplier > 1 {
 			sema = make(chan struct{}, multiplier)
 		}
-		rl := &globalJogger{joggerBase: joggerBase{m: reb, mpath: mpathL, xreb: &reb.xreb.RebBase, wg: wg},
-			smap: md.smap, sema: sema, ver: ver}
+		rl := &globalJogger{
+			joggerBase: joggerBase{m: reb, mpath: mpathL, xreb: &reb.xreb.RebBase, wg: wg},
+			smap:       md.smap, sema: sema, ver: ver,
+		}
 		wg.Add(1)
 		go rl.jog()
 	}
-	for _, mpathInfo := range md.paths {
-		var sema chan struct{}
-		mpathC := mpathInfo.MakePath(fs.ObjectType, cmn.Cloud)
-		if multiplier > 1 {
-			sema = make(chan struct{}, multiplier)
+	if cfg.CloudEnabled {
+		for _, mpathInfo := range md.paths {
+			var sema chan struct{}
+			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.CloudProvider)
+			if multiplier > 1 {
+				sema = make(chan struct{}, multiplier)
+			}
+			rc := &globalJogger{
+				joggerBase: joggerBase{m: reb, mpath: mpathC, xreb: &reb.xreb.RebBase, wg: wg},
+				smap:       md.smap, sema: sema, ver: ver,
+			}
+			wg.Add(1)
+			go rc.jog()
 		}
-		rc := &globalJogger{joggerBase: joggerBase{m: reb, mpath: mpathC, xreb: &reb.xreb.RebBase, wg: wg},
-			smap: md.smap, sema: sema, ver: ver}
-		wg.Add(1)
-		go rc.jog()
 	}
 	wg.Wait()
 	if reb.xreb.Aborted() {

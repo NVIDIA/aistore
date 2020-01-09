@@ -123,12 +123,13 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 		foundParts = make(map[string]ecSliceMD)
 		oldest     = time.Now().Add(time.Hour)
 
-		bckType = cmn.AIS
-		bmd     = cluster.NewBaseBownerMock(bucketName)
+		bckProvider = cmn.ProviderAIS
+		bmd         = cluster.NewBaseBownerMock(bucketName)
 	)
 
 	if !o.isAIS {
-		bckType = cmn.Cloud
+		config := getClusterConfig(t, proxyURL)
+		bckProvider = config.CloudProvider
 		bmd.CBmap[bucketName] = cmn.DefaultBucketProps()
 	}
 
@@ -147,7 +148,7 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 		}
 		sliceLom := &cluster.LOM{T: tMock, FQN: path}
 
-		if err = sliceLom.Init("", bckType); err != nil {
+		if err = sliceLom.Init("", bckProvider); err != nil {
 			return nil
 		}
 
@@ -2346,8 +2347,19 @@ func TestECBucketEncode(t *testing.T) {
 }
 
 func init() {
+	primary, err := tutils.GetPrimaryProxy(proxyURL)
+	if err != nil {
+		tutils.Logf("ERROR: %v", err)
+	}
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	cfg, err := api.GetDaemonConfig(baseParams, primary.ID())
+	if err != nil {
+		tutils.Logf("ERROR: %v", err)
+	}
+
 	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
+	config.CloudProvider = cfg.CloudProvider
 	cmn.GCO.CommitUpdate(config)
 
 	fs.InitMountedFS()

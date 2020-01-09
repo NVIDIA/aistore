@@ -1393,7 +1393,7 @@ func TestCopyBucket(t *testing.T) {
 
 				srcBckList, err = api.ListBucket(baseParams, srcm.bucket, nil, 0)
 				tassert.CheckFatal(t, err)
-			} else if cmn.IsProviderCloud(cmn.Cloud) {
+			} else if cmn.IsProviderCloud(test.provider) {
 				srcm.cloudPuts()
 				defer srcm.cloudDelete()
 

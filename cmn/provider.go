@@ -24,7 +24,8 @@ const (
 )
 
 var (
-	Providers = []string{ProviderAmazon, ProviderGoogle, ProviderAIS}
+	Providers      = []string{ProviderAmazon, ProviderGoogle, ProviderAIS}
+	CloudProviders = []string{ProviderAmazon, ProviderGoogle}
 )
 
 var (
@@ -53,12 +54,18 @@ func ProviderFromStr(provider string) (val string, err error) {
 	return
 }
 
+// TODO: should only accept `ProviderAIS`
 func IsProviderAIS(provider string) bool {
 	return provider == AIS || provider == ProviderAIS
 }
 
+// TODO: should only accept `ProviderAmazon` and `ProviderGoogle` (CloudProviders)
 func IsProviderCloud(provider string) bool {
 	return provider == Cloud || provider == ProviderAmazon || provider == ProviderGoogle
+}
+
+func IsValidProvider(provider string) bool {
+	return StringInSlice(provider, Providers)
 }
 
 func validateCloudProvider(provider string, bckIsAIS bool) error {
