@@ -39,7 +39,7 @@ const (
 )
 
 var (
-	nsCache *namespaceCache // Namespace cache for files and directories.
+	ns *namespace // Namespace for files and directories.
 
 	glMem2 *memsys.Mem2 // Global memory manager
 )
@@ -155,7 +155,7 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 	aisfs.root.IncLookupCount()
 	aisfs.inodeTable[fuseops.RootInodeID] = aisfs.root
 
-	nsCache, err = newNsCache(bucket, aisfs.errLog, aisfs.cfg)
+	ns, err = newNamespace(bucket, aisfs.errLog, aisfs.cfg)
 	if err != nil {
 		return nil, err
 	}

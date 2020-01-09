@@ -22,15 +22,15 @@ type Object struct {
 	Atime     time.Time
 }
 
-func NewObject(objName string, bucket *Bucket, sizes ...int64) *Object {
+func NewObject(objName string, bucket Bucket, sizes ...int64) *Object {
 	var size int64
 	if len(sizes) > 0 {
 		size = sizes[0]
 	}
 
 	return &Object{
-		apiParams: bucket.apiParams,
-		bucket:    bucket.name,
+		apiParams: bucket.APIParams(),
+		bucket:    bucket.Name(),
 		Name:      objName,
 		Size:      size,
 		Atime:     time.Now(),

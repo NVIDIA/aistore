@@ -17,7 +17,7 @@ import (
 var _ = Describe("Cache", func() {
 	Describe("internal", func() {
 		var (
-			bck   *ais.Bucket
+			bck   ais.Bucket
 			cache *namespaceCache
 		)
 
@@ -32,7 +32,7 @@ var _ = Describe("Cache", func() {
 				Client: http.DefaultClient,
 				URL:    "",
 			})
-			cache, _ = newNsCache(bck, nil, &ServerConfig{})
+			cache = newNsCache(bck, &ServerConfig{})
 		})
 
 		Describe("add", func() {
@@ -42,7 +42,7 @@ var _ = Describe("Cache", func() {
 					path: fpath,
 					obj:  ais.NewObject(fpath, bck, 1024),
 				})
-				exists, res, entry := cache.exists(fpath)
+				res, entry, exists := cache.lookup(fpath)
 				Expect(exists).To(BeTrue())
 				Expect(res.IsDir()).To(BeFalse())
 				Expect(res.Object).NotTo(BeNil())
@@ -52,7 +52,7 @@ var _ = Describe("Cache", func() {
 				Expect(entry.Name()).To(Equal(fpath))
 
 				for _, dirPath := range subDirs {
-					exists, _, _ = cache.exists(dirPath)
+					_, _, exists = cache.lookup(dirPath)
 					Expect(exists).To(BeTrue())
 				}
 			})
@@ -62,7 +62,7 @@ var _ = Describe("Cache", func() {
 					id:   invalidInodeID,
 					path: dpath,
 				})
-				exists, res, entry := cache.exists(dpath)
+				res, entry, exists := cache.lookup(dpath)
 				Expect(exists).To(BeTrue())
 				Expect(res.IsDir()).To(BeTrue())
 				Expect(res.Object).To(BeNil())
@@ -71,7 +71,7 @@ var _ = Describe("Cache", func() {
 				Expect(entry.Name()).To(Equal(dpath))
 
 				for _, dirPath := range subDirs {
-					exists, _, _ = cache.exists(dirPath)
+					_, _, exists = cache.lookup(dirPath)
 					Expect(exists).To(BeTrue())
 				}
 			})
@@ -84,15 +84,15 @@ var _ = Describe("Cache", func() {
 					path: fpath,
 					obj:  ais.NewObject(fpath, bck, 1024),
 				})
-				exists, _, _ := cache.exists(fpath)
+				_, _, exists := cache.lookup(fpath)
 				Expect(exists).To(BeTrue())
 
 				cache.remove(fpath)
-				exists, _, _ = cache.exists(fpath)
+				_, _, exists = cache.lookup(fpath)
 				Expect(exists).To(BeFalse())
 
 				for _, dirPath := range subDirs {
-					exists, _, _ = cache.exists(dirPath)
+					_, _, exists = cache.lookup(dirPath)
 					Expect(exists).To(BeTrue())
 				}
 			})
@@ -102,15 +102,15 @@ var _ = Describe("Cache", func() {
 					id:   invalidInodeID,
 					path: dpath,
 				})
-				exists, _, _ := cache.exists(dpath)
+				_, _, exists := cache.lookup(dpath)
 				Expect(exists).To(BeTrue())
 
 				cache.remove(dpath)
-				exists, _, _ = cache.exists(dpath)
+				_, _, exists = cache.lookup(dpath)
 				Expect(exists).To(BeFalse())
 
 				for _, dirPath := range subDirs {
-					exists, _, _ = cache.exists(dirPath)
+					_, _, exists = cache.lookup(dirPath)
 					Expect(exists).To(BeTrue())
 				}
 			})
@@ -127,7 +127,7 @@ var _ = Describe("Cache", func() {
 					id:   invalidInodeID,
 					path: dpath,
 				})
-				exists, _, _ := cache.exists(dpath)
+				_, _, exists := cache.lookup(dpath)
 				Expect(exists).To(BeTrue())
 
 				for _, filePath := range filesPaths {
@@ -135,16 +135,16 @@ var _ = Describe("Cache", func() {
 						id:   invalidInodeID,
 						path: filePath,
 					})
-					exists, _, _ := cache.exists(filePath)
+					_, _, exists := cache.lookup(filePath)
 					Expect(exists).To(BeTrue())
 				}
 
 				cache.remove(dpath)
-				exists, _, _ = cache.exists(dpath)
+				_, _, exists = cache.lookup(dpath)
 				Expect(exists).To(BeFalse())
 
 				for _, filePath := range filesPaths {
-					exists, _, _ := cache.exists(filePath)
+					_, _, exists = cache.lookup(filePath)
 					Expect(exists).To(BeFalse())
 				}
 			})
@@ -152,8 +152,8 @@ var _ = Describe("Cache", func() {
 
 		Describe("listEntries", func() {
 			It("should list no entries", func() {
-				var entries []cacheEntry
-				cache.listEntries("", func(v cacheEntry) {
+				var entries []nsEntry
+				cache.listEntries("", func(v nsEntry) {
 					entries = append(entries, v)
 				})
 				Expect(entries).To(HaveLen(0))
@@ -161,7 +161,7 @@ var _ = Describe("Cache", func() {
 
 			It("should list entries for given directory", func() {
 				var (
-					entries []cacheEntry
+					entries []nsEntry
 
 					filesPaths = []string{
 						"a",
@@ -175,7 +175,7 @@ var _ = Describe("Cache", func() {
 					id:   invalidInodeID,
 					path: dpath,
 				})
-				exists, _, _ := cache.exists(dpath)
+				_, _, exists := cache.lookup(dpath)
 				Expect(exists).To(BeTrue())
 
 				for _, filePath := range filesPaths {
@@ -183,11 +183,11 @@ var _ = Describe("Cache", func() {
 						id:   invalidInodeID,
 						path: filePath,
 					})
-					exists, _, _ := cache.exists(filePath)
+					_, _, exists = cache.lookup(filePath)
 					Expect(exists).To(BeTrue())
 				}
 
-				cache.listEntries(dpath, func(v cacheEntry) {
+				cache.listEntries(dpath, func(v nsEntry) {
 					entries = append(entries, v)
 				})
 				Expect(entries).To(HaveLen(3))
@@ -209,7 +209,7 @@ var _ = Describe("Cache", func() {
 
 			It("should only list directories after files are removed", func() {
 				var (
-					entries []cacheEntry
+					entries []nsEntry
 
 					filesPaths = []string{
 						"a",
@@ -223,7 +223,7 @@ var _ = Describe("Cache", func() {
 					id:   invalidInodeID,
 					path: dpath,
 				})
-				exists, _, _ := cache.exists(dpath)
+				_, _, exists := cache.lookup(dpath)
 				Expect(exists).To(BeTrue())
 
 				for _, filePath := range filesPaths {
@@ -231,23 +231,23 @@ var _ = Describe("Cache", func() {
 						id:   invalidInodeID,
 						path: filePath,
 					})
-					exists, _, _ := cache.exists(filePath)
+					_, _, exists := cache.lookup(filePath)
 					Expect(exists).To(BeTrue())
 				}
 
-				cache.listEntries(dpath, func(v cacheEntry) {
+				cache.listEntries(dpath, func(v nsEntry) {
 					entries = append(entries, v)
 				})
 				Expect(entries).To(HaveLen(3))
 
 				for _, filePath := range filesPaths {
 					cache.remove(filePath)
-					exists, _, _ := cache.exists(filePath)
+					_, _, exists := cache.lookup(filePath)
 					Expect(exists).To(BeFalse())
 				}
 
 				entries = nil
-				cache.listEntries(dpath, func(v cacheEntry) {
+				cache.listEntries(dpath, func(v nsEntry) {
 					entries = append(entries, v)
 				})
 

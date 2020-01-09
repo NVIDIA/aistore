@@ -24,12 +24,12 @@ type DirectoryInode struct {
 	baseInode
 
 	parent *DirectoryInode
-	bucket *ais.Bucket
+	bucket ais.Bucket
 
 	entries []fuseutil.Dirent
 }
 
-func NewDirectoryInode(id fuseops.InodeID, attrs fuseops.InodeAttributes, path string, parent *DirectoryInode, bucket *ais.Bucket) Inode {
+func NewDirectoryInode(id fuseops.InodeID, attrs fuseops.InodeAttributes, path string, parent *DirectoryInode, bucket ais.Bucket) Inode {
 	return &DirectoryInode{
 		baseInode: newBaseInode(id, attrs, path),
 		parent:    parent,
@@ -59,7 +59,7 @@ func (dir *DirectoryInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAtt
 // REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) NewFileEntry(entryName string, id fuseops.InodeID, object *ais.Object) {
 	entryName = path.Join(dir.Path(), entryName)
-	nsCache.add(entryFileTy, dtAttrs{id: id, path: entryName, obj: object})
+	ns.add(entryFileTy, dtAttrs{id: id, path: entryName, obj: object})
 
 	// TODO: improve caching entries for `ReadEntries`
 	dir.entries = nil
@@ -68,7 +68,7 @@ func (dir *DirectoryInode) NewFileEntry(entryName string, id fuseops.InodeID, ob
 // REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) ForgetFile(entryName string) {
 	entryName = path.Join(dir.Path(), entryName)
-	nsCache.remove(entryName)
+	ns.remove(entryName)
 
 	// TODO: improve caching entries for `ReadEntries`
 	dir.entries = nil
@@ -77,7 +77,7 @@ func (dir *DirectoryInode) ForgetFile(entryName string) {
 // REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) NewDirEntry(entryName string, id fuseops.InodeID) {
 	entryName = path.Join(dir.Path(), entryName) + separator
-	nsCache.add(entryDirTy, dtAttrs{id: id, path: entryName})
+	ns.add(entryDirTy, dtAttrs{id: id, path: entryName})
 
 	// TODO: improve caching entries for `ReadEntries`
 	dir.entries = nil
@@ -86,7 +86,7 @@ func (dir *DirectoryInode) NewDirEntry(entryName string, id fuseops.InodeID) {
 // REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) ForgetDir(entryName string) {
 	entryName = path.Join(dir.Path(), entryName) + separator
-	nsCache.remove(entryName)
+	ns.remove(entryName)
 
 	// TODO: improve caching entries for `ReadEntries`
 	dir.entries = nil
@@ -99,11 +99,11 @@ func (dir *DirectoryInode) InvalidateInode(entryName string, isDir bool) {
 		entryName += separator
 		ty = entryDirTy
 	}
-	exists, _, _ := nsCache.exists(entryName)
+	_, exists := ns.lookup(entryName)
 	if !exists {
 		return
 	}
-	nsCache.add(ty, dtAttrs{id: invalidInodeID, path: entryName})
+	ns.add(ty, dtAttrs{id: invalidInodeID, path: entryName})
 }
 
 func (dir *DirectoryInode) LinkNewFile(fileName string) (*ais.Object, error) {
@@ -118,7 +118,7 @@ func (dir *DirectoryInode) LinkNewFile(fileName string) (*ais.Object, error) {
 // REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) {
 	// Traverse files and subdirectories of dir read from the bucket.
-	exists, _, _ := nsCache.exists(dir.Path())
+	_, exists := ns.lookup(dir.Path())
 	if !exists {
 		return nil, fuse.ENOENT
 	}
@@ -128,7 +128,7 @@ func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) 
 	}
 
 	var offset fuseops.DirOffset = 1
-	nsCache.listEntries(dir.Path(), func(child cacheEntry) {
+	ns.listEntries(dir.Path(), func(child nsEntry) {
 		dir.entries = append(dir.entries, fuseutil.Dirent{
 			Inode:  child.ID(),
 			Offset: offset,
@@ -161,11 +161,11 @@ func (dir *DirectoryInode) LookupEntry(entryName string) (res EntryLookupResult)
 	)
 
 	// First check for directories
-	exists, res, _ = nsCache.exists(dirEntryName)
+	res, exists = ns.lookup(dirEntryName)
 	if exists {
 		return res
 	}
 
-	_, res, _ = nsCache.exists(objEntryName)
+	res, _ = ns.lookup(objEntryName)
 	return res
 }

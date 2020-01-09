@@ -5,12 +5,10 @@
 package fs
 
 import (
-	"log"
 	"path"
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -38,17 +36,6 @@ import (
 // is directory or not (this requires doing ListObjects what is expensive and
 // can take 1-2sec just to check if the single directory exists).
 
-const (
-	entryFileTy = entryType(fuseutil.DT_File)
-	entryDirTy  = entryType(fuseutil.DT_Directory)
-)
-
-var (
-	// interface guard
-	_ cacheEntry = &fileEntry{}
-	_ cacheEntry = &dirEntry{}
-)
-
 type (
 	// Data type attributes (either for file or directory)
 	dtAttrs struct {
@@ -57,55 +44,19 @@ type (
 		obj  *ais.Object
 	}
 
-	entryType uint8
-
-	cacheEntry interface {
-		Ty() entryType
-		ID() fuseops.InodeID
-		Name() string
-
-		// Valid only for files
-		Object() *ais.Object
-	}
-
-	fileEntry struct {
-		id     fuseops.InodeID
-		object *ais.Object
-	}
-
-	dirEntry struct {
-		id   fuseops.InodeID
-		name string
-	}
-
 	namespaceCache struct {
 		m atomic.Pointer // keeps `*cmn.MultiSyncMap` type
 
 		root       *dirEntry
 		rootDirent *fuseutil.Dirent // contains (constant/cached) dirent for root
 
-		bck *ais.Bucket
+		bck ais.Bucket
 
 		cfg *ServerConfig
-
-		// Determines if the cache was able to read whole namespace into memory.
-		// In case we do have all objects in memory we can enable some of the
-		// performance improvements.
-		containsAllObjects bool
 	}
 )
 
-func (e *fileEntry) Ty() entryType       { return entryFileTy }
-func (e *fileEntry) ID() fuseops.InodeID { return e.id }
-func (e *fileEntry) Name() string        { return e.object.Name }
-func (e *fileEntry) Object() *ais.Object { return e.object }
-
-func (e *dirEntry) Ty() entryType       { return entryDirTy }
-func (e *dirEntry) ID() fuseops.InodeID { return e.id }
-func (e *dirEntry) Name() string        { return e.name }
-func (e *dirEntry) Object() *ais.Object { return nil }
-
-func newNsCache(bck *ais.Bucket, logger *log.Logger, cfg *ServerConfig) (*namespaceCache, error) {
+func newNsCache(bck ais.Bucket, cfg *ServerConfig) *namespaceCache {
 	c := &namespaceCache{
 		bck: bck,
 		cfg: cfg,
@@ -118,32 +69,10 @@ func newNsCache(bck *ais.Bucket, logger *log.Logger, cfg *ServerConfig) (*namesp
 		Type:  fuseutil.DirentType(c.root.Ty()),
 	}
 
-	err := c.refresh()
-
-	if cfg.SyncInterval.Load() > 0 {
-		go func() {
-			for {
-				interval := cfg.SyncInterval.Load()
-				if interval == 0 {
-					// Someone disabled the syncing.
-					return
-				}
-
-				time.Sleep(interval)
-				logger.Printf("syncing with AIS...")
-				if err := c.refresh(); err != nil {
-					logger.Printf("failed to sync, err: %v", err)
-				} else {
-					logger.Printf("syncing has finished successfully")
-				}
-			}
-		}()
-	}
-
-	return c, err
+	return c
 }
 
-func (c *namespaceCache) newFileEntry(dta dtAttrs) cacheEntry {
+func (c *namespaceCache) newFileEntry(dta dtAttrs) nsEntry {
 	// Allow `nil` object only for `invalidInodeID`
 	cmn.Assert(dta.obj != nil || dta.id == invalidInodeID)
 	if dta.obj == nil {
@@ -162,11 +91,14 @@ func (c *namespaceCache) newDirEntry(dta dtAttrs) *dirEntry {
 	}
 }
 
-func (c *namespaceCache) refresh() error {
-	c.containsAllObjects = true
-	newCache := &namespaceCache{
-		bck: c.bck,
-	}
+func (c *namespaceCache) refresh() (bool, error) {
+	var (
+		hasAllObjects = true
+
+		newCache = &namespaceCache{
+			bck: c.bck,
+		}
+	)
 	newCache.m.Store(unsafe.Pointer(&cmn.MultiSyncMap{}))
 
 	var (
@@ -177,11 +109,11 @@ func (c *namespaceCache) refresh() error {
 	for {
 		objs, pageMarker, err = c.bck.ListObjects("", pageMarker, 50_000)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		for _, obj := range objs {
-			exists, _, entry := c.exists(obj.Name)
+			_, entry, exists := c.lookup(obj.Name)
 			id := invalidInodeID
 			if exists {
 				id = entry.ID()
@@ -202,18 +134,18 @@ func (c *namespaceCache) refresh() error {
 		runtime.ReadMemStats(&mem)
 		memLimit := c.cfg.MemoryLimit.Load()
 		if memLimit > 0 && mem.HeapAlloc > memLimit {
-			c.containsAllObjects = false
+			hasAllObjects = false
 			break
 		}
 	}
 
 	c.m.Store(newCache.m.Load())
-	return nil
+	return hasAllObjects, nil
 }
 
 func (c *namespaceCache) add(ty entryType, dta dtAttrs) {
 	var (
-		entry cacheEntry
+		entry nsEntry
 	)
 
 	arms := splitEntryName(dta.path)
@@ -265,29 +197,29 @@ func (c *namespaceCache) remove(p string) {
 	wg.Wait()
 }
 
-func (c *namespaceCache) exists(p string) (exists bool, res EntryLookupResult, entry cacheEntry) {
+func (c *namespaceCache) lookup(p string) (res EntryLookupResult, entry nsEntry, exists bool) {
 	root := c.root
 	if p == "" {
 		res.Entry = c.rootDirent
-		return true, res, root
+		return res, root, true
 	}
 
 	m := c.getCache(p)
 	v, exists := m.Load(p)
 	if !exists {
-		return false, res, entry
+		return res, entry, false
 	}
-	e := v.(cacheEntry)
+	e := v.(nsEntry)
 	res.Object = e.Object()
 	res.Entry = &fuseutil.Dirent{
 		Inode: e.ID(),
 		Name:  e.Name(),
 		Type:  fuseutil.DirentType(e.Ty()),
 	}
-	return true, res, e
+	return res, e, true
 }
 
-func (c *namespaceCache) listEntries(p string, cb func(cacheEntry)) {
+func (c *namespaceCache) listEntries(p string, cb func(nsEntry)) {
 	var (
 		mtx sync.Mutex
 		wg  = &sync.WaitGroup{}
@@ -312,7 +244,7 @@ func (c *namespaceCache) listEntries(p string, cb func(cacheEntry)) {
 				// it at the end of the name (directory).
 				if idx == -1 || idx == (len(name)-1) {
 					mtx.Lock()
-					cb(v.(cacheEntry))
+					cb(v.(nsEntry))
 					mtx.Unlock()
 				}
 				return true
