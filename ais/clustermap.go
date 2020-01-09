@@ -186,21 +186,28 @@ func (m *smapX) deepCopy(dst *smapX) {
 	}
 }
 
-func (m *smapX) merge(dst *smapX) {
-	for id, v := range m.Tmap {
+func (m *smapX) merge(dst *smapX) (added int) {
+	for id, si := range m.Tmap {
 		if _, ok := dst.Tmap[id]; !ok {
 			if _, ok = dst.Pmap[id]; !ok {
-				dst.Tmap[id] = v
+				dst.Tmap[id] = si
+				added++
 			}
 		}
 	}
-	for id, v := range m.Pmap {
+	for id, si := range m.Pmap {
 		if _, ok := dst.Pmap[id]; !ok {
 			if _, ok = dst.Tmap[id]; !ok {
-				dst.Pmap[id] = v
+				dst.Pmap[id] = si
+				added++
 			}
 		}
 	}
+	if m.Origin != 0 && dst.Origin == 0 {
+		dst.Origin = m.Origin
+		dst.CreationTime = m.CreationTime
+	}
+	return
 }
 
 /* TODO -- FIXME: make use

@@ -131,6 +131,8 @@ type (
 	errTgtBmdOriginDiffer struct{ detail string }
 	errPrxBmdOriginDiffer struct{ detail string }
 	errBmdOriginSplit     struct{ detail string }
+	// ditto Smap
+	errSmapOriginDiffer struct{ detail string }
 )
 
 const (
@@ -146,6 +148,7 @@ var errNoBMD = errors.New("no bucket metadata")
 func (e errTgtBmdOriginDiffer) Error() string { return e.detail }
 func (e errBmdOriginSplit) Error() string     { return e.detail }
 func (e errPrxBmdOriginDiffer) Error() string { return e.detail }
+func (e errSmapOriginDiffer) Error() string   { return e.detail }
 
 ////////////////
 // glogWriter //
@@ -932,14 +935,14 @@ func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, 
 // metasync Rx handlers //
 //////////////////////////
 
-func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newSmap *smapX, msgInt *actionMsgInternal, err error) {
+func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap *smapX, msgInt *actionMsgInternal, err error) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
 	newSmap, msgInt = &smapX{}, &actionMsgInternal{}
 	smapValue := payload[smaptag]
 	if err1 := jsoniter.Unmarshal([]byte(smapValue), newSmap); err1 != nil {
-		err = fmt.Errorf("failed to unmarshal new smap, value (%+v, %T), err: %v", smapValue, smapValue, err1)
+		err = fmt.Errorf("failed to unmarshal new Smap, value (%+v, %T), err: %v", smapValue, smapValue, err1)
 		return
 	}
 	if msgValue, ok := payload[smaptag+actiontag]; ok {
@@ -967,44 +970,50 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newSmap *smapX, msgInt 
 	if msgInt.Action != "" {
 		s = ", action " + msgInt.Action
 	}
+	if err = h.validateOriginSmap(smap, nil, newSmap, caller); err != nil {
+		glog.Error(err)
+		newSmap = nil
+		return
+	}
 	glog.Infof("%s: receive %s (local %s)%s", hname, newSmap.StringEx(), smap.StringEx(), s)
+	sameOrigin, sameVersion, eq := smap.Compare(&newSmap.Smap)
+	cmn.Assert(sameOrigin)
 	if newSmap.version() < myver {
-		smap.Smap.Version = newSmap.version()
-		eq := smap.Equals(&newSmap.Smap)
-		smap.Smap.Version = myver
-		if eq {
-			glog.Warningf("%s: %s and %s are otherwise identical", hname, newSmap.StringEx(), smap.StringEx())
-			newSmap = nil
-		} else {
+		cmn.Assert(!sameVersion)
+		if !eq {
 			err = fmt.Errorf("%s: attempt to downgrade %s to %s", hname, smap.StringEx(), newSmap.StringEx())
-			glog.Error(err)
 			newSmap = nil
 			return
 		}
+		glog.Warningf("%s: %s and %s are otherwise identical", hname, newSmap.StringEx(), smap.StringEx())
+		newSmap = nil
 	}
 	return
 }
 
-func (h *httprunner) extractbucketmd(payload cmn.SimpleKVs) (newBMD *bucketMD, msgInt *actionMsgInternal, err error) {
-	if _, ok := payload[bucketmdtag]; !ok {
+func (h *httprunner) extractBMD(payload cmn.SimpleKVs) (newBMD *bucketMD, msgInt *actionMsgInternal, err error) {
+	hname := h.si.Name()
+	if _, ok := payload[bmdtag]; !ok {
 		return
 	}
 	newBMD, msgInt = &bucketMD{}, &actionMsgInternal{}
-	bmdValue := payload[bucketmdtag]
+	bmdValue := payload[bmdtag]
 	if err1 := jsoniter.Unmarshal([]byte(bmdValue), newBMD); err1 != nil {
-		err = fmt.Errorf("failed to unmarshal new %s, value (%+v, %T), err: %v", bmdTermName, bmdValue, bmdValue, err1)
+		err = fmt.Errorf("%s: failed to unmarshal new %s, value (%+v, %T), err: %v",
+			hname, bmdTermName, bmdValue, bmdValue, err1)
 		return
 	}
-	if msgValue, ok := payload[bucketmdtag+actiontag]; ok {
+	if msgValue, ok := payload[bmdtag+actiontag]; ok {
 		if err1 := jsoniter.Unmarshal([]byte(msgValue), msgInt); err1 != nil {
-			err = fmt.Errorf("failed to unmarshal action message, value (%+v, %T), err: %v", msgValue, msgValue, err1)
+			err = fmt.Errorf("%s: failed to unmarshal action message, value (%+v, %T), err: %v",
+				hname, msgValue, msgValue, err1)
 			return
 		}
 	}
-	curVersion := h.bmdowner.get().version()
-	if newBMD.version() <= curVersion {
-		if newBMD.version() < curVersion {
-			err = fmt.Errorf("attempt to downgrade %s v%d to v%d", bmdTermName, curVersion, newBMD.version())
+	bmd := h.bmdowner.get()
+	if newBMD.version() <= bmd.version() {
+		if newBMD.version() < bmd.version() {
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", hname, bmd.StringEx(), newBMD.StringEx())
 		}
 		newBMD = nil
 	}
@@ -1100,7 +1109,8 @@ func (h *httprunner) join(query url.Values) (res callResult) {
 	return
 }
 
-func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values, keepalive bool) (res callResult) {
+func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration,
+	query url.Values, keepalive bool) (res callResult) {
 	req := targetRegMeta{SI: h.si}
 	if h.si.IsTarget() && !keepalive {
 		req.BMD = h.bmdowner.get()
@@ -1126,6 +1136,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 		},
 		timeout: tout,
 	}
+	var err error
 	for rcount := 0; rcount < 2; rcount++ {
 		res = h.call(callArgs)
 		if res.err == nil {
@@ -1135,11 +1146,12 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 			return
 		}
 		if cmn.IsErrConnectionRefused(res.err) {
-			glog.Errorf("%s: (register => %s[%s]: connection refused)", h.si, url, path)
+			err = errors.New("connection refused")
 		} else {
-			glog.Errorf("%s: (register => %s[%s]: %v)", h.si, url, path, res.err)
+			err = res.err
 		}
 	}
+	glog.Errorf("%s: (%s: %v)", h.si, psi, err)
 	return
 }
 
@@ -1162,19 +1174,47 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 	return
 }
 
-func (h *httprunner) checkBMDcompat(nsi *cluster.Snode, nbmd *bucketMD) (err error) {
-	var nsiname = "???"
+func (h *httprunner) validateOriginBMD(bmd *bucketMD, nsi *cluster.Snode, nbmd *bucketMD, caller string) (err error) {
+	if nbmd == nil || nbmd.Version == 0 || bmd.Version == 0 {
+		return
+	}
+	if bmd.Origin == 0 || nbmd.Origin == 0 {
+		return
+	}
+	if bmd.Origin == nbmd.Origin {
+		return
+	}
+	nsiname := caller
 	if nsi != nil {
 		nsiname = nsi.Name()
+	} else if nsiname == "" {
+		nsiname = "???"
 	}
-	if nbmd != nil && nbmd.Version != 0 {
-		bmd := h.bmdowner.get()
-		if bmd.Origin != 0 && nbmd.Origin != 0 && bmd.Version != 0 && bmd.Origin != nbmd.Origin {
-			s := fmt.Sprintf("%s BMD-origin (v%d, %d) is incompatible with %s (v%d, %d)",
-				h.si.Name(), bmd.Version, bmd.Origin, nsiname, nbmd.Version, nbmd.Origin)
-			return &errPrxBmdOriginDiffer{s}
-		}
+	s := fmt.Sprintf("%s: BMDs have different origins: %s vs %s: %s",
+		h.si.Name(), bmd.StringEx(), nsiname, nbmd.StringEx())
+	err = &errPrxBmdOriginDiffer{s}
+	return
+}
+
+func (h *httprunner) validateOriginSmap(smap *smapX, nsi *cluster.Snode, newSmap *smapX, caller string) (err error) {
+	if newSmap == nil || newSmap.Version == 0 {
+		return
 	}
+	if smap.Origin == 0 || newSmap.Origin == 0 {
+		return
+	}
+	if smap.Origin == newSmap.Origin {
+		return
+	}
+	nsiname := caller
+	if nsi != nil {
+		nsiname = nsi.Name()
+	} else if nsiname == "" {
+		nsiname = "???"
+	}
+	s := fmt.Sprintf("%s: Smaps have different origins: %s vs %s: %s",
+		h.si.Name(), smap.StringEx(), nsiname, newSmap.StringEx())
+	err = &errSmapOriginDiffer{s}
 	return
 }
 

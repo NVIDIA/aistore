@@ -124,20 +124,19 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 		if err != nil && !cmn.IsErrConnectionRefused(err) {
 			return nil, err
 		}
-
-		doCheckSMap := (totalTargets == 0 || smap.CountTargets() == totalTargets) &&
-			(totalProxies == 0 || smap.CountProxies() == totalProxies)
+		ts, ps := smap.CountTargets(), smap.CountProxies()
+		doCheckSMap := (totalTargets == 0 || ts == totalTargets) && (totalProxies == 0 || ps == totalProxies)
 		if !doCheckSMap {
 			d := time.Since(timeStart)
 			expectedTargets, expectedProxies := totalTargets, totalProxies
 			if totalTargets == 0 {
-				expectedTargets = smap.CountTargets()
+				expectedTargets = ts
 			}
 			if totalProxies == 0 {
-				expectedProxies = smap.CountProxies()
+				expectedProxies = ps
 			}
-			Logf("Smap is not updated yet at %s, targets: %d/%d, proxies: %d/%d (%v)\n",
-				proxyURL, smap.CountTargets(), expectedTargets, smap.CountProxies(), expectedProxies, d.Truncate(time.Second))
+			Logf("waiting for Smap at %s[t%d/%d, p%d/%d] (%v)\n", proxyURL, ts, expectedTargets, ps, expectedProxies,
+				d.Truncate(time.Second))
 		}
 
 		// if the primary's map changed to the state we want, wait for the map get populated

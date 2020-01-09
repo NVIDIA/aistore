@@ -17,7 +17,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const maxRetrySeconds = 5
+const maxRetrySeconds = 4
 
 // Background:
 // 	- Each proxy/gateway stores a local copy of the cluster map (Smap)
@@ -25,9 +25,8 @@ const maxRetrySeconds = 5
 // 	- Only the primary (leader) proxy distributes Smap updates to all other clustered nodes
 // 	- Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
 func (p *proxyrunner) bootstrap() {
-	const fmd = "%s: discovered %s (primary=%s): %s local %s (primary=%s)"
 	var (
-		found, smap       *smapX
+		smap              *smapX
 		url               string
 		pname             = p.si.Name()
 		config            = cmn.GCO.Get()
@@ -38,93 +37,53 @@ func (p *proxyrunner) bootstrap() {
 	smap.Pmap[p.si.DaemonID] = p.si
 	if err := p.smapowner.load(smap, config); err == nil {
 		loaded = true
-		found = p.bootstrapSmap(smap)
 	}
-	// 2: having local Smap, plus, maybe, discovered max-version Smap, plus env "AIS_PRIMARYPROXY"
-	//    we figure out if this proxy *may be* the primary and proceed to start it up as such
-	//    until and if there's more evidence that points to the contrary.
-	if found != nil {
-		if smap.version() == found.version() {
-			// do nothing
-		} else if smap.version() > found.version() {
-			glog.Infof(fmd, pname, found, found.ProxySI.DaemonID, "merging", smap, smap.ProxySI.DaemonID)
-			found.merge(smap)
-		} else {
-			glog.Infof(fmd, pname, found, found.ProxySI.DaemonID, "overriding", smap, smap.ProxySI.DaemonID)
-			smap = found
-		}
-	}
-	// 3: decide whether this starting-up proxy is primary
+	// 2: am primary (tentative)
+	primaryEnv, _ := cmn.ParseBool(os.Getenv("AIS_PRIMARYPROXY"))
+	glog.Infof("%s: %s, loaded=%t, primary-env=%t", pname, smap.StringEx(), loaded, primaryEnv)
 	if loaded {
-		var disagreement = found != nil && smap.ProxySI.DaemonID != found.ProxySI.DaemonID
-		if disagreement {
-			// NOTE: potential split-brain down the road
-			glog.Warningf("%s: discovered Smap has a different primary %s", pname, found.ProxySI.Name())
-		}
 		secondary = !smap.isPrimary(p.si)
 		if secondary {
 			url = smap.ProxySI.IntraControlNet.DirectURL
 			// TODO if disagreement: url2 = found.ProxySI.IntraControlNet.DirectURL - and use it
-		} else if disagreement {
-			glog.Warningf("%s: proceeding as primary anyway...", pname)
 		}
 	} else {
-		secondary = os.Getenv("AIS_PRIMARYPROXY") == ""
+		secondary = !primaryEnv
+		smap = nil
 		if secondary {
 			url = config.Proxy.PrimaryURL // NOTE: PublicNet, not IntraControlNet
-		} else {
-			smap.ProxySI = p.si
 		}
 	}
 	// 4: join cluster as secondary
 	if secondary {
 		glog.Infof("%s: starting up as non-primary, joining via %s", pname, url)
-		p.secondaryStartup(url)
+		var err error
+		if err = p.secondaryStartup(url); err != nil {
+			if loaded {
+				maxVerSmap, _ := p.uncoverMeta(smap)
+				if maxVerSmap != nil && maxVerSmap.ProxySI != nil {
+					url = maxVerSmap.ProxySI.IntraControlNet.DirectURL
+					glog.Infof("%s: second attempt - join via %s", pname, url)
+					err = p.secondaryStartup(url)
+				}
+			}
+		}
+		if err != nil {
+			glog.Fatalf("FATAL: %s failed to join, err: %v", pname, err)
+		}
 		return
 	}
-	// 5: keep starting up as a primary - for now
+	// 5: keep starting up as a primary
 	glog.Infof("%s: assuming the primary role for now, starting up...", pname)
-	go p.primaryStartup(smap, clivars.ntargets)
-}
-
-func (p *proxyrunner) bootstrapSmap(smap *smapX) (found *smapX) {
-	if smap.CountTargets() == 0 && smap.CountProxies() <= 1 {
-		return
-	}
-	pname := p.si.Name()
-	q := url.Values{}
-	glog.Infof("%s: fast discovery based on %s", pname, smap.pp())
-	q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
-	url := cmn.URLPath(cmn.Version, cmn.Daemon)
-	results := p.bcastGet(bcastArgs{req: cmn.ReqArgs{Path: url, Query: q}, smap: smap, to: cluster.AllNodes})
-	for res := range results {
-		if res.err != nil {
-			continue
-		}
-		svm := SmapVoteMsg{}
-		if err := jsoniter.Unmarshal(res.outjson, &svm); err != nil {
-			continue
-		}
-		if svm.Smap == nil || svm.Smap.version() == 0 {
-			continue
-		}
-		if svm.VoteInProgress {
-			found = nil // unusable
-			break
-		}
-		if found == nil || svm.Smap.version() > found.version() {
-			found = svm.Smap
-			glog.Infof("%s: found %s from %s", pname, found, res.si)
-		}
-	}
-	return
+	go p.primaryStartup(smap, config, clivars.ntargets)
 }
 
 // no change of mind when on the "secondary" track
-func (p *proxyrunner) secondaryStartup(getSmapURL string) {
+func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 	var (
 		config = cmn.GCO.Get()
 		query  = url.Values{}
+		pname  = p.si.Name()
 	)
 	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
 	req := cmn.ReqArgs{
@@ -134,7 +93,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 		Query:  query,
 	}
 	// get Smap
-	f := func() {
+	f := func() error {
 		var (
 			res  callResult
 			args = callArgs{
@@ -147,7 +106,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			res = p.call(args)
 			if res.err != nil {
 				if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
-					glog.Errorf("%s: get Smap from primary %s - retrying...", p.si.Name(), getSmapURL)
+					glog.Errorf("%s: get Smap from primary %s - retrying...", pname, getSmapURL)
 					time.Sleep(config.Timeout.CplaneOperation)
 					continue
 				}
@@ -155,7 +114,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			break
 		}
 		if res.err != nil {
-			glog.Fatalf("FATAL: error getting Smap from primary %s: %v", getSmapURL, res.err)
+			return res.err
 		}
 		smap := &smapX{}
 		err := jsoniter.Unmarshal(res.outjson, smap)
@@ -164,10 +123,13 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			glog.Fatalf("FATAL: invalid Smap at startup/registration: %s", smap.pp())
 		}
 		p.smapowner.put(smap) // put Smap
+		return nil
 	}
 
 	// get Smap -- wait some -- use the Smap to register self
-	f()
+	if err := f(); err != nil {
+		return err
+	}
 	if err := p.registerWithRetry(); err != nil {
 		glog.Fatalf("FATAL: %v", err)
 	}
@@ -177,97 +139,111 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if !smap.isPresent(p.si) {
-		glog.Fatalf("FATAL: %s failed to register self - not present in the %s", p.si.Name(), smap.pp())
+		glog.Fatalf("FATAL: %s failed to register self - not present in the %s", pname, smap.pp())
 	}
 	if err := p.smapowner.persist(smap); err != nil {
 		glog.Fatalf("FATAL: %s", err)
 	}
 	p.smapowner.Unlock()
-	p.startedUp.Store(true) // joined as non-primary and started up
+	p.startedUp.Store(true)
+	glog.Infof("%s: joined as non-primary, %s", pname, smap.StringEx())
+	return nil
 }
 
 // proxy/gateway that is, potentially, the leader of the cluster
 // waits a configured time for other nodes to join,
 // discoveris cluster-wide metadata, and resolve remaining conflicts
-func (p *proxyrunner) primaryStartup(loadedSmap *smapX, ntargets int) {
+func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int) {
 	const (
 		metaction1 = "early-start-have-registrations"
 		metaction2 = "primary-started-up"
 	)
 	var (
-		smap                     *smapX
-		emptySmap                = newSmap()
-		ver                      = loadedSmap.version()
-		haveRegistratons, merged bool
+		smap             = newSmap()
+		pname            = p.si.Name()
+		haveRegistratons bool
 	)
-	p.smapowner.Lock()
-	emptySmap.Pmap[p.si.DaemonID] = p.si
-	emptySmap.ProxySI = p.si
-	p.smapowner.put(emptySmap)
-	p.smapowner.Unlock() // starting up with an empty Smap version = 0
 
-	// startup: accept registrations aka joins
-	p.startup(ntargets)
-
+	// 1: init Smap to accept reg-s
 	p.smapowner.Lock()
-	smap = p.smapowner.get()
-	if !smap.isPrimary(p.si) {
-		p.smapowner.Unlock()
-		glog.Infof("%s: change of mind #1: registering with %s", p.si.Name(), smap.ProxySI.IntraControlNet.DirectURL)
-		p.secondaryStartup(smap.ProxySI.IntraControlNet.DirectURL)
-		return
-	}
-	if smap.version() > 0 {
-		cmn.Assert(smap.CountTargets() > 0 || smap.CountProxies() > 1)
-		haveRegistratons = true
-		v := smap.version()
-		smap.Smap.Version = ver
-		if !loadedSmap.Equals(&smap.Smap) {
-			smap.Smap.Version = v
-			loadedSmap.merge(smap)
-			smap.Smap.Version = cmn.MaxI64(v, ver) + 1
-			p.smapowner.put(smap)
-			merged = true
-		}
-	}
-	if !merged {
-		p.smapowner.put(loadedSmap)
-		smap = loadedSmap
-	}
+	smap.Pmap[p.si.DaemonID] = p.si
+	smap.ProxySI = p.si
+	p.smapowner.put(smap)
 	p.smapowner.Unlock()
 
+	maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
+	if maxVerSmap != nil {
+		maxVerSmap.Pmap[p.si.DaemonID] = p.si
+		p.smapowner.put(maxVerSmap)
+		glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
+			pname, maxVerSmap.ProxySI.DaemonID, maxVerSmap.ProxySI.IntraControlNet.DirectURL)
+		p.secondaryStartup(maxVerSmap.ProxySI.IntraControlNet.DirectURL)
+		return
+	}
+
+	smap = p.smapowner.get()
+	haveRegistratons = smap.CountTargets() > 0 || smap.CountProxies() > 1
+
+	// 2: merging local => boot
 	if haveRegistratons {
-		if merged {
-			glog.Infof("%s: merged loaded %s", p.si.Name(), loadedSmap)
+		var added int
+		if loadedSmap != nil {
+			added = smap.merge(loadedSmap)
+			p.smapowner.Lock()
+			smap = loadedSmap
+			if added > 0 {
+				smap.Version = smap.Version + int64(added) + 1
+			}
+			p.smapowner.put(smap)
+			p.smapowner.Unlock()
 		}
-		glog.Infof("%s: %s => %s", p.si.Name(), loadedSmap, smap.StringEx())
+		glog.Infof("%s: initial %s, curr %s, added=%d", pname, loadedSmap, smap.StringEx(), added)
 		bmd := p.bmdowner.get()
 		msgInt := p.newActionMsgInternalStr(metaction1, smap, bmd)
 		p.metasyncer.sync(true, revspair{smap, msgInt}, revspair{bmd, msgInt})
 	} else {
-		glog.Infof("%s: no registrations yet", p.si.Name())
+		glog.Infof("%s: no registrations yet", pname)
+		if loadedSmap != nil {
+			glog.Infof("%s: keep going w/ local %s", pname, loadedSmap.StringEx())
+			p.smapowner.Lock()
+			smap = loadedSmap
+			p.smapowner.put(smap)
+			p.smapowner.Unlock()
+		}
 	}
 
-	// discover cluster-wide metadata and resolve remaining conflicts, if any
-	p.discoverMeta(haveRegistratons)
-	smap = p.smapowner.get()
+	// 3: discover cluster meta and resolve remaining conflicts, if any
+	p.discoverMeta(smap)
 
+	// 4: still primary?
+	p.smapowner.Lock()
+	smap = p.smapowner.get()
 	if !smap.isPrimary(p.si) {
-		glog.Infof("%s: change of mind #2: registering with %s", p.si.Name(), smap.ProxySI.IntraControlNet.DirectURL)
+		p.smapowner.Unlock()
+		glog.Infof("%s: registering with %s(%s)", pname, smap.ProxySI.DaemonID, smap.ProxySI.IntraControlNet.DirectURL)
 		p.secondaryStartup(smap.ProxySI.IntraControlNet.DirectURL)
 		return
 	}
 
-	if err := p.smapowner.persist(p.smapowner.get()); err != nil {
+	// 5:  persist and finalize w/ sync + BMD
+	if smap.Origin == 0 {
+		clone := smap.clone()
+		clone.Origin, clone.CreationTime = newOriginMD() // new origin
+		clone.Version++
+		p.smapowner.put(clone)
+		smap = clone
+	}
+	if err := p.smapowner.persist(smap); err != nil {
 		glog.Fatalf("FATAL: %s", err)
 	}
+	p.smapowner.Unlock()
+
 	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
-	// create BMD(new origin)
 	if bmd.Version == 0 {
 		clone := bmd.clone()
-		clone.Version = 1
-		clone.Origin = newBMDorigin()
+		clone.Version = 1 // init BMD
+		clone.Origin = smap.Origin
 		p.bmdowner.put(clone)
 		bmd = clone
 	}
@@ -277,154 +253,137 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, ntargets int) {
 	p.setGlobRebID(smap, msgInt, false /*set*/)
 	p.metasyncer.sync(false, revspair{smap, msgInt}, revspair{bmd, msgInt})
 
-	glog.Infof("%s: primary/cluster startup complete, %s", p.si.Name(), smap.StringEx())
-	p.startedUp.Store(true) // started up as primary
+	// 6: started up as primary
+	glog.Infof("%s: primary/cluster startup complete, %s", pname, smap.StringEx())
+	p.startedUp.Store(true)
 }
 
-func (p *proxyrunner) startup(ntargets int) {
-	started := time.Now()
-	for time.Since(started) < cmn.GCO.Get().Timeout.Startup {
-		smap := p.smapowner.get()
+func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config, ntargets int) (maxVerSmap *smapX) {
+	var (
+		started  = time.Now()
+		pname    = p.si.Name()
+		deadline = config.Timeout.Startup
+		wtime    = deadline / 2 // note below
+		nt       int
+		checked  = loadedSmap == nil
+		slowp    bool
+	)
+	cmn.Assert(smap.CountTargets() == 0)
+	for time.Since(started) < wtime {
+		time.Sleep(time.Second)
+		smap = p.smapowner.get()
 		if !smap.isPrimary(p.si) {
 			break
 		}
-		nt := smap.CountTargets()
+		nt = smap.CountTargets()
 		if nt >= ntargets && ntargets > 0 {
-			glog.Infof("%s: reached the specified ntargets %d (curr=%d)", p.si.Name(), ntargets, nt)
+			glog.Infof("%s: reached the specified ntargets %d (curr=%d)", pname, ntargets, nt)
 			return
 		}
-		time.Sleep(time.Second)
+		if nt > 0 {
+			wtime = deadline // NOTE: full configured time in presence of "live" registrations
+		}
+		// check whether the cluster has moved on (but only once)
+		if !checked && loadedSmap.CountTargets() > 0 && time.Since(started) > 2*config.Timeout.MaxKeepalive {
+			checked = true
+			q := url.Values{}
+			url := cmn.URLPath(cmn.Version, cmn.Daemon)
+			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
+			args := bcastArgs{req: cmn.ReqArgs{Path: url, Query: q}, smap: loadedSmap, to: cluster.AllNodes}
+			maxVerSmap, _, _, slowp = p.bcastMaxVer(args, nil, nil)
+			if maxVerSmap != nil && !slowp {
+				if maxVerSmap.Origin == loadedSmap.Origin && maxVerSmap.version() > loadedSmap.version() {
+					if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.DaemonID != p.si.DaemonID {
+						glog.Infof("%s: %s <= max-ver %s", pname, loadedSmap.StringEx(), maxVerSmap.StringEx())
+						return
+					}
+				}
+			}
+			maxVerSmap = nil
+		}
 	}
-	nt := p.smapowner.get().CountTargets()
+	nt = p.smapowner.get().CountTargets()
 	if nt > 0 {
-		glog.Warningf("%s: timed-out waiting for %d ntargets (curr=%d)", p.si.Name(), ntargets, nt)
+		glog.Warningf("%s: timed-out waiting for %d ntargets (curr=%d)", pname, ntargets, nt)
 	}
+	return
 }
 
 // the final major step in the primary startup sequence:
 // discover cluster-wide metadata and resolve remaining conflicts
-func (p *proxyrunner) discoverMeta(haveRegistratons bool) {
+func (p *proxyrunner) discoverMeta(smap *smapX) {
 	var (
-		pname    = p.si.Name()
-		now      = time.Now()
-		deadline = now.Add(cmn.GCO.Get().Timeout.Startup)
+		pname                 = p.si.Name()
+		maxVerSmap, maxVerBMD = p.uncoverMeta(smap)
 	)
-	maxVerSmap, bucketmd := p.meta(deadline)
-	if bucketmd != nil {
+	if maxVerBMD != nil {
 		p.bmdowner.Lock()
-		if p.bmdowner.get().version() < bucketmd.version() {
-			p.bmdowner.put(bucketmd)
+		bmd := p.bmdowner.get()
+		if bmd == nil || bmd.version() < maxVerBMD.version() {
+			p.bmdowner.put(maxVerBMD)
 		}
 		p.bmdowner.Unlock()
 	}
 	if maxVerSmap == nil || maxVerSmap.version() == 0 {
-		glog.Infof("%s: Smap discovery: none discovered", pname)
+		glog.Infof("%s: no max-ver Smaps", pname)
 		return
 	}
-	smap := p.smapowner.get()
-	if !haveRegistratons {
-		// with no "live" registrations during p.startup() we use discovered Smap
-		glog.Infof("%s: overriding local/merged Smap with the discovered %s", pname, maxVerSmap.pp())
-		p.smapowner.put(maxVerSmap)
+	glog.Infof("%s: local %s max-ver %s", pname, smap.StringEx(), maxVerSmap.StringEx())
+	sameOrigin, sameVersion, eq := smap.Compare(&maxVerSmap.Smap)
+	if !sameOrigin {
+		// FATAL
+		glog.Fatalf("%s %s: split-brain origin %s", pname, smap.StringEx(), maxVerSmap.StringEx())
+	}
+	if eq && sameVersion {
 		return
 	}
-	// check for split-brain
 	if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.DaemonID != p.si.DaemonID {
-		glog.Errorf("%s: split-brain (local/merged %s, primary=%s) vs (discovered %s, primary=%s)",
-			pname, smap, smap.ProxySI.Name(), maxVerSmap, maxVerSmap.ProxySI.Name())
-		glog.Flush()
+		if maxVerSmap.version() > smap.version() {
+			glog.Infof("%s: change-of-mind #2 %s <= max-ver %s", pname, smap.StringEx(), maxVerSmap.StringEx())
+			maxVerSmap.Pmap[p.si.DaemonID] = p.si
+			p.smapowner.put(maxVerSmap)
+			return
+		}
+		glog.Fatalf("%s: split-brain local %s vs %s(%s)",
+			pname, smap.StringEx(), maxVerSmap.ProxySI.Name(), maxVerSmap.StringEx())
 	}
-	if !smap.Equals(&maxVerSmap.Smap) {
-		glog.Infof("%s %s: merging discovered %s", pname, smap, maxVerSmap.StringEx())
-		p.smapowner.Lock()
-		clone := p.smapowner.get().clone()
+	p.smapowner.Lock()
+	clone := p.smapowner.get().clone()
+	if !eq {
 		maxVerSmap.merge(clone)
-		clone.Version = cmn.MaxI64(clone.version(), maxVerSmap.version()) + 1
-		p.smapowner.put(clone)
-		p.smapowner.Unlock()
-		glog.Infof("%s: merged %s", pname, clone.pp())
 	}
+	clone.Version = cmn.MaxI64(clone.version(), maxVerSmap.version()) + 1
+	p.smapowner.put(clone)
+	p.smapowner.Unlock()
+	glog.Infof("%s: merged %s", pname, clone.pp())
 }
 
-func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
+func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBMD *bucketMD) {
 	var (
-		maxVerSmap *smapX
-		maxVerBMD  *bucketMD
-		results    chan callResult
-		origin     int64
-		err        error
-		resmap     map[*cluster.Snode]*bucketMD
-		bcastSmap  = p.smapowner.get().clone()
-		q          = url.Values{}
-		config     = cmn.GCO.Get()
-		keeptrying = true
-		slowp      = false
+		err         error
+		sorigin     uint64
+		config      = cmn.GCO.Get()
+		now         = time.Now()
+		deadline    = now.Add(config.Timeout.Startup)
+		q           = url.Values{}
+		url         = cmn.URLPath(cmn.Version, cmn.Daemon)
+		l           = bcastSmap.CountTargets() + bcastSmap.CountProxies()
+		bmds        = make(map[*cluster.Snode]*bucketMD, l)
+		smaps       = make(map[*cluster.Snode]*smapX, l)
+		done, slowp bool
 	)
-	resmap = make(map[*cluster.Snode]*bucketMD, bcastSmap.CountTargets()+bcastSmap.CountProxies())
 	q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
-	for keeptrying && time.Now().Before(deadline) {
-		url := cmn.URLPath(cmn.Version, cmn.Daemon)
-		results = p.bcastTo(bcastArgs{
-			req:  cmn.ReqArgs{Path: url, Query: q},
-			smap: bcastSmap,
-			to:   cluster.AllNodes,
-		})
-		maxVerBMD, origin, keeptrying, slowp = nil, 0, false, false
-		for k := range resmap {
-			delete(resmap, k)
-		}
-		for res := range results {
-			if res.err != nil {
-				keeptrying = true
-				continue
-			}
-			svm := SmapVoteMsg{}
-			if err = jsoniter.Unmarshal(res.outjson, &svm); err != nil {
-				glog.Errorf("unexpected unmarshal-error: %v", err)
-				keeptrying = true
-				continue
-			}
-			if svm.BucketMD != nil && svm.BucketMD.version() > 0 {
-				if maxVerBMD == nil { // 1. init
-					origin, maxVerBMD = svm.BucketMD.Origin, svm.BucketMD
-				} else if origin != svm.BucketMD.Origin { // 2. slow path
-					slowp = true
-				} else if !slowp && maxVerBMD.Version < svm.BucketMD.Version { // 3. fast path max(version)
-					maxVerBMD = svm.BucketMD
-				}
-			}
-			if svm.Smap == nil {
-				keeptrying = true
-				continue
-			}
-			if maxVerSmap == nil || svm.Smap.version() > maxVerSmap.version() {
-				maxVerSmap = svm.Smap
-				for id, v := range maxVerSmap.Tmap {
-					bcastSmap.Tmap[id] = v
-				}
-				for id, v := range maxVerSmap.Pmap {
-					bcastSmap.Pmap[id] = v
-				}
-			}
-			if svm.VoteInProgress {
-				var s string
-				if svm.Smap.ProxySI != nil {
-					s = " of the current one " + svm.Smap.ProxySI.DaemonID
-				}
-				glog.Warningf("%s: starting up as primary(?) during reelection%s", p.si.Name(), s)
-				maxVerSmap, maxVerBMD = nil, nil // zero-out as unusable
-				keeptrying = true
-				time.Sleep(config.Timeout.CplaneOperation)
-				break
-			}
-			if svm.BucketMD != nil && svm.BucketMD.version() > 0 {
-				resmap[res.si] = svm.BucketMD
-			}
+	args := bcastArgs{req: cmn.ReqArgs{Path: url, Query: q}, smap: bcastSmap, to: cluster.AllNodes}
+	for {
+		last := time.Now().After(deadline)
+		maxVerSmap, maxVerBMD, done, slowp = p.bcastMaxVer(args, bmds, smaps)
+		if done || last {
+			break
 		}
 		time.Sleep(config.Timeout.CplaneOperation)
 	}
 	if slowp {
-		if maxVerBMD, err = resolveBMDorigin(resmap); err != nil {
+		if maxVerBMD, err = resolveOriginBMD(bmds); err != nil {
 			if _, split := err.(*errBmdOriginSplit); split {
 				glog.Fatalf("FATAL: %v", err)
 			}
@@ -432,8 +391,97 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 				glog.Error(err.Error())
 			}
 		}
+		for si, smap := range smaps {
+			if !si.IsTarget() {
+				continue
+			}
+			if sorigin == 0 {
+				sorigin = smap.Origin
+				if sorigin != 0 {
+					glog.Infof("%s: set Smap origin = %s(%d)", p.si.Name(), si, sorigin)
+				}
+			} else if sorigin != smap.Origin && smap.Origin != 0 {
+				glog.Fatalf("FATAL: split-brain Smap origin %d != %s(%d)", sorigin, si, smap.Origin)
+			}
+		}
+		for _, smap := range smaps {
+			if smap.Origin != sorigin {
+				continue
+			}
+			if maxVerSmap == nil {
+				maxVerSmap = smap
+			} else if maxVerSmap.version() < smap.version() {
+				maxVerSmap = smap
+			}
+		}
 	}
-	return maxVerSmap, maxVerBMD
+	return
+}
+
+func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucketMD,
+	smaps map[*cluster.Snode]*smapX) (maxVerSmap *smapX, maxVerBMD *bucketMD, done, slowp bool) {
+	var (
+		results          chan callResult
+		borigin, sorigin uint64
+		err              error
+	)
+	done = true
+	results = p.bcastTo(args)
+	for k := range bmds {
+		delete(bmds, k)
+	}
+	for k := range smaps {
+		delete(smaps, k)
+	}
+	for res := range results {
+		if res.err != nil {
+			done = false
+			continue
+		}
+		svm := SmapVoteMsg{}
+		if err = jsoniter.Unmarshal(res.outjson, &svm); err != nil {
+			glog.Errorf("unexpected unmarshal-error: %v", err)
+			done = false
+			continue
+		}
+		if svm.BucketMD != nil && svm.BucketMD.version() > 0 {
+			if maxVerBMD == nil { // 1. init
+				borigin, maxVerBMD = svm.BucketMD.Origin, svm.BucketMD
+			} else if borigin != 0 && borigin != svm.BucketMD.Origin { // 2. slow path
+				slowp = true
+			} else if !slowp && maxVerBMD.Version < svm.BucketMD.Version { // 3. fast path max(version)
+				maxVerBMD = svm.BucketMD
+				borigin = svm.BucketMD.Origin
+			}
+		}
+		if svm.Smap != nil && svm.VoteInProgress {
+			var s string
+			if svm.Smap.ProxySI != nil {
+				s = " of the current one " + svm.Smap.ProxySI.DaemonID
+			}
+			glog.Warningf("%s: starting up as primary(?) during reelection%s", p.si.Name(), s)
+			maxVerSmap, maxVerBMD = nil, nil // zero-out as unusable
+			done = false
+			break
+		}
+		if svm.Smap != nil && svm.Smap.version() > 0 {
+			if maxVerSmap == nil { // 1. init
+				sorigin, maxVerSmap = svm.Smap.Origin, svm.Smap
+			} else if sorigin != 0 && sorigin != svm.Smap.Origin { // 2. slow path
+				slowp = true
+			} else if !slowp && maxVerSmap.Version < svm.Smap.Version { // 3. fast path max(version)
+				maxVerSmap = svm.Smap
+				sorigin = svm.Smap.Origin
+			}
+		}
+		if bmds != nil && svm.BucketMD != nil && svm.BucketMD.version() > 0 {
+			bmds[res.si] = svm.BucketMD
+		}
+		if smaps != nil && svm.Smap != nil && svm.Smap.version() > 0 {
+			smaps[res.si] = svm.Smap
+		}
+	}
+	return
 }
 
 func (p *proxyrunner) registerWithRetry() error {

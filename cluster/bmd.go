@@ -6,6 +6,7 @@ package cluster
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -30,7 +31,21 @@ type BMD struct {
 	LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`         // ais buckets and their props
 	CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`         // Cloud-based buckets and their AIStore-only metadata
 	Version int64                       `json:"version,string"` // version - gets incremented on every update
-	Origin  int64                       `json:"origin,string"`  // (unique) origin stays the same for the lifetime
+	Origin  uint64                      `json:"origin,string"`  // (unique) origin stays the same for the lifetime
+}
+
+func (m *BMD) String() string {
+	if m == nil {
+		return "BMD <nil>"
+	}
+	return "BMD v" + strconv.FormatInt(m.Version, 10)
+}
+
+func (m *BMD) StringEx() string {
+	if m == nil {
+		return "BMD <nil>"
+	}
+	return fmt.Sprintf("BMD v%d[...%d, ais=%d, cloud=%d]", m.Version, m.Origin%1000, len(m.LBmap), len(m.CBmap))
 }
 
 func (m *BMD) GenBucketID(isais bool) uint64 {

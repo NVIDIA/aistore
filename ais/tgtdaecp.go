@@ -99,7 +99,7 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 		}
 		err = nil
 	} else {
-		glog.Infof("%s: %s v%d", tname, bmdTermName, t.bmdowner.get().version())
+		glog.Infof("%s: %s", tname, t.bmdowner.get())
 	}
 	// smap
 	if err := t.smapowner.synchronize(meta.Smap, true /* lesserIsErr */); err != nil {
@@ -694,34 +694,35 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 // FIXME: use the message
-func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
+func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
 	from := ""
+	tname := t.si.Name()
 	if caller != "" {
 		from = " from " + caller
 	}
 	if msgInt.Action == "" {
-		glog.Infof("%s: %s %s v%d%s", t.si.Name(), tag, bmdTermName, newbucketmd.version(), from)
+		glog.Infof("%s: %s %s%s", tname, tag, newBMD, from)
 	} else {
-		glog.Infof("%s: %s %s v%d%s, action %s", t.si.Name(), tag, bmdTermName, newbucketmd.version(), from, msgInt.Action)
+		glog.Infof("%s: %s %s%s, action %s", tname, tag, newBMD, from, msgInt.Action)
 	}
 
 	t.bmdowner.Lock()
+	bmd := t.bmdowner.get()
 	_, psi := t.getPrimaryURLAndSI()
-	if err = t.checkBMDcompat(psi, newbucketmd); err != nil {
+	if err = t.validateOriginBMD(bmd, psi, newBMD, ""); err != nil {
 		t.bmdowner.Unlock()
 		return
 	}
 
-	bucketmd := t.bmdowner.get()
-	myver := bucketmd.version()
-	if newbucketmd.version() <= myver {
+	myver := bmd.version()
+	if newBMD.version() <= myver {
 		t.bmdowner.Unlock()
-		if newbucketmd.version() < myver {
-			err = fmt.Errorf("attempt to downgrade %s v%d to v%d", bmdTermName, myver, newbucketmd.version())
+		if newBMD.version() < myver {
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", tname, bmd.StringEx(), newBMD.StringEx())
 		}
 		return
 	}
-	t.bmdowner.put(newbucketmd)
+	t.bmdowner.put(newBMD)
 	t.bmdowner.Unlock()
 
 	if tag != bucketMDRegister {
@@ -731,11 +732,11 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	}
 
 	// Delete buckets that do not exist in the new BMD
-	bucketsToDelete := make([]string, 0, len(bucketmd.LBmap))
-	for bucket := range bucketmd.LBmap {
-		if nprops, ok := newbucketmd.LBmap[bucket]; !ok {
+	bucketsToDelete := make([]string, 0, len(bmd.LBmap))
+	for bucket := range bmd.LBmap {
+		if nprops, ok := newBMD.LBmap[bucket]; !ok {
 			bucketsToDelete = append(bucketsToDelete, bucket)
-		} else if bprops, ok := bucketmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
+		} else if bprops, ok := bmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
 			if bprops.Mirror.Enabled && !nprops.Mirror.Enabled {
 				xaction.Registry.AbortBucketXact(cmn.ActPutCopies, bucket)
 			}
@@ -753,25 +754,25 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 				cluster.EvictLomCache(b)
 			}
 		}(bucketsToDelete...)
-		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", false /*false=destroy*/, cmn.AIS, bucketsToDelete...)
+		fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false /*false=destroy*/, cmn.AIS, bucketsToDelete...)
 	}
 
 	// Create buckets that have been added
-	bucketsToCreate := make([]string, 0, len(newbucketmd.LBmap))
-	for bckName := range newbucketmd.LBmap {
-		if _, ok := bucketmd.LBmap[bckName]; !ok {
+	bucketsToCreate := make([]string, 0, len(newBMD.LBmap))
+	for bckName := range newBMD.LBmap {
+		if _, ok := bmd.LBmap[bckName]; !ok {
 			bucketsToCreate = append(bucketsToCreate, bckName)
 		}
 	}
-	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cmn.AIS, bucketsToCreate...)
+	fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*true=create*/, cmn.AIS, bucketsToCreate...)
 
-	bucketsToCreate = make([]string, 0, len(newbucketmd.CBmap))
-	for bckName := range newbucketmd.CBmap {
-		if _, ok := bucketmd.CBmap[bckName]; !ok {
+	bucketsToCreate = make([]string, 0, len(newBMD.CBmap))
+	for bckName := range newBMD.CBmap {
+		if _, ok := bmd.CBmap[bckName]; !ok {
 			bucketsToCreate = append(bucketsToCreate, bckName)
 		}
 	}
-	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cmn.Cloud, bucketsToCreate...)
+	fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*true=create*/, cmn.Cloud, bucketsToCreate...)
 
 	return
 }
@@ -837,24 +838,24 @@ func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
 	smap := t.smapowner.Get()
 	smapVersion := msgInt.SmapVersion
 	if smap.Version < smapVersion {
-		glog.Errorf("own %s < %d - fetching latest for %v", smap, smapVersion, msgInt.Action)
+		glog.Errorf("own %s < v%d - fetching latest for %v", smap, smapVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
 		t.smapVersionFixup()
 	} else if smap.Version > smapVersion {
 		//if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("own %s > %d - encountered during %v", smap, smapVersion, msgInt.Action)
+		glog.Errorf("own %s > v%d - encountered during %v", smap, smapVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
 	}
 
 	bucketmd := t.bmdowner.Get()
 	bmdVersion := msgInt.BMDVersion
 	if bucketmd.Version < bmdVersion {
-		glog.Errorf("own BMD version %d < %d - fetching latest for %v", bucketmd.Version, bmdVersion, msgInt.Action)
+		glog.Errorf("own %s < v%d - fetching latest for %v", bucketmd, bmdVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
 		t.BMDVersionFixup("", false)
 	} else if bucketmd.Version > bmdVersion {
 		//if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("own BMD version %d > %d - encountered during %v", bucketmd.Version, bmdVersion, msgInt.Action)
+		glog.Errorf("own %s > v%d - encountered during %v", bucketmd, bmdVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
 	}
 }
@@ -1023,15 +1024,14 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		return
 	}
-
-	newSmap, actionSmap, err := t.extractSmap(payload)
+	caller := r.Header.Get(cmn.HeaderCallerName)
+	newSmap, actionSmap, err := t.extractSmap(payload, caller)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
 	if newSmap != nil {
-		caller := r.Header.Get(cmn.HeaderCallerName)
 		err = t.receiveSmap(newSmap, actionSmap, caller)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -1039,7 +1039,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	newBMD, actionLB, err := t.extractbucketmd(payload)
+	newBMD, actionLB, err := t.extractBMD(payload)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -1067,8 +1067,8 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		return
 	}
-
-	newSmap, msgInt, err := t.extractSmap(payload)
+	caller := r.Header.Get(cmn.HeaderCallerName)
+	newSmap, msgInt, err := t.extractSmap(payload, caller)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return

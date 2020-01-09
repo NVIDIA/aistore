@@ -25,7 +25,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	if !t.verifyProxyRedirection(w, r, cmn.Download) {
 		return
 	}
-
 	var (
 		response   interface{}
 		respErr    error

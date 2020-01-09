@@ -68,13 +68,6 @@ type (
 		fpath string
 	}
 	bmdOwnerTgt struct{ bmdOwnerBase }
-
-	// for backwards compatibility - TODO: eventually must be removed
-	oldBMD struct {
-		LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`
-		CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`
-		Version int64                       `json:"version"`
-	}
 )
 
 var (
@@ -92,13 +85,19 @@ func newBucketMD() *bucketMD {
 	return &bucketMD{BMD: cluster.BMD{LBmap: lbmap, CBmap: cbmap, Origin: 0}} // only proxy can generate
 }
 
-func newBMDorigin() int64 {
-	origin, err := cmn.GenUUID64()
-	if err != nil {
+func newOriginMD() (origin uint64, created string) {
+	var (
+		now    = time.Now()
+		o, err = cmn.GenUUID64()
+	)
+	if err == nil {
+		origin = uint64(o)
+	} else {
 		glog.Error(err)
-		return time.Now().UnixNano()
+		origin = uint64(now.UnixNano())
 	}
-	return origin
+	created = now.String()
+	return
 }
 
 //////////////
@@ -205,7 +204,7 @@ func (m *bucketMD) deepCopy(dst *bucketMD) {
 //
 // revs interface
 //
-func (m *bucketMD) tag() string    { return bucketmdtag }
+func (m *bucketMD) tag() string    { return bmdtag }
 func (m *bucketMD) version() int64 { return m.Version }
 
 func (m *bucketMD) marshal() ([]byte, error) {
@@ -286,19 +285,7 @@ func (bo *bmdOwnerPrx) init() {
 	var bmd = newBucketMD()
 	err := cmn.LocalLoad(bo.fpath, bmd, true /*compression*/)
 	if err != nil && !os.IsNotExist(err) {
-		old := &oldBMD{LBmap: bmd.LBmap, CBmap: bmd.CBmap}
-		ers := err
-		// backward-compat
-		if err := cmn.LocalLoad(bo.fpath, old, true /*compression*/); err != nil {
-			glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bo.fpath, ers)
-			bmd = newBucketMD()
-		} else {
-			bmd.Version = old.Version
-			if bmd.Version == 0 {
-				bmd.Version = 100
-			}
-			bmd.Origin = 99
-		}
+		glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bo.fpath, err)
 	}
 	bo._put(bmd)
 }
@@ -307,7 +294,7 @@ func (bo *bmdOwnerPrx) put(bmd *bucketMD) {
 	bo._put(bmd)
 	err := cmn.LocalSave(bo.fpath, bmd, true /*compression*/)
 	if err != nil {
-		glog.Errorf("failed to store %s as %s, err: %v", bmdTermName, bo.fpath, err)
+		glog.Errorf("failed to write %s as %s, err: %v", bmdTermName, bo.fpath, err)
 	}
 }
 
@@ -337,26 +324,18 @@ func (bo *bmdOwnerTgt) find() (avail, curr, prev fs.MPI) {
 
 func (bo *bmdOwnerTgt) init() {
 	load := func(mpi fs.MPI, suffix bool) (bmd *bucketMD) {
+		bmd = newBucketMD()
 		for mpath := range mpi {
-			bmd = newBucketMD()
 			fpath := filepath.Join(mpath, bmdFname)
 			if suffix {
 				fpath += bmdFext
 			}
-			if err := cmn.LocalLoad(fpath, bmd, true /*compression*/); err != nil {
-				old := &oldBMD{LBmap: bmd.LBmap, CBmap: bmd.CBmap}
-				ers := err
-				// backward-compat
-				if err := cmn.LocalLoad(fpath, old, true /*compression*/); err != nil {
-					glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, fpath, ers)
-					bmd = nil
-				} else {
-					bmd.Version = old.Version
-					bmd.Origin = 99
-					break
-				}
-			} else {
+			err := cmn.LocalLoad(fpath, bmd, true /*compression*/)
+			if err == nil {
 				break
+			}
+			if !os.IsNotExist(err) {
+				glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, fpath, err)
 			}
 		}
 		return

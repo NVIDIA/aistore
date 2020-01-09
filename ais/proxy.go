@@ -607,7 +607,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	smap := p.smapowner.get()
 	if smap.isPrimary(p.si) {
 		vote := xaction.Registry.GlobalXactRunning(cmn.ActElection)
-		s := fmt.Sprintf("Primary %s cannot receive cluster meta (election=%t)", p.si, vote)
+		s := fmt.Sprintf("primary %s cannot receive cluster meta (election=%t)", p.si, vote)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -615,8 +615,8 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		return
 	}
-
-	newSmap, _, err := p.extractSmap(payload)
+	caller := r.Header.Get(cmn.HeaderCallerName)
+	newSmap, _, err := p.extractSmap(payload, caller)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -624,7 +624,6 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 
 	if newSmap != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			caller := r.Header.Get(cmn.HeaderCallerName)
 			glog.Infof("new %s from %s", newSmap.StringEx(), caller)
 		}
 		err = p.smapowner.synchronize(newSmap, true /* lesserIsErr */)
@@ -649,17 +648,17 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	newBMD, actionLB, err := p.extractbucketmd(payload)
+	newBMD, actionLB, err := p.extractBMD(payload)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if newBMD != nil {
+		caller := r.Header.Get(cmn.HeaderCallerName)
 		if glog.FastV(4, glog.SmoduleAIS) {
-			caller := r.Header.Get(cmn.HeaderCallerName)
-			glog.Infof("new %s v%d from %s", bmdTermName, newBMD.version(), caller)
+			glog.Infof("new %s from %s", newBMD.StringEx(), caller)
 		}
-		if err = p.receiveBucketMD(newBMD, actionLB); err != nil {
+		if err = p.receiveBucketMD(newBMD, actionLB, caller); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -1534,7 +1533,7 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 	// Distribute temporary bucket
 	msgInt := p.newActionMsgInternal(msg, smap, clone)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
-	glog.Infof("%s ais bucket %s => %s, %s v%d", msg.Action, bckFrom, bckTo, bmdTermName, clone.version())
+	glog.Infof("%s ais bucket %s => %s %s", msg.Action, bckFrom, bckTo, clone)
 
 	errHandler := func() {
 		p.bmdowner.Lock()
@@ -1601,7 +1600,7 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 	// Finalize
 	msgInt = p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
-	glog.Infof("%s ais bucket %s => %s, %s v%d", msg.Action, bckFrom, bckTo, bmdTermName, clone.version())
+	glog.Infof("%s ais bucket %s => %s, %s", msg.Action, bckFrom, bckTo, clone)
 	return
 }
 
@@ -2675,8 +2674,8 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 
 	bmd := p.bmdowner.get()
 	if glog.V(3) {
-		glog.Infof("%s: distributing %s with the newly elected primary (self)", p.si.Name(), clone)
-		glog.Infof("%s: distributing %s v%d as well", p.si.Name(), bmdTermName, bmd.version())
+		glog.Infof("%s: distributing %s with newly elected primary (self)", p.si.Name(), clone)
+		glog.Infof("%s: distributing %s as well", p.si.Name(), bmd)
 	}
 	p.metasyncer.sync(true, revspair{clone, msgInt}, revspair{bmd, msgInt})
 	return
@@ -3034,7 +3033,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.startedUp.Load() {
-		if err := p.checkBMDcompat(nsi, regReq.BMD); err != nil {
+		bmd := p.bmdowner.get()
+		if err := p.validateOriginBMD(bmd, nsi, regReq.BMD, ""); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -3114,8 +3114,15 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	if err = p.validateOriginSmap(smap, nsi, regReq.Smap, ""); err != nil {
+		p.smapowner.Unlock()
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
 	if !p.startedUp.Load() {
-		clone := p.smapowner.get().clone()
+		clone := smap.clone()
 		clone.putNode(nsi, nonElectable)
 		p.smapowner.put(clone)
 		p.smapowner.Unlock()
@@ -3419,9 +3426,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 // broadcasts: Rx and Tx
 //
 //========================
-func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal) (err error) {
+func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, caller string) (err error) {
 	if glog.V(3) {
-		s := fmt.Sprintf("receive %s: v%d", bmdTermName, newBMD.version())
+		s := fmt.Sprintf("receive %s", newBMD.StringEx())
 		if msgInt.Action == "" {
 			glog.Infoln(s)
 		} else {
@@ -3429,11 +3436,15 @@ func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInterna
 		}
 	}
 	p.bmdowner.Lock()
-	curVersion := p.bmdowner.get().version()
-	if newBMD.version() <= curVersion {
+	bmd := p.bmdowner.get()
+	if err = p.validateOriginBMD(bmd, nil, newBMD, caller); err != nil {
 		p.bmdowner.Unlock()
-		if newBMD.version() < curVersion {
-			err = fmt.Errorf("attempt to downgrade %s v%d to v%d", bmdTermName, curVersion, newBMD.version())
+		return
+	}
+	if newBMD.version() <= bmd.version() {
+		p.bmdowner.Unlock()
+		if newBMD.version() < bmd.version() {
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", p.si.Name(), bmd, newBMD)
 		}
 		return
 	}
@@ -3485,18 +3496,18 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 }
 
 // Upon user request to recover bucket metadata, primary:
-// 1. Broadcasts request to get all bucket lists stored in xattrs
-// 2. Sorts results by BMD version in descending order
+// 1. Broadcasts request to get target BMDs
+// 2. Sorts results by BMD version in a descending order
 // 3. Force=true: use BMD with highest version number as new BMD
 //    Force=false: use targets' BMD only if they are of the same version
 // 4. Set primary's BMD version to be greater than any target's one
 // 4. Metasync the merged BMD
 func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	var (
-		origin       int64
+		origin       uint64
 		rbmd         *bucketMD
 		err          error
-		resmap       map[*cluster.Snode]*bucketMD
+		bmds         map[*cluster.Snode]*bucketMD
 		force, slowp bool
 	)
 	if p.forwardCP(w, r, msg, "recover-buckets", nil) {
@@ -3506,7 +3517,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		req:     cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)},
 		timeout: cmn.GCO.Get().Timeout.Default,
 	})
-	resmap = make(map[*cluster.Snode]*bucketMD, len(results))
+	bmds = make(map[*cluster.Snode]*bucketMD, len(results))
 	for res := range results {
 		var bmd = &bucketMD{}
 		if res.err != nil || res.status >= http.StatusBadRequest {
@@ -3518,7 +3529,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 			continue
 		}
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s from %s v%d", bmdTermName, res.si.Name(), bmd.Version)
+			glog.Infof("%s from %s", bmd, res.si.Name())
 		}
 		if rbmd == nil { // 1. init
 			origin, rbmd = bmd.Origin, bmd
@@ -3527,11 +3538,11 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		} else if !slowp && rbmd.Version < bmd.Version { // 3. fast path max(version)
 			rbmd = bmd
 		}
-		resmap[res.si] = bmd
+		bmds[res.si] = bmd
 	}
 	if slowp {
 		force, _ = cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
-		if rbmd, err = resolveBMDorigin(resmap); err != nil {
+		if rbmd, err = resolveOriginBMD(bmds); err != nil {
 			_, split := err.(*errBmdOriginSplit)
 			if !force || errors.Is(err, errNoBMD) || split {
 				p.invalmsghdlr(w, r, err.Error())
@@ -3555,13 +3566,13 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 // misc utils //
 ////////////////
 
-func resolveBMDorigin(resmap map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
+func resolveOriginBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	var (
-		mlist = make(map[int64][]targetRegMeta) // origin => list(targetRegMeta)
-		maxor = make(map[int64]*bucketMD)       // origin => max-ver BMD
+		mlist = make(map[uint64][]targetRegMeta) // origin => list(targetRegMeta)
+		maxor = make(map[uint64]*bucketMD)       // origin => max-ver BMD
 	)
 	// results => (mlist, maxor)
-	for si, bmd := range resmap {
+	for si, bmd := range bmds {
 		if bmd.Version == 0 {
 			continue
 		}
@@ -3577,16 +3588,8 @@ func resolveBMDorigin(resmap map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	if len(maxor) == 0 {
 		return nil, errNoBMD
 	}
-	if len(maxor) == 1 {
-		for _, bmd := range maxor {
-			if bmd.Origin == 0 {
-				bmd.Origin = newBMDorigin() // override zero
-			}
-			return bmd, nil
-		}
-	}
-	// otherwise by simple majority
-	var origin, l = int64(0), int(0)
+	// by simple majority
+	var origin, l = uint64(0), int(0)
 	for o, lst := range mlist {
 		if l < len(lst) {
 			origin, l = o, len(lst)
@@ -3594,17 +3597,13 @@ func resolveBMDorigin(resmap map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	}
 	for o, lst := range mlist {
 		if l == len(lst) && o != origin {
-			s := fmt.Sprintf("targets have different BMD-origins with no simple majority:\n%v", mlist)
+			s := fmt.Sprintf("targets have BMDs of different origins with no simple majority:\n%v", mlist)
 			return nil, &errBmdOriginSplit{s}
 		}
 	}
-	s := fmt.Sprintf("targets have different BMD-origins with simple majory = %d:\n%v", origin, mlist)
+	s := fmt.Sprintf("targets have BMDs of different origins, simple majority: ...%d:\n%v", origin%1000, mlist)
 	bmd := maxor[origin]
-	if bmd.Origin == 0 {
-		cmn.Assert(origin == 0)
-		s := fmt.Sprintf("cannot override zero BMD-origin when it's the majority:\n%v", mlist)
-		return nil, &errBmdOriginSplit{s}
-	}
+	cmn.Assert(bmd.Origin != 0)
 	return bmd, &errTgtBmdOriginDiffer{s}
 }
 

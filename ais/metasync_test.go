@@ -589,10 +589,10 @@ func TestMetaSyncData(t *testing.T) {
 		t.Fatal("Failed to marshal bucketmd, err =", err)
 	}
 
-	exp[bucketmdtag] = string(b)
-	expRetry[bucketmdtag] = string(b)
-	exp[bucketmdtag+actiontag] = emptyActionMsgInt
-	expRetry[bucketmdtag+actiontag] = emptyActionMsgInt
+	exp[bmdtag] = string(b)
+	expRetry[bmdtag] = string(b)
+	exp[bmdtag+actiontag] = emptyActionMsgInt
+	expRetry[bmdtag+actiontag] = emptyActionMsgInt
 
 	syncer.sync(false, revspair{bucketmd, &actionMsgInternal{}})
 	match(t, exp, ch, 1)
@@ -611,7 +611,7 @@ func TestMetaSyncData(t *testing.T) {
 		t.Fatal("Failed to marshal bucketmd, err =", err)
 	}
 
-	exp[bucketmdtag] = string(b)
+	exp[bmdtag] = string(b)
 	msgInt := primary.newActionMsgInternalStr("", smap, bucketmd)
 	syncer.sync(false, revspair{bucketmd, msgInt})
 }
@@ -743,8 +743,9 @@ func TestMetaSyncReceive(t *testing.T) {
 		}
 
 		matchSMap := func(a, b *smapX) {
-			if !a.Smap.Equals(&b.Smap) {
-				t.Fatal("Smap mismatch", a, b)
+			sameOrigin, sameVersion, eq := a.Compare(&b.Smap)
+			if !sameOrigin || !sameVersion || !eq {
+				t.Fatal("Smap mismatch", a.StringEx(), b.StringEx())
 			}
 		}
 
@@ -781,7 +782,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		proxy1.bmdowner.put(newBucketMD())
 
 		// empty payload
-		newSMap, actMsg, err := proxy1.extractSmap(make(map[string]string))
+		newSMap, actMsg, err := proxy1.extractSmap(make(map[string]string), "")
 		if newSMap != nil || actMsg != nil || err != nil {
 			t.Fatal("Extract smap from empty payload returned data")
 		}
@@ -789,14 +790,14 @@ func TestMetaSyncReceive(t *testing.T) {
 		syncer.sync(true, revspair{primary.smapowner.get(), &actionMsgInternal{}})
 		payload := <-chProxy
 
-		newSMap, actMsg, err = proxy1.extractSmap(payload)
+		newSMap, actMsg, err = proxy1.extractSmap(payload, "")
 		tassert.CheckFatal(t, err)
 		emptyActionMsgInt(actMsg)
 		matchSMap(primary.smapowner.get(), newSMap)
 		proxy1.smapowner.put(newSMap)
 
 		// same version of smap received
-		newSMap, actMsg, err = proxy1.extractSmap(payload)
+		newSMap, actMsg, err = proxy1.extractSmap(payload, "")
 		tassert.CheckFatal(t, err)
 		emptyActionMsgInt(actMsg)
 		nilSMap(newSMap)

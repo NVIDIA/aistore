@@ -33,11 +33,17 @@ type (
 func newDiscoverServerPrimary() *proxyrunner {
 	p := proxyrunner{}
 	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
-	p.smapowner = &smapowner{}
 	p.httpclientGetPut = &http.Client{}
 	config := cmn.GCO.BeginUpdate()
 	config.KeepaliveTracker.Proxy.Name = "heartbeat"
+	config.Timeout.Startup = time.Second
 	cmn.GCO.CommitUpdate(config)
+
+	p.smapowner = newSmapowner()
+	p.smapowner.put(newSmap())
+	owner := newBMDOwnerPrx(config)
+	owner._put(newBucketMD())
+	p.bmdowner = owner
 	p.keepalive = newProxyKeepaliveRunner(&p, &p.startedUp)
 	return &p
 }
@@ -258,8 +264,7 @@ func TestDiscoverServers(t *testing.T) {
 				discoverSmap.addTarget(newSnode(s.id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 			}
 		}
-		primary.smapowner.put(discoverSmap)
-		smap, bucketmd := primary.meta(time.Now().Add(tc.duration))
+		smap, bucketmd := primary.uncoverMeta(discoverSmap)
 		if tc.smapVersion == 0 {
 			if smap != nil && smap.version() > 0 {
 				t.Errorf("test case %s: expecting nil Smap", tc.name)

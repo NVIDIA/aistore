@@ -18,10 +18,10 @@ import (
 
 // REVS tags
 const (
-	smaptag     = "smaptag"
-	bucketmdtag = "bucketmdtag" //
-	tokentag    = "tokentag"    //
-	actiontag   = "-action"     // to make a pair (revs, action)
+	smaptag   = "smaptag"
+	bmdtag    = "bmdtag"   //
+	tokentag  = "tokentag" //
+	actiontag = "-action"  // to make a pair (revs, action)
 )
 const (
 	revsReqSync = iota
@@ -316,8 +316,11 @@ outer:
 	}
 	// step 2: build payload and update last sync-ed
 	for _, pair := range pairsToSend {
-		var revs, msgInt, tag = pair.revs, pair.msgInt, pair.revs.tag()
-		glog.Infof("dosync: %s, action=%s, version=%d", tag, msgInt.Action, revs.version())
+		var revs, msgInt, tag, s = pair.revs, pair.msgInt, pair.revs.tag(), ""
+		if msgInt.Action != "" {
+			s = ", action " + msgInt.Action
+		}
+		glog.Infof("%s: sync %s v%d%s", y.p.si.Name(), tag[:2], revs.version(), s)
 
 		y.last[tag] = revs
 		revJSON, err := revs.marshal()

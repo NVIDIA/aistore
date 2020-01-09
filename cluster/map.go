@@ -132,11 +132,13 @@ type (
 	NodeMap map[string]*Snode
 
 	Smap struct {
-		Tmap      NodeMap       `json:"tmap"` // daemonID -> Snode
-		Pmap      NodeMap       `json:"pmap"` // proxyID -> proxyInfo
-		NonElects cmn.SimpleKVs `json:"non_electable"`
-		ProxySI   *Snode        `json:"proxy_si"`
-		Version   int64         `json:"version,string"`
+		Tmap         NodeMap       `json:"tmap"` // daemonID -> Snode
+		Pmap         NodeMap       `json:"pmap"` // proxyID -> proxyInfo
+		NonElects    cmn.SimpleKVs `json:"non_electable"`
+		ProxySI      *Snode        `json:"proxy_si"`
+		Version      int64         `json:"version,string"`
+		Origin       uint64        `json:"origin,string"` // (unique) origin stays the same for the lifetime
+		CreationTime string        `json:"creation_time"`
 	}
 )
 
@@ -159,7 +161,7 @@ func (m *Smap) StringEx() string {
 	if m == nil {
 		return "Smap <nil>"
 	}
-	return fmt.Sprintf("Smap v%d (%d/%d)", m.Version, m.CountTargets(), m.CountProxies())
+	return fmt.Sprintf("Smap v%d[...%d, t=%d, p=%d]", m.Version, m.Origin%1000, m.CountTargets(), m.CountProxies())
 }
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }
@@ -198,18 +200,26 @@ func (m *Smap) GetNode(id string) *Snode {
 	return m.GetProxy(id)
 }
 
-func (a *Smap) Equals(b *Smap) bool {
-	if a.Version != b.Version {
-		return false
+func (a *Smap) Compare(b *Smap) (sameOrigin, sameVersion, eq bool) {
+	sameOrigin, sameVersion, eq = true, true, true
+	if a.Origin != 0 && b.Origin != 0 && a.Origin != b.Origin {
+		sameOrigin = false
 	}
-	if !a.ProxySI.Equals(b.ProxySI) {
-		return false
+	if a.Version != b.Version {
+		sameVersion = false
+	}
+	if a.ProxySI == nil || b.ProxySI == nil || !a.ProxySI.Equals(b.ProxySI) {
+		eq = false
+		return
 	}
 	if !reflect.DeepEqual(a.NonElects, b.NonElects) {
-		return false
+		eq = false
+		return
 	}
-	return mapsEq(a.Tmap, b.Tmap) && mapsEq(a.Pmap, b.Pmap)
+	eq = mapsEq(a.Tmap, b.Tmap) && mapsEq(a.Pmap, b.Pmap)
+	return
 }
+
 func mapsEq(a, b NodeMap) bool {
 	if len(a) != len(b) {
 		return false

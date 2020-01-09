@@ -397,16 +397,25 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 }
 
 // verifyProxyRedirection returns if the http request was redirected from a proxy
-func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Request, action string) bool {
-	query := r.URL.Query()
-	pid := query.Get(cmn.URLParamProxyID)
+func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Request, action ...string) bool {
+	var (
+		tname  = t.si.Name()
+		query  = r.URL.Query()
+		pid    = query.Get(cmn.URLParamProxyID)
+		method = r.Method
+	)
+	if len(action) > 0 {
+		method = action[0]
+	}
 	if pid == "" {
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s %s requests are expected to be redirected", r.Method, action))
+		s := fmt.Sprintf("%s: %s is expected to be redirected", tname, method)
+		t.invalmsghdlr(w, r, s)
 		return false
 	}
-	if t.smapowner.get().GetProxy(pid) == nil {
-		t.invalmsghdlr(w, r,
-			fmt.Sprintf("%s %s request from an unknown proxy/gateway ID '%s' - Smap out of sync?", r.Method, action, pid))
+	smap := t.smapowner.get()
+	if smap.GetProxy(pid) == nil {
+		s := fmt.Sprintf("%s: %s from unknown [%s], %s", tname, method, pid, smap.StringEx())
+		t.invalmsghdlr(w, r, s)
 		return false
 	}
 	return true
@@ -511,7 +520,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.statsif.Add(stats.PutRedirLatency, redelta)
 	}
 	// PUT
-	if !t.verifyProxyRedirection(w, r, r.Method) {
+	if !t.verifyProxyRedirection(w, r) {
 		return
 	}
 	config := cmn.GCO.Get()
