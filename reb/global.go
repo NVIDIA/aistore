@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 	"unsafe"
@@ -31,12 +32,13 @@ type (
 		ver   int64
 	}
 	globArgs struct {
-		smap    *cluster.Smap
-		config  *cmn.Config
-		paths   fs.MPI
-		pmarker string
-		ecUsed  bool
-		dryRun  bool
+		smap      *cluster.Smap
+		config    *cmn.Config
+		paths     fs.MPI
+		pmarker   string
+		ecUsed    bool
+		dryRun    bool
+		singleBck bool // rebalance running for a single bucket (e.g. after rename)
 	}
 )
 
@@ -183,23 +185,25 @@ func (reb *Manager) ecFixGlobal(md *globArgs) error {
 
 // when at least one bucket has EC enabled
 func (reb *Manager) globalRebRunEC(md *globArgs) error {
-	// collect all local slices
+	// Update internal global rebalance args
+	reb.ecReb.ra = md
+	// Collect all local slices
 	if cnt := reb.buildECNamespace(md); cnt != 0 {
 		return fmt.Errorf("%d targets failed to build namespace", cnt)
 	}
-	// wait for all targets send their lists of slices to other nodes
+	// Waiting for all targets to send their lists of slices to other nodes
 	if err := reb.distributeECNamespace(md); err != nil {
 		return err
 	}
-	// detect objects with misplaced or missing parts
+	// Detect objects with misplaced or missing parts
 	reb.generateECFixList(md)
 
-	// fix objects that are on local target but they are misplaced
+	// Fix objects that are on local target but they are misplaced
 	if err := reb.ecFixLocal(md); err != nil {
 		return err
 	}
 
-	// fix objects that needs network transfers and/or object rebuild
+	// Fix objects that needs network transfers and/or object rebuild
 	if err := reb.ecFixGlobal(md); err != nil {
 		return err
 	}
@@ -261,16 +265,52 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	return nil
 }
 
+// The function detects two cases(to reduce redundant goroutine creation):
+// 1. One bucket case just calls a single rebalance worker depending on
+//    whether a bucket is erasure coded. No goroutine is used.
+// 2. Multi-bucket rebalance may start up to two rebalances in parallel and
+//    wait for all finishes.
 func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
-	// 6. capture stats, start mpath joggers TODO: currently supporting only fs.ObjectType (content-type)
+	// 6. Capture stats, start mpath joggers TODO: currently supporting only fs.ObjectType (content-type)
 	reb.stage.Store(rebStageTraverse)
-	if md.ecUsed {
-		glog.Infof("EC detected - starting EC-friendly rebalance")
-		md.dryRun = true // TODO: enabled just for debugging jenkins, it only increases log output for EC rebalance operations
+
+	// No EC-enabled buckets - run only regular rebalance
+	if !md.ecUsed {
+		glog.Infof("Starting only regular rebalance")
+		return reb.globalRebRun(md)
+	}
+	// Single bucket is rebalancing and it is a bucket with EC enabled.
+	// Run only EC rebalance.
+	if md.singleBck {
+		glog.Infof("Starting only EC rebalance for a bucket")
 		return reb.globalRebRunEC(md)
 	}
 
-	return reb.globalRebRun(md)
+	// In all other cases run both rebalances simultaneously
+	var rebErr, ecRebErr error
+	wg := &sync.WaitGroup{}
+	ecMD := *md
+	glog.Infof("Starting regular rebalance")
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		md.ecUsed = false
+		rebErr = reb.globalRebRun(md)
+	}()
+
+	wg.Add(1)
+	glog.Infof("EC detected - starting EC rebalance")
+	go func() {
+		defer wg.Done()
+		ecRebErr = reb.globalRebRunEC(&ecMD)
+	}()
+	wg.Wait()
+
+	// Return the first encountered error
+	if rebErr != nil {
+		return rebErr
+	}
+	return ecRebErr
 }
 
 func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
@@ -414,10 +454,20 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 }
 
 // main method: 10 stages
+// A note about rebalance stage management:
+// Regular and EC rebalances are running in parallel. They share
+// the rebalance stage in `Manager`. At this moment it is safe, because:
+// 1. Parallel execution starts after `Manager` sets stage to rebStageTraverse
+// 2. Regular rebalance does not change stage
+// 3. EC rebalance changes the stage
+// 4. Regular rebalance do checks like `stage > rebStageTraverse` or
+//    `stage < rebStageWaitAck`. But since all EC stages are between
+//    `Traverse` and `WaitAck` regular rebalance does not notice stage changes.
 func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ...string) {
 	md := &globArgs{
-		smap:   smap,
-		config: cmn.GCO.Get(),
+		smap:      smap,
+		config:    cmn.GCO.Get(),
+		singleBck: len(buckets) == 1,
 	}
 	if len(buckets) == 0 || buckets[0] == "" {
 		md.ecUsed = reb.t.GetBowner().Get().IsECUsed()
@@ -548,7 +598,13 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		}
 		return nil
 	}
-	// rebalance, maybe
+
+	// Skip a bucket with EC.Enabled - it is a job for EC rebalance
+	if lom.Bck().Props.EC.Enabled {
+		return filepath.SkipDir
+	}
+
+	// Rebalance, maybe
 	tsi, err = cluster.HrwTarget(lom.Uname(), rj.smap)
 	if err != nil {
 		return err

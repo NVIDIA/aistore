@@ -678,7 +678,7 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bucket, objName s
 	tassert.Errorf(t, mainObjPath != "", "Full copy is not found")
 }
 
-func createECObject(t *testing.T, baseParams api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) int {
+func createECObject(t *testing.T, baseParams api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) {
 	const (
 		smallEvery = 7 // Every N-th object is small
 	)
@@ -714,7 +714,6 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bucket, objName str
 	if mainObjPath == "" {
 		t.Errorf("Full copy is not found")
 	}
-	return totalCnt
 }
 
 func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) {
@@ -2106,6 +2105,54 @@ func TestECEmergencyMpath(t *testing.T) {
 	}
 }
 
+func deleteAllFiles(t *testing.T, path string) {
+	if len(path) < 5 {
+		t.Fatalf("Invalid path %q", path)
+		return
+	}
+	walkDel := func(fqn string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+		cmn.Assert(len(fqn) > 5)
+		if err := os.Remove(fqn); err != nil {
+			t.Logf("Failed to delete %q: %v", fqn, err)
+		}
+		return nil
+	}
+	filepath.Walk(path, walkDel)
+}
+
+func moveAllFiles(t *testing.T, pathFrom, pathTo string) {
+	if len(pathFrom) < 5 || len(pathTo) < 5 {
+		t.Fatalf("Invalid path %q or %q", pathFrom, pathTo)
+		return
+	}
+	walkMove := func(fqn string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+		cmn.Assert(len(fqn) > 5)
+		newPath := filepath.Join(pathTo, strings.TrimPrefix(fqn, pathFrom))
+		newDir := filepath.Dir(newPath)
+		if err := cmn.CreateDir(newDir); err != nil {
+			t.Logf("Failed to create directory %q: %v", newDir, err)
+			return nil
+		}
+		if err := os.Rename(fqn, newPath); err != nil {
+			t.Logf("Failed to move %q to %q: %v", fqn, newPath, err)
+		}
+		return nil
+	}
+	filepath.Walk(pathFrom, walkMove)
+}
+
 // The test only checks that the number of object after rebalance equals
 // the number of objects before it
 // TODO: add reading objects
@@ -2141,26 +2188,9 @@ func TestECRebalance(t *testing.T) {
 
 	fullPath := fmt.Sprintf("%s/%s/%s", aisDir, bucket, ecTestDir)
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	mpathTouched := make(map[*cluster.Snode][]string)
 
 	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
-	defer func() {
-		// First, delete bucket
-		tutils.DestroyBucket(t, proxyURL, bucket)
-		// Second, reattach mpaths to recreate all directories
-		for si, mpaths := range mpathTouched {
-			for _, mp := range mpaths {
-				if err := api.RemoveMountpath(baseParams, si.ID(), mp); err != nil {
-					t.Logf("Failed to remove mpath %s of %s: %v", mp, si.Name(), err)
-				}
-				if err := api.AddMountpath(baseParams, si, mp); err != nil {
-					t.Logf("Failed to add mpath %s of %s: %v", mp, si.Name(), err)
-				}
-			}
-		}
-		// Third, wait for local rebalance finishes(just in case)
-		waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
-	}()
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := sync.WaitGroup{}
 
@@ -2206,11 +2236,9 @@ func TestECRebalance(t *testing.T) {
 	//    case of the object is replicated)
 	if o.parityCnt > 1 {
 		lostPath := lostFSList.Available[0]
-		mpathTouched[tgtLost] = []string{lostFSList.Available[0]}
 		tutils.Logf("Removing mpath %q of target %s\n", lostPath, tgtLost.DaemonID)
 		tutils.CheckPathExists(t, lostPath, true /*dir*/)
-		tassert.CheckFatal(t, os.RemoveAll(lostPath))
-		cmn.CreateDir(lostPath)
+		deleteAllFiles(t, lostPath)
 	}
 
 	// 2. Delete one, and rename the second: simulate mpath dead + new mpath attached
@@ -2218,15 +2246,12 @@ func TestECRebalance(t *testing.T) {
 	swapPathObj1 := swapFSList.Available[0]
 	tutils.Logf("Removing mpath %q of target %s\n", swapPathObj1, tgtSwap.DaemonID)
 	tutils.CheckPathExists(t, swapPathObj1, true /*dir*/)
-	mpathTouched[tgtSwap] = []string{swapFSList.Available[0]}
-	tassert.CheckFatal(t, os.RemoveAll(swapPathObj1))
+	deleteAllFiles(t, swapPathObj1)
 
 	swapPathObj2 := swapFSList.Available[1]
 	tutils.Logf("Renaming mpath %q -> %q of target %s\n", swapPathObj2, swapPathObj1, tgtSwap.DaemonID)
 	tutils.CheckPathExists(t, swapPathObj2, true /*dir*/)
-	mpathTouched[tgtSwap] = append(mpathTouched[tgtSwap], swapFSList.Available[1])
-	tassert.CheckFatal(t, os.Rename(swapPathObj2, swapPathObj1))
-	cmn.CreateDir(swapPathObj2)
+	moveAllFiles(t, swapPathObj2, swapPathObj1)
 
 	// Kill a random target
 	var removedTarget *cluster.Snode
@@ -2381,4 +2406,133 @@ func init() {
 	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 	_ = fs.CSM.RegisterFileType(ec.SliceType, &ec.SliceSpec{})
 	_ = fs.CSM.RegisterFileType(ec.MetaType, &ec.MetaSpec{})
+}
+
+// Creates two buckets (with EC enabled and disabled), fill them with data,
+// and then runs two parallel rebalances
+func TestECAndRegularRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+	if containers.DockerRunning() {
+		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
+	}
+
+	const (
+		aisDir   = "local" // TODO: hardcode
+		fileSize = 32 * cmn.KiB
+	)
+	var (
+		bucketReg = TestBucketName + "-REG"
+		bucketEC  = TestBucketName + "-EC"
+		proxyURL  = getPrimaryURL(t, proxyURLReadOnly)
+	)
+	o := ecOptions{
+		objCount:  90,
+		concurr:   8,
+		pattern:   "obj-reb-chk-%04d",
+		isAIS:     true,
+		dataCnt:   1,
+		parityCnt: 2,
+		silent:    true,
+	}.init()
+
+	smap := getClusterMap(t, proxyURL)
+	err := ecSliceNumInit(t, smap, o)
+	tassert.CheckFatal(t, err)
+	if len(smap.Tmap) < 4 {
+		t.Skip(fmt.Sprintf("%q requires at least 4 targets to have parity>=2, found %d", t.Name(), len(smap.Tmap)))
+	}
+
+	fullPath := fmt.Sprintf("%s/%s/%s", aisDir, bucketEC, ecTestDir)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	tutils.CreateFreshBucket(t, proxyURL, bucketReg)
+	defer tutils.DestroyBucket(t, proxyURL, bucketReg)
+	newLocalBckWithProps(t, baseParams, bucketEC, defaultECBckProps(o), o)
+	defer tutils.DestroyBucket(t, proxyURL, bucketEC)
+
+	// select a target that loses its mpath(simulate drive death),
+	// and that has mpaths changed (simulate mpath added)
+	tgtList := tutils.ExtractTargetNodes(smap)
+	tgtLost := tgtList[0]
+
+	tutils.Logf("Unregistering %s...\n", tgtLost.ID())
+	err = tutils.UnregisterNode(proxyURL, tgtLost.DaemonID)
+	tassert.CheckFatal(t, err)
+	registered := false
+	smap = getClusterMap(t, proxyURL)
+	defer func() {
+		if !registered {
+			err = tutils.RegisterNode(proxyURL, tgtLost, smap)
+			tassert.CheckError(t, err)
+		}
+	}()
+
+	// fill EC bucket
+	wg := sync.WaitGroup{}
+	wg.Add(o.objCount)
+	for i := 0; i < o.objCount; i++ {
+		objName := fmt.Sprintf(o.pattern, i)
+		go func(i int) {
+			defer wg.Done()
+			createECObject(t, baseParams, bucketEC, objName, i, fullPath, o)
+		}(i)
+	}
+	wg.Wait()
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	// fill regular bucket
+	rpattern := "obj-reg-chk-%04d"
+	fileList := []string{}
+	for i := 0; i < o.objCount; i++ {
+		fileList = append(fileList, fmt.Sprintf(rpattern, i))
+	}
+	ldir := filepath.Join(LocalSrcDir, fshcDir)
+	errCh := make(chan error, len(fileList))
+	objsPutCh := make(chan string, len(fileList))
+	sgl := tutils.Mem2.NewSGL(fileSize)
+	defer sgl.Free()
+	tutils.PutObjsFromList(proxyURL, bucketReg, ldir, readerType, ecTestDir, fileSize, fileList, errCh, objsPutCh, sgl)
+
+	msg := &cmn.SelectMsg{}
+	resECOld, err := api.ListBucket(baseParams, bucketEC, msg, 0)
+	tassert.CheckError(t, err)
+	oldECList := filterObjListOK(resECOld.Entries)
+	resRegOld, err := api.ListBucket(baseParams, bucketReg, msg, 0)
+	tassert.CheckError(t, err)
+	oldRegList := filterObjListOK(resRegOld.Entries)
+	tutils.Logf("Created %d objects in %s, %d objects in %s. Starting global rebalance\n",
+		len(oldECList), bucketEC, len(oldRegList), bucketReg)
+
+	tutils.Logf("Registering node %s\n", tgtLost.Name())
+	err = tutils.RegisterNode(proxyURL, tgtLost, smap)
+	tassert.CheckFatal(t, err)
+	registered = true
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+
+	tutils.Logf("Getting the number of objects after rebalance\n", tgtLost.Name())
+	resECNew, err := api.ListBucket(baseParams, bucketEC, msg, 0)
+	tassert.CheckError(t, err)
+	newECList := filterObjListOK(resECNew.Entries)
+	tutils.Logf("%d objects in %s after rebalance\n",
+		len(newECList), bucketEC)
+	resRegNew, err := api.ListBucket(baseParams, bucketReg, msg, 0)
+	tassert.CheckError(t, err)
+	newRegList := filterObjListOK(resRegNew.Entries)
+	tutils.Logf("%d objects in %si after rebalance\n",
+		len(newRegList), bucketReg)
+
+	tutils.Logf("Test object readability after rebalance\n")
+	for _, obj := range oldECList {
+		_, err := api.GetObject(baseParams, bucketEC, obj.Name)
+		tassert.CheckError(t, err)
+	}
+	for _, obj := range oldRegList {
+		_, err := api.GetObject(baseParams, bucketReg, obj.Name)
+		tassert.CheckError(t, err)
+	}
 }

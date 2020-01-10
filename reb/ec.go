@@ -174,7 +174,8 @@ type (
 		isMain       bool             // is local target a default one
 		inHrwList    bool             // is local target should have any slice/replica according to HRW
 		fullObjFound bool             // some target has the full object, no need to rebuild, just copy
-		isAIS        bool
+		isAIS        bool             // true: AIS bucket, false: cloud bucket
+		hasAllSlices bool             // true: all slices existed before rebalance
 	}
 	ecRebBck struct {
 		objs map[string]*ecRebObject // maps ObjectName <-> object info
@@ -1241,6 +1242,9 @@ func (s *ecRebalancer) calcLocalProps(bck *cluster.Bck, obj *ecRebObject, smap *
 	obj.uid = uniqueWaitID(mainSlice.Bucket, mainSlice.Objname, obj.isAIS)
 	obj.isMain = obj.mainDaemon == localDaemon
 
+	// TODO: must check only slices of the newest object version
+	// FIXME: after EC versioning is implemented
+	sliceCnt := int16(0)
 	for _, slice := range slices {
 		obj.sliceAt[slice.DaemonID] = slice
 		if slice.DaemonID == localDaemon {
@@ -1254,7 +1258,11 @@ func (s *ecRebalancer) calcLocalProps(bck *cluster.Bck, obj *ecRebObject, smap *
 			obj.fullObjFound = true
 		}
 		obj.sliceExist[slice.SliceID] = true
+		if slice.SliceID != 0 {
+			sliceCnt++
+		}
 	}
+	obj.hasAllSlices = sliceCnt >= obj.dataSlices+obj.paritySlices
 
 	genCount := cmn.Max(sliceReq, len(smap.Tmap))
 	obj.hrwTargets, err = cluster.HrwTargetList(bck.MakeUname(obj.objName), smap, genCount)
@@ -1277,22 +1285,21 @@ func (s *ecRebalancer) calcLocalProps(bck *cluster.Bck, obj *ecRebObject, smap *
 	}
 	// detect which target is responsible to send missing replicas to all
 	// other target that miss their replicas
-	if obj.isECCopy {
-		for _, si := range obj.hrwTargets {
-			if _, ok := obj.sliceAt[si.DaemonID]; ok {
-				obj.sender = si
-				break
-			}
+	for _, si := range obj.hrwTargets {
+		if _, ok := obj.sliceAt[si.DaemonID]; ok {
+			obj.sender = si
+			break
 		}
-		cmn.Assert(obj.sender != nil) // must not happen
 	}
+
+	cmn.Assert(obj.sender != nil) // must not happen
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 		if obj.sender == nil {
-			glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], slice found %d vs required %d, is in HRW %v",
-				s.t.Snode().Name(), obj.uid, obj.hasSlice, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID, sliceFound, sliceReq, obj.inHrwList)
+			glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], slice found %d vs required %d[all slices: %v], is in HRW %v",
+				s.t.Snode().Name(), obj.uid, obj.hasSlice, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID, sliceFound, sliceReq, obj.hasAllSlices, obj.inHrwList)
 		} else {
-			glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], slice found %d vs required %d, is in HRW %v [sender %s]",
-				s.t.Snode().Name(), obj.uid, obj.hasSlice, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID, sliceFound, sliceReq, obj.inHrwList, obj.sender.Name())
+			glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], slice found %d vs required %d[all slices: %v], is in HRW %v [sender %s]",
+				s.t.Snode().Name(), obj.uid, obj.hasSlice, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID, sliceFound, sliceReq, obj.hasAllSlices, obj.inHrwList, obj.sender.Name())
 		}
 	}
 	return nil
@@ -1460,8 +1467,14 @@ func (s *ecRebalancer) allSliceReceived() bool {
 			}
 		}
 		cmn.Assert(obj != nil)
-		if err := s.rebuildAndSend(obj, wObj.slices); err != nil {
-			glog.Errorf("Failed to rebuild %s: %v", uid, err)
+		// Rebuild only if there were missing slices or main object.
+		// Otherwise, just mark it done and continue.
+		rebuildSlices := obj.isECCopy && !obj.hasAllSlices
+		rebuildObject := !obj.mainHasAny && !obj.fullObjFound
+		if rebuildSlices || rebuildObject {
+			if err := s.rebuildAndSend(obj, wObj.slices); err != nil {
+				glog.Errorf("Failed to rebuild %s: %v", uid, err)
+			}
 		}
 		wObj.status = objDone
 		s.waiter.toRebuild.Dec()
@@ -1497,14 +1510,21 @@ func (s *ecRebalancer) waitQuiesce(cb func() bool) error {
 	return nil
 }
 
-func (s *ecRebalancer) waitForFullObject(obj *ecRebObject) error {
-	tgt := s.firstEmptyTgt(obj)
-	cmn.Assert(tgt != nil) // must not happen
-	if err := s.sendLocalData(obj, tgt); err != nil {
-		return err
+func (s *ecRebalancer) waitForFullObject(obj *ecRebObject, moveLocalSlice bool) error {
+	if moveLocalSlice {
+		// Default target has a slice, so it must be sent to another target
+		// before receiving a full object from some other target
+		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			glog.Infof("#5.4 Sending local slice before getting full object %s", obj.uid)
+		}
+		tgt := s.firstEmptyTgt(obj)
+		cmn.Assert(tgt != nil) // must not happen
+		if err := s.sendLocalData(obj, tgt); err != nil {
+			return err
+		}
 	}
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
-		glog.Infof("#5.4 Waiting for an object %s", obj.uid)
+		glog.Infof("#5.3/4 Waiting for an object %s", obj.uid)
 	}
 	s.waiter.lookupCreate(obj.uid, 0, waitForReplica)
 	s.waiter.updateRebuildInfo(obj.uid)
@@ -1597,10 +1617,15 @@ func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
 		return nil
 	}
 
+	// Case #5.3: main has nothing, but full object and all slices exists
+	if obj.isMain && !obj.mainHasAny && obj.fullObjFound {
+		return s.waitForFullObject(obj, false)
+	}
+
 	// Case #5.4: main has a slice instead of a full object, send local
 	// slice to a free target and wait for another target sends the full obj
 	if obj.isMain && obj.mainHasAny && obj.mainSliceID != 0 && obj.fullObjFound {
-		return s.waitForFullObject(obj)
+		return s.waitForFullObject(obj, true)
 	}
 
 	// Case #5.5: it is main target and full object is missing
@@ -1610,7 +1635,8 @@ func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
 
 	// The last case: must be main with object. Rebuild and send missing slices
 	cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
-		fmt.Sprintf("isMain %t - mainHasSome %t - mainID %d", obj.isMain, obj.mainHasAny, obj.mainSliceID))
+		fmt.Sprintf("%s%s/%s: isMain %t - mainHasSome %t - mainID %d",
+			s.mgr.t.Snode().Name(), obj.bucket, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID))
 	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
 		glog.Infof("rebuilding slices of %s and send them", obj.objName)
 	}
