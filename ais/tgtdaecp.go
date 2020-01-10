@@ -72,6 +72,9 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 		res = t.registerToURL(url, psi, timeout, nil, keepalive)
 	}
 	if res.err != nil {
+		if strings.Contains(res.err.Error(), ciePrefix) {
+			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
+		}
 		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive
@@ -710,7 +713,7 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 	bmd := t.bmdowner.get()
 	_, psi := t.getPrimaryURLAndSI()
 	if err = t.validateOriginBMD(bmd, psi, newBMD, ""); err != nil {
-		t.bmdowner.Unlock()
+		cmn.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
 		return
 	}
 

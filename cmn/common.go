@@ -433,6 +433,7 @@ func ExitInfof(f string, a ...interface{}) {
 }
 
 func ExitLogf(f string, a ...interface{}) {
+	glog.Errorln("Terminating...")
 	glog.Errorf(f, a...)
 	glog.Flush()
 	ExitInfof(f, a...)

@@ -40,6 +40,8 @@ const (
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
 	fmtUnknownAct = "unexpected action message <- JSON [%v]"
 	guestError    = "guest account does not have permissions for the operation"
+	ciePrefix     = "cluster integrity error: cie#"
+	githubHome    = "https://github.com/NVIDIA/aistore"
 )
 
 type (
@@ -3114,7 +3116,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
+	// check for cluster integrity errors (cie)
 	if err = p.validateOriginSmap(smap, nsi, regReq.Smap, ""); err != nil {
 		p.smapowner.Unlock()
 		p.invalmsghdlr(w, r, err.Error())
@@ -3427,6 +3429,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 //
 //========================
 func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, caller string) (err error) {
+	var (
+		pname = p.si.Name()
+	)
 	if glog.V(3) {
 		s := fmt.Sprintf("receive %s", newBMD.StringEx())
 		if msgInt.Action == "" {
@@ -3438,13 +3443,13 @@ func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInterna
 	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
 	if err = p.validateOriginBMD(bmd, nil, newBMD, caller); err != nil {
-		p.bmdowner.Unlock()
-		return
-	}
-	if newBMD.version() <= bmd.version() {
+		cmn.Assert(!p.smapowner.get().isPrimary(p.si))
+		// cluster integrity error: making exception for non-primary proxies
+		glog.Errorf("%s (non-primary): %v - proceeding to override BMD", pname, err)
+	} else if newBMD.version() <= bmd.version() {
 		p.bmdowner.Unlock()
 		if newBMD.version() < bmd.version() {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", p.si.Name(), bmd, newBMD)
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", pname, bmd, newBMD)
 		}
 		return
 	}
@@ -3597,11 +3602,11 @@ func resolveOriginBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	}
 	for o, lst := range mlist {
 		if l == len(lst) && o != origin {
-			s := fmt.Sprintf("targets have BMDs of different origins with no simple majority:\n%v", mlist)
+			s := fmt.Sprintf("%s: BMDs have different origins with no simple majority:\n%v", ciError(60), mlist)
 			return nil, &errBmdOriginSplit{s}
 		}
 	}
-	s := fmt.Sprintf("targets have BMDs of different origins, simple majority: ...%d:\n%v", origin%1000, mlist)
+	s := fmt.Sprintf("%s: BMDs have different origins with simple majority: ...%d:\n%v", ciError(70), origin%1000, mlist)
 	bmd := maxor[origin]
 	cmn.Assert(bmd.Origin != 0)
 	return bmd, &errTgtBmdOriginDiffer{s}
@@ -3615,4 +3620,9 @@ func requiresRemirroring(prevm, newm cmn.MirrorConf) bool {
 		return prevm.Copies != newm.Copies
 	}
 	return false
+}
+
+func ciError(num int) string {
+	const s = "[%s%d - for details, see %s/blob/master/docs/troubleshooting.md]"
+	return fmt.Sprintf(s, ciePrefix, num, githubHome)
 }

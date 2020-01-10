@@ -69,7 +69,7 @@ func (p *proxyrunner) bootstrap() {
 			}
 		}
 		if err != nil {
-			glog.Fatalf("FATAL: %s failed to join, err: %v", pname, err)
+			cmn.ExitLogf("FATAL: %s (non-primary) failed to join cluster, err: %v", pname, err)
 		}
 		return
 	}
@@ -120,7 +120,8 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 		err := jsoniter.Unmarshal(res.outjson, smap)
 		cmn.AssertNoErr(err)
 		if !smap.isValid() {
-			glog.Fatalf("FATAL: invalid Smap at startup/registration: %s", smap.pp())
+			cmn.ExitLogf("FATAL: %s (non-primary) invalid %s at startup/registration, err: %v",
+				pname, smap, err)
 		}
 		p.smapowner.put(smap) // put Smap
 		return nil
@@ -131,7 +132,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 		return err
 	}
 	if err := p.registerWithRetry(); err != nil {
-		glog.Fatalf("FATAL: %v", err)
+		cmn.ExitLogf("FATAL: %s (non-primary), err: %v", pname, err)
 	}
 	time.Sleep(time.Second)
 	f()
@@ -139,10 +140,10 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if !smap.isPresent(p.si) {
-		glog.Fatalf("FATAL: %s failed to register self - not present in the %s", pname, smap.pp())
+		cmn.ExitLogf("FATAL: %s failed to register self - not present in the %s", pname, smap.pp())
 	}
 	if err := p.smapowner.persist(smap); err != nil {
-		glog.Fatalf("FATAL: %s", err)
+		cmn.ExitLogf("FATAL: %s (non-primary), err: %v", pname, err)
 	}
 	p.smapowner.Unlock()
 	p.startedUp.Store(true)
@@ -234,7 +235,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		smap = clone
 	}
 	if err := p.smapowner.persist(smap); err != nil {
-		glog.Fatalf("FATAL: %s", err)
+		cmn.ExitLogf("FATAL: %s (primary), err: %v", pname, err)
 	}
 	p.smapowner.Unlock()
 
@@ -331,8 +332,9 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	glog.Infof("%s: local %s max-ver %s", pname, smap.StringEx(), maxVerSmap.StringEx())
 	sameOrigin, sameVersion, eq := smap.Compare(&maxVerSmap.Smap)
 	if !sameOrigin {
-		// FATAL
-		glog.Fatalf("%s %s: split-brain origin %s", pname, smap.StringEx(), maxVerSmap.StringEx())
+		// FATAL: cluster integrity error (cie)
+		cmn.ExitLogf("%s: split-brain origin [%s %s] vs [%s %s]",
+			ciError(10), pname, smap.StringEx(), maxVerSmap.ProxySI.Name(), maxVerSmap.StringEx())
 	}
 	if eq && sameVersion {
 		return
@@ -344,8 +346,9 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 			p.smapowner.put(maxVerSmap)
 			return
 		}
-		glog.Fatalf("%s: split-brain local %s vs %s(%s)",
-			pname, smap.StringEx(), maxVerSmap.ProxySI.Name(), maxVerSmap.StringEx())
+		// FATAL: cluster integrity error (cie)
+		cmn.ExitLogf("%s: split-brain local [%s %s] vs [%s %s]",
+			ciError(20), pname, smap.StringEx(), maxVerSmap.ProxySI.Name(), maxVerSmap.StringEx())
 	}
 	p.smapowner.Lock()
 	clone := p.smapowner.get().clone()
@@ -362,6 +365,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 	var (
 		err         error
 		sorigin     uint64
+		pname       = p.si.Name()
 		config      = cmn.GCO.Get()
 		now         = time.Now()
 		deadline    = now.Add(config.Timeout.Startup)
@@ -385,7 +389,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 	if slowp {
 		if maxVerBMD, err = resolveOriginBMD(bmds); err != nil {
 			if _, split := err.(*errBmdOriginSplit); split {
-				glog.Fatalf("FATAL: %v", err)
+				cmn.ExitLogf("FATAL: %s (primary), err: %v", pname, err) // cluster integrity error
 			}
 			if !errors.Is(err, errNoBMD) {
 				glog.Error(err.Error())
@@ -398,10 +402,12 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 			if sorigin == 0 {
 				sorigin = smap.Origin
 				if sorigin != 0 {
-					glog.Infof("%s: set Smap origin = %s(%d)", p.si.Name(), si, sorigin)
+					glog.Infof("%s: set Smap origin = %s(%d)", pname, si, sorigin)
 				}
 			} else if sorigin != smap.Origin && smap.Origin != 0 {
-				glog.Fatalf("FATAL: split-brain Smap origin %d != %s(%d)", sorigin, si, smap.Origin)
+				// FATAL: cluster integrity error (cie)
+				cmn.ExitLogf("%s: split-brain [%s %d] vs [%s %d]",
+					ciError(30), pname, sorigin, si.Name(), smap.Origin)
 			}
 		}
 		for _, smap := range smaps {

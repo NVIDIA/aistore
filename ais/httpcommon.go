@@ -971,15 +971,19 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap 
 		s = ", action " + msgInt.Action
 	}
 	if err = h.validateOriginSmap(smap, nil, newSmap, caller); err != nil {
-		glog.Error(err)
-		newSmap = nil
-		return
+		if h.si.IsProxy() {
+			cmn.Assert(!smap.isPrimary(h.si))
+			// cluster integrity error: making exception for non-primary proxies
+			glog.Errorf("%s (non-primary): %v - proceeding to override Smap", hname, err)
+			return
+		}
+		cmn.ExitLogf("%v", err) // otherwise, FATAL
 	}
+
 	glog.Infof("%s: receive %s (local %s)%s", hname, newSmap.StringEx(), smap.StringEx(), s)
-	sameOrigin, sameVersion, eq := smap.Compare(&newSmap.Smap)
+	sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	cmn.Assert(sameOrigin)
 	if newSmap.version() < myver {
-		cmn.Assert(!sameVersion)
 		if !eq {
 			err = fmt.Errorf("%s: attempt to downgrade %s to %s", hname, smap.StringEx(), newSmap.StringEx())
 			newSmap = nil
@@ -1190,8 +1194,10 @@ func (h *httprunner) validateOriginBMD(bmd *bucketMD, nsi *cluster.Snode, nbmd *
 	} else if nsiname == "" {
 		nsiname = "???"
 	}
-	s := fmt.Sprintf("%s: BMDs have different origins: %s vs %s: %s",
-		h.si.Name(), bmd.StringEx(), nsiname, nbmd.StringEx())
+	hname := h.si.Name()
+	// FATAL: cluster integrity error (cie)
+	s := fmt.Sprintf("%s: BMDs have different origins: [%s: %s] vs [%s: %s]",
+		ciError(40), hname, bmd.StringEx(), nsiname, nbmd.StringEx())
 	err = &errPrxBmdOriginDiffer{s}
 	return
 }
@@ -1212,8 +1218,10 @@ func (h *httprunner) validateOriginSmap(smap *smapX, nsi *cluster.Snode, newSmap
 	} else if nsiname == "" {
 		nsiname = "???"
 	}
-	s := fmt.Sprintf("%s: Smaps have different origins: %s vs %s: %s",
-		h.si.Name(), smap.StringEx(), nsiname, newSmap.StringEx())
+	hname := h.si.Name()
+	// FATAL: cluster integrity error (cie)
+	s := fmt.Sprintf("%s: Smaps have different origins: [%s: %s] vs [%s: %s]",
+		ciError(50), hname, smap.StringEx(), nsiname, newSmap.StringEx())
 	err = &errSmapOriginDiffer{s}
 	return
 }

@@ -1,5 +1,15 @@
-## Table of Contents
-- [AIS Design Philosophy](#ais-design-philosophy)
+## Introduction
+
+Training deep learning (DL) models on petascale datasets is essential for achieving competitive and state-of-the-art performance in applications such as speech, video analytics, and object recognition. However, existing distributed filesystems were not developed for the access patterns and usability requirements of DL jobs.
+
+In this [white paper](https://arxiv.org/abs/2001.01858) we describe AIStore and components, and then compare system performance experimentally using image classification workloads and storing training data on a variety of backends. For details, please see:
+
+* AIStore [white paper](https://arxiv.org/abs/2001.01858).
+* IEEE BigData 2019 [poster](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf)
+
+The rest of this document is structured as follows:
+
+- [Design Philosophy](#ais-design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
 - [Datapath](#datapath)
 - [Open Format](#open-format)
@@ -14,8 +24,8 @@
 - [Python Client](#python-client)
 - [AIS Limitations](#ais-limitations)
 
-## AIS Design Philosophy
-The design philosophy behind AIS is based on the simple truth that it is often more optimal to let applications control how and whether the stored content is stored in chunks. In particular, AI datasets are often pre-sharded, whereby the content and boundaries of those shards are based on AI-specific optimization criteria. More exactly, the datasets could be pre-sharded, post-sharded, and otherwise transformed to facilitate training, inference, and simulation by the AI apps.
+## Design Philosophy
+It is often more optimal to let applications control how and whether the stored content is stored in chunks. That's the simple truth that holds, in particular, for AI datasets that are often pre-sharded with content and boundaries of those shards based on application-specific optimization criteria. More exactly, the datasets could be pre-sharded, post-sharded, and otherwise transformed to facilitate training, inference, and simulation by the AI apps.
 
 The corollary of this statement is two-fold:
 

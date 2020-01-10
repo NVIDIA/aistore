@@ -16,8 +16,8 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 * scale-out with no downtime and no limitation;
 * HTTP REST API to GET/PUT objects, create, destroy, list and configure buckets;
 * FUSE client (`aisfs`) to access AIS objects as files;
-* arbitrary number of access points via AIS gateways (aka *proxies*);
-* easy-to-use CLI based on command-line (TAB) completions;
+* arbitrary number of (extremely lightweight) access points;
+* easy-to-use CLI supporting command-line (TAB) completions;
 * automated rebalancing upon changes in cluster membership, drive failures, bucket renames;
 * N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
 
@@ -31,7 +31,7 @@ Also, AIStore:
 
 Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For a detailed overview, design philosophy, and components, please see this [document](docs/overview.md), where you can also find 5 (five) alternative ways to populate AIStore with existing datasets.
+For AIStore **white paper** and design philosophy, please see the [overview document](docs/overview.md) (where you can also find 5 alternative ways to populate AIStore with existing datasets).
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
@@ -47,7 +47,7 @@ For a detailed overview, design philosophy, and components, please see this [doc
 
 ## Prerequisites
 
-* [Linux](#Linux) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) and [MacOS](#MacOS)
+* [Linux](#Linux) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) or [MacOS](#MacOS)
 * [Go 1.13 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
@@ -246,6 +246,7 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 - [Extended Actions](docs/xaction.md)
 - [Integrated Internet Downloader](downloader/README.md)
 - [Docker for AIS developers](docs/docker_main.md)
+- [Troubleshooting Cluster Operation](docs/troubleshooting.md)
 
 ## Selected Package READMEs
 - [Package `api`](api/README.md)
