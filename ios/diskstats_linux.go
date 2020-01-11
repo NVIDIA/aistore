@@ -15,26 +15,38 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+// The "sectors" in question are the standard UNIX 512-byte sectors, not any device- or filesystem-specific block size
+// (from https://www.kernel.org/doc/Documentation/block/stat.txt)
+const sectorSize = int64(512)
+
 // based on https://www.kernel.org/doc/Documentation/iostats.txt
 //   and https://www.kernel.org/doc/Documentation/block/stat.txt
 type dblockStat struct {
-	ReadComplete  int64 // 1 - # of reads completed
-	ReadMerged    int64 // 2 - # of reads merged
-	ReadSectors   int64 // 3 - # of sectors read
-	ReadMs        int64 // 4 - # ms spent reading
-	WriteComplete int64 // 5 - # writes completed
-	WriteMerged   int64 // 6 - # writes merged
-	WriteSectors  int64 // 7 - # of sectors written
-	WriteMs       int64 // 8 - # of milliseconds spent writing
-	IOPending     int64 // 9 - # of I/Os currently in progress
-	IOMs          int64 // 10 - # of milliseconds spent doing I/Os
-	IOMsWeighted  int64 // 11 - weighted # of milliseconds spent doing I/Os
+	readComplete  int64 // 1 - # of reads completed
+	readMerged    int64 // 2 - # of reads merged
+	readSectors   int64 // 3 - # of sectors read
+	readMs        int64 // 4 - # ms spent reading
+	writeComplete int64 // 5 - # writes completed
+	writeMerged   int64 // 6 - # writes merged
+	writeSectors  int64 // 7 - # of sectors written
+	writeMs       int64 // 8 - # of milliseconds spent writing
+	ioPending     int64 // 9 - # of I/Os currently in progress
+	ioMs          int64 // 10 - # of milliseconds spent doing I/Os
+	ioMsWeighted  int64 // 11 - weighted # of milliseconds spent doing I/Os
 }
 
-type diskBlockStats map[string]dblockStat
+var (
+	// interface guard
+	_ diskBlockStat = dblockStat{}
+)
+
+var (
+	// Allocated here to reduce number of allocations in `readDiskStats`.
+	blockStats = make(diskBlockStats, 10)
+)
 
 // readDiskStats returns disk stats FIXME: optimize
-func readDiskStats(disks, sysfnames cmn.SimpleKVs, blockStats diskBlockStats) {
+func readDiskStats(disks, sysfnames cmn.SimpleKVs) diskBlockStats {
 	for d := range disks {
 		stat, ok := readSingleDiskStat(sysfnames[d])
 		if !ok {
@@ -42,6 +54,7 @@ func readDiskStats(disks, sysfnames cmn.SimpleKVs, blockStats diskBlockStats) {
 		}
 		blockStats[d] = stat
 	}
+	return blockStats
 }
 
 // https://www.kernel.org/doc/Documentation/block/stat.txt
@@ -86,3 +99,9 @@ func extractI64(field string) int64 {
 	}
 	return val
 }
+
+func (dbs dblockStat) ReadBytes() int64  { return dbs.readSectors * sectorSize }
+func (dbs dblockStat) WriteBytes() int64 { return dbs.writeSectors * sectorSize }
+func (dbs dblockStat) IOMs() int64       { return dbs.ioMs }
+func (dbs dblockStat) WriteMs() int64    { return dbs.writeMs }
+func (dbs dblockStat) ReadMs() int64     { return dbs.readMs }

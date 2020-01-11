@@ -22,17 +22,12 @@ const (
 	second = int64(time.Second)
 )
 
-// The "sectors" in question are the standard UNIX 512-byte sectors, not any device- or filesystem-specific block size
-// (from https://www.kernel.org/doc/Documentation/block/stat.txt)
-const sectorSize = int64(512)
-
 type (
 	IostatContext struct {
 		mpathLock   sync.Mutex
 		mpath2disks map[string]fsDisks
 		disk2mpath  cmn.SimpleKVs
 		sorted      []string
-		blockStats  diskBlockStats
 		disk2sysfn  cmn.SimpleKVs
 		cache       atomic.Pointer
 		cacheLock   *sync.Mutex
@@ -46,14 +41,14 @@ type (
 		expireTime time.Time
 		timestamp  time.Time
 
-		diskIOms map[string]int64
-		diskUtil map[string]int64
-		diskRms  map[string]int64
-		diskRSec map[string]int64
-		diskRBps map[string]int64
-		diskWms  map[string]int64
-		diskWSec map[string]int64
-		diskWBps map[string]int64
+		diskIOms   map[string]int64
+		diskUtil   map[string]int64
+		diskRms    map[string]int64
+		diskRBytes map[string]int64
+		diskRBps   map[string]int64
+		diskWms    map[string]int64
+		diskWBytes map[string]int64
+		diskWBps   map[string]int64
 
 		mpathUtil map[string]int64 // average utilization of the disks, max 100
 		mpathRR   map[string]*atomic.Int32
@@ -74,7 +69,6 @@ func NewIostatContext() (ctx *IostatContext) {
 		mpath2disks: make(map[string]fsDisks, 10),
 		disk2mpath:  make(cmn.SimpleKVs, 10),
 		sorted:      make([]string, 0, 10),
-		blockStats:  make(diskBlockStats, 10),
 		disk2sysfn:  make(cmn.SimpleKVs, 10),
 		cacheLock:   &sync.Mutex{},
 	}
@@ -88,16 +82,16 @@ func NewIostatContext() (ctx *IostatContext) {
 
 func newIostatCache() *ioStatCache {
 	return &ioStatCache{
-		diskIOms:  make(map[string]int64),
-		diskUtil:  make(map[string]int64),
-		diskRms:   make(map[string]int64),
-		diskRSec:  make(map[string]int64),
-		diskRBps:  make(map[string]int64),
-		diskWms:   make(map[string]int64),
-		diskWSec:  make(map[string]int64),
-		diskWBps:  make(map[string]int64),
-		mpathUtil: make(map[string]int64),
-		mpathRR:   make(map[string]*atomic.Int32),
+		diskIOms:   make(map[string]int64),
+		diskUtil:   make(map[string]int64),
+		diskRms:    make(map[string]int64),
+		diskRBytes: make(map[string]int64),
+		diskRBps:   make(map[string]int64),
+		diskWms:    make(map[string]int64),
+		diskWBytes: make(map[string]int64),
+		diskWBps:   make(map[string]int64),
+		mpathUtil:  make(map[string]int64),
+		mpathRR:    make(map[string]*atomic.Int32),
 	}
 }
 
@@ -182,7 +176,8 @@ func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStat
 		m[disk] = &SelectedDiskStats{
 			RBps: cache.diskRBps[disk],
 			WBps: cache.diskWBps[disk],
-			Util: cache.diskUtil[disk]}
+			Util: cache.diskUtil[disk],
+		}
 	}
 	return
 }
@@ -234,7 +229,7 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 	//
 	ctx.mpathLock.Lock() // nested lock
 	now = time.Now()
-	readDiskStats(ctx.disk2mpath, ctx.disk2sysfn, ctx.blockStats)
+	disksStats := readDiskStats(ctx.disk2mpath, ctx.disk2sysfn)
 
 	ctx.cacheIdx++
 	ctx.cacheIdx %= len(ctx.cacheHst)
@@ -264,16 +259,16 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 		ncache.diskRBps[disk] = 0
 		ncache.diskWBps[disk] = 0
 		ncache.diskUtil[disk] = 0
-		stat, ok := ctx.blockStats[disk]
+		stat, ok := disksStats[disk]
 		if !ok {
 			glog.Errorf("no block stats for disk %s", disk) // TODO: remove
 			continue
 		}
-		ncache.diskIOms[disk] = stat.IOMs
-		ncache.diskRms[disk] = stat.ReadMs
-		ncache.diskRSec[disk] = stat.ReadSectors
-		ncache.diskWms[disk] = stat.WriteMs
-		ncache.diskWSec[disk] = stat.WriteSectors
+		ncache.diskIOms[disk] = stat.IOMs()
+		ncache.diskRms[disk] = stat.ReadMs()
+		ncache.diskRBytes[disk] = stat.ReadBytes()
+		ncache.diskWms[disk] = stat.WriteMs()
+		ncache.diskWBytes[disk] = stat.WriteBytes()
 
 		if _, ok := statsCache.diskIOms[disk]; !ok {
 			missingInfo = true
@@ -281,9 +276,9 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 		}
 		// deltas
 		var (
-			ioms   = stat.IOMs - statsCache.diskIOms[disk]
-			rdsect = stat.ReadSectors - statsCache.diskRSec[disk]
-			wdsect = stat.WriteSectors - statsCache.diskWSec[disk]
+			ioms       = stat.IOMs() - statsCache.diskIOms[disk]
+			readBytes  = stat.ReadBytes() - statsCache.diskRBytes[disk]
+			writeBytes = stat.WriteBytes() - statsCache.diskWBytes[disk]
 		)
 		if elapsedMillis > 0 {
 			ncache.diskUtil[disk] = cmn.DivRound(ioms*100, elapsedMillis)
@@ -292,8 +287,8 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 		}
 		ncache.mpathUtil[mpath] += ncache.diskUtil[disk]
 		if elapsedSeconds > 0 {
-			ncache.diskRBps[disk] = cmn.DivRound(rdsect*sectorSize, elapsedSeconds)
-			ncache.diskWBps[disk] = cmn.DivRound(wdsect*sectorSize, elapsedSeconds)
+			ncache.diskRBps[disk] = cmn.DivRound(readBytes, elapsedSeconds)
+			ncache.diskWBps[disk] = cmn.DivRound(writeBytes, elapsedSeconds)
 		} else {
 			ncache.diskRBps[disk] = statsCache.diskRBps[disk]
 			ncache.diskWBps[disk] = statsCache.diskWBps[disk]

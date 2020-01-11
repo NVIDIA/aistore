@@ -17,6 +17,7 @@ require (
 	github.com/karrick/godirwalk v1.12.0
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kylelemons/godebug v1.1.0 // indirect
+	github.com/lufia/iostat v0.0.0-20170605150913-9f7362b77ad3
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0

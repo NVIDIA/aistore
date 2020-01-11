@@ -5,28 +5,46 @@
  */
 package ios
 
-import "github.com/NVIDIA/aistore/cmn"
+import (
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/lufia/iostat"
+)
 
-// TODO: this struct is only there to make Darwin platform compile. Later,
-//  this must become an interface that will be implemented for both Linux and
-//  Darwin platform. Then the signature of `readDiskStats` needs to be changed
-//  as well to accept an interface rather than a struct.
 type dblockStat struct {
-	ReadComplete  int64 // 1 - # of reads completed
-	ReadMerged    int64 // 2 - # of reads merged
-	ReadSectors   int64 // 3 - # of sectors read
-	ReadMs        int64 // 4 - # ms spent reading
-	WriteComplete int64 // 5 - # writes completed
-	WriteMerged   int64 // 6 - # writes merged
-	WriteSectors  int64 // 7 - # of sectors written
-	WriteMs       int64 // 8 - # of milliseconds spent writing
-	IOPending     int64 // 9 - # of I/Os currently in progress
-	IOMs          int64 // 10 - # of milliseconds spent doing I/Os
-	IOMsWeighted  int64 // 11 - weighted # of milliseconds spent doing I/Os
+	readBytes  int64
+	readMs     int64
+	writeBytes int64
+	writeMs    int64
+	ioMs       int64
 }
 
-type diskBlockStats map[string]dblockStat
+var (
+	// interface guard
+	_ diskBlockStat = dblockStat{}
+)
 
 // readDiskStats returns disk stats
-// TODO implementation
-func readDiskStats(disks, sysfnames cmn.SimpleKVs, blockStats diskBlockStats) {}
+func readDiskStats(disks, sysfnames cmn.SimpleKVs) diskBlockStats {
+	driveStats, err := iostat.ReadDriveStats()
+	if err != nil {
+		return diskBlockStats{}
+	}
+
+	dblockStats := make(diskBlockStats, len(disks))
+	for _, driveStat := range driveStats {
+		dblockStats[driveStat.Name] = dblockStat{
+			readBytes:  driveStat.BytesRead,
+			readMs:     driveStat.TotalReadTime.Milliseconds(),
+			writeBytes: driveStat.BytesWritten,
+			writeMs:    driveStat.TotalWriteTime.Milliseconds(),
+			ioMs:       driveStat.TotalReadTime.Milliseconds() + driveStat.TotalWriteTime.Milliseconds(),
+		}
+	}
+	return dblockStats
+}
+
+func (dbs dblockStat) ReadBytes() int64  { return dbs.readBytes }
+func (dbs dblockStat) WriteBytes() int64 { return dbs.writeBytes }
+func (dbs dblockStat) IOMs() int64       { return dbs.ioMs }
+func (dbs dblockStat) WriteMs() int64    { return dbs.writeMs }
+func (dbs dblockStat) ReadMs() int64     { return dbs.readMs }
