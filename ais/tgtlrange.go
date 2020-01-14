@@ -154,7 +154,7 @@ func (t *targetrunner) prefetchMissing(ctx context.Context, objName string, bck 
 			return
 		}
 	}
-	if lom.IsAIS() { // must not come here
+	if lom.Bck().IsAIS() { // must not come here
 		if coldGet {
 			glog.Errorf("prefetch: %s", lom)
 		}

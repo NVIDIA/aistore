@@ -158,9 +158,8 @@ func (lctx *lruCtx) evict() (err error) {
 		}
 		lom.Uncache()
 		// 2.2: for mirrored objects: remove extra copies if any
-		prov := cmn.ProviderFromBool(lom.IsAIS())
 		lom = &cluster.LOM{T: lctx.ini.T, Objname: lom.Objname}
-		err = lom.Init(lom.Bucket(), prov, lom.Config())
+		err = lom.Init(lom.Bucket(), lom.Provider(), lom.Config())
 		if err != nil {
 			glog.Warningf("%s: %v", lom, err)
 		} else if err = lom.Load(false); err != nil {

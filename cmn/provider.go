@@ -9,7 +9,6 @@ package cmn
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -38,13 +37,6 @@ var (
 	}
 )
 
-func ProviderFromBool(isais bool) string {
-	if isais {
-		return AIS
-	}
-	return Cloud
-}
-
 func ProviderFromStr(provider string) (val string, err error) {
 	var ok bool
 	val, ok = providerMap[strings.ToLower(provider)]
@@ -66,14 +58,4 @@ func IsProviderCloud(provider string) bool {
 
 func IsValidProvider(provider string) bool {
 	return StringInSlice(provider, Providers)
-}
-
-func validateCloudProvider(provider string, bckIsAIS bool) error {
-	if provider != "" && provider != ProviderAmazon && provider != ProviderGoogle && provider != ProviderAIS {
-		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s | %s | %s)", provider,
-			ProviderAmazon, ProviderGoogle, ProviderAIS)
-	} else if bckIsAIS && provider != ProviderAIS && provider != "" {
-		return fmt.Errorf("ais bucket can only have '%s' as the cloud provider", ProviderAIS)
-	}
-	return nil
 }

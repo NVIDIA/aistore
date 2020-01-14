@@ -374,8 +374,8 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	request := iReq.Marshal()
 	hdr := transport.Header{
 		Bucket:   req.LOM.Bucket(),
-		BckIsAIS: req.LOM.IsAIS(),
-		Objname:  req.LOM.Objname,
+		Provider: req.LOM.Provider(),
+		ObjName:  req.LOM.Objname,
 		Opaque:   request,
 	}
 
@@ -618,7 +618,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 
 	// FIXME: slice meta file should be a different kind of LOM
 	metaLom := &cluster.LOM{T: c.parent.t, FQN: metaFQN}
-	if err := metaLom.Init(req.LOM.Bucket(), req.LOM.Bck().Provider); err != nil {
+	if err := metaLom.Init(req.LOM.Bucket(), req.LOM.Provider()); err != nil {
 		return restored, err
 	}
 
@@ -870,7 +870,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		wg.Add(1)
 		go func(si *cluster.Snode) {
 			defer wg.Done()
-			md, err := RequestECMeta(req.LOM.Bucket(), req.LOM.Objname, req.LOM.Bck().Provider, si)
+			md, err := RequestECMeta(req.LOM.Bucket(), req.LOM.Objname, req.LOM.Provider(), si)
 			if err != nil {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("No EC meta %s from %s: %v", req.LOM.Objname, si.Name(), err)

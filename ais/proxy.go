@@ -1218,7 +1218,7 @@ func (p *proxyrunner) applyNewProps(bck *cluster.Bck, propsToUpdate cmn.BucketPr
 	}
 
 	targetCnt := p.smapowner.Get().CountTargets()
-	err = nprops.Validate(bck.IsAIS(), targetCnt, p.urlOutsideCluster)
+	err = nprops.Validate(targetCnt, p.urlOutsideCluster)
 	return
 }
 

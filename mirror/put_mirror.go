@@ -48,7 +48,7 @@ func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPut
 		mpathCount        = len(availablePaths)
 	)
 	r = &XactPutLRepl{
-		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket(), lom.IsAIS()),
+		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket(), lom.Provider()),
 		slab:           slab,
 		mirror:         *lom.MirrorConf(),
 	}

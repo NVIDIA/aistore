@@ -319,7 +319,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 			curwt += sleep
 		}
 		if curwt >= maxwt {
-			glog.Errorf("%s: timed-out waiting to start, dropping %s/%s", reb.t.Snode().Name(), hdr.Bucket, hdr.Objname)
+			glog.Errorf("%s: timed-out waiting to start, dropping %s/%s/%s", reb.t.Snode().Name(), hdr.Provider, hdr.Bucket, hdr.ObjName)
 			return
 		}
 	}
@@ -328,8 +328,8 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 		tsi  = smap.GetTarget(tsid)
 	)
 	// Rx
-	lom := &cluster.LOM{T: reb.t, Objname: hdr.Objname}
-	if err = lom.Init(hdr.Bucket, cmn.ProviderFromBool(hdr.BckIsAIS)); err != nil {
+	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
+	if err = lom.Init(hdr.Bucket, hdr.Provider); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -419,7 +419,7 @@ func (reb *Manager) isNodeInStage(si *cluster.Snode, stage uint32) bool {
 
 func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 	if err != nil {
-		glog.Errorf("Failed to get notification %s from %s: %v", hdr.Objname, hdr.Bucket, err)
+		glog.Errorf("Failed to get notification %s from %s[%s]: %v", hdr.ObjName, hdr.Bucket, hdr.Provider, err)
 		return
 	}
 
@@ -459,9 +459,9 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 
 func (reb *Manager) recvECAck(hdr transport.Header) {
 	opaque := string(hdr.Opaque)
-	uid := ackID(hdr.Bucket, hdr.Objname, cmn.ProviderFromBool(hdr.BckIsAIS), string(hdr.Opaque))
+	uid := ackID(hdr.Bucket, hdr.Provider, hdr.ObjName, string(hdr.Opaque))
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s: EC ack from %s on %s/%s", reb.t.Snode().Name(), opaque, hdr.Bucket, hdr.Objname)
+		glog.Infof("%s: EC ack from %s on %s/%s/%s", reb.t.Snode().Name(), opaque, hdr.Provider, hdr.Bucket, hdr.ObjName)
 	}
 	reb.ecReb.ackCTs.mtx.Lock()
 	delete(reb.ecReb.ackCTs.ct, uid)
@@ -481,8 +481,8 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objRead
 		return
 	}
 
-	lom := &cluster.LOM{T: reb.t, Objname: hdr.Objname}
-	if err = lom.Init(hdr.Bucket, cmn.ProviderFromBool(hdr.BckIsAIS)); err != nil {
+	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
+	if err = lom.Init(hdr.Bucket, hdr.Provider); err != nil {
 		glog.Error(err)
 		return
 	}

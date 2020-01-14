@@ -95,10 +95,10 @@ func HeadObject(baseParams BaseParams, bucket, provider, object string, checkExi
 		return nil, err
 	}
 	var (
-		size           int64
-		atime          time.Time
-		numCopies      int
-		present, isais bool
+		size      int64
+		atime     time.Time
+		numCopies int
+		present   bool
 	)
 	size, err = strconv.ParseInt(r.Header.Get(cmn.HeaderObjSize), 10, 64)
 	if err != nil {
@@ -122,19 +122,15 @@ func HeadObject(baseParams BaseParams, bucket, provider, object string, checkExi
 	if err != nil {
 		return nil, err
 	}
-	isais, err = cmn.ParseBool(r.Header.Get(cmn.HeaderObjBckIsAIS))
-	if err != nil {
-		return nil, err
-	}
 
 	objProps := &cmn.ObjectProps{
 		Size:      size,
 		Version:   r.Header.Get(cmn.HeaderObjVersion),
 		Atime:     atime,
+		Provider:  r.Header.Get(cmn.HeaderObjProvider),
 		NumCopies: numCopies,
 		Checksum:  r.Header.Get(cmn.HeaderObjCksumVal),
 		Present:   present,
-		BckIsAIS:  isais,
 	}
 
 	if ecStr := r.Header.Get(cmn.HeaderObjECMeta); ecStr != "" {

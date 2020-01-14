@@ -23,6 +23,7 @@ type CT struct {
 
 func (ct *CT) ObjName() string          { return ct.parsedFQN.ObjName }
 func (ct *CT) Bucket() string           { return ct.bck.Name }
+func (ct *CT) Provider() string         { return ct.bck.Provider }
 func (ct *CT) Bprops() *cmn.BucketProps { return ct.bck.Props }
 func (ct *CT) Bck() *Bck                { return ct.bck }
 func (ct *CT) ParsedFQN() fs.ParsedFQN  { return ct.parsedFQN }

@@ -125,7 +125,7 @@ const (
 	HeaderObjVersion   = "ObjVersion"   // Object version/generation - ais or Cloud
 	HeaderObjPresent   = "ObjPresent"   // Is object present in the cluster
 	HeaderObjNumCopies = "ObjNumCopies" // Number of copies of the object
-	HeaderObjBckIsAIS  = "ObjBckIsAIS"  // Is object from an ais bucket
+	HeaderObjProvider  = "ObjProvider"  // Cloud provider of the object
 	HeaderObjECMeta    = "ObjECMeta"    // Info about EC object/slice/replica
 
 	// intra-cluster: control

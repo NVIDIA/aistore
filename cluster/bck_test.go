@@ -87,19 +87,11 @@ var _ = Describe("Bck", func() {
 			),
 			Entry(
 				"matching Cloud providers",
-				&Bck{Name: "a", Provider: cmn.Cloud}, &Bck{Name: "a", Provider: cmn.Cloud},
-			),
-			Entry(
-				"matching Cloud providers #2",
-				&Bck{Name: "a", Provider: cmn.ProviderGoogle}, &Bck{Name: "a", Provider: cmn.Cloud},
-			),
-			Entry(
-				"matching Cloud providers #3",
 				&Bck{Name: "a", Provider: cmn.ProviderGoogle}, &Bck{Name: "a", Provider: cmn.ProviderAmazon},
 			),
 			Entry(
-				"matching Cloud providers #4",
-				&Bck{Name: "a", Provider: cmn.Cloud}, &Bck{Name: "a", Provider: cmn.ProviderAmazon},
+				"matching Cloud providers #2",
+				&Bck{Name: "a", Provider: cmn.ProviderAmazon}, &Bck{Name: "a", Provider: cmn.ProviderGoogle},
 			),
 		)
 	})

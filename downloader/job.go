@@ -180,7 +180,7 @@ func (j *CloudBucketDlJob) GetNextObjs() error {
 		objects[entry.Name] = ""
 	}
 
-	dl, err := GetTargetDlObjs(j.t, objects, j.bck, true /* is cloud - FIXME: deprecated */)
+	dl, err := GetTargetDlObjs(j.t, objects, j.bck)
 	if err != nil {
 		return err
 	}

@@ -12,7 +12,7 @@ import (
 // BuildDownloaderInput takes payload, extracted from user's request and returnes DlBody
 // which contains metadata of objects supposed to be downloaded by target t
 func BuildDownloaderInput(t cluster.Target, id string, bck *cluster.Bck,
-	payload *cmn.DlBase, objects cmn.SimpleKVs, cloud bool) (*cmn.DlBody, error) {
+	payload *cmn.DlBase, objects cmn.SimpleKVs) (*cmn.DlBody, error) {
 	var (
 		err    error
 		dlBody = &cmn.DlBody{ID: id}
@@ -22,12 +22,11 @@ func BuildDownloaderInput(t cluster.Target, id string, bck *cluster.Bck,
 	dlBody.Timeout = payload.Timeout
 	dlBody.Description = payload.Description
 
-	dlBody.Objs, err = GetTargetDlObjs(t, objects, bck, cloud)
+	dlBody.Objs, err = GetTargetDlObjs(t, objects, bck)
 	return dlBody, err
 }
 
-// TODO -- FIXME: `cloud bool` is deprecated
-func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bck *cluster.Bck, cloud bool) ([]cmn.DlObj, error) {
+func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bck *cluster.Bck) ([]cmn.DlObj, error) {
 	// Filter out objects that will be handled by other targets
 	dlObjs := make([]cmn.DlObj, 0, len(objects))
 	smap := t.GetSowner().Get()
@@ -51,7 +50,7 @@ func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bck *cluster.Bck, 
 		dlObjs = append(dlObjs, cmn.DlObj{
 			Objname:   objName,
 			Link:      link,
-			FromCloud: cloud,
+			FromCloud: cmn.IsProviderCloud(bck.Provider),
 		})
 	}
 

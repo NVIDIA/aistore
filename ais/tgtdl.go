@@ -141,8 +141,6 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 		objectsPayload interface{}
 
 		description string
-		bckIsAIS    bool
-		fromCloud   bool
 	)
 
 	payload.InitWithQuery(query)
@@ -182,11 +180,15 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 			return nil, err
 		}
 		description = multiPayload.Describe()
-	} else if err := cloudPayload.Validate(bckIsAIS); err == nil {
-		//
-		// TODO -- FIXME: bckIsAIS must be removed; init bck (below) and check conditions&errors
-		//
+	} else if err := cloudPayload.Validate(); err == nil {
 		bck := &cluster.Bck{Name: cloudPayload.Bucket, Provider: cloudPayload.Provider}
+		if err := bck.Init(t.bmdowner); err != nil {
+			return nil, err
+		}
+		if !cmn.IsProviderCloud(bck.Provider) {
+			return nil, fmt.Errorf("bucket download requires cloud bucket")
+		}
+
 		baseJob := downloader.NewBaseDlJob(id, bck, cloudPayload.Timeout, payload.Description)
 		return downloader.NewCloudBucketDlJob(t.contextWithAuth(r.Header), t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
 	} else {
@@ -199,11 +201,14 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 
 	bck := &cluster.Bck{Name: payload.Bucket, Provider: payload.Provider}
 	if err = bck.Init(t.bmdowner); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 			return nil, err
 		}
 	}
-	input, err := downloader.BuildDownloaderInput(t, id, bck, payload, objects, fromCloud)
+	if !bck.IsAIS() {
+		return nil, fmt.Errorf("regular download requires ais bucket")
+	}
+	input, err := downloader.BuildDownloaderInput(t, id, bck, payload, objects)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@
 package reb
 
 import (
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 
 	. "github.com/onsi/ginkgo"
@@ -12,9 +13,9 @@ import (
 )
 
 type testObject struct {
-	bucket string
-	name   string
-	ais    bool
+	bucket   string
+	provider string
+	name     string
 }
 
 var _ = Describe("ECWaiter", func() {
@@ -27,20 +28,20 @@ var _ = Describe("ECWaiter", func() {
 		wt := newWaiter(memsys.GMM())
 		// must have more than ecRebBatchSize items
 		objs := []testObject{
-			{"bck1", "obj1", false},
-			{"bck1", "obj2", false},
-			{"bck1", "obj2", true},
-			{"bck1", "obj3", true},
-			{"bck2", "obj1", false},
-			{"bck2", "obj4", true},
-			{"bck5", "obj1", false},
-			{"bck5", "obj2", false},
-			{"bck5", "obj3", true},
-			{"bck5", "obj4", true},
-			{"bck5", "obj5", false},
-			{"bck5", "obj6", false},
-			{"bck5", "obj8", true},
-			{"bck5", "obj9", true},
+			{bucket: "bck1", provider: cmn.ProviderAmazon, name: "obj1"},
+			{bucket: "bck1", provider: cmn.ProviderAmazon, name: "obj2"},
+			{bucket: "bck1", provider: cmn.ProviderAIS, name: "obj2"},
+			{bucket: "bck1", provider: cmn.ProviderAIS, name: "obj3"},
+			{bucket: "bck2", provider: cmn.ProviderAmazon, name: "obj1"},
+			{bucket: "bck2", provider: cmn.ProviderAIS, name: "obj4"},
+			{bucket: "bck5", provider: cmn.ProviderAmazon, name: "obj1"},
+			{bucket: "bck5", provider: cmn.ProviderAmazon, name: "obj2"},
+			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj3"},
+			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj4"},
+			{bucket: "bck5", provider: cmn.ProviderAmazon, name: "obj5"},
+			{bucket: "bck5", provider: cmn.ProviderAmazon, name: "obj6"},
+			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj8"},
+			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj9"},
 		}
 		rebObjs := make([]*ecRebObject, 0)
 		created := make([]*ecWaitSlice, 0, len(rebObjs))
@@ -48,7 +49,7 @@ var _ = Describe("ECWaiter", func() {
 		By("all unames must be unique")
 		objSet := make(map[string]struct{})
 		for _, o := range objs {
-			uname := uniqueWaitID(o.bucket, o.name, o.ais)
+			uname := uniqueWaitID(o.bucket, o.provider, o.name)
 			objSet[uname] = struct{}{}
 			rebObjs = append(rebObjs, &ecRebObject{uid: uname})
 		}

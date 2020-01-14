@@ -404,8 +404,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		cksumType, cksumValue := lom.Cksum().Get()
 		hdr := transport.Header{
 			Bucket:   bucket,
-			Objname:  shardName,
-			BckIsAIS: cmn.IsProviderAIS(provider),
+			Provider: provider,
+			ObjName:  shardName,
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       lom.Size(),
 				CksumType:  cksumType,

@@ -91,8 +91,8 @@ func (lom *LOM) ECEnabled() bool           { return lom.Bprops().EC.Enabled }
 func (lom *LOM) LRUEnabled() bool          { return lom.Bprops().LRU.Enabled }
 func (lom *LOM) IsHRW() bool               { return lom.HrwFQN == lom.FQN } // subj to resilvering
 func (lom *LOM) Bucket() string            { return lom.bck.Name }
+func (lom *LOM) Provider() string          { return lom.bck.Provider }
 func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
-func (lom *LOM) IsAIS() bool               { return lom.bck.IsAIS() }
 func (lom *LOM) Bck() *Bck                 { return lom.bck }
 
 //
@@ -447,7 +447,7 @@ func (lom *LOM) _string(b string) string {
 
 // increment ais LOM's version
 func (lom *LOM) IncVersion() error {
-	cmn.Assert(lom.IsAIS())
+	cmn.Assert(lom.Bck().IsAIS())
 	if lom.Version() == "" {
 		lom.SetVersion(lomInitialVersion)
 		return nil

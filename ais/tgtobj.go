@@ -160,7 +160,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		ver string
 		lom = poi.lom
 	)
-	if !lom.IsAIS() && !poi.migrated {
+	if lom.Bck().IsCloud() && !poi.migrated {
 		file, err1 := os.Open(poi.workFQN)
 		if err1 != nil {
 			err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, err1)
@@ -178,7 +178,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 
 	// check if bucket was destroyed while PUT was in the progress.
 	// TODO: support cloud case
-	if lom.IsAIS() && !poi.t.bmdowner.Get().IsAIS(lom.Bucket()) {
+	if lom.Bck().IsAIS() && !poi.t.bmdowner.Get().IsAIS(lom.Bucket()) {
 		err = fmt.Errorf("Bucket %s was destroyed while PUTting %s was in the progress",
 			lom.Bucket(), lom.Objname)
 		errCode = http.StatusBadRequest
@@ -188,7 +188,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	if lom.IsAIS() && lom.VerConf().Enabled && !poi.migrated {
+	if lom.Bck().IsAIS() && lom.VerConf().Enabled && !poi.migrated {
 		if err = lom.IncVersion(); err != nil {
 			return
 		}
@@ -339,13 +339,13 @@ do:
 			return err, http.StatusInternalServerError
 		}
 	}
-	if coldGet && goi.lom.IsAIS() {
+	if coldGet && goi.lom.Bck().IsAIS() {
 		// try lookup and restore
 		goi.lom.Unlock(false)
 		doubleCheck, err, errCode = goi.tryRestoreObject()
 		if doubleCheck && err != nil {
 			lom2 := &cluster.LOM{T: goi.t, Objname: goi.lom.Objname}
-			er2 := lom2.Init(goi.lom.Bucket(), goi.lom.Bck().Provider)
+			er2 := lom2.Init(goi.lom.Bucket(), goi.lom.Provider())
 			if er2 == nil {
 				er2 = lom2.Load()
 				if er2 == nil {
@@ -360,7 +360,7 @@ do:
 		goi.lom.Lock(false)
 		goto get
 	}
-	if !coldGet && !goi.lom.IsAIS() { // exists && cloud-bucket : check ver if requested
+	if !coldGet && goi.lom.Bck().IsCloud() { // exists && cloud-bucket : check ver if requested
 		if goi.lom.Version() != "" && goi.lom.VerConf().ValidateWarmGet {
 			goi.lom.Unlock(false)
 			if coldGet, err, errCode = goi.t.checkCloudVersion(goi.ctx, goi.lom); err != nil {
@@ -380,7 +380,7 @@ do:
 		if err != nil {
 			glog.Error(err)
 			if _, ok := err.(*cmn.BadCksumError); ok {
-				if goi.lom.IsAIS() {
+				if goi.lom.Bck().IsAIS() {
 					// TODO: recover from copies or EC if available (scruber).
 					// Removing object and copies at this point seems too harsh.
 					if err := goi.lom.Remove(); err != nil {
@@ -503,7 +503,7 @@ gfn:
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, lom.Bck().Provider)
+	query.Add(cmn.URLParamProvider, lom.Provider())
 	query.Add(cmn.URLParamIsGFNRequest, "true")
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,

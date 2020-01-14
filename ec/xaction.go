@@ -229,8 +229,8 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 
 	rHdr := transport.Header{
 		Bucket:   bck.Name,
-		BckIsAIS: bck.IsAIS(),
-		Objname:  objname,
+		Provider: bck.Provider,
+		ObjName:  objname,
 		ObjAttrs: objAttrs,
 	}
 	rHdr.Opaque = ireq.Marshal()
@@ -240,7 +240,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 
 	cb := func(hdr transport.Header, c io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
-			glog.Errorf("Failed to send %s/%s: %v", hdr.Bucket, hdr.Objname, err)
+			glog.Errorf("Failed to send %s/%s/%s: %v", hdr.Provider, hdr.Bucket, hdr.ObjName, err)
 		}
 	}
 	return r.sendByDaemonID([]string{id}, rHdr, reader, cb, false)
@@ -295,8 +295,8 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
 	hdr := transport.Header{
 		Bucket:   lom.Bucket(),
-		BckIsAIS: lom.IsAIS(),
-		Objname:  lom.Objname,
+		Provider: lom.Provider(),
+		ObjName:  lom.Objname,
 		Opaque:   request,
 	}
 	var reader cmn.ReadOpenCloser
@@ -396,11 +396,11 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum().Get()
 	}
 	hdr := transport.Header{
-		Objname:  lom.Objname,
 		Bucket:   lom.Bucket(),
-		BckIsAIS: lom.IsAIS(),
-		Opaque:   putData,
+		Provider: lom.Provider(),
+		ObjName:  lom.Objname,
 		ObjAttrs: objAttrs,
+		Opaque:   putData,
 	}
 	if cb == nil && src.obj != nil {
 		obj := src.obj

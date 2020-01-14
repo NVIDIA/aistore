@@ -132,7 +132,7 @@ type ecGetEntry struct {
 
 func (e *ecGetEntry) Start(id int64) error {
 	xec := ec.ECM.NewGetXact(e.bck.Name)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, e.bck.Name, e.bck.IsAIS())
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, e.bck.Name, e.bck.Provider)
 	e.xact = xec
 	go xec.Run()
 
@@ -158,7 +158,7 @@ type ecPutEntry struct {
 
 func (e *ecPutEntry) Start(id int64) error {
 	xec := ec.ECM.NewPutXact(e.bck.Name)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, e.bck.Name, e.bck.IsAIS())
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, e.bck.Name, e.bck.Provider)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -182,7 +182,7 @@ type ecRespondEntry struct {
 
 func (e *ecRespondEntry) Start(id int64) error {
 	xec := ec.ECM.NewRespondXact(e.bck.Name)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, e.bck.Name, e.bck.IsAIS())
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, e.bck.Name, e.bck.Provider)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -490,7 +490,7 @@ func (r *FastRen) Run(globRebID int64) {
 
 func (e *FastRenEntry) Start(id int64) error {
 	e.xact = &FastRen{
-		XactBase:   *cmn.NewXactBaseWithBucket(id, e.Kind(), e.bck.Name, e.bck.IsAIS()),
+		XactBase:   *cmn.NewXactBaseWithBucket(id, e.Kind(), e.bck.Name, e.bck.Provider),
 		t:          e.t,
 		bucketTo:   e.bucketTo,
 		rebManager: e.rebManager,

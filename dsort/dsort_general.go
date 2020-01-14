@@ -528,7 +528,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 		}
 
 		respHdr := transport.Header{
-			Objname: req.Record.MakeUniqueName(req.RecordObj),
+			ObjName: req.Record.MakeUniqueName(req.RecordObj),
 		}
 
 		if ds.m.aborted() {
@@ -640,7 +640,7 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.Receive {
 
 		defer io.Copy(ioutil.Discard, object) // drain to prevent unnecessary stream errors
 
-		writer := ds.pullStreamWriter(hdr.Objname)
+		writer := ds.pullStreamWriter(hdr.ObjName)
 		if writer == nil { // was removed after timing out
 			return
 		}

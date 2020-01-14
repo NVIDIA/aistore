@@ -248,7 +248,7 @@ func (d *Downloader) Description() string {
  */
 func NewDownloader(t cluster.Target, statsT stats.Tracker, f *fs.MountedFS, id int64, kind string) (d *Downloader) {
 	downloader := &Downloader{
-		XactDemandBase: *cmn.NewXactDemandBase(id, kind, "" /* no bucket */, false),
+		XactDemandBase: *cmn.NewXactDemandBase(id, kind, "" /* no bucket */, cmn.ProviderAIS),
 		t:              t,
 		statsT:         statsT,
 		mountpaths:     f,

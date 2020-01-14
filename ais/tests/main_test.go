@@ -903,7 +903,7 @@ func TestHeadObject(t *testing.T) {
 		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
 
-	propsExp := &cmn.ObjectProps{Size: objSize, Version: "1", NumCopies: 1, Checksum: hash, Present: true, BckIsAIS: true}
+	propsExp := &cmn.ObjectProps{Size: objSize, Version: "1", NumCopies: 1, Checksum: hash, Present: true, Provider: cmn.ProviderAIS}
 	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestBucketName, "", objName)
 	if err != nil {
 		t.Errorf("api.HeadObject failed, err = %v", err)
@@ -915,6 +915,9 @@ func TestHeadObject(t *testing.T) {
 	if props.Version != propsExp.Version {
 		t.Errorf("Returned `Version` not correct. Expected: %v, actual: %v", propsExp.Version, props.Version)
 	}
+	if props.Provider != propsExp.Provider {
+		t.Errorf("Returned `Provider` not correct. Expected: %v, actual: %v", propsExp.Provider, props.Provider)
+	}
 	if props.NumCopies != propsExp.NumCopies {
 		t.Errorf("Returned `Number` of copies not correct. Expected: %v, actual: %v", propsExp.NumCopies, props.NumCopies)
 	}
@@ -923,9 +926,6 @@ func TestHeadObject(t *testing.T) {
 	}
 	if props.Present != propsExp.Present {
 		t.Errorf("Returned `Present` not correct. Expected: %v, actual: %v", propsExp.Present, props.Present)
-	}
-	if props.BckIsAIS != propsExp.BckIsAIS {
-		t.Errorf("Returned `BckIsAIS` not correct. Expected: %v, actual: %v", propsExp.BckIsAIS, props.BckIsAIS)
 	}
 	if props.Atime.IsZero() {
 		t.Fatalf("Returned `Atime` (%s) is zero.", props.Atime)

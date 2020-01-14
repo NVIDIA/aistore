@@ -126,6 +126,7 @@ type (
 		meta    *ec.Metadata // metadata loaded from a local file
 
 		Bucket       string `json:"bck"`
+		Provider     string `json:"prov,omitempty"`
 		Objname      string `json:"obj"`
 		DaemonID     string `json:"sid"` // a target that has the slice/obj
 		ObjHash      string `json:"cksum"`
@@ -133,7 +134,6 @@ type (
 		SliceID      int16  `json:"sliceid,omitempty"`
 		DataSlices   int16  `json:"data"`
 		ParitySlices int16  `json:"parity"`
-		IsAIS        bool   `json:"ais,omitempty"`
 	}
 
 	// A single object description which slices/replica the targets waits for
@@ -162,6 +162,7 @@ type (
 		mainDaemon   string           // hrw target for an object
 		uid          string           // unique identifier for the object (Bucket#Object#IsAIS)
 		bucket       string           // bucket name for faster acceess
+		provider     string           // cloud provider of the bucket
 		objName      string           // object name for faster access
 		objSize      int64            // object size
 		sliceSize    int64            // a size of an object slice
@@ -174,7 +175,6 @@ type (
 		isMain       bool             // is local target a default one
 		inHrwList    bool             // is local target should have any slice/replica according to HRW
 		fullObjFound bool             // some target has the full object, no need to rebuild, just copy
-		isAIS        bool             // true: AIS bucket, false: cloud bucket
 		hasAllSlices bool             // true: all slices existed before rebalance
 	}
 	ecRebBck struct {
@@ -248,8 +248,8 @@ var (
 )
 
 // Generate unique ID for an object
-func uniqueWaitID(bucket, objName string, isAIS bool) string {
-	return fmt.Sprintf("%s#%s#%t", bucket, objName, isAIS)
+func uniqueWaitID(bucket, provider, objName string) string {
+	return fmt.Sprintf("%s#%s#%s", bucket, provider, objName)
 }
 
 // Generate unique ID for a CT (id is a slice or replica ordinal number).
@@ -260,8 +260,8 @@ func ctUID(id int, daemonID string) string {
 }
 
 // Generate unique ID for a CT acknowledge.
-func ackID(bucket, objname, provider, ctUID string) string {
-	return fmt.Sprintf("%s#%s#%s#%s", bucket, objname, provider, ctUID)
+func ackID(bucket, provider, objName, ctUID string) string {
+	return fmt.Sprintf("%s#%s#%s#%s", bucket, provider, objName, ctUID)
 }
 
 //
@@ -336,7 +336,7 @@ func (so *ecRebObject) emptyTargets(skip *cluster.Snode) cluster.Nodes {
 // and the slice's info about object matches previously found slices.
 func (rr *ecRebResult) addSlice(slice *ecRebSlice, tgt cluster.Target) error {
 	bckList := rr.ais
-	if !slice.IsAIS {
+	if cmn.IsProviderCloud(slice.Provider) {
 		bckList = rr.cloud
 	}
 	bck, ok := bckList[slice.Bucket]
@@ -348,7 +348,7 @@ func (rr *ecRebResult) addSlice(slice *ecRebSlice, tgt cluster.Target) error {
 	obj, ok := bck.objs[slice.Objname]
 	if !ok {
 		// first slice of the object
-		b := &cluster.Bck{Name: slice.Bucket, Provider: cmn.ProviderFromBool(slice.IsAIS)}
+		b := &cluster.Bck{Name: slice.Bucket, Provider: slice.Provider}
 		if err := b.Init(tgt.GetBowner()); err != nil {
 			return err
 		}
@@ -359,7 +359,7 @@ func (rr *ecRebResult) addSlice(slice *ecRebSlice, tgt cluster.Target) error {
 		obj = &ecRebObject{
 			slices:     make(ecSliceList),
 			mainDaemon: si.DaemonID,
-			isAIS:      slice.IsAIS,
+			provider:   slice.Provider,
 		}
 		obj.slices[slice.ObjHash] = []*ecRebSlice{slice}
 		bck.objs[slice.Objname] = obj
@@ -452,17 +452,17 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 	}
 	hdr := transport.Header{
 		Bucket:   slice.Bucket,
-		Objname:  slice.Objname,
-		BckIsAIS: slice.IsAIS,
+		Provider: slice.Provider,
+		ObjName:  slice.Objname,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: slice.ObjSize,
 		},
 		Opaque: cmn.MustMarshal(req),
 	}
-	provider := cmn.ProviderFromBool(slice.IsAIS)
+
 	if resolved.ContentType == fs.ObjectType {
 		lom := cluster.LOM{T: s.t, FQN: fqn}
-		if err := lom.Init(slice.Bucket, provider); err != nil {
+		if err := lom.Init(slice.Bucket, slice.Provider); err != nil {
 			return err
 		}
 		if err := lom.Load(false); err != nil {
@@ -489,7 +489,7 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 	for _, tgt := range targets {
 		dest := &retransmitCT{daemonID: tgt.ID(), header: hdr}
 		ctUID := ctUID(int(slice.SliceID), tgt.ID())
-		uid := ackID(slice.Bucket, slice.Objname, provider, ctUID)
+		uid := ackID(slice.Bucket, slice.Provider, slice.Objname, ctUID)
 		s.ackCTs.mtx.Lock()
 		s.ackCTs.ct[uid] = dest
 		s.ackCTs.mtx.Unlock()
@@ -540,8 +540,8 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 	size := ec.SliceSize(slice.ObjSize, int(slice.DataSlices))
 	hdr := transport.Header{
 		Bucket:   slice.Bucket,
-		Objname:  slice.Objname,
-		BckIsAIS: slice.IsAIS,
+		Provider: slice.Provider,
+		ObjName:  slice.Objname,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: size,
 		},
@@ -552,9 +552,8 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 		hdr.ObjAttrs.CksumType = cmn.ChecksumXXHash
 	}
 
-	provider := cmn.ProviderFromBool(slice.IsAIS)
 	sliceUID := ctUID(sliceID, target.ID())
-	uid := ackID(slice.Bucket, slice.Objname, provider, sliceUID)
+	uid := ackID(slice.Bucket, slice.Provider, slice.Objname, sliceUID)
 	dest := &retransmitCT{daemonID: target.ID(), header: hdr}
 	s.ackCTs.mtx.Lock()
 	s.ackCTs.ct[uid] = dest
@@ -585,14 +584,13 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 	var (
 		sliceFQN string
 		lom      *cluster.LOM
-		provider = cmn.ProviderFromBool(hdr.BckIsAIS)
-		bck      = &cluster.Bck{Name: hdr.Bucket, Provider: provider}
+		bck      = &cluster.Bck{Name: hdr.Bucket, Provider: hdr.Provider}
 		needSave = md.SliceID == 0 // full object always saved
 	)
 	if err := bck.Init(s.t.GetBowner()); err != nil {
 		return err
 	}
-	uname := bck.MakeUname(hdr.Objname)
+	uname := bck.MakeUname(hdr.ObjName)
 	if !needSave {
 		// slice is saved only if this target is not "main" one.
 		// Main one receives slices as well but it uses them only to rebuild "full"
@@ -610,10 +608,10 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 		return err
 	}
 	if md.SliceID != 0 {
-		sliceFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, provider, hdr.Objname)
+		sliceFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, hdr.Provider, hdr.ObjName)
 	} else {
-		lom = &cluster.LOM{T: s.t, Objname: hdr.Objname}
-		if err := lom.Init(hdr.Bucket, provider); err != nil {
+		lom = &cluster.LOM{T: s.t, Objname: hdr.ObjName}
+		if err := lom.Init(hdr.Bucket, hdr.Provider); err != nil {
 			return err
 		}
 		sliceFQN = lom.FQN
@@ -633,17 +631,17 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 	}
 
 	buffer, slab := s.t.GetMem2().AllocDefault()
-	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bucket, provider, hdr.Objname)
+	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bucket, hdr.Provider, hdr.ObjName)
 	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.Extra), buffer, false)
 	if err != nil {
 		slab.Free(buffer)
 		return err
 	}
-	tmpFQN := mpath.MakePathBucketObject(fs.WorkfileType, hdr.Bucket, provider, hdr.Objname)
+	tmpFQN := mpath.MakePathBucketObject(fs.WorkfileType, hdr.Bucket, hdr.Provider, hdr.ObjName)
 	cksum, err := cmn.SaveReaderSafe(tmpFQN, sliceFQN, memsys.NewReader(data), buffer, true)
 	if md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
 		err = fmt.Errorf("Mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
-			hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, md.ObjCksum)
+			hdr.Bucket, hdr.ObjName, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, md.ObjCksum)
 	}
 	slab.Free(buffer)
 	if err != nil {
@@ -670,7 +668,7 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 // it is a missing slice/replica
 func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader io.Reader) error {
 	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
-		glog.Infof("%s GOT slice/object for %s/%s from %s", s.t.Snode().Name(), hdr.Bucket, hdr.Objname, req.DaemonID)
+		glog.Infof("%s GOT slice/object for %s/%s/%s from %s", s.t.Snode().Name(), hdr.Provider, hdr.Bucket, hdr.ObjName, req.DaemonID)
 	}
 	var md ec.Metadata
 	cmn.Assert(req.Extra != nil)
@@ -682,9 +680,9 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	s.mgr.laterx.Store(true)
 	sliceID := md.SliceID
 	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
-		glog.Infof(">>> %s got slice %d for %s/%s[%t]", s.t.Snode().Name(), sliceID, hdr.Bucket, hdr.Objname, hdr.BckIsAIS)
+		glog.Infof(">>> %s got slice %d for [%s]%s/%s", s.t.Snode().Name(), sliceID, hdr.Provider, hdr.Bucket, hdr.ObjName)
 	}
-	uid := uniqueWaitID(hdr.Bucket, hdr.Objname, hdr.BckIsAIS)
+	uid := uniqueWaitID(hdr.Bucket, hdr.Provider, hdr.ObjName)
 	waitSlice := s.waiter.lookupCreate(uid, int16(sliceID), waitForSingleSlice)
 	cmn.Assert(waitSlice != nil)
 	cmn.Assert(waitSlice.sgl != nil)
@@ -693,7 +691,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	waitSlice.meta = req.Extra
 	n, err := io.Copy(waitSlice.sgl, reader)
 	if err != nil {
-		return fmt.Errorf("Failed to read slice %d for %s/%s: %v", sliceID, hdr.Bucket, hdr.Objname, err)
+		return fmt.Errorf("failed to read slice %d for %s/%s/%s: %v", sliceID, hdr.Provider, hdr.Bucket, hdr.ObjName, err)
 	}
 	s.statsT.AddMany(
 		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
@@ -701,7 +699,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	)
 	ckval, _ := cksumForSlice(memsys.NewReader(waitSlice.sgl), waitSlice.sgl.Size(), s.t.GetMem2())
 	if hdr.ObjAttrs.CksumValue != "" && hdr.ObjAttrs.CksumValue != ckval {
-		return fmt.Errorf("Received checksum mismatches checksum in header %s vs %s",
+		return fmt.Errorf("received checksum mismatches checksum in header %s vs %s",
 			hdr.ObjAttrs.CksumValue, ckval)
 	}
 	waitSlice.recv.Store(true)
@@ -709,7 +707,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 
 	if !waitRebuild || sliceID == 0 {
 		if err := s.saveSliceToDisk(waitSlice.sgl, req, &md, hdr); err != nil {
-			glog.Errorf("Failed to save slice %d of %s: %v", sliceID, hdr.Objname, err)
+			glog.Errorf("Failed to save slice %d of %s: %v", sliceID, hdr.ObjName, err)
 			s.mgr.abortGlobal()
 		}
 	}
@@ -735,7 +733,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 // On receiving a list of collected slices or slice/replica from another target.
 func (s *ecRebalancer) OnData(w http.ResponseWriter, hdr transport.Header, reader io.Reader, err error) {
 	if err != nil {
-		glog.Errorf("Failed to get ack %s from %s: %v", hdr.Objname, hdr.Bucket, err)
+		glog.Errorf("Failed to get ack for %s/%s/%s: %v", hdr.Provider, hdr.Bucket, hdr.ObjName, err)
 		return
 	}
 
@@ -755,7 +753,7 @@ func (s *ecRebalancer) OnData(w http.ResponseWriter, hdr transport.Header, reade
 	// a remote target sent object/slice
 	if req.Stage == rebStageECGlobRepair {
 		if err := s.receiveSlice(&req, hdr, reader); err != nil {
-			glog.Errorf("Failed to receive slice for %s/%s: %v", hdr.Bucket, hdr.Objname, err)
+			glog.Errorf("Failed to receive slice for %s/%s/%s: %v", hdr.Provider, hdr.Bucket, hdr.ObjName, err)
 			return
 		}
 		return
@@ -765,7 +763,7 @@ func (s *ecRebalancer) OnData(w http.ResponseWriter, hdr transport.Header, reade
 	// - receive the slice list
 	// - update the remote target stage
 	if req.Stage != rebStageECNameSpace {
-		glog.Errorf("Invalid stage %s : %s (must be %s)", hdr.Objname,
+		glog.Errorf("Invalid stage %s : %s (must be %s)", hdr.ObjName,
 			stages[req.Stage], stages[rebStageECNameSpace])
 		cmn.DrainReader(reader)
 		return
@@ -805,7 +803,7 @@ func (s *ecRebalancer) mergeSlices() *ecRebResult {
 		}
 		for _, slice := range sliceList {
 			if slice.SliceID != 0 && local {
-				b := &cluster.Bck{Name: slice.Bucket, Provider: cmn.ProviderFromBool(slice.IsAIS)}
+				b := &cluster.Bck{Name: slice.Bucket, Provider: slice.Provider}
 				if err := b.Init(s.t.GetBowner()); err != nil {
 					s.mgr.abortGlobal()
 					return nil
@@ -890,8 +888,8 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) {
 	// sort the list of broken object to have deterministic order on all targets
 	// sort order: IsAIS/Bucket name/Object name
 	sliceLess := func(i, j int) bool {
-		if s.broken[i].isAIS != s.broken[j].isAIS {
-			return s.broken[j].isAIS
+		if s.broken[i].provider != s.broken[j].provider {
+			return cmn.IsProviderAIS(s.broken[j].provider)
 		}
 		bi := s.broken[i].bucket
 		bj := s.broken[j].bucket
@@ -992,6 +990,7 @@ func (s *ecRebalancer) walk(fqn string, de fs.DirEntry) (err error) {
 	id := s.t.Snode().DaemonID
 	rec := &ecRebSlice{
 		Bucket:       ct.Bucket(),
+		Provider:     ct.Provider(),
 		Objname:      ct.ObjName(),
 		DaemonID:     id,
 		ObjHash:      md.ObjCksum,
@@ -999,7 +998,6 @@ func (s *ecRebalancer) walk(fqn string, de fs.DirEntry) (err error) {
 		SliceID:      int16(md.SliceID),
 		DataSlices:   int16(md.Data),
 		ParitySlices: int16(md.Parity),
-		IsAIS:        ct.Bck().IsAIS(),
 		realFQN:      fileFQN,
 		hrwFQN:       hrwFQN,
 		meta:         md,
@@ -1239,7 +1237,7 @@ func (s *ecRebalancer) calcLocalProps(bck *cluster.Bck, obj *ecRebObject, smap *
 	obj.sliceExist = make([]bool, sliceReq)
 	obj.sliceAt = make(nodeSlices, sliceFound)
 
-	obj.uid = uniqueWaitID(mainSlice.Bucket, mainSlice.Objname, obj.isAIS)
+	obj.uid = uniqueWaitID(mainSlice.Bucket, obj.provider, mainSlice.Objname)
 	obj.isMain = obj.mainDaemon == localDaemon
 
 	// TODO: must check only slices of the newest object version
@@ -1462,7 +1460,7 @@ func (s *ecRebalancer) allSliceReceived() bool {
 		var obj *ecRebObject
 		for j := 0; j+s.batchID < len(s.broken) && j < ecRebBatchSize; j++ {
 			o := s.broken[s.batchID+j]
-			if uid == uniqueWaitID(o.bucket, o.objName, o.isAIS) {
+			if uid == uniqueWaitID(o.bucket, o.provider, o.objName) {
 				obj = o
 				break
 			}
@@ -1703,8 +1701,7 @@ func (s *ecRebalancer) retransmit() (cnt int) {
 			continue
 		}
 
-		_, err := ec.RequestECMeta(dest.header.Bucket, dest.header.Objname,
-			cmn.ProviderFromBool(dest.header.BckIsAIS), si)
+		_, err := ec.RequestECMeta(dest.header.Bucket, dest.header.ObjName, dest.header.Provider, si)
 		if err == nil {
 			// the destination got new slice/replica, but failed to send
 			// ACK, cleanup ACK wait right now
@@ -1714,7 +1711,7 @@ func (s *ecRebalancer) retransmit() (cnt int) {
 
 		// destination still waits for the data, resend
 		glog.Errorf("Did not receive ACK from %s for %s/%s. Retransmit",
-			dest.daemonID, dest.header.Bucket, dest.header.Objname)
+			dest.daemonID, dest.header.Bucket, dest.header.ObjName)
 		// TODO: resend the slice/replica with s.data.SendV
 
 		cnt++
@@ -2113,9 +2110,8 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 	objMD := ecMD // copy
 	objMD.SliceID = 0
 
-	provider := cmn.ProviderFromBool(obj.isAIS)
 	lom := &cluster.LOM{T: s.t, Objname: obj.objName}
-	err = lom.Init(obj.bucket, provider)
+	err = lom.Init(obj.bucket, obj.provider)
 	if err != nil {
 		return err
 	}
@@ -2134,7 +2130,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 
 	lom.SetSize(obj.objSize)
 	lom.SetCksum(cksum)
-	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket, provider, obj.objName)
+	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket, obj.provider, obj.objName)
 	metaBuf := cmn.MustMarshal(&objMD)
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
 		glog.Error(err)
@@ -2189,7 +2185,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 			ObjSize:      sliceMD.Size,
 			DaemonID:     s.t.Snode().DaemonID,
 			SliceID:      int16(sliceID),
-			IsAIS:        obj.isAIS,
+			Provider:     obj.provider,
 			DataSlices:   int16(ecMD.Data),
 			ParitySlices: int16(ecMD.Parity),
 			meta:         &sliceMD,

@@ -108,36 +108,6 @@ func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
 	return
 }
 
-func (m *BMD) ValidateBucket(bucket, provider string) (isLocal bool, err error) {
-	if err = cmn.ValidateBucketName(bucket); err != nil {
-		return
-	}
-	normalizedProvider, err := cmn.ProviderFromStr(provider)
-	if err != nil {
-		return
-	}
-	var (
-		config   = cmn.GCO.Get()
-		bckIsAIS = m.IsAIS(bucket)
-	)
-	switch normalizedProvider {
-	case cmn.AIS:
-		if !bckIsAIS {
-			return false, fmt.Errorf("ais bucket %q %s", bucket, cmn.DoesNotExist)
-		}
-		isLocal = true
-	case cmn.Cloud:
-		if provider != config.CloudProvider && provider != cmn.Cloud {
-			err = fmt.Errorf("cluster cloud provider %q, mismatch bucket provider %q", config.CloudProvider, provider)
-			return
-		}
-		isLocal = false
-	default:
-		isLocal = bckIsAIS
-	}
-	return
-}
-
 func (m *BMD) IsECUsed() bool {
 	for _, bck := range m.LBmap {
 		if bck.EC.Enabled {

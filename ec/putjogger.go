@@ -188,8 +188,8 @@ func (c *putJogger) cleanup(req *Request) error {
 	request := c.parent.newIntraReq(reqDel, nil).Marshal()
 	hdr := transport.Header{
 		Bucket:   req.LOM.Bucket(),
-		BckIsAIS: req.LOM.IsAIS(),
-		Objname:  req.LOM.Objname,
+		Provider: req.LOM.Provider(),
+		ObjName:  req.LOM.Objname,
 		Opaque:   request,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: 0,

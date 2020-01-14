@@ -419,12 +419,12 @@ type ObjectProps struct {
 	Version      string
 	Atime        time.Time
 	Checksum     string
+	Provider     string
 	NumCopies    int
 	DataSlices   int
 	ParitySlices int
 	IsECCopy     bool
 	Present      bool
-	BckIsAIS     bool
 }
 
 func DefaultBucketProps() *BucketProps {
@@ -465,7 +465,7 @@ func (p1 *BucketProps) Equal(p2 *BucketProps) bool {
 	return string(s1) == string(s2)
 }
 
-func (bp *BucketProps) Validate(bckIsAIS bool, targetCnt int, urlOutsideCluster func(string) bool) error {
+func (bp *BucketProps) Validate(targetCnt int, urlOutsideCluster func(string) bool) error {
 	if bp.Tiering.NextTierURL != "" {
 		if _, err := url.ParseRequestURI(bp.Tiering.NextTierURL); err != nil {
 			return fmt.Errorf("invalid next tier URL: %s, err: %v", bp.Tiering.NextTierURL, err)
@@ -474,19 +474,19 @@ func (bp *BucketProps) Validate(bckIsAIS bool, targetCnt int, urlOutsideCluster 
 			return fmt.Errorf("invalid next tier URL: %s, URL is in current cluster", bp.Tiering.NextTierURL)
 		}
 	}
-	if err := validateCloudProvider(bp.CloudProvider, bckIsAIS); err != nil {
-		return err
+	if !IsValidProvider(bp.CloudProvider) {
+		return fmt.Errorf("invalid cloud provider: %s, must be one of (%v)", bp.CloudProvider, Providers)
 	}
 	if bp.Tiering.ReadPolicy != "" && bp.Tiering.ReadPolicy != RWPolicyCloud && bp.Tiering.ReadPolicy != RWPolicyNextTier {
 		return fmt.Errorf("invalid read policy: %s", bp.Tiering.ReadPolicy)
 	}
-	if bp.Tiering.ReadPolicy == RWPolicyCloud && bckIsAIS {
+	if bp.Tiering.ReadPolicy == RWPolicyCloud && IsProviderAIS(bp.CloudProvider) {
 		return fmt.Errorf("read policy for ais bucket cannot be '%s'", RWPolicyCloud)
 	}
 	if bp.Tiering.WritePolicy != "" && bp.Tiering.WritePolicy != RWPolicyCloud && bp.Tiering.WritePolicy != RWPolicyNextTier {
 		return fmt.Errorf("invalid write policy: %s", bp.Tiering.WritePolicy)
 	}
-	if bp.Tiering.WritePolicy == RWPolicyCloud && bckIsAIS {
+	if bp.Tiering.WritePolicy == RWPolicyCloud && IsProviderAIS(bp.CloudProvider) {
 		return fmt.Errorf("write policy for ais bucket cannot be '%s'", RWPolicyCloud)
 	}
 	if bp.Tiering.NextTierURL != "" {
@@ -499,12 +499,12 @@ func (bp *BucketProps) Validate(bckIsAIS bool, targetCnt int, urlOutsideCluster 
 		}
 		if bp.Tiering.WritePolicy == "" {
 			bp.Tiering.WritePolicy = RWPolicyNextTier
-			if !bckIsAIS {
+			if IsProviderCloud(bp.CloudProvider) {
 				bp.Tiering.WritePolicy = RWPolicyCloud
 			}
 		}
 	}
-	validationArgs := &ValidationArgs{BckIsAIS: bckIsAIS, TargetCnt: targetCnt}
+	validationArgs := &ValidationArgs{TargetCnt: targetCnt}
 	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC}
 	for _, validator := range validators {
 		if err := validator.ValidateAsProps(validationArgs); err != nil {

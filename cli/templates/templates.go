@@ -343,7 +343,7 @@ var (
 	}
 
 	ObjStatMap = map[string]string{
-		"ais":      "{{ .BckIsAIS }}\t",
+		"provider": "{{ .Provider }}\t",
 		"iscached": "{{ .Present }}\t",
 		"size":     "{{ FormatBytesSigned .Size 2 }}\t",
 		"version":  "{{ .Version }}\t",

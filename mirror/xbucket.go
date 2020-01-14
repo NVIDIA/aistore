@@ -46,7 +46,7 @@ type (
 )
 
 func newXactBckBase(id int64, kind string, bck *cluster.Bck, t cluster.Target) *xactBckBase {
-	return &xactBckBase{XactBase: *cmn.NewXactBaseWithBucket(id, kind, bck.Name, bck.IsAIS()), t: t}
+	return &xactBckBase{XactBase: *cmn.NewXactBaseWithBucket(id, kind, bck.Name, bck.Provider), t: t}
 }
 
 //

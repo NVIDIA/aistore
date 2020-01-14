@@ -123,8 +123,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bucket:abc Objname:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[] BckIsAIS:false} (88)
-	// {Bucket:abracadabra Objname:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51] BckIsAIS:true} (103)
+	// {Bucket:abc Provider:aws ObjName:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[]} (90)
+	// {Bucket:abracadabra Provider:ais ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51]} (105)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -135,15 +135,17 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	sgl1 := Mem2.NewSGL(0)
 	sgl1.Write([]byte(txt1))
 	hdr := transport.Header{
-		"abc", "X",
-		transport.ObjectAttrs{
+		Bucket:   "abc",
+		Provider: cmn.ProviderAmazon,
+		ObjName:  "X",
+		ObjAttrs: transport.ObjectAttrs{
 			Size:       sgl1.Size(),
 			Atime:      663346294,
 			CksumType:  cmn.ChecksumXXHash,
 			CksumValue: "hash",
 			Version:    "2",
 		},
-		nil, false,
+		Opaque: nil,
 	}
 	wg.Add(1)
 	stream.Send(transport.Obj{Hdr: hdr, Reader: sgl1, Callback: cb})
@@ -152,15 +154,17 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	sgl2 := Mem2.NewSGL(0)
 	sgl2.Write([]byte(txt2))
 	hdr = transport.Header{
-		"abracadabra", "p/q/s",
-		transport.ObjectAttrs{
+		Bucket:   "abracadabra",
+		ObjName:  "p/q/s",
+		Provider: cmn.ProviderAIS,
+		ObjAttrs: transport.ObjectAttrs{
 			Size:       sgl2.Size(),
 			Atime:      663346294,
 			CksumType:  cmn.ChecksumXXHash,
 			CksumValue: "hash",
 			Version:    "2",
 		},
-		[]byte{'1', '2', '3'}, true,
+		Opaque: []byte{'1', '2', '3'},
 	}
 	wg.Add(1)
 	stream.Send(transport.Obj{Hdr: hdr, Reader: sgl2, Callback: cb})
@@ -470,7 +474,7 @@ func Test_ObjAttrs(t *testing.T) {
 		cmn.Assert(err == nil)
 
 		idx := hdr.Opaque[0]
-		cmn.AssertMsg(hdr.BckIsAIS, "expecting ais bucket")
+		cmn.AssertMsg(cmn.IsProviderAIS(hdr.Provider), "expecting ais bucket")
 		cmn.AssertMsg(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
 			fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
 
@@ -491,9 +495,9 @@ func Test_ObjAttrs(t *testing.T) {
 	random := newRand(time.Now().UnixNano())
 	for idx, attrs := range testAttrs {
 		hdr := transport.Header{
-			BckIsAIS: true,
-			Opaque:   []byte{byte(idx)},
+			Provider: cmn.ProviderAIS,
 			ObjAttrs: attrs,
+			Opaque:   []byte{byte(idx)},
 		}
 		slab, err := Mem2.GetSlab2(cmn.PageSize)
 		if err != nil {
@@ -607,7 +611,7 @@ func newRand(seed int64) *rand.Rand {
 
 func genStaticHeader() (hdr transport.Header) {
 	hdr.Bucket = "a"
-	hdr.Objname = "b"
+	hdr.ObjName = "b"
 	hdr.Opaque = []byte("c")
 	hdr.ObjAttrs.Size = cmn.GiB
 	return
@@ -616,7 +620,7 @@ func genStaticHeader() (hdr transport.Header) {
 func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 	x := random.Int63()
 	hdr.Bucket = strconv.FormatInt(x, 10)
-	hdr.Objname = path.Join(hdr.Bucket, strconv.FormatInt(math.MaxInt64-x, 10))
+	hdr.ObjName = path.Join(hdr.Bucket, strconv.FormatInt(math.MaxInt64-x, 10))
 	pos := x % int64(len(text))
 	hdr.Opaque = []byte(text[int(pos):])
 	y := x & 3
@@ -711,14 +715,14 @@ type randReaderCtx struct {
 
 func (rrc *randReaderCtx) sentCallback(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 	if err != nil {
-		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bucket, hdr.Objname, err)
+		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bucket, hdr.ObjName, err)
 	}
 	rr := rrc.rr
 	rr.slab.Free(rr.buf)
 	rrc.mu.Lock()
 	rrc.posted[rrc.idx] = nil
 	if rrc.idx > 0 && rrc.posted[rrc.idx-1] != nil {
-		rrc.t.Errorf("sent-callback %d(%s/%s) fired out of order", rrc.idx, hdr.Bucket, hdr.Objname)
+		rrc.t.Errorf("sent-callback %d(%s/%s) fired out of order", rrc.idx, hdr.Bucket, hdr.ObjName)
 	}
 	rrc.posted[rrc.idx] = nil
 	rrc.mu.Unlock()

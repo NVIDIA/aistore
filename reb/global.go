@@ -566,7 +566,7 @@ func (rj *globalJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, l
 	lom.Unlock(false)
 
 	if err != nil {
-		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode().Name(), hdr.Bucket, hdr.Objname, err)
+		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode().Name(), hdr.Bucket, hdr.ObjName, err)
 		return
 	}
 	cmn.AssertMsg(hdr.ObjAttrs.Size == lom.Size(), lom.String()) // TODO: remove
@@ -690,8 +690,8 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	// transmit
 	hdr := transport.Header{
 		Bucket:   lom.Bucket(),
-		Objname:  lom.Objname,
-		BckIsAIS: lom.IsAIS(),
+		Provider: lom.Provider(),
+		ObjName:  lom.Objname,
 		Opaque:   []byte(rj.m.t.Snode().DaemonID), // self == src
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       lom.Size(),

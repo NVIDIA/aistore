@@ -436,6 +436,7 @@ func (m *ioContext) setRandBucketProps() {
 		LRU: &cmn.LRUConfToUpdate{
 			LowWM:  api.Int64(int64(rand.Intn(35) + 1)),
 			HighWM: api.Int64(int64(rand.Intn(15) + 40)),
+			OOS:    api.Int64(int64(rand.Intn(30) + 60)),
 		},
 	}
 	err := api.SetBucketProps(baseParams, m.bucket, props)

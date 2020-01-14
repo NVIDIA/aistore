@@ -262,13 +262,13 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 				if debug {
 					xxh, _ := UID2SessID(uid)
 					glog.Infof("%s[%d:%d]: off=%d, size=%d(%d), num=%d - %s/%s",
-						trname, xxh, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Bucket, hdr.Objname)
+						trname, xxh, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Bucket, hdr.ObjName)
 				}
 				continue
 			}
 			xxh, _ := UID2SessID(uid)
 			err = fmt.Errorf("%s[%d:%d]: sbrk #3: err %v, off %d != %d size, num=%d, %s/%s",
-				trname, xxh, sessID, err, objReader.off, hdr.ObjAttrs.Size, stats.Num.Load(), hdr.Bucket, hdr.Objname)
+				trname, xxh, sessID, err, objReader.off, hdr.ObjAttrs.Size, stats.Num.Load(), hdr.Bucket, hdr.ObjName)
 		}
 		if err != nil {
 			h.oldSessions.Store(uid, time.Now())
@@ -441,8 +441,8 @@ func (bb *fixedBuffer) Free()         { bb.slab.Free(bb.buf) }
 func ExtHeader(body []byte, hlen int) (hdr Header) {
 	var off int
 	off, hdr.Bucket = extString(0, body)
-	off, hdr.Objname = extString(off, body)
-	off, hdr.BckIsAIS = extBool(off, body)
+	off, hdr.ObjName = extString(off, body)
+	off, hdr.Provider = extString(off, body)
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
 	if _, ok := cmn.CheckDebug(pkgName); ok {
@@ -454,11 +454,6 @@ func ExtHeader(body []byte, hlen int) (hdr Header) {
 func extString(off int, from []byte) (int, string) {
 	off, bt := extByte(off, from)
 	return off, string(bt)
-}
-
-func extBool(off int, from []byte) (int, bool) {
-	off, bt := extByte(off, from)
-	return off, bt[0] != 0
 }
 
 func extByte(off int, from []byte) (int, []byte) {

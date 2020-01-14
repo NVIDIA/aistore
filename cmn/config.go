@@ -57,7 +57,6 @@ const (
 
 type (
 	ValidationArgs struct {
-		BckIsAIS  bool
 		TargetCnt int // for EC
 	}
 

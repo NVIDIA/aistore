@@ -551,7 +551,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if lom.IsAIS() && lom.VerConf().Enabled {
+	if lom.Bck().IsAIS() && lom.VerConf().Enabled {
 		lom.Load() // need to know the current version if versioning enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
@@ -985,7 +985,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		exists = lom.RestoreObjectFromAny() // lookup and restore the object to its default location
 	}
 
-	if lom.IsAIS() || checkExists {
+	if lom.Bck().IsAIS() || checkExists {
 		if !exists {
 			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
 			return
@@ -1025,7 +1025,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	hdr.Set(cmn.HeaderObjBckIsAIS, strconv.FormatBool(lom.IsAIS()))
+	hdr.Set(cmn.HeaderObjProvider, lom.Provider())
 	hdr.Set(cmn.HeaderObjPresent, strconv.FormatBool(exists))
 }
 
@@ -1200,7 +1200,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromCloud := !lom.IsAIS() && !evict
+	delFromCloud := lom.Bck().IsCloud() && !evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsNotObjExist(err) {
@@ -1224,7 +1224,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 			}
 		}
 		if evict {
-			cmn.Assert(!lom.IsAIS())
+			cmn.Assert(lom.Bck().IsCloud())
 			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
 				stats.NamedVal64{Name: stats.LruEvictSize, Value: lom.Size()},
@@ -1254,7 +1254,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if !lom.IsAIS() {
+	if lom.Bck().IsCloud() {
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename object from Cloud bucket", lom))
 		return
 	}

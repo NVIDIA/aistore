@@ -53,7 +53,7 @@ linters-settings:
     locale: US
 
 issues:
-  # use default exclude rules 
+  # use default exclude rules
   exclude-use-default: true
 
   # additional exclude rules

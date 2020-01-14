@@ -54,10 +54,10 @@ func (b *Bck) String() string {
 	}
 	return fmt.Sprintf("%s(%x, %s, %v)", b.Name, bid, b.Provider, inProgress)
 }
-func (b *Bck) IsAIS() bool { return b.Provider == cmn.AIS || b.Provider == cmn.ProviderAIS }
+
+func (b *Bck) IsAIS() bool { return b.Provider == cmn.ProviderAIS }
 func (b *Bck) IsCloud() bool {
-	prov, _ := cmn.ProviderFromStr(b.Provider)
-	return prov == cmn.Cloud
+	return b.Provider == cmn.ProviderAmazon || b.Provider == cmn.ProviderGoogle
 }
 
 func (b *Bck) Equal(other *Bck) bool {
@@ -97,15 +97,19 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 		if b.IsAIS() && !bmd.IsAIS(b.Name) {
 			return cmn.NewErrorBucketDoesNotExist(b.Name)
 		}
-		if b.IsCloud() {
-			if bmd.IsCloud(b.Name) {
-				b.Provider = cmn.GCO.Get().CloudProvider
-			} else {
+		if !b.IsAIS() {
+			b.Provider = cmn.GCO.Get().CloudProvider
+			if !bmd.IsCloud(b.Name) {
 				err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
 			}
 		}
 	}
-	if b.IsCloud() && b.Provider != cmn.Cloud {
+
+	// NOTE: At this point we should be sure that we no longer use `cloud` but
+	// rather we have explicit cloud provider name.
+	cmn.Assert(b.Provider != cmn.Cloud)
+
+	if b.IsCloud() {
 		if cloudProvider := cmn.GCO.Get().CloudProvider; b.Provider != cloudProvider {
 			err = fmt.Errorf("provider mismatch: %q vs bucket (%s, %s)", cloudProvider, b.Name, b.Provider)
 		}

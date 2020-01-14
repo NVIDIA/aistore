@@ -91,7 +91,7 @@ func (mgr *Manager) initECBundles() {
 
 	cbReq := func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
-			glog.Errorf("Failed to request %s/%s: %v", hdr.Bucket, hdr.Objname, err)
+			glog.Errorf("Failed to request %s/%s: %v", hdr.Bucket, hdr.ObjName, err)
 		}
 	}
 
@@ -223,14 +223,14 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.Header, obj
 			return
 		}
 	}
-	bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
+	bck := &cluster.Bck{Name: hdr.Bucket, Provider: hdr.Provider}
 	if err = bck.Init(mgr.t.GetBowner()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			glog.Errorf("Failed to init bucket %s: %v", bck, err)
 			return
 		}
 	}
-	mgr.RestoreBckRespXact(bck).DispatchReq(iReq, bck, hdr.Objname)
+	mgr.RestoreBckRespXact(bck).DispatchReq(iReq, bck, hdr.ObjName)
 }
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
@@ -252,7 +252,7 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 		cmn.DrainReader(object)
 		return
 	}
-	bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
+	bck := &cluster.Bck{Name: hdr.Bucket, Provider: hdr.Provider}
 	if err = bck.Init(mgr.t.GetBowner()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			glog.Errorf("Failed to init bucket %s: %v", bck, err)
@@ -262,11 +262,11 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 	}
 	switch iReq.Act {
 	case ReqPut:
-		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
+		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, bck, hdr.ObjName, hdr.ObjAttrs, object)
 	case RespPut:
 		// Process this request even if there might not be enough targets. It might have been started when there was,
 		// so there is a chance to complete restore successfully
-		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
+		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.ObjName, hdr.ObjAttrs, object)
 	default:
 		glog.Errorf("Unknown EC response action %d", iReq.Act)
 		cmn.DrainReader(object)
