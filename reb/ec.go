@@ -866,7 +866,7 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) {
 				}
 
 				mainHasObject := (obj.mainSliceID == 0 || obj.isECCopy) && obj.mainHasAny
-				allSlicesFound := obj.sliceRequired() == obj.sliceFound()
+				allSlicesFound := obj.sliceFound() >= obj.sliceRequired()
 				// the object is good, nothing to restore:
 				// 1. Either objects is replicated, default target has replica
 				//    and total number of replicas is sufficient for EC

@@ -627,9 +627,6 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if err := lom.Load(); err != nil {
 		return err
 	}
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s %s => %s", lom, t.Snode().Name(), tsi.Name())
-	}
 	if rj.sema == nil { // rebalance.multiplier == 1
 		err = rj.send(lom, tsi)
 	} else { // // rebalance.multiplier > 1

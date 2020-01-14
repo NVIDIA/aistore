@@ -364,7 +364,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 		return
 	}
 
-	if glog.FastV(4, glog.SmoduleReb) {
+	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof("%s: from %s %s", reb.t.Snode().Name(), tsid, lom)
 	}
 	reb.statRunner.AddMany(
@@ -486,7 +486,7 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objRead
 		glog.Error(err)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleReb) {
+	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof("%s: ack from %s on %s", reb.t.Snode().Name(), opaque, lom)
 	}
 	var (
