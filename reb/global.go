@@ -145,12 +145,10 @@ func (reb *Manager) distributeECNamespace(md *globArgs) error {
 }
 
 // find out which objects are broken and how to fix them
-func (reb *Manager) generateECFixList(md *globArgs) {
+func (reb *Manager) generateECFixList() {
 	reb.ecReb.checkSlices()
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || md.dryRun {
-		glog.Infof("Number of objects misplaced locally: %d", len(reb.ecReb.localActions))
-		glog.Infof("Number of objects needs to be reconstructed/resent: %d", len(reb.ecReb.broken))
-	}
+	glog.Infof("Number of objects misplaced locally: %d", len(reb.ecReb.localActions))
+	glog.Infof("Number of objects to be reconstructed/resent: %d", len(reb.ecReb.broken))
 }
 
 func (reb *Manager) ecFixLocal(md *globArgs) error {
@@ -196,7 +194,7 @@ func (reb *Manager) globalRebRunEC(md *globArgs) error {
 		return err
 	}
 	// Detect objects with misplaced or missing parts
-	reb.generateECFixList(md)
+	reb.generateECFixList()
 
 	// Fix objects that are on local target but they are misplaced
 	if err := reb.ecFixLocal(md); err != nil {
@@ -593,7 +591,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	lom = &cluster.LOM{T: t, FQN: fqn}
 	err = lom.Init("", "")
 	if err != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
+		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("%s, err %s - skipping...", lom, err)
 		}
 		return nil
@@ -629,7 +627,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if err := lom.Load(); err != nil {
 		return err
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s %s => %s", lom, t.Snode().Name(), tsi.Name())
 	}
 	if rj.sema == nil { // rebalance.multiplier == 1
@@ -662,7 +660,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 		}
 		lom.Unlock(false)
 		if err != nil {
-			if glog.FastV(4, glog.SmoduleAIS) {
+			if glog.FastV(4, glog.SmoduleReb) {
 				glog.Errorf("%s, err: %v", lom, err)
 			}
 		}

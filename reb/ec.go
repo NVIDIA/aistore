@@ -526,7 +526,7 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 	slice *ecRebSlice, sliceID int, xxhash string, target *cluster.Snode) error {
 	cmn.AssertMsg(slice.meta != nil, slice.Objname)
 	newMeta := *slice.meta // copy meta (it does not contain pointers)
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("Sending slice %d[%s] of %s to %s", sliceID, xxhash, slice.Objname, target.Name())
 	}
 	newMeta.SliceID = sliceID
@@ -669,7 +669,7 @@ func (s *ecRebalancer) saveSliceToDisk(data *memsys.SGL, req *pushReq, md *ec.Me
 // Receives a slice/replica from another target, saves to local drive because
 // it is a missing slice/replica
 func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader io.Reader) error {
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("%s GOT slice/object for %s/%s from %s", s.t.Snode().Name(), hdr.Bucket, hdr.Objname, req.DaemonID)
 	}
 	var md ec.Metadata
@@ -681,7 +681,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 
 	s.mgr.laterx.Store(true)
 	sliceID := md.SliceID
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof(">>> %s got slice %d for %s/%s[%t]", s.t.Snode().Name(), sliceID, hdr.Bucket, hdr.Objname, hdr.BckIsAIS)
 	}
 	uid := uniqueWaitID(hdr.Bucket, hdr.Objname, hdr.BckIsAIS)
@@ -716,7 +716,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 
 	// notify that another slice is received successfully
 	remains := s.waiter.waitFor.Dec()
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("Slices to get remains: %d", remains)
 	}
 
@@ -822,9 +822,9 @@ func (s *ecRebalancer) mergeSlices() *ecRebResult {
 				continue
 			}
 			if local && slice.hrwFQN != slice.realFQN {
-				if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+				s.localActions = append(s.localActions, slice)
+				if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 					glog.Infof("%s %s -> %s", s.t.Snode().Name(), slice.hrwFQN, slice.realFQN)
-					s.localActions = append(s.localActions, slice)
 				}
 			}
 		}
@@ -878,7 +878,7 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) {
 					continue
 				}
 
-				if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+				if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 					glog.Infof("[%s] BROKEN: %s [Main %d on %s], slices %d of %d",
 						s.t.Snode().Name(), objName, obj.mainSliceID, obj.mainDaemon, obj.sliceFound(), obj.sliceRequired())
 				}
@@ -1175,7 +1175,7 @@ func (s *ecRebalancer) rebalanceLocal() error {
 	buf, slab := s.t.GetMem2().AllocDefault()
 	defer slab.Free(buf)
 	for _, act := range s.localActions {
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 			glog.Infof("%s Repair local %s -> %s", s.t.Snode().Name(), act.realFQN, act.hrwFQN)
 		}
 		mpathSrc, _, err := cluster.ResolveFQN(act.realFQN)
@@ -1293,7 +1293,7 @@ func (s *ecRebalancer) calcLocalProps(bck *cluster.Bck, obj *ecRebObject, smap *
 	}
 
 	cmn.Assert(obj.sender != nil) // must not happen
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		if obj.sender == nil {
 			glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], slice found %d vs required %d[all slices: %v], is in HRW %v",
 				s.t.Snode().Name(), obj.uid, obj.hasSlice, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID, sliceFound, sliceReq, obj.hasAllSlices, obj.inHrwList)
@@ -1345,7 +1345,7 @@ func (s *ecRebalancer) shouldSendSlice(obj *ecRebObject) (hasSlice bool, shouldS
 	tgtIndex := s.targetIndex(s.t.Snode().DaemonID, obj)
 	shouldSend = tgtIndex >= 0 && tgtIndex < int(sliceCnt)
 	hasSlice = obj.hasSlice && !obj.isMain && !obj.isECCopy && !obj.fullObjFound
-	if hasSlice && (bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun) {
+	if hasSlice && (bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun) {
 		locSlice := obj.sliceAt[s.t.Snode().DaemonID]
 		glog.Infof("Should send: %s[%d] - %d : %v / %v", obj.uid, locSlice.SliceID, tgtIndex,
 			hasSlice, shouldSend)
@@ -1383,7 +1383,7 @@ func (s *ecRebalancer) sendLocalData(obj *ecRebObject, si ...*cluster.Snode) err
 		cmn.Assert(ok)
 		target = mainSI
 	}
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("%s sending a slice/replica #%d of %s to main %s", s.t.Snode().Name(), slice.SliceID, slice.Objname, target.Name())
 	}
 	return s.sendFromDisk(slice, target)
@@ -1394,7 +1394,7 @@ func (s *ecRebalancer) sendLocalData(obj *ecRebObject, si ...*cluster.Snode) err
 // target by HRW that has one of replicas
 func (s *ecRebalancer) bcastLocalReplica(obj *ecRebObject) error {
 	cmn.Assert(obj.sender != nil) // mustn't happen
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("%s Object %s sender %s", s.t.Snode().Name(), obj.uid, obj.sender.Name())
 	}
 	// Another node should send replicas, do noting
@@ -1417,7 +1417,7 @@ func (s *ecRebalancer) bcastLocalReplica(obj *ecRebObject) error {
 			continue
 		}
 		sendTo = append(sendTo, si)
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 			glog.Infof("%s #4.4 - sending %s a replica of %s to %s", s.t.Snode().Name(), slice.hrwFQN, slice.Objname, si.Name())
 		}
 		sliceDiff--
@@ -1515,7 +1515,7 @@ func (s *ecRebalancer) waitForFullObject(obj *ecRebObject, moveLocalSlice bool) 
 	if moveLocalSlice {
 		// Default target has a slice, so it must be sent to another target
 		// before receiving a full object from some other target
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 			glog.Infof("#5.4 Sending local slice before getting full object %s", obj.uid)
 		}
 		tgt := s.firstEmptyTgt(obj)
@@ -1524,7 +1524,7 @@ func (s *ecRebalancer) waitForFullObject(obj *ecRebObject, moveLocalSlice bool) 
 			return err
 		}
 	}
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("#5.3/4 Waiting for an object %s", obj.uid)
 	}
 	s.waiter.lookupCreate(obj.uid, 0, waitForReplica)
@@ -1541,13 +1541,13 @@ func (s *ecRebalancer) waitForExistingSlices(obj *ecRebObject) (err error) {
 		// wait slices only from `dataSliceCount` first HRW targets
 		tgtIndex := s.targetIndex(sl.DaemonID, obj)
 		if tgtIndex < 0 || tgtIndex >= int(obj.dataSlices) {
-			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 				glog.Infof("#5.5 Waiting for slice %d %s - [SKIPPED %d]", sl.SliceID, obj.uid, tgtIndex)
 			}
 			continue
 		}
 
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 			glog.Infof("#5.5 Waiting for slice %d %s", sl.SliceID, obj.uid)
 		}
 		s.waiter.lookupCreate(obj.uid, sl.SliceID, waitForAllSlices)
@@ -1561,7 +1561,7 @@ func (s *ecRebalancer) restoreReplicas(obj *ecRebObject) (err error) {
 	if !s.needsReplica(obj) {
 		return s.bcastLocalReplica(obj)
 	}
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("#4 Waiting for replica %s", obj.uid)
 	}
 	s.waiter.lookupCreate(obj.uid, 0, waitForSingleSlice)
@@ -1571,7 +1571,7 @@ func (s *ecRebalancer) restoreReplicas(obj *ecRebObject) (err error) {
 func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
 	// Case #1: this target does not have to do anything
 	if s.shouldSkipObj(obj) {
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 			glog.Infof("SKIPPING %s", obj.uid)
 		}
 		return nil
@@ -1602,7 +1602,7 @@ func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
 
 	// Case #5.1: it is not main target and has slice or does not need any
 	if !obj.isMain && (obj.hasSlice || !obj.inHrwList) {
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 			glog.Infof("#5.1 Object %s skipped", obj.uid)
 		}
 		return nil
@@ -1611,7 +1611,7 @@ func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
 	// Case #5.2: it is not main target, has no slice, needs according to HRW
 	// but won't receive since there are few slices outside HRW
 	if !obj.isMain && !obj.hasSlice && obj.inHrwList {
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 			glog.Infof("#5.2 Waiting for object %s", obj.uid)
 		}
 		s.waiter.lookupCreate(obj.uid, anySliceID, waitForSingleSlice)
@@ -1638,7 +1638,7 @@ func (s *ecRebalancer) rebalanceObject(obj *ecRebObject) (err error) {
 	cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
 		fmt.Sprintf("%s%s/%s: isMain %t - mainHasSome %t - mainID %d",
 			s.mgr.t.Snode().Name(), obj.bucket, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID))
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("rebuilding slices of %s and send them", obj.objName)
 	}
 	return s.rebuildFromDisk(obj)
@@ -1664,7 +1664,7 @@ func (s *ecRebalancer) finalizeBatch() error {
 	s.waitECAck()
 
 	// mark batch done and notify other targets
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("%s batch %d done", s.t.Snode().Name(), s.batchID)
 	}
 	s.batchDone(s.t.Snode().DaemonID, s.batchID)
@@ -1781,7 +1781,7 @@ func (s *ecRebalancer) rebalanceGlobal() (err error) {
 	s.batchID = 0
 	// to cleanup the last batch and allocated SGLs
 	for s.batchID < len(s.broken) {
-		if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+		if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 			glog.Infof("Starting batch of %d from %d", ecRebBatchSize, s.batchID)
 		}
 
@@ -1794,7 +1794,7 @@ func (s *ecRebalancer) rebalanceGlobal() (err error) {
 			}
 
 			obj := s.broken[s.batchID+j]
-			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 				glog.Infof("--- Starting object [%d] %s ---", j+s.batchID, obj.uid)
 			}
 			cmn.Assert(len(obj.sliceAt) != 0) // cannot happen
@@ -1839,7 +1839,7 @@ func (s *ecRebalancer) releaseSGLs(objList []*ecRebObject) {
 // TODO: rebuildFromDisk, rebuildFromMem, and rebuildFromSlices shares some
 // code. See what can be done to deduplicate it. Some code may go to EC package
 func (s *ecRebalancer) rebuildFromDisk(obj *ecRebObject) (err error) {
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("%s rebuilding slices of %s and send them", s.t.Snode().Name(), obj.objName)
 	}
 	slice, ok := obj.sliceAt[s.t.Snode().DaemonID]
@@ -1895,7 +1895,7 @@ func (s *ecRebalancer) rebuildFromDisk(obj *ecRebObject) (err error) {
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
 		if idx <= int(obj.dataSlices) {
-			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 				glog.Infof("Sending %s data slice %d to %s", obj.objName, idx, si.Name())
 			}
 			reader := readerSend[idx-1]
@@ -1912,7 +1912,7 @@ func (s *ecRebalancer) rebuildFromDisk(obj *ecRebObject) (err error) {
 			}
 		} else {
 			sglIdx := idx - int(obj.dataSlices) - 1
-			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si.Name())
 			}
 			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize, s.t.GetMem2())
@@ -1954,7 +1954,7 @@ func (s *ecRebalancer) metadataForSlice(slices []*ecWaitSlice, sliceID int) *ec.
 // The object is misplaced and few slices are missing. The default target
 // receives the object into SGL, rebuilds missing slices, and sends them
 func (s *ecRebalancer) rebuildFromMem(obj *ecRebObject, slices []*ecWaitSlice) (err error) {
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("%s rebuilding slices of %s and send them", s.t.Snode().Name(), obj.objName)
 	}
 	cmn.Assert(len(slices) != 0)
@@ -2005,7 +2005,7 @@ func (s *ecRebalancer) rebuildFromMem(obj *ecRebObject, slices []*ecWaitSlice) (
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
 		if idx <= int(obj.dataSlices) {
-			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 				glog.Infof("Sending %s data slice %d to %s", obj.objName, idx, si.Name())
 			}
 			reader := readerSGLs[idx-1]
@@ -2021,7 +2021,7 @@ func (s *ecRebalancer) rebuildFromMem(obj *ecRebObject, slices []*ecWaitSlice) (
 			}
 		} else {
 			sglIdx := idx - int(obj.dataSlices) - 1
-			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si.Name())
 			}
 			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize, s.t.GetMem2())
@@ -2043,7 +2043,7 @@ func (s *ecRebalancer) rebuildFromMem(obj *ecRebObject, slices []*ecWaitSlice) (
 // existing slices into SGLs, restores the object, rebuilds slices, and finally
 // send missing slices to other targets
 func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice) (err error) {
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("%s rebuilding slices of %s and send them(mem)", s.t.Snode().Name(), obj.objName)
 	}
 
@@ -2095,7 +2095,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		return fmt.Errorf("Failed to build EC for %q: %v", obj.objName, err)
 	}
 
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("Saving restored full object %s[%d]", obj.objName, obj.objSize)
 	}
 	// Save the object and its metadata first
@@ -2120,7 +2120,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		return err
 	}
 	lom.Uncache()
-	if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof("Saving restored full object %s to %q", obj.objName, lom.FQN)
 	}
 	tmpFQN := fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec")
@@ -2163,7 +2163,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *ecRebObject, slices []*ecWaitSlice
 		}
 		sliceID := i + 1
 		if exists := obj.sliceExist[sliceID]; exists {
-			if bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun {
+			if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 				glog.Infof("Object %s slice %d: already exists", obj.uid, sliceID)
 			}
 			continue

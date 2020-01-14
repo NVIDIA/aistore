@@ -2514,7 +2514,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 	registered = true
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	tutils.Logf("Getting the number of objects after rebalance\n", tgtLost.Name())
+	tutils.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListBucket(baseParams, bucketEC, msg, 0)
 	tassert.CheckError(t, err)
 	newECList := filterObjListOK(resECNew.Entries)
@@ -2523,10 +2523,10 @@ func TestECAndRegularRebalance(t *testing.T) {
 	resRegNew, err := api.ListBucket(baseParams, bucketReg, msg, 0)
 	tassert.CheckError(t, err)
 	newRegList := filterObjListOK(resRegNew.Entries)
-	tutils.Logf("%d objects in %si after rebalance\n",
+	tutils.Logf("%d objects in %s after rebalance\n",
 		len(newRegList), bucketReg)
 
-	tutils.Logf("Test object readability after rebalance\n")
+	tutils.Logln("Test object readability after rebalance")
 	for _, obj := range oldECList {
 		_, err := api.GetObject(baseParams, bucketEC, obj.Name)
 		tassert.CheckError(t, err)

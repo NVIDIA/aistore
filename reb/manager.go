@@ -26,6 +26,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const pkgName = "rebalance"
+
 const (
 	RebalanceStreamName = "rebalance"
 	RebalanceAcksName   = "remwack" // NOTE: can become generic remote-write-acknowledgment
@@ -101,6 +103,12 @@ var stages = map[uint32]string{
 	rebStageECDetect:     "<build-fix-list>",
 	rebStageECGlobRepair: "<ec-transfer>",
 	rebStageECCleanup:    "<ec-fin>",
+}
+
+func init() {
+	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
+		glog.SetV(glog.SmoduleReb, logLvl)
+	}
 }
 
 //
@@ -356,7 +364,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 		return
 	}
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s: from %s %s", reb.t.Snode().Name(), tsid, lom)
 	}
 	reb.statRunner.AddMany(
@@ -439,7 +447,7 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 	}
 
 	if req.Stage == rebStageECBatch {
-		if glog.FastV(4, glog.SmoduleAIS) {
+		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("%s Target %s finished batch %d", reb.t.Snode().Name(), req.DaemonID, req.Batch)
 		}
 		reb.ecReb.batchDone(req.DaemonID, req.Batch)
@@ -452,7 +460,7 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 func (reb *Manager) recvECAck(hdr transport.Header) {
 	opaque := string(hdr.Opaque)
 	uid := ackID(hdr.Bucket, hdr.Objname, cmn.ProviderFromBool(hdr.BckIsAIS), string(hdr.Opaque))
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s: EC ack from %s on %s/%s", reb.t.Snode().Name(), opaque, hdr.Bucket, hdr.Objname)
 	}
 	reb.ecReb.ackCTs.mtx.Lock()
@@ -478,7 +486,7 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objRead
 		glog.Error(err)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s: ack from %s on %s", reb.t.Snode().Name(), opaque, lom)
 	}
 	var (
@@ -526,7 +534,7 @@ func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt in
 			}
 			tsi, _ := cluster.HrwTarget(lom.Uname(), smap)
 			if reb.t.LookupRemoteSingle(lom, tsi) {
-				if glog.FastV(4, glog.SmoduleAIS) {
+				if glog.FastV(4, glog.SmoduleReb) {
 					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi.Name())
 				}
 				delete(lomack.q, uname)
