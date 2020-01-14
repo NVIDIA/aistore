@@ -55,7 +55,7 @@ const (
 	reasonStopped  = "stopped"
 )
 
-// API: types
+// API types
 type (
 	Stream struct {
 		// user-defined & queryable
@@ -67,7 +67,7 @@ type (
 		Numcur, Sizecur int64        // gets reset to zero upon each timeout
 		// internals
 		lid      string        // log prefix
-		workCh   chan obj      // aka SQ: next object to stream
+		workCh   chan Obj      // aka SQ: next object to stream
 		cmplCh   chan cmpl     // aka SCQ; note that SQ and SCQ together form a FIFO
 		lastCh   cmn.StopCh    // end of stream
 		stopCh   cmn.StopCh    // stop/abort stream
@@ -110,7 +110,7 @@ type (
 	}
 	EndpointStats map[uint64]*Stats // all stats for a given http endpoint defined by a tuple(network, trname) by session ID
 
-	// attributes associated with given object
+	// object attrs
 	ObjectAttrs struct {
 		Atime      int64  // access time - nanoseconds since UNIX epoch
 		Size       int64  // size of objects in bytes
@@ -118,7 +118,6 @@ type (
 		CksumValue string // checksum of the object produced by given checksum type
 		Version    string // version of the object
 	}
-
 	// object header
 	Header struct {
 		Bucket, Objname string      // uname at the destination
@@ -126,12 +125,20 @@ type (
 		Opaque          []byte      // custom control (optional)
 		BckIsAIS        bool        // is ais bucket
 	}
+	// object to transmit
+	Obj struct {
+		Hdr      Header         // object header
+		Reader   io.ReadCloser  // reader, to read the object, and close when done
+		Callback SendCallback   // callback fired when sending is done OR when the stream terminates (see term.reason)
+		CmplPtr  unsafe.Pointer // local pointer that gets returned to the caller via Send completion callback
+		Prc      *atomic.Int64  // optional refcount; if present, SendCallback gets called if and when *prc reaches zero
+	}
+
 	// object-sent callback that has the following signature can optionally be defined on a:
 	// a) per-stream basis (via NewStream constructor - see Extra struct above)
 	// b) for a given object that is being sent (for instance, to support a call-per-batch semantics)
 	// Naturally, object callback "overrides" the per-stream one: when object callback is defined
 	// (i.e., non-nil), the stream callback is ignored/skipped.
-	//
 	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
 	SendCallback func(Header, io.ReadCloser, unsafe.Pointer, error)
 
@@ -140,7 +147,7 @@ type (
 	}
 )
 
-// internal
+// internal types
 type (
 	lz4Stream struct {
 		s             *Stream
@@ -149,21 +156,14 @@ type (
 		blockMaxSize  int         // *uncompressed* block max size
 		frameChecksum bool        // true: checksum lz4 frames
 	}
-	obj struct {
-		hdr      Header         // object header
-		reader   io.ReadCloser  // reader, to read the object, and close when done
-		callback SendCallback   // callback fired when sending is done OR when the stream terminates (see term.reason)
-		cmplPtr  unsafe.Pointer // local pointer that gets returned to the caller via Send completion callback
-		prc      *atomic.Int64  // optional refcount; if present, SendCallback gets called if and when *prc reaches zero
-	}
 	sendoff struct {
-		obj obj
+		obj Obj
 		// in progress
 		off int64
 		dod int64
 	}
 	cmpl struct { // send completions => SCQ
-		obj obj
+		obj Obj
 		err error
 	}
 	nopReadCloser struct{}
@@ -205,7 +205,7 @@ func (extra *Extra) compressed() bool {
 }
 
 //
-// API: methods
+// API methods
 //
 func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	u, err := url.Parse(toURL)
@@ -264,7 +264,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 			burst = int(burst64)
 		}
 	}
-	s.workCh = make(chan obj, burst)  // Send Qeueue or SQ
+	s.workCh = make(chan Obj, burst)  // Send Qeueue or SQ
 	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue or SCQ
 
 	s.lastCh = cmn.NewStopCh()
@@ -325,9 +325,9 @@ func (s *Stream) compressed() bool { return s.lz4s.s == s }
 // stream(s).
 //
 // ---------------------------------------------------------------------------------------
-func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, cmplPtr unsafe.Pointer, prc ...*atomic.Int64) (err error) {
+func (s *Stream) Send(obj Obj) (err error) {
 	s.time.inSend.Store(true) // indication for Collector to delay cleanup
-
+	hdr := &obj.Hdr
 	if s.Terminated() {
 		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
 			s, *s.term.reason, s.term.err, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size)
@@ -341,13 +341,9 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, c
 		}
 	}
 	// next object => SQ
-	if reader == nil {
+	if obj.Reader == nil {
 		cmn.Assert(hdr.IsHeaderOnly())
-		reader = nopRC
-	}
-	obj := obj{hdr: hdr, reader: reader, callback: callback, cmplPtr: cmplPtr}
-	if len(prc) > 0 {
-		obj.prc = prc[0]
+		obj.Reader = nopRC
 	}
 	s.workCh <- obj
 	if glog.FastV(4, glog.SmoduleTransport) {
@@ -357,8 +353,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, c
 }
 
 func (s *Stream) Fin() {
-	hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
-	_ = s.Send(hdr, nil, nil, nil)
+	_ = s.Send(Obj{Hdr: Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}})
 	s.wg.Wait()
 }
 func (s *Stream) Stop()               { s.stopCh.Close() }
@@ -379,7 +374,7 @@ func (s *Stream) terminate() {
 	s.Stop()
 
 	hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
-	obj := obj{hdr: hdr}
+	obj := Obj{Hdr: hdr}
 	s.cmplCh <- cmpl{obj, s.term.err}
 	s.term.mu.Unlock()
 
@@ -455,7 +450,7 @@ func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
 		s.wg.Wait()
 
 		// second, handle the last send that was interrupted
-		if s.sendoff.obj.reader != nil {
+		if s.sendoff.obj.Reader != nil {
 			obj := &s.sendoff.obj
 			s.objDone(obj, s.term.err)
 		}
@@ -470,7 +465,7 @@ func (s *Stream) cmplLoop() {
 	for {
 		cmpl, ok := <-s.cmplCh
 		obj := &cmpl.obj
-		if !ok || obj.hdr.IsLast() {
+		if !ok || obj.Hdr.IsLast() {
 			break
 		}
 		s.objDone(&cmpl.obj, cmpl.err)
@@ -479,22 +474,22 @@ func (s *Stream) cmplLoop() {
 }
 
 // refcount, invoke Sendcallback, and *always* close the reader
-func (s *Stream) objDone(obj *obj, err error) {
+func (s *Stream) objDone(obj *Obj, err error) {
 	var rc int64
-	if obj.prc != nil {
-		rc = obj.prc.Dec()
+	if obj.Prc != nil {
+		rc = obj.Prc.Dec()
 		cmn.Assert(rc >= 0) // remove
 	}
 	// SCQ completion callback
 	if rc == 0 {
-		if obj.callback != nil {
-			obj.callback(obj.hdr, obj.reader, obj.cmplPtr, err)
+		if obj.Callback != nil {
+			obj.Callback(obj.Hdr, obj.Reader, obj.CmplPtr, err)
 		} else if s.callback != nil {
-			s.callback(obj.hdr, obj.reader, obj.cmplPtr, err)
+			s.callback(obj.Hdr, obj.Reader, obj.CmplPtr, err)
 		}
 	}
-	if obj.reader != nil {
-		obj.reader.Close() // NOTE: always closing
+	if obj.Reader != nil {
+		obj.Reader.Close() // NOTE: always closing
 	}
 }
 
@@ -577,12 +572,12 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 func (s *Stream) Read(b []byte) (n int, err error) {
 	s.time.inSend.Store(true) // indication for Collector to delay cleanup
 	obj := &s.sendoff.obj
-	if obj.reader != nil { // have object
+	if obj.Reader != nil { // have object
 		if s.sendoff.dod != 0 { // fast path
-			if !obj.hdr.IsHeaderOnly() {
+			if !obj.Hdr.IsHeaderOnly() {
 				return s.sendData(b)
 			}
-			if !obj.hdr.IsLast() {
+			if !obj.Hdr.IsLast() {
 				s.eoObj(nil)
 			} else {
 				err = io.EOF
@@ -595,13 +590,13 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 repeat:
 	select {
 	case s.sendoff.obj = <-s.workCh: // next object OR idle tick
-		if s.sendoff.obj.hdr.IsIdleTick() {
+		if s.sendoff.obj.Hdr.IsIdleTick() {
 			if len(s.workCh) > 0 {
 				goto repeat
 			}
 			return s.deactivate()
 		}
-		l := s.insHeader(s.sendoff.obj.hdr)
+		l := s.insHeader(s.sendoff.obj.Hdr)
 		s.header = s.maxheader[:l]
 		return s.sendHdr(b)
 	case <-s.stopCh.Listen():
@@ -633,7 +628,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 		}
 		s.sendoff.dod = s.sendoff.off
 		s.sendoff.off = 0
-		if s.sendoff.obj.hdr.IsLast() {
+		if s.sendoff.obj.Hdr.IsLast() {
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: sent last", s)
 			}
@@ -648,14 +643,14 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 
 func (s *Stream) sendData(b []byte) (n int, err error) {
 	obj := &s.sendoff.obj
-	n, err = obj.reader.Read(b)
+	n, err = obj.Reader.Read(b)
 	s.sendoff.off += int64(n)
 	if err != nil {
 		if err == io.EOF {
 			err = nil
 		}
 		s.eoObj(err)
-	} else if s.sendoff.off >= obj.hdr.ObjAttrs.Size {
+	} else if s.sendoff.off >= obj.Hdr.ObjAttrs.Size {
 		s.eoObj(err)
 	}
 	return
@@ -672,16 +667,16 @@ func (s *Stream) eoObj(err error) {
 	if err != nil {
 		goto exit
 	}
-	if s.sendoff.off != obj.hdr.ObjAttrs.Size {
+	if s.sendoff.off != obj.Hdr.ObjAttrs.Size {
 		err = fmt.Errorf("%s: obj %s/%s offset %d != %d size",
-			s, s.sendoff.obj.hdr.Bucket, s.sendoff.obj.hdr.Objname, s.sendoff.off, obj.hdr.ObjAttrs.Size)
+			s, s.sendoff.obj.Hdr.Bucket, s.sendoff.obj.Hdr.Objname, s.sendoff.off, obj.Hdr.ObjAttrs.Size)
 		goto exit
 	}
-	s.stats.Size.Add(obj.hdr.ObjAttrs.Size)
+	s.stats.Size.Add(obj.Hdr.ObjAttrs.Size)
 	s.Numcur++
 	s.stats.Num.Inc()
 	if glog.FastV(4, glog.SmoduleTransport) {
-		glog.Infof("%s: sent size=%d (%d/%d): %s", s, obj.hdr.ObjAttrs.Size, s.Numcur, s.stats.Num.Load(), obj.hdr.Objname)
+		glog.Infof("%s: sent size=%d (%d/%d): %s", s, obj.Hdr.ObjAttrs.Size, s.Numcur, s.stats.Num.Load(), obj.Hdr.Objname)
 	}
 exit:
 	if err != nil {
@@ -793,7 +788,7 @@ func (r *nopReadCloser) Close() error                   { return nil }
 func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	var (
 		sendoff = &lz4s.s.sendoff
-		last    = sendoff.obj.hdr.IsLast()
+		last    = sendoff.obj.Hdr.IsLast()
 		retry   = 64 // insist on returning n > 0
 	)
 	if lz4s.sgl.Len() > 0 {
@@ -809,7 +804,7 @@ re:
 	if last {
 		lz4s.zw.Close()
 		retry = 0
-	} else if lz4s.s.sendoff.obj.reader == nil /*eoObj*/ || err != nil {
+	} else if lz4s.s.sendoff.obj.Reader == nil /*eoObj*/ || err != nil {
 		lz4s.zw.Flush()
 		retry = 0
 	}

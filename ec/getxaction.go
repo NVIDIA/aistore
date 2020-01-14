@@ -60,7 +60,8 @@ func NewGetXact(t cluster.Target, smap cluster.Sowner,
 	return runner
 }
 
-func (r *XactGet) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
+func (r *XactGet) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs,
+	object io.Reader) {
 	uname := unique(iReq.Sender, bck, objName)
 
 	switch iReq.Act {

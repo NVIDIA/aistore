@@ -50,7 +50,7 @@ func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
 // Sorts all targets in a cluster by their respective HRW (weights) in a descending order;
 // returns resulting subset (aka slice) that has the requested length = count.
 // Returns error if the cluster does not have enough targets.
-func HrwTargetList(uname string, smap *Smap, count int) (si []*Snode, err error) {
+func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 	cmn.Assert(count > 0)
 	cnt := smap.CountTargets()
 	if cnt < count {
@@ -62,7 +62,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (si []*Snode, err error)
 		digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
 		i      int
 	)
-	si = make([]*Snode, count)
+	sis = make(Nodes, count)
 	for _, sinfo := range smap.Tmap {
 		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
 		arr[i] = tsi{sinfo, cs}
@@ -70,7 +70,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (si []*Snode, err error)
 	}
 	sort.Slice(arr, func(i, j int) bool { return arr[i].hash > arr[j].hash })
 	for i := 0; i < count; i++ {
-		si[i] = arr[i].node
+		sis[i] = arr[i].node
 	}
 	return
 }

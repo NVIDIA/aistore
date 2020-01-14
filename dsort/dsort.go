@@ -416,11 +416,12 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		// Make send synchronous
 		streamWg := &sync.WaitGroup{}
 		errCh := make(chan error, 1)
-		streamWg.Add(1)
-		err = m.streams.shards.SendV(hdr, file, func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+		cb := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, err error) {
 			errCh <- err
 			streamWg.Done()
-		}, nil, si)
+		}
+		streamWg.Add(1)
+		err = m.streams.shards.Send(transport.Obj{Hdr: hdr, Reader: file, Callback: cb}, file, si)
 		if err != nil {
 			return err
 		}
@@ -461,7 +462,7 @@ exit:
 // repeats until len(targetOrder) == 1, in which case the single target in the
 // slice is the final target with the final, complete, sorted slice of Record
 // structs.
-func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) (currentTargetIsFinal bool, err error) {
+func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (currentTargetIsFinal bool, err error) {
 	var (
 		i           int
 		d           *cluster.Snode
@@ -858,7 +859,7 @@ func nodeForShardRequest(shardsToTarget map[string][]*extract.Shard, numLocalRec
 }
 
 // randomTargetOrder returns a cluster.Snode slice for targets in a pseudorandom order.
-func randomTargetOrder(salt uint64, tmap map[string]*cluster.Snode) []*cluster.Snode {
+func randomTargetOrder(salt uint64, tmap cluster.NodeMap) []*cluster.Snode {
 	targets := make(map[uint64]*cluster.Snode, len(tmap))
 	keys := make([]uint64, 0, len(tmap))
 	for i, d := range tmap {

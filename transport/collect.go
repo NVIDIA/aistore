@@ -145,7 +145,7 @@ func (gc *collector) do() {
 					s.objDone(&obj, s.term.err)
 				}
 				for cmpl := range s.cmplCh {
-					if !cmpl.obj.hdr.IsLast() {
+					if !cmpl.obj.Hdr.IsLast() {
 						s.objDone(&cmpl.obj, cmpl.err)
 					}
 				}
@@ -163,7 +163,7 @@ func (gc *collector) do() {
 			continue
 		}
 		if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
-			s.workCh <- obj{hdr: Header{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
+			s.workCh <- Obj{Hdr: Header{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: active => inactive", s)
 			}

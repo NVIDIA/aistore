@@ -1912,7 +1912,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	// kill #dataslices of targets, normal EC restore won't be possible
 	// 2. Kill a random target
-	removedTargets := make([]*cluster.Snode, 0, o.dataCnt)
+	removedTargets := make(cluster.Nodes, 0, o.dataCnt)
 	smap := getClusterMap(t, proxyURL)
 
 	for i := o.dataCnt - 1; i >= 0; i-- {
@@ -1930,7 +1930,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
 
-	hasTarget := func(targets []*cluster.Snode, target *cluster.Snode) bool {
+	hasTarget := func(targets cluster.Nodes, target *cluster.Snode) bool {
 		for _, tr := range targets {
 			if tr.DaemonID == target.DaemonID {
 				return true

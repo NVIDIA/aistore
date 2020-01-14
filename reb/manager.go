@@ -370,7 +370,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 	if stage := reb.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
 		hdr.Opaque = []byte(reb.t.Snode().DaemonID) // self == src
 		hdr.ObjAttrs.Size = 0
-		if err := reb.acks.SendV(hdr, nil /*reader*/, nil /*callback*/, nil /*ptr*/, tsi); err != nil {
+		if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
 		}
 	}
@@ -387,36 +387,17 @@ func (reb *Manager) setStage(node string, stage uint32) {
 // - update internal stage
 // - send notification to all other targets that this one is in a new stage
 func (reb *Manager) changeStage(newStage uint32) {
-	// first, set its own stage
+	// first, set stage
 	reb.setStage(reb.t.Snode().DaemonID, newStage)
-
-	smap := reb.t.GetSowner().Get()
-	nodes := make([]*cluster.Snode, 0, len(smap.Tmap))
-	for _, node := range smap.Tmap {
-		if node.DaemonID == reb.t.Snode().DaemonID {
-			continue
-		}
-		nodes = append(nodes, node)
-	}
 
 	req := pushReq{DaemonID: reb.t.Snode().DaemonID, Stage: newStage, RebID: reb.globRebID.Load()}
 	hdr := transport.Header{
 		ObjAttrs: transport.ObjectAttrs{Size: 0},
 		Opaque:   cmn.MustMarshal(req),
 	}
-	// second, notify all other targets
-	if err := reb.pushes.SendV(hdr, nil, nil, nil, nodes...); err != nil {
-		var sb strings.Builder
-		for idx, n := range nodes {
-			sb.WriteString(n.DaemonID)
-			if idx < len(nodes)-1 {
-				sb.WriteString(",")
-			}
-		}
-		// in case of error only log a warning - other targets should be able
-		// to pull the new stage and continue later
-		glog.Warningf("Failed to send ack %s to %s nodes: %v", stages[newStage], sb.String(), err)
-		return
+	// second, notify all
+	if err := reb.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
+		glog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
 	}
 }
 
@@ -593,15 +574,7 @@ func (reb *Manager) abortGlobal() {
 		ObjAttrs: transport.ObjectAttrs{Size: 0},
 		Opaque:   cmn.MustMarshal(req),
 	}
-	smap := reb.t.GetSowner().Get()
-	sendTo := make([]*cluster.Snode, 0, len(smap.Tmap))
-	for _, node := range smap.Tmap {
-		if node.DaemonID == req.DaemonID {
-			continue
-		}
-		sendTo = append(sendTo, node)
-	}
-	if err := reb.pushes.Send(hdr, nil, nil, nil, sendTo); err != nil {
-		glog.Errorf("Failed to send abort notification to nodes %+v: %v", sendTo, err)
+	if err := reb.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
+		glog.Errorf("Failed to broadcast abort notification: %v", err)
 	}
 }

@@ -78,7 +78,7 @@ func newTestSmap(targets ...string) *testSmap {
 		&cluster.Smap{},
 		&testSmapListeners{},
 	}
-	smap.Tmap = make(map[string]*cluster.Snode)
+	smap.Tmap = make(cluster.NodeMap)
 	for _, target := range targets {
 		smap.Tmap[target] = &cluster.Snode{}
 	}

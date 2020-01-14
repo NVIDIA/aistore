@@ -64,6 +64,9 @@ type (
 	}
 )
 
+// implements cluster.Slistener interface. registers with cluster.SmapListeners
+var _ cluster.Slistener = &StreamBundle{}
+
 //
 // API
 //
@@ -125,45 +128,30 @@ func (sb *StreamBundle) Close(gracefully bool) {
 	}
 }
 
-//
-// Following are the two main API methods:
-// - to broadcast via all established streams, use SendV() and omit the last arg;
-// - otherwise, use SendV() with destinations specified as a comma-separated list,
-//   or use Send() with a slice of nodes for destinations.
-//
-
-func (sb *StreamBundle) SendV(hdr Header, reader cmn.ReadOpenCloser, cb SendCallback,
-	cmplPtr unsafe.Pointer, nodes ...*cluster.Snode) (err error) {
-	return sb.Send(hdr, reader, cb, cmplPtr, nodes)
-}
-
-func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallback,
-	cmplPtr unsafe.Pointer, nodes []*cluster.Snode) (err error) {
+// (nodes == nil): transmit via all established streams
+func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
 	var (
-		prc     *atomic.Int64 // completion refcount (optional)
 		streams = sb.get()
+		reopen  bool
 	)
 	if len(streams) == 0 {
 		err = fmt.Errorf("no streams %s => .../%s", sb.lsnode, sb.trname)
 		return
 	}
-	if cb == nil {
-		cb = sb.extra.Callback
+	if obj.Callback == nil {
+		obj.Callback = sb.extra.Callback
 	}
 	if nodes == nil {
-		if cb != nil && len(streams) > 1 {
-			prc = atomic.NewInt64(int64(len(streams))) // only when there's a callback and more than 1 dest-s
+		if obj.Callback != nil && len(streams) > 1 {
+			obj.Prc = atomic.NewInt64(int64(len(streams))) // when there's a callback and > 1 dest-s
 		}
-		//
 		// Reader-reopening logic: since the streams in a bundle are mutually independent
 		// and asynchronous, reader.Open() (aka reopen) is skipped for the 1st replica
 		// that we put on the wire and is done for the 2nd, 3rd, etc. replicas.
 		// In other words, for the N object replicas over the N bundled streams, the
 		// original reader will get reopened (N-1) times.
-		//
-		reopen := false
 		for _, robin := range streams {
-			if err = sb.sendOne(robin, hdr, reader, cb, cmplPtr, prc, reopen); err != nil {
+			if err = sb.sendOne(obj, roc, robin, reopen); err != nil {
 				return
 			}
 			reopen = true
@@ -176,14 +164,13 @@ func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallb
 				return
 			}
 		}
-		if cb != nil && len(nodes) > 1 {
-			prc = atomic.NewInt64(int64(len(nodes)))
+		if obj.Callback != nil && len(nodes) > 1 {
+			obj.Prc = atomic.NewInt64(int64(len(nodes)))
 		}
 		// second, do send. Same comment wrt reopening.
-		reopen := false
 		for _, di := range nodes {
 			robin := streams[di.DaemonID]
-			if err = sb.sendOne(robin, hdr, reader, cb, cmplPtr, prc, reopen); err != nil {
+			if err = sb.sendOne(obj, roc, robin, reopen); err != nil {
 				return
 			}
 			reopen = true
@@ -191,10 +178,6 @@ func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallb
 	}
 	return
 }
-
-// implements cluster.Slistener interface. registers with cluster.SmapListeners
-
-var _ cluster.Slistener = &StreamBundle{}
 
 func (sb *StreamBundle) String() string { return sb.lid }
 
@@ -216,32 +199,6 @@ func (sb *StreamBundle) ListenSmapChanged(newSmapVersionChannel chan int64) {
 	}
 }
 
-func (sb *StreamBundle) apply(action int) {
-	cmn.Assert(action == closeFin || action == closeStop)
-	var (
-		streams = sb.get()
-		wg      = &sync.WaitGroup{}
-	)
-	for _, robin := range streams {
-		wg.Add(1)
-		go func(stsdest stsdest, wg *sync.WaitGroup) {
-			for _, s := range stsdest {
-				if !s.Terminated() {
-					if action == closeFin {
-						s.Fin()
-					} else {
-						s.Stop()
-					}
-				}
-			}
-			wg.Done()
-		}(robin.stsdest, wg)
-	}
-	wg.Wait()
-}
-
-// TODO: collect stats from all (stsdest) STreams to the Same Destination, and possibly
-//       aggregate averages actross them.
 func (sb *StreamBundle) GetStats() BundleStats {
 	streams := sb.get()
 	stats := make(BundleStats, len(streams))
@@ -267,24 +224,46 @@ func (sb *StreamBundle) get() (bun bundle) {
 	return
 }
 
-func (sb *StreamBundle) sendOne(robin *robin, hdr Header, reader cmn.ReadOpenCloser, cb SendCallback,
-	cmplPtr unsafe.Pointer, prc *atomic.Int64, reopen bool) (err error) {
-	var (
-		i       int
-		reader2 io.ReadCloser = reader
-	)
-	if reopen && reader != nil {
-		if reader2, err = reader.Open(); err != nil { // reopen for every destination
-			err = fmt.Errorf("unexpected: %s failed to reopen reader, err: %v", sb, err)
-			return
+// one obj, one stream
+func (sb *StreamBundle) sendOne(obj Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) (err error) {
+	if reopen && obj.Reader != nil {
+		var reader io.ReadCloser
+		if reader, err = roc.Open(); err != nil { // reopen for every destination
+			return fmt.Errorf("unexpected: %s failed to reopen reader, err: %v", sb, err)
 		}
+		obj.Reader = reader
 	}
-	if sb.multiplier > 1 {
-		i = int(robin.i.Inc()) % len(robin.stsdest)
+	if sb.multiplier <= 1 {
+		s0 := robin.stsdest[0]
+		return s0.Send(obj)
 	}
+	i := int(robin.i.Inc()) % len(robin.stsdest)
 	s := robin.stsdest[i]
-	err = s.Send(hdr, reader2, cb, cmplPtr, prc)
-	return
+	return s.Send(obj)
+}
+
+func (sb *StreamBundle) apply(action int) {
+	cmn.Assert(action == closeFin || action == closeStop)
+	var (
+		streams = sb.get()
+		wg      = &sync.WaitGroup{}
+	)
+	for _, robin := range streams {
+		wg.Add(1)
+		go func(stsdest stsdest, wg *sync.WaitGroup) {
+			for _, s := range stsdest {
+				if !s.Terminated() {
+					if action == closeFin {
+						s.Fin()
+					} else {
+						s.Stop()
+					}
+				}
+			}
+			wg.Done()
+		}(robin.stsdest, wg)
+	}
+	wg.Wait()
 }
 
 // "Resync" streams asynchronously (is a slowpath); calls stream.Stop()

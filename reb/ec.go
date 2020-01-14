@@ -155,10 +155,10 @@ type (
 		slices       ecSliceList      // obj hash <-> list of slices with the same hash
 		hrwTargets   []*cluster.Snode // the list of targets that should have slices/replicas
 		rebuildSGLs  []*memsys.SGL    // temporary slices for [re]building EC
-		fh           *cmn.FileHandle  // file handle for main object when building slices from existing full object
-		sender       *cluster.Snode   // which target is responsible to send replicas over the cluster (first by HRW)
+		fh           *cmn.FileHandle  // main fh when building slices from existing main
+		sender       *cluster.Snode   // target responsible to send replicas over the cluster (first by HRW)
 		sliceAt      nodeSlices       // maps daemonID to slice for faster check what nodes have slices
-		sliceExist   []bool           // marks existing slices/replicas(first item is full object) for faster check if a slice exists
+		sliceExist   []bool           // marks existing slices/replicas(first item is full object)
 		mainDaemon   string           // hrw target for an object
 		uid          string           // unique identifier for the object (Bucket#Object#IsAIS)
 		bucket       string           // bucket name for faster acceess
@@ -313,8 +313,8 @@ func (so *ecRebObject) sliceForMD() *ecRebSlice {
 
 // Returns the list of targets that does not have any slice/replica but
 // they should have according to HRW
-func (so *ecRebObject) emptyTargets(skip *cluster.Snode) []*cluster.Snode {
-	freeTargets := make([]*cluster.Snode, 0)
+func (so *ecRebObject) emptyTargets(skip *cluster.Snode) cluster.Nodes {
+	freeTargets := make(cluster.Nodes, 0)
 	for _, tgt := range so.hrwTargets {
 		if skip != nil && skip.DaemonID == tgt.DaemonID {
 			continue
@@ -450,7 +450,6 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 	if err != nil {
 		return err
 	}
-
 	hdr := transport.Header{
 		Bucket:   slice.Bucket,
 		Objname:  slice.Objname,
@@ -460,7 +459,6 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 		},
 		Opaque: cmn.MustMarshal(req),
 	}
-
 	provider := cmn.ProviderFromBool(slice.IsAIS)
 	if resolved.ContentType == fs.ObjectType {
 		lom := cluster.LOM{T: s.t, FQN: fqn}
@@ -486,7 +484,7 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 		return err
 	}
 
-	// temporary list of UIDs for proper cleanup if SendV fails
+	// temporary list of UIDs for proper cleanup if Send fails
 	rebUIDs := make([]string, 0, len(targets))
 	for _, tgt := range targets {
 		dest := &retransmitCT{daemonID: tgt.ID(), header: hdr}
@@ -498,7 +496,8 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 		rebUIDs = append(rebUIDs, uid)
 	}
 	s.onAir.Inc()
-	if err := s.data.Send(hdr, fh, s.transportCB, nil, targets); err != nil {
+	o := transport.Obj{Hdr: hdr, Reader: fh, Callback: s.transportCB}
+	if err := s.data.Send(o, fh, targets...); err != nil {
 		s.onAir.Dec()
 		fh.Close()
 		s.ackCTs.mtx.Lock()
@@ -563,7 +562,8 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 	s.ackCTs.mtx.Unlock()
 
 	s.onAir.Inc()
-	if err := s.data.SendV(hdr, reader, s.transportCB, nil, target); err != nil {
+	o := transport.Obj{Hdr: hdr, Reader: reader, Callback: s.transportCB}
+	if err := s.data.Send(o, reader, target); err != nil {
 		s.onAir.Dec()
 		s.ackCTs.mtx.Lock()
 		delete(s.ackCTs.ct, uid)
@@ -727,7 +727,7 @@ func (s *ecRebalancer) receiveSlice(req *pushReq, hdr transport.Header, reader i
 	tsi := smap.GetTarget(req.DaemonID)
 	hdr.Opaque = []byte(ctUID(sliceID, s.mgr.t.Snode().ID()))
 	hdr.ObjAttrs.Size = 0
-	if err := s.mgr.acks.SendV(hdr, nil /*reader*/, nil /*callback*/, nil /*ptr*/, tsi); err != nil {
+	if err := s.mgr.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
 		glog.Error(err)
 	}
 
@@ -1075,8 +1075,11 @@ func (s *ecRebalancer) exchange() error {
 
 	globRebID := s.mgr.globRebID.Load()
 	smap := s.t.GetSowner().Get()
-	sendTo := make([]*cluster.Snode, 0, len(smap.Tmap))
-	failed := make([]*cluster.Snode, 0, len(smap.Tmap))
+
+	// TODO -- FIXME: add a helper in the cluster pkg: NodeMap => Nodes skipping self
+
+	sendTo := make(cluster.Nodes, 0, len(smap.Tmap))
+	failed := make(cluster.Nodes, 0, len(smap.Tmap))
 	for _, node := range smap.Tmap {
 		if node.DaemonID == s.t.Snode().DaemonID {
 			continue
@@ -1108,9 +1111,9 @@ func (s *ecRebalancer) exchange() error {
 				ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
 				Opaque:   cmn.MustMarshal(req),
 			}
-
 			rd := cmn.NewByteHandle(body)
-			if err := s.data.SendV(hdr, rd, nil, nil, node); err != nil {
+			o := transport.Obj{Hdr: hdr, Reader: rd}
+			if err := s.data.Send(o, rd, node); err != nil {
 				glog.Errorf("Failed to send slices to node %s: %v", node.DaemonID, err)
 				failed = append(failed, node)
 			}
@@ -1347,7 +1350,8 @@ func (s *ecRebalancer) shouldSendSlice(obj *ecRebObject) (hasSlice bool, shouldS
 	hasSlice = obj.hasSlice && !obj.isMain && !obj.isECCopy && !obj.fullObjFound
 	if hasSlice && (bool(glog.FastV(4, glog.SmoduleAIS)) || s.ra.dryRun) {
 		locSlice := obj.sliceAt[s.t.Snode().DaemonID]
-		glog.Infof("Should send: %s[%d] - %d : %v / %v", obj.uid, locSlice.SliceID, tgtIndex, hasSlice, shouldSend)
+		glog.Infof("Should send: %s[%d] - %d : %v / %v", obj.uid, locSlice.SliceID, tgtIndex,
+			hasSlice, shouldSend)
 	}
 	return hasSlice, shouldSend
 }
@@ -2246,17 +2250,8 @@ func (s *ecRebalancer) batchNotify() error {
 	hdr := transport.Header{
 		Opaque: cmn.MustMarshal(req),
 	}
-
-	smap := s.t.GetSowner().Get()
-	targets := make([]*cluster.Snode, 0, len(smap.Tmap))
-	for _, node := range smap.Tmap {
-		if node.DaemonID == s.t.Snode().DaemonID {
-			continue
-		}
-		targets = append(targets, node)
-	}
-	if err := s.mgr.pushes.Send(hdr, nil, nil, nil, targets); err != nil {
-		return fmt.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].DaemonID, err)
+	if err := s.mgr.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
+		return fmt.Errorf("Failed to send slices to nodes: %v", err)
 	}
 	return nil
 }

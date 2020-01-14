@@ -22,34 +22,43 @@ const (
 	AllNodes
 )
 
-// interface to Get current cluster-map instance
-// (for implementation, see ais/clustermap.go)
-type Sowner interface {
-	Get() (smap *Smap)
-	Listeners() SmapListeners
-}
+type (
+	// interface to Get current cluster-map instance
+	Sowner interface {
+		Get() (smap *Smap)
+		Listeners() SmapListeners
+	}
 
-// NetInfo
-type NetInfo struct {
-	NodeIPAddr string `json:"node_ip_addr"`
-	DaemonPort string `json:"daemon_port"`
-	DirectURL  string `json:"direct_url"`
-}
+	// Snode's networking info
+	NetInfo struct {
+		NodeIPAddr string `json:"node_ip_addr"`
+		DaemonPort string `json:"daemon_port"`
+		DirectURL  string `json:"direct_url"`
+	}
 
-//==================================================================
-//
-// Snode: represents storage daemon in a cluster (gateway or target)
-//
-//==================================================================
-type Snode struct {
-	DaemonID        string  `json:"daemon_id"`
-	DaemonType      string  `json:"daemon_type"`       // enum: "target" or "proxy"
-	PublicNet       NetInfo `json:"public_net"`        // cmn.NetworkPublic
-	IntraControlNet NetInfo `json:"intra_control_net"` // cmn.NetworkIntraControl
-	IntraDataNet    NetInfo `json:"intra_data_net"`    // cmn.NetworkIntraData
-	idDigest        uint64
-	LocalNet        *net.IPNet `json:"-"`
-}
+	// Snode - a node (gateway or target) in a cluster
+	Snode struct {
+		DaemonID        string  `json:"daemon_id"`
+		DaemonType      string  `json:"daemon_type"`       // enum: "target" or "proxy"
+		PublicNet       NetInfo `json:"public_net"`        // cmn.NetworkPublic
+		IntraControlNet NetInfo `json:"intra_control_net"` // cmn.NetworkIntraControl
+		IntraDataNet    NetInfo `json:"intra_data_net"`    // cmn.NetworkIntraData
+		idDigest        uint64
+		LocalNet        *net.IPNet `json:"-"`
+	}
+	Nodes   []*Snode          // slice of Snodes
+	NodeMap map[string]*Snode // map of Snodes: DaemonID => Snodes
+
+	Smap struct {
+		Tmap         NodeMap       `json:"tmap"`           // daemonID -> Snode
+		Pmap         NodeMap       `json:"pmap"`           // proxyID -> proxyInfo
+		NonElects    cmn.SimpleKVs `json:"non_electable"`  // non-electable proxies: DaemonID => [info]
+		ProxySI      *Snode        `json:"proxy_si"`       // primary
+		Version      int64         `json:"version,string"` // version
+		Origin       uint64        `json:"origin,string"`  // UUID - is assigned ar creation time
+		CreationTime string        `json:"creation_time"`  // creation time
+	}
+)
 
 func (d *Snode) Digest() uint64 {
 	if d.idDigest == 0 {
@@ -128,20 +137,6 @@ func (d *Snode) IsTarget() bool { return d.DaemonType == cmn.Target }
 // Smap uniquely and solely defines the primary proxy
 //
 //===============================================================
-type (
-	NodeMap map[string]*Snode
-
-	Smap struct {
-		Tmap         NodeMap       `json:"tmap"` // daemonID -> Snode
-		Pmap         NodeMap       `json:"pmap"` // proxyID -> proxyInfo
-		NonElects    cmn.SimpleKVs `json:"non_electable"`
-		ProxySI      *Snode        `json:"proxy_si"`
-		Version      int64         `json:"version,string"`
-		Origin       uint64        `json:"origin,string"` // (unique) origin stays the same for the lifetime
-		CreationTime string        `json:"creation_time"`
-	}
-)
-
 func (m *Smap) InitDigests() {
 	for _, node := range m.Tmap {
 		node.Digest()

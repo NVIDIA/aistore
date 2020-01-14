@@ -146,7 +146,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		nil, false,
 	}
 	wg.Add(1)
-	stream.Send(hdr, sgl1, cb, nil)
+	stream.Send(transport.Obj{Hdr: hdr, Reader: sgl1, Callback: cb})
 	wg.Wait()
 
 	sgl2 := Mem2.NewSGL(0)
@@ -163,7 +163,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		[]byte{'1', '2', '3'}, true,
 	}
 	wg.Add(1)
-	stream.Send(hdr, sgl2, cb, nil)
+	stream.Send(transport.Obj{Hdr: hdr, Reader: sgl2, Callback: cb})
 	wg.Wait()
 }
 
@@ -265,7 +265,7 @@ func Test_CancelStream(t *testing.T) {
 		hdr := genStaticHeader()
 		slab, _ := Mem2.GetSlab2(memsys.MaxSlabSize)
 		reader := newRandReader(random, hdr, slab)
-		stream.Send(hdr, reader, nil, nil)
+		stream.Send(transport.Obj{Hdr: hdr, Reader: reader})
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB {
@@ -371,7 +371,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	totalSend := int64(0)
 	for _, stream := range streams {
 		hdr, reader := makeRandReader()
-		stream.Send(hdr, reader, nil, nil)
+		stream.Send(transport.Obj{Hdr: hdr, Reader: reader})
 		totalSend += hdr.ObjAttrs.Size
 	}
 
@@ -420,7 +420,7 @@ func Test_OnSendCallback(t *testing.T) {
 		posted[idx] = rr
 		mu.Unlock()
 		rrc := &randReaderCtx{t, rr, posted, &mu, idx}
-		stream.Send(hdr, rr, rrc.sentCallback, nil)
+		stream.Send(transport.Obj{Hdr: hdr, Reader: rr, Callback: rrc.sentCallback})
 		totalSend += hdr.ObjAttrs.Size
 	}
 	stream.Fin()
@@ -500,7 +500,7 @@ func Test_ObjAttrs(t *testing.T) {
 			t.Fatal(err)
 		}
 		reader := newRandReader(random, hdr, slab)
-		if err := stream.Send(hdr, reader, nil, nil); err != nil {
+		if err := stream.Send(transport.Obj{Hdr: hdr, Reader: reader}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -550,7 +550,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	}
 	for time.Since(now) < runFor {
 		hdr, reader := makeRandReader()
-		stream.Send(hdr, reader, nil, nil)
+		stream.Send(transport.Obj{Hdr: hdr, Reader: reader})
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*4 {

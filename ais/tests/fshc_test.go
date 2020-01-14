@@ -39,7 +39,7 @@ type checkerMD struct {
 	proxyURL   string
 	bucket     string
 	smap       *cluster.Smap
-	mpList     map[string]*cluster.Snode
+	mpList     cluster.NodeMap
 	allMps     map[*cluster.Snode]*cmn.MountpathList
 	origAvail  int
 	fileSize   int64
@@ -57,7 +57,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		proxyURL: getPrimaryURL(t, proxyURLReadOnly),
 		bucket:   TestBucketName,
 		fileSize: 64 * cmn.KiB,
-		mpList:   make(map[string]*cluster.Snode, 10),
+		mpList:   make(cluster.NodeMap, 10),
 		allMps:   make(map[*cluster.Snode]*cmn.MountpathList, 10),
 		chstop:   make(chan struct{}),
 		chfail:   make(chan struct{}),
@@ -396,7 +396,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		smap       = getClusterMap(t, proxyURL)
-		mpList     = make(map[string]*cluster.Snode, 10)
+		mpList     = make(cluster.NodeMap, 10)
 		allMps     = make(map[*cluster.Snode]*cmn.MountpathList, 10)
 		origAvail  = 0
 		origOff    = 0

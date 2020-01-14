@@ -651,6 +651,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	var (
 		file                  *cmn.FileHandle
 		hdr                   transport.Header
+		o                     transport.Obj
 		cksum                 *cmn.Cksum
 		cksumType, cksumValue string
 		lomack                *LomAcks
@@ -682,6 +683,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 			Version:    lom.Version(),
 		},
 	}
+	o = transport.Obj{Hdr: hdr, Reader: file, Callback: rj.objSentCallback, CmplPtr: unsafe.Pointer(lom)}
 	// cache it as pending-acknowledgement (optimistically - see objSentCallback)
 	_, idx = lom.Hkey()
 	lomack = rj.m.lomAcks()[idx]
@@ -689,7 +691,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	lomack.q[lom.Uname()] = lom
 	lomack.mu.Unlock()
 	// transmit
-	if err := rj.m.streams.SendV(hdr, file, rj.objSentCallback, unsafe.Pointer(lom) /* cmpl ptr */, tsi); err != nil {
+	if err := rj.m.streams.Send(o, file, tsi); err != nil {
 		lomack.mu.Lock()
 		delete(lomack.q, lom.Uname())
 		lomack.mu.Unlock()
