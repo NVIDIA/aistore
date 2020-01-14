@@ -865,6 +865,9 @@ func restore(cmd string, args []string, asPrimary bool, tag string) error {
 		tutils.Logf("Restarting %s container %s\n", tag, cmd)
 		return containers.RestartContainer(cmd)
 	}
+	if !cmn.StringInSlice("-skipstartup=true", args) {
+		args = append(args, "-skipstartup=true")
+	}
 	tutils.Logf("Restoring %s: %s %+v\n", tag, cmd, args)
 
 	ncmd := exec.Command(cmd, args...)

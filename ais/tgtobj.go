@@ -110,7 +110,7 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 		}
 	}
 
-	if !dryRun.disk {
+	if !daemon.dryRun.disk {
 		if err := poi.writeToFile(); err != nil {
 			return err, http.StatusInternalServerError
 		}
@@ -214,7 +214,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		slab   *memsys.Slab2
 		reader = poi.r
 	)
-	if dryRun.disk {
+	if daemon.dryRun.disk {
 		return
 	}
 	if file, err = cmn.CreateFile(poi.workFQN); err != nil {
@@ -223,9 +223,9 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	}
 
 	if poi.size == 0 {
-		buf, slab = nodeCtx.mm.AllocDefault()
+		buf, slab = daemon.mm.AllocDefault()
 	} else {
-		buf, slab = nodeCtx.mm.AllocForSize(poi.size)
+		buf, slab = daemon.mm.AllocForSize(poi.size)
 	}
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
@@ -328,7 +328,7 @@ func (goi *getObjInfo) getObject() (err error, errCode int) {
 	goi.lom.Lock(false)
 do:
 	// all subsequent checks work with disks - skip all if dryRun.disk=true
-	if dryRun.disk {
+	if daemon.dryRun.disk {
 		goto get
 	}
 	err = goi.lom.Load()
@@ -610,8 +610,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	}
 
 	// loopback if disk IO is disabled
-	if dryRun.disk {
-		rd := newDryReader(dryRun.size)
+	if daemon.dryRun.disk {
+		rd := newDryReader(daemon.dryRun.size)
 		if _, err = io.Copy(goi.w, rd); err != nil {
 			err = fmt.Errorf("dry-run: failed to send random response, err: %v", err)
 			errCode = http.StatusInternalServerError
@@ -655,16 +655,16 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		reader = file
 		if goi.chunked {
 			w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
-			buf, slab = nodeCtx.mm.AllocForSize(goi.lom.Size())
+			buf, slab = daemon.mm.AllocForSize(goi.lom.Size())
 		} else {
 			hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
 		}
 	} else {
-		buf, slab = nodeCtx.mm.AllocForSize(goi.length)
+		buf, slab = daemon.mm.AllocForSize(goi.length)
 		reader = io.NewSectionReader(file, goi.offset, goi.length)
 		if cksumRange {
 			var cksumValue string
-			sgl = nodeCtx.mm.NewSGL(goi.length, slab.Size())
+			sgl = daemon.mm.NewSGL(goi.length, slab.Size())
 			if _, cksumValue, err = cmn.WriteWithHash(sgl, reader, buf); err != nil {
 				return
 			}
@@ -743,9 +743,9 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 			slab *memsys.Slab2
 		)
 		if aoi.size == 0 {
-			buf, slab = nodeCtx.mm.AllocDefault()
+			buf, slab = daemon.mm.AllocDefault()
 		} else {
-			buf, slab = nodeCtx.mm.AllocForSize(aoi.size)
+			buf, slab = daemon.mm.AllocForSize(aoi.size)
 		}
 		_, err = io.CopyBuffer(f, aoi.r, buf)
 

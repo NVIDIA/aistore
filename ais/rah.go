@@ -117,7 +117,7 @@ func newRahJogger(mpath string) (rj *rahjogger) {
 	rj.aheadCh = make(chan *rahfcache, rahChanSize)
 	rj.getCh = make(chan *rahfcache, rahChanSize)
 	rj.stopCh = make(chan struct{}, 4)
-	rj.buf, rj.slab = nodeCtx.mm.AllocDefault()
+	rj.buf, rj.slab = daemon.mm.AllocDefault()
 	return
 }
 
@@ -298,7 +298,7 @@ func (rahfcache *rahfcache) readahead(buf []byte) {
 		reader = io.NewSectionReader(file, rahfcache.rangeOff, rahfcache.rangeLen)
 	}
 	if !config.Readahead.Discard {
-		rahfcache.sgl = nodeCtx.mm.NewSGL(fsize)
+		rahfcache.sgl = daemon.mm.NewSGL(fsize)
 	}
 	// 3. read
 	for size < fsize {

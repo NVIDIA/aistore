@@ -75,7 +75,7 @@ func (p *proxyrunner) bootstrap() {
 	}
 	// 5: keep starting up as a primary
 	glog.Infof("%s: assuming the primary role for now, starting up...", pname)
-	go p.primaryStartup(smap, config, clivars.ntargets)
+	go p.primaryStartup(smap, config, daemon.cli.ntargets)
 }
 
 // no change of mind when on the "secondary" track
@@ -172,14 +172,16 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.smapowner.put(smap)
 	p.smapowner.Unlock()
 
-	maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
-	if maxVerSmap != nil {
-		maxVerSmap.Pmap[p.si.DaemonID] = p.si
-		p.smapowner.put(maxVerSmap)
-		glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
-			pname, maxVerSmap.ProxySI.DaemonID, maxVerSmap.ProxySI.IntraControlNet.DirectURL)
-		p.secondaryStartup(maxVerSmap.ProxySI.IntraControlNet.DirectURL)
-		return
+	if !daemon.cli.skipStartup {
+		maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
+		if maxVerSmap != nil {
+			maxVerSmap.Pmap[p.si.DaemonID] = p.si
+			p.smapowner.put(maxVerSmap)
+			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
+				pname, maxVerSmap.ProxySI.DaemonID, maxVerSmap.ProxySI.IntraControlNet.DirectURL)
+			p.secondaryStartup(maxVerSmap.ProxySI.IntraControlNet.DirectURL)
+			return
+		}
 	}
 
 	smap = p.smapowner.get()

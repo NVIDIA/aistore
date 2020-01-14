@@ -1264,7 +1264,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		return
 	}
 
-	buf, slab := nodeCtx.mm.AllocDefault()
+	buf, slab := daemon.mm.AllocDefault()
 	ri := &replicInfo{smap: t.smapowner.get(), t: t, bckTo: lom.Bck(), buf: buf, localOnly: false, finalize: true}
 	copied, err := ri.copyObject(lom, msg.Name /* new objname */)
 	slab.Free(buf)

@@ -302,7 +302,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
-		body := cmn.MustMarshal(cmn.TSysInfo{SysInfo: nodeCtx.mm.FetchSysInfo(), FSInfo: fs.Mountpaths.FetchFSInfo()})
+		body := cmn.MustMarshal(cmn.TSysInfo{SysInfo: daemon.mm.FetchSysInfo(), FSInfo: fs.Mountpaths.FetchFSInfo()})
 		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatStats:
 		rst := getstorstatsrunner()
@@ -376,7 +376,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := &stats.DaemonStatus{
 			Snode:       t.httprunner.si,
 			SmapVersion: t.smapowner.get().Version,
-			SysInfo:     nodeCtx.mm.FetchSysInfo(),
+			SysInfo:     daemon.mm.FetchSysInfo(),
 			Stats:       tstats.Core,
 			Capacity:    tstats.Capacity,
 			TStatus:     &stats.TargetStatus{GlobalRebalanceStats: globalRebStats},

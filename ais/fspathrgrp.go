@@ -27,7 +27,7 @@ type (
 	fsprungroup struct {
 		sync.RWMutex
 		t       *targetrunner
-		runners map[int64]fs.PathRunner // subgroup of the nodeCtx.runners rungroup
+		runners map[int64]fs.PathRunner // subgroup of the daemon.runners rungroup
 		nextid  atomic.Int64
 	}
 )

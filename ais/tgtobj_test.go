@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	// memory
-	nodeCtx.mm = memsys.GMM()
+	daemon.mm = memsys.GMM()
 
 	// target
 	t = &targetrunner{}
