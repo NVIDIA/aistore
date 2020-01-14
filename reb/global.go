@@ -650,27 +650,47 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	var (
 		file                  *cmn.FileHandle
-		hdr                   transport.Header
-		o                     transport.Obj
 		cksum                 *cmn.Cksum
 		cksumType, cksumValue string
 		lomack                *LomAcks
 		idx                   int
 	)
-	lom.Lock(false) // NOTE: unlock in objSentCallback()
+	lom.Lock(false) // NOTE: unlock in objSentCallback() unless err
+	defer func() {
+		if err == nil {
+			return
+		}
+		lom.Unlock(false)
+		if err != nil {
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Errorf("%s, err: %v", lom, err)
+			}
+		}
+	}()
 
 	err = lom.Load(false)
-	if err != nil || lom.IsCopy() {
-		goto rerr
+	if err != nil {
+		return
+	}
+	if lom.IsCopy() {
+		lom.Unlock(false)
+		return
 	}
 	if cksum, err = lom.CksumComputeIfMissing(); err != nil {
-		goto rerr
+		return
 	}
 	cksumType, cksumValue = cksum.Get()
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
-		goto rerr
+		return
 	}
-	hdr = transport.Header{
+	// cache it as pending-acknowledgement (optimistically - see objSentCallback)
+	_, idx = lom.Hkey()
+	lomack = rj.m.lomAcks()[idx]
+	lomack.mu.Lock()
+	lomack.q[lom.Uname()] = lom
+	lomack.mu.Unlock()
+	// transmit
+	hdr := transport.Header{
 		Bucket:   lom.Bucket(),
 		Objname:  lom.Objname,
 		BckIsAIS: lom.IsAIS(),
@@ -683,28 +703,13 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 			Version:    lom.Version(),
 		},
 	}
-	o = transport.Obj{Hdr: hdr, Reader: file, Callback: rj.objSentCallback, CmplPtr: unsafe.Pointer(lom)}
-	// cache it as pending-acknowledgement (optimistically - see objSentCallback)
-	_, idx = lom.Hkey()
-	lomack = rj.m.lomAcks()[idx]
-	lomack.mu.Lock()
-	lomack.q[lom.Uname()] = lom
-	lomack.mu.Unlock()
-	// transmit
-	if err := rj.m.streams.Send(o, file, tsi); err != nil {
+	o := transport.Obj{Hdr: hdr, Callback: rj.objSentCallback, CmplPtr: unsafe.Pointer(lom)}
+	if err = rj.m.streams.Send(o, file, tsi); err != nil {
 		lomack.mu.Lock()
 		delete(lomack.q, lom.Uname())
 		lomack.mu.Unlock()
-		goto rerr
+		return
 	}
 	rj.m.laterx.Store(true)
-	return nil
-rerr:
-	lom.Unlock(false)
-	if err != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Errorf("%s, err: %v", lom, err)
-		}
-	}
 	return
 }

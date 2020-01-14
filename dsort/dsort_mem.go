@@ -303,10 +303,7 @@ func (ds *dsorterMem) preShardCreation(shardName string, mpathInfo *fs.Mountpath
 	opaque := cmn.MustMarshal(buildingShardInfo{
 		ShardName: shardName,
 	})
-	hdr := transport.Header{
-		Opaque: opaque,
-	}
-	if err := ds.streams.builder.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
+	if err := ds.streams.builder.Send(transport.Obj{Hdr: transport.Header{Opaque: opaque}}, nil); err != nil {
 		return err
 	}
 	ds.creationPhase.requestedShards <- shardName // we also need to inform ourselves
@@ -530,8 +527,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 				ds.m.Metrics.Creation.Unlock()
 			}
 		} else {
-			o := transport.Obj{Hdr: hdr, Reader: r, Callback: ds.m.sentCallback,
-				CmplPtr: unsafe.Pointer(&beforeSend)}
+			o := transport.Obj{Hdr: hdr, Callback: ds.m.sentCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			err = ds.streams.records.Send(o, r, toNode)
 		}
 		return

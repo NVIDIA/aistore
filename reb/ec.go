@@ -496,8 +496,7 @@ func (s *ecRebalancer) sendFromDisk(slice *ecRebSlice, targets ...*cluster.Snode
 		rebUIDs = append(rebUIDs, uid)
 	}
 	s.onAir.Inc()
-	o := transport.Obj{Hdr: hdr, Reader: fh, Callback: s.transportCB}
-	if err := s.data.Send(o, fh, targets...); err != nil {
+	if err := s.data.Send(transport.Obj{Hdr: hdr, Callback: s.transportCB}, fh, targets...); err != nil {
 		s.onAir.Dec()
 		fh.Close()
 		s.ackCTs.mtx.Lock()
@@ -562,8 +561,7 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 	s.ackCTs.mtx.Unlock()
 
 	s.onAir.Inc()
-	o := transport.Obj{Hdr: hdr, Reader: reader, Callback: s.transportCB}
-	if err := s.data.Send(o, reader, target); err != nil {
+	if err := s.data.Send(transport.Obj{Hdr: hdr, Callback: s.transportCB}, reader, target); err != nil {
 		s.onAir.Dec()
 		s.ackCTs.mtx.Lock()
 		delete(s.ackCTs.ct, uid)
@@ -1112,8 +1110,7 @@ func (s *ecRebalancer) exchange() error {
 				Opaque:   cmn.MustMarshal(req),
 			}
 			rd := cmn.NewByteHandle(body)
-			o := transport.Obj{Hdr: hdr, Reader: rd}
-			if err := s.data.Send(o, rd, node); err != nil {
+			if err := s.data.Send(transport.Obj{Hdr: hdr}, rd, node); err != nil {
 				glog.Errorf("Failed to send slices to node %s: %v", node.DaemonID, err)
 				failed = append(failed, node)
 			}
@@ -2241,15 +2238,15 @@ func (s *ecRebalancer) batchDone(daemonID string, batchID int) {
 
 // send push notification to other targets that local one has completed batch
 func (s *ecRebalancer) batchNotify() error {
-	req := &pushReq{
-		DaemonID: s.t.Snode().DaemonID,
-		Stage:    rebStageECBatch,
-		RebID:    s.mgr.globRebID.Load(),
-		Batch:    s.batchID,
-	}
-	hdr := transport.Header{
-		Opaque: cmn.MustMarshal(req),
-	}
+	var (
+		req = &pushReq{
+			DaemonID: s.t.Snode().DaemonID,
+			Stage:    rebStageECBatch,
+			RebID:    s.mgr.globRebID.Load(),
+			Batch:    s.batchID,
+		}
+		hdr = transport.Header{Opaque: cmn.MustMarshal(req)}
+	)
 	if err := s.mgr.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
 		return fmt.Errorf("Failed to send slices to nodes: %v", err)
 	}

@@ -421,7 +421,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			streamWg.Done()
 		}
 		streamWg.Add(1)
-		err = m.streams.shards.Send(transport.Obj{Hdr: hdr, Reader: file, Callback: cb}, file, si)
+		err = m.streams.shards.Send(transport.Obj{Hdr: hdr, Callback: cb}, file, si)
 		if err != nil {
 			return err
 		}

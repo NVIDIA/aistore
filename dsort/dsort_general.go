@@ -546,8 +546,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			lr := cmn.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
 			r := cmn.NopOpener(ioutil.NopCloser(lr))
 			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			o := transport.Obj{Hdr: respHdr, Reader: r, Callback: ds.responseCallback,
-				CmplPtr: unsafe.Pointer(&beforeSend)}
+			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
 				ds.m.abort(err)
 			}
@@ -569,8 +568,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 				errHandler(err, respHdr, fromNode)
 				return
 			}
-			o := transport.Obj{Hdr: respHdr, Reader: r, Callback: ds.responseCallback,
-				CmplPtr: unsafe.Pointer(&beforeSend)}
+			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
 				f.Close()
 				ds.m.abort(err)
@@ -581,8 +579,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			ds.m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			respHdr.ObjAttrs.Size = sgl.Size()
-			o := transport.Obj{Hdr: respHdr, Reader: sgl, Callback: ds.responseCallback,
-				CmplPtr: unsafe.Pointer(&beforeSend)}
+			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, sgl, fromNode); err != nil {
 				sgl.Free()
 				ds.m.abort(err)
@@ -600,8 +597,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 				return
 			}
 			respHdr.ObjAttrs.Size = fi.Size()
-			o := transport.Obj{Hdr: respHdr, Reader: f, Callback: ds.responseCallback,
-				CmplPtr: unsafe.Pointer(&beforeSend)}
+			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, f, fromNode); err != nil {
 				f.Close()
 				ds.m.abort(err)

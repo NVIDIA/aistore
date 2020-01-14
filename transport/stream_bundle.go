@@ -226,7 +226,8 @@ func (sb *StreamBundle) get() (bun bundle) {
 
 // one obj, one stream
 func (sb *StreamBundle) sendOne(obj Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) (err error) {
-	if reopen && obj.Reader != nil {
+	obj.Reader = roc // reduce to io.ReadCloser
+	if reopen && roc != nil {
 		var reader io.ReadCloser
 		if reader, err = roc.Open(); err != nil { // reopen for every destination
 			return fmt.Errorf("unexpected: %s failed to reopen reader, err: %v", sb, err)
