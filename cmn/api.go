@@ -267,7 +267,7 @@ type BucketPropsToUpdate struct {
 	LRU         *LRUConfToUpdate     `json:"lru"`
 	Mirror      *MirrorConfToUpdate  `json:"mirror"`
 	EC          *ECConfToUpdate      `json:"ec"`
-	AccessAttrs *uint64              `json:"attrs,string"`
+	AccessAttrs *uint64              `json:"aattrs,string"`
 }
 
 type TierConf struct {
@@ -558,7 +558,7 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 		name, value := strings.ToLower(key), val
 
 		if err := UpdateFieldValue(&props, name, value); err != nil {
-			return props, fmt.Errorf("unknown property '%s'", name)
+			return props, fmt.Errorf("unknown property %q", name)
 		}
 	}
 	return

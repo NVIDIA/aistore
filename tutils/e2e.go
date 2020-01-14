@@ -61,6 +61,8 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 					firstIdx := strings.Index(comment, `"`)
 					lastIdx := strings.LastIndex(comment, `"`)
 					expectFailMsg = comment[firstIdx+1 : lastIdx]
+					expectFailMsg = strings.ReplaceAll(expectFailMsg, "$BUCKET", bucket)
+					expectFailMsg = strings.ToLower(expectFailMsg)
 				}
 			}
 		}

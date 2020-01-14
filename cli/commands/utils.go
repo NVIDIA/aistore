@@ -518,7 +518,7 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]string, error) {
 	var nonEmptyBuckets cli.Args
 	for _, bucket := range buckets {
 		if bucket != "" {
-			nonEmptyBuckets = append(nonEmptyBuckets, bucket)
+			nonEmptyBuckets = append(nonEmptyBuckets, cleanBucketName(bucket))
 		}
 	}
 

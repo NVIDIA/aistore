@@ -1299,21 +1299,19 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.forwardCP(w, r, &cmn.ActionMsg{}, "httpbckput", nil) {
-		return
-	}
 
-	// otherwise, handle the general case: unmarshal into cmn.BucketProps and treat accordingly
-	// Note: this use case is for setting all bucket props
 	msg := cmn.ActionMsg{}
 	if err = cmn.ReadJSON(w, r, &msg); err != nil {
 		s := fmt.Sprintf("Failed to unmarshal: %v", err)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-
 	if err := p.checkAction(msg, cmn.ActResetProps); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	if p.forwardCP(w, r, &msg, "httpbckput", nil) {
 		return
 	}
 
@@ -1359,11 +1357,6 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.forwardCP(w, r, &cmn.ActionMsg{}, "httpbckpatch", nil) {
-		return
-	}
-
-	prevMirrorConf := bck.Props.Mirror
 
 	var propsToUpdate cmn.BucketPropsToUpdate
 	msg := cmn.ActionMsg{Value: &propsToUpdate}
@@ -1378,6 +1371,11 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if p.forwardCP(w, r, &msg, "httpbckpatch", nil) {
+		return
+	}
+
+	prevMirrorConf := bck.Props.Mirror
 	nprops, err := p.updateBucketProps(bck, propsToUpdate)
 	if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
@@ -1788,6 +1786,7 @@ func (p *proxyrunner) cbExists(bucket string) (header http.Header, err error) {
 			Method: http.MethodHead,
 			Base:   tsi.URL(cmn.NetworkIntraData),
 			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+			Query:  url.Values{cmn.URLParamProvider: []string{cmn.Cloud}},
 		},
 		timeout: cmn.DefaultTimeout,
 	}

@@ -1,3 +1,3 @@
 ais gen-shards --bucket $BUCKET_1 --ext .tar --template="tmp/shard-{0..9}" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
-ais rename bucket $BUCKET_1 $BUCKET_2
+ais rename bucket $BUCKET_1/ $BUCKET_2/
 ais rm bucket $BUCKET_2

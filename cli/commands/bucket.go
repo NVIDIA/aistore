@@ -34,7 +34,7 @@ func validateBucket(c *cli.Context, b string, tag string, optional bool) (bucket
 	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
-	bucket = b
+	bucket = cleanBucketName(b)
 	if bucket == "" {
 		if optional {
 			return
@@ -367,7 +367,7 @@ func setBucketPropsJSON(c *cli.Context) (err error) {
 		return err
 	}
 
-	fmt.Fprintln(c.App.Writer)
+	fmt.Fprintln(c.App.Writer, "Bucket props have been successfully updated.")
 	return nil
 }
 
@@ -389,7 +389,7 @@ func resetBucketProps(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Reset %s bucket properties\n", bucket)
+	fmt.Fprintf(c.App.Writer, "Bucket props have been reset successfully.")
 	return
 }
 
@@ -482,7 +482,7 @@ func getOldNewBucketName(c *cli.Context) (bucket, newBucket string, err error) {
 		return "", "", missingArgumentsError(c, "new bucket name")
 	}
 
-	bucket, newBucket = c.Args().Get(0), c.Args().Get(1)
+	bucket, newBucket = cleanBucketName(c.Args().Get(0)), cleanBucketName(c.Args().Get(1))
 	return
 }
 
@@ -647,4 +647,8 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	}
 
 	return objFilter, nil
+}
+
+func cleanBucketName(bucket string) string {
+	return strings.TrimSuffix(bucket, "/")
 }

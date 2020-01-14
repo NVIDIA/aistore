@@ -43,6 +43,7 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 	switch srcVal.Kind() {
 	case reflect.String:
 		s := srcVal.String()
+	reflectDst:
 		switch dst.Kind() {
 		case reflect.String:
 			dst.SetString(s)
@@ -70,6 +71,10 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 				return err
 			}
 			dst.SetFloat(n)
+		case reflect.Ptr:
+			dst.Set(reflect.New(dst.Type().Elem())) // set pointer to default value
+			dst = dst.Elem()                        // dereference pointer
+			goto reflectDst
 		default:
 			AssertMsg(false, fmt.Sprintf("field.name: %s, field.type: %s", f.listTag, dst.Kind()))
 		}
@@ -104,6 +109,14 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 		fieldName := strings.Split(jsonTag, ",")[0]
 		if fieldName == "-" {
 			continue
+		}
+
+		// If the field is a pointer to a struct we must dereference it.
+		if srcValField.Kind() == reflect.Ptr && srcValField.Elem().Kind() == reflect.Struct {
+			if srcValField.IsNil() {
+				srcValField.Set(reflect.New(srcValField.Type().Elem()))
+			}
+			srcValField = srcValField.Elem()
 		}
 
 		if srcValField.Kind() != reflect.Struct {

@@ -1,3 +1,7 @@
-ais gen-shards --bucket $BUCKET_1 --ext .tar --template="tmp/shard-{0..10}" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
+ais gen-shards --bucket $BUCKET_1 --ext .tar --template="tmp/shard-{0..4}" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
 ais ls $BUCKET_1
+ais ls $BUCKET_1/
+ais ls $BUCKET_1
+ais ls ais $BUCKET_1/
+ais ls cloud $BUCKET_1/ // FAIL "bucket with name "$BUCKET_1" does not exists"
 ais rm bucket $BUCKET_1

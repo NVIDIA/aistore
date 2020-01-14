@@ -217,6 +217,12 @@ func showXactionHandler(c *cli.Context) (err error) {
 		}
 	}
 
+	if bucket != "" {
+		if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+			return
+		}
+	}
+
 	xactStatsMap, err := api.MakeXactGetRequest(defaultAPIParams, xaction, commandStats, bucket, flagIsSet(c, allItemsFlag))
 	if err != nil {
 		return

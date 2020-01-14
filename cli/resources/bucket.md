@@ -40,17 +40,17 @@ Lists cloud bucket names.
 
 #### With provider auto-detection
 
-`ais ls BUCKET_NAME/`
+`ais ls BUCKET_NAME`
 
 Lists object names in the bucket `BUCKET_NAME`. Bucket provider is auto-detected.
 
 #### From the specific provider
 
-`ais ls ais BUCKET_NAME/`
+`ais ls ais BUCKET_NAME`
 
 Lists objects in the AIS bucket `BUCKET_NAME`.
 
-`ais ls cloud BUCKET_NAME/`
+`ais ls cloud BUCKET_NAME`
 
 Lists objects in the cloud bucket `BUCKET_NAME`.
 
@@ -75,7 +75,7 @@ Lists objects in the cloud bucket `BUCKET_NAME`.
 
 ### Evict
 
-`ais evict BUCKET_NAME/`
+`ais evict BUCKET_NAME`
 
 Evicts a cloud bucket. It also resets the properties of the bucket (if changed).
 
@@ -223,11 +223,13 @@ Tiering		Disabled
 If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
 ```bash
 ais set props mybucket --jsonspec '{
-    "cloud_provider": "ais",
-    "versioning": {
-      "enabled": true,
-      "validate_warm_get": true
-    }
+  "mirror": {
+    "enabled": true
+  },
+  "versioning": {
+    "enabled": true,
+    "validate_warm_get": true
+  }
 }'
 ```
 > After which `ais ls props mybucket` results in:
@@ -236,7 +238,7 @@ Property        Value
 Provider        ais
 Access          No access
 Checksum        xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
-Mirror          Disabled
+Mirror          2 Copies
 EC              Disabled
 LRU             Disabled
 Versioning      (validation: WarmGET=yes)
