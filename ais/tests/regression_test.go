@@ -762,8 +762,8 @@ func TestLRU(t *testing.T) {
 			lwmStr, err := cmn.ConvertToString(lwms[k])
 			tassert.CheckFatal(t, err)
 			setDaemonConfig(t, proxyURL, di.ID(), cmn.SimpleKVs{
-				"highwm": hwmStr,
-				"lowwm":  lwmStr,
+				"lru.highwm": hwmStr,
+				"lru.lowwm":  lwmStr,
 			})
 		}
 	}()
