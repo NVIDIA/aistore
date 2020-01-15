@@ -261,9 +261,9 @@ func (reb *Manager) beginStreams(md *globArgs) {
 	reb.streams = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), client, sbArgs)
 
 	//
-	// ACKs (notice client with default transport args)
+	// ACKs
 	//
-	clientAcks := cmn.NewClient(cmn.TransportArgs{})
+	clientAcks := transport.NewIntraDataClient()
 	sbArgs = transport.SBArgs{
 		ManualResync: true,
 		Network:      reb.netc,

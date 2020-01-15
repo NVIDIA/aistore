@@ -109,7 +109,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	tassert.CheckFatal(t, err)
 
 	var (
-		httpclient     = &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+		httpclient     = transport.NewIntraDataClient()
 		sowner         = &sowner{}
 		lsnode         = cluster.Snode{DaemonID: "local"}
 		random         = newRand(time.Now().UnixNano())

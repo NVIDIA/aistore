@@ -15,7 +15,6 @@ require (
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
 	github.com/json-iterator/go v1.1.7
 	github.com/karrick/godirwalk v1.12.0
-	github.com/klauspost/cpuid v1.2.1 // indirect
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -28,6 +27,7 @@ require (
 	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
 	github.com/urfave/cli v1.20.0
+	github.com/valyala/fasthttp v1.8.0
 	github.com/vbauerster/mpb/v4 v4.10.1
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20190927073244-c990c680b611

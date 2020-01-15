@@ -1,7 +1,46 @@
-## Overview
+**Package `transport` provides streaming object-based transport over HTTP for massive intra-AIS data transfers. AIStore utilizes this package for cluster-wide (aka "global") rebalancing, distributed merge-sort, and more.**
 
-Package transport provides streaming object-based transport over HTTP for massive intra-AIS and AIS-to-AIS data transfers. This transport layer
-can be utilized for cluster-wide rebalancing, replication (of any kind), distributed merge-sort operation, and more.
+- [Build](#build)
+- [Description](#description)
+- [Closing and completions](#closing-and-completions)
+- [Commented example](#commented-example)
+- [Registering HTTP endpoint](#registering-http-endpoint)
+- [On the wire](#on-the-wire)
+- [Transport statistics](#transport-statistics)
+- [Stream Bundle](#stream-bundle)
+- [Testing](#testing)
+- [Environment](#environment)
+
+## Build
+
+The package includes build-time support for two alternative http clients:
+
+* standard net/http
+* 3rd party github.com/valyala/fasthttp aka "fasthttp"
+
+The following is a quick summary:
+
+| Client | Reference | Build Tag | Default |
+|--- | --- | --- | ---|
+| net/http | golang.org/pkg/net/http | `nethttp` | no |
+| fasthttp | github.com/valyala/fasthttp | n/a  | yes |
+
+To test with net/http, run:
+
+```sh
+$ go test -v -tags=nethttp
+```
+
+or, the same, with logs reditrected to stdout:
+
+```sh
+
+$ go test -v -logtostderr=true -tags=nethttp
+```
+
+For more examplesi, see [testing](#testing) below.
+
+## Description
 
 A **stream** (or, more exactly, a `transport.Stream`) asynchronously transfers **objects** between two HTTP endpoints.
 The objects, in turn, are defined by their **headers** (`transport.Header`) and their **readers** ([io.ReadCloser](https://golang.org/pkg/io/#ReadCloser)).
@@ -38,7 +77,7 @@ Note as well that for every transmission of every object there's always a *compl
 This holds true in all cases including network errors that may cause sudden and instant termination
 of the underlying stream(s).
 
-## Example with extended comments
+## Commented example
 
 ```go
 path := transport.Register("n1", "ep1", testReceive) // register receive callback with HTTP endpoint "ep1" to "n1" network
@@ -206,8 +245,20 @@ go test -v -logtostderr=true
 AIS_DEBUG=transport=1 go test -v -run=Multi
 ```
 
-For more examples, please see tests in the package directory.
 
+Use `nethttp` build tag to run with net/http, e.g.:
+
+```sh
+$ go test -v -tags=nethttp
+```
+
+The same with fasthttp (which is the current default):
+
+```sh
+$ go test -v
+```
+
+For more examples, please see tests in the package directory.
 
 ## Environment
 
@@ -216,7 +267,4 @@ For more examples, please see tests in the package directory.
 | AIS_DEBUG | Enable inline assertions and verbose tracing (eg. `AIS_DEBUG=transport=1`) |
 | AIS_STREAM_BURST_NUM | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |
 | AIS_STREAM_DRY_RUN | If enabled, read and immediately discard all read data (can be used to evaluate client-side throughput) |
-
-
-
 

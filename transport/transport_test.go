@@ -21,7 +21,6 @@ package transport_test
 //
 
 import (
-	"context"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -115,8 +114,7 @@ func Example_headers() {
 	ts := httptest.NewServer(http.HandlerFunc(f))
 	defer ts.Close()
 
-	httpclient := &http.Client{Transport: &http.Transport{}}
-
+	httpclient := transport.NewIntraDataClient()
 	stream := transport.NewStream(httpclient, ts.URL, nil)
 
 	sendText(stream, text1, text2)
@@ -195,7 +193,7 @@ func Example_mux() {
 		fmt.Println(err)
 		return
 	}
-	httpclient := &http.Client{Transport: &http.Transport{}}
+	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url, nil)
 
@@ -225,76 +223,6 @@ func Test_OneStream(t *testing.T) {
 		streamWriteUntil(t, 55, nil, ts, nil, nil, false)
 	}
 	printNetworkStats(t, "n1")
-}
-
-func Test_CancelStream(t *testing.T) {
-	mux := mux.NewServeMux()
-	network := "nc"
-	transport.SetMux(network, mux)
-
-	ts := httptest.NewServer(mux)
-	defer ts.Close()
-
-	recvFunc := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
-		if err != nil {
-			return // stream probably canceled nothing to do
-		}
-		slab, _ := Mem2.GetSlab2(memsys.MaxSlabSize)
-		buf := slab.Alloc()
-		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
-		if err != nil && err != io.EOF {
-			tutils.Logf("err %v", err)
-		} else if err == io.EOF && written != hdr.ObjAttrs.Size {
-			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
-		}
-		slab.Free(buf)
-	}
-	trname := "cancel-rx-88"
-	path, err := transport.Register(network, trname, recvFunc)
-	tassert.CheckFatal(t, err)
-
-	httpclient := &http.Client{Transport: &http.Transport{}}
-	url := ts.URL + path
-	ctx, cancel := context.WithCancel(context.Background())
-	err = os.Setenv("AIS_STREAM_BURST_NUM", "1")
-	tassert.CheckFatal(t, err)
-	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
-	stream := transport.NewStream(httpclient, url, &transport.Extra{Ctx: ctx})
-	now := time.Now()
-
-	random := newRand(time.Now().UnixNano())
-	size, num, prevsize := int64(0), 0, int64(0)
-	canceled := false
-	for time.Since(now) < duration {
-		hdr := genStaticHeader()
-		slab, _ := Mem2.GetSlab2(memsys.MaxSlabSize)
-		reader := newRandReader(random, hdr, slab)
-		stream.Send(transport.Obj{Hdr: hdr, Reader: reader})
-		num++
-		size += hdr.ObjAttrs.Size
-		if size-prevsize >= cmn.GiB {
-			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
-			prevsize = size
-			if num > 10 && random.Int63()%3 == 0 {
-				cancel()
-				canceled = true
-				tutils.Logln("Canceling...")
-				break
-			}
-		}
-	}
-	time.Sleep(time.Second)
-
-	if !canceled {
-		tutils.Logln("Delayed cancelation...")
-	}
-	cancel() // Does nothing if cancel() was called before, placed here to keep govet linter happy
-
-	termReason, termErr := stream.TermInfo()
-	stats := stream.GetStats()
-	fmt.Printf("send$ %s: offset=%d, num=%d(%d), term(%s, %v)\n",
-		stream, stats.Offset.Load(), stats.Num.Load(), num, termReason, termErr)
-	stream.Fin() // vs. stream being term-ed
 }
 
 func Test_MultiStream(t *testing.T) {
@@ -367,7 +295,7 @@ func Test_MultipleNetworks(t *testing.T) {
 		path, err := transport.Register(network, "endpoint", recvFunc)
 		tassert.CheckFatal(t, err)
 
-		httpclient := &http.Client{Transport: &http.Transport{}}
+		httpclient := transport.NewIntraDataClient()
 		url := ts.URL + path
 		streams = append(streams, transport.NewStream(httpclient, url, nil))
 	}
@@ -409,7 +337,7 @@ func Test_OnSendCallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpclient := &http.Client{Transport: &http.Transport{}}
+	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url, nil)
 
@@ -488,7 +416,7 @@ func Test_ObjAttrs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpclient := &http.Client{Transport: &http.Transport{}}
+	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url, nil)
 
@@ -536,7 +464,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		}
 	}
 
-	httpclient := &http.Client{Transport: &http.Transport{}}
+	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + path
 	var extra *transport.Extra
 	if compress {

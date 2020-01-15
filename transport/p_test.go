@@ -59,8 +59,7 @@ func Test_CompressedOne(t *testing.T) {
 	path, err := transport.Register(network, trname, receive10G, memsys.GMM() /* optionally, specify memsys*/)
 	tassert.CheckFatal(t, err)
 
-	httpclient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-
+	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + path
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "2")
 	tassert.CheckFatal(t, err)
@@ -168,7 +167,7 @@ func Test_CompletionCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpclient := &http.Client{Transport: &http.Transport{}}
+	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + path
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "256")
 	tassert.CheckFatal(t, err)

@@ -6,13 +6,11 @@
 package transport
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -48,18 +46,18 @@ const (
 
 // termination: reasons
 const (
-	reasonCanceled = "canceled"
-	reasonUnknown  = "unknown"
-	reasonError    = "error"
-	endOfStream    = "end-of-stream"
-	reasonStopped  = "stopped"
+	reasonUnknown = "unknown"
+	reasonError   = "error"
+	endOfStream   = "end-of-stream"
+	reasonStopped = "stopped"
 )
 
 // API types
 type (
 	Stream struct {
+		client Client // http client this send-stream will use
+
 		// user-defined & queryable
-		client          *http.Client // http client this send-stream will use
 		toURL, trname   string       // http endpoint
 		sessID          int64        // stream session ID
 		sessST          atomic.Int64 // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
@@ -94,11 +92,10 @@ type (
 	}
 	// advanced usage: additional stream control
 	Extra struct {
-		IdleTimeout time.Duration   // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
-		Ctx         context.Context // presumably, result of context.WithCancel(context.Background()) by the caller
-		Callback    SendCallback    // typical usage: to free SGLs, close files, etc.
-		Compression string          // see CompressAlways, etc. enum
-		Mem2        *memsys.Mem2    // compression-related buffering
+		IdleTimeout time.Duration // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
+		Callback    SendCallback  // typical usage: to free SGLs, close files, etc.
+		Compression string        // see CompressAlways, etc. enum
+		Mem2        *memsys.Mem2  // compression-related buffering
 		Config      *cmn.Config
 	}
 	// stream stats
@@ -132,7 +129,8 @@ type (
 		Reader   io.ReadCloser  // reader, to read the object, and close when done
 		Callback SendCallback   // callback fired when sending is done OR when the stream terminates (see term.reason)
 		CmplPtr  unsafe.Pointer // local pointer that gets returned to the caller via Send completion callback
-		Prc      *atomic.Int64  // optional refcount; if present, SendCallback gets called if and when *prc reaches zero
+		// private
+		prc *atomic.Int64 // if present, ref-counts num sent objects to call SendCallback only once
 	}
 
 	// object-sent callback that has the following signature can optionally be defined on a:
@@ -183,23 +181,11 @@ type (
 )
 
 var (
-	nopRC      = &nopReadCloser{}
-	background = context.Background()
-	nextSID    = *atomic.NewInt64(100) // unique session IDs starting from 101
-	sc         = &StreamCollector{}
-	gc         *collector // real collector
+	nopRC   = &nopReadCloser{}      // read and close stubs
+	nextSID = *atomic.NewInt64(100) // unique session IDs starting from 101
+	sc      = &StreamCollector{}    // idle timer and house-keeping (slow path)
+	gc      *collector              // real stream collector
 )
-
-// default HTTP client used with streams (intra-data network)
-// resulting transport will dial timeout=30s, timeout=no-timeout
-func NewIntraDataClient() *http.Client {
-	config := cmn.GCO.Get()
-	return cmn.NewClient(cmn.TransportArgs{
-		SndRcvBufSize:   config.Net.L4.SndRcvBufSize,
-		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
-		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
-	})
-}
 
 func (extra *Extra) compressed() bool {
 	return extra.Compression != "" && extra.Compression != cmn.CompressNever
@@ -208,7 +194,7 @@ func (extra *Extra) compressed() bool {
 //
 // API methods
 //
-func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
+func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 	u, err := url.Parse(toURL)
 	if err != nil {
 		glog.Errorf("Failed to parse %s: %v", toURL, err)
@@ -274,13 +260,6 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	s.maxheader = make([]byte, maxHeaderSize) // NOTE: must be large enough to accommodate all max-size Header
 	s.sessST.Store(inactive)                  // NOTE: initiate HTTP session upon arrival of the first object
 
-	var ctx context.Context
-	if extra != nil && extra.Ctx != nil {
-		ctx = extra.Ctx
-	} else {
-		ctx = background
-	}
-
 	s.time.start.Store(time.Now().UnixNano())
 	s.term.reason = new(string)
 
@@ -292,8 +271,8 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		}
 		cmn.Assert(dryrun || client != nil)
 	}
-	go s.sendLoop(ctx, dryrun) // handle SQ
-	go s.cmplLoop()            // handle SCQ
+	go s.sendLoop(dryrun) // handle SQ
+	go s.cmplLoop()       // handle SCQ
 
 	gc.ctrlCh <- ctrl{s, true /* collect */}
 	return
@@ -327,7 +306,7 @@ func (s *Stream) compressed() bool { return s.lz4s.s == s }
 //
 // ---------------------------------------------------------------------------------------
 func (s *Stream) Send(obj Obj) (err error) {
-	s.time.inSend.Store(true) // indication for Collector to delay cleanup
+	s.time.inSend.Store(true) // an indication for Collector to postpone cleanup
 	hdr := &obj.Hdr
 	if s.Terminated() {
 		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
@@ -419,18 +398,18 @@ func (hdr *Header) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.Is
 // internal methods including the sending and completing loops below, each running in its own goroutine
 //
 
-func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
+func (s *Stream) sendLoop(dryrun bool) {
 	for {
 		if s.sessST.Load() == active {
 			if dryrun {
 				s.dryrun()
-			} else if err := s.doRequest(ctx); err != nil {
+			} else if err := s.doRequest(); err != nil {
 				*s.term.reason = reasonError
 				s.term.err = err
 				break
 			}
 		}
-		if !s.isNextReq(ctx) {
+		if !s.isNextReq() {
 			break
 		}
 	}
@@ -477,8 +456,8 @@ func (s *Stream) cmplLoop() {
 // refcount, invoke Sendcallback, and *always* close the reader
 func (s *Stream) objDone(obj *Obj, err error) {
 	var rc int64
-	if obj.Prc != nil {
-		rc = obj.Prc.Dec()
+	if obj.prc != nil {
+		rc = obj.prc.Dec()
 		cmn.Assert(rc >= 0) // remove
 	}
 	// SCQ completion callback
@@ -494,13 +473,9 @@ func (s *Stream) objDone(obj *Obj, err error) {
 	}
 }
 
-func (s *Stream) isNextReq(ctx context.Context) (next bool) {
+func (s *Stream) isNextReq() (next bool) {
 	for {
 		select {
-		case <-ctx.Done():
-			glog.Infof("%s: %v", s, ctx.Err())
-			*s.term.reason = reasonCanceled
-			return
 		case <-s.lastCh.Listen():
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: end-of-stream", s)
@@ -522,12 +497,11 @@ func (s *Stream) isNextReq(ctx context.Context) (next bool) {
 	}
 }
 
-func (s *Stream) doRequest(ctx context.Context) (err error) {
+func (s *Stream) doRequest() (err error) {
 	var (
-		request  *http.Request
-		response *http.Response
-		body     io.Reader = s
+		body io.Reader = s
 	)
+	s.Numcur, s.Sizecur = 0, 0
 	if s.compressed() {
 		s.lz4s.sgl.Reset()
 		if s.lz4s.zw == nil {
@@ -541,32 +515,7 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 		s.lz4s.zw.Header.BlockMaxSize = s.lz4s.blockMaxSize
 		body = &s.lz4s
 	}
-	if request, err = http.NewRequest(http.MethodPut, s.toURL, body); err != nil {
-		return
-	}
-	if ctx != background {
-		request = request.WithContext(ctx)
-	}
-	s.Numcur, s.Sizecur = 0, 0
-	if glog.FastV(4, glog.SmoduleTransport) {
-		glog.Infof("%s: Do", s)
-	}
-	if s.compressed() {
-		request.Header.Set(cmn.HeaderCompress, cmn.LZ4Compression)
-	}
-	request.Header.Set(cmn.HeaderSessID, strconv.FormatInt(s.sessID, 10))
-	response, err = s.client.Do(request)
-	if err == nil {
-		if glog.FastV(4, glog.SmoduleTransport) {
-			glog.Infof("%s: Done", s)
-		}
-	} else {
-		glog.Errorf("%s: Error [%v]", s, err)
-		return
-	}
-	ioutil.ReadAll(response.Body)
-	response.Body.Close()
-	return
+	return s.do(body)
 }
 
 // as io.Reader
@@ -782,9 +731,10 @@ func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	var (
 		sendoff = &lz4s.s.sendoff
 		last    = sendoff.obj.Hdr.IsLast()
-		retry   = 64 // insist on returning n > 0
+		retry   = 64 // insist on returning n > 0 (note that lz4 compresses /blocks/)
 	)
 	if lz4s.sgl.Len() > 0 {
+		lz4s.zw.Flush()
 		n, err = lz4s.sgl.Read(b)
 		if err == io.EOF { // reusing/rewinding this buf multiple times
 			err = nil
@@ -795,28 +745,29 @@ re:
 	n, err = lz4s.s.Read(b)
 	_, _ = lz4s.zw.Write(b[:n])
 	if last {
-		lz4s.zw.Close()
+		lz4s.zw.Flush()
 		retry = 0
 	} else if lz4s.s.sendoff.obj.Reader == nil /*eoObj*/ || err != nil {
 		lz4s.zw.Flush()
 		retry = 0
 	}
 	n, _ = lz4s.sgl.Read(b)
-	if n == 0 && retry > 0 {
-		runtime.Gosched()
-		retry--
-		goto re
+	if n == 0 {
+		if retry > 0 {
+			retry--
+			runtime.Gosched()
+			goto re
+		}
+		lz4s.zw.Flush()
+		n, _ = lz4s.sgl.Read(b)
 	}
 ex:
 	lz4s.s.stats.CompressedSize.Add(int64(n))
-
 	if lz4s.sgl.Len() == 0 {
 		lz4s.sgl.Reset()
-		if last && err == nil {
-			err = io.EOF
-		}
-	} else if last && err == io.EOF {
-		err = nil
+	}
+	if last && err == nil {
+		err = io.EOF
 	}
 	return
 }

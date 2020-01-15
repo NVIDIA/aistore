@@ -334,7 +334,7 @@ func (it *iterator) next() (obj *objReader, hl64 int64, err error) {
 	)
 	n, err = it.Read(it.headerBuf[:cmn.SizeofI64*2])
 	if n < cmn.SizeofI64*2 {
-		cmn.Assert(err != nil) // expecting an error or EOF as the reason for failing to read 16 bytes
+		cmn.Assert(err != nil) // expecting an error for failing to receive 16 bytes
 		if err != io.EOF {
 			glog.Errorf("%s: %v", it.trname, err)
 		}

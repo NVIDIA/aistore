@@ -8,7 +8,6 @@ package transport
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"sync"
 	"unsafe"
 
@@ -33,7 +32,7 @@ type (
 		smap         *cluster.Smap // current Smap
 		smaplock     *sync.Mutex
 		lsnode       *cluster.Snode // local Snode
-		client       *http.Client
+		client       Client
 		network      string
 		trname       string
 		streams      atomic.Pointer // points to bundle (below)
@@ -71,7 +70,7 @@ var _ cluster.Slistener = &StreamBundle{}
 // API
 //
 
-func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl *http.Client, sbArgs SBArgs) (sb *StreamBundle) {
+func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl Client, sbArgs SBArgs) (sb *StreamBundle) {
 	if !cmn.NetworkIsKnown(sbArgs.Network) {
 		glog.Errorf("Unknown network %s, expecting one of: %v", sbArgs.Network, cmn.KnownNetworks)
 	}
@@ -143,7 +142,7 @@ func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.
 	}
 	if nodes == nil {
 		if obj.Callback != nil && len(streams) > 1 {
-			obj.Prc = atomic.NewInt64(int64(len(streams))) // when there's a callback and > 1 dest-s
+			obj.prc = atomic.NewInt64(int64(len(streams))) // when there's a callback and > 1 dest-s
 		}
 		// Reader-reopening logic: since the streams in a bundle are mutually independent
 		// and asynchronous, reader.Open() (aka reopen) is skipped for the 1st replica
@@ -165,7 +164,7 @@ func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.
 			}
 		}
 		if obj.Callback != nil && len(nodes) > 1 {
-			obj.Prc = atomic.NewInt64(int64(len(nodes)))
+			obj.prc = atomic.NewInt64(int64(len(nodes)))
 		}
 		// second, do send. Same comment wrt reopening.
 		for _, di := range nodes {

@@ -5,13 +5,18 @@ BUILD_SRC = $(BUILD_DIR)/aisnode.go
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
 
-# Build version and flags
+# Build version, flags, and tags
 VERSION = $(shell git rev-parse --short HEAD)
 BUILD = $(shell date +%FT%T%z)
 FLAGS = $(if $(strip $(GORACE)),-race,)
+ifdef TAGS
+	BUILD_TAGS = "$(CLDPROVIDER) $(TAGS)"
+else
+	BUILD_TAGS = $(CLDPROVIDER)
+endif
 
 # Profiling
-# Example usage: MEMPROFILE=/tmp/mem make kill clean deploy <<< $'4\n4\n4\n0'
+# Example usage: MEMPROFILE=/tmp/mem make kill clean deploy <<< $'5\n5\n4\n0'
 # Note that MEMPROFILE (memprofile) option requires graceful shutdown (see `kill:`)
 ifdef MEMPROFILE
 	export PROFILE = -memprofile=$(MEMPROFILE)
@@ -21,6 +26,14 @@ ifdef CPUPROFILE
 	export PROFILE += -cpuprofile=$(CPUPROFILE)
 	BUILD_SRC = ./ais/setup/profile/aisnode.go
 endif
+
+# Intra-cluster networking: two alternative ways to build AIS `transport` package:
+# 1) using Go net/http, or
+# 2) with a 3rd party github.com/valyala/fasthttp aka "fasthttp"
+#
+# The second option is the current default.
+# To build with net/http, use `nethttp` build tag, for instance:
+# TAGS=nethttp make deploy <<< $'5\n5\n4\n0'
 
 ifeq ($(MODE),debug)
 	# Debug mode
@@ -48,7 +61,7 @@ ifneq ($(strip $(GORACE)),)
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
 	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
-		go install $(FLAGS) -tags="$(CLDPROVIDER)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+		go install $(FLAGS) -tags=$(BUILD_TAGS) $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
 	@echo "done."
 
 aisfs: ## Build 'aisfs' binary
