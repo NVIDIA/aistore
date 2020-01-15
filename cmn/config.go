@@ -275,7 +275,6 @@ type Config struct {
 	Downloader       DownloaderConf  `json:"downloader"`
 	DSort            DSortConf       `json:"distributed_sort"`
 	Compression      CompressionConf `json:"compression"`
-	Readahead        RahConf         `json:"readahead"`
 }
 
 type MirrorConf struct {
@@ -292,14 +291,6 @@ type MirrorConfToUpdate struct {
 	UtilThresh  *int64 `json:"util_thresh"`
 	OptimizePUT *bool  `json:"optimize_put"`
 	Enabled     *bool  `json:"enabled"`
-}
-
-type RahConf struct {
-	ObjectMem int64 `json:"object_mem"`
-	TotalMem  int64 `json:"total_mem"`
-	ByProxy   bool  `json:"by_proxy"`
-	Discard   bool  `json:"discard"`
-	Enabled   bool  `json:"enabled"`
 }
 
 type LogConf struct {

@@ -72,7 +72,6 @@ type (
 		prefetchQueue chan filesWithDeadline
 		authn         *authManager
 		fsprg         fsprungroup
-		readahead     readaheader
 		rebManager    *reb.Manager
 		capUsed       capUsed
 		gfn           struct {

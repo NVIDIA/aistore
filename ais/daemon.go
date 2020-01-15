@@ -276,8 +276,6 @@ func aisinit(version, build string) {
 		fshc := health.NewFSHC(t, fs.Mountpaths, daemon.mm, fs.CSM)
 		daemon.rg.add(fshc, xfshc)
 
-		t.readahead = &dummyreadahead{}
-
 		housekeep, initialInterval := cluster.LomCacheHousekeep(daemon.mm, t)
 		hk.Housekeeper.Register("lom-cache", housekeep, initialInterval)
 		_ = ts.UpdateCapacityOOS(nil) // goes after fs.Mountpaths.Init

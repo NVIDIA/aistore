@@ -8,12 +8,12 @@
     "optimize_put": false,
     "enabled":      false
   },
-  "readahead": {
-    "object_mem": 1048576,
-    "total_mem":  1073741824,
-    "by_proxy":   true,
-    "discard":    false,
-    "enabled":    false
+  "ec": {
+    "objsize_limit": 262144,
+    "data_slices": 1,
+    "parity_slices": 1,
+    "compression": "never",
+    "enabled": false
   },
   "log": {
     "dir":       "/tmp/ais1/log",
@@ -50,18 +50,18 @@
     "enabled":           true
   },
   "disk":{
-    "iostat_time_long":  "2s",
-    "iostat_time_short": "100ms",
-    "disk_util_low_wm":  20,
+    "disk_util_low_wm": 20,
     "disk_util_high_wm": 80,
-    "disk_util_max_wm":  95
+    "disk_util_max_wm": 95,
+    "iostat_time_long": "2s",
+    "iostat_time_short": "100ms"
   },
   "rebalance": {
-    "enabled":         true,
-	"quiescent":       "20s",
-	"compression":     "never",
-	"multiplier":       4,
-    "dest_retry_time": "2m"
+    "dest_retry_time": "2m",
+    "quiescent": "20s",
+    "compression": "never",
+    "multiplier": 4,
+    "enabled": true
   },
   "cksum": {
     "type":                       "xxhash",

@@ -245,21 +245,15 @@ const (
 		" Compression options:\t{{$obj.Compression}}\n"
 	GlobalConfTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.CloudProvider}}\n"
 
-	// hidden config sections: replication and readahead.
+	// hidden config sections: replication
 	// Application Config has this sections but setup/config.sh does not expose them
 	ReplicationConfTmpl = "\n{{$obj := .Replication}}Replication Config\n" +
 		" On Cold Get:\t{{$obj.OnColdGet}}\n" +
 		" On Put:\t{{$obj.OnPut}}\n" +
 		" On LRU Eviction:\t{{$obj.OnLRUEviction}}\n"
-	ReadaheadConfTmpl = "\n{{$obj := .Readahead}}Readahead Config\n" +
-		" ObjectMem:\t{{$obj.ObjectMem}}\n" +
-		" TotalMem:\t{{$obj.TotalMem}}\n" +
-		" ByProxy:\t{{$obj.ByProxy}}\n" +
-		" Discard:\t{{$obj.Discard}}\n" +
-		" Enabled:\t{{$obj.Discard}}\n"
 
 	ConfigTmpl = GlobalConfTmpl +
-		MirrorConfTmpl + ReadaheadConfTmpl + LogConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
+		MirrorConfTmpl + LogConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
 		ProxyConfTmpl + LRUConfTmpl + DiskConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
 		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl +
@@ -461,7 +455,6 @@ var (
 		cmn.DSortNameLowercase: DSortConfTmpl,
 		"compression":          CompressionTmpl,
 		"ec":                   ECTmpl,
-		"readahead":            ReadaheadConfTmpl,
 		"replication":          ReplicationConfTmpl,
 	}
 )
