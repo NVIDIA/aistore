@@ -7,7 +7,6 @@ package fs
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -36,36 +35,63 @@ type ParsedFQN struct {
 	Digest      uint64
 }
 
-// mpathInfo, bucket, objname, isLocal, err
+// mpathInfo, contentType, provider, bucket, objName, err
 func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
-	var rel string
+	var (
+		rel           string
+		itemIdx, prev int
+	)
 
 	parsed.MpathInfo, rel, err = mfs.FQN2MpathInfo(fqn)
 	if err != nil {
 		return
 	}
-	items := strings.SplitN(rel, string(filepath.Separator), 4)
-	if len(items) < 4 {
-		err = fmt.Errorf("fqn %s is invalid: %+v", fqn, items)
-	} else if _, ok := CSM.RegisteredContentTypes[items[0]]; !ok {
-		err = fmt.Errorf("invalid fqn %s: unrecognized content type", fqn)
-	} else if items[2] == "" {
-		err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
-	} else if items[3] == "" {
-		err = fmt.Errorf("invalid fqn %s: object name is empty", fqn)
-	} else if items[1] != aisPath && items[1] != cloudPath {
-		err = fmt.Errorf("invalid bucket type %q for fqn %s", items[1], fqn)
-	} else {
-		// TODO: when on-disk structure changes we should just assign:
-		// `parsed.Provider = items[1]`
-		if items[1] == aisPath {
-			parsed.Provider = cmn.AIS
-		} else {
-			parsed.Provider = cmn.GCO.Get().CloudProvider
+
+	for i := 0; i < len(rel); i++ {
+		if rel[i] != byte(filepath.Separator) {
+			continue
 		}
 
-		parsed.ContentType, parsed.Bucket, parsed.ObjName = items[0], items[2], items[3]
+		item := rel[prev:i]
+		switch itemIdx {
+		case 0: // content type
+			if _, ok := CSM.RegisteredContentTypes[item]; !ok {
+				err = fmt.Errorf("invalid fqn %s: unrecognized content type %q", fqn, item)
+				return
+			}
+			parsed.ContentType = item
+		case 1: // cloud provider
+			if item != aisPath && item != cloudPath {
+				err = fmt.Errorf("invalid fqn %s: unrecognized provider %q", fqn, item)
+				return
+			}
+			// TODO: when on-disk structure changes we should just assign:
+			// `parsed.Provider = item`
+			if item == aisPath {
+				parsed.Provider = cmn.AIS
+			} else {
+				parsed.Provider = cmn.GCO.Get().CloudProvider
+			}
+		case 2: // bucket and object name
+			if item == "" {
+				err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
+				return
+			}
+			parsed.Bucket = item
+
+			objName := rel[i+1:]
+			if objName == "" {
+				err = fmt.Errorf("invalid fqn %s: object name is empty", fqn)
+			}
+			parsed.ObjName = objName
+			return
+		}
+
+		itemIdx++
+		prev = i + 1
 	}
+
+	err = fmt.Errorf("fqn is invalid: %s", fqn)
 	return
 }
 

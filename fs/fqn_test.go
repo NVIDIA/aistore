@@ -1,10 +1,12 @@
-package fs
+package fs_test
 
 import (
 	"os"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 )
 
 func TestFQN2Info(t *testing.T) {
@@ -108,7 +110,8 @@ func TestFQN2Info(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			mfs := NewMountedFS()
+			mios := ios.NewIOStaterMock()
+			mfs := fs.NewMountedFS(mios)
 			mfs.DisableFsIDCheck()
 
 			for _, mpath := range tt.mpaths {
@@ -122,8 +125,8 @@ func TestFQN2Info(t *testing.T) {
 					return
 				}
 			}
-			Mountpaths = mfs
-			CSM.RegisterFileType(ObjectType, &ObjectContentResolver{})
+			fs.Mountpaths = mfs
+			fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 
 			parsedFQN, err := mfs.FQN2Info(tt.fqn)
 			if (err != nil) != tt.wantErr {
@@ -151,5 +154,29 @@ func TestFQN2Info(t *testing.T) {
 				t.Errorf("fqn2info() gotObjName = %v, want %v", gotObjName, tt.wantObjName)
 			}
 		})
+	}
+}
+
+var (
+	parsedFQN fs.ParsedFQN
+)
+
+func BenchmarkFQN2Info(b *testing.B) {
+	var (
+		mpath = "/tmp/mpath"
+		mios  = ios.NewIOStaterMock()
+		mfs   = fs.NewMountedFS(mios)
+	)
+
+	mfs.DisableFsIDCheck()
+	cmn.CreateDir(mpath)
+	defer os.RemoveAll(mpath)
+	mfs.Add(mpath)
+	fs.Mountpaths = mfs
+	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		parsedFQN, _ = mfs.FQN2Info("/tmp/mpath/obj/local/bucket/super/long/name")
 	}
 }
