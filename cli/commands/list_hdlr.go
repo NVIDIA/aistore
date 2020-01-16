@@ -71,7 +71,7 @@ var (
 					ArgsUsage:    optionalBucketWithSeparatorArgument,
 					Flags:        listCmdsFlags[subcmdListAIS],
 					Action:       listAISBucketsHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */, cmn.AIS),
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */, cmn.ProviderAIS),
 				},
 				{
 					Name:         subcmdListCloud,
@@ -128,11 +128,11 @@ func defaultListHandler(c *cli.Context) (err error) {
 func listAISBucketsHandler(c *cli.Context) (err error) {
 	bucket := c.Args().First()
 	if bucket == "" {
-		return listBucketNames(c, cmn.AIS)
+		return listBucketNames(c, cmn.ProviderAIS)
 	}
 
 	bucket = strings.TrimSuffix(bucket, "/")
-	return listBucketObj(c, bucket, cmn.AIS)
+	return listBucketObj(c, bucket, cmn.ProviderAIS)
 }
 
 // Note: This handler ignores aisBucketEnvVar because the intention

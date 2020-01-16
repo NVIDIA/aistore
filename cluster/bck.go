@@ -87,7 +87,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		if bmd.IsAIS(b.Name) {
-			b.Provider = cmn.AIS
+			b.Provider = cmn.ProviderAIS
 		} else if bmd.IsCloud(b.Name) {
 			b.Provider = cmn.GCO.Get().CloudProvider
 		} else {

@@ -32,7 +32,7 @@ var _ = Describe("IterFields", func() {
 			},
 			Entry("list bucket props",
 				cmn.BucketProps{
-					CloudProvider: cmn.AIS,
+					CloudProvider: cmn.ProviderAIS,
 					EC: cmn.ECConf{
 						Enabled:      true,
 						ParitySlices: 1024,
@@ -43,7 +43,7 @@ var _ = Describe("IterFields", func() {
 					},
 				},
 				map[string]interface{}{
-					"cloud_provider": cmn.AIS,
+					"cloud_provider": cmn.ProviderAIS,
 
 					"tier.write_policy": "",
 					"tier.next_url":     "",
@@ -149,7 +149,7 @@ var _ = Describe("IterFields", func() {
 				"mirror.enabled": true,
 			}),
 			Entry("readonly field", &cmn.BucketProps{}, map[string]interface{}{
-				"cloud_provider": cmn.AIS,
+				"cloud_provider": cmn.ProviderAIS,
 			}),
 			Entry("field not found", &foo{}, map[string]interface{}{
 				"foo.bar": 2,

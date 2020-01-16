@@ -193,7 +193,7 @@ func DestroyBucket(baseParams BaseParams, bucket string) error {
 // DoesBucketExist queries a proxy or target to get a list of all ais buckets,
 // returns true if the bucket is present in the list.
 func DoesBucketExist(baseParams BaseParams, bucket string) (bool, error) {
-	buckets, err := GetBucketNames(baseParams, cmn.AIS)
+	buckets, err := GetBucketNames(baseParams, cmn.ProviderAIS)
 	if err != nil {
 		return false, err
 	}

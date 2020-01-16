@@ -92,7 +92,7 @@ func destroyBuckets(c *cli.Context, buckets []string) (err error) {
 
 // Rename ais bucket
 func renameBucket(c *cli.Context, bucket, newBucket string) (err error) {
-	if err = canReachBucket(bucket, cmn.AIS); err != nil {
+	if err = canReachBucket(bucket, cmn.ProviderAIS); err != nil {
 		return
 	}
 	if err = api.RenameBucket(defaultAPIParams, bucket, newBucket); err != nil {
@@ -164,12 +164,12 @@ func listBucketObj(c *cli.Context, bucket string, provider string) error {
 	query := url.Values{}
 	query.Add(cmn.URLParamProvider, parseStrFlag(c, providerFlag))
 	query.Add(cmn.URLParamPrefix, prefix)
-	if flagIsSet(c, cachedFlag) && provider == cmn.AIS {
+	if flagIsSet(c, cachedFlag) && provider == cmn.ProviderAIS {
 		fmt.Fprintf(c.App.ErrWriter, "warning: ignoring %s flag: irrelevant for ais buckets\n", cachedFlag.Name)
 		msg.Cached = false
 	}
 
-	if flagIsSet(c, fastFlag) && (provider == cmn.AIS || msg.Cached) {
+	if flagIsSet(c, fastFlag) && (provider == cmn.ProviderAIS || msg.Cached) {
 		msg.Fast = true
 		objList, err := api.ListBucketFast(defaultAPIParams, bucket, msg, query)
 		if err != nil {
@@ -179,7 +179,7 @@ func listBucketObj(c *cli.Context, bucket string, provider string) error {
 		return printObjectNames(c, objList.Entries, objectListFilter, showUnmatched, !flagIsSet(c, noHeaderFlag))
 	}
 
-	if provider != cmn.AIS && flagIsSet(c, fastFlag) {
+	if provider != cmn.ProviderAIS && flagIsSet(c, fastFlag) {
 		fmt.Fprintf(c.App.ErrWriter, "warning: %q for cloud buckets takes an effect only with %q\n", fastFlag.Name, cachedFlag.Name)
 	}
 	if flagIsSet(c, markerFlag) {

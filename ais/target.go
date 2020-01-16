@@ -385,12 +385,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.writeJSON(w, r, body, "get-what-bmd")
 		} else {
 			provider := r.URL.Query().Get(cmn.URLParamProvider)
-			normalizedProvider, err := cmn.ProviderFromStr(provider)
-			if err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			t.getbucketnames(w, r, normalizedProvider)
+			t.getbucketnames(w, r, provider)
 		}
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])

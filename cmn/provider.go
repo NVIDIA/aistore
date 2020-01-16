@@ -14,12 +14,11 @@ import (
 
 // Cloud Provider enum
 const (
+	Cloud = "cloud" // used only for API
+
 	ProviderAmazon = "aws"
 	ProviderGoogle = "gcp"
 	ProviderAIS    = "ais"
-	// maps to one of:
-	Cloud = "cloud"
-	AIS   = ProviderAIS
 )
 
 var (
@@ -32,11 +31,12 @@ var (
 		Cloud:          Cloud,
 		ProviderAmazon: Cloud,
 		ProviderGoogle: Cloud,
-		ProviderAIS:    AIS,
+		ProviderAIS:    ProviderAIS,
 		"":             "",
 	}
 )
 
+// TODO: should be removed after on-disk structure change
 func ProviderFromStr(provider string) (val string, err error) {
 	var ok bool
 	val, ok = providerMap[strings.ToLower(provider)]
@@ -46,12 +46,10 @@ func ProviderFromStr(provider string) (val string, err error) {
 	return
 }
 
-// TODO: should only accept `ProviderAIS`
 func IsProviderAIS(provider string) bool {
-	return provider == AIS || provider == ProviderAIS
+	return provider == ProviderAIS
 }
 
-// TODO: should only accept `ProviderAmazon` and `ProviderGoogle` (CloudProviders)
 func IsProviderCloud(provider string) bool {
 	return provider == Cloud || provider == ProviderAmazon || provider == ProviderGoogle
 }

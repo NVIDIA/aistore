@@ -178,7 +178,7 @@ func startDownloadHandler(c *cli.Context) error {
 	)
 
 	basePayload := cmn.DlBase{
-		Provider:    cmn.AIS, // NOTE: currently downloading only to ais buckets is supported
+		Provider:    cmn.ProviderAIS, // NOTE: currently downloading only to ais buckets is supported
 		Timeout:     timeout,
 		Description: description,
 	}

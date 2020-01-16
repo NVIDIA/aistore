@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 	t.bmdowner = newBMDOwnerTgt()
 
 	bmd := newBucketMD()
-	bmd.add(&cluster.Bck{Name: testBucket, Provider: cmn.AIS}, &cmn.BucketProps{
+	bmd.add(&cluster.Bck{Name: testBucket, Provider: cmn.ProviderAIS}, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cmn.ChecksumNone,
 		},
@@ -97,7 +97,7 @@ func BenchmarkObjPut(b *testing.B) {
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
 			lom := &cluster.LOM{T: t, Objname: "objname"}
-			err := lom.Init(testBucket, cmn.AIS)
+			err := lom.Init(testBucket, cmn.ProviderAIS)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -143,7 +143,7 @@ func BenchmarkObjAppend(b *testing.B) {
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
 			lom := &cluster.LOM{T: t, Objname: "objname"}
-			err := lom.Init(testBucket, cmn.AIS)
+			err := lom.Init(testBucket, cmn.ProviderAIS)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -203,7 +203,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 		}
 		b.Run(benchName, func(b *testing.B) {
 			lom := &cluster.LOM{T: t, Objname: "objname"}
-			err := lom.Init(testBucket, cmn.AIS)
+			err := lom.Init(testBucket, cmn.ProviderAIS)
 			if err != nil {
 				b.Fatal(err)
 			}

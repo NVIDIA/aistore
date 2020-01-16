@@ -136,7 +136,7 @@ func InitAndRun(ini *InitLRU) {
 			}
 		}
 
-		if aborted := startLRUJoggers(cmn.AIS); aborted {
+		if aborted := startLRUJoggers(cmn.ProviderAIS); aborted {
 			break
 		}
 	}

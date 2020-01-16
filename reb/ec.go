@@ -845,6 +845,11 @@ func (s *ecRebalancer) detectBroken(res *ecRebResult) {
 	}
 	for provider, tp := range providers {
 		for bckName, objs := range tp {
+			if provider == "" {
+				// Cloud provider can be empty so we do not need to do anything.
+				continue
+			}
+
 			bck := &cluster.Bck{Name: bckName, Provider: provider}
 			if err := bck.Init(bowner); err != nil {
 				// bucket might be deleted while rebalancing - skip it

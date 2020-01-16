@@ -465,13 +465,13 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	if !isCloudBucket(t, proxyURL, bucketName) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
-	queryLocal.Add(cmn.URLParamProvider, cmn.AIS)
+	queryLocal.Add(cmn.URLParamProvider, cmn.ProviderAIS)
 	queryCloud.Add(cmn.URLParamProvider, cmn.Cloud)
 
 	putArgsLocal := api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bucket:     bucketName,
-		Provider:   cmn.AIS,
+		Provider:   cmn.ProviderAIS,
 		Object:     fileName1,
 		Reader:     tutils.NewBytesReader(dataLocal),
 	}
@@ -496,7 +496,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bucketName)
 	}
 
-	err = api.DeleteObject(baseParams, bucketName, fileName1, cmn.AIS)
+	err = api.DeleteObject(baseParams, bucketName, fileName1, cmn.ProviderAIS)
 	if err == nil {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bucketName)
 	}
@@ -541,9 +541,9 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 
 	// Check ais bucket has 2 objects
 	tutils.Logf("Validating ais bucket have %s and %s ...\n", fileName1, fileName2)
-	_, err = api.HeadObject(baseParams, bucketName, cmn.AIS, fileName1)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.ProviderAIS, fileName1)
 	tassert.CheckFatal(t, err)
-	_, err = api.HeadObject(baseParams, bucketName, cmn.AIS, fileName2)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.ProviderAIS, fileName2)
 	tassert.CheckFatal(t, err)
 
 	// Prefetch/Evict should work
@@ -558,13 +558,13 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 
 	// Deleting from ais bucket
 	tutils.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
-	api.DeleteList(baseParams, bucketName, cmn.AIS, files, true, 0)
+	api.DeleteList(baseParams, bucketName, cmn.ProviderAIS, files, true, 0)
 
-	_, err = api.HeadObject(baseParams, bucketName, cmn.AIS, fileName1)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.ProviderAIS, fileName1)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Local file %s not deleted", fileName1)
 	}
-	_, err = api.HeadObject(baseParams, bucketName, cmn.AIS, fileName2)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.ProviderAIS, fileName2)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Local file %s not deleted", fileName2)
 	}
@@ -600,7 +600,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
-	queryLocal.Add(cmn.URLParamProvider, cmn.AIS)
+	queryLocal.Add(cmn.URLParamProvider, cmn.ProviderAIS)
 	queryCloud.Add(cmn.URLParamProvider, cmn.Cloud)
 
 	tutils.CreateFreshBucket(t, proxyURL, bucketName)
@@ -618,7 +618,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bucket:     bucketName,
-		Provider:   cmn.AIS,
+		Provider:   cmn.ProviderAIS,
 		Object:     fileName,
 		Reader:     tutils.NewBytesReader(dataLocal),
 	}

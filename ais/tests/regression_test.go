@@ -308,7 +308,7 @@ func TestRenameBucket(t *testing.T) {
 			defer tutils.DestroyBucket(t, proxyURL, bucket)
 			defer tutils.DestroyBucket(t, proxyURL, renamedBucket)
 
-			b, err := api.GetBucketNames(tutils.DefaultBaseAPIParams(t), cmn.AIS)
+			b, err := api.GetBucketNames(tutils.DefaultBaseAPIParams(t), cmn.ProviderAIS)
 			tassert.CheckFatal(t, err)
 
 			doBucketRegressionTest(t, proxyURL, regressionTestData{
@@ -382,7 +382,7 @@ func postRenameWaitAndCheck(t *testing.T, proxyURL string, rtd regressionTestDat
 	waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, rtd.bucket, baseParams, rebalanceTimeout)
 	tutils.Logf("xaction (rename %s=>%s) done\n", rtd.bucket, rtd.renamedBucket)
 
-	buckets, err := api.GetBucketNames(baseParams, cmn.AIS)
+	buckets, err := api.GetBucketNames(baseParams, cmn.ProviderAIS)
 	tassert.CheckFatal(t, err)
 
 	if len(buckets.AIS) != rtd.numBuckets {
@@ -1143,7 +1143,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 2. Delete a range of objects
 	tutils.Logf("Deleting objects in range: %s\n", partialRange)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestBucketName, cmn.AIS, prefix, regex, partialRange, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestBucketName, cmn.ProviderAIS, prefix, regex, partialRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1173,7 +1173,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 4. Delete the entire range of objects
 	tutils.Logf("Deleting objects in range: %s\n", rnge)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestBucketName, cmn.AIS, prefix, regex, rnge, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestBucketName, cmn.ProviderAIS, prefix, regex, rnge, true, 0)
 	if err != nil {
 		t.Error(err)
 	}

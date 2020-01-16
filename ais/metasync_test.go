@@ -578,13 +578,13 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bucketmd.add(&cluster.Bck{Name: "bucket1", Provider: cmn.AIS}, &cmn.BucketProps{
+	bucketmd.add(&cluster.Bck{Name: "bucket1", Provider: cmn.ProviderAIS}, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bucketmd.add(&cluster.Bck{Name: "bucket2", Provider: cmn.AIS}, &cmn.BucketProps{
+	bucketmd.add(&cluster.Bck{Name: "bucket2", Provider: cmn.ProviderAIS}, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
@@ -611,7 +611,7 @@ func TestMetaSyncData(t *testing.T) {
 		Cksum: cmn.CksumConf{Type: cmn.PropInherit},
 		LRU:   cmn.GCO.Get().LRU,
 	}
-	bucketmd.add(&cluster.Bck{Name: "bucket3", Provider: cmn.AIS}, bprops)
+	bucketmd.add(&cluster.Bck{Name: "bucket3", Provider: cmn.ProviderAIS}, bprops)
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)

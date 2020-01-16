@@ -55,9 +55,9 @@ var _ = Describe("Mirror", func() {
 
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}
-		bucketPath      = mi.MakePathBucket(fs.ObjectType, testBucketName, cmn.AIS)
-		defaultObjFQN   = mi.MakePathBucketObject(fs.ObjectType, testBucketName, cmn.AIS, testObjectName)
-		expectedCopyFQN = mi2.MakePathBucketObject(fs.ObjectType, testBucketName, cmn.AIS, testObjectName)
+		bucketPath      = mi.MakePathBucket(fs.ObjectType, testBucketName, cmn.ProviderAIS)
+		defaultObjFQN   = mi.MakePathBucketObject(fs.ObjectType, testBucketName, cmn.ProviderAIS, testObjectName)
+		expectedCopyFQN = mi2.MakePathBucketObject(fs.ObjectType, testBucketName, cmn.ProviderAIS, testObjectName)
 	)
 
 	BeforeEach(func() {

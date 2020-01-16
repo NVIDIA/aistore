@@ -185,7 +185,7 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 		if err := bck.Init(t.bmdowner); err != nil {
 			return nil, err
 		}
-		if !cmn.IsProviderCloud(bck.Provider) {
+		if !bck.IsCloud() {
 			return nil, fmt.Errorf("bucket download requires cloud bucket")
 		}
 

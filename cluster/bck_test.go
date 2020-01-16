@@ -57,7 +57,7 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"not matching names",
-				&Bck{Name: "a", Provider: cmn.AIS}, &Bck{Name: "b", Provider: cmn.AIS},
+				&Bck{Name: "a", Provider: cmn.ProviderAIS}, &Bck{Name: "b", Provider: cmn.ProviderAIS},
 			),
 			Entry(
 				"empty providers",
@@ -65,11 +65,11 @@ var _ = Describe("Bck", func() {
 			),
 			Entry(
 				"not matching providers",
-				&Bck{Name: "a", Provider: cmn.AIS}, &Bck{Name: "a", Provider: ""},
+				&Bck{Name: "a", Provider: cmn.ProviderAIS}, &Bck{Name: "a", Provider: ""},
 			),
 			Entry(
 				"not matching providers #2",
-				&Bck{Name: "a", Provider: cmn.AIS}, &Bck{Name: "a", Provider: cmn.Cloud},
+				&Bck{Name: "a", Provider: cmn.ProviderAIS}, &Bck{Name: "a", Provider: cmn.Cloud},
 			),
 			Entry(
 				"not matching providers #3",
@@ -83,7 +83,7 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"matching AIS providers",
-				&Bck{Name: "a", Provider: cmn.AIS}, &Bck{Name: "a", Provider: cmn.AIS},
+				&Bck{Name: "a", Provider: cmn.ProviderAIS}, &Bck{Name: "a", Provider: cmn.ProviderAIS},
 			),
 			Entry(
 				"matching Cloud providers",

@@ -456,7 +456,7 @@ func TestListObjectsPrefix(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	for _, provider := range []string{cmn.AIS, cmn.Cloud} {
+	for _, provider := range []string{cmn.ProviderAIS, cmn.Cloud} {
 		t.Run(provider, func(t *testing.T) {
 			var (
 				bucket     string
@@ -591,7 +591,7 @@ func TestBucketListAndSummary(t *testing.T) {
 	}
 
 	var tests []test
-	for _, provider := range []string{cmn.AIS, cmn.Cloud} {
+	for _, provider := range []string{cmn.ProviderAIS, cmn.Cloud} {
 		for _, summary := range []bool{false, true} {
 			for _, cached := range []bool{false, true} {
 				for _, fast := range []bool{false, true} {
@@ -1141,7 +1141,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.GetBucketNames(baseParams, cmn.AIS)
+	names, err := api.GetBucketNames(baseParams, cmn.ProviderAIS)
 	tassert.CheckFatal(t, err)
 
 	exists := cmn.StringInSlice(dstBckName, names.AIS)
@@ -1252,7 +1252,7 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 	}
 
 	// Check if the old bucket still appears in the list
-	names, err := api.GetBucketNames(baseParams, cmn.AIS)
+	names, err := api.GetBucketNames(baseParams, cmn.ProviderAIS)
 	tassert.CheckFatal(t, err)
 
 	if !cmn.StringInSlice(m.bucket, names.AIS) || !cmn.StringInSlice(tmpBckName, names.AIS) {

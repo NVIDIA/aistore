@@ -143,7 +143,7 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	// LRU will take care of removing the rest of the bucket.
 	counter := mi.removeDirCounter.Inc()
 	nonExistingBucket := fmt.Sprintf("removing-%d", counter)
-	tmpDir := CSM.FQN(mi, WorkfileType, nonExistingBucket, cmn.AIS, "")
+	tmpDir := CSM.FQN(mi, WorkfileType, nonExistingBucket, cmn.ProviderAIS, "")
 	if err := cmn.CreateDir(filepath.Dir(tmpDir)); err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func (mi *MountpathInfo) makePathBuf(contentType, provider string, extra int) (b
 		l        = len(mi.Path) + lsepa + len(contentType) + lsepa + extra
 	)
 	switch provider {
-	case cmn.AIS:
+	case cmn.ProviderAIS:
 		l += len(aisPath)
 		provPath = aisPath
 	case cmn.ProviderAmazon, cmn.ProviderGoogle:

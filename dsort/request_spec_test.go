@@ -38,8 +38,8 @@ var _ = Describe("RequestSpec", func() {
 
 			Expect(parsed.Bucket).To(Equal("test"))
 			Expect(parsed.OutputBucket).To(Equal("test"))
-			Expect(parsed.Provider).To(Equal(cmn.AIS))
-			Expect(parsed.OutputProvider).To(Equal(cmn.AIS))
+			Expect(parsed.Provider).To(Equal(cmn.ProviderAIS))
+			Expect(parsed.OutputProvider).To(Equal(cmn.ProviderAIS))
 			Expect(parsed.Extension).To(Equal(ExtTar))
 
 			Expect(parsed.InputFormat.Template).To(Equal(cmn.ParsedTemplate{

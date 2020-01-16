@@ -181,10 +181,10 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bo
 			}
 		}
 
-		if cmn.IsProviderAIS(provider) || provider == "" {
+		if provider == "" || cmn.IsProviderAIS(provider) {
 			printNotUsedBuckets(bucketNames.AIS)
 		}
-		if cmn.IsProviderCloud(provider) || provider == "" {
+		if provider == "" || cmn.IsProviderCloud(provider) {
 			printNotUsedBuckets(bucketNames.Cloud)
 		}
 	}
@@ -218,13 +218,13 @@ func propCompletions(c *cli.Context) {
 	})
 }
 
-func suggestBucket(c *cli.Context, separator bool, provider ...string) {
-	prov, err := bucketProvider(c, provider...)
+func suggestBucket(c *cli.Context, separator bool, providers ...string) {
+	provider, err := bucketProvider(c, providers...)
 	if err != nil {
 		return
 	}
 
-	bucketNames, err := api.GetBucketNames(defaultAPIParams, prov)
+	bucketNames, err := api.GetBucketNames(defaultAPIParams, provider)
 	if err != nil {
 		return
 	}
@@ -240,10 +240,10 @@ func suggestBucket(c *cli.Context, separator bool, provider ...string) {
 		}
 	}
 
-	if cmn.IsProviderAIS(prov) || prov == "" {
+	if provider == "" || cmn.IsProviderAIS(provider) {
 		printBuckets(bucketNames.AIS)
 	}
-	if cmn.IsProviderCloud(prov) || prov == "" {
+	if provider == "" || cmn.IsProviderCloud(provider) {
 		printBuckets(bucketNames.Cloud)
 	}
 }

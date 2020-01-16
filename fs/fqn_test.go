@@ -26,7 +26,7 @@ func TestFQN2Info(t *testing.T) {
 			"smoke test",
 			"/tmp/obj/local/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", "obj", "bucket", cmn.AIS, "objname", false,
+			"/tmp", "obj", "bucket", cmn.ProviderAIS, "objname", false,
 		},
 		{
 			"cloud as bucket type",

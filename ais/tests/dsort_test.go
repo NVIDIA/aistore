@@ -115,7 +115,7 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 	return dsort.RequestSpec{
 		Description:      generateDSortDesc(),
 		Bucket:           df.m.bucket,
-		Provider:         cmn.AIS,
+		Provider:         cmn.ProviderAIS,
 		OutputBucket:     df.outputBucket,
 		Extension:        df.extension,
 		InputFormat:      df.inputTempl,

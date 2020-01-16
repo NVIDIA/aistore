@@ -215,7 +215,7 @@ func TestDownloadSingle(t *testing.T) {
 
 	waitForDownload(t, id, 30*time.Second)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.ProviderAIS, "", 0)
 	tassert.CheckError(t, err)
 	if len(objs) != 1 || objs[0] != objname {
 		t.Errorf("expected single object (%s), got: %s", objname, objs)
@@ -297,7 +297,7 @@ func TestDownloadMultiMap(t *testing.T) {
 
 	waitForDownload(t, id, 10*time.Second)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.ProviderAIS, "", 0)
 	tassert.CheckFatal(t, err)
 	if len(objs) != len(m) {
 		t.Errorf("expected objects (%s), got: %s", m, objs)
@@ -328,7 +328,7 @@ func TestDownloadMultiList(t *testing.T) {
 
 	waitForDownload(t, id, 10*time.Second)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.ProviderAIS, "", 0)
 	tassert.CheckFatal(t, err)
 	if !reflect.DeepEqual(objs, expectedObjs) {
 		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
@@ -374,7 +374,7 @@ func TestDownloadTimeout(t *testing.T) {
 		tutils.Logf("%v\n", err)
 	}
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.ProviderAIS, "", 0)
 	tassert.CheckFatal(t, err)
 	if len(objs) != 0 {
 		t.Errorf("expected 0 objects, got: %s", objs)
@@ -475,7 +475,7 @@ func TestDownloadStatus(t *testing.T) {
 		return
 	}
 
-	bck := &cluster.Bck{Name: TestBucketName, Provider: cmn.AIS}
+	bck := &cluster.Bck{Name: TestBucketName, Provider: cmn.ProviderAIS}
 	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", bck, m.smap)
 
 	files := map[string]string{
@@ -754,7 +754,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tutils.Logf("Aborting download job %s\n", id)
 	err = api.DownloadAbort(baseParams, id)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.ProviderAIS, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
 
@@ -763,7 +763,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tutils.Logf("Started download job %s, waiting for it to finish\n", id)
 
 	waitForDownload(t, id, 2*time.Minute)
-	objs, err = tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
+	objs, err = tutils.ListObjects(proxyURL, bucket, cmn.ProviderAIS, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs)) // 21: from cifar10.tgz to cifar30.tgz
 }

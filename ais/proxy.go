@@ -320,14 +320,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	switch apiItems[0] {
 	case cmn.AllBuckets:
 		provider := r.URL.Query().Get(cmn.URLParamProvider)
-
-		normalizedProvider, err := cmn.ProviderFromStr(provider)
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-
-		p.getbucketnames(w, r, normalizedProvider)
+		p.getbucketnames(w, r, provider)
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
 		p.invalmsghdlr(w, r, s)
@@ -807,7 +800,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		bck.Provider = cmn.AIS
+		bck.Provider = cmn.ProviderAIS
 		if err := p.createBucket(&msg, bck); err != nil {
 			errCode := http.StatusInternalServerError
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
@@ -1108,7 +1101,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	bucket := apitems[0]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	if provider == "" {
-		provider = cmn.AIS /*must be ais*/
+		provider = cmn.ProviderAIS /*must be ais*/
 	}
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(p.bmdowner); err != nil {
@@ -1503,7 +1496,7 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 	var (
 		smap  = p.smapowner.get()
 		tout  = config.Timeout.Default
-		bckTo = &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
+		bckTo = &cluster.Bck{Name: bucketTo, Provider: cmn.ProviderAIS}
 	)
 
 	p.bmdowner.Lock()
@@ -2361,7 +2354,7 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
-	bck := &cluster.Bck{Name: renamedBucket, Provider: cmn.AIS}
+	bck := &cluster.Bck{Name: renamedBucket, Provider: cmn.ProviderAIS}
 	if err := bck.Init(p.bmdowner); err != nil {
 		p.bmdowner.Unlock() // already removed via the the very first target calling here..
 		return

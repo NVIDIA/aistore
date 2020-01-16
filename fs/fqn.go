@@ -61,6 +61,8 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 			}
 			parsed.ContentType = item
 		case 1: // cloud provider
+			// TODO: when on-disk structure changes we should just check:
+			// `cmn.IsValidProvider(item)`
 			if item != aisPath && item != cloudPath {
 				err = fmt.Errorf("invalid fqn %s: unrecognized provider %q", fqn, item)
 				return
@@ -68,7 +70,7 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 			// TODO: when on-disk structure changes we should just assign:
 			// `parsed.Provider = item`
 			if item == aisPath {
-				parsed.Provider = cmn.AIS
+				parsed.Provider = cmn.ProviderAIS
 			} else {
 				parsed.Provider = cmn.GCO.Get().CloudProvider
 			}

@@ -471,7 +471,7 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		md.ecUsed = reb.t.GetBowner().Get().IsECUsed()
 	} else {
 		// single bucket rebalance is AIS case only
-		bck := cluster.Bck{Name: buckets[0], Provider: cmn.AIS}
+		bck := cluster.Bck{Name: buckets[0], Provider: cmn.ProviderAIS}
 		props, ok := reb.t.GetBowner().Get().Get(&bck)
 		if !ok {
 			glog.Errorf("Bucket %q not found", bck.Name)

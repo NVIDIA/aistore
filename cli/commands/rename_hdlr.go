@@ -31,7 +31,7 @@ var (
 					ArgsUsage:    bucketOldNewArgument,
 					Flags:        renameCmdsFlags[subcmdRenameBucket],
 					Action:       renameBucketHandler,
-					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.AIS),
+					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.ProviderAIS),
 				},
 				{
 					Name:         subcmdRenameObject,
@@ -39,7 +39,7 @@ var (
 					ArgsUsage:    objectOldNewArgument,
 					Flags:        renameCmdsFlags[subcmdRenameObject],
 					Action:       renameObjectHandler,
-					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, true /* separator */, cmn.AIS),
+					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, true /* separator */, cmn.ProviderAIS),
 				},
 			},
 		},

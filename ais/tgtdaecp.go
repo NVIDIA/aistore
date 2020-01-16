@@ -751,7 +751,7 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 	if len(bucketsToDelete) > 0 {
 		xaction.Registry.AbortAllBuckets(true, bucketsToDelete...)
 		go func(buckets ...string) {
-			b := &cluster.Bck{Provider: cmn.AIS}
+			b := &cluster.Bck{Provider: cmn.ProviderAIS}
 			for _, n := range buckets {
 				b.Name = n
 				cluster.EvictLomCache(b)
@@ -1306,7 +1306,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 }
 
 func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action string) {
-	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
+	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.ProviderAIS}
 	_, ok := t.bmdowner.get().Get(bckTo)
 	if !ok {
 		return
@@ -1327,7 +1327,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 }
 
 func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string, msgInt *actionMsgInternal) (err error) {
-	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
+	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.ProviderAIS}
 	if err := bckTo.Init(t.bmdowner); err != nil {
 		return err
 	}
@@ -1340,7 +1340,7 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 			glog.Error(err) // must not happen at commit time
 			break
 		}
-		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Name, bckTo.Name, cmn.AIS)
+		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Name, bckTo.Name, cmn.ProviderAIS)
 		if err != nil {
 			glog.Error(err) // ditto
 			break

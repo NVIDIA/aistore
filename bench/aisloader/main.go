@@ -239,7 +239,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
-	f.StringVar(&p.provider, "provider", cmn.AIS, "ais - for AIS bucket, cloud - for Cloud bucket; other supported values include \"gcp\" and \"aws\", for Amazon and Google clouds, respectively")
+	f.StringVar(&p.provider, "provider", cmn.ProviderAIS, "ais - for AIS bucket, cloud - for Cloud bucket; other supported values include \"gcp\" and \"aws\", for Amazon and Google clouds, respectively")
 
 	cmn.DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
@@ -540,7 +540,7 @@ func (s *sts) aggregate(other sts) {
 }
 
 func setupBucket(runParams *params) error {
-	if runParams.provider != cmn.AIS || runParams.getConfig {
+	if runParams.provider != cmn.ProviderAIS || runParams.getConfig {
 		return nil
 	}
 	baseParams := tutils.BaseAPIParams(runParams.proxyURL)

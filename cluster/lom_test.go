@@ -109,7 +109,7 @@ var _ = Describe("LOM", func() {
 
 	Describe("FQN Resolution", func() {
 		testObject := "foldr/test-obj.ext"
-		desiredLocalFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObject)
+		desiredLocalFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, testObject)
 
 		When("run for an ais bucket", func() {
 			It("Should populate fields from Bucket and Objname", func() {
@@ -125,7 +125,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Provider()).To(Equal(cmn.ProviderAIS))
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
+				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAIS))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpaths[0]))
 				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketLocalA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
@@ -158,7 +158,7 @@ var _ = Describe("LOM", func() {
 				testPid := strconv.FormatInt(9876, 16)
 				testTieIndex := strconv.FormatInt(1355314332000000, 16)[5:]
 				workObject := "foldr/get.test-obj.ext" + "." + testTieIndex + "." + testPid
-				localFQN := mis[0].MakePathBucketObject(fs.WorkfileType, bucketLocalA, cmn.AIS, workObject)
+				localFQN := mis[0].MakePathBucketObject(fs.WorkfileType, bucketLocalA, cmn.ProviderAIS, workObject)
 
 				lom := &cluster.LOM{T: tMock, FQN: localFQN}
 				err := lom.Init("", "")
@@ -223,7 +223,7 @@ var _ = Describe("LOM", func() {
 				},
 				Entry(
 					"invalid object name",
-					mis[0].MakePathBucketObject(fs.ObjectType, bucketCloudA, cmn.AIS, " ??? "),
+					mis[0].MakePathBucketObject(fs.ObjectType, bucketCloudA, cmn.ProviderAIS, " ??? "),
 				),
 				Entry(
 					"invalid fqn",
@@ -239,11 +239,11 @@ var _ = Describe("LOM", func() {
 				),
 				Entry(
 					"missing bucket",
-					mis[0].MakePathBucketObject(fs.ObjectType, "", cmn.AIS, " ??? "),
+					mis[0].MakePathBucketObject(fs.ObjectType, "", cmn.ProviderAIS, " ??? "),
 				),
 				Entry(
 					"missing object",
-					mis[0].MakePathBucket(fs.ObjectType, bucketLocalA, cmn.AIS),
+					mis[0].MakePathBucket(fs.ObjectType, bucketLocalA, cmn.ProviderAIS),
 				),
 			)
 		})
@@ -253,7 +253,7 @@ var _ = Describe("LOM", func() {
 		Describe("Exists", func() {
 			testFileSize := 123
 			testObjectName := "fstat-foldr/test-obj.ext"
-			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObjectName)
+			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, testObjectName)
 
 			It("should find out that object does not exist", func() {
 				os.Remove(localFQN)
@@ -282,7 +282,7 @@ var _ = Describe("LOM", func() {
 			testObjectName := "foldr/test-obj.ext"
 
 			It("should fetch atime for bucket with LRU disabled", func() {
-				localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObjectName)
+				localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, testObjectName)
 				createTestFile(localFQN, 0)
 				Expect(os.Chtimes(localFQN, desiredAtime, desiredAtime)).ShouldNot(HaveOccurred())
 
@@ -296,7 +296,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Atime()).To(BeEquivalentTo(desiredAtime))
 			})
 			It("should fetch atime for bucket with LRU enabled", func() {
-				localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.AIS, testObjectName)
+				localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.ProviderAIS, testObjectName)
 				createTestFile(localFQN, 0)
 				Expect(os.Chtimes(localFQN, desiredAtime, desiredAtime)).ShouldNot(HaveOccurred())
 
@@ -315,13 +315,13 @@ var _ = Describe("LOM", func() {
 			testFileSize := 456
 			testObjectName := "cksum-foldr/test-obj.ext"
 			// Bucket needs to have checksum enabled
-			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.AIS, testObjectName)
+			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.ProviderAIS, testObjectName)
 			dummyCksm := cmn.NewCksum(cmn.ChecksumXXHash, "dummycksm")
 
 			Describe("CksumComputeIfMissing", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
 					cksum, err := lom.CksumComputeIfMissing()
@@ -331,7 +331,7 @@ var _ = Describe("LOM", func() {
 
 				It("should not compute if not missing", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.AIS, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.ProviderAIS, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
 					lom.SetCksum(dummyCksm)
@@ -361,7 +361,7 @@ var _ = Describe("LOM", func() {
 			Describe("ValidateMetaChecksum", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
 					err := lom.ValidateMetaChecksum()
@@ -440,7 +440,7 @@ var _ = Describe("LOM", func() {
 			Describe("ValidateContentChecksum", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
 					err := lom.ValidateContentChecksum()
@@ -500,7 +500,7 @@ var _ = Describe("LOM", func() {
 			Describe("FromFS", func() {
 				It("should error if file does not exist", func() {
 					testObject := "foldr/test-obj-doesnt-exist.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, testObject)
 					lom := NewBasicLom(noneFQN, tMock)
 
 					Expect(lom.FromFS()).To(HaveOccurred())
@@ -528,7 +528,7 @@ var _ = Describe("LOM", func() {
 		Describe("Version", func() {
 			testObject := "foldr/test-obj.ext"
 			desiredVersion := "9001"
-			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.AIS, testObject)
+			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, testObject)
 
 			It("should be able to get version", func() {
 				lom := filePut(localFQN, 0, tMock)
@@ -552,7 +552,7 @@ var _ = Describe("LOM", func() {
 		findMpath := func(bucket string, defaultLoc bool, ignoreFQNs ...string) string {
 		OuterLoop:
 			for _, mi := range mis {
-				fqn := mi.MakePathBucketObject(fs.ObjectType, bucket, cmn.AIS, testObjectName)
+				fqn := mi.MakePathBucketObject(fs.ObjectType, bucket, cmn.ProviderAIS, testObjectName)
 				for _, ignoreFQN := range ignoreFQNs {
 					if fqn == ignoreFQN {
 						continue OuterLoop
@@ -881,21 +881,21 @@ var _ = Describe("LOM", func() {
 			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomEmpty.Uname()).To(Equal(lomEmpty.Bck().MakeUname(testObject)))
 			Expect(lomEmpty.Provider()).To(Equal(cmn.ProviderAIS))
-			Expect(lomEmpty.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
+			Expect(lomEmpty.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAIS))
 			Expect(lomEmpty.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
 			Expect(lomEmpty.ParsedFQN.Bucket).To(Equal(sameBucketName))
 			Expect(lomEmpty.ParsedFQN.ObjName).To(Equal(testObject))
 			Expect(lomEmpty.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
 			lomLocal := &cluster.LOM{T: tMock, Objname: testObject}
-			err = lomLocal.Init(sameBucketName, cmn.AIS)
+			err = lomLocal.Init(sameBucketName, cmn.ProviderAIS)
 			Expect(err).NotTo(HaveOccurred())
 			err = lomLocal.Load(false)
 			Expect(cmn.IsNotObjExist(err)).To(BeTrue())
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomLocal.Uname()).To(Equal(lomLocal.Bck().MakeUname(testObject)))
 			Expect(lomLocal.Provider()).To(Equal(cmn.ProviderAIS))
-			Expect(lomLocal.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
+			Expect(lomLocal.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAIS))
 			Expect(lomLocal.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
 			Expect(lomLocal.ParsedFQN.Bucket).To(Equal(sameBucketName))
 			Expect(lomLocal.ParsedFQN.ObjName).To(Equal(testObject))

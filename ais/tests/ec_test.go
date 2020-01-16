@@ -1943,7 +1943,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		defer wg.Done()
 
 		// hack: calculate which targets stored a replica
-		bck := &cluster.Bck{Name: bucket, Provider: cmn.AIS}
+		bck := &cluster.Bck{Name: bucket, Provider: cmn.ProviderAIS}
 		targets, err := cluster.HrwTargetList(bck.MakeUname(ecTestDir+objName), initialSmap, o.parityCnt+1)
 		tassert.CheckFatal(t, err)
 

@@ -55,7 +55,7 @@ var _ = Describe("LOM Xattributes", func() {
 			testObjectName = "xattr-foldr/test-obj.ext"
 
 			// Bucket needs to have checksum enabled
-			localFQN = mix.MakePathBucketObject(fs.ObjectType, bucketLocal, cmn.AIS, testObjectName)
+			localFQN = mix.MakePathBucketObject(fs.ObjectType, bucketLocal, cmn.ProviderAIS, testObjectName)
 
 			fqns = []string{
 				copyMpath + "/copy/fqn",
