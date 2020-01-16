@@ -1627,7 +1627,7 @@ components:
       properties:
         confdir:
           type: string
-        cloudprovider:
+        cloud_provider:
           type: string
         mirror:
           type: object

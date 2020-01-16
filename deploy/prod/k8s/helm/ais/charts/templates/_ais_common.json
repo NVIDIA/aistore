@@ -12,7 +12,7 @@
         "validate_obj_move":    {{ .cksum.validate_obj_move }},
         "enable_read_range":    {{ .cksum.enable_read_range }}
 },
-"cloudprovider": {{ .cloudprovider | quote }},
+"cloud_provider": {{ .cloud_provider | quote }},
 "compression": {
         "block_size":   {{ .compression.block_size }},
         "checksum":     {{ .compression.checksum }}

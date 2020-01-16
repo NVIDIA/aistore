@@ -252,7 +252,7 @@ var (
 // nolint:maligned // no performance critical code
 type Config struct {
 	Confdir          string          `json:"confdir"`
-	CloudProvider    string          `json:"cloudprovider"`
+	CloudProvider    string          `json:"cloud_provider"`
 	CloudEnabled     bool            `json:"-"`
 	Mirror           MirrorConf      `json:"mirror"`
 	EC               ECConf          `json:"ec"`
@@ -654,7 +654,7 @@ func (c *Config) TestingEnv() bool {
 
 func (c *Config) Validate() error {
 	if c.CloudProvider != "" && !StringInSlice(c.CloudProvider, CloudProviders) {
-		return fmt.Errorf("invalid `cloudprovider` value (%s), expected one of: %v", c.CloudProvider, CloudProviders)
+		return fmt.Errorf("invalid `cloud_provider` value (%s), expected one of: %v", c.CloudProvider, CloudProviders)
 	}
 	c.CloudEnabled = c.CloudProvider != ""
 

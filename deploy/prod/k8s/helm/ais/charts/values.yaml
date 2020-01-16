@@ -31,7 +31,7 @@ ais_config_common:
     validate_warm_get: false
     validate_obj_move: false
     enable_read_range: false
-  cloudprovider: ""
+  cloud_provider: ""
   compression:
     block_size: 262144
     checksum: false
