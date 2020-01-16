@@ -35,9 +35,7 @@ func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh ch
 		return
 	}
 	lctx.joggers = joggers
-	now := time.Now()
 
-	lctx.dontEvictTime = now.Add(-lctx.config.LRU.DontEvictTime)
 	lctx.heap = &fileInfoMinHeap{}
 	heap.Init(lctx.heap)
 	glog.Infof("%s: evicting %s", lctx.mpathInfo, cmn.B2S(lctx.totalSize, 2))
@@ -64,6 +62,9 @@ func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh ch
 	}
 }
 
+// TODO: `mirroring` and `ec` is not correctly taken into account when
+//  doing LRU. Also, in some places, we can entirely skip walking instead of just
+//  skipping single FQN (eg. LRUEnabled or AllowDELETE checks).
 func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
@@ -83,6 +84,8 @@ func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 		}
 		return nil
 	}
+	cmn.Assert(lctx.contentType == fs.ObjectType) // see also lrumain.go
+
 	lom := &cluster.LOM{T: lctx.ini.T, FQN: fqn}
 	err := lom.Init("", lctx.provider, lctx.config)
 	if err != nil {
@@ -97,31 +100,30 @@ func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	// objects
-	cmn.Assert(lctx.contentType == fs.ObjectType) // see also lrumain.go
-	if lom.Atime().After(lctx.dontEvictTime) {
+	dontEvictTime := time.Now().Add(-lctx.config.LRU.DontEvictTime)
+	if lom.Atime().After(dontEvictTime) {
 		return nil
 	}
 	if lom.IsCopy() {
 		return nil
 	}
-	// includes post-rebalancing cleanup
 	if !lom.IsHRW() {
 		lctx.misplaced = append(lctx.misplaced, lom)
 		return nil
 	}
-	// real objects
 	if err = lom.AllowDELETE(); err != nil {
 		return nil
 	}
-	// partial optimization:
-	// do nothing if the heap's cursize >= totsize &&
-	// the file is more recent then the the heap's newest
-	// full optimization (TODO) entails compacting the heap when its cursize >> totsize
+
+	// Partial optimization: do nothing if the heap's curSize >= totalSize and
+	// the file is more recent then the the heap's newest.
+	// Full optimization: (TODO) entails compacting the heap when its cursize >> totsize
 	if lctx.curSize >= lctx.totalSize && lom.Atime().After(lctx.newest) {
+		// TODO: should we abort walking?
 		return nil
 	}
-	// push and update the context
+
+	// Push LOM into the heap and update the context
 	if glog.V(4) {
 		glog.Infof("old-obj: %s, fqn=%s", lom, fqn)
 	}
@@ -198,15 +200,14 @@ func (lctx *lruCtx) postRemove(capCheck int64, lom *cluster.LOM) (int64, error) 
 	}
 	if capCheck >= capCheckThresh {
 		capCheck = 0
-		usedpct, ok := lctx.ini.GetFSUsedPercentage(lctx.bckTypeDir)
+		usedPct, ok := lctx.ini.GetFSUsedPercentage(lctx.bckTypeDir)
 		lctx.throttle = false
 		lctx.config = cmn.GCO.Get()
 		now := time.Now()
-		lctx.dontEvictTime = now.Add(-lctx.config.LRU.DontEvictTime)
-		if ok && usedpct < lctx.config.LRU.HighWM {
+		if ok && usedPct < lctx.config.LRU.HighWM {
 			if !lctx.mpathInfo.IsIdle(lctx.config, now) {
 				// throttle self
-				ratioCapacity := cmn.Ratio(lctx.config.LRU.HighWM, lctx.config.LRU.LowWM, usedpct)
+				ratioCapacity := cmn.Ratio(lctx.config.LRU.HighWM, lctx.config.LRU.LowWM, usedPct)
 				curr := fs.Mountpaths.GetMpathUtil(lctx.mpathInfo.Path, now)
 				ratioUtilization := cmn.Ratio(lctx.config.Disk.DiskUtilHighWM, lctx.config.Disk.DiskUtilLowWM, curr)
 				if ratioUtilization > ratioCapacity {

@@ -73,7 +73,6 @@ type (
 		bckTypeDir      string
 		contentResolver fs.ContentResolver
 		config          *cmn.Config
-		dontEvictTime   time.Time
 		throttle        bool
 		aborted         bool
 	}
@@ -107,7 +106,7 @@ func InitAndRun(ini *InitLRU) {
 			continue
 		}
 
-		// NOTE: the sequence: Cloud buckets first, ais buckets second
+		// NOTE: the sequence: cloud buckets first, ais buckets second
 		startLRUJoggers := func(provider string) (aborted bool) {
 			joggers := make(map[string]*lruCtx, len(availablePaths))
 			errCh := make(chan struct{}, len(availablePaths))

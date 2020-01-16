@@ -12,6 +12,7 @@ AIStore is all about the performance. Below you will find some tips and tricks t
         - [Block settings](#block-settings)
         - [Benchmarking disk](#benchmarking-disk)
         - [Underlying filesystem](#underlying-filesystem)
+            - [noatime](#noatime)
     - [Virtualization](#virtualization)
 - [Performance testing](#performance-testing)
 
@@ -133,6 +134,21 @@ It seems like generally `deadline` scheduler is a good choice for AIStore, inste
 When you consider using `xfs` keep in mind that:
 
 > According to xfs.org, the CFQ scheduler defeats much of the parallelization in XFS.
+
+##### noatime
+
+One of the most important performance improvements can be achieved by turning off `atime` (access time) updates on the filesystem.
+This can be achieved by specifying `noatime` option when mounting the storage disk.
+
+`atime` updates generate additional write traffic during file access (retrieving the object) which can significantly impact the overall throughput of the system.
+Therefore, we **strongly** advise to use the `noatime` option when mounting a disk.
+
+Important to note is that AIStore will still maintain access time updates but with using more optimized techniques as well as ensuring that it is consistent during object migration.
+
+External links:
+ * http://en.tldp.org/LDP/solrhe/Securing-Optimizing-Linux-RH-Edition-v1.3/chap6sec73.html
+ * https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/global_file_system_2/s2-manage-mountnoatime
+ * https://lonesysadmin.net/2013/12/08/gain-30-linux-disk-performance-noatime-nodiratime-relatime/
 
 ### Virtualization
 

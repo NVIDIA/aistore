@@ -684,125 +684,97 @@ func TestConfig(t *testing.T) {
 
 func TestLRU(t *testing.T) {
 	var (
-		errCh      = make(chan error, 100)
-		usedPct    = int32(100)
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.DefaultBaseAPIParams(t)
+
+		m = &ioContext{
+			t:      t,
+			bucket: clibucket,
+
+			num: 100,
+		}
 	)
 
-	if !isCloudBucket(t, proxyURL, clibucket) {
+	if !isCloudBucket(t, proxyURL, m.bucket) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
-	getRandomFiles(proxyURL, 20, clibucket, "", t, errCh)
-	// The error could be no object in the bucket. In that case, consider it as not an error;
-	// this test will be skipped
-	if len(errCh) != 0 {
-		t.Logf("LRU: need a cloud bucket with at least 20 objects")
-		t.Skip("skipping - cannot test LRU.")
-	}
+	m.saveClusterState()
 
-	//
-	// remember targets' watermarks
-	//
-	smap := getClusterMap(t, proxyURL)
-	lwms := make(map[string]interface{})
-	hwms := make(map[string]interface{})
-	bytesEvictedOrig := make(map[string]int64)
-	filesEvictedOrig := make(map[string]int64)
-	for k, di := range smap.Tmap {
-		cfg := getDaemonConfig(t, proxyURL, di.ID())
-		lwms[k] = cfg.LRU.LowWM
-		hwms[k] = cfg.LRU.HighWM
-	}
-	// add a few more
-	getRandomFiles(proxyURL, 3, clibucket, "", t, errCh)
-	selectErr(errCh, "get", t, true)
-	//
-	// find out min usage %% across all targets
-	//
-	stats := getClusterStats(t, proxyURL)
-	for k, v := range stats.Target {
-		bytesEvictedOrig[k], filesEvictedOrig[k] = getNamedTargetStats(v, "lru.evict.size"), getNamedTargetStats(v, "lru.evict.n")
+	m.cloudPuts()
+	defer m.cloudDelete()
+
+	// Remember targets' watermarks
+	var (
+		usedPct      = int32(100)
+		cluStats     = getClusterStats(t, proxyURL)
+		filesEvicted = make(map[string]int64)
+		bytesEvicted = make(map[string]int64)
+	)
+
+	// Find out min usage % across all targets
+	for k, v := range cluStats.Target {
+		filesEvicted[k] = getNamedTargetStats(v, "lru.evict.n")
+		bytesEvicted[k] = getNamedTargetStats(v, "lru.evict.size")
 		for _, c := range v.Capacity {
 			usedPct = cmn.MinI32(usedPct, c.Usedpct)
 		}
 	}
-	tutils.Logf("LRU: current min space usage in the cluster: %d%%\n", usedPct)
+
 	var (
-		lowwm  = usedPct - 5
-		highwm = usedPct - 1
+		lowWM  = usedPct - 5
+		highWM = usedPct - 2
 	)
-	if int(lowwm) < 3 {
-		t.Logf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
-		t.Skip("skipping - cannot test LRU.")
+	if int(lowWM) < 2 {
+		t.Skipf("The current space usage is too low (%d) for the LRU to be tested", lowWM)
 		return
 	}
+
+	tutils.Logf("LRU: current min space usage in the cluster: %d%%\n", usedPct)
+	tutils.Logf("Setting 'lru.lowm=%d' and 'lru.highwm=%d'\n", lowWM, highWM)
+
+	// All targets: set new watermarks; restore upon exit
 	oconfig := getClusterConfig(t, proxyURL)
-	if t.Failed() {
-		return
-	}
-	//
-	// all targets: set new watermarks; restore upon exit
-	//
-	olruconfig := oconfig.LRU
 	defer func() {
-		oldhwm, _ := cmn.ConvertToString(olruconfig.HighWM)
-		oldlwm, _ := cmn.ConvertToString(olruconfig.LowWM)
+		lowWMStr, _ := cmn.ConvertToString(oconfig.LRU.LowWM)
+		highWMStr, _ := cmn.ConvertToString(oconfig.LRU.HighWM)
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-			"lru.dont_evict_time":   olruconfig.DontEvictTimeStr,
-			"lru.capacity_upd_time": olruconfig.CapacityUpdTimeStr,
-			"lru.highwm":            oldhwm,
-			"lru.lowwm":             oldlwm,
+			"lru.lowwm":             lowWMStr,
+			"lru.highwm":            highWMStr,
+			"lru.dont_evict_time":   oconfig.LRU.DontEvictTimeStr,
+			"lru.capacity_upd_time": oconfig.LRU.CapacityUpdTimeStr,
 		})
-		for k, di := range smap.Tmap {
-			hwmStr, err := cmn.ConvertToString(hwms[k])
-			tassert.CheckFatal(t, err)
-
-			lwmStr, err := cmn.ConvertToString(lwms[k])
-			tassert.CheckFatal(t, err)
-			setDaemonConfig(t, proxyURL, di.ID(), cmn.SimpleKVs{
-				"lru.highwm": hwmStr,
-				"lru.lowwm":  lwmStr,
-			})
-		}
 	}()
-	//
-	// cluster-wide reduce dont-evict-time
-	//
-	lowwmStr, _ := cmn.ConvertToString(lowwm)
-	hwmStr, _ := cmn.ConvertToString(highwm)
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-		"lru.dont_evict_time":   "30s",
-		"lru.capacity_upd_time": "5s",
-		"lru.lowwm":             lowwmStr,
-		"lru.highwm":            hwmStr,
-	})
-	if t.Failed() {
-		return
-	}
-	waitForBucketXactionToStart(t, cmn.ActLRU, "", baseParams)
-	getRandomFiles(proxyURL, 1, clibucket, "", t, errCh)
-	waitForBucketXactionToComplete(t, cmn.ActLRU, "", baseParams, rebalanceTimeout)
 
-	//
-	// results
-	//
-	stats = getClusterStats(t, proxyURL)
-	for k, v := range stats.Target {
-		bytes := getNamedTargetStats(v, "lru.evict.size") - bytesEvictedOrig[k]
-		tutils.Logf("Target %s: evicted %d files - %.2f MB (%dB) total\n",
-			k, getNamedTargetStats(v, "lru.evict.n")-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
-		//
-		// TestingEnv() - cannot reliably verify space utilization by tmpfs
-		//
-		if oconfig.TestFSP.Count > 0 {
-			continue
-		}
-		for mpath, c := range v.Capacity {
-			if c.Usedpct < lowwm-1 || c.Usedpct > lowwm+1 {
-				t.Errorf("Target %s failed to reach lwm %d%%: mpath %s, used space %d%%", k, lowwm, mpath, c.Usedpct)
-			}
+	// Cluster-wide reduce dont-evict-time
+	lowWMStr, _ := cmn.ConvertToString(lowWM)
+	highWMStr, _ := cmn.ConvertToString(highWM)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+		"lru.lowwm":             lowWMStr,
+		"lru.highwm":            highWMStr,
+		"lru.dont_evict_time":   "0s",
+		"lru.capacity_upd_time": "2s",
+	})
+
+	tutils.Logln("starting LRU...")
+	err := api.ExecXaction(baseParams, cmn.ActLRU, cmn.ActXactStart, "")
+	tassert.CheckFatal(t, err)
+	waitForBucketXactionToStart(t, cmn.ActLRU, m.bucket, baseParams)
+	waitForBucketXactionToComplete(t, cmn.ActLRU, m.bucket, baseParams, rebalanceTimeout)
+
+	// Check results
+	tutils.Logln("checking the results...")
+	cluStats = getClusterStats(t, proxyURL)
+	for k, v := range cluStats.Target {
+		diffFilesEvicted := getNamedTargetStats(v, "lru.evict.n") - filesEvicted[k]
+		diffBytesEvicted := getNamedTargetStats(v, "lru.evict.size") - bytesEvicted[k]
+		tutils.Logf(
+			"Target %s: evicted %d files - %s (%dB) total\n",
+			k, diffFilesEvicted, cmn.B2S(diffBytesEvicted, 2), diffBytesEvicted,
+		)
+
+		if diffFilesEvicted == 0 {
+			t.Errorf("Target %s: LRU failed to any evict files", k)
 		}
 	}
 }
@@ -1425,12 +1397,6 @@ func getDaemonConfig(t *testing.T, proxyURL string, nodeID string) (config *cmn.
 	config, err = api.GetDaemonConfig(baseParams, nodeID)
 	tassert.CheckFatal(t, err)
 	return
-}
-
-func setDaemonConfig(t *testing.T, proxyURL string, nodeID string, nvs cmn.SimpleKVs) {
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	err := api.SetDaemonConfig(baseParams, nodeID, nvs)
-	tassert.CheckFatal(t, err)
 }
 
 func setClusterConfig(t *testing.T, proxyURL string, nvs cmn.SimpleKVs) {
