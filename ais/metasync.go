@@ -357,17 +357,17 @@ outer:
 	for r := range res {
 		if r.err == nil {
 			if revsReqType == revsReqSync {
-				y.syncDone(r.si.DaemonID, pairsToSend)
+				y.syncDone(r.si.ID(), pairsToSend)
 			}
 			continue
 		}
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		// in addition to "connection-refused" always retry newTargetID - the joining one
-		if cmn.IsErrConnectionRefused(r.err) || r.si.DaemonID == newTargetID {
+		if cmn.IsErrConnectionRefused(r.err) || r.si.ID() == newTargetID {
 			if refused == nil {
 				refused = make(cluster.NodeMap, 4)
 			}
-			refused[r.si.DaemonID] = r.si
+			refused[r.si.ID()] = r.si
 		} else {
 			cnt++
 		}
@@ -425,12 +425,12 @@ func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused 
 
 	for r := range res {
 		if r.err == nil {
-			delete(refused, r.si.DaemonID)
-			y.syncDone(r.si.DaemonID, pairs)
-			glog.Infof("handle-refused: sync-ed %s", smap.printname(r.si.DaemonID))
+			delete(refused, r.si.ID())
+			y.syncDone(r.si.ID(), pairs)
+			glog.Infof("handle-refused: sync-ed %s", smap.printname(r.si.ID()))
 		} else {
 			glog.Warningf("handle-refused: failing to sync %s, err: %v (%d)",
-				smap.printname(r.si.DaemonID), r.err, r.status)
+				smap.printname(r.si.ID()), r.err, r.status)
 		}
 	}
 }
@@ -510,12 +510,12 @@ func (y *metasyncer) handlePending() (cnt int) {
 	})
 	for r := range res {
 		if r.err == nil {
-			y.syncDone(r.si.DaemonID, pairs)
-			glog.Infof("handle-pending: sync-ed %s", smap.printname(r.si.DaemonID))
+			y.syncDone(r.si.ID(), pairs)
+			glog.Infof("handle-pending: sync-ed %s", smap.printname(r.si.ID()))
 		} else {
 			cnt++
 			glog.Warningf("handle-pending: failing to sync %s, err: %v (%d)",
-				smap.printname(r.si.DaemonID), r.err, r.status)
+				smap.printname(r.si.ID()), r.err, r.status)
 		}
 	}
 	return
@@ -533,7 +533,7 @@ func (y *metasyncer) checkPrimary() bool {
 	}
 	lead := "?"
 	if smap.ProxySI != nil {
-		lead = smap.ProxySI.DaemonID
+		lead = smap.ProxySI.ID()
 	}
 	glog.Errorf("%s self is not %s (primary=%s, %s) - failing the 'sync' request", y.p.si, reason, lead, smap)
 	return false

@@ -49,7 +49,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		defer lom.Uncache()
 	}
 
-	if si.DaemonID != ri.t.si.DaemonID {
+	if si.ID() != ri.t.si.ID() {
 		return ri.putRemote(lom, objnameTo, si)
 	}
 
@@ -118,7 +118,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objnameTo string, si *cluster.
 	// PUT object into different target
 	query := url.Values{}
 	query.Add(cmn.URLParamProvider, ri.bckTo.Provider)
-	query.Add(cmn.URLParamProxyID, ri.smap.ProxySI.DaemonID)
+	query.Add(cmn.URLParamProxyID, ri.smap.ProxySI.ID())
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   si.URL(cmn.NetworkIntraData),

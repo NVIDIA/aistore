@@ -87,7 +87,7 @@ func (r *XactBckEncode) init() (int, error) {
 			mpathInfo: mpathInfo,
 			config:    config,
 			smap:      r.t.GetSowner().Get(),
-			daemonID:  r.t.Snode().DaemonID,
+			daemonID:  r.t.Snode().ID(),
 			stopCh:    cmn.NewStopCh(),
 		}
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
@@ -178,7 +178,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	// an object replica - skip EC
-	if j.daemonID != si.DaemonID {
+	if j.daemonID != si.ID() {
 		return nil
 	}
 

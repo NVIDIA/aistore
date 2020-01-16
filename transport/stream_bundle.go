@@ -105,9 +105,9 @@ func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl Client, sb
 		listeners.Reg(sb)
 	}
 	if !sb.extra.compressed() {
-		sb.lid = fmt.Sprintf("sb[%s=>%s/%s]", sb.lsnode.DaemonID, sb.network, sb.trname)
+		sb.lid = fmt.Sprintf("sb[%s=>%s/%s]", sb.lsnode.ID(), sb.network, sb.trname)
 	} else {
-		sb.lid = fmt.Sprintf("sb[%s=>%s/%s[%s]]", sb.lsnode.DaemonID, sb.network, sb.trname,
+		sb.lid = fmt.Sprintf("sb[%s=>%s/%s[%s]]", sb.lsnode.ID(), sb.network, sb.trname,
 			cmn.B2S(int64(sb.extra.Config.Compression.BlockMaxSize), 0))
 	}
 	return
@@ -158,7 +158,7 @@ func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.
 	} else {
 		// first, find out whether the designated streams are present
 		for _, di := range nodes {
-			if _, ok := streams[di.DaemonID]; !ok {
+			if _, ok := streams[di.ID()]; !ok {
 				err = fmt.Errorf("%s: destination mismatch: stream => %s %s", sb, di, cmn.DoesNotExist)
 				return
 			}
@@ -168,7 +168,7 @@ func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.
 		}
 		// second, do send. Same comment wrt reopening.
 		for _, di := range nodes {
-			robin := streams[di.DaemonID]
+			robin := streams[di.ID()]
 			if err = sb.sendOne(obj, roc, robin, reopen); err != nil {
 				return
 			}
@@ -301,7 +301,7 @@ func (sb *StreamBundle) Resync() {
 		nbundle[id] = robin
 	}
 	for id, si := range added {
-		if id == sb.lsnode.DaemonID {
+		if id == sb.lsnode.ID() {
 			continue
 		}
 		toURL := si.URL(sb.network) + cmn.URLPath(cmn.Version, cmn.Transport, sb.trname) // NOTE: destination URL
@@ -320,7 +320,7 @@ func (sb *StreamBundle) Resync() {
 		nbundle[id] = nrobin
 	}
 	for id := range removed {
-		if id == sb.lsnode.DaemonID {
+		if id == sb.lsnode.ID() {
 			continue
 		}
 		orobin := nbundle[id]

@@ -75,15 +75,15 @@ func (m *smapX) isPrimary(self *cluster.Snode) bool {
 	if !m.isValid() {
 		return false
 	}
-	return m.ProxySI.DaemonID == self.DaemonID
+	return m.ProxySI.ID() == self.ID()
 }
 
 func (m *smapX) isPresent(si *cluster.Snode) bool {
 	if si.IsProxy() {
-		psi := m.GetProxy(si.DaemonID)
+		psi := m.GetProxy(si.ID())
 		return psi != nil
 	}
-	tsi := m.GetTarget(si.DaemonID)
+	tsi := m.GetTarget(si.ID())
 	return tsi != nil
 }
 
@@ -108,24 +108,24 @@ func (m *smapX) containsID(id string) bool {
 }
 
 func (m *smapX) addTarget(tsi *cluster.Snode) {
-	if m.containsID(tsi.DaemonID) {
-		cmn.AssertMsg(false, "FATAL: duplicate daemon ID: '"+tsi.DaemonID+"'")
+	if m.containsID(tsi.ID()) {
+		cmn.AssertMsg(false, "FATAL: duplicate daemon ID: '"+tsi.ID()+"'")
 	}
-	m.Tmap[tsi.DaemonID] = tsi
+	m.Tmap[tsi.ID()] = tsi
 	m.Version++
 }
 
 func (m *smapX) addProxy(psi *cluster.Snode) {
-	if m.containsID(psi.DaemonID) {
-		cmn.AssertMsg(false, "FATAL: duplicate daemon ID: '"+psi.DaemonID+"'")
+	if m.containsID(psi.ID()) {
+		cmn.AssertMsg(false, "FATAL: duplicate daemon ID: '"+psi.ID()+"'")
 	}
-	m.Pmap[psi.DaemonID] = psi
+	m.Pmap[psi.ID()] = psi
 	m.Version++
 }
 
 func (m *smapX) delTarget(sid string) {
 	if m.GetTarget(sid) == nil {
-		cmn.AssertMsg(false, fmt.Sprintf("FATAL: target: %s is not in the smap: %s", sid, m.pp()))
+		cmn.AssertMsg(false, fmt.Sprintf("FATAL: target: %s is not in: %s", sid, m.pp()))
 	}
 	delete(m.Tmap, sid)
 	m.Version++
@@ -133,7 +133,7 @@ func (m *smapX) delTarget(sid string) {
 
 func (m *smapX) delProxy(pid string) {
 	if m.GetProxy(pid) == nil {
-		cmn.AssertMsg(false, fmt.Sprintf("FATAL: proxy: %s is not in the smap: %s", pid, m.pp()))
+		cmn.AssertMsg(false, fmt.Sprintf("FATAL: proxy: %s is not in: %s", pid, m.pp()))
 	}
 	delete(m.Pmap, pid)
 	delete(m.NonElects, pid)
@@ -141,7 +141,7 @@ func (m *smapX) delProxy(pid string) {
 }
 
 func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) {
-	id := nsi.DaemonID
+	id := nsi.ID()
 	if nsi.IsProxy() {
 		if m.GetProxy(id) != nil {
 			m.delProxy(id)
@@ -186,8 +186,28 @@ func (m *smapX) deepCopy(dst *smapX) {
 	}
 }
 
-func (m *smapX) merge(dst *smapX) (added int) {
+func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
+	var osi *cluster.Snode
+	f := func(nsi *cluster.Snode) { // detect duplicate URLs
+		if osi, err = dst.IsDuplicateURL(nsi); err != nil {
+			glog.Error(err)
+			if !override {
+				return
+			}
+			err = nil
+			glog.Errorf("Warning: removing (old/obsolete) %s from future Smaps", osi)
+			if osi.IsProxy() {
+				dst.delProxy(osi.ID())
+			} else {
+				dst.delTarget(osi.ID())
+			}
+		}
+	}
 	for id, si := range m.Tmap {
+		f(si)
+		if err != nil {
+			return
+		}
 		if _, ok := dst.Tmap[id]; !ok {
 			if _, ok = dst.Pmap[id]; !ok {
 				dst.Tmap[id] = si
@@ -196,6 +216,10 @@ func (m *smapX) merge(dst *smapX) (added int) {
 		}
 	}
 	for id, si := range m.Pmap {
+		f(si)
+		if err != nil {
+			return
+		}
 		if _, ok := dst.Pmap[id]; !ok {
 			if _, ok = dst.Tmap[id]; !ok {
 				dst.Pmap[id] = si
@@ -313,7 +337,7 @@ func (r *smapowner) persist(newSmap *smapX) error {
 	}
 	smapPathName := filepath.Join(config.Confdir, smapFname)
 	if err := cmn.LocalSave(smapPathName, newSmap, true /* compression */); err != nil {
-		glog.Errorf("failed writing smapX %s, err: %v", smapPathName, err)
+		glog.Errorf("error writing Smap to %s: %v", smapPathName, err)
 	}
 	return nil
 }
@@ -345,7 +369,13 @@ func newSnode(id, proto, daeType string, publicAddr, intraControlAddr, intraData
 			DirectURL:  proto + "://" + intraDataAddr.String(),
 		}
 	}
-	snode = &cluster.Snode{DaemonID: id, DaemonType: daeType, PublicNet: publicNet, IntraControlNet: intraControlNet, IntraDataNet: intraDataNet}
+	snode = &cluster.Snode{
+		DaemonID:        id,
+		DaemonType:      daeType,
+		PublicNet:       publicNet,
+		IntraControlNet: intraControlNet,
+		IntraDataNet:    intraDataNet,
+	}
 	snode.Digest()
 	return
 }

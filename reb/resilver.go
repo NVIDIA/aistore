@@ -138,7 +138,7 @@ func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if rj.skipGlobMisplaced {
 		smap := t.GetSowner().Get()
 		if tsi, err := cluster.HrwTarget(lom.Uname(), smap); err == nil {
-			if tsi.DaemonID != t.Snode().DaemonID {
+			if tsi.ID() != t.Snode().ID() {
 				return nil
 			}
 		}

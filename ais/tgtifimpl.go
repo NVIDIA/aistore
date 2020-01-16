@@ -266,9 +266,9 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		return
 	}
 	// remote
-	if si.DaemonID != t.si.DaemonID {
+	if si.ID() != t.si.ID() {
 		if verbose {
-			glog.Infof("promote/PUT %s => %s @ %s", srcFQN, lom, si.DaemonID)
+			glog.Infof("promote/PUT %s => %s @ %s", srcFQN, lom, si.ID())
 		}
 		buf, slab := daemon.mm.AllocDefault()
 		lom.FQN = srcFQN
@@ -358,7 +358,7 @@ func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) ([]byte, int, error
 	// pull the data
 	query := url.Values{}
 	header := make(http.Header)
-	header.Set(cmn.HeaderCallerID, t.si.DaemonID)
+	header.Set(cmn.HeaderCallerID, t.si.ID())
 	query.Add(cmn.URLParamRebData, "true")
 	args := callArgs{
 		si: si,

@@ -221,7 +221,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 
 	nodes := make([]string, 0, len(targets))
 	for _, tgt := range targets {
-		nodes = append(nodes, tgt.DaemonID)
+		nodes = append(nodes, tgt.ID())
 	}
 
 	// broadcast the replica to the targets
@@ -558,7 +558,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			mcopy.CksumType, mcopy.CksumValue = slices[i].cksum.Get()
 		}
 
-		err = c.parent.writeRemote([]string{targets[i+1].DaemonID}, &lom, src, nil)
+		err = c.parent.writeRemote([]string{targets[i+1].ID()}, &lom, src, nil)
 		if err != nil {
 			ch <- err
 			return

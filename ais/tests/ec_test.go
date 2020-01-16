@@ -1932,7 +1932,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	hasTarget := func(targets cluster.Nodes, target *cluster.Snode) bool {
 		for _, tr := range targets {
-			if tr.DaemonID == target.DaemonID {
+			if tr.ID() == target.ID() {
 				return true
 			}
 		}
@@ -1954,7 +1954,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		// HACK: this tells directory of target based on last number of it's port
 		// This is usually true, but undefined if target has > 9 nodes
 		// as the last digit becomes ambiguous
-		targetDir := mainTarget.DaemonID[len(mainTarget.DaemonID)-1]
+		targetDir := mainTarget.ID()[len(mainTarget.ID())-1]
 
 		for p := range replicas {
 			if strings.Contains(p, path.Join(rootDir, string(targetDir))) {
@@ -2080,12 +2080,12 @@ func TestECEmergencyMpath(t *testing.T) {
 	// 2. Disable a random mountpath
 	mpathID := o.rnd.Intn(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
-	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.DaemonID)
+	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.ID())
 	err = api.DisableMountpath(baseParams, removeTarget.ID(), removeMpath)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		// Enable mountpah
-		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.DaemonID)
+		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
 		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 	}()
@@ -2222,12 +2222,12 @@ func TestECRebalance(t *testing.T) {
 	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
 	tassert.CheckFatal(t, err)
 	if len(lostFSList.Available) < 2 {
-		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtLost.DaemonID, len(lostFSList.Available))
+		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtLost.ID(), len(lostFSList.Available))
 	}
 	swapFSList, err := api.GetMountpaths(baseParams, tgtSwap)
 	tassert.CheckFatal(t, err)
 	if len(swapFSList.Available) < 2 {
-		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtSwap.DaemonID, len(swapFSList.Available))
+		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtSwap.ID(), len(swapFSList.Available))
 	}
 
 	// make troubles in mpaths
@@ -2236,7 +2236,7 @@ func TestECRebalance(t *testing.T) {
 	//    case of the object is replicated)
 	if o.parityCnt > 1 {
 		lostPath := lostFSList.Available[0]
-		tutils.Logf("Removing mpath %q of target %s\n", lostPath, tgtLost.DaemonID)
+		tutils.Logf("Removing mpath %q of target %s\n", lostPath, tgtLost.ID())
 		tutils.CheckPathExists(t, lostPath, true /*dir*/)
 		deleteAllFiles(t, lostPath)
 	}
@@ -2244,12 +2244,12 @@ func TestECRebalance(t *testing.T) {
 	// 2. Delete one, and rename the second: simulate mpath dead + new mpath attached
 	// delete obj1 & delete meta1; rename obj2 -> ob1, and meta2 -> meta1
 	swapPathObj1 := swapFSList.Available[0]
-	tutils.Logf("Removing mpath %q of target %s\n", swapPathObj1, tgtSwap.DaemonID)
+	tutils.Logf("Removing mpath %q of target %s\n", swapPathObj1, tgtSwap.ID())
 	tutils.CheckPathExists(t, swapPathObj1, true /*dir*/)
 	deleteAllFiles(t, swapPathObj1)
 
 	swapPathObj2 := swapFSList.Available[1]
-	tutils.Logf("Renaming mpath %q -> %q of target %s\n", swapPathObj2, swapPathObj1, tgtSwap.DaemonID)
+	tutils.Logf("Renaming mpath %q -> %q of target %s\n", swapPathObj2, swapPathObj1, tgtSwap.ID())
 	tutils.CheckPathExists(t, swapPathObj2, true /*dir*/)
 	moveAllFiles(t, swapPathObj2, swapPathObj1)
 
@@ -2458,7 +2458,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 	tgtLost := tgtList[0]
 
 	tutils.Logf("Unregistering %s...\n", tgtLost.ID())
-	err = tutils.UnregisterNode(proxyURL, tgtLost.DaemonID)
+	err = tutils.UnregisterNode(proxyURL, tgtLost.ID())
 	tassert.CheckFatal(t, err)
 	registered := false
 	smap = getClusterMap(t, proxyURL)

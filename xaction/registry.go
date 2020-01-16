@@ -853,7 +853,7 @@ func (r *bckSummaryTask) Run() {
 	}
 
 	// When we are target which should not list CB we should only list cached objects.
-	shouldListCB := si.DaemonID == r.t.Snode().DaemonID && !r.msg.Cached
+	shouldListCB := si.ID() == r.t.Snode().ID() && !r.msg.Cached
 	if !shouldListCB {
 		r.msg.Cached = true
 	}

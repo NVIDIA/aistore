@@ -737,19 +737,19 @@ func TestDownloadMpathEvents(t *testing.T) {
 
 	mpathID := cmn.NowRand().Intn(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
-	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.DaemonID)
+	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.ID())
 	err = api.DisableMountpath(baseParams, removeTarget.ID(), removeMpath)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
 		// Enable mountpah
-		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.DaemonID)
+		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
 		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 	}()
 
 	// wait until downloader is aborted
-	waitForDownloaderToFinish(t, baseParams, removeTarget.DaemonID, time.Second*30)
+	waitForDownloaderToFinish(t, baseParams, removeTarget.ID(), time.Second*30)
 	// downloader finished on required target, safe to abort the rest
 	tutils.Logf("Aborting download job %s\n", id)
 	err = api.DownloadAbort(baseParams, id)

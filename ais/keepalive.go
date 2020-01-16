@@ -145,7 +145,7 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 	if smap == nil || !smap.isValid() {
 		return
 	}
-	if stopped = tkr.register(tkr.t, smap.ProxySI.DaemonID, tkr.t.si.Name()); stopped {
+	if stopped = tkr.register(tkr.t, smap.ProxySI.ID(), tkr.t.si.Name()); stopped {
 		tkr.t.onPrimaryProxyFailure()
 	}
 	return
@@ -167,11 +167,11 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 	if smap.isPrimary(pkr.p.si) {
 		return pkr.pingAllOthers()
 	}
-	if !pkr.isTimeToPing(smap.ProxySI.DaemonID) {
+	if !pkr.isTimeToPing(smap.ProxySI.ID()) {
 		return
 	}
 
-	if stopped = pkr.register(pkr.p, smap.ProxySI.DaemonID, pkr.p.si.Name()); stopped {
+	if stopped = pkr.register(pkr.p, smap.ProxySI.ID(), pkr.p.si.Name()); stopped {
 		pkr.p.onPrimaryProxyFailure()
 	}
 	return
@@ -197,7 +197,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	)
 	for _, daemons := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for sid, si := range daemons {
-			if sid == pkr.p.si.DaemonID {
+			if sid == pkr.p.si.ID() {
 				continue
 			}
 			// Skip pinging other daemons until they time out.
@@ -215,7 +215,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 					stoppedCh <- struct{}{}
 				}
 				if !ok {
-					toRemoveCh <- si.DaemonID
+					toRemoveCh <- si.ID()
 				}
 				if lat != cmn.DefaultTimeout {
 					latencyCh <- lat
@@ -291,7 +291,7 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 }
 
 func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delta time.Duration) {
-	timeout := time.Duration(pkr.timeoutStatsForDaemon(to.DaemonID).timeout)
+	timeout := time.Duration(pkr.timeoutStatsForDaemon(to.ID()).timeout)
 	args := callArgs{
 		si: to,
 		req: cmn.ReqArgs{
@@ -304,7 +304,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 	t := time.Now()
 	res := pkr.p.call(args)
 	delta = time.Since(t)
-	pkr.updateTimeoutForDaemon(to.DaemonID, delta)
+	pkr.updateTimeoutForDaemon(to.ID(), delta)
 	pkr.statsT.Add(stats.KeepAliveLatency, int64(delta))
 
 	if res.err == nil {
@@ -318,12 +318,12 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, stopped bool) {
 	var (
 		i       int
-		timeout = time.Duration(pkr.timeoutStatsForDaemon(si.DaemonID).timeout)
+		timeout = time.Duration(pkr.timeoutStatsForDaemon(si.ID()).timeout)
 		ticker  = time.NewTicker(cmn.KeepaliveRetryDuration())
 	)
 	defer ticker.Stop()
 	for {
-		if !pkr.isTimeToPing(si.DaemonID) {
+		if !pkr.isTimeToPing(si.ID()) {
 			return true, false
 		}
 		select {
@@ -331,7 +331,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 			t := time.Now()
 			args.timeout = timeout
 			res := pkr.p.call(args)
-			timeout = pkr.updateTimeoutForDaemon(si.DaemonID, time.Since(t))
+			timeout = pkr.updateTimeoutForDaemon(si.ID(), time.Since(t))
 			if res.err == nil {
 				return true, false
 			}

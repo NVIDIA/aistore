@@ -27,7 +27,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 
 	si, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	sid = si.DaemonID
+	sid = si.ID()
 
 	url := smap.Tmap[sid].URL(cmn.NetworkPublic)
 	baseParams := tutils.BaseAPIParams(url)

@@ -157,7 +157,7 @@ func (reb *Manager) ecFixLocal(md *globArgs) error {
 	}
 
 	reb.stage.Store(rebStageECGlobRepair)
-	reb.setStage(reb.t.Snode().DaemonID, rebStageECGlobRepair)
+	reb.setStage(reb.t.Snode().ID(), rebStageECGlobRepair)
 	if cnt := reb.bcast(md, reb.waitECLocalReb); cnt != 0 {
 		return fmt.Errorf("%d targets failed to complete local rebalance", cnt)
 	}
@@ -174,7 +174,7 @@ func (reb *Manager) ecFixGlobal(md *globArgs) error {
 	}
 
 	reb.stage.Store(rebStageECCleanup)
-	reb.setStage(reb.t.Snode().DaemonID, rebStageECCleanup)
+	reb.setStage(reb.t.Snode().ID(), rebStageECCleanup)
 	if cnt := reb.bcast(md, reb.waitECCleanup); cnt != 0 {
 		return fmt.Errorf("%d targets failed to complete local rebalance", cnt)
 	}
@@ -206,7 +206,7 @@ func (reb *Manager) globalRebRunEC(md *globArgs) error {
 		return err
 	}
 
-	glog.Infof("[%s] RebalanceEC done", reb.t.Snode().DaemonID)
+	glog.Infof("[%s] RebalanceEC done", reb.t.Snode().ID())
 	return nil
 }
 
@@ -525,7 +525,7 @@ func (reb *Manager) GlobECDataStatus() (body []byte, status int) {
 	}
 
 	// ask rebalance manager the list of all local slices
-	slices, ok := reb.ecReb.nodeData(reb.t.Snode().DaemonID)
+	slices, ok := reb.ecReb.nodeData(reb.t.Snode().ID())
 	// no local slices found. It is possible if the number of object is small
 	if !ok {
 		return nil, http.StatusNoContent
@@ -607,7 +607,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if err != nil {
 		return err
 	}
-	if tsi.DaemonID == t.Snode().DaemonID {
+	if tsi.ID() == t.Snode().ID() {
 		return nil
 	}
 	nver := t.GetSowner().Get().Version
@@ -689,7 +689,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 		Bucket:   lom.Bucket(),
 		Provider: lom.Provider(),
 		ObjName:  lom.Objname,
-		Opaque:   []byte(rj.m.t.Snode().DaemonID), // self == src
+		Opaque:   []byte(rj.m.t.Snode().ID()), // self == src
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       lom.Size(),
 			Atime:      lom.Atime().UnixNano(),

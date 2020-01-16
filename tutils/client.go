@@ -639,7 +639,7 @@ func UnregisterNode(proxyURL, sid string) error {
 	target, ok := smap.Tmap[sid]
 	var idsToIgnore []string
 	if ok {
-		idsToIgnore = []string{target.DaemonID}
+		idsToIgnore = []string{target.ID()}
 	}
 	if err := api.UnregisterNode(baseParams, sid); err != nil {
 		return err

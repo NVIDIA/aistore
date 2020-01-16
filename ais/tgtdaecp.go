@@ -122,7 +122,7 @@ func (t *targetrunner) unregister() (int, error) {
 		si: smap.ProxySI,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.DaemonID),
+			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.ID()),
 		},
 		timeout: cmn.DefaultTimeout,
 	}
@@ -282,7 +282,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	}
 	t.smapowner.Lock()
 	smap = t.smapowner.get()
-	if smap.ProxySI.DaemonID != psi.DaemonID {
+	if smap.ProxySI.ID() != psi.ID() {
 		clone := smap.clone()
 		clone.ProxySI = psi
 		if err := t.smapowner.persist(clone); err != nil {
@@ -801,7 +801,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 	}
 	glog.Infof("%s: receive %s%s, primary %s%s", tname, newsmap.StringEx(), from, newsmap.ProxySI.Name(), s)
 	for id, si := range newsmap.Tmap { // log
-		if id == t.si.DaemonID {
+		if id == t.si.ID() {
 			iPresent = true
 			glog.Infof("%s <= self", si.Name())
 		} else if id == newTargetID {
@@ -815,7 +815,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		glog.Warningf("Error: %s\n%s", err, newsmap.pp())
 		return
 	}
-	if newTargetID != "" && newTargetID != t.si.DaemonID && !newTargetPresent {
+	if newTargetID != "" && newTargetID != t.si.ID() && !newTargetPresent {
 		err = fmt.Errorf("not finding %s(new target) in the new v%d", newTargetID, newsmap.version())
 		glog.Warningf("Error: %s\n%s", err, newsmap.pp())
 		return
@@ -1406,7 +1406,7 @@ func (t *targetrunner) validateBckProps(bck *cluster.Bck, msgInt *actionMsgInter
 		if int(nprops.Mirror.Copies) > mpathCount {
 			return fmt.Errorf(
 				"number of mountpaths (%d) is not sufficient for requested number of copies (%d) on target %q",
-				mpathCount, nprops.Mirror.Copies, t.si.DaemonID,
+				mpathCount, nprops.Mirror.Copies, t.si.ID(),
 			)
 		}
 

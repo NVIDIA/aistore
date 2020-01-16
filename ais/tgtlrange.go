@@ -275,7 +275,7 @@ func (t *targetrunner) listOperation(r *http.Request, bck *cluster.Bck, listMsg 
 		if err != nil {
 			return err
 		}
-		if si.DaemonID == t.si.DaemonID {
+		if si.ID() == t.si.ID() {
 			objs = append(objs, obj)
 		}
 	}

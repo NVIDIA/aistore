@@ -559,7 +559,7 @@ func (h *httprunner) call(args callArgs) callResult {
 	)
 
 	if args.si != nil {
-		sid = args.si.DaemonID
+		sid = args.si.ID()
 	}
 
 	cmn.Assert(args.si != nil || args.req.Base != "") // either we have si or base
@@ -607,7 +607,7 @@ func (h *httprunner) call(args callArgs) callResult {
 		return callResult{args.si, outjson, nil, err, details, status}
 	}
 
-	req.Header.Set(cmn.HeaderCallerID, h.si.DaemonID)
+	req.Header.Set(cmn.HeaderCallerID, h.si.ID())
 	req.Header.Set(cmn.HeaderCallerName, h.si.Name())
 	if smap := h.smapowner.get(); smap.isValid() {
 		req.Header.Set(cmn.HeaderCallerSmapVersion, strconv.FormatInt(smap.version(), 10))
@@ -762,7 +762,7 @@ func (h *httprunner) bcast(bargs bcastArgs) chan callResult {
 
 	for _, nodeMap := range bargs.nodes {
 		for sid, serverInfo := range nodeMap {
-			if sid == h.si.DaemonID {
+			if sid == h.si.ID() {
 				continue
 			}
 			wg.Add(1)
@@ -1164,7 +1164,7 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 		url, proxysi = config.Proxy.PrimaryURL, nil
 		return
 	}
-	if smap.ProxySI.DaemonID != "" {
+	if smap.ProxySI.ID() != "" {
 		url, proxysi = smap.ProxySI.IntraControlNet.DirectURL, smap.ProxySI
 		return
 	}

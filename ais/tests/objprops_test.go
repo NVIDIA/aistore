@@ -232,8 +232,8 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 
 	removeTarget := tutils.ExtractTargetNodes(smap)[0]
 
-	tutils.Logf("Removing a target: %s\n", removeTarget.DaemonID)
-	err := tutils.UnregisterNode(proxyURL, removeTarget.DaemonID)
+	tutils.Logf("Removing a target: %s\n", removeTarget.ID())
+	err := tutils.UnregisterNode(proxyURL, removeTarget.ID())
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
@@ -244,7 +244,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	)
 	tassert.CheckError(t, err)
 
-	tutils.Logf("Target %s [%s] is removed\n", removeTarget.DaemonID, removeTarget.URL(cmn.NetworkPublic))
+	tutils.Logf("Target %s [%s] is removed\n", removeTarget.ID(), removeTarget.URL(cmn.NetworkPublic))
 
 	// rewrite objects and compare versions - they should change
 	newobjs := propsUpdateObjects(t, proxyURL, bucket, objects, msg, versionEnabled, bckIsAIS)

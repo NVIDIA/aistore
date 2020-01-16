@@ -176,7 +176,7 @@ func (t *targetrunner) Run() error {
 	t.bmdowner.init() // BMD
 	smap := newSmap() // Smap
 	if err := t.smapowner.load(smap, config); err == nil {
-		smap.Tmap[t.si.DaemonID] = t.si
+		smap.Tmap[t.si.ID()] = t.si
 	} else if !os.IsNotExist(err) {
 		glog.Errorf("%s: cannot load Smap (- corruption?), err: %v", tname, err)
 	}
@@ -557,7 +557,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		if filePath, err, errCode := t.doAppend(r, lom, started); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		} else {
-			handle := combineAppendHandle(t.si.DaemonID, filePath)
+			handle := combineAppendHandle(t.si.ID(), filePath)
 			w.Header().Set(cmn.HeaderAppendHandle, handle)
 		}
 	}
@@ -1293,7 +1293,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 
-	if params.Target != "" && params.Target != t.si.DaemonID {
+	if params.Target != "" && params.Target != t.si.ID() {
 		glog.Errorf("%s: unexpected target ID %s mismatch", tname, params.Target)
 	}
 

@@ -194,7 +194,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	var (
 		config   = cmn.GCO.Get()
 		localURL = w.t.Snode().URL(cmn.NetworkPublic)
-		localID  = w.t.Snode().DaemonID
+		localID  = w.t.Snode().ID()
 		smap     = w.t.GetSowner().Get()
 
 		needURL     = w.msg.WantProp(cmn.GetTargetURL)
@@ -206,7 +206,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 
 	for _, e := range bucketList.Entries {
 		si, _ := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)
-		if si.DaemonID != localID {
+		if si.ID() != localID {
 			continue
 		}
 

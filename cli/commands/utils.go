@@ -164,7 +164,7 @@ func fillMap() (*cluster.Smap, error) {
 		return nil, err
 	}
 	// Get the primary proxy's smap
-	smapPrimary, err := api.GetNodeClusterMap(defaultAPIParams, smap.ProxySI.DaemonID)
+	smapPrimary, err := api.GetNodeClusterMap(defaultAPIParams, smap.ProxySI.ID())
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +296,7 @@ func getPrefixFromPrimary() (string, error) {
 		return "", err
 	}
 
-	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.ProxySI.DaemonID)
+	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.ProxySI.ID())
 	if err != nil {
 		return "", err
 	}

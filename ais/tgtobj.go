@@ -461,7 +461,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 		doubleCheck = true
 	}
 	gfnActive = goi.t.gfn.global.active()
-	if running && tsi.DaemonID != goi.t.si.DaemonID {
+	if running && tsi.ID() != goi.t.si.ID() {
 		if goi.t.LookupRemoteSingle(goi.lom, tsi) {
 			gfnNode = tsi
 			goto gfn

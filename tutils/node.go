@@ -17,7 +17,7 @@ import (
 )
 
 func RegisterNode(proxyURL string, targetNode *cluster.Snode, smap *cluster.Smap) error {
-	_, ok := smap.Tmap[targetNode.DaemonID]
+	_, ok := smap.Tmap[targetNode.ID()]
 	baseParams := BaseAPIParams(proxyURL)
 	if err := api.RegisterNode(baseParams, targetNode); err != nil {
 		return err
@@ -33,8 +33,8 @@ func RegisterNode(proxyURL string, targetNode *cluster.Snode, smap *cluster.Smap
 
 func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
 	removeTarget := ExtractTargetNodes(smap)[0]
-	Logf("Removing target %s\n", removeTarget.DaemonID)
-	err := UnregisterNode(proxyURL, removeTarget.DaemonID)
+	Logf("Removing target %s\n", removeTarget.ID())
+	err := UnregisterNode(proxyURL, removeTarget.ID())
 	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(
 		proxyURL,
@@ -161,7 +161,7 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 			var proxyID string
 			for _, p := range smap.Pmap {
 				if p.PublicNet.DirectURL == proxyURL {
-					proxyID = p.DaemonID
+					proxyID = p.ID()
 				}
 			}
 			err = WaitMapVersionSync(timeUntil, smap, origVersion, []string{mockDaemonID, proxyID})
@@ -193,13 +193,13 @@ func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64
 
 	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore []string) (string, string, bool) {
 		for _, d := range smap.Pmap {
-			if !inList(d.DaemonID, idsToIgnore) {
-				return d.DaemonID, d.PublicNet.DirectURL, true
+			if !inList(d.ID(), idsToIgnore) {
+				return d.ID(), d.PublicNet.DirectURL, true
 			}
 		}
 		for _, d := range smap.Tmap {
-			if !inList(d.DaemonID, idsToIgnore) {
-				return d.DaemonID, d.PublicNet.DirectURL, true
+			if !inList(d.ID(), idsToIgnore) {
+				return d.ID(), d.PublicNet.DirectURL, true
 			}
 		}
 

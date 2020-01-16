@@ -34,7 +34,7 @@ func (p *proxyrunner) bootstrap() {
 	)
 	// 1: load a local copy and try to utilize it for discovery
 	smap = newSmap()
-	smap.Pmap[p.si.DaemonID] = p.si
+	smap.Pmap[p.si.ID()] = p.si
 	if err := p.smapowner.load(smap, config); err == nil {
 		loaded = true
 	}
@@ -167,7 +167,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// 1: init Smap to accept reg-s
 	p.smapowner.Lock()
-	smap.Pmap[p.si.DaemonID] = p.si
+	smap.Pmap[p.si.ID()] = p.si
 	smap.ProxySI = p.si
 	p.smapowner.put(smap)
 	p.smapowner.Unlock()
@@ -175,10 +175,10 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	if !daemon.cli.skipStartup {
 		maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
 		if maxVerSmap != nil {
-			maxVerSmap.Pmap[p.si.DaemonID] = p.si
+			maxVerSmap.Pmap[p.si.ID()] = p.si
 			p.smapowner.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
-				pname, maxVerSmap.ProxySI.DaemonID, maxVerSmap.ProxySI.IntraControlNet.DirectURL)
+				pname, maxVerSmap.ProxySI.ID(), maxVerSmap.ProxySI.IntraControlNet.DirectURL)
 			p.secondaryStartup(maxVerSmap.ProxySI.IntraControlNet.DirectURL)
 			return
 		}
@@ -191,7 +191,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	if haveRegistratons {
 		var added int
 		if loadedSmap != nil {
-			added = smap.merge(loadedSmap)
+			added, _ = smap.merge(loadedSmap, true /*override (IP, port) duplicates*/)
 			p.smapowner.Lock()
 			smap = loadedSmap
 			if added > 0 {
@@ -223,7 +223,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	smap = p.smapowner.get()
 	if !smap.isPrimary(p.si) {
 		p.smapowner.Unlock()
-		glog.Infof("%s: registering with %s(%s)", pname, smap.ProxySI.DaemonID, smap.ProxySI.IntraControlNet.DirectURL)
+		glog.Infof("%s: registering with %s(%s)", pname, smap.ProxySI.ID(), smap.ProxySI.IntraControlNet.DirectURL)
 		p.secondaryStartup(smap.ProxySI.IntraControlNet.DirectURL)
 		return
 	}
@@ -286,7 +286,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 		if nt > 0 {
 			wtime = deadline // NOTE: full configured time in presence of "live" registrations
 		}
-		// check whether the cluster has moved on (but only once)
+		// check whether the cluster has moved on (but check only once)
 		if !checked && loadedSmap.CountTargets() > 0 && time.Since(started) > 2*config.Timeout.MaxKeepalive {
 			checked = true
 			q := url.Values{}
@@ -296,8 +296,9 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 			maxVerSmap, _, _, slowp = p.bcastMaxVer(args, nil, nil)
 			if maxVerSmap != nil && !slowp {
 				if maxVerSmap.Origin == loadedSmap.Origin && maxVerSmap.version() > loadedSmap.version() {
-					if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.DaemonID != p.si.DaemonID {
-						glog.Infof("%s: %s <= max-ver %s", pname, loadedSmap.StringEx(), maxVerSmap.StringEx())
+					if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
+						glog.Infof("%s: %s <= max-ver %s",
+							pname, loadedSmap.StringEx(), maxVerSmap.StringEx())
 						return
 					}
 				}
@@ -341,10 +342,10 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	if eq && sameVersion {
 		return
 	}
-	if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.DaemonID != p.si.DaemonID {
+	if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
 		if maxVerSmap.version() > smap.version() {
 			glog.Infof("%s: change-of-mind #2 %s <= max-ver %s", pname, smap.StringEx(), maxVerSmap.StringEx())
-			maxVerSmap.Pmap[p.si.DaemonID] = p.si
+			maxVerSmap.Pmap[p.si.ID()] = p.si
 			p.smapowner.put(maxVerSmap)
 			return
 		}
@@ -355,7 +356,8 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	p.smapowner.Lock()
 	clone := p.smapowner.get().clone()
 	if !eq {
-		maxVerSmap.merge(clone)
+		_, err := maxVerSmap.merge(clone, false /*err if detected (IP, port) duplicates*/)
+		cmn.ExitLogf("%s: %s vs [%s %s]", pname, err, maxVerSmap.ProxySI.Name(), maxVerSmap.StringEx())
 	}
 	clone.Version = cmn.MaxI64(clone.version(), maxVerSmap.version()) + 1
 	p.smapowner.put(clone)
@@ -465,7 +467,7 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 		if svm.Smap != nil && svm.VoteInProgress {
 			var s string
 			if svm.Smap.ProxySI != nil {
-				s = " of the current one " + svm.Smap.ProxySI.DaemonID
+				s = " of the current one " + svm.Smap.ProxySI.ID()
 			}
 			glog.Warningf("%s: starting up as primary(?) during reelection%s", p.si.Name(), s)
 			maxVerSmap, maxVerBMD = nil, nil // zero-out as unusable

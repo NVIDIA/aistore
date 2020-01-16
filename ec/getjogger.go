@@ -127,12 +127,12 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 	// fill the list of daemonIDs that do not have replica
 	daemons := make([]string, 0, len(targets))
 	for _, target := range targets {
-		if target.DaemonID == c.parent.si.DaemonID {
+		if target.ID() == c.parent.si.ID() {
 			continue
 		}
 
-		if _, ok := nodes[target.DaemonID]; !ok {
-			daemons = append(daemons, target.DaemonID)
+		if _, ok := nodes[target.ID()]; !ok {
+			daemons = append(daemons, target.ID())
 		}
 	}
 
@@ -674,13 +674,13 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 	}
 	emptyNodes := make([]string, 0, len(targets))
 	for _, t := range targets {
-		if t.DaemonID == c.parent.si.DaemonID {
+		if t.ID() == c.parent.si.ID() {
 			continue
 		}
-		if _, ok := nodeToID[t.DaemonID]; ok {
+		if _, ok := nodeToID[t.ID()]; ok {
 			continue
 		}
-		emptyNodes = append(emptyNodes, t.DaemonID)
+		emptyNodes = append(emptyNodes, t.ID())
 	}
 	if glog.V(4) {
 		glog.Infof("Empty nodes for %s/%s are %#v", req.LOM.Bucket(), req.LOM.Objname, emptyNodes)
@@ -864,7 +864,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 	chkMax := 0
 	chkVal := ""
 	for _, node := range tmap {
-		if node.DaemonID == c.parent.si.DaemonID {
+		if node.ID() == c.parent.si.ID() {
 			continue
 		}
 		wg.Add(1)
@@ -879,7 +879,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 			}
 
 			mtx.Lock()
-			metas[si.DaemonID] = md
+			metas[si.ID()] = md
 			// detect the metadata with the latest version on the fly.
 			// At this moment it is the most frequent hash in the list.
 			// TODO: fix when an EC Metadata versioning is introduced

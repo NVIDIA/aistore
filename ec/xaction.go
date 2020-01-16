@@ -130,7 +130,7 @@ func (r *xactReqBase) ecRequestsEnabled() bool {
 func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata) *IntraReq {
 	req := &IntraReq{
 		Act:    act,
-		Sender: r.si.DaemonID,
+		Sender: r.si.ID(),
 		Meta:   meta,
 		Exists: true,
 	}

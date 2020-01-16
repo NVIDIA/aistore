@@ -176,7 +176,7 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 		if err != nil {
 			return err
 		}
-		if ci.t.Snode().DaemonID != si.DaemonID {
+		if ci.t.Snode().ID() != si.ID() {
 			objStatus = cmn.ObjStatusMoved
 		}
 	}

@@ -32,7 +32,7 @@ func (p *proxyrunner) targetDownloadRequest(method string, path string, body []b
 			fullQuery.Add(k, v)
 		}
 	}
-	fullQuery.Add(cmn.URLParamProxyID, p.si.DaemonID)
+	fullQuery.Add(cmn.URLParamProxyID, p.si.ID())
 	fullQuery.Add(cmn.URLParamUnixTime, strconv.FormatInt(time.Now().UnixNano(), 10))
 
 	args := callArgs{

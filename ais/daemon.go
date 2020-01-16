@@ -234,7 +234,7 @@ func aisinit(version, build string) {
 		daemon.rg.add(p, cmn.Proxy)
 
 		ps := &stats.Prunner{}
-		psStartedUp := ps.Init("aisproxy", p.si.DaemonID, &p.startedUp)
+		psStartedUp := ps.Init("aisproxy", p.si.ID(), &p.startedUp)
 		daemon.rg.add(ps, xproxystats)
 
 		daemon.rg.add(newProxyKeepaliveRunner(p, ps, psStartedUp), xproxykeepalive)
@@ -246,7 +246,7 @@ func aisinit(version, build string) {
 		daemon.rg.add(t, cmn.Target)
 
 		ts := &stats.Trunner{T: t} // iostat below
-		tsStartedUp := ts.Init("aistarget", t.si.DaemonID, &t.clusterStarted)
+		tsStartedUp := ts.Init("aistarget", t.si.ID(), &t.clusterStarted)
 		daemon.rg.add(ts, xstorstats)
 
 		daemon.rg.add(newTargetKeepaliveRunner(t, ts, tsStartedUp), xtargetkeepalive)

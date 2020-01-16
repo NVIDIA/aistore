@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/OneOfOne/xxhash"
 )
@@ -21,6 +20,7 @@ const (
 	Proxies
 	AllNodes
 )
+const snfmt = "%s[ID: %s, pub: %s, control: %s, data: %s]"
 
 type (
 	// interface to Get current cluster-map instance
@@ -62,26 +62,29 @@ type (
 
 func (d *Snode) Digest() uint64 {
 	if d.idDigest == 0 {
-		d.idDigest = xxhash.ChecksumString64S(d.DaemonID, cmn.MLCG32)
+		d.idDigest = xxhash.ChecksumString64S(d.ID(), cmn.MLCG32)
 	}
 	return d.idDigest
 }
 
-func (d *Snode) ID() string {
-	return d.DaemonID
-}
+func (d *Snode) ID() string { return d.DaemonID }
 
-const snodeFmt = "[\n\tDaemonID: %s,\n\tDaemonType: %s, \n\tPublicNet: %s,\n\tIntraControl: %s,\n\tIntraData: %s,\n\tidDigest: %d]"
-
-func (d *Snode) _string() string {
-	return fmt.Sprintf(snodeFmt, d.DaemonID, d.DaemonType, d.PublicNet.DirectURL,
-		d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
-}
 func (d *Snode) String() string {
-	if glog.FastV(4, glog.SmoduleCluster) {
-		return d._string()
+	return d.ID()
+}
+func (d *Snode) Name() string {
+	if d.DaemonType == cmn.Proxy {
+		return "p[" + d.ID() + "]"
 	}
-	return d.DaemonID
+	return "t[" + d.ID() + "]"
+}
+func (d *Snode) NameEx() string {
+	var t = "t"
+	if d.DaemonType == cmn.Proxy {
+		t = "p"
+	}
+	return fmt.Sprintf(snfmt, t, d.ID(),
+		d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL)
 }
 
 func (d *Snode) URL(network string) string {
@@ -99,31 +102,38 @@ func (d *Snode) URL(network string) string {
 }
 
 func (a *Snode) Equals(b *Snode) bool {
-	return a.DaemonID == b.DaemonID && a.DaemonType == b.DaemonType &&
+	return a.ID() == b.ID() && a.DaemonType == b.DaemonType &&
 		reflect.DeepEqual(a.PublicNet, b.PublicNet) &&
 		reflect.DeepEqual(a.IntraControlNet, b.IntraControlNet) &&
 		reflect.DeepEqual(a.IntraDataNet, b.IntraDataNet)
-}
-
-// See printname() in clustermap.go
-func (d *Snode) Name() string {
-	if d.DaemonType == cmn.Proxy {
-		return "p[" + d.DaemonID + "]"
-	}
-	return "t[" + d.DaemonID + "]"
 }
 
 func (d *Snode) Validate() error {
 	if d == nil {
 		return errors.New("invalid Snode: nil")
 	}
-	if d.DaemonID == "" {
-		return errors.New("invalid Snode: missing node ID " + d._string())
+	if d.ID() == "" {
+		return errors.New("invalid Snode: missing node " + d.NameEx())
 	}
 	if d.DaemonType != cmn.Proxy && d.DaemonType != cmn.Target {
-		return errors.New("invalid Snode: unexpected type " + d._string())
+		cmn.AssertMsg(false, "invalid Snode type '+"+d.DaemonType+"'")
 	}
 	return nil
+}
+
+func (d *Snode) isDuplicateURL(n *Snode) bool {
+	var (
+		du = []string{d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL}
+		nu = []string{n.PublicNet.DirectURL, n.IntraControlNet.DirectURL, n.IntraDataNet.DirectURL}
+	)
+	for _, ni := range nu {
+		for _, di := range du {
+			if ni == di {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (d *Snode) IsProxy() bool  { return d.DaemonType == cmn.Proxy }
@@ -193,6 +203,26 @@ func (m *Smap) GetNode(id string) *Snode {
 		return node
 	}
 	return m.GetProxy(id)
+}
+
+func (m *Smap) IsDuplicateURL(nsi *Snode) (osi *Snode, err error) {
+	for _, tsi := range m.Tmap {
+		if tsi.ID() != nsi.ID() && tsi.isDuplicateURL(nsi) {
+			osi = tsi
+			break
+		}
+	}
+	for _, psi := range m.Pmap {
+		if psi.ID() != nsi.ID() && psi.isDuplicateURL(nsi) {
+			osi = psi
+			break
+		}
+	}
+	if osi == nil {
+		return
+	}
+	err = fmt.Errorf("duplicate URL:\n>>> new:\t%s\n<<< old:\t%s", nsi.NameEx(), osi.NameEx())
+	return
 }
 
 func (a *Smap) Compare(b *Smap) (sameOrigin, sameVersion, eq bool) {

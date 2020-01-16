@@ -219,7 +219,7 @@ func (p *proxyrunner) unregisterSelf() (int, error) {
 		si: smap.ProxySI,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, p.si.DaemonID),
+			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, p.si.ID()),
 		},
 		timeout: cmn.DefaultTimeout,
 	}
@@ -1716,7 +1716,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 		redirect += r.URL.RawQuery + "&"
 	}
 
-	query.Add(cmn.URLParamProxyID, p.si.DaemonID)
+	query.Add(cmn.URLParamProxyID, p.si.ID())
 	query.Add(cmn.URLParamBMDVersion, bmd.vstr)
 	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(ts.UnixNano(), 10))
 	redirect += query.Encode()
@@ -1996,7 +1996,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 				req:     args.req,
 				network: cmn.NetworkIntraControl,
 				timeout: reqTimeout,
-				nodes:   []cluster.NodeMap{{si.DaemonID: si}},
+				nodes:   []cluster.NodeMap{{si.ID(): si}},
 			})
 			break
 		}
@@ -2531,7 +2531,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	newPrimaryURL := r.URL.Query().Get(cmn.URLParamPrimaryCandidate)
 	glog.Infof("%s: force new primary %s (URL: %s)", p.si.Name(), proxyID, newPrimaryURL)
 
-	if p.si.DaemonID == proxyID {
+	if p.si.ID() == proxyID {
 		glog.Warningf("%s is already the primary", p.si.Name())
 		return
 	}
@@ -2555,7 +2555,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if proxyID != newSmap.ProxySI.DaemonID {
+	if proxyID != newSmap.ProxySI.ID() {
 		s := fmt.Sprintf("%s: proxy %s is not the primary, current %s", p.si.Name(), proxyID, newSmap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
@@ -2607,7 +2607,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if p.si.DaemonID == proxyID {
+	if p.si.ID() == proxyID {
 		if !prepare {
 			if err := p.becomeNewPrimary(""); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
@@ -2646,7 +2646,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if !smap.isPresent(p.si) {
-		cmn.AssertMsg(false, "This proxy '"+p.si.DaemonID+"' must always be present in the "+smap.pp())
+		cmn.AssertMsg(false, "This proxy '"+p.si.ID()+"' must always be present in the "+smap.pp())
 	}
 	clone := smap.clone()
 	// FIXME: may be premature at this point
@@ -2693,8 +2693,8 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-	if proxyid == p.si.DaemonID {
-		cmn.Assert(p.si.DaemonID == smap.ProxySI.DaemonID) // must be forwardCP-ed
+	if proxyid == p.si.ID() {
+		cmn.Assert(p.si.ID() == smap.ProxySI.ID()) // must be forwardCP-ed
 		glog.Warningf("Request to set primary = %s = self: nothing to do", proxyid)
 		return
 	}
@@ -2747,11 +2747,11 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	// FIXME: retry
 	for res := range results {
 		if res.err != nil {
-			if res.si.DaemonID == proxyid {
+			if res.si.ID() == proxyid {
 				glog.Fatalf("Commit phase failure: new primary %s returned err %v", proxyid, res.err)
 			} else {
 				glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
-					res.si.DaemonID, res.err, proxyid)
+					res.si.ID(), res.err, proxyid)
 			}
 		}
 	}
@@ -2904,7 +2904,7 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 			}
 			return nil, false
 		}
-		targetResults[res.si.DaemonID] = jsoniter.RawMessage(res.outjson)
+		targetResults[res.si.ID()] = jsoniter.RawMessage(res.outjson)
 	}
 	return targetResults, true
 }
@@ -2925,7 +2925,7 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 			if res.err != nil {
 				return nil, res.details
 			}
-			sysInfoMap[res.si.DaemonID] = jsoniter.RawMessage(res.outjson)
+			sysInfoMap[res.si.ID()] = jsoniter.RawMessage(res.outjson)
 		}
 		return sysInfoMap, ""
 	}
@@ -3052,7 +3052,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
-		s := fmt.Sprintf("%s: failed to register %s - invalid IP address %v", pname, nsi.Name(), nsi.PublicNet.NodeIPAddr)
+		s := fmt.Sprintf("%s: failed to register %s - invalid IP address %v", pname, nsi.Name(),
+			nsi.PublicNet.NodeIPAddr)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -3062,13 +3063,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if isProxy {
-		osi := smap.GetProxy(nsi.DaemonID)
+		osi := smap.GetProxy(nsi.ID())
 		if !p.addOrUpdateNode(nsi, osi, keepalive) {
 			p.smapowner.Unlock()
 			return
 		}
 	} else {
-		osi := smap.GetTarget(nsi.DaemonID)
+		osi := smap.GetTarget(nsi.ID())
 
 		// FIXME: If !keepalive then update Smap anyway - either: new target,
 		// updated target or target has powercycled. Except 'updated target' case,
@@ -3080,7 +3081,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 		if userRegister {
 			if glog.FastV(3, glog.SmoduleAIS) {
-				glog.Infof("%s: register %s (num targets before: %d)", pname, nsi.Name(), smap.CountTargets())
+				glog.Infof("%s: register %s => (%s)", pname, nsi.Name(), smap.StringEx())
 			}
 			// when registration is done by user send the current BMD and Smap
 			bmd := p.bmdowner.get()
@@ -3115,26 +3116,31 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
+	// no-further-checks join when cluster's starting up
 	if !p.startedUp.Load() {
 		clone := smap.clone()
 		clone.putNode(nsi, nonElectable)
 		p.smapowner.put(clone)
 		p.smapowner.Unlock()
 		if !isProxy && selfRegister {
-			glog.Infof("%s: joining %s (%s)", p.si, nsi, regReq.Smap)
+			glog.Infof("%s: joining %s (%s)", pname, nsi, regReq.Smap)
 		}
+		return
+	}
+	if _, err = smap.IsDuplicateURL(nsi); err != nil {
+		p.smapowner.Unlock()
+		p.invalmsghdlr(w, r, pname+": "+err.Error())
 		return
 	}
 	p.smapowner.Unlock()
 
 	// Return current metadata to registering target
 	if !isProxy && selfRegister { // case: self-registering target
-		glog.Infof("%s: joining %s (%s)", p.si, nsi, regReq.Smap)
+		glog.Infof("%s: joining %s (%s)", pname, nsi, regReq.Smap)
 		bmd := p.bmdowner.get()
 		meta := &targetRegMeta{smap, bmd, p.si}
 		body := cmn.MustMarshal(meta)
-		p.writeJSON(w, r, body, path.Join(cmn.ActRegTarget, nsi.DaemonID) /* tag */)
+		p.writeJSON(w, r, body, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
 
 	// update and distribute Smap
@@ -3164,7 +3170,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.setGlobRebID(clone, msgInt, true)
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
-		msgInt.NewDaemonID = nsi.DaemonID
+		msgInt.NewDaemonID = nsi.ID()
 
 		// metasync
 		pairs := []revspair{{clone, msgInt}}
@@ -3197,7 +3203,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, ke
 			return true
 		}
 
-		p.keepalive.heardFrom(nsi.DaemonID, !keepalive /* reset */)
+		p.keepalive.heardFrom(nsi.ID(), !keepalive /* reset */)
 		return false
 	}
 	if osi != nil {

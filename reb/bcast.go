@@ -100,7 +100,7 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 			if err != nil {
 				continue
 			}
-			tmap[tsi.DaemonID] = tsi
+			tmap[tsi.ID()] = tsi
 			if len(tmap) >= max {
 				lomack.mu.Unlock()
 				goto ret
@@ -121,14 +121,14 @@ func (reb *Manager) nodesNotInStage(stage uint32) int {
 	count := 0
 	reb.stageMtx.Lock()
 	for _, si := range smap.Tmap {
-		if si.DaemonID == reb.t.Snode().DaemonID {
+		if si.ID() == reb.t.Snode().ID() {
 			continue
 		}
-		if _, ok := reb.nodeStages[si.DaemonID]; !ok {
+		if _, ok := reb.nodeStages[si.ID()]; !ok {
 			count++
 			continue
 		}
-		_, exists := reb.ecReb.nodeData(si.DaemonID)
+		_, exists := reb.ecReb.nodeData(si.ID())
 		if stage == rebStageECDetect && !exists {
 			count++
 			continue
@@ -145,7 +145,7 @@ func (reb *Manager) bcast(md *globArgs, cb syncCallback) (errCnt int) {
 		cnt atomic.Int32
 	)
 	for _, tsi := range md.smap.Tmap {
-		if tsi.DaemonID == reb.t.Snode().DaemonID {
+		if tsi.ID() == reb.t.Snode().ID() {
 			continue
 		}
 		wg.Add(1)
@@ -259,7 +259,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 		//
 		var w4me bool // true: this target is waiting for ACKs from me
 		for tid := range status.Tmap {
-			if tid == reb.t.Snode().DaemonID {
+			if tid == reb.t.Snode().ID() {
 				glog.Infof("%s: keep wack <= %s[%s]", loghdr, tsi.Name(), stages[status.Stage])
 				w4me = true
 				break
@@ -386,7 +386,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 	curwt := time.Duration(0)
 
 	for curwt < maxwt {
-		_, exists := reb.ecReb.nodeData(si.DaemonID)
+		_, exists := reb.ecReb.nodeData(si.ID())
 		if reb.isNodeInStage(si, locStage) && exists {
 			return true
 		}
@@ -415,8 +415,8 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 				continue
 			}
 		}
-		reb.ecReb.setNodeData(si.DaemonID, slices)
-		reb.setStage(si.DaemonID, rebStageECDetect)
+		reb.ecReb.setNodeData(si.ID(), slices)
+		reb.setStage(si.ID(), rebStageECDetect)
 		return true
 	}
 	return false

@@ -1393,7 +1393,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 
 					waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
 						tutils.Logln("killing target...")
-						err := tutils.UnregisterNode(m.proxyURL, targets[idx].DaemonID)
+						err := tutils.UnregisterNode(m.proxyURL, targets[idx].ID())
 						tassert.CheckFatal(t, err)
 					})
 
@@ -1514,11 +1514,11 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					waitForDSortPhase(t, m.proxyURL, df.managerUUID, entry.phase, func() {
 						for target, mpath := range mountpaths {
 							if entry.adding {
-								tutils.Logf("adding new mountpath %q to %s...\n", mpath, target.DaemonID)
+								tutils.Logf("adding new mountpath %q to %s...\n", mpath, target.ID())
 								err := api.AddMountpath(baseParams, target, mpath)
 								tassert.CheckFatal(t, err)
 							} else {
-								tutils.Logf("removing mountpath %q from %s...\n", mpath, target.DaemonID)
+								tutils.Logf("removing mountpath %q from %s...\n", mpath, target.ID())
 								err := api.RemoveMountpath(baseParams, target.ID(), mpath)
 								tassert.CheckFatal(t, err)
 							}
@@ -1533,11 +1533,11 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 
 					for target, mpath := range mountpaths {
 						if entry.adding {
-							tutils.Logf("removing mountpath %q to %s...\n", mpath, target.DaemonID)
+							tutils.Logf("removing mountpath %q to %s...\n", mpath, target.ID())
 							err := api.RemoveMountpath(baseParams, target.ID(), mpath)
 							tassert.CheckFatal(t, err)
 						} else {
-							tutils.Logf("adding mountpath %q to %s...\n", mpath, target.DaemonID)
+							tutils.Logf("adding mountpath %q to %s...\n", mpath, target.ID())
 							err := api.AddMountpath(baseParams, target, mpath)
 							tassert.CheckFatal(t, err)
 						}
@@ -1583,7 +1583,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			df.clearDSortList()
 
 			tutils.Logln("killing target...")
-			err := tutils.UnregisterNode(m.proxyURL, targets[0].DaemonID)
+			err := tutils.UnregisterNode(m.proxyURL, targets[0].ID())
 			tassert.CheckFatal(t, err)
 
 			// Create ais bucket
