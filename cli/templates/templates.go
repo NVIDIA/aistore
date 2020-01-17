@@ -51,7 +51,7 @@ const (
 	ProxyInfoSingleBodyTmpl = "{{$value := . }}" + ProxyInfoBody
 	ProxyInfoSingleTmpl     = ProxyInfoHeader + ProxyInfoSingleBodyTmpl
 
-	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.ID() $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
+	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.DaemonID $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
 	AllProxyInfoBodyTmpl = "{{ range $key, $value := .Status }}" + AllProxyInfoBody + "{{end}}"
@@ -59,7 +59,7 @@ const (
 
 	// Target Info
 	TargetInfoHeader = "Target\t %MemUsed\t MemAvail\t %CapUsed\t CapAvail\t %CpuUsed\t Rebalance\n"
-	TargetInfoBody   = "{{$value.Snode.ID()}}\t " +
+	TargetInfoBody   = "{{$value.Snode.DaemonID}}\t " +
 		"{{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
 		"{{CalcCap $value `percent` | printf `%d`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
 		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
@@ -70,10 +70,10 @@ const (
 	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoBody
 	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
 
-	ClusterSummary = "Summary:\n Proxies:\t{{len .Pmap}} ({{len .NonElects}} - unelectable)\n Targets:\t{{len .Tmap}}\n Primary Proxy:\t{{.ProxySI.ID()}}\n Smap Version:\t{{.Version}}\n"
+	ClusterSummary = "Summary:\n Proxies:\t{{len .Pmap}} ({{len .NonElects}} - unelectable)\n Targets:\t{{len .Tmap}}\n Primary Proxy:\t{{.ProxySI.DaemonID}}\n Smap Version:\t{{.Version}}\n"
 
 	// Stats
-	StatsHeader = "{{$obj := . }}Daemon:\t{{ .Snode.ID() }}\nType:\t{{ .Snode.DaemonType }}\n\nStats\n-----\n"
+	StatsHeader = "{{$obj := . }}Daemon:\t{{ .Snode.DaemonID }}\nType:\t{{ .Snode.DaemonType }}\n\nStats\n-----\n"
 	StatsBody   = "{{range $key, $val := $obj.Stats.Tracker }}" +
 		"{{$statVal := ExtractStat $obj.Stats $key}}" +
 		"{{if (eq $statVal 0)}}{{else}}{{$key}}\t{{$statVal}}\n{{end}}" +
