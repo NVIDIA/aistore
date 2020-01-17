@@ -33,16 +33,16 @@ Last but not least, AIS runs natively on Kubernetes and features open format and
 
 For AIStore **white paper** and design philosophy, please see the [overview document](docs/overview.md) (where you can also find 5 alternative ways to populate AIStore with existing datasets).
 
-## Table of Contents
+**Table of Contents**
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
-    - [Deployment: Local non-Containerized](#deployment-local-non-containerized)
-    - [Deployment: Local Docker-Compose](#deployment-local-docker-compose)
-    - [Deployment: Local Kubernetes](#deployment-local-kubernetes)
+- [Build, Make, and Development Tools](#build-make-and-development-tools)
+- [Deployment](#deployment)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
-    - [Performance Monitoring](#performance-monitoring)
+- [Performance Monitoring](#performance-monitoring)
 - [Configuration](#configuration)
 - [Guides and References](#guides-and-references)
+- [Assorted Tips](#assorted-tips)
 - [Selected Package READMEs](#selected-package-readmes)
 
 ## Prerequisites
@@ -69,10 +69,6 @@ MacOS/Darwin is also supported, albeit for development only. Certain capabilitie
 AIStore runs on commodity Linux machines with no special hardware requirements whatsoever. Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
 
 > It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.
-
-This section covers 3 (three) ways to deploy AIS on a single Linux machine and is intended for developers and development, and/or for a quick trial.
-
-### Deployment: Local non-Containerized
 
 Assuming that [Go](https://golang.org/dl/) is already installed, the remaining getting-started steps are:
 
@@ -114,10 +110,6 @@ $ make kill; make deploy <<< $'10\n3\n2\n0'
 
 > `make kill` will terminate local AIStore if it's already running.
 
-> Run `make help` for many other useful commands, including those that **build** AIS CLI, FUSE, and benchmarks (binaries), **deploy** AIS cluster, and **run** some/all tests.
-
-> To enable an optional AIStore authentication server, execute instead `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
-
 Finally, the `go test` (above) will create an ais bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
 
 Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running `go test` commands. For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
@@ -134,27 +126,30 @@ $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match=
 
 This command runs a test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match `a\d+` regex.
 
-> In addition to AIStore - the storage cluster, you can also deploy [aisfs](fuse/README.md) - to access AIS objects as files, and [AIS CLI](cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
+## Build, Make and Development Tools
 
-> AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais status` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
+As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](dev/kubernetes/Dockerfile). As the very first step, run `make help` for help on:
 
-> For more testing commands and command-line options, please refer to the [corresponding README](ais/tests/README.md).
+* **building** AIS binary (called `aisnode`) deployable as both a storage target _or_ a proxy/gateway;
+* **building** [CLI](cli/README.md), FUSE [aisfs](fuse/README.md), and benchmark binaries;
 
-> For tips and help on local non-containerized deployment, please see [the tips](docs/local_tips.md).
+In particular, the `make` provides a growing number of developer-friendly commands to:
 
-> For info on how to run AIS executables, see [command-line arguments](docs/command_line.md).
+* **deploy** AIS cluster on your local development machine;
+* **run** all or selected tests;
+* **instrument** AIS binary with race detection, CPU and/or memory profiling, and more.
 
-> For helpful links and background on Go, AWS, GCP, and Deep Learning, please see [helpful links](docs/helpful-links.md).
+## Deployment
 
-> And again, run `make help` to find out how to build and run AIS executables and tests.
+As previously stated, AIStore can be deployed in a vast variety of [ways](deploy). This section focuses on a single Linux machine; as such, it is intended for developers and development, or for a quick trial.
 
-### Deployment: Local Docker-Compose
+### Local Docker-Compose
 
 The 2nd option to run AIS on your local machine requires [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It also allows for multi-clusters deployment with multiple separate networks. You can deploy a simple AIS cluster within seconds or deploy a multi-container cluster for development.
 
 To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md).
 
-### Deployment: Local Kubernetes
+### Local Kubernetes
 
 The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/kubernetes).
 
@@ -176,7 +171,7 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 
 > For technical details on AIS memory management, please see [this readme](memsys/README.md).
 
-### Performance Monitoring
+## Performance Monitoring
 
 As is usually the case with storage clusters, there are multiple ways to monitor their performance.
 
@@ -223,6 +218,22 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 * `ipv4`
 * `ipv4_intra_control`
 * `ipv4_intra_data`
+
+## Assorted Tips
+
+> To enable an optional AIStore authentication server, execute `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
+
+> In addition to AIStore - the storage cluster, you can also deploy [aisfs](fuse/README.md) - to access AIS objects as files, and [AIS CLI](cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
+
+> AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais status` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
+
+> For more testing commands and options, please refer to the [testing README](ais/tests/README.md).
+
+> For `aisnode` command-line options, see: [command-line options](docs/command_line.md).
+
+> For general helpful links and background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful-links.md).
+
+> And again, run `make help` to find out how to build and run AIS executables and tests.
 
 ## Guides and References
 - [AIS Overview](docs/overview.md)

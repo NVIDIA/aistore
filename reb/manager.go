@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -177,6 +178,7 @@ func (reb *Manager) serialize(smap *cluster.Smap, config *cmn.Config, globRebID 
 		case <-reb.semaCh:
 			canRun = true
 		default:
+			runtime.Gosched()
 		}
 		//
 		// vs newer Smap

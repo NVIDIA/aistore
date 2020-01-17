@@ -246,9 +246,13 @@ help:
 	@echo "Examples:"
 	@printf "  $(cyan)%s$(term-reset)\n    %s\n\n" \
 		"make deploy" "Deploy cluster locally" \
-		"make kill clean" "Stop locally deployed cluster and cleanup all cluster-related data and metadata" \
-		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster locally with race detector, write reports to /tmp/race.pid" \
-		"MODE='debug' make deploy" "Deploy cluster locally with binary build in debug mode" \
-		"BUCKET='tmp' make test-short" "Run all short tests" \
-		"BUCKET='cloud_bucket' make test-long" "Run all tests" \
-		"BUCKET='tmp' make ci" "Run all checks and short tests"
+		"make kill clean" "Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)" \
+		"make kill deploy <<< $'7\n2\n4\n1'"  "Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies" \
+		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster with race detector, write reports to /tmp/race.<PID>" \
+		"MODE=debug make deploy" "Deploy cluster with aisnode (AIS target and proxy) executable built with debug info" \
+		"BUCKET=tmp make test-short" "Run all short tests" \
+		"BUCKET=<existing-cloud-bucket> make test-long" "Run all tests" \
+		"BUCKET=tmp make ci" "Run style, lint, and spell checks, as well as all short tests" \
+		"MEMPROFILE=/tmp/mem make deploy" "Deploy cluster with memory profiling enabled, write reports to /tmp/mem.<PID> (and make sure to stop gracefully)" \
+		"CPUPROFILE=/tmp/cpu make deploy" "Build and deploy cluster instrumented for CPU profiling, write reports to /tmp/cpu.<PID>" \
+		"TAGS=nethttp make deploy" "Build 'transport' package with net/http (see transport/README.md) and deploy cluster locally"
