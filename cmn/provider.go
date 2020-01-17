@@ -4,13 +4,10 @@
  */
 package cmn
 
+import "strings"
+
 // consolidates all bucket provider related enums and functions
 // see also: target.go validateBucket - it checks provider, too
-
-import (
-	"errors"
-	"strings"
-)
 
 // Cloud Provider enum
 const (
@@ -22,29 +19,13 @@ const (
 )
 
 var (
-	Providers      = []string{ProviderAmazon, ProviderGoogle, ProviderAIS}
+	Providers = map[string]struct{}{
+		ProviderAIS:    {},
+		ProviderGoogle: {},
+		ProviderAmazon: {},
+	}
 	CloudProviders = []string{ProviderAmazon, ProviderGoogle}
 )
-
-var (
-	providerMap = map[string]string{
-		Cloud:          Cloud,
-		ProviderAmazon: Cloud,
-		ProviderGoogle: Cloud,
-		ProviderAIS:    ProviderAIS,
-		"":             "",
-	}
-)
-
-// TODO: should be removed after on-disk structure change
-func ProviderFromStr(provider string) (val string, err error) {
-	var ok bool
-	val, ok = providerMap[strings.ToLower(provider)]
-	if !ok {
-		err = errors.New("invalid bucket provider '" + provider + "'")
-	}
-	return
-}
 
 func IsProviderAIS(provider string) bool {
 	return provider == ProviderAIS
@@ -55,5 +36,14 @@ func IsProviderCloud(provider string) bool {
 }
 
 func IsValidProvider(provider string) bool {
-	return StringInSlice(provider, Providers)
+	_, ok := Providers[provider]
+	return ok
+}
+
+func ListProviders() string {
+	keys := make([]string, 0, len(Providers))
+	for k := range Providers {
+		keys = append(keys, k)
+	}
+	return strings.Join(keys, ", ")
 }

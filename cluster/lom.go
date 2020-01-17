@@ -801,18 +801,16 @@ func (lom *LOM) Remove() (err error) {
 //
 func EvictLomCache(b *Bck) {
 	var (
-		caches    = lomCaches()
-		wg        = &sync.WaitGroup{}
-		prov, err = cmn.ProviderFromStr(b.Provider)
+		caches = lomCaches()
+		wg     = &sync.WaitGroup{}
 	)
-	cmn.AssertNoErr(err)
 	for _, cache := range caches {
 		wg.Add(1)
 		go func(cache *sync.Map) {
 			cache.Range(func(hkey, _ interface{}) bool {
 				uname := hkey.(string)
 				bck, _ := ParseUname(uname)
-				if bck.Name == b.Name && bck.Provider == prov {
+				if bck.Name == b.Name && bck.Provider == b.Provider {
 					cache.Delete(hkey)
 				}
 				return true

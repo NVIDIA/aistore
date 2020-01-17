@@ -9,8 +9,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,7 +18,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -1467,58 +1464,4 @@ func TestCopyBucket(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-	const (
-		newTestBucketName = TestBucketName + "_new"
-	)
-	var (
-		m = ioContext{
-			t:  t,
-			wg: &sync.WaitGroup{},
-		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
-	)
-
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-
-	localBucketDir := ""
-	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if localBucketDir != "" {
-			return filepath.SkipDir
-		}
-		if strings.HasSuffix(path, "/local") && strings.Contains(path, fs.ObjectType) {
-			localBucketDir = path
-			return filepath.SkipDir
-		}
-		return nil
-	}
-	filepath.Walk(rootDir, fsWalkFunc)
-	tutils.Logf("ais bucket's dir: %s\n", localBucketDir)
-
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	tutils.DestroyBucket(t, m.proxyURL, newTestBucketName)
-
-	bucketFQN := filepath.Join(localBucketDir, m.bucket)
-	tutils.CheckPathExists(t, bucketFQN, true /*dir*/)
-
-	err := api.RenameBucket(baseParams, m.bucket, newTestBucketName)
-	tassert.CheckFatal(t, err)
-
-	waitForBucketXactionToComplete(t, cmn.ActRenameLB /*kind*/, m.bucket, baseParams, rebalanceTimeout)
-
-	tutils.CheckPathNotExists(t, bucketFQN)
-
-	newBucketFQN := filepath.Join(localBucketDir, newTestBucketName)
-	tutils.CheckPathExists(t, newBucketFQN, true /*dir*/)
-
-	tutils.DestroyBucket(t, m.proxyURL, newTestBucketName)
 }

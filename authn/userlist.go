@@ -334,7 +334,7 @@ func (m *userManager) updateCredentials(userID, provider, userCreds string) (boo
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	if !isValidProvider(provider) {
+	if !cmn.IsValidProvider(provider) {
 		return false, fmt.Errorf("invalid cloud provider: %s", provider)
 	}
 
@@ -366,7 +366,7 @@ func (m *userManager) deleteCredentials(userID, provider string) (bool, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	if !isValidProvider(provider) {
+	if !cmn.IsValidProvider(provider) {
 		return false, fmt.Errorf("invalid cloud provider: %s", provider)
 	}
 

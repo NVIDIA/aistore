@@ -475,7 +475,7 @@ func (bp *BucketProps) Validate(targetCnt int, urlOutsideCluster func(string) bo
 		}
 	}
 	if !IsValidProvider(bp.CloudProvider) {
-		return fmt.Errorf("invalid cloud provider: %s, must be one of (%v)", bp.CloudProvider, Providers)
+		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.CloudProvider, ListProviders())
 	}
 	if bp.Tiering.ReadPolicy != "" && bp.Tiering.ReadPolicy != RWPolicyCloud && bp.Tiering.ReadPolicy != RWPolicyNextTier {
 		return fmt.Errorf("invalid read policy: %s", bp.Tiering.ReadPolicy)

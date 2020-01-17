@@ -20,25 +20,23 @@ type Bck struct {
 }
 
 func (b *Bck) MakeUname(objName string) string {
-	const sep = string(filepath.Separator)
+	cmn.Assert(b.Provider != "" && b.Name != "" && objName != "") // FIXME: this should be removed
 	var (
-		prov, _ = cmn.ProviderFromStr(b.Provider)
-		l       = len(prov) + 2*len(sep) + len(b.Name) + len(objName)
-		buf     = make([]byte, 0, l)
+		l   = len(b.Provider) + 2 + len(b.Name) + len(objName)
+		buf = make([]byte, 0, l)
 	)
-	buf = append(buf, prov...)
-	buf = append(buf, sep...)
+	buf = append(buf, b.Provider...)
+	buf = append(buf, filepath.Separator)
 	buf = append(buf, b.Name...)
-	buf = append(buf, sep...)
+	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
 	return *(*string)(unsafe.Pointer(&buf))
 }
 
 func ParseUname(uname string) (b Bck, objName string) {
-	const sep = byte(filepath.Separator)
-	i := strings.IndexByte(uname, sep)
+	i := strings.IndexByte(uname, filepath.Separator)
 	b.Provider = uname[:i]
-	j := strings.IndexByte(uname[i+1:], sep)
+	j := strings.IndexByte(uname[i+1:], filepath.Separator)
 	b.Name, objName = uname[i+1:i+j+1], uname[i+j+2:]
 	return
 }
@@ -106,7 +104,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 	}
 
 	// NOTE: At this point we should be sure that we no longer use `cloud` but
-	// rather we have explicit cloud provider name.
+	//  rather we have explicit cloud provider name.
 	cmn.Assert(b.Provider != cmn.Cloud)
 
 	if b.IsCloud() {

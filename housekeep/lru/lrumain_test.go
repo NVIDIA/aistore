@@ -35,9 +35,8 @@ const (
 	numberOfCreatedFiles = 45
 	fileSize             = 10 * cmn.MiB
 	blockSize            = cmn.KiB
-	basePath             = "/tmp/lru-tests/"
+	basePath             = "/tmp/lru-tests"
 	bucketName           = "lru-bck"
-	filesPath            = basePath + fs.ObjectType + "/local/" + bucketName
 )
 
 type fileMetadata struct {
@@ -128,7 +127,7 @@ func saveRandomFile(t cluster.Target, filename string, size int64) {
 	Expect(lom.Persist()).NotTo(HaveOccurred())
 }
 
-func saveRandomFilesWithMetadata(t cluster.Target, files []fileMetadata) {
+func saveRandomFilesWithMetadata(t cluster.Target, filesPath string, files []fileMetadata) {
 	for _, file := range files {
 		saveRandomFile(t, path.Join(filesPath, file.name), file.size)
 	}
@@ -136,7 +135,7 @@ func saveRandomFilesWithMetadata(t cluster.Target, files []fileMetadata) {
 
 // Saves random bytes to a file with random name.
 // timestamps and names are not increasing in the same manner
-func saveRandomFiles(t cluster.Target, filesNumber int) {
+func saveRandomFiles(t cluster.Target, filesPath string, filesNumber int) {
 	for i := 0; i < filesNumber; i++ {
 		saveRandomFile(t, path.Join(filesPath, getRandomFileName(i)), fileSize)
 	}
@@ -145,15 +144,22 @@ func saveRandomFiles(t cluster.Target, filesNumber int) {
 var _ = Describe("LRU tests", func() {
 	Describe("InitAndRun", func() {
 
-		var t *cluster.TargetMock
-		var ini *InitLRU
+		var (
+			t   *cluster.TargetMock
+			ini *InitLRU
+
+			filesPath string
+		)
 
 		BeforeEach(func() {
 			initConfig()
 			createAndAddMountpath(basePath)
-			cmn.CreateDir(filesPath)
 			t = newTargetLRUMock()
 			ini = newInitLRU(t)
+
+			mpaths, _ := fs.Mountpaths.Get()
+			filesPath = mpaths[basePath].MakePathBucket(fs.ObjectType, bucketName, cmn.ProviderAIS)
+			cmn.CreateDir(filesPath)
 		})
 
 		AfterEach(func() {
@@ -166,7 +172,7 @@ var _ = Describe("LRU tests", func() {
 			})
 
 			It("should evict correct number of files", func() {
-				saveRandomFiles(t, numberOfCreatedFiles)
+				saveRandomFiles(t, filesPath, numberOfCreatedFiles)
 
 				InitAndRun(ini)
 
@@ -190,9 +196,9 @@ var _ = Describe("LRU tests", func() {
 					{getRandomFileName(4), fileSize},
 					{getRandomFileName(5), fileSize},
 				}
-				saveRandomFilesWithMetadata(t, oldFiles)
+				saveRandomFilesWithMetadata(t, filesPath, oldFiles)
 				time.Sleep(1 * time.Second)
-				saveRandomFiles(t, 3)
+				saveRandomFiles(t, filesPath, 3)
 
 				InitAndRun(ini)
 
@@ -224,7 +230,7 @@ var _ = Describe("LRU tests", func() {
 					{getRandomFileName(2), int64(4 * cmn.MiB)},
 					{getRandomFileName(3), int64(8 * cmn.MiB)},
 				}
-				saveRandomFilesWithMetadata(t, files)
+				saveRandomFilesWithMetadata(t, filesPath, files)
 
 				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
 				// Those files are 4Mb file and 16Mb file
@@ -251,7 +257,7 @@ var _ = Describe("LRU tests", func() {
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
-				saveRandomFiles(t, numberOfFiles)
+				saveRandomFiles(t, filesPath, numberOfFiles)
 
 				InitAndRun(ini)
 
@@ -268,7 +274,7 @@ var _ = Describe("LRU tests", func() {
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
-				saveRandomFiles(t, numberOfFiles)
+				saveRandomFiles(t, filesPath, numberOfFiles)
 
 				InitAndRun(ini)
 

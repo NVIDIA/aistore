@@ -318,7 +318,7 @@ class TestBucketApi(unittest.TestCase):
 
     def __check_if_local_bucket_exists(self, bucket_name):
         log.info("LIST BUCKET local names [%s]", bucket_name)
-        bucket_names = self.bucket.list_names(bprovider="local")
+        bucket_names = self.bucket.list_names(bprovider="ais")
         self.assertTrue(len(bucket_names.cloud) == 0,
                         "Cloud buckets returned when requesting for only "
                         "local buckets")

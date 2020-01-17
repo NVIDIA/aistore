@@ -23,28 +23,6 @@ func TestAddNonExistingMountpath(t *testing.T) {
 	assertMountpathCount(t, mfs, 0, 0)
 }
 
-func TestAddInvalidMountpaths(t *testing.T) {
-	mfs := NewMountedFS()
-	mpaths := []string{
-		"/local",
-		"/cloud",
-		"/tmp/local/abcd",
-		"/tmp/cloud/abcd",
-		"/tmp/abcd/local",
-		"/tmp/abcd/cloud",
-	}
-	// Note: There is no need to create the directories for these mountpaths because the
-	// check for os.Stat(mpath) happens after we check if the have '/local' or
-	// '/cloud' in their path
-	for _, mpath := range mpaths {
-		err := mfs.Add(mpath)
-		if err == nil {
-			t.Errorf("adding invalid mountpath: %q succeeded", mpath)
-		}
-	}
-	assertMountpathCount(t, mfs, 0, 0)
-}
-
 func TestAddValidMountpaths(t *testing.T) {
 	mfs := NewMountedFS()
 	mfs.DisableFsIDCheck()

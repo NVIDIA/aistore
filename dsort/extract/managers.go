@@ -289,7 +289,7 @@ func (rm *RecordManager) encodeRecordName(storeType string, shardName, recordNam
 	case DiskStoreType:
 		// For disk:
 		//  * contentPath = recordUniqueName with extension  (eg. shard_1-record_name.cls)
-		//  * fullContentPath = fqn to recordUniqueName with extension (eg. /tmp/ais/dsort/local/bucket/shard_1-record_name.cls)
+		//  * fullContentPath = fqn to recordUniqueName with extension (eg. <bucket_fqn>/shard_1-record_name.cls)
 		recordExt := filepath.Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
 		ct, err := cluster.NewCTFromBO(rm.bucket, rm.provider, contentPath, nil)

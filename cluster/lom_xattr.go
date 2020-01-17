@@ -170,7 +170,7 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 			haveCopies = true
 			md.copies = make(fs.MPI, len(copyFQNs))
 			for _, copyFQN := range copyFQNs {
-				mpathInfo, _, err := fs.Mountpaths.FQN2MpathInfo(copyFQN)
+				mpathInfo, _, err := fs.Mountpaths.ParseMpathInfo(copyFQN)
 				if err != nil {
 					glog.Warning(err)
 					continue

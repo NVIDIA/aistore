@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	ecSliceDir = "/" + ec.SliceType + "/"
-	ecMetaDir  = "/" + ec.MetaType + "/"
-	ecDataDir  = "/" + fs.ObjectType + "/"
+	ecSliceDir = "/~" + ec.SliceType + "/"
+	ecMetaDir  = "/~" + ec.MetaType + "/"
+	ecDataDir  = "/~" + fs.ObjectType + "/"
 	ecTestDir  = "ec-test/"
 
 	ECPutTimeOut = time.Minute * 4 // maximum wait time after PUT to be sure that the object is EC'ed/replicated
@@ -214,10 +214,18 @@ func filterObjListOK(lst []*cmn.BucketEntry) []*cmn.BucketEntry {
 }
 
 func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
-	objFullPath string, objSize, sliceSize int64,
-	totalCnt int) {
-	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %q: %d, found: %d\n%+v",
-		objFullPath, totalCnt, len(sliceList), sliceList)
+	bckName, objPath string, objSize, sliceSize int64,
+	totalCnt int, o *ecOptions) {
+	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %s/%s: %d, found: %d\n%+v",
+		bckName, objPath, totalCnt, len(sliceList), sliceList)
+
+	var bckProvider string
+	if o.isAIS {
+		bckProvider = cmn.ProviderAIS
+	} else {
+		config := getClusterConfig(t, proxyURLReadOnly)
+		bckProvider = config.CloudProvider
+	}
 
 	sliced := sliceSize < objSize
 	hashes := make(map[string]bool)
@@ -230,16 +238,21 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 			tassert.Errorf(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
 			if sliced {
 				if _, ok := hashes[md.hash]; ok {
-					t.Logf("Duplicated slice hash(slice) %q: %s\n", objFullPath, md.hash)
+					t.Logf("Duplicated slice hash(slice) %s/%s: %s\n", bckName, objPath, md.hash)
 				}
 				hashes[md.hash] = true
 			}
 		} else {
-			tassert.Errorf(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '../%s']", k, objFullPath)
+			ct, err := cluster.NewCTFromFQN(k, nil)
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
+			tassert.Errorf(t, ct.Provider() == bckProvider, "invalid provider %s, expected: %s", ct.Provider(), bckProvider)
+			tassert.Errorf(t, ct.Bucket() == bckName, "invalid bucket name %s, expected: %s", ct.Bucket(), bckName)
+			tassert.Errorf(t, ct.ObjName() == objPath, "invalid object name %s, expected: %s", ct.ObjName(), objPath)
 			tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
 			if sliced {
 				if _, ok := hashes[md.hash]; ok {
-					t.Logf("Duplicated slice hash(main) %q: %s\n", objFullPath, md.hash)
+					t.Logf("Duplicated slice hash(main) %s/%s: %s\n", bckName, objPath, md.hash)
 				}
 				hashes[md.hash] = true
 			}
@@ -394,7 +407,6 @@ func doECPutsAndCheck(t *testing.T, bckName string, baseParams api.BaseParams, o
 			err = api.PutObject(putArgs)
 			tassert.CheckFatal(t, err)
 
-			fullPath := fmt.Sprintf("local/%s/%s", bckName, ecTestDir)
 			foundParts, _ := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bckName, o)
 			mainObjPath := ""
 			if len(foundParts) != totalCnt {
@@ -416,8 +428,12 @@ func doECPutsAndCheck(t *testing.T, bckName string, baseParams api.BaseParams, o
 						t.Errorf("Copy %q size mismatch: %d, expected %d", k, md.size, objSize)
 					}
 				} else {
-					objFullPath := fullPath + objName
-					tassert.Errorf(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '..%s']", k, objFullPath)
+					ct, err := cluster.NewCTFromFQN(k, nil)
+					tassert.CheckFatal(t, err)
+					tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
+					tassert.Errorf(t, ct.Provider() == cmn.ProviderAIS, "invalid provider %s, expected: %s", ct.Provider(), cmn.ProviderAIS)
+					tassert.Errorf(t, ct.Bucket() == bckName, "invalid bucket name %s, expected: %s", ct.Bucket(), bckName)
+					tassert.Errorf(t, ct.ObjName() == objPath, "invalid object name %s, expected: %s", ct.ObjName(), objPath)
 					tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
 					mainObjPath = k
 					replCnt++
@@ -650,7 +666,7 @@ func TestECChange(t *testing.T) {
 	tassert.Errorf(t, err == nil, "Resetting properties should work")
 }
 
-func createECReplicas(t *testing.T, baseParams api.BaseParams, bucket, objName string, fullPath string, o *ecOptions) {
+func createECReplicas(t *testing.T, baseParams api.BaseParams, bucket, objName string, o *ecOptions) {
 	o.sema <- struct{}{}
 	defer func() {
 		<-o.sema
@@ -674,11 +690,11 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bucket, objName s
 	tutils.Logf("waiting for %s\n", objPath)
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, false, objName, bucket, o)
 
-	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+	ecCheckSlices(t, foundParts, bucket, objPath, objSize, sliceSize, totalCnt, o)
 	tassert.Errorf(t, mainObjPath != "", "Full copy is not found")
 }
 
-func createECObject(t *testing.T, baseParams api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) {
+func createECObject(t *testing.T, baseParams api.BaseParams, bucket, objName string, idx int, o *ecOptions) {
 	const (
 		smallEvery = 7 // Every N-th object is small
 	)
@@ -710,13 +726,13 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bucket, objName str
 	}
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bucket, o)
 
-	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+	ecCheckSlices(t, foundParts, bucket, objPath, objSize, sliceSize, totalCnt, o)
 	if mainObjPath == "" {
 		t.Errorf("Full copy is not found")
 	}
 }
 
-func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) {
+func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bucket, objName string, idx int, o *ecOptions) {
 	const (
 		sleepRestoreTime = 5 * time.Second // wait time after GET restores slices
 		smallEvery       = 7               // Every N-th object is small
@@ -757,7 +773,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bucket, 
 	tutils.Logf("waiting for %s\n", objPath)
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bucket, o)
 
-	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+	ecCheckSlices(t, foundParts, bucket, objPath, objSize, sliceSize, totalCnt, o)
 	if mainObjPath == "" {
 		t.Errorf("Full copy is not found")
 		return
@@ -819,7 +835,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bucket, 
 				break
 			}
 		}
-		ecCheckSlices(t, partsAfterRestore, fullPath+objName, objSize, sliceSize, totalCnt)
+		ecCheckSlices(t, partsAfterRestore, bucket, objPath, objSize, sliceSize, totalCnt, o)
 	}
 }
 
@@ -849,8 +865,6 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
 
-	fullPath := fmt.Sprintf("cloud/%s/%s", bucket, ecTestDir)
-
 	setBucketECProps(t, baseParams, bucket, defaultECBckProps(o))
 	defer api.SetBucketProps(baseParams, bucket, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
@@ -863,7 +877,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
-			createDamageRestoreECFile(t, baseParams, bucket, objName, i, fullPath, o)
+			createDamageRestoreECFile(t, baseParams, bucket, objName, i, o)
 		}(i)
 	}
 	wg.Wait()
@@ -882,8 +896,9 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 //  - The target restores the original object from slices and missing slices
 func TestECRestoreObjAndSlice(t *testing.T) {
 	var (
-		bucket   = TestBucketName
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket     = TestBucketName
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -900,10 +915,6 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
 
-	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
-
-	baseParams := tutils.BaseAPIParams(proxyURL)
-
 	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
@@ -911,11 +922,10 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
-		go func(i int) {
+		go func(objName string, i int) {
 			defer wg.Done()
-			createDamageRestoreECFile(t, baseParams, bucket, objName, i, fullPath, o)
-		}(i)
+			createDamageRestoreECFile(t, baseParams, bucket, objName, i, o)
+		}(fmt.Sprintf(o.pattern, i), i)
 	}
 	wg.Wait()
 
@@ -942,7 +952,7 @@ func putECFile(baseParams api.BaseParams, bucket, objName string) error {
 }
 
 // Returns path to main object and map of all object's slices and ioContext
-func createECFile(t *testing.T, bucket, objName, fullPath string, baseParams api.BaseParams, o *ecOptions) (map[string]ecSliceMD, string) {
+func createECFile(t *testing.T, bucket, objName string, baseParams api.BaseParams, o *ecOptions) (map[string]ecSliceMD, string) {
 	totalCnt := 2 + (o.sliceTotal())*2
 	objSize := int64(ecMinBigSize * 2)
 	sliceSize := ec.SliceSize(objSize, o.dataCnt)
@@ -953,7 +963,8 @@ func createECFile(t *testing.T, bucket, objName, fullPath string, baseParams api
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, true, objName, bucket, o)
 	tassert.Fatalf(t, mainObjPath != "", "Full copy %s was not found", mainObjPath)
 
-	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+	objPath := ecTestDir + objName
+	ecCheckSlices(t, foundParts, bucket, objPath, objSize, sliceSize, totalCnt, o)
 
 	return foundParts, mainObjPath
 }
@@ -982,7 +993,6 @@ func TestECChecksum(t *testing.T) {
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
 
-	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
@@ -990,11 +1000,11 @@ func TestECChecksum(t *testing.T) {
 
 	objName1 := fmt.Sprintf(o.pattern, 1)
 	objPath1 := ecTestDir + objName1
-	foundParts1, mainObjPath1 := createECFile(t, bucket, objName1, fullPath, baseParams, o)
+	foundParts1, mainObjPath1 := createECFile(t, bucket, objName1, baseParams, o)
 
 	objName2 := fmt.Sprintf(o.pattern, 2)
 	objPath2 := ecTestDir + objName2
-	foundParts2, mainObjPath2 := createECFile(t, bucket, objName2, fullPath, baseParams, o)
+	foundParts2, mainObjPath2 := createECFile(t, bucket, objName2, baseParams, o)
 
 	tutils.Logf("Removing main object %s\n", mainObjPath1)
 	tassert.CheckFatal(t, os.Remove(mainObjPath1))
@@ -1030,8 +1040,9 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	}
 
 	var (
-		bucket   = TestBucketName
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket     = TestBucketName
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -1047,10 +1058,6 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
 
-	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
-
-	baseParams := tutils.BaseAPIParams(proxyURL)
-
 	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
@@ -1062,7 +1069,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
-			createDamageRestoreECFile(t, baseParams, bucket, objName, i, fullPath, o)
+			createDamageRestoreECFile(t, baseParams, bucket, objName, i, o)
 		}(i)
 	}
 	wg.Wait()
@@ -1107,7 +1114,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
-			createDamageRestoreECFile(t, baseParams, bucket, objName, i, fullPath, o)
+			createDamageRestoreECFile(t, baseParams, bucket, objName, i, o)
 		}(i)
 	}
 	wg.Wait()
@@ -1125,8 +1132,9 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	}
 
 	var (
-		bucket   = TestBucketName
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket     = TestBucketName
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -1142,10 +1150,6 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
 
-	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
-
-	baseParams := tutils.BaseAPIParams(proxyURL)
-
 	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
@@ -1157,7 +1161,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
-			createDamageRestoreECFile(t, baseParams, bucket, objName, i, fullPath, o)
+			createDamageRestoreECFile(t, baseParams, bucket, objName, i, o)
 		}(i)
 	}
 	wg.Wait()
@@ -1245,7 +1249,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 		go func(i int) {
 			defer wg.Done()
-			createDamageRestoreECFile(t, baseParams, bucket, objName, i, fullPath, o)
+			createDamageRestoreECFile(t, baseParams, bucket, objName, i, o)
 		}(j)
 	}
 
@@ -1518,7 +1522,6 @@ func TestECXattrs(t *testing.T) {
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
-	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
@@ -1558,7 +1561,7 @@ func TestECXattrs(t *testing.T) {
 		tutils.Logf("waiting for %s\n", objPath)
 		foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bucket, o)
 
-		ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+		ecCheckSlices(t, foundParts, bucket, objPath, objSize, sliceSize, totalCnt, o)
 		if mainObjPath == "" {
 			t.Fatalf("Full copy is not found")
 		}
@@ -1615,7 +1618,7 @@ func TestECXattrs(t *testing.T) {
 					break
 				}
 			}
-			ecCheckSlices(t, partsAfterRestore, fullPath+objName, objSize, sliceSize, totalCnt)
+			ecCheckSlices(t, partsAfterRestore, bucket, objPath, objSize, sliceSize, totalCnt, o)
 		}
 	}
 
@@ -1752,8 +1755,9 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	}
 
 	var (
-		bucket   = TestBucketName
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket     = TestBucketName
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -1773,8 +1777,6 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
 
-	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
-	baseParams := tutils.BaseAPIParams(proxyURL)
 	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
@@ -1806,7 +1808,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 		foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bucket, o)
 
-		ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+		ecCheckSlices(t, foundParts, bucket, objPath, objSize, sliceSize, totalCnt, o)
 		if mainObjPath == "" {
 			t.Errorf("Full copy is not found")
 			return
@@ -1885,8 +1887,6 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
 
-	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
-
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
 	newLocalBckWithProps(t, baseParams, bucket, bckProps, o)
@@ -1897,11 +1897,10 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	// PUT object
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
-		go func() {
+		go func(objName string) {
 			defer wg.Done()
-			createECReplicas(t, baseParams, bucket, objName, fullPath, o)
-		}()
+			createECReplicas(t, baseParams, bucket, objName, o)
+		}(fmt.Sprintf(o.pattern, i))
 	}
 
 	wg.Wait()
@@ -2030,7 +2029,6 @@ func TestECEmergencyMpath(t *testing.T) {
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
 
-	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
 	bckProps := defaultECBckProps(o)
 	newLocalBckWithProps(t, baseParams, bucket, bckProps, o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
@@ -2059,7 +2057,7 @@ func TestECEmergencyMpath(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bucket, o)
-		ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+		ecCheckSlices(t, foundParts, bucket, objPath, objSize, sliceSize, totalCnt, o)
 		if mainObjPath == "" {
 			t.Errorf("Full copy is not found")
 			return
@@ -2164,10 +2162,10 @@ func TestECRebalance(t *testing.T) {
 		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
 	}
 
-	const aisDir = "local" // TODO: hardcode
 	var (
-		bucket   = TestBucketName
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket     = TestBucketName
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	o := ecOptions{
 		objCount:  30,
@@ -2186,9 +2184,6 @@ func TestECRebalance(t *testing.T) {
 		t.Skip(fmt.Sprintf("%q requires at least 4 targets to have parity>=2, found %d", t.Name(), len(smap.Tmap)))
 	}
 
-	fullPath := fmt.Sprintf("%s/%s/%s", aisDir, bucket, ecTestDir)
-	baseParams := tutils.BaseAPIParams(proxyURL)
-
 	newLocalBckWithProps(t, baseParams, bucket, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
@@ -2199,7 +2194,7 @@ func TestECRebalance(t *testing.T) {
 		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
-			createECObject(t, baseParams, bucket, objName, i, fullPath, o)
+			createECObject(t, baseParams, bucket, objName, i, o)
 		}(i)
 	}
 	wg.Wait()
@@ -2419,13 +2414,13 @@ func TestECAndRegularRebalance(t *testing.T) {
 	}
 
 	const (
-		aisDir   = "local" // TODO: hardcode
 		fileSize = 32 * cmn.KiB
 	)
 	var (
-		bucketReg = TestBucketName + "-REG"
-		bucketEC  = TestBucketName + "-EC"
-		proxyURL  = getPrimaryURL(t, proxyURLReadOnly)
+		bucketReg  = TestBucketName + "-REG"
+		bucketEC   = TestBucketName + "-EC"
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	o := ecOptions{
 		objCount:  90,
@@ -2443,9 +2438,6 @@ func TestECAndRegularRebalance(t *testing.T) {
 	if len(smap.Tmap) < 4 {
 		t.Skip(fmt.Sprintf("%q requires at least 4 targets to have parity>=2, found %d", t.Name(), len(smap.Tmap)))
 	}
-
-	fullPath := fmt.Sprintf("%s/%s/%s", aisDir, bucketEC, ecTestDir)
-	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	tutils.CreateFreshBucket(t, proxyURL, bucketReg)
 	defer tutils.DestroyBucket(t, proxyURL, bucketReg)
@@ -2476,7 +2468,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
-			createECObject(t, baseParams, bucketEC, objName, i, fullPath, o)
+			createECObject(t, baseParams, bucketEC, objName, i, o)
 		}(i)
 	}
 	wg.Wait()
@@ -2487,7 +2479,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 
 	// fill regular bucket
 	rpattern := "obj-reg-chk-%04d"
-	fileList := []string{}
+	fileList := make([]string, 0, o.objCount)
 	for i := 0; i < o.objCount; i++ {
 		fileList = append(fileList, fmt.Sprintf(rpattern, i))
 	}

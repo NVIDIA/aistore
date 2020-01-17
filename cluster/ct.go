@@ -21,6 +21,7 @@ type CT struct {
 	parsedFQN fs.ParsedFQN
 }
 
+func (ct *CT) ContentType() string      { return ct.parsedFQN.ContentType }
 func (ct *CT) ObjName() string          { return ct.parsedFQN.ObjName }
 func (ct *CT) Bucket() string           { return ct.bck.Name }
 func (ct *CT) Provider() string         { return ct.bck.Provider }
@@ -46,8 +47,8 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 	if err != nil {
 		return ct, err
 	}
+	ct.bck = &Bck{Name: ct.parsedFQN.Bucket, Provider: ct.parsedFQN.Provider}
 	if b != nil {
-		ct.bck = &Bck{Name: ct.parsedFQN.Bucket, Provider: ct.parsedFQN.Provider}
 		err = ct.bck.Init(b)
 	}
 	return

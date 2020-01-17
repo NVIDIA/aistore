@@ -2,6 +2,7 @@ package fs_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -9,7 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 )
 
-func TestFQN2Info(t *testing.T) {
+func TestParseFQN(t *testing.T) {
 	tests := []struct {
 		testName        string
 		fqn             string
@@ -24,39 +25,45 @@ func TestFQN2Info(t *testing.T) {
 		// good
 		{
 			"smoke test",
-			"/tmp/obj/local/bucket/objname",
+			"/tmp/~obj/@ais/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", "obj", "bucket", cmn.ProviderAIS, "objname", false,
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, "objname", false,
 		},
 		{
 			"cloud as bucket type",
-			"/tmp/obj/cloud/bucket/objname",
+			"/tmp/~obj/@aws/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", "obj", "bucket", cmn.ProviderAmazon, "objname", false,
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAmazon, "objname", false,
+		},
+		{
+			"cloud as bucket type",
+			"/tmp/~obj/@gcp/bucket/objname",
+			[]string{"/tmp"},
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderGoogle, "objname", false,
 		},
 		{
 			"long mount path name",
-			"/tmp/super/long/obj/cloud/bucket/objname",
+			"/tmp/super/long/~obj/@aws/bucket/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", "obj", "bucket", cmn.ProviderAmazon, "objname", false,
+			"/tmp/super/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, "objname", false,
 		},
 		{
 			"long mount path name and objname in folder",
-			"/tmp/super/long/obj/cloud/bucket/folder/objname",
+			"/tmp/super/long/~obj/@aws/bucket/folder/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", "obj", "bucket", cmn.ProviderAmazon, "folder/objname", false,
+			"/tmp/super/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, "folder/objname", false,
 		},
 		{
 			"multiple mpaths matching, choose the longest",
-			"/tmp/super/long/long/obj/cloud/bucket/folder/objname",
+			"/tmp/super/long/long/~obj/@aws/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/super/long/long"},
-			"/tmp/super/long/long", "obj", "bucket", cmn.ProviderAmazon, "folder/objname", false,
+			"/tmp/super/long/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, "folder/objname", false,
 		},
 		{
 			"dirty mpath",
-			"/tmp/super/long/long/obj/cloud/bucket/folder/objname",
+			"/tmp/super/long/long/~obj/@gcp/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/.////super/../super//./long///////////long"},
-			"/tmp/super/long/long", "obj", "bucket", cmn.ProviderAmazon, "folder/objname", false,
+			"/tmp/super/long/long", fs.ObjectType, "bucket", cmn.ProviderGoogle, "folder/objname", false,
 		},
 
 		// bad
@@ -64,49 +71,75 @@ func TestFQN2Info(t *testing.T) {
 			"too short name",
 			"/tmp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", cmn.ProviderAmazon, "", true,
+			"", "", "", "", "", true,
+		},
+		{
+			"invalid content type (not prefixed with '~')",
+			"/tmp/obj/@gcp/bucket/objname",
+			[]string{"/tmp"},
+			"", "", "", "", "", true,
+		},
+		{
+			"invalid cloud provider (unknown)",
+			"/tmp/~unknown/@gcp/bucket/objname",
+			[]string{"/tmp"},
+			"", "", "", "", "", true,
 		},
 		{
 			"empty bucket name",
-			"/tmp/local//objname",
+			"/tmp/~obj/@ais//objname",
 			[]string{"/tmp"},
-			"", "", "", cmn.ProviderAmazon, "", true,
+			"", "", "", "", "", true,
 		},
 		{
 			"empty object name",
-			"/tmp/local//objname",
+			"/tmp/~obj/@ais/bucket/",
 			[]string{"/tmp"},
-			"", "", "", cmn.ProviderAmazon, "", true,
+			"", "", "", "", "", true,
 		},
 		{
-			"empty bucket type",
-			"/tmp/bucket/objname",
+			"empty cloud provider",
+			"/tmp/~obj/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", cmn.ProviderAmazon, "", true,
+			"", "", "", "", "", true,
 		},
 		{
-			"bad bucket type",
-			"/tmp/local_or_cloud/bucket/objname",
+			"invalid cloud provider (not prefixed with '@')",
+			"/tmp/~obj/gcp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", cmn.ProviderAmazon, "", true,
+			"", "", "", "", "", true,
+		},
+		{
+			"invalid cloud provider (unknown)",
+			"/tmp/~obj/@unknown/bucket/objname",
+			[]string{"/tmp"},
+			"", "", "", "", "", true,
+		},
+		{
+			"invalid cloud provider (cloud)",
+			"/tmp/~obj/@cloud/bucket/objname",
+			[]string{"/tmp"},
+			"", "", "", "", "", true,
+		},
+		{
+			"invalid cloud provider (local)",
+			"/tmp/~obj/@cloud/bucket/objname",
+			[]string{"/tmp"},
+			"", "", "", "", "", true,
 		},
 		{
 			"no matching mountpath",
-			"/tmp/local/bucket/objname",
+			"/tmp/~obj/@ais/bucket/objname",
 			[]string{"/tmp/a", "/tmp/b"},
-			"", "", "", cmn.ProviderAmazon, "", true,
+			"", "", "", "", "", true,
 		},
 		{
 			"fqn is mpath",
 			"/tmp/mpath",
 			[]string{"/tmp/mpath"},
-			"", "", "", cmn.ProviderAmazon, "", true,
+			"", "", "", "", "", true,
 		},
 	}
-
-	cfg := cmn.GCO.BeginUpdate()
-	cfg.CloudProvider = cmn.ProviderAmazon
-	cmn.GCO.CommitUpdate(cfg)
 
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
@@ -128,7 +161,7 @@ func TestFQN2Info(t *testing.T) {
 			fs.Mountpaths = mfs
 			fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 
-			parsedFQN, err := mfs.FQN2Info(tt.fqn)
+			parsedFQN, err := mfs.ParseFQN(tt.fqn)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("fqn2info() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -136,22 +169,106 @@ func TestFQN2Info(t *testing.T) {
 			if err != nil {
 				return
 			}
-			mpathInfo, gotContentType, gotBucket, gotProvider, gotObjName := parsedFQN.MpathInfo, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.ObjName
-			gotMPath := mpathInfo.Path
-			if gotMPath != tt.wantMPath {
-				t.Errorf("fqn2info() gotMPath = %v, want %v", gotMPath, tt.wantMPath)
-			}
-			if gotContentType != tt.wantContentType {
-				t.Errorf("fqn2info() gotMPath = %v, want %v", gotContentType, tt.wantContentType)
-			}
-			if gotBucket != tt.wantBucket {
-				t.Errorf("fqn2info() gotBucket = %v, want %v", gotBucket, tt.wantBucket)
+			gotMpath, gotContentType, gotBucket, gotProvider, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.ObjName
+			if gotMpath != tt.wantMPath {
+				t.Errorf("gotMpath = %v, want %v", gotMpath, tt.wantMPath)
 			}
 			if gotProvider != tt.wantProvider {
-				t.Errorf("fqn2info() gotProvider = %v, want %v", gotProvider, tt.wantProvider)
+				t.Errorf("gotProvider = %v, want %v", gotProvider, tt.wantProvider)
+			}
+			if gotContentType != tt.wantContentType {
+				t.Errorf("gotContentType = %v, want %v", gotContentType, tt.wantContentType)
+			}
+			if gotBucket != tt.wantBucket {
+				t.Errorf("gotBucket = %v, want %v", gotBucket, tt.wantBucket)
 			}
 			if gotObjName != tt.wantObjName {
-				t.Errorf("fqn2info() gotObjName = %v, want %v", gotObjName, tt.wantObjName)
+				t.Errorf("gotObjName = %v, want %v", gotObjName, tt.wantObjName)
+			}
+		})
+	}
+}
+
+func TestMakeAndParseFQN(t *testing.T) {
+	tests := []struct {
+		mpath       string
+		contentType string
+		provider    string
+		bucket      string
+		objName     string
+	}{
+		{
+			mpath:       "/tmp/path",
+			contentType: fs.ObjectType,
+			provider:    cmn.ProviderAIS,
+			bucket:      "bucket",
+			objName:     "object/name",
+		},
+		{
+			mpath:       "/tmp/path",
+			contentType: fs.WorkfileType,
+			provider:    cmn.ProviderAmazon,
+			bucket:      "bucket",
+			objName:     "object/name",
+		},
+		{
+			mpath:       "/tmp/path",
+			contentType: fs.ObjectType,
+			provider:    cmn.ProviderAmazon,
+			bucket:      "bucket",
+			objName:     "object/name",
+		},
+		{
+			mpath:       "/tmp/path",
+			contentType: fs.ObjectType,
+			provider:    cmn.ProviderGoogle,
+			bucket:      "bucket",
+			objName:     "object/name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(strings.Join([]string{tt.mpath, tt.contentType, tt.provider, tt.bucket, tt.objName}, "|"), func(t *testing.T) {
+			mios := ios.NewIOStaterMock()
+			mfs := fs.NewMountedFS(mios)
+			mfs.DisableFsIDCheck()
+
+			if _, err := os.Stat(tt.mpath); os.IsNotExist(err) {
+				cmn.CreateDir(tt.mpath)
+				defer os.RemoveAll(tt.mpath)
+			}
+			err := mfs.Add(tt.mpath)
+			if err != nil {
+				t.Errorf("error in add mountpath: %v", err)
+				return
+			}
+
+			fs.Mountpaths = mfs
+			fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
+			fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+
+			mpaths, _ := fs.Mountpaths.Get()
+			fqn := mpaths[tt.mpath].MakePathBucketObject(tt.contentType, tt.bucket, tt.provider, tt.objName)
+
+			parsedFQN, err := mfs.ParseFQN(fqn)
+			if err != nil {
+				t.Fatalf("failed to parse FQN: %v", err)
+			}
+			gotMpath, gotContentType, gotBucket, gotProvider, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.ObjName
+			if gotMpath != tt.mpath {
+				t.Errorf("gotMpath = %v, want %v", gotMpath, tt.mpath)
+			}
+			if gotContentType != tt.contentType {
+				t.Errorf("getContentType = %v, want %v", gotContentType, tt.contentType)
+			}
+			if gotProvider != tt.provider {
+				t.Errorf("gotProvider = %v, want %v", gotProvider, tt.provider)
+			}
+			if gotBucket != tt.bucket {
+				t.Errorf("gotBucket = %v, want %v", gotBucket, tt.bucket)
+			}
+			if gotObjName != tt.objName {
+				t.Errorf("gotObjName = %v, want %v", gotObjName, tt.objName)
 			}
 		})
 	}
@@ -161,7 +278,7 @@ var (
 	parsedFQN fs.ParsedFQN
 )
 
-func BenchmarkFQN2Info(b *testing.B) {
+func BenchmarkParseFQN(b *testing.B) {
 	var (
 		mpath = "/tmp/mpath"
 		mios  = ios.NewIOStaterMock()
@@ -174,9 +291,12 @@ func BenchmarkFQN2Info(b *testing.B) {
 	mfs.Add(mpath)
 	fs.Mountpaths = mfs
 	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
+
+	mpaths, _ := fs.Mountpaths.Get()
+	fqn := mpaths[mpath].MakePathBucketObject(fs.ObjectType, "bucket", cmn.ProviderAIS, "super/long/name")
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		parsedFQN, _ = mfs.FQN2Info("/tmp/mpath/obj/local/bucket/super/long/name")
+		parsedFQN, _ = mfs.ParseFQN(fqn)
 	}
 }

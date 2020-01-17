@@ -11,10 +11,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-// mountpath/<content-type>/<cloudPath|aisPath>/<bucket-name>/...
 const (
-	cloudPath = "cloud"
-	aisPath   = "local"
+	prefCT       = '~'
+	prefProvider = '@'
+	// prefNamespace = '$'
 )
 
 const (
@@ -35,45 +35,48 @@ type ParsedFQN struct {
 	Digest      uint64
 }
 
-// mpathInfo, contentType, provider, bucket, objName, err
-func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
+// ParseFQN splits a provided FQN (created by `MakePathBucketObject`) or reports
+// an error.
+func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 	var (
 		rel           string
 		itemIdx, prev int
 	)
 
-	parsed.MpathInfo, rel, err = mfs.FQN2MpathInfo(fqn)
+	parsed.MpathInfo, rel, err = mfs.ParseMpathInfo(fqn)
 	if err != nil {
 		return
 	}
 
 	for i := 0; i < len(rel); i++ {
-		if rel[i] != byte(filepath.Separator) {
+		if rel[i] != filepath.Separator {
 			continue
 		}
 
 		item := rel[prev:i]
 		switch itemIdx {
 		case 0: // content type
+			if item[0] != prefCT {
+				err = fmt.Errorf("invalid fqn %s: expected content type to be prefixed with '%s'", fqn, string(prefCT))
+				return
+			}
+			item = item[1:]
 			if _, ok := CSM.RegisteredContentTypes[item]; !ok {
 				err = fmt.Errorf("invalid fqn %s: unrecognized content type %q", fqn, item)
 				return
 			}
 			parsed.ContentType = item
 		case 1: // cloud provider
-			// TODO: when on-disk structure changes we should just check:
-			// `cmn.IsValidProvider(item)`
-			if item != aisPath && item != cloudPath {
+			if item[0] != prefProvider {
+				err = fmt.Errorf("invalid fqn %s: expected cloud provider to be prefixed with '%v'", fqn, string(prefProvider))
+				return
+			}
+			item = item[1:]
+			if !cmn.IsValidProvider(item) {
 				err = fmt.Errorf("invalid fqn %s: unrecognized provider %q", fqn, item)
 				return
 			}
-			// TODO: when on-disk structure changes we should just assign:
-			// `parsed.Provider = item`
-			if item == aisPath {
-				parsed.Provider = cmn.ProviderAIS
-			} else {
-				parsed.Provider = cmn.GCO.Get().CloudProvider
-			}
+			parsed.Provider = item
 		case 2: // bucket and object name
 			if item == "" {
 				err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
@@ -97,11 +100,11 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 	return
 }
 
-func (mfs *MountedFS) FQN2MpathInfo(fqn string) (info *MountpathInfo, relativePath string, err error) {
+// ParseMpathInfo matches and extracts <mpath> from the FQN and returns the rest of FQN.
+func (mfs *MountedFS) ParseMpathInfo(fqn string) (info *MountpathInfo, relativePath string, err error) {
 	var (
 		available = (*MPI)(mfs.available.Load())
 		max       = 0
-		ll        = len(fqn)
 	)
 	if available == nil {
 		err = fmt.Errorf("failed to get mountpaths, fqn: %s", fqn)
@@ -110,7 +113,7 @@ func (mfs *MountedFS) FQN2MpathInfo(fqn string) (info *MountpathInfo, relativePa
 	availablePaths := *available
 	for mpath, mpathInfo := range availablePaths {
 		l := len(mpath)
-		if ll > l && l > max && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
+		if len(fqn) > l && l > max && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
 			info = mpathInfo
 			relativePath = fqn[l+1:]
 			max = l

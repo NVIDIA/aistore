@@ -58,10 +58,6 @@ func isSyscallWriteError(err error) bool {
 	}
 }
 
-func isValidProvider(prov string) bool {
-	return prov == cmn.ProviderAmazon || prov == cmn.ProviderGoogle || prov == cmn.ProviderAIS
-}
-
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items ...string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, true, items...)
 	if err != nil {
@@ -356,7 +352,7 @@ func (a *authServ) userRemoveCredentials(w http.ResponseWriter, r *http.Request)
 
 	userID := apiItems[0]
 	provider := apiItems[1]
-	if !isValidProvider(provider) {
+	if !cmn.IsValidProvider(provider) {
 		errmsg := fmt.Sprintf("Invalid cloud provider: %s", provider)
 		cmn.InvalidHandlerWithMsg(w, r, errmsg, http.StatusBadRequest)
 		return

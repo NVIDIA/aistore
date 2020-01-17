@@ -14,38 +14,34 @@ import (
 var _ = Describe("Bck", func() {
 	Describe("Uname", func() {
 		DescribeTable("should convert bucket and objname to uname and back",
-			func(bckName, bckProvider, objName, expectedBckProvider string) {
+			func(bckName, bckProvider, objName string) {
 				bck := &Bck{Name: bckName, Provider: bckProvider}
 				uname := bck.MakeUname(objName)
 
 				gotBck, gotObjName := ParseUname(uname)
 				Expect(gotBck.Name).To(Equal(bckName))
-				Expect(gotBck.Provider).To(Equal(expectedBckProvider))
+				Expect(gotBck.Provider).To(Equal(bckProvider))
 				Expect(gotObjName).To(Equal(objName))
 			},
 			Entry(
 				"regular ais bucket with simple object name",
-				"bck", cmn.ProviderAIS, "obj", cmn.ProviderAIS,
+				"bck", cmn.ProviderAIS, "obj",
 			),
 			Entry(
 				"regular ais bucket with long object name",
-				"bck", cmn.ProviderAIS, "obj/tmp1/tmp2", cmn.ProviderAIS,
-			),
-			Entry(
-				"empty provider",
-				"bck", "", "obj", "",
+				"bck", cmn.ProviderAIS, "obj/tmp1/tmp2",
 			),
 			Entry(
 				"aws provider",
-				"bck", cmn.ProviderAmazon, "obj", cmn.Cloud,
+				"bck", cmn.ProviderAmazon, "obj",
 			),
 			Entry(
 				"gcp provider",
-				"bck", cmn.ProviderGoogle, "obj", cmn.Cloud,
+				"bck", cmn.ProviderGoogle, "obj",
 			),
 			Entry(
 				"cloud provider",
-				"bck", cmn.Cloud, "obj", cmn.Cloud,
+				"bck", cmn.ProviderGoogle, "obj",
 			),
 		)
 	})

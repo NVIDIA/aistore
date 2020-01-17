@@ -21,10 +21,10 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-const pkgName = "fs"
-const uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
-const sepa = string(filepath.Separator)
-const lsepa = len(sepa)
+const (
+	pkgName  = "fs"
+	uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
+)
 
 // mountpath lifecycle-change enum
 const (
@@ -188,32 +188,19 @@ func (mi *MountpathInfo) String() string {
 ///////////////
 
 func (mi *MountpathInfo) makePathBuf(contentType, provider string, extra int) (buf []byte) {
-	var (
-		provPath string
-		l        = len(mi.Path) + lsepa + len(contentType) + lsepa + extra
-	)
-	switch provider {
-	case cmn.ProviderAIS:
-		l += len(aisPath)
-		provPath = aisPath
-	case cmn.ProviderAmazon, cmn.ProviderGoogle:
-		l += len(cloudPath)
-		provPath = cloudPath
-	default:
-		cmn.AssertMsg(false, "invalid provider: "+provider)
-	}
-	buf = make([]byte, 0, l)
+	cmn.Assert(cmn.IsValidProvider(provider)) // FIXME: this should be removed
+	buf = make([]byte, 0, len(mi.Path)+1+1+len(contentType)+1+1+len(provider)+extra)
 	buf = append(buf, mi.Path...)
-	buf = append(buf, sepa...)
+	buf = append(buf, filepath.Separator, prefCT)
 	buf = append(buf, contentType...)
-	buf = append(buf, sepa...)
-	buf = append(buf, provPath...)
+	buf = append(buf, filepath.Separator, prefProvider)
+	buf = append(buf, provider...)
 	return
 }
 
 func (mi *MountpathInfo) makePathBucketBuf(contentType, bucket, provider string, extra int) (buf []byte) {
-	buf = mi.makePathBuf(contentType, provider, lsepa+len(bucket)+extra)
-	buf = append(buf, sepa...)
+	buf = mi.makePathBuf(contentType, provider, 1+len(bucket)+extra)
+	buf = append(buf, filepath.Separator)
 	buf = append(buf, bucket...)
 	return
 }
@@ -228,8 +215,8 @@ func (mi *MountpathInfo) MakePathBucket(contentType, bucket, provider string) st
 	return *(*string)(unsafe.Pointer(&buf))
 }
 func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, provider, objName string) string {
-	buf := mi.makePathBucketBuf(contentType, bucket, provider, lsepa+len(objName))
-	buf = append(buf, sepa...)
+	buf := mi.makePathBucketBuf(contentType, bucket, provider, 1+len(objName))
+	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
 	return *(*string)(unsafe.Pointer(&buf))
 }
@@ -321,22 +308,10 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 // Add adds new mountpath to the target's mountpaths.
 // FIXME: unify error messages for original and clean mountpath
 func (mfs *MountedFS) Add(mpath string) error {
-	const separator = string(filepath.Separator)
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
 		return err
 	}
-	for _, bucket := range []string{aisPath, cloudPath} {
-		invalidMpath := separator + bucket
-		if strings.HasSuffix(cleanMpath, invalidMpath) {
-			return fmt.Errorf("cannot add fspath %q with suffix %q", mpath, invalidMpath)
-		}
-		invalidMpath += separator
-		if strings.Contains(cleanMpath, invalidMpath) {
-			return fmt.Errorf("fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
-		}
-	}
-
 	if err := Access(cleanMpath); err != nil {
 		return fmt.Errorf("fspath %q %s, err: %v", mpath, cmn.DoesNotExist, err)
 	}

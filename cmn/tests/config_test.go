@@ -62,3 +62,16 @@ func thisFileDir(t *testing.T) string {
 	tassert.Fatalf(t, ok, "Taking path of a file failed")
 	return filepath.Dir(filename)
 }
+
+func TestValidateMpath(t *testing.T) {
+	mpaths := []string{
+		"tmp", // not absolute path
+		"/",   // root
+	}
+	for _, mpath := range mpaths {
+		_, err := cmn.ValidateMpath(mpath)
+		if err == nil {
+			t.Errorf("validation of invalid mountpath: %q succeeded", mpath)
+		}
+	}
+}

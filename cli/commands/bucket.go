@@ -31,9 +31,7 @@ const (
 )
 
 func validateBucket(c *cli.Context, b string, tag string, optional bool) (bucket, provider string, err error) {
-	if provider, err = bucketProvider(c); err != nil {
-		return
-	}
+	provider = bucketProvider(c)
 	bucket = cleanBucketName(b)
 	if bucket == "" {
 		if optional {
@@ -437,10 +435,7 @@ func printBckHeadTable(c *cli.Context, props cmn.BucketProps) error {
 
 // Configure bucket as n-way mirror
 func configureNCopies(c *cli.Context, bucket string) (err error) {
-	provider, err := bucketProvider(c)
-	if err != nil {
-		return
-	}
+	provider := bucketProvider(c)
 	if err = checkFlags(c, []cli.Flag{copiesFlag}); err != nil {
 		return
 	}
@@ -457,10 +452,7 @@ func configureNCopies(c *cli.Context, bucket string) (err error) {
 
 // Makes every object in a bucket erasure coded
 func ecEncode(c *cli.Context, bucket string) (err error) {
-	provider, err := bucketProvider(c)
-	if err != nil {
-		return
-	}
+	provider := bucketProvider(c)
 	if err = canReachBucket(bucket, provider); err != nil {
 		return
 	}

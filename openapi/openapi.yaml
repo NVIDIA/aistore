@@ -1088,11 +1088,11 @@ components:
         bprovider:
           type: string
           description: Describes if the bucket is local or cloud
-          default: "local"
+          default: "ais"
         output_bprovider:
           type: string
           description: Describes if the output bucket is local or cloud
-          default: "local"
+          default: "ais"
         extension:
           type: string
           example: ".tar"

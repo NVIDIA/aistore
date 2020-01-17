@@ -92,9 +92,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 		provider string
 	)
 
-	if provider, err = bucketProvider(c); err != nil {
-		return
-	}
+	provider = bucketProvider(c)
 
 	// default bucket or bucket argument given by the user
 	if c.NArg() == 0 || (c.NArg() == 1 && strings.HasSuffix(c.Args().Get(0), "/")) {
