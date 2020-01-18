@@ -23,7 +23,7 @@ import (
 //
 // or, to run a single selected benchmark for 30s:
 //
-// $ GODEBUG=madvdontneed=1 go test -bench=BenchmarkLargeWRF256K -benchtime=30s -benchmem ./d256_test.go
+// $ GODEBUG=madvdontneed=1 go test -bench=BenchmarkLargeAllocMax -benchtime=30s -benchmem ./d256_test.go
 //
 // NOTE: running these benchmarks for less than 40s will likely generate non-reproducible (unstable) results
 

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package ais_test
 
 import (
 	"encoding/json"

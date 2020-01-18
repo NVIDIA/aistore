@@ -2,7 +2,7 @@
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package ais
+package ais_test
 
 import (
 	"testing"

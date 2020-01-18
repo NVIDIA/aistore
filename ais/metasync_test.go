@@ -99,8 +99,20 @@ func newPrimary() *proxyrunner {
 	p.httpclientGetPut = &http.Client{}
 	p.keepalive = newProxyKeepaliveRunner(p, tracker, &p.startedUp)
 
-	p.bmdowner = newBMDOwnerPrx(config)
-	p.bmdowner.put(newBucketMD())
+	o := newBMDOwnerPrx(config)
+	o._put(newBucketMD())
+	p.bmdowner = o
+	return p
+}
+
+func newSecondary(name string) *proxyrunner {
+	p := &proxyrunner{}
+	p.si = newSnode(name, httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	p.smapowner = newSmapowner()
+	p.smapowner.put(newSmap())
+	o := newBMDOwnerPrx(cmn.GCO.Get())
+	o._put(newBucketMD())
+	p.bmdowner = o
 	return p
 }
 
@@ -780,12 +792,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		clone.addProxy(newSnode("proxy1", httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
-		proxy1 := proxyrunner{}
-		proxy1.si = newSnode("p1", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
-		proxy1.smapowner = newSmapowner()
-		proxy1.smapowner.put(newSmap())
-		proxy1.bmdowner = newBMDOwnerPrx(cmn.GCO.Get())
-		proxy1.bmdowner.put(newBucketMD())
+		proxy1 := newSecondary("p1")
 
 		// empty payload
 		newSMap, actMsg, err := proxy1.extractSmap(make(map[string]string), "")
