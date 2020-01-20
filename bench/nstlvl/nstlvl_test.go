@@ -28,72 +28,71 @@ import (
 // print usage and exit:
 // $ go test -bench=. -usage
 
-var nst = struct {
-	// const
-	fnl int
-	lll int
-	ddd string
+const (
+	fileNameLen = 13
+	dirs        = "/a/b/c/d/e/f/g/h/i/j"
+)
+
+type benchContext struct {
 	// internal
-	rnd *rand.Rand
-	lst []string
-	buf []byte
-	prm []int
+	rnd       *rand.Rand
+	fileNames []string
+
 	// command line
-	size  int64
-	dir   string
-	num   int
-	level int
-	help  bool
-}{}
+	level     int
+	fileSize  int64
+	fileCount int
+	dir       string
+	help      bool
+}
+
+var benchCtx benchContext
 
 func init() {
-	nst.fnl = 13 // filename length
-	nst.lll = len(cmn.LetterBytes)
-	nst.ddd = "/a/b/c/d/e/f/g/h/i/j"
-
-	flag.IntVar(&nst.num, "num", 1000, "number of files to generate (and then randomly read)")
-	flag.IntVar(&nst.level, "level", 2, "initial (mountpath) nesting level")
-	flag.Int64Var(&nst.size, "size", cmn.KiB, "file/object size")
-	flag.StringVar(&nst.dir, "dir", "/tmp", "top directory for generated files")
-	flag.BoolVar(&nst.help, "usage", false, "show command-line options")
-
-	nst.rnd = cmn.NowRand()
-	nst.buf = make([]byte, 32*cmn.KiB)
+	flag.IntVar(&benchCtx.level, "level", 2, "initial (mountpath) nesting level")
+	flag.IntVar(&benchCtx.fileCount, "num", 1000, "number of files to generate (and then randomly read)")
+	flag.Int64Var(&benchCtx.fileSize, "size", cmn.KiB, "file/object size")
+	flag.StringVar(&benchCtx.dir, "dir", "/tmp", "top directory for generated files")
+	flag.BoolVar(&benchCtx.help, "usage", false, "show command-line options")
 }
 
-func nstInit() {
-	if nst.lst == nil {
-		flag.Parse()
-		if nst.help {
-			flag.Usage()
-			os.Exit(0)
-		}
-		fmt.Println("files:", nst.num, "size:", nst.size)
-		nst.lst = make([]string, 0, nst.num)
-		nst.prm = nst.rnd.Perm(nst.num)
+func (bctx *benchContext) init() {
+	flag.Parse()
+	if bctx.help {
+		flag.Usage()
+		os.Exit(0)
 	}
+	fmt.Printf("files: %d size: %d\n", bctx.fileCount, bctx.fileSize)
+	bctx.fileNames = make([]string, 0, bctx.fileCount)
+	bctx.rnd = cmn.NowRand()
 }
 
-func BenchmarkNestLevel(b *testing.B) {
-	nstInit()
+func BenchmarkNestedLevel(b *testing.B) {
+	benchCtx.init()
 	for _, extraDepth := range []int{2, 4, 6} {
-		createFiles(nst.level+extraDepth, nst.num)
-		b.Run(strconv.Itoa(nst.level+extraDepth), benchNest)
-		removeFiles()
+		nestedLvl := benchCtx.level + extraDepth
+
+		benchCtx.createFiles(nestedLvl)
+		b.Run(strconv.Itoa(nestedLvl), benchNestedLevel)
+		benchCtx.removeFiles()
 	}
 }
 
-func benchNest(b *testing.B) {
-	var j int
-	for i := 0; i < b.N; i++ {
-		j++
-		if j >= nst.num {
-			b.StopTimer()                   // pause
-			nst.prm = nst.rnd.Perm(nst.num) // permutate
-			b.StartTimer()                  // resume
+func benchNestedLevel(b *testing.B) {
+	var (
+		perm = benchCtx.rnd.Perm(benchCtx.fileCount)
+	)
+
+	b.ResetTimer()
+	for i, j := 0, 0; i < b.N; i, j = i+1, j+1 {
+		if j >= benchCtx.fileCount {
+			b.StopTimer()
+			perm = benchCtx.rnd.Perm(benchCtx.fileCount)
 			j = 0
+			b.StartTimer()
 		}
-		fqn := nst.lst[nst.prm[j]]
+
+		fqn := benchCtx.fileNames[perm[j]]
 		file, err := os.Open(fqn)
 		cmn.AssertNoErr(err)
 		_, err = io.Copy(ioutil.Discard, file)
@@ -102,32 +101,38 @@ func benchNest(b *testing.B) {
 	}
 }
 
-func createFiles(lvl, num int) {
-	reader := &io.LimitedReader{R: nst.rnd, N: nst.size}
-	for i := 0; i < num; i++ {
-		fn := nst.dir + nst.ddd[0:lvl*2+1] + randNestName()
-		file, err := cmn.CreateFile(fn)
+func (bctx *benchContext) createFiles(lvl int) {
+	var (
+		reader = &io.LimitedReader{R: bctx.rnd, N: bctx.fileSize}
+		buf    = make([]byte, 32*cmn.KiB)
+	)
+
+	for i := 0; i < bctx.fileCount; i++ {
+		fileName := bctx.dir + dirs[:lvl*2+1] + bctx.randNestName()
+
+		file, err := cmn.CreateFile(fileName)
 		cmn.AssertNoErr(err)
-		_, err = io.CopyBuffer(file, reader, nst.buf)
+		_, err = io.CopyBuffer(file, reader, buf)
+		cmn.AssertNoErr(err)
+		err = file.Close()
 		cmn.AssertNoErr(err)
 
-		_ = file.Close()
-		reader.N = nst.size
-		nst.lst = append(nst.lst, fn)
+		reader.N = bctx.fileSize
+		bctx.fileNames = append(bctx.fileNames, fileName)
 	}
 }
 
-func removeFiles() {
-	err := os.RemoveAll(nst.dir + nst.ddd[:2])
+func (bctx *benchContext) removeFiles() {
+	err := os.RemoveAll(bctx.dir + dirs[:2])
 	cmn.AssertNoErr(err)
-	nst.lst = nst.lst[:0]
+	bctx.fileNames = bctx.fileNames[:0]
 }
 
-func randNestName() string {
-	bytes := nst.buf[:nst.fnl]
-	nst.rnd.Read(bytes)
+func (bctx *benchContext) randNestName() string {
+	var bytes [fileNameLen]byte
+	bctx.rnd.Read(bytes[:])
 	for i, b := range bytes {
-		bytes[i] = cmn.LetterBytes[b%byte(nst.lll)]
+		bytes[i] = cmn.LetterBytes[b%byte(len(cmn.LetterBytes))]
 	}
-	return string(bytes)
+	return string(bytes[:])
 }
