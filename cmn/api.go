@@ -499,7 +499,7 @@ func (bp *BucketProps) Validate(targetCnt int, urlOutsideCluster func(string) bo
 		}
 		if bp.Tiering.WritePolicy == "" {
 			bp.Tiering.WritePolicy = RWPolicyNextTier
-			if IsProviderCloud(bp.CloudProvider) {
+			if IsProviderCloud(bp.CloudProvider, false /*acceptAnon*/) {
 				bp.Tiering.WritePolicy = RWPolicyCloud
 			}
 		}

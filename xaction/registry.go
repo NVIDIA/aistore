@@ -825,7 +825,7 @@ func (r *bckSummaryTask) Run() {
 				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.ProviderAIS})
 			}
 		}
-		if r.bck.Provider == "" || cmn.IsProviderCloud(r.bck.Provider) {
+		if r.bck.Provider == "" || cmn.IsProviderCloud(r.bck.Provider, true /*acceptAnon*/) {
 			for name := range bmd.CBmap {
 				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.GCO.Get().CloudProvider})
 			}

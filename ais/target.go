@@ -1091,7 +1091,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, pr
 		}
 		sort.Strings(bucketNames.AIS) // sort by name
 	}
-	if provider == "" || cmn.IsProviderCloud(provider) {
+	if provider == "" || cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
 		buckets, err, errcode := t.cloud.getBucketNames(t.contextWithAuth(r.Header))
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)

@@ -31,8 +31,8 @@ func IsProviderAIS(provider string) bool {
 	return provider == ProviderAIS
 }
 
-func IsProviderCloud(provider string) bool {
-	return provider == Cloud || provider == ProviderAmazon || provider == ProviderGoogle
+func IsProviderCloud(provider string, acceptAnon bool) bool {
+	return (!IsProviderAIS(provider) && IsValidProvider(provider)) || (acceptAnon && provider == Cloud)
 }
 
 func IsValidProvider(provider string) bool {

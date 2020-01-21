@@ -181,7 +181,7 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bo
 		if provider == "" || cmn.IsProviderAIS(provider) {
 			printNotUsedBuckets(bucketNames.AIS)
 		}
-		if provider == "" || cmn.IsProviderCloud(provider) {
+		if provider == "" || cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
 			printNotUsedBuckets(bucketNames.Cloud)
 		}
 	}
@@ -236,7 +236,7 @@ func suggestBucket(c *cli.Context, separator bool, providers ...string) {
 	if provider == "" || cmn.IsProviderAIS(provider) {
 		printBuckets(bucketNames.AIS)
 	}
-	if provider == "" || cmn.IsProviderCloud(provider) {
+	if provider == "" || cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
 		printBuckets(bucketNames.Cloud)
 	}
 }

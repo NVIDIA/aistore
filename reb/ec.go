@@ -337,7 +337,7 @@ func (so *rebObject) emptyTargets(skip *cluster.Snode) cluster.Nodes {
 // and the CT's info about object matches previously found CTs.
 func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
 	bckList := rr.ais
-	if cmn.IsProviderCloud(ct.Provider) {
+	if cmn.IsProviderCloud(ct.Provider, false /*acceptAnon*/) {
 		bckList = rr.cloud
 	}
 	bck, ok := bckList[ct.Bucket]

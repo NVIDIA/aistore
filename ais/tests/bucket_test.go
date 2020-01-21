@@ -461,7 +461,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				filesPutCh = make(chan string, numfiles)
 			)
 
-			if cmn.IsProviderCloud(provider) {
+			if cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
 				bucket = clibucket
 
 				if !isCloudBucket(t, proxyURL, bucket) {
@@ -641,7 +641,7 @@ func TestBucketListAndSummary(t *testing.T) {
 				defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 				m.puts()
-			} else if cmn.IsProviderCloud(test.provider) {
+			} else if cmn.IsProviderCloud(test.provider, true /*acceptAnon*/) {
 				m.bucket = clibucket
 
 				if !isCloudBucket(t, proxyURL, m.bucket) {
@@ -1339,7 +1339,7 @@ func TestCopyBucket(t *testing.T) {
 				})
 			}
 
-			if cmn.IsProviderCloud(test.provider) {
+			if cmn.IsProviderCloud(test.provider, true /*acceptAnon*/) {
 				srcm.bucket = clibucket
 
 				if !isCloudBucket(t, proxyURL, srcm.bucket) {
@@ -1390,7 +1390,7 @@ func TestCopyBucket(t *testing.T) {
 
 				srcBckList, err = api.ListBucket(baseParams, srcm.bucket, nil, 0)
 				tassert.CheckFatal(t, err)
-			} else if cmn.IsProviderCloud(test.provider) {
+			} else if cmn.IsProviderCloud(test.provider, true /*acceptAnon*/) {
 				srcm.cloudPuts()
 				defer srcm.cloudDelete()
 
