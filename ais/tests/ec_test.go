@@ -28,10 +28,7 @@ import (
 )
 
 const (
-	ecSliceDir = "/~" + ec.SliceType + "/"
-	ecMetaDir  = "/~" + ec.MetaType + "/"
-	ecDataDir  = "/~" + fs.ObjectType + "/"
-	ecTestDir  = "ec-test/"
+	ecTestDir = "ec-test/"
 
 	ECPutTimeOut = time.Minute * 4 // maximum wait time after PUT to be sure that the object is EC'ed/replicated
 
@@ -146,8 +143,8 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 		if !strings.Contains(path, objName) {
 			return nil
 		}
-		sliceLom := &cluster.LOM{T: tMock, FQN: path}
 
+		sliceLom := &cluster.LOM{T: tMock, FQN: path}
 		if err = sliceLom.Init("", bckProvider); err != nil {
 			return nil
 		}
@@ -158,11 +155,15 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 		}
 
 		var cksumVal string
-
 		if sliceLom.ParsedFQN.ContentType == ec.SliceType {
-			// extract checksum from metadata for slices
-			metaFQN := strings.Replace(path, ecSliceDir, ecMetaDir, 1)
-			md, err := ec.LoadMetadata(metaFQN)
+			ct, err := cluster.NewCTFromFQN(path, nil)
+			if err != nil {
+				return err
+			}
+
+			fqn := ct.Make(ec.MetaType)
+			// Extract checksum from metadata for slices
+			md, err := ec.LoadMetadata(fqn)
 			if err == nil {
 				cksumVal = md.CksumValue
 			}
@@ -171,7 +172,7 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 		}
 
 		foundParts[path] = ecSliceMD{info.Size(), cksumVal}
-		if strings.Contains(path, ecDataDir) && oldest.After(info.ModTime()) {
+		if sliceLom.ParsedFQN.ContentType == fs.ObjectType && oldest.After(info.ModTime()) {
 			main = path
 			oldest = info.ModTime()
 		}
@@ -231,10 +232,13 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	hashes := make(map[string]bool)
 	metaCnt := 0
 	for k, md := range sliceList {
-		if strings.Contains(k, ecMetaDir) {
+		ct, err := cluster.NewCTFromFQN(k, nil)
+		tassert.CheckFatal(t, err)
+
+		if ct.ContentType() == ec.MetaType {
 			metaCnt++
 			tassert.Errorf(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
-		} else if strings.Contains(k, ecSliceDir) {
+		} else if ct.ContentType() == ec.SliceType {
 			tassert.Errorf(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
 			if sliced {
 				if _, ok := hashes[md.hash]; ok {
@@ -243,8 +247,6 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 				hashes[md.hash] = true
 			}
 		} else {
-			ct, err := cluster.NewCTFromFQN(k, nil)
-			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
 			tassert.Errorf(t, ct.Provider() == bckProvider, "invalid provider %s, expected: %s", ct.Provider(), bckProvider)
 			tassert.Errorf(t, ct.Bucket() == bckName, "invalid bucket name %s, expected: %s", ct.Bucket(), bckName)
@@ -272,15 +274,17 @@ func waitForECFinishes(t *testing.T, totalCnt int, objSize, sliceSize int64, doE
 		if len(foundParts) == totalCnt {
 			same := true
 			for nm, md := range foundParts {
+				ct, err := cluster.NewCTFromFQN(nm, nil)
+				tassert.CheckFatal(t, err)
 				if doEC {
-					if strings.Contains(nm, ecSliceDir) {
+					if ct.ContentType() == ec.SliceType {
 						if md.size != sliceSize {
 							same = false
 							break
 						}
 					}
 				} else {
-					if strings.Contains(nm, ecDataDir) {
+					if ct.ContentType() == fs.ObjectType {
 						if md.size != objSize {
 							same = false
 							break
@@ -416,10 +420,12 @@ func doECPutsAndCheck(t *testing.T, bckName string, baseParams api.BaseParams, o
 			}
 			metaCnt, sliceCnt, replCnt := 0, 0, 0
 			for k, md := range foundParts {
-				if strings.Contains(k, ecMetaDir) {
+				ct, err := cluster.NewCTFromFQN(k, nil)
+				tassert.CheckFatal(t, err)
+				if ct.ContentType() == ec.MetaType {
 					metaCnt++
 					tassert.Errorf(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
-				} else if strings.Contains(k, ecSliceDir) {
+				} else if ct.ContentType() == ec.SliceType {
 					sliceCnt++
 					if md.size != sliceSize && doEC {
 						t.Errorf("Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
@@ -428,8 +434,6 @@ func doECPutsAndCheck(t *testing.T, bckName string, baseParams api.BaseParams, o
 						t.Errorf("Copy %q size mismatch: %d, expected %d", k, md.size, objSize)
 					}
 				} else {
-					ct, err := cluster.NewCTFromFQN(k, nil)
-					tassert.CheckFatal(t, err)
 					tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
 					tassert.Errorf(t, ct.Provider() == cmn.ProviderAIS, "invalid provider %s, expected: %s", ct.Provider(), cmn.ProviderAIS)
 					tassert.Errorf(t, ct.Bucket() == bckName, "invalid bucket name %s, expected: %s", ct.Bucket(), bckName)
@@ -593,7 +597,9 @@ func objectsExist(t *testing.T, baseParams api.BaseParams, bckName, objPatt stri
 
 // Simulates damaged slice by changing slice's checksum in metadata file
 func damageMetadataCksum(t *testing.T, slicePath string) {
-	metaFQN := strings.Replace(slicePath, ecSliceDir, ecMetaDir, 1)
+	ct, err := cluster.NewCTFromFQN(slicePath, nil)
+	tassert.CheckFatal(t, err)
+	metaFQN := ct.Make(ec.MetaType)
 	md, err := ec.LoadMetadata(metaFQN)
 	tassert.CheckFatal(t, err)
 	md.CksumValue = "01234"
@@ -781,16 +787,21 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bucket, 
 
 	tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
 	tassert.CheckFatal(t, os.Remove(mainObjPath))
-	metafile := strings.ReplaceAll(mainObjPath, ecDataDir, ecMetaDir)
+
+	ct, err := cluster.NewCTFromFQN(mainObjPath, nil)
+	tassert.CheckFatal(t, err)
+	metafile := ct.Make(ec.MetaType)
 	tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
 	tassert.CheckFatal(t, os.Remove(metafile))
 	if delSlice {
 		sliceToDel := ""
 		for k := range foundParts {
-			if k != mainObjPath && strings.Contains(k, ecSliceDir) && doEC {
+			ct, err := cluster.NewCTFromFQN(k, nil)
+			tassert.CheckFatal(t, err)
+			if k != mainObjPath && ct.ContentType() == ec.SliceType && doEC {
 				sliceToDel = k
 				break
-			} else if k != mainObjPath && strings.Contains(k, ecDataDir) && !doEC {
+			} else if k != mainObjPath && ct.ContentType() == fs.ObjectType && !doEC {
 				sliceToDel = k
 				break
 			}
@@ -801,15 +812,16 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bucket, 
 		}
 		tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
 		tassert.CheckFatal(t, os.Remove(sliceToDel))
+
+		ct, err := cluster.NewCTFromFQN(sliceToDel, nil)
+		tassert.CheckFatal(t, err)
+		metafile := ct.Make(ec.MetaType)
 		if doEC {
-			metafile := strings.ReplaceAll(sliceToDel, ecSliceDir, ecMetaDir)
 			tutils.Logf("Removing slice meta %s\n", metafile)
-			tassert.CheckFatal(t, os.Remove(metafile))
 		} else {
-			metafile := strings.ReplaceAll(sliceToDel, ecDataDir, ecMetaDir)
 			tutils.Logf("Removing replica meta %s\n", metafile)
-			tassert.CheckFatal(t, os.Remove(metafile))
 		}
+		tassert.CheckFatal(t, os.Remove(metafile))
 	}
 
 	partsAfterRemove, _ := ecGetAllSlices(t, objName, bucket, o)
@@ -1011,7 +1023,10 @@ func TestECChecksum(t *testing.T) {
 
 	// Corrupt just one slice, EC should be able to restore the original object
 	for k := range foundParts1 {
-		if k != mainObjPath1 && strings.Contains(k, ecSliceDir) {
+		ct, err := cluster.NewCTFromFQN(k, nil)
+		tassert.CheckFatal(t, err)
+
+		if k != mainObjPath1 && ct.ContentType() == ec.SliceType {
 			damageMetadataCksum(t, k)
 			break
 		}
@@ -1025,7 +1040,10 @@ func TestECChecksum(t *testing.T) {
 
 	// Corrupt all slices, EC should not be able to restore
 	for k := range foundParts2 {
-		if k != mainObjPath2 && strings.Contains(k, ecSliceDir) {
+		ct, err := cluster.NewCTFromFQN(k, nil)
+		tassert.CheckFatal(t, err)
+
+		if k != mainObjPath2 && ct.ContentType() == ec.SliceType {
 			damageMetadataCksum(t, k)
 		}
 	}
@@ -1568,16 +1586,22 @@ func TestECXattrs(t *testing.T) {
 
 		tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
 		tassert.CheckFatal(t, os.Remove(mainObjPath))
-		metafile := strings.ReplaceAll(mainObjPath, ecDataDir, ecMetaDir)
+
+		ct, err := cluster.NewCTFromFQN(mainObjPath, nil)
+		tassert.CheckFatal(t, err)
+		metafile := ct.Make(ec.MetaType)
 		tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
 		tassert.CheckFatal(t, os.Remove(metafile))
 		if delSlice {
 			sliceToDel := ""
 			for k := range foundParts {
-				if k != mainObjPath && strings.Contains(k, ecSliceDir) && doEC {
+				ct, err := cluster.NewCTFromFQN(k, nil)
+				tassert.CheckFatal(t, err)
+
+				if k != mainObjPath && ct.ContentType() == ec.SliceType && doEC {
 					sliceToDel = k
 					break
-				} else if k != mainObjPath && strings.Contains(k, ecDataDir) && !doEC {
+				} else if k != mainObjPath && ct.ContentType() == fs.ObjectType && !doEC {
 					sliceToDel = k
 					break
 				}
@@ -1587,15 +1611,16 @@ func TestECXattrs(t *testing.T) {
 			}
 			tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
 			tassert.CheckFatal(t, os.Remove(sliceToDel))
+
+			ct, err := cluster.NewCTFromFQN(sliceToDel, nil)
+			tassert.CheckFatal(t, err)
+			metafile := ct.Make(ec.MetaType)
 			if doEC {
-				metafile := strings.ReplaceAll(sliceToDel, ecSliceDir, ecMetaDir)
 				tutils.Logf("Removing slice meta %s\n", metafile)
-				tassert.CheckFatal(t, os.Remove(metafile))
 			} else {
-				metafile := strings.ReplaceAll(sliceToDel, ecDataDir, ecMetaDir)
 				tutils.Logf("Removing replica meta %s\n", metafile)
-				tassert.CheckFatal(t, os.Remove(metafile))
 			}
+			tassert.CheckFatal(t, os.Remove(metafile))
 		}
 
 		partsAfterRemove, _ := ecGetAllSlices(t, objName, bucket, o)
