@@ -110,8 +110,8 @@ func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...stri
 // look for local slices/replicas
 func (reb *Manager) buildECNamespace(md *globArgs) int {
 	reb.ecReb.run()
-	reb.stage.Store(rebStageECNameSpace)
-	if reb.waitForPushReqs(md, rebStageECNameSpace) {
+	reb.stage.Store(rebStageECNamespace)
+	if reb.waitForPushReqs(md, rebStageECNamespace) {
 		return 0
 	}
 	return reb.bcast(md, reb.waitNamespace)
@@ -146,7 +146,7 @@ func (reb *Manager) distributeECNamespace(md *globArgs) error {
 
 // find out which objects are broken and how to fix them
 func (reb *Manager) generateECFixList() {
-	reb.ecReb.checkSlices()
+	reb.ecReb.checkCTs()
 	glog.Infof("Number of objects misplaced locally: %d", len(reb.ecReb.localActions))
 	glog.Infof("Number of objects to be reconstructed/resent: %d", len(reb.ecReb.broken))
 }

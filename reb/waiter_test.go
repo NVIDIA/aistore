@@ -43,15 +43,15 @@ var _ = Describe("ECWaiter", func() {
 			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj8"},
 			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj9"},
 		}
-		rebObjs := make([]*ecRebObject, 0)
-		created := make([]*ecWaitSlice, 0, len(rebObjs))
+		rebObjs := make([]*rebObject, 0)
+		created := make([]*waitCT, 0, len(rebObjs))
 
 		By("all unames must be unique")
 		objSet := make(map[string]struct{})
 		for _, o := range objs {
 			uname := uniqueWaitID(o.bucket, o.provider, o.name)
 			objSet[uname] = struct{}{}
-			rebObjs = append(rebObjs, &ecRebObject{uid: uname})
+			rebObjs = append(rebObjs, &rebObject{uid: uname})
 		}
 		// Here and below it should be Expect(objSet).To(HaveLen(N)) but it
 		// makes ginkgo to print the entire list on error that generates

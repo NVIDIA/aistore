@@ -40,9 +40,9 @@ const (
 	rebStageInactive = iota
 	rebStageInit
 	rebStageTraverse
-	rebStageECNameSpace  // local slice list built
+	rebStageECNamespace  // local CT list built
 	rebStageECDetect     // all lists are received, start detecting which objects to fix
-	rebStageECGlobRepair // all local slices are fine, targets start using remote data
+	rebStageECGlobRepair // all local CTs are fine, targets start inter-cluster rebalance
 	rebStageECBatch      // target sends message that the current batch is processed
 	rebStageECCleanup    // all is done, time to cleanup memory etc
 	rebStageWaitAck
@@ -100,7 +100,7 @@ var stages = map[uint32]string{
 	rebStageFin:          "<fin>",
 	rebStageFinStreams:   "<fin-streams>",
 	rebStageDone:         "<done>",
-	rebStageECNameSpace:  "<namespace>",
+	rebStageECNamespace:  "<namespace>",
 	rebStageECDetect:     "<build-fix-list>",
 	rebStageECGlobRepair: "<ec-transfer>",
 	rebStageECCleanup:    "<ec-fin>",

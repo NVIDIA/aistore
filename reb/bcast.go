@@ -245,7 +245,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 			glog.Infof("%s: abrt wack", loghdr)
 			return
 		}
-		if status.Stage <= rebStageECNameSpace {
+		if status.Stage <= rebStageECNamespace {
 			glog.Infof("%s: keep waiting for %s[%s]", loghdr, tsi.Name(), stages[status.Stage])
 			time.Sleep(sleepRetry)
 			curwt += sleepRetry
@@ -364,7 +364,7 @@ func (reb *Manager) waitStage(si *cluster.Snode, md *globArgs, stage uint32) boo
 
 // Wait until all nodes finishes namespace building (just wait)
 func (reb *Manager) waitNamespace(si *cluster.Snode, md *globArgs) bool {
-	return reb.waitStage(si, md, rebStageECNameSpace)
+	return reb.waitStage(si, md, rebStageECNamespace)
 }
 
 // Wait until all nodes finishes moving local slices/object to correct mpath
@@ -404,7 +404,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 			time.Sleep(sleep)
 			continue
 		}
-		slices := make([]*ecRebSlice, 0)
+		slices := make([]*rebCT, 0)
 		if status != http.StatusNoContent {
 			// TODO: send the number of items in push request and preallocate `slices`?
 			if err := jsoniter.Unmarshal(outjson, &slices); err != nil {
@@ -441,7 +441,7 @@ func (reb *Manager) waitForPushReqs(md *globArgs, stage uint32, timeout ...time.
 			return false
 		}
 		cnt := reb.nodesNotInStage(stage)
-		if cnt < maxMissing || stage <= rebStageECNameSpace {
+		if cnt < maxMissing || stage <= rebStageECNamespace {
 			return cnt == 0
 		}
 		time.Sleep(sleep)
