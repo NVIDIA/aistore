@@ -328,10 +328,19 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 		glog.Warningf("%s: %s has older Smap (v%d, v%d) - keep waiting...", loghdr, tsi.Name(), tver, rver)
 		return
 	}
-	if status.GlobRebID < reb.globRebID.Load() {
+	if status.GlobRebID < reb.GlobRebID() {
 		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", loghdr, tsi.Name(), status.GlobRebID)
 		return
 	}
+	// Remote target has aborted its running rebalance with the same ID as local,
+	// but local rebalance is still running. Abort local xaction with `Abort`,
+	// do not use `abortGlobal` - no need to broadcast.
+	if status.GlobRebID == reb.GlobRebID() && status.Aborted {
+		glog.Warningf("%s has aborted rebalance %d - aborting...", tsi.ID(), status.GlobRebID)
+		reb.xreb.Abort()
+		return
+	}
+
 	if status.Stage >= desiredStage {
 		ok = true
 		return
