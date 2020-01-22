@@ -1442,7 +1442,14 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	if smap.isPrimary(p.si) {
 		return
 	}
-	if body == nil {
+	if r.Method == http.MethodHead {
+		// We must **not** send any request body when doing HEAD request.
+		// Otherwise, the request can be rejected and terminated.
+		if len(body) > 0 {
+			glog.Error("forwarded HEAD request contained non-empty body")
+			body = nil
+		}
+	} else if body == nil {
 		body = cmn.MustMarshal(msg)
 	}
 	primary := &p.rproxy.primary
