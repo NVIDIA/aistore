@@ -685,11 +685,15 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	lomack.q[lom.Uname()] = lom
 	lomack.mu.Unlock()
 	// transmit
+	ack := regularAck{
+		GlobRebID: rj.m.GlobRebID(),
+		DaemonID:  rj.m.t.Snode().ID(),
+	}
 	hdr := transport.Header{
 		Bucket:   lom.Bucket(),
 		Provider: lom.Provider(),
 		ObjName:  lom.Objname,
-		Opaque:   []byte(rj.m.t.Snode().ID()), // self == src
+		Opaque:   cmn.MustMarshal(&ack), // self == src
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       lom.Size(),
 			Atime:      lom.Atime().UnixNano(),

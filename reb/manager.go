@@ -90,6 +90,10 @@ type (
 		mu *sync.Mutex
 		q  map[string]*cluster.LOM // on the wire, waiting for ACK
 	}
+	regularAck struct {
+		GlobRebID int64  `json:"reb_id"`
+		DaemonID  string `json:"daemon"` // sender's DaemonID
+	}
 )
 
 var stages = map[uint32]string{
@@ -104,6 +108,8 @@ var stages = map[uint32]string{
 	rebStageECDetect:     "<build-fix-list>",
 	rebStageECGlobRepair: "<ec-transfer>",
 	rebStageECCleanup:    "<ec-fin>",
+	rebStageECBatch:      "<ec-batch>",
+	rebStageAbort:        "<abort>",
 }
 
 func init() {
@@ -165,6 +171,9 @@ func (reb *Manager) loghdr(globRebID int64, smap *cluster.Smap) string {
 		stage = stages[reb.stage.Load()]
 	)
 	return fmt.Sprintf("%s[g%d,v%d,%s]", tname, globRebID, smap.Version, stage)
+}
+func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
+	return fmt.Sprintf("rebalance IDs mismatch: local %d, remote %d", reb.GlobRebID(), remoteID)
 }
 
 func (reb *Manager) serialize(smap *cluster.Smap, config *cmn.Config, globRebID int64) (newerSmap, alreadyRunning bool) {
@@ -325,10 +334,18 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 			return
 		}
 	}
-	var (
-		tsid = string(hdr.Opaque) // the sender
-		tsi  = smap.GetTarget(tsid)
-	)
+
+	ack := &regularAck{}
+	if err = jsoniter.Unmarshal(hdr.Opaque, ack); err != nil {
+		glog.Error(err)
+		return
+	}
+	if ack.GlobRebID != reb.GlobRebID() {
+		glog.Warningf("Received object %s/%s: %s", hdr.Bucket, hdr.ObjName, reb.rebIDMismatchMsg(ack.GlobRebID))
+		io.Copy(ioutil.Discard, objReader) // drain the reader
+		return
+	}
+	tsid := ack.DaemonID // the sender
 	// Rx
 	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
 	if err = lom.Init(hdr.Bucket, hdr.Provider); err != nil {
@@ -374,11 +391,17 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 		stats.NamedVal64{Name: stats.RxRebSize, Value: hdr.ObjAttrs.Size},
 	)
 	// ACK
+	tsi := smap.GetTarget(tsid)
 	if tsi == nil {
+		glog.Errorf("%s target is not found in smap", tsid)
 		return
 	}
 	if stage := reb.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
-		hdr.Opaque = []byte(reb.t.Snode().DaemonID) // self == src
+		ack := regularAck{
+			GlobRebID: reb.GlobRebID(),
+			DaemonID:  reb.t.Snode().ID(),
+		}
+		hdr.Opaque = cmn.MustMarshal(&ack)
 		hdr.ObjAttrs.Size = 0
 		if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
@@ -431,20 +454,17 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 		return
 	}
 
-	if req.Stage == rebStageAbort {
-		// a target aborted its xaction and sent the signal to others
-		glog.Warningf("Got rebalance %d abort notification from %s (local RebID: %d)",
-			req.RebID, req.DaemonID, reb.GlobRebID())
-		if reb.xreb != nil && reb.GlobRebID() == req.RebID {
-			reb.xreb.Abort()
-		}
+	if reb.GlobRebID() != req.RebID {
+		glog.Warningf("Stage %v push notification: %s", stages[req.Stage], reb.rebIDMismatchMsg(req.RebID))
 		return
 	}
 
-	// a target was too late in sending(rebID is obsolete) its data or too early (md == nil)
-	if req.RebID < reb.globRebID.Load() {
-		// TODO: warning
-		glog.Errorf("Rebalance IDs mismatch: %d vs %d. %s is late(%s)?", reb.globRebID.Load(), req.RebID, req.DaemonID, stages[req.Stage])
+	if req.Stage == rebStageAbort {
+		// a target aborted its xaction and sent the signal to others
+		glog.Warningf("Rebalance abort notification from %s", req.DaemonID)
+		if reb.xreb != nil {
+			reb.xreb.Abort()
+		}
 		return
 	}
 
@@ -480,6 +500,16 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objRead
 	opaque := string(hdr.Opaque)
 	if strings.HasPrefix(opaque, "@") {
 		reb.recvECAck(hdr)
+		return
+	}
+
+	ack := &regularAck{}
+	if err = jsoniter.Unmarshal(hdr.Opaque, ack); err != nil {
+		glog.Errorf("Failed to parse acknowledge: %v", err)
+		return
+	}
+	if ack.GlobRebID != reb.globRebID.Load() {
+		glog.Warningf("ACK from %s: %s", ack.DaemonID, reb.rebIDMismatchMsg(ack.GlobRebID))
 		return
 	}
 
