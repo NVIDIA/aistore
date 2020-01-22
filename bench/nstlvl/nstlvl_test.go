@@ -1,3 +1,4 @@
+// Package nstlvl is intended to measure impact (or lack of thereof) of POSIX directory nesting on random read performance.
 /*
  * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -10,8 +11,11 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -29,8 +33,10 @@ import (
 // $ go test -bench=. -usage
 
 const (
-	fileNameLen = 13
-	dirs        = "/a/b/c/d/e/f/g/h/i/j"
+	fileNameLen = 15
+	dirs        = "/aaaaaa/bbbbbb/cccccc/dddddd/eeeeee/ffffff/gggggg/hhhhhh/iiiiii/jjjjjj"
+	dirNameLen  = 6 // NOTE: must reflect the length of dirs' dirs
+	skipModulo  = 967
 )
 
 type benchContext struct {
@@ -42,6 +48,7 @@ type benchContext struct {
 	level     int
 	fileSize  int64
 	fileCount int
+	skipMod   int
 	dir       string
 	help      bool
 }
@@ -62,14 +69,22 @@ func (bctx *benchContext) init() {
 		flag.Usage()
 		os.Exit(0)
 	}
+	if bctx.fileCount < 10 {
+		fmt.Printf("Error: number of files (%d) must be greater than 10 (see README for usage)\n", bctx.fileCount)
+		os.Exit(2)
+	}
 	fmt.Printf("files: %d size: %d\n", bctx.fileCount, bctx.fileSize)
 	bctx.fileNames = make([]string, 0, bctx.fileCount)
 	bctx.rnd = cmn.NowRand()
+	bctx.skipMod = skipModulo
+	if bctx.fileCount < skipModulo {
+		bctx.skipMod = bctx.fileCount/2 - 1
+	}
 }
 
 func BenchmarkNestedLevel(b *testing.B) {
 	benchCtx.init()
-	for _, extraDepth := range []int{2, 4, 6} {
+	for _, extraDepth := range []int{0, 2, 4, 6} {
 		nestedLvl := benchCtx.level + extraDepth
 
 		benchCtx.createFiles(nestedLvl)
@@ -79,20 +94,15 @@ func BenchmarkNestedLevel(b *testing.B) {
 }
 
 func benchNestedLevel(b *testing.B) {
-	var (
-		perm = benchCtx.rnd.Perm(benchCtx.fileCount)
-	)
-
-	b.ResetTimer()
-	for i, j := 0, 0; i < b.N; i, j = i+1, j+1 {
+	for i, j, k := 0, 0, 0; i < b.N; i, j = i+1, j+benchCtx.skipMod {
 		if j >= benchCtx.fileCount {
-			b.StopTimer()
-			perm = benchCtx.rnd.Perm(benchCtx.fileCount)
-			j = 0
-			b.StartTimer()
+			k++
+			if k >= benchCtx.skipMod {
+				k = 0
+			}
+			j = k
 		}
-
-		fqn := benchCtx.fileNames[perm[j]]
+		fqn := benchCtx.fileNames[j]
 		file, err := os.Open(fqn)
 		cmn.AssertNoErr(err)
 		_, err = io.Copy(ioutil.Discard, file)
@@ -106,10 +116,8 @@ func (bctx *benchContext) createFiles(lvl int) {
 		reader = &io.LimitedReader{R: bctx.rnd, N: bctx.fileSize}
 		buf    = make([]byte, 32*cmn.KiB)
 	)
-
 	for i := 0; i < bctx.fileCount; i++ {
-		fileName := bctx.dir + dirs[:lvl*2+1] + bctx.randNestName()
-
+		fileName := bctx.dir + dirs[:lvl*(dirNameLen+1)+1] + bctx.randNestName()
 		file, err := cmn.CreateFile(fileName)
 		cmn.AssertNoErr(err)
 		_, err = io.CopyBuffer(file, reader, buf)
@@ -120,10 +128,19 @@ func (bctx *benchContext) createFiles(lvl int) {
 		reader.N = bctx.fileSize
 		bctx.fileNames = append(bctx.fileNames, fileName)
 	}
+
+	cmd := exec.Command("sync")
+	_, err := cmd.Output()
+	cmn.AssertNoErr(err)
+	time.Sleep(time.Second)
+
+	dropCaches()
+	runtime.GC()
+	time.Sleep(time.Second)
 }
 
 func (bctx *benchContext) removeFiles() {
-	err := os.RemoveAll(bctx.dir + dirs[:2])
+	err := os.RemoveAll(bctx.dir + dirs[:dirNameLen+1])
 	cmn.AssertNoErr(err)
 	bctx.fileNames = bctx.fileNames[:0]
 }
