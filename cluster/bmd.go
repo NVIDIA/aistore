@@ -57,7 +57,7 @@ func (m *BMD) NumAIS(nsQuery *string) (na int) {
 func (m *BMD) NumCloud(nsQuery *string) (nc int) {
 	for provider, namespaces := range m.Providers {
 		for nsUname, buckets := range namespaces {
-			bck := cmn.Bck{Provider: provider, Ns: cmn.MakeNs(nsUname)}
+			bck := cmn.Bck{Provider: provider, Ns: cmn.ParseNsUname(nsUname)}
 			if cmn.IsProviderAIS(bck) {
 				continue
 			}
@@ -159,7 +159,7 @@ func (m *BMD) Range(providerQuery *string, nsQuery *cmn.Ns, callback func(*Bck) 
 				continue
 			}
 			for name, props := range buckets {
-				ns := cmn.MakeNs(nsUname)
+				ns := cmn.ParseNsUname(nsUname)
 				bck := NewBck(name, provider, ns, props)
 				if callback(bck) { // break?
 					return
@@ -199,31 +199,34 @@ func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 	return
 }
 
-func (m *BMD) initBckAnyProvider(bck *Bck) (provider string, p *cmn.BucketProps) {
-	var present bool
+func (m *BMD) initBckAnyProvider(bck *Bck) {
 	if namespaces, ok := m.Providers[cmn.ProviderAIS]; ok {
-		if buckets, ok := namespaces[bck.Ns.Uname()]; ok {
-			if p, present = buckets[bck.Name]; present {
-				provider = cmn.ProviderAIS
+		if buckets, ok := namespaces[cmn.NsGlobal.Uname()]; ok {
+			if p, present := buckets[bck.Name]; present {
+				bck.Provider = cmn.ProviderAIS
+				bck.Ns = cmn.NsGlobal
+				bck.Props = p
 				return
 			}
 		}
 	}
-	return m.initBckCloudProvider(bck)
+	m.initBckCloudProvider(bck)
 }
 
-func (m *BMD) initBckCloudProvider(bck *Bck) (provider string, p *cmn.BucketProps) {
-	var present bool
-	for prov, namespaces := range m.Providers {
-		if prov == cmn.ProviderAIS {
-			continue
-		}
-		if buckets, ok2 := namespaces[bck.Ns.Uname()]; ok2 {
-			if p, present = buckets[bck.Name]; present {
-				provider = prov
+func (m *BMD) initBckCloudProvider(bck *Bck) {
+	for provider, namespaces := range m.Providers {
+		for nsUname, buckets := range namespaces {
+			ns := cmn.ParseNsUname(nsUname)
+			if cmn.IsProviderAIS(cmn.Bck{Provider: provider, Ns: ns}) {
+				continue
+			}
+
+			if p, present := buckets[bck.Name]; present {
+				bck.Provider = provider
+				bck.Ns = ns
+				bck.Props = p
 				return
 			}
 		}
 	}
-	return
 }

@@ -141,7 +141,8 @@ echo "Select:"
 echo " 0: No cloud provider"
 echo " 1: Amazon Cloud"
 echo " 2: Google Cloud"
-echo "Enter your provider choice (0, 1 or 2):"
+echo " 3: AIS Cloud - remote cluster"
+echo "Enter your provider choice (0, 1, 2 or 3):"
 read -r cld_provider
 is_number ${cld_provider}
 
@@ -151,6 +152,8 @@ elif [[ ${cld_provider} -eq 1 ]]; then
   CLDPROVIDER="aws"
 elif [[ ${cld_provider} -eq 2 ]]; then
   CLDPROVIDER="gcp"
+elif [[ ${cld_provider} -eq 3 ]]; then
+  CLDPROVIDER="ais"
 else
   printError "${cld_provider} is not a valid entry"
 fi

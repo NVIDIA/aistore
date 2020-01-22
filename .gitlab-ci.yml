@@ -26,6 +26,7 @@ build:linux:
   script:
     - CLDPROVIDER="aws" make node
     - CLDPROVIDER="gcp" make node
+    - CLDPROVIDER="ais" make node
     - CLDPROVIDER="" make node
     - make authn
     - make aisfs
@@ -37,6 +38,7 @@ build:darwin:
   script:
     - GOOS="darwin" CLDPROVIDER="aws" make node
     - GOOS="darwin" CLDPROVIDER="gcp" make node
+    - GOOS="darwin" CLDPROVIDER="ais" make node
     - GOOS="darwin" CLDPROVIDER="" make node
     - GOOS="darwin" make authn
     - GOOS="darwin" make aisfs

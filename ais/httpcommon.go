@@ -1213,6 +1213,6 @@ func (h *httprunner) getBucketNamesAIS(bmd *bucketMD) *cmn.BucketNames {
 
 func newBckFromQuery(bckName string, query url.Values) *cluster.Bck {
 	provider := query.Get(cmn.URLParamProvider)
-	namespace := cmn.MakeNs(query.Get(cmn.URLParamNamespace))
+	namespace := cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
 	return cluster.NewBck(bckName, provider, namespace)
 }

@@ -291,10 +291,11 @@ if [[ -z $CLOUD ]]; then
     echo " 0: No cloud provider"
     echo " 1: Use AWS"
     echo " 2: Use GCP"
-    echo "Enter your provider choice (0, 1 or 2):"
+    echo " 3: Use AIS remote cluster"
+    echo "Enter your provider choice (0, 1, 2 or 3):"
     read -r CLOUD
     is_number $CLOUD
-    if [ $CLOUD -ne 0 ] && [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ]; then
+    if [ $CLOUD -ne 0 ] && [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ] && [ $CLOUD -ne 3]; then
         echo "Not a valid entry. Exiting..."
         exit 1
     fi

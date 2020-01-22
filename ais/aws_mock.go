@@ -13,4 +13,6 @@ type (
 	}
 )
 
-func newAWSProvider(t *targetrunner) *awsProvider { return &awsProvider{emptyCloudProvider{}, t} }
+func newAWSProvider(t *targetrunner) (cloudProvider, error) {
+	return &awsProvider{emptyCloudProvider{}, t}, nil
+}

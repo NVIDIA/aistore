@@ -63,7 +63,7 @@ func ParseUname(uname string) (b Bck, objName string) {
 		case 0:
 			b.Provider = item
 		case 1:
-			b.Ns = cmn.MakeNs(item)
+			b.Ns = cmn.ParseNsUname(item)
 		case 2:
 			b.Name = item
 			objName = uname[i+1:]
@@ -124,17 +124,17 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 func (b *Bck) Init(bowner Bowner) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
-		b.Provider, b.Props = bmd.initBckAnyProvider(b)
+		bmd.initBckAnyProvider(b)
 	} else if b.Provider == cmn.Cloud {
 		cloudConf := cmn.GCO.Get().Cloud
 		b.Provider = cloudConf.Provider
 		b.Ns = cloudConf.Ns
-		b.Provider, b.Props = bmd.initBckCloudProvider(b)
+		bmd.initBckCloudProvider(b)
 	} else {
 		b.Props, _ = bmd.Get(b)
 	}
 	if b.Props == nil {
-		if b.Provider == cmn.ProviderAIS {
+		if cmn.IsProviderAIS(b.Bck) {
 			return cmn.NewErrorBucketDoesNotExist(b.Name)
 		}
 		return cmn.NewErrorCloudBucketDoesNotExist(b.Name)

@@ -54,7 +54,7 @@ var (
 	}
 )
 
-func MakeNs(s string) (n Ns) {
+func ParseNsUname(s string) (n Ns) {
 	idx := strings.IndexByte(s, nsSeparator)
 	if idx == -1 {
 		n.Name = s
@@ -98,7 +98,13 @@ func (b Bck) Equal(other Bck) bool {
 
 func (b Bck) String() string {
 	if b.Ns.IsGlobal() {
+		if b.Provider == "" {
+			return b.Name
+		}
 		return fmt.Sprintf("%s/%s", b.Provider, b.Name)
+	}
+	if b.Provider == "" {
+		return fmt.Sprintf("%s/%s", b.Ns, b.Name)
 	}
 	return fmt.Sprintf("%s/%s/%s", b.Provider, b.Ns, b.Name)
 }

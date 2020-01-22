@@ -99,7 +99,7 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p cmn.
 
 // GetBucketNames API
 //
-// provider takes one of Cloud Provider enum names (see provider.go). If provider is empty, return all names.
+// provider takes one of Cloud Provider enum names (see cmn/bucket.go). If provider is empty, return all names.
 // Otherwise, return cloud or ais bucket names.
 func GetBucketNames(baseParams BaseParams, bck cmn.Bck) (*cmn.BucketNames, error) {
 	var (
@@ -431,6 +431,7 @@ func ListBucket(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjec
 	if len(query) > 0 {
 		q = query[0]
 	}
+	q = cmn.AddBckToQuery(q, bck)
 
 	if msg == nil {
 		msg = &cmn.SelectMsg{}
@@ -524,6 +525,7 @@ func ListBucketPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, quer
 		q = query[0]
 	}
 
+	q = cmn.AddBckToQuery(q, bck)
 	optParams := OptionalParams{
 		Header: http.Header{
 			"Content-Type": []string{"application/json"},

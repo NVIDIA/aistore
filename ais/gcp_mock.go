@@ -13,4 +13,6 @@ type (
 	}
 )
 
-func newGCPProvider(t *targetrunner) *gcpProvider { return &gcpProvider{emptyCloudProvider{}, t} }
+func newGCPProvider(t *targetrunner) (cloudProvider, error) {
+	return &gcpProvider{emptyCloudProvider{}, t}, nil
+}

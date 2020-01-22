@@ -61,7 +61,7 @@ var (
 // global - FIXME: environ
 //
 //======
-func newGCPProvider(t *targetrunner) *gcpProvider { return &gcpProvider{t} }
+func newGCPProvider(t *targetrunner) (cloudProvider, error) { return &gcpProvider{t}, nil }
 
 func getProjID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")

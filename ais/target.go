@@ -223,6 +223,7 @@ func (t *targetrunner) Run() error {
 
 	// cloud provider (empty stubs that may get populated via build tags)
 	var (
+		err          error
 		providerConf = config.Cloud.ProviderConf()
 	)
 	if config.Cloud.Supported {
@@ -231,17 +232,19 @@ func (t *targetrunner) Run() error {
 			var (
 				clusterConf = providerConf.(cmn.CloudConfAIS)
 			)
-			glog.Errorf("%v", clusterConf)
-			cmn.AssertMsg(false, "not yet implemented")
+			t.cloud, err = newAISCloudProvider(t, clusterConf)
 		case cmn.ProviderAmazon:
-			t.cloud = newAWSProvider(t)
+			t.cloud, err = newAWSProvider(t)
 		case cmn.ProviderGoogle:
-			t.cloud = newGCPProvider(t)
+			t.cloud, err = newGCPProvider(t)
 		default:
 			cmn.AssertMsg(false, fmt.Sprintf("unsupported cloud provider: %s", config.Cloud.Provider))
 		}
 	} else {
-		t.cloud = newEmptyCloud() // mock
+		t.cloud, err = newEmptyCloud() // mock
+	}
+	if err != nil {
+		cmn.ExitLogf("%v", err)
 	}
 
 	// prefetch

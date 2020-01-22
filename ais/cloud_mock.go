@@ -21,7 +21,7 @@ var (
 	_ cloudProvider = &emptyCloudProvider{}
 )
 
-func newEmptyCloud() cloudProvider { return &emptyCloudProvider{} }
+func newEmptyCloud() (cloudProvider, error) { return &emptyCloudProvider{}, nil }
 
 func (m *emptyCloudProvider) ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	return nil, cmn.NewErrorCloudBucketOffline(bucket, ""), http.StatusNotFound

@@ -47,7 +47,7 @@ var (
 	_ cloudProvider = &awsProvider{}
 )
 
-func newAWSProvider(t *targetrunner) *awsProvider { return &awsProvider{t} }
+func newAWSProvider(t *targetrunner) (cloudProvider, error) { return &awsProvider{t}, nil }
 
 // If extractAWSCreds returns no error and awsCreds is nil then the default
 //   AWS client is used (that loads credentials from ~/.aws/credentials)
