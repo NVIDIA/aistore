@@ -29,6 +29,8 @@ type (
 		RebVersion  int64                   `json:"reb_version,string"`  // Smap version of *this* rebalancing op
 		GlobRebID   int64                   `json:"glob_reb_id,string"`  // global rebalance ID
 		StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`         // objects and sizes transmitted/received by this reb oper
+		BatchCurr   int                     `json:"batch_curr"`          // the current batch ID processing by EC rebalance
+		BatchLast   int                     `json:"batch_last"`          // the last batch ID to be processed by EC rebalance
 		Stage       uint32                  `json:"stage"`               // the current stage - see enum above
 		Aborted     bool                    `json:"aborted"`             // aborted?
 		Running     bool                    `json:"running"`             // running?
@@ -57,6 +59,8 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 	status.Aborted, status.Running = xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
 	status.Stage = reb.stage.Load()
 	status.GlobRebID = reb.globRebID.Load()
+	status.BatchCurr = int(reb.ecReb.batchCurr.Load())
+	status.BatchLast = int(reb.ecReb.batchLast.Load())
 	status.SmapVersion = tsmap.Version
 	if rsmap != nil {
 		status.RebVersion = rsmap.Version

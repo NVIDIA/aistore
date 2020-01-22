@@ -222,7 +222,9 @@ type (
 		// the batch ID a target has processed. DaemonID <-> BatchID
 		tgtBatch map[string]int
 		// the current batch ID
-		batchID int
+		batchCurr atomic.Int64
+		// ID of the last batch to be processeed (for health, stats etc)
+		batchLast atomic.Int64
 	}
 
 	// a description of a CT that local target awaits from another target
@@ -1460,8 +1462,9 @@ func (s *ecRebalancer) allCTReceived() bool {
 			break
 		}
 		var obj *rebObject
-		for j := 0; j+s.batchID < len(s.broken) && j < ecRebBatchSize; j++ {
-			o := s.broken[s.batchID+j]
+		batchCurr := int(s.batchCurr.Load())
+		for j := 0; j+batchCurr < len(s.broken) && j < ecRebBatchSize; j++ {
+			o := s.broken[j+batchCurr]
 			if uid == uniqueWaitID(o.bucket, o.provider, o.objName) {
 				obj = o
 				break
@@ -1491,7 +1494,7 @@ func (s *ecRebalancer) allNodesCompletedBatch() bool {
 	s.mtx.Lock()
 	for sid := range s.ra.smap.Tmap {
 		btch, ok := s.tgtBatch[sid]
-		if ok && btch >= s.batchID {
+		if ok && btch >= int(s.batchCurr.Load()) {
 			cnt++
 		}
 	}
@@ -1645,7 +1648,7 @@ func (s *ecRebalancer) rebalanceObject(obj *rebObject) (err error) {
 }
 
 func (s *ecRebalancer) cleanupBatch() {
-	s.waiter.cleanupBatch(s.broken, s.batchID)
+	s.waiter.cleanupBatch(s.broken, int(s.batchCurr.Load()))
 	s.releaseSGLs(s.broken)
 	s.ackCTs.mtx.Lock()
 	for id := range s.ackCTs.ct {
@@ -1665,9 +1668,9 @@ func (s *ecRebalancer) finalizeBatch() error {
 
 	// mark batch done and notify other targets
 	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
-		glog.Infof("%s batch %d done", s.t.Snode().Name(), s.batchID)
+		glog.Infof("%s batch %d done", s.t.Snode().Name(), s.batchCurr.Load())
 	}
-	s.batchDone(s.t.Snode().DaemonID, s.batchID)
+	s.batchDone(s.t.Snode().DaemonID, int(s.batchCurr.Load()))
 	if err := s.batchNotify(); err != nil {
 		return err
 	}
@@ -1776,32 +1779,41 @@ func (s *ecRebalancer) waitECAck() {
 	}
 }
 
-func (s *ecRebalancer) rebalanceGlobal() (err error) {
-	s.batchID = 0
-	// to cleanup the last batch and allocated SGLs
-	for s.batchID < len(s.broken) {
-		if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
-			glog.Infof("Starting batch of %d from %d", ecRebBatchSize, s.batchID)
+// Rebalances the current batch of broken objects
+func (s *ecRebalancer) rebalanceBatch(batchCurr int64) error {
+	batchEnd := cmn.Min(int(batchCurr)+ecRebBatchSize, len(s.broken))
+	for objIdx := int(batchCurr); objIdx < batchEnd; objIdx++ {
+		if s.mgr.xreb.Aborted() {
+			return fmt.Errorf("Aborted")
 		}
 
-		// get batchSize next objects
-		for j := 0; j+s.batchID < len(s.broken) && j < ecRebBatchSize; j++ {
-			s.onAir.Store(0)
-			if s.mgr.xreb.Aborted() {
-				s.cleanupBatch()
-				return fmt.Errorf("Aborted")
-			}
+		obj := s.broken[objIdx]
+		if bool(glog.FastV(4, glog.SmoduleReb)) {
+			glog.Infof("--- Starting object [%d] %s ---", objIdx, obj.uid)
+		}
+		cmn.Assert(len(obj.locCT) != 0) // cannot happen
 
-			obj := s.broken[s.batchID+j]
-			if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
-				glog.Infof("--- Starting object [%d] %s ---", j+s.batchID, obj.uid)
-			}
-			cmn.Assert(len(obj.locCT) != 0) // cannot happen
+		if err := s.rebalanceObject(obj); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-			if err = s.rebalanceObject(obj); err != nil {
-				s.cleanupBatch()
-				return err
-			}
+// Does cluster-wide rebalance
+func (s *ecRebalancer) rebalanceGlobal() (err error) {
+	batchCurr := int64(0)
+	batchLast := int64(len(s.broken) - 1)
+	s.batchCurr.Store(batchCurr)
+	s.batchLast.Store(batchLast)
+	for batchCurr <= batchLast {
+		if bool(glog.FastV(4, glog.SmoduleReb)) {
+			glog.Infof("Starting batch of %d from %d", ecRebBatchSize, batchCurr)
+		}
+
+		if err = s.rebalanceBatch(batchCurr); err != nil {
+			s.cleanupBatch()
+			return err
 		}
 
 		s.waitECAck()
@@ -1810,7 +1822,7 @@ func (s *ecRebalancer) rebalanceGlobal() (err error) {
 		if err != nil {
 			return err
 		}
-		s.batchID += ecRebBatchSize
+		batchCurr = s.batchCurr.Add(int64(ecRebBatchSize))
 	}
 	return nil
 }
@@ -1818,7 +1830,8 @@ func (s *ecRebalancer) rebalanceGlobal() (err error) {
 // Free allocated memory for EC reconstruction, close opened file handles of replicas.
 // Used to clean up memory after finishing a batch
 func (s *ecRebalancer) releaseSGLs(objList []*rebObject) {
-	for i := s.batchID; i < s.batchID+ecRebBatchSize && i < len(objList); i++ {
+	batchCurr := int(s.batchCurr.Load())
+	for i := batchCurr; i < batchCurr+ecRebBatchSize && i < len(objList); i++ {
 		obj := objList[i]
 		for _, sg := range obj.rebuildSGLs {
 			if sg != nil {
@@ -2225,12 +2238,12 @@ func (s *ecRebalancer) rebuildAndSend(obj *rebObject, slices []*waitCT) error {
 	return s.rebuildFromSlices(obj, slices)
 }
 
-// mark that a target completed batch with batchID
-func (s *ecRebalancer) batchDone(daemonID string, batchID int) {
+// mark that a target completed batch with batchCurr
+func (s *ecRebalancer) batchDone(daemonID string, batchCurr int) {
 	_, ok := s.ra.smap.Tmap[daemonID]
 	cmn.AssertMsg(ok, daemonID)
 	s.mtx.Lock()
-	s.tgtBatch[daemonID] = batchID
+	s.tgtBatch[daemonID] = batchCurr
 	s.mtx.Unlock()
 }
 
@@ -2241,7 +2254,7 @@ func (s *ecRebalancer) batchNotify() error {
 			DaemonID: s.t.Snode().DaemonID,
 			Stage:    rebStageECBatch,
 			RebID:    s.mgr.globRebID.Load(),
-			Batch:    s.batchID,
+			Batch:    int(s.batchCurr.Load()),
 		}
 		hdr = transport.Header{Opaque: cmn.MustMarshal(req)}
 	)
