@@ -840,8 +840,8 @@ func (s *ecRebalancer) detectBroken(res *globalCTList) {
 	smap := s.t.GetSowner().Get()
 
 	providers := map[string]map[string]*rebBck{
-		cmn.ProviderAIS:             res.ais,
-		cmn.GCO.Get().CloudProvider: res.cloud,
+		cmn.ProviderAIS:              res.ais,
+		cmn.GCO.Get().Cloud.Provider: res.cloud,
 	}
 	for provider, tp := range providers {
 		for bckName, objs := range tp {
@@ -1052,12 +1052,12 @@ func (s *ecRebalancer) run() {
 		go s.jog(mpath, &wg)
 	}
 
-	if cfg.CloudEnabled {
+	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
 			if s.mgr.xreb.Bucket() == "" {
-				mpath = mpathInfo.MakePath(ec.MetaType, cfg.CloudProvider)
+				mpath = mpathInfo.MakePath(ec.MetaType, cfg.Cloud.Provider)
 			} else {
-				mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cfg.CloudProvider)
+				mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cfg.Cloud.Provider)
 			}
 			wg.Add(1)
 			go s.jog(mpath, &wg)

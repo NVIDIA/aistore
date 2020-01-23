@@ -243,7 +243,7 @@ const (
 		" Number of data slices:\t{{$obj.DataSlices}}\n" +
 		" Number of parity slices:\t{{$obj.ParitySlices}}\n" +
 		" Compression options:\t{{$obj.Compression}}\n"
-	GlobalConfTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.CloudProvider}}\n"
+	GlobalConfTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.Cloud.Provider}}\n"
 
 	// hidden config sections: replication
 	// Application Config has this sections but setup/config.sh does not expose them

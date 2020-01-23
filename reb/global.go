@@ -240,10 +240,10 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 		wg.Add(1)
 		go rl.jog()
 	}
-	if cfg.CloudEnabled {
+	if cfg.Cloud.Supported {
 		for _, mpathInfo := range md.paths {
 			var sema chan struct{}
-			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.CloudProvider)
+			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.Cloud.Provider)
 			if multiplier > 1 {
 				sema = make(chan struct{}, multiplier)
 			}

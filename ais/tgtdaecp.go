@@ -795,14 +795,14 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 	fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*true=create*/, cmn.ProviderAIS, bucketsToCreate...)
 
 	cfg := cmn.GCO.Get()
-	if cfg.CloudEnabled {
+	if cfg.Cloud.Supported {
 		bucketsToCreate = make([]string, 0, len(newBMD.CBmap))
 		for bckName := range newBMD.CBmap {
 			if _, ok := bmd.CBmap[bckName]; !ok {
 				bucketsToCreate = append(bucketsToCreate, bckName)
 			}
 		}
-		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cfg.CloudProvider,
+		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cfg.Cloud.Provider,
 			bucketsToCreate...)
 	}
 	return

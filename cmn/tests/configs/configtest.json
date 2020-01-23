@@ -1,6 +1,8 @@
 {
   "confdir":       "/fake/conf/dir",
-  "cloud_provider": "aws",
+  "cloud": {
+    "gcp": {}
+  },
   "mirror": {
     "copies":       2,
     "burst_buffer": 512,

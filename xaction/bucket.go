@@ -277,8 +277,8 @@ func (r *registry) RenewObjsRedundancy(t cluster.Target) {
 		bowner = t.GetBowner().Get()
 	)
 	renewBckRedundacy(bowner.LBmap, cmn.ProviderAIS)
-	if cfg.CloudEnabled {
-		renewBckRedundacy(bowner.CBmap, cfg.CloudProvider)
+	if cfg.Cloud.Supported {
+		renewBckRedundacy(bowner.CBmap, cfg.Cloud.Provider)
 	}
 }
 

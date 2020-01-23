@@ -129,8 +129,8 @@ func InitAndRun(ini *InitLRU) {
 			return
 		}
 
-		if config.CloudEnabled {
-			if aborted := startLRUJoggers(config.CloudProvider); aborted {
+		if config.Cloud.Supported {
+			if aborted := startLRUJoggers(config.Cloud.Provider); aborted {
 				break
 			}
 		}

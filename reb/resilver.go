@@ -73,9 +73,9 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	if bucket != "" {
 		goto wait
 	}
-	if cfg.CloudEnabled {
+	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
-			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.CloudProvider)
+			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.Cloud.Provider)
 			jogger := &localJogger{
 				joggerBase:        joggerBase{m: reb, mpath: mpathC, xreb: &xreb.RebBase, wg: wg},
 				slab:              slab,

@@ -86,7 +86,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 		if bmd.IsAIS(b.Name) {
 			b.Provider = cmn.ProviderAIS
 		} else if bmd.IsCloud(b.Name) {
-			b.Provider = cmn.GCO.Get().CloudProvider
+			b.Provider = cmn.GCO.Get().Cloud.Provider
 		} else {
 			err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
 		}
@@ -95,7 +95,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 			return cmn.NewErrorBucketDoesNotExist(b.Name)
 		}
 		if !b.IsAIS() {
-			b.Provider = cmn.GCO.Get().CloudProvider
+			b.Provider = cmn.GCO.Get().Cloud.Provider
 			if !bmd.IsCloud(b.Name) {
 				err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
 			}
@@ -107,7 +107,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 	cmn.Assert(b.Provider != cmn.Cloud)
 
 	if b.IsCloud() {
-		if cloudProvider := cmn.GCO.Get().CloudProvider; b.Provider != cloudProvider {
+		if cloudProvider := cmn.GCO.Get().Cloud.Provider; b.Provider != cloudProvider {
 			err = fmt.Errorf("provider mismatch: %q vs bucket (%s, %s)", cloudProvider, b.Name, b.Provider)
 		}
 	}

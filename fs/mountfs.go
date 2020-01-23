@@ -504,7 +504,7 @@ func (mfs *MountedFS) EvictCloudBucket(bucket string) {
 		passMsg = "evict cloud bucket"
 		failMsg = "failed: evict cloud bucket"
 	)
-	mfs.createDestroyBuckets(false, cmn.GCO.Get().CloudProvider, passMsg, failMsg, bucket)
+	mfs.createDestroyBuckets(false, cmn.GCO.Get().Cloud.Provider, passMsg, failMsg, bucket)
 }
 
 func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {

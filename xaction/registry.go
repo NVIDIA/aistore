@@ -831,12 +831,14 @@ func (r *bckSummaryTask) Run() {
 	} else {
 		if r.bck.Provider == "" || cmn.IsProviderAIS(r.bck.Provider) {
 			for name := range bmd.LBmap {
-				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.ProviderAIS})
+				bck := &cluster.Bck{Name: name, Provider: cmn.ProviderAIS}
+				buckets = append(buckets, bck)
 			}
 		}
 		if r.bck.Provider == "" || cmn.IsProviderCloud(r.bck.Provider, true /*acceptAnon*/) {
 			for name := range bmd.CBmap {
-				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.GCO.Get().CloudProvider})
+				bck := &cluster.Bck{Name: name, Provider: cmn.GCO.Get().Cloud.Provider}
+				buckets = append(buckets, bck)
 			}
 		}
 	}

@@ -1,7 +1,9 @@
 cat > $CONFFILE <<EOL
 {
-	"confdir":       "${CONFDIR}",
-	"cloud_provider": "${CLDPROVIDER}",
+	"confdir": "${CONFDIR}",
+	"cloud": {
+		"${CLDPROVIDER}": {}
+	},
 	"mirror": {
 		"copies":       2,
 		"burst_buffer": 512,

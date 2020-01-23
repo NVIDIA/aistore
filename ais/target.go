@@ -214,20 +214,20 @@ func (t *targetrunner) Run() error {
 	if err := fs.Mountpaths.CreateBucketDir(cmn.ProviderAIS); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	if cloudProvider := config.CloudProvider; cloudProvider != "" {
-		if err := fs.Mountpaths.CreateBucketDir(cloudProvider); err != nil {
+	if config.Cloud.Supported {
+		if err := fs.Mountpaths.CreateBucketDir(config.Cloud.Provider); err != nil {
 			cmn.ExitLogf("%v", err)
 		}
 	}
 	t.detectMpathChanges()
 
 	// cloud provider (empty stubs that may get populated via build tags)
-	if config.CloudProvider == cmn.ProviderAmazon {
+	if config.Cloud.Provider == cmn.ProviderAmazon {
 		t.cloud = newAWSProvider(t)
-	} else if config.CloudProvider == cmn.ProviderGoogle {
+	} else if config.Cloud.Provider == cmn.ProviderGoogle {
 		t.cloud = newGCPProvider(t)
 	} else {
-		cmn.AssertMsg(config.CloudProvider == "", fmt.Sprintf("unsupported cloud provider: %s", config.CloudProvider))
+		cmn.AssertMsg(config.Cloud.Provider == "", fmt.Sprintf("unsupported cloud provider: %s", config.Cloud.Provider))
 		t.cloud = newEmptyCloud() // mock
 	}
 

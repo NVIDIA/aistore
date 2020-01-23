@@ -126,7 +126,7 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 
 	if !o.isAIS {
 		config := getClusterConfig(t, proxyURL)
-		bckProvider = config.CloudProvider
+		bckProvider = config.Cloud.Provider
 		bmd.CBmap[bucketName] = cmn.DefaultBucketProps()
 	}
 
@@ -225,7 +225,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 		bckProvider = cmn.ProviderAIS
 	} else {
 		config := getClusterConfig(t, proxyURLReadOnly)
-		bckProvider = config.CloudProvider
+		bckProvider = config.Cloud.Provider
 	}
 
 	sliced := sliceSize < objSize
@@ -2405,7 +2405,7 @@ func init() {
 
 	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
-	config.CloudProvider = cfg.CloudProvider
+	config.Cloud = cfg.Cloud
 	cmn.GCO.CommitUpdate(config)
 
 	fs.InitMountedFS()

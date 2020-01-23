@@ -217,6 +217,7 @@ var (
 
 	// NOTE: new validators must be run via Config.Validate() - see below
 
+	_ Validator = &CloudConf{}
 	_ Validator = &CksumConf{}
 	_ Validator = &LRUConf{}
 	_ Validator = &MirrorConf{}
@@ -238,6 +239,8 @@ var (
 	_ PropsValidator = &MirrorConf{}
 	_ PropsValidator = &ECConf{}
 
+	_ json.Marshaler   = &CloudConf{}
+	_ json.Unmarshaler = &CloudConf{}
 	_ json.Marshaler   = &FSPathsConf{}
 	_ json.Unmarshaler = &FSPathsConf{}
 
@@ -252,8 +255,7 @@ var (
 // nolint:maligned // no performance critical code
 type Config struct {
 	Confdir          string          `json:"confdir"`
-	CloudProvider    string          `json:"cloud_provider"`
-	CloudEnabled     bool            `json:"-"`
+	Cloud            CloudConf       `json:"cloud"`
 	Mirror           MirrorConf      `json:"mirror"`
 	EC               ECConf          `json:"ec"`
 	Log              LogConf         `json:"log"`
@@ -275,6 +277,14 @@ type Config struct {
 	Downloader       DownloaderConf  `json:"downloader"`
 	DSort            DSortConf       `json:"distributed_sort"`
 	Compression      CompressionConf `json:"compression"`
+}
+
+type CloudConf struct {
+	Desc map[string]interface{} `json:"-"`
+
+	// Set during validation
+	Supported bool   `json:"-"`
+	Provider  string `json:"-"`
 }
 
 type MirrorConf struct {
@@ -653,12 +663,8 @@ func (c *Config) TestingEnv() bool {
 }
 
 func (c *Config) Validate() error {
-	if c.CloudProvider != "" && !StringInSlice(c.CloudProvider, CloudProviders) {
-		return fmt.Errorf("invalid `cloud_provider` value (%s), expected one of: %v", c.CloudProvider, CloudProviders)
-	}
-	c.CloudEnabled = c.CloudProvider != ""
-
 	validators := []Validator{
+		&c.Cloud,
 		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum, &c.Versioning,
 		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net,
 		&c.Downloader, &c.DSort, &c.TestFSP, &c.FSpaths, &c.Compression,
@@ -715,6 +721,26 @@ func ipv4ListsEqual(alist, blist string) bool {
 // validKeepaliveType returns true if the keepalive type is supported.
 func validKeepaliveType(t string) bool {
 	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
+}
+
+func (c *CloudConf) UnmarshalJSON(data []byte) error {
+	return jsoniter.Unmarshal(data, &c.Desc)
+}
+
+func (c *CloudConf) MarshalJSON() (data []byte, err error) {
+	return MustMarshal(c.Desc), nil
+}
+
+func (c *CloudConf) Validate(_ *Config) (err error) {
+	for provider := range c.Desc {
+		c.Provider = provider
+		break
+	}
+	if c.Provider != "" && !StringInSlice(c.Provider, CloudProviders) {
+		return fmt.Errorf("invalid `cloud_provider` value (%s), expected one of: %v", c.Provider, CloudProviders)
+	}
+	c.Supported = c.Provider != ""
+	return nil
 }
 
 func (c *DiskConf) Validate(_ *Config) (err error) {
