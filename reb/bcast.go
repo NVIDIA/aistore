@@ -57,10 +57,16 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 		tsmap      = reb.t.GetSowner().Get()
 	)
 	status.Aborted, status.Running = xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
-	status.Stage = reb.stage.Load()
+	status.Stage = reb.stages.stage.Load()
 	status.GlobRebID = reb.globRebID.Load()
-	status.BatchCurr = int(reb.ecReb.batchCurr.Load())
-	status.BatchLast = int(reb.ecReb.batchLast.Load())
+	if status.Stage > rebStageECGlobRepair && status.Stage < rebStageECCleanup {
+		status.BatchCurr = int(reb.stages.currBatch.Load())
+		status.BatchLast = int(reb.stages.lastBatch.Load())
+	} else {
+		status.BatchCurr = 0
+		status.BatchLast = 0
+	}
+
 	status.SmapVersion = tsmap.Version
 	if rsmap != nil {
 		status.RebVersion = rsmap.Version
@@ -114,7 +120,7 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 	}
 ret:
 	reb.tcache.mu.Unlock()
-	status.Stage = reb.stage.Load()
+	status.Stage = reb.stages.stage.Load()
 }
 
 // returns the number of targets that have not reached `stage` yet. It is
@@ -123,12 +129,12 @@ ret:
 func (reb *Manager) nodesNotInStage(stage uint32) int {
 	smap := reb.t.GetSowner().Get()
 	count := 0
-	reb.stageMtx.Lock()
+	reb.stages.mtx.Lock()
 	for _, si := range smap.Tmap {
 		if si.ID() == reb.t.Snode().ID() {
 			continue
 		}
-		if _, ok := reb.nodeStages[si.ID()]; !ok {
+		if !reb.stages.isInStageBatchUnlocked(si, stage, 0) {
 			count++
 			continue
 		}
@@ -138,7 +144,7 @@ func (reb *Manager) nodesNotInStage(stage uint32) int {
 			continue
 		}
 	}
-	reb.stageMtx.Unlock()
+	reb.stages.mtx.Unlock()
 	return count
 }
 
@@ -202,7 +208,7 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *globArgs) (ok bool) {
 		loghdr = reb.loghdr(reb.globRebID.Load(), md.smap)
 	)
 	for curwt < maxwt {
-		if reb.isNodeInStage(tsi, rebStageTraverse) {
+		if reb.stages.isInStage(tsi, rebStageTraverse) {
 			// do not request the node stage if it has sent push notification
 			return true
 		}
@@ -237,7 +243,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 			glog.Infof("%s: abrt wack", loghdr)
 			return
 		}
-		if reb.isNodeInStage(tsi, rebStageFin) {
+		if reb.stages.isInStage(tsi, rebStageFin) {
 			// do not request the node stage if it has sent push notification
 			return true
 		}
@@ -355,7 +361,7 @@ func (reb *Manager) waitStage(si *cluster.Snode, md *globArgs, stage uint32) boo
 	maxwt := md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
 	curwt := time.Duration(0)
 	for curwt < maxwt {
-		if reb.isNodeInStage(si, stage) {
+		if reb.stages.isInStage(si, stage) {
 			return true
 		}
 
@@ -400,7 +406,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 
 	for curwt < maxwt {
 		_, exists := reb.ecReb.nodeData(si.ID())
-		if reb.isNodeInStage(si, locStage) && exists {
+		if reb.stages.isInStage(si, locStage) && exists {
 			return true
 		}
 
@@ -429,7 +435,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 			}
 		}
 		reb.ecReb.setNodeData(si.ID(), slices)
-		reb.setStage(si.ID(), rebStageECDetect)
+		reb.stages.setStage(si.ID(), rebStageECDetect, 0)
 		return true
 	}
 	return false

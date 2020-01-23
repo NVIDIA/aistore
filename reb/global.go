@@ -71,7 +71,7 @@ func (reb *Manager) globalRebPrecheck(md *globArgs, globRebID int64) bool {
 
 func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
-	reb.stage.Store(rebStageInit)
+	reb.stages.stage.Store(rebStageInit)
 	reb.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, globRebID, len(md.paths)*2, reb.statRunner)
 	cmn.Assert(reb.xreb != nil) // must renew given the CAS and checks above
 
@@ -102,6 +102,7 @@ func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...stri
 	// 5. ready - can receive objects
 	reb.smap.Store(unsafe.Pointer(md.smap))
 	reb.globRebID.Store(globRebID)
+	reb.stages.cleanup()
 	glog.Infof("%s: %s", reb.loghdr(globRebID, md.smap), reb.xreb.String())
 
 	return true
@@ -110,7 +111,6 @@ func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...stri
 // look for local slices/replicas
 func (reb *Manager) buildECNamespace(md *globArgs) int {
 	reb.ecReb.run()
-	reb.stage.Store(rebStageECNamespace)
 	if reb.waitForPushReqs(md, rebStageECNamespace) {
 		return 0
 	}
@@ -133,7 +133,6 @@ func (reb *Manager) distributeECNamespace(md *globArgs) error {
 	if err := reb.ecReb.exchange(); err != nil {
 		return err
 	}
-	reb.stage.Store(rebStageECDetect)
 	if reb.waitForPushReqs(md, rebStageECDetect, distributeTimeout) {
 		return nil
 	}
@@ -156,8 +155,6 @@ func (reb *Manager) ecFixLocal(md *globArgs) error {
 		return fmt.Errorf("Failed to rebalance local slices/objects: %v", err)
 	}
 
-	reb.stage.Store(rebStageECGlobRepair)
-	reb.setStage(reb.t.Snode().ID(), rebStageECGlobRepair)
 	if cnt := reb.bcast(md, reb.waitECLocalReb); cnt != 0 {
 		return fmt.Errorf("%d targets failed to complete local rebalance", cnt)
 	}
@@ -173,8 +170,6 @@ func (reb *Manager) ecFixGlobal(md *globArgs) error {
 		return err
 	}
 
-	reb.stage.Store(rebStageECCleanup)
-	reb.setStage(reb.t.Snode().ID(), rebStageECCleanup)
 	if cnt := reb.bcast(md, reb.waitECCleanup); cnt != 0 {
 		return fmt.Errorf("%d targets failed to complete local rebalance", cnt)
 	}
@@ -270,7 +265,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 //    wait for all finishes.
 func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 	// 6. Capture stats, start mpath joggers TODO: currently supporting only fs.ObjectType (content-type)
-	reb.stage.Store(rebStageTraverse)
+	reb.stages.stage.Store(rebStageTraverse)
 
 	// No EC-enabled buckets - run only regular rebalance
 	if !md.ecUsed {
@@ -312,7 +307,7 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 }
 
 func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
-	reb.stage.Store(rebStageWaitAck)
+	reb.changeStage(rebStageWaitAck, 0)
 	globRebID := reb.globRebID.Load()
 	loghdr := reb.loghdr(globRebID, md.smap)
 	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
@@ -447,7 +442,7 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 			glog.Infoln(string(delta))
 		}
 	}
-	reb.stage.Store(rebStageDone)
+	reb.stages.stage.Store(rebStageDone)
 	reb.semaCh <- struct{}{}
 }
 
@@ -498,7 +493,7 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 	} else {
 		glog.Warning(err)
 	}
-	reb.stage.Store(rebStageFin)
+	reb.changeStage(rebStageFin, 0)
 	for errCnt != 0 && !reb.xreb.Aborted() {
 		errCnt = reb.bcast(md, reb.waitFinExtended)
 	}
@@ -508,7 +503,7 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		reb.ecReb.cleanup()
 	}
 
-	reb.nodeStages = make(map[string]uint32) // cleanup after run
+	reb.stages.cleanup()
 }
 
 func (reb *Manager) onECData(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {

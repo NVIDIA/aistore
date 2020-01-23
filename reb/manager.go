@@ -80,11 +80,26 @@ type (
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
 		xreb       *xaction.GlobalReb
 		ecReb      *ecRebalancer
-		stageMtx   sync.Mutex
-		nodeStages map[string]uint32
+		stages     *nodeStages
 		globRebID  atomic.Int64
-		stage      atomic.Uint32 // rebStage* enum
 		laterx     atomic.Bool
+	}
+	// Stage status of a single target
+	stageStatus struct {
+		batchID int64  // current batch ID (0 for non-EC stages)
+		stage   uint32 // current stage
+	}
+	nodeStages struct {
+		// Info about remote targets. It needs mutex for it can be
+		// updated from different goroutines
+		mtx     sync.Mutex
+		targets map[string]*stageStatus // daemonID <-> stageStatus
+		// Info about this target rebalance status. This info is used oftener
+		// than remote target ones, and updated more frequently locally.
+		// That is why it uses atomics instead of global mutex
+		currBatch atomic.Int64  // EC rebalance: current batch ID
+		lastBatch atomic.Int64  // EC rebalance: ID of the last batch
+		stage     atomic.Uint32 // rebStage* enum: this target current stage
 	}
 	LomAcks struct {
 		mu *sync.Mutex
@@ -119,6 +134,69 @@ func init() {
 }
 
 //
+// nodeStages
+//
+
+func newNodeStages() *nodeStages {
+	return &nodeStages{targets: make(map[string]*stageStatus)}
+}
+
+// Returns true if the target is in `newStage` or in any next stage
+func (ns *nodeStages) stageReached(status *stageStatus, newStage uint32, newBatchID int64) bool {
+	// for simple stages: just check the stage
+	if newBatchID == 0 {
+		return status.stage >= newStage
+	}
+	// for cyclic stage (used in EC): check both batch ID and stage
+	return status.batchID > newBatchID ||
+		(status.batchID == newBatchID && status.stage >= newStage) ||
+		(status.stage >= rebStageECCleanup && status.stage > newStage)
+}
+
+// Mark a 'node' that it has reached the 'stage'. Do nothing if the target
+// is already in this stage or has finished it already
+func (ns *nodeStages) setStage(daemonID string, stage uint32, batchID int64) {
+	ns.mtx.Lock()
+	status, ok := ns.targets[daemonID]
+	if !ok {
+		status = &stageStatus{}
+		ns.targets[daemonID] = status
+	}
+
+	if !ns.stageReached(status, stage, batchID) {
+		status.stage = stage
+		status.batchID = batchID
+	}
+	ns.mtx.Unlock()
+}
+
+// Returns true if the target is in `newStage` or in any next stage.
+func (ns *nodeStages) isInStage(si *cluster.Snode, stage uint32) bool {
+	ns.mtx.Lock()
+	inStage := ns.isInStageBatchUnlocked(si, stage, 0)
+	ns.mtx.Unlock()
+	return inStage
+}
+
+// Returns true if the target is in `newStage` and has reached the given
+// batch ID or it is in any next stage
+func (ns *nodeStages) isInStageBatchUnlocked(si *cluster.Snode, stage uint32, batchID int64) bool {
+	status, ok := ns.targets[si.ID()]
+	if !ok {
+		return false
+	}
+	return ns.stageReached(status, stage, batchID)
+}
+
+func (ns *nodeStages) cleanup() {
+	ns.mtx.Lock()
+	for k := range ns.targets {
+		delete(ns.targets, k)
+	}
+	ns.mtx.Unlock()
+}
+
+//
 // Manager
 //
 func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *Manager {
@@ -134,8 +212,8 @@ func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *
 		filterGFN:  filter.NewDefaultFilter(),
 		netd:       netd,
 		netc:       netc,
-		nodeStages: make(map[string]uint32),
 		statRunner: strunner,
+		stages:     newNodeStages(),
 	}
 	reb.ecReb = newECRebalancer(t, reb, strunner)
 	reb.initStreams()
@@ -168,7 +246,7 @@ func (reb *Manager) lomAcks() *[cmn.MultiSyncMapCount]*LomAcks { return &reb.lom
 func (reb *Manager) loghdr(globRebID int64, smap *cluster.Smap) string {
 	var (
 		tname = reb.t.Snode().Name()
-		stage = stages[reb.stage.Load()]
+		stage = stages[reb.stages.stage.Load()]
 	)
 	return fmt.Sprintf("%s[g%d,v%d,%s]", tname, globRebID, smap.Version, stage)
 }
@@ -248,7 +326,7 @@ func (reb *Manager) getStats() (s *stats.ExtRebalanceStats) {
 }
 
 func (reb *Manager) beginStreams(md *globArgs) {
-	cmn.Assert(reb.stage.Load() == rebStageInit)
+	cmn.Assert(reb.stages.stage.Load() == rebStageInit)
 	if md.config.Rebalance.Multiplier == 0 {
 		md.config.Rebalance.Multiplier = 1
 	} else if md.config.Rebalance.Multiplier > 8 {
@@ -296,7 +374,7 @@ func (reb *Manager) beginStreams(md *globArgs) {
 }
 
 func (reb *Manager) endStreams() {
-	if reb.stage.CAS(rebStageFin, rebStageFinStreams) { // TODO: must always succeed?
+	if reb.stages.stage.CAS(rebStageFin, rebStageFinStreams) { // TODO: must always succeed?
 		reb.streams.Close(true /* graceful */)
 		reb.streams = nil
 		reb.acks.Close(true)
@@ -358,7 +436,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 		return
 	}
 
-	if stage := reb.stage.Load(); stage >= rebStageFin {
+	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
 		reb.laterx.Store(true)
 		f := glog.Warningf
 		if stage > rebStageFin {
@@ -396,7 +474,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 		glog.Errorf("%s target is not found in smap", tsid)
 		return
 	}
-	if stage := reb.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
+	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
 		ack := regularAck{
 			GlobRebID: reb.GlobRebID(),
 			DaemonID:  reb.t.Snode().ID(),
@@ -409,21 +487,17 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 	}
 }
 
-// Mark a 'node' that it has passed the 'stage'
-func (reb *Manager) setStage(node string, stage uint32) {
-	reb.stageMtx.Lock()
-	reb.nodeStages[node] = stage
-	reb.stageMtx.Unlock()
-}
-
 // Rebalance moves to the next stage:
 // - update internal stage
 // - send notification to all other targets that this one is in a new stage
-func (reb *Manager) changeStage(newStage uint32) {
-	// first, set stage
-	reb.setStage(reb.t.Snode().DaemonID, newStage)
+func (reb *Manager) changeStage(newStage uint32, batchID int64) {
+	// first, set own stage
+	reb.stages.stage.Store(newStage)
 
-	req := pushReq{DaemonID: reb.t.Snode().DaemonID, Stage: newStage, RebID: reb.globRebID.Load()}
+	req := pushReq{
+		DaemonID: reb.t.Snode().DaemonID, Stage: newStage,
+		RebID: reb.globRebID.Load(), Batch: int(batchID),
+	}
 	hdr := transport.Header{
 		ObjAttrs: transport.ObjectAttrs{Size: 0},
 		Opaque:   cmn.MustMarshal(req),
@@ -432,14 +506,6 @@ func (reb *Manager) changeStage(newStage uint32) {
 	if err := reb.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
 		glog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
 	}
-}
-
-// returns true if the node is in or passed `stage`
-func (reb *Manager) isNodeInStage(si *cluster.Snode, stage uint32) bool {
-	reb.stageMtx.Lock()
-	nodeStage, ok := reb.nodeStages[si.DaemonID]
-	reb.stageMtx.Unlock()
-	return ok && nodeStage >= stage
 }
 
 func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
@@ -472,11 +538,9 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("%s Target %s finished batch %d", reb.t.Snode().Name(), req.DaemonID, req.Batch)
 		}
-		reb.ecReb.batchDone(req.DaemonID, req.Batch)
-		return
 	}
 
-	reb.setStage(req.DaemonID, req.Stage)
+	reb.stages.setStage(req.DaemonID, req.Stage, int64(req.Batch))
 }
 
 func (reb *Manager) recvECAck(hdr transport.Header) {

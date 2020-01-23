@@ -219,12 +219,6 @@ type (
 
 		// list of CTs that should be moved between local mpaths
 		localActions []*rebCT
-		// the batch ID a target has processed. DaemonID <-> BatchID
-		tgtBatch map[string]int
-		// the current batch ID
-		batchCurr atomic.Int64
-		// ID of the last batch to be processeed (for health, stats etc)
-		batchLast atomic.Int64
 	}
 
 	// a description of a CT that local target awaits from another target
@@ -393,7 +387,6 @@ func newECRebalancer(t cluster.Target, mgr *Manager, statsT stats.Tracker) *ecRe
 		waiter:       newWaiter(t.GetMem2()),
 		cts:          make(ctList),
 		localActions: make([]*rebCT, 0),
-		tgtBatch:     make(map[string]int),
 		ackCTs:       ackCT{ct: make(map[string]*retransmitCT)},
 		statsT:       statsT,
 	}
@@ -782,7 +775,7 @@ func (s *ecRebalancer) OnData(w http.ResponseWriter, hdr transport.Header, reade
 	}
 
 	s.setNodeData(req.DaemonID, cts)
-	s.mgr.setStage(req.DaemonID, req.Stage)
+	s.mgr.stages.setStage(req.DaemonID, req.Stage, 0)
 }
 
 // Build a list buckets with their objects from a flat list of all CTs
@@ -1017,7 +1010,6 @@ func (s *ecRebalancer) cleanup() {
 	s.mtx.Lock()
 	s.cts = make(ctList)
 	s.localActions = make([]*rebCT, 0)
-	s.tgtBatch = make(map[string]int)
 	s.broken = nil
 	s.mtx.Unlock()
 	s.waiter.cleanup()
@@ -1064,7 +1056,7 @@ func (s *ecRebalancer) run() {
 		}
 	}
 	wg.Wait()
-	s.mgr.changeStage(rebStageECNamespace)
+	s.mgr.changeStage(rebStageECNamespace, 0)
 }
 
 // send collected CTs to all targets with retry
@@ -1124,7 +1116,7 @@ func (s *ecRebalancer) exchange() error {
 		}
 
 		if len(failed) == 0 {
-			s.mgr.setStage(s.t.Snode().DaemonID, rebStageECDetect)
+			s.mgr.changeStage(rebStageECDetect, 0)
 			return nil
 		}
 
@@ -1219,6 +1211,7 @@ func (s *ecRebalancer) rebalanceLocal() error {
 		}
 	}
 
+	s.mgr.changeStage(rebStageECGlobRepair, 0)
 	return nil
 }
 
@@ -1462,7 +1455,7 @@ func (s *ecRebalancer) allCTReceived() bool {
 			break
 		}
 		var obj *rebObject
-		batchCurr := int(s.batchCurr.Load())
+		batchCurr := int(s.mgr.stages.currBatch.Load())
 		for j := 0; j+batchCurr < len(s.broken) && j < ecRebBatchSize; j++ {
 			o := s.broken[j+batchCurr]
 			if uid == uniqueWaitID(o.bucket, o.provider, o.objName) {
@@ -1491,15 +1484,21 @@ func (s *ecRebalancer) allCTReceived() bool {
 
 func (s *ecRebalancer) allNodesCompletedBatch() bool {
 	cnt := 0
-	s.mtx.Lock()
-	for sid := range s.ra.smap.Tmap {
-		btch, ok := s.tgtBatch[sid]
-		if ok && btch >= int(s.batchCurr.Load()) {
+	batchID := s.mgr.stages.currBatch.Load()
+	s.mgr.stages.mtx.Lock()
+	smap := s.ra.smap.Tmap
+	for _, si := range smap {
+		if si.ID() == s.mgr.t.Snode().ID() {
+			// local target is always in the stage
+			cnt++
+			continue
+		}
+		if s.mgr.stages.isInStageBatchUnlocked(si, rebStageECBatch, batchID) {
 			cnt++
 		}
 	}
-	s.mtx.Unlock()
-	return cnt == len(s.ra.smap.Tmap)
+	s.mgr.stages.mtx.Unlock()
+	return cnt == len(smap)
 }
 
 func (s *ecRebalancer) waitQuiesce(cb func() bool) error {
@@ -1648,7 +1647,7 @@ func (s *ecRebalancer) rebalanceObject(obj *rebObject) (err error) {
 }
 
 func (s *ecRebalancer) cleanupBatch() {
-	s.waiter.cleanupBatch(s.broken, int(s.batchCurr.Load()))
+	s.waiter.cleanupBatch(s.broken, int(s.mgr.stages.currBatch.Load()))
 	s.releaseSGLs(s.broken)
 	s.ackCTs.mtx.Lock()
 	for id := range s.ackCTs.ct {
@@ -1668,12 +1667,9 @@ func (s *ecRebalancer) finalizeBatch() error {
 
 	// mark batch done and notify other targets
 	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
-		glog.Infof("%s batch %d done", s.t.Snode().Name(), s.batchCurr.Load())
+		glog.Infof("%s batch %d done", s.t.Snode().Name(), s.mgr.stages.currBatch.Load())
 	}
-	s.batchDone(s.t.Snode().DaemonID, int(s.batchCurr.Load()))
-	if err := s.batchNotify(); err != nil {
-		return err
-	}
+	s.mgr.changeStage(rebStageECBatch, s.mgr.stages.currBatch.Load())
 
 	// wait for all targets to finish sending/receiving
 	if err := s.waitQuiesce(s.allNodesCompletedBatch); err != nil {
@@ -1804,8 +1800,8 @@ func (s *ecRebalancer) rebalanceBatch(batchCurr int64) error {
 func (s *ecRebalancer) rebalanceGlobal() (err error) {
 	batchCurr := int64(0)
 	batchLast := int64(len(s.broken) - 1)
-	s.batchCurr.Store(batchCurr)
-	s.batchLast.Store(batchLast)
+	s.mgr.stages.currBatch.Store(batchCurr)
+	s.mgr.stages.lastBatch.Store(batchLast)
 	for batchCurr <= batchLast {
 		if bool(glog.FastV(4, glog.SmoduleReb)) {
 			glog.Infof("Starting batch of %d from %d", ecRebBatchSize, batchCurr)
@@ -1817,20 +1813,22 @@ func (s *ecRebalancer) rebalanceGlobal() (err error) {
 		}
 
 		s.waitECAck()
+		s.mgr.stages.stage.Store(rebStageECBatch)
 		err = s.finalizeBatch()
 		s.cleanupBatch()
 		if err != nil {
 			return err
 		}
-		batchCurr = s.batchCurr.Add(int64(ecRebBatchSize))
+		batchCurr = s.mgr.stages.currBatch.Add(int64(ecRebBatchSize))
 	}
+	s.mgr.changeStage(rebStageECCleanup, 0)
 	return nil
 }
 
 // Free allocated memory for EC reconstruction, close opened file handles of replicas.
 // Used to clean up memory after finishing a batch
 func (s *ecRebalancer) releaseSGLs(objList []*rebObject) {
-	batchCurr := int(s.batchCurr.Load())
+	batchCurr := int(s.mgr.stages.currBatch.Load())
 	for i := batchCurr; i < batchCurr+ecRebBatchSize && i < len(objList); i++ {
 		obj := objList[i]
 		for _, sg := range obj.rebuildSGLs {
@@ -2236,32 +2234,6 @@ func (s *ecRebalancer) rebuildAndSend(obj *rebObject, slices []*waitCT) error {
 	}
 
 	return s.rebuildFromSlices(obj, slices)
-}
-
-// mark that a target completed batch with batchCurr
-func (s *ecRebalancer) batchDone(daemonID string, batchCurr int) {
-	_, ok := s.ra.smap.Tmap[daemonID]
-	cmn.AssertMsg(ok, daemonID)
-	s.mtx.Lock()
-	s.tgtBatch[daemonID] = batchCurr
-	s.mtx.Unlock()
-}
-
-// send push notification to other targets that local one has completed batch
-func (s *ecRebalancer) batchNotify() error {
-	var (
-		req = &pushReq{
-			DaemonID: s.t.Snode().DaemonID,
-			Stage:    rebStageECBatch,
-			RebID:    s.mgr.globRebID.Load(),
-			Batch:    int(s.batchCurr.Load()),
-		}
-		hdr = transport.Header{Opaque: cmn.MustMarshal(req)}
-	)
-	if err := s.mgr.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
-		return fmt.Errorf("Failed to send slices to nodes: %v", err)
-	}
-	return nil
 }
 
 // Returns XXHash calculated for the reader
