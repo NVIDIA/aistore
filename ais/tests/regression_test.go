@@ -757,7 +757,7 @@ func TestLRU(t *testing.T) {
 	})
 
 	tutils.Logln("starting LRU...")
-	err := api.ExecXaction(baseParams, cmn.ActLRU, cmn.ActXactStart, "")
+	err := api.ExecXaction(baseParams, cmn.ActLRU, cmn.ActXactStart, "", "")
 	tassert.CheckFatal(t, err)
 	waitForBucketXactionToStart(t, cmn.ActLRU, m.bucket, baseParams)
 	waitForBucketXactionToComplete(t, cmn.ActLRU, m.bucket, baseParams, rebalanceTimeout)

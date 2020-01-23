@@ -196,13 +196,14 @@ func (r *registry) GetL(kind string) globalEntry {
 
 // registry - private methods
 
-func (r *registry) AbortAllBuckets(removeFromRegistry bool, buckets ...string) {
+func (r *registry) AbortAllBuckets(removeFromRegistry bool, bcks ...*cluster.Bck) {
 	wg := &sync.WaitGroup{}
-	for _, b := range buckets {
+	for _, bck := range bcks {
 		wg.Add(1)
-		go func(b string) {
+		go func(bck *cluster.Bck) {
 			defer wg.Done()
-			val, ok := r.bucketXacts.Load(b)
+			bckUname := bck.MakeUname("")
+			val, ok := r.bucketXacts.Load(bckUname)
 			if !ok {
 				// nothing to abort
 				return
@@ -210,9 +211,9 @@ func (r *registry) AbortAllBuckets(removeFromRegistry bool, buckets ...string) {
 			bXacts := val.(*bucketXactions)
 			bXacts.AbortAll()
 			if removeFromRegistry {
-				r.bucketXacts.Delete(b)
+				r.bucketXacts.Delete(bckUname)
 			}
-		}(b)
+		}(bck)
 	}
 
 	wg.Wait()
@@ -300,12 +301,12 @@ func (r *registry) StopMountpathXactions() {
 	})
 }
 
-func (r *registry) AbortBucketXact(kind, bucket string) {
-	val, ok := r.bucketXacts.Load(bucket)
-
+func (r *registry) AbortBucketXact(kind string, bck *cluster.Bck) {
+	bckUname := bck.MakeUname("")
+	val, ok := r.bucketXacts.Load(bckUname)
 	if !ok {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Can't abort nonexistent xaction for bucket %s", bucket)
+			glog.Infof("Can't abort nonexistent xaction for bucket %s", bck)
 		}
 		return
 	}
@@ -313,11 +314,10 @@ func (r *registry) AbortBucketXact(kind, bucket string) {
 	entry := bucketsXacts.GetL(kind)
 	if entry == nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Can't abort nonexistent xaction for bucket %s", bucket)
+			glog.Infof("Can't abort nonexistent xaction for bucket %s", bck)
 		}
 		return
 	}
-
 	if !entry.Get().Finished() {
 		entry.Get().Abort()
 	}
@@ -364,23 +364,22 @@ func (r *registry) AbortGlobalXact(kind string) (aborted bool) {
 }
 
 // Returns stats of xaction with given 'kind' on a given bucket
-func (r *registry) bucketSingleXactStats(kind, bucket string, onlyRecent bool) (map[int64]stats.XactStats, error) {
+func (r *registry) bucketSingleXactStats(kind string, bck *cluster.Bck,
+	onlyRecent bool) (map[int64]stats.XactStats, error) {
 	if onlyRecent {
-		bucketXats, ok := r.getBucketsXacts(bucket)
+		bucketXats, ok := r.getBucketsXacts(bck)
 		if !ok {
-			return nil, cmn.NewXactionNotFoundError("<any>, bucket=" + bucket)
+			return nil, cmn.NewXactionNotFoundError("<any>, bucket=" + bck.Name)
 		}
-
 		entry := bucketXats.GetL(kind)
 		if entry == nil {
-			return nil, cmn.NewXactionNotFoundError(kind + ", bucket=" + bucket)
+			return nil, cmn.NewXactionNotFoundError(kind + ", bucket=" + bck.Name)
 		}
 		xact := entry.Get()
 		return map[int64]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
 	}
-
 	return r.matchingXactsStats(func(xact cmn.Xact) bool {
-		return xact.Bucket() == bucket && xact.Kind() == kind
+		return xact.Bucket() == bck.Name && xact.Provider() == bck.Provider && xact.Kind() == kind
 	}), nil
 }
 
@@ -453,12 +452,12 @@ func (r *registry) getNonBucketSpecificStats(kind string, onlyRecent bool) (map[
 		return r.globalXactStats(kind, onlyRecent)
 	}
 
-	return nil, fmt.Errorf("xaction %s is not a global xaction", kind)
+	return nil, fmt.Errorf("xaction %s is not global", kind)
 }
 
 // Returns stats of all xactions of a given bucket
-func (r *registry) bucketAllXactsStats(bucket string, onlyRecent bool) map[int64]stats.XactStats {
-	bucketsXacts, ok := r.getBucketsXacts(bucket)
+func (r *registry) bucketAllXactsStats(bck *cluster.Bck, onlyRecent bool) map[int64]stats.XactStats {
+	bucketsXacts, ok := r.getBucketsXacts(bck)
 
 	// bucketsXacts is not present, bucket might have never existed
 	// or has been removed, return empty result
@@ -467,49 +466,53 @@ func (r *registry) bucketAllXactsStats(bucket string, onlyRecent bool) map[int64
 			return map[int64]stats.XactStats{}
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return xact.Bucket() == bucket
+			return xact.Bucket() == bck.Name && xact.Provider() == bck.Provider
 		})
 	}
 
 	return bucketsXacts.Stats()
 }
 
-func (r *registry) GetStats(kind, bucket string, onlyRecent bool) (map[int64]stats.XactStats, error) {
-	if bucket == "" {
+func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map[int64]stats.XactStats, error) {
+	if bck == nil {
 		// no bucket - either all xactions or a global xaction
 		return r.getNonBucketSpecificStats(kind, onlyRecent)
 	}
-
+	if !bck.HasProvider() {
+		return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", kind, bck.Name)
+	}
 	// both bucket and kind present - request for specific bucket's xaction
 	if kind != "" {
-		return r.bucketSingleXactStats(kind, bucket, onlyRecent)
+		return r.bucketSingleXactStats(kind, bck, onlyRecent)
 	}
-
 	// bucket present and no kind - request for all available bucket's xactions
-	return r.bucketAllXactsStats(bucket, onlyRecent), nil
+	return r.bucketAllXactsStats(bck, onlyRecent), nil
 }
 
-func (r *registry) DoAbort(kind, bucket string) {
+func (r *registry) DoAbort(kind string, bck *cluster.Bck) {
 	// no bucket and no kind - request for all available xactions
-	if bucket == "" && kind == "" {
+	if bck == nil && kind == "" {
 		r.AbortAll()
 	}
 	// bucket present and no kind - request for all available bucket's xactions
-	if bucket != "" && kind == "" {
-		r.AbortAllBuckets(false, bucket)
+	if bck != nil && kind == "" {
+		cmn.Assert(bck.HasProvider()) // TODO -- FIXME: remove
+		r.AbortAllBuckets(false, bck)
 	}
 	// both bucket and kind present - request for specific bucket's xaction
-	if bucket != "" && kind != "" {
-		r.AbortBucketXact(kind, bucket)
+	if bck != nil && kind != "" {
+		cmn.Assert(bck.HasProvider()) // TODO -- FIXME: remove
+		r.AbortBucketXact(kind, bck)
 	}
 	// no bucket, but kind present - request for specific global xaction
-	if bucket == "" && kind != "" {
+	if bck == nil && kind != "" {
 		r.AbortGlobalXact(kind)
 	}
 }
 
-func (r *registry) getBucketsXacts(bucket string) (xactions *bucketXactions, ok bool) {
-	val, ok := r.bucketXacts.Load(bucket) // TODO -- FIXME: support same-name Cloud and AIS
+func (r *registry) getBucketsXacts(bck *cluster.Bck) (xactions *bucketXactions, ok bool) {
+	bckUname := bck.MakeUname("")
+	val, ok := r.bucketXacts.Load(bckUname)
 	if !ok {
 		return nil, false
 	}
@@ -517,15 +520,17 @@ func (r *registry) getBucketsXacts(bucket string) (xactions *bucketXactions, ok 
 }
 
 func (r *registry) BucketsXacts(bck *cluster.Bck) *bucketXactions {
-	// NOTE: Load and then LoadOrStore saves us creating new object with
-	// newBucketXactions every time this function is called, putting additional,
-	// unnecessary stress on GC
-	val, loaded := r.bucketXacts.Load(bck.Name)
+	if !bck.HasProvider() {
+		cmn.AssertMsg(false, "bucket '"+bck.Name+"' must have provider")
+	}
+	bckUname := bck.MakeUname("")
+
+	// try loading first to avoid creating newBucketXactions()
+	val, loaded := r.bucketXacts.Load(bckUname)
 	if loaded {
 		return val.(*bucketXactions)
 	}
-
-	val, _ = r.bucketXacts.LoadOrStore(bck.Name, newBucketXactions(r))
+	val, _ = r.bucketXacts.LoadOrStore(bckUname, newBucketXactions(r))
 	return val.(*bucketXactions)
 }
 
@@ -571,13 +576,15 @@ func (r *registry) cleanUpFinished() time.Duration {
 	}
 	anyTaskDeleted := false
 	r.byID.Range(func(k, v interface{}) bool {
-		entry := v.(entry)
-		if !entry.Get().Finished() {
+		var (
+			entry = v.(entry)
+			xact  = entry.Get()
+			eID   = xact.ID()
+			eKind = xact.Kind()
+		)
+		if !xact.Finished() {
 			return true
 		}
-
-		eID := entry.Get().ID()
-		eKind := entry.Get().Kind()
 
 		// if IsTask == true the task must be cleaned up always - no extra
 		// checks besides it is finished at least entryOldAge ago.
@@ -590,7 +597,9 @@ func (r *registry) cleanUpFinished() time.Duration {
 				return true
 			}
 		} else if !entry.IsTask() {
-			bXact, _ := r.getBucketsXacts(entry.Get().Bucket())
+			bck := &cluster.Bck{Name: xact.Bucket(), Provider: xact.Provider()}
+			cmn.Assert(bck.HasProvider())
+			bXact, _ := r.getBucketsXacts(bck)
 			if bXact != nil {
 				currentEntry := bXact.GetL(eKind)
 				if currentEntry != nil && currentEntry.Get().ID() == eID {
@@ -599,7 +608,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 			}
 		}
 
-		if entry.Get().EndTime().Add(entryOldAge).Before(startTime) {
+		if xact.EndTime().Add(entryOldAge).Before(startTime) {
 			// xaction has finished more than entryOldAge ago
 			r.byID.Delete(k)
 			r.byIDSize.Dec()

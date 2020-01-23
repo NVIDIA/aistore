@@ -103,9 +103,10 @@ type MountpathList struct {
 }
 
 type XactionExtMsg struct {
-	Target string `json:"target,omitempty"`
-	Bucket string `json:"bucket,omitempty"`
-	All    bool   `json:"all,omitempty"`
+	Target   string `json:"target,omitempty"`
+	Bucket   string `json:"bucket,omitempty"`
+	Provider string `json:"provider,omitempty"` // TODO -- FIXME: extend the API to optionally specify provider
+	All      bool   `json:"all,omitempty"`
 }
 
 // GetPropsAll is a list of all GetProps* options

@@ -20,7 +20,8 @@ import (
 // MakeXactGetRequest gets the response of the Xaction Query
 // Action can be one of: start, stop, stats
 // Kind will be one of the xactions
-func MakeXactGetRequest(baseParams BaseParams, kind, action, bucket string, all bool) (map[string][]*stats.BaseXactStatsExt, error) {
+func MakeXactGetRequest(baseParams BaseParams, kind, action, bucket string,
+	all bool) (map[string][]*stats.BaseXactStatsExt, error) {
 	var (
 		resp      *http.Response
 		xactStats = make(map[string][]*stats.BaseXactStatsExt)

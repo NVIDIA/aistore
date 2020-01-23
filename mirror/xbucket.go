@@ -18,7 +18,6 @@ import (
 type (
 	XactBck interface {
 		cmn.Xact
-		Provider() string
 		DoneCh() chan struct{}
 		Target() cluster.Target
 		Mpathers() map[string]mpather

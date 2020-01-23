@@ -237,13 +237,13 @@ var (
 
 	// Bucket
 	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}
-	markerFlag        = cli.StringFlag{Name: "marker", Usage: "start listing bucket objects starting from the object that follows the marker(alphabetically), ignored in fast mode"}
+	markerFlag        = cli.StringFlag{Name: "marker", Usage: "list bucket objects alphabetically starting from the object after the marker"}
 	objLimitFlag      = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
 	pageSizeFlag      = cli.StringFlag{Name: "page-size", Usage: "maximum number of entries by list bucket call", Value: "1000"}
 	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
 	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
 	maxPagesFlag      = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
-	allItemsFlag      = cli.BoolTFlag{Name: "all-items", Usage: "show all items including old, duplicated etc"}
+	allItemsFlag      = cli.BoolTFlag{Name: "all-items", Usage: "show all items including old and duplicated"}
 	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all-items', 'limit', and 'page-size' are ignored in this mode"}
 	fastDetailsFlag   = cli.BoolFlag{Name: "fast", Usage: "enforce using faster methods to find out the buckets' details, note: the output may not be accurate"}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}

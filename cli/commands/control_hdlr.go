@@ -102,8 +102,8 @@ var (
 
 func startXactionHandler(c *cli.Context) (err error) {
 	var (
-		xaction = c.Args().First() // empty string if no args given
-		bucket  string
+		xaction          = c.Args().First() // empty string if no args given
+		bucket, provider string
 	)
 
 	if c.NArg() == 0 {
@@ -120,12 +120,12 @@ func startXactionHandler(c *cli.Context) (err error) {
 		}
 	} else { // bucket related xaction
 		bucket = c.Args().Get(1)
-		if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+		if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 			return
 		}
 	}
 
-	if err = api.ExecXaction(defaultAPIParams, xaction, commandStart, bucket); err != nil {
+	if err = api.ExecXaction(defaultAPIParams, xaction, commandStart, bucket, provider); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "started %q xaction\n", xaction)
@@ -134,8 +134,8 @@ func startXactionHandler(c *cli.Context) (err error) {
 
 func stopXactionHandler(c *cli.Context) (err error) {
 	var (
-		xaction = c.Args().First() // empty string if no args given
-		bucket  string
+		xaction          = c.Args().First() // empty string if no args given
+		bucket, provider string
 	)
 
 	if c.NArg() == 0 {
@@ -150,7 +150,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	} else { // valid xaction
 		if bucketXactions.Contains(xaction) {
 			bucket = c.Args().Get(1)
-			if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+			if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 				return
 			}
 		} else if c.NArg() > 1 {
@@ -158,7 +158,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	if err = api.ExecXaction(defaultAPIParams, xaction, commandStop, bucket); err != nil {
+	if err = api.ExecXaction(defaultAPIParams, xaction, commandStop, bucket, provider); err != nil {
 		return
 	}
 

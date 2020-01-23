@@ -206,22 +206,30 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActXactStart, cmn.ActXactStop:
 		var (
-			kind   = msg.Name
-			bucket string
+			bck       *cluster.Bck
+			kind      = msg.Name
+			bucket, _ = msg.Value.(string)
+			provider  = r.URL.Query().Get(cmn.URLParamProvider)
 		)
-		bucket, _ = msg.Value.(string)
-		// TODO -- FIXME: enforce bucket != "" for xactionbucket kinds
+		if bucket != "" {
+			bck = &cluster.Bck{Name: bucket, Provider: provider}
+			if err := bck.Init(t.bmdowner); err != nil {
+				t.invalmsghdlr(w, r, err.Error())
+				return
+			}
+		}
 		if msg.Action == cmn.ActXactStart {
 			if kind == cmn.ActGlobalReb {
 				// see p.httpcluput()
 				t.invalmsghdlr(w, r, "Invalid API request: expecting action="+cmn.ActGlobalReb)
 				return
 			}
-			if err := t.xactsStartRequest(kind, bucket); err != nil {
+			if err := t.xactsStartRequest(kind, bck); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
+				return
 			}
 		} else {
-			xaction.Registry.DoAbort(kind, bucket)
+			xaction.Registry.DoAbort(kind, bck)
 		}
 		return
 	default:
@@ -319,15 +327,24 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		xactMsg, err := cmn.ReadXactionRequestMessage(&msg)
 		if err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse xaction action message: %s", err.Error()), http.StatusBadRequest)
+			t.invalmsghdlr(w, r,
+				fmt.Sprintf("Could not parse xaction action message: %s", err.Error()), http.StatusBadRequest)
 			return
 		}
 
-		kind, bucket, onlyRecent := msg.Name, xactMsg.Bucket, !xactMsg.All
+		kind, bucket, provider, onlyRecent := msg.Name, xactMsg.Bucket, xactMsg.Provider, !xactMsg.All
 
 		switch msg.Action {
 		case cmn.ActXactStats:
-			body, err = t.xactStatsRequest(kind, bucket, onlyRecent)
+			var bck *cluster.Bck
+			if bucket != "" {
+				bck = &cluster.Bck{Name: bucket, Provider: provider}
+				if err := bck.Init(t.bmdowner); err != nil {
+					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+					return
+				}
+			}
+			body, err = t.xactStatsRequest(kind, bck, onlyRecent)
 			if err != nil {
 				if _, ok := err.(cmn.XactionNotFoundError); ok {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
@@ -393,12 +410,11 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) xactStatsRequest(kind, bucket string, onlyRecent bool) ([]byte, error) {
-	xactStatsMap, err := xaction.Registry.GetStats(kind, bucket, onlyRecent)
+func (t *targetrunner) xactStatsRequest(kind string, bck *cluster.Bck, onlyRecent bool) ([]byte, error) {
+	xactStatsMap, err := xaction.Registry.GetStats(kind, bck, onlyRecent)
 	if err != nil {
 		return nil, err
 	}
-
 	xactStats := make([]stats.XactStats, 0, len(xactStatsMap))
 	for _, stat := range xactStatsMap {
 		if stat == nil {
@@ -406,50 +422,57 @@ func (t *targetrunner) xactStatsRequest(kind, bucket string, onlyRecent bool) ([
 		}
 		xactStats = append(xactStats, stat)
 	}
-
 	return jsoniter.Marshal(xactStats)
 }
 
-func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
-	if kind == "" {
-		return fmt.Errorf("kind of xaction to start not specified")
-	}
-
-	if bucket == "" {
-		switch kind {
-		case cmn.ActLRU:
-			go t.RunLRU()
-		case cmn.ActLocalReb:
-			go t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
-		case cmn.ActPrefetch:
-			go t.Prefetch()
-		case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete:
-			return fmt.Errorf("%q xaction start not supported", kind)
-		case cmn.ActElection:
-			return fmt.Errorf("%q not supported by target node", kind)
-		case cmn.ActECPut, cmn.ActECGet, cmn.ActECRespond:
-			return fmt.Errorf("%q requires a bucket to start", kind)
-		default:
-			return fmt.Errorf("unknown %q xaction", kind)
-		}
-		return nil
-	}
-	// henceforth supporting only ais buckets
-	bck := &cluster.Bck{Name: bucket, Provider: cmn.ProviderAIS}
-	if err := bck.Init(t.bmdowner); err != nil {
-		return err
-	}
+func (t *targetrunner) xactsStartRequest(kind string, bck *cluster.Bck) error {
+	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
+	const erfmn = "xaction %q requires a bucket to start"
 	switch kind {
+	// 1. globals
+	case cmn.ActLRU:
+		if bck != nil {
+			glog.Errorf(erfmb, kind, bck)
+		}
+		go t.RunLRU()
+	case cmn.ActLocalReb:
+		if bck != nil {
+			glog.Errorf(erfmb, kind, bck)
+		}
+		go t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
+	case cmn.ActPrefetch:
+		if bck != nil {
+			glog.Errorf(erfmb, kind, bck)
+		}
+		go t.Prefetch()
+	// 2. with bucket
 	case cmn.ActECPut:
+		if bck == nil {
+			return fmt.Errorf(erfmn, kind)
+		}
 		ec.ECM.RestoreBckPutXact(bck)
 	case cmn.ActECGet:
+		if bck == nil {
+			return fmt.Errorf(erfmn, kind)
+		}
 		ec.ECM.RestoreBckGetXact(bck)
 	case cmn.ActECRespond:
+		if bck == nil {
+			return fmt.Errorf(erfmn, kind)
+		}
 		ec.ECM.RestoreBckRespXact(bck)
-	case cmn.ActMakeNCopies, cmn.ActECEncode:
-		return fmt.Errorf("%s supported by /buckets/bucket-name endpoint", kind)
+	// 3. cannot start
 	case cmn.ActPutCopies:
-		return fmt.Errorf("%s currently not supported", kind)
+		return fmt.Errorf("cannot start xaction %q (- is invoked automatically by PUTs into mirrored bucket)", kind)
+	case cmn.ActElection:
+		return fmt.Errorf("xaction %q: AIS targets are not permitted to start cluster-wide proxy election", kind)
+	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete, cmn.ActMakeNCopies, cmn.ActECEncode:
+		return fmt.Errorf("initiating xaction %q must be done via a separate documented API", kind)
+	// 4. unknown
+	case "":
+		return errors.New("empty or unspecified xaction kind")
+	default:
+		return fmt.Errorf("unknown xaction %q", kind)
 	}
 	return nil
 }
@@ -735,13 +758,16 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 	}
 
 	// Delete buckets that do not exist in the new BMD
-	bucketsToDelete := make([]string, 0, len(bmd.LBmap))
+	bucketsToDelete := make([]string, 0, len(bmd.LBmap)) // TODO -- FIXME: redundant: cannot pass cluster.Bck into `fs`
+	bcksToDelete := make([]*cluster.Bck, 0, len(bmd.LBmap))
 	for bucket := range bmd.LBmap {
+		bck := &cluster.Bck{Name: bucket, Provider: cmn.ProviderAIS}
 		if nprops, ok := newBMD.LBmap[bucket]; !ok {
 			bucketsToDelete = append(bucketsToDelete, bucket)
+			bcksToDelete = append(bcksToDelete, bck)
 		} else if bprops, ok := bmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
 			if bprops.Mirror.Enabled && !nprops.Mirror.Enabled {
-				xaction.Registry.AbortBucketXact(cmn.ActPutCopies, bucket)
+				xaction.Registry.AbortBucketXact(cmn.ActPutCopies, bck)
 			}
 		}
 	}
@@ -749,15 +775,14 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
 	//       disable mirroring (needed in part for cloud buckets)
 	if len(bucketsToDelete) > 0 {
-		xaction.Registry.AbortAllBuckets(true, bucketsToDelete...)
-		go func(buckets ...string) {
-			b := &cluster.Bck{Provider: cmn.ProviderAIS}
-			for _, n := range buckets {
-				b.Name = n
+		xaction.Registry.AbortAllBuckets(true, bcksToDelete...)
+		go func(bcks ...*cluster.Bck) {
+			for _, b := range bcks {
 				cluster.EvictLomCache(b)
 			}
-		}(bucketsToDelete...)
-		fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false /*false=destroy*/, cmn.ProviderAIS, bucketsToDelete...)
+		}(bcksToDelete...)
+		fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false, /*false=destroy*/
+			cmn.ProviderAIS, bucketsToDelete...)
 	}
 
 	// Create buckets that have been added
@@ -777,7 +802,8 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 				bucketsToCreate = append(bucketsToCreate, bckName)
 			}
 		}
-		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cfg.CloudProvider, bucketsToCreate...)
+		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cfg.CloudProvider,
+			bucketsToCreate...)
 	}
 	return
 }

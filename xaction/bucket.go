@@ -517,11 +517,13 @@ func (e *FastRenEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err e
 		keep = true
 		return
 	}
-	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(=>%s)", e.Kind(), prev.bck.Name, prev.bucketTo, prev.phase, e.phase, e.bucketTo)
+	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(=>%s)",
+		e.Kind(), prev.bck.Name, prev.bucketTo, prev.phase, e.phase, e.bucketTo)
 	return
 }
 
-func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, phase string, mgr cluster.RebManager) (*FastRen, error) {
+func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, phase string,
+	mgr cluster.RebManager) (*FastRen, error) {
 	b := r.BucketsXacts(bckFrom)
 	e := &FastRenEntry{baseBckEntry: baseBckEntry{bck: bckFrom},
 		t:          t,

@@ -778,7 +778,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			break // nothing to do
 		case cmn.ActCommit:
 			copies, _ := t.parseValidateNCopies(msgInt.Value)
-			xaction.Registry.AbortBucketXact(cmn.ActPutCopies, bucket)
+			xaction.Registry.AbortBucketXact(cmn.ActPutCopies, bck)
 			xaction.Registry.RenewBckMakeNCopies(bck, t, copies)
 		default:
 			cmn.Assert(false)

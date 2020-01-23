@@ -1966,7 +1966,8 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	getOneObj := func(objName string) {
 		defer wg.Done()
 
-		// hack: calculate which targets stored a replica
+		// 1) hack: calculate which targets stored a replica
+		// 2) TODO -- FIXME: replace `cluster.Bck` with a separate `api` { bucket, provider, ...} struct
 		bck := &cluster.Bck{Name: bucket, Provider: cmn.ProviderAIS}
 		targets, err := cluster.HrwTargetList(bck.MakeUname(ecTestDir+objName), initialSmap, o.parityCnt+1)
 		tassert.CheckFatal(t, err)

@@ -2050,7 +2050,7 @@ func TestRenewRebalance(t *testing.T) {
 
 		<-m.controlCh // wait for half the GETs to complete
 
-		err := api.ExecXaction(baseParams, cmn.ActGlobalReb, cmn.ActXactStart, "")
+		err := api.ExecXaction(baseParams, cmn.ActGlobalReb, cmn.ActXactStart, "", "")
 		tassert.CheckFatal(t, err)
 		tutils.Logf("manually initiated global rebalance\n")
 	}()

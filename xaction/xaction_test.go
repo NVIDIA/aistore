@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/housekeep/lru"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -98,8 +99,8 @@ func TestXactionRenewEvictDelete(t *testing.T) {
 
 func TestXactionAbortAll(t *testing.T) {
 	xactions := newXactions()
-	bckFrom := &cluster.Bck{Name: "test"}
-	bckTo := &cluster.Bck{Name: "test"}
+	bckFrom := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
+	bckTo := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
 
 	xactGlob := xactions.RenewEvictDelete(true)
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -116,8 +117,8 @@ func TestXactionAbortAll(t *testing.T) {
 
 func TestXactionAbortAllGlobal(t *testing.T) {
 	xactions := newXactions()
-	bckFrom := &cluster.Bck{Name: "test"}
-	bckTo := &cluster.Bck{Name: "test"}
+	bckFrom := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
+	bckTo := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
 
 	xactGlob := xactions.RenewEvictDelete(true)
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -135,15 +136,15 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 func TestXactionAbortBuckets(t *testing.T) {
 	xactions := newXactions()
-	bckFrom := &cluster.Bck{Name: "test"}
-	bckTo := &cluster.Bck{Name: "test"}
+	bckFrom := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
+	bckTo := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
 
 	xactGlob := xactions.RenewEvictDelete(true)
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
 	xactBck, err := xactions.RenewBckFastRename(nil, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
-	xactions.AbortAllBuckets(true, "test")
+	xactions.AbortAllBuckets(true, bckFrom)
 
 	tassert.Errorf(t, xactGlob != nil && !xactGlob.Aborted(),
 		"AbortAllGlobal: expected global xaction to be running")

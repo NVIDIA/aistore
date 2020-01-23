@@ -52,8 +52,10 @@ func (b *Bck) String() string {
 	return fmt.Sprintf("%s(%x, %s, %v)", b.Name, bid, b.Provider, inProgress)
 }
 
-func (b *Bck) IsAIS() bool   { return cmn.IsProviderAIS(b.Provider) }
-func (b *Bck) IsCloud() bool { return cmn.IsProviderCloud(b.Provider, false /*acceptAnon*/) }
+func (b *Bck) IsAIS() bool         { return cmn.IsProviderAIS(b.Provider) }
+func (b *Bck) IsCloud() bool       { return cmn.IsProviderCloud(b.Provider, false /*acceptAnon*/) }
+func (b *Bck) IsInitialized() bool { return b.Props != nil }
+func (b *Bck) HasProvider() bool   { return b.IsAIS() || b.IsCloud() }
 
 func (b *Bck) Equal(other *Bck) bool {
 	if b.Name != other.Name {

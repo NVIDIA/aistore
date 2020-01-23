@@ -23,6 +23,7 @@ type (
 		ID() int64
 		Kind() string
 		Bucket() string
+		Provider() string
 		SetBucket(bucket string)
 		StartTime(s ...time.Time) time.Time
 		EndTime(e ...time.Time) time.Time
@@ -95,14 +96,15 @@ func NewXactBaseWithBucket(id int64, kind, bucket, provider string) *XactBase {
 
 func (xact *XactBase) ID() int64                  { return xact.id }
 func (xact *XactBase) ShortID() uint32            { return ShortID(xact.id) }
-func (xact *XactBase) SetGID(gid int64)           { xact.gid = gid }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bucket() string             { return xact.bucket }
-func (xact *XactBase) SetBucket(bucket string)    { xact.bucket = bucket }
 func (xact *XactBase) Provider() string           { return xact.provider }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
+
+func (xact *XactBase) SetGID(gid int64)        { xact.gid = gid }
+func (xact *XactBase) SetBucket(bucket string) { xact.bucket = bucket }
 
 func (xact *XactBase) String() string {
 	var (
@@ -124,9 +126,11 @@ func (xact *XactBase) String() string {
 		d        = etime.Sub(stime)
 	)
 	if xact.gid == 0 {
-		return fmt.Sprintf("%s(%d) started %s ended %s (%v)", prefix, xact.ShortID(), stimestr, etime.Format(timeStampFormat), d)
+		return fmt.Sprintf("%s(%d) started %s ended %s (%v)",
+			prefix, xact.ShortID(), stimestr, etime.Format(timeStampFormat), d)
 	}
-	return fmt.Sprintf("%s[%d, g%d] started %s ended %s (%v)", prefix, xact.ShortID(), xact.gid, stimestr, etime.Format(timeStampFormat), d)
+	return fmt.Sprintf("%s[%d, g%d] started %s ended %s (%v)",
+		prefix, xact.ShortID(), xact.gid, stimestr, etime.Format(timeStampFormat), d)
 }
 
 func (xact *XactBase) StartTime(s ...time.Time) time.Time {

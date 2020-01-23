@@ -475,6 +475,7 @@ func TestDownloadStatus(t *testing.T) {
 		return
 	}
 
+	// TODO -- FIXME: replace `cluster.Bck` with a separate `api` { bucket, provider, ...} struct
 	bck := &cluster.Bck{Name: TestBucketName, Provider: cmn.ProviderAIS}
 	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", bck, m.smap)
 
