@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	prefCT       = '~'
-	prefProvider = '@'
-	// prefNamespace = '$'
+	prefCT        = '~'
+	prefProvider  = '@'
+	prefNamespace = '#'
 )
 
 const (
@@ -31,6 +31,7 @@ type ParsedFQN struct {
 	ContentType string
 	Bucket      string
 	Provider    string
+	Ns          string
 	ObjName     string
 	Digest      uint64
 }
@@ -88,19 +89,27 @@ func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 				return
 			}
 			parsed.Provider = item
-		case 2: // bucket and object name
+		case 2, 3: // bucket and object name (or namespace)
 			if item == "" {
-				err = fmt.Errorf("invalid fqn %s: bad bucket name", fqn)
+				err = fmt.Errorf("invalid fqn %s: bad bucket name (or namespace)", fqn)
 				return
 			}
-			parsed.Bucket = item
+			switch item[0] {
+			case prefNamespace:
+				parsed.Ns = item[1:]
+			default:
+				if itemIdx == 2 {
+					parsed.Ns = cmn.NsGlobal
+				}
+				parsed.Bucket = item
 
-			objName := rel[i+1:]
-			if objName == "" {
-				err = fmt.Errorf("invalid fqn %s: bad object name", fqn)
+				objName := rel[i+1:]
+				if objName == "" {
+					err = fmt.Errorf("invalid fqn %s: bad object name", fqn)
+				}
+				parsed.ObjName = objName
+				return
 			}
-			parsed.ObjName = objName
-			return
 		}
 
 		itemIdx++
@@ -165,7 +174,7 @@ func (mfs *MountedFS) CreateBucketDir(provider string) error {
 	availablePaths, _ := Mountpaths.Get()
 	for contentType := range CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
-			dir := mpathInfo.MakePath(contentType, provider)
+			dir := mpathInfo.MakePath(contentType, provider, cmn.NsGlobal)
 			if _, exists := availablePaths[dir]; exists {
 				return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo, dir)
 			}

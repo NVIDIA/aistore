@@ -224,7 +224,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 			sema   chan struct{}
 			mpathL string
 		)
-		mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.ProviderAIS)
+		mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.ProviderAIS, cmn.NsGlobal)
 		if multiplier > 1 {
 			sema = make(chan struct{}, multiplier)
 		}
@@ -238,7 +238,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range md.paths {
 			var sema chan struct{}
-			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.Cloud.Provider)
+			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.Cloud.Provider, cmn.NsGlobal)
 			if multiplier > 1 {
 				sema = make(chan struct{}, multiplier)
 			}

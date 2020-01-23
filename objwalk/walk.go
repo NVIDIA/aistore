@@ -141,7 +141,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 		}
 		for _, mpathInfo := range availablePaths {
 			wg.Add(1)
-			dir := mpathInfo.MakePathBucket(contentType, w.bck.Name, w.bck.Provider)
+			dir := mpathInfo.MakePathBucket(contentType, w.bck.Name, w.bck.Provider, cmn.NsGlobal)
 			go walkMpath(dir)
 		}
 	}

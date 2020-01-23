@@ -64,7 +64,7 @@ func (r *XactBckCopy) init() (mpathCount int) {
 	for _, mpathInfo := range availablePaths {
 		bccJogger := newBCCJogger(r, mpathInfo, config)
 		// only objects; TODO contentType := range fs.CSM.RegisteredContentTypes
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider(), cmn.NsGlobal)
 		r.mpathers[mpathLC] = bccJogger
 		go bccJogger.jog()
 	}

@@ -158,7 +158,7 @@ var _ = Describe("LRU tests", func() {
 			ini = newInitLRU(t)
 
 			mpaths, _ := fs.Mountpaths.Get()
-			filesPath = mpaths[basePath].MakePathBucket(fs.ObjectType, bucketName, cmn.ProviderAIS)
+			filesPath = mpaths[basePath].MakePathBucket(fs.ObjectType, bucketName, cmn.ProviderAIS, cmn.NsGlobal)
 			cmn.CreateDir(filesPath)
 		})
 

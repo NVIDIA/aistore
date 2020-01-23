@@ -19,6 +19,7 @@ func TestParseFQN(t *testing.T) {
 		wantContentType string
 		wantBucket      string
 		wantProvider    string
+		wantNamespace   string
 		wantObjName     string
 		wantErr         bool
 	}{
@@ -27,55 +28,67 @@ func TestParseFQN(t *testing.T) {
 			"smoke test",
 			"/tmp/~obj/@ais/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, "objname", false,
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, cmn.NsGlobal, "objname", false,
 		},
 		{
 			"content type (work)",
 			"/tmp/~work/@aws/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.WorkfileType, "bucket", cmn.ProviderAmazon, "objname", false,
+			"/tmp", fs.WorkfileType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "objname", false,
 		},
 		{
 			"content type (empty - obj)",
 			"/tmp/@ais/bucket/obj/name",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, "obj/name", false,
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, cmn.NsGlobal, "obj/name", false,
 		},
 		{
 			"cloud as bucket type (aws)",
 			"/tmp/~obj/@aws/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAmazon, "objname", false,
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "objname", false,
 		},
 		{
 			"cloud as bucket type (gcp)",
 			"/tmp/~obj/@gcp/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderGoogle, "objname", false,
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderGoogle, cmn.NsGlobal, "objname", false,
+		},
+		{
+			"global namespace (empty)",
+			"/tmp/~obj/@ais/bucket/objname",
+			[]string{"/tmp"},
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, cmn.NsGlobal, "objname", false,
+		},
+		{
+			"non-empty namespace",
+			"/tmp/~obj/@ais/#namespace/bucket/objname",
+			[]string{"/tmp"},
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, "namespace", "objname", false,
 		},
 		{
 			"long mount path name",
 			"/tmp/super/long/~obj/@aws/bucket/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, "objname", false,
+			"/tmp/super/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "objname", false,
 		},
 		{
 			"long mount path name and objname in folder",
 			"/tmp/super/long/~obj/@aws/bucket/folder/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, "folder/objname", false,
+			"/tmp/super/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "folder/objname", false,
 		},
 		{
 			"multiple mpaths matching, choose the longest",
 			"/tmp/super/long/long/~obj/@aws/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/super/long/long"},
-			"/tmp/super/long/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, "folder/objname", false,
+			"/tmp/super/long/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "folder/objname", false,
 		},
 		{
 			"dirty mpath",
 			"/tmp/super/long/long/~obj/@gcp/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/.////super/../super//./long///////////long"},
-			"/tmp/super/long/long", fs.ObjectType, "bucket", cmn.ProviderGoogle, "folder/objname", false,
+			"/tmp/super/long/long", fs.ObjectType, "bucket", cmn.ProviderGoogle, cmn.NsGlobal, "folder/objname", false,
 		},
 
 		// bad
@@ -83,73 +96,73 @@ func TestParseFQN(t *testing.T) {
 			"too short name",
 			"/tmp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"invalid content type (not prefixed with '~')",
 			"/tmp/obj/@gcp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"invalid content type (unknown)",
 			"/tmp/~unknown/@gcp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"empty bucket name",
 			"/tmp/~obj/@ais//objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"empty object name",
 			"/tmp/~obj/@ais/bucket/",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"empty cloud provider",
 			"/tmp/~obj/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"invalid cloud provider (not prefixed with '@')",
 			"/tmp/~obj/gcp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"invalid cloud provider (unknown)",
 			"/tmp/~obj/@unknown/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"invalid cloud provider (cloud)",
 			"/tmp/~obj/@cloud/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"invalid cloud provider (local)",
 			"/tmp/~obj/@cloud/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"no matching mountpath",
 			"/tmp/~obj/@ais/bucket/objname",
 			[]string{"/tmp/a", "/tmp/b"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 		{
 			"fqn is mpath",
 			"/tmp/mpath",
 			[]string{"/tmp/mpath"},
-			"", "", "", "", "", true,
+			"", "", "", "", "", "", true,
 		},
 	}
 
@@ -182,12 +195,15 @@ func TestParseFQN(t *testing.T) {
 			if err != nil {
 				return
 			}
-			gotMpath, gotContentType, gotBucket, gotProvider, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.ObjName
+			gotMpath, gotContentType, gotBucket, gotProvider, gotNs, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.Ns, parsedFQN.ObjName
 			if gotMpath != tt.wantMPath {
 				t.Errorf("gotMpath = %v, want %v", gotMpath, tt.wantMPath)
 			}
 			if gotProvider != tt.wantProvider {
 				t.Errorf("gotProvider = %v, want %v", gotProvider, tt.wantProvider)
+			}
+			if gotNs != tt.wantNamespace {
+				t.Errorf("gotNamespace = %v, want %v", gotNs, tt.wantNamespace)
 			}
 			if gotContentType != tt.wantContentType {
 				t.Errorf("gotContentType = %v, want %v", gotContentType, tt.wantContentType)
@@ -208,12 +224,14 @@ func TestMakeAndParseFQN(t *testing.T) {
 		contentType string
 		provider    string
 		bucket      string
+		namespace   string
 		objName     string
 	}{
 		{
 			mpath:       "/tmp/path",
 			contentType: fs.ObjectType,
 			provider:    cmn.ProviderAIS,
+			namespace:   cmn.NsGlobal,
 			bucket:      "bucket",
 			objName:     "object/name",
 		},
@@ -221,6 +239,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			mpath:       "/tmp/path",
 			contentType: fs.WorkfileType,
 			provider:    cmn.ProviderAmazon,
+			namespace:   "uuid10294",
 			bucket:      "bucket",
 			objName:     "object/name",
 		},
@@ -228,6 +247,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			mpath:       "/tmp/path",
 			contentType: fs.ObjectType,
 			provider:    cmn.ProviderAmazon,
+			namespace:   "alias",
 			bucket:      "bucket",
 			objName:     "object/name",
 		},
@@ -235,6 +255,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			mpath:       "/tmp/path",
 			contentType: fs.ObjectType,
 			provider:    cmn.ProviderGoogle,
+			namespace:   cmn.NsGlobal,
 			bucket:      "bucket",
 			objName:     "object/name",
 		},
@@ -261,13 +282,13 @@ func TestMakeAndParseFQN(t *testing.T) {
 			fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 			mpaths, _ := fs.Mountpaths.Get()
-			fqn := mpaths[tt.mpath].MakePathBucketObject(tt.contentType, tt.bucket, tt.provider, tt.objName)
+			fqn := mpaths[tt.mpath].MakePathBucketObject(tt.contentType, tt.bucket, tt.provider, tt.namespace, tt.objName)
 
 			parsedFQN, err := mfs.ParseFQN(fqn)
 			if err != nil {
 				t.Fatalf("failed to parse FQN: %v", err)
 			}
-			gotMpath, gotContentType, gotBucket, gotProvider, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.ObjName
+			gotMpath, gotContentType, gotBucket, gotProvider, gotNs, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.Ns, parsedFQN.ObjName
 			if gotMpath != tt.mpath {
 				t.Errorf("gotMpath = %v, want %v", gotMpath, tt.mpath)
 			}
@@ -276,6 +297,9 @@ func TestMakeAndParseFQN(t *testing.T) {
 			}
 			if gotProvider != tt.provider {
 				t.Errorf("gotProvider = %v, want %v", gotProvider, tt.provider)
+			}
+			if gotNs != tt.namespace {
+				t.Errorf("gotNamespace = %v, want %v", gotNs, tt.namespace)
 			}
 			if gotBucket != tt.bucket {
 				t.Errorf("gotBucket = %v, want %v", gotBucket, tt.bucket)
@@ -306,7 +330,7 @@ func BenchmarkParseFQN(b *testing.B) {
 	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 
 	mpaths, _ := fs.Mountpaths.Get()
-	fqn := mpaths[mpath].MakePathBucketObject(fs.ObjectType, "bucket", cmn.ProviderAIS, "super/long/name")
+	fqn := mpaths[mpath].MakePathBucketObject(fs.ObjectType, "bucket", cmn.ProviderAIS, cmn.NsGlobal, "super/long/name")
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

@@ -101,7 +101,7 @@ func (r *XactBckMakeNCopies) init() (mpathCount int, err error) {
 	r.xactBckBase.init(mpathCount)
 	for _, mpathInfo := range availablePaths {
 		mncJogger := newMNCJogger(r, mpathInfo, config)
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider(), cmn.NsGlobal)
 		r.mpathers[mpathLC] = mncJogger
 	}
 	for _, mpather := range r.mpathers {

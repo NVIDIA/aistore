@@ -58,9 +58,9 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	for _, mpathInfo := range availablePaths {
 		var mpathL string
 		if bucket == "" {
-			mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.ProviderAIS)
+			mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.ProviderAIS, cmn.NsGlobal)
 		} else {
-			mpathL = mpathInfo.MakePathBucket(fs.ObjectType, bucket, cmn.ProviderAIS)
+			mpathL = mpathInfo.MakePathBucket(fs.ObjectType, bucket, cmn.ProviderAIS, cmn.NsGlobal)
 		}
 		jogger := &localJogger{
 			joggerBase:        joggerBase{m: reb, mpath: mpathL, xreb: &xreb.RebBase, wg: wg},
@@ -75,7 +75,7 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	}
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
-			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.Cloud.Provider)
+			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.Cloud.Provider, cmn.NsGlobal)
 			jogger := &localJogger{
 				joggerBase:        joggerBase{m: reb, mpath: mpathC, xreb: &xreb.RebBase, wg: wg},
 				slab:              slab,

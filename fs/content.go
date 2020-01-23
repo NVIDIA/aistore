@@ -140,7 +140,7 @@ func (f *ContentSpecMgr) FQN(mi *MountpathInfo, contentType, bucket, provider, o
 	if _, ok := f.RegisteredContentTypes[contentType]; !ok {
 		cmn.AssertMsg(false, contentType)
 	}
-	return mi.MakePathBucketObject(contentType, bucket, provider, objName)
+	return mi.MakePathBucketObject(contentType, bucket, provider, cmn.NsGlobal, objName)
 }
 
 func (f *ContentSpecMgr) PermToEvict(fqn string) (ok, isOld bool) {

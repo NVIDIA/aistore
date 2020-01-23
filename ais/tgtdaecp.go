@@ -781,8 +781,8 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 				cluster.EvictLomCache(b)
 			}
 		}(bcksToDelete...)
-		fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false, /*false=destroy*/
-			cmn.ProviderAIS, bucketsToDelete...)
+		fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false, /*destroy*/
+			cmn.ProviderAIS, cmn.NsGlobal, bucketsToDelete...)
 	}
 
 	// Create buckets that have been added
@@ -792,7 +792,8 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 			bucketsToCreate = append(bucketsToCreate, bckName)
 		}
 	}
-	fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*true=create*/, cmn.ProviderAIS, bucketsToCreate...)
+	fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true, /*create*/
+		cmn.ProviderAIS, cmn.NsGlobal, bucketsToCreate...)
 
 	cfg := cmn.GCO.Get()
 	if cfg.Cloud.Supported {
@@ -802,8 +803,8 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 				bucketsToCreate = append(bucketsToCreate, bckName)
 			}
 		}
-		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cfg.Cloud.Provider,
-			bucketsToCreate...)
+		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true, /*create*/
+			cfg.Cloud.Provider, cmn.NsGlobal, bucketsToCreate...)
 	}
 	return
 }
@@ -1366,7 +1367,7 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 			glog.Error(err) // must not happen at commit time
 			break
 		}
-		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Name, bckTo.Name, cmn.ProviderAIS)
+		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Name, bckTo.Name, cmn.ProviderAIS, cmn.NsGlobal)
 		if err != nil {
 			glog.Error(err) // ditto
 			break

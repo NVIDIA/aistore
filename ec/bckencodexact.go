@@ -90,7 +90,7 @@ func (r *XactBckEncode) init() (int, error) {
 			daemonID:  r.t.Snode().ID(),
 			stopCh:    cmn.NewStopCh(),
 		}
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider(), cmn.NsGlobal)
 		r.mpathers[mpathLC] = jogger
 	}
 	for _, mpather := range r.mpathers {
@@ -134,7 +134,7 @@ func (r *XactBckEncode) stop() {
 func (j *joggerBckEncode) stop() { j.stopCh.Close() }
 
 func (j *joggerBckEncode) jog() {
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Provider())
+	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Provider(), cmn.NsGlobal)
 	j.provider = j.parent.Provider()
 	opts := &fs.Options{
 		Callback: j.walk,

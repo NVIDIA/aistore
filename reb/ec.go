@@ -602,7 +602,7 @@ func (s *ecRebalancer) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metad
 		return err
 	}
 	if md.SliceID != 0 {
-		ctFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, hdr.Provider, hdr.ObjName)
+		ctFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, hdr.Provider, cmn.NsGlobal, hdr.ObjName)
 	} else {
 		lom = &cluster.LOM{T: s.t, Objname: hdr.ObjName}
 		if err := lom.Init(hdr.Bucket, hdr.Provider); err != nil {
@@ -625,13 +625,13 @@ func (s *ecRebalancer) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metad
 	}
 
 	buffer, slab := s.t.GetMem2().AllocDefault()
-	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bucket, hdr.Provider, hdr.ObjName)
+	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bucket, hdr.Provider, cmn.NsGlobal, hdr.ObjName)
 	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.Extra), buffer, false)
 	if err != nil {
 		slab.Free(buffer)
 		return err
 	}
-	tmpFQN := mpath.MakePathBucketObject(fs.WorkfileType, hdr.Bucket, hdr.Provider, hdr.ObjName)
+	tmpFQN := mpath.MakePathBucketObject(fs.WorkfileType, hdr.Bucket, hdr.Provider, cmn.NsGlobal, hdr.ObjName)
 	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, memsys.NewReader(data), buffer, true)
 	if md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
 		err = fmt.Errorf("Mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
@@ -1036,9 +1036,9 @@ func (s *ecRebalancer) run() {
 
 	for _, mpathInfo := range availablePaths {
 		if s.mgr.xreb.Bucket() == "" {
-			mpath = mpathInfo.MakePath(ec.MetaType, cmn.ProviderAIS)
+			mpath = mpathInfo.MakePath(ec.MetaType, cmn.ProviderAIS, cmn.NsGlobal)
 		} else {
-			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cmn.ProviderAIS)
+			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cmn.ProviderAIS, cmn.NsGlobal)
 		}
 		wg.Add(1)
 		go s.jog(mpath, &wg)
@@ -1047,9 +1047,9 @@ func (s *ecRebalancer) run() {
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
 			if s.mgr.xreb.Bucket() == "" {
-				mpath = mpathInfo.MakePath(ec.MetaType, cfg.Cloud.Provider)
+				mpath = mpathInfo.MakePath(ec.MetaType, cfg.Cloud.Provider, cmn.NsGlobal)
 			} else {
-				mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cfg.Cloud.Provider)
+				mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cfg.Cloud.Provider, cmn.NsGlobal)
 			}
 			wg.Add(1)
 			go s.jog(mpath, &wg)
@@ -1182,8 +1182,8 @@ func (s *ecRebalancer) rebalanceLocal() error {
 			return err
 		}
 
-		metaSrcFQN := mpathSrc.MpathInfo.MakePathBucketObject(ec.MetaType, mpathSrc.Bucket, mpathSrc.Provider, mpathSrc.ObjName)
-		metaDstFQN := mpathDst.MpathInfo.MakePathBucketObject(ec.MetaType, mpathDst.Bucket, mpathDst.Provider, mpathDst.ObjName)
+		metaSrcFQN := mpathSrc.MpathInfo.MakePathBucketObject(ec.MetaType, mpathSrc.Bucket, mpathSrc.Provider, cmn.NsGlobal, mpathSrc.ObjName)
+		metaDstFQN := mpathDst.MpathInfo.MakePathBucketObject(ec.MetaType, mpathDst.Bucket, mpathDst.Provider, cmn.NsGlobal, mpathDst.ObjName)
 		_, _, err = cmn.CopyFile(metaSrcFQN, metaDstFQN, buf, false)
 		if err != nil {
 			return err
@@ -2143,7 +2143,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err 
 
 	lom.SetSize(obj.objSize)
 	lom.SetCksum(cksum)
-	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket, obj.provider, obj.objName)
+	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket, obj.provider, cmn.NsGlobal, obj.objName)
 	metaBuf := cmn.MustMarshal(&objMD)
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
 		glog.Error(err)
