@@ -30,13 +30,25 @@ func TestParseFQN(t *testing.T) {
 			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, "objname", false,
 		},
 		{
-			"cloud as bucket type",
+			"content type (work)",
+			"/tmp/~work/@aws/bucket/objname",
+			[]string{"/tmp"},
+			"/tmp", fs.WorkfileType, "bucket", cmn.ProviderAmazon, "objname", false,
+		},
+		{
+			"content type (empty - obj)",
+			"/tmp/@ais/bucket/obj/name",
+			[]string{"/tmp"},
+			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, "obj/name", false,
+		},
+		{
+			"cloud as bucket type (aws)",
 			"/tmp/~obj/@aws/bucket/objname",
 			[]string{"/tmp"},
 			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAmazon, "objname", false,
 		},
 		{
-			"cloud as bucket type",
+			"cloud as bucket type (gcp)",
 			"/tmp/~obj/@gcp/bucket/objname",
 			[]string{"/tmp"},
 			"/tmp", fs.ObjectType, "bucket", cmn.ProviderGoogle, "objname", false,
@@ -80,7 +92,7 @@ func TestParseFQN(t *testing.T) {
 			"", "", "", "", "", true,
 		},
 		{
-			"invalid cloud provider (unknown)",
+			"invalid content type (unknown)",
 			"/tmp/~unknown/@gcp/bucket/objname",
 			[]string{"/tmp"},
 			"", "", "", "", "", true,
@@ -160,6 +172,7 @@ func TestParseFQN(t *testing.T) {
 			}
 			fs.Mountpaths = mfs
 			fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
+			fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 			parsedFQN, err := mfs.ParseFQN(tt.fqn)
 			if (err != nil) != tt.wantErr {

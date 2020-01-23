@@ -55,38 +55,49 @@ func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 
 		item := rel[prev:i]
 		switch itemIdx {
-		case 0: // content type
-			if item[0] != prefCT {
-				err = fmt.Errorf("invalid fqn %s: expected content type to be prefixed with '%s'", fqn, string(prefCT))
+		case 0: // content type (or cloud provider if `obj`)
+			switch item[0] {
+			case prefCT:
+				item = item[1:]
+				if _, ok := CSM.RegisteredContentTypes[item]; !ok {
+					err = fmt.Errorf("invalid fqn %s: bad content type %q", fqn, item)
+					return
+				}
+				parsed.ContentType = item
+			case prefProvider:
+				item = item[1:]
+				if !cmn.IsValidProvider(item) {
+					err = fmt.Errorf("invalid fqn %s: bad provider %q", fqn, item)
+					return
+				}
+				parsed.ContentType = ObjectType
+				parsed.Provider = item
+				itemIdx++ // skip parsing cloud provider
+			default:
+				err = fmt.Errorf("invalid fqn %s: bad content type (or provider) %q", fqn, item)
 				return
 			}
-			item = item[1:]
-			if _, ok := CSM.RegisteredContentTypes[item]; !ok {
-				err = fmt.Errorf("invalid fqn %s: unrecognized content type %q", fqn, item)
-				return
-			}
-			parsed.ContentType = item
 		case 1: // cloud provider
 			if item[0] != prefProvider {
-				err = fmt.Errorf("invalid fqn %s: expected cloud provider to be prefixed with '%v'", fqn, string(prefProvider))
+				err = fmt.Errorf("invalid fqn %s: bad provider %q", fqn, item)
 				return
 			}
 			item = item[1:]
 			if !cmn.IsValidProvider(item) {
-				err = fmt.Errorf("invalid fqn %s: unrecognized provider %q", fqn, item)
+				err = fmt.Errorf("invalid fqn %s: bad provider %q", fqn, item)
 				return
 			}
 			parsed.Provider = item
 		case 2: // bucket and object name
 			if item == "" {
-				err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
+				err = fmt.Errorf("invalid fqn %s: bad bucket name", fqn)
 				return
 			}
 			parsed.Bucket = item
 
 			objName := rel[i+1:]
 			if objName == "" {
-				err = fmt.Errorf("invalid fqn %s: object name is empty", fqn)
+				err = fmt.Errorf("invalid fqn %s: bad object name", fqn)
 			}
 			parsed.ObjName = objName
 			return

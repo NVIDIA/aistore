@@ -188,11 +188,18 @@ func (mi *MountpathInfo) String() string {
 ///////////////
 
 func (mi *MountpathInfo) makePathBuf(contentType, provider string, extra int) (buf []byte) {
-	cmn.Assert(cmn.IsValidProvider(provider)) // FIXME: this should be removed
-	buf = make([]byte, 0, len(mi.Path)+1+1+len(contentType)+1+1+len(provider)+extra)
+	ctLen := 0
+	if contentType != ObjectType {
+		// Skip content type for `obj`
+		ctLen = 1 + 1 + len(contentType)
+	}
+
+	buf = make([]byte, 0, len(mi.Path)+ctLen+1+1+len(provider)+extra)
 	buf = append(buf, mi.Path...)
-	buf = append(buf, filepath.Separator, prefCT)
-	buf = append(buf, contentType...)
+	if ctLen > 0 {
+		buf = append(buf, filepath.Separator, prefCT)
+		buf = append(buf, contentType...)
+	}
 	buf = append(buf, filepath.Separator, prefProvider)
 	buf = append(buf, provider...)
 	return
