@@ -20,7 +20,6 @@ type Bck struct {
 }
 
 func (b *Bck) MakeUname(objName string) string {
-	cmn.Assert(b.Provider != "" && b.Name != "" && objName != "") // FIXME: this should be removed
 	var (
 		l   = len(b.Provider) + 2 + len(b.Name) + len(objName)
 		buf = make([]byte, 0, l)

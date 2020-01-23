@@ -934,15 +934,6 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
 		bck, objName = ParseUname(md.uname)
 		err          error
 	)
-	if bck.Provider == cmn.Cloud {
-		// TODO: once the on-disk structure is changed this must be removed.
-		bck.Provider = cmn.GCO.Get().CloudProvider
-	} else {
-		// TODO: once the on-disk structure is changed this must be removed.
-		// This assert is only to not forget this code (should fail when structure changes).
-		cmn.Assert(bck.Provider == cmn.ProviderAIS)
-	}
-
 	lom = &LOM{Objname: objName, bck: &bck}
 	bucketExists = bmd.Exists(&bck, md.bckID)
 	if bucketExists {
