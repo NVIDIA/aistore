@@ -28,9 +28,13 @@ func TestCloudBucketObject(t *testing.T) {
 
 	var (
 		baseParams = tutils.DefaultBaseAPIParams(t)
+		bck        = api.Bck{
+			Name:     clibucket,
+			Provider: cmn.Cloud,
+		}
 	)
 
-	if !isCloudBucket(t, baseParams.URL, clibucket) {
+	if !isCloudBucket(t, baseParams.URL, bck) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
@@ -47,24 +51,22 @@ func TestCloudBucketObject(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s:%v", test.ty, test.exists), func(t *testing.T) {
 			var (
-				bucket = clibucket
 				object = cmn.RandString(10)
 			)
 			if !test.exists {
-				bucket = cmn.RandString(10)
+				bck.Name = cmn.RandString(10)
 			}
 
 			reader, err := tutils.NewRandReader(cmn.KiB, false /* withHash */)
 			tassert.CheckFatal(t, err)
 
-			defer api.DeleteObject(baseParams, bucket, object, cmn.Cloud)
+			defer api.DeleteObject(baseParams, bck, object)
 
 			switch test.ty {
 			case putOP:
 				err = api.PutObject(api.PutObjectArgs{
 					BaseParams: baseParams,
-					Bucket:     bucket,
-					Provider:   cmn.Cloud,
+					Bck:        bck,
 					Object:     object,
 					Reader:     reader,
 				})
@@ -72,22 +74,21 @@ func TestCloudBucketObject(t *testing.T) {
 				if test.exists {
 					err = api.PutObject(api.PutObjectArgs{
 						BaseParams: baseParams,
-						Bucket:     bucket,
-						Provider:   cmn.Cloud,
+						Bck:        bck,
 						Object:     object,
 						Reader:     reader,
 					})
 					tassert.CheckFatal(t, err)
 				}
 
-				_, err = api.GetObject(baseParams, bucket, object)
+				_, err = api.GetObject(baseParams, bck, object)
 			default:
 				t.Fail()
 			}
 
 			if !test.exists {
 				if err == nil {
-					t.Errorf("expected error when doing %s on non existing %q bucket", test.ty, bucket)
+					t.Errorf("expected error when doing %s on non existing %q bucket", test.ty, bck)
 				} else if errAsHTTPError, ok := err.(*cmn.HTTPError); !ok {
 					t.Errorf("invalid error returned")
 				} else if errAsHTTPError.Status != http.StatusNotFound {
@@ -95,7 +96,7 @@ func TestCloudBucketObject(t *testing.T) {
 				}
 			} else {
 				if err != nil {
-					t.Errorf("expected no error when doing %s on existing %q bucket", test.ty, bucket)
+					t.Errorf("expected no error when doing %s on existing %q bucket", test.ty, bck)
 				}
 			}
 		})

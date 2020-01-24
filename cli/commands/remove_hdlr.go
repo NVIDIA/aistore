@@ -88,23 +88,21 @@ func removeBucketHandler(c *cli.Context) (err error) {
 
 func removeObjectHandler(c *cli.Context) (err error) {
 	var (
-		bucket   string
-		provider string
+		bck    api.Bck
+		bucket string
 	)
-
-	provider = bucketProvider(c)
 
 	// default bucket or bucket argument given by the user
 	if c.NArg() == 0 || (c.NArg() == 1 && strings.HasSuffix(c.Args().Get(0), "/")) {
 		if c.NArg() == 1 {
 			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 		}
-		if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+		if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 			return
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 			// list or range operation on a given bucket
-			return listOrRangeOp(c, commandRemove, bucket, provider)
+			return listOrRangeOp(c, commandRemove, bck)
 		}
 
 		err = fmt.Errorf("%s or %s flag not set with a single bucket argument", listFlag.Name, rangeFlag.Name)
@@ -123,7 +121,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 	}
 
 	// object argument(s) given by the user; operation on given object(s)
-	return multiObjOp(c, commandRemove, provider)
+	return multiObjOp(c, commandRemove)
 }
 
 func removeNodeHandler(c *cli.Context) (err error) {

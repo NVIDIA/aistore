@@ -227,12 +227,13 @@ func emitError(r *http.Response, err error, errCh chan error) {
 //
 // GetDiscard sends a GET request and discards returned data
 //
-func GetDiscard(proxyURL, bucket, provider string, objName string, validate bool, offset, length int64) (int64, error) {
+func GetDiscard(proxyURL string, bck api.Bck, objName string, validate bool, offset, length int64) (int64, error) {
 	var (
 		hash, hdhash, hdhashtype string
 	)
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, provider)
+	query.Add(cmn.URLParamProvider, bck.Provider)
+	query.Add(cmn.URLParamNamespace, bck.Namespace)
 	if length > 0 {
 		query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
 		query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
@@ -240,7 +241,7 @@ func GetDiscard(proxyURL, bucket, provider string, objName string, validate bool
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   proxyURL,
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bucket, objName),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
 		Query:  query,
 	}
 	req, err := reqArgs.Req()
@@ -259,7 +260,7 @@ func GetDiscard(proxyURL, bucket, provider string, objName string, validate bool
 	}
 	v := hdhashtype == cmn.ChecksumXXHash
 	n, hash, err := readResponse(resp, ioutil.Discard,
-		fmt.Sprintf("GET (object %s from bucket %s)", objName, bucket), v)
+		fmt.Sprintf("GET (object %s from bucket %s)", objName, bck), v)
 	if err != nil {
 		return 0, err
 	}
@@ -272,13 +273,14 @@ func GetDiscard(proxyURL, bucket, provider string, objName string, validate bool
 }
 
 // same as above with HTTP trace
-func GetTraceDiscard(proxyURL, bucket, provider string, objName string, validate bool,
+func GetTraceDiscard(proxyURL string, bck api.Bck, objName string, validate bool,
 	offset, length int64) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
 	)
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, provider)
+	query.Add(cmn.URLParamProvider, bck.Provider)
+	query.Add(cmn.URLParamNamespace, bck.Namespace)
 	if length > 0 {
 		query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
 		query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
@@ -286,7 +288,7 @@ func GetTraceDiscard(proxyURL, bucket, provider string, objName string, validate
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   proxyURL,
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bucket, objName),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
 		Query:  query,
 	}
 	req, err := reqArgs.Req()
@@ -311,7 +313,7 @@ func GetTraceDiscard(proxyURL, bucket, provider string, objName string, validate
 
 	v := hdhashtype == cmn.ChecksumXXHash
 	n, hash, err := readResponse(resp, ioutil.Discard,
-		fmt.Sprintf("GET (object %s from bucket %s)", objName, bucket), v)
+		fmt.Sprintf("GET (object %s from bucket %s)", objName, bck), v)
 	if err != nil {
 		return 0, HTTPLatencies{}, err
 	}
@@ -340,7 +342,7 @@ func GetTraceDiscard(proxyURL, bucket, provider string, objName string, validate
 //
 // Put executes PUT
 //
-func Put(proxyURL, bucket, provider, object, hash string, reader cmn.ReadOpenCloser) error {
+func Put(proxyURL string, bck api.Bck, object, hash string, reader cmn.ReadOpenCloser) error {
 	var (
 		baseParams = api.BaseParams{
 			Client: HTTPClientGetPut,
@@ -349,8 +351,7 @@ func Put(proxyURL, bucket, provider, object, hash string, reader cmn.ReadOpenClo
 		}
 		args = api.PutObjectArgs{
 			BaseParams: baseParams,
-			Bucket:     bucket,
-			Provider:   provider,
+			Bck:        bck,
 			Object:     object,
 			Hash:       hash,
 			Reader:     reader,
@@ -360,7 +361,7 @@ func Put(proxyURL, bucket, provider, object, hash string, reader cmn.ReadOpenClo
 }
 
 // PUT with HTTP trace FIXME: copy-paste
-func PutWithTrace(proxyURL, bucket, provider, object, hash string, reader cmn.ReadOpenCloser) (HTTPLatencies, error) {
+func PutWithTrace(proxyURL string, bck api.Bck, object, hash string, reader cmn.ReadOpenCloser) (HTTPLatencies, error) {
 	handle, err := reader.Open()
 	if err != nil {
 		return HTTPLatencies{}, fmt.Errorf("failed to open reader, err: %v", err)
@@ -368,11 +369,12 @@ func PutWithTrace(proxyURL, bucket, provider, object, hash string, reader cmn.Re
 	defer handle.Close()
 
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, provider)
+	query.Add(cmn.URLParamProvider, bck.Provider)
+	query.Add(cmn.URLParamNamespace, bck.Namespace)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   proxyURL,
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bucket, object),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object),
 		Query:  query,
 		BodyR:  handle,
 	}
@@ -435,7 +437,7 @@ func PutWithTrace(proxyURL, bucket, provider, object, hash string, reader cmn.Re
 	return l, nil
 }
 
-func Del(proxyURL, bucket, object, provider string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
+func Del(proxyURL string, bck api.Bck, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -443,13 +445,13 @@ func Del(proxyURL, bucket, object, provider string, wg *sync.WaitGroup, errCh ch
 		fmt.Printf("DEL: %s\n", object)
 	}
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.DeleteObject(baseParams, bucket, object, provider)
+	err := api.DeleteObject(baseParams, bck, object)
 	emitError(nil, err, errCh)
 	return err
 }
 
-func CheckExists(proxyURL, bucket, objname string) (bool, error) {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname) + "?" + cmn.URLParamCheckExists + "=true"
+func CheckExists(proxyURL string, bck api.Bck, objName string) (bool, error) {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName) + "?" + cmn.URLParamCheckExists + "=true"
 	r, err := HTTPClient.Head(url)
 	if err != nil {
 		return false, err
@@ -467,19 +469,19 @@ func CheckExists(proxyURL, bucket, objname string) (bool, error) {
 			return false, err
 		}
 		err = fmt.Errorf("CheckExists failed: bucket/object: %s/%s, HTTP status: %d, HTTP response: %s",
-			bucket, objname, r.StatusCode, string(b))
+			bck, objName, r.StatusCode, string(b))
 		return false, err
 	}
 	return true, nil
 }
 
 // PutAsync sends a PUT request to the given URL
-func PutAsync(wg *sync.WaitGroup, proxyURL, bucket, object string, reader Reader, errCh chan error) {
+func PutAsync(wg *sync.WaitGroup, proxyURL string, bck api.Bck, object string, reader Reader, errCh chan error) {
 	defer wg.Done()
 	baseParams := BaseAPIParams(proxyURL)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bucket:     bucket,
+		Bck:        bck,
 		Object:     object,
 		Hash:       reader.XXHash(),
 		Reader:     reader,
@@ -504,7 +506,7 @@ func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]stri
 	baseParams := BaseAPIParams(proxyURL)
 	for bucket, objectList := range bucketToObjects {
 		for _, object := range objectList {
-			if err := api.ReplicateObject(baseParams, bucket, object); err != nil {
+			if err := api.ReplicateObject(baseParams, api.Bck{Name: bucket}, object); err != nil {
 				objectsWithErrors[filepath.Join(bucket, object)] = err
 			}
 		}
@@ -513,13 +515,11 @@ func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]stri
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjects(proxyURL, bucket, provider, prefix string, objectCountLimit int) ([]string, error) {
+func ListObjects(proxyURL string, bck api.Bck, prefix string, objectCountLimit int) ([]string, error) {
 	msg := &cmn.SelectMsg{Prefix: prefix}
 	baseParams := BaseAPIParams(proxyURL)
-	query := url.Values{}
-	query.Add(cmn.URLParamProvider, provider)
 
-	data, err := api.ListBucket(baseParams, bucket, msg, objectCountLimit, query)
+	data, err := api.ListBucket(baseParams, bck, msg, objectCountLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -536,15 +536,14 @@ func ListObjects(proxyURL, bucket, provider, prefix string, objectCountLimit int
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjectsFast(proxyURL, bucket, provider, prefix string) ([]string, error) {
+func ListObjectsFast(proxyURL string, bck api.Bck, prefix string) ([]string, error) {
 	baseParams := BaseAPIParams(proxyURL)
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, provider)
 	if prefix != "" {
 		query.Add(cmn.URLParamPrefix, prefix)
 	}
 
-	data, err := api.ListBucketFast(baseParams, bucket, nil, query)
+	data, err := api.ListBucketFast(baseParams, bck, nil, query)
 	if err != nil {
 		return nil, err
 	}
@@ -603,28 +602,29 @@ func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
 	return smap.ProxySI, err
 }
 
-func CreateFreshBucket(t *testing.T, proxyURL, bucketFQN string) {
-	DestroyBucket(t, proxyURL, bucketFQN)
+func CreateFreshBucket(t *testing.T, proxyURL string, bck api.Bck) {
+	DestroyBucket(t, proxyURL, bck)
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.CreateBucket(baseParams, bucketFQN)
+	err := api.CreateBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 }
 
-func DestroyBucket(t *testing.T, proxyURL, bucket string) {
+func DestroyBucket(t *testing.T, proxyURL string, bck api.Bck) {
 	baseParams := BaseAPIParams(proxyURL)
-	exists, err := api.DoesBucketExist(baseParams, bucket)
+	exists, err := api.DoesBucketExist(baseParams, bck)
 	tassert.CheckFatal(t, err)
 	if exists {
-		err = api.DestroyBucket(baseParams, bucket)
+		err = api.DestroyBucket(baseParams, bck)
 		tassert.CheckFatal(t, err)
 	}
 }
 
-func CleanCloudBucket(t *testing.T, proxyURL, bucket, prefix string) {
-	toDelete, err := ListObjects(proxyURL, bucket, cmn.Cloud, prefix, 0)
+func CleanCloudBucket(t *testing.T, proxyURL string, bck api.Bck, prefix string) {
+	bck.Provider = cmn.Cloud
+	toDelete, err := ListObjects(proxyURL, bck, prefix, 0)
 	tassert.CheckFatal(t, err)
 	baseParams := BaseAPIParams(proxyURL)
-	err = api.DeleteList(baseParams, bucket, cmn.Cloud, toDelete, true, 0)
+	err = api.DeleteList(baseParams, bck, toDelete, true, 0)
 	tassert.CheckFatal(t, err)
 }
 
@@ -685,15 +685,15 @@ func determineReaderType(sgl *memsys.SGL, readerPath, readerType, objName string
 	return
 }
 
-func WaitForObjectToBeDowloaded(objName, bucket string, params api.BaseParams, timeout time.Duration) error {
+func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck api.Bck, objName string, timeout time.Duration) error {
 	maxTime := time.Now().Add(timeout)
 
 	for {
 		if time.Now().After(maxTime) {
-			return fmt.Errorf("timed out when downloading %s/%s", bucket, objName)
+			return fmt.Errorf("timed out when downloading %s/%s", bck, objName)
 		}
 
-		reslist, err := api.ListBucket(params, bucket, &cmn.SelectMsg{Fast: true}, 0)
+		reslist, err := api.ListBucket(baseParams, bck, &cmn.SelectMsg{Fast: true}, 0)
 		if err != nil {
 			return err
 		}
@@ -708,16 +708,16 @@ func WaitForObjectToBeDowloaded(objName, bucket string, params api.BaseParams, t
 	}
 }
 
-func EnsureObjectsExist(t *testing.T, params api.BaseParams, bucket string, objectsNames ...string) {
+func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck api.Bck, objectsNames ...string) {
 	for _, objName := range objectsNames {
-		_, err := api.GetObject(params, bucket, objName)
+		_, err := api.GetObject(params, bck, objName)
 		if err != nil {
 			t.Errorf("Unexpected GetObject(%s) error: %v.", objName, err)
 		}
 	}
 }
 
-func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, sgl *memsys.SGL, errCh chan error, objCh, objsPutCh chan string) {
+func putObjs(proxyURL string, bck api.Bck, readerPath, readerType, objPath string, objSize uint64, sgl *memsys.SGL, errCh chan error, objCh, objsPutCh chan string) {
 	var (
 		size   = objSize
 		reader Reader
@@ -747,7 +747,7 @@ func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize u
 		baseParams := BaseAPIParams(proxyURL)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
-			Bucket:     bucket,
+			Bck:        bck,
 			Object:     fullObjName,
 			Hash:       reader.XXHash(),
 			Reader:     reader,
@@ -767,7 +767,7 @@ func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize u
 	}
 }
 
-func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, objList []string,
+func PutObjsFromList(proxyURL string, bck api.Bck, readerPath, readerType, objPath string, objSize uint64, objList []string,
 	errCh chan error, objsPutCh chan string, sgl *memsys.SGL, fixedSize ...bool) {
 	var (
 		wg         = &sync.WaitGroup{}
@@ -804,7 +804,7 @@ func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, o
 				x := uintptr(unsafe.Pointer(sgli)) & 0xfff
 				size = objSize + uint64(x)
 			}
-			putObjs(proxyURL, bucket, readerPath, readerType, objPath, size, sgli, errCh, objCh, objsPutCh)
+			putObjs(proxyURL, bck, readerPath, readerType, objPath, size, sgli, errCh, objCh, objsPutCh)
 			wg.Done()
 		}(sgli)
 	}
@@ -816,7 +816,7 @@ func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, o
 	wg.Wait()
 }
 
-func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, numPuts int, errCh chan error, objsPutCh chan string, sgl *memsys.SGL, fixedSize ...bool) {
+func PutRandObjs(proxyURL string, bck api.Bck, readerPath, readerType, objPath string, objSize uint64, numPuts int, errCh chan error, objsPutCh chan string, sgl *memsys.SGL, fixedSize ...bool) {
 	var (
 		fNameLen = 16
 		objList  = make([]string, 0, numPuts)
@@ -825,22 +825,27 @@ func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSi
 		fname := GenRandomString(fNameLen)
 		objList = append(objList, fname)
 	}
-	PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath, objSize, objList, errCh, objsPutCh, sgl, fixedSize...)
+	PutObjsFromList(proxyURL, bck, readerPath, readerType, objPath, objSize, objList, errCh, objsPutCh, sgl, fixedSize...)
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET
-func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, object, bucket, proxyURL string, objContent cmn.ReadOpenCloser) {
+func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, proxyURL string, bck api.Bck, object string, objContent cmn.ReadOpenCloser) {
 	baseParams := DefaultBaseAPIParams(t)
 
-	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: object, Reader: objContent})
+	err := api.PutObject(api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     object,
+		Reader:     objContent,
+	})
 	tassert.CheckFatal(t, err)
 
-	EvictObjects(t, proxyURL, []string{object}, bucket)
+	EvictObjects(t, proxyURL, bck, []string{object})
 }
 
-func GetObjectAtime(t *testing.T, baseParams api.BaseParams, object string, bucket string, timeFormat string) time.Time {
+func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck api.Bck, object string, timeFormat string) time.Time {
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
-	bucketList, err := api.ListBucket(baseParams, bucket, msg, 0)
+	bucketList, err := api.ListBucket(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	for _, entry := range bucketList.Entries {
@@ -851,7 +856,7 @@ func GetObjectAtime(t *testing.T, baseParams api.BaseParams, object string, buck
 		}
 	}
 
-	tassert.Fatalf(t, false, "Object with name %s not present in bucket %s.", object, bucket)
+	tassert.Fatalf(t, false, "Object with name %s not present in bucket %s.", object, bck)
 	return time.Time{}
 }
 
@@ -924,7 +929,7 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 }
 
 // waitForBucket waits until all targets ack having ais bucket created or deleted
-func WaitForBucket(proxyURL, name string, exists bool) error {
+func WaitForBucket(proxyURL string, bck api.Bck, exists bool) error {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
@@ -934,7 +939,7 @@ func WaitForBucket(proxyURL, name string, exists bool) error {
 	for _, s := range smap.Tmap {
 		for {
 			baseParams := BaseAPIParams(s.URL(cmn.NetworkPublic))
-			bucketExists, err := api.DoesBucketExist(baseParams, name)
+			bucketExists, err := api.DoesBucketExist(baseParams, bck)
 			if err != nil {
 				return err
 			}
@@ -950,20 +955,15 @@ func WaitForBucket(proxyURL, name string, exists bool) error {
 	return nil
 }
 
-func EvictObjects(t *testing.T, proxyURL string, fileslist []string, bucket string) {
-	err := api.EvictList(BaseAPIParams(proxyURL), bucket, cmn.Cloud, fileslist, true, 0)
+func EvictObjects(t *testing.T, proxyURL string, bck api.Bck, fileslist []string) {
+	err := api.EvictList(BaseAPIParams(proxyURL), bck, fileslist, true, 0)
 	if err != nil {
-		t.Errorf("Evict bucket %s failed, err = %v", bucket, err)
+		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}
 }
 
-func GetXactionStats(baseParams api.BaseParams, kind string, buckets ...string) (map[string][]*stats.BaseXactStatsExt, error) {
-	bucket := ""
-	if len(buckets) > 0 {
-		bucket = buckets[0]
-	}
-
-	return api.MakeXactGetRequest(baseParams, kind, cmn.ActXactStats, bucket, true)
+func GetXactionStats(baseParams api.BaseParams, bck api.Bck, kind string) (map[string][]*stats.BaseXactStatsExt, error) {
+	return api.MakeXactGetRequest(baseParams, bck, kind, cmn.ActXactStats, true)
 }
 
 func allCompleted(targetsStats map[string][]*stats.BaseXactStatsExt) bool {
@@ -989,7 +989,7 @@ func CheckXactAPIErr(t *testing.T, err error) {
 }
 
 // nolint:unparam // for now timeout is always the same but it is better to keep it generalized
-func WaitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParams api.BaseParams, timeout time.Duration) {
+func WaitForBucketXactionToComplete(t *testing.T, baseParams api.BaseParams, bck api.Bck, kind string, timeout time.Duration) {
 	var (
 		wg    = &sync.WaitGroup{}
 		ch    = make(chan error, 1)
@@ -1001,7 +1001,7 @@ func WaitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParam
 		for {
 			time.Sleep(sleep)
 			i++
-			stats, err := GetXactionStats(baseParams, kind, bucket)
+			stats, err := GetXactionStats(baseParams, bck, kind)
 			CheckXactAPIErr(t, err)
 			if allCompleted(stats) {
 				break
@@ -1023,7 +1023,7 @@ func WaitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParam
 	}
 }
 
-func WaitForBucketXactionToStart(t *testing.T, kind, bucket string, baseParams api.BaseParams, timeouts ...time.Duration) {
+func WaitForBucketXactionToStart(t *testing.T, baseParams api.BaseParams, bck api.Bck, kind string, timeouts ...time.Duration) {
 	var (
 		start   = time.Now()
 		timeout = time.Duration(0)
@@ -1035,7 +1035,7 @@ func WaitForBucketXactionToStart(t *testing.T, kind, bucket string, baseParams a
 	}
 
 	for {
-		stats, err := GetXactionStats(baseParams, kind, bucket)
+		stats, err := GetXactionStats(baseParams, bck, kind)
 		CheckXactAPIErr(t, err)
 		for _, targetStats := range stats {
 			for _, xaction := range targetStats {
@@ -1083,7 +1083,7 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 		defer wg.Done()
 		for {
 			time.Sleep(sleep)
-			globalRebalanceStats, err := GetXactionStats(baseParams, cmn.ActGlobalReb)
+			globalRebalanceStats, err := GetXactionStats(baseParams, api.Bck{}, cmn.ActGlobalReb)
 			CheckXactAPIErr(t, err)
 
 			if allCompleted(globalRebalanceStats) {
@@ -1106,7 +1106,7 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 		defer wg.Done()
 		for {
 			time.Sleep(sleep)
-			localRebalanceStats, err := GetXactionStats(baseParams, cmn.ActLocalReb)
+			localRebalanceStats, err := GetXactionStats(baseParams, api.Bck{}, cmn.ActLocalReb)
 			CheckXactAPIErr(t, err)
 
 			if allCompleted(localRebalanceStats) {

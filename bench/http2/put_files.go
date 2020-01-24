@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/NVIDIA/aistore/api"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -25,13 +27,14 @@ var (
 	files    int
 	workers  int
 	filesize uint64
-	bucket   string
+	bucket   api.Bck
 	url      string
 )
 
 func init() {
 	flag.StringVar(&url, "url", ProxyURL, "Proxy URL")
-	flag.StringVar(&bucket, "bucket", "local_benchmark_bucket", "AWS or GCP bucket")
+	flag.StringVar(&bucket.Name, "bucket", "local_benchmark_bucket", "AWS or GCP bucket")
+	flag.StringVar(&bucket.Provider, "provider", "", "cloud provider")
 	flag.IntVar(&files, "files", 10, "Number of files to put")
 	flag.IntVar(&workers, "workers", 10, "Number of workers")
 	flag.Uint64Var(&filesize, "filesize", 1, "Size of files to put in KB")
@@ -58,7 +61,7 @@ func main() {
 	}
 }
 
-func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan func()) error {
+func putSpecificFiles(fileSize uint64, numPuts int, bck api.Bck, pool chan func()) error {
 	var (
 		errCh = make(chan error, files)
 		wg    = &sync.WaitGroup{}
@@ -75,7 +78,7 @@ func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan fun
 		fname := fmt.Sprintf("l%d", i)
 		wg.Add(1)
 		pool <- func() {
-			tutils.PutAsync(wg, url, bucket, "__bench/"+fname, r, errCh)
+			tutils.PutAsync(wg, url, bck, "__bench/"+fname, r, errCh)
 		}
 	}
 	close(pool)

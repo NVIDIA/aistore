@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -95,18 +97,18 @@ var (
 
 func prefetchHandler(c *cli.Context) (err error) {
 	var (
-		bucket   string
-		provider string
+		bck    api.Bck
+		bucket string
 	)
 
 	if c.NArg() > 0 {
 		bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 	}
-	if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
-		return listOrRangeOp(c, commandPrefetch, bucket, provider)
+		return listOrRangeOp(c, commandPrefetch, bck)
 	}
 
 	return missingArgumentsError(c, "object list or range")
@@ -114,27 +116,25 @@ func prefetchHandler(c *cli.Context) (err error) {
 
 func evictHandler(c *cli.Context) (err error) {
 	var (
-		bucket   string
-		provider string
+		bck    api.Bck
+		bucket string
 	)
-
-	provider = bucketProvider(c)
 
 	// default bucket or bucket argument given by the user
 	if c.NArg() == 0 || (c.NArg() == 1 && strings.HasSuffix(c.Args().Get(0), "/")) {
 		if c.NArg() == 1 {
 			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 		}
-		if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+		if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 			return
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 			// list or range operation on a given bucket
-			return listOrRangeOp(c, commandEvict, bucket, provider)
+			return listOrRangeOp(c, commandEvict, bck)
 		}
 
 		// operation on a given bucket
-		return evictBucket(c, bucket)
+		return evictBucket(c, bck)
 	}
 
 	// list and range flags are invalid with object argument(s)
@@ -144,14 +144,15 @@ func evictHandler(c *cli.Context) (err error) {
 	}
 
 	// object argument(s) given by the user; operation on given object(s)
-	return multiObjOp(c, commandEvict, provider)
+	return multiObjOp(c, commandEvict)
 }
 
 func getHandler(c *cli.Context) (err error) {
 	var (
-		provider, bucket, objName string
-		fullObjName               = c.Args().Get(0) // empty string if arg not given
-		outFile                   = c.Args().Get(1) // empty string if arg not given
+		bck             api.Bck
+		bucket, objName string
+		fullObjName     = c.Args().Get(0) // empty string if arg not given
+		outFile         = c.Args().Get(1) // empty string if arg not given
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
@@ -160,20 +161,21 @@ func getHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "output file")
 	}
 	bucket, objName = splitBucketObject(fullObjName)
-	if bucket, provider, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
 	if objName == "" {
 		return incorrectUsageError(c, fmt.Errorf("'%s': missing object name", fullObjName))
 	}
-	return getObject(c, bucket, provider, objName, outFile)
+	return getObject(c, bck, objName, outFile)
 }
 
 func putHandler(c *cli.Context) (err error) {
 	var (
-		provider, bucket, objName string
-		fileName                  = c.Args().Get(0)
-		fullObjName               = c.Args().Get(1)
+		bck             api.Bck
+		bucket, objName string
+		fileName        = c.Args().Get(0)
+		fullObjName     = c.Args().Get(1)
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "file to upload", "object name in the form bucket/[object]")
@@ -182,17 +184,18 @@ func putHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
 	bucket, objName = splitBucketObject(fullObjName)
-	if bucket, provider, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
-	return putObject(c, bucket, provider, objName, fileName)
+	return putObject(c, bck, objName, fileName)
 }
 
 func promoteHandler(c *cli.Context) (err error) {
 	var (
-		provider, bucket, objName string
-		fqn                       = c.Args().Get(0)
-		fullObjName               = c.Args().Get(1)
+		bck             api.Bck
+		bucket, objName string
+		fqn             = c.Args().Get(0)
+		fullObjName     = c.Args().Get(1)
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "file|directory to promote")
@@ -201,8 +204,8 @@ func promoteHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
 	bucket, objName = splitBucketObject(fullObjName)
-	if bucket, provider, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
-	return promoteFileOrDir(c, bucket, provider, objName, fqn)
+	return promoteFileOrDir(c, bck, objName, fqn)
 }

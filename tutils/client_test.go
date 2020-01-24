@@ -53,7 +53,7 @@ func putFile(size int64, withHash bool) error {
 	}
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bucket:     "bucket",
+		Bck:        api.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
 		Object:     "key",
 		Hash:       r.XXHash(),
 		Reader:     r,
@@ -72,7 +72,7 @@ func putRand(size int64, withHash bool) error {
 	defer r.Close()
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bucket:     "bucket",
+		Bck:        api.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
 		Object:     "key",
 		Hash:       r.XXHash(),
 		Reader:     r,
@@ -89,7 +89,7 @@ func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
 	defer r.Close()
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bucket:     "bucket",
+		Bck:        api.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
 		Object:     "key",
 		Hash:       r.XXHash(),
 		Reader:     r,

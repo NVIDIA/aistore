@@ -29,7 +29,7 @@ func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged i
 	return
 }
 
-func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[string]string, msg *cmn.SelectMsg,
+func propsUpdateObjects(t *testing.T, proxyURL string, bck api.Bck, oldVersions map[string]string, msg *cmn.SelectMsg,
 	versionEnabled bool, bckIsAIS bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
@@ -42,18 +42,18 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 	for fname := range oldVersions {
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
-			Bucket:     bucket,
+			Bck:        bck,
 			Object:     fname,
 			Hash:       r.XXHash(),
 			Reader:     r,
 		}
 		err = api.PutObject(putArgs)
 		if err != nil {
-			t.Errorf("Failed to put new data to object %s/%s, err: %v", bucket, fname, err)
+			t.Errorf("Failed to put new data to object %s/%s, err: %v", bck, fname, err)
 		}
 	}
 
-	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
+	reslist := testListBucket(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		return
 	}
@@ -70,17 +70,17 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 		newVersions[m.Name] = m.Version
 
 		if !m.CheckExists() && !bckIsAIS {
-			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
+			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
 		}
 		if !versionEnabled {
 			continue
 		}
 
 		if ver == m.Version {
-			t.Errorf("Object %s/%s version has not changed", bucket, m.Name)
+			t.Errorf("Object %s/%s version has not changed", bck, m.Name)
 			t.Fail()
 		} else if m.Version == "" {
-			t.Errorf("Object %s/%s version is empty", bucket, m.Name)
+			t.Errorf("Object %s/%s version is empty", bck, m.Name)
 			t.Fail()
 		}
 	}
@@ -88,15 +88,15 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 	return
 }
 
-func propsReadObjects(t *testing.T, proxyURL, bucket string, objList map[string]string) {
+func propsReadObjects(t *testing.T, proxyURL string, bck api.Bck, objList map[string]string) {
 	versChanged, bytesChanged := propsStats(t, proxyURL)
 	tutils.Logf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for object := range objList {
-		_, err := api.GetObject(baseParams, bucket, object)
+		_, err := api.GetObject(baseParams, bck, object)
 		if err != nil {
-			t.Errorf("Failed to read %s/%s, err: %v", bucket, object, err)
+			t.Errorf("Failed to read %s/%s, err: %v", bck, object, err)
 			continue
 		}
 	}
@@ -110,7 +110,7 @@ func propsReadObjects(t *testing.T, proxyURL, bucket string, objList map[string]
 	}
 }
 
-func propsEvict(t *testing.T, proxyURL, bucket, provider string, objMap map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
+func propsEvict(t *testing.T, proxyURL string, bck api.Bck, objMap map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
 	// generate a object list to evict (evict 1/3 of total objects - random selection)
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
@@ -123,13 +123,13 @@ func propsEvict(t *testing.T, proxyURL, bucket, provider string, objMap map[stri
 	for fname := range objMap {
 		evictMap[fname] = true
 		toEvictList = append(toEvictList, fname)
-		tutils.Logf("    %s/%s\n", bucket, fname)
+		tutils.Logf("    %s/%s\n", bck, fname)
 		if len(toEvictList) >= toEvict {
 			break
 		}
 	}
 
-	err := api.EvictList(tutils.BaseAPIParams(proxyURL), bucket, provider, toEvictList, true, 0)
+	err := api.EvictList(tutils.BaseAPIParams(proxyURL), bck, toEvictList, true, 0)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 		t.Fail()
@@ -139,7 +139,7 @@ func propsEvict(t *testing.T, proxyURL, bucket, provider string, objMap map[stri
 
 	// read a new object list and check that evicted objects do not have atime and iscached==false
 	// version must be the same
-	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
+	reslist := testListBucket(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		return
 	}
@@ -149,7 +149,7 @@ func propsEvict(t *testing.T, proxyURL, bucket, provider string, objMap map[stri
 		if !ok {
 			continue
 		}
-		tutils.Logf("%s/%s [%d] - iscached: [%v], atime [%v]\n", bucket, m.Name, m.Flags, m.CheckExists, m.Atime)
+		tutils.Logf("%s/%s [%d] - iscached: [%v], atime [%v]\n", bck, m.Name, m.Flags, m.CheckExists, m.Atime)
 
 		// invalid object: rebalance leftover or uploaded directly to target
 		if !m.IsStatusOK() {
@@ -158,11 +158,11 @@ func propsEvict(t *testing.T, proxyURL, bucket, provider string, objMap map[stri
 
 		if _, wasEvicted := evictMap[m.Name]; wasEvicted {
 			if m.Atime != "" {
-				t.Errorf("Evicted object %s/%s still has atime '%s'", bucket, m.Name, m.Atime)
+				t.Errorf("Evicted object %s/%s still has atime '%s'", bck, m.Name, m.Atime)
 				t.Fail()
 			}
 			if m.CheckExists() {
-				t.Errorf("Evicted object %s/%s is still marked as cached one", bucket, m.Name)
+				t.Errorf("Evicted object %s/%s is still marked as cached one", bck, m.Name)
 				t.Fail()
 			}
 		}
@@ -172,22 +172,22 @@ func propsEvict(t *testing.T, proxyURL, bucket, provider string, objMap map[stri
 		}
 
 		if m.Version == "" {
-			t.Errorf("Object %s/%s version is empty", bucket, m.Name)
+			t.Errorf("Object %s/%s version is empty", bck, m.Name)
 			t.Fail()
 		} else if m.Version != oldVersion {
-			t.Errorf("Object %s/%s version has changed from %s to %s", bucket, m.Name, oldVersion, m.Version)
+			t.Errorf("Object %s/%s version has changed from %s to %s", bck, m.Name, oldVersion, m.Version)
 			t.Fail()
 		}
 	}
 }
 
-func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
+func propsRecacheObjects(t *testing.T, proxyURL string, bck api.Bck, objs map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
 	tutils.Logf("Refetching objects...\n")
-	propsReadObjects(t, proxyURL, bucket, objs)
+	propsReadObjects(t, proxyURL, bck, objs)
 	tutils.Logf("Checking objects properties after refetching...\n")
-	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
+	reslist := testListBucket(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
-		t.Errorf("Unexpected error: no object in the bucket %s", bucket)
+		t.Errorf("Unexpected error: no object in the bucket %s", bck)
 		t.Fail()
 	}
 	var (
@@ -200,10 +200,10 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 		}
 
 		if !m.CheckExists() {
-			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
+			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
 		}
 		if m.Atime == "" {
-			t.Errorf("Object %s/%s access time is empty", bucket, m.Name)
+			t.Errorf("Object %s/%s access time is empty", bck, m.Name)
 		}
 
 		if !versionEnabled {
@@ -211,18 +211,18 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 		}
 
 		if m.Version == "" {
-			t.Errorf("Failed to read object %s/%s version", bucket, m.Name)
+			t.Errorf("Failed to read object %s/%s version", bck, m.Name)
 			t.Fail()
 		} else if version != m.Version {
-			t.Errorf("Object %s/%s versions mismatch: old[%s], new[%s]", bucket, m.Name, version, m.Version)
+			t.Errorf("Object %s/%s versions mismatch: old[%s], new[%s]", bck, m.Name, version, m.Version)
 			t.Fail()
 		}
 	}
 }
 
-func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsAIS bool) {
+func propsRebalance(t *testing.T, proxyURL string, bck api.Bck, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsAIS bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	propsCleanupObjects(t, proxyURL, bucket, objects)
+	propsCleanupObjects(t, proxyURL, bck, objects)
 
 	smap := tutils.GetClusterMap(t, proxyURL)
 	l := smap.CountTargets()
@@ -247,7 +247,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	tutils.Logf("Target %s [%s] is removed\n", removeTarget.ID(), removeTarget.URL(cmn.NetworkPublic))
 
 	// rewrite objects and compare versions - they should change
-	newobjs := propsUpdateObjects(t, proxyURL, bucket, objects, msg, versionEnabled, bckIsAIS)
+	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled, bckIsAIS)
 
 	tutils.Logf("Reregistering target...\n")
 	err = tutils.RegisterNode(proxyURL, removeTarget, smap)
@@ -263,9 +263,9 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	tutils.Logf("Reading file versions...\n")
-	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
+	reslist := testListBucket(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
-		t.Errorf("Unexpected error: no object in the bucket %s", bucket)
+		t.Errorf("Unexpected error: no object in the bucket %s", bck)
 		t.Fail()
 	}
 	var (
@@ -285,19 +285,19 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		objFound++
 
 		if !m.CheckExists() && !bckIsAIS {
-			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
+			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
 		}
 		if m.Atime == "" {
-			t.Errorf("Object %s/%s access time is empty", bucket, m.Name)
+			t.Errorf("Object %s/%s access time is empty", bck, m.Name)
 		}
 
 		if !versionEnabled {
 			continue
 		}
 
-		tutils.Logf("Object %s/%s, version before rebalance [%s], after [%s]\n", bucket, m.Name, version, m.Version)
+		tutils.Logf("Object %s/%s, version before rebalance [%s], after [%s]\n", bck, m.Name, version, m.Version)
 		if version != m.Version {
-			t.Errorf("Object %s/%s version mismatch: existing [%s], expected [%s]", bucket, m.Name, m.Version, version)
+			t.Errorf("Object %s/%s version mismatch: existing [%s], expected [%s]", bck, m.Name, m.Version, version)
 		}
 	}
 
@@ -306,12 +306,12 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	}
 }
 
-func propsCleanupObjects(t *testing.T, proxyURL, bucket string, newVersions map[string]string) {
+func propsCleanupObjects(t *testing.T, proxyURL string, bck api.Bck, newVersions map[string]string) {
 	errCh := make(chan error, 100)
 	wg := &sync.WaitGroup{}
 	for objname := range newVersions {
 		wg.Add(1)
-		go tutils.Del(proxyURL, bucket, objname, "", wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, bck, objname, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	tassert.SelectErr(t, errCh, "delete", abortonerr)
@@ -328,7 +328,9 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 		fileslist  = make(map[string]string, objCountToTest)
 		errCh      = make(chan error, objCountToTest)
 		numPuts    = objCountToTest
-		bucket     = clibucket
+		bck        = api.Bck{
+			Name: clibucket,
+		}
 		versionDir = "versionid"
 		proxyURL   = tutils.GetPrimaryURL()
 	)
@@ -339,7 +341,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 	// Create a few objects
 	tutils.Logf("Creating %d objects...\n", numPuts)
 	ldir := LocalSrcDir + "/" + versionDir
-	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, versionDir, filesize, numPuts, errCh, filesPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, ldir, readerType, versionDir, filesize, numPuts, errCh, filesPutCh, sgl)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh)
 	close(errCh)
@@ -352,9 +354,9 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 	// Read object versions
 	msg := &cmn.SelectMsg{Prefix: versionDir}
 	msg.AddProps(cmn.GetPropsVersion, cmn.GetPropsIsCached, cmn.GetPropsAtime, cmn.GetPropsStatus)
-	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
+	reslist := testListBucket(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
-		t.Errorf("Unexpected error: no object in the bucket %s", bucket)
+		t.Errorf("Unexpected error: no object in the bucket %s", bck)
 		t.Fail()
 		return
 	}
@@ -367,11 +369,11 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 		tutils.Logf("Initial version %s - %v\n", m.Name, m.Version)
 
 		if !m.CheckExists() && !bckIsAIS {
-			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
+			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
 		}
 
 		if m.Atime == "" {
-			t.Errorf("Object %s/%s access time is empty", bucket, m.Name)
+			t.Errorf("Object %s/%s access time is empty", bck, m.Name)
 		}
 
 		if !versionEnabled {
@@ -387,34 +389,40 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 	}
 
 	// rewrite objects and compare versions - they should change
-	newVersions := propsUpdateObjects(t, proxyURL, bucket, fileslist, msg, versionEnabled, bckIsAIS)
+	newVersions := propsUpdateObjects(t, proxyURL, bck, fileslist, msg, versionEnabled, bckIsAIS)
 	if len(newVersions) != len(fileslist) {
 		t.Errorf("Number of objects mismatch. Expected: %d objects, after update: %d", len(fileslist), len(newVersions))
 	}
 
 	// check that files are read from cache
-	propsReadObjects(t, proxyURL, bucket, fileslist)
+	propsReadObjects(t, proxyURL, bck, fileslist)
 
 	if !bckIsAIS {
 		// try to evict some files and check if they are gone
-		propsEvict(t, proxyURL, bucket, cmn.Cloud, newVersions, msg, versionEnabled)
+		propsEvict(t, proxyURL, bck, newVersions, msg, versionEnabled)
 
 		// read objects to put them to the cache. After that all objects must have iscached=true
-		propsRecacheObjects(t, proxyURL, bucket, newVersions, msg, versionEnabled)
+		propsRecacheObjects(t, proxyURL, bck, newVersions, msg, versionEnabled)
 	}
 
 	// test rebalance should keep object versions
-	propsRebalance(t, proxyURL, bucket, newVersions, msg, versionEnabled, bckIsAIS)
+	propsRebalance(t, proxyURL, bck, newVersions, msg, versionEnabled, bckIsAIS)
 
 	// cleanup
-	propsCleanupObjects(t, proxyURL, bucket, newVersions)
+	propsCleanupObjects(t, proxyURL, bck, newVersions)
 }
 
 func propsMainTest(t *testing.T, versioning bool) {
-	proxyURL := tutils.GetPrimaryURL()
-	chkVersion := true
+	var (
+		chkVersion = true
 
-	config := tutils.GetClusterConfig(t)
+		proxyURL = tutils.GetPrimaryURL()
+		config   = tutils.GetClusterConfig(t)
+		bck      = api.Bck{
+			Name: clibucket,
+		}
+	)
+
 	oldChkVersion := config.Versioning.ValidateWarmGet
 	oldVersioning := config.Versioning.Enabled
 
@@ -429,7 +437,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 	if len(newConfig) != 0 {
 		tutils.SetClusterConfig(t, newConfig)
 	}
-	created := createBucketIfNotExists(t, proxyURL, clibucket)
+	created := createBucketIfNotExists(t, proxyURL, bck)
 
 	defer func() {
 		// restore configuration
@@ -445,11 +453,11 @@ func propsMainTest(t *testing.T, versioning bool) {
 			tutils.SetClusterConfig(t, newConfig)
 		}
 		if created {
-			tutils.DestroyBucket(t, proxyURL, clibucket)
+			tutils.DestroyBucket(t, proxyURL, bck)
 		}
 	}()
 
-	props, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), clibucket)
+	props, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bck)
 	if err != nil {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}

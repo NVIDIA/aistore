@@ -82,8 +82,7 @@ type (
 	workOrder struct {
 		op        int
 		proxyURL  string
-		bucket    string
-		provider  string
+		bck       api.Bck
 		objName   string // In the format of 'virtual dir' + "/" + objName
 		size      int64
 		err       error
@@ -106,8 +105,7 @@ type (
 
 		loaderID             string // used with multiple loader instances generating objects in parallel
 		proxyURL             string
-		provider             string // "ais" or "cloud"
-		bucket               string
+		bck                  api.Bck
 		readerType           string
 		tmpDir               string // used only when usingFile
 		statsOutput          string
@@ -216,7 +214,7 @@ func (wo *workOrder) String() string {
 	}
 
 	return fmt.Sprintf("WO: %s/%s, start:%s end:%s, size: %d, type: %s%s",
-		wo.bucket, wo.objName, wo.start.Format(time.StampMilli), wo.end.Format(time.StampMilli), wo.size, opName, errstr)
+		wo.bck, wo.objName, wo.start.Format(time.StampMilli), wo.end.Format(time.StampMilli), wo.size, opName, errstr)
 }
 
 func loaderMaskFromTotalLoaders(totalLoaders uint64) uint {
@@ -238,8 +236,8 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
-	f.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
-	f.StringVar(&p.provider, "provider", cmn.ProviderAIS, "ais - for AIS bucket, cloud - for Cloud bucket; other supported values include \"gcp\" and \"aws\", for Amazon and Google clouds, respectively")
+	f.StringVar(&p.bck.Name, "bucket", "nvais", "Bucket name")
+	f.StringVar(&p.bck.Provider, "provider", cmn.ProviderAIS, "ais - for AIS bucket, cloud - for Cloud bucket; other supported values include \"gcp\" and \"aws\", for Amazon and Google clouds, respectively")
 
 	cmn.DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
@@ -478,7 +476,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	if !p.cleanUp.IsSet {
-		p.cleanUp.Val = cmn.IsProviderAIS(p.provider)
+		p.cleanUp.Val = cmn.IsProviderAIS(p.bck.Provider)
 	}
 
 	// For Dry-Run on Docker
@@ -540,19 +538,19 @@ func (s *sts) aggregate(other sts) {
 }
 
 func setupBucket(runParams *params) error {
-	if runParams.provider != cmn.ProviderAIS || runParams.getConfig {
+	if runParams.bck.Provider != cmn.ProviderAIS || runParams.getConfig {
 		return nil
 	}
 	baseParams := tutils.BaseAPIParams(runParams.proxyURL)
-	exists, err := api.DoesBucketExist(baseParams, runParams.bucket)
+	exists, err := api.DoesBucketExist(baseParams, runParams.bck)
 	if err != nil {
-		return fmt.Errorf("failed to get ais bucket lists to check for %s, err = %v", runParams.bucket, err)
+		return fmt.Errorf("failed to get ais bucket lists to check for %s, err = %v", runParams.bck, err)
 	}
 
 	if !exists {
-		err := api.CreateBucket(baseParams, runParams.bucket)
+		err := api.CreateBucket(baseParams, runParams.bck)
 		if err != nil {
-			return fmt.Errorf("failed to create ais bucket %s, err = %s", runParams.bucket, err)
+			return fmt.Errorf("failed to create ais bucket %s, err = %s", runParams.bck, err)
 		}
 	}
 
@@ -562,9 +560,9 @@ func setupBucket(runParams *params) error {
 
 	propsToUpdate := cmn.BucketPropsToUpdate{}
 	// update bucket props if bPropsStr is set
-	oldProps, err := api.HeadBucket(baseParams, runParams.bucket)
+	oldProps, err := api.HeadBucket(baseParams, runParams.bck)
 	if err != nil {
-		return fmt.Errorf("failed to read bucket %s properties: %v", runParams.bucket, err)
+		return fmt.Errorf("failed to read bucket %s properties: %v", runParams.bck, err)
 	}
 	change := false
 	if runParams.bProps.EC.Enabled != oldProps.EC.Enabled {
@@ -585,8 +583,8 @@ func setupBucket(runParams *params) error {
 		change = true
 	}
 	if change {
-		if err = api.SetBucketProps(baseParams, runParams.bucket, propsToUpdate); err != nil {
-			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bucket, err)
+		if err = api.SetBucketProps(baseParams, runParams.bck, propsToUpdate); err != nil {
+			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bck, err)
 		}
 	}
 	return nil
@@ -667,7 +665,7 @@ func main() {
 	}
 
 	if runParams.cleanUp.Val {
-		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed after the run!\n", runParams.bucket)
+		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed after the run!\n", runParams.bck)
 	}
 
 	host, err := os.Hostname()
@@ -842,8 +840,7 @@ func newPutWorkOrder() (*workOrder, error) {
 	putPending++
 	return &workOrder{
 		proxyURL: runParams.proxyURL,
-		bucket:   runParams.bucket,
-		provider: runParams.provider,
+		bck:      runParams.bck,
 		op:       opPut,
 		objName:  objName,
 		size:     size,
@@ -892,8 +889,7 @@ func newGetWorkOrder() (*workOrder, error) {
 	getPending++
 	return &workOrder{
 		proxyURL: runParams.proxyURL,
-		bucket:   runParams.bucket,
-		provider: runParams.provider,
+		bck:      runParams.bck,
 		op:       opGet,
 		objName:  bucketObjsNames.ObjName(),
 	}, nil
@@ -1024,9 +1020,9 @@ func cleanUp() {
 		wg.Wait()
 	}
 
-	if cmn.IsProviderAIS(runParams.provider) {
+	if cmn.IsProviderAIS(runParams.bck.Provider) {
 		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
-		api.DestroyBucket(baseParams, runParams.bucket)
+		api.DestroyBucket(baseParams, runParams.bck)
 	}
 	fmt.Println(prettyTimeStamp() + " Done")
 }
@@ -1041,7 +1037,7 @@ func _cleanup(objs []string, wg *sync.WaitGroup) {
 	b := cmn.Min(t, runParams.batchSize)
 	n := t / b
 	for i := 0; i < n; i++ {
-		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bucket, runParams.provider,
+		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bck,
 			objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
 		if err != nil {
 			fmt.Println("delete err ", err)
@@ -1049,7 +1045,7 @@ func _cleanup(objs []string, wg *sync.WaitGroup) {
 	}
 
 	if t%b != 0 {
-		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bucket, runParams.provider,
+		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bck,
 			objs[n*b:], true /* wait */, 0 /* wait forever */)
 		if err != nil {
 			fmt.Println("delete err ", err)
@@ -1068,10 +1064,10 @@ func _cleanup(objs []string, wg *sync.WaitGroup) {
 
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
-	names, err := tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.provider, "")
+	names, err := tutils.ListObjectsFast(runParams.proxyURL, runParams.bck, "")
 	if err != nil {
-		fmt.Printf("Failed to list bucket %s(%s), proxy %s, err: %v\n",
-			runParams.bucket, runParams.provider, runParams.proxyURL, err)
+		fmt.Printf("Failed to list bucket %s, proxy %s, err: %v\n",
+			runParams.bck, runParams.proxyURL, err)
 		return err
 	}
 

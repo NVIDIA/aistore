@@ -102,8 +102,9 @@ var (
 
 func startXactionHandler(c *cli.Context) (err error) {
 	var (
-		xaction          = c.Args().First() // empty string if no args given
-		bucket, provider string
+		bck     api.Bck
+		xaction = c.Args().First() // empty string if no args given
+		bucket  string
 	)
 
 	if c.NArg() == 0 {
@@ -120,12 +121,12 @@ func startXactionHandler(c *cli.Context) (err error) {
 		}
 	} else { // bucket related xaction
 		bucket = c.Args().Get(1)
-		if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+		if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 			return
 		}
 	}
 
-	if err = api.ExecXaction(defaultAPIParams, xaction, commandStart, bucket, provider); err != nil {
+	if err = api.ExecXaction(defaultAPIParams, bck, xaction, commandStart); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "started %q xaction\n", xaction)
@@ -134,8 +135,8 @@ func startXactionHandler(c *cli.Context) (err error) {
 
 func stopXactionHandler(c *cli.Context) (err error) {
 	var (
-		xaction          = c.Args().First() // empty string if no args given
-		bucket, provider string
+		bck     api.Bck
+		xaction = c.Args().First() // empty string if no args given
 	)
 
 	if c.NArg() == 0 {
@@ -144,13 +145,13 @@ func stopXactionHandler(c *cli.Context) (err error) {
 
 	if xaction == allArgument {
 		xaction = ""
-		bucket = c.Args().Get(1)
+		bck.Name = c.Args().Get(1)
 	} else if _, ok := cmn.ValidXact(xaction); !ok {
 		return fmt.Errorf("%q is not a valid xaction", xaction)
 	} else { // valid xaction
 		if bucketXactions.Contains(xaction) {
-			bucket = c.Args().Get(1)
-			if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+			bucket := c.Args().Get(1)
+			if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 				return
 			}
 		} else if c.NArg() > 1 {
@@ -158,7 +159,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	if err = api.ExecXaction(defaultAPIParams, xaction, commandStop, bucket, provider); err != nil {
+	if err = api.ExecXaction(defaultAPIParams, bck, xaction, commandStop); err != nil {
 		return
 	}
 

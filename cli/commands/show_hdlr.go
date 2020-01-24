@@ -138,15 +138,15 @@ var (
 
 func showBucketHandler(c *cli.Context) (err error) {
 	var (
-		bucket   string
-		provider string
+		bck    api.Bck
+		bucket string
 	)
 
 	bucket = c.Args().First()
-	if bucket, provider, err = validateBucket(c, bucket, "", true /* optional */); err != nil {
+	if bck, err = validateBucket(c, bucket, "", true /* optional */); err != nil {
 		return
 	}
-	return bucketDetails(c, bucket, provider)
+	return bucketDetails(c, bck)
 }
 
 func showDisksHandler(c *cli.Context) (err error) {
@@ -199,6 +199,7 @@ func showNodeHandler(c *cli.Context) (err error) {
 
 func showXactionHandler(c *cli.Context) (err error) {
 	var (
+		bck     api.Bck
 		xaction = c.Args().Get(0) // empty string if no arg given
 		bucket  = c.Args().Get(1) // empty string if no arg given
 	)
@@ -218,12 +219,12 @@ func showXactionHandler(c *cli.Context) (err error) {
 	}
 
 	if bucket != "" {
-		if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+		if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 			return
 		}
 	}
 
-	xactStatsMap, err := api.MakeXactGetRequest(defaultAPIParams, xaction, commandStats, bucket, flagIsSet(c, allItemsFlag))
+	xactStatsMap, err := api.MakeXactGetRequest(defaultAPIParams, bck, xaction, commandStats, flagIsSet(c, allItemsFlag))
 	if err != nil {
 		return
 	}
@@ -253,21 +254,22 @@ func showXactionHandler(c *cli.Context) (err error) {
 
 func showObjectHandler(c *cli.Context) (err error) {
 	var (
-		provider, bucket, object string
-		fullObjName              = c.Args().Get(0) // empty string if no arg given
+		bck            api.Bck
+		bucket, object string
+		fullObjName    = c.Args().Get(0) // empty string if no arg given
 	)
 
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in format bucket/object")
 	}
 	bucket, object = splitBucketObject(fullObjName)
-	if bucket, provider, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
 	if object == "" {
 		return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", fullObjName))
 	}
-	return objectStats(c, bucket, provider, object)
+	return objectStats(c, bck, object)
 }
 
 func showRebalanceHandler(c *cli.Context) (err error) {

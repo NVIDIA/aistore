@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
+
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
@@ -64,7 +66,7 @@ func init() {
 	cmn.AssertNoErr(err)
 }
 
-func AISExec(ch chan *stats.PrimitiveStat, opType string, bucket string, numWorkers int, params *AISLoaderExecParams) {
+func AISExec(ch chan *stats.PrimitiveStat, opType string, bck api.Bck, numWorkers int, params *AISLoaderExecParams) {
 	filebasename := cmn.RandString(13)
 	filename := path.Join(soaktestDirname, filebasename+".json")
 	defer os.Remove(filename)
@@ -79,7 +81,8 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bucket string, numWork
 	// Using the default readertype sgl for now. If later we decided to use file, need to also set aisloader tmpdir to be a unique folder per call.
 
 	cmd := exec.Command(aisloaderTarget, spf("-ip=%s", primaryIP), spf("-port=%s", primaryPort),
-		spf("-bucket=%s", bucket),
+		spf("-bucket=%s", bck.Name),
+		spf("-provider=%s", bck.Provider),
 		spf("-numworkers=%v", numWorkers),
 		spf("-pctput=%v", params.pctput),
 		spf("-duration=%s", params.duration),

@@ -50,19 +50,18 @@ func doPut(wo *workOrder) {
 		return
 	}
 	if !traceHTTPSig.Load() {
-		wo.err = tutils.Put(wo.proxyURL, wo.bucket, wo.provider, wo.objName, r.XXHash(), r)
+		wo.err = tutils.Put(wo.proxyURL, wo.bck, wo.objName, r.XXHash(), r)
 	} else {
-		wo.latencies, wo.err = tutils.PutWithTrace(wo.proxyURL, wo.bucket, wo.provider,
-			wo.objName, r.XXHash(), r)
+		wo.latencies, wo.err = tutils.PutWithTrace(wo.proxyURL, wo.bck, wo.objName, r.XXHash(), r)
 	}
 }
 
 func doGet(wo *workOrder) {
 	if !traceHTTPSig.Load() {
-		wo.size, wo.err = tutils.GetDiscard(wo.proxyURL, wo.bucket, wo.provider,
+		wo.size, wo.err = tutils.GetDiscard(wo.proxyURL, wo.bck,
 			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
 	} else {
-		wo.size, wo.latencies, wo.err = tutils.GetTraceDiscard(wo.proxyURL, wo.bucket, wo.provider,
+		wo.size, wo.latencies, wo.err = tutils.GetTraceDiscard(wo.proxyURL, wo.bck,
 			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
 	}
 }

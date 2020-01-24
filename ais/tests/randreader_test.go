@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cmn"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -18,26 +20,29 @@ func TestRandomReaderPutStress(t *testing.T) {
 	var (
 		numworkers = 1000
 		numobjects = 10 // NOTE: increase this number if need be ...
-		bucket     = "RRTestBucket"
-		proxyURL   = tutils.GetPrimaryURL()
-		wg         = &sync.WaitGroup{}
-		dir        = t.Name()
+		bck        = api.Bck{
+			Name:     "RRTestBucket",
+			Provider: cmn.ProviderAIS,
+		}
+		proxyURL = tutils.GetPrimaryURL()
+		wg       = &sync.WaitGroup{}
+		dir      = t.Name()
 	)
-	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bck)
 	for i := 0; i < numworkers; i++ {
 		reader, err := tutils.NewRandReader(fileSize, true)
 		tassert.CheckFatal(t, err)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			putRR(t, reader, bucket, dir, numobjects)
+			putRR(t, reader, bck, dir, numobjects)
 		}()
 	}
 	wg.Wait()
-	tutils.DestroyBucket(t, proxyURL, bucket)
+	tutils.DestroyBucket(t, proxyURL, bck)
 }
 
-func putRR(t *testing.T, reader tutils.Reader, bucket, dir string, objCount int) []string {
+func putRR(t *testing.T, reader tutils.Reader, bck api.Bck, dir string, objCount int) []string {
 	var (
 		objNames = make([]string, objCount)
 	)
@@ -46,7 +51,7 @@ func putRR(t *testing.T, reader tutils.Reader, bucket, dir string, objCount int)
 		objName := filepath.Join(dir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: tutils.DefaultBaseAPIParams(t),
-			Bucket:     bucket,
+			Bck:        bck,
 			Object:     objName,
 			Hash:       reader.XXHash(),
 			Reader:     reader,

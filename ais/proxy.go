@@ -1734,6 +1734,10 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket string, erc error) (bck *cluster.Bck, err error) {
 	if _, ok := erc.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 		err = erc
+		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
+			p.invalmsghdlr(w, r, erc.Error(), http.StatusNotFound)
+			return
+		}
 		p.invalmsghdlr(w, r, erc.Error())
 		return
 	}

@@ -27,7 +27,10 @@ func Test_smoke(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	proxyURL := tutils.GetPrimaryURL()
+	var (
+		bck      = api.Bck{Name: clibucket}
+		proxyURL = tutils.GetPrimaryURL()
+	)
 	if err := cmn.CreateDir(LocalDestDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
 	}
@@ -36,7 +39,7 @@ func Test_smoke(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
 
-	created := createBucketIfNotExists(t, proxyURL, clibucket)
+	created := createBucketIfNotExists(t, proxyURL, bck)
 	fp := make(chan string, len(objSizes)*len(ratios)*numops*numworkers)
 	for _, fs := range objSizes {
 		for _, r := range ratios {
@@ -52,7 +55,7 @@ func Test_smoke(t *testing.T) {
 	errCh := make(chan error, len(objSizes)*len(ratios)*numops*numworkers)
 	for file := range fp {
 		wg.Add(1)
-		go tutils.Del(proxyURL, clibucket, "smoke/"+file, "", wg, errCh, true)
+		go tutils.Del(proxyURL, bck, "smoke/"+file, wg, errCh, true)
 	}
 	wg.Wait()
 	select {
@@ -62,19 +65,22 @@ func Test_smoke(t *testing.T) {
 	}
 
 	if created {
-		tutils.DestroyBucket(t, proxyURL, clibucket)
+		tutils.DestroyBucket(t, proxyURL, bck)
 	}
 }
 
 func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, filesPutCh chan string) {
-	// Start the worker pools
-	errCh := make(chan error, 100)
-	var wg = &sync.WaitGroup{}
-	// Decide the number of each type
 	var (
-		nGet = int(float32(numworkers) * ratio)
-		nPut = numworkers - nGet
-		sgls = make([]*memsys.SGL, numworkers)
+		nGet  = int(float32(numworkers) * ratio)
+		nPut  = numworkers - nGet
+		sgls  = make([]*memsys.SGL, numworkers)
+		errCh = make(chan error, 100)
+		wg    = &sync.WaitGroup{}
+
+		bck = api.Bck{
+			Name:     clibucket,
+			Provider: cmn.Cloud,
+		}
 	)
 
 	// Get the workers started
@@ -93,14 +99,14 @@ func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, files
 			go func(i int) {
 				defer wg.Done()
 				sgl := sgls[i]
-				tutils.PutRandObjs(proxyURL, clibucket, SmokeDir, readerType, SmokeStr, uint64(objSize), numops, errCh, filesPutCh, sgl)
+				tutils.PutRandObjs(proxyURL, bck, SmokeDir, readerType, SmokeStr, uint64(objSize), numops, errCh, filesPutCh, sgl)
 			}(i)
 			nPut--
 		} else {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				getRandomFiles(proxyURL, numops, clibucket, SmokeStr+"/", t, errCh)
+				getRandomFiles(proxyURL, bck, numops, SmokeStr+"/", t, errCh)
 			}()
 			nGet--
 		}
@@ -113,7 +119,7 @@ func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, files
 	}
 }
 
-func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *testing.T, errCh chan error) {
+func getRandomFiles(proxyURL string, bck api.Bck, numGets int, prefix string, t *testing.T, errCh chan error) {
 	var (
 		src        = rand.NewSource(time.Now().UnixNano())
 		random     = rand.New(src)
@@ -122,14 +128,14 @@ func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *test
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	items, err := api.ListBucket(baseParams, bucket, msg, 0)
+	items, err := api.ListBucket(baseParams, bck, msg, 0)
 	if err != nil {
 		errCh <- err
 		t.Error(err)
 		return
 	}
 	if len(items.Entries) == 0 {
-		errCh <- fmt.Errorf("listbucket %s: is empty - no entries", bucket)
+		errCh <- fmt.Errorf("listbucket %s: is empty - no entries", bck)
 		// not considered a failure
 		return
 	}
@@ -145,7 +151,7 @@ func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *test
 			defer getsGroup.Done()
 
 			baseParams := tutils.BaseAPIParams(proxyURL)
-			_, err := api.GetObject(baseParams, bucket, keyname)
+			_, err := api.GetObject(baseParams, bck, keyname)
 			if err != nil {
 				errCh <- err
 			}

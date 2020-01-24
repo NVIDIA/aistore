@@ -20,7 +20,7 @@ import (
 // MakeXactGetRequest gets the response of the Xaction Query
 // Action can be one of: start, stop, stats
 // Kind will be one of the xactions
-func MakeXactGetRequest(baseParams BaseParams, kind, action, bucket string,
+func MakeXactGetRequest(baseParams BaseParams, bck Bck, kind, action string,
 	all bool) (map[string][]*stats.BaseXactStatsExt, error) {
 	var (
 		resp      *http.Response
@@ -31,8 +31,10 @@ func MakeXactGetRequest(baseParams BaseParams, kind, action, bucket string,
 		Action: action,
 		Name:   kind,
 		Value: cmn.XactionExtMsg{
-			Bucket: bucket,
-			All:    all,
+			Bucket:    bck.Name,
+			Provider:  bck.Provider,
+			Namespace: bck.Namespace,
+			All:       all,
 		},
 	}
 	msg, err := jsoniter.Marshal(actMsg)
@@ -63,13 +65,13 @@ func MakeXactGetRequest(baseParams BaseParams, kind, action, bucket string,
 // MakeNCopies API
 //
 // MakeNCopies starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies)
-func MakeNCopies(baseParams BaseParams, bucket string, copies int) error {
+func MakeNCopies(baseParams BaseParams, bck Bck, copies int) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies})
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	_, err = DoHTTPRequest(baseParams, path, b)
 	return err
 }

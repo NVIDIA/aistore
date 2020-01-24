@@ -37,7 +37,7 @@ type checkerMD struct {
 	seed       int64
 	numObjs    int
 	proxyURL   string
-	bucket     string
+	bck        api.Bck
 	smap       *cluster.Smap
 	mpList     cluster.NodeMap
 	allMps     map[*cluster.Snode]*cmn.MountpathList
@@ -55,7 +55,10 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		seed:     baseseed + 300,
 		numObjs:  100,
 		proxyURL: tutils.GetPrimaryURL(),
-		bucket:   TestBucketName,
+		bck: api.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		},
 		fileSize: 64 * cmn.KiB,
 		mpList:   make(cluster.NodeMap, 10),
 		allMps:   make(map[*cluster.Snode]*cmn.MountpathList, 10),
@@ -100,7 +103,7 @@ func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, m
 
 func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, sgl *memsys.SGL) {
 	md.wg.Add(1)
-	go runAsyncJob(md.t, md.wg, method, mpath, fileNames, md.chfail, md.chstop, sgl, md.bucket)
+	go runAsyncJob(md.t, md.bck, md.wg, method, mpath, fileNames, md.chfail, md.chstop, sgl)
 	// let the job run for a while and then make a mountpath broken
 	time.Sleep(2 * time.Second)
 	md.chfail <- struct{}{}
@@ -128,11 +131,11 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 
 	switch method {
 	case http.MethodPut:
-		tutils.PutObjsFromList(md.proxyURL, md.bucket, ldir, readerType, fshcDir, uint64(md.fileSize), objList, nil, nil, sgl)
+		tutils.PutObjsFromList(md.proxyURL, md.bck, ldir, readerType, fshcDir, uint64(md.fileSize), objList, nil, nil, sgl)
 	case http.MethodGet:
 		for _, objName := range objList {
 			// GetObject must fail - so no error checking
-			_, err := api.GetObject(md.baseParams, md.bucket, objName)
+			_, err := api.GetObject(md.baseParams, md.bck, objName)
 			if err == nil {
 				md.t.Errorf("Get %q must fail", objName)
 			}
@@ -234,7 +237,7 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	}
 }
 
-func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, sgl *memsys.SGL, bucket string) {
+func runAsyncJob(t *testing.T, bck api.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, sgl *memsys.SGL) {
 	defer wg.Done()
 
 	const fileSize = 64 * cmn.KiB
@@ -270,9 +273,9 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 			case "PUT":
 				fileList := []string{fname}
 				ldir := filepath.Join(LocalSrcDir, fshcDir)
-				tutils.PutObjsFromList(proxyURL, bucket, ldir, readerType, fshcDir, fileSize, fileList, errCh, objsPutCh, sgl)
+				tutils.PutObjsFromList(proxyURL, bck, ldir, readerType, fshcDir, fileSize, fileList, errCh, objsPutCh, sgl)
 			case "GET":
-				api.GetObject(tutils.DefaultBaseAPIParams(t), bucket, path.Join(fshcDir, fname))
+				api.GetObject(tutils.DefaultBaseAPIParams(t), bck, path.Join(fshcDir, fname))
 				time.Sleep(time.Millisecond * 10)
 			default:
 				t.Errorf("Invalid operation: %s", op)
@@ -301,12 +304,12 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		t.Fatal("No available mountpaths found")
 	}
 
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
+	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	sgl := tutils.Mem2.NewSGL(md.fileSize)
 	defer func() {
-		tutils.DestroyBucket(t, md.proxyURL, md.bucket)
+		tutils.DestroyBucket(t, md.proxyURL, md.bck)
 		sgl.Free()
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
@@ -330,7 +333,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
 	for n := 1; n < 10; n++ {
 		objName := fmt.Sprintf("%s/o%d", fshcDir, n)
-		if _, err := api.GetObject(md.baseParams, md.bucket, objName); err == nil {
+		if _, err := api.GetObject(md.baseParams, md.bck, objName); err == nil {
 			t.Error("Should not be able to GET non-existing objects")
 		}
 	}
@@ -364,10 +367,10 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	sgl := tutils.Mem2.NewSGL(md.fileSize)
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
+	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	defer func() {
 		sgl.Free()
-		tutils.DestroyBucket(t, md.proxyURL, md.bucket)
+		tutils.DestroyBucket(t, md.proxyURL, md.bck)
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
 		}

@@ -8,6 +8,8 @@ package commands
 import (
 	"strings"
 
+	"github.com/NVIDIA/aistore/api"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
@@ -114,37 +116,46 @@ var (
 // because the intention is to list all buckets or auto-detect bucket provider
 // for a given bucket.
 func defaultListHandler(c *cli.Context) (err error) {
-	bucket := c.Args().First()
-	if bucket == "" {
-		return listBucketNames(c, "" /* any provider */)
+	bck := api.Bck{
+		Name:     c.Args().First(),
+		Provider: "", /* any provider*/
+	}
+	if bck.Name == "" {
+		return listBucketNames(c, bck)
 	}
 
-	bucket = strings.TrimSuffix(bucket, "/")
-	return listBucketObj(c, bucket, "" /* auto-detect provider */)
+	bck.Name = strings.TrimSuffix(bck.Name, "/")
+	return listBucketObj(c, bck)
 }
 
 // Note: This handler ignores aisBucketEnvVar because the intention
 // is to list ais bucket names if bucket name isn't given.
 func listAISBucketsHandler(c *cli.Context) (err error) {
-	bucket := c.Args().First()
-	if bucket == "" {
-		return listBucketNames(c, cmn.ProviderAIS)
+	bck := api.Bck{
+		Name:     c.Args().First(),
+		Provider: cmn.ProviderAIS,
+	}
+	if bck.Name == "" {
+		return listBucketNames(c, bck)
 	}
 
-	bucket = strings.TrimSuffix(bucket, "/")
-	return listBucketObj(c, bucket, cmn.ProviderAIS)
+	bck.Name = strings.TrimSuffix(bck.Name, "/")
+	return listBucketObj(c, bck)
 }
 
 // Note: This handler ignores aisBucketEnvVar because the intention
 // is to list cloud bucket names if bucket name isn't given.
 func listCloudBucketsHandler(c *cli.Context) (err error) {
-	bucket := c.Args().First()
-	if bucket == "" {
-		return listBucketNames(c, cmn.Cloud)
+	bck := api.Bck{
+		Name:     c.Args().First(),
+		Provider: cmn.Cloud,
+	}
+	if bck.Name == "" {
+		return listBucketNames(c, bck)
 	}
 
-	bucket = strings.TrimSuffix(bucket, "/")
-	return listBucketObj(c, bucket, cmn.Cloud)
+	bck.Name = strings.TrimSuffix(bck.Name, "/")
+	return listBucketObj(c, bck)
 }
 
 func listBckPropsHandler(c *cli.Context) (err error) {

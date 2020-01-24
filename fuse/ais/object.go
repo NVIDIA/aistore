@@ -16,7 +16,7 @@ import (
 
 type Object struct {
 	apiParams api.BaseParams // FIXME: it is quite a big struct and should be removed
-	bucket    string         // FIXME: bucket name is static so we should not have it as a field
+	bck       api.Bck        // FIXME: bucket name is static so we should not have it as a field
 	Name      string
 	Size      int64
 	Atime     time.Time
@@ -30,7 +30,7 @@ func NewObject(objName string, bucket Bucket, sizes ...int64) *Object {
 
 	return &Object{
 		apiParams: bucket.APIParams(),
-		bucket:    bucket.Name(),
+		bck:       bucket.Bck(),
 		Name:      objName,
 		Size:      size,
 		Atime:     time.Now(),
@@ -40,7 +40,7 @@ func NewObject(objName string, bucket Bucket, sizes ...int64) *Object {
 func (obj *Object) Put(r cmn.ReadOpenCloser) (err error) {
 	putArgs := api.PutObjectArgs{
 		BaseParams: obj.apiParams,
-		Bucket:     obj.bucket,
+		Bck:        obj.bck,
 		Object:     obj.Name,
 		Reader:     r,
 	}
@@ -60,7 +60,7 @@ func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, e
 		Query:  query,
 	}
 
-	n, err = api.GetObject(obj.apiParams, obj.bucket, obj.Name, objArgs)
+	n, err = api.GetObject(obj.apiParams, obj.bck, obj.Name, objArgs)
 	if err != nil {
 		return 0, newObjectIOError(err, "GetChunk", obj.Name)
 	}
@@ -70,7 +70,7 @@ func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, e
 func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (handle string, err error) {
 	appendArgs := api.AppendArgs{
 		BaseParams: obj.apiParams,
-		Bucket:     obj.bucket,
+		Bck:        obj.bck,
 		Object:     obj.Name,
 		Handle:     prevHandle,
 		Reader:     r,
@@ -87,7 +87,7 @@ func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (
 func (obj *Object) Flush(handle string) (err error) {
 	appendArgs := api.AppendArgs{
 		BaseParams: obj.apiParams,
-		Bucket:     obj.bucket,
+		Bck:        obj.bck,
 		Object:     obj.Name,
 		Handle:     handle,
 	}

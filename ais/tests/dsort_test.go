@@ -44,7 +44,7 @@ type (
 
 		dsorterType string
 
-		outputBucket string
+		outputBck    api.Bck
 		inputPrefix  string
 		outputPrefix string
 
@@ -114,9 +114,10 @@ func (df *dsortFramework) init() {
 func (df *dsortFramework) gen() dsort.RequestSpec {
 	return dsort.RequestSpec{
 		Description:      generateDSortDesc(),
-		Bucket:           df.m.bucket,
-		Provider:         cmn.ProviderAIS,
-		OutputBucket:     df.outputBucket,
+		Bucket:           df.m.bck.Name,
+		Provider:         df.m.bck.Provider,
+		OutputBucket:     df.outputBck.Name,
+		OutputProvider:   df.outputBck.Provider,
 		Extension:        df.extension,
 		InputFormat:      df.inputTempl,
 		OutputFormat:     df.outputTempl,
@@ -174,7 +175,7 @@ func (df *dsortFramework) createInputShards() {
 			reader, err := tutils.NewFileReaderFromFile(fqn, false)
 			tassert.CheckFatal(df.m.t, err)
 
-			tutils.PutAsync(wg, df.m.proxyURL, df.m.bucket, filepath.Base(fqn), reader, errCh)
+			tutils.PutAsync(wg, df.m.proxyURL, df.m.bck, filepath.Base(fqn), reader, errCh)
 		}(i)
 	}
 	wg.Wait()
@@ -205,9 +206,9 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			Writer: &buffer,
 		}
 
-		bucket := df.m.bucket
-		if df.outputBucket != "" {
-			bucket = df.outputBucket
+		bucket := df.m.bck
+		if df.outputBck.Name != "" {
+			bucket = df.outputBck
 		}
 
 		_, err := api.GetObject(baseParams, bucket, shardName, getOptions)
@@ -346,16 +347,16 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 	}
 }
 
-func (df *dsortFramework) getRecordNames(bucket string) []shardRecords {
+func (df *dsortFramework) getRecordNames(bck api.Bck) []shardRecords {
 	var (
 		allShardRecords = make([]shardRecords, 0, 10)
 	)
 
-	list, err := api.ListBucketFast(df.baseParams, bucket, nil)
+	list, err := api.ListBucketFast(df.baseParams, bck, nil)
 	tassert.CheckFatal(df.m.t, err)
 
 	if len(list.Entries) == 0 {
-		df.m.t.Errorf("number of objects in bucket %q is 0", bucket)
+		df.m.t.Errorf("number of objects in bucket %q is 0", bck)
 	}
 
 	for _, obj := range list.Entries {
@@ -363,7 +364,7 @@ func (df *dsortFramework) getRecordNames(bucket string) []shardRecords {
 		getOptions := api.GetObjectInput{
 			Writer: &buffer,
 		}
-		_, err := api.GetObject(df.baseParams, bucket, obj.Name, getOptions)
+		_, err := api.GetObject(df.baseParams, bck, obj.Name, getOptions)
 		tassert.CheckFatal(df.m.t, err)
 
 		files, err := tutils.GetFileInfosFromTarBuffer(buffer, false)
@@ -526,8 +527,11 @@ func TestDistributedSort(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -545,8 +549,8 @@ func TestDistributedSort(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -571,13 +575,19 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: "dsort-bucket-input",
+					t: t,
+					bck: api.Bck{
+						Name:     "dsort-bucket-input",
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
-					m:                m,
-					dsorterType:      dsorterType,
-					outputBucket:     "dsort-bucket-output",
+					m:           m,
+					dsorterType: dsorterType,
+					outputBck: api.Bck{
+						Name:     "dsort-bucket-output",
+						Provider: cmn.ProviderAIS,
+					},
 					tarballCnt:       1000,
 					fileInTarballCnt: 100,
 					maxMemUsage:      "99%",
@@ -594,7 +604,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			df.clearDSortList()
 
 			// Create local output bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBck)
 
 			tutils.Logln("starting distributed sort...")
 			rs := df.gen()
@@ -603,9 +613,9 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			}
 
 			// Now destroy output bucket and create input bucket
-			tutils.DestroyBucket(t, m.proxyURL, df.outputBucket)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.DestroyBucket(t, m.proxyURL, df.outputBck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			tutils.Logln("starting second distributed sort...")
 			if _, err := api.StartDSort(df.baseParams, rs); err == nil {
@@ -627,13 +637,19 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 			var (
 				err error
 				m   = &ioContext{
-					t:      t,
-					bucket: "dsort-bucket-input",
+					t: t,
+					bck: api.Bck{
+						Name:     "dsort-bucket-input",
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
-					m:                m,
-					dsorterType:      dsorterType,
-					outputBucket:     "dsort-bucket-output",
+					m:           m,
+					dsorterType: dsorterType,
+					outputBck: api.Bck{
+						Name:     "dsort-bucket-output",
+						Provider: cmn.ProviderAIS,
+					},
 					tarballCnt:       1000,
 					fileInTarballCnt: 100,
 					maxMemUsage:      "99%",
@@ -647,12 +663,12 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 			}
 
 			// Create ais buckets
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			// Create local output bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, df.outputBucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBck)
+			defer tutils.DestroyBucket(t, m.proxyURL, df.outputBck)
 
 			df.init()
 			df.clearDSortList()
@@ -682,8 +698,11 @@ func TestDistributedSortParallel(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:           m,
@@ -701,8 +720,8 @@ func TestDistributedSortParallel(t *testing.T) {
 			df.clearDSortList()
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			wg := &sync.WaitGroup{}
 			for i := 0; i < dSortsCount; i++ {
@@ -729,8 +748,11 @@ func TestDistributedSortChain(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:           m,
@@ -748,8 +770,8 @@ func TestDistributedSortChain(t *testing.T) {
 			df.clearDSortList()
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			for i := 0; i < dSortsCount; i++ {
 				dispatchDSortJob(m, i)
@@ -765,8 +787,11 @@ func TestDistributedSortShuffle(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -785,8 +810,8 @@ func TestDistributedSortShuffle(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -812,8 +837,11 @@ func TestDistributedSortWithDisk(t *testing.T) {
 			var (
 				err error
 				m   = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -832,8 +860,8 @@ func TestDistributedSortWithDisk(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -865,8 +893,11 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 			var (
 				err error
 				m   = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -885,8 +916,8 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -913,8 +944,11 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 
 	var (
 		m = &ioContext{
-			t:      t,
-			bucket: TestBucketName,
+			t: t,
+			bck: api.Bck{
+				Name:     TestBucketName,
+				Provider: cmn.ProviderAIS,
+			},
 		}
 		df = &dsortFramework{
 			m:                 m,
@@ -932,8 +966,8 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	df.init()
 	df.clearDSortList()
@@ -983,8 +1017,11 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 
 	var (
 		m = &ioContext{
-			t:      t,
-			bucket: TestBucketName,
+			t: t,
+			bck: api.Bck{
+				Name:     TestBucketName,
+				Provider: cmn.ProviderAIS,
+			},
 		}
 		df = &dsortFramework{
 			m:                 m,
@@ -1003,8 +1040,8 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	df.init()
 	df.clearDSortList()
@@ -1057,8 +1094,11 @@ func TestDistributedSortZip(t *testing.T) {
 			var (
 				err error
 				m   = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1077,8 +1117,8 @@ func TestDistributedSortZip(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -1108,8 +1148,11 @@ func TestDistributedSortWithCompression(t *testing.T) {
 			var (
 				err error
 				m   = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1128,8 +1171,8 @@ func TestDistributedSortWithCompression(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -1177,8 +1220,11 @@ func TestDistributedSortWithContent(t *testing.T) {
 				t.Run(test, func(t *testing.T) {
 					var (
 						m = &ioContext{
-							t:      t,
-							bucket: TestBucketName,
+							t: t,
+							bck: api.Bck{
+								Name:     TestBucketName,
+								Provider: cmn.ProviderAIS,
+							},
 						}
 						df = &dsortFramework{
 							m:           m,
@@ -1202,8 +1248,8 @@ func TestDistributedSortWithContent(t *testing.T) {
 					}
 
 					// Create ais bucket
-					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 					df.init()
 					df.clearDSortList()
@@ -1247,8 +1293,11 @@ func TestDistributedSortAbort(t *testing.T) {
 			var (
 				err error
 				m   = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1266,8 +1315,8 @@ func TestDistributedSortAbort(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -1301,8 +1350,11 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 				t.Run(phase, func(t *testing.T) {
 					var (
 						m = &ioContext{
-							t:      t,
-							bucket: TestBucketName,
+							t: t,
+							bck: api.Bck{
+								Name:     TestBucketName,
+								Provider: cmn.ProviderAIS,
+							},
 						}
 						df = &dsortFramework{
 							m:                m,
@@ -1320,8 +1372,8 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 					}
 
 					// Create ais bucket
-					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 					df.init()
 					df.clearDSortList()
@@ -1359,8 +1411,11 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 				t.Run(phase, func(t *testing.T) {
 					var (
 						m = &ioContext{
-							t:      t,
-							bucket: TestBucketName,
+							t: t,
+							bck: api.Bck{
+								Name:     TestBucketName,
+								Provider: cmn.ProviderAIS,
+							},
 						}
 						df = &dsortFramework{
 							m:                m,
@@ -1383,8 +1438,8 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					df.clearDSortList()
 
 					// Create ais bucket
-					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 					df.createInputShards()
 
@@ -1459,8 +1514,11 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 				t.Run(test, func(t *testing.T) {
 					var (
 						m = &ioContext{
-							t:      t,
-							bucket: TestBucketName,
+							t: t,
+							bck: api.Bck{
+								Name:     TestBucketName,
+								Provider: cmn.ProviderAIS,
+							},
 						}
 						df = &dsortFramework{
 							m:                m,
@@ -1501,8 +1559,8 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					}
 
 					// Create ais bucket
-					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 					df.init()
 					df.clearDSortList()
@@ -1559,8 +1617,11 @@ func TestDistributedSortAddTarget(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1587,8 +1648,8 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.createInputShards()
 
@@ -1625,8 +1686,11 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1645,8 +1709,8 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -1677,8 +1741,11 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1696,8 +1763,8 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -1725,8 +1792,11 @@ func TestDistributedSortOnOOM(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                 m,
@@ -1752,8 +1822,8 @@ func TestDistributedSortOnOOM(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -1784,8 +1854,11 @@ func TestDistributedSortMissingShards(t *testing.T) {
 				t.Run(reaction, func(t *testing.T) {
 					var (
 						m = &ioContext{
-							t:      t,
-							bucket: TestBucketName,
+							t: t,
+							bck: api.Bck{
+								Name:     TestBucketName,
+								Provider: cmn.ProviderAIS,
+							},
 						}
 						df = &dsortFramework{
 							m:                m,
@@ -1805,9 +1878,8 @@ func TestDistributedSortMissingShards(t *testing.T) {
 						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 					}
 
-					// Create ais bucket
-					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 					defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.AbortReaction})
 					tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
 
@@ -1843,8 +1915,11 @@ func TestDistributedSortDuplications(t *testing.T) {
 				t.Run(reaction, func(t *testing.T) {
 					var (
 						m = &ioContext{
-							t:      t,
-							bucket: TestBucketName,
+							t: t,
+							bck: api.Bck{
+								Name:     TestBucketName,
+								Provider: cmn.ProviderAIS,
+							},
 						}
 						df = &dsortFramework{
 							m:                     m,
@@ -1864,9 +1939,8 @@ func TestDistributedSortDuplications(t *testing.T) {
 						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 					}
 
-					// Create ais bucket
-					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 					defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
 					tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
 
@@ -1895,13 +1969,19 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			var (
 				err error
 				m   = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				dsortFW = &dsortFramework{
-					m:                m,
-					dsorterType:      dsorterType,
-					outputBucket:     TestBucketName + "output",
+					m:           m,
+					dsorterType: dsorterType,
+					outputBck: api.Bck{
+						Name:     TestBucketName + "output",
+						Provider: cmn.ProviderAIS,
+					},
 					tarballCnt:       100,
 					fileInTarballCnt: 10,
 					maxMemUsage:      "40%",
@@ -1925,18 +2005,18 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			baseParams := tutils.BaseAPIParams(proxyURL)
 
 			// Set URL for order file (points to the object in cluster)
-			dsortFW.orderFileURL = fmt.Sprintf("%s/%s/%s/%s/%s", proxyURL, cmn.Version, cmn.Objects, m.bucket, orderFileName)
+			dsortFW.orderFileURL = fmt.Sprintf("%s/%s/%s/%s/%s", proxyURL, cmn.Version, cmn.Objects, m.bck.Name, orderFileName)
 
 			dsortFW.init()
 			dsortFW.clearDSortList()
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			// Create local output bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, dsortFW.outputBucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, dsortFW.outputBucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, dsortFW.outputBck)
+			defer tutils.DestroyBucket(t, m.proxyURL, dsortFW.outputBck)
 
 			dsortFW.createInputShards()
 
@@ -1944,7 +2024,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			tutils.Logln("generating and putting order file into cluster...")
 			var (
 				buffer       bytes.Buffer
-				shardRecords = dsortFW.getRecordNames(m.bucket)
+				shardRecords = dsortFW.getRecordNames(m.bck)
 			)
 			for _, shard := range shardRecords {
 				for idx, recordName := range shard.recordNames {
@@ -1952,7 +2032,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					ekm[recordName] = shardFmts[idx%len(shardFmts)]
 				}
 			}
-			args := api.PutObjectArgs{BaseParams: baseParams, Bucket: m.bucket, Object: orderFileName, Reader: tutils.NewBytesReader(buffer.Bytes())}
+			args := api.PutObjectArgs{BaseParams: baseParams, Bck: m.bck, Object: orderFileName, Reader: tutils.NewBytesReader(buffer.Bytes())}
 			err = api.PutObject(args)
 			tassert.CheckFatal(t, err)
 
@@ -1972,7 +2052,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			}
 
 			tutils.Logln("checking if all records are in specified shards...")
-			shardRecords = dsortFW.getRecordNames(dsortFW.outputBucket)
+			shardRecords = dsortFW.getRecordNames(dsortFW.outputBck)
 			for _, shard := range shardRecords {
 				for _, recordName := range shard.recordNames {
 					match := false
@@ -2000,8 +2080,11 @@ func TestDistributedSortDryRun(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -2020,8 +2103,8 @@ func TestDistributedSortDryRun(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()
@@ -2049,8 +2132,11 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
-					t:      t,
-					bucket: TestBucketName,
+					t: t,
+					bck: api.Bck{
+						Name:     TestBucketName,
+						Provider: cmn.ProviderAIS,
+					},
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -2069,8 +2155,8 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 			}
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 			df.init()
 			df.clearDSortList()

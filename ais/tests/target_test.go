@@ -15,7 +15,6 @@ import (
 
 func TestPutObjectNoDaemonID(t *testing.T) {
 	const (
-		bucket  = TestBucketName
 		objName = "someObject"
 	)
 	var (
@@ -23,6 +22,10 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		objDummyData = []byte("testing is so much fun")
 		proxyURL     = tutils.GetPrimaryURL()
 		smap         = tutils.GetClusterMap(t, proxyURL)
+		bck          = api.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		}
 	)
 
 	si, err := smap.GetRandTarget()
@@ -34,7 +37,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	reader := tutils.NewBytesReader(objDummyData)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bucket:     bucket,
+		Bck:        bck,
 		Object:     objName,
 		Hash:       reader.XXHash(),
 		Reader:     reader,

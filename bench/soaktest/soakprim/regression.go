@@ -25,7 +25,10 @@ const (
 )
 
 var (
-	bckName = fmt.Sprintf("%s-%d", regBucketPrefix, os.Getpid())
+	bck = api.Bck{
+		Name:     fmt.Sprintf("%s-%d", regBucketPrefix, os.Getpid()),
+		Provider: cmn.ProviderAIS,
+	}
 )
 
 type regressionContext struct {
@@ -35,12 +38,12 @@ type regressionContext struct {
 
 // Regression runs a constant get request throughout the testing
 func cleanupRegression() {
-	names, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.ProviderAIS)
+	names, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), api.Bck{Provider: cmn.ProviderAIS})
 	cmn.AssertNoErr(err)
 
 	for _, name := range names.AIS {
-		if strings.HasPrefix(name, regBucketPrefix) && (!soakcmn.Params.LocalCleanup || name == bckName) {
-			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckName)
+		if strings.HasPrefix(name, regBucketPrefix) && (!soakcmn.Params.LocalCleanup || name == bck.Name) {
+			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bck)
 		}
 	}
 }
@@ -58,7 +61,7 @@ func setupRegression() *regressionContext {
 		minsize:      soakcmn.Params.RegMinFilesize,
 		maxsize:      soakcmn.Params.RegMaxFilesize,
 	}
-	AISExec(aisStopCh, soakcmn.OpTypePut, bckName, soakcmn.Params.RegSetupWorkers, params)
+	AISExec(aisStopCh, soakcmn.OpTypePut, bck, soakcmn.Params.RegSetupWorkers, params)
 	setupStat := <-aisStopCh
 	close(aisStopCh)
 
@@ -68,7 +71,7 @@ func setupRegression() *regressionContext {
 }
 
 // Worker function for regression. Must call in go func
-func regressionWorker(tag string, bucket string, stopCh chan struct{}, wg *sync.WaitGroup, recordRegression func(*stats.PrimitiveStat)) {
+func regressionWorker(tag string, bck api.Bck, stopCh chan struct{}, wg *sync.WaitGroup, recordRegression func(*stats.PrimitiveStat)) {
 	aisLoaderExecParams := &AISLoaderExecParams{
 		pctput:     0,
 		stopable:   true,
@@ -86,7 +89,7 @@ func regressionWorker(tag string, bucket string, stopCh chan struct{}, wg *sync.
 
 	go func() {
 		defer aisExecWg.Done()
-		AISExec(aisExecResultCh, soakcmn.OpTypeGet, bucket, soakcmn.Params.RegWorkers, aisLoaderExecParams)
+		AISExec(aisExecResultCh, soakcmn.OpTypeGet, bck, soakcmn.Params.RegWorkers, aisLoaderExecParams)
 	}()
 
 	<-stopCh
@@ -118,7 +121,7 @@ func (rctx *RecipeContext) StartRegression() {
 	for i := 0; i < soakcmn.Params.RegInstances; i++ {
 		tag := fmt.Sprintf("regression %d", i+1)
 		regCtx.wg.Add(1)
-		go regressionWorker(tag, bckName, regCtx.stopCh, regCtx.wg, rctx.repCtx.RecordRegression)
+		go regressionWorker(tag, bck, regCtx.stopCh, regCtx.wg, rctx.repCtx.RecordRegression)
 	}
 }
 

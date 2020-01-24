@@ -149,8 +149,10 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bo
 			return
 		}
 
-		provider := bucketProvider(c, provider...)
-		bucketNames, err := api.GetBucketNames(defaultAPIParams, provider)
+		bck := api.Bck{
+			Provider: bucketProvider(c, provider...),
+		}
+		bucketNames, err := api.GetBucketNames(defaultAPIParams, bck)
 		if err != nil {
 			return
 		}
@@ -178,10 +180,10 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bo
 			}
 		}
 
-		if provider == "" || cmn.IsProviderAIS(provider) {
+		if bck.Provider == "" || cmn.IsProviderAIS(bck.Provider) {
 			printNotUsedBuckets(bucketNames.AIS)
 		}
-		if provider == "" || cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
+		if bck.Provider == "" || cmn.IsProviderCloud(bck.Provider, true /*acceptAnon*/) {
 			printNotUsedBuckets(bucketNames.Cloud)
 		}
 	}
@@ -216,8 +218,10 @@ func propCompletions(c *cli.Context) {
 }
 
 func suggestBucket(c *cli.Context, separator bool, providers ...string) {
-	provider := bucketProvider(c, providers...)
-	bucketNames, err := api.GetBucketNames(defaultAPIParams, provider)
+	bck := api.Bck{
+		Name: bucketProvider(c, providers...),
+	}
+	bucketNames, err := api.GetBucketNames(defaultAPIParams, bck)
 	if err != nil {
 		return
 	}
@@ -233,10 +237,10 @@ func suggestBucket(c *cli.Context, separator bool, providers ...string) {
 		}
 	}
 
-	if provider == "" || cmn.IsProviderAIS(provider) {
+	if bck.Provider == "" || cmn.IsProviderAIS(bck.Provider) {
 		printBuckets(bucketNames.AIS)
 	}
-	if provider == "" || cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
+	if bck.Provider == "" || cmn.IsProviderCloud(bck.Provider, true /*acceptAnon*/) {
 		printBuckets(bucketNames.Cloud)
 	}
 }

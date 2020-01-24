@@ -32,7 +32,7 @@ const (
 // URL HANDLING
 ////////////////
 
-func determineClusterURL(c *cli.Context, cfg *Config, bucket string) (clusterURL string, err error) {
+func determineClusterURL(c *cli.Context, cfg *Config, bck api.Bck) (clusterURL string, err error) {
 	// Determine which cluster URL will be used
 	clusterURL = cfg.Cluster.URL
 	if clusterURL == "" {
@@ -46,8 +46,8 @@ func determineClusterURL(c *cli.Context, cfg *Config, bucket string) (clusterURL
 	}
 
 	// Try to access the bucket, possibly catching an early error
-	if ok := tryAccessBucket(clusterURL, bucket); !ok {
-		err = fmt.Errorf("No response from proxy at %q (bucket %q)", clusterURL, bucket)
+	if ok := tryAccessBucket(clusterURL, bck); !ok {
+		err = fmt.Errorf("No response from proxy at %q (bucket %q)", clusterURL, bck)
 		return "", err
 	}
 
@@ -94,13 +94,13 @@ func discoverClusterURL(c *cli.Context) string {
 	return defaultAISURL
 }
 
-func tryAccessBucket(url string, bucket string) bool {
+func tryAccessBucket(url string, bck api.Bck) bool {
 	baseParams := api.BaseParams{
 		Client: &http.Client{},
 		URL:    url,
 	}
 
-	_, err := api.HeadBucket(baseParams, bucket)
+	_, err := api.HeadBucket(baseParams, bck)
 	return err == nil
 }
 

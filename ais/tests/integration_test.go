@@ -42,7 +42,7 @@ type ioContext struct {
 	stopCh              chan struct{}
 	repFilenameCh       chan repFile
 	wg                  *sync.WaitGroup
-	bucket              string
+	bck                 api.Bck
 	fileSize            uint64
 	numGetErrs          atomic.Uint64
 	getsCompleted       atomic.Uint64
@@ -76,8 +76,11 @@ func (m *ioContext) init() {
 	}
 	m.semaphore = make(chan struct{}, 10) // 10 concurrent GET requests at a time
 	m.wg = &sync.WaitGroup{}
-	if m.bucket == "" {
-		m.bucket = m.t.Name() + "Bucket"
+	if m.bck.Name == "" {
+		m.bck.Name = m.t.Name() + "Bucket"
+	}
+	if m.bck.Provider == "" {
+		m.bck.Provider = cmn.ProviderAIS
 	}
 	m.stopCh = make(chan struct{})
 }
@@ -109,16 +112,16 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
 		targetObjectCount = make(map[string]int64)
 	)
-	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
+	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListBucket(baseParams, m.bucket, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
+	bucketList, err := api.ListBucket(baseParams, m.bck, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
 	tassert.CheckFatal(t, err)
 	for _, obj := range bucketList.Entries {
 		targetObjectCount[obj.TargetURL]++
 	}
 	if len(targetObjectCount) != m.originalTargetCount {
 		t.Fatalf("Rebalance error, %d/%d targets received no objects from bucket %s\n",
-			m.originalTargetCount-len(targetObjectCount), m.originalTargetCount, m.bucket)
+			m.originalTargetCount-len(targetObjectCount), m.originalTargetCount, m.bck)
 	}
 	for targetURL, objCount := range targetObjectCount {
 		if objCount < requiredCount {
@@ -134,8 +137,8 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	filenameCh := make(chan string, m.num)
 	errCh := make(chan error, m.num)
 
-	tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bucket)
-	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, m.fileSize, m.num, errCh, filenameCh, sgl)
+	tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
+	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeDir, readerType, SmokeStr, m.fileSize, m.num, errCh, filenameCh, sgl)
 	if len(dontFail) == 0 {
 		tassert.SelectErr(m.t, errCh, "put", false)
 	}
@@ -153,14 +156,14 @@ func (m *ioContext) cloudPuts() {
 		msg        = &cmn.SelectMsg{}
 	)
 
-	tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bucket)
+	tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bck)
 
-	objList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
 	leftToFill := m.num - len(objList.Entries)
 	if leftToFill <= 0 {
-		tutils.Logf("cloud PUT %d (%d) objects already in bucket %s...\n", m.num, len(objList.Entries), m.bucket)
+		tutils.Logf("cloud PUT %d (%d) objects already in bucket %s...\n", m.num, len(objList.Entries), m.bck)
 		m.num = len(objList.Entries)
 		return
 	}
@@ -175,19 +178,19 @@ func (m *ioContext) cloudPuts() {
 		tassert.CheckFatal(m.t, err)
 		objName := fmt.Sprintf("%s%s%d", "copy/cloud_", cmn.RandString(4), i)
 		wg.Add(1)
-		go tutils.PutAsync(wg, m.proxyURL, m.bucket, objName, r, errCh)
+		go tutils.PutAsync(wg, m.proxyURL, m.bck, objName, r, errCh)
 	}
 	wg.Wait()
 	tassert.SelectErr(m.t, errCh, "put", true)
 	tutils.Logln("cloud PUT done")
 
-	objList, err = api.ListBucket(baseParams, m.bucket, msg, 0)
+	objList, err = api.ListBucket(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 	if len(objList.Entries) != m.num {
 		m.t.Fatalf("list-bucket err: %d != %d", len(objList.Entries), m.num)
 	}
 
-	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bucket, m.num)
+	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
 }
 
 func (m *ioContext) cloudPrefetch(prefetchCnt int) {
@@ -196,7 +199,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 		msg        = &cmn.SelectMsg{}
 	)
 
-	objList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
 	tutils.Logf("cloud PREFETCH %d objects...\n", prefetchCnt)
@@ -209,7 +212,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 
 		wg.Add(1)
 		go func(obj *cmn.BucketEntry) {
-			_, err := tutils.GetDiscard(m.proxyURL, m.bucket, cmn.Cloud, obj.Name, false /*validate*/, 0, 0)
+			_, err := tutils.GetDiscard(m.proxyURL, m.bck, obj.Name, false /*validate*/, 0, 0)
 			tassert.CheckError(m.t, err)
 			wg.Done()
 		}(obj)
@@ -224,7 +227,8 @@ func (m *ioContext) cloudDelete() {
 		sema       = make(chan struct{}, 40)
 	)
 
-	objList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	cmn.Assert(m.bck.Provider == cmn.Cloud)
+	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
 	tutils.Logln("deleting cloud objects...")
@@ -237,7 +241,7 @@ func (m *ioContext) cloudDelete() {
 			defer func() {
 				<-sema
 			}()
-			err := api.DeleteObject(baseParams, m.bucket, obj.Name, cmn.Cloud)
+			err := api.DeleteObject(baseParams, m.bck, obj.Name)
 			tassert.CheckError(m.t, err)
 			wg.Done()
 		}(obj)
@@ -250,9 +254,9 @@ func (m *ioContext) gets() {
 		m.semaphore <- struct{}{}
 	}
 	if m.numGetsEachFile == 1 {
-		tutils.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bucket)
+		tutils.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bck)
 	} else {
-		tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bucket)
+		tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bck)
 	}
 	baseParams := tutils.DefaultBaseAPIParams(m.t)
 	for i := 0; i < m.num*m.numGetsEachFile; i++ {
@@ -267,7 +271,7 @@ func (m *ioContext) gets() {
 				repFile.repetitions--
 				m.repFilenameCh <- repFile
 			}
-			_, err := api.GetObject(baseParams, m.bucket, path.Join(SmokeStr, repFile.filename))
+			_, err := api.GetObject(baseParams, m.bck, path.Join(SmokeStr, repFile.filename))
 			if err != nil {
 				if m.getErrIsFatal {
 					m.t.Error(err)
@@ -313,7 +317,7 @@ func (m *ioContext) getsUntilStop() {
 				}()
 				repFile := <-m.repFilenameCh
 				m.repFilenameCh <- repFile
-				_, err := api.GetObject(baseParams, m.bucket, path.Join(SmokeStr, repFile.filename))
+				_, err := api.GetObject(baseParams, m.bck, path.Join(SmokeStr, repFile.filename))
 				if err != nil {
 					if m.getErrIsFatal {
 						m.t.Error(err)
@@ -348,19 +352,19 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	)
 
 	time.Sleep(3 * time.Second)
-	tutils.WaitForBucketXactionToComplete(m.t, cmn.ActMakeNCopies /*kind*/, m.bucket, baseParams, rebalanceTimeout)
+	tutils.WaitForBucketXactionToComplete(m.t, baseParams, m.bck, cmn.ActMakeNCopies /*kind*/, rebalanceTimeout)
 
 	// List Bucket - primarily for the copies
 	query := make(url.Values)
 	msg := &cmn.SelectMsg{Cached: true}
 	msg.AddProps(cmn.GetPropsCopies, cmn.GetPropsAtime, cmn.GetPropsStatus)
-	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0, query)
+	objectList, err := api.ListBucket(baseParams, m.bck, msg, 0, query)
 	tassert.CheckFatal(m.t, err)
 
 	copiesToNumObjects := make(map[int]int)
 	for _, entry := range objectList.Entries {
 		if entry.Atime == "" {
-			m.t.Errorf("%s/%s: access time is empty", m.bucket, entry.Name)
+			m.t.Errorf("%s/%s: access time is empty", m.bck, entry.Name)
 		}
 		total++
 		copiesToNumObjects[int(entry.Copies)]++
@@ -411,11 +415,11 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 			}
 		} else {
 			baseParams.URL = m.proxyURL
-			proxyLBNames, err := api.GetBucketNames(baseParams, cmn.ProviderAIS)
+			proxyLBNames, err := api.GetBucketNames(baseParams, m.bck)
 			tassert.CheckFatal(m.t, err)
 
 			baseParams.URL = target.URL(cmn.NetworkPublic)
-			targetLBNames, err := api.GetBucketNames(baseParams, cmn.ProviderAIS)
+			targetLBNames, err := api.GetBucketNames(baseParams, m.bck)
 			tassert.CheckFatal(m.t, err)
 			// T3
 			if cmn.StrSlicesEqual(proxyLBNames.AIS, targetLBNames.AIS) {
@@ -439,7 +443,7 @@ func (m *ioContext) setRandBucketProps() {
 			OOS:    api.Int64(int64(rand.Intn(30) + 60)),
 		},
 	}
-	err := api.SetBucketProps(baseParams, m.bucket, props)
+	err := api.SetBucketProps(baseParams, m.bck, props)
 	tassert.CheckFatal(m.t, err)
 }
 
@@ -469,8 +473,8 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	}
 
 	// Step 2.
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	err := tutils.UnregisterNode(m.proxyURL, target.ID())
@@ -536,8 +540,8 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	}
 
 	// Step 2.
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	err := tutils.UnregisterNode(m.proxyURL, target.ID())
@@ -638,8 +642,8 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// Step 2
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 3
 	m.puts()
@@ -719,8 +723,8 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	targets := tutils.ExtractTargetNodes(m.smap)
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Unregister target 0
 	err := tutils.UnregisterNode(m.proxyURL, targets[0].ID())
@@ -794,8 +798,8 @@ func TestAckRebalance(t *testing.T) {
 	target := tutils.ExtractTargetNodes(md.smap)[0]
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
-	defer tutils.DestroyBucket(t, md.proxyURL, md.bucket)
+	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
+	defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
 
 	// Unregister a target
 	tutils.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
@@ -858,10 +862,10 @@ func testStressRebalance(t *testing.T, rand *rand.Rand, createlb, destroylb bool
 
 	// Create ais bucket
 	if createlb {
-		tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
+		tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	}
 	if destroylb {
-		defer tutils.DestroyBucket(t, md.proxyURL, md.bucket)
+		defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
 	}
 
 	// Unregister a target
@@ -927,8 +931,8 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	targets := tutils.ExtractTargetNodes(m.smap)
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Unregister target 0
 	err := tutils.UnregisterNode(m.proxyURL, targets[0].ID())
@@ -999,8 +1003,8 @@ func TestPutDuringRebalance(t *testing.T) {
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Unregister a target
 	tutils.Logf("Unregister target %s\n", target.URL(cmn.NetworkPublic))
@@ -1062,8 +1066,8 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// select a random target to disable one of its mountpaths,
 	// and another random target to unregister
@@ -1169,8 +1173,8 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	mpList, err := api.GetMountpaths(baseParams, target)
@@ -1245,8 +1249,8 @@ func TestGetDuringRebalance(t *testing.T) {
 	target := tutils.ExtractTargetNodes(md.smap)[0]
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
-	defer tutils.DestroyBucket(t, md.proxyURL, md.bucket)
+	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
+	defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
 
 	// Unregister a target
 	err := tutils.UnregisterNode(md.proxyURL, target.ID())
@@ -1330,13 +1334,15 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 	m.wg.Add(newBucketCount)
 	for i := 0; i < newBucketCount; i++ {
-		go func(number int) {
+		bck := m.bck
+		bck.Name += strconv.Itoa(i)
+
+		go func() {
 			defer m.wg.Done()
+			tutils.CreateFreshBucket(t, m.proxyURL, bck)
+		}()
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket+strconv.Itoa(number))
-		}(i)
-
-		defer tutils.DestroyBucket(t, m.proxyURL, m.bucket+strconv.Itoa(i))
+		defer tutils.DestroyBucket(t, m.proxyURL, bck)
 	}
 	m.wg.Wait()
 	m.assertClusterState()
@@ -1380,8 +1386,8 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1430,7 +1436,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 
 	if containers.DockerRunning() {
 		err := containers.DockerCreateMpathDir(0, newMountpath)
@@ -1444,7 +1450,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		if !containers.DockerRunning() {
 			os.RemoveAll(newMountpath)
 		}
-		tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+		tutils.DestroyBucket(t, m.proxyURL, m.bck)
 	}()
 
 	// Put random files
@@ -1500,13 +1506,13 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 	targets := tutils.ExtractTargetNodes(m.smap)
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 
 	defer func() {
 		if !containers.DockerRunning() {
 			os.RemoveAll(newMountpath)
 		}
-		tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+		tutils.DestroyBucket(t, m.proxyURL, m.bck)
 	}()
 
 	// Put random files
@@ -1596,8 +1602,8 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1617,8 +1623,8 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 		t.Fatalf("Not all disabled mountpaths were enabled")
 	}
 
-	tutils.Logf("waiting for ais bucket %s to appear on all targets\n", m.bucket)
-	err = tutils.WaitForBucket(m.proxyURL, m.bucket, true /*exists*/)
+	tutils.Logf("waiting for ais bucket %s to appear on all targets\n", m.bck)
+	err = tutils.WaitForBucket(m.proxyURL, m.bck, true /*exists*/)
 	tassert.CheckFatal(t, err)
 
 	// Put and read random files
@@ -1650,10 +1656,10 @@ func TestForwardCP(t *testing.T) {
 	origID, origURL := m.smap.ProxySI.ID(), m.smap.ProxySI.PublicNet.DirectURL
 	nextProxyID, nextProxyURL, _ := chooseNextProxy(m.smap)
 
-	tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	tutils.CreateFreshBucket(t, nextProxyURL, m.bucket)
-	tutils.Logf("Created bucket %s via non-primary %s\n", m.bucket, nextProxyID)
+	tutils.CreateFreshBucket(t, nextProxyURL, m.bck)
+	tutils.Logf("Created bucket %s via non-primary %s\n", m.bck, nextProxyID)
 
 	// Step 3.
 	m.puts()
@@ -1673,8 +1679,8 @@ func TestForwardCP(t *testing.T) {
 	m.ensureNoErrors()
 
 	// Step 5. destroy ais bucket via original primary which is not primary at this point
-	tutils.DestroyBucket(t, origURL, m.bucket)
-	tutils.Logf("Destroyed bucket %s via non-primary %s/%s\n", m.bucket, origID, origURL)
+	tutils.DestroyBucket(t, origURL, m.bck)
+	tutils.Logf("Destroyed bucket %s via non-primary %s/%s\n", m.bck, origID, origURL)
 }
 
 func TestAtimeRebalance(t *testing.T) {
@@ -1697,8 +1703,8 @@ func TestAtimeRebalance(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 
@@ -1716,7 +1722,7 @@ func TestAtimeRebalance(t *testing.T) {
 	msg := &cmn.SelectMsg{TimeFormat: time.StampNano}
 	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	bucketList, err := api.ListBucket(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	objNames := make(cmn.SimpleKVs, 10)
@@ -1742,7 +1748,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	msg = &cmn.SelectMsg{TimeFormat: time.StampNano}
 	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
-	bucketListReb, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	bucketListReb, err := api.ListBucket(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	itemCount, itemCountOk := len(bucketListReb.Entries), 0
@@ -1770,26 +1776,29 @@ func TestAtimeRebalance(t *testing.T) {
 
 func TestAtimeLocalGet(t *testing.T) {
 	var (
+		bck = api.Bck{
+			Name:     t.Name(),
+			Provider: cmn.ProviderAIS,
+		}
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)
-		bucket        = t.Name()
 		objectName    = t.Name()
 		objectContent = tutils.NewBytesReader([]byte("file content"))
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bucket)
-	defer tutils.DestroyBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objectName, Reader: objectContent})
+	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
 
-	timeAfterPut := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+	timeAfterPut := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	// Get object so that atime is updated
-	_, err = api.GetObject(baseParams, bucket, objectName)
+	_, err = api.GetObject(baseParams, bck, objectName)
 	tassert.CheckFatal(t, err)
 
-	timeAfterGet := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	if !(timeAfterGet.After(timeAfterPut)) {
 		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).", timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
@@ -1798,28 +1807,31 @@ func TestAtimeLocalGet(t *testing.T) {
 
 func TestAtimeColdGet(t *testing.T) {
 	var (
+		bck = api.Bck{
+			Name:     clibucket,
+			Provider: cmn.Cloud,
+		}
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)
-		bucket        = clibucket
 		objectName    = t.Name()
 		objectContent = tutils.NewBytesReader([]byte("file content"))
 	)
 
-	if !isCloudBucket(t, proxyURL, bucket) {
+	if !isCloudBucket(t, proxyURL, bck) {
 		t.Skip("test requires a cloud bucket")
 	}
-	tutils.CleanCloudBucket(t, proxyURL, bucket, objectName)
-	defer tutils.CleanCloudBucket(t, proxyURL, bucket, objectName)
+	tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
+	defer tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
 
-	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, objectName, bucket, proxyURL, objectContent)
+	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, objectName, bck, proxyURL, objectContent)
 
 	timeAfterPut := time.Now()
 
 	// Perform the COLD get
-	_, err := api.GetObject(baseParams, bucket, objectName)
+	_, err := api.GetObject(baseParams, bck, objectName)
 	tassert.CheckFatal(t, err)
 
-	timeAfterGet := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	if !(timeAfterGet.After(timeAfterPut)) {
 		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).", timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
@@ -1832,27 +1844,30 @@ func TestAtimePrefetch(t *testing.T) {
 	}
 
 	var (
+		bck = api.Bck{
+			Name:     clibucket,
+			Provider: cmn.Cloud,
+		}
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)
-		bucket        = clibucket
 		objectName    = t.Name()
 		objectContent = tutils.NewBytesReader([]byte("file content"))
 	)
 
-	if !isCloudBucket(t, proxyURL, bucket) {
+	if !isCloudBucket(t, proxyURL, bck) {
 		t.Skip("test requires a cloud bucket")
 	}
-	tutils.CleanCloudBucket(t, proxyURL, bucket, objectName)
-	defer tutils.CleanCloudBucket(t, proxyURL, bucket, objectName)
+	tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
+	defer tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
 
-	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, objectName, bucket, proxyURL, objectContent)
+	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, proxyURL, bck, objectName, objectContent)
 
 	timeAfterPut := time.Now()
 
-	err := api.PrefetchList(baseParams, bucket, cmn.Cloud, []string{objectName}, true, 0)
+	err := api.PrefetchList(baseParams, bck, []string{objectName}, true, 0)
 	tassert.CheckFatal(t, err)
 
-	timeAfterGet := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	if !(timeAfterGet.Before(timeAfterPut)) {
 		t.Errorf("Atime should not be updated after prefetch (got: atime after PUT: %s, atime after GET: %s).",
@@ -1862,21 +1877,24 @@ func TestAtimePrefetch(t *testing.T) {
 
 func TestAtimeLocalPut(t *testing.T) {
 	var (
+		bck = api.Bck{
+			Name:     t.Name(),
+			Provider: cmn.ProviderAIS,
+		}
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)
-		bucket        = t.Name()
 		objectName    = t.Name()
 		objectContent = tutils.NewBytesReader([]byte("file content"))
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bucket)
-	defer tutils.DestroyBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	timeBeforePut := time.Now()
-	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objectName, Reader: objectContent})
+	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
 
-	timeAfterPut := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+	timeAfterPut := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	if !(timeAfterPut.After(timeBeforePut)) {
 		t.Errorf("Expected atime after PUT (%s) to be after atime before PUT (%s).", timeAfterPut.Format(time.RFC3339Nano), timeBeforePut.Format(time.RFC3339Nano))
@@ -1917,8 +1935,8 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Reregister target 0
 	m.reregisterTarget(targets[0])
@@ -1971,8 +1989,8 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	m.puts()
 
@@ -2022,8 +2040,8 @@ func TestRenewRebalance(t *testing.T) {
 	tutils.Logf("Unregistered target %s: the cluster now has %d targets\n", target.URL(cmn.NetworkPublic), n)
 
 	// Step 2: Create an ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
@@ -2032,7 +2050,7 @@ func TestRenewRebalance(t *testing.T) {
 
 	// Step 4: Re-register target (triggers rebalance)
 	m.reregisterTarget(target)
-	tutils.WaitForBucketXactionToStart(t, cmn.ActGlobalReb, "", baseParams, rebalanceStartTimeout)
+	tutils.WaitForBucketXactionToStart(t, baseParams, api.Bck{}, cmn.ActGlobalReb, rebalanceStartTimeout)
 	tutils.Logf("automatic global rebalance started\n")
 
 	m.wg.Add(m.num*m.numGetsEachFile + 2)
@@ -2050,7 +2068,7 @@ func TestRenewRebalance(t *testing.T) {
 
 		<-m.controlCh // wait for half the GETs to complete
 
-		err := api.ExecXaction(baseParams, cmn.ActGlobalReb, cmn.ActXactStart, "", "")
+		err := api.ExecXaction(baseParams, api.Bck{}, cmn.ActGlobalReb, cmn.ActXactStart)
 		tassert.CheckFatal(t, err)
 		tutils.Logf("manually initiated global rebalance\n")
 	}()
@@ -2085,11 +2103,11 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	}
 
 	// Step 1: Create a local bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 2: Make the bucket redundant
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
 			Enabled: api.Bool(true),
 			Copies:  api.Int64(int64(copies)),
@@ -2150,11 +2168,11 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 	}
 
 	// Step 1: Create a local bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 2: Make the bucket redundant
-	err = api.SetBucketProps(baseParams, m.bucket, cmn.BucketPropsToUpdate{
+	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
 			Enabled: api.Bool(true),
 			Copies:  api.Int64(int64(mpathCount)),

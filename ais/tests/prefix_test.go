@@ -33,11 +33,16 @@ var (
 // the names starting with the prefix;
 // otherwise, the test creates (PUT) random files and executes 'a*' through 'z*' listings.
 func TestPrefix(t *testing.T) {
-	proxyURL := tutils.GetPrimaryURL()
+	var (
+		bck = api.Bck{
+			Name: clibucket,
+		}
+		proxyURL = tutils.GetPrimaryURL()
+	)
 
 	tutils.Logf("Looking for files with prefix [%s]\n", prefix)
-	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyBucket(t, proxyURL, clibucket)
+	if created := createBucketIfNotExists(t, proxyURL, bck); created {
+		defer tutils.DestroyBucket(t, proxyURL, bck)
 	}
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t, proxyURL)
@@ -60,8 +65,14 @@ func numberOfFilesWithPrefix(fileNames []string, namePrefix string, commonDir st
 
 func prefixCreateFiles(t *testing.T, proxyURL string) {
 	fileNames = make([]string, 0, prefixFileNumber)
-	errCh := make(chan error, numfiles)
-	wg := &sync.WaitGroup{}
+
+	var (
+		wg    = &sync.WaitGroup{}
+		errCh = make(chan error, numfiles)
+		bck   = api.Bck{
+			Name: clibucket,
+		}
+	)
 
 	for i := 0; i < prefixFileNumber; i++ {
 		fileName := tutils.GenRandomString(fnlen)
@@ -74,7 +85,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		}
 
 		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, clibucket, keyName, r, errCh)
+		go tutils.PutAsync(wg, proxyURL, bck, keyName, r, errCh)
 		fileNames = append(fileNames, fileName)
 	}
 
@@ -89,7 +100,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		}
 
 		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, clibucket, keyName, r, errCh)
+		go tutils.PutAsync(wg, proxyURL, bck, keyName, r, errCh)
 		fileNames = append(fileNames, fName)
 	}
 
@@ -105,10 +116,15 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 
 func prefixLookupOne(t *testing.T, proxyURL string) {
 	tutils.Logf("Looking up for files than names start with %s\n", prefix)
-	var msg = &cmn.SelectMsg{Prefix: prefix}
-	numFiles := 0
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	objList, err := api.ListBucket(baseParams, clibucket, msg, 0)
+	var (
+		numFiles   = 0
+		msg        = &cmn.SelectMsg{Prefix: prefix}
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = api.Bck{
+			Name: clibucket,
+		}
+	)
+	objList, err := api.ListBucket(baseParams, bck, msg, 0)
 	if err != nil {
 		t.Errorf("List files with prefix failed, err = %v", err)
 		return
@@ -130,13 +146,18 @@ func prefixLookupOne(t *testing.T, proxyURL string) {
 func prefixLookupDefault(t *testing.T, proxyURL string) {
 	tutils.Logf("Looking up for files in alphabetic order\n")
 
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	letters := "abcdefghijklmnopqrstuvwxyz"
+	var (
+		letters    = "abcdefghijklmnopqrstuvwxyz"
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = api.Bck{
+			Name: clibucket,
+		}
+	)
 	for i := 0; i < len(letters); i++ {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		var msg = &cmn.SelectMsg{Prefix: lookFor}
-		objList, err := api.ListBucket(baseParams, clibucket, msg, 0)
+		objList, err := api.ListBucket(baseParams, bck, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return
@@ -173,12 +194,15 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string) {
 		{"dir1", "dir1", 2},
 		{"dir1/", "dir1/", 2},
 	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	var (
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = api.Bck{Name: clibucket}
+	)
 	for idx, test := range tests {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
 		tutils.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		var msg = &cmn.SelectMsg{Prefix: p}
-		objList, err := api.ListBucket(baseParams, clibucket, msg, 0)
+		objList, err := api.ListBucket(baseParams, bck, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return
@@ -205,13 +229,16 @@ func prefixLookup(t *testing.T, proxyURL string) {
 }
 
 func prefixCleanup(t *testing.T, proxyURL string) {
-	errCh := make(chan error, numfiles)
-	var wg = &sync.WaitGroup{}
+	var (
+		wg    = &sync.WaitGroup{}
+		errCh = make(chan error, numfiles)
+		bck   = api.Bck{Name: clibucket}
+	)
 
 	for _, fileName := range fileNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		wg.Add(1)
-		go tutils.Del(proxyURL, clibucket, keyName, "", wg, errCh, true)
+		go tutils.Del(proxyURL, bck, keyName, wg, errCh, true)
 	}
 	wg.Wait()
 

@@ -59,26 +59,30 @@ func GenRandomString(fnLen int) string {
 }
 
 // Generates an object name that hashes to a different target than `baseName`.
-func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck *cluster.Bck, smap *cluster.Smap) string {
+func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck api.Bck, smap *cluster.Smap) string {
 	// Init digests - HrwTarget() requires it
 	smap.InitDigests()
 
 	newName := newNamePrefix
 
-	baseNameHrw, _ := cluster.HrwTarget(bck.MakeUname(baseName), smap)
-	newNameHrw, _ := cluster.HrwTarget(bck.MakeUname(newName), smap)
+	cbck := cluster.Bck{Name: bck.Name, Provider: bck.Provider}
+	baseNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(baseName), smap)
+	newNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(newName), smap)
 
 	for i := 0; baseNameHrw == newNameHrw; i++ {
 		newName = newNamePrefix + strconv.Itoa(i)
-		newNameHrw, _ = cluster.HrwTarget(bck.MakeUname(newName), smap)
+		newNameHrw, _ = cluster.HrwTarget(cbck.MakeUname(newName), smap)
 	}
 	return newName
 }
 
 func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (string, error) {
 	for i := 0; i < 100; i++ {
-		name := prefix + GenRandomString(8)
-		_, err := api.HeadBucket(baseParams, name)
+		bck := api.Bck{
+			Name:     prefix + GenRandomString(8),
+			Provider: cmn.ProviderAIS,
+		}
+		_, err := api.HeadBucket(baseParams, bck)
 		if err == nil {
 			continue
 		}
@@ -87,7 +91,7 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 			return "", fmt.Errorf("error generating bucket name: expected error of type *cmn.HTTPError, but got: %T", err)
 		}
 		if errHTTP.Status == http.StatusNotFound {
-			return name, nil
+			return bck.Name, nil
 		}
 
 		return "", fmt.Errorf("error generating bucket name: unexpected HEAD request error: %v", err)

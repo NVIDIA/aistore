@@ -73,7 +73,11 @@ func renameObjectHandler(c *cli.Context) (err error) {
 		return incorrectUsageError(c, fmt.Errorf("no bucket specified for object '%s'", oldObj))
 	}
 
-	if err = api.RenameObject(defaultAPIParams, bucket, oldObj, newObj); err != nil {
+	bck := api.Bck{
+		Name:     bucket,
+		Provider: cmn.ProviderAIS,
+	}
+	if err = api.RenameObject(defaultAPIParams, bck, oldObj, newObj); err != nil {
 		return
 	}
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -35,10 +36,11 @@ func TestE2E(t *testing.T) {
 
 var _ = Describe("E2E FUSE Tests", func() {
 	var (
-		f               *tutils.E2EFramework
-		fuseDir, bucket string
-		entries         []TableEntry
-		baseParams      api.BaseParams
+		f          *tutils.E2EFramework
+		fuseDir    string
+		bck        api.Bck
+		entries    []TableEntry
+		baseParams api.BaseParams
 
 		files, _ = filepath.Glob("./*.in")
 	)
@@ -53,14 +55,17 @@ var _ = Describe("E2E FUSE Tests", func() {
 
 		proxyURL := tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bucket = tutils.GenRandomString(10)
+		bck = api.Bck{
+			Name:     tutils.GenRandomString(10),
+			Provider: cmn.ProviderAIS,
+		}
 		fuseDir, err = ioutil.TempDir("/tmp", "")
 		Expect(err).NotTo(HaveOccurred())
 
-		err = api.CreateBucket(baseParams, bucket)
+		err = api.CreateBucket(baseParams, bck)
 		Expect(err).NotTo(HaveOccurred())
 
-		out, err := exec.Command("aisfs", bucket, fuseDir).Output()
+		out, err := exec.Command("aisfs", bck.Name, fuseDir).Output()
 		if err != nil {
 			stderr := ""
 			if ee, ok := err.(*exec.ExitError); ok {
@@ -81,10 +86,10 @@ var _ = Describe("E2E FUSE Tests", func() {
 		exec.Command("fusermount", "-u", fuseDir).Run()
 		os.RemoveAll(fuseDir)
 
-		exists, err := api.DoesBucketExist(baseParams, bucket)
+		exists, err := api.DoesBucketExist(baseParams, bck)
 		Expect(err).NotTo(HaveOccurred())
 		if exists {
-			err = api.DestroyBucket(baseParams, bucket)
+			err = api.DestroyBucket(baseParams, bck)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})

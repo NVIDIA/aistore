@@ -6,6 +6,7 @@
 package commands
 
 import (
+	"github.com/NVIDIA/aistore/api"
 	"github.com/urfave/cli"
 )
 
@@ -41,17 +42,23 @@ var (
 )
 
 func setCopiesHandler(c *cli.Context) (err error) {
-	bucket := c.Args().First()
-	if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	var (
+		bck    api.Bck
+		bucket = c.Args().First()
+	)
+	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 		return
 	}
-	return configureNCopies(c, bucket)
+	return configureNCopies(c, bck)
 }
 
 func ecEncodeHandler(c *cli.Context) (err error) {
-	bucket := c.Args().First()
-	if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	var (
+		bck    api.Bck
+		bucket = c.Args().First()
+	)
+	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 		return
 	}
-	return ecEncode(c, bucket)
+	return ecEncode(c, bck)
 }

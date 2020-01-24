@@ -16,6 +16,7 @@ type (
 	Bucket interface {
 		Name() string
 		APIParams() api.BaseParams
+		Bck() api.Bck
 		HeadObject(objName string) (obj *Object, exists bool, err error)
 		ListObjects(prefix, pageMarker string, pageSize int) (objs []*Object, newPageMarker string, err error)
 		DeleteObject(objName string) (err error)
@@ -35,10 +36,11 @@ func NewBucket(name string, apiParams api.BaseParams) Bucket {
 }
 
 func (bck *bucketAPI) Name() string              { return bck.name }
+func (bck *bucketAPI) Bck() api.Bck              { return api.Bck{Name: bck.name} }
 func (bck *bucketAPI) APIParams() api.BaseParams { return bck.apiParams }
 
 func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err error) {
-	objProps, err := api.HeadObject(bck.apiParams, bck.name, "", objName)
+	objProps, err := api.HeadObject(bck.apiParams, bck.Bck(), objName)
 	if err != nil {
 		httpErr := &cmn.HTTPError{}
 		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
@@ -49,7 +51,7 @@ func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err 
 
 	return &Object{
 		apiParams: bck.apiParams,
-		bucket:    bck.name,
+		bck:       bck.Bck(),
 		Name:      objName,
 		Size:      objProps.Size,
 		Atime:     objProps.Atime,
@@ -63,7 +65,7 @@ func (bck *bucketAPI) ListObjects(prefix, pageMarker string, pageSize int) (objs
 		PageMarker: pageMarker,
 		PageSize:   pageSize,
 	}
-	listResult, err := api.ListBucketFast(bck.apiParams, bck.name, selectMsg)
+	listResult, err := api.ListBucketFast(bck.apiParams, bck.Bck(), selectMsg)
 	if err != nil {
 		return nil, "", newBucketIOError(err, "ListObjects")
 	}
@@ -77,7 +79,7 @@ func (bck *bucketAPI) ListObjects(prefix, pageMarker string, pageSize int) (objs
 }
 
 func (bck *bucketAPI) DeleteObject(objName string) (err error) {
-	err = api.DeleteObject(bck.apiParams, bck.name, objName, "")
+	err = api.DeleteObject(bck.apiParams, bck.Bck(), objName)
 	if err != nil {
 		err = newBucketIOError(err, "DeleteObject", objName)
 	}

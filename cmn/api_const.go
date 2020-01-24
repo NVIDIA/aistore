@@ -157,9 +157,10 @@ const (
 	URLParamCheckExists = "check_cached" // true: check if object exists
 	URLParamOffset      = "offset"       // Offset from where the object should be read
 	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
-	URLParamProvider    = "provider"     // ais | cloud
-	URLParamPrefix      = "prefix"       // prefix for list objects in a bucket
-	URLParamRegex       = "regex"        // dsort/downloader regex
+	URLParamProvider    = "provider"     // cloud provider
+	URLParamNamespace   = "namespace"
+	URLParamPrefix      = "prefix" // prefix for list objects in a bucket
+	URLParamRegex       = "regex"  // dsort/downloader regex
 	// internal use
 	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
 	URLParamProxyID          = "pid" // ID of the redirecting proxy

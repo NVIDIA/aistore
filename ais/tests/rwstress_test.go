@@ -133,6 +133,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 		totalOps   int
 		prc        int
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = api.Bck{Name: clibucket}
 	)
 	errCh := make(chan error, 10)
 	fileCount := len(fileNames)
@@ -164,14 +165,14 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						tutils.PutAsync(&wg, proxyURL, clibucket, keyname, r, errCh)
+						tutils.PutAsync(&wg, proxyURL, bck, keyname, r, errCh)
 						unlockFile(localIdx, rwFileCreated)
 						putCounter.Dec()
 					}()
 				} else {
 					putArgs := api.PutObjectArgs{
 						BaseParams: baseParams,
-						Bucket:     clibucket,
+						Bck:        bck,
 						Object:     keyname,
 						Hash:       r.XXHash(),
 						Reader:     r,
@@ -208,10 +209,13 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 }
 
 func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, doCleanUp bool) {
-	done := false
-	var totalOps, currIdx int
-	errCh := make(chan error, 10)
-	var wg = &sync.WaitGroup{}
+	var (
+		done              bool
+		totalOps, currIdx int
+		errCh             = make(chan error, 10)
+		wg                = &sync.WaitGroup{}
+		bck               = api.Bck{Name: clibucket}
+	)
 
 	if taskGrp != nil {
 		defer taskGrp.Done()
@@ -226,12 +230,12 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					tutils.Del(proxyURL, clibucket, keyname, "", wg, errCh, true)
+					tutils.Del(proxyURL, bck, keyname, wg, errCh, true)
 					unlockFile(localIdx, rwFileDeleted)
 					delCounter.Dec()
 				}()
 			} else {
-				tutils.Del(proxyURL, clibucket, keyname, "", nil, errCh, true)
+				tutils.Del(proxyURL, bck, keyname, nil, errCh, true)
 				unlockFile(idx, rwFileDeleted)
 			}
 
@@ -261,11 +265,12 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 
 func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
 	var (
-		done              = false
+		done              bool
 		currIdx, totalOps int
 		errCh             = make(chan error, 10)
 		wg                = &sync.WaitGroup{}
 		baseParams        = tutils.BaseAPIParams(proxyURL)
+		bck               = api.Bck{Name: clibucket}
 	)
 
 	if taskGrp != nil {
@@ -283,7 +288,7 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				go func() {
 					defer wg.Done()
 
-					_, err := api.GetObject(baseParams, clibucket, keyname)
+					_, err := api.GetObject(baseParams, bck, keyname)
 					if err != nil {
 						errCh <- err
 					}
@@ -291,7 +296,7 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 					getCounter.Dec()
 				}()
 			} else {
-				_, err := api.GetObject(baseParams, clibucket, keyname)
+				_, err := api.GetObject(baseParams, bck, keyname)
 				if err != nil {
 					errCh <- err
 				}
@@ -324,8 +329,11 @@ func rwstress(t *testing.T) {
 		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, rwdir, err)
 	}
 
-	proxyURL := tutils.GetPrimaryURL()
-	created := createBucketIfNotExists(t, proxyURL, clibucket)
+	var (
+		proxyURL = tutils.GetPrimaryURL()
+		bck      = api.Bck{Name: clibucket}
+		created  = createBucketIfNotExists(t, proxyURL, bck)
+	)
 	filelock.files = make([]fileLock, numFiles)
 
 	generateRandomData(numFiles)
@@ -346,7 +354,7 @@ func rwstress(t *testing.T) {
 	rwstressCleanup(t)
 
 	if created {
-		tutils.DestroyBucket(t, proxyURL, clibucket)
+		tutils.DestroyBucket(t, proxyURL, bck)
 	}
 }
 

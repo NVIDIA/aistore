@@ -284,7 +284,7 @@ func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.D
 	for {
 		allFinished := true
 
-		rebStats, err := api.MakeXactGetRequest(defaultAPIParams, cmn.ActGlobalReb, cmn.GetWhatStats, "" /* bucket */, false /* all */)
+		rebStats, err := api.MakeXactGetRequest(defaultAPIParams, api.Bck{}, cmn.ActGlobalReb, cmn.GetWhatStats, false /* all */)
 		if err != nil {
 			switch err := err.(type) {
 			case *cmn.HTTPError:

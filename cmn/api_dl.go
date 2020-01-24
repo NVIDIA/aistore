@@ -141,6 +141,7 @@ type DlBase struct {
 	Description string `json:"description"`
 	Bucket      string `json:"bucket"`
 	Provider    string `json:"provider"`
+	Namespace   string `json:"namespace"`
 	Timeout     string `json:"timeout"`
 }
 
@@ -160,6 +161,9 @@ func (b *DlBase) AsQuery() url.Values {
 	}
 	if b.Provider != "" {
 		query.Add(URLParamProvider, b.Provider)
+	}
+	if b.Namespace != "" {
+		query.Add(URLParamNamespace, b.Namespace)
 	}
 	if b.Timeout != "" {
 		query.Add(URLParamTimeout, b.Timeout)

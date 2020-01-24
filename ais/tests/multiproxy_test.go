@@ -32,7 +32,6 @@ import (
 const (
 	mockDaemonID    = "MOCK"
 	localBucketDir  = "multipleproxy"
-	localBucketName = "multipleproxytmp"
 	defaultChanSize = 10
 )
 
@@ -548,7 +547,8 @@ func concurrentPutGetDel(t *testing.T) {
 	proxyURL := tutils.GetPrimaryURL()
 	smap := tutils.GetClusterMap(t, proxyURL)
 
-	createBucketIfNotExists(t, proxyURL, clibucket)
+	bck := api.Bck{Name: clibucket}
+	createBucketIfNotExists(t, proxyURL, bck)
 
 	var (
 		errCh = make(chan error, smap.CountProxies())
@@ -563,7 +563,7 @@ func concurrentPutGetDel(t *testing.T) {
 		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
-			errCh <- proxyPutGetDelete(100, url)
+			errCh <- proxyPutGetDelete(100, url, bck)
 		}(v.PublicNet.DirectURL)
 	}
 
@@ -573,11 +573,11 @@ func concurrentPutGetDel(t *testing.T) {
 	for err := range errCh {
 		tassert.CheckFatal(t, err)
 	}
-	tutils.DestroyBucket(t, proxyURL, clibucket)
+	tutils.DestroyBucket(t, proxyURL, bck)
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
-func proxyPutGetDelete(count int, proxyURL string) error {
+func proxyPutGetDelete(count int, proxyURL string, bck api.Bck) error {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for i := 0; i < count; i++ {
 		reader, err := tutils.NewRandReader(fileSize, true /* withHash */)
@@ -588,7 +588,7 @@ func proxyPutGetDelete(count int, proxyURL string) error {
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
-			Bucket:     clibucket,
+			Bck:        bck,
 			Object:     keyname,
 			Hash:       reader.XXHash(),
 			Reader:     reader,
@@ -596,10 +596,10 @@ func proxyPutGetDelete(count int, proxyURL string) error {
 		if err = api.PutObject(putArgs); err != nil {
 			return fmt.Errorf("error executing put: %v", err)
 		}
-		if _, err = api.GetObject(baseParams, clibucket, keyname); err != nil {
+		if _, err = api.GetObject(baseParams, bck, keyname); err != nil {
 			return fmt.Errorf("error executing get: %v", err)
 		}
-		if err = tutils.Del(proxyURL, clibucket, keyname, "", nil /* wg */, nil /* errCh */, true /* silent */); err != nil {
+		if err = tutils.Del(proxyURL, bck, keyname, nil /* wg */, nil /* errCh */, true /* silent */); err != nil {
 			return fmt.Errorf("error executing del: %v", err)
 		}
 	}
@@ -615,6 +615,11 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 
 	missedDeleteCh := make(chan string, 100)
 	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	bck := api.Bck{
+		Name:     TestBucketName,
+		Provider: cmn.ProviderAIS,
+	}
 loop:
 	for {
 		select {
@@ -627,10 +632,10 @@ loop:
 		deleteLoop:
 			for {
 				select {
-				case keyname := <-missedDeleteCh:
-					err := tutils.Del(url, localBucketName, keyname, "", nil, errCh, true)
+				case objName := <-missedDeleteCh:
+					err := tutils.Del(url, bck, objName, nil, errCh, true)
 					if err != nil {
-						missedDeleteCh <- keyname
+						missedDeleteCh <- objName
 					}
 
 				default:
@@ -648,11 +653,11 @@ loop:
 		}
 
 		fname := tutils.GenRandomString(fnlen)
-		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
+		objName := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
-			Bucket:     localBucketName,
-			Object:     keyname,
+			Bck:        bck,
+			Object:     objName,
 			Hash:       reader.XXHash(),
 			Reader:     reader,
 		}
@@ -661,21 +666,21 @@ loop:
 			errCh <- err
 			continue
 		}
-		_, err = api.GetObject(baseParams, localBucketName, keyname)
+		_, err = api.GetObject(baseParams, bck, objName)
 		if err != nil {
 			errCh <- err
 		}
 
-		err = tutils.Del(proxyURL, localBucketName, keyname, "", nil, errCh, true)
+		err = tutils.Del(proxyURL, bck, objName, nil, errCh, true)
 		if err != nil {
-			missedDeleteCh <- keyname
+			missedDeleteCh <- objName
 		}
 	}
 
 	// process left over not deleted objects
 	close(missedDeleteCh)
 	for n := range missedDeleteCh {
-		tutils.Del(proxyURL, localBucketName, n, "", nil, nil, true)
+		tutils.Del(proxyURL, bck, n, nil, nil, true)
 	}
 }
 
@@ -729,14 +734,18 @@ loop:
 // the process is repeated until a pre-defined time duration is reached.
 func proxyStress(t *testing.T) {
 	var (
+		wg          sync.WaitGroup
 		errChs      = make([]chan error, numworkers+1)
 		stopChs     = make([]chan struct{}, numworkers+1)
 		proxyURLChs = make([]chan string, numworkers)
-		wg          sync.WaitGroup
-		proxyURL    = tutils.GetPrimaryURL()
+		bck         = api.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		}
+		proxyURL = tutils.GetPrimaryURL()
 	)
 
-	createBucketIfNotExists(t, proxyURL, localBucketName)
+	createBucketIfNotExists(t, proxyURL, bck)
 
 	// start all workers
 	for i := 0; i < numworkers; i++ {
@@ -780,7 +789,7 @@ loop:
 	}
 
 	wg.Wait()
-	tutils.DestroyBucket(t, proxyURL, localBucketName)
+	tutils.DestroyBucket(t, proxyURL, bck)
 }
 
 // smap 	- current Smap

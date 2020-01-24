@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -21,7 +22,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		objectCountPerWorker = 25000
 		objSize              = int64(cmn.KiB)
 		totalObjs            = objectCountPerWorker * workerCount
-		bucket               = t.Name() + "Bucket"
+		bck                  = api.Bck{Name: t.Name() + "Bucket", Provider: cmn.ProviderAIS}
 		proxyURL             = tutils.GetPrimaryURL()
 		wg                   = &sync.WaitGroup{}
 	)
@@ -30,10 +31,10 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer func() {
 		startDelete := time.Now()
-		tutils.DestroyBucket(t, proxyURL, bucket)
+		tutils.DestroyBucket(t, proxyURL, bck)
 		tutils.Logf("Took %v to DELETE bucket with %d total objects\n", time.Since(startDelete), totalObjs)
 	}()
 
@@ -48,7 +49,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 			reader, err := tutils.NewRandReader(objSize, true)
 			tassert.CheckFatal(t, err)
 			objDir := tutils.RandomObjDir(10, 5)
-			putRR(t, reader, bucket, objDir, objectCountPerWorker)
+			putRR(t, reader, bck, objDir, objectCountPerWorker)
 		}()
 	}
 	wg.Wait()
@@ -61,10 +62,9 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		stressReps      = 5
 		numObjIncrement = 2000
 		objSize         = int64(cmn.KiB)
-
-		bucket   = t.Name() + "Bucket"
-		proxyURL = tutils.GetPrimaryURL()
-		wg       = &sync.WaitGroup{}
+		wg              = &sync.WaitGroup{}
+		bck             = api.Bck{Name: t.Name() + "Bucket", Provider: cmn.ProviderAIS}
+		proxyURL        = tutils.GetPrimaryURL()
 	)
 
 	if testing.Short() {
@@ -75,7 +75,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		numObjs := (i + 1) * numObjIncrement
 		totalObjs := numObjs * workerCount
 
-		tutils.CreateFreshBucket(t, proxyURL, bucket)
+		tutils.CreateFreshBucket(t, proxyURL, bck)
 
 		// Iterations of PUT
 		startPut := time.Now()
@@ -88,14 +88,14 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 				reader, err := tutils.NewRandReader(objSize, true)
 				tassert.CheckFatal(t, err)
 				objDir := tutils.RandomObjDir(10, 5)
-				putRR(t, reader, bucket, objDir, numObjs)
+				putRR(t, reader, bck, objDir, numObjs)
 			}()
 		}
 		wg.Wait()
 		tutils.Logf("Took %v to PUT %d total objects\n", time.Since(startPut), totalObjs)
 
 		startDelete := time.Now()
-		tutils.DestroyBucket(t, proxyURL, bucket)
+		tutils.DestroyBucket(t, proxyURL, bck)
 		tutils.Logf("Took %v to DELETE bucket with %d total objects\n", time.Since(startDelete), totalObjs)
 	}
 }

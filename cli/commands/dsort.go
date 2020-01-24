@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
-	"github.com/vbauerster/mpb/v4"
+	mpb "github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
 	"golang.org/x/sync/errgroup"
 )
@@ -111,23 +111,23 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 
 // Creates bucket if not exists. If exists uses it or deletes and creates new
 // one if cleanup flag was set.
-func setupBucket(c *cli.Context, bucket string) error {
+func setupBucket(c *cli.Context, bck api.Bck) error {
 	cleanup := flagIsSet(c, cleanupFlag)
 
-	exists, err := api.DoesBucketExist(defaultAPIParams, bucket)
+	exists, err := api.DoesBucketExist(defaultAPIParams, bck)
 	if err != nil {
 		return err
 	}
 
 	if exists && cleanup {
-		err := api.DestroyBucket(defaultAPIParams, bucket)
+		err := api.DestroyBucket(defaultAPIParams, bck)
 		if err != nil {
 			return err
 		}
 	}
 
 	if !exists || cleanup {
-		if err := api.CreateBucket(defaultAPIParams, bucket); err != nil {
+		if err := api.CreateBucket(defaultAPIParams, bck); err != nil {
 			return err
 		}
 	}
@@ -137,8 +137,10 @@ func setupBucket(c *cli.Context, bucket string) error {
 
 func genShardsHandler(c *cli.Context) error {
 	var (
-		ext       = parseStrFlag(c, extFlag)
-		bucket    = parseStrFlag(c, dsortBucketFlag)
+		ext = parseStrFlag(c, extFlag)
+		bck = api.Bck{
+			Name: parseStrFlag(c, dsortBucketFlag),
+		}
 		template  = parseStrFlag(c, dsortTemplateFlag)
 		fileCnt   = parseIntFlag(c, fileCountFlag)
 		concLimit = parseIntFlag(c, concurrencyFlag)
@@ -165,7 +167,7 @@ func genShardsHandler(c *cli.Context) error {
 		return err
 	}
 
-	if err := setupBucket(c, bucket); err != nil {
+	if err := setupBucket(c, bck); err != nil {
 		return err
 	}
 
@@ -210,7 +212,7 @@ CreateShards:
 
 				putArgs := api.PutObjectArgs{
 					BaseParams: defaultAPIParams,
-					Bucket:     bucket,
+					Bck:        bck,
 					Object:     name,
 					Reader:     sgl,
 				}
