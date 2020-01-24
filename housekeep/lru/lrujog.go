@@ -26,7 +26,7 @@ import (
 
 func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh chan struct{}) {
 	defer wg.Done()
-	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.provider, cmn.NsGlobal)
+	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.provider, lctx.ns)
 	if err := lctx.evictSize(); err != nil {
 		return
 	}

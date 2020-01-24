@@ -211,11 +211,11 @@ func (t *targetrunner) Run() error {
 		cmn.ExitLogf("%v", err)
 	}
 
-	if err := fs.Mountpaths.CreateBucketDir(cmn.ProviderAIS); err != nil {
+	if err := fs.Mountpaths.CreateBucketDir(cmn.ProviderAIS, cmn.NsGlobal); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	if config.Cloud.Supported {
-		if err := fs.Mountpaths.CreateBucketDir(config.Cloud.Provider); err != nil {
+		if err := fs.Mountpaths.CreateBucketDir(config.Cloud.Provider, cmn.NsGlobal); err != nil {
 			cmn.ExitLogf("%v", err)
 		}
 	}

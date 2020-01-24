@@ -127,6 +127,7 @@ type (
 
 		Bucket       string `json:"bck"`
 		Provider     string `json:"prov,omitempty"`
+		Ns           string `json:"namespace,omitempty"`
 		Objname      string `json:"obj"`
 		DaemonID     string `json:"sid"` // a target that has the CT
 		ObjHash      string `json:"cksum"`
@@ -162,19 +163,20 @@ type (
 		uid          string            // unique identifier for the object (Bucket#Object#IsAIS)
 		bucket       string            // bucket name for faster acceess
 		provider     string            // cloud provider of the bucket
-		objName      string            // object name for faster access
-		objSize      int64             // object size
-		sliceSize    int64             // a size of an object slice
-		dataSlices   int16             // the number of data slices
-		paritySlices int16             // the number of parity slices
-		mainSliceID  int16             // sliceID on the main target
-		isECCopy     bool              // replicated or erasure coded
-		hasCT        bool              // local target has any obj's CT
-		mainHasAny   bool              // is default target has any part of the object
-		isMain       bool              // is local target a default one
-		inHrwList    bool              // is local target should have any CT according to HRW
-		fullObjFound bool              // some target has the full object, no need to rebuild, just copy
-		hasAllSlices bool              // true: all slices existed before rebalance
+		ns           string
+		objName      string // object name for faster access
+		objSize      int64  // object size
+		sliceSize    int64  // a size of an object slice
+		dataSlices   int16  // the number of data slices
+		paritySlices int16  // the number of parity slices
+		mainSliceID  int16  // sliceID on the main target
+		isECCopy     bool   // replicated or erasure coded
+		hasCT        bool   // local target has any obj's CT
+		mainHasAny   bool   // is default target has any part of the object
+		isMain       bool   // is local target a default one
+		inHrwList    bool   // is local target should have any CT according to HRW
+		fullObjFound bool   // some target has the full object, no need to rebuild, just copy
+		hasAllSlices bool   // true: all slices existed before rebalance
 	}
 	rebBck struct {
 		objs map[string]*rebObject // maps ObjectName <-> object info
@@ -243,8 +245,8 @@ var (
 )
 
 // Generate unique ID for an object
-func uniqueWaitID(bucket, provider, objName string) string {
-	return fmt.Sprintf("%s#%s#%s", bucket, provider, objName)
+func uniqueWaitID(bucket, provider, namespace, objName string) string {
+	return fmt.Sprintf("%s#%s#%s#%s", bucket, provider, namespace, objName)
 }
 
 // Generate unique ID for a CT (id is a CT ordinal number).
@@ -255,8 +257,8 @@ func ctUID(id int, daemonID string) string {
 }
 
 // Generate unique ID for a CT acknowledge.
-func ackID(bucket, provider, objName, ctUID string) string {
-	return fmt.Sprintf("%s#%s#%s#%s", bucket, provider, objName, ctUID)
+func ackID(bucket, provider, namespace, objName, ctUID string) string {
+	return fmt.Sprintf("%s#%s#%s#%s#%s", bucket, provider, namespace, objName, ctUID)
 }
 
 //
@@ -343,7 +345,7 @@ func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
 	obj, ok := bck.objs[ct.Objname]
 	if !ok {
 		// first CT of the object
-		b := &cluster.Bck{Name: ct.Bucket, Provider: ct.Provider}
+		b := &cluster.Bck{Name: ct.Bucket, Provider: ct.Provider, Ns: ct.Ns}
 		if err := b.Init(tgt.GetBowner()); err != nil {
 			return err
 		}
@@ -355,6 +357,7 @@ func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
 			cts:        make(ctList),
 			mainDaemon: si.DaemonID,
 			provider:   ct.Provider,
+			ns:         ct.Ns,
 		}
 		obj.cts[ct.ObjHash] = []*rebCT{ct}
 		bck.objs[ct.Objname] = obj
@@ -447,6 +450,7 @@ func (s *ecRebalancer) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error 
 	hdr := transport.Header{
 		Bucket:   ct.Bucket,
 		Provider: ct.Provider,
+		Ns:       ct.Ns,
 		ObjName:  ct.Objname,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: ct.ObjSize,
@@ -483,7 +487,7 @@ func (s *ecRebalancer) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error 
 	for _, tgt := range targets {
 		dest := &retransmitCT{daemonID: tgt.ID(), header: hdr}
 		ctUID := ctUID(int(ct.SliceID), tgt.ID())
-		uid := ackID(ct.Bucket, ct.Provider, ct.Objname, ctUID)
+		uid := ackID(ct.Bucket, ct.Provider, ct.Ns, ct.Objname, ctUID)
 		s.ackCTs.mtx.Lock()
 		s.ackCTs.ct[uid] = dest
 		s.ackCTs.mtx.Unlock()
@@ -547,7 +551,7 @@ func (s *ecRebalancer) sendFromReader(reader cmn.ReadOpenCloser,
 	}
 
 	sliceUID := ctUID(sliceID, target.ID())
-	uid := ackID(ct.Bucket, ct.Provider, ct.Objname, sliceUID)
+	uid := ackID(ct.Bucket, ct.Provider, ct.Ns, ct.Objname, sliceUID)
 	dest := &retransmitCT{daemonID: target.ID(), header: hdr}
 	s.ackCTs.mtx.Lock()
 	s.ackCTs.ct[uid] = dest
@@ -602,7 +606,7 @@ func (s *ecRebalancer) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metad
 		return err
 	}
 	if md.SliceID != 0 {
-		ctFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, hdr.Provider, cmn.NsGlobal, hdr.ObjName)
+		ctFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, hdr.Provider, hdr.Ns, hdr.ObjName)
 	} else {
 		lom = &cluster.LOM{T: s.t, Objname: hdr.ObjName}
 		if err := lom.Init(hdr.Bucket, hdr.Provider); err != nil {
@@ -625,7 +629,7 @@ func (s *ecRebalancer) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metad
 	}
 
 	buffer, slab := s.t.GetMem2().AllocDefault()
-	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bucket, hdr.Provider, cmn.NsGlobal, hdr.ObjName)
+	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bucket, hdr.Provider, hdr.Ns, hdr.ObjName)
 	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.Extra), buffer, false)
 	if err != nil {
 		slab.Free(buffer)
@@ -675,7 +679,7 @@ func (s *ecRebalancer) receiveCT(req *pushReq, hdr transport.Header, reader io.R
 	if bool(glog.FastV(4, glog.SmoduleReb)) || s.ra.dryRun {
 		glog.Infof(">>> %s got CT %d for [%s]%s/%s", s.t.Snode().Name(), sliceID, hdr.Provider, hdr.Bucket, hdr.ObjName)
 	}
-	uid := uniqueWaitID(hdr.Bucket, hdr.Provider, hdr.ObjName)
+	uid := uniqueWaitID(hdr.Bucket, hdr.Provider, hdr.Ns, hdr.ObjName)
 	waitFor := s.waiter.lookupCreate(uid, int16(sliceID), waitForSingleSlice)
 	cmn.Assert(waitFor != nil)
 	cmn.Assert(waitFor.sgl != nil)
@@ -1036,9 +1040,9 @@ func (s *ecRebalancer) run() {
 
 	for _, mpathInfo := range availablePaths {
 		if s.mgr.xreb.Bucket() == "" {
-			mpath = mpathInfo.MakePath(ec.MetaType, cmn.ProviderAIS, cmn.NsGlobal)
+			mpath = mpathInfo.MakePath(ec.MetaType, cmn.ProviderAIS, s.mgr.xreb.Ns())
 		} else {
-			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cmn.ProviderAIS, cmn.NsGlobal)
+			mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cmn.ProviderAIS, s.mgr.xreb.Ns())
 		}
 		wg.Add(1)
 		go s.jog(mpath, &wg)
@@ -1046,10 +1050,11 @@ func (s *ecRebalancer) run() {
 
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
+			provider := cfg.Cloud.Provider
 			if s.mgr.xreb.Bucket() == "" {
-				mpath = mpathInfo.MakePath(ec.MetaType, cfg.Cloud.Provider, cmn.NsGlobal)
+				mpath = mpathInfo.MakePath(ec.MetaType, provider, s.mgr.xreb.Ns())
 			} else {
-				mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), cfg.Cloud.Provider, cmn.NsGlobal)
+				mpath = mpathInfo.MakePathBucket(ec.MetaType, s.mgr.xreb.Bucket(), provider, s.mgr.xreb.Ns())
 			}
 			wg.Add(1)
 			go s.jog(mpath, &wg)
@@ -1182,8 +1187,8 @@ func (s *ecRebalancer) rebalanceLocal() error {
 			return err
 		}
 
-		metaSrcFQN := mpathSrc.MpathInfo.MakePathBucketObject(ec.MetaType, mpathSrc.Bucket, mpathSrc.Provider, cmn.NsGlobal, mpathSrc.ObjName)
-		metaDstFQN := mpathDst.MpathInfo.MakePathBucketObject(ec.MetaType, mpathDst.Bucket, mpathDst.Provider, cmn.NsGlobal, mpathDst.ObjName)
+		metaSrcFQN := mpathSrc.MpathInfo.MakePathBucketObject(ec.MetaType, mpathSrc.Bucket, mpathSrc.Provider, mpathSrc.Ns, mpathSrc.ObjName)
+		metaDstFQN := mpathDst.MpathInfo.MakePathBucketObject(ec.MetaType, mpathDst.Bucket, mpathDst.Provider, mpathDst.Ns, mpathDst.ObjName)
 		_, _, err = cmn.CopyFile(metaSrcFQN, metaDstFQN, buf, false)
 		if err != nil {
 			return err
@@ -1235,7 +1240,7 @@ func (s *ecRebalancer) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *cl
 	obj.ctExist = make([]bool, ctReq)
 	obj.locCT = make(map[string]*rebCT, ctFound)
 
-	obj.uid = uniqueWaitID(mainSlice.Bucket, obj.provider, mainSlice.Objname)
+	obj.uid = uniqueWaitID(mainSlice.Bucket, obj.provider, obj.ns, mainSlice.Objname)
 	obj.isMain = obj.mainDaemon == localDaemon
 
 	// TODO: must check only slices of the newest object version
@@ -1458,7 +1463,7 @@ func (s *ecRebalancer) allCTReceived() bool {
 		batchCurr := int(s.mgr.stages.currBatch.Load())
 		for j := 0; j+batchCurr < len(s.broken) && j < ecRebBatchSize; j++ {
 			o := s.broken[j+batchCurr]
-			if uid == uniqueWaitID(o.bucket, o.provider, o.objName) {
+			if uid == uniqueWaitID(o.bucket, o.provider, o.ns, o.objName) {
 				obj = o
 				break
 			}
@@ -2143,7 +2148,7 @@ func (s *ecRebalancer) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err 
 
 	lom.SetSize(obj.objSize)
 	lom.SetCksum(cksum)
-	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket, obj.provider, cmn.NsGlobal, obj.objName)
+	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket, obj.provider, obj.ns, obj.objName)
 	metaBuf := cmn.MustMarshal(&objMD)
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
 		glog.Error(err)

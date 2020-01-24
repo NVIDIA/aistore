@@ -23,7 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/OneOfOne/xxhash"
-	"github.com/pierrec/lz4/v3"
+	lz4 "github.com/pierrec/lz4/v3"
 )
 
 //
@@ -443,6 +443,7 @@ func ExtHeader(body []byte, hlen int) (hdr Header) {
 	off, hdr.Bucket = extString(0, body)
 	off, hdr.ObjName = extString(off, body)
 	off, hdr.Provider = extString(off, body)
+	off, hdr.Ns = extString(off, body)
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
 	if _, ok := cmn.CheckDebug(pkgName); ok {

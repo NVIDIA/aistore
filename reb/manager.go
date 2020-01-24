@@ -545,9 +545,12 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 
 func (reb *Manager) recvECAck(hdr transport.Header) {
 	opaque := string(hdr.Opaque)
-	uid := ackID(hdr.Bucket, hdr.Provider, hdr.ObjName, string(hdr.Opaque))
+	uid := ackID(hdr.Bucket, hdr.Provider, hdr.ObjName, hdr.Ns, string(hdr.Opaque))
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s: EC ack from %s on %s/%s/%s", reb.t.Snode().Name(), opaque, hdr.Provider, hdr.Bucket, hdr.ObjName)
+		glog.Infof(
+			"%s: EC ack from %s on %s/%s/%s/%s",
+			reb.t.Snode().Name(), opaque, hdr.Provider, hdr.Ns, hdr.Bucket, hdr.ObjName,
+		)
 	}
 	reb.ecReb.ackCTs.mtx.Lock()
 	delete(reb.ecReb.ackCTs.ct, uid)

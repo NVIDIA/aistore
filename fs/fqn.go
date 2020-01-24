@@ -168,13 +168,13 @@ func (mfs *MountedFS) Path2MpathInfo(path string) (info *MountpathInfo, relative
 	return
 }
 
-func (mfs *MountedFS) CreateBucketDir(provider string) error {
+func (mfs *MountedFS) CreateBucketDir(provider, namespace string) error {
 	cmn.AssertMsg(cmn.IsValidProvider(provider), "unknown cloud provider: '"+provider+"'")
 
 	availablePaths, _ := Mountpaths.Get()
 	for contentType := range CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
-			dir := mpathInfo.MakePath(contentType, provider, cmn.NsGlobal)
+			dir := mpathInfo.MakePath(contentType, provider, namespace)
 			if _, exists := availablePaths[dir]; exists {
 				return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo, dir)
 			}

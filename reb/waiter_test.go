@@ -13,9 +13,10 @@ import (
 )
 
 type testObject struct {
-	bucket   string
-	provider string
-	name     string
+	bucket    string
+	provider  string
+	namespace string
+	name      string
 }
 
 var _ = Describe("ECWaiter", func() {
@@ -28,20 +29,20 @@ var _ = Describe("ECWaiter", func() {
 		wt := newWaiter(memsys.GMM())
 		// must have more than ecRebBatchSize items
 		objs := []testObject{
-			{bucket: "bck1", provider: cmn.ProviderAmazon, name: "obj1"},
-			{bucket: "bck1", provider: cmn.ProviderAmazon, name: "obj2"},
-			{bucket: "bck1", provider: cmn.ProviderAIS, name: "obj2"},
-			{bucket: "bck1", provider: cmn.ProviderAIS, name: "obj3"},
-			{bucket: "bck2", provider: cmn.ProviderAmazon, name: "obj1"},
-			{bucket: "bck2", provider: cmn.ProviderAIS, name: "obj4"},
-			{bucket: "bck5", provider: cmn.ProviderAmazon, name: "obj1"},
-			{bucket: "bck5", provider: cmn.ProviderAmazon, name: "obj2"},
-			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj3"},
-			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj4"},
-			{bucket: "bck5", provider: cmn.ProviderAmazon, name: "obj5"},
-			{bucket: "bck5", provider: cmn.ProviderAmazon, name: "obj6"},
-			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj8"},
-			{bucket: "bck5", provider: cmn.ProviderAIS, name: "obj9"},
+			{bucket: "bck1", provider: cmn.ProviderAmazon, namespace: cmn.NsGlobal, name: "obj1"},
+			{bucket: "bck1", provider: cmn.ProviderAmazon, namespace: cmn.NsGlobal, name: "obj2"},
+			{bucket: "bck1", provider: cmn.ProviderAIS, namespace: cmn.NsGlobal, name: "obj2"},
+			{bucket: "bck1", provider: cmn.ProviderAIS, namespace: cmn.NsGlobal, name: "obj3"},
+			{bucket: "bck2", provider: cmn.ProviderAmazon, namespace: cmn.NsGlobal, name: "obj1"},
+			{bucket: "bck2", provider: cmn.ProviderAIS, namespace: cmn.NsGlobal, name: "obj4"},
+			{bucket: "bck5", provider: cmn.ProviderAmazon, namespace: cmn.NsGlobal, name: "obj1"},
+			{bucket: "bck5", provider: cmn.ProviderAmazon, namespace: cmn.NsGlobal, name: "obj2"},
+			{bucket: "bck5", provider: cmn.ProviderAIS, namespace: cmn.NsGlobal, name: "obj3"},
+			{bucket: "bck5", provider: cmn.ProviderAIS, namespace: cmn.NsGlobal, name: "obj4"},
+			{bucket: "bck5", provider: cmn.ProviderAmazon, namespace: cmn.NsGlobal, name: "obj5"},
+			{bucket: "bck5", provider: cmn.ProviderAmazon, namespace: cmn.NsGlobal, name: "obj6"},
+			{bucket: "bck5", provider: cmn.ProviderAIS, namespace: cmn.NsGlobal, name: "obj8"},
+			{bucket: "bck5", provider: cmn.ProviderAIS, namespace: cmn.NsGlobal, name: "obj9"},
 		}
 		rebObjs := make([]*rebObject, 0)
 		created := make([]*waitCT, 0, len(rebObjs))
@@ -49,7 +50,7 @@ var _ = Describe("ECWaiter", func() {
 		By("all unames must be unique")
 		objSet := make(map[string]struct{})
 		for _, o := range objs {
-			uname := uniqueWaitID(o.bucket, o.provider, o.name)
+			uname := uniqueWaitID(o.bucket, o.provider, o.namespace, o.name)
 			objSet[uname] = struct{}{}
 			rebObjs = append(rebObjs, &rebObject{uid: uname})
 		}

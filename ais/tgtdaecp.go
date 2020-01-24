@@ -1322,7 +1322,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	case cmn.ActRenameLB:
 		_, err = xaction.Registry.RenewBckFastRename(t, bckFrom, bckTo, cmn.ActBegin, t.rebManager)
 		if err == nil {
-			err = fs.Mountpaths.CreateBucketDirs(bckTo.Name, bckTo.Provider, true /*destroy*/)
+			err = fs.Mountpaths.CreateBucketDirs(bckTo.Name, bckTo.Provider, bckTo.Ns, true /*destroy*/)
 		}
 	case cmn.ActCopyBucket:
 		_, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActBegin)
@@ -1367,7 +1367,7 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 			glog.Error(err) // must not happen at commit time
 			break
 		}
-		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Name, bckTo.Name, cmn.ProviderAIS, cmn.NsGlobal)
+		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Name, bckTo.Name, cmn.ProviderAIS, bckTo.Ns)
 		if err != nil {
 			glog.Error(err) // ditto
 			break

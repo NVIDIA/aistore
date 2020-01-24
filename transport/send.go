@@ -119,6 +119,7 @@ type (
 	Header struct {
 		Bucket   string
 		Provider string // cloud provider of the bucket
+		Ns       string
 		ObjName  string
 		ObjAttrs ObjectAttrs // attributes/metadata of the sent object
 		Opaque   []byte      // custom control (optional)
@@ -646,6 +647,7 @@ func (s *Stream) insHeader(hdr Header) (l int) {
 	l = insString(l, s.maxheader, hdr.Bucket)
 	l = insString(l, s.maxheader, hdr.ObjName)
 	l = insString(l, s.maxheader, hdr.Provider)
+	l = insString(l, s.maxheader, hdr.Ns)
 	l = insByte(l, s.maxheader, hdr.Opaque)
 	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
 	hlen := l - cmn.SizeofI64*2

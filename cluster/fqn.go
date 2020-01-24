@@ -35,7 +35,7 @@ func HrwFQN(contentType string, bck *Bck, objName string) (fqn string, digest ui
 		uname     = bck.MakeUname(objName)
 	)
 	if mpathInfo, digest, err = HrwMpath(uname); err == nil {
-		fqn = fs.CSM.FQN(mpathInfo, contentType, bck.Name, bck.Provider, objName)
+		fqn = fs.CSM.FQN(mpathInfo, contentType, bck.Name, bck.Provider, bck.Ns, objName)
 	}
 	return
 }

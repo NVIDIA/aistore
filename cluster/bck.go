@@ -7,7 +7,6 @@ package cluster
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -16,15 +15,18 @@ import (
 type Bck struct {
 	Name     string
 	Provider string
+	Ns       string
 	Props    *cmn.BucketProps
 }
 
 func (b *Bck) MakeUname(objName string) string {
 	var (
-		l   = len(b.Provider) + 2 + len(b.Name) + len(objName)
+		l   = len(b.Provider) + 1 + len(b.Ns) + 1 + len(b.Name) + 1 + len(objName)
 		buf = make([]byte, 0, l)
 	)
 	buf = append(buf, b.Provider...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, b.Ns...)
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, b.Name...)
 	buf = append(buf, filepath.Separator)
@@ -33,10 +35,29 @@ func (b *Bck) MakeUname(objName string) string {
 }
 
 func ParseUname(uname string) (b Bck, objName string) {
-	i := strings.IndexByte(uname, filepath.Separator)
-	b.Provider = uname[:i]
-	j := strings.IndexByte(uname[i+1:], filepath.Separator)
-	b.Name, objName = uname[i+1:i+j+1], uname[i+j+2:]
+	var (
+		prev, itemIdx int
+	)
+	for i := 0; i < len(uname); i++ {
+		if uname[i] != filepath.Separator {
+			continue
+		}
+
+		item := uname[prev:i]
+		switch itemIdx {
+		case 0:
+			b.Provider = item
+		case 1:
+			b.Ns = item
+		case 2:
+			b.Name = item
+			objName = uname[i+1:]
+			return
+		}
+
+		itemIdx++
+		prev = i + 1
+	}
 	return
 }
 
@@ -49,7 +70,7 @@ func (b *Bck) String() string {
 		bid = b.Props.BID
 		inProgress = b.Props.InProgress
 	}
-	return fmt.Sprintf("%s(%x, %s, %v)", b.Name, bid, b.Provider, inProgress)
+	return fmt.Sprintf("%s(%x, %s, %s, %v)", b.Name, bid, b.Provider, b.Ns, inProgress)
 }
 
 func (b *Bck) IsAIS() bool         { return cmn.IsProviderAIS(b.Provider) }
@@ -59,6 +80,9 @@ func (b *Bck) HasProvider() bool   { return b.IsAIS() || b.IsCloud() }
 
 func (b *Bck) Equal(other *Bck) bool {
 	if b.Name != other.Name {
+		return false
+	}
+	if b.Ns != other.Ns {
 		return false
 	}
 	if b.Props != nil && other.Props != nil {

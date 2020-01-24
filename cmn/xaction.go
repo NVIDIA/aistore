@@ -24,6 +24,7 @@ type (
 		Kind() string
 		Bucket() string
 		Provider() string
+		Ns() string
 		SetBucket(bucket string)
 		StartTime(s ...time.Time) time.Time
 		EndTime(e ...time.Time) time.Time
@@ -45,6 +46,7 @@ type (
 		kind     string
 		bucket   string
 		provider string
+		ns       string
 		abrt     chan struct{}
 		aborted  atomic.Bool
 	}
@@ -99,6 +101,7 @@ func (xact *XactBase) ShortID() uint32            { return ShortID(xact.id) }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bucket() string             { return xact.bucket }
 func (xact *XactBase) Provider() string           { return xact.provider }
+func (xact *XactBase) Ns() string                 { return xact.ns }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }

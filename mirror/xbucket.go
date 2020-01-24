@@ -102,7 +102,7 @@ func (j *joggerBckBase) jog() {
 	j.stopCh = cmn.NewStopCh()
 	j.provider = j.parent.Provider()
 
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Provider(), cmn.NsGlobal)
+	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Provider(), j.parent.Ns())
 	opts := &fs.Options{
 		Callback: j.walk,
 		Sorted:   false,

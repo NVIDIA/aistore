@@ -143,7 +143,7 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	// LRU will take care of removing the rest of the bucket.
 	counter := mi.removeDirCounter.Inc()
 	nonExistingBucket := fmt.Sprintf("removing-%d", counter)
-	tmpDir := CSM.FQN(mi, WorkfileType, nonExistingBucket, cmn.ProviderAIS, "")
+	tmpDir := CSM.FQN(mi, WorkfileType, nonExistingBucket, cmn.ProviderAIS, cmn.NsGlobal, "")
 	if err := cmn.CreateDir(filepath.Dir(tmpDir)); err != nil {
 		return err
 	}
@@ -544,11 +544,11 @@ func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
 
 // NOTE:  caller is responsible to serialize per bucket
 // FIXME: cannot pass cluster.Bck - causes "import cycle"
-func (mfs *MountedFS) CreateBucketDirs(bucketName, provider string, destroyUponRet bool) (err error) {
+func (mfs *MountedFS) CreateBucketDirs(bucketName, provider, namespace string, destroyUponRet bool) (err error) {
 	availablePaths, _ := mfs.Get()
 	created := make([]string, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
-		bdir := mpathInfo.MakePathBucket(ObjectType, bucketName, provider, cmn.NsGlobal)
+		bdir := mpathInfo.MakePathBucket(ObjectType, bucketName, provider, namespace)
 		if err = Access(bdir); err == nil {
 			if isDirEmpty(bdir) {
 				created = append(created, bdir)

@@ -277,7 +277,7 @@ func (lom *LOM) DelExtraCopies() (err error) {
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
-		copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.Objname)
+		copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.bck.Ns, lom.Objname)
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
@@ -334,7 +334,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
 		}
-		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.Objname)
+		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.bck.Ns, lom.Objname)
 		if _, err := os.Stat(fqn); err != nil {
 			continue
 		}
@@ -655,7 +655,7 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 			return
 		}
 		lom.ParsedFQN.ContentType = fs.ObjectType
-		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, bucket, lom.bck.Provider, lom.Objname)
+		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, bucket, lom.bck.Provider, lom.bck.Ns, lom.Objname)
 		lom.HrwFQN = lom.FQN
 		lom.ParsedFQN.Provider = lom.bck.Provider
 		lom.ParsedFQN.Bucket, lom.ParsedFQN.ObjName = bucket, lom.Objname

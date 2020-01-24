@@ -70,6 +70,7 @@ type (
 		mpathInfo       *fs.MountpathInfo
 		contentType     string
 		provider        string
+		ns              string
 		bckTypeDir      string
 		contentResolver fs.ContentResolver
 		config          *cmn.Config
@@ -112,7 +113,7 @@ func InitAndRun(ini *InitLRU) {
 			errCh := make(chan struct{}, len(availablePaths))
 
 			for mpath, mpathInfo := range availablePaths {
-				joggers[mpath] = newLRU(ini, mpathInfo, contentType, provider, contentResolver, config)
+				joggers[mpath] = newLRU(ini, mpathInfo, contentType, provider, cmn.NsGlobal, contentResolver, config)
 			}
 			for _, j := range joggers {
 				wg.Add(1)
@@ -141,7 +142,7 @@ func InitAndRun(ini *InitLRU) {
 	}
 }
 
-func newLRU(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType, provider string, contentResolver fs.ContentResolver, config *cmn.Config) *lruCtx {
+func newLRU(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType, provider, ns string, contentResolver fs.ContentResolver, config *cmn.Config) *lruCtx {
 	return &lruCtx{
 		oldWork:         make([]string, 0, 64),
 		misplaced:       make([]*cluster.LOM, 0, 64),
@@ -150,6 +151,7 @@ func newLRU(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType, provider str
 		mpathInfo:       mpathInfo,
 		contentType:     contentType,
 		provider:        provider,
+		ns:              ns,
 		contentResolver: contentResolver,
 		config:          config,
 	}
