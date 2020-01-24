@@ -125,8 +125,10 @@ func GetDaemonConfig(baseParams BaseParams, nodeID string) (config *cmn.Config, 
 	if err != nil {
 		return nil, err
 	}
-	err = jsoniter.Unmarshal(b, &config)
-	if err != nil {
+	if err := jsoniter.Unmarshal(b, &config); err != nil {
+		return nil, err
+	}
+	if err := config.Validate(); err != nil {
 		return nil, err
 	}
 	return
