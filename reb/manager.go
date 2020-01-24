@@ -79,8 +79,9 @@ type (
 		semaCh     chan struct{}
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
 		xreb       *xaction.GlobalReb
-		ecReb      *ecRebalancer
 		stages     *nodeStages
+		ra         *globArgs
+		ec         *ecData
 		globRebID  atomic.Int64
 		laterx     atomic.Bool
 	}
@@ -215,7 +216,7 @@ func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *
 		statRunner: strunner,
 		stages:     newNodeStages(),
 	}
-	reb.ecReb = newECRebalancer(t, reb, strunner)
+	reb.ec = newECData(t)
 	reb.initStreams()
 	return reb
 }
@@ -368,7 +369,7 @@ func (reb *Manager) beginStreams(md *globArgs) {
 
 	// Init ecRebalancer streams
 	if md.ecUsed {
-		reb.ecReb.init(md, reb.netd)
+		reb.initEC(reb.netd)
 	}
 	reb.laterx.Store(false)
 }
@@ -379,7 +380,7 @@ func (reb *Manager) endStreams() {
 		reb.streams = nil
 		reb.acks.Close(true)
 		reb.pushes.Close(true)
-		reb.ecReb.endStreams()
+		reb.endECStreams()
 	}
 }
 
@@ -552,9 +553,9 @@ func (reb *Manager) recvECAck(hdr transport.Header) {
 			reb.t.Snode().Name(), opaque, hdr.Provider, hdr.Ns, hdr.Bucket, hdr.ObjName,
 		)
 	}
-	reb.ecReb.ackCTs.mtx.Lock()
-	delete(reb.ecReb.ackCTs.ct, uid)
-	reb.ecReb.ackCTs.mtx.Unlock()
+	reb.ec.ackCTs.mtx.Lock()
+	delete(reb.ec.ackCTs.ct, uid)
+	reb.ec.ackCTs.mtx.Unlock()
 }
 
 func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {

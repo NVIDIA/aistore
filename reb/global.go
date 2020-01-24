@@ -37,7 +37,6 @@ type (
 		paths     fs.MPI
 		pmarker   string
 		ecUsed    bool
-		dryRun    bool
 		singleBck bool // rebalance running for a single bucket (e.g. after rename)
 	}
 )
@@ -45,8 +44,8 @@ type (
 func (reb *Manager) globalRebPrecheck(md *globArgs, globRebID int64) bool {
 	// get EC rebalancer ready
 	if md.ecUsed {
-		reb.ecReb.cleanup()
-		reb.ecReb.waiter.waitFor.Store(0)
+		reb.cleanupEC()
+		reb.ec.waiter.waitFor.Store(0)
 	}
 	// 1. check whether other targets are up and running
 	if errCnt := reb.bcast(md, reb.pingTarget); errCnt > 0 {
@@ -110,7 +109,7 @@ func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...stri
 
 // look for local slices/replicas
 func (reb *Manager) buildECNamespace(md *globArgs) int {
-	reb.ecReb.run()
+	reb.runEC()
 	if reb.waitForPushReqs(md, rebStageECNamespace) {
 		return 0
 	}
@@ -130,7 +129,7 @@ func (reb *Manager) buildECNamespace(md *globArgs) int {
 //		data transfer
 func (reb *Manager) distributeECNamespace(md *globArgs) error {
 	const distributeTimeout = 5 * time.Minute
-	if err := reb.ecReb.exchange(); err != nil {
+	if err := reb.exchange(); err != nil {
 		return err
 	}
 	if reb.waitForPushReqs(md, rebStageECDetect, distributeTimeout) {
@@ -145,13 +144,13 @@ func (reb *Manager) distributeECNamespace(md *globArgs) error {
 
 // find out which objects are broken and how to fix them
 func (reb *Manager) generateECFixList() {
-	reb.ecReb.checkCTs()
-	glog.Infof("Number of objects misplaced locally: %d", len(reb.ecReb.localActions))
-	glog.Infof("Number of objects to be reconstructed/resent: %d", len(reb.ecReb.broken))
+	reb.checkCTs()
+	glog.Infof("Number of objects misplaced locally: %d", len(reb.ec.localActions))
+	glog.Infof("Number of objects to be reconstructed/resent: %d", len(reb.ec.broken))
 }
 
 func (reb *Manager) ecFixLocal(md *globArgs) error {
-	if err := reb.ecReb.rebalanceLocal(); err != nil {
+	if err := reb.rebalanceLocal(); err != nil {
 		return fmt.Errorf("Failed to rebalance local slices/objects: %v", err)
 	}
 
@@ -162,7 +161,7 @@ func (reb *Manager) ecFixLocal(md *globArgs) error {
 }
 
 func (reb *Manager) ecFixGlobal(md *globArgs) error {
-	if err := reb.ecReb.rebalanceGlobal(); err != nil {
+	if err := reb.rebalanceGlobal(); err != nil {
 		if !reb.xreb.Aborted() {
 			glog.Errorf("EC rebalance failed: %v", err)
 			reb.abortGlobal()
@@ -178,8 +177,6 @@ func (reb *Manager) ecFixGlobal(md *globArgs) error {
 
 // when at least one bucket has EC enabled
 func (reb *Manager) globalRebRunEC(md *globArgs) error {
-	// Update internal global rebalance args
-	reb.ecReb.ra = md
 	// Collect all local slices
 	if cnt := reb.buildECNamespace(md); cnt != 0 {
 		return fmt.Errorf("%d targets failed to build namespace", cnt)
@@ -395,7 +392,7 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 // e.g., to wait for EC batch to finish: no need to wait until timeout if
 // all targets have sent push notification that they are done with the batch.
 func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func() bool) (
-	aborted bool, timedout bool) {
+	aborted bool) {
 	cmn.Assert(maxWait > 0)
 	sleep := md.config.Timeout.CplaneOperation
 	maxQuiet := int(maxWait/sleep) + 1
@@ -414,13 +411,13 @@ func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func() b
 		aborted = reb.xreb.AbortedAfter(sleep)
 	}
 
-	return aborted, quiescent >= maxQuiet
+	return aborted
 }
 
 func (reb *Manager) globalRebFini(md *globArgs) {
 	// 10.5. keep at it... (can't close the streams as long as)
 	maxWait := md.config.Rebalance.Quiesce
-	aborted, _ := reb.waitQuiesce(md, maxWait, nil)
+	aborted := reb.waitQuiesce(md, maxWait, nil)
 	if !aborted {
 		if err := cmn.RemoveFile(md.pmarker); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(reb.globRebID.Load(), md.smap), md.pmarker, err)
@@ -462,6 +459,7 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		config:    cmn.GCO.Get(),
 		singleBck: len(buckets) == 1,
 	}
+	reb.ra = md
 	if len(buckets) == 0 || buckets[0] == "" {
 		md.ecUsed = reb.t.GetBowner().Get().IsECUsed()
 	} else {
@@ -500,14 +498,10 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 	reb.globalRebFini(md)
 	// clean up all collected data
 	if md.ecUsed {
-		reb.ecReb.cleanup()
+		reb.cleanupEC()
 	}
 
 	reb.stages.cleanup()
-}
-
-func (reb *Manager) onECData(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
-	reb.ecReb.OnData(w, hdr, objReader, err)
 }
 
 func (reb *Manager) GlobECDataStatus() (body []byte, status int) {
@@ -520,7 +514,7 @@ func (reb *Manager) GlobECDataStatus() (body []byte, status int) {
 	}
 
 	// ask rebalance manager the list of all local slices
-	slices, ok := reb.ecReb.nodeData(reb.t.Snode().ID())
+	slices, ok := reb.ec.nodeData(reb.t.Snode().ID())
 	// no local slices found. It is possible if the number of object is small
 	if !ok {
 		return nil, http.StatusNoContent

@@ -138,7 +138,7 @@ func (reb *Manager) nodesNotInStage(stage uint32) int {
 			count++
 			continue
 		}
-		_, exists := reb.ecReb.nodeData(si.ID())
+		_, exists := reb.ec.nodeData(si.ID())
 		if stage == rebStageECDetect && !exists {
 			count++
 			continue
@@ -405,7 +405,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 	curwt := time.Duration(0)
 
 	for curwt < maxwt {
-		_, exists := reb.ecReb.nodeData(si.ID())
+		_, exists := reb.ec.nodeData(si.ID())
 		if reb.stages.isInStage(si, locStage) && exists {
 			return true
 		}
@@ -434,7 +434,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 				continue
 			}
 		}
-		reb.ecReb.setNodeData(si.ID(), slices)
+		reb.ec.setNodeData(si.ID(), slices)
 		reb.stages.setStage(si.ID(), rebStageECDetect, 0)
 		return true
 	}
