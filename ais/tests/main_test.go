@@ -588,7 +588,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 
 	// Deleting from ais bucket
 	tutils.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
-	api.DeleteList(baseParams, bckCloud, files, true, 0)
+	api.DeleteList(baseParams, bckLocal, files, true, 0)
 
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
