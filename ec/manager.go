@@ -388,19 +388,18 @@ func (mgr *Manager) BucketsMDChanged() {
 	} else if !newBckMD.IsECUsed() {
 		mgr.closeECBundles()
 	}
-
-	for bckName, newBck := range newBckMD.LBmap {
-		bck := &cluster.Bck{Name: bckName, Provider: cmn.ProviderAIS}
-		// Disable EC for buckets that existed and have changed EC.Enabled to false
-		// Enable EC for buckets that existed and have change EC.Enabled to true
-		if oldBck, existed := oldBckMD.LBmap[bckName]; existed {
-			if !oldBck.EC.Enabled && newBck.EC.Enabled {
-				mgr.enableBck(bck)
-			} else if oldBck.EC.Enabled && !newBck.EC.Enabled {
-				mgr.disableBck(bck)
+	provider := cmn.ProviderAIS
+	newBckMD.Range(&provider, nil, func(nbck *cluster.Bck) bool {
+		oldBckMD.Range(&provider, nil, func(obck *cluster.Bck) bool {
+			if !obck.Props.EC.Enabled && nbck.Props.EC.Enabled {
+				mgr.enableBck(nbck)
+			} else if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
+				mgr.disableBck(nbck)
 			}
-		}
-	}
+			return false
+		})
+		return false
+	})
 }
 
 func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
@@ -432,10 +431,12 @@ func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 		// bckMD will be present at this point
 		// stopping relevant EC xactions which can't be satisfied with current number of targets
 		// respond xaction is never stopped as it should respond regardless of the other targets
-		for bckName, bckProps := range mgr.bmd.LBmap {
+		provider := cmn.ProviderAIS
+		mgr.bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+			bckName, bckProps := bck.Name, bck.Props
 			bckXacts := mgr.getBckXacts(bckName)
 			if !bckProps.EC.Enabled {
-				continue
+				return false
 			}
 			if required := bckProps.EC.RequiredEncodeTargets(); targetCnt < required {
 				glog.Warningf("Not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
@@ -446,10 +447,12 @@ func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 			// if one target was killed, and a new one joined, this condition will be satisfied even though
 			// slices of the object are not present on the new target
 			if required := bckProps.EC.RequiredRestoreTargets(); targetCnt < required {
-				glog.Warningf("Not enough targets for EC restoring for bucket %s; actual: %v, expected: %v", bckName, targetCnt, required)
+				glog.Warningf("Not enough targets for EC restoring for bucket %s; actual: %v, expected: %v",
+					bckName, targetCnt, required)
 				bckXacts.StopGet()
 			}
-		}
+			return false
+		})
 
 		mgr.RUnlock()
 	}

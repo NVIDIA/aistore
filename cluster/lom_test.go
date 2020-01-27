@@ -62,31 +62,23 @@ var _ = Describe("LOM", func() {
 	_ = fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
-	tMock := cluster.NewTargetMock(cluster.BownerMock{BMD: cluster.BMD{
-		LBmap: map[string]*cmn.BucketProps{
-			// Map ais buckets here referenced by test lom
-			bucketLocalA: {
-				Cksum: cmn.CksumConf{Type: cmn.ChecksumNone},
-			},
-			bucketLocalB: {
-				Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
-				LRU:   cmn.LRUConf{Enabled: true},
-			},
-			bucketLocalC: {
-				Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
-				LRU:    cmn.LRUConf{Enabled: true},
-				Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
-			},
-			sameBucketName: {},
-		},
-		CBmap: map[string]*cmn.BucketProps{
-			// Map cloud buckets here referenced by test lom
-			bucketCloudA:   {},
-			bucketCloudB:   {},
-			sameBucketName: {},
-		},
-		Version: 1,
-	}})
+	bmd := cluster.NewBaseBownerMock()
+	bmd.Add(&cluster.Bck{Name: bucketLocalA, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
+		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}}})
+	bmd.Add(&cluster.Bck{Name: bucketLocalB, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
+		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}}})
+	bmd.Add(&cluster.Bck{Name: bucketLocalC, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
+		Props: &cmn.BucketProps{
+			Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
+			LRU:    cmn.LRUConf{Enabled: true},
+			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
+		}})
+	bmd.Add(&cluster.Bck{Name: sameBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal, Props: &cmn.BucketProps{}})
+	bmd.Add(&cluster.Bck{Name: bucketCloudA, Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal, Props: &cmn.BucketProps{}})
+	bmd.Add(&cluster.Bck{Name: bucketCloudB, Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal, Props: &cmn.BucketProps{}})
+	bmd.Add(&cluster.Bck{Name: sameBucketName, Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal, Props: &cmn.BucketProps{}})
+
+	tMock := cluster.NewTargetMock(bmd)
 
 	BeforeEach(func() {
 		// Dummy cloud provider for tests involving cloud buckets

@@ -124,7 +124,7 @@ func (lom *LOM) VerConf() *cmn.VersionConf { return &lom.Bprops().Versioning }
 
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil
-	if lom.MirrorConf().Enabled && lom.Bck().Equal(from.Bck()) {
+	if lom.MirrorConf().Enabled && lom.Bck().Equal(from.Bck(), true /* must have same BID*/) {
 		lom.setCopiesMd(from.FQN, from.ParsedFQN.MpathInfo)
 		for fqn, mpathInfo := range from.GetCopies() {
 			lom.addCopyMd(fqn, mpathInfo)
@@ -397,7 +397,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		return
 	}
 
-	if lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck()) {
+	if lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck(), true /* must have same BID*/) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			return
 		}
@@ -810,7 +810,7 @@ func EvictLomCache(b *Bck) {
 			cache.Range(func(hkey, _ interface{}) bool {
 				uname := hkey.(string)
 				bck, _ := ParseUname(uname)
-				if bck.Name == b.Name && bck.Provider == b.Provider {
+				if bck.Equal(b, false /*ignore BID*/) {
 					cache.Delete(hkey)
 				}
 				return true

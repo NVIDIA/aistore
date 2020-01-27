@@ -257,28 +257,27 @@ func (e *mncEntry) Start(id int64) error {
 func (*mncEntry) Kind() string    { return cmn.ActMakeNCopies }
 func (e *mncEntry) Get() cmn.Xact { return e.xact }
 
+// TODO: restart the EC (#531) in case of mountpath event
 func (r *registry) RenewObjsRedundancy(t cluster.Target) {
-	renewBckRedundacy := func(bcks map[string]*cmn.BucketProps, provider string) {
-		for bckName, bckProps := range bcks {
-			bck := &cluster.Bck{Name: bckName, Provider: provider}
-			if bckProps.Mirror.Enabled {
-				r.RenewBckMakeNCopies(bck, t, int(bckProps.Mirror.Copies))
-			}
-
-			// TODO: restart the EC (#531) in case mountpath event
-			// if bckProps.EC.Enabled {
-			// r.renewRespondEC(bck)
-			// }
-		}
-	}
-
 	var (
-		cfg    = cmn.GCO.Get()
-		bowner = t.GetBowner().Get()
+		cfg      = cmn.GCO.Get()
+		bmd      = t.GetBowner().Get()
+		provider = cmn.ProviderAIS
 	)
-	renewBckRedundacy(bowner.LBmap, cmn.ProviderAIS)
+	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+		if bck.Props.Mirror.Enabled {
+			r.RenewBckMakeNCopies(bck, t, int(bck.Props.Mirror.Copies))
+		}
+		return false
+	})
 	if cfg.Cloud.Supported {
-		renewBckRedundacy(bowner.CBmap, cfg.Cloud.Provider)
+		provider = cfg.Cloud.Provider
+		bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+			if bck.Props.Mirror.Enabled {
+				r.RenewBckMakeNCopies(bck, t, int(bck.Props.Mirror.Copies))
+			}
+			return false
+		})
 	}
 }
 
@@ -407,7 +406,7 @@ func (e *bccEntry) Get() cmn.Xact { return e.xact }
 
 func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
 	prev := previousEntry.(*bccEntry)
-	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bckFrom.Equal(e.bckFrom) {
+	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bckFrom.Equal(e.bckFrom, true /*same BID*/) {
 		prev.phase = cmn.ActCommit // transition
 		keep = true
 		return

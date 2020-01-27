@@ -18,10 +18,12 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-// Examples:
+// Examples - Smap:
 // 1. go test -v ./ais/. -run=DumpSmap -fsmap=~/.ais0/.ais.smap
 // 2. go test -v ./ais/. -run=DumpSmap -fsmap=~/.ais0/.ais.smap -fout=/tmp/smap.txt
 // 3. go test -v ./ais/. -run=CompressSmap -fsmap=/tmp/smap.txt -fout=/tmp/.ais.smap
+// Example - BMD:
+// go test -v ./ais/. -run=DumpBMD -fbmd=~/.ais0/.ais.bmd
 
 var (
 	fsmap, fbmd, fout string

@@ -78,19 +78,21 @@ func (b *Bck) IsCloud() bool       { return cmn.IsProviderCloud(b.Provider, fals
 func (b *Bck) IsInitialized() bool { return b.Props != nil }
 func (b *Bck) HasProvider() bool   { return b.IsAIS() || b.IsCloud() }
 
-func (b *Bck) Equal(other *Bck) bool {
+func (b *Bck) Equal(other *Bck, sameID bool) bool {
 	if b.Name != other.Name {
 		return false
 	}
 	if b.Ns != other.Ns {
 		return false
 	}
-	if b.Props != nil && other.Props != nil {
-		if b.Props.BID != other.Props.BID {
-			return false
-		}
-		if b.Props.InProgress != other.Props.InProgress {
-			return false
+	if sameID {
+		if b.Props != nil && other.Props != nil {
+			if b.Props.BID != other.Props.BID {
+				return false
+			}
+			if b.Props.InProgress != other.Props.InProgress {
+				return false
+			}
 		}
 	}
 	if b.IsAIS() && other.IsAIS() {
@@ -107,35 +109,19 @@ func (b *Bck) Equal(other *Bck) bool {
 func (b *Bck) Init(bowner Bowner) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
-		if bmd.IsAIS(b.Name) {
-			b.Provider = cmn.ProviderAIS
-		} else if bmd.IsCloud(b.Name) {
-			b.Provider = cmn.GCO.Get().Cloud.Provider
-		} else {
-			err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
-		}
+		b.Provider, b.Props = bmd.initBckAnyProvider(b)
+	} else if b.Provider == cmn.Cloud {
+		b.Provider = cmn.GCO.Get().Cloud.Provider
+		b.Provider, b.Props = bmd.initBckCloudProvider(b)
 	} else {
-		if b.IsAIS() && !bmd.IsAIS(b.Name) {
+		b.Props, _ = bmd.Get(b)
+	}
+	if b.Props == nil {
+		if b.Provider == cmn.ProviderAIS {
 			return cmn.NewErrorBucketDoesNotExist(b.Name)
 		}
-		if !b.IsAIS() {
-			b.Provider = cmn.GCO.Get().Cloud.Provider
-			if !bmd.IsCloud(b.Name) {
-				err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
-			}
-		}
+		return cmn.NewErrorCloudBucketDoesNotExist(b.Name)
 	}
-
-	// NOTE: At this point we should be sure that we no longer use `cloud` but
-	//  rather we have explicit cloud provider name.
-	cmn.Assert(b.Provider != cmn.Cloud)
-
-	if b.IsCloud() {
-		if cloudProvider := cmn.GCO.Get().Cloud.Provider; b.Provider != cloudProvider {
-			err = fmt.Errorf("provider mismatch: %q vs bucket (%s, %s)", cloudProvider, b.Name, b.Provider)
-		}
-	}
-	b.Props, _ = bmd.Get(b)
 	return
 }
 

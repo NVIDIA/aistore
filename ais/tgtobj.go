@@ -159,8 +159,9 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	var (
 		ver string
 		lom = poi.lom
+		bck = lom.Bck()
 	)
-	if lom.Bck().IsCloud() && !poi.migrated {
+	if bck.IsCloud() && !poi.migrated {
 		file, err1 := os.Open(poi.workFQN)
 		if err1 != nil {
 			err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, err1)
@@ -177,10 +178,12 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	}
 
 	// check if bucket was destroyed while PUT was in the progress.
-	// TODO: support cloud case
-	if lom.Bck().IsAIS() && !poi.t.bmdowner.Get().IsAIS(lom.Bucket()) {
-		err = fmt.Errorf("Bucket %s was destroyed while PUTting %s was in the progress",
-			lom.Bucket(), lom.Objname)
+	var (
+		bmd        = poi.t.bmdowner.Get()
+		_, present = bmd.Get(bck)
+	)
+	if !present {
+		err = fmt.Errorf("%s: PUT failed, bucket %s does not exist", lom, bck)
 		errCode = http.StatusBadRequest
 		return
 	}
@@ -188,7 +191,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	if lom.Bck().IsAIS() && lom.VerConf().Enabled && !poi.migrated {
+	if bck.IsAIS() && lom.VerConf().Enabled && !poi.migrated {
 		if err = lom.IncVersion(); err != nil {
 			return
 		}

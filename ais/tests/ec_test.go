@@ -121,13 +121,15 @@ func ecGetAllSlices(t *testing.T, bck api.Bck, objName string, o *ecOptions) (ma
 		oldest     = time.Now().Add(time.Hour)
 
 		bckProvider = cmn.ProviderAIS
-		bmd         = cluster.NewBaseBownerMock(bck.Name)
+		bmd         = cluster.NewBaseBownerMock()
 	)
+	bmd.Add(&cluster.Bck{Name: bck.Name, Provider: bck.Provider, Ns: bck.Namespace,
+		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}})
 
 	if !o.isAIS {
 		config := tutils.GetClusterConfig(t)
 		bckProvider = config.Cloud.Provider
-		bmd.CBmap[bck.Name] = cmn.DefaultBucketProps()
+		bmd.Add(&cluster.Bck{Name: bck.Name, Provider: bck.Provider, Ns: bck.Namespace, Props: cmn.DefaultBucketProps()})
 	}
 
 	tMock := cluster.NewTargetMock(bmd)

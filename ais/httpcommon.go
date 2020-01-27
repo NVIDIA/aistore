@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1242,4 +1243,18 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config 
 		hdr.Set(fieldName, fmt.Sprintf("%v", field.Value()))
 		return nil, false
 	})
+}
+
+func (h *httprunner) getBucketNamesAIS(bmd *bucketMD) *cmn.BucketNames {
+	var (
+		na          = bmd.NumAIS(nil /*all namespaces*/)
+		bucketNames = &cmn.BucketNames{AIS: make([]string, 0, na)}
+		provider    = cmn.ProviderAIS
+	)
+	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+		bucketNames.AIS = append(bucketNames.AIS, bck.Name)
+		return false
+	})
+	sort.Strings(bucketNames.AIS) // sort by name
+	return bucketNames
 }

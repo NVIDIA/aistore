@@ -54,7 +54,7 @@ var _ = Describe("Bck", func() {
 	Describe("Equal", func() {
 		DescribeTable("should not be equal",
 			func(a, b *Bck) {
-				Expect(a.Equal(b)).To(BeFalse())
+				Expect(a.Equal(b, true /*same BID*/)).To(BeFalse())
 			},
 			Entry(
 				"not matching names",
@@ -90,7 +90,7 @@ var _ = Describe("Bck", func() {
 
 		DescribeTable("should be equal",
 			func(a, b *Bck) {
-				Expect(a.Equal(b)).To(BeTrue())
+				Expect(a.Equal(b, true /*same BID*/)).To(BeTrue())
 			},
 			Entry(
 				"matching AIS providers",

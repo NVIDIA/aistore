@@ -8,31 +8,30 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-)
-
-const (
-	BisLocalBit = uint64(1 << 63)
 )
 
 // interface to Get current BMD instance
 // (for implementation, see ais/bucketmeta.go)
-type Bowner interface {
-	Get() (bmd *BMD)
-}
+type (
+	Bowner interface {
+		Get() (bmd *BMD)
+	}
 
-// - BMD represents buckets (that store objects) and associated metadata
-// - BMD (instance) can be obtained via Bowner.Get()
-// - BMD is immutable and versioned
-// - BMD versioning is monotonic and incremental
-// Note: Getting a cloud object does not add the cloud bucket to CBmap
-type BMD struct {
-	LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`         // ais buckets and their props
-	CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`         // Cloud-based buckets and their AIStore-only metadata
-	Version int64                       `json:"version,string"` // version - gets incremented on every update
-	Origin  uint64                      `json:"origin,string"`  // (unique) origin stays the same for the lifetime
-}
+	Buckets    map[string]*cmn.BucketProps
+	Namespaces map[string]Buckets
+	Providers  map[string]Namespaces
+
+	// - BMD is the root of the (providers, namespaces, buckets) hierarchy
+	// - BMD (instance) can be obtained via Bowner.Get()
+	// - BMD is immutable and versioned
+	// - BMD versioning is monotonic and incremental
+	BMD struct {
+		Version   int64     `json:"version,string"` // version - gets incremented on every update
+		Origin    uint64    `json:"origin,string"`  // (unique) origin stays the same for the lifetime
+		Providers Providers `json:"providers"`      // (provider, namespace, bucket) hierarchy
+	}
+)
 
 func (m *BMD) String() string {
 	if m == nil {
@@ -41,84 +40,188 @@ func (m *BMD) String() string {
 	return "BMD v" + strconv.FormatInt(m.Version, 10)
 }
 
-func (m *BMD) StringEx() string {
-	if m == nil {
-		return "BMD <nil>"
-	}
-	return fmt.Sprintf("BMD v%d[...%d, ais=%d, cloud=%d]", m.Version, m.Origin%1000, len(m.LBmap), len(m.CBmap))
-}
+// nsQuery == nil: all namespaces
 
-func (m *BMD) GenBucketID(isais bool) uint64 {
-	if !isais {
-		return uint64(m.Version)
-	}
-	return uint64(m.Version) | BisLocalBit
-}
-
-func (m *BMD) Exists(bck *Bck, bckID uint64) (exists bool) {
-	if bckID == 0 {
-		if bck.IsAIS() {
-			exists = m.IsAIS(bck.Name)
-			if exists {
-				glog.Errorf("%s: ais bucket must have ID", m.Bstring(bck))
-				exists = false
+func (m *BMD) NumAIS(nsQuery *string) (na int) {
+	if namespaces, ok := m.Providers[cmn.ProviderAIS]; ok {
+		for ns, buckets := range namespaces {
+			if nsQuery != nil && ns != *nsQuery {
+				continue
 			}
-		} else {
-			exists = m.IsCloud(bck.Name)
+			na += len(buckets)
 		}
-		return
-	}
-	if bck.IsAIS() != (bckID&BisLocalBit != 0) {
-		return
-	}
-	var (
-		p  *cmn.BucketProps
-		mm = m.LBmap
-	)
-	if !bck.IsAIS() {
-		mm = m.CBmap
-	}
-	p, exists = mm[bck.Name]
-	if exists && p.BID != bckID {
-		exists = false
 	}
 	return
 }
 
-func (m *BMD) IsAIS(bucket string) bool   { _, ok := m.LBmap[bucket]; return ok }
-func (m *BMD) IsCloud(bucket string) bool { _, ok := m.CBmap[bucket]; return ok }
-
-func (m *BMD) Bstring(bck *Bck) string {
-	_, e := m.Get(bck)
-	if !e {
-		return fmt.Sprintf("%s(not exists)", bck)
+func (m *BMD) NumCloud(nsQuery *string) (nc int) {
+	for provider, namespaces := range m.Providers {
+		if cmn.IsProviderAIS(provider) {
+			continue
+		}
+		for ns, buckets := range namespaces {
+			if nsQuery != nil && ns != *nsQuery {
+				continue
+			}
+			nc += len(buckets)
+		}
 	}
-	return fmt.Sprintf("%s(exists)", bck)
+	return
+}
+
+func (m *BMD) StringEx() string {
+	if m == nil {
+		return "BMD <nil>"
+	}
+	na, nc := m.NumAIS(nil), m.NumCloud(nil)
+	return fmt.Sprintf("BMD v%d[...%d, ais=%d, cloud=%d]", m.Version, m.Origin%1000, na, nc)
 }
 
 func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
+	buckets := m.getBuckets(bck)
+	if buckets != nil {
+		p, present = buckets[bck.Name]
+	}
 	if bck.IsAIS() {
-		p, present = m.LBmap[bck.Name]
 		return
 	}
-	p, present = m.CBmap[bck.Name]
 	if !present {
 		p = cmn.DefaultBucketProps()
 	}
 	return
 }
 
-func (m *BMD) IsECUsed() bool {
-	for _, bck := range m.LBmap {
-		if bck.EC.Enabled {
-			return true
-		}
+func (m *BMD) Del(bck *Bck) (deleted bool) {
+	buckets := m.getBuckets(bck)
+	if buckets == nil {
+		return
 	}
-	for _, bck := range m.CBmap {
-		if bck.EC.Enabled {
-			return true
-		}
+	if _, present := buckets[bck.Name]; !present {
+		return
 	}
+	delete(buckets, bck.Name)
+	return true
+}
 
-	return false
+func (m *BMD) Set(bck *Bck, p *cmn.BucketProps) {
+	buckets := m.getBuckets(bck)
+	buckets[bck.Name] = p
+}
+
+func (m *BMD) Exists(bck *Bck, bckID uint64) (exists bool) {
+	p, present := m.Get(bck)
+	if present {
+		if bck.IsAIS() {
+			exists = bckID != 0 && p.BID == bckID
+		} else {
+			exists = p.BID == bckID
+		}
+	}
+	return
+}
+
+func (m *BMD) Add(bck *Bck) {
+	var (
+		namespaces Namespaces
+		buckets    Buckets
+		ok         bool
+	)
+	if namespaces, ok = m.Providers[bck.Provider]; !ok {
+		namespaces = make(Namespaces)
+		m.Providers[bck.Provider] = namespaces
+	}
+	if buckets, ok = namespaces[bck.Ns]; !ok {
+		buckets = make(Buckets)
+		namespaces[bck.Ns] = buckets
+	}
+	buckets[bck.Name] = bck.Props
+}
+
+func (m *BMD) IsECUsed() (yes bool) {
+	m.Range(nil, nil, func(bck *Bck) (stop bool) {
+		if bck.Props.EC.Enabled {
+			yes, stop = true, true
+		}
+		return
+	})
+	return
+}
+
+// providerQuery == nil: all providers; nsQuery == nil: all namespaces
+func (m *BMD) Range(providerQuery, nsQuery *string, callback func(*Bck) bool) {
+	for provider, namespaces := range m.Providers {
+		if providerQuery != nil && provider != *providerQuery {
+			continue
+		}
+		for ns, buckets := range namespaces {
+			if nsQuery != nil && ns != *nsQuery {
+				continue
+			}
+			for name, props := range buckets {
+				bck := &Bck{Name: name, Provider: provider, Ns: ns, Props: props}
+				if callback(bck) { // break?
+					return
+				}
+			}
+		}
+	}
+}
+
+func (m *BMD) DeepCopy(dst *BMD) {
+	*dst = *m
+	dst.Providers = make(Providers, len(m.Providers))
+	for provider, namespaces := range m.Providers {
+		dstNamespaces := make(Namespaces, len(namespaces))
+		for ns, buckets := range namespaces {
+			dstBuckets := make(Buckets, len(buckets))
+			for name, p := range buckets {
+				dstProps := &cmn.BucketProps{}
+				*dstProps = *p
+				dstBuckets[name] = dstProps
+			}
+			dstNamespaces[ns] = dstBuckets
+		}
+		dst.Providers[provider] = dstNamespaces
+	}
+}
+
+/////////////////////
+// private methods //
+/////////////////////
+
+func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
+	cmn.Assert(bck.HasProvider()) // TODO -- FIXME: remove
+	if namespaces, ok := m.Providers[bck.Provider]; ok {
+		buckets = namespaces[bck.Ns]
+	}
+	return
+}
+
+func (m *BMD) initBckAnyProvider(bck *Bck) (provider string, p *cmn.BucketProps) {
+	var present bool
+	if namespaces, ok := m.Providers[cmn.ProviderAIS]; ok {
+		if buckets, ok := namespaces[bck.Ns]; ok {
+			if p, present = buckets[bck.Name]; present {
+				provider = cmn.ProviderAIS
+				return
+			}
+		}
+	}
+	return m.initBckCloudProvider(bck)
+}
+
+func (m *BMD) initBckCloudProvider(bck *Bck) (provider string, p *cmn.BucketProps) {
+	var present bool
+	for prov, namespaces := range m.Providers {
+		if prov == cmn.ProviderAIS {
+			continue
+		}
+		if buckets, ok2 := namespaces[bck.Ns]; ok2 {
+			if p, present = buckets[bck.Name]; present {
+				provider = prov
+				return
+			}
+		}
+	}
+	return
 }

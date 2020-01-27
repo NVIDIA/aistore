@@ -721,8 +721,10 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 
 // FIXME: use the message
 func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
-	from := ""
-	tname := t.si.Name()
+	var (
+		from  string
+		tname = t.si.Name()
+	)
 	if caller != "" {
 		from = " from " + caller
 	}
@@ -733,14 +735,21 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 	}
 
 	t.bmdowner.Lock()
-	bmd := t.bmdowner.get()
-	_, psi := t.getPrimaryURLAndSI()
+	var (
+		bmd          = t.bmdowner.get()
+		myver        = bmd.version()
+		na           = bmd.NumAIS(nil /*all namespaces*/)
+		bcksToDelete = make([]*cluster.Bck, 0, na)
+		provider     = cmn.ProviderAIS
+		cfg          = cmn.GCO.Get()
+		_, psi       = t.getPrimaryURLAndSI()
+	)
 	if err = t.validateOriginBMD(bmd, psi, newBMD, ""); err != nil {
+		t.bmdowner.Unlock()
 		cmn.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
 		return
 	}
 
-	myver := bmd.version()
 	if newBMD.version() <= myver {
 		t.bmdowner.Unlock()
 		if newBMD.version() < myver {
@@ -758,54 +767,52 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 	}
 
 	// Delete buckets that do not exist in the new BMD
-	bucketsToDelete := make([]string, 0, len(bmd.LBmap)) // TODO -- FIXME: redundant: cannot pass cluster.Bck into `fs`
-	bcksToDelete := make([]*cluster.Bck, 0, len(bmd.LBmap))
-	for bucket := range bmd.LBmap {
-		bck := &cluster.Bck{Name: bucket, Provider: cmn.ProviderAIS}
-		if nprops, ok := newBMD.LBmap[bucket]; !ok {
-			bucketsToDelete = append(bucketsToDelete, bucket)
-			bcksToDelete = append(bcksToDelete, bck)
-		} else if bprops, ok := bmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
-			if bprops.Mirror.Enabled && !nprops.Mirror.Enabled {
-				xaction.Registry.AbortBucketXact(cmn.ActPutCopies, bck)
+	bmd.Range(&provider, nil, func(obck *cluster.Bck) bool {
+		var present bool
+		newBMD.Range(&provider, nil, func(nbck *cluster.Bck) bool {
+			if obck.Equal(nbck, false /*ignore BID*/) {
+				present = true
+				// TODO -- FIXME: the logic applies to make-n-copies and EC xactions
+				if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
+					xaction.Registry.AbortBucketXact(cmn.ActPutCopies, obck)
+				}
+				return true
 			}
+			return false
+		})
+		if !present {
+			bcksToDelete = append(bcksToDelete, obck)
+			fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false, /*destroy*/
+				cmn.ProviderAIS, obck.Ns, obck.Name)
 		}
-	}
+		return false
+	})
 
 	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
 	//       disable mirroring (needed in part for cloud buckets)
-	if len(bucketsToDelete) > 0 {
+	if len(bcksToDelete) > 0 {
 		xaction.Registry.AbortAllBuckets(true, bcksToDelete...)
 		go func(bcks ...*cluster.Bck) {
 			for _, b := range bcks {
 				cluster.EvictLomCache(b)
 			}
 		}(bcksToDelete...)
-		fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false, /*destroy*/
-			cmn.ProviderAIS, cmn.NsGlobal, bucketsToDelete...)
 	}
 
 	// Create buckets that have been added
-	bucketsToCreate := make([]string, 0, len(newBMD.LBmap))
-	for bckName := range newBMD.LBmap {
-		if _, ok := bmd.LBmap[bckName]; !ok {
-			bucketsToCreate = append(bucketsToCreate, bckName)
-		}
-	}
-	fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true, /*create*/
-		cmn.ProviderAIS, cmn.NsGlobal, bucketsToCreate...)
-
-	cfg := cmn.GCO.Get()
-	if cfg.Cloud.Supported {
-		bucketsToCreate = make([]string, 0, len(newBMD.CBmap))
-		for bckName := range newBMD.CBmap {
-			if _, ok := bmd.CBmap[bckName]; !ok {
-				bucketsToCreate = append(bucketsToCreate, bckName)
+	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {
+		if bck.IsCloud() {
+			if cfg.Cloud.Supported {
+				fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true, /*create*/
+					bck.Provider, bck.Ns, bck.Name)
 			}
+		} else {
+			fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true, /*create*/
+				bck.Provider, bck.Ns, bck.Name)
 		}
-		fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true, /*create*/
-			cfg.Cloud.Provider, cmn.NsGlobal, bucketsToCreate...)
-	}
+		return false
+	})
+
 	return
 }
 

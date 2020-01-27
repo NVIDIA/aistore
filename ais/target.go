@@ -385,7 +385,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.writeJSON(w, r, body, "get-what-bmd")
 		} else {
 			provider := r.URL.Query().Get(cmn.URLParamProvider)
-			t.getbucketnames(w, r, provider)
+			t.getBucketNames(w, r, provider)
 		}
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
@@ -606,7 +606,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	switch msgInt.Action {
 	case cmn.ActEvictCB:
 		cluster.EvictLomCache(bck)
-		fs.Mountpaths.EvictCloudBucket(bucket) // validation handled in proxy.go
+		fs.Mountpaths.CreateDestroyBuckets("evict-cb", false /*destroy*/, bck.Provider, bck.Ns, bck.Name)
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) > 0 { // must be a List/Range request
 			err := t.listRangeOperation(r, apitems, provider, msgInt)
@@ -922,14 +922,16 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket, objName := apiItems[0], apiItems[1]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	invalidHandler := t.invalmsghdlr
+	var (
+		bucket, objName = apiItems[0], apiItems[1]
+		provider        = r.URL.Query().Get(cmn.URLParamProvider)
+		invalidHandler  = t.invalmsghdlr
+		hdr             = w.Header()
+	)
 	if silent {
 		invalidHandler = t.invalmsghdlrsilent
 	}
 
-	hdr := w.Header()
 	if checkEC {
 		// should do it before LOM is initialized because the target may
 		// have a slice instead of object/replica
@@ -970,7 +972,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 
 	exists = err == nil
 
-	// NOTE: DEFINITION
+	// NOTE:
 	// * checkExists and checkExistsAny establish local presence of the object by looking up all mountpaths
 	// * checkExistsAny does it *even* if the object *may* not have local copies
 	// * see also: GFN
@@ -1076,22 +1078,17 @@ func (t *targetrunner) checkCloudVersion(ctx context.Context, lom *cluster.LOM) 
 	return
 }
 
-func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, provider string) {
+func (t *targetrunner) getBucketNames(w http.ResponseWriter, r *http.Request, provider string) {
 	var (
 		bmd         = t.bmdowner.get()
-		bucketNames = &cmn.BucketNames{
-			AIS:   make([]string, 0, len(bmd.LBmap)),
-			Cloud: make([]string, 0, 64),
-		}
+		bucketNames = &cmn.BucketNames{}
+		all         = provider == "" /*all providers*/
 	)
 
-	if provider == "" || cmn.IsProviderAIS(provider) {
-		for bucket := range bmd.LBmap {
-			bucketNames.AIS = append(bucketNames.AIS, bucket)
-		}
-		sort.Strings(bucketNames.AIS) // sort by name
+	if all || cmn.IsProviderAIS(provider) {
+		bucketNames = t.getBucketNamesAIS(bmd)
 	}
-	if provider == "" || cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
+	if all || cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
 		buckets, err, errcode := t.cloud.getBucketNames(t.contextWithAuth(r.Header))
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)

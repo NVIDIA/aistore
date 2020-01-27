@@ -320,7 +320,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	switch apiItems[0] {
 	case cmn.AllBuckets:
 		provider := r.URL.Query().Get(cmn.URLParamProvider)
-		p.getbucketnames(w, r, provider)
+		p.getBucketNames(w, r, provider)
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
 		p.invalmsghdlr(w, r, s)
@@ -710,12 +710,13 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (*bucketMD, error, int) {
 	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
+	_, present := bmd.Get(bck)
 	if bck.IsAIS() {
-		if !bmd.IsAIS(bck.Name) {
+		if !present {
 			p.bmdowner.Unlock()
 			return bmd, cmn.NewErrorBucketDoesNotExist(bck.Name), http.StatusNotFound
 		}
-	} else if !bmd.IsCloud(bck.Name) {
+	} else if !present {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bck, cmn.DoesNotExist)
 		}
@@ -1657,14 +1658,14 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error)
 	return
 }
 
-func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, provider string) {
-	bmd := p.bmdowner.get()
-	providerStr := "?" + cmn.URLParamProvider + "=" + provider
+func (p *proxyrunner) getBucketNames(w http.ResponseWriter, r *http.Request, provider string) {
+	var (
+		bmd         = p.bmdowner.get()
+		providerStr = "?" + cmn.URLParamProvider + "=" + provider
+	)
+
 	if cmn.IsProviderAIS(provider) {
-		bucketNames := &cmn.BucketNames{Cloud: []string{}, AIS: make([]string, 0, 64)}
-		for bucket := range bmd.LBmap {
-			bucketNames.AIS = append(bucketNames.AIS, bucket)
-		}
+		bucketNames := p.getBucketNamesAIS(bmd)
 		body := cmn.MustMarshal(bucketNames)
 		p.writeJSON(w, r, body, "getbucketnames"+providerStr)
 		return
@@ -1675,7 +1676,6 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, pro
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	args := callArgs{
 		si: si,
 		req: cmn.ReqArgs{

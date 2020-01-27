@@ -16,14 +16,11 @@ type BownerMock struct {
 
 func (r BownerMock) Get() *BMD { return &r.BMD }
 
-func NewBaseBownerMock(bckName string) *BownerMock {
-	return &BownerMock{BMD: BMD{
-		LBmap: map[string]*cmn.BucketProps{
-			bckName: {
-				Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
-			},
-		},
-		CBmap:   map[string]*cmn.BucketProps{},
-		Version: 1,
-	}}
+func NewBaseBownerMock() *BownerMock {
+	providers := make(Providers)
+	namespaces := make(Namespaces)
+	providers[cmn.ProviderAIS] = namespaces
+	buckets := make(Buckets)
+	namespaces[cmn.NsGlobal] = buckets
+	return &BownerMock{BMD: BMD{Providers: providers}}
 }

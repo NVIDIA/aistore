@@ -27,15 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/containers"
-
-	"github.com/NVIDIA/aistore/cluster"
-
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -291,7 +288,8 @@ func Test_putdeleteRange(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for idx, test := range tests {
 		msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
-		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
+		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n",
+			idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
 
 		err := api.DeleteRange(baseParams, bck, test.prefix, test.regexStr, test.rangeStr, true, 0)
 		if err != nil {
@@ -418,7 +416,8 @@ func listObjects(t *testing.T, proxyURL string, bck api.Bck, msg *cmn.SelectMsg,
 	}
 	for _, m := range resList.Entries {
 		if len(m.Checksum) > 8 {
-			tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum[:8]+"...", m.CheckExists, m.Atime)
+			tutils.Logf("%s %d [%s] %s [%v - %s]\n",
+				m.Name, m.Size, m.Version, m.Checksum[:8]+"...", m.CheckExists, m.Atime)
 		} else {
 			tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum, m.CheckExists, m.Atime)
 		}
@@ -673,7 +672,8 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	if len(resLocal.Entries) != 1 {
-		t.Fatalf("Expected number of files in ais bucket (%s) does not match: expected %v, got %v", bckCloud, 1, len(resLocal.Entries))
+		t.Fatalf("Expected number of files in ais bucket (%s) does not match: expected %v, got %v",
+			bckCloud, 1, len(resLocal.Entries))
 	}
 
 	for _, entry := range resCloud.Entries {
@@ -948,12 +948,14 @@ func TestHeadObject(t *testing.T) {
 		Reader:     r,
 	}
 
-	putTime, _ = time.Parse(time.RFC822, time.Now().Format(time.RFC822)) // Get the time in the same format as atime (with milliseconds truncated)
+	// Get the time in the same format as atime (with milliseconds truncated)
+	putTime, _ = time.Parse(time.RFC822, time.Now().Format(time.RFC822))
 	if err := api.PutObject(putArgs); err != nil {
 		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
 
-	propsExp := &cmn.ObjectProps{Size: objSize, Version: "1", NumCopies: 1, Checksum: hash, Present: true, Provider: cmn.ProviderAIS}
+	propsExp := &cmn.ObjectProps{Size: objSize, Version: "1", NumCopies: 1, Checksum: hash,
+		Present: true, Provider: cmn.ProviderAIS}
 	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), bck, objName)
 	if err != nil {
 		t.Errorf("api.HeadObject failed, err = %v", err)
@@ -969,7 +971,8 @@ func TestHeadObject(t *testing.T) {
 		t.Errorf("Returned `Provider` not correct. Expected: %v, actual: %v", propsExp.Provider, props.Provider)
 	}
 	if props.NumCopies != propsExp.NumCopies {
-		t.Errorf("Returned `Number` of copies not correct. Expected: %v, actual: %v", propsExp.NumCopies, props.NumCopies)
+		t.Errorf("Returned `Number` of copies not correct. Expected: %v, actual: %v",
+			propsExp.NumCopies, props.NumCopies)
 	}
 	if props.Checksum != propsExp.Checksum {
 		t.Errorf("Returned `Checksum` not correct. Expected: %v, actual: %v", propsExp.Checksum, props.Checksum)
@@ -981,7 +984,8 @@ func TestHeadObject(t *testing.T) {
 		t.Fatalf("Returned `Atime` (%s) is zero.", props.Atime)
 	}
 	if props.Atime.Before(putTime) {
-		t.Errorf("Returned `Atime` (%s) not correct - expected `atime` after `put` time (%s)", props.Atime, putTime.Format(time.RFC822))
+		t.Errorf("Returned `Atime` (%s) not correct - expected `atime` after `put` time (%s)",
+			props.Atime, putTime.Format(time.RFC822))
 	}
 }
 
@@ -1069,7 +1073,8 @@ func getAndCopyTmp(t *testing.T, proxyURL string, bck api.Bck, id int, keynames 
 	resch <- res
 }
 
-func getAndCopyOne(t *testing.T, url string, bck api.Bck, id int, errCh chan error, keyname string) (written int64, failed bool) {
+func getAndCopyOne(t *testing.T, url string, bck api.Bck, id int, errCh chan error,
+	keyname string) (written int64, failed bool) {
 	var (
 		errstr   string
 		cksumVal string
@@ -1167,7 +1172,8 @@ func deleteFiles(proxyURL string, bck api.Bck, keynames <-chan string, wg *sync.
 	dwg.Wait()
 }
 
-func getMatchingKeys(t *testing.T, proxyURL string, bck api.Bck, regexmatch string, keynameChans []chan string, outputChan chan string) int {
+func getMatchingKeys(t *testing.T, proxyURL string, bck api.Bck, regexmatch string,
+	keynameChans []chan string, outputChan chan string) int {
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
 	reslist := testListBucket(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
@@ -1201,7 +1207,8 @@ func getMatchingKeys(t *testing.T, proxyURL string, bck api.Bck, regexmatch stri
 }
 
 func testListBucket(t *testing.T, proxyURL string, bck api.Bck, msg *cmn.SelectMsg, limit int) *cmn.BucketList {
-	tutils.Logf("LIST bucket %s [fast: %v, prefix: %q, page_size: %d, marker: %q]\n", bck, msg.Fast, msg.Prefix, msg.PageSize, msg.PageMarker)
+	tutils.Logf("LIST bucket %s [fast: %v, prefix: %q, page_size: %d, marker: %q]\n",
+		bck, msg.Fast, msg.Prefix, msg.PageSize, msg.PageMarker)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	resList, err := api.ListBucket(baseParams, bck, msg, limit)
 	if err != nil {
@@ -1229,12 +1236,15 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		oldFileInfo os.FileInfo
 		filesList   = make([]string, 0, numFiles)
 		proxyURL    = tutils.GetPrimaryURL()
-		tMock       = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestBucketName))
+		bmdMock     = cluster.NewBaseBownerMock()
+		tMock       = cluster.NewTargetMock(bmdMock)
 		bck         = api.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
 	)
+	bmdMock.Add(&cluster.Bck{Name: TestBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
+		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}})
 
 	if !isCloudBucket(t, proxyURL, bck) {
 		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
@@ -1247,7 +1257,8 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	defer sgl.Free()
 
 	tutils.Logf("Creating %d objects\n", numFiles)
-	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr, fileSize,
+		numFiles, errCh, fileNameCh, sgl)
 	tassert.SelectErr(t, errCh, "put", false)
 
 	fileName = <-fileNameCh
@@ -1411,7 +1422,8 @@ func Test_evictCloudBucket(t *testing.T) {
 	}
 }
 
-func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, fileName string, fqn string, oldFileInfo os.FileInfo) {
+func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, fileName string, fqn string,
+	oldFileInfo os.FileInfo) {
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1427,7 +1439,7 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, file
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	newFileInfo, _ := os.Stat(fqn)
 	if newFileInfo.Size() != oldFileInfo.Size() {
-		t.Errorf("Both files should match in size since a cold get"+"should have been executed. Expected size: %d, Actual Size: %d", oldFileInfo.Size(), newFileInfo.Size())
+		t.Errorf("Expected size: %d, Actual Size: %d", oldFileInfo.Size(), newFileInfo.Size())
 	}
 }
 
@@ -1447,13 +1459,16 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		numFiles   = 3
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, 100)
+		proxyURL   = tutils.GetPrimaryURL()
+		bmdMock    = cluster.NewBaseBownerMock()
+		tMock      = cluster.NewTargetMock(bmdMock)
 		bck        = api.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
-		tMock    = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestBucketName))
 	)
+	bmdMock.Add(&cluster.Bck{Name: TestBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
+		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}})
 
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
@@ -1462,7 +1477,8 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	sgl := tutils.Mem2.NewSGL(fileSize)
 	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr,
+		fileSize, numFiles, errCh, fileNameCh, sgl)
 	tassert.SelectErr(t, errCh, "put", false)
 
 	// Get Current Config
@@ -1692,7 +1708,8 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck api.Bck, fileName stri
 		t.Errorf("Bytes length mismatch. Expected bytes: [%d]. Actual bytes: [%d]", len(expectedBytes), len(outputBytes))
 	}
 	if int64(len(outputBytes)) != expectedLength {
-		t.Errorf("Returned bytes don't match expected length. Expected length: [%d]. Output length: [%d]", expectedLength, len(outputBytes))
+		t.Errorf("Returned bytes don't match expected length. Expected length: [%d]. Output length: [%d]",
+			expectedLength, len(outputBytes))
 	}
 	for i := 0; i < len(expectedBytes); i++ {
 		if expectedBytes[i] != outputBytes[i] {

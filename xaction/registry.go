@@ -825,21 +825,24 @@ func (r *bckSummaryTask) Run() {
 	var (
 		buckets []*cluster.Bck
 		bmd     = r.t.GetBowner().Get()
+		cfg     = cmn.GCO.Get()
 	)
 	if r.bck.Name != "" {
 		buckets = append(buckets, r.bck)
 	} else {
 		if r.bck.Provider == "" || cmn.IsProviderAIS(r.bck.Provider) {
-			for name := range bmd.LBmap {
-				bck := &cluster.Bck{Name: name, Provider: cmn.ProviderAIS}
+			provider := cmn.ProviderAIS
+			bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 				buckets = append(buckets, bck)
-			}
+				return false
+			})
 		}
 		if r.bck.Provider == "" || cmn.IsProviderCloud(r.bck.Provider, true /*acceptAnon*/) {
-			for name := range bmd.CBmap {
-				bck := &cluster.Bck{Name: name, Provider: cmn.GCO.Get().Cloud.Provider}
+			provider := cfg.Cloud.Provider
+			bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 				buckets = append(buckets, bck)
-			}
+				return false
+			})
 		}
 	}
 

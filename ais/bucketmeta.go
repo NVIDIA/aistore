@@ -45,6 +45,7 @@ const (
 	bmdFext     = ".prev"    // suffix: previous version
 	bmdTermName = "BMD"      // display name
 	bmdCopies   = 2          // local copies
+	aisBckIDbit = uint64(1 << 63)
 )
 
 type (
@@ -80,9 +81,12 @@ var (
 
 // c-tor
 func newBucketMD() *bucketMD {
-	lbmap := make(map[string]*cmn.BucketProps)
-	cbmap := make(map[string]*cmn.BucketProps)
-	return &bucketMD{BMD: cluster.BMD{LBmap: lbmap, CBmap: cbmap, Origin: 0}} // only proxy can generate
+	providers := make(cluster.Providers, 2)
+	namespaces := make(cluster.Namespaces, 1)
+	providers[cmn.ProviderAIS] = namespaces
+	buckets := make(cluster.Buckets, 16)
+	namespaces[cmn.NsGlobal] = buckets
+	return &bucketMD{BMD: cluster.BMD{Providers: providers, Origin: 0}}
 }
 
 func newOriginMD() (origin uint64, created string) {
@@ -104,71 +108,63 @@ func newOriginMD() (origin uint64, created string) {
 // bucketMD //
 //////////////
 
-func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
-	cmn.Assert(p != nil)
-	mm := m.LBmap
-	if !bck.IsAIS() {
-		mm = m.CBmap
+func (m *bucketMD) genBucketID(isais bool) uint64 {
+	if !isais {
+		return uint64(m.Version)
 	}
-	p.CloudProvider = bck.Provider
-	cmn.AssertMsg(cmn.IsValidProvider(p.CloudProvider), p.CloudProvider)
+	return uint64(m.Version) | aisBckIDbit
+}
 
-	if _, exists := mm[bck.Name]; exists {
+func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
+	if !cmn.IsValidProvider(bck.Provider) {
+		cmn.AssertMsg(false, bck.String()+": invalid provider")
+	}
+	if _, present := m.Get(bck); present {
 		return false
 	}
-
 	m.Version++
-	p.BID = m.GenBucketID(bck.IsAIS())
-	mm[bck.Name] = p
+	p.BID = m.genBucketID(bck.IsAIS())
+	p.CloudProvider = bck.Provider
 	bck.Props = p
+
+	m.Add(bck)
 	return true
 }
 
-func (m *bucketMD) del(bck *cluster.Bck) bool {
-	mm := m.LBmap
-	if !bck.IsAIS() {
-		mm = m.CBmap
-	}
-	if _, ok := mm[bck.Name]; !ok {
-		return false
+func (m *bucketMD) del(bck *cluster.Bck) (deleted bool) {
+	if !m.Del(bck) {
+		return
 	}
 	m.Version++
-	delete(mm, bck.Name)
 	return true
 }
 
 func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
-	mm := m.LBmap
-	if !bck.IsAIS() {
-		mm = m.CBmap
-	}
-	p.CloudProvider = bck.Provider
-	cmn.AssertMsg(cmn.IsValidProvider(p.CloudProvider), p.CloudProvider)
-
-	prevProps, ok := mm[bck.Name]
-	cmn.Assert(ok)
 	cmn.Assert(!p.InProgress)
+	if !cmn.IsValidProvider(bck.Provider) {
+		cmn.AssertMsg(false, bck.String()+": invalid provider")
+	}
+	prevProps, present := m.Get(bck)
+	if !present {
+		cmn.AssertMsg(false, bck.String()+": not present")
+	}
+	cmn.Assert(prevProps.BID != 0)
 
+	p.CloudProvider = bck.Provider
+	p.BID = prevProps.BID
+	m.Set(bck, p)
 	m.Version++
-	p.BID = prevProps.BID // Always use previous BID
-	cmn.Assert(p.BID != 0)
-	mm[bck.Name] = p
 }
 
 func (m *bucketMD) toggleInProgress(bck *cluster.Bck, toggle bool) {
-	mm := m.LBmap
-	if !bck.IsAIS() {
-		mm = m.CBmap
-	}
-	p, ok := mm[bck.Name]
-	cmn.Assert(ok)
+	p, present := m.Get(bck)
+	cmn.Assert(present)
 	if !toggle {
 		cmn.Assert(p.InProgress)
 	}
-
 	p.InProgress = toggle
+	m.Set(bck, p)
 	m.Version++
-	mm[bck.Name] = p
 }
 
 func (m *bucketMD) downgrade(bck *cluster.Bck) {
@@ -186,19 +182,8 @@ func (m *bucketMD) clone() *bucketMD {
 }
 
 func (m *bucketMD) deepCopy(dst *bucketMD) {
-	cmn.CopyStruct(dst, m)
-	dst.LBmap = make(map[string]*cmn.BucketProps, len(m.LBmap))
-	dst.CBmap = make(map[string]*cmn.BucketProps, len(m.CBmap))
-	inmaps := [2]map[string]*cmn.BucketProps{m.LBmap, m.CBmap}
-	outmaps := [2]map[string]*cmn.BucketProps{dst.LBmap, dst.CBmap}
-	for i := 0; i < len(inmaps); i++ {
-		mm := outmaps[i]
-		for name, props := range inmaps[i] {
-			p := &cmn.BucketProps{}
-			*p = *props
-			mm[name] = p
-		}
-	}
+	dst.vstr = m.vstr
+	m.DeepCopy(&dst.BMD)
 }
 
 //
@@ -244,21 +229,6 @@ func (m *bucketMD) MarshalJSON() ([]byte, error) {
 		BMD:   m.BMD,
 		Cksum: cksum,
 	}), nil
-}
-
-func (m *bucketMD) Dump() string {
-	s := fmt.Sprintf("BMD Version %d\nais buckets: [", m.Version)
-	for name := range m.LBmap {
-		s += name + ", "
-	}
-
-	s += "]\nCloud buckets: ["
-	for name := range m.CBmap {
-		s += name + ", "
-	}
-	s += "]"
-
-	return s
 }
 
 //////////////////
