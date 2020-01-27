@@ -80,7 +80,6 @@ type (
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
 		xreb       *xaction.GlobalReb
 		stages     *nodeStages
-		ra         *globArgs
 		ec         *ecData
 		globRebID  atomic.Int64
 		laterx     atomic.Bool
@@ -369,7 +368,7 @@ func (reb *Manager) beginStreams(md *globArgs) {
 
 	// Init ecRebalancer streams
 	if md.ecUsed {
-		reb.initEC(reb.netd)
+		reb.initEC(md, reb.netd)
 	}
 	reb.laterx.Store(false)
 }

@@ -161,7 +161,7 @@ func (reb *Manager) ecFixLocal(md *globArgs) error {
 }
 
 func (reb *Manager) ecFixGlobal(md *globArgs) error {
-	if err := reb.rebalanceGlobal(); err != nil {
+	if err := reb.rebalanceGlobal(md); err != nil {
 		if !reb.xreb.Aborted() {
 			glog.Errorf("EC rebalance failed: %v", err)
 			reb.abortGlobal()
@@ -391,7 +391,7 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 // if `cb` returns true the wait loop interrupts immediately. It is used,
 // e.g., to wait for EC batch to finish: no need to wait until timeout if
 // all targets have sent push notification that they are done with the batch.
-func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func() bool) (
+func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func(md *globArgs) bool) (
 	aborted bool) {
 	cmn.Assert(maxWait > 0)
 	sleep := md.config.Timeout.CplaneOperation
@@ -405,7 +405,7 @@ func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func() b
 		} else {
 			quiescent = 0
 		}
-		if cb != nil && cb() {
+		if cb != nil && cb(md) {
 			break
 		}
 		aborted = reb.xreb.AbortedAfter(sleep)
@@ -459,7 +459,6 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		config:    cmn.GCO.Get(),
 		singleBck: len(buckets) == 1,
 	}
-	reb.ra = md
 	if len(buckets) == 0 || buckets[0] == "" {
 		md.ecUsed = reb.t.GetBowner().Get().IsECUsed()
 	} else {

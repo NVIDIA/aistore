@@ -721,8 +721,7 @@ func (reb *Manager) onECData(w http.ResponseWriter, hdr transport.Header, reader
 		return
 	}
 
-	// a target was too late in sending(rebID is obsolete) its data or too early (ra == nil)
-	if reb.ra == nil || req.RebID != reb.globRebID.Load() {
+	if req.RebID != reb.globRebID.Load() {
 		glog.Warningf("Local node has not started or already has finished rebalancing")
 		cmn.DrainReader(reader)
 		return
@@ -1352,7 +1351,7 @@ func (reb *Manager) needsReplica(obj *rebObject) bool {
 
 // Read CT from local drive and send to another target.
 // If destination is not defined the target sends its data to "default by HRW" target
-func (reb *Manager) sendLocalData(obj *rebObject, si ...*cluster.Snode) error {
+func (reb *Manager) sendLocalData(md *globArgs, obj *rebObject, si ...*cluster.Snode) error {
 	reb.laterx.Store(true)
 	ct, ok := obj.locCT[reb.t.Snode().ID()]
 	cmn.Assert(ok)
@@ -1360,7 +1359,7 @@ func (reb *Manager) sendLocalData(obj *rebObject, si ...*cluster.Snode) error {
 	if len(si) != 0 {
 		target = si[0]
 	} else {
-		mainSI, ok := reb.ra.smap.Tmap[obj.mainDaemon]
+		mainSI, ok := md.smap.Tmap[obj.mainDaemon]
 		cmn.Assert(ok)
 		target = mainSI
 	}
@@ -1431,7 +1430,7 @@ func (reb *Manager) firstEmptyTgt(obj *rebObject) *cluster.Snode {
 	return nil
 }
 
-func (reb *Manager) allCTReceived() bool {
+func (reb *Manager) allCTReceived(_ *globArgs) bool {
 	for {
 		if reb.xreb.Aborted() {
 			return false
@@ -1468,11 +1467,11 @@ func (reb *Manager) allCTReceived() bool {
 	return reb.ec.waiter.waitFor.Load() == 0 && reb.ec.waiter.toRebuild.Load() == 0
 }
 
-func (reb *Manager) allNodesCompletedBatch() bool {
+func (reb *Manager) allNodesCompletedBatch(md *globArgs) bool {
 	cnt := 0
 	batchID := reb.stages.currBatch.Load()
 	reb.stages.mtx.Lock()
-	smap := reb.ra.smap.Tmap
+	smap := md.smap.Tmap
 	for _, si := range smap {
 		if si.ID() == reb.t.Snode().ID() {
 			// local target is always in the stage
@@ -1487,7 +1486,7 @@ func (reb *Manager) allNodesCompletedBatch() bool {
 	return cnt == len(smap)
 }
 
-func (reb *Manager) waitForFullObject(obj *rebObject, moveLocalSlice bool) error {
+func (reb *Manager) waitForFullObject(md *globArgs, obj *rebObject, moveLocalSlice bool) error {
 	if moveLocalSlice {
 		// Default target has a slice, so it must be sent to another target
 		// before receiving a full object from some other target
@@ -1496,7 +1495,7 @@ func (reb *Manager) waitForFullObject(obj *rebObject, moveLocalSlice bool) error
 		}
 		tgt := reb.firstEmptyTgt(obj)
 		cmn.Assert(tgt != nil) // must not happen
-		if err := reb.sendLocalData(obj, tgt); err != nil {
+		if err := reb.sendLocalData(md, obj, tgt); err != nil {
 			return err
 		}
 	}
@@ -1544,7 +1543,7 @@ func (reb *Manager) restoreReplicas(obj *rebObject) (err error) {
 	return nil
 }
 
-func (reb *Manager) rebalanceObject(obj *rebObject) (err error) {
+func (reb *Manager) rebalanceObject(md *globArgs, obj *rebObject) (err error) {
 	// Case #1: this target does not have to do anything
 	if reb.shouldSkipObj(obj) {
 		if bool(glog.FastV(4, glog.SmoduleReb)) {
@@ -1555,7 +1554,7 @@ func (reb *Manager) rebalanceObject(obj *rebObject) (err error) {
 
 	// Case #2: this target has someone's main object
 	if reb.hasFullObjMisplaced(obj) {
-		return reb.sendLocalData(obj)
+		return reb.sendLocalData(md, obj)
 	}
 
 	// Case #3: this target has a slice while the main must be restored.
@@ -1564,7 +1563,7 @@ func (reb *Manager) rebalanceObject(obj *rebObject) (err error) {
 	hasSlice, shouldSend := reb.shouldSendSlice(obj)
 	if !obj.fullObjFound && hasSlice {
 		if shouldSend {
-			return reb.sendLocalData(obj)
+			return reb.sendLocalData(md, obj)
 		}
 		return nil
 	}
@@ -1596,13 +1595,13 @@ func (reb *Manager) rebalanceObject(obj *rebObject) (err error) {
 
 	// Case #5.3: main has nothing, but full object and all slices exists
 	if obj.isMain && !obj.mainHasAny && obj.fullObjFound {
-		return reb.waitForFullObject(obj, false)
+		return reb.waitForFullObject(md, obj, false)
 	}
 
 	// Case #5.4: main has a slice instead of a full object, send local
 	// slice to a free target and wait for another target sends the full obj
 	if obj.isMain && obj.mainHasAny && obj.mainSliceID != 0 && obj.fullObjFound {
-		return reb.waitForFullObject(obj, true)
+		return reb.waitForFullObject(md, obj, true)
 	}
 
 	// Case #5.5: it is main target and full object is missing
@@ -1631,15 +1630,15 @@ func (reb *Manager) cleanupBatch() {
 }
 
 // Wait for all targets to finish the current batch and then free allocated resources
-func (reb *Manager) finalizeBatch() error {
+func (reb *Manager) finalizeBatch(md *globArgs) error {
 	// First, wait for all slices the local target wants to receive
-	maxWait := reb.ra.config.Rebalance.Quiesce
-	if aborted := reb.waitQuiesce(reb.ra, maxWait, reb.allCTReceived); aborted {
+	maxWait := md.config.Rebalance.Quiesce
+	if aborted := reb.waitQuiesce(md, maxWait, reb.allCTReceived); aborted {
 		reb.ec.waiter.waitFor.Store(0)
 		return errors.New("Aborted")
 	}
 	// wait until all rebiult slices are sent
-	reb.waitECAck()
+	reb.waitECAck(md)
 
 	// mark batch done and notify other targets
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
@@ -1648,7 +1647,7 @@ func (reb *Manager) finalizeBatch() error {
 	reb.changeStage(rebStageECBatch, reb.stages.currBatch.Load())
 
 	// wait for all targets to finish sending/receiving
-	if aborted := reb.waitQuiesce(reb.ra, maxWait, reb.allNodesCompletedBatch); aborted {
+	if aborted := reb.waitQuiesce(md, maxWait, reb.allNodesCompletedBatch); aborted {
 		reb.ec.waiter.waitFor.Store(0)
 		return errors.New("Aborted")
 	}
@@ -1659,7 +1658,7 @@ func (reb *Manager) finalizeBatch() error {
 // Check the list of sent CTs and resent ones that did not
 // receive and acknowledge from a destination target.
 // Returns the number of resent CTs
-func (reb *Manager) retransmitEC() (cnt int) {
+func (reb *Manager) retransmitEC(md *globArgs) (cnt int) {
 	reb.ec.ackCTs.mtx.Lock()
 	defer reb.ec.ackCTs.mtx.Unlock()
 	if len(reb.ec.ackCTs.ct) == 0 {
@@ -1670,7 +1669,7 @@ func (reb *Manager) retransmitEC() (cnt int) {
 		if reb.xreb.Aborted() {
 			return 0
 		}
-		si, ok := reb.ra.smap.Tmap[dest.daemonID]
+		si, ok := md.smap.Tmap[dest.daemonID]
 		if !ok {
 			glog.Errorf("Target %s not found in smap", dest.daemonID)
 			continue
@@ -1701,7 +1700,7 @@ func (reb *Manager) retransmitEC() (cnt int) {
 	return cnt
 }
 
-func (reb *Manager) allAckReceived() bool {
+func (reb *Manager) allAckReceived(_ *globArgs) bool {
 	if reb.xreb.Aborted() {
 		return false
 	}
@@ -1711,10 +1710,10 @@ func (reb *Manager) allAckReceived() bool {
 	return cnt == 0
 }
 
-func (reb *Manager) waitECAck() {
+func (reb *Manager) waitECAck(md *globArgs) {
 	globRebID := reb.globRebID.Load()
-	loghdr := reb.loghdr(globRebID, reb.ra.smap)
-	sleep := reb.ra.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
+	loghdr := reb.loghdr(globRebID, md.smap)
+	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
 
 	// loop without timeout - wait until all CTs put into transport
 	// queue are processed (either sent or failed)
@@ -1727,16 +1726,16 @@ func (reb *Manager) waitECAck() {
 	}
 
 	// ignore erros and continue
-	maxWait := reb.ra.config.Rebalance.Quiesce
-	if aborted := reb.waitQuiesce(reb.ra, maxWait, reb.allAckReceived); aborted {
+	maxWait := md.config.Rebalance.Quiesce
+	if aborted := reb.waitQuiesce(md, maxWait, reb.allAckReceived); aborted {
 		return
 	}
-	maxwt := reb.ra.config.Rebalance.DestRetryTime
-	maxwt += time.Duration(int64(time.Minute) * int64(reb.ra.smap.CountTargets()/10))
-	maxwt = cmn.MinDur(maxwt, reb.ra.config.Rebalance.DestRetryTime*2)
+	maxwt := md.config.Rebalance.DestRetryTime
+	maxwt += time.Duration(int64(time.Minute) * int64(md.smap.CountTargets()/10))
+	maxwt = cmn.MinDur(maxwt, md.config.Rebalance.DestRetryTime*2)
 	curwt := time.Duration(0)
 	for curwt < maxwt {
-		cnt := reb.retransmitEC()
+		cnt := reb.retransmitEC(md)
 		if cnt == 0 || reb.xreb.Aborted() {
 			return
 		}
@@ -1750,7 +1749,7 @@ func (reb *Manager) waitECAck() {
 }
 
 // Rebalances the current batch of broken objects
-func (reb *Manager) rebalanceBatch(batchCurr int64) error {
+func (reb *Manager) rebalanceBatch(md *globArgs, batchCurr int64) error {
 	batchEnd := cmn.Min(int(batchCurr)+ecRebBatchSize, len(reb.ec.broken))
 	for objIdx := int(batchCurr); objIdx < batchEnd; objIdx++ {
 		if reb.xreb.Aborted() {
@@ -1763,7 +1762,7 @@ func (reb *Manager) rebalanceBatch(batchCurr int64) error {
 		}
 		cmn.Assert(len(obj.locCT) != 0) // cannot happen
 
-		if err := reb.rebalanceObject(obj); err != nil {
+		if err := reb.rebalanceObject(md, obj); err != nil {
 			return err
 		}
 	}
@@ -1771,7 +1770,7 @@ func (reb *Manager) rebalanceBatch(batchCurr int64) error {
 }
 
 // Does cluster-wide rebalance
-func (reb *Manager) rebalanceGlobal() (err error) {
+func (reb *Manager) rebalanceGlobal(md *globArgs) (err error) {
 	batchCurr := int64(0)
 	batchLast := int64(len(reb.ec.broken) - 1)
 	reb.stages.currBatch.Store(batchCurr)
@@ -1781,14 +1780,14 @@ func (reb *Manager) rebalanceGlobal() (err error) {
 			glog.Infof("Starting batch of %d from %d", ecRebBatchSize, batchCurr)
 		}
 
-		if err = reb.rebalanceBatch(batchCurr); err != nil {
+		if err = reb.rebalanceBatch(md, batchCurr); err != nil {
 			reb.cleanupBatch()
 			return err
 		}
 
-		reb.waitECAck()
+		reb.waitECAck(md)
 		reb.stages.stage.Store(rebStageECBatch)
-		err = reb.finalizeBatch()
+		err = reb.finalizeBatch(md)
 		reb.cleanupBatch()
 		if err != nil {
 			return err
@@ -2210,12 +2209,12 @@ func (reb *Manager) rebuildAndSend(obj *rebObject, slices []*waitCT) error {
 	return reb.rebuildFromSlices(obj, slices)
 }
 
-func (reb *Manager) initEC(netd string) {
+func (reb *Manager) initEC(md *globArgs, netd string) {
 	client := transport.NewIntraDataClient()
 	dataArgs := transport.SBArgs{
 		Network:    netd,
 		Trname:     DataECRebStreamName,
-		Multiplier: int(reb.ra.config.Rebalance.Multiplier),
+		Multiplier: int(md.config.Rebalance.Multiplier),
 	}
 	reb.ec.data = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), client, dataArgs)
 }
