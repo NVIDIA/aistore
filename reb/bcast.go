@@ -34,6 +34,7 @@ type (
 		Stage       uint32                  `json:"stage"`               // the current stage - see enum above
 		Aborted     bool                    `json:"aborted"`             // aborted?
 		Running     bool                    `json:"running"`             // running?
+		Quiescent   bool                    `json:"quiescent"`           // transport queue is empty
 	}
 
 	// push notification struct - a target sends it when it enters `stage`
@@ -59,6 +60,7 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 	status.Aborted, status.Running = xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
 	status.Stage = reb.stages.stage.Load()
 	status.GlobRebID = reb.globRebID.Load()
+	status.Quiescent = reb.isQuiescent()
 	if status.Stage > rebStageECGlobRepair && status.Stage < rebStageECCleanup {
 		status.BatchCurr = int(reb.stages.currBatch.Load())
 		status.BatchLast = int(reb.stages.lastBatch.Load())
@@ -351,7 +353,7 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 		ok = true
 		return
 	}
-	glog.Infof("%s: %s[%s] not yet at the right stage", loghdr, tsi.Name(), stages[status.Stage])
+	glog.Infof("%s: %s[%s] not yet at the right stage %s", loghdr, tsi.Name(), stages[status.Stage], stages[desiredStage])
 	return
 }
 
@@ -467,4 +469,22 @@ func (reb *Manager) waitForPushReqs(md *globArgs, stage uint32, timeout ...time.
 		curWait += sleep
 	}
 	return false
+}
+
+// Returns true if all targets in the cluster are quiescent: all
+// transport queues are empty
+func (reb *Manager) nodesQuescent(md *globArgs) bool {
+	quiescent := true
+	for _, si := range md.smap.Tmap {
+		if si.ID() == reb.t.Snode().ID() && !reb.isQuiescent() {
+			quiescent = false
+			break
+		}
+		status, ok := reb.checkGlobStatus(si, md.smap.Version, rebStageFin, md)
+		if !ok || !status.Quiescent {
+			quiescent = false
+			break
+		}
+	}
+	return quiescent
 }

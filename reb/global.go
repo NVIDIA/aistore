@@ -367,10 +367,7 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 
 		// 8. synchronize
 		glog.Infof("%s: poll targets for: stage=(%s or %s***)", loghdr, stages[rebStageFin], stages[rebStageWaitAck])
-		if !reb.waitForPushReqs(md, rebStageFin) {
-			// no need to broadcast if all targets have sent notifications
-			errCnt = reb.bcast(md, reb.waitFinExtended)
-		}
+		errCnt = reb.bcast(md, reb.waitFinExtended)
 		if reb.xreb.Aborted() {
 			return
 		}
@@ -417,7 +414,7 @@ func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func(md 
 func (reb *Manager) globalRebFini(md *globArgs) {
 	// 10.5. keep at it... (can't close the streams as long as)
 	maxWait := md.config.Rebalance.Quiesce
-	aborted := reb.waitQuiesce(md, maxWait, nil)
+	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuescent)
 	if !aborted {
 		if err := cmn.RemoveFile(md.pmarker); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(reb.globRebID.Load(), md.smap), md.pmarker, err)
@@ -551,6 +548,7 @@ func (rj *globalJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, l
 		lom = (*cluster.LOM)(lomptr)
 		t   = rj.m.t
 	)
+	rj.m.inQueue.Dec()
 	lom.Unlock(false)
 
 	if err != nil {
@@ -690,8 +688,10 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 			Version:    lom.Version(),
 		},
 	}
+	rj.m.inQueue.Inc()
 	o := transport.Obj{Hdr: hdr, Callback: rj.objSentCallback, CmplPtr: unsafe.Pointer(lom)}
 	if err = rj.m.streams.Send(o, file, tsi); err != nil {
+		rj.m.inQueue.Dec()
 		lomack.mu.Lock()
 		delete(lomack.q, lom.Uname())
 		lomack.mu.Unlock()

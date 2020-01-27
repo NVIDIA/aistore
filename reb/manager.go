@@ -83,6 +83,7 @@ type (
 		ec         *ecData
 		globRebID  atomic.Int64
 		laterx     atomic.Bool
+		inQueue    atomic.Int64
 	}
 	// Stage status of a single target
 	stageStatus struct {
@@ -371,6 +372,7 @@ func (reb *Manager) beginStreams(md *globArgs) {
 		reb.initEC(md, reb.netd)
 	}
 	reb.laterx.Store(false)
+	reb.inQueue.Store(0)
 }
 
 func (reb *Manager) endStreams() {
@@ -684,4 +686,19 @@ func (reb *Manager) abortGlobal() {
 	if err := reb.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
 		glog.Errorf("Failed to broadcast abort notification: %v", err)
 	}
+}
+
+// Returns if the target is quiescent: transport queue is empty, or xaction
+// has already aborted or finished
+func (reb *Manager) isQuiescent() bool {
+	// Finished or aborted xaction = no traffic
+	if reb.xreb == nil || reb.xreb.Aborted() || reb.xreb.Finished() {
+		return true
+	}
+	// Has not finished the stage that generates network traffic yet
+	if reb.stages.stage.Load() < rebStageECBatch {
+		return false
+	}
+	// Check for both regular and EC transport queues are empty
+	return reb.inQueue.Load() == 0 && reb.ec.onAir.Load() == 0
 }
