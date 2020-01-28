@@ -29,7 +29,7 @@ const (
 
 // delimiters
 const (
-	copyFQNSepa = "\xa6/\xc5"
+	copyFQNSepa = "\x00"
 	recordSepa  = "\xe3/\xbd"
 	lenCopySepa = len(copyFQNSepa)
 	lenRecSepa  = len(recordSepa)
