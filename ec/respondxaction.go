@@ -210,7 +210,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 		// save xattrs only for object replicas (slices have xattrs empty)
 		if err == nil && !iReq.IsSlice {
 			lom = &cluster.LOM{T: r.t, FQN: objFQN}
-			err = lom.Init(bck.Name, bck.Provider)
+			err = lom.Init(bck.Bck)
 			if err != nil {
 				glog.Errorf("Failed to read resolve FQN %s: %s", objFQN, err)
 				slab.Free(buf)

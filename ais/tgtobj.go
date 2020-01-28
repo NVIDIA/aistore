@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -303,7 +305,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	if checkHash != nil {
 		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
 		if !cmn.EqCksum(expectedCksum, computedCksum) {
-			err = cmn.NewBadDataCksumError(expectedCksum, computedCksum, poi.lom.StringEx())
+			err = cmn.NewBadDataCksumError(expectedCksum, computedCksum, poi.lom.String())
 			poi.t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
 				stats.NamedVal64{Name: stats.ErrCksumSize, Value: written},
@@ -348,7 +350,7 @@ do:
 		doubleCheck, err, errCode = goi.tryRestoreObject()
 		if doubleCheck && err != nil {
 			lom2 := &cluster.LOM{T: goi.t, Objname: goi.lom.Objname}
-			er2 := lom2.Init(goi.lom.Bucket(), goi.lom.Provider())
+			er2 := lom2.Init(goi.lom.Bck().Bck)
 			if er2 == nil {
 				er2 = lom2.Load()
 				if er2 == nil {
@@ -506,12 +508,12 @@ gfn:
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, lom.Provider())
 	query.Add(cmn.URLParamIsGFNRequest, "true")
+	query = api.AddBckToQuery(query, api.MakeBckFrom(lom.Bck().Bck))
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket(), lom.Objname),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.Objname),
 		Query:  query,
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)

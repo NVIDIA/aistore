@@ -105,7 +105,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 			continue
 		}
 		lom := &cluster.LOM{T: t, Objname: objname}
-		err := lom.Init(bck.Name, bck.Provider)
+		err := lom.Init(bck.Bck)
 		if err != nil {
 			glog.Error(err)
 			continue
@@ -142,7 +142,7 @@ func (t *targetrunner) prefetchMissing(ctx context.Context, objName string, bck 
 		vchanged, coldGet bool
 	)
 	lom := &cluster.LOM{T: t, Objname: objName}
-	err := lom.Init(bck.Name, bck.Provider)
+	err := lom.Init(bck.Bck)
 	if err != nil {
 		glog.Error(err)
 		return

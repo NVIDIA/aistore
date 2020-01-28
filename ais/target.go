@@ -435,6 +435,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objName := apiItems[0], apiItems[1]
 	provider := query.Get(cmn.URLParamProvider)
+	namespace := query.Get(cmn.URLParamNamespace)
 	started := time.Now()
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsT.Add(stats.GetRedirLatency, redirDelta)
@@ -444,11 +445,12 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
+	bck := cmn.Bck{Name: bucket, Provider: provider, Ns: namespace}
 	lom := &cluster.LOM{T: t, Objname: objName}
-	if err = lom.Init(bucket, provider, config); err != nil {
+	if err = lom.Init(bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
-			err = lom.Init(bucket, provider, config)
+			err = lom.Init(bck, config)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -512,6 +514,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	provider := query.Get(cmn.URLParamProvider)
+	namespace := query.Get(cmn.URLParamNamespace)
 	started := time.Now()
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
 		t.statsT.Add(stats.PutRedirLatency, redelta)
@@ -525,11 +528,12 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, capInfo.Err.Error())
 		return
 	}
+	bck := cmn.Bck{Name: bucket, Provider: provider, Ns: namespace}
 	lom := &cluster.LOM{T: t, Objname: objname}
-	if err = lom.Init(bucket, provider, config); err != nil {
+	if err = lom.Init(bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
-			err = lom.Init(bucket, provider, config)
+			err = lom.Init(bck, config)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -628,15 +632,17 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg     cmn.ActionMsg
-		started = time.Now()
 		evict   bool
+		started = time.Now()
+		query   = r.URL.Query()
 	)
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
+	provider := query.Get(cmn.URLParamProvider)
+	namespace := query.Get(cmn.URLParamNamespace)
 	b, err := cmn.ReadBytes(r)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -650,8 +656,9 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		evict = msg.Action == cmn.ActEvictObjects
 	}
 
+	bck := cmn.Bck{Name: bucket, Provider: provider, Ns: namespace}
 	lom := &cluster.LOM{T: t, Objname: objname}
-	if err = lom.Init(bucket, provider); err != nil {
+	if err = lom.Init(bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -661,14 +668,14 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	err = t.objDelete(t.contextWithAuth(r.Header), lom, evict)
 	if err != nil {
-		s := fmt.Sprintf("Error deleting %s: %v", lom.StringEx(), err)
+		s := fmt.Sprintf("Error deleting %s: %v", lom, err)
 		t.invalmsghdlr(w, r, s)
 		return
 	}
 	// EC cleanup if EC is enabled
 	ec.ECM.CleanupObject(lom)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("DELETE: %s, %d µs", lom.StringEx(), int64(time.Since(started)/time.Microsecond))
+		glog.Infof("DELETE: %s, %d µs", lom, int64(time.Since(started)/time.Microsecond))
 	}
 }
 
@@ -924,7 +931,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	var (
 		bucket, objName = apiItems[0], apiItems[1]
-		provider        = r.URL.Query().Get(cmn.URLParamProvider)
+		provider        = query.Get(cmn.URLParamProvider)
+		namespace       = query.Get(cmn.URLParamNamespace)
 		invalidHandler  = t.invalmsghdlr
 		hdr             = w.Header()
 	)
@@ -951,8 +959,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bck := cmn.Bck{Name: bucket, Provider: provider, Ns: namespace}
 	lom := &cluster.LOM{T: t, Objname: objName}
-	if err = lom.Init(bucket, provider); err != nil {
+	if err = lom.Init(bck); err != nil {
 		invalidHandler(w, r, err.Error())
 		return
 	}
@@ -967,7 +976,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
-		glog.Infof("%s %s <= %s", r.Method, lom.StringEx(), pid)
+		glog.Infof("%s %s <= %s", r.Method, lom, pid)
 	}
 
 	exists = err == nil
@@ -1021,7 +1030,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	hdr.Set(cmn.HeaderObjProvider, lom.Provider())
+	hdr.Set(cmn.HeaderObjProvider, lom.Bck().Provider)
 	hdr.Set(cmn.HeaderObjPresent, strconv.FormatBool(exists))
 }
 
@@ -1178,7 +1187,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		// retry upon race vs (just finished/timed_out)
 	}
 	if err != nil {
-		glog.Errorf("%s: unexpected failure to initiate local mirroring, err: %v", lom.StringEx(), err)
+		glog.Errorf("%s: unexpected failure to initiate local mirroring, err: %v", lom, err)
 	}
 }
 
@@ -1209,7 +1218,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 		if errRet != nil {
 			if !os.IsNotExist(errRet) {
 				if cloudErr != nil {
-					glog.Errorf("%s: failed to delete from cloud: %v", lom.StringEx(), cloudErr)
+					glog.Errorf("%s: failed to delete from cloud: %v", lom, cloudErr)
 				}
 				return errRet
 			}
@@ -1223,7 +1232,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 		}
 	}
 	if cloudErr != nil {
-		return fmt.Errorf("%s: failed to delete from cloud: %v", lom.StringEx(), cloudErr)
+		return fmt.Errorf("%s: failed to delete from cloud: %v", lom, cloudErr)
 	}
 	return errRet
 }
@@ -1239,9 +1248,11 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 	bucket, objnameFrom := apitems[0], apitems[1]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
+	namespace := r.URL.Query().Get(cmn.URLParamNamespace)
 
+	bck := cmn.Bck{Name: bucket, Provider: provider, Ns: namespace}
 	lom := &cluster.LOM{T: t, Objname: objnameFrom}
-	if err = lom.Init(bucket, provider); err != nil {
+	if err = lom.Init(bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

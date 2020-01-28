@@ -147,7 +147,7 @@ func ecGetAllSlices(t *testing.T, bck api.Bck, objName string, o *ecOptions) (ma
 		}
 
 		sliceLom := &cluster.LOM{T: tMock, FQN: path}
-		if err = sliceLom.Init("", bckProvider); err != nil {
+		if err = sliceLom.Init(cmn.Bck{Provider: bckProvider}); err != nil {
 			return nil
 		}
 

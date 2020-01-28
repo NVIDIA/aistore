@@ -79,7 +79,7 @@ func HeadObject(baseParams BaseParams, bck Bck, object string, checkExists ...bo
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object)
 	query := make(url.Values)
 	query.Add(cmn.URLParamCheckExists, strconv.FormatBool(checkIsCached))
-	query = addBckToQuery(query, bck)
+	query = AddBckToQuery(query, bck)
 	params := OptionalParams{Query: query}
 
 	r, err := doHTTPRequestGetResp(baseParams, path, nil, params)
@@ -146,7 +146,7 @@ func HeadObject(baseParams BaseParams, bck Bck, object string, checkExists ...bo
 func DeleteObject(baseParams BaseParams, bck Bck, object string) error {
 	var (
 		path   = cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object)
-		query  = addBckToQuery(nil, bck)
+		query  = AddBckToQuery(nil, bck)
 		params = OptionalParams{Query: query}
 	)
 	baseParams.Method = http.MethodDelete
@@ -186,7 +186,7 @@ func GetObject(baseParams BaseParams, bck Bck, object string, options ...GetObje
 	if len(options) != 0 {
 		w, q = getObjectOptParams(options[0])
 	}
-	q = addBckToQuery(q, bck)
+	q = AddBckToQuery(q, bck)
 	optParams.Query = q
 
 	baseParams.Method = http.MethodGet
@@ -275,7 +275,7 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	}
 	defer handle.Close()
 
-	query := addBckToQuery(nil, args.Bck)
+	query := AddBckToQuery(nil, args.Bck)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
@@ -338,7 +338,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamAppendType, cmn.AppendOp)
 	query.Add(cmn.URLParamAppendHandle, args.Handle)
-	query = addBckToQuery(query, args.Bck)
+	query = AddBckToQuery(query, args.Bck)
 
 	var header http.Header
 	if args.Size > 0 {
@@ -394,7 +394,7 @@ func FlushObject(args AppendArgs) (err error) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamAppendType, cmn.FlushOp)
 	query.Add(cmn.URLParamAppendHandle, args.Handle)
-	query = addBckToQuery(query, args.Bck)
+	query = AddBckToQuery(query, args.Bck)
 	params := OptionalParams{Query: query}
 
 	args.BaseParams.Method = http.MethodPut
@@ -437,7 +437,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 	if err != nil {
 		return err
 	}
-	query := addBckToQuery(nil, args.Bck)
+	query := AddBckToQuery(nil, args.Bck)
 	params := OptionalParams{Query: query}
 
 	args.BaseParams.Method = http.MethodPost

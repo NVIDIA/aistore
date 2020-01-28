@@ -254,7 +254,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		return
 	}
 	lom := &cluster.LOM{T: t, Objname: objName}
-	if err = lom.Init(bck.Name, bck.Provider); err != nil {
+	if err = lom.Init(bck.Bck); err != nil {
 		return
 	}
 	// local or remote?

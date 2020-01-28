@@ -90,10 +90,9 @@ func (lom *LOM) SetAtimeUnix(tu int64)     { lom.md.atime = tu }
 func (lom *LOM) ECEnabled() bool           { return lom.Bprops().EC.Enabled }
 func (lom *LOM) LRUEnabled() bool          { return lom.Bprops().LRU.Enabled }
 func (lom *LOM) IsHRW() bool               { return lom.HrwFQN == lom.FQN } // subj to resilvering
-func (lom *LOM) Bucket() string            { return lom.bck.Name }
-func (lom *LOM) Provider() string          { return lom.bck.Provider }
-func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
 func (lom *LOM) Bck() *Bck                 { return lom.bck }
+func (lom *LOM) BckName() string           { return lom.bck.Name }
+func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
 
 //
 // access perms
@@ -161,7 +160,7 @@ func (lom *LOM) _whingeCopy() (yes bool) {
 	if !lom.IsCopy() {
 		return
 	}
-	msg := fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %+v)", lom.StringEx(), lom.FQN, lom.HrwFQN, lom.md.copies)
+	msg := fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %+v)", lom, lom.FQN, lom.HrwFQN, lom.md.copies)
 	cmn.DassertMsg(false, msg, pkgName)
 	glog.Error(msg)
 	return true
@@ -339,7 +338,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 			continue
 		}
 		src := lom.Clone(fqn)
-		if err := src.Init(lom.bck.Name, lom.bck.Provider, lom.Config()); err != nil {
+		if err := src.Init(lom.bck.Bck, lom.Config()); err != nil {
 			continue
 		}
 		if err := src.Load(false); err != nil {
@@ -371,7 +370,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 
 	dst = lom.Clone(dstFQN)
-	if err = dst.Init("", "", lom.Config()); err != nil {
+	if err = dst.Init(cmn.Bck{}, lom.Config()); err != nil {
 		return
 	}
 	dst.CopyMetadata(lom)
@@ -409,8 +408,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 // lom.String() and helpers
 //
 
-func (lom *LOM) String() string   { return lom._string(lom.Bucket()) }
-func (lom *LOM) StringEx() string { return lom._string(lom.bck.String()) }
+func (lom *LOM) String() string { return lom._string(lom.bck.String()) }
 
 func (lom *LOM) _string(b string) string {
 	var (
@@ -510,7 +508,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	// different versions may have different checksums
 	if (cksumFromFS != nil || lom.md.cksum != nil) && md.version == lom.md.version {
 		if !cmn.EqCksum(lom.md.cksum, cksumFromFS) {
-			err = cmn.NewBadDataCksumError(lom.md.cksum, cksumFromFS, lom.StringEx())
+			err = cmn.NewBadDataCksumError(lom.md.cksum, cksumFromFS, lom.String())
 			lom.Uncache()
 		}
 	}
@@ -624,27 +622,27 @@ func (lom *LOM) Hkey() (string, int) {
 	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName)
 	return lom.md.uname, int(lom.ParsedFQN.Digest & (cmn.MultiSyncMapCount - 1))
 }
-func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error) {
+func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 	if lom.FQN != "" {
 		lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN)
 		if err != nil {
 			return
 		}
-		if bucket == "" {
-			bucket = lom.ParsedFQN.Bck.Name
-		} else if bucket != lom.ParsedFQN.Bck.Name {
-			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, bucket, lom.ParsedFQN.Bck.Name)
+		if bck.Name == "" {
+			bck.Name = lom.ParsedFQN.Bck.Name
+		} else if bck.Name != lom.ParsedFQN.Bck.Name {
+			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, bck, lom.ParsedFQN.Bck)
 		}
 		lom.Objname = lom.ParsedFQN.ObjName
 		prov := lom.ParsedFQN.Bck.Provider
-		if provider == "" {
-			provider = prov
-		} else if provider != prov {
-			return fmt.Errorf("lom-init %s: provider mismatch (%s != %s)", lom.FQN, provider, prov)
+		if bck.Provider == "" {
+			bck.Provider = prov
+		} else if bck.Provider != prov {
+			return fmt.Errorf("lom-init %s: provider mismatch (%s != %s)", lom.FQN, bck.Provider, prov)
 		}
 	}
 	bowner := lom.T.GetBowner()
-	lom.bck = NewBck(bucket, provider, cmn.NsGlobal)
+	lom.bck = NewBckEmbed(bck)
 	if err = lom.bck.Init(bowner); err != nil {
 		return
 	}
@@ -715,9 +713,9 @@ func (lom *LOM) checkBucket() error {
 	)
 	if !present { // bucket does not exist
 		if lom.bck.IsCloud() {
-			return cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket())
+			return cmn.NewErrorCloudBucketDoesNotExist(lom.BckName())
 		}
-		return cmn.NewErrorBucketDoesNotExist(lom.Bucket())
+		return cmn.NewErrorBucketDoesNotExist(lom.BckName())
 	}
 	if lom.md.bckID == bprops.BID {
 		return nil // ok
@@ -758,7 +756,7 @@ beg:
 	finfo, err = os.Stat(lom.FQN)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			err = fmt.Errorf("%s: errstat %v", lom.StringEx(), err)
+			err = fmt.Errorf("%s: errstat %v", lom, err)
 			lom.T.FSHC(err, lom.FQN)
 		}
 		return
@@ -771,13 +769,13 @@ beg:
 				goto beg
 			}
 		}
-		err = fmt.Errorf("%s: errmeta %v, %T", lom.StringEx(), err, err)
+		err = fmt.Errorf("%s: errmeta %v, %T", lom, err, err)
 		lom.T.FSHC(err, lom.FQN)
 		return
 	}
 	// fstat & atime
 	if lom.md.size != finfo.Size() { // corruption or tampering
-		return fmt.Errorf("%s: errsize (%d != %d)", lom.StringEx(), lom.md.size, finfo.Size())
+		return fmt.Errorf("%s: errsize (%d != %d)", lom, lom.md.size, finfo.Size())
 	}
 	atime := ios.GetATime(finfo)
 	lom.md.atime = atime.UnixNano()

@@ -91,7 +91,7 @@ func (c *putJogger) ec(req *Request) error {
 
 	if err != nil {
 		glog.Errorf("Error %s object [%s/%s], fqn: %q, err: %v",
-			act, req.LOM.Bucket(), req.LOM.Objname, req.LOM.FQN, err)
+			act, req.LOM.Bck(), req.LOM.Objname, req.LOM.FQN, err)
 	}
 
 	if req.ErrCh != nil {
@@ -138,7 +138,7 @@ func (c *putJogger) encode(req *Request) error {
 	targetCnt := len(c.parent.smap.Get().Tmap)
 	if targetCnt < reqTargets {
 		return fmt.Errorf("object %s/%s requires %d targets to encode, only %d found",
-			req.LOM.Bucket(), req.LOM.Objname, reqTargets, targetCnt)
+			req.LOM.Bck(), req.LOM.Objname, reqTargets, targetCnt)
 	}
 
 	// Save metadata before encoding the object
@@ -176,7 +176,7 @@ func (c *putJogger) encode(req *Request) error {
 func (c *putJogger) cleanup(req *Request) error {
 	fqnMeta, _, err := cluster.HrwFQN(MetaType, req.LOM.Bck(), req.LOM.Objname)
 	if err != nil {
-		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bucket(), req.LOM.Objname, err)
+		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bck(), req.LOM.Objname, err)
 		return nil
 	}
 

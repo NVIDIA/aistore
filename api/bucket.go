@@ -36,6 +36,10 @@ func (b Bck) String() string {
 	return fmt.Sprintf("%s/%s/%s", b.Provider, b.Namespace, b.Name)
 }
 
+func MakeBckFrom(bck cmn.Bck) Bck {
+	return Bck{Name: bck.Name, Provider: bck.Provider, Namespace: bck.Ns}
+}
+
 // SetBucketProps API
 //
 // Set the properties of a bucket using the bucket name and the entire bucket
@@ -52,7 +56,7 @@ func SetBucketProps(baseParams BaseParams, bck Bck, props cmn.BucketPropsToUpdat
 	if len(query) > 0 {
 		optParams.Query = query[0]
 	}
-	optParams.Query = addBckToQuery(optParams.Query, bck)
+	optParams.Query = AddBckToQuery(optParams.Query, bck)
 
 	baseParams.Method = http.MethodPatch
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
@@ -74,7 +78,7 @@ func ResetBucketProps(baseParams BaseParams, bck Bck, query ...url.Values) error
 	if len(query) > 0 {
 		optParams.Query = query[0]
 	}
-	optParams.Query = addBckToQuery(optParams.Query, bck)
+	optParams.Query = AddBckToQuery(optParams.Query, bck)
 
 	baseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
@@ -97,7 +101,7 @@ func HeadBucket(baseParams BaseParams, bck Bck, query ...url.Values) (p cmn.Buck
 	if len(query) > 0 {
 		optParams.Query = query[0]
 	}
-	optParams.Query = addBckToQuery(optParams.Query, bck)
+	optParams.Query = AddBckToQuery(optParams.Query, bck)
 
 	if r, err = doHTTPRequestGetResp(baseParams, path, nil, optParams); err != nil {
 		return
@@ -121,7 +125,7 @@ func GetBucketNames(baseParams BaseParams, bck Bck) (*cmn.BucketNames, error) {
 	var (
 		bucketNames = &cmn.BucketNames{}
 		path        = cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)
-		query       = addBckToQuery(nil, bck)
+		query       = AddBckToQuery(nil, bck)
 		optParams   = OptionalParams{Query: query}
 	)
 
@@ -145,7 +149,7 @@ func GetBucketNames(baseParams BaseParams, bck Bck) (*cmn.BucketNames, error) {
 // Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
 func GetBucketsSummaries(baseParams BaseParams, bck Bck, msg *cmn.SelectMsg) (cmn.BucketsSummaries, error) {
 	var (
-		q    = addBckToQuery(nil, bck)
+		q    = AddBckToQuery(nil, bck)
 		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	)
 
@@ -189,7 +193,7 @@ func CreateBucket(baseParams BaseParams, bck Bck) error {
 	var (
 		msg, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCreateLB})
 		path     = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		query    = addBckToQuery(nil, bck)
+		query    = AddBckToQuery(nil, bck)
 	)
 	if err != nil {
 		return err
@@ -206,7 +210,7 @@ func DestroyBucket(baseParams BaseParams, bck Bck) error {
 	var (
 		msg, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActDestroyLB})
 		path     = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		query    = addBckToQuery(nil, bck)
+		query    = AddBckToQuery(nil, bck)
 	)
 	if err != nil {
 		return err
@@ -331,7 +335,7 @@ func EvictCloudBucket(baseParams BaseParams, bck Bck, query ...url.Values) error
 	if bck.Provider == "" {
 		bck.Provider = cmn.Cloud
 	}
-	optParams.Query = addBckToQuery(optParams.Query, bck)
+	optParams.Query = AddBckToQuery(optParams.Query, bck)
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	_, err = DoHTTPRequest(baseParams, path, b, optParams)
@@ -588,7 +592,7 @@ func ListBucketFast(baseParams BaseParams, bck Bck, msg *cmn.SelectMsg, query ..
 	if len(query) > 0 {
 		q = query[0]
 	}
-	q = addBckToQuery(q, bck)
+	q = AddBckToQuery(q, bck)
 
 	optParams := OptionalParams{
 		Header: http.Header{"Content-Type": []string{"application/json"}},
@@ -615,7 +619,7 @@ func doListRangeRequest(baseParams BaseParams, bck Bck, action, method string, l
 		actionMsg = cmn.ActionMsg{Action: action, Value: listrangemsg}
 		b, err    = jsoniter.Marshal(actionMsg)
 		path      = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		query     = addBckToQuery(nil, bck)
+		query     = AddBckToQuery(nil, bck)
 	)
 	if err != nil {
 		return fmt.Errorf("failed to marshal cmn.ActionMsg, err: %v", err)
@@ -635,7 +639,7 @@ func ECEncodeBucket(baseParams BaseParams, bck Bck) error {
 	var (
 		b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActECEncode})
 		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		query  = addBckToQuery(nil, bck)
+		query  = AddBckToQuery(nil, bck)
 	)
 	if err != nil {
 		return err

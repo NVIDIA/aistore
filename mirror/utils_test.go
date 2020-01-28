@@ -124,7 +124,7 @@ func createTestFile(filePath, objName string, size int64) {
 
 func newBasicLom(fqn string, t cluster.Target) *cluster.LOM {
 	lom := &cluster.LOM{T: t, FQN: fqn}
-	err := lom.Init("", "")
+	err := lom.Init(cmn.Bck{})
 	Expect(err).NotTo(HaveOccurred())
 	lom.Uncache()
 	return lom

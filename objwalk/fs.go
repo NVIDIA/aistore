@@ -157,7 +157,7 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 		objStatus uint16 = cmn.ObjStatusOK
 	)
 	lom := &cluster.LOM{T: ci.t, FQN: fqn}
-	if err := lom.Init("", ""); err != nil {
+	if err := lom.Init(cmn.Bck{}); err != nil {
 		return err
 	}
 	if err := lom.Load(); err != nil {

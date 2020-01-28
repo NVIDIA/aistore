@@ -178,7 +178,7 @@ func (r *xactECBase) newMetafileResponse(attrs *transport.ObjectAttrs, fqn strin
 // replica/full object request
 func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
 	lom := &cluster.LOM{T: r.t, FQN: fqn}
-	err = lom.Init("", "")
+	err = lom.Init(cmn.Bck{})
 	if err != nil {
 		glog.Warning(err)
 		return nil, err
@@ -310,7 +310,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.regWriter(uname, sw)
 
 	if glog.V(4) {
-		glog.Infof("Requesting object %s/%s from %s", lom.Bucket(), lom.Objname, daemonID)
+		glog.Infof("Requesting object %s/%s from %s", lom.Bck(), lom.Objname, daemonID)
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, hdr, reader, nil, true); err != nil {
 		r.unregWriter(uname)
@@ -324,7 +324,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.unregWriter(uname)
 	lom.Uncache()
 	if glog.V(4) {
-		glog.Infof("Received object %s/%s from %s", lom.Bucket(), lom.Objname, daemonID)
+		glog.Infof("Received object %s/%s from %s", lom.Bck(), lom.Objname, daemonID)
 	}
 	return sw.n, nil
 }
@@ -406,7 +406,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 				obj.release()
 			}
 			if err != nil {
-				glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bucket(), lom.Objname, daemonIDs, err)
+				glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bck(), lom.Objname, daemonIDs, err)
 			}
 		}
 	}

@@ -428,7 +428,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 	tsid := ack.DaemonID // the sender
 	// Rx
 	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
-	if err = lom.Init(hdr.Bck.Name, hdr.Bck.Provider); err != nil {
+	if err = lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -583,7 +583,7 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objRead
 	}
 
 	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
-	if err = lom.Init(hdr.Bck.Name, hdr.Bck.Provider); err != nil {
+	if err = lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
 		return
 	}

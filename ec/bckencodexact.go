@@ -57,7 +57,7 @@ func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 		r.ObjectsInc()
 		r.BytesAdd(lom.Size())
 	} else {
-		glog.Errorf("Failed to EC object %s/%s: %v", lom.Bck().Name, lom.Objname, err)
+		glog.Errorf("Failed to EC object %s/%s: %v", lom.BckName(), lom.Objname, err)
 	}
 
 	r.wg.Done()
@@ -158,7 +158,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	lom := &cluster.LOM{T: j.parent.target(), FQN: fqn}
-	err := lom.Init("", j.parent.Bck().Provider, j.config)
+	err := lom.Init(j.parent.Bck(), j.config)
 	if err != nil {
 		return nil
 	}

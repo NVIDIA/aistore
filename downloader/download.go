@@ -167,8 +167,7 @@ type (
 		id         string         // id of the job task
 		regex      *regexp.Regexp // regex of descriptions to return if id is empty
 		obj        cmn.DlObj
-		bucket     string
-		provider   string
+		bck        cmn.Bck
 		timeout    string
 		fqn        string         // fqn of the object after it has been committed
 		responseCh chan *response // where the outcome of the request is written
@@ -184,15 +183,15 @@ type (
 
 func (req *request) String() (str string) {
 	str += fmt.Sprintf("id: %q, objname: %q, link: %q, from_cloud: %v, ", req.id, req.obj.Objname, req.obj.Link, req.obj.FromCloud)
-	if req.bucket != "" {
-		str += fmt.Sprintf("bucket: %q (provider: %q), ", req.bucket, req.provider)
+	if req.bck.Name != "" {
+		str += fmt.Sprintf("bucket: %q, ", req.bck)
 	}
 
 	return "{" + strings.TrimSuffix(str, ", ") + "}"
 }
 
 func (req *request) uid() string {
-	return fmt.Sprintf("%s|%s|%s|%v", req.obj.Link, req.bucket, req.obj.Objname, req.obj.FromCloud)
+	return fmt.Sprintf("%s|%s|%s|%v", req.obj.Link, req.bck, req.obj.Objname, req.obj.FromCloud)
 }
 
 func (req *request) write(resp interface{}, err error, statusCode int) {

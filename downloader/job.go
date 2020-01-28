@@ -25,8 +25,7 @@ var (
 type (
 	DlJob interface {
 		ID() string
-		Bucket() string
-		Provider() string
+		Bck() cmn.Bck
 
 		// FIXME: change to time.Duration
 		Timeout() string
@@ -87,8 +86,7 @@ type (
 )
 
 func (j *BaseDlJob) ID() string          { return j.id }
-func (j *BaseDlJob) Bucket() string      { return j.bck.Name }
-func (j *BaseDlJob) Provider() string    { return j.bck.Provider }
+func (j *BaseDlJob) Bck() cmn.Bck        { return j.bck.Bck }
 func (j *BaseDlJob) Timeout() string     { return j.timeout }
 func (j *BaseDlJob) Description() string { return j.description }
 

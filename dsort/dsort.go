@@ -144,7 +144,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 
 		shardName := name + m.rs.Extension
 		lom := &cluster.LOM{T: m.ctx.t, Objname: shardName}
-		if err := lom.Init(m.rs.Bucket, m.rs.Provider); err != nil {
+		if err := lom.Init(cmn.Bck{Name: m.rs.Bucket, Provider: m.rs.Provider}); err != nil {
 			return err
 		}
 
@@ -312,7 +312,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		errCh = make(chan error, 2)
 	)
 	lom := &cluster.LOM{T: m.ctx.t, Objname: shardName}
-	if err = lom.Init(bucket, provider); err != nil {
+	if err = lom.Init(cmn.Bck{Name: bucket, Provider: provider}); err != nil {
 		return
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())

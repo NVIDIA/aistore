@@ -55,7 +55,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 
 	// local op
 	dst := &cluster.LOM{T: ri.t, Objname: objnameTo}
-	err = dst.Init(ri.bckTo.Name, ri.bckTo.Provider)
+	err = dst.Init(ri.bckTo.Bck)
 	if err != nil {
 		return
 	}

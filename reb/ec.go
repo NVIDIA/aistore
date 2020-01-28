@@ -434,7 +434,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 
 	if resolved.ContentType == fs.ObjectType {
 		lom := cluster.LOM{T: reb.t, FQN: fqn}
-		if err := lom.Init(ct.Bck.Name, ct.Bck.Provider); err != nil {
+		if err := lom.Init(ct.Bck); err != nil {
 			return err
 		}
 		if err := lom.Load(false); err != nil {
@@ -582,7 +582,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 		ctFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bck, hdr.ObjName)
 	} else {
 		lom = &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
-		if err := lom.Init(hdr.Bck.Name, hdr.Bck.Provider); err != nil {
+		if err := lom.Init(hdr.Bck); err != nil {
 			return err
 		}
 		ctFQN = lom.FQN
@@ -1118,7 +1118,7 @@ func (reb *Manager) rebalanceLocalSlice(fromFQN, toFQN string, buf []byte) error
 
 func (reb *Manager) rebalanceLocalObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string, buf []byte) error {
 	lom := &cluster.LOM{T: reb.t, FQN: fromFQN}
-	err := lom.Init(fromMpath.Bck.Name, fromMpath.Bck.Provider)
+	err := lom.Init(fromMpath.Bck)
 	if err == nil {
 		err = lom.Load()
 	}
@@ -2089,7 +2089,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 	objMD.SliceID = 0
 
 	lom := &cluster.LOM{T: reb.t, Objname: obj.objName}
-	err = lom.Init(obj.bck.Name, obj.bck.Provider)
+	err = lom.Init(obj.bck)
 	if err != nil {
 		return err
 	}

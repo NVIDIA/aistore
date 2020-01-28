@@ -222,7 +222,7 @@ func ExecXaction(baseParams BaseParams, bck Bck, kind, command string) error {
 		}
 		path     = cmn.URLPath(cmn.Version, cmn.Cluster)
 		msg, err = jsoniter.Marshal(actMsg)
-		query    = addBckToQuery(nil, bck)
+		query    = AddBckToQuery(nil, bck)
 	)
 	if err != nil {
 		return err

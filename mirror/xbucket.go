@@ -121,7 +121,7 @@ func (j *joggerBckBase) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	lom := &cluster.LOM{T: j.parent.Target(), FQN: fqn}
-	err := lom.Init("", j.parent.Bck().Provider, j.config)
+	err := lom.Init(j.parent.Bck(), j.config)
 	if err != nil {
 		return nil
 	}

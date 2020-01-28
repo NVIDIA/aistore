@@ -214,7 +214,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 			e.TargetURL = localURL
 		}
 		lom := &cluster.LOM{T: w.t, Objname: e.Name}
-		err := lom.Init(w.bck.Name, cmn.GCO.Get().Cloud.Provider, config)
+		err := lom.Init(w.bck.Bck, config)
 		if err != nil {
 			if cmn.IsErrBucketNought(err) {
 				return nil, err

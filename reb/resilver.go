@@ -137,7 +137,7 @@ func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 	lom := &cluster.LOM{T: t, FQN: fqn}
-	if err = lom.Init("", ""); err != nil {
+	if err = lom.Init(cmn.Bck{}); err != nil {
 		return nil
 	}
 	// optionally, skip those that must be globally rebalanced
