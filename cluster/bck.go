@@ -88,8 +88,8 @@ func (b *Bck) String() string {
 	return fmt.Sprintf("%s(%x, %s, %s, %v)", b.Name, bid, b.Provider, b.Ns, inProgress)
 }
 
-func (b *Bck) IsAIS() bool         { return cmn.IsProviderAIS(b.Provider) }
-func (b *Bck) IsCloud() bool       { return cmn.IsProviderCloud(b.Provider, false /*acceptAnon*/) }
+func (b *Bck) IsAIS() bool         { return cmn.IsProviderAIS(b.Bck) }
+func (b *Bck) IsCloud() bool       { return cmn.IsProviderCloud(b.Bck, false /*acceptAnon*/) }
 func (b *Bck) IsInitialized() bool { return b.Props != nil }
 func (b *Bck) HasProvider() bool   { return b.IsAIS() || b.IsCloud() }
 
@@ -126,7 +126,9 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 	if b.Provider == "" {
 		b.Provider, b.Props = bmd.initBckAnyProvider(b)
 	} else if b.Provider == cmn.Cloud {
-		b.Provider = cmn.GCO.Get().Cloud.Provider
+		cloudConf := cmn.GCO.Get().Cloud
+		b.Provider = cloudConf.Provider
+		b.Ns = cloudConf.Ns
 		b.Provider, b.Props = bmd.initBckCloudProvider(b)
 	} else {
 		b.Props, _ = bmd.Get(b)

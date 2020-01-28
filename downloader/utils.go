@@ -49,7 +49,7 @@ func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bck *cluster.Bck) 
 		dlObjs = append(dlObjs, cmn.DlObj{
 			Objname:   objName,
 			Link:      link,
-			FromCloud: cmn.IsProviderCloud(bck.Provider, true /*acceptAnon*/),
+			FromCloud: cmn.IsProviderCloud(bck.Bck, true /*acceptAnon*/),
 		})
 	}
 

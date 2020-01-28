@@ -235,7 +235,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 		for _, mpathInfo := range md.paths {
 			var (
 				sema chan struct{}
-				bck  = cmn.Bck{Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
+				bck  = cmn.Bck{Provider: cfg.Cloud.Provider, Ns: cfg.Cloud.Ns}
 			)
 			if multiplier > 1 {
 				sema = make(chan struct{}, multiplier)

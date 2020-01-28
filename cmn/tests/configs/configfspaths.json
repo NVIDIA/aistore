@@ -1,7 +1,13 @@
 {
-  "confdir":       "/fake/conf/dir",
+  "confdir": "/fake/conf/dir",
   "cloud": {
-    "aws": {}
+    "ais": {
+      "cluster-uuid": [
+        "http://localhost:10080",
+        "http://127.0.0.2",
+        "https://api.web.org"
+      ]
+    }
   },
   "mirror": {
     "copies":       2,

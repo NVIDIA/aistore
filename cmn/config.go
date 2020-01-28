@@ -280,12 +280,15 @@ type Config struct {
 }
 
 type CloudConf struct {
-	Desc map[string]interface{} `json:"-"`
+	Conf map[string]interface{} `json:"-"` // implementation depends on cloud provider
 
 	// Set during validation
 	Supported bool   `json:"-"`
+	Ns        Ns     `json:"-"`
 	Provider  string `json:"-"`
 }
+
+type CloudConfAIS map[string][]string // cluster uuid -> urls
 
 type MirrorConf struct {
 	Copies      int64 `json:"copies"`       // num local copies
@@ -724,24 +727,56 @@ func validKeepaliveType(t string) bool {
 }
 
 func (c *CloudConf) UnmarshalJSON(data []byte) error {
-	return jsoniter.Unmarshal(data, &c.Desc)
+	return jsoniter.Unmarshal(data, &c.Conf)
 }
 
 func (c *CloudConf) MarshalJSON() (data []byte, err error) {
-	return MustMarshal(c.Desc), nil
+	return MustMarshal(c.Conf), nil
 }
 
 func (c *CloudConf) Validate(_ *Config) (err error) {
-	for provider := range c.Desc {
+	for provider := range c.Conf {
 		c.Provider = provider
 		break
 	}
-	if c.Provider != "" && !StringInSlice(c.Provider, CloudProviders) {
-		return fmt.Errorf("invalid `cloud_provider` value (%s), expected one of: %v", c.Provider, CloudProviders)
+	if c.Provider != "" && !IsValidProvider(c.Provider) {
+		return fmt.Errorf("invalid `cloud[provider]` value (%s), expected one of: %v", c.Provider, ListProviders())
 	}
-	c.Supported = c.Provider != ""
+
+	if c.Provider != "" {
+		var (
+			conf interface{}
+			b    = MustMarshal(c.Conf[c.Provider])
+		)
+		switch c.Provider {
+		case ProviderAIS:
+			var aisConf CloudConfAIS
+			if err := jsoniter.Unmarshal(b, &aisConf); err != nil {
+				return fmt.Errorf("invalid cloud specification: %v", err)
+			}
+
+			// NOTE: For now assuming only single "cluster uuid" is provided.
+			for clusterUUID := range aisConf {
+				c.Ns.UUID = clusterUUID
+				break
+			}
+
+			c.Supported = true
+
+			conf = aisConf
+		case ProviderAmazon, ProviderGoogle:
+			c.Supported = true
+			c.Ns = NsGlobal
+		default:
+			AssertMsg(false, "not yet implemented")
+		}
+
+		c.Conf[c.Provider] = conf
+	}
 	return nil
 }
+
+func (c *CloudConf) ProviderConf() interface{} { return c.Conf[c.Provider] }
 
 func (c *DiskConf) Validate(_ *Config) (err error) {
 	lwm, hwm, maxwm := c.DiskUtilLowWM, c.DiskUtilHighWM, c.DiskUtilMaxWM

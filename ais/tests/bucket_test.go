@@ -479,7 +479,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				filesPutCh = make(chan string, numfiles)
 			)
 
-			if cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
+			if cmn.IsProviderCloud(cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}, true /*acceptAnon*/) {
 				bck = cmn.Bck{
 					Name:     clibucket,
 					Provider: provider,
@@ -664,12 +664,12 @@ func TestBucketListAndSummary(t *testing.T) {
 			}
 
 			expectedFiles := m.num
-			if cmn.IsProviderAIS(test.provider) {
+			if cmn.IsProviderAIS(cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}) {
 				tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 				defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 				m.puts()
-			} else if cmn.IsProviderCloud(test.provider, true /*acceptAnon*/) {
+			} else if cmn.IsProviderCloud(cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}, true /*acceptAnon*/) {
 				m.bck.Name = clibucket
 
 				if !isCloudBucket(t, proxyURL, m.bck) {
@@ -1393,7 +1393,7 @@ func TestCopyBucket(t *testing.T) {
 				})
 			}
 
-			if cmn.IsProviderCloud(test.provider, true /*acceptAnon*/) {
+			if cmn.IsProviderCloud(cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}, true /*acceptAnon*/) {
 				srcm.bck = cmn.Bck{
 					Name:     clibucket,
 					Provider: cmn.Cloud,
@@ -1413,7 +1413,7 @@ func TestCopyBucket(t *testing.T) {
 				t.Fatalf("Must have 1 or more targets in the cluster, have only %d", srcm.originalTargetCount)
 			}
 
-			if cmn.IsProviderAIS(test.provider) {
+			if cmn.IsProviderAIS(cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}) {
 				tutils.CreateFreshBucket(t, srcm.proxyURL, srcm.bck)
 				defer tutils.DestroyBucket(t, srcm.proxyURL, srcm.bck)
 				srcm.setRandBucketProps()
@@ -1442,12 +1442,12 @@ func TestCopyBucket(t *testing.T) {
 				}
 			}
 
-			if cmn.IsProviderAIS(test.provider) {
+			if cmn.IsProviderAIS(cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}) {
 				srcm.puts()
 
 				srcBckList, err = api.ListBucket(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
-			} else if cmn.IsProviderCloud(test.provider, true /*acceptAnon*/) {
+			} else if cmn.IsProviderCloud(cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}, true /*acceptAnon*/) {
 				srcm.cloudPuts()
 				defer srcm.cloudDelete()
 

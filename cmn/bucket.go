@@ -9,9 +9,6 @@ import (
 	"strings"
 )
 
-// consolidates all bucket provider related enums and functions
-// see also: target.go validateBucket - it checks provider, too
-
 // Cloud Provider enum
 const (
 	Cloud = "cloud" // used only for API
@@ -55,7 +52,6 @@ var (
 		ProviderGoogle: {},
 		ProviderAmazon: {},
 	}
-	CloudProviders = []string{ProviderAmazon, ProviderGoogle}
 )
 
 func MakeNs(s string) (n Ns) {
@@ -107,12 +103,12 @@ func (b Bck) String() string {
 	return fmt.Sprintf("%s/%s/%s", b.Provider, b.Ns, b.Name)
 }
 
-func IsProviderAIS(provider string) bool {
-	return provider == ProviderAIS
+func IsProviderAIS(bck Bck) bool {
+	return bck.Provider == ProviderAIS && bck.Ns == NsGlobal
 }
 
-func IsProviderCloud(provider string, acceptAnon bool) bool {
-	return (!IsProviderAIS(provider) && IsValidProvider(provider)) || (acceptAnon && provider == Cloud)
+func IsProviderCloud(bck Bck, acceptAnon bool) bool {
+	return (!IsProviderAIS(bck) && IsValidProvider(bck.Provider)) || (acceptAnon && bck.Provider == Cloud)
 }
 
 func IsValidProvider(provider string) bool {

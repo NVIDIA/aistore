@@ -847,7 +847,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		bck.Provider = cmn.GCO.Get().Cloud.Provider
+		cloudConf := cmn.GCO.Get().Cloud
+		bck.Provider = cloudConf.Provider
+		bck.Ns = cloudConf.Ns
 		if err := p.createBucket(&msg, bck); err != nil {
 			errCode := http.StatusInternalServerError
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
@@ -1653,7 +1655,7 @@ func (p *proxyrunner) getBucketNames(w http.ResponseWriter, r *http.Request, bck
 		)
 	)
 
-	if cmn.IsProviderAIS(bck.Provider) {
+	if cmn.IsProviderAIS(bck.Bck) {
 		bucketNames := p.getBucketNamesAIS(bmd)
 		body := cmn.MustMarshal(bucketNames)
 		p.writeJSON(w, r, body, "getbucketnames"+bckQuery)
@@ -1744,7 +1746,8 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 		}
 		return
 	}
-	bck = cluster.NewBck(bucket, cmn.GCO.Get().Cloud.Provider, cmn.NsGlobal)
+	cloudConf := cmn.GCO.Get().Cloud
+	bck = cluster.NewBck(bucket, cloudConf.Provider, cloudConf.Ns)
 	if err = p.createBucket(msg, bck, cloudProps); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusConflict)

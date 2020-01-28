@@ -56,11 +56,12 @@ func (m *BMD) NumAIS(nsQuery *string) (na int) {
 
 func (m *BMD) NumCloud(nsQuery *string) (nc int) {
 	for provider, namespaces := range m.Providers {
-		if cmn.IsProviderAIS(provider) {
-			continue
-		}
-		for ns, buckets := range namespaces {
-			if nsQuery != nil && ns != *nsQuery {
+		for nsUname, buckets := range namespaces {
+			bck := cmn.Bck{Provider: provider, Ns: cmn.MakeNs(nsUname)}
+			if cmn.IsProviderAIS(bck) {
+				continue
+			}
+			if nsQuery != nil && nsUname != *nsQuery {
 				continue
 			}
 			nc += len(buckets)

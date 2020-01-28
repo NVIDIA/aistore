@@ -272,7 +272,8 @@ func (r *registry) RenewObjsRedundancy(t cluster.Target) {
 	})
 	if cfg.Cloud.Supported {
 		provider = cfg.Cloud.Provider
-		bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+		namespace := cfg.Cloud.Ns
+		bmd.Range(&provider, &namespace, func(bck *cluster.Bck) bool {
 			if bck.Props.Mirror.Enabled {
 				r.RenewBckMakeNCopies(bck, t, int(bck.Props.Mirror.Copies))
 			}

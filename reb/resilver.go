@@ -73,7 +73,7 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 
 	for _, mpathInfo := range availablePaths {
 		var (
-			bck    = cmn.Bck{Name: bucket, Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
+			bck    = cmn.Bck{Name: bucket, Provider: cfg.Cloud.Provider, Ns: cfg.Cloud.Ns}
 			jogger = &localJogger{
 				joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
 				slab:              slab,

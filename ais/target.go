@@ -215,19 +215,32 @@ func (t *targetrunner) Run() error {
 		cmn.ExitLogf("%v", err)
 	}
 	if config.Cloud.Supported {
-		if err := fs.Mountpaths.CreateBckDir(cmn.Bck{Provider: config.Cloud.Provider, Ns: cmn.NsGlobal}); err != nil {
+		if err := fs.Mountpaths.CreateBckDir(cmn.Bck{Provider: config.Cloud.Provider, Ns: config.Cloud.Ns}); err != nil {
 			cmn.ExitLogf("%v", err)
 		}
 	}
 	t.detectMpathChanges()
 
 	// cloud provider (empty stubs that may get populated via build tags)
-	if config.Cloud.Provider == cmn.ProviderAmazon {
-		t.cloud = newAWSProvider(t)
-	} else if config.Cloud.Provider == cmn.ProviderGoogle {
-		t.cloud = newGCPProvider(t)
+	var (
+		providerConf = config.Cloud.ProviderConf()
+	)
+	if config.Cloud.Supported {
+		switch config.Cloud.Provider {
+		case cmn.ProviderAIS:
+			var (
+				clusterConf = providerConf.(cmn.CloudConfAIS)
+			)
+			glog.Errorf("%v", clusterConf)
+			cmn.AssertMsg(false, "not yet implemented")
+		case cmn.ProviderAmazon:
+			t.cloud = newAWSProvider(t)
+		case cmn.ProviderGoogle:
+			t.cloud = newGCPProvider(t)
+		default:
+			cmn.AssertMsg(false, fmt.Sprintf("unsupported cloud provider: %s", config.Cloud.Provider))
+		}
 	} else {
-		cmn.AssertMsg(config.Cloud.Provider == "", fmt.Sprintf("unsupported cloud provider: %s", config.Cloud.Provider))
 		t.cloud = newEmptyCloud() // mock
 	}
 
@@ -1077,12 +1090,13 @@ func (t *targetrunner) getBucketNames(w http.ResponseWriter, r *http.Request, pr
 		bmd         = t.bmdowner.get()
 		bucketNames = &cmn.BucketNames{}
 		all         = provider == "" /*all providers*/
+		bck         = cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
 	)
 
-	if all || cmn.IsProviderAIS(provider) {
+	if all || cmn.IsProviderAIS(bck) {
 		bucketNames = t.getBucketNamesAIS(bmd)
 	}
-	if all || cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
+	if all || cmn.IsProviderCloud(bck, true /*acceptAnon*/) {
 		buckets, err, errcode := t.cloud.getBucketNames(t.contextWithAuth(r.Header))
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)

@@ -180,10 +180,10 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bo
 			}
 		}
 
-		if bck.Provider == "" || cmn.IsProviderAIS(bck.Provider) {
+		if bck.Provider == "" || cmn.IsProviderAIS(bck) {
 			printNotUsedBuckets(bucketNames.AIS)
 		}
-		if bck.Provider == "" || cmn.IsProviderCloud(bck.Provider, true /*acceptAnon*/) {
+		if bck.Provider == "" || cmn.IsProviderCloud(bck, true /*acceptAnon*/) {
 			printNotUsedBuckets(bucketNames.Cloud)
 		}
 	}
@@ -237,10 +237,10 @@ func suggestBucket(c *cli.Context, separator bool, providers ...string) {
 		}
 	}
 
-	if bck.Provider == "" || cmn.IsProviderAIS(bck.Provider) {
+	if bck.Provider == "" || cmn.IsProviderAIS(bck) {
 		printBuckets(bucketNames.AIS)
 	}
-	if bck.Provider == "" || cmn.IsProviderCloud(bck.Provider, true /*acceptAnon*/) {
+	if bck.Provider == "" || cmn.IsProviderCloud(bck, true /*acceptAnon*/) {
 		printBuckets(bucketNames.Cloud)
 	}
 }

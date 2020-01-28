@@ -830,16 +830,19 @@ func (r *bckSummaryTask) Run() {
 	if r.bck.Name != "" {
 		buckets = append(buckets, r.bck)
 	} else {
-		if r.bck.Provider == "" || cmn.IsProviderAIS(r.bck.Provider) {
+		if r.bck.Provider == "" || cmn.IsProviderAIS(r.bck.Bck) {
 			provider := cmn.ProviderAIS
 			bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 				buckets = append(buckets, bck)
 				return false
 			})
 		}
-		if r.bck.Provider == "" || cmn.IsProviderCloud(r.bck.Provider, true /*acceptAnon*/) {
-			provider := cfg.Cloud.Provider
-			bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+		if r.bck.Provider == "" || cmn.IsProviderCloud(r.bck.Bck, true /*acceptAnon*/) {
+			var (
+				provider  = cfg.Cloud.Provider
+				namespace = cfg.Cloud.Ns
+			)
+			bmd.Range(&provider, &namespace, func(bck *cluster.Bck) bool {
 				buckets = append(buckets, bck)
 				return false
 			})
