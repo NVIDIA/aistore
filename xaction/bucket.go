@@ -132,7 +132,7 @@ type ecGetEntry struct {
 
 func (e *ecGetEntry) Start(id int64) error {
 	xec := ec.ECM.NewGetXact(e.bck.Name)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, e.bck.Name, e.bck.Provider)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, e.bck.Bck)
 	e.xact = xec
 	go xec.Run()
 
@@ -158,7 +158,7 @@ type ecPutEntry struct {
 
 func (e *ecPutEntry) Start(id int64) error {
 	xec := ec.ECM.NewPutXact(e.bck.Name)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, e.bck.Name, e.bck.Provider)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, e.bck.Bck)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -182,7 +182,7 @@ type ecRespondEntry struct {
 
 func (e *ecRespondEntry) Start(id int64) error {
 	xec := ec.ECM.NewRespondXact(e.bck.Name)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, e.bck.Name, e.bck.Provider)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, e.bck.Bck)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -466,7 +466,7 @@ func (r *FastRen) Run(globRebID int64) {
 		gbucket, lbucket = r.bucketTo, r.bucketTo // scoping
 		_, lrunning      = Registry.IsRebalancing(cmn.ActLocalReb)
 	)
-	glog.Infoln(r.String(), r.Bucket(), "=>", r.bucketTo)
+	glog.Infoln(r.String(), r.Bck(), "=>", r.bucketTo)
 	if Registry.AbortGlobalXact(cmn.ActGlobalReb) {
 		glog.Infof("%s: restarting global rebalance upon rename...", r)
 		gbucket = ""
@@ -483,13 +483,13 @@ func (r *FastRen) Run(globRebID int64) {
 	r.rebManager.RunGlobalReb(r.t.GetSowner().Get(), globRebID, gbucket)
 	wg.Wait()
 
-	r.t.BMDVersionFixup(r.Bucket(), false) // piggyback bucket renaming (last step) on getting updated BMD
+	r.t.BMDVersionFixup(r.Bck(), false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.EndTime(time.Now())
 }
 
 func (e *FastRenEntry) Start(id int64) error {
 	e.xact = &FastRen{
-		XactBase:   *cmn.NewXactBaseWithBucket(id, e.Kind(), e.bck.Name, e.bck.Provider),
+		XactBase:   *cmn.NewXactBaseWithBucket(id, e.Kind(), e.bck.Bck),
 		t:          e.t,
 		bucketTo:   e.bucketTo,
 		rebManager: e.rebManager,
@@ -502,7 +502,7 @@ func (r *FastRenEntry) Bucket() string { return r.bck.Name }
 
 func (e *FastRenEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
 	if e.phase == cmn.ActBegin {
-		bckTo := &cluster.Bck{Name: e.bucketTo, Provider: cmn.ProviderAIS}
+		bckTo := cluster.NewBck(e.bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
 		bb := Registry.BucketsXacts(bckTo)
 		if num := bb.len(); num > 0 {
 			err = fmt.Errorf("%s: cannot(%s=>%s) with %d in progress", e.Kind(), e.bck.Name, e.bucketTo, num)

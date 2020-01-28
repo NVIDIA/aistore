@@ -99,8 +99,8 @@ func TestXactionRenewEvictDelete(t *testing.T) {
 
 func TestXactionAbortAll(t *testing.T) {
 	xactions := newXactions()
-	bckFrom := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
-	bckTo := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
+	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 
 	xactGlob := xactions.RenewEvictDelete(true)
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -117,8 +117,8 @@ func TestXactionAbortAll(t *testing.T) {
 
 func TestXactionAbortAllGlobal(t *testing.T) {
 	xactions := newXactions()
-	bckFrom := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
-	bckTo := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
+	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 
 	xactGlob := xactions.RenewEvictDelete(true)
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -136,8 +136,8 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 func TestXactionAbortBuckets(t *testing.T) {
 	xactions := newXactions()
-	bckFrom := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
-	bckTo := &cluster.Bck{Name: "test", Provider: cmn.ProviderAIS}
+	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 
 	xactGlob := xactions.RenewEvictDelete(true)
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")

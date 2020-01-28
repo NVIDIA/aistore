@@ -48,7 +48,7 @@ func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPut
 		mpathCount        = len(availablePaths)
 	)
 	r = &XactPutLRepl{
-		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket(), lom.Provider()),
+		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bck().Bck),
 		slab:           slab,
 		mirror:         *lom.MirrorConf(),
 	}
@@ -61,7 +61,7 @@ func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPut
 
 	// Run
 	for _, mpathInfo := range availablePaths {
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider(), r.Ns())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bck())
 		r.mpathers[mpathLC] = newXputJogger(r, mpathInfo)
 	}
 	go r.Run()
@@ -82,7 +82,7 @@ func (r *XactPutLRepl) Run() error {
 				glog.Error(err)
 				break
 			}
-			path := lom.ParsedFQN.MpathInfo.MakePath(fs.ObjectType, r.Provider(), r.Ns())
+			path := lom.ParsedFQN.MpathInfo.MakePath(fs.ObjectType, r.Bck())
 			if mpather, ok := r.mpathers[path]; ok {
 				mpather.post(lom)
 			} else {

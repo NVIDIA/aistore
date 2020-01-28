@@ -17,9 +17,7 @@ func TestParseFQN(t *testing.T) {
 		mpaths          []string
 		wantMPath       string
 		wantContentType string
-		wantBucket      string
-		wantProvider    string
-		wantNamespace   string
+		wantBck         cmn.Bck
 		wantObjName     string
 		wantErr         bool
 	}{
@@ -28,67 +26,67 @@ func TestParseFQN(t *testing.T) {
 			"smoke test",
 			"/tmp/~obj/@ais/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, cmn.NsGlobal, "objname", false,
+			"/tmp", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}, "objname", false,
 		},
 		{
 			"content type (work)",
 			"/tmp/~work/@aws/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.WorkfileType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "objname", false,
+			"/tmp", fs.WorkfileType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal}, "objname", false,
 		},
 		{
 			"content type (empty - obj)",
 			"/tmp/@ais/bucket/obj/name",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, cmn.NsGlobal, "obj/name", false,
+			"/tmp", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}, "obj/name", false,
 		},
 		{
 			"cloud as bucket type (aws)",
 			"/tmp/~obj/@aws/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "objname", false,
+			"/tmp", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal}, "objname", false,
 		},
 		{
 			"cloud as bucket type (gcp)",
 			"/tmp/~obj/@gcp/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderGoogle, cmn.NsGlobal, "objname", false,
+			"/tmp", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle, Ns: cmn.NsGlobal}, "objname", false,
 		},
 		{
 			"global namespace (empty)",
 			"/tmp/~obj/@ais/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, cmn.NsGlobal, "objname", false,
+			"/tmp", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}, "objname", false,
 		},
 		{
 			"non-empty namespace",
 			"/tmp/~obj/@ais/#namespace/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", fs.ObjectType, "bucket", cmn.ProviderAIS, "namespace", "objname", false,
+			"/tmp", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: "namespace"}, "objname", false,
 		},
 		{
 			"long mount path name",
 			"/tmp/super/long/~obj/@aws/bucket/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "objname", false,
+			"/tmp/super/long", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal}, "objname", false,
 		},
 		{
 			"long mount path name and objname in folder",
 			"/tmp/super/long/~obj/@aws/bucket/folder/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "folder/objname", false,
+			"/tmp/super/long", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal}, "folder/objname", false,
 		},
 		{
 			"multiple mpaths matching, choose the longest",
 			"/tmp/super/long/long/~obj/@aws/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/super/long/long"},
-			"/tmp/super/long/long", fs.ObjectType, "bucket", cmn.ProviderAmazon, cmn.NsGlobal, "folder/objname", false,
+			"/tmp/super/long/long", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal}, "folder/objname", false,
 		},
 		{
 			"dirty mpath",
 			"/tmp/super/long/long/~obj/@gcp/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/.////super/../super//./long///////////long"},
-			"/tmp/super/long/long", fs.ObjectType, "bucket", cmn.ProviderGoogle, cmn.NsGlobal, "folder/objname", false,
+			"/tmp/super/long/long", fs.ObjectType, cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle, Ns: cmn.NsGlobal}, "folder/objname", false,
 		},
 
 		// bad
@@ -96,73 +94,73 @@ func TestParseFQN(t *testing.T) {
 			"too short name",
 			"/tmp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"invalid content type (not prefixed with '~')",
 			"/tmp/obj/@gcp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"invalid content type (unknown)",
 			"/tmp/~unknown/@gcp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"empty bucket name",
 			"/tmp/~obj/@ais//objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"empty object name",
 			"/tmp/~obj/@ais/bucket/",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"empty cloud provider",
 			"/tmp/~obj/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"invalid cloud provider (not prefixed with '@')",
 			"/tmp/~obj/gcp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"invalid cloud provider (unknown)",
 			"/tmp/~obj/@unknown/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"invalid cloud provider (cloud)",
 			"/tmp/~obj/@cloud/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"invalid cloud provider (local)",
 			"/tmp/~obj/@cloud/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"no matching mountpath",
 			"/tmp/~obj/@ais/bucket/objname",
 			[]string{"/tmp/a", "/tmp/b"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 		{
 			"fqn is mpath",
 			"/tmp/mpath",
 			[]string{"/tmp/mpath"},
-			"", "", "", "", "", "", true,
+			"", "", cmn.Bck{}, "", true,
 		},
 	}
 
@@ -195,21 +193,15 @@ func TestParseFQN(t *testing.T) {
 			if err != nil {
 				return
 			}
-			gotMpath, gotContentType, gotBucket, gotProvider, gotNs, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.Ns, parsedFQN.ObjName
+			gotMpath, gotContentType, gotBck, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bck, parsedFQN.ObjName
 			if gotMpath != tt.wantMPath {
 				t.Errorf("gotMpath = %v, want %v", gotMpath, tt.wantMPath)
-			}
-			if gotProvider != tt.wantProvider {
-				t.Errorf("gotProvider = %v, want %v", gotProvider, tt.wantProvider)
-			}
-			if gotNs != tt.wantNamespace {
-				t.Errorf("gotNamespace = %v, want %v", gotNs, tt.wantNamespace)
 			}
 			if gotContentType != tt.wantContentType {
 				t.Errorf("gotContentType = %v, want %v", gotContentType, tt.wantContentType)
 			}
-			if gotBucket != tt.wantBucket {
-				t.Errorf("gotBucket = %v, want %v", gotBucket, tt.wantBucket)
+			if !gotBck.Equal(tt.wantBck) {
+				t.Errorf("gotBck = %v, want %v", gotBck, tt.wantBck)
 			}
 			if gotObjName != tt.wantObjName {
 				t.Errorf("gotObjName = %v, want %v", gotObjName, tt.wantObjName)
@@ -222,47 +214,53 @@ func TestMakeAndParseFQN(t *testing.T) {
 	tests := []struct {
 		mpath       string
 		contentType string
-		provider    string
-		bucket      string
-		namespace   string
+		bck         cmn.Bck
 		objName     string
 	}{
 		{
 			mpath:       "/tmp/path",
 			contentType: fs.ObjectType,
-			provider:    cmn.ProviderAIS,
-			namespace:   cmn.NsGlobal,
-			bucket:      "bucket",
-			objName:     "object/name",
+			bck: cmn.Bck{
+				Name:     "bucket",
+				Provider: cmn.ProviderAIS,
+				Ns:       cmn.NsGlobal,
+			},
+			objName: "object/name",
 		},
 		{
 			mpath:       "/tmp/path",
 			contentType: fs.WorkfileType,
-			provider:    cmn.ProviderAmazon,
-			namespace:   "uuid10294",
-			bucket:      "bucket",
-			objName:     "object/name",
+			bck: cmn.Bck{
+				Name:     "bucket",
+				Provider: cmn.ProviderAmazon,
+				Ns:       "uuid10294",
+			},
+			objName: "object/name",
 		},
 		{
 			mpath:       "/tmp/path",
 			contentType: fs.ObjectType,
-			provider:    cmn.ProviderAmazon,
-			namespace:   "alias",
-			bucket:      "bucket",
-			objName:     "object/name",
+			bck: cmn.Bck{
+				Name:     "bucket",
+				Provider: cmn.ProviderAmazon,
+				Ns:       "alias",
+			},
+			objName: "object/name",
 		},
 		{
 			mpath:       "/tmp/path",
 			contentType: fs.ObjectType,
-			provider:    cmn.ProviderGoogle,
-			namespace:   cmn.NsGlobal,
-			bucket:      "bucket",
-			objName:     "object/name",
+			bck: cmn.Bck{
+				Name:     "bucket",
+				Provider: cmn.ProviderGoogle,
+				Ns:       cmn.NsGlobal,
+			},
+			objName: "object/name",
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(strings.Join([]string{tt.mpath, tt.contentType, tt.provider, tt.bucket, tt.objName}, "|"), func(t *testing.T) {
+		t.Run(strings.Join([]string{tt.mpath, tt.contentType, tt.bck.String(), tt.objName}, "|"), func(t *testing.T) {
 			mios := ios.NewIOStaterMock()
 			mfs := fs.NewMountedFS(mios)
 			mfs.DisableFsIDCheck()
@@ -282,27 +280,21 @@ func TestMakeAndParseFQN(t *testing.T) {
 			fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 			mpaths, _ := fs.Mountpaths.Get()
-			fqn := mpaths[tt.mpath].MakePathBucketObject(tt.contentType, tt.bucket, tt.provider, tt.namespace, tt.objName)
+			fqn := mpaths[tt.mpath].MakePathBucketObject(tt.contentType, tt.bck, tt.objName)
 
 			parsedFQN, err := mfs.ParseFQN(fqn)
 			if err != nil {
 				t.Fatalf("failed to parse FQN: %v", err)
 			}
-			gotMpath, gotContentType, gotBucket, gotProvider, gotNs, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.Ns, parsedFQN.ObjName
+			gotMpath, gotContentType, gotBck, gotObjName := parsedFQN.MpathInfo.Path, parsedFQN.ContentType, parsedFQN.Bck, parsedFQN.ObjName
 			if gotMpath != tt.mpath {
 				t.Errorf("gotMpath = %v, want %v", gotMpath, tt.mpath)
 			}
 			if gotContentType != tt.contentType {
 				t.Errorf("getContentType = %v, want %v", gotContentType, tt.contentType)
 			}
-			if gotProvider != tt.provider {
-				t.Errorf("gotProvider = %v, want %v", gotProvider, tt.provider)
-			}
-			if gotNs != tt.namespace {
-				t.Errorf("gotNamespace = %v, want %v", gotNs, tt.namespace)
-			}
-			if gotBucket != tt.bucket {
-				t.Errorf("gotBucket = %v, want %v", gotBucket, tt.bucket)
+			if gotBck != tt.bck {
+				t.Errorf("gotBck = %v, want %v", gotBck, tt.bck)
 			}
 			if gotObjName != tt.objName {
 				t.Errorf("gotObjName = %v, want %v", gotObjName, tt.objName)
@@ -320,6 +312,7 @@ func BenchmarkParseFQN(b *testing.B) {
 		mpath = "/tmp/mpath"
 		mios  = ios.NewIOStaterMock()
 		mfs   = fs.NewMountedFS(mios)
+		bck   = cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 	)
 
 	mfs.DisableFsIDCheck()
@@ -330,7 +323,7 @@ func BenchmarkParseFQN(b *testing.B) {
 	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 
 	mpaths, _ := fs.Mountpaths.Get()
-	fqn := mpaths[mpath].MakePathBucketObject(fs.ObjectType, "bucket", cmn.ProviderAIS, cmn.NsGlobal, "super/long/name")
+	fqn := mpaths[mpath].MakePathBucketObject(fs.ObjectType, bck, "super/long/name")
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

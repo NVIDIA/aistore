@@ -255,8 +255,8 @@ func (tctx *testContext) setup() {
 
 	ctx.smap = smap
 	bmdMock := cluster.NewBaseBownerMock()
-	bmdMock.Add(&cluster.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
-		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}})
+	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
+	bmdMock.Add(cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal, props))
 	ctx.t = cluster.NewTargetMock(bmdMock)
 
 	tctx.smap = smap

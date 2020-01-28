@@ -212,7 +212,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			provider  = r.URL.Query().Get(cmn.URLParamProvider)
 		)
 		if bucket != "" {
-			bck = &cluster.Bck{Name: bucket, Provider: provider}
+			bck = cluster.NewBck(bucket, provider, cmn.NsGlobal)
 			if err := bck.Init(t.bmdowner); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
@@ -338,7 +338,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		case cmn.ActXactStats:
 			var bck *cluster.Bck
 			if bucket != "" {
-				bck = &cluster.Bck{Name: bucket, Provider: provider}
+				bck = cluster.NewBck(bucket, provider, cmn.NsGlobal)
 				if err := bck.Init(t.bmdowner); err != nil {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 					return
@@ -782,8 +782,7 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 		})
 		if !present {
 			bcksToDelete = append(bcksToDelete, obck)
-			fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false, /*destroy*/
-				cmn.ProviderAIS, obck.Ns, obck.Name)
+			fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false /*destroy*/, obck.Bck)
 		}
 		return false
 	})
@@ -803,12 +802,10 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {
 		if bck.IsCloud() {
 			if cfg.Cloud.Supported {
-				fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true, /*create*/
-					bck.Provider, bck.Ns, bck.Name)
+				fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*create*/, bck.Bck)
 			}
 		} else {
-			fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true, /*create*/
-				bck.Provider, bck.Ns, bck.Name)
+			fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*create*/, bck.Bck)
 		}
 		return false
 	})
@@ -891,7 +888,7 @@ func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
 	if bucketmd.Version < bmdVersion {
 		glog.Errorf("own %s < v%d - fetching latest for %v", bucketmd, bmdVersion, msgInt.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
-		t.BMDVersionFixup("", false)
+		t.BMDVersionFixup(cmn.Bck{}, false)
 	} else if bucketmd.Version > bmdVersion {
 		// if metasync outraces the request, we end up here, just log it and continue
 		glog.Errorf("own %s > v%d - encountered during %v", bucketmd, bmdVersion, msgInt.Action)
@@ -1021,12 +1018,12 @@ func (t *targetrunner) smapVersionFixup() {
 	t.receiveSmap(newSmap, msgInt, "")
 }
 
-func (t *targetrunner) BMDVersionFixup(renamed string, sleep bool) {
+func (t *targetrunner) BMDVersionFixup(bck cmn.Bck, sleep bool) {
 	if sleep {
 		time.Sleep(200 * time.Millisecond) // FIXME: request proxy to execute syncCBmeta()
 	}
 	newBucketMD := &bucketMD{}
-	err := t.fetchPrimaryMD(cmn.GetWhatBMD, newBucketMD, renamed)
+	err := t.fetchPrimaryMD(cmn.GetWhatBMD, newBucketMD, bck.Name)
 	if err != nil {
 		glog.Error(err)
 		return
@@ -1315,7 +1312,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 		return
 	}
 
-	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.ProviderAIS}
+	bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
 	if err = bckTo.Init(t.bmdowner); err != nil {
 		return
 	}
@@ -1329,7 +1326,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	case cmn.ActRenameLB:
 		_, err = xaction.Registry.RenewBckFastRename(t, bckFrom, bckTo, cmn.ActBegin, t.rebManager)
 		if err == nil {
-			err = fs.Mountpaths.CreateBucketDirs(bckTo.Name, bckTo.Provider, bckTo.Ns, true /*destroy*/)
+			err = fs.Mountpaths.CreateBucketDirs(bckTo.Bck, true /*destroy*/)
 		}
 	case cmn.ActCopyBucket:
 		_, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActBegin)
@@ -1340,7 +1337,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 }
 
 func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action string) {
-	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.ProviderAIS}
+	bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
 	_, ok := t.bmdowner.get().Get(bckTo)
 	if !ok {
 		return
@@ -1361,7 +1358,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 }
 
 func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string, msgInt *actionMsgInternal) (err error) {
-	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.ProviderAIS}
+	bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bckTo.Init(t.bmdowner); err != nil {
 		return err
 	}
@@ -1374,7 +1371,7 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 			glog.Error(err) // must not happen at commit time
 			break
 		}
-		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Name, bckTo.Name, cmn.ProviderAIS, bckTo.Ns)
+		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Bck, bckTo.Bck)
 		if err != nil {
 			glog.Error(err) // ditto
 			break
@@ -1406,7 +1403,7 @@ func (t *targetrunner) beginECEncode(bck *cluster.Bck) (err error) {
 	// Do not start the xaction if any rebalance is running
 	rbInfo := t.RebalanceInfo()
 	if rbInfo.IsRebalancing {
-		return fmt.Errorf("Cannot start bucket %q encoding while rebalance is running", bck.Name)
+		return fmt.Errorf("Cannot start bucket %q encoding while rebalance is running", bck)
 	}
 
 	_, err = xaction.Registry.RenewECEncodeXact(t, bck, cmn.ActBegin)

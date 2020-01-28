@@ -33,7 +33,6 @@ type (
 		stopCh    cmn.StopCh
 
 		// to cache some info for quick access
-		provider string
 		smap     *cluster.Smap
 		daemonID string
 	}
@@ -41,7 +40,7 @@ type (
 
 func NewXactBckEncode(id int64, bck *cluster.Bck, t cluster.Target) *XactBckEncode {
 	return &XactBckEncode{
-		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActECEncode, bck.Name, bck.Provider),
+		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActECEncode, bck.Bck),
 		t:        t,
 		bck:      bck,
 		wg:       &sync.WaitGroup{},
@@ -90,7 +89,7 @@ func (r *XactBckEncode) init() (int, error) {
 			daemonID:  r.t.Snode().ID(),
 			stopCh:    cmn.NewStopCh(),
 		}
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider(), r.Ns())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bck())
 		r.mpathers[mpathLC] = jogger
 	}
 	for _, mpather := range r.mpathers {
@@ -134,8 +133,7 @@ func (r *XactBckEncode) stop() {
 func (j *joggerBckEncode) stop() { j.stopCh.Close() }
 
 func (j *joggerBckEncode) jog() {
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Provider(), j.parent.Ns())
-	j.provider = j.parent.Provider()
+	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bck())
 	opts := &fs.Options{
 		Callback: j.walk,
 		Sorted:   false,
@@ -152,7 +150,7 @@ func (j *joggerBckEncode) jog() {
 func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 	select {
 	case <-j.stopCh.Listen():
-		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bucket())
+		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bck())
 	default:
 	}
 
@@ -160,7 +158,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	lom := &cluster.LOM{T: j.parent.target(), FQN: fqn}
-	err := lom.Init("", j.provider, j.config)
+	err := lom.Init("", j.parent.Bck().Provider, j.config)
 	if err != nil {
 		return nil
 	}

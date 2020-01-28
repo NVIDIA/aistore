@@ -277,7 +277,7 @@ func (lom *LOM) DelExtraCopies() (err error) {
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
-		copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.bck.Ns, lom.Objname)
+		copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.bck.Bck, lom.Objname)
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
@@ -334,7 +334,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
 		}
-		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.bck.Ns, lom.Objname)
+		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.bck.Bck, lom.Objname)
 		if _, err := os.Stat(fqn); err != nil {
 			continue
 		}
@@ -631,12 +631,12 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 			return
 		}
 		if bucket == "" {
-			bucket = lom.ParsedFQN.Bucket
-		} else if bucket != lom.ParsedFQN.Bucket {
-			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, bucket, lom.ParsedFQN.Bucket)
+			bucket = lom.ParsedFQN.Bck.Name
+		} else if bucket != lom.ParsedFQN.Bck.Name {
+			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, bucket, lom.ParsedFQN.Bck.Name)
 		}
 		lom.Objname = lom.ParsedFQN.ObjName
-		prov := lom.ParsedFQN.Provider
+		prov := lom.ParsedFQN.Bck.Provider
 		if provider == "" {
 			provider = prov
 		} else if provider != prov {
@@ -644,7 +644,7 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 		}
 	}
 	bowner := lom.T.GetBowner()
-	lom.bck = &Bck{Name: bucket, Provider: provider}
+	lom.bck = NewBck(bucket, provider, cmn.NsGlobal)
 	if err = lom.bck.Init(bowner); err != nil {
 		return
 	}
@@ -655,10 +655,10 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 			return
 		}
 		lom.ParsedFQN.ContentType = fs.ObjectType
-		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, bucket, lom.bck.Provider, lom.bck.Ns, lom.Objname)
+		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, lom.bck.Bck, lom.Objname)
 		lom.HrwFQN = lom.FQN
-		lom.ParsedFQN.Provider = lom.bck.Provider
-		lom.ParsedFQN.Bucket, lom.ParsedFQN.ObjName = bucket, lom.Objname
+		lom.ParsedFQN.Bck = lom.bck.Bck
+		lom.ParsedFQN.ObjName = lom.Objname
 	}
 	if len(config) > 0 {
 		lom.config = config[0]

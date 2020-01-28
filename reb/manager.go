@@ -410,7 +410,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 			curwt += sleep
 		}
 		if curwt >= maxwt {
-			glog.Errorf("%s: timed-out waiting to start, dropping %s/%s/%s", reb.t.Snode().Name(), hdr.Provider, hdr.Bucket, hdr.ObjName)
+			glog.Errorf("%s: timed-out waiting to start, dropping %s/%s", reb.t.Snode().Name(), hdr.Bck, hdr.ObjName)
 			return
 		}
 	}
@@ -421,14 +421,14 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 		return
 	}
 	if ack.GlobRebID != reb.GlobRebID() {
-		glog.Warningf("Received object %s/%s: %s", hdr.Bucket, hdr.ObjName, reb.rebIDMismatchMsg(ack.GlobRebID))
+		glog.Warningf("Received object %s/%s: %s", hdr.Bck, hdr.ObjName, reb.rebIDMismatchMsg(ack.GlobRebID))
 		io.Copy(ioutil.Discard, objReader) // drain the reader
 		return
 	}
 	tsid := ack.DaemonID // the sender
 	// Rx
 	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
-	if err = lom.Init(hdr.Bucket, hdr.Provider); err != nil {
+	if err = lom.Init(hdr.Bck.Name, hdr.Bck.Provider); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -512,7 +512,7 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 
 func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 	if err != nil {
-		glog.Errorf("Failed to get notification %s from %s[%s]: %v", hdr.ObjName, hdr.Bucket, hdr.Provider, err)
+		glog.Errorf("Failed to get notification %s from %s: %v", hdr.ObjName, hdr.Bck, err)
 		return
 	}
 
@@ -547,11 +547,11 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 
 func (reb *Manager) recvECAck(hdr transport.Header) {
 	opaque := string(hdr.Opaque)
-	uid := ackID(hdr.Bucket, hdr.Provider, hdr.ObjName, hdr.Ns, string(hdr.Opaque))
+	uid := ackID(hdr.Bck, hdr.ObjName, string(hdr.Opaque))
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof(
-			"%s: EC ack from %s on %s/%s/%s/%s",
-			reb.t.Snode().Name(), opaque, hdr.Provider, hdr.Ns, hdr.Bucket, hdr.ObjName,
+			"%s: EC ack from %s on %s/%s",
+			reb.t.Snode().Name(), opaque, hdr.Bck, hdr.ObjName,
 		)
 	}
 	reb.ec.ackCTs.mtx.Lock()
@@ -583,7 +583,7 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objRead
 	}
 
 	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
-	if err = lom.Init(hdr.Bucket, hdr.Provider); err != nil {
+	if err = lom.Init(hdr.Bck.Name, hdr.Bck.Provider); err != nil {
 		glog.Error(err)
 		return
 	}

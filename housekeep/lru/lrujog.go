@@ -26,7 +26,7 @@ import (
 
 func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh chan struct{}) {
 	defer wg.Done()
-	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.provider, lctx.ns)
+	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.bck)
 	if err := lctx.evictSize(); err != nil {
 		return
 	}
@@ -87,7 +87,7 @@ func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 	cmn.Assert(lctx.contentType == fs.ObjectType) // see also lrumain.go
 
 	lom := &cluster.LOM{T: lctx.ini.T, FQN: fqn}
-	err := lom.Init("", lctx.provider, lctx.config)
+	err := lom.Init("", lctx.bck.Provider, lctx.config)
 	if err != nil {
 		return nil
 	}

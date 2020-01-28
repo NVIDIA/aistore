@@ -71,8 +71,8 @@ func newTargetLRUMock() *cluster.TargetMock {
 	// Bucket owner mock, required for LOM
 	bmdMock := cluster.NewBaseBownerMock()
 	tMock := cluster.NewTargetMock(bmdMock)
-	bmdMock.Add(&cluster.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
-		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}, LRU: cmn.LRUConf{Enabled: true}}})
+	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}, LRU: cmn.LRUConf{Enabled: true}}
+	bmdMock.Add(cluster.NewBck(bucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 	return tMock
 }
 
@@ -152,7 +152,8 @@ var _ = Describe("LRU tests", func() {
 			ini = newInitLRU(t)
 
 			mpaths, _ := fs.Mountpaths.Get()
-			filesPath = mpaths[basePath].MakePathBucket(fs.ObjectType, bucketName, cmn.ProviderAIS, cmn.NsGlobal)
+			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			filesPath = mpaths[basePath].MakePathBucket(fs.ObjectType, bck)
 			cmn.CreateDir(filesPath)
 		})
 

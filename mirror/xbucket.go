@@ -39,13 +39,12 @@ type (
 		num, size int64
 		stopCh    cmn.StopCh
 		callback  func(lom *cluster.LOM) error
-		provider  string
 		skipLoad  bool // true: skip lom.Load() and further checks (e.g. done in callback under lock)
 	}
 )
 
 func newXactBckBase(id int64, kind string, bck *cluster.Bck, t cluster.Target) *xactBckBase {
-	return &xactBckBase{XactBase: *cmn.NewXactBaseWithBucket(id, kind, bck.Name, bck.Provider), t: t}
+	return &xactBckBase{XactBase: *cmn.NewXactBaseWithBucket(id, kind, bck.Bck), t: t}
 }
 
 //
@@ -100,9 +99,8 @@ func (r *xactBckBase) stop() {
 
 func (j *joggerBckBase) jog() {
 	j.stopCh = cmn.NewStopCh()
-	j.provider = j.parent.Provider()
 
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Provider(), j.parent.Ns())
+	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bck())
 	opts := &fs.Options{
 		Callback: j.walk,
 		Sorted:   false,
@@ -123,7 +121,7 @@ func (j *joggerBckBase) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	lom := &cluster.LOM{T: j.parent.Target(), FQN: fqn}
-	err := lom.Init("", j.provider, j.config)
+	err := lom.Init("", j.parent.Bck().Provider, j.config)
 	if err != nil {
 		return nil
 	}
@@ -143,7 +141,7 @@ func (j *joggerBckBase) yieldTerm() error {
 	diskConf := &j.config.Disk
 	select {
 	case <-j.stopCh.Listen():
-		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bucket())
+		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bck())
 	default:
 		curr := fs.Mountpaths.GetMpathUtil(j.mpathInfo.Path, time.Now())
 		if curr >= diskConf.DiskUtilHighWM {

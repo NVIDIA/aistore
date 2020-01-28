@@ -22,6 +22,10 @@ var _ = Describe("LOM Xattributes", func() {
 		bucketLocal = "LOM_TEST_Local"
 	)
 
+	var (
+		localBck = cmn.Bck{Name: bucketLocal, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+	)
+
 	_ = fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
@@ -31,8 +35,7 @@ var _ = Describe("LOM Xattributes", func() {
 		bmdMock       = cluster.NewBaseBownerMock()
 		tMock         = cluster.NewTargetMock(bmdMock)
 	)
-	bmdMock.Add(&cluster.Bck{Name: bucketLocal, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
-		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}})
+	bmdMock.Add(cluster.NewBck(bucketLocal, cmn.ProviderAIS, cmn.NsGlobal, &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}))
 
 	BeforeEach(func() {
 		_ = cmn.CreateDir(xattrMpath)
@@ -58,7 +61,7 @@ var _ = Describe("LOM Xattributes", func() {
 			testObjectName = "xattr-foldr/test-obj.ext"
 
 			// Bucket needs to have checksum enabled
-			localFQN = mix.MakePathBucketObject(fs.ObjectType, bucketLocal, cmn.ProviderAIS, cmn.NsGlobal, testObjectName)
+			localFQN = mix.MakePathBucketObject(fs.ObjectType, localBck, testObjectName)
 
 			fqns = []string{
 				copyMpath + "/copy/fqn",

@@ -394,7 +394,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 					return func() error {
 						defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
 
-						bck := &cluster.Bck{Name: ds.m.rs.OutputBucket, Provider: ds.m.rs.OutputProvider}
+						bck := cluster.NewBck(ds.m.rs.OutputBucket, ds.m.rs.OutputProvider, cmn.NsGlobal)
 						if err := bck.Init(ds.m.ctx.bmdowner); err != nil {
 							return err
 						}

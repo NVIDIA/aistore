@@ -142,8 +142,8 @@ func (xact *prefetch) BytesCnt() int64 {
 
 func (xact *RebBase) String() string {
 	s := xact.XactBase.String()
-	if xact.Bucket() != "" {
-		s += ", bucket " + xact.Bucket()
+	if xact.Bck().Name != "" {
+		s += ", bucket " + xact.Bck().String()
 	}
 	return s
 }
@@ -379,7 +379,7 @@ func (r *registry) bucketSingleXactStats(kind string, bck *cluster.Bck,
 		return map[int64]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
 	}
 	return r.matchingXactsStats(func(xact cmn.Xact) bool {
-		return xact.Bucket() == bck.Name && xact.Provider() == bck.Provider && xact.Kind() == kind
+		return xact.Bck().Equal(bck.Bck) && xact.Kind() == kind
 	}), nil
 }
 
@@ -466,7 +466,7 @@ func (r *registry) bucketAllXactsStats(bck *cluster.Bck, onlyRecent bool) map[in
 			return map[int64]stats.XactStats{}
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return xact.Bucket() == bck.Name && xact.Provider() == bck.Provider
+			return xact.Bck().Equal(bck.Bck)
 		})
 	}
 
@@ -597,7 +597,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 				return true
 			}
 		} else if !entry.IsTask() {
-			bck := &cluster.Bck{Name: xact.Bucket(), Provider: xact.Provider()}
+			bck := cluster.NewBckEmbed(xact.Bck())
 			cmn.Assert(bck.HasProvider())
 			bXact, _ := r.getBucketsXacts(bck)
 			if bXact != nil {
@@ -882,14 +882,13 @@ func (r *bckSummaryTask) Run() {
 			}
 
 			summary := cmn.BucketSummary{
-				Name:           bck.Name,
-				Provider:       bck.Provider,
+				Bck:            bck.Bck,
 				TotalDisksSize: totalDisksSize,
 			}
 
 			if r.msg.Fast && (bck.IsAIS() || r.msg.Cached) {
 				for _, mpathInfo := range availablePaths {
-					path := mpathInfo.MakePathBucket(fs.ObjectType, bck.Name, bck.Provider, bck.Ns)
+					path := mpathInfo.MakePathBucket(fs.ObjectType, bck.Bck)
 					size, err := ios.GetDirSize(path)
 					if err != nil {
 						errCh <- err

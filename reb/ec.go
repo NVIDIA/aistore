@@ -125,9 +125,7 @@ type (
 		hrwFQN  string       // mpath CT by HRW
 		meta    *ec.Metadata // metadata loaded from a local file
 
-		Bucket       string `json:"bck"`
-		Provider     string `json:"prov,omitempty"`
-		Ns           string `json:"namespace,omitempty"`
+		cmn.Bck
 		Objname      string `json:"obj"`
 		DaemonID     string `json:"sid"` // a target that has the CT
 		ObjHash      string `json:"cksum"`
@@ -161,9 +159,7 @@ type (
 		ctExist      []bool            // marks existing CT: SliceID <=> Exists
 		mainDaemon   string            // hrw target for an object
 		uid          string            // unique identifier for the object (Bucket#Object#IsAIS)
-		bucket       string            // bucket name for faster acceess
-		provider     string            // cloud provider of the bucket
-		ns           string
+		bck          cmn.Bck
 		objName      string // object name for faster access
 		objSize      int64  // object size
 		sliceSize    int64  // a size of an object slice
@@ -240,8 +236,8 @@ var (
 )
 
 // Generate unique ID for an object
-func uniqueWaitID(bucket, provider, namespace, objName string) string {
-	return fmt.Sprintf("%s#%s#%s#%s", bucket, provider, namespace, objName)
+func uniqueWaitID(bck cmn.Bck, objName string) string {
+	return fmt.Sprintf("%s#%s#%s#%s", bck.Name, bck.Provider, bck.Ns, objName)
 }
 
 // Generate unique ID for a CT (id is a CT ordinal number).
@@ -252,8 +248,8 @@ func ctUID(id int, daemonID string) string {
 }
 
 // Generate unique ID for a CT acknowledge.
-func ackID(bucket, provider, namespace, objName, ctUID string) string {
-	return fmt.Sprintf("%s#%s#%s#%s#%s", bucket, provider, namespace, objName, ctUID)
+func ackID(bck cmn.Bck, objName, ctUID string) string {
+	return fmt.Sprintf("%s#%s#%s#%s#%s", bck.Name, bck.Provider, bck.Ns, objName, ctUID)
 }
 
 //
@@ -331,16 +327,16 @@ func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
 	if cmn.IsProviderCloud(ct.Provider, false /*acceptAnon*/) {
 		bckList = rr.cloud
 	}
-	bck, ok := bckList[ct.Bucket]
+	bck, ok := bckList[ct.Name]
 	if !ok {
 		bck = &rebBck{objs: make(map[string]*rebObject)}
-		bckList[ct.Bucket] = bck
+		bckList[ct.Name] = bck
 	}
 
 	obj, ok := bck.objs[ct.Objname]
 	if !ok {
 		// first CT of the object
-		b := &cluster.Bck{Name: ct.Bucket, Provider: ct.Provider, Ns: ct.Ns}
+		b := cluster.NewBckEmbed(ct.Bck)
 		if err := b.Init(tgt.GetBowner()); err != nil {
 			return err
 		}
@@ -351,8 +347,7 @@ func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
 		obj = &rebObject{
 			cts:        make(ctList),
 			mainDaemon: si.ID(),
-			provider:   ct.Provider,
-			ns:         ct.Ns,
+			bck:        ct.Bck,
 		}
 		obj.cts[ct.ObjHash] = []*rebCT{ct}
 		bck.objs[ct.Objname] = obj
@@ -365,7 +360,7 @@ func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
 		for _, found := range list {
 			if found.SliceID == ct.SliceID {
 				err := fmt.Errorf("Duplicated %s/%s SliceID %d from %s (discarded)",
-					ct.Bucket, ct.Objname, ct.SliceID, ct.DaemonID)
+					ct.Name, ct.Objname, ct.SliceID, ct.DaemonID)
 				return err
 			}
 		}
@@ -429,10 +424,8 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 		return err
 	}
 	hdr := transport.Header{
-		Bucket:   ct.Bucket,
-		Provider: ct.Provider,
-		Ns:       ct.Ns,
-		ObjName:  ct.Objname,
+		Bck:     ct.Bck,
+		ObjName: ct.Objname,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: ct.ObjSize,
 		},
@@ -441,7 +434,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 
 	if resolved.ContentType == fs.ObjectType {
 		lom := cluster.LOM{T: reb.t, FQN: fqn}
-		if err := lom.Init(ct.Bucket, ct.Provider); err != nil {
+		if err := lom.Init(ct.Bck.Name, ct.Bck.Provider); err != nil {
 			return err
 		}
 		if err := lom.Load(false); err != nil {
@@ -468,7 +461,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 	for _, tgt := range targets {
 		dest := &retransmitCT{daemonID: tgt.ID(), header: hdr}
 		ctUID := ctUID(int(ct.SliceID), tgt.ID())
-		uid := ackID(ct.Bucket, ct.Provider, ct.Ns, ct.Objname, ctUID)
+		uid := ackID(ct.Bck, ct.Objname, ctUID)
 		reb.ec.ackCTs.mtx.Lock()
 		reb.ec.ackCTs.ct[uid] = dest
 		reb.ec.ackCTs.mtx.Unlock()
@@ -518,9 +511,8 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	cmn.AssertMsg(ct.ObjSize != 0, ct.Objname)
 	size := ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
 	hdr := transport.Header{
-		Bucket:   ct.Bucket,
-		Provider: ct.Provider,
-		ObjName:  ct.Objname,
+		Bck:     ct.Bck,
+		ObjName: ct.Objname,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: size,
 		},
@@ -532,7 +524,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	}
 
 	sliceUID := ctUID(sliceID, target.ID())
-	uid := ackID(ct.Bucket, ct.Provider, ct.Ns, ct.Objname, sliceUID)
+	uid := ackID(ct.Bck, ct.Objname, sliceUID)
 	dest := &retransmitCT{daemonID: target.ID(), header: hdr}
 	reb.ec.ackCTs.mtx.Lock()
 	reb.ec.ackCTs.ct[uid] = dest
@@ -563,7 +555,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 	var (
 		ctFQN    string
 		lom      *cluster.LOM
-		bck      = &cluster.Bck{Name: hdr.Bucket, Provider: hdr.Provider}
+		bck      = cluster.NewBckEmbed(hdr.Bck)
 		needSave = md.SliceID == 0 // full object always saved
 	)
 	if err := bck.Init(reb.t.GetBowner()); err != nil {
@@ -587,10 +579,10 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 		return err
 	}
 	if md.SliceID != 0 {
-		ctFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bucket, hdr.Provider, hdr.Ns, hdr.ObjName)
+		ctFQN = mpath.MakePathBucketObject(ec.SliceType, hdr.Bck, hdr.ObjName)
 	} else {
 		lom = &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
-		if err := lom.Init(hdr.Bucket, hdr.Provider); err != nil {
+		if err := lom.Init(hdr.Bck.Name, hdr.Bck.Provider); err != nil {
 			return err
 		}
 		ctFQN = lom.FQN
@@ -610,17 +602,17 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 	}
 
 	buffer, slab := reb.t.GetMem2().AllocDefault()
-	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bucket, hdr.Provider, hdr.Ns, hdr.ObjName)
+	metaFQN := mpath.MakePathBucketObject(ec.MetaType, hdr.Bck, hdr.ObjName)
 	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.Extra), buffer, false)
 	if err != nil {
 		slab.Free(buffer)
 		return err
 	}
-	tmpFQN := mpath.MakePathBucketObject(fs.WorkfileType, hdr.Bucket, hdr.Provider, cmn.NsGlobal, hdr.ObjName)
+	tmpFQN := mpath.MakePathBucketObject(fs.WorkfileType, hdr.Bck, hdr.ObjName)
 	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, memsys.NewReader(data), buffer, true)
 	if md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
 		err = fmt.Errorf("Mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
-			hdr.Bucket, hdr.ObjName, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, md.ObjCksum)
+			hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, md.ObjCksum)
 	}
 	slab.Free(buffer)
 	if err != nil {
@@ -646,7 +638,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 // Receives a CT from another target, saves to local drive because it is a missing one
 func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Reader) error {
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s GOT CT for %s/%s/%s from %s", reb.t.Snode().Name(), hdr.Provider, hdr.Bucket, hdr.ObjName, req.DaemonID)
+		glog.Infof("%s GOT CT for %s/%s from %s", reb.t.Snode().Name(), hdr.Bck, hdr.ObjName, req.DaemonID)
 	}
 	var md ec.Metadata
 	cmn.Assert(req.Extra != nil)
@@ -658,9 +650,9 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	reb.laterx.Store(true)
 	sliceID := md.SliceID
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof(">>> %s got CT %d for [%s]%s/%s", reb.t.Snode().Name(), sliceID, hdr.Provider, hdr.Bucket, hdr.ObjName)
+		glog.Infof(">>> %s got CT %d for %s/%s", reb.t.Snode().Name(), sliceID, hdr.Bck, hdr.ObjName)
 	}
-	uid := uniqueWaitID(hdr.Bucket, hdr.Provider, hdr.Ns, hdr.ObjName)
+	uid := uniqueWaitID(hdr.Bck, hdr.ObjName)
 	waitFor := reb.ec.waiter.lookupCreate(uid, int16(sliceID), waitForSingleSlice)
 	cmn.Assert(waitFor != nil)
 	cmn.Assert(waitFor.sgl != nil)
@@ -669,7 +661,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	waitFor.meta = req.Extra
 	n, err := io.Copy(waitFor.sgl, reader)
 	if err != nil {
-		return fmt.Errorf("failed to read slice %d for %s/%s/%s: %v", sliceID, hdr.Provider, hdr.Bucket, hdr.ObjName, err)
+		return fmt.Errorf("failed to read slice %d for %s/%s: %v", sliceID, hdr.Bck, hdr.ObjName, err)
 	}
 	reb.statRunner.AddMany(
 		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
@@ -711,7 +703,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 // On receiving a list of collected CT from another target.
 func (reb *Manager) onECData(w http.ResponseWriter, hdr transport.Header, reader io.Reader, err error) {
 	if err != nil {
-		glog.Errorf("Failed to get ack for %s/%s/%s: %v", hdr.Provider, hdr.Bucket, hdr.ObjName, err)
+		glog.Errorf("Failed to get ack for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		return
 	}
 
@@ -730,7 +722,7 @@ func (reb *Manager) onECData(w http.ResponseWriter, hdr transport.Header, reader
 	// a remote target sent CT
 	if req.Stage == rebStageECGlobRepair {
 		if err := reb.receiveCT(&req, hdr, reader); err != nil {
-			glog.Errorf("Failed to receive CT for %s/%s/%s: %v", hdr.Provider, hdr.Bucket, hdr.ObjName, err)
+			glog.Errorf("Failed to receive CT for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 			return
 		}
 		return
@@ -780,7 +772,7 @@ func (reb *Manager) mergeCTs() *globalCTList {
 		}
 		for _, ct := range ctList {
 			if ct.SliceID != 0 && local {
-				b := &cluster.Bck{Name: ct.Bucket, Provider: ct.Provider}
+				b := cluster.NewBckEmbed(ct.Bck)
 				if err := b.Init(reb.t.GetBowner()); err != nil {
 					reb.abortGlobal()
 					return nil
@@ -827,7 +819,7 @@ func (reb *Manager) detectBroken(res *globalCTList) {
 				continue
 			}
 
-			bck := &cluster.Bck{Name: bckName, Provider: provider}
+			bck := cluster.NewBck(bckName, provider, cmn.NsGlobal)
 			if err := bck.Init(bowner); err != nil {
 				// bucket might be deleted while rebalancing - skip it
 				glog.Errorf("Invalid bucket %s: %v", bckName, err)
@@ -870,11 +862,11 @@ func (reb *Manager) detectBroken(res *globalCTList) {
 	// sort the list of broken object to have deterministic order on all targets
 	// sort order: IsAIS/Bucket name/Object name
 	ctLess := func(i, j int) bool {
-		if reb.ec.broken[i].provider != reb.ec.broken[j].provider {
-			return cmn.IsProviderAIS(reb.ec.broken[j].provider)
+		if reb.ec.broken[i].bck.Provider != reb.ec.broken[j].bck.Provider {
+			return cmn.IsProviderAIS(reb.ec.broken[j].bck.Provider)
 		}
-		bi := reb.ec.broken[i].bucket
-		bj := reb.ec.broken[j].bucket
+		bi := reb.ec.broken[i].bck.Name
+		bj := reb.ec.broken[j].bck.Name
 		if bi != bj {
 			return bi < bj
 		}
@@ -971,8 +963,7 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 
 	id := reb.t.Snode().ID()
 	rec := &rebCT{
-		Bucket:       ct.Bucket(),
-		Provider:     ct.Provider(),
+		Bck:          ct.Bck().Bck,
 		Objname:      ct.ObjName(),
 		DaemonID:     id,
 		ObjHash:      md.ObjCksum,
@@ -1019,10 +1010,11 @@ func (reb *Manager) runEC() {
 	)
 
 	for _, mpathInfo := range availablePaths {
-		if reb.xreb.Bucket() == "" {
-			mpath = mpathInfo.MakePath(ec.MetaType, cmn.ProviderAIS, reb.xreb.Ns())
+		bck := cmn.Bck{Name: reb.xreb.Bck().Name, Provider: cmn.ProviderAIS, Ns: reb.xreb.Bck().Ns}
+		if bck.Name == "" {
+			mpath = mpathInfo.MakePath(ec.MetaType, bck)
 		} else {
-			mpath = mpathInfo.MakePathBucket(ec.MetaType, reb.xreb.Bucket(), cmn.ProviderAIS, reb.xreb.Ns())
+			mpath = mpathInfo.MakePathBucket(ec.MetaType, bck)
 		}
 		wg.Add(1)
 		go reb.jogEC(mpath, &wg)
@@ -1030,11 +1022,11 @@ func (reb *Manager) runEC() {
 
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
-			provider := cfg.Cloud.Provider
-			if reb.xreb.Bucket() == "" {
-				mpath = mpathInfo.MakePath(ec.MetaType, provider, reb.xreb.Ns())
+			bck := cmn.Bck{Name: reb.xreb.Bck().Name, Provider: cfg.Cloud.Provider, Ns: reb.xreb.Bck().Ns}
+			if bck.Name == "" {
+				mpath = mpathInfo.MakePath(ec.MetaType, bck)
 			} else {
-				mpath = mpathInfo.MakePathBucket(ec.MetaType, reb.xreb.Bucket(), provider, reb.xreb.Ns())
+				mpath = mpathInfo.MakePathBucket(ec.MetaType, bck)
 			}
 			wg.Add(1)
 			go reb.jogEC(mpath, &wg)
@@ -1126,7 +1118,7 @@ func (reb *Manager) rebalanceLocalSlice(fromFQN, toFQN string, buf []byte) error
 
 func (reb *Manager) rebalanceLocalObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string, buf []byte) error {
 	lom := &cluster.LOM{T: reb.t, FQN: fromFQN}
-	err := lom.Init(fromMpath.Bucket, fromMpath.Provider)
+	err := lom.Init(fromMpath.Bck.Name, fromMpath.Bck.Provider)
 	if err == nil {
 		err = lom.Load()
 	}
@@ -1167,8 +1159,8 @@ func (reb *Manager) rebalanceLocal() error {
 			return err
 		}
 
-		metaSrcFQN := mpathSrc.MpathInfo.MakePathBucketObject(ec.MetaType, mpathSrc.Bucket, mpathSrc.Provider, mpathSrc.Ns, mpathSrc.ObjName)
-		metaDstFQN := mpathDst.MpathInfo.MakePathBucketObject(ec.MetaType, mpathDst.Bucket, mpathDst.Provider, mpathDst.Ns, mpathDst.ObjName)
+		metaSrcFQN := mpathSrc.MpathInfo.MakePathBucketObject(ec.MetaType, mpathSrc.Bck, mpathSrc.ObjName)
+		metaDstFQN := mpathDst.MpathInfo.MakePathBucketObject(ec.MetaType, mpathDst.Bck, mpathDst.ObjName)
 		_, _, err = cmn.CopyFile(metaSrcFQN, metaDstFQN, buf, false)
 		if err != nil {
 			return err
@@ -1207,7 +1199,7 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	cmn.Assert(len(cts) != 0) // cannot happen
 	mainSlice := cts[0]
 
-	obj.bucket = mainSlice.Bucket
+	obj.bck = mainSlice.Bck
 	obj.objName = mainSlice.Objname
 	obj.objSize = mainSlice.ObjSize
 	obj.isECCopy = ec.IsECCopy(obj.objSize, ecConfig)
@@ -1220,7 +1212,7 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	obj.ctExist = make([]bool, ctReq)
 	obj.locCT = make(map[string]*rebCT, ctFound)
 
-	obj.uid = uniqueWaitID(mainSlice.Bucket, obj.provider, obj.ns, mainSlice.Objname)
+	obj.uid = uniqueWaitID(obj.bck, mainSlice.Objname)
 	obj.isMain = obj.mainDaemon == localDaemon
 
 	// TODO: must check only slices of the newest object version
@@ -1443,7 +1435,7 @@ func (reb *Manager) allCTReceived(_ *globArgs) bool {
 		batchCurr := int(reb.stages.currBatch.Load())
 		for j := 0; j+batchCurr < len(reb.ec.broken) && j < ecRebBatchSize; j++ {
 			o := reb.ec.broken[j+batchCurr]
-			if uid == uniqueWaitID(o.bucket, o.provider, o.ns, o.objName) {
+			if uid == uniqueWaitID(o.bck, o.objName) {
 				obj = o
 				break
 			}
@@ -1612,7 +1604,7 @@ func (reb *Manager) rebalanceObject(md *globArgs, obj *rebObject) (err error) {
 	// The last case: must be main with object. Rebuild and send missing slices
 	cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
 		fmt.Sprintf("%s%s/%s: isMain %t - mainHasSome %t - mainID %d",
-			reb.t.Snode().Name(), obj.bucket, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID))
+			reb.t.Snode().Name(), obj.bck, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID))
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
 		glog.Infof("rebuilding slices of %s and send them", obj.objName)
 	}
@@ -1675,7 +1667,7 @@ func (reb *Manager) retransmitEC(md *globArgs) (cnt int) {
 			continue
 		}
 
-		_, err := ec.RequestECMeta(dest.header.Bucket, dest.header.ObjName, dest.header.Provider, si)
+		_, err := ec.RequestECMeta(dest.header.Bck, dest.header.ObjName, si)
 		if err == nil {
 			// the destination got new slice/replica, but failed to send
 			// ACK, cleanup ACK wait right now
@@ -1685,7 +1677,7 @@ func (reb *Manager) retransmitEC(md *globArgs) (cnt int) {
 
 		// destination still waits for the data, resend
 		glog.Errorf("Did not receive ACK from %s for %s/%s. Retransmit",
-			dest.daemonID, dest.header.Bucket, dest.header.ObjName)
+			dest.daemonID, dest.header.Bck, dest.header.ObjName)
 		// TODO: resend the slice/replica with s.data.SendV
 
 		cnt++
@@ -2097,7 +2089,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 	objMD.SliceID = 0
 
 	lom := &cluster.LOM{T: reb.t, Objname: obj.objName}
-	err = lom.Init(obj.bucket, obj.provider)
+	err = lom.Init(obj.bck.Name, obj.bck.Provider)
 	if err != nil {
 		return err
 	}
@@ -2116,7 +2108,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 
 	lom.SetSize(obj.objSize)
 	lom.SetCksum(cksum)
-	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bucket, obj.provider, obj.ns, obj.objName)
+	metaFQN := lom.ParsedFQN.MpathInfo.MakePathBucketObject(ec.MetaType, obj.bck, obj.objName)
 	metaBuf := cmn.MustMarshal(&objMD)
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
 		glog.Error(err)
@@ -2166,12 +2158,11 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		sliceMD := ecMD // copy
 		sliceMD.SliceID = sliceID
 		sl := &rebCT{
-			Bucket:       obj.bucket,
+			Bck:          obj.bck,
 			Objname:      obj.objName,
 			ObjSize:      sliceMD.Size,
 			DaemonID:     reb.t.Snode().ID(),
 			SliceID:      int16(sliceID),
-			Provider:     obj.provider,
 			DataSlices:   int16(ecMD.Data),
 			ParitySlices: int16(ecMD.Parity),
 			meta:         &sliceMD,

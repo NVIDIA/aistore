@@ -158,7 +158,7 @@ func (m *BMD) Range(providerQuery, nsQuery *string, callback func(*Bck) bool) {
 				continue
 			}
 			for name, props := range buckets {
-				bck := &Bck{Name: name, Provider: provider, Ns: ns, Props: props}
+				bck := NewBck(name, provider, ns, props)
 				if callback(bck) { // break?
 					return
 				}

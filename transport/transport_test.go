@@ -121,8 +121,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bucket:abc Provider:aws Ns: ObjName:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[]} (98)
-	// {Bucket:abracadabra Provider:ais Ns: ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51]} (113)
+	// {Bck:aws/abc ObjName:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[]} (98)
+	// {Bck:ais/abracadabra ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51]} (113)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -133,9 +133,12 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	sgl1 := Mem2.NewSGL(0)
 	sgl1.Write([]byte(txt1))
 	hdr := transport.Header{
-		Bucket:   "abc",
-		Provider: cmn.ProviderAmazon,
-		ObjName:  "X",
+		Bck: cmn.Bck{
+			Name:     "abc",
+			Provider: cmn.ProviderAmazon,
+			Ns:       cmn.NsGlobal,
+		},
+		ObjName: "X",
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       sgl1.Size(),
 			Atime:      663346294,
@@ -152,9 +155,12 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	sgl2 := Mem2.NewSGL(0)
 	sgl2.Write([]byte(txt2))
 	hdr = transport.Header{
-		Bucket:   "abracadabra",
-		ObjName:  "p/q/s",
-		Provider: cmn.ProviderAIS,
+		Bck: cmn.Bck{
+			Name:     "abracadabra",
+			Provider: cmn.ProviderAIS,
+			Ns:       cmn.NsGlobal,
+		},
+		ObjName: "p/q/s",
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       sgl2.Size(),
 			Atime:      663346294,
@@ -402,7 +408,7 @@ func Test_ObjAttrs(t *testing.T) {
 		cmn.Assert(err == nil)
 
 		idx := hdr.Opaque[0]
-		cmn.AssertMsg(cmn.IsProviderAIS(hdr.Provider), "expecting ais bucket")
+		cmn.AssertMsg(cmn.IsProviderAIS(hdr.Bck.Provider), "expecting ais bucket")
 		cmn.AssertMsg(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
 			fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
 
@@ -423,7 +429,9 @@ func Test_ObjAttrs(t *testing.T) {
 	random := newRand(time.Now().UnixNano())
 	for idx, attrs := range testAttrs {
 		hdr := transport.Header{
-			Provider: cmn.ProviderAIS,
+			Bck: cmn.Bck{
+				Provider: cmn.ProviderAIS,
+			},
 			ObjAttrs: attrs,
 			Opaque:   []byte{byte(idx)},
 		}
@@ -538,7 +546,10 @@ func newRand(seed int64) *rand.Rand {
 }
 
 func genStaticHeader() (hdr transport.Header) {
-	hdr.Bucket = "a"
+	hdr.Bck = cmn.Bck{
+		Name:     "a",
+		Provider: cmn.ProviderAIS,
+	}
 	hdr.ObjName = "b"
 	hdr.Opaque = []byte("c")
 	hdr.ObjAttrs.Size = cmn.GiB
@@ -547,8 +558,8 @@ func genStaticHeader() (hdr transport.Header) {
 
 func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 	x := random.Int63()
-	hdr.Bucket = strconv.FormatInt(x, 10)
-	hdr.ObjName = path.Join(hdr.Bucket, strconv.FormatInt(math.MaxInt64-x, 10))
+	hdr.Bck.Name = strconv.FormatInt(x, 10)
+	hdr.ObjName = path.Join(hdr.Bck.Name, strconv.FormatInt(math.MaxInt64-x, 10))
 	pos := x % int64(len(text))
 	hdr.Opaque = []byte(text[int(pos):])
 	y := x & 3
@@ -643,14 +654,14 @@ type randReaderCtx struct {
 
 func (rrc *randReaderCtx) sentCallback(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 	if err != nil {
-		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bucket, hdr.ObjName, err)
+		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bck, hdr.ObjName, err)
 	}
 	rr := rrc.rr
 	rr.slab.Free(rr.buf)
 	rrc.mu.Lock()
 	rrc.posted[rrc.idx] = nil
 	if rrc.idx > 0 && rrc.posted[rrc.idx-1] != nil {
-		rrc.t.Errorf("sent-callback %d(%s/%s) fired out of order", rrc.idx, hdr.Bucket, hdr.ObjName)
+		rrc.t.Errorf("sent-callback %d(%s/%s) fired out of order", rrc.idx, hdr.Bck, hdr.ObjName)
 	}
 	rrc.posted[rrc.idx] = nil
 	rrc.mu.Unlock()

@@ -117,9 +117,7 @@ type (
 	}
 	// object header
 	Header struct {
-		Bucket   string
-		Provider string // cloud provider of the bucket
-		Ns       string
+		Bck      cmn.Bck
 		ObjName  string
 		ObjAttrs ObjectAttrs // attributes/metadata of the sent object
 		Opaque   []byte      // custom control (optional)
@@ -311,7 +309,7 @@ func (s *Stream) Send(obj Obj) (err error) {
 	hdr := &obj.Hdr
 	if s.Terminated() {
 		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
-			s, *s.term.reason, s.term.err, hdr.Bucket, hdr.ObjName, hdr.ObjAttrs.Size)
+			s, *s.term.reason, s.term.err, hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Size)
 		glog.Errorln(err)
 		return
 	}
@@ -328,7 +326,7 @@ func (s *Stream) Send(obj Obj) (err error) {
 	}
 	s.workCh <- obj
 	if glog.FastV(4, glog.SmoduleTransport) {
-		glog.Infof("%s: send %s/%s(%d)[sq=%d]", s, hdr.Bucket, hdr.ObjName, hdr.ObjAttrs.Size, len(s.workCh))
+		glog.Infof("%s: send %s/%s(%d)[sq=%d]", s, hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Size, len(s.workCh))
 	}
 	return
 }
@@ -620,7 +618,7 @@ func (s *Stream) eoObj(err error) {
 	}
 	if s.sendoff.off != obj.Hdr.ObjAttrs.Size {
 		err = fmt.Errorf("%s: obj %s/%s offset %d != %d size",
-			s, s.sendoff.obj.Hdr.Bucket, s.sendoff.obj.Hdr.ObjName, s.sendoff.off, obj.Hdr.ObjAttrs.Size)
+			s, s.sendoff.obj.Hdr.Bck, s.sendoff.obj.Hdr.ObjName, s.sendoff.off, obj.Hdr.ObjAttrs.Size)
 		goto exit
 	}
 	s.stats.Size.Add(obj.Hdr.ObjAttrs.Size)
@@ -644,10 +642,10 @@ exit:
 //
 func (s *Stream) insHeader(hdr Header) (l int) {
 	l = cmn.SizeofI64 * 2
-	l = insString(l, s.maxheader, hdr.Bucket)
+	l = insString(l, s.maxheader, hdr.Bck.Name)
 	l = insString(l, s.maxheader, hdr.ObjName)
-	l = insString(l, s.maxheader, hdr.Provider)
-	l = insString(l, s.maxheader, hdr.Ns)
+	l = insString(l, s.maxheader, hdr.Bck.Provider)
+	l = insString(l, s.maxheader, hdr.Bck.Ns)
 	l = insByte(l, s.maxheader, hdr.Opaque)
 	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
 	hlen := l - cmn.SizeofI64*2

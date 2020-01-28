@@ -1243,8 +1243,8 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 			Provider: cmn.Cloud,
 		}
 	)
-	bmdMock.Add(&cluster.Bck{Name: TestBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
-		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}})
+	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
+	bmdMock.Add(cluster.NewBck(TestBucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 
 	if !isCloudBucket(t, proxyURL, bck) {
 		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
@@ -1467,8 +1467,8 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 	)
-	bmdMock.Add(&cluster.Bck{Name: TestBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
-		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}})
+	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
+	bmdMock.Add(cluster.NewBck(TestBucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))

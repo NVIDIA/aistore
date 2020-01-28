@@ -36,6 +36,12 @@ var _ = Describe("LOM", func() {
 	)
 
 	var (
+		localBckA = cmn.Bck{Name: bucketLocalA, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+		localBckB = cmn.Bck{Name: bucketLocalB, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+		cloudBckA = cmn.Bck{Name: bucketCloudA, Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal}
+	)
+
+	var (
 		mpaths []string
 		mis    []*fs.MountpathInfo
 
@@ -63,20 +69,20 @@ var _ = Describe("LOM", func() {
 	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	bmd := cluster.NewBaseBownerMock()
-	bmd.Add(&cluster.Bck{Name: bucketLocalA, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
-		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}}})
-	bmd.Add(&cluster.Bck{Name: bucketLocalB, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
-		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}}})
-	bmd.Add(&cluster.Bck{Name: bucketLocalC, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal,
-		Props: &cmn.BucketProps{
+	bmd.Add(cluster.NewBck(bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal,
+		&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}}))
+	bmd.Add(cluster.NewBck(bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal,
+		&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}}))
+	bmd.Add(cluster.NewBck(bucketLocalC, cmn.ProviderAIS, cmn.NsGlobal,
+		&cmn.BucketProps{
 			Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
 			LRU:    cmn.LRUConf{Enabled: true},
 			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
-		}})
-	bmd.Add(&cluster.Bck{Name: sameBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal, Props: &cmn.BucketProps{}})
-	bmd.Add(&cluster.Bck{Name: bucketCloudA, Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal, Props: &cmn.BucketProps{}})
-	bmd.Add(&cluster.Bck{Name: bucketCloudB, Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal, Props: &cmn.BucketProps{}})
-	bmd.Add(&cluster.Bck{Name: sameBucketName, Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal, Props: &cmn.BucketProps{}})
+		}))
+	bmd.Add(cluster.NewBck(sameBucketName, cmn.ProviderAIS, cmn.NsGlobal, &cmn.BucketProps{}))
+	bmd.Add(cluster.NewBck(bucketCloudA, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}))
+	bmd.Add(cluster.NewBck(bucketCloudB, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}))
+	bmd.Add(cluster.NewBck(sameBucketName, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}))
 
 	tMock := cluster.NewTargetMock(bmd)
 
@@ -102,7 +108,7 @@ var _ = Describe("LOM", func() {
 
 	Describe("FQN Resolution", func() {
 		testObject := "foldr/test-obj.ext"
-		desiredLocalFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal, testObject)
+		desiredLocalFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckA, testObject)
 
 		When("run for an ais bucket", func() {
 			It("Should populate fields from Bucket and Objname", func() {
@@ -118,9 +124,8 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Provider()).To(Equal(cmn.ProviderAIS))
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAIS))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpaths[0]))
-				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketLocalA))
+				Expect(lom.ParsedFQN.Bck).To(Equal(localBckA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
 				Expect(lom.ParsedFQN.ContentType).To(BeEquivalentTo(fs.ObjectType))
 
@@ -140,9 +145,8 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Provider()).To(Equal(cmn.ProviderAIS))
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAIS))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpaths[0]))
-				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketLocalA))
+				Expect(lom.ParsedFQN.Bck).To(Equal(localBckA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
 				Expect(lom.ParsedFQN.ContentType).To(BeEquivalentTo(fs.ObjectType))
 			})
@@ -151,7 +155,7 @@ var _ = Describe("LOM", func() {
 				testPid := strconv.FormatInt(9876, 16)
 				testTieIndex := strconv.FormatInt(1355314332000000, 16)[5:]
 				workObject := "foldr/get.test-obj.ext" + "." + testTieIndex + "." + testPid
-				localFQN := mis[0].MakePathBucketObject(fs.WorkfileType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal, workObject)
+				localFQN := mis[0].MakePathBucketObject(fs.WorkfileType, cloudBckA, workObject)
 
 				lom := &cluster.LOM{T: tMock, FQN: localFQN}
 				err := lom.Init("", "")
@@ -162,7 +166,7 @@ var _ = Describe("LOM", func() {
 
 		When("run for a cloud bucket", func() {
 			testObject := "foldr/test-obj.ext"
-			desiredCloudFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketCloudA, cmn.ProviderAmazon, cmn.NsGlobal, testObject)
+			desiredCloudFQN := mis[0].MakePathBucketObject(fs.ObjectType, cloudBckA, testObject)
 
 			It("Should populate fields from Bucket and Objname", func() {
 				// Ensure that it matches desiredCloudFQN
@@ -178,11 +182,10 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Provider()).To(Equal(cmn.ProviderAmazon))
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAmazon))
-				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpaths[0]))
-				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketCloudA))
-				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
-				Expect(lom.ParsedFQN.ContentType).To(BeEquivalentTo(fs.ObjectType))
+				Expect(lom.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
+				Expect(lom.ParsedFQN.Bck).To(Equal(cloudBckA))
+				Expect(lom.ParsedFQN.ObjName).To(Equal(testObject))
+				Expect(lom.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
 				fs.Mountpaths.Enable(mpaths[2])
 				fs.Mountpaths.Enable(mpaths[1])
@@ -199,11 +202,10 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Provider()).To(Equal(cmn.ProviderAmazon))
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAmazon))
-				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpaths[0]))
-				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketCloudA))
-				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
-				Expect(lom.ParsedFQN.ContentType).To(BeEquivalentTo(fs.ObjectType))
+				Expect(lom.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
+				Expect(lom.ParsedFQN.Bck).To(Equal(cloudBckA))
+				Expect(lom.ParsedFQN.ObjName).To(Equal(testObject))
+				Expect(lom.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 			})
 		})
 
@@ -216,7 +218,11 @@ var _ = Describe("LOM", func() {
 				},
 				Entry(
 					"invalid object name",
-					mis[0].MakePathBucketObject(fs.ObjectType, bucketCloudA, cmn.ProviderAIS, cmn.NsGlobal, " ??? "),
+					mis[0].MakePathBucketObject(
+						fs.ObjectType,
+						cmn.Bck{Name: bucketCloudA, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
+						" ??? ",
+					),
 				),
 				Entry(
 					"invalid fqn",
@@ -232,21 +238,29 @@ var _ = Describe("LOM", func() {
 				),
 				Entry(
 					"missing bucket",
-					mis[0].MakePathBucketObject(fs.ObjectType, "", cmn.ProviderAIS, cmn.NsGlobal, " ??? "),
+					mis[0].MakePathBucketObject(
+						fs.ObjectType,
+						cmn.Bck{Name: "", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
+						" ??? ",
+					),
 				),
 				Entry(
 					"missing object",
-					mis[0].MakePathBucket(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal),
+					mis[0].MakePathBucket(
+						fs.ObjectType,
+						cmn.Bck{Name: bucketLocalA, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
+					),
 				),
 			)
 		})
 	})
 
 	Describe("Load", func() {
+
 		Describe("Exists", func() {
 			testFileSize := 123
 			testObjectName := "fstat-foldr/test-obj.ext"
-			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal, testObjectName)
+			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckA, testObjectName)
 
 			It("should find out that object does not exist", func() {
 				os.Remove(localFQN)
@@ -275,7 +289,7 @@ var _ = Describe("LOM", func() {
 			testObjectName := "foldr/test-obj.ext"
 
 			It("should fetch atime for bucket with LRU disabled", func() {
-				localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal, testObjectName)
+				localFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckA, testObjectName)
 				createTestFile(localFQN, 0)
 				Expect(os.Chtimes(localFQN, desiredAtime, desiredAtime)).ShouldNot(HaveOccurred())
 
@@ -289,7 +303,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Atime()).To(BeEquivalentTo(desiredAtime))
 			})
 			It("should fetch atime for bucket with LRU enabled", func() {
-				localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal, testObjectName)
+				localFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckB, testObjectName)
 				createTestFile(localFQN, 0)
 				Expect(os.Chtimes(localFQN, desiredAtime, desiredAtime)).ShouldNot(HaveOccurred())
 
@@ -308,13 +322,13 @@ var _ = Describe("LOM", func() {
 			testFileSize := 456
 			testObjectName := "cksum-foldr/test-obj.ext"
 			// Bucket needs to have checksum enabled
-			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal, testObjectName)
+			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckB, testObjectName)
 			dummyCksm := cmn.NewCksum(cmn.ChecksumXXHash, "dummycksm")
 
 			Describe("CksumComputeIfMissing", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckA, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
 					cksum, err := lom.CksumComputeIfMissing()
@@ -324,7 +338,7 @@ var _ = Describe("LOM", func() {
 
 				It("should not compute if not missing", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckB, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
 					lom.SetCksum(dummyCksm)
@@ -354,7 +368,7 @@ var _ = Describe("LOM", func() {
 			Describe("ValidateMetaChecksum", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckA, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
 					err := lom.ValidateMetaChecksum()
@@ -433,7 +447,7 @@ var _ = Describe("LOM", func() {
 			Describe("ValidateContentChecksum", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckA, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
 					err := lom.ValidateContentChecksum()
@@ -493,7 +507,7 @@ var _ = Describe("LOM", func() {
 			Describe("FromFS", func() {
 				It("should error if file does not exist", func() {
 					testObject := "foldr/test-obj-doesnt-exist.ext"
-					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal, testObject)
+					noneFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckA, testObject)
 					lom := NewBasicLom(noneFQN, tMock)
 
 					Expect(lom.FromFS()).To(HaveOccurred())
@@ -521,7 +535,7 @@ var _ = Describe("LOM", func() {
 		Describe("Version", func() {
 			testObject := "foldr/test-obj.ext"
 			desiredVersion := "9001"
-			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal, testObject)
+			localFQN := mis[0].MakePathBucketObject(fs.ObjectType, localBckA, testObject)
 
 			It("should be able to get version", func() {
 				lom := filePut(localFQN, 0, tMock)
@@ -545,7 +559,8 @@ var _ = Describe("LOM", func() {
 		findMpath := func(bucket string, defaultLoc bool, ignoreFQNs ...string) string {
 		OuterLoop:
 			for _, mi := range mis {
-				fqn := mi.MakePathBucketObject(fs.ObjectType, bucket, cmn.ProviderAIS, cmn.NsGlobal, testObjectName)
+				bck := cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+				fqn := mi.MakePathBucketObject(fs.ObjectType, bck, testObjectName)
 				for _, ignoreFQN := range ignoreFQNs {
 					if fqn == ignoreFQN {
 						continue OuterLoop
@@ -860,8 +875,10 @@ var _ = Describe("LOM", func() {
 	Describe("local and cloud bucket with the same name", func() {
 		It("should have different fqn", func() {
 			testObject := "foldr/test-obj.ext"
-			desiredLocalFQN := mis[0].MakePathBucketObject(fs.ObjectType, sameBucketName, cmn.ProviderAIS, cmn.NsGlobal, testObject)
-			desiredCloudFQN := mis[0].MakePathBucketObject(fs.ObjectType, sameBucketName, cmn.ProviderAmazon, cmn.NsGlobal, testObject)
+			localSameBck := cmn.Bck{Name: sameBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			cloudSameBck := cmn.Bck{Name: sameBucketName, Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal}
+			desiredLocalFQN := mis[0].MakePathBucketObject(fs.ObjectType, localSameBck, testObject)
+			desiredCloudFQN := mis[0].MakePathBucketObject(fs.ObjectType, cloudSameBck, testObject)
 
 			fs.Mountpaths.Disable(mpaths[1]) // Ensure that it matches desiredCloudFQN
 			fs.Mountpaths.Disable(mpaths[2]) // ditto
@@ -874,9 +891,8 @@ var _ = Describe("LOM", func() {
 			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomEmpty.Uname()).To(Equal(lomEmpty.Bck().MakeUname(testObject)))
 			Expect(lomEmpty.Provider()).To(Equal(cmn.ProviderAIS))
-			Expect(lomEmpty.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAIS))
 			Expect(lomEmpty.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
-			Expect(lomEmpty.ParsedFQN.Bucket).To(Equal(sameBucketName))
+			Expect(lomEmpty.ParsedFQN.Bck).To(Equal(localSameBck))
 			Expect(lomEmpty.ParsedFQN.ObjName).To(Equal(testObject))
 			Expect(lomEmpty.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
@@ -888,9 +904,8 @@ var _ = Describe("LOM", func() {
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomLocal.Uname()).To(Equal(lomLocal.Bck().MakeUname(testObject)))
 			Expect(lomLocal.Provider()).To(Equal(cmn.ProviderAIS))
-			Expect(lomLocal.ParsedFQN.Provider).To(BeEquivalentTo(cmn.ProviderAIS))
 			Expect(lomLocal.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
-			Expect(lomLocal.ParsedFQN.Bucket).To(Equal(sameBucketName))
+			Expect(lomLocal.ParsedFQN.Bck).To(Equal(localSameBck))
 			Expect(lomLocal.ParsedFQN.ObjName).To(Equal(testObject))
 			Expect(lomLocal.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
@@ -902,9 +917,8 @@ var _ = Describe("LOM", func() {
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
 			Expect(lomCloud.Uname()).To(Equal(lomCloud.Bck().MakeUname(testObject)))
 			Expect(lomCloud.Provider()).To(Equal(cmn.ProviderAmazon))
-			Expect(lomCloud.ParsedFQN.Provider).To(Equal(cmn.ProviderAmazon))
 			Expect(lomCloud.ParsedFQN.MpathInfo.Path).To(Equal(mpaths[0]))
-			Expect(lomCloud.ParsedFQN.Bucket).To(Equal(sameBucketName))
+			Expect(lomCloud.ParsedFQN.Bck).To(Equal(cloudSameBck))
 			Expect(lomCloud.ParsedFQN.ObjName).To(Equal(testObject))
 			Expect(lomCloud.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 

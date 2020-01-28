@@ -336,7 +336,8 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	namespace := r.URL.Query().Get(cmn.URLParamNamespace)
+	bck := cluster.NewBck(bucket, provider, namespace)
 	if err = bck.Init(p.bmdowner); err != nil {
 		if _, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -381,7 +382,8 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	namespace := r.URL.Query().Get(cmn.URLParamNamespace)
+	bck := cluster.NewBck(bucket, provider, namespace)
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -425,7 +427,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	bucket, objName := apiItems[0], apiItems[1]
 	provider := query.Get(cmn.URLParamProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -486,7 +488,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -523,7 +525,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -771,7 +773,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			msgInt := p.newActionMsgInternal(&msg, nil, bmd)
 			p.metasyncer.sync(false, revspair{bmd, msgInt})
 		case cmn.ActSummaryBucket:
-			bck := &cluster.Bck{Name: "", Provider: provider}
+			bck := cluster.NewBck("", provider, cmn.NsGlobal)
 			p.bucketSummary(w, r, bck, msg)
 		default:
 			p.invalmsghdlr(w, r, "URL path is too short: expecting bucket name")
@@ -780,7 +782,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket := apiItems[0]
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	config := cmn.GCO.Get()
 
 	if msg.Action != cmn.ActListObjects && guestAccess {
@@ -1104,7 +1106,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if provider == "" {
 		provider = cmn.ProviderAIS /*must be ais*/
 	}
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err = bck.Init(p.bmdowner); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -1139,7 +1141,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apiItems[0]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err = bck.Init(p.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
@@ -1287,7 +1289,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -1345,7 +1347,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -1400,7 +1402,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	provider := query.Get(cmn.URLParamProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -1504,7 +1506,7 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 	var (
 		smap  = p.smapowner.get()
 		tout  = config.Timeout.Default
-		bckTo = &cluster.Bck{Name: bucketTo, Provider: cmn.ProviderAIS}
+		bckTo = cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
 	)
 
 	p.bmdowner.Lock()
@@ -1755,7 +1757,7 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 		}
 		return
 	}
-	bck = &cluster.Bck{Name: bucket, Provider: cmn.GCO.Get().Cloud.Provider}
+	bck = cluster.NewBck(bucket, cmn.GCO.Get().Cloud.Provider, cmn.NsGlobal)
 	if err = p.createBucket(msg, bck, cloudProps); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusConflict)
@@ -2365,7 +2367,7 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
-	bck := &cluster.Bck{Name: renamedBucket, Provider: cmn.ProviderAIS}
+	bck := cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.bmdowner); err != nil {
 		p.bmdowner.Unlock() // already removed via the the very first target calling here..
 		return

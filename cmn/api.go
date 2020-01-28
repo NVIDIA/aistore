@@ -182,12 +182,11 @@ type BucketList struct {
 }
 
 type BucketSummary struct {
-	Name           string `json:"name"`
+	Bck
 	ObjCount       uint64 `json:"count,string"`
 	Size           uint64 `json:"size,string"`
 	TotalDisksSize uint64 `json:"disks_size,string"`
 	UsedPct        uint64 `json:"used_pct"`
-	Provider       string `json:"provider"`
 }
 
 func (bs *BucketSummary) Aggregate(bckSummary BucketSummary) {

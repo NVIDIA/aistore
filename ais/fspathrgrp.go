@@ -102,7 +102,8 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 			// Cloud provider can be empty so we do not need to create a directory.
 			continue
 		}
-		if err = fs.Mountpaths.CreateBucketDir(provider, cmn.NsGlobal); err != nil {
+		bck := cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
+		if err = fs.Mountpaths.CreateBucketDir(bck); err != nil {
 			if !gfnActive {
 				g.t.gfn.local.Deactivate()
 			}

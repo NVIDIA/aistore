@@ -403,9 +403,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 		cksumType, cksumValue := lom.Cksum().Get()
 		hdr := transport.Header{
-			Bucket:   bucket,
-			Provider: provider,
-			ObjName:  shardName,
+			Bck:     lom.Bck().Bck,
+			ObjName: shardName,
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       lom.Size(),
 				CksumType:  cksumType,
@@ -760,7 +759,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	// 	// target.
 	// }
 
-	bck := &cluster.Bck{Name: m.rs.OutputBucket, Provider: m.rs.OutputProvider}
+	bck := cluster.NewBck(m.rs.OutputBucket, m.rs.OutputProvider, cmn.NsGlobal)
 	if err := bck.Init(m.ctx.bmdowner); err != nil {
 		return err
 	}

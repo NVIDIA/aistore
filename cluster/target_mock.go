@@ -61,4 +61,4 @@ func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (error,
 func (*TargetMock) PutObject(_ string, _ io.ReadCloser, _ *LOM, _ RecvType, _ *cmn.Cksum, _ time.Time) error {
 	return nil
 }
-func (*TargetMock) BMDVersionFixup(_ string, _ bool) {}
+func (*TargetMock) BMDVersionFixup(_ cmn.Bck, _ bool) {}

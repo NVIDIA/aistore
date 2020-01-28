@@ -156,24 +156,24 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bmd := newBucketMD()
-	bmd.add(&cluster.Bck{Name: "bucket1", Provider: cmn.ProviderAIS}, &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bmd.add(&cluster.Bck{Name: "bucket2", Provider: cmn.ProviderAIS}, &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket2", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bmd.add(&cluster.Bck{Name: "bucket3", Provider: cmn.ProviderAmazon}, &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAmazon,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bmd.add(&cluster.Bck{Name: "bucket4", Provider: cmn.ProviderAmazon}, &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket4", cmn.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
@@ -590,13 +590,13 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bucketmd.add(&cluster.Bck{Name: "bucket1", Provider: cmn.ProviderAIS}, &cmn.BucketProps{
+	bucketmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bucketmd.add(&cluster.Bck{Name: "bucket2", Provider: cmn.ProviderAIS}, &cmn.BucketProps{
+	bucketmd.add(cluster.NewBck("bucket2", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
@@ -623,7 +623,7 @@ func TestMetaSyncData(t *testing.T) {
 		Cksum: cmn.CksumConf{Type: cmn.PropInherit},
 		LRU:   cmn.GCO.Get().LRU,
 	}
-	bucketmd.add(&cluster.Bck{Name: "bucket3", Provider: cmn.ProviderAIS}, bprops)
+	bucketmd.add(cluster.NewBck("bucket3", cmn.ProviderAIS, cmn.NsGlobal), bprops)
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)

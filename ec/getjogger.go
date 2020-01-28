@@ -373,10 +373,9 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	iReq.IsSlice = true
 	request := iReq.Marshal()
 	hdr := transport.Header{
-		Bucket:   req.LOM.Bucket(),
-		Provider: req.LOM.Provider(),
-		ObjName:  req.LOM.Objname,
-		Opaque:   request,
+		Bck:     req.LOM.Bck().Bck,
+		ObjName: req.LOM.Objname,
+		Opaque:  request,
 	}
 
 	// broadcast slice request and wait for all targets respond
@@ -870,7 +869,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		wg.Add(1)
 		go func(si *cluster.Snode) {
 			defer wg.Done()
-			md, err := RequestECMeta(req.LOM.Bucket(), req.LOM.Objname, req.LOM.Provider(), si)
+			md, err := RequestECMeta(req.LOM.Bck().Bck, req.LOM.Objname, si)
 			if err != nil {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("No EC meta %s from %s: %v", req.LOM.Objname, si.Name(), err)

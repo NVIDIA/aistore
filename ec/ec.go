@@ -417,10 +417,11 @@ func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
 
 // RequestECMeta returns an EC metadata found on a remote target.
 // TODO: replace with better alternative (e.g, targetrunner.call)
-func RequestECMeta(bucket, objName, provider string, si *cluster.Snode) (md *Metadata, err error) {
-	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, objName)
+func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode) (md *Metadata, err error) {
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName)
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, provider)
+	query.Add(cmn.URLParamProvider, bck.Provider)
+	query.Add(cmn.URLParamNamespace, bck.Ns)
 	query.Add(cmn.URLParamECMeta, "true")
 	query.Add(cmn.URLParamSilent, "true")
 	url := si.URL(cmn.NetworkIntraData) + path
@@ -434,12 +435,12 @@ func RequestECMeta(bucket, objName, provider string, si *cluster.Snode) (md *Met
 		if resp.StatusCode != http.StatusNotFound {
 			return nil, fmt.Errorf("Failed to read %s HEAD request: %v", objName, err)
 		}
-		return nil, fmt.Errorf("%s/%s not found on %s", bucket, objName, si.ID())
+		return nil, fmt.Errorf("%s/%s not found on %s", bck, objName, si.ID())
 	}
 	resp.Body.Close()
 	mdStr := resp.Header.Get(cmn.HeaderObjECMeta)
 	if mdStr == "" {
-		return nil, fmt.Errorf("Empty metadata content for %s/%s from %s", bucket, objName, si.ID())
+		return nil, fmt.Errorf("Empty metadata content for %s/%s from %s", bck, objName, si.ID())
 	}
 	if md, err = StringToMeta(mdStr); err != nil {
 		return nil, err

@@ -220,8 +220,9 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 		var (
 			sema   chan struct{}
 			mpathL string
+			bck    = cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 		)
-		mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.ProviderAIS, cmn.NsGlobal)
+		mpathL = mpathInfo.MakePath(fs.ObjectType, bck)
 		if multiplier > 1 {
 			sema = make(chan struct{}, multiplier)
 		}
@@ -234,8 +235,11 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	}
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range md.paths {
-			var sema chan struct{}
-			mpathC := mpathInfo.MakePath(fs.ObjectType, cfg.Cloud.Provider, cmn.NsGlobal)
+			var (
+				sema chan struct{}
+				bck  = cmn.Bck{Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
+			)
+			mpathC := mpathInfo.MakePath(fs.ObjectType, bck)
 			if multiplier > 1 {
 				sema = make(chan struct{}, multiplier)
 			}
@@ -460,8 +464,8 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		md.ecUsed = reb.t.GetBowner().Get().IsECUsed()
 	} else {
 		// single bucket rebalance is AIS case only
-		bck := cluster.Bck{Name: buckets[0], Provider: cmn.ProviderAIS}
-		props, ok := reb.t.GetBowner().Get().Get(&bck)
+		bck := cluster.NewBck(buckets[0], cmn.ProviderAIS, cmn.NsGlobal)
+		props, ok := reb.t.GetBowner().Get().Get(bck)
 		if !ok {
 			glog.Errorf("Bucket %q not found", bck.Name)
 			return
@@ -552,7 +556,7 @@ func (rj *globalJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, l
 	lom.Unlock(false)
 
 	if err != nil {
-		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode().Name(), hdr.Bucket, hdr.ObjName, err)
+		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode().Name(), hdr.Bck, hdr.ObjName, err)
 		return
 	}
 	cmn.AssertMsg(hdr.ObjAttrs.Size == lom.Size(), lom.String()) // TODO: remove
@@ -676,10 +680,9 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 		DaemonID:  rj.m.t.Snode().ID(),
 	}
 	hdr := transport.Header{
-		Bucket:   lom.Bucket(),
-		Provider: lom.Provider(),
-		ObjName:  lom.Objname,
-		Opaque:   cmn.MustMarshal(&ack), // self == src
+		Bck:     lom.Bck().Bck,
+		ObjName: lom.Objname,
+		Opaque:  cmn.MustMarshal(&ack), // self == src
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       lom.Size(),
 			Atime:      lom.Atime().UnixNano(),

@@ -143,11 +143,7 @@ func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpath
 }
 
 func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *cluster.LOM, err error) {
-	var (
-		bck = lom.Bck()
-	)
-
-	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, bck.Name, bck.Provider, bck.Ns, lom.Objname)
+	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bck().Bck, lom.Objname)
 	clone, err = lom.CopyObject(copyFQN, buf)
 	if err != nil {
 		return

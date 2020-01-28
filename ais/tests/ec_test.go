@@ -123,13 +123,13 @@ func ecGetAllSlices(t *testing.T, bck api.Bck, objName string, o *ecOptions) (ma
 		bckProvider = cmn.ProviderAIS
 		bmd         = cluster.NewBaseBownerMock()
 	)
-	bmd.Add(&cluster.Bck{Name: bck.Name, Provider: bck.Provider, Ns: bck.Namespace,
-		Props: &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}})
+	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
+	bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Namespace, props))
 
 	if !o.isAIS {
 		config := tutils.GetClusterConfig(t)
 		bckProvider = config.Cloud.Provider
-		bmd.Add(&cluster.Bck{Name: bck.Name, Provider: bck.Provider, Ns: bck.Namespace, Props: cmn.DefaultBucketProps()})
+		bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Namespace, cmn.DefaultBucketProps()))
 	}
 
 	tMock := cluster.NewTargetMock(bmd)
@@ -250,8 +250,8 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 			}
 		} else {
 			tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
-			tassert.Errorf(t, ct.Provider() == bckProvider, "invalid provider %s, expected: %s", ct.Provider(), bckProvider)
-			tassert.Errorf(t, ct.Bucket() == bck.Name, "invalid bucket name %s, expected: %s", ct.Bucket(), bck)
+			tassert.Errorf(t, ct.Bck().Provider == bckProvider, "invalid provider %s, expected: %s", ct.Bck().Provider, bckProvider)
+			tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)
 			tassert.Errorf(t, ct.ObjName() == objPath, "invalid object name %s, expected: %s", ct.ObjName(), objPath)
 			tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
 			if sliced {
@@ -437,8 +437,8 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck api.Bck, o *e
 					}
 				} else {
 					tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
-					tassert.Errorf(t, ct.Provider() == bck.Provider, "invalid provider %s, expected: %s", ct.Provider(), cmn.ProviderAIS)
-					tassert.Errorf(t, ct.Bucket() == bck.Name, "invalid bucket name %s, expected: %s", ct.Bucket(), bck.Name)
+					tassert.Errorf(t, ct.Bck().Provider == bck.Provider, "invalid provider %s, expected: %s", ct.Bck().Provider, cmn.ProviderAIS)
+					tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)
 					tassert.Errorf(t, ct.ObjName() == objPath, "invalid object name %s, expected: %s", ct.ObjName(), objPath)
 					tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
 					mainObjPath = k
@@ -2014,7 +2014,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		defer wg.Done()
 
 		// 1) hack: calculate which targets stored a replica
-		cbck := &cluster.Bck{Name: bck.Name, Provider: bck.Provider}
+		cbck := cluster.NewBck(bck.Name, bck.Provider, cmn.NsGlobal)
 		targets, err := cluster.HrwTargetList(cbck.MakeUname(ecTestDir+objName), initialSmap, o.parityCnt+1)
 		tassert.CheckFatal(t, err)
 

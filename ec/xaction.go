@@ -228,8 +228,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 	cmn.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
 
 	rHdr := transport.Header{
-		Bucket:   bck.Name,
-		Provider: bck.Provider,
+		Bck:      bck.Bck,
 		ObjName:  objname,
 		ObjAttrs: objAttrs,
 	}
@@ -240,7 +239,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 
 	cb := func(hdr transport.Header, c io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
-			glog.Errorf("Failed to send %s/%s/%s: %v", hdr.Provider, hdr.Bucket, hdr.ObjName, err)
+			glog.Errorf("Failed to send %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		}
 	}
 	return r.sendByDaemonID([]string{id}, rHdr, reader, cb, false)
@@ -294,10 +293,9 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 // * writer - an opened writer that will receive the replica/slice/meta
 func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
 	hdr := transport.Header{
-		Bucket:   lom.Bucket(),
-		Provider: lom.Provider(),
-		ObjName:  lom.Objname,
-		Opaque:   request,
+		Bck:     lom.Bck().Bck,
+		ObjName: lom.Objname,
+		Opaque:  request,
 	}
 	var reader cmn.ReadOpenCloser
 	reader, hdr.ObjAttrs.Size = nil, 0
@@ -396,8 +394,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum().Get()
 	}
 	hdr := transport.Header{
-		Bucket:   lom.Bucket(),
-		Provider: lom.Provider(),
+		Bck:      lom.Bck().Bck,
 		ObjName:  lom.Objname,
 		ObjAttrs: objAttrs,
 		Opaque:   putData,

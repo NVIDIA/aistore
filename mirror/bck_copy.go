@@ -41,7 +41,7 @@ func NewXactBCC(id int64, bckFrom, bckTo *cluster.Bck, action string, t cluster.
 
 func (r *XactBckCopy) Run() (err error) {
 	mpathCount := r.init()
-	glog.Infoln(r.String(), r.Bucket(), "=>", r.bckTo.Name)
+	glog.Infoln(r.String(), r.Bck(), "=>", r.bckTo.Name)
 	return r.xactBckBase.run(mpathCount)
 }
 
@@ -64,7 +64,7 @@ func (r *XactBckCopy) init() (mpathCount int) {
 	for _, mpathInfo := range availablePaths {
 		bccJogger := newBCCJogger(r, mpathInfo, config)
 		// only objects; TODO contentType := range fs.CSM.RegisteredContentTypes
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider(), r.Ns())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bck())
 		r.mpathers[mpathLC] = bccJogger
 		go bccJogger.jog()
 	}
@@ -85,7 +85,7 @@ func newBCCJogger(parent *XactBckCopy, mpathInfo *fs.MountpathInfo, config *cmn.
 }
 
 func (j *bccJogger) jog() {
-	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bucket())
+	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bck())
 	j.buf = j.parent.slab.Alloc()
 	j.joggerBckBase.jog()
 	j.parent.slab.Free(j.buf)

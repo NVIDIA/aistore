@@ -22,9 +22,7 @@ type (
 		XactCountStats
 		ID() int64
 		Kind() string
-		Bucket() string
-		Provider() string
-		Ns() string
+		Bck() Bck
 		SetBucket(bucket string)
 		StartTime(s ...time.Time) time.Time
 		EndTime(e ...time.Time) time.Time
@@ -39,16 +37,14 @@ type (
 	}
 	XactBase struct {
 		XactBaseCountStats
-		id       int64
-		gid      int64
-		sutime   atomic.Int64
-		eutime   atomic.Int64
-		kind     string
-		bucket   string
-		provider string
-		ns       string
-		abrt     chan struct{}
-		aborted  atomic.Bool
+		id      int64
+		gid     int64
+		sutime  atomic.Int64
+		eutime  atomic.Int64
+		kind    string
+		bck     Bck
+		abrt    chan struct{}
+		aborted atomic.Bool
 	}
 	//
 	// xaction that self-terminates after staying idle for a while
@@ -90,31 +86,29 @@ func NewXactBase(id int64, kind string) *XactBase {
 	xact.sutime.Store(stime.UnixNano())
 	return xact
 }
-func NewXactBaseWithBucket(id int64, kind, bucket, provider string) *XactBase {
+func NewXactBaseWithBucket(id int64, kind string, bck Bck) *XactBase {
 	xact := NewXactBase(id, kind)
-	xact.bucket, xact.provider = bucket, provider
+	xact.bck = bck
 	return xact
 }
 
 func (xact *XactBase) ID() int64                  { return xact.id }
 func (xact *XactBase) ShortID() uint32            { return ShortID(xact.id) }
 func (xact *XactBase) Kind() string               { return xact.kind }
-func (xact *XactBase) Bucket() string             { return xact.bucket }
-func (xact *XactBase) Provider() string           { return xact.provider }
-func (xact *XactBase) Ns() string                 { return xact.ns }
+func (xact *XactBase) Bck() Bck                   { return xact.bck }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
 
 func (xact *XactBase) SetGID(gid int64)        { xact.gid = gid }
-func (xact *XactBase) SetBucket(bucket string) { xact.bucket = bucket }
+func (xact *XactBase) SetBucket(bucket string) { xact.bck.Name = bucket }
 
 func (xact *XactBase) String() string {
 	var (
 		prefix = xact.Kind()
 	)
-	if xact.bucket != "" {
-		prefix += "@" + xact.bucket
+	if xact.bck.Name != "" {
+		prefix += "@" + xact.bck.Name
 	}
 	if !xact.Finished() {
 		if xact.gid == 0 {
@@ -183,14 +177,14 @@ func (xact *XactBase) Result() (interface{}, error) {
 // XactDemandBase - partially implements XactDemand interface
 //
 
-func NewXactDemandBase(id int64, kind, bucket, provider string, idleTime ...time.Duration) *XactDemandBase {
+func NewXactDemandBase(id int64, kind string, bck Bck, idleTime ...time.Duration) *XactDemandBase {
 	tickTime := xactIdleTimeout
 	if len(idleTime) != 0 {
 		tickTime = idleTime[0]
 	}
 	ticker := time.NewTicker(tickTime)
 	return &XactDemandBase{
-		XactBase: *NewXactBaseWithBucket(id, kind, bucket, provider),
+		XactBase: *NewXactBaseWithBucket(id, kind, bck),
 		ticker:   ticker,
 	}
 }

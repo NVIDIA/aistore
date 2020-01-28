@@ -65,7 +65,7 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck api.Bc
 
 	newName := newNamePrefix
 
-	cbck := cluster.Bck{Name: bck.Name, Provider: bck.Provider}
+	cbck := cluster.NewBck(bck.Name, bck.Provider, bck.Namespace)
 	baseNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(baseName), smap)
 	newNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(newName), smap)
 

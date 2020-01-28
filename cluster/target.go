@@ -67,7 +67,7 @@ type Target interface {
 	GetGFN(gfnType GFNType) GFN
 	Health(si *Snode, includeReb bool, timeout time.Duration) ([]byte, error)
 	RebalanceNamespace(si *Snode) ([]byte, int, error)
-	BMDVersionFixup(bucket string, sleep bool)
+	BMDVersionFixup(bck cmn.Bck, sleep bool)
 }
 
 type RebalanceInfo struct {

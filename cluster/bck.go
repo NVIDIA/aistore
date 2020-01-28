@@ -13,11 +13,25 @@ import (
 )
 
 type Bck struct {
-	Name     string
-	Provider string
-	Ns       string
-	Props    *cmn.BucketProps
+	cmn.Bck
+	Props *cmn.BucketProps
 }
+
+func NewBck(name, provider, ns string, optProps ...*cmn.BucketProps) *Bck {
+	var props *cmn.BucketProps
+	if len(optProps) > 0 {
+		props = optProps[0]
+	}
+	if !cmn.IsValidProvider(provider) {
+		cmn.Assert(provider == "" || provider == cmn.Cloud)
+	}
+	return &Bck{
+		Bck:   cmn.Bck{Name: name, Provider: provider, Ns: ns},
+		Props: props,
+	}
+}
+
+func NewBckEmbed(bck cmn.Bck) *Bck { return &Bck{Bck: bck} }
 
 func (b *Bck) MakeUname(objName string) string {
 	var (

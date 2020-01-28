@@ -253,7 +253,7 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apiItems []string, pr
 	if err := cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
 		return t.iterateBucketListPages(r, apiItems, provider, rangeMsg, operation)
 	} else if err := cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
-		bck := &cluster.Bck{Name: apiItems[0], Provider: provider}
+		bck := cluster.NewBck(apiItems[0], provider, cmn.NsGlobal)
 		if err := bck.Init(t.bmdowner); err != nil {
 			return err
 		}
@@ -325,7 +325,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	)
 
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err := bck.Init(t.bmdowner); err != nil {
 		return err
 	}

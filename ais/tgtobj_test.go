@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 	t.bmdowner = newBMDOwnerTgt()
 
 	bmd := newBucketMD()
-	bmd.add(&cluster.Bck{Name: testBucket, Provider: cmn.ProviderAIS}, &cmn.BucketProps{
+	bmd.add(cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cmn.ChecksumNone,
 		},

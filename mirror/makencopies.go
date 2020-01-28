@@ -101,7 +101,7 @@ func (r *XactBckMakeNCopies) init() (mpathCount int, err error) {
 	r.xactBckBase.init(mpathCount)
 	for _, mpathInfo := range availablePaths {
 		mncJogger := newMNCJogger(r, mpathInfo, config)
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider(), r.Ns())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bck())
 		r.mpathers[mpathLC] = mncJogger
 	}
 	for _, mpather := range r.mpathers {
@@ -129,7 +129,7 @@ func newMNCJogger(parent *XactBckMakeNCopies, mpathInfo *fs.MountpathInfo, confi
 }
 
 func (j *mncJogger) jog() {
-	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bucket())
+	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bck())
 	j.buf = j.parent.slab.Alloc()
 	j.joggerBckBase.jog()
 	j.parent.slab.Free(j.buf)
@@ -167,7 +167,7 @@ func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
 			}
 		}
 		if (j.num % logNumProcessed) == 0 {
-			glog.Infof("jogger[%s/%s] processed %d objects...", j.mpathInfo, j.parent.Bucket(), j.num)
+			glog.Infof("jogger[%s/%s] processed %d objects...", j.mpathInfo, j.parent.Bck(), j.num)
 			j.config = cmn.GCO.Get()
 		}
 	} else {

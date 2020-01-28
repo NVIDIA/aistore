@@ -15,7 +15,7 @@ var _ = Describe("Bck", func() {
 	Describe("Uname", func() {
 		DescribeTable("should convert bucket and object name to uname and back",
 			func(bckName, bckProvider, bckNs, objName string) {
-				bck := &Bck{Name: bckName, Provider: bckProvider, Ns: bckNs}
+				bck := NewBck(bckName, bckProvider, bckNs)
 				uname := bck.MakeUname(objName)
 
 				gotBck, gotObjName := ParseUname(uname)
@@ -58,33 +58,33 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"not matching names",
-				&Bck{Name: "a", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
-				&Bck{Name: "b", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
+				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
+				NewBck("b", cmn.ProviderAIS, cmn.NsGlobal),
 			),
 			Entry(
 				"empty providers",
-				&Bck{Name: "a", Provider: "", Ns: cmn.NsGlobal},
-				&Bck{Name: "a", Provider: "", Ns: cmn.NsGlobal},
+				NewBck("a", "", cmn.NsGlobal),
+				NewBck("a", "", cmn.NsGlobal),
 			),
 			Entry(
 				"not matching namespace",
-				&Bck{Name: "a", Provider: "", Ns: "ns1"},
-				&Bck{Name: "a", Provider: "", Ns: "ns2"},
+				NewBck("a", "", "ns1"),
+				NewBck("a", "", "ns2"),
 			),
 			Entry(
 				"not matching providers",
-				&Bck{Name: "a", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
-				&Bck{Name: "a", Provider: "", Ns: cmn.NsGlobal},
+				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
+				NewBck("a", "", cmn.NsGlobal),
 			),
 			Entry(
 				"not matching providers #2",
-				&Bck{Name: "a", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
-				&Bck{Name: "a", Provider: cmn.Cloud, Ns: cmn.NsGlobal},
+				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
+				NewBck("a", cmn.Cloud, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching providers #3",
-				&Bck{Name: "a", Provider: "", Ns: cmn.NsGlobal},
-				&Bck{Name: "a", Provider: cmn.Cloud, Ns: cmn.NsGlobal},
+				NewBck("a", "", cmn.NsGlobal),
+				NewBck("a", cmn.Cloud, cmn.NsGlobal),
 			),
 		)
 
@@ -94,23 +94,23 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"matching AIS providers",
-				&Bck{Name: "a", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
-				&Bck{Name: "a", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
+				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
+				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
 			),
 			Entry(
 				"matching namespaces",
-				&Bck{Name: "a", Provider: cmn.ProviderAIS, Ns: "ns"},
-				&Bck{Name: "a", Provider: cmn.ProviderAIS, Ns: "ns"},
+				NewBck("a", cmn.ProviderAIS, "ns"),
+				NewBck("a", cmn.ProviderAIS, "ns"),
 			),
 			Entry(
 				"matching Cloud providers",
-				&Bck{Name: "a", Provider: cmn.ProviderGoogle, Ns: cmn.NsGlobal},
-				&Bck{Name: "a", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
+				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
+				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
 			),
 			Entry(
 				"matching Cloud providers #2",
-				&Bck{Name: "a", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
-				&Bck{Name: "a", Provider: cmn.ProviderGoogle, Ns: cmn.NsGlobal},
+				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
+				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
 			),
 		)
 	})
