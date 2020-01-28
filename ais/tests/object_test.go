@@ -55,6 +55,8 @@ func TestCloudBucketObject(t *testing.T) {
 			)
 			if !test.exists {
 				bck.Name = cmn.RandString(10)
+			} else {
+				bck.Name = clibucket
 			}
 
 			reader, err := tutils.NewRandReader(cmn.KiB, false /* withHash */)
