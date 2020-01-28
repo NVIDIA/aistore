@@ -359,6 +359,9 @@ func waitForAsyncReqComplete(baseParams BaseParams, action, path string,
 	if err != nil {
 		return nil, err
 	}
+	if optParams.Query == nil {
+		optParams.Query = url.Values{}
+	}
 	if resp, err = doHTTPRequestGetResp(baseParams, path, b, optParams); err != nil {
 		return nil, err
 	}
