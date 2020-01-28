@@ -638,7 +638,8 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	proxyURL := tutils.GetPrimaryURL()
-	m.smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to update smap", m.smap.Version, testing.Verbose(), m.originalProxyCount, m.originalTargetCount-1)
+	m.smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to update smap", m.smap.Version,
+		testing.Verbose(), m.originalProxyCount, m.originalTargetCount-1)
 	tassert.CheckError(t, err)
 
 	// Step 2
@@ -731,7 +732,8 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
+		t.Fatalf("%d targets expected after unregister, actually %d targets",
+			m.originalTargetCount-1, n)
 	}
 
 	// Do puts in parallel
@@ -1317,9 +1319,11 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		tassert.CheckError(t, err)
 		n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
 		if n != m.originalTargetCount-(i+1) {
-			t.Errorf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-(i+1), n)
+			t.Errorf("%d targets expected after unregister, actually %d targets",
+				m.originalTargetCount-(i+1), n)
 		}
-		tutils.Logf("Unregistered target %s: the cluster now has %d targets\n", targets[i].URL(cmn.NetworkPublic), n)
+		tutils.Logf("Unregistered target %s: the cluster now has %d targets\n",
+			targets[i].URL(cmn.NetworkPublic), n)
 	}
 
 	m.wg.Add(unregisterTargetCount)
@@ -1801,7 +1805,8 @@ func TestAtimeLocalGet(t *testing.T) {
 	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	if !(timeAfterGet.After(timeAfterPut)) {
-		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).", timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
+		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).",
+			timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
 	}
 }
 
@@ -1823,7 +1828,7 @@ func TestAtimeColdGet(t *testing.T) {
 	tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
 	defer tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
 
-	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, objectName, bck, proxyURL, objectContent)
+	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, proxyURL, bck, objectName, objectContent)
 
 	timeAfterPut := time.Now()
 
@@ -1834,7 +1839,8 @@ func TestAtimeColdGet(t *testing.T) {
 	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	if !(timeAfterGet.After(timeAfterPut)) {
-		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).", timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
+		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).",
+			timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
 	}
 }
 
@@ -1897,7 +1903,8 @@ func TestAtimeLocalPut(t *testing.T) {
 	timeAfterPut := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	if !(timeAfterPut.After(timeBeforePut)) {
-		t.Errorf("Expected atime after PUT (%s) to be after atime before PUT (%s).", timeAfterPut.Format(time.RFC3339Nano), timeBeforePut.Format(time.RFC3339Nano))
+		t.Errorf("Expected atime after PUT (%s) to be after atime before PUT (%s).",
+			timeAfterPut.Format(time.RFC3339Nano), timeBeforePut.Format(time.RFC3339Nano))
 	}
 }
 

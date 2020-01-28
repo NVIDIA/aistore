@@ -829,7 +829,8 @@ func PutRandObjs(proxyURL string, bck api.Bck, readerPath, readerType, objPath s
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET
-func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, proxyURL string, bck api.Bck, object string, objContent cmn.ReadOpenCloser) {
+func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, proxyURL string, bck api.Bck,
+	object string, objContent cmn.ReadOpenCloser) {
 	baseParams := DefaultBaseAPIParams(t)
 
 	err := api.PutObject(api.PutObjectArgs{
