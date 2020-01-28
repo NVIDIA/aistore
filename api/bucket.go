@@ -42,19 +42,18 @@ func (b Bck) String() string {
 // property structure to be set.
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams BaseParams, bck Bck, props cmn.BucketPropsToUpdate, query ...url.Values) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Value: props})
+	var (
+		b, err    = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Value: props})
+		optParams = OptionalParams{}
+	)
 	if err != nil {
 		return err
 	}
-
-	optParams := OptionalParams{}
 	if len(query) > 0 {
 		optParams.Query = query[0]
-	} else {
-		optParams.Query = make(url.Values)
 	}
-	optParams.Query.Add(cmn.URLParamProvider, bck.Provider)
-	optParams.Query.Add(cmn.URLParamNamespace, bck.Namespace)
+	optParams.Query = addBckToQuery(optParams.Query, bck)
+
 	baseParams.Method = http.MethodPatch
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	_, err = DoHTTPRequest(baseParams, path, b, optParams)
@@ -65,18 +64,18 @@ func SetBucketProps(baseParams BaseParams, bck Bck, props cmn.BucketPropsToUpdat
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
 func ResetBucketProps(baseParams BaseParams, bck Bck, query ...url.Values) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActResetProps})
+	var (
+		b, err    = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActResetProps})
+		optParams = OptionalParams{}
+	)
 	if err != nil {
 		return err
 	}
-	optParams := OptionalParams{}
 	if len(query) > 0 {
 		optParams.Query = query[0]
-	} else {
-		optParams.Query = make(url.Values)
 	}
-	optParams.Query.Add(cmn.URLParamProvider, bck.Provider)
-	optParams.Query.Add(cmn.URLParamNamespace, bck.Namespace)
+	optParams.Query = addBckToQuery(optParams.Query, bck)
+
 	baseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	_, err = DoHTTPRequest(baseParams, path, b, optParams)
@@ -97,11 +96,9 @@ func HeadBucket(baseParams BaseParams, bck Bck, query ...url.Values) (p cmn.Buck
 	baseParams.Method = http.MethodHead
 	if len(query) > 0 {
 		optParams.Query = query[0]
-	} else {
-		optParams.Query = make(url.Values)
 	}
-	optParams.Query.Add(cmn.URLParamProvider, bck.Provider)
-	optParams.Query.Add(cmn.URLParamNamespace, bck.Namespace)
+	optParams.Query = addBckToQuery(optParams.Query, bck)
+
 	if r, err = doHTTPRequestGetResp(baseParams, path, nil, optParams); err != nil {
 		return
 	}
@@ -121,15 +118,14 @@ func HeadBucket(baseParams BaseParams, bck Bck, query ...url.Values) (p cmn.Buck
 // provider takes one of Cloud Provider enum names (see provider.go). If provider is empty, return all names.
 // Otherwise, return cloud or ais bucket names.
 func GetBucketNames(baseParams BaseParams, bck Bck) (*cmn.BucketNames, error) {
-	bucketNames := &cmn.BucketNames{}
-	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)
-	query := url.Values{
-		cmn.URLParamProvider:  []string{bck.Provider},
-		cmn.URLParamNamespace: []string{bck.Namespace},
-	}
-	optParams := OptionalParams{Query: query}
+	var (
+		bucketNames = &cmn.BucketNames{}
+		path        = cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)
+		query       = addBckToQuery(nil, bck)
+		optParams   = OptionalParams{Query: query}
+	)
 
+	baseParams.Method = http.MethodGet
 	b, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	if err != nil {
 		return nil, err
@@ -149,7 +145,7 @@ func GetBucketNames(baseParams BaseParams, bck Bck) (*cmn.BucketNames, error) {
 // Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
 func GetBucketsSummaries(baseParams BaseParams, bck Bck, msg *cmn.SelectMsg) (cmn.BucketsSummaries, error) {
 	var (
-		q    = url.Values{}
+		q    = addBckToQuery(nil, bck)
 		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	)
 
@@ -158,9 +154,6 @@ func GetBucketsSummaries(baseParams BaseParams, bck Bck, msg *cmn.SelectMsg) (cm
 	}
 
 	baseParams.Method = http.MethodPost
-	q.Add(cmn.URLParamProvider, bck.Provider)
-	q.Add(cmn.URLParamNamespace, bck.Namespace)
-
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg})
 	if err != nil {
 		return nil, err
@@ -193,16 +186,15 @@ func GetBucketsSummaries(baseParams BaseParams, bck Bck, msg *cmn.SelectMsg) (cm
 //
 // CreateBucket sends a HTTP request to a proxy to create an ais bucket with the given name
 func CreateBucket(baseParams BaseParams, bck Bck) error {
-	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCreateLB})
+	var (
+		msg, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCreateLB})
+		path     = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		query    = addBckToQuery(nil, bck)
+	)
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	query := url.Values{
-		cmn.URLParamProvider:  []string{bck.Provider},
-		cmn.URLParamNamespace: []string{bck.Namespace},
-	}
 	_, err = DoHTTPRequest(baseParams, path, msg, OptionalParams{Query: query})
 	return err
 }
@@ -211,16 +203,15 @@ func CreateBucket(baseParams BaseParams, bck Bck) error {
 //
 // DestroyBucket sends a HTTP request to a proxy to remove an ais bucket with the given name
 func DestroyBucket(baseParams BaseParams, bck Bck) error {
-	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActDestroyLB})
+	var (
+		msg, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActDestroyLB})
+		path     = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		query    = addBckToQuery(nil, bck)
+	)
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	query := url.Values{
-		cmn.URLParamProvider:  []string{bck.Provider},
-		cmn.URLParamNamespace: []string{bck.Namespace},
-	}
 	_, err = DoHTTPRequest(baseParams, path, msg, OptionalParams{Query: query})
 	return err
 }
@@ -327,18 +318,20 @@ func EvictRange(baseParams BaseParams, bck Bck, prefix, regex, rng string, wait 
 // EvictCloudBucket sends a HTTP request to a proxy to evict an entire cloud bucket from the AIStore
 // - the operation results in eliminating all traces of the specified cloud bucket in the AIStore
 func EvictCloudBucket(baseParams BaseParams, bck Bck, query ...url.Values) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictCB})
+	var (
+		b, err    = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictCB})
+		optParams = OptionalParams{}
+	)
 	if err != nil {
 		return err
 	}
-	optParams := OptionalParams{}
 	if len(query) > 0 {
 		optParams.Query = query[0]
-	} else {
-		optParams.Query = make(url.Values)
 	}
-	optParams.Query.Add(cmn.URLParamProvider, cmn.Cloud)
-	optParams.Query.Add(cmn.URLParamNamespace, bck.Namespace)
+	if bck.Provider == "" {
+		bck.Provider = cmn.Cloud
+	}
+	optParams.Query = addBckToQuery(optParams.Query, bck)
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	_, err = DoHTTPRequest(baseParams, path, b, optParams)
@@ -573,9 +566,10 @@ func ListBucketPage(baseParams BaseParams, bck Bck, msg *cmn.SelectMsg, query ..
 // All SelectMsg fields except prefix do not work and are skipped.
 // Function always returns the whole list of objects without paging
 func ListBucketFast(baseParams BaseParams, bck Bck, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
-	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-
+	var (
+		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		q    url.Values
+	)
 	if msg == nil {
 		msg = &cmn.SelectMsg{}
 	}
@@ -588,17 +582,16 @@ func ListBucketFast(baseParams BaseParams, bck Bck, msg *cmn.SelectMsg, query ..
 	msg.Fast = true
 	msg.Cached = true
 
-	q := url.Values{}
 	if len(query) > 0 {
 		q = query[0]
 	}
-	q.Add(cmn.URLParamProvider, bck.Provider)
-	q.Add(cmn.URLParamNamespace, bck.Namespace)
+	q = addBckToQuery(q, bck)
 
 	optParams := OptionalParams{
 		Header: http.Header{"Content-Type": []string{"application/json"}},
 		Query:  q,
 	}
+	baseParams.Method = http.MethodPost
 	resp, err := waitForAsyncReqComplete(baseParams, cmn.ActListObjects, path, msg, optParams)
 	if err != nil {
 		return nil, err
@@ -615,16 +608,14 @@ func ListBucketFast(baseParams BaseParams, bck Bck, msg *cmn.SelectMsg, query ..
 
 // Handles the List/Range operations (delete, prefetch)
 func doListRangeRequest(baseParams BaseParams, bck Bck, action, method string, listrangemsg interface{}) error {
-	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
-	b, err := jsoniter.Marshal(actionMsg)
+	var (
+		actionMsg = cmn.ActionMsg{Action: action, Value: listrangemsg}
+		b, err    = jsoniter.Marshal(actionMsg)
+		path      = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		query     = addBckToQuery(nil, bck)
+	)
 	if err != nil {
 		return fmt.Errorf("failed to marshal cmn.ActionMsg, err: %v", err)
-	}
-	baseParams.Method = method
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	query := url.Values{
-		cmn.URLParamProvider:  []string{bck.Provider},
-		cmn.URLParamNamespace: []string{bck.Namespace},
 	}
 	optParams := OptionalParams{
 		Header: http.Header{
@@ -632,21 +623,21 @@ func doListRangeRequest(baseParams BaseParams, bck Bck, action, method string, l
 		},
 		Query: query,
 	}
+	baseParams.Method = method
 	_, err = DoHTTPRequest(baseParams, path, b, optParams)
 	return err
 }
 
 func ECEncodeBucket(baseParams BaseParams, bck Bck) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActECEncode})
+	var (
+		b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActECEncode})
+		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		query  = addBckToQuery(nil, bck)
+	)
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	query := url.Values{
-		cmn.URLParamProvider:  []string{bck.Provider},
-		cmn.URLParamNamespace: []string{bck.Namespace},
-	}
 	_, err = DoHTTPRequest(baseParams, path, b, OptionalParams{Query: query})
 	return err
 }

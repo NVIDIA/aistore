@@ -130,3 +130,19 @@ func setAuthToken(r *http.Request, baseParams BaseParams) {
 		r.Header.Set(cmn.HeaderAuthorization, cmn.MakeHeaderAuthnToken(baseParams.Token))
 	}
 }
+
+func addBckToQuery(query url.Values, bck Bck) url.Values {
+	if bck.Provider != "" {
+		if query == nil {
+			query = make(url.Values)
+		}
+		query.Set(cmn.URLParamProvider, bck.Provider)
+	}
+	if bck.Namespace != "" {
+		if query == nil {
+			query = make(url.Values)
+		}
+		query.Set(cmn.URLParamNamespace, bck.Namespace)
+	}
+	return query
+}

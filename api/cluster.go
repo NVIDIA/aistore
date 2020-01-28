@@ -222,15 +222,12 @@ func ExecXaction(baseParams BaseParams, bck Bck, kind, command string) error {
 		}
 		path     = cmn.URLPath(cmn.Version, cmn.Cluster)
 		msg, err = jsoniter.Marshal(actMsg)
+		query    = addBckToQuery(nil, bck)
 	)
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodPut
-	query := url.Values{
-		cmn.URLParamProvider:  []string{bck.Provider},
-		cmn.URLParamNamespace: []string{bck.Namespace},
-	}
 	optParams = []OptionalParams{{Query: query}}
 	_, err = DoHTTPRequest(baseParams, path, msg, optParams...)
 	return err
