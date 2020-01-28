@@ -691,7 +691,11 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	// send acknowledge back to the caller
 	smap := (*cluster.Smap)(reb.smap.Load())
 	tsi := smap.GetTarget(req.DaemonID)
-	hdr.Opaque = []byte(ctUID(sliceID, reb.t.Snode().ID()))
+	ack := &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.Snode().ID()}
+	packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
+	packer.WriteByte(rebMsgAckEC)
+	packer.WriteAny(ack)
+	hdr.Opaque = packer.Bytes()
 	hdr.ObjAttrs.Size = 0
 	if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
 		glog.Error(err)

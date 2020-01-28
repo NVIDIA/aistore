@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -105,10 +104,6 @@ type (
 	LomAcks struct {
 		mu *sync.Mutex
 		q  map[string]*cluster.LOM // on the wire, waiting for ACK
-	}
-	regularAck struct {
-		GlobRebID int64  `json:"reb_id"`
-		DaemonID  string `json:"daemon"` // sender's DaemonID
 	}
 )
 
@@ -477,11 +472,11 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 		return
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
-		ack := regularAck{
-			GlobRebID: reb.GlobRebID(),
-			DaemonID:  reb.t.Snode().ID(),
-		}
-		hdr.Opaque = cmn.MustMarshal(&ack)
+		ack := &regularAck{GlobRebID: reb.GlobRebID(), DaemonID: reb.t.Snode().ID()}
+		packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
+		packer.WriteByte(rebMsgAckRegular)
+		packer.WriteAny(ack)
+		hdr.Opaque = packer.Bytes()
 		hdr.ObjAttrs.Size = 0
 		if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
@@ -545,13 +540,19 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 	reb.stages.setStage(req.DaemonID, req.Stage, int64(req.Batch))
 }
 
-func (reb *Manager) recvECAck(hdr transport.Header) {
-	opaque := string(hdr.Opaque)
-	uid := ackID(hdr.Bck, hdr.ObjName, string(hdr.Opaque))
-	if glog.FastV(4, glog.SmoduleReb) {
+func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
+	ack := &ecAck{}
+	if err := unpacker.ReadAny(ack); err != nil {
+		glog.Errorf("Failed to unmarshal EC ACK for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
+		return
+	}
+
+	cid := ctUID(int(ack.sliceID), ack.daemonID)
+	uid := ackID(hdr.Bck, hdr.ObjName, cid)
+	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof(
 			"%s: EC ack from %s on %s/%s",
-			reb.t.Snode().Name(), opaque, hdr.Bck, hdr.ObjName,
+			reb.t.Snode().Name(), cid, hdr.Bck, hdr.ObjName,
 		)
 	}
 	reb.ec.ackCTs.mtx.Lock()
@@ -559,21 +560,29 @@ func (reb *Manager) recvECAck(hdr transport.Header) {
 	reb.ec.ackCTs.mtx.Unlock()
 }
 
-func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Reader, err error) {
 	if err != nil {
 		glog.Error(err)
 		return
 	}
-	// regular rebalance sends "daemonID" as opaque
-	// EC rebalance sends "@sliceID/daemonID" as opaque
-	opaque := string(hdr.Opaque)
-	if strings.HasPrefix(opaque, "@") {
-		reb.recvECAck(hdr)
+
+	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	act, err := unpacker.ReadByte()
+	if err != nil {
+		glog.Errorf("Failed to read message type: %v", err)
 		return
 	}
 
+	if act == rebMsgAckEC {
+		reb.recvECAck(hdr, unpacker)
+		return
+	}
+	if act != rebMsgAckRegular {
+		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgAckRegular)
+	}
+
 	ack := &regularAck{}
-	if err = jsoniter.Unmarshal(hdr.Opaque, ack); err != nil {
+	if err = unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse acknowledge: %v", err)
 		return
 	}
@@ -588,7 +597,7 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, objRead
 		return
 	}
 	if glog.FastV(5, glog.SmoduleReb) {
-		glog.Infof("%s: ack from %s on %s", reb.t.Snode().Name(), opaque, lom)
+		glog.Infof("%s: ack from %s on %s", reb.t.Snode().Name(), string(hdr.Opaque), lom)
 	}
 	var (
 		_, idx = lom.Hkey()
