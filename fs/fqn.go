@@ -34,7 +34,7 @@ type ParsedFQN struct {
 	Digest      uint64
 }
 
-// ParseFQN splits a provided FQN (created by `MakePathBucketObject`) or reports
+// ParseFQN splits a provided FQN (created by `MakePathCT`) or reports
 // an error.
 func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 	var (

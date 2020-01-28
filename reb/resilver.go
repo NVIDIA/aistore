@@ -60,11 +60,7 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 			mpathL string
 			bck    = cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 		)
-		if bucket == "" {
-			mpathL = mpathInfo.MakePath(fs.ObjectType, bck)
-		} else {
-			mpathL = mpathInfo.MakePathBucket(fs.ObjectType, bck)
-		}
+		mpathL = mpathInfo.MakePath(fs.ObjectType, bck)
 		jogger := &localJogger{
 			joggerBase:        joggerBase{m: reb, mpath: mpathL, xreb: &xreb.RebBase, wg: wg},
 			slab:              slab,

@@ -200,8 +200,12 @@ func (mi *MountpathInfo) makePathBuf(contentType string, bck cmn.Bck, extra int)
 	if bck.Ns != cmn.NsGlobal {
 		nsLen = 1 + 1 + len(bck.Ns)
 	}
+	bckNameLen := 0
+	if bck.Name != "" {
+		bckNameLen = 1 + len(bck.Name)
+	}
 
-	buf = make([]byte, 0, len(mi.Path)+ctLen+1+1+len(bck.Provider)+nsLen+extra)
+	buf = make([]byte, 0, len(mi.Path)+ctLen+1+1+len(bck.Provider)+nsLen+bckNameLen+extra)
 	buf = append(buf, mi.Path...)
 	if ctLen > 0 {
 		buf = append(buf, filepath.Separator, prefCT)
@@ -213,13 +217,10 @@ func (mi *MountpathInfo) makePathBuf(contentType string, bck cmn.Bck, extra int)
 		buf = append(buf, filepath.Separator, prefNamespace)
 		buf = append(buf, bck.Ns...)
 	}
-	return
-}
-
-func (mi *MountpathInfo) makePathBucketBuf(contentType string, bck cmn.Bck, extra int) (buf []byte) {
-	buf = mi.makePathBuf(contentType, bck, 1+len(bck.Name)+extra)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, bck.Name...)
+	if bckNameLen > 0 {
+		buf = append(buf, filepath.Separator)
+		buf = append(buf, bck.Name...)
+	}
 	return
 }
 
@@ -228,12 +229,8 @@ func (mi *MountpathInfo) MakePath(contentType string, bck cmn.Bck) string {
 	return *(*string)(unsafe.Pointer(&buf))
 }
 
-func (mi *MountpathInfo) MakePathBucket(contentType string, bck cmn.Bck) string {
-	buf := mi.makePathBucketBuf(contentType, bck, 0)
-	return *(*string)(unsafe.Pointer(&buf))
-}
-func (mi *MountpathInfo) MakePathBucketObject(contentType string, bck cmn.Bck, objName string) string {
-	buf := mi.makePathBucketBuf(contentType, bck, 1+len(objName))
+func (mi *MountpathInfo) MakePathCT(contentType string, bck cmn.Bck, objName string) string {
+	buf := mi.makePathBuf(contentType, bck, 1+len(objName))
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
 	return *(*string)(unsafe.Pointer(&buf))
@@ -541,7 +538,7 @@ func (mfs *MountedFS) CreateBucketDirs(bck cmn.Bck, destroyUponRet bool) (err er
 	availablePaths, _ := mfs.Get()
 	created := make([]string, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
-		bdir := mpathInfo.MakePathBucket(ObjectType, bck)
+		bdir := mpathInfo.MakePath(ObjectType, bck)
 		if err = Access(bdir); err == nil {
 			if isDirEmpty(bdir) {
 				created = append(created, bdir)
@@ -573,8 +570,8 @@ func (mfs *MountedFS) RenameBucketDirs(bckFrom, bckTo cmn.Bck) (err error) {
 	availablePaths, _ := mfs.Get()
 	renamed := make([]*MountpathInfo, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
-		from := mpathInfo.MakePathBucket(ObjectType, bckFrom)
-		to := mpathInfo.MakePathBucket(ObjectType, bckTo)
+		from := mpathInfo.MakePath(ObjectType, bckFrom)
+		to := mpathInfo.MakePath(ObjectType, bckTo)
 		if err = os.Rename(from, to); err != nil {
 			break
 		}
@@ -584,8 +581,8 @@ func (mfs *MountedFS) RenameBucketDirs(bckFrom, bckTo cmn.Bck) (err error) {
 		return
 	}
 	for _, mpathInfo := range renamed {
-		from := mpathInfo.MakePathBucket(ObjectType, bckTo)
-		to := mpathInfo.MakePathBucket(ObjectType, bckFrom)
+		from := mpathInfo.MakePath(ObjectType, bckTo)
+		to := mpathInfo.MakePath(ObjectType, bckFrom)
 		if erd := os.Rename(from, to); erd != nil {
 			glog.Error(erd)
 		}
@@ -618,7 +615,7 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, passMsg, failMsg string,
 			}
 			for _, bck := range bcks {
 				for contentType := range contentTypes {
-					dir := mi.MakePathBucket(contentType, bck)
+					dir := mi.MakePath(contentType, bck)
 					if !create {
 						if err := Access(dir); os.IsNotExist(err) {
 							continue

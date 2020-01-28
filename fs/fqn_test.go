@@ -280,7 +280,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 			mpaths, _ := fs.Mountpaths.Get()
-			fqn := mpaths[tt.mpath].MakePathBucketObject(tt.contentType, tt.bck, tt.objName)
+			fqn := mpaths[tt.mpath].MakePathCT(tt.contentType, tt.bck, tt.objName)
 
 			parsedFQN, err := mfs.ParseFQN(fqn)
 			if err != nil {
@@ -323,7 +323,7 @@ func BenchmarkParseFQN(b *testing.B) {
 	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 
 	mpaths, _ := fs.Mountpaths.Get()
-	fqn := mpaths[mpath].MakePathBucketObject(fs.ObjectType, bck, "super/long/name")
+	fqn := mpaths[mpath].MakePathCT(fs.ObjectType, bck, "super/long/name")
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

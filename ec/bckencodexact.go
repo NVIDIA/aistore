@@ -133,7 +133,7 @@ func (r *XactBckEncode) stop() {
 func (j *joggerBckEncode) stop() { j.stopCh.Close() }
 
 func (j *joggerBckEncode) jog() {
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bck())
+	dir := j.mpathInfo.MakePath(fs.ObjectType, j.parent.Bck())
 	opts := &fs.Options{
 		Callback: j.walk,
 		Sorted:   false,

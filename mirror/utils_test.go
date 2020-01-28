@@ -48,9 +48,9 @@ var _ = Describe("Mirror", func() {
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}
 		bck             = cmn.Bck{Name: testBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-		bucketPath      = mi.MakePathBucket(fs.ObjectType, bck)
-		defaultObjFQN   = mi.MakePathBucketObject(fs.ObjectType, bck, testObjectName)
-		expectedCopyFQN = mi2.MakePathBucketObject(fs.ObjectType, bck, testObjectName)
+		bucketPath      = mi.MakePath(fs.ObjectType, bck)
+		defaultObjFQN   = mi.MakePathCT(fs.ObjectType, bck, testObjectName)
+		expectedCopyFQN = mi2.MakePathCT(fs.ObjectType, bck, testObjectName)
 	)
 
 	cbck := cluster.NewBckEmbed(bck)
