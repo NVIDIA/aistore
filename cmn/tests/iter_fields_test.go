@@ -45,10 +45,6 @@ var _ = Describe("IterFields", func() {
 				map[string]interface{}{
 					"cloud_provider": cmn.ProviderAIS,
 
-					"tier.write_policy": "",
-					"tier.next_url":     "",
-					"tier.read_policy":  "",
-
 					"mirror.enabled":      false,
 					"mirror.copies":       int64(0),
 					"mirror.util_thresh":  int64(0),

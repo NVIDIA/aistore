@@ -6,7 +6,6 @@ package cmn
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
@@ -233,9 +232,6 @@ type BucketProps struct {
 	// Versioning can be enabled or disabled on a per-bucket basis
 	Versioning VersionConf `json:"versioning"`
 
-	// Tier location and tier/cloud policies
-	Tiering TierConf `json:"tier"`
-
 	// Cksum is the embedded struct of the same name
 	Cksum CksumConf `json:"cksum"`
 
@@ -269,20 +265,6 @@ type BucketPropsToUpdate struct {
 	Mirror      *MirrorConfToUpdate  `json:"mirror"`
 	EC          *ECConfToUpdate      `json:"ec"`
 	AccessAttrs *uint64              `json:"aattrs,string"`
-}
-
-type TierConf struct {
-	// NextTierURL is an absolute URI corresponding to the primary proxy
-	// of the next tier configured for the bucket specified
-	NextTierURL string `json:"next_url"`
-
-	// ReadPolicy determines if a read will be from cloud or next tier
-	// specified by NextTierURL. Default: "next_tier"
-	ReadPolicy string `json:"read_policy"`
-
-	// WritePolicy determines if a write will be to cloud or next tier
-	// specified by NextTierURL. Default: "cloud"
-	WritePolicy string `json:"write_policy"`
 }
 
 // ECConfig - per-bucket erasure coding configuration
@@ -388,14 +370,6 @@ func (c *RebalanceConf) String() string {
 	return "Disabled"
 }
 
-func (c *TierConf) String() string {
-	if c.NextTierURL == "" {
-		return "Disabled"
-	}
-
-	return c.NextTierURL
-}
-
 func (c *ECConf) String() string {
 	if !c.Enabled {
 		return "Disabled"
@@ -467,43 +441,8 @@ func (p1 *BucketProps) Equal(p2 *BucketProps) bool {
 }
 
 func (bp *BucketProps) Validate(targetCnt int, urlOutsideCluster func(string) bool) error {
-	if bp.Tiering.NextTierURL != "" {
-		if _, err := url.ParseRequestURI(bp.Tiering.NextTierURL); err != nil {
-			return fmt.Errorf("invalid next tier URL: %s, err: %v", bp.Tiering.NextTierURL, err)
-		}
-		if !urlOutsideCluster(bp.Tiering.NextTierURL) {
-			return fmt.Errorf("invalid next tier URL: %s, URL is in current cluster", bp.Tiering.NextTierURL)
-		}
-	}
 	if !IsValidProvider(bp.CloudProvider) {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.CloudProvider, ListProviders())
-	}
-	if bp.Tiering.ReadPolicy != "" && bp.Tiering.ReadPolicy != RWPolicyCloud && bp.Tiering.ReadPolicy != RWPolicyNextTier {
-		return fmt.Errorf("invalid read policy: %s", bp.Tiering.ReadPolicy)
-	}
-	if bp.Tiering.ReadPolicy == RWPolicyCloud && IsProviderAIS(bp.CloudProvider) {
-		return fmt.Errorf("read policy for ais bucket cannot be '%s'", RWPolicyCloud)
-	}
-	if bp.Tiering.WritePolicy != "" && bp.Tiering.WritePolicy != RWPolicyCloud && bp.Tiering.WritePolicy != RWPolicyNextTier {
-		return fmt.Errorf("invalid write policy: %s", bp.Tiering.WritePolicy)
-	}
-	if bp.Tiering.WritePolicy == RWPolicyCloud && IsProviderAIS(bp.CloudProvider) {
-		return fmt.Errorf("write policy for ais bucket cannot be '%s'", RWPolicyCloud)
-	}
-	if bp.Tiering.NextTierURL != "" {
-		if bp.CloudProvider == "" {
-			return fmt.Errorf("tiered bucket must use one of the supported cloud providers (%s | %s | %s)",
-				ProviderAmazon, ProviderGoogle, ProviderAIS)
-		}
-		if bp.Tiering.ReadPolicy == "" {
-			bp.Tiering.ReadPolicy = RWPolicyNextTier
-		}
-		if bp.Tiering.WritePolicy == "" {
-			bp.Tiering.WritePolicy = RWPolicyNextTier
-			if IsProviderCloud(bp.CloudProvider, false /*acceptAnon*/) {
-				bp.Tiering.WritePolicy = RWPolicyCloud
-			}
-		}
 	}
 	validationArgs := &ValidationArgs{TargetCnt: targetCnt}
 	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC}

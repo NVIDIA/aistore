@@ -93,8 +93,8 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | timeout.default_timeout | 30s | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
 | timeout.default_long_timeout | 30m | Default timeout for long intra-cluster requests, e.g. reading an object from neighbor target while rebalancing |
 | cksum.type | xxhash | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
-| cksum.validate_cold_get | true | Enables and disables checking the hash of received object after downloading it from the cloud or next tier |
-| cksum.validate_warm_get | false | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud or next AIStore tier based version |
+| cksum.validate_cold_get | true | Enables and disables checking the hash of received object after downloading it from the cloud |
+| cksum.validate_warm_get | false | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |
 | cksum.enable_read_range | false | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
 | versioning.enabled | all | Defines what kind of buckets should use versioning to detect if the object must be redownloaded. Possible values are 'cloud', 'local', and 'all' |
 | versioning.validate_warm_get | false | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |

@@ -440,7 +440,6 @@ func printBckHeadTable(c *cli.Context, props cmn.BucketProps) error {
 		{"EC", props.EC.String()},
 		{"LRU", props.LRU.String()},
 		{"Versioning", props.Versioning.String()},
-		{"Tiering", props.Tiering.String()},
 	}
 
 	return templates.DisplayOutput(propList, c.App.Writer, templates.BucketPropsSimpleTmpl)

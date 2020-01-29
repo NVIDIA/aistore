@@ -430,8 +430,10 @@ get:
 }
 
 // an attempt to restore an object that is missing in the ais bucket - from:
-//     1) local FS, 2) this cluster, 3) other tiers in the DC 4) from other
-//		targets using erasure coding (if enabled)
+// 1) local FS
+// 2) other FSes or targets when resilvering (rebalancing) is running (aka GFN)
+// 3) other targets if the bucket erasure coded
+// 4) Cloud
 func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode int) {
 	var (
 		tsi, gfnNode     *cluster.Snode

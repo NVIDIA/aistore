@@ -117,7 +117,6 @@ Mirror          Disabled
 EC              3:3 (256KiB)
 LRU             Disabled
 Versioning      Disabled
-Tiering         Disabled
 ```
 
 ### Limitations

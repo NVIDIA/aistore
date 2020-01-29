@@ -332,21 +332,6 @@ paths:
           schema:
             type: string
             enum: [local, cloud, none]
-        - name: next_tier_url
-          in: query
-          description: URL for the next tier
-          schema:
-            type: string
-        - name: read_policy
-          in: query
-          description: Policy which defines how to perform reads in case of more tiers
-          schema:
-            $ref: '#/components/schemas/RWPolicy'
-        - name: write_policy
-          in: query
-          description: Policy which defines how to perform writes in case of more tiers
-          schema:
-            $ref: '#/components/schemas/RWPolicy'
       requestBody:
         required: true
         content:
@@ -1336,12 +1321,6 @@ components:
       properties:
         cloud_provider:
           type: string
-        next_tier_url:
-          type: string
-        read_policy:
-          type: string
-        write_policy:
-          type: string
         cksum:
           $ref: '#/components/schemas/BucketPropsCksum'
     BucketPropsCksum:
@@ -1426,10 +1405,10 @@ components:
       enum: [ais, aws, gcp]
     Headers:
       type: string
-      enum: [cloud_provider, Versioning, next_tier_url, read_policy, write_policy, ObjVersion, ObjSize, ObjCksumType, ObjCksumVal]
+      enum: [cloud_provider, Versioning, ObjVersion, ObjSize, ObjCksumType, ObjCksumVal]
     RWPolicy:
       type: string
-      enum: [cloud, next_tier]
+      enum: [cloud]
     Version:
       type: string
       enum: [all, cloud, local, none]

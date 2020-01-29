@@ -33,7 +33,7 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 5. If the object already exists locally (meaning, it belongs to an ais bucket or the most recent version of a Cloud-based object is cached
    and resides on a local disk), the target optionally validates the object's checksum and version.
    This type of `GET` is often referred to as a "warm `GET`".
-6. Otherwise, the target performs a "cold `GET`" by downloading the newest version of the object from the next AIStore tier or from the Cloud.
+6. Otherwise, the target performs a "cold `GET`" by downloading the latest version of the object from the Cloud.
 7. Finally, the target delivers the object to the client via HTTP(S) response.
 
 <img src="images/ais-get-flow.png" alt="AIStore GET flow" width="800">
@@ -43,7 +43,7 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 5. If the object already exists locally and its checksum matches the checksum from the `PUT` request, processing stops because the object hasn't
    changed.
 6. Target streams the object contents from an HTTP request to a temporary work file.
-7. Upon receiving the last byte of the object, the target sends the new version of the object to the next AIStore tier or the Cloud.
+7. Upon receiving the last byte of the object, the target sends the new version of the object to the Cloud.
 8. The target then writes the object to the local disk replacing the old one if it exists.
 9. Finally, the target writes extended attributes that include the versioning and checksum information, and thus commits the PUT transaction.
 

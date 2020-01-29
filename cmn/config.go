@@ -418,7 +418,7 @@ type CksumConf struct {
 	Type string `json:"type"`
 
 	// ValidateColdGet determines whether or not the checksum of received object
-	// is checked after downloading it from the cloud or next tier.
+	// is checked after downloading it from remote (cloud) buckets.
 	ValidateColdGet bool `json:"validate_cold_get"`
 
 	// ValidateWarmGet: if enabled, the object's version (if in Cloud-based bucket)

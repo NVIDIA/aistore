@@ -10,7 +10,6 @@ Mirror		2 copies
 EC		Disabled
 LRU		Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 Versioning	(validation: WarmGET=no)
-Tiering		Disabled
 Bucket props have been reset successfully.
 Bucket props have been successfully updated.
 Property	Value
@@ -22,4 +21,3 @@ Mirror		Disabled
 EC		Disabled
 LRU		Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 Versioning	(validation: WarmGET=yes)
-Tiering		Disabled

@@ -17,7 +17,6 @@ The rest of this document is structured as follows:
 - [Data Protection](#data-protection)
 - [Scale-Out](#scale-out)
 - [HA](#ha)
-- [Fast Tier](#fast-tier)
 - [Other Services](#other-services)
 - [dSort](#dsort)
 - [CLI](#cli)

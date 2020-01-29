@@ -306,11 +306,6 @@ const (
 	Target = "target"
 )
 
-const (
-	RWPolicyCloud    = "cloud"
-	RWPolicyNextTier = "next_tier"
-)
-
 // bucket and object access attrs and [TODO] some of their popular combinations
 const (
 	AccessGET = 1 << iota
