@@ -17,8 +17,7 @@ func BuildDownloaderInput(t cluster.Target, id string, bck *cluster.Bck,
 		err    error
 		dlBody = &cmn.DlBody{ID: id}
 	)
-	dlBody.Bucket = bck.Name
-	dlBody.Provider = bck.Provider
+	dlBody.Bck = bck.Bck
 	dlBody.Timeout = payload.Timeout
 	dlBody.Description = payload.Description
 

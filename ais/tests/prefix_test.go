@@ -34,7 +34,7 @@ var (
 // otherwise, the test creates (PUT) random files and executes 'a*' through 'z*' listings.
 func TestPrefix(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name: clibucket,
 		}
 		proxyURL = tutils.GetPrimaryURL()
@@ -69,7 +69,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 	var (
 		wg    = &sync.WaitGroup{}
 		errCh = make(chan error, numfiles)
-		bck   = api.Bck{
+		bck   = cmn.Bck{
 			Name: clibucket,
 		}
 	)
@@ -120,7 +120,7 @@ func prefixLookupOne(t *testing.T, proxyURL string) {
 		numFiles   = 0
 		msg        = &cmn.SelectMsg{Prefix: prefix}
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name: clibucket,
 		}
 	)
@@ -149,7 +149,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string) {
 	var (
 		letters    = "abcdefghijklmnopqrstuvwxyz"
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name: clibucket,
 		}
 	)
@@ -196,7 +196,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string) {
 	}
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = api.Bck{Name: clibucket}
+		bck        = cmn.Bck{Name: clibucket}
 	)
 	for idx, test := range tests {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
@@ -232,7 +232,7 @@ func prefixCleanup(t *testing.T, proxyURL string) {
 	var (
 		wg    = &sync.WaitGroup{}
 		errCh = make(chan error, numfiles)
-		bck   = api.Bck{Name: clibucket}
+		bck   = cmn.Bck{Name: clibucket}
 	)
 
 	for _, fileName := range fileNames {

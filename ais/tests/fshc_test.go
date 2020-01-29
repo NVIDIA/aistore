@@ -37,7 +37,7 @@ type checkerMD struct {
 	seed       int64
 	numObjs    int
 	proxyURL   string
-	bck        api.Bck
+	bck        cmn.Bck
 	smap       *cluster.Smap
 	mpList     cluster.NodeMap
 	allMps     map[*cluster.Snode]*cmn.MountpathList
@@ -55,7 +55,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		seed:     baseseed + 300,
 		numObjs:  100,
 		proxyURL: tutils.GetPrimaryURL(),
-		bck: api.Bck{
+		bck: cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		},
@@ -237,7 +237,7 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	}
 }
 
-func runAsyncJob(t *testing.T, bck api.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, sgl *memsys.SGL) {
+func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, sgl *memsys.SGL) {
 	defer wg.Done()
 
 	const fileSize = 64 * cmn.KiB

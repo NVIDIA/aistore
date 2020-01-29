@@ -25,14 +25,14 @@ import (
 )
 
 type uploadParams struct {
-	bck       api.Bck
+	bck       cmn.Bck
 	files     []fileToObj
 	workerCnt int
 	refresh   time.Duration
 	totalSize int64
 }
 
-func getObject(c *cli.Context, bck api.Bck, object, outFile string) (err error) {
+func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) {
 	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
 		return objectCheckExists(c, bck, object)
@@ -57,8 +57,7 @@ func getObject(c *cli.Context, bck api.Bck, object, outFile string) (err error) 
 		return
 	}
 
-	query.Add(cmn.URLParamProvider, bck.Provider)
-	query.Add(cmn.URLParamNamespace, bck.Namespace)
+	query = cmn.AddBckToQuery(query, bck)
 	query.Add(cmn.URLParamOffset, offset)
 	query.Add(cmn.URLParamLength, length)
 
@@ -94,7 +93,7 @@ func getObject(c *cli.Context, bck api.Bck, object, outFile string) (err error) 
 //////
 // Promote AIS-colocated files and directories to objects (NOTE: advanced usage only)
 //////
-func promoteFileOrDir(c *cli.Context, bck api.Bck, objName, fqn string) (err error) {
+func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err error) {
 	target := parseStrFlag(c, targetFlag)
 	omitBase := parseStrFlag(c, baseFlag)
 	if err = cmn.ValidateOmitBase(fqn, omitBase); err != nil {
@@ -118,7 +117,7 @@ func promoteFileOrDir(c *cli.Context, bck api.Bck, objName, fqn string) (err err
 	return
 }
 
-func putObject(c *cli.Context, bck api.Bck, objName, fileName string) (err error) {
+func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error) {
 	path := cmn.ExpandPath(fileName)
 	if path, err = filepath.Abs(path); err != nil {
 		return
@@ -204,7 +203,7 @@ func putObject(c *cli.Context, bck api.Bck, objName, fileName string) (err error
 	return uploadFiles(c, params)
 }
 
-func objectCheckExists(c *cli.Context, bck api.Bck, object string) error {
+func objectCheckExists(c *cli.Context, bck cmn.Bck, object string) error {
 	_, err := api.HeadObject(defaultAPIParams, bck, object, true)
 	if err != nil {
 		if err.(*cmn.HTTPError).Status == http.StatusNotFound {
@@ -331,7 +330,7 @@ func buildObjStatTemplate(props string, showHeaders bool) string {
 }
 
 // Displays object properties
-func objectStats(c *cli.Context, bck api.Bck, object string) error {
+func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
 	props, propsFlag := "local,", ""
 	if flagIsSet(c, objPropsFlag) {
 		propsFlag = parseStrFlag(c, objPropsFlag)
@@ -355,7 +354,7 @@ func objectStats(c *cli.Context, bck api.Bck, object string) error {
 }
 
 // This function is needed to print a nice error message for the user
-func handleObjHeadError(err error, bck api.Bck, object string) error {
+func handleObjHeadError(err error, bck cmn.Bck, object string) error {
 	httpErr, ok := err.(*cmn.HTTPError)
 	if !ok {
 		return err
@@ -367,7 +366,7 @@ func handleObjHeadError(err error, bck api.Bck, object string) error {
 	return err
 }
 
-func listOrRangeOp(c *cli.Context, command string, bck api.Bck) (err error) {
+func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	if err = canReachBucket(bck); err != nil {
 		return
 	}
@@ -385,7 +384,7 @@ func listOrRangeOp(c *cli.Context, command string, bck api.Bck) (err error) {
 }
 
 // List handler
-func listOp(c *cli.Context, command string, bck api.Bck) (err error) {
+func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	fileList := makeList(parseStrFlag(c, listFlag), ",")
 	wait := flagIsSet(c, waitFlag)
 	deadline, err := time.ParseDuration(parseStrFlag(c, deadlineFlag))
@@ -416,7 +415,7 @@ func listOp(c *cli.Context, command string, bck api.Bck) (err error) {
 }
 
 // Range handler
-func rangeOp(c *cli.Context, command string, bck api.Bck) (err error) {
+func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
 		wait     = flagIsSet(c, waitFlag)
 		prefix   = parseStrFlag(c, prefixFlag)
@@ -457,7 +456,7 @@ func multiObjOp(c *cli.Context, command string) (err error) {
 	// stops iterating if it encounters an error
 	for _, fullObjName := range c.Args() {
 		var (
-			bck            api.Bck
+			bck            cmn.Bck
 			bucket, object = splitBucketObject(fullObjName)
 		)
 		if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {

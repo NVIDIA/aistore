@@ -16,7 +16,7 @@ type (
 	Bucket interface {
 		Name() string
 		APIParams() api.BaseParams
-		Bck() api.Bck
+		Bck() cmn.Bck
 		HeadObject(objName string) (obj *Object, exists bool, err error)
 		ListObjects(prefix, pageMarker string, pageSize int) (objs []*Object, newPageMarker string, err error)
 		DeleteObject(objName string) (err error)
@@ -36,7 +36,7 @@ func NewBucket(name string, apiParams api.BaseParams) Bucket {
 }
 
 func (bck *bucketAPI) Name() string              { return bck.name }
-func (bck *bucketAPI) Bck() api.Bck              { return api.Bck{Name: bck.name} }
+func (bck *bucketAPI) Bck() cmn.Bck              { return cmn.Bck{Name: bck.name} }
 func (bck *bucketAPI) APIParams() api.BaseParams { return bck.apiParams }
 
 func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err error) {

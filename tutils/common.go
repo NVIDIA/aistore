@@ -59,13 +59,13 @@ func GenRandomString(fnLen int) string {
 }
 
 // Generates an object name that hashes to a different target than `baseName`.
-func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck api.Bck, smap *cluster.Smap) string {
+func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bck, smap *cluster.Smap) string {
 	// Init digests - HrwTarget() requires it
 	smap.InitDigests()
 
 	newName := newNamePrefix
 
-	cbck := cluster.NewBck(bck.Name, bck.Provider, bck.Namespace)
+	cbck := cluster.NewBckEmbed(bck)
 	baseNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(baseName), smap)
 	newNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(newName), smap)
 
@@ -78,7 +78,7 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck api.Bc
 
 func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (string, error) {
 	for i := 0; i < 100; i++ {
-		bck := api.Bck{
+		bck := cmn.Bck{
 			Name:     prefix + GenRandomString(8),
 			Provider: cmn.ProviderAIS,
 		}

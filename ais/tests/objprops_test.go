@@ -29,7 +29,7 @@ func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged i
 	return
 }
 
-func propsUpdateObjects(t *testing.T, proxyURL string, bck api.Bck, oldVersions map[string]string, msg *cmn.SelectMsg,
+func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions map[string]string, msg *cmn.SelectMsg,
 	versionEnabled bool, bckIsAIS bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
@@ -88,7 +88,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck api.Bck, oldVersions 
 	return
 }
 
-func propsReadObjects(t *testing.T, proxyURL string, bck api.Bck, objList map[string]string) {
+func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[string]string) {
 	versChanged, bytesChanged := propsStats(t, proxyURL)
 	tutils.Logf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
@@ -110,7 +110,7 @@ func propsReadObjects(t *testing.T, proxyURL string, bck api.Bck, objList map[st
 	}
 }
 
-func propsEvict(t *testing.T, proxyURL string, bck api.Bck, objMap map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
+func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
 	// generate a object list to evict (evict 1/3 of total objects - random selection)
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
@@ -181,7 +181,7 @@ func propsEvict(t *testing.T, proxyURL string, bck api.Bck, objMap map[string]st
 	}
 }
 
-func propsRecacheObjects(t *testing.T, proxyURL string, bck api.Bck, objs map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
+func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
 	tutils.Logf("Refetching objects...\n")
 	propsReadObjects(t, proxyURL, bck, objs)
 	tutils.Logf("Checking objects properties after refetching...\n")
@@ -220,7 +220,7 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck api.Bck, objs map[st
 	}
 }
 
-func propsRebalance(t *testing.T, proxyURL string, bck api.Bck, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsAIS bool) {
+func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsAIS bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bck, objects)
 
@@ -306,7 +306,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck api.Bck, objects map[stri
 	}
 }
 
-func propsCleanupObjects(t *testing.T, proxyURL string, bck api.Bck, newVersions map[string]string) {
+func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions map[string]string) {
 	errCh := make(chan error, 100)
 	wg := &sync.WaitGroup{}
 	for objname := range newVersions {
@@ -328,7 +328,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 		fileslist  = make(map[string]string, objCountToTest)
 		errCh      = make(chan error, objCountToTest)
 		numPuts    = objCountToTest
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name: clibucket,
 		}
 		versionDir = "versionid"
@@ -418,7 +418,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 
 		proxyURL = tutils.GetPrimaryURL()
 		config   = tutils.GetClusterConfig(t)
-		bck      = api.Bck{
+		bck      = cmn.Bck{
 			Name: clibucket,
 		}
 	)

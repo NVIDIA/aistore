@@ -28,7 +28,7 @@ func TestCloudBucketObject(t *testing.T) {
 
 	var (
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}

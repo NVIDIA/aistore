@@ -239,7 +239,7 @@ func parseRange(rangestr string) (min, max int64, err error) {
 //
 //=======================================================================
 
-func (t *targetrunner) listRangeOperation(r *http.Request, apiItems []string, provider string, msgInt *actionMsgInternal) error {
+func (t *targetrunner) listRangeOperation(r *http.Request, bck *cluster.Bck, msgInt *actionMsgInternal) error {
 	operation := t.getOpFromActionMsg(msgInt.Action)
 	if operation == nil {
 		return fmt.Errorf("invalid operation")
@@ -251,9 +251,8 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apiItems []string, pr
 	)
 
 	if err := cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
-		return t.iterateBucketListPages(r, apiItems, provider, rangeMsg, operation)
+		return t.iterateBucketListPages(r, bck, rangeMsg, operation)
 	} else if err := cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
-		bck := cluster.NewBck(apiItems[0], provider, cmn.NsGlobal)
 		if err := bck.Init(t.bmdowner); err != nil {
 			return err
 		}
@@ -314,18 +313,16 @@ func (t *targetrunner) listOperation(r *http.Request, bck *cluster.Bck, listMsg 
 	return err
 }
 
-func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string, provider string,
+func (t *targetrunner) iterateBucketListPages(r *http.Request, bck *cluster.Bck,
 	rangeMsg *cmn.RangeMsg, operation listf) error {
 	var (
 		bucketListPage *cmn.BucketList
 		err            error
-		bucket         = apitems[0]
 		prefix         = rangeMsg.Prefix
 		ctx            = t.contextWithAuth(r.Header)
 		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	)
 
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
 	if err := bck.Init(t.bmdowner); err != nil {
 		return err
 	}

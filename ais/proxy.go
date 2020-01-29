@@ -319,8 +319,8 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 	switch apiItems[0] {
 	case cmn.AllBuckets:
-		provider := r.URL.Query().Get(cmn.URLParamProvider)
-		p.getBucketNames(w, r, provider)
+		bck := newBckFromQuery("", r.URL.Query())
+		p.getBucketNames(w, r, bck)
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
 		p.invalmsghdlr(w, r, s)
@@ -335,9 +335,7 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	namespace := r.URL.Query().Get(cmn.URLParamNamespace)
-	bck := cluster.NewBck(bucket, provider, namespace)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		if _, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -381,9 +379,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	namespace := r.URL.Query().Get(cmn.URLParamNamespace)
-	bck := cluster.NewBck(bucket, provider, namespace)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -426,8 +422,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	bucket, objName := apiItems[0], apiItems[1]
-	provider := query.Get(cmn.URLParamProvider)
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -487,8 +482,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -524,8 +518,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -560,12 +553,13 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		msgInt := p.newActionMsgInternal(&msg, nil, bmd)
 
 		// Delete on all targets
+		query := cmn.AddBckToQuery(nil, bck.Bck)
 		results := p.bcastTo(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodDelete,
 				Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 				Body:   cmn.MustMarshal(msgInt),
-				Query:  url.Values{cmn.URLParamProvider: []string{bck.Provider}},
+				Query:  query,
 			},
 		})
 		for res := range results {
@@ -753,7 +747,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	guestAccess := r.Header.Get(cmn.HeaderGuestAccess) == "1"
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
 
 	// 1. "all buckets"
 	if len(apiItems) == 0 {
@@ -773,7 +766,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			msgInt := p.newActionMsgInternal(&msg, nil, bmd)
 			p.metasyncer.sync(false, revspair{bmd, msgInt})
 		case cmn.ActSummaryBucket:
-			bck := cluster.NewBck("", provider, cmn.NsGlobal)
+			bck := newBckFromQuery("", r.URL.Query())
 			p.bucketSummary(w, r, bck, msg)
 		default:
 			p.invalmsghdlr(w, r, "URL path is too short: expecting bucket name")
@@ -782,7 +775,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket := apiItems[0]
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	config := cmn.GCO.Get()
 
 	if msg.Action != cmn.ActListObjects && guestAccess {
@@ -797,7 +790,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if bck.IsCloud() {
-			p.invalmsghdlr(w, r, fmt.Sprintf(fmtErr, msg.Action, provider))
+			p.invalmsghdlr(w, r, fmt.Sprintf(fmtErr, msg.Action, bck.Provider))
 			return
 		}
 		if p.forwardCP(w, r, &msg, bucket, nil) {
@@ -1033,8 +1026,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg,
 		return nil, 0, err
 	}
 
-	q.Add(cmn.URLParamProvider, bck.Provider)
-
+	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap   = p.smapowner.get()
 		msgInt = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &msg}, smap, nil)
@@ -1066,8 +1058,8 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg,
 	q = url.Values{}
 	summaries = make(cmn.BucketsSummaries)
 
+	q = cmn.AddBckToQuery(q, bck.Bck)
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
-	q.Add(cmn.URLParamProvider, bck.Provider)
 	q.Set(cmn.URLParamSilent, "true")
 	args.req.Query = q
 	results = p.bcastPost(args)
@@ -1102,11 +1094,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	if provider == "" {
-		provider = cmn.ProviderAIS /*must be ais*/
-	}
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -1140,8 +1128,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apiItems[0]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
@@ -1288,8 +1275,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -1346,8 +1332,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -1401,8 +1386,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	provider := query.Get(cmn.URLParamProvider)
-	bck := cluster.NewBck(bucket, provider, cmn.NsGlobal)
+	bck := newBckFromQuery(bucket, r.URL.Query())
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -1660,16 +1644,19 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error)
 	return
 }
 
-func (p *proxyrunner) getBucketNames(w http.ResponseWriter, r *http.Request, provider string) {
+func (p *proxyrunner) getBucketNames(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
 	var (
-		bmd         = p.bmdowner.get()
-		providerStr = "?" + cmn.URLParamProvider + "=" + provider
+		bmd      = p.bmdowner.get()
+		bckQuery = fmt.Sprintf(
+			"?%s=%s&%s=%s",
+			cmn.URLParamProvider, bck.Provider, cmn.URLParamNamespace, bck.Ns,
+		)
 	)
 
-	if cmn.IsProviderAIS(provider) {
+	if cmn.IsProviderAIS(bck.Provider) {
 		bucketNames := p.getBucketNamesAIS(bmd)
 		body := cmn.MustMarshal(bucketNames)
-		p.writeJSON(w, r, body, "getbucketnames"+providerStr)
+		p.writeJSON(w, r, body, "getbucketnames"+bckQuery)
 		return
 	}
 
@@ -1693,7 +1680,7 @@ func (p *proxyrunner) getBucketNames(w http.ResponseWriter, r *http.Request, pro
 		p.invalmsghdlr(w, r, res.details)
 		p.keepalive.onerr(res.err, res.status)
 	} else {
-		p.writeJSON(w, r, res.outjson, "getbucketnames"+providerStr)
+		p.writeJSON(w, r, res.outjson, "getbucketnames"+bckQuery)
 	}
 }
 
@@ -1978,8 +1965,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	q.Set(cmn.URLParamProvider, bck.Provider)
-
+	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap          = p.smapowner.get()
 		reqTimeout    = cmn.GCO.Get().Timeout.ListBucket
@@ -2028,9 +2014,9 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 
 	// all targets are ready, prepare the final result
 	q = url.Values{}
+	q = cmn.AddBckToQuery(q, bck.Bck)
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
-	q.Set(cmn.URLParamProvider, bck.Provider)
 	args.req.Query = q
 	results = p.bcastTo(args)
 
@@ -2146,10 +2132,9 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	// TODO -- FIXME: 2phase begin to check space, validate params, and check vs running xactions
 	//
 	var (
-		body  = cmn.MustMarshal(msg)
-		query = url.Values{}
+		body = cmn.MustMarshal(msg)
 	)
-	query.Add(cmn.URLParamProvider, bck.Provider)
+	query := cmn.AddBckToQuery(nil, bck.Bck)
 	results := p.bcastPost(bcastArgs{
 		req: cmn.ReqArgs{
 			Path:  cmn.URLPath(cmn.Version, cmn.Objects, bucket),

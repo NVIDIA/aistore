@@ -133,7 +133,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 		totalOps   int
 		prc        int
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = api.Bck{Name: clibucket}
+		bck        = cmn.Bck{Name: clibucket}
 	)
 	errCh := make(chan error, 10)
 	fileCount := len(fileNames)
@@ -214,7 +214,7 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 		totalOps, currIdx int
 		errCh             = make(chan error, 10)
 		wg                = &sync.WaitGroup{}
-		bck               = api.Bck{Name: clibucket}
+		bck               = cmn.Bck{Name: clibucket}
 	)
 
 	if taskGrp != nil {
@@ -270,7 +270,7 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 		errCh             = make(chan error, 10)
 		wg                = &sync.WaitGroup{}
 		baseParams        = tutils.BaseAPIParams(proxyURL)
-		bck               = api.Bck{Name: clibucket}
+		bck               = cmn.Bck{Name: clibucket}
 	)
 
 	if taskGrp != nil {
@@ -331,7 +331,7 @@ func rwstress(t *testing.T) {
 
 	var (
 		proxyURL = tutils.GetPrimaryURL()
-		bck      = api.Bck{Name: clibucket}
+		bck      = cmn.Bck{Name: clibucket}
 		created  = createBucketIfNotExists(t, proxyURL, bck)
 	)
 	filelock.files = make([]fileLock, numFiles)

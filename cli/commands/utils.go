@@ -537,7 +537,7 @@ func cliAPIParams(proxyURL string) api.BaseParams {
 	}
 }
 
-func canReachBucket(bck api.Bck) error {
+func canReachBucket(bck cmn.Bck) error {
 	if _, err := api.HeadBucket(defaultAPIParams, bck); err != nil {
 		if httpErr, ok := err.(*cmn.HTTPError); ok {
 			if httpErr.Status == http.StatusNotFound {

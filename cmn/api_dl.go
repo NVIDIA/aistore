@@ -139,31 +139,30 @@ func (j *DlJobInfo) String() string {
 
 type DlBase struct {
 	Description string `json:"description"`
-	Bucket      string `json:"bucket"`
-	Provider    string `json:"provider"`
-	Namespace   string `json:"namespace"`
+	Bck         Bck    `json:"bck"`
 	Timeout     string `json:"timeout"`
 }
 
 func (b *DlBase) InitWithQuery(query url.Values) {
-	if b.Bucket == "" {
-		b.Bucket = query.Get(URLParamBucket)
+	if b.Bck.Name == "" {
+		b.Bck.Name = query.Get(URLParamBucket)
 	}
-	b.Provider = query.Get(URLParamProvider)
+	b.Bck.Provider = query.Get(URLParamProvider)
+	b.Bck.Ns = query.Get(URLParamNamespace)
 	b.Timeout = query.Get(URLParamTimeout)
 	b.Description = query.Get(URLParamDescription)
 }
 
 func (b *DlBase) AsQuery() url.Values {
 	query := url.Values{}
-	if b.Bucket != "" {
-		query.Add(URLParamBucket, b.Bucket)
+	if b.Bck.Name != "" {
+		query.Add(URLParamBucket, b.Bck.Name)
 	}
-	if b.Provider != "" {
-		query.Add(URLParamProvider, b.Provider)
+	if b.Bck.Provider != "" {
+		query.Add(URLParamProvider, b.Bck.Provider)
 	}
-	if b.Namespace != "" {
-		query.Add(URLParamNamespace, b.Namespace)
+	if b.Bck.Ns != "" {
+		query.Add(URLParamNamespace, b.Bck.Ns)
 	}
 	if b.Timeout != "" {
 		query.Add(URLParamTimeout, b.Timeout)
@@ -175,7 +174,7 @@ func (b *DlBase) AsQuery() url.Values {
 }
 
 func (b *DlBase) Validate() error {
-	if b.Bucket == "" {
+	if b.Bck.Name == "" {
 		return fmt.Errorf("missing the %q which is required", URLParamBucket)
 	}
 	if b.Timeout != "" {
@@ -339,11 +338,11 @@ func (b *DlSingleBody) ExtractPayload() (SimpleKVs, error) {
 }
 
 func (b *DlSingleBody) Describe() string {
-	return fmt.Sprintf("%s -> %s/%s", b.Link, b.Bucket, b.Objname)
+	return fmt.Sprintf("%s -> %s/%s", b.Link, b.Bck, b.Objname)
 }
 
 func (b *DlSingleBody) String() string {
-	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
+	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bck, b.Objname)
 }
 
 // Range request
@@ -394,11 +393,11 @@ func (b *DlRangeBody) ExtractPayload() (SimpleKVs, error) {
 }
 
 func (b *DlRangeBody) Describe() string {
-	return fmt.Sprintf("%s -> %s", b.Template, b.Bucket)
+	return fmt.Sprintf("%s -> %s", b.Template, b.Bck)
 }
 
 func (b *DlRangeBody) String() string {
-	return fmt.Sprintf("bucket: %q, template: %q", b.Bucket, b.Template)
+	return fmt.Sprintf("bucket: %q, template: %q", b.Bck, b.Template)
 }
 
 // Multi request
@@ -455,11 +454,11 @@ func (b *DlMultiBody) ExtractPayload(objectsPayload interface{}) (SimpleKVs, err
 }
 
 func (b *DlMultiBody) Describe() string {
-	return fmt.Sprintf("multi-download -> %s", b.Bucket)
+	return fmt.Sprintf("multi-download -> %s", b.Bck)
 }
 
 func (b *DlMultiBody) String() string {
-	return fmt.Sprintf("bucket: %q", b.Bucket)
+	return fmt.Sprintf("bucket: %q", b.Bck)
 }
 
 // Cloud request
@@ -490,7 +489,7 @@ func (b *DlCloudBody) AsQuery() url.Values {
 }
 
 func (b *DlCloudBody) Describe() string {
-	return fmt.Sprintf("cloud prefetch -> %s", b.Bucket)
+	return fmt.Sprintf("cloud prefetch -> %s", b.Bck)
 }
 
 // Removes everything that goes after '?', eg. "?query=key..." so it will not

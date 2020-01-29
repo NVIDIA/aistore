@@ -6,7 +6,7 @@
 package commands
 
 import (
-	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -43,7 +43,7 @@ var (
 
 func setCopiesHandler(c *cli.Context) (err error) {
 	var (
-		bck    api.Bck
+		bck    cmn.Bck
 		bucket = c.Args().First()
 	)
 	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
@@ -54,7 +54,7 @@ func setCopiesHandler(c *cli.Context) (err error) {
 
 func ecEncodeHandler(c *cli.Context) (err error) {
 	var (
-		bck    api.Bck
+		bck    cmn.Bck
 		bucket = c.Args().First()
 	)
 	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {

@@ -20,7 +20,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 	var (
 		numworkers = 1000
 		numobjects = 10 // NOTE: increase this number if need be ...
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     "RRTestBucket",
 			Provider: cmn.ProviderAIS,
 		}
@@ -42,7 +42,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 	tutils.DestroyBucket(t, proxyURL, bck)
 }
 
-func putRR(t *testing.T, reader tutils.Reader, bck api.Bck, dir string, objCount int) []string {
+func putRR(t *testing.T, reader tutils.Reader, bck cmn.Bck, dir string, objCount int) []string {
 	var (
 		objNames = make([]string, objCount)
 	)

@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -102,11 +103,9 @@ type MountpathList struct {
 }
 
 type XactionExtMsg struct {
-	Target    string `json:"target,omitempty"`
-	Bucket    string `json:"bucket,omitempty"`
-	Provider  string `json:"provider,omitempty"` // TODO -- FIXME: extend the API to optionally specify provider
-	Namespace string `json:"namespace,omitempty"`
-	All       bool   `json:"all,omitempty"`
+	Target string `json:"target,omitempty"`
+	Bck    Bck    `json:"bck"`
+	All    bool   `json:"all,omitempty"`
 }
 
 // GetPropsAll is a list of all GetProps* options
@@ -502,4 +501,20 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 		}
 	}
 	return
+}
+
+func AddBckToQuery(query url.Values, bck Bck) url.Values {
+	if bck.Provider != "" {
+		if query == nil {
+			query = make(url.Values)
+		}
+		query.Set(URLParamProvider, bck.Provider)
+	}
+	if bck.Ns != "" {
+		if query == nil {
+			query = make(url.Values)
+		}
+		query.Set(URLParamNamespace, bck.Ns)
+	}
+	return query
 }

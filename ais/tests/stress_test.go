@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -22,7 +21,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		objectCountPerWorker = 25000
 		objSize              = int64(cmn.KiB)
 		totalObjs            = objectCountPerWorker * workerCount
-		bck                  = api.Bck{Name: t.Name() + "Bucket", Provider: cmn.ProviderAIS}
+		bck                  = cmn.Bck{Name: t.Name() + "Bucket", Provider: cmn.ProviderAIS}
 		proxyURL             = tutils.GetPrimaryURL()
 		wg                   = &sync.WaitGroup{}
 	)
@@ -63,7 +62,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		numObjIncrement = 2000
 		objSize         = int64(cmn.KiB)
 		wg              = &sync.WaitGroup{}
-		bck             = api.Bck{Name: t.Name() + "Bucket", Provider: cmn.ProviderAIS}
+		bck             = cmn.Bck{Name: t.Name() + "Bucket", Provider: cmn.ProviderAIS}
 		proxyURL        = tutils.GetPrimaryURL()
 	)
 

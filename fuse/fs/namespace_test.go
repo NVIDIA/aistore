@@ -34,7 +34,7 @@ func (bm *bucketMock) addObj(obj string)    { bm.objs[obj] = struct{}{} }
 func (bm *bucketMock) removeObj(obj string) { delete(bm.objs, obj) }
 
 func (bm *bucketMock) Name() string              { return "empty" }
-func (bm *bucketMock) Bck() api.Bck              { return api.Bck{Name: bm.Name(), Provider: cmn.ProviderAIS} }
+func (bm *bucketMock) Bck() cmn.Bck              { return cmn.Bck{Name: bm.Name(), Provider: cmn.ProviderAIS} }
 func (bm *bucketMock) APIParams() api.BaseParams { return api.BaseParams{} }
 func (bm *bucketMock) HeadObject(objName string) (obj *ais.Object, exists bool, err error) {
 	_, ok := bm.objs[objName]

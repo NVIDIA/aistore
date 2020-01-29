@@ -547,7 +547,7 @@ func concurrentPutGetDel(t *testing.T) {
 	proxyURL := tutils.GetPrimaryURL()
 	smap := tutils.GetClusterMap(t, proxyURL)
 
-	bck := api.Bck{Name: clibucket}
+	bck := cmn.Bck{Name: clibucket}
 	createBucketIfNotExists(t, proxyURL, bck)
 
 	var (
@@ -577,7 +577,7 @@ func concurrentPutGetDel(t *testing.T) {
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
-func proxyPutGetDelete(count int, proxyURL string, bck api.Bck) error {
+func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck) error {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for i := 0; i < count; i++ {
 		reader, err := tutils.NewRandReader(fileSize, true /* withHash */)
@@ -616,7 +616,7 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 	missedDeleteCh := make(chan string, 100)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	bck := api.Bck{
+	bck := cmn.Bck{
 		Name:     TestBucketName,
 		Provider: cmn.ProviderAIS,
 	}
@@ -738,7 +738,7 @@ func proxyStress(t *testing.T) {
 		errChs      = make([]chan error, numworkers+1)
 		stopChs     = make([]chan struct{}, numworkers+1)
 		proxyURLChs = make([]chan string, numworkers)
-		bck         = api.Bck{
+		bck         = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}

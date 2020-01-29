@@ -304,9 +304,9 @@ func printRunParams(p params) {
 	b, _ := json.MarshalIndent(struct {
 		Seed          int64  `json:"seed,string"`
 		URL           string `json:"proxy"`
+		Bucket        string `json:"bucket"`
 		Provider      string `json:"provider"`
 		Namespace     string `json:"namespace"`
-		Bucket        string `json:"bucket"`
 		Duration      string `json:"duration"`
 		MaxPutBytes   int64  `json:"PUT upper bound,string"`
 		PutPct        int    `json:"% PUT"`
@@ -319,9 +319,9 @@ func printRunParams(p params) {
 	}{
 		Seed:          p.seed,
 		URL:           p.proxyURL,
-		Provider:      p.bck.Provider,
-		Namespace:     p.bck.Namespace,
 		Bucket:        p.bck.Name,
+		Provider:      p.bck.Provider,
+		Namespace:     p.bck.Ns,
 		Duration:      p.duration.String(),
 		MaxPutBytes:   p.putSizeUpperBound,
 		PutPct:        p.putPct,

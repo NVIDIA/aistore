@@ -420,8 +420,7 @@ func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
 func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode) (md *Metadata, err error) {
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName)
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, bck.Provider)
-	query.Add(cmn.URLParamNamespace, bck.Ns)
+	query = cmn.AddBckToQuery(query, bck)
 	query.Add(cmn.URLParamECMeta, "true")
 	query.Add(cmn.URLParamSilent, "true")
 	url := si.URL(cmn.NetworkIntraData) + path

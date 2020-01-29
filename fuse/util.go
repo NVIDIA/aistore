@@ -32,7 +32,7 @@ const (
 // URL HANDLING
 ////////////////
 
-func determineClusterURL(c *cli.Context, cfg *Config, bck api.Bck) (clusterURL string, err error) {
+func determineClusterURL(c *cli.Context, cfg *Config, bck cmn.Bck) (clusterURL string, err error) {
 	// Determine which cluster URL will be used
 	clusterURL = cfg.Cluster.URL
 	if clusterURL == "" {
@@ -94,7 +94,7 @@ func discoverClusterURL(c *cli.Context) string {
 	return defaultAISURL
 }
 
-func tryAccessBucket(url string, bck api.Bck) bool {
+func tryAccessBucket(url string, bck cmn.Bck) bool {
 	baseParams := api.BaseParams{
 		Client: &http.Client{},
 		URL:    url,

@@ -803,8 +803,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				return
 			}
 
-			query := url.Values{}
-			query.Add(cmn.URLParamProvider, m.rs.Provider)
+			query := cmn.AddBckToQuery(nil, cmn.Bck{Provider: m.rs.Provider, Ns: cmn.NsGlobal})
 			reqArgs := &cmn.ReqArgs{
 				Method: http.MethodPost,
 				Base:   si.URL(cmn.NetworkIntraData),

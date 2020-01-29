@@ -149,7 +149,7 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bo
 			return
 		}
 
-		bck := api.Bck{
+		bck := cmn.Bck{
 			Provider: bucketProvider(c, provider...),
 		}
 		bucketNames, err := api.GetBucketNames(defaultAPIParams, bck)
@@ -218,7 +218,7 @@ func propCompletions(c *cli.Context) {
 }
 
 func suggestBucket(c *cli.Context, separator bool, providers ...string) {
-	bck := api.Bck{
+	bck := cmn.Bck{
 		Name: bucketProvider(c, providers...),
 	}
 	bucketNames, err := api.GetBucketNames(defaultAPIParams, bck)

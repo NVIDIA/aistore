@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/NVIDIA/aistore/api"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -97,7 +95,7 @@ var (
 
 func prefetchHandler(c *cli.Context) (err error) {
 	var (
-		bck    api.Bck
+		bck    cmn.Bck
 		bucket string
 	)
 
@@ -116,7 +114,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 
 func evictHandler(c *cli.Context) (err error) {
 	var (
-		bck    api.Bck
+		bck    cmn.Bck
 		bucket string
 	)
 
@@ -149,7 +147,7 @@ func evictHandler(c *cli.Context) (err error) {
 
 func getHandler(c *cli.Context) (err error) {
 	var (
-		bck             api.Bck
+		bck             cmn.Bck
 		bucket, objName string
 		fullObjName     = c.Args().Get(0) // empty string if arg not given
 		outFile         = c.Args().Get(1) // empty string if arg not given
@@ -172,7 +170,7 @@ func getHandler(c *cli.Context) (err error) {
 
 func putHandler(c *cli.Context) (err error) {
 	var (
-		bck             api.Bck
+		bck             cmn.Bck
 		bucket, objName string
 		fileName        = c.Args().Get(0)
 		fullObjName     = c.Args().Get(1)
@@ -192,7 +190,7 @@ func putHandler(c *cli.Context) (err error) {
 
 func promoteHandler(c *cli.Context) (err error) {
 	var (
-		bck             api.Bck
+		bck             cmn.Bck
 		bucket, objName string
 		fqn             = c.Args().Get(0)
 		fullObjName     = c.Args().Get(1)

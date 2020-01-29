@@ -26,7 +26,7 @@ func TestDefaultBucketProps(t *testing.T) {
 	var (
 		proxyURL     = tutils.GetPrimaryURL()
 		globalConfig = tutils.GetClusterConfig(t)
-		bck          = api.Bck{
+		bck          = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -59,7 +59,7 @@ func TestResetBucketProps(t *testing.T) {
 		proxyURL     = tutils.GetPrimaryURL()
 		globalConfig = tutils.GetClusterConfig(t)
 		baseParams   = tutils.DefaultBaseAPIParams(t)
-		bck          = api.Bck{
+		bck          = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -114,7 +114,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -188,7 +188,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		objectDir   = "cloud-version-test"
 		objectSize  = 256
 		objectCount = 1340 // must be greater than 1000(AWS page size)
-		bck         = api.Bck{
+		bck         = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -276,7 +276,7 @@ func TestListObjects(t *testing.T) {
 		workerCount = 10
 		dirLen      = 10
 
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
 			Provider: cmn.ProviderAIS,
 		}
@@ -474,13 +474,13 @@ func TestListObjectsPrefix(t *testing.T) {
 	for _, provider := range []string{cmn.ProviderAIS, cmn.Cloud} {
 		t.Run(provider, func(t *testing.T) {
 			var (
-				bck        api.Bck
+				bck        cmn.Bck
 				errCh      = make(chan error, numFiles*5)
 				filesPutCh = make(chan string, numfiles)
 			)
 
 			if cmn.IsProviderCloud(provider, true /*acceptAnon*/) {
-				bck = api.Bck{
+				bck = cmn.Bck{
 					Name:     clibucket,
 					Provider: provider,
 				}
@@ -498,7 +498,7 @@ func TestListObjectsPrefix(t *testing.T) {
 					tassert.CheckFatal(t, err)
 				}
 			} else {
-				bck = api.Bck{
+				bck = cmn.Bck{
 					Name:     TestBucketName,
 					Provider: provider,
 				}
@@ -646,7 +646,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     cmn.RandString(10),
 						Provider: test.provider,
 					},
@@ -847,7 +847,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
 	tassert.CheckFatal(t, err)
 
-	bck := api.Bck{
+	bck := cmn.Bck{
 		Name:     bucket,
 		Provider: cmn.Cloud,
 	}
@@ -877,7 +877,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
 	tassert.CheckFatal(t, err)
 
-	bck := api.Bck{
+	bck := cmn.Bck{
 		Name:     bucket,
 		Provider: cmn.Cloud,
 	}
@@ -904,7 +904,7 @@ func TestBucketInvalidName(t *testing.T) {
 
 	invalidNames := []string{"*", ".", "", " ", "bucket and name", "bucket/name", "#name", "$name", "~name"}
 	for _, name := range invalidNames {
-		bck := api.Bck{
+		bck := cmn.Bck{
 			Name:     name,
 			Provider: cmn.ProviderAIS,
 		}
@@ -945,7 +945,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 5,
-			bck: api.Bck{
+			bck: cmn.Bck{
 				Name:     cmn.RandString(10),
 				Provider: cmn.ProviderAIS,
 			},
@@ -1004,7 +1004,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	m.ensureNumCopies(numCopies[len(numCopies)-1])
 }
 
-func makeNCopies(t *testing.T, baseParams api.BaseParams, bck api.Bck, ncopies int) {
+func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies int) {
 	tutils.Logf("Set copies = %d\n", ncopies)
 	if err := api.MakeNCopies(baseParams, bck, ncopies); err != nil {
 		t.Fatalf("Failed to start copies=%d xaction, err: %v", ncopies, err)
@@ -1038,7 +1038,7 @@ func TestCloudMirror(t *testing.T) {
 		m = &ioContext{
 			t:   t,
 			num: 64,
-			bck: api.Bck{
+			bck: cmn.Bck{
 				Name:     clibucket,
 				Provider: cmn.Cloud,
 			},
@@ -1151,7 +1151,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 			wg: &sync.WaitGroup{},
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		dstBckName = api.Bck{
+		dstBckName = cmn.Bck{
 			Name:     TestBucketName + "_new",
 			Provider: cmn.ProviderAIS,
 		}
@@ -1208,7 +1208,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 			numGetsEachFile: 2,
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		dstBck     = api.Bck{
+		dstBck     = cmn.Bck{
 			Name:     TestBucketName + "_new",
 			Provider: cmn.ProviderAIS,
 		}
@@ -1262,7 +1262,7 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 			wg: &sync.WaitGroup{},
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		tmpBck     = api.Bck{
+		tmpBck     = cmn.Bck{
 			Name:     "tmp_bck_name",
 			Provider: cmn.ProviderAIS,
 		}
@@ -1358,7 +1358,7 @@ func TestCopyBucket(t *testing.T) {
 				srcm = &ioContext{
 					t:   t,
 					num: numput,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     "src_copy_bck",
 						Provider: cmn.ProviderAIS,
 					},
@@ -1368,7 +1368,7 @@ func TestCopyBucket(t *testing.T) {
 					{
 						t:   t,
 						num: numput,
-						bck: api.Bck{
+						bck: cmn.Bck{
 							Name:     "dst_copy_bck_1",
 							Provider: cmn.ProviderAIS,
 						},
@@ -1383,7 +1383,7 @@ func TestCopyBucket(t *testing.T) {
 				dstms = append(dstms, &ioContext{
 					t:   t,
 					num: numput,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     "dst_copy_bck_2",
 						Provider: cmn.ProviderAIS,
 					},
@@ -1392,7 +1392,7 @@ func TestCopyBucket(t *testing.T) {
 			}
 
 			if cmn.IsProviderCloud(test.provider, true /*acceptAnon*/) {
-				srcm.bck = api.Bck{
+				srcm.bck = cmn.Bck{
 					Name:     clibucket,
 					Provider: cmn.Cloud,
 				}

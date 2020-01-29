@@ -39,7 +39,7 @@ type ReplicateObjectInput struct {
 
 type PutObjectArgs struct {
 	BaseParams BaseParams
-	Bck        Bck
+	Bck        cmn.Bck
 	Object     string
 	Hash       string
 	Reader     cmn.ReadOpenCloser
@@ -48,7 +48,7 @@ type PutObjectArgs struct {
 
 type PromoteArgs struct {
 	BaseParams BaseParams
-	Bck        Bck
+	Bck        cmn.Bck
 	Object     string
 	Target     string
 	OmitBase   string
@@ -60,7 +60,7 @@ type PromoteArgs struct {
 
 type AppendArgs struct {
 	BaseParams BaseParams
-	Bck        Bck
+	Bck        cmn.Bck
 	Object     string
 	Handle     string
 	Reader     cmn.ReadOpenCloser
@@ -70,7 +70,7 @@ type AppendArgs struct {
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
-func HeadObject(baseParams BaseParams, bck Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
+func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
 	checkIsCached := false
 	if len(checkExists) > 0 {
 		checkIsCached = checkExists[0]
@@ -79,7 +79,7 @@ func HeadObject(baseParams BaseParams, bck Bck, object string, checkExists ...bo
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object)
 	query := make(url.Values)
 	query.Add(cmn.URLParamCheckExists, strconv.FormatBool(checkIsCached))
-	query = AddBckToQuery(query, bck)
+	query = cmn.AddBckToQuery(query, bck)
 	params := OptionalParams{Query: query}
 
 	r, err := doHTTPRequestGetResp(baseParams, path, nil, params)
@@ -143,10 +143,10 @@ func HeadObject(baseParams BaseParams, bck Bck, object string, checkExists ...bo
 // DeleteObject API
 //
 // Deletes an object specified by bucket/object
-func DeleteObject(baseParams BaseParams, bck Bck, object string) error {
+func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	var (
 		path   = cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object)
-		query  = AddBckToQuery(nil, bck)
+		query  = cmn.AddBckToQuery(nil, bck)
 		params = OptionalParams{Query: query}
 	)
 	baseParams.Method = http.MethodDelete
@@ -157,7 +157,7 @@ func DeleteObject(baseParams BaseParams, bck Bck, object string) error {
 // EvictObject API
 //
 // Evicts an object specified by bucket/object
-func EvictObject(baseParams BaseParams, bck Bck, object string) error {
+func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	var (
 		msg, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictObjects, Name: cmn.URLPath(bck.Name, object)})
 		path     = cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object)
@@ -177,7 +177,7 @@ func EvictObject(baseParams BaseParams, bck Bck, object string) error {
 // Writes the response body to a writer if one is specified in the optional GetObjectInput.Writer.
 // Otherwise, it discards the response body read.
 //
-func GetObject(baseParams BaseParams, bck Bck, object string, options ...GetObjectInput) (n int64, err error) {
+func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w         = ioutil.Discard
 		q         url.Values
@@ -186,7 +186,7 @@ func GetObject(baseParams BaseParams, bck Bck, object string, options ...GetObje
 	if len(options) != 0 {
 		w, q = getObjectOptParams(options[0])
 	}
-	q = AddBckToQuery(q, bck)
+	q = cmn.AddBckToQuery(q, bck)
 	optParams.Query = q
 
 	baseParams.Method = http.MethodGet
@@ -220,7 +220,7 @@ func GetObject(baseParams BaseParams, bck Bck, object string, options ...GetObje
 // is allocated when reading from the response body to compute the object checksum.
 //
 // Returns InvalidCksumError when the expected and actual checksum values are different.
-func GetObjectWithValidation(baseParams BaseParams, bck Bck, object string, options ...GetObjectInput) (n int64, err error) {
+func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		cksumVal  string
 		w         = ioutil.Discard
@@ -275,7 +275,7 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	}
 	defer handle.Close()
 
-	query := AddBckToQuery(nil, args.Bck)
+	query := cmn.AddBckToQuery(nil, args.Bck)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
@@ -338,7 +338,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamAppendType, cmn.AppendOp)
 	query.Add(cmn.URLParamAppendHandle, args.Handle)
-	query = AddBckToQuery(query, args.Bck)
+	query = cmn.AddBckToQuery(query, args.Bck)
 
 	var header http.Header
 	if args.Size > 0 {
@@ -394,7 +394,7 @@ func FlushObject(args AppendArgs) (err error) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamAppendType, cmn.FlushOp)
 	query.Add(cmn.URLParamAppendHandle, args.Handle)
-	query = AddBckToQuery(query, args.Bck)
+	query = cmn.AddBckToQuery(query, args.Bck)
 	params := OptionalParams{Query: query}
 
 	args.BaseParams.Method = http.MethodPut
@@ -409,7 +409,7 @@ func FlushObject(args AppendArgs) (err error) {
 // and sends a POST HTTP Request to /v1/objects/bucket-name/object-name
 //
 // FIXME: handle cloud provider - here and elsewhere
-func RenameObject(baseParams BaseParams, bck Bck, oldName, newName string) error {
+func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) error {
 	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newName})
 	if err != nil {
 		return err
@@ -437,7 +437,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 	if err != nil {
 		return err
 	}
-	query := AddBckToQuery(nil, args.Bck)
+	query := cmn.AddBckToQuery(nil, args.Bck)
 	params := OptionalParams{Query: query}
 
 	args.BaseParams.Method = http.MethodPost
@@ -449,7 +449,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 // ReplicateObject API
 //
 // ReplicateObject replicates given object in bucket using targetrunner's replicate endpoint.
-func ReplicateObject(baseParams BaseParams, bck Bck, object string) error {
+func ReplicateObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActReplicate})
 	if err != nil {
 		return err
@@ -462,16 +462,14 @@ func ReplicateObject(baseParams BaseParams, bck Bck, object string) error {
 
 // Downloader API
 
-func DownloadSingle(baseParams BaseParams, description string, bck Bck, objName, link string) (string, error) {
+func DownloadSingle(baseParams BaseParams, description string, bck cmn.Bck, objName, link string) (string, error) {
 	dlBody := cmn.DlSingleBody{
 		DlObj: cmn.DlObj{
 			Objname: objName,
 			Link:    link,
 		},
 	}
-	dlBody.Bucket = bck.Name
-	dlBody.Provider = bck.Provider
-	dlBody.Namespace = bck.Namespace
+	dlBody.Bck = bck
 	dlBody.Description = description
 	return DownloadSingleWithParam(baseParams, dlBody)
 }
@@ -487,13 +485,11 @@ func DownloadSingleWithParam(baseParams BaseParams, dlBody cmn.DlSingleBody) (st
 	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
-func DownloadRange(baseParams BaseParams, description string, bck Bck, template string) (string, error) {
+func DownloadRange(baseParams BaseParams, description string, bck cmn.Bck, template string) (string, error) {
 	dlBody := cmn.DlRangeBody{
 		Template: template,
 	}
-	dlBody.Bucket = bck.Name
-	dlBody.Provider = bck.Provider
-	dlBody.Namespace = bck.Namespace
+	dlBody.Bck = bck
 	dlBody.Description = description
 	return DownloadRangeWithParam(baseParams, dlBody)
 }
@@ -509,11 +505,9 @@ func DownloadRangeWithParam(baseParams BaseParams, dlBody cmn.DlRangeBody) (stri
 	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
-func DownloadMulti(baseParams BaseParams, description string, bck Bck, m interface{}) (string, error) {
+func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, m interface{}) (string, error) {
 	dlBody := cmn.DlMultiBody{}
-	dlBody.Bucket = bck.Name
-	dlBody.Provider = bck.Provider
-	dlBody.Namespace = bck.Namespace
+	dlBody.Bck = bck
 	dlBody.Description = description
 	query := dlBody.AsQuery()
 
@@ -530,14 +524,12 @@ func DownloadMulti(baseParams BaseParams, description string, bck Bck, m interfa
 	return doDlDownloadRequest(baseParams, path, msg, optParams)
 }
 
-func DownloadCloud(baseParams BaseParams, description string, bck Bck, prefix, suffix string) (string, error) {
+func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefix, suffix string) (string, error) {
 	dlBody := cmn.DlCloudBody{
 		Prefix: prefix,
 		Suffix: suffix,
 	}
-	dlBody.Bucket = bck.Name
-	dlBody.Provider = bck.Provider
-	dlBody.Namespace = bck.Namespace
+	dlBody.Bck = bck
 	dlBody.Description = description
 	return DownloadCloudWithParam(baseParams, dlBody)
 }

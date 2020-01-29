@@ -206,13 +206,12 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActXactStart, cmn.ActXactStop:
 		var (
-			bck       *cluster.Bck
-			kind      = msg.Name
-			bucket, _ = msg.Value.(string)
-			provider  = r.URL.Query().Get(cmn.URLParamProvider)
+			bck    *cluster.Bck
+			kind   = msg.Name
+			bucket = msg.Value.(string)
 		)
 		if bucket != "" {
-			bck = cluster.NewBck(bucket, provider, cmn.NsGlobal)
+			bck = newBckFromQuery(bucket, r.URL.Query())
 			if err := bck.Init(t.bmdowner); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
@@ -332,13 +331,13 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		kind, bucket, provider, onlyRecent := msg.Name, xactMsg.Bucket, xactMsg.Provider, !xactMsg.All
+		kind, onlyRecent := msg.Name, !xactMsg.All
 
 		switch msg.Action {
 		case cmn.ActXactStats:
 			var bck *cluster.Bck
-			if bucket != "" {
-				bck = cluster.NewBck(bucket, provider, cmn.NsGlobal)
+			if xactMsg.Bck.Name != "" {
+				bck = cluster.NewBckEmbed(xactMsg.Bck)
 				if err := bck.Init(t.bmdowner); err != nil {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 					return
@@ -1295,7 +1294,7 @@ func (t *targetrunner) enable() error {
 //
 // copy-rename bucket: 2-phase commit
 //
-func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action string) (err error) {
+func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action string) (err error) {
 	config := cmn.GCO.Get()
 	if action == cmn.ActRenameLB && !config.Rebalance.Enabled {
 		return fmt.Errorf("cannot %s %s bucket: global rebalancing disabled", action, bckFrom)
@@ -1311,8 +1310,6 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	if err = bckFrom.Init(t.bmdowner); err != nil {
 		return
 	}
-
-	bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
 	if err = bckTo.Init(t.bmdowner); err != nil {
 		return
 	}
@@ -1336,8 +1333,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	return
 }
 
-func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action string) {
-	bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
+func (t *targetrunner) abortCopyRenameLB(bckFrom, bckTo *cluster.Bck, action string) {
 	_, ok := t.bmdowner.get().Get(bckTo)
 	if !ok {
 		return
@@ -1357,8 +1353,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	e.Get().Abort()
 }
 
-func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string, msgInt *actionMsgInternal) (err error) {
-	bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
+func (t *targetrunner) commitCopyRenameLB(bckFrom, bckTo *cluster.Bck, msgInt *actionMsgInternal) (err error) {
 	if err := bckTo.Init(t.bmdowner); err != nil {
 		return err
 	}

@@ -35,8 +35,8 @@ type Test struct {
 }
 
 type regressionTestData struct {
-	bck        api.Bck
-	renamedBck api.Bck
+	bck        cmn.Bck
+	renamedBck cmn.Bck
 	numBuckets int
 	rename     bool
 	wait       bool
@@ -74,7 +74,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		filenameCh = make(chan string, num)
 		errCh      = make(chan error, num)
 		targets    = make(map[string]struct{})
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -150,7 +150,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		fileNameCh = make(chan string, numberOfFiles)
 		errCh      = make(chan error, numberOfFiles)
 		targets    = make(map[string]struct{})
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -242,7 +242,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		num        = 2
 		filenameCh = make(chan string, num)
 		errCh      = make(chan error, 100)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -290,7 +290,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 
 func TestRegressionBuckets(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -307,14 +307,14 @@ func TestRenameBucket(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		guid, _    = cmn.GenUUID()
-		renamedBck = api.Bck{
+		renamedBck = cmn.Bck{
 			Name:     bck.Name + "_" + guid,
 			Provider: cmn.ProviderAIS,
 		}
@@ -448,7 +448,7 @@ func TestRenameObjects(t *testing.T) {
 		newBaseNames = make([]string, 0, numPuts) // new basenames
 		proxyURL     = tutils.GetPrimaryURL()
 		baseParams   = tutils.DefaultBaseAPIParams(t)
-		bck          = api.Bck{
+		bck          = cmn.Bck{
 			Name:     t.Name(),
 			Provider: cmn.ProviderAIS,
 		}
@@ -489,7 +489,7 @@ func TestRenameObjects(t *testing.T) {
 func TestObjectPrefix(t *testing.T) {
 	var (
 		proxyURL = tutils.GetPrimaryURL()
-		bck      = api.Bck{Name: clibucket}
+		bck      = cmn.Bck{Name: clibucket}
 	)
 	if created := createBucketIfNotExists(t, proxyURL, bck); created {
 		defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -712,7 +712,7 @@ func TestLRU(t *testing.T) {
 
 		m = &ioContext{
 			t: t,
-			bck: api.Bck{
+			bck: cmn.Bck{
 				Name:     clibucket,
 				Provider: cmn.Cloud,
 			},
@@ -781,7 +781,7 @@ func TestLRU(t *testing.T) {
 	})
 
 	tutils.Logln("starting LRU...")
-	err := api.ExecXaction(baseParams, api.Bck{}, cmn.ActLRU, cmn.ActXactStart)
+	err := api.ExecXaction(baseParams, cmn.Bck{}, cmn.ActLRU, cmn.ActXactStart)
 	tassert.CheckFatal(t, err)
 	tutils.WaitForBucketXactionToStart(t, baseParams, m.bck, cmn.ActLRU)
 	tutils.WaitForBucketXactionToComplete(t, baseParams, m.bck, cmn.ActLRU, rebalanceTimeout)
@@ -812,7 +812,7 @@ func TestPrefetchList(t *testing.T) {
 		netprefetches = int64(0)
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.BaseAPIParams(proxyURL)
-		bck           = api.Bck{
+		bck           = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -883,7 +883,7 @@ func TestDeleteList(t *testing.T) {
 		wg         = &sync.WaitGroup{}
 		errCh      = make(chan error, numfiles)
 		files      = make([]string, 0, numfiles)
-		bck        = api.Bck{Name: clibucket}
+		bck        = cmn.Bck{Name: clibucket}
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
@@ -934,7 +934,7 @@ func TestPrefetchRange(t *testing.T) {
 		baseParams     = tutils.BaseAPIParams(proxyURL)
 		prefetchPrefix = "regressionList/obj"
 		prefetchRegex  = "\\d*"
-		bck            = api.Bck{
+		bck            = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -1029,7 +1029,7 @@ func TestDeleteRange(t *testing.T) {
 		errCh          = make(chan error, numfiles)
 		proxyURL       = tutils.GetPrimaryURL()
 		baseParams     = tutils.DefaultBaseAPIParams(t)
-		bck            = api.Bck{Name: clibucket}
+		bck            = cmn.Bck{Name: clibucket}
 	)
 
 	if created := createBucketIfNotExists(t, proxyURL, bck); created {
@@ -1110,7 +1110,7 @@ func TestStressDeleteRange(t *testing.T) {
 		rnge         = fmt.Sprintf("0:%d", numFiles)
 		readersList  [numReaders]tutils.Reader
 		baseParams   = tutils.DefaultBaseAPIParams(t)
-		bck          = api.Bck{
+		bck          = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}

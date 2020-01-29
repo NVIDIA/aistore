@@ -44,7 +44,7 @@ type (
 
 		dsorterType string
 
-		outputBck    api.Bck
+		outputBck    cmn.Bck
 		inputPrefix  string
 		outputPrefix string
 
@@ -347,7 +347,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 	}
 }
 
-func (df *dsortFramework) getRecordNames(bck api.Bck) []shardRecords {
+func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 	var (
 		allShardRecords = make([]shardRecords, 0, 10)
 	)
@@ -528,7 +528,7 @@ func TestDistributedSort(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -576,7 +576,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     "dsort-bucket-input",
 						Provider: cmn.ProviderAIS,
 					},
@@ -584,7 +584,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 				df = &dsortFramework{
 					m:           m,
 					dsorterType: dsorterType,
-					outputBck: api.Bck{
+					outputBck: cmn.Bck{
 						Name:     "dsort-bucket-output",
 						Provider: cmn.ProviderAIS,
 					},
@@ -638,7 +638,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     "dsort-bucket-input",
 						Provider: cmn.ProviderAIS,
 					},
@@ -646,7 +646,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 				df = &dsortFramework{
 					m:           m,
 					dsorterType: dsorterType,
-					outputBck: api.Bck{
+					outputBck: cmn.Bck{
 						Name:     "dsort-bucket-output",
 						Provider: cmn.ProviderAIS,
 					},
@@ -699,7 +699,7 @@ func TestDistributedSortParallel(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -749,7 +749,7 @@ func TestDistributedSortChain(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -788,7 +788,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -838,7 +838,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -894,7 +894,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -945,7 +945,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	var (
 		m = &ioContext{
 			t: t,
-			bck: api.Bck{
+			bck: cmn.Bck{
 				Name:     TestBucketName,
 				Provider: cmn.ProviderAIS,
 			},
@@ -1018,7 +1018,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	var (
 		m = &ioContext{
 			t: t,
-			bck: api.Bck{
+			bck: cmn.Bck{
 				Name:     TestBucketName,
 				Provider: cmn.ProviderAIS,
 			},
@@ -1095,7 +1095,7 @@ func TestDistributedSortZip(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -1149,7 +1149,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -1221,7 +1221,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 					var (
 						m = &ioContext{
 							t: t,
-							bck: api.Bck{
+							bck: cmn.Bck{
 								Name:     TestBucketName,
 								Provider: cmn.ProviderAIS,
 							},
@@ -1294,7 +1294,7 @@ func TestDistributedSortAbort(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -1351,7 +1351,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 					var (
 						m = &ioContext{
 							t: t,
-							bck: api.Bck{
+							bck: cmn.Bck{
 								Name:     TestBucketName,
 								Provider: cmn.ProviderAIS,
 							},
@@ -1412,7 +1412,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					var (
 						m = &ioContext{
 							t: t,
-							bck: api.Bck{
+							bck: cmn.Bck{
 								Name:     TestBucketName,
 								Provider: cmn.ProviderAIS,
 							},
@@ -1515,7 +1515,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					var (
 						m = &ioContext{
 							t: t,
-							bck: api.Bck{
+							bck: cmn.Bck{
 								Name:     TestBucketName,
 								Provider: cmn.ProviderAIS,
 							},
@@ -1618,7 +1618,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -1687,7 +1687,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -1742,7 +1742,7 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -1793,7 +1793,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -1855,7 +1855,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 					var (
 						m = &ioContext{
 							t: t,
-							bck: api.Bck{
+							bck: cmn.Bck{
 								Name:     TestBucketName,
 								Provider: cmn.ProviderAIS,
 							},
@@ -1916,7 +1916,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 					var (
 						m = &ioContext{
 							t: t,
-							bck: api.Bck{
+							bck: cmn.Bck{
 								Name:     TestBucketName,
 								Provider: cmn.ProviderAIS,
 							},
@@ -1970,7 +1970,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -1978,7 +1978,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 				dsortFW = &dsortFramework{
 					m:           m,
 					dsorterType: dsorterType,
-					outputBck: api.Bck{
+					outputBck: cmn.Bck{
 						Name:     TestBucketName + "output",
 						Provider: cmn.ProviderAIS,
 					},
@@ -2081,7 +2081,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},
@@ -2133,7 +2133,7 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 			var (
 				m = &ioContext{
 					t: t,
-					bck: api.Bck{
+					bck: cmn.Bck{
 						Name:     TestBucketName,
 						Provider: cmn.ProviderAIS,
 					},

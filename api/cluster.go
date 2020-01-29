@@ -212,7 +212,7 @@ func SetClusterConfig(baseParams BaseParams, nvs cmn.SimpleKVs) error {
 // Exec Xaction API
 //
 // Executes a given command (start, stop, tbd...) on xaction of a given (kind [, bucket, provider])
-func ExecXaction(baseParams BaseParams, bck Bck, kind, command string) error {
+func ExecXaction(baseParams BaseParams, bck cmn.Bck, kind, command string) error {
 	var (
 		optParams []OptionalParams
 		actMsg    = &cmn.ActionMsg{
@@ -222,7 +222,7 @@ func ExecXaction(baseParams BaseParams, bck Bck, kind, command string) error {
 		}
 		path     = cmn.URLPath(cmn.Version, cmn.Cluster)
 		msg, err = jsoniter.Marshal(actMsg)
-		query    = AddBckToQuery(nil, bck)
+		query    = cmn.AddBckToQuery(nil, bck)
 	)
 	if err != nil {
 		return err

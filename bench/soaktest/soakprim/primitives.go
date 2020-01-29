@@ -130,7 +130,7 @@ func (rctx *RecipeContext) GetCfg(duration time.Duration) {
 	go func() {
 		ch := make(chan *stats.PrimitiveStat, 1)
 		defer rctx.finishPrim(tag)
-		AISExec(ch, soakcmn.OpTypeCfg, api.Bck{} /** bucket not required for getcfg **/, soakcmn.Params.RecPrimWorkers, params)
+		AISExec(ch, soakcmn.OpTypeCfg, cmn.Bck{} /** bucket not required for getcfg **/, soakcmn.Params.RecPrimWorkers, params)
 		stat := <-ch
 		stat.ID = tag.String()
 		rctx.repCtx.PutPrimitiveStats(stat)

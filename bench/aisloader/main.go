@@ -82,7 +82,7 @@ type (
 	workOrder struct {
 		op        int
 		proxyURL  string
-		bck       api.Bck
+		bck       cmn.Bck
 		objName   string // In the format of 'virtual dir' + "/" + objName
 		size      int64
 		err       error
@@ -105,7 +105,7 @@ type (
 
 		loaderID             string // used with multiple loader instances generating objects in parallel
 		proxyURL             string
-		bck                  api.Bck
+		bck                  cmn.Bck
 		readerType           string
 		tmpDir               string // used only when usingFile
 		statsOutput          string

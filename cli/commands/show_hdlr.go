@@ -138,7 +138,7 @@ var (
 
 func showBucketHandler(c *cli.Context) (err error) {
 	var (
-		bck    api.Bck
+		bck    cmn.Bck
 		bucket string
 	)
 
@@ -199,7 +199,7 @@ func showNodeHandler(c *cli.Context) (err error) {
 
 func showXactionHandler(c *cli.Context) (err error) {
 	var (
-		bck     api.Bck
+		bck     cmn.Bck
 		xaction = c.Args().Get(0) // empty string if no arg given
 		bucket  = c.Args().Get(1) // empty string if no arg given
 	)
@@ -254,7 +254,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 
 func showObjectHandler(c *cli.Context) (err error) {
 	var (
-		bck            api.Bck
+		bck            cmn.Bck
 		bucket, object string
 		fullObjName    = c.Args().Get(0) // empty string if no arg given
 	)

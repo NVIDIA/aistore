@@ -42,7 +42,7 @@ type ioContext struct {
 	stopCh              chan struct{}
 	repFilenameCh       chan repFile
 	wg                  *sync.WaitGroup
-	bck                 api.Bck
+	bck                 cmn.Bck
 	fileSize            uint64
 	numGetErrs          atomic.Uint64
 	getsCompleted       atomic.Uint64
@@ -1780,7 +1780,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 func TestAtimeLocalGet(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     t.Name(),
 			Provider: cmn.ProviderAIS,
 		}
@@ -1812,7 +1812,7 @@ func TestAtimeLocalGet(t *testing.T) {
 
 func TestAtimeColdGet(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -1850,7 +1850,7 @@ func TestAtimePrefetch(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -1883,7 +1883,7 @@ func TestAtimePrefetch(t *testing.T) {
 
 func TestAtimeLocalPut(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     t.Name(),
 			Provider: cmn.ProviderAIS,
 		}
@@ -2057,7 +2057,7 @@ func TestRenewRebalance(t *testing.T) {
 
 	// Step 4: Re-register target (triggers rebalance)
 	m.reregisterTarget(target)
-	tutils.WaitForBucketXactionToStart(t, baseParams, api.Bck{}, cmn.ActGlobalReb, rebalanceStartTimeout)
+	tutils.WaitForBucketXactionToStart(t, baseParams, cmn.Bck{}, cmn.ActGlobalReb, rebalanceStartTimeout)
 	tutils.Logf("automatic global rebalance started\n")
 
 	m.wg.Add(m.num*m.numGetsEachFile + 2)
@@ -2075,7 +2075,7 @@ func TestRenewRebalance(t *testing.T) {
 
 		<-m.controlCh // wait for half the GETs to complete
 
-		err := api.ExecXaction(baseParams, api.Bck{}, cmn.ActGlobalReb, cmn.ActXactStart)
+		err := api.ExecXaction(baseParams, cmn.Bck{}, cmn.ActGlobalReb, cmn.ActXactStart)
 		tassert.CheckFatal(t, err)
 		tutils.Logf("manually initiated global rebalance\n")
 	}()

@@ -38,7 +38,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 	var (
 		f          *tutils.E2EFramework
 		fuseDir    string
-		bck        api.Bck
+		bck        cmn.Bck
 		entries    []TableEntry
 		baseParams api.BaseParams
 
@@ -55,7 +55,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 
 		proxyURL := tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     tutils.GenRandomString(10),
 			Provider: cmn.ProviderAIS,
 		}

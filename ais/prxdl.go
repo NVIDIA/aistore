@@ -298,8 +298,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 		payload = &cmn.DlBase{}
 	)
 	payload.InitWithQuery(query)
-	bucket = payload.Bucket
-	bck := cluster.NewBck(bucket, payload.Provider, cmn.NsGlobal)
+	bck := cluster.NewBckEmbed(payload.Bck)
 	if err := bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return

@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/NVIDIA/aistore/api"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -27,7 +25,7 @@ var (
 	files    int
 	workers  int
 	filesize uint64
-	bucket   api.Bck
+	bucket   cmn.Bck
 	url      string
 )
 
@@ -61,7 +59,7 @@ func main() {
 	}
 }
 
-func putSpecificFiles(fileSize uint64, numPuts int, bck api.Bck, pool chan func()) error {
+func putSpecificFiles(fileSize uint64, numPuts int, bck cmn.Bck, pool chan func()) error {
 	var (
 		errCh = make(chan error, files)
 		wg    = &sync.WaitGroup{}

@@ -28,7 +28,7 @@ func Test_smoke(t *testing.T) {
 	}
 
 	var (
-		bck      = api.Bck{Name: clibucket}
+		bck      = cmn.Bck{Name: clibucket}
 		proxyURL = tutils.GetPrimaryURL()
 	)
 	if err := cmn.CreateDir(LocalDestDir); err != nil {
@@ -77,7 +77,7 @@ func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, files
 		errCh = make(chan error, 100)
 		wg    = &sync.WaitGroup{}
 
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -119,7 +119,7 @@ func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, files
 	}
 }
 
-func getRandomFiles(proxyURL string, bck api.Bck, numGets int, prefix string, t *testing.T, errCh chan error) {
+func getRandomFiles(proxyURL string, bck cmn.Bck, numGets int, prefix string, t *testing.T, errCh chan error) {
 	var (
 		src        = rand.NewSource(time.Now().UnixNano())
 		random     = rand.New(src)

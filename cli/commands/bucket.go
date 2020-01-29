@@ -30,7 +30,7 @@ const (
 	longCommandTime = 10 * time.Second
 )
 
-func validateBucket(c *cli.Context, b string, tag string, optional bool) (bck api.Bck, err error) {
+func validateBucket(c *cli.Context, b string, tag string, optional bool) (bck cmn.Bck, err error) {
 	bck.Provider = bucketProvider(c)
 	bck.Name = cleanBucketName(b)
 	if bck.Name == "" {
@@ -54,7 +54,7 @@ func createBuckets(c *cli.Context, buckets []string) (err error) {
 	// emit zero exit code - this may be problematic when using
 	// in scripts.
 	for _, bucket := range buckets {
-		bck := api.Bck{
+		bck := cmn.Bck{
 			Name:     bucket,
 			Provider: cmn.ProviderAIS,
 		}
@@ -78,7 +78,7 @@ func destroyBuckets(c *cli.Context, buckets []string) (err error) {
 	// emit zero exit code - this may be problematic when using
 	// in scripts.
 	for _, bucket := range buckets {
-		bck := api.Bck{
+		bck := cmn.Bck{
 			Name:     bucket,
 			Provider: cmn.ProviderAIS,
 		}
@@ -98,11 +98,11 @@ func destroyBuckets(c *cli.Context, buckets []string) (err error) {
 
 // Rename ais bucket
 func renameBucket(c *cli.Context, fromBucket, toBucket string) (err error) {
-	fromBck := api.Bck{
+	fromBck := cmn.Bck{
 		Name:     fromBucket,
 		Provider: cmn.ProviderAIS,
 	}
-	toBck := api.Bck{
+	toBck := cmn.Bck{
 		Name:     toBucket,
 		Provider: cmn.ProviderAIS,
 	}
@@ -119,7 +119,7 @@ func renameBucket(c *cli.Context, fromBucket, toBucket string) (err error) {
 }
 
 // Copy ais bucket
-func copyBucket(c *cli.Context, fromBck, toBck api.Bck) (err error) {
+func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	if err = api.CopyBucket(defaultAPIParams, fromBck, toBck); err != nil {
 		return
 	}
@@ -130,7 +130,7 @@ func copyBucket(c *cli.Context, fromBck, toBck api.Bck) (err error) {
 }
 
 // Evict a cloud bucket
-func evictBucket(c *cli.Context, bck api.Bck) (err error) {
+func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = api.EvictCloudBucket(defaultAPIParams, bck); err != nil {
 		return
 	}
@@ -139,7 +139,7 @@ func evictBucket(c *cli.Context, bck api.Bck) (err error) {
 }
 
 // List bucket names
-func listBucketNames(c *cli.Context, bck api.Bck) (err error) {
+func listBucketNames(c *cli.Context, bck cmn.Bck) (err error) {
 	bucketNames, err := api.GetBucketNames(defaultAPIParams, bck)
 	if err != nil {
 		return
@@ -149,7 +149,7 @@ func listBucketNames(c *cli.Context, bck api.Bck) (err error) {
 }
 
 // Lists objects in bucket
-func listBucketObj(c *cli.Context, bck api.Bck) error {
+func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	err := canReachBucket(bck)
 	if err != nil {
 		return err
@@ -266,7 +266,7 @@ func listBucketObj(c *cli.Context, bck api.Bck) error {
 	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-func bucketDetails(c *cli.Context, bck api.Bck) error {
+func bucketDetails(c *cli.Context, bck cmn.Bck) error {
 	fDetails := func() error {
 		return bucketDetailsSync(c, bck)
 	}
@@ -274,7 +274,7 @@ func bucketDetails(c *cli.Context, bck api.Bck) error {
 }
 
 // The function shows bucket details
-func bucketDetailsSync(c *cli.Context, bck api.Bck) error {
+func bucketDetailsSync(c *cli.Context, bck cmn.Bck) error {
 	// Request bucket summaries
 	msg := &cmn.SelectMsg{
 		Fast:   flagIsSet(c, fastDetailsFlag),
@@ -293,7 +293,7 @@ func bucketDetailsSync(c *cli.Context, bck api.Bck) error {
 
 // replace user-friendly properties like `access=ro` with real values
 // like `aattrs = GET | HEAD`. All numbers are passed to API as is
-func reformatBucketProps(bck api.Bck, nvs cmn.SimpleKVs) error {
+func reformatBucketProps(bck cmn.Bck, nvs cmn.SimpleKVs) error {
 	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {
 		props, err := api.HeadBucket(defaultAPIParams, bck)
 		if err != nil {
@@ -321,7 +321,7 @@ func reformatBucketProps(bck api.Bck, nvs cmn.SimpleKVs) error {
 // Sets bucket properties
 func setBucketProps(c *cli.Context) (err error) {
 	var (
-		bck       api.Bck
+		bck       cmn.Bck
 		propsArgs = c.Args().Tail()
 		bucket    = c.Args().First()
 	)
@@ -365,7 +365,7 @@ func setBucketProps(c *cli.Context) (err error) {
 
 func setBucketPropsJSON(c *cli.Context) (err error) {
 	var (
-		bck        api.Bck
+		bck        cmn.Bck
 		props      cmn.BucketPropsToUpdate
 		bucket     = c.Args().First()
 		inputProps = parseStrFlag(c, jsonspecFlag)
@@ -387,7 +387,7 @@ func setBucketPropsJSON(c *cli.Context) (err error) {
 // Resets bucket props
 func resetBucketProps(c *cli.Context) (err error) {
 	var (
-		bck    api.Bck
+		bck    cmn.Bck
 		bucket = c.Args().First()
 	)
 	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
@@ -408,7 +408,7 @@ func resetBucketProps(c *cli.Context) (err error) {
 // Get bucket props
 func listBucketProps(c *cli.Context) (err error) {
 	var (
-		bck    api.Bck
+		bck    cmn.Bck
 		bucket = c.Args().First()
 	)
 	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
@@ -446,7 +446,7 @@ func printBckHeadTable(c *cli.Context, props cmn.BucketProps) error {
 }
 
 // Configure bucket as n-way mirror
-func configureNCopies(c *cli.Context, bck api.Bck) (err error) {
+func configureNCopies(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = checkFlags(c, []cli.Flag{copiesFlag}); err != nil {
 		return
 	}
@@ -462,7 +462,7 @@ func configureNCopies(c *cli.Context, bck api.Bck) (err error) {
 }
 
 // Makes every object in a bucket erasure coded
-func ecEncode(c *cli.Context, bck api.Bck) (err error) {
+func ecEncode(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = canReachBucket(bck); err != nil {
 		return
 	}
@@ -488,7 +488,7 @@ func getOldNewBucketName(c *cli.Context) (bucket, newBucket string, err error) {
 	return
 }
 
-func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex string, bck api.Bck, showHeaders bool) {
+func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex string, bck cmn.Bck, showHeaders bool) {
 	isAISBck := cmn.IsProviderAIS(bck.Provider)
 	if isAISBck || bck.Provider == "" {
 		aisBuckets := regexFilter(regex, bucketNames.AIS)

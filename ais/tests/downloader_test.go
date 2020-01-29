@@ -136,7 +136,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 	sleep := time.Second * 1
 	for {
 		time.Sleep(sleep)
-		downloaderStats, err := tutils.GetXactionStats(baseParams, api.Bck{}, cmn.ActDownload)
+		downloaderStats, err := tutils.GetXactionStats(baseParams, cmn.Bck{}, cmn.ActDownload)
 		tutils.CheckXactAPIErr(t, err)
 
 		if downloaderCompleted(t, targetID, downloaderStats) {
@@ -153,7 +153,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 
 func TestDownloadSingle(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -230,7 +230,7 @@ func TestDownloadSingle(t *testing.T) {
 
 func TestDownloadRange(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -258,7 +258,7 @@ func TestDownloadRange(t *testing.T) {
 
 func TestDownloadMultiRange(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -286,7 +286,7 @@ func TestDownloadMultiRange(t *testing.T) {
 
 func TestDownloadMultiMap(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -319,7 +319,7 @@ func TestDownloadMultiMap(t *testing.T) {
 
 func TestDownloadMultiList(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -353,7 +353,7 @@ func TestDownloadMultiList(t *testing.T) {
 
 func TestDownloadTimeout(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -374,9 +374,7 @@ func TestDownloadTimeout(t *testing.T) {
 			Link:    link,
 		},
 	}
-	body.Bucket = bck.Name
-	body.Provider = bck.Provider
-	body.Namespace = bck.Namespace
+	body.Bck = bck
 	body.Description = generateDownloadDesc()
 	body.Timeout = "1ms" // super small timeout to see if the request will be canceled
 
@@ -410,7 +408,7 @@ func TestDownloadCloud(t *testing.T) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -484,7 +482,7 @@ func TestDownloadCloud(t *testing.T) {
 
 func TestDownloadStatus(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -544,7 +542,7 @@ func TestDownloadStatusError(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -602,7 +600,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -646,7 +644,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -689,7 +687,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -727,7 +725,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 	bucket, err := tutils.GenerateNonexistentBucketName("download", baseParams)
 	tassert.CheckFatal(t, err)
 
-	bck := api.Bck{
+	bck := cmn.Bck{
 		Name:     bucket,
 		Provider: cmn.ProviderAIS,
 	}
@@ -748,7 +746,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}

@@ -16,7 +16,7 @@ import (
 
 type Object struct {
 	apiParams api.BaseParams // FIXME: it is quite a big struct and should be removed
-	bck       api.Bck        // FIXME: bucket name is static so we should not have it as a field
+	bck       cmn.Bck        // FIXME: bucket name is static so we should not have it as a field
 	Name      string
 	Size      int64
 	Atime     time.Time

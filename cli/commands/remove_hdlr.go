@@ -88,7 +88,7 @@ func removeBucketHandler(c *cli.Context) (err error) {
 
 func removeObjectHandler(c *cli.Context) (err error) {
 	var (
-		bck    api.Bck
+		bck    cmn.Bck
 		bucket string
 	)
 

@@ -112,7 +112,7 @@ func ecSliceNumInit(t *testing.T, smap *cluster.Smap, o *ecOptions) error {
 // The main replica is the replica that is on the target chosen by proxy using HrwTarget
 // algorithm on GET request from a client.
 // The function uses heuristics to detect the main one: it should be the oldest
-func ecGetAllSlices(t *testing.T, bck api.Bck, objName string, o *ecOptions) (map[string]ecSliceMD, string) {
+func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string, o *ecOptions) (map[string]ecSliceMD, string) {
 	var (
 		noObjCnt int64
 		main     string
@@ -124,12 +124,12 @@ func ecGetAllSlices(t *testing.T, bck api.Bck, objName string, o *ecOptions) (ma
 		bmd         = cluster.NewBaseBownerMock()
 	)
 	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
-	bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Namespace, props))
+	bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Ns, props))
 
 	if !o.isAIS {
 		config := tutils.GetClusterConfig(t)
 		bckProvider = config.Cloud.Provider
-		bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Namespace, cmn.DefaultBucketProps()))
+		bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Ns, cmn.DefaultBucketProps()))
 	}
 
 	tMock := cluster.NewTargetMock(bmd)
@@ -217,7 +217,7 @@ func filterObjListOK(lst []*cmn.BucketEntry) []*cmn.BucketEntry {
 }
 
 func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
-	bck api.Bck, objPath string, objSize, sliceSize int64,
+	bck cmn.Bck, objPath string, objSize, sliceSize int64,
 	totalCnt int, o *ecOptions) {
 	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %s/%s: %d, found: %d\n%+v",
 		bck, objPath, totalCnt, len(sliceList), sliceList)
@@ -268,7 +268,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 }
 
 func waitForECFinishes(t *testing.T, totalCnt int, objSize, sliceSize int64, doEC bool,
-	bck api.Bck, objName string, o *ecOptions) (
+	bck cmn.Bck, objName string, o *ecOptions) (
 	foundParts map[string]ecSliceMD, mainObjPath string) {
 	deadLine := time.Now().Add(ECPutTimeOut)
 	for time.Now().Before(deadLine) {
@@ -375,7 +375,7 @@ func compareSlicesCount(t *testing.T, orig, found map[string]int) {
 	}
 }
 
-func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck api.Bck, o *ecOptions) {
+func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *ecOptions) {
 	const (
 		smallEvery = 10 // Every N-th object is small
 		objPatt    = "obj-%s-%04d"
@@ -502,12 +502,12 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck api.Bck, o *e
 	}
 }
 
-func assertBucketSize(t *testing.T, baseParams api.BaseParams, bck api.Bck, objCount int) {
+func assertBucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objCount int) {
 	bckObjectsCnt := bucketSize(t, baseParams, bck)
 	tassert.Fatalf(t, bckObjectsCnt == objCount, "Invalid number of objects: %d, expected %d", bckObjectsCnt, objCount)
 }
 
-func bucketSize(t *testing.T, baseParams api.BaseParams, bck api.Bck) int {
+func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -516,7 +516,7 @@ func bucketSize(t *testing.T, baseParams api.BaseParams, bck api.Bck) int {
 	return len(reslist.Entries)
 }
 
-func putRandomFile(t *testing.T, baseParams api.BaseParams, bck api.Bck, objPath string, size int) {
+func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath string, size int) {
 	r, err := tutils.NewRandReader(int64(size), false)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
@@ -526,7 +526,7 @@ func putRandomFile(t *testing.T, baseParams api.BaseParams, bck api.Bck, objPath
 	tassert.CheckFatal(t, err)
 }
 
-func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck api.Bck, bckProps cmn.BucketPropsToUpdate, o *ecOptions) {
+func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps cmn.BucketPropsToUpdate, o *ecOptions) {
 	proxyURL := tutils.GetPrimaryURL()
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 
@@ -540,13 +540,13 @@ func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck api.Bck, 
 	tassert.CheckFatal(t, err)
 }
 
-func setBucketECProps(t *testing.T, baseParams api.BaseParams, bck api.Bck, bckProps cmn.BucketPropsToUpdate) {
+func setBucketECProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps cmn.BucketPropsToUpdate) {
 	tutils.Logf("Changing EC %d:%d\n", bckProps.EC.DataSlices, bckProps.EC.ParitySlices)
 	err := api.SetBucketProps(baseParams, bck, bckProps)
 	tassert.CheckFatal(t, err)
 }
 
-func clearAllECObjects(t *testing.T, bck api.Bck, failOnDelErr bool, o *ecOptions) {
+func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOptions) {
 	var (
 		wg       = sync.WaitGroup{}
 		proxyURL = tutils.GetPrimaryURL()
@@ -583,7 +583,7 @@ func clearAllECObjects(t *testing.T, bck api.Bck, failOnDelErr bool, o *ecOption
 	wg.Wait()
 }
 
-func objectsExist(t *testing.T, baseParams api.BaseParams, bck api.Bck, objPatt string, objCount int) {
+func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt string, objCount int) {
 	wg := &sync.WaitGroup{}
 	getOneObj := func(objName string) {
 		defer wg.Done()
@@ -618,7 +618,7 @@ func damageMetadataCksum(t *testing.T, slicePath string) {
 func TestECChange(t *testing.T) {
 	var (
 		proxyURL = tutils.GetPrimaryURL()
-		bck      = api.Bck{
+		bck      = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -681,7 +681,7 @@ func TestECChange(t *testing.T) {
 	tassert.Errorf(t, err == nil, "Resetting properties should work")
 }
 
-func createECReplicas(t *testing.T, baseParams api.BaseParams, bck api.Bck, objName string, o *ecOptions) {
+func createECReplicas(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objName string, o *ecOptions) {
 	o.sema <- struct{}{}
 	defer func() {
 		<-o.sema
@@ -709,7 +709,7 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bck api.Bck, objN
 	tassert.Errorf(t, mainObjPath != "", "Full copy is not found")
 }
 
-func createECObject(t *testing.T, baseParams api.BaseParams, bck api.Bck, objName string, idx int, o *ecOptions) {
+func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objName string, idx int, o *ecOptions) {
 	const (
 		smallEvery = 7 // Every N-th object is small
 	)
@@ -747,7 +747,7 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck api.Bck, objNam
 	}
 }
 
-func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck api.Bck, objName string, idx int, o *ecOptions) {
+func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objName string, idx int, o *ecOptions) {
 	const (
 		sleepRestoreTime = 5 * time.Second // wait time after GET restores slices
 		smallEvery       = 7               // Every N-th object is small
@@ -863,7 +863,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck api.
 // Simple stress testing EC for Cloud buckets
 func TestECRestoreObjAndSliceCloud(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -920,7 +920,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 //  - The target restores the original object from slices and missing slices
 func TestECRestoreObjAndSlice(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -964,7 +964,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	clearAllECObjects(t, bck, true, o)
 }
 
-func putECFile(baseParams api.BaseParams, bck api.Bck, objName string) error {
+func putECFile(baseParams api.BaseParams, bck cmn.Bck, objName string) error {
 	objSize := int64(ecMinBigSize * 2)
 	objPath := ecTestDir + objName
 
@@ -979,7 +979,7 @@ func putECFile(baseParams api.BaseParams, bck api.Bck, objName string) error {
 }
 
 // Returns path to main object and map of all object's slices and ioContext
-func createECFile(t *testing.T, baseParams api.BaseParams, bck api.Bck, objName string, o *ecOptions) (map[string]ecSliceMD, string) {
+func createECFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objName string, o *ecOptions) (map[string]ecSliceMD, string) {
 	totalCnt := 2 + (o.sliceTotal())*2
 	objSize := int64(ecMinBigSize * 2)
 	sliceSize := ec.SliceSize(objSize, o.dataCnt)
@@ -1006,7 +1006,7 @@ func TestECChecksum(t *testing.T) {
 
 	var (
 		proxyURL = tutils.GetPrimaryURL()
-		bck      = api.Bck{
+		bck      = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -1076,7 +1076,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -1171,7 +1171,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -1317,7 +1317,7 @@ func TestECStress(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -1359,11 +1359,11 @@ func TestECStressManyBuckets(t *testing.T) {
 	}
 
 	var (
-		bck1 = api.Bck{
+		bck1 = cmn.Bck{
 			Name:     TestBucketName + "1",
 			Provider: cmn.ProviderAIS,
 		}
-		bck2 = api.Bck{
+		bck2 = cmn.Bck{
 			Name:     TestBucketName + "2",
 			Provider: cmn.ProviderAIS,
 		}
@@ -1441,7 +1441,7 @@ func TestECExtraStress(t *testing.T) {
 	)
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -1559,7 +1559,7 @@ func TestECXattrs(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -1723,7 +1723,7 @@ func TestECDestroyBucket(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName + "-DESTROY",
 			Provider: cmn.ProviderAIS,
 		}
@@ -1821,7 +1821,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -1924,7 +1924,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -2076,7 +2076,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -2238,7 +2238,7 @@ func TestECRebalance(t *testing.T) {
 	}
 
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -2494,11 +2494,11 @@ func TestECAndRegularRebalance(t *testing.T) {
 		fileSize = 32 * cmn.KiB
 	)
 	var (
-		bckReg = api.Bck{
+		bckReg = cmn.Bck{
 			Name:     TestBucketName + "-REG",
 			Provider: cmn.ProviderAIS,
 		}
-		bckEC = api.Bck{
+		bckEC = cmn.Bck{
 			Name:     TestBucketName + "-EC",
 			Provider: cmn.ProviderAIS,
 		}

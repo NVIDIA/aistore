@@ -44,7 +44,7 @@ type workres struct {
 
 func Test_download(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -138,10 +138,7 @@ func Test_download(t *testing.T) {
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
 	var (
-		bck = api.Bck{
-			Name:     clibucket,
-			Provider: cmn.Cloud,
-		}
+		bck      = cmn.Bck{Name: clibucket}
 		proxyURL = tutils.GetPrimaryURL()
 	)
 
@@ -205,7 +202,7 @@ func Test_matchdelete(t *testing.T) {
 
 func Test_putdeleteRange(t *testing.T) {
 	var (
-		bck      = api.Bck{Name: clibucket}
+		bck      = cmn.Bck{Name: clibucket}
 		proxyURL = tutils.GetPrimaryURL()
 	)
 
@@ -353,7 +350,7 @@ func Test_putdelete(t *testing.T) {
 
 	var (
 		proxyURL = tutils.GetPrimaryURL()
-		bck      = api.Bck{Name: clibucket}
+		bck      = cmn.Bck{Name: clibucket}
 	)
 
 	if testing.Short() && isCloudBucket(t, proxyURL, bck) {
@@ -409,7 +406,7 @@ func Test_putdelete(t *testing.T) {
 	tassert.SelectErr(t, errCh, "delete", false)
 }
 
-func listObjects(t *testing.T, proxyURL string, bck api.Bck, msg *cmn.SelectMsg, objLimit int) (*cmn.BucketList, error) {
+func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, objLimit int) (*cmn.BucketList, error) {
 	resList := testListBucket(t, proxyURL, bck, msg, objLimit)
 	if resList == nil {
 		return nil, fmt.Errorf("failed to list bucket %s", bck)
@@ -430,7 +427,7 @@ func listObjects(t *testing.T, proxyURL string, bck api.Bck, msg *cmn.SelectMsg,
 
 func Test_BucketNames(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
 			Provider: cmn.ProviderAIS,
 		}
@@ -440,7 +437,7 @@ func Test_BucketNames(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	buckets, err := api.GetBucketNames(baseParams, api.Bck{})
+	buckets, err := api.GetBucketNames(baseParams, cmn.Bck{})
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("ais bucket names:\n")
@@ -449,7 +446,7 @@ func Test_BucketNames(t *testing.T) {
 	printBucketNames(t, buckets.Cloud)
 
 	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle} {
-		cloudBuckets, err := api.GetBucketNames(baseParams, api.Bck{Provider: provider})
+		cloudBuckets, err := api.GetBucketNames(baseParams, cmn.Bck{Provider: provider})
 		tassert.CheckError(t, err)
 		if len(cloudBuckets.Cloud) != len(buckets.Cloud) {
 			t.Fatalf("cloud buckets: %d != %d\n", len(cloudBuckets.Cloud), len(buckets.Cloud))
@@ -458,7 +455,7 @@ func Test_BucketNames(t *testing.T) {
 			t.Fatalf("cloud buckets contain ais: %+v\n", cloudBuckets.AIS)
 		}
 	}
-	aisBuckets, err := api.GetBucketNames(baseParams, api.Bck{Provider: cmn.ProviderAIS})
+	aisBuckets, err := api.GetBucketNames(baseParams, cmn.Bck{Provider: cmn.ProviderAIS})
 	tassert.CheckError(t, err)
 	if len(aisBuckets.AIS) != len(buckets.AIS) {
 		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets.AIS), len(buckets.AIS))
@@ -480,11 +477,11 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		bckLocal   = api.Bck{
+		bckLocal   = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.ProviderAIS,
 		}
-		bckCloud = api.Bck{
+		bckCloud = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -613,11 +610,11 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		defLocalProps cmn.BucketPropsToUpdate
 		defCloudProps cmn.BucketPropsToUpdate
 
-		bckLocal = api.Bck{
+		bckLocal = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.ProviderAIS,
 		}
-		bckCloud = api.Bck{
+		bckCloud = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -765,7 +762,7 @@ func Test_coldgetmd5(t *testing.T) {
 		filesList  = make([]string, 0, 100)
 		errCh      = make(chan error, 100)
 		wg         = &sync.WaitGroup{}
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -834,7 +831,7 @@ func TestHeadBucket(t *testing.T) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -864,7 +861,7 @@ func TestHeadCloudBucket(t *testing.T) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -901,7 +898,7 @@ func TestHeadNonexistentBucket(t *testing.T) {
 	bucket, err := tutils.GenerateNonexistentBucketName("head", baseParams)
 	tassert.CheckFatal(t, err)
 
-	bck := api.Bck{
+	bck := cmn.Bck{
 		Name:     bucket,
 		Provider: cmn.ProviderAIS,
 	}
@@ -924,7 +921,7 @@ func TestHeadObject(t *testing.T) {
 		proxyURL = tutils.GetPrimaryURL()
 		objName  = "headobject_test_obj"
 		objSize  = int64(1024)
-		bck      = api.Bck{
+		bck      = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -991,7 +988,7 @@ func TestHeadObject(t *testing.T) {
 
 func TestHeadNonexistentObject(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -1009,7 +1006,7 @@ func TestHeadNonexistentObject(t *testing.T) {
 
 func TestHeadObjectCheckExists(t *testing.T) {
 	var (
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name: clibucket,
 		}
 		fileName = "headobject_check_cached_test_file"
@@ -1051,7 +1048,7 @@ func TestHeadObjectCheckExists(t *testing.T) {
 	}
 }
 
-func getAndCopyTmp(t *testing.T, proxyURL string, bck api.Bck, id int, keynames <-chan string, wg *sync.WaitGroup,
+func getAndCopyTmp(t *testing.T, proxyURL string, bck cmn.Bck, id int, keynames <-chan string, wg *sync.WaitGroup,
 	errCh chan error, resch chan workres) {
 	geturl := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects)
 	res := workres{0, 0}
@@ -1073,7 +1070,7 @@ func getAndCopyTmp(t *testing.T, proxyURL string, bck api.Bck, id int, keynames 
 	resch <- res
 }
 
-func getAndCopyOne(t *testing.T, url string, bck api.Bck, id int, errCh chan error,
+func getAndCopyOne(t *testing.T, url string, bck cmn.Bck, id int, errCh chan error,
 	keyname string) (written int64, failed bool) {
 	var (
 		errstr   string
@@ -1162,7 +1159,7 @@ func getAndCopyOne(t *testing.T, url string, bck api.Bck, id int, errCh chan err
 	return
 }
 
-func deleteFiles(proxyURL string, bck api.Bck, keynames <-chan string, wg *sync.WaitGroup, errCh chan error) {
+func deleteFiles(proxyURL string, bck cmn.Bck, keynames <-chan string, wg *sync.WaitGroup, errCh chan error) {
 	defer wg.Done()
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
@@ -1172,7 +1169,7 @@ func deleteFiles(proxyURL string, bck api.Bck, keynames <-chan string, wg *sync.
 	dwg.Wait()
 }
 
-func getMatchingKeys(t *testing.T, proxyURL string, bck api.Bck, regexmatch string,
+func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch string,
 	keynameChans []chan string, outputChan chan string) int {
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
 	reslist := testListBucket(t, proxyURL, bck, msg, 0)
@@ -1206,7 +1203,7 @@ func getMatchingKeys(t *testing.T, proxyURL string, bck api.Bck, regexmatch stri
 	return num
 }
 
-func testListBucket(t *testing.T, proxyURL string, bck api.Bck, msg *cmn.SelectMsg, limit int) *cmn.BucketList {
+func testListBucket(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, limit int) *cmn.BucketList {
 	tutils.Logf("LIST bucket %s [fast: %v, prefix: %q, page_size: %d, marker: %q]\n",
 		bck, msg.Fast, msg.Prefix, msg.PageSize, msg.PageMarker)
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -1238,7 +1235,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		proxyURL    = tutils.GetPrimaryURL()
 		bmdMock     = cluster.NewBaseBownerMock()
 		tMock       = cluster.NewTargetMock(bmdMock)
-		bck         = api.Bck{
+		bck         = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -1350,7 +1347,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		filesList  = make([]string, 0, 100)
 		errCh      = make(chan error, 100)
 		wg         = &sync.WaitGroup{}
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -1427,7 +1424,7 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, file
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -1462,7 +1459,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		proxyURL   = tutils.GetPrimaryURL()
 		bmdMock    = cluster.NewBaseBownerMock()
 		tMock      = cluster.NewTargetMock(bmdMock)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
@@ -1546,7 +1543,7 @@ cleanup:
 	close(fileNameCh)
 }
 
-func executeTwoGETsForChecksumValidation(proxyURL string, bck api.Bck, fName string, t *testing.T) {
+func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, fName string, t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	_, err := api.GetObjectWithValidation(baseParams, bck, path.Join(ChecksumWarmValidateStr, fName))
 	if err == nil {
@@ -1571,7 +1568,7 @@ func TestRangeRead(t *testing.T) {
 		numFiles   = 1
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, numFiles)
-		bck        = api.Bck{
+		bck        = cmn.Bck{
 			Name: clibucket,
 		}
 		proxyURL = tutils.GetPrimaryURL()
@@ -1631,7 +1628,7 @@ cleanup:
 	}
 }
 
-func testValidCases(t *testing.T, proxyURL string, bck api.Bck, fileSize uint64, fileName string, checkEntireObjCkSum bool, checkDir string) {
+func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, fileSize uint64, fileName string, checkEntireObjCkSum bool, checkDir string) {
 	// Read the entire file range by range
 	// Read in ranges of 500 to test covered, partially covered and completely
 	// uncovered ranges
@@ -1644,7 +1641,7 @@ func testValidCases(t *testing.T, proxyURL string, bck api.Bck, fileSize uint64,
 	verifyValidRanges(t, proxyURL, bck, fileName, int64(fileSize)+100, byteRange, 0, checkEntireObjCkSum, checkDir)
 }
 
-func verifyValidRanges(t *testing.T, proxyURL string, bck api.Bck, fileName string,
+func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, fileName string,
 	offset, length, expectedLength int64, checkEntireObjCksum bool, checkDir string) {
 	var fqn string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
@@ -1718,7 +1715,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck api.Bck, fileName stri
 	}
 }
 
-func verifyInvalidParams(t *testing.T, proxyURL string, bck api.Bck, fileName string, offset string, length string) {
+func verifyInvalidParams(t *testing.T, proxyURL string, bck cmn.Bck, fileName string, offset string, length string) {
 	q := url.Values{}
 	q.Add(cmn.URLParamOffset, offset)
 	q.Add(cmn.URLParamLength, length)
@@ -1740,7 +1737,7 @@ func Test_checksum(t *testing.T) {
 		duration    time.Duration
 
 		numPuts = 5
-		bck     = api.Bck{
+		bck     = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -1847,7 +1844,7 @@ cleanup:
 
 // deleteFromFileList requires that errCh be twice the size of len(filesList) as each
 // file can produce upwards of two errors.
-func deleteFromFileList(proxyURL string, bck api.Bck, errCh chan error, filesList []string) {
+func deleteFromFileList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []string) {
 	wg := &sync.WaitGroup{}
 	// Delete local file and objects from bucket
 	for _, fn := range filesList {
@@ -1858,7 +1855,7 @@ func deleteFromFileList(proxyURL string, bck api.Bck, errCh chan error, filesLis
 	wg.Wait()
 }
 
-func getFromObjList(proxyURL string, bck api.Bck, errCh chan error, filesList []string, validate bool) {
+func getFromObjList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []string, validate bool) {
 	getsGroup := &sync.WaitGroup{}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for i := 0; i < len(filesList); i++ {
@@ -1881,9 +1878,9 @@ func getFromObjList(proxyURL string, bck api.Bck, errCh chan error, filesList []
 	getsGroup.Wait()
 }
 
-func createBucketIfNotExists(t *testing.T, proxyURL string, bck api.Bck) (created bool) {
+func createBucketIfNotExists(t *testing.T, proxyURL string, bck cmn.Bck) (created bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	buckets, err := api.GetBucketNames(baseParams, api.Bck{})
+	buckets, err := api.GetBucketNames(baseParams, cmn.Bck{})
 	if err != nil {
 		t.Fatalf("Failed to read bucket list: %v", err)
 	}
@@ -1900,7 +1897,7 @@ func createBucketIfNotExists(t *testing.T, proxyURL string, bck api.Bck) (create
 	return true
 }
 
-func isCloudBucket(t *testing.T, proxyURL string, bck api.Bck) bool {
+func isCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck) bool {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	buckets, err := api.GetBucketNames(baseParams, bck)
 	if err != nil {
@@ -1920,7 +1917,7 @@ func validateBucketProps(t *testing.T, expected cmn.BucketPropsToUpdate, actual 
 	}
 }
 
-func resetBucketProps(proxyURL string, bck api.Bck, t *testing.T) {
+func resetBucketProps(proxyURL string, bck cmn.Bck, t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	if err := api.ResetBucketProps(baseParams, bck); err != nil {
 		t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)

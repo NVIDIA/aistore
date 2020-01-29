@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 
 	"github.com/NVIDIA/aistore/fuse/fs"
 	"github.com/jacobsa/daemonize"
@@ -252,7 +252,7 @@ func appMain(c *cli.Context) (err error) {
 	}
 
 	// Validate and test cluster URL.
-	cluURL, err = determineClusterURL(c, cfg, api.Bck{Name: bucket})
+	cluURL, err = determineClusterURL(c, cfg, cmn.Bck{Name: bucket})
 	if err != nil {
 		return
 	}

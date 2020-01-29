@@ -18,8 +18,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -511,7 +509,7 @@ gfn:
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := url.Values{}
 	query.Add(cmn.URLParamIsGFNRequest, "true")
-	query = api.AddBckToQuery(query, api.MakeBckFrom(lom.Bck().Bck))
+	query = cmn.AddBckToQuery(query, lom.Bck().Bck)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),

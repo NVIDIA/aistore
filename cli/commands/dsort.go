@@ -111,7 +111,7 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 
 // Creates bucket if not exists. If exists uses it or deletes and creates new
 // one if cleanup flag was set.
-func setupBucket(c *cli.Context, bck api.Bck) error {
+func setupBucket(c *cli.Context, bck cmn.Bck) error {
 	cleanup := flagIsSet(c, cleanupFlag)
 
 	exists, err := api.DoesBucketExist(defaultAPIParams, bck)
@@ -138,7 +138,7 @@ func setupBucket(c *cli.Context, bck api.Bck) error {
 func genShardsHandler(c *cli.Context) error {
 	var (
 		ext = parseStrFlag(c, extFlag)
-		bck = api.Bck{
+		bck = cmn.Bck{
 			Name: parseStrFlag(c, dsortBucketFlag),
 		}
 		template  = parseStrFlag(c, dsortTemplateFlag)

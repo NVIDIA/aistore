@@ -1258,3 +1258,9 @@ func (h *httprunner) getBucketNamesAIS(bmd *bucketMD) *cmn.BucketNames {
 	sort.Strings(bucketNames.AIS) // sort by name
 	return bucketNames
 }
+
+func newBckFromQuery(bckName string, query url.Values) *cluster.Bck {
+	provider := query.Get(cmn.URLParamProvider)
+	namespace := query.Get(cmn.URLParamNamespace)
+	return cluster.NewBck(bckName, provider, namespace)
+}

@@ -6,7 +6,6 @@
 package commands
 
 import (
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -39,11 +38,11 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
-	fromBck := api.Bck{
+	fromBck := cmn.Bck{
 		Name:     bucket,
 		Provider: cmn.ProviderAIS,
 	}
-	toBck := api.Bck{
+	toBck := cmn.Bck{
 		Name:     newBucket,
 		Provider: cmn.ProviderAIS,
 	}

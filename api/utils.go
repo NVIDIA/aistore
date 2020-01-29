@@ -51,22 +51,6 @@ func DoHTTPRequest(baseParams BaseParams, path string, b []byte, optParams ...Op
 	return ioutil.ReadAll(resp.Body)
 }
 
-func AddBckToQuery(query url.Values, bck Bck) url.Values {
-	if bck.Provider != "" {
-		if query == nil {
-			query = make(url.Values)
-		}
-		query.Set(cmn.URLParamProvider, bck.Provider)
-	}
-	if bck.Namespace != "" {
-		if query == nil {
-			query = make(url.Values)
-		}
-		query.Set(cmn.URLParamNamespace, bck.Namespace)
-	}
-	return query
-}
-
 // doHTTPRequestGetResp sends one HTTP request and returns the whole response
 func doHTTPRequestGetResp(baseParams BaseParams, path string, b []byte, optParams ...OptionalParams) (*http.Response, error) {
 	var (

@@ -102,7 +102,7 @@ var (
 
 func startXactionHandler(c *cli.Context) (err error) {
 	var (
-		bck     api.Bck
+		bck     cmn.Bck
 		xaction = c.Args().First() // empty string if no args given
 		bucket  string
 	)
@@ -135,7 +135,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 
 func stopXactionHandler(c *cli.Context) (err error) {
 	var (
-		bck     api.Bck
+		bck     cmn.Bck
 		xaction = c.Args().First() // empty string if no args given
 	)
 
@@ -178,12 +178,6 @@ func startDownloadHandler(c *cli.Context) error {
 		id          string
 	)
 
-	basePayload := cmn.DlBase{
-		Provider:    cmn.ProviderAIS, // NOTE: currently downloading only to ais buckets is supported
-		Timeout:     timeout,
-		Description: description,
-	}
-
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "source", "destination")
 	}
@@ -200,7 +194,16 @@ func startDownloadHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	basePayload.Bucket = bucket
+
+	basePayload := cmn.DlBase{
+		Bck: cmn.Bck{
+			Name:     bucket,
+			Provider: cmn.ProviderAIS, // NOTE: currently downloading only to ais buckets is supported
+			Ns:       cmn.NsGlobal,
+		},
+		Timeout:     timeout,
+		Description: description,
+	}
 
 	if strings.Contains(source, "{") && strings.Contains(source, "}") {
 		// Range

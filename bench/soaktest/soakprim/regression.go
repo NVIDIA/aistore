@@ -25,7 +25,7 @@ const (
 )
 
 var (
-	bck = api.Bck{
+	bck = cmn.Bck{
 		Name:     fmt.Sprintf("%s-%d", regBucketPrefix, os.Getpid()),
 		Provider: cmn.ProviderAIS,
 	}
@@ -38,7 +38,7 @@ type regressionContext struct {
 
 // Regression runs a constant get request throughout the testing
 func cleanupRegression() {
-	names, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), api.Bck{Provider: cmn.ProviderAIS})
+	names, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.Bck{Provider: cmn.ProviderAIS})
 	cmn.AssertNoErr(err)
 
 	for _, name := range names.AIS {
@@ -71,7 +71,7 @@ func setupRegression() *regressionContext {
 }
 
 // Worker function for regression. Must call in go func
-func regressionWorker(tag string, bck api.Bck, stopCh chan struct{}, wg *sync.WaitGroup, recordRegression func(*stats.PrimitiveStat)) {
+func regressionWorker(tag string, bck cmn.Bck, stopCh chan struct{}, wg *sync.WaitGroup, recordRegression func(*stats.PrimitiveStat)) {
 	aisLoaderExecParams := &AISLoaderExecParams{
 		pctput:     0,
 		stopable:   true,

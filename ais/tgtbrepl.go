@@ -117,7 +117,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objnameTo string, si *cluster.
 
 	// PUT object into different target
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, ri.bckTo.Provider)
+	query = cmn.AddBckToQuery(query, ri.bckTo.Bck)
 	query.Add(cmn.URLParamProxyID, ri.smap.ProxySI.ID())
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
