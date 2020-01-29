@@ -204,18 +204,18 @@ func (t *targetrunner) Run() error {
 	go t.pollClusterStarted(config.Timeout.CplaneOperation)
 
 	// register object type and workfile type
-	if err := fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
+	if err := fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	if err := fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
+	if err := fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 
-	if err := fs.Mountpaths.CreateBucketDir(cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}); err != nil {
+	if err := fs.Mountpaths.CreateBckDir(cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	if config.Cloud.Supported {
-		if err := fs.Mountpaths.CreateBucketDir(cmn.Bck{Provider: config.Cloud.Provider, Ns: cmn.NsGlobal}); err != nil {
+		if err := fs.Mountpaths.CreateBckDir(cmn.Bck{Provider: config.Cloud.Provider, Ns: cmn.NsGlobal}); err != nil {
 			cmn.ExitLogf("%v", err)
 		}
 	}

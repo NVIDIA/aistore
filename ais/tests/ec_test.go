@@ -6,7 +6,6 @@ package ais_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -2454,6 +2453,19 @@ func init() {
 		tutils.Logf("ERROR: %v", err)
 	}
 
+	smap, err := api.GetClusterMap(baseParams)
+	if err != nil {
+		tutils.Logf("ERROR: %v", err)
+	}
+	mpaths := make([]string, 0, len(smap.Tmap)*5)
+	for _, target := range smap.Tmap {
+		mpathList, err := api.GetMountpaths(baseParams, target)
+		if err != nil {
+			tutils.Logf("ERROR: %v", err)
+		}
+		mpaths = append(mpaths, mpathList.Available...)
+	}
+
 	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
 	config.Cloud = cfg.Cloud
@@ -2461,23 +2473,14 @@ func init() {
 
 	fs.InitMountedFS()
 	fs.Mountpaths.DisableFsIDCheck()
-	targetDirs, _ := ioutil.ReadDir(rootDir)
-
-	for _, tDir := range targetDirs {
-		dir := path.Join(rootDir, tDir.Name())
-		mpDirs, _ := ioutil.ReadDir(dir)
-
-		for _, mpDir := range mpDirs {
-			if mpDir.Name() != "log" {
-				_ = fs.Mountpaths.Add(path.Join(dir, mpDir.Name()))
-			}
-		}
+	for _, mpath := range mpaths {
+		_ = fs.Mountpaths.Add(mpath)
 	}
 
-	_ = fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
-	_ = fs.CSM.RegisterFileType(ec.SliceType, &ec.SliceSpec{})
-	_ = fs.CSM.RegisterFileType(ec.MetaType, &ec.MetaSpec{})
+	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.RegisterContentType(ec.SliceType, &ec.SliceSpec{})
+	_ = fs.CSM.RegisterContentType(ec.MetaType, &ec.MetaSpec{})
 }
 
 // Creates two buckets (with EC enabled and disabled), fill them with data,

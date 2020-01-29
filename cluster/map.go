@@ -182,7 +182,7 @@ func (m *Smap) GetTarget(sid string) *Snode {
 
 func (m *Smap) GetRandTarget() (si *Snode, err error) {
 	if m.CountTargets() == 0 {
-		return nil, errNoTargets
+		return nil, ErrNoTargets
 	}
 	for _, si = range m.Tmap {
 		break

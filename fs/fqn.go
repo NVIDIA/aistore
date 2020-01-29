@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	prefCT        = '~'
-	prefProvider  = '@'
-	prefNamespace = '#'
+	prefCT       = '%'
+	prefProvider = '@'
+	prefNsLocal  = '#'
+	prefNsCloud  = ':'
 )
 
 const (
@@ -34,7 +35,7 @@ type ParsedFQN struct {
 	Digest      uint64
 }
 
-// ParseFQN splits a provided FQN (created by `MakePathCT`) or reports
+// ParseFQN splits a provided FQN (created by `MakePathFQN`) or reports
 // an error.
 func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 	var (
@@ -54,29 +55,7 @@ func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 
 		item := rel[prev:i]
 		switch itemIdx {
-		case 0: // content type (or cloud provider if `obj`)
-			switch item[0] {
-			case prefCT:
-				item = item[1:]
-				if _, ok := CSM.RegisteredContentTypes[item]; !ok {
-					err = fmt.Errorf("invalid fqn %s: bad content type %q", fqn, item)
-					return
-				}
-				parsed.ContentType = item
-			case prefProvider:
-				item = item[1:]
-				if !cmn.IsValidProvider(item) {
-					err = fmt.Errorf("invalid fqn %s: bad provider %q", fqn, item)
-					return
-				}
-				parsed.ContentType = ObjectType
-				parsed.Bck.Provider = item
-				itemIdx++ // skip parsing cloud provider
-			default:
-				err = fmt.Errorf("invalid fqn %s: bad content type (or provider) %q", fqn, item)
-				return
-			}
-		case 1: // cloud provider
+		case 0: // cloud provider
 			if item[0] != prefProvider {
 				err = fmt.Errorf("invalid fqn %s: bad provider %q", fqn, item)
 				return
@@ -87,27 +66,41 @@ func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 				return
 			}
 			parsed.Bck.Provider = item
-		case 2, 3: // bucket and object name (or namespace)
+		case 1: // namespace or bucket name
 			if item == "" {
 				err = fmt.Errorf("invalid fqn %s: bad bucket name (or namespace)", fqn)
 				return
 			}
-			switch item[0] {
-			case prefNamespace:
-				parsed.Bck.Ns = item[1:]
-			default:
-				if itemIdx == 2 {
-					parsed.Bck.Ns = cmn.NsGlobal
-				}
-				parsed.Bck.Name = item
 
-				objName := rel[i+1:]
-				if objName == "" {
-					err = fmt.Errorf("invalid fqn %s: bad object name", fqn)
-				}
-				parsed.ObjName = objName
+			switch item[0] {
+			case prefNsLocal:
+				parsed.Bck.Ns = item[1:]
+				itemIdx-- // we must visit this case again
+			case prefNsCloud:
+				cmn.AssertMsg(false, "not yet implemented")
+			default:
+				parsed.Bck.Name = item
+			}
+		case 2: // content type and object name
+			if item[0] != prefCT {
+				err = fmt.Errorf("invalid fqn %s: bad content type %q", fqn, item)
 				return
 			}
+
+			item = item[1:]
+			if _, ok := CSM.RegisteredContentTypes[item]; !ok {
+				err = fmt.Errorf("invalid fqn %s: bad content type %q", fqn, item)
+				return
+			}
+			parsed.ContentType = item
+
+			// Object name
+			objName := rel[i+1:]
+			if objName == "" {
+				err = fmt.Errorf("invalid fqn %s: bad object name", fqn)
+			}
+			parsed.ObjName = objName
+			return
 		}
 
 		itemIdx++
@@ -164,22 +157,4 @@ func (mfs *MountedFS) Path2MpathInfo(path string) (info *MountpathInfo, relative
 		}
 	}
 	return
-}
-
-func (mfs *MountedFS) CreateBucketDir(bck cmn.Bck) error {
-	cmn.AssertMsg(cmn.IsValidProvider(bck.Provider), "unknown cloud provider: '"+bck.Provider+"'")
-
-	availablePaths, _ := Mountpaths.Get()
-	for contentType := range CSM.RegisteredContentTypes {
-		for _, mpathInfo := range availablePaths {
-			dir := mpathInfo.MakePath(contentType, bck)
-			if _, exists := availablePaths[dir]; exists {
-				return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo, dir)
-			}
-			if err := cmn.CreateDir(dir); err != nil {
-				return fmt.Errorf("cannot create %q buckets dir %q, err: %v", bck.Provider, dir, err)
-			}
-		}
-	}
-	return nil
 }

@@ -43,6 +43,10 @@ var (
 	CloudProviders = []string{ProviderAmazon, ProviderGoogle}
 )
 
+func (b Bck) Valid() bool {
+	return ValidateBucketName(b.Name) == nil && IsValidProvider(b.Provider)
+}
+
 func (b Bck) Equal(other Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
 }

@@ -39,8 +39,8 @@ var _ = Describe("Mirror", func() {
 	fs.Mountpaths.DisableFsIDCheck()
 	_ = fs.Mountpaths.Add(mpath)
 	_ = fs.Mountpaths.Add(mpath2)
-	_ = fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	var (
 		bmdMock         = cluster.NewBaseBownerMock()
@@ -48,9 +48,9 @@ var _ = Describe("Mirror", func() {
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}
 		bck             = cmn.Bck{Name: testBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-		bucketPath      = mi.MakePath(fs.ObjectType, bck)
-		defaultObjFQN   = mi.MakePathCT(fs.ObjectType, bck, testObjectName)
-		expectedCopyFQN = mi2.MakePathCT(fs.ObjectType, bck, testObjectName)
+		bucketPath      = mi.MakePathCT(bck, fs.ObjectType)
+		defaultObjFQN   = mi.MakePathFQN(bck, fs.ObjectType, testObjectName)
+		expectedCopyFQN = mi2.MakePathFQN(bck, fs.ObjectType, testObjectName)
 	)
 
 	cbck := cluster.NewBckEmbed(bck)

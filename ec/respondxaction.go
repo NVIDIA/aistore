@@ -84,7 +84,7 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
-		fqnMeta, _, err := cluster.HrwFQN(tp, bck, objName)
+		fqnMeta, _, err := cluster.HrwFQN(bck, tp, objName)
 		if err != nil {
 			return err
 		}
@@ -116,12 +116,12 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName strin
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, objName)
 			}
-			fqn, _, err = cluster.HrwFQN(SliceType, bck, objName)
+			fqn, _, err = cluster.HrwFQN(bck, SliceType, objName)
 			if err != nil {
 				glog.Error(err)
 				return
 			}
-			metaFQN, _, err = cluster.HrwFQN(MetaType, bck, objName)
+			metaFQN, _, err = cluster.HrwFQN(bck, MetaType, objName)
 			if err == nil {
 				md, err = LoadMetadata(metaFQN)
 			}
@@ -131,7 +131,7 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName strin
 			}
 			// FIXME: (redundant) r.dataResponse() does not need it as it constructs
 			//        LOM right away
-			fqn, _, err = cluster.HrwFQN(fs.ObjectType, bck, objName)
+			fqn, _, err = cluster.HrwFQN(bck, fs.ObjectType, objName)
 		}
 		if err != nil {
 			glog.Error(err)
@@ -185,7 +185,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 			if glog.V(4) {
 				glog.Infof("Got slice response from %s (#%d of %s/%s)", iReq.Sender, iReq.Meta.SliceID, bck.Name, objName)
 			}
-			objFQN, _, err = cluster.HrwFQN(SliceType, bck, objName)
+			objFQN, _, err = cluster.HrwFQN(bck, SliceType, objName)
 			if err != nil {
 				drain()
 				glog.Error(err)
@@ -195,7 +195,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 			if glog.V(4) {
 				glog.Infof("Got replica response from %s (%s/%s)", iReq.Sender, bck.Name, objName)
 			}
-			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bck, objName)
+			objFQN, _, err = cluster.HrwFQN(bck, fs.ObjectType, objName)
 			if err != nil {
 				drain()
 				glog.Error(err)

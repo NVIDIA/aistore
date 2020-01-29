@@ -276,7 +276,7 @@ func (lom *LOM) DelExtraCopies() (err error) {
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
-		copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.bck.Bck, lom.Objname)
+		copyFQN := fs.CSM.FQN(mpathInfo, lom.bck.Bck, lom.ParsedFQN.ContentType, lom.Objname)
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
@@ -333,7 +333,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
 		}
-		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.bck.Bck, lom.Objname)
+		fqn := fs.CSM.FQN(mpathInfo, lom.bck.Bck, lom.ParsedFQN.ContentType, lom.Objname)
 		if _, err := os.Stat(fqn); err != nil {
 			continue
 		}
@@ -653,7 +653,7 @@ func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 			return
 		}
 		lom.ParsedFQN.ContentType = fs.ObjectType
-		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, lom.bck.Bck, lom.Objname)
+		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, lom.bck.Bck, fs.ObjectType, lom.Objname)
 		lom.HrwFQN = lom.FQN
 		lom.ParsedFQN.Bck = lom.bck.Bck
 		lom.ParsedFQN.ObjName = lom.Objname
@@ -935,7 +935,7 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
 	lom = &LOM{Objname: objName, bck: &bck}
 	bucketExists = bmd.Exists(&bck, md.bckID)
 	if bucketExists {
-		lom.FQN, _, err = HrwFQN(fs.ObjectType, lom.Bck(), lom.Objname)
+		lom.FQN, _, err = HrwFQN(lom.Bck(), fs.ObjectType, lom.Objname)
 		if err != nil {
 			glog.Errorf("%s: hrw err: %v", lom, err)
 			bucketExists = false

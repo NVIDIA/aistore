@@ -111,8 +111,8 @@ import (
 //		 algorithm returns.
 
 const (
-	SliceType = "ec"   // object slice prefix
-	MetaType  = "meta" // metafile prefix
+	SliceType = "ec" // object slice prefix
+	MetaType  = "mt" // metafile prefix
 
 	ActSplit   = "split"
 	ActRestore = "restore"
@@ -268,8 +268,8 @@ func Init(t cluster.Target, reg XactRegistry) {
 	if err := mm.Init(false /*panicOnErr*/); err != nil {
 		glog.Fatalf("Failed to initialize EC: %v", err)
 	}
-	fs.CSM.RegisterFileType(SliceType, &SliceSpec{})
-	fs.CSM.RegisterFileType(MetaType, &MetaSpec{})
+	fs.CSM.RegisterContentType(SliceType, &SliceSpec{})
+	fs.CSM.RegisterContentType(MetaType, &MetaSpec{})
 	if err := initManager(t, reg); err != nil {
 		glog.Fatal(err)
 	}

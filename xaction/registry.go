@@ -888,7 +888,7 @@ func (r *bckSummaryTask) Run() {
 
 			if r.msg.Fast && (bck.IsAIS() || r.msg.Cached) {
 				for _, mpathInfo := range availablePaths {
-					path := mpathInfo.MakePath(fs.ObjectType, bck.Bck)
+					path := mpathInfo.MakePathCT(bck.Bck, fs.ObjectType)
 					size, err := ios.GetDirSize(path)
 					if err != nil {
 						errCh <- err

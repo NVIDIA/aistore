@@ -64,17 +64,15 @@ type (
 		oldWork   []string
 		misplaced []*cluster.LOM
 		// init-time
-		ini             InitLRU
-		stopCh          chan struct{}
-		joggers         map[string]*lruCtx
-		mpathInfo       *fs.MountpathInfo
-		contentType     string
-		bck             cmn.Bck
-		bckTypeDir      string
-		contentResolver fs.ContentResolver
-		config          *cmn.Config
-		throttle        bool
-		aborted         bool
+		ini        InitLRU
+		stopCh     chan struct{}
+		joggers    map[string]*lruCtx
+		mpathInfo  *fs.MountpathInfo
+		bck        cmn.Bck
+		bckTypeDir string
+		config     *cmn.Config
+		throttle   bool
+		aborted    bool
 	}
 
 	Xaction struct {
@@ -96,63 +94,50 @@ func InitAndRun(ini *InitLRU) {
 	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xaction, config.LRU.DontEvictTime)
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
-		if !contentResolver.PermToEvict() {
-			continue
-		}
-		// TODO: extend LRU for other content types
-		if contentType != fs.WorkfileType && contentType != fs.ObjectType {
-			glog.Warningf("Skipping content type %q", contentType)
-			continue
-		}
+	startLRUJoggers := func(provider string) (aborted bool) {
+		joggers := make(map[string]*lruCtx, len(availablePaths))
+		errCh := make(chan struct{}, len(availablePaths))
 
-		// NOTE: the sequence: cloud buckets first, ais buckets second
-		startLRUJoggers := func(provider string) (aborted bool) {
-			joggers := make(map[string]*lruCtx, len(availablePaths))
-			errCh := make(chan struct{}, len(availablePaths))
-
-			for mpath, mpathInfo := range availablePaths {
-				bck := cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
-				joggers[mpath] = newLRU(ini, mpathInfo, contentType, bck, contentResolver, config)
-			}
-			for _, j := range joggers {
-				wg.Add(1)
-				go j.jog(wg, joggers, errCh)
-			}
-			wg.Wait()
-			close(errCh)
-			select {
-			case _, ok := <-errCh:
-				aborted = ok
-			default:
-				break
-			}
-			return
+		for mpath, mpathInfo := range availablePaths {
+			bck := cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
+			joggers[mpath] = newLRU(ini, mpathInfo, bck, config)
 		}
-
-		if config.Cloud.Supported {
-			if aborted := startLRUJoggers(config.Cloud.Provider); aborted {
-				break
-			}
+		for _, j := range joggers {
+			wg.Add(1)
+			go j.jog(wg, joggers, errCh)
 		}
-
-		if aborted := startLRUJoggers(cmn.ProviderAIS); aborted {
+		wg.Wait()
+		close(errCh)
+		select {
+		case _, ok := <-errCh:
+			aborted = ok
+		default:
 			break
 		}
+		return
+	}
+
+	// NOTE: the sequence: cloud buckets first, ais buckets second
+	if config.Cloud.Supported {
+		if aborted := startLRUJoggers(config.Cloud.Provider); aborted {
+			return
+		}
+	}
+
+	if aborted := startLRUJoggers(cmn.ProviderAIS); aborted {
+		return
 	}
 }
 
-func newLRU(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, bck cmn.Bck, contentResolver fs.ContentResolver, config *cmn.Config) *lruCtx {
+func newLRU(ini *InitLRU, mpathInfo *fs.MountpathInfo, bck cmn.Bck, config *cmn.Config) *lruCtx {
 	return &lruCtx{
-		oldWork:         make([]string, 0, 64),
-		misplaced:       make([]*cluster.LOM, 0, 64),
-		ini:             *ini,
-		stopCh:          make(chan struct{}, 1),
-		mpathInfo:       mpathInfo,
-		contentType:     contentType,
-		bck:             bck,
-		contentResolver: contentResolver,
-		config:          config,
+		oldWork:   make([]string, 0, 64),
+		misplaced: make([]*cluster.LOM, 0, 64),
+		ini:       *ini,
+		stopCh:    make(chan struct{}, 1),
+		mpathInfo: mpathInfo,
+		bck:       bck,
+		config:    config,
 	}
 }
 

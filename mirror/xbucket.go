@@ -100,7 +100,7 @@ func (r *xactBckBase) stop() {
 func (j *joggerBckBase) jog() {
 	j.stopCh = cmn.NewStopCh()
 
-	dir := j.mpathInfo.MakePath(fs.ObjectType, j.parent.Bck())
+	dir := j.mpathInfo.MakePathCT(j.parent.Bck(), fs.ObjectType)
 	opts := &fs.Options{
 		Callback: j.walk,
 		Sorted:   false,

@@ -26,8 +26,8 @@ var _ = Describe("LOM Xattributes", func() {
 		localBck = cmn.Bck{Name: bucketLocal, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 	)
 
-	_ = fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	var (
 		copyMpathInfo *fs.MountpathInfo
@@ -61,7 +61,7 @@ var _ = Describe("LOM Xattributes", func() {
 			testObjectName = "xattr-foldr/test-obj.ext"
 
 			// Bucket needs to have checksum enabled
-			localFQN = mix.MakePathCT(fs.ObjectType, localBck, testObjectName)
+			localFQN = mix.MakePathFQN(localBck, fs.ObjectType, testObjectName)
 
 			fqns = []string{
 				copyMpath + "/copy/fqn",

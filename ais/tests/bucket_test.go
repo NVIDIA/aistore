@@ -1151,7 +1151,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 			wg: &sync.WaitGroup{},
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		dstBckName = cmn.Bck{
+		dstBck     = cmn.Bck{
 			Name:     TestBucketName + "_new",
 			Provider: cmn.ProviderAIS,
 		}
@@ -1163,38 +1163,38 @@ func TestRenameEmptyBucket(t *testing.T) {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-	tutils.DestroyBucket(t, m.proxyURL, dstBckName)
+	srcBck := m.bck
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	defer func() {
+		tutils.DestroyBucket(t, m.proxyURL, srcBck)
+		tutils.DestroyBucket(t, m.proxyURL, dstBck)
+	}()
+	tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
 	m.setRandBucketProps()
-	srcProps, err := api.HeadBucket(baseParams, m.bck)
+	srcProps, err := api.HeadBucket(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
 	// Rename it
-	tutils.Logf("rename %s => %s\n", m.bck, dstBckName)
-	err = api.RenameBucket(baseParams, m.bck, dstBckName)
+	tutils.Logf("rename %s => %s\n", srcBck, dstBck)
+	err = api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.GetBucketNames(baseParams, m.bck)
+	names, err := api.GetBucketNames(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
-	exists := cmn.StringInSlice(dstBckName.Name, names.AIS)
+	exists := cmn.StringInSlice(dstBck.Name, names.AIS)
 	if !exists {
 		t.Error("new bucket not found in buckets list")
 	}
 
 	tutils.Logln("checking bucket props...")
-	dstProps, err := api.HeadBucket(baseParams, dstBckName)
+	dstProps, err := api.HeadBucket(baseParams, dstBck)
 	tassert.CheckFatal(t, err)
 	if !srcProps.Equal(&dstProps) {
 		t.Fatalf("source and destination bucket props do not match: %v - %v", srcProps, dstProps)
 	}
-
-	// Destroy renamed ais bucket
-	tutils.DestroyBucket(t, m.proxyURL, dstBckName)
 }
 
 func TestRenameNonEmptyBucket(t *testing.T) {
@@ -1220,23 +1220,25 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+	srcBck := m.bck
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	defer func() {
+		tutils.DestroyBucket(t, m.proxyURL, srcBck)
+		tutils.DestroyBucket(t, m.proxyURL, dstBck)
+	}()
 	tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
 	m.setRandBucketProps()
-	srcProps, err := api.HeadBucket(baseParams, m.bck)
+	srcProps, err := api.HeadBucket(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
 	// Put some files
 	m.puts()
 
 	// Rename it
-	tutils.Logf("rename %s => %s\n", m.bck, dstBck)
-	srcBck := m.bck
+	tutils.Logf("rename %s => %s\n", srcBck, dstBck)
 	m.bck = dstBck
-	err = api.RenameBucket(baseParams, srcBck, m.bck)
+	err = api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
 	tutils.WaitForBucketXactionToComplete(t, baseParams, srcBck, cmn.ActRenameLB /*kind*/, rebalanceTimeout)

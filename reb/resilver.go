@@ -6,6 +6,7 @@ package reb
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -60,7 +61,7 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 			mpathL string
 			bck    = cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 		)
-		mpathL = mpathInfo.MakePath(fs.ObjectType, bck)
+		mpathL = mpathInfo.MakePathBck(bck)
 		jogger := &localJogger{
 			joggerBase:        joggerBase{m: reb, mpath: mpathL, xreb: &xreb.RebBase, wg: wg},
 			slab:              slab,
@@ -75,9 +76,10 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
 			var (
-				bck = cmn.Bck{Name: bucket, Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
+				mpathC string
+				bck    = cmn.Bck{Name: bucket, Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
 			)
-			mpathC := mpathInfo.MakePath(fs.ObjectType, bck)
+			mpathC = mpathInfo.MakePathBck(bck)
 			jogger := &localJogger{
 				joggerBase:        joggerBase{m: reb, mpath: mpathC, xreb: &xreb.RebBase, wg: wg},
 				slab:              slab,
@@ -135,6 +137,9 @@ func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	lom := &cluster.LOM{T: t, FQN: fqn}
 	if err = lom.Init(cmn.Bck{}); err != nil {
 		return nil
+	}
+	if lom.ParsedFQN.ContentType != fs.ObjectType {
+		return filepath.SkipDir
 	}
 	// optionally, skip those that must be globally rebalanced
 	if rj.skipGlobMisplaced {

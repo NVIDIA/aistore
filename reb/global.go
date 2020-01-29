@@ -222,7 +222,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 			mpathL string
 			bck    = cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 		)
-		mpathL = mpathInfo.MakePath(fs.ObjectType, bck)
+		mpathL = mpathInfo.MakePathBck(bck)
 		if multiplier > 1 {
 			sema = make(chan struct{}, multiplier)
 		}
@@ -239,7 +239,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 				sema chan struct{}
 				bck  = cmn.Bck{Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
 			)
-			mpathC := mpathInfo.MakePath(fs.ObjectType, bck)
+			mpathC := mpathInfo.MakePathBck(bck)
 			if multiplier > 1 {
 				sema = make(chan struct{}, multiplier)
 			}
@@ -585,6 +585,10 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 			glog.Infof("%s, err %s - skipping...", lom, err)
 		}
 		return nil
+	}
+	// TODO: handle rebalance for other content-type
+	if lom.ParsedFQN.ContentType != fs.ObjectType {
+		return filepath.SkipDir
 	}
 
 	// Skip a bucket with EC.Enabled - it is a job for EC rebalance

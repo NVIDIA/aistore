@@ -1488,7 +1488,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		if info == nil {
 			return filepath.SkipDir
 		}
-		if filepath.Base(path) == fileName && strings.Contains(path, filepath.Join(bck.Name, ChecksumWarmValidateStr)) {
+		if strings.HasSuffix(path, filepath.Join(ChecksumWarmValidateStr, fileName)) && strings.Contains(path, bck.Name) {
 			fqn = path
 		}
 		return nil
@@ -1645,7 +1645,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, fileName stri
 	offset, length, expectedLength int64, checkEntireObjCksum bool, checkDir string) {
 	var fqn string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if filepath.Base(path) == fileName && strings.Contains(path, filepath.Join(bck.Name, checkDir)) {
+		if strings.HasSuffix(path, filepath.Join(checkDir, fileName)) && strings.Contains(path, bck.Name) {
 			fqn = path
 		}
 		return nil

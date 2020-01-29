@@ -19,7 +19,7 @@ import (
 // aka highest random weight (HRW)
 
 var (
-	errNoTargets = errors.New("no targets registered in the cluster")
+	ErrNoTargets = errors.New("no targets registered in the cluster")
 )
 
 type tsi struct {
@@ -42,7 +42,7 @@ func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
 		}
 	}
 	if si == nil {
-		err = errNoTargets
+		err = ErrNoTargets
 	}
 	return
 }
@@ -113,7 +113,7 @@ func HrwTargetTask(taskID uint64, smap *Smap) (si *Snode, err error) {
 		}
 	}
 	if si == nil {
-		err = errNoTargets
+		err = ErrNoTargets
 	}
 	return
 }

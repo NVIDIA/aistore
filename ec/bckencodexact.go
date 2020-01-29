@@ -89,7 +89,7 @@ func (r *XactBckEncode) init() (int, error) {
 			daemonID:  r.t.Snode().ID(),
 			stopCh:    cmn.NewStopCh(),
 		}
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bck())
+		mpathLC := mpathInfo.MakePathCT(r.Bck(), fs.ObjectType)
 		r.mpathers[mpathLC] = jogger
 	}
 	for _, mpather := range r.mpathers {
@@ -133,7 +133,7 @@ func (r *XactBckEncode) stop() {
 func (j *joggerBckEncode) stop() { j.stopCh.Close() }
 
 func (j *joggerBckEncode) jog() {
-	dir := j.mpathInfo.MakePath(fs.ObjectType, j.parent.Bck())
+	dir := j.mpathInfo.MakePathCT(j.parent.Bck(), fs.ObjectType)
 	opts := &fs.Options{
 		Callback: j.walk,
 		Sorted:   false,
@@ -180,7 +180,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	mdFQN, _, err := cluster.HrwFQN(MetaType, lom.Bck(), lom.Objname)
+	mdFQN, _, err := cluster.HrwFQN(lom.Bck(), MetaType, lom.Objname)
 	if err != nil {
 		glog.Warningf("Metadata FQN generation failed %q: %v", fqn, err)
 		return nil

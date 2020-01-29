@@ -579,7 +579,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 		return err
 	}
 	if md.SliceID != 0 {
-		ctFQN = mpath.MakePathCT(ec.SliceType, hdr.Bck, hdr.ObjName)
+		ctFQN = mpath.MakePathFQN(hdr.Bck, ec.SliceType, hdr.ObjName)
 	} else {
 		lom = &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
 		if err := lom.Init(hdr.Bck); err != nil {
@@ -602,13 +602,13 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 	}
 
 	buffer, slab := reb.t.GetMem2().Alloc()
-	metaFQN := mpath.MakePathCT(ec.MetaType, hdr.Bck, hdr.ObjName)
+	metaFQN := mpath.MakePathFQN(hdr.Bck, ec.MetaType, hdr.ObjName)
 	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.md.Marshal()), buffer, false)
 	if err != nil {
 		slab.Free(buffer)
 		return err
 	}
-	tmpFQN := mpath.MakePathCT(fs.WorkfileType, hdr.Bck, hdr.ObjName)
+	tmpFQN := mpath.MakePathFQN(hdr.Bck, fs.WorkfileType, hdr.ObjName)
 	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, memsys.NewReader(data), buffer, true)
 	if md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
 		err = fmt.Errorf("Mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
@@ -914,20 +914,23 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	md, err := ec.LoadMetadata(fqn)
-	if err != nil {
-		glog.Warningf("Damaged file? Failed to load metadata from %q: %v", fqn, err)
-		return nil
-	}
-
 	ct, err := cluster.NewCTFromFQN(fqn, reb.t.GetBowner())
 	if err != nil {
 		return nil
+	}
+	if ct.ContentType() != ec.MetaType {
+		return filepath.SkipDir
 	}
 	// do not touch directories for buckets with EC disabled (for now)
 	// TODO: what to do if we found metafile on a bucket with EC disabled?
 	if !ct.Bprops().EC.Enabled {
 		return filepath.SkipDir
+	}
+
+	md, err := ec.LoadMetadata(fqn)
+	if err != nil {
+		glog.Warningf("Damaged file? Failed to load metadata from %q: %v", fqn, err)
+		return nil
 	}
 
 	// generate CT path in the same mpath that metadata is, and detect CT
@@ -947,9 +950,9 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 	// calculate correct FQN
 	var hrwFQN string
 	if isReplica {
-		hrwFQN, _, err = cluster.HrwFQN(fs.ObjectType, ct.Bck(), ct.ObjName())
+		hrwFQN, _, err = cluster.HrwFQN(ct.Bck(), fs.ObjectType, ct.ObjName())
 	} else {
-		hrwFQN, _, err = cluster.HrwFQN(ec.SliceType, ct.Bck(), ct.ObjName())
+		hrwFQN, _, err = cluster.HrwFQN(ct.Bck(), ec.SliceType, ct.ObjName())
 	}
 	if err != nil {
 		return err
@@ -1010,7 +1013,7 @@ func (reb *Manager) runEC() {
 
 	for _, mpathInfo := range availablePaths {
 		bck := cmn.Bck{Name: reb.xreb.Bck().Name, Provider: cmn.ProviderAIS, Ns: reb.xreb.Bck().Ns}
-		mpath = mpathInfo.MakePath(ec.MetaType, bck)
+		mpath = mpathInfo.MakePathBck(bck)
 		wg.Add(1)
 		go reb.jogEC(mpath, &wg)
 	}
@@ -1018,7 +1021,7 @@ func (reb *Manager) runEC() {
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
 			bck := cmn.Bck{Name: reb.xreb.Bck().Name, Provider: cfg.Cloud.Provider, Ns: reb.xreb.Bck().Ns}
-			mpath = mpathInfo.MakePath(ec.MetaType, bck)
+			mpath = mpathInfo.MakePathBck(bck)
 			wg.Add(1)
 			go reb.jogEC(mpath, &wg)
 		}
@@ -1150,8 +1153,8 @@ func (reb *Manager) rebalanceLocal() error {
 			return err
 		}
 
-		metaSrcFQN := mpathSrc.MpathInfo.MakePathCT(ec.MetaType, mpathSrc.Bck, mpathSrc.ObjName)
-		metaDstFQN := mpathDst.MpathInfo.MakePathCT(ec.MetaType, mpathDst.Bck, mpathDst.ObjName)
+		metaSrcFQN := mpathSrc.MpathInfo.MakePathFQN(mpathSrc.Bck, ec.MetaType, mpathSrc.ObjName)
+		metaDstFQN := mpathDst.MpathInfo.MakePathFQN(mpathDst.Bck, ec.MetaType, mpathDst.ObjName)
 		_, _, err = cmn.CopyFile(metaSrcFQN, metaDstFQN, buf, false)
 		if err != nil {
 			return err
@@ -2092,7 +2095,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 
 	lom.SetSize(obj.objSize)
 	lom.SetCksum(cksum)
-	metaFQN := lom.ParsedFQN.MpathInfo.MakePathCT(ec.MetaType, obj.bck, obj.objName)
+	metaFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(obj.bck, ec.MetaType, obj.objName)
 	metaBuf := cmn.MustMarshal(&objMD)
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
 		glog.Error(err)

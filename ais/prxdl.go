@@ -84,6 +84,9 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, body 
 func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, msg *cmn.DlAdminBody) ([]byte, int, error) {
 	body := cmn.MustMarshal(msg)
 	responses := p.broadcastDownloadRequest(method, path, body, url.Values{})
+	if len(responses) == 0 {
+		return nil, http.StatusInternalServerError, cluster.ErrNoTargets
+	}
 
 	notFoundCnt := 0
 	errs := make([]dlResponse, 0, 10) // errors other than than 404 (not found)

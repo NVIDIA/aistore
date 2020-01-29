@@ -26,7 +26,7 @@ import (
 
 func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh chan struct{}) {
 	defer wg.Done()
-	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.bck)
+	lctx.bckTypeDir = lctx.mpathInfo.MakePathBck(lctx.bck)
 	if err := lctx.evictSize(); err != nil {
 		return
 	}
@@ -75,22 +75,27 @@ func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 	var (
 		h = lctx.heap
 	)
-	// workfiles: remove old or do nothing
-	if lctx.contentType == fs.WorkfileType {
-		_, base := filepath.Split(fqn)
-		_, old, ok := lctx.contentResolver.ParseUniqueFQN(base)
-		if ok && old {
-			lctx.oldWork = append(lctx.oldWork, fqn)
-		}
-		return nil
-	}
-	cmn.Assert(lctx.contentType == fs.ObjectType) // see also lrumain.go
 
 	lom := &cluster.LOM{T: lctx.ini.T, FQN: fqn}
 	err := lom.Init(lctx.bck, lctx.config)
 	if err != nil {
 		return nil
 	}
+
+	// workfiles: remove old or do nothing
+	if lom.ParsedFQN.ContentType == fs.WorkfileType {
+		_, base := filepath.Split(fqn)
+		contentResolver := fs.CSM.RegisteredContentTypes[fs.WorkfileType]
+		_, old, ok := contentResolver.ParseUniqueFQN(base)
+		if ok && old {
+			lctx.oldWork = append(lctx.oldWork, fqn)
+		}
+		return nil
+	} else if lom.ParsedFQN.ContentType != fs.ObjectType {
+		// TODO: extend LRU for other content types
+		return filepath.SkipDir
+	}
+
 	// LRUEnabled is set by lom.Init(), no need to make FS call in Load if not enabled
 	if !lom.LRUEnabled() {
 		return nil

@@ -49,8 +49,8 @@ var (
 	mm       *memsys.MMSA
 	once     sync.Once
 	initOnce = func() {
-		fs.CSM.RegisterFileType(filetype.DSortFileType, &filetype.DSortFile{})
-		fs.CSM.RegisterFileType(filetype.DSortWorkfileType, &filetype.DSortFile{})
+		fs.CSM.RegisterContentType(filetype.DSortFileType, &filetype.DSortFile{})
+		fs.CSM.RegisterContentType(filetype.DSortWorkfileType, &filetype.DSortFile{})
 
 		mm = &memsys.MMSA{
 			Name:     cmn.DSortName + ".MMSA",

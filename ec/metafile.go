@@ -70,7 +70,7 @@ func StringToMeta(s string) (*Metadata, error) {
 
 // ObjectMetadata returns metadata for an object or its slice if any exists
 func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
-	fqn, _, err := cluster.HrwFQN(MetaType, bck, objName)
+	fqn, _, err := cluster.HrwFQN(bck, MetaType, objName)
 	if err != nil {
 		return nil, err
 	}

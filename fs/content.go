@@ -30,8 +30,10 @@ import (
  */
 
 const (
-	ObjectType   = "obj"
-	WorkfileType = "work"
+	contentTypeLen = 2
+
+	ObjectType   = "ob"
+	WorkfileType = "wk"
 )
 
 type (
@@ -64,31 +66,25 @@ type (
 	}
 )
 
-// RegisterFileType registers new object and workfile type with given content resolver.
+// RegisterContentType registers new object and workfile type with given content resolver.
 //
 // NOTE: fileType should not contain dot since it is separator for additional
 // info and parsing can fail.
 //
 // NOTE: FIXME: All registration must happen at the startup, otherwise panic can
 // be expected.
-func (f *ContentSpecMgr) RegisterFileType(contentType string, spec ContentResolver) error {
-	if strings.Contains(contentType, "/") {
-		return fmt.Errorf("file type %s should not contain dot '.'", contentType)
+func (f *ContentSpecMgr) RegisterContentType(contentType string, spec ContentResolver) error {
+	if strings.ContainsRune(contentType, filepath.Separator) {
+		return fmt.Errorf("content type %s cannot contain dot '.'", contentType)
+	}
+	if len(contentType) != contentTypeLen {
+		return fmt.Errorf("content type %s must have length %d", contentType, contentTypeLen)
 	}
 
 	if _, ok := f.RegisteredContentTypes[contentType]; ok {
-		return fmt.Errorf("file type %s is already registered", contentType)
+		return fmt.Errorf("content type %s is already registered", contentType)
 	}
 	f.RegisteredContentTypes[contentType] = spec
-
-	// Create type subfolders (ec, obj, work, dsort) for each mountpath
-	available, _ := Mountpaths.Get()
-	for mpath := range available {
-		if err := cmn.CreateDir(filepath.Join(mpath, contentType)); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -104,8 +100,8 @@ func (f *ContentSpecMgr) GenContentParsedFQN(parsedFQN ParsedFQN, contentType, p
 	spec := f.RegisteredContentTypes[contentType]
 	fqn = f.FQN(
 		parsedFQN.MpathInfo,
-		contentType,
 		parsedFQN.Bck,
+		contentType,
 		spec.GenUniqueFQN(parsedFQN.ObjName, prefix))
 	return
 }
@@ -135,11 +131,8 @@ func (f *ContentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 	return
 }
 
-func (f *ContentSpecMgr) FQN(mi *MountpathInfo, contentType string, bck cmn.Bck, objName string) (fqn string) {
-	if _, ok := f.RegisteredContentTypes[contentType]; !ok {
-		cmn.AssertMsg(false, contentType)
-	}
-	return mi.MakePathCT(contentType, bck, objName)
+func (f *ContentSpecMgr) FQN(mi *MountpathInfo, bck cmn.Bck, contentType, objName string) (fqn string) {
+	return mi.MakePathFQN(bck, contentType, objName)
 }
 
 func (f *ContentSpecMgr) PermToEvict(fqn string) (ok, isOld bool) {

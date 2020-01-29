@@ -208,7 +208,7 @@ func (tctx *testContext) setup() {
 	err = fs.Mountpaths.Add(testDir)
 	Expect(err).NotTo(HaveOccurred())
 
-	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
+	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 
 	config := cmn.GCO.BeginUpdate()
 	config.Net.UseIntraControl = false

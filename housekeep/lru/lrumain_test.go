@@ -101,8 +101,8 @@ func createAndAddMountpath(path string) {
 	fs.InitMountedFS()
 	fs.Mountpaths.Add(path)
 
-	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
-	fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
+	fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 }
 
 func getRandomFileName(fileCounter int) string {
@@ -153,7 +153,7 @@ var _ = Describe("LRU tests", func() {
 
 			mpaths, _ := fs.Mountpaths.Get()
 			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-			filesPath = mpaths[basePath].MakePath(fs.ObjectType, bck)
+			filesPath = mpaths[basePath].MakePathCT(bck, fs.ObjectType)
 			cmn.CreateDir(filesPath)
 		})
 
