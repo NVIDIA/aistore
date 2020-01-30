@@ -185,14 +185,22 @@ type (
 
 	// CT destination (to use later for retransmitting lost CTs)
 	retransmitCT struct {
-		daemonID string
-		header   transport.Header
+		bck         cmn.Bck
+		objName     string
+		sliceID     int16
+		daemonID    string           // destination
+		header      transport.Header // original transport header copy
+		fqn         string           // for sending CT from local drives
+		sgl         *memsys.SGL      // CT was rebuilt and it is in-memory one
+		sliceOffset int64            // slice offset for data slice
+		sliceSize   int64            // slice data size for data slice
+		slicePad    int64            // slice padding size for data slice
 	}
 
 	// a list of CTs waiting for receive acknowledge from remote targets
 	ackCT struct {
 		mtx sync.Mutex
-		ct  map[string]*retransmitCT
+		ct  []*retransmitCT
 	}
 
 	// Callback is called if a target did not report that it is in `stage` or
@@ -232,24 +240,13 @@ type (
 )
 
 var (
-	ecPadding = make([]byte, 256) // more than enough for max number of slices
+	ecPadding    = make([]byte, 256) // more than enough for max number of slices
+	ErrorAborted = errors.New("Aborted")
 )
 
-// Generate unique ID for an object
+// Generate unique ID for an object (all its slices gets the same uid)
 func uniqueWaitID(bck cmn.Bck, objName string) string {
-	return fmt.Sprintf("%s#%s#%s#%s", bck.Name, bck.Provider, bck.Ns, objName)
-}
-
-// Generate unique ID for a CT (id is a CT ordinal number).
-// The combination of id and daemonID is unique as a target can contain
-// only one item (either replica or slice)
-func ctUID(id int, daemonID string) string {
-	return fmt.Sprintf("@%d/%s", id, daemonID)
-}
-
-// Generate unique ID for a CT acknowledge.
-func ackID(bck cmn.Bck, objName, ctUID string) string {
-	return fmt.Sprintf("%s#%s#%s#%s#%s", bck.Name, bck.Provider, bck.Ns, objName, ctUID)
+	return fmt.Sprintf("%s/%s", bck, objName)
 }
 
 //
@@ -315,6 +312,73 @@ func (so *rebObject) emptyTargets(skip *cluster.Snode) cluster.Nodes {
 	return freeTargets
 }
 
+func (rt *retransmitCT) equal(rhs *retransmitCT) bool {
+	return rt.sliceID == rhs.sliceID &&
+		rt.objName == rhs.objName &&
+		rt.daemonID == rhs.daemonID &&
+		rt.bck.Equal(rhs.bck)
+}
+
+func (ack *ackCT) add(rt *retransmitCT) {
+	cmn.Assert(rt.objName != "" && rt.bck.Name != "")
+	ack.mtx.Lock()
+	ack.ct = append(ack.ct, rt)
+	ack.mtx.Unlock()
+}
+
+// Linear search is sufficient at this moment: ackCT holds only ACKs for the
+// current batch that is 8. Even if everything is broken an object is
+// repairable only if there are at least `Data` slices exist.
+// So, at most ackCT holds <number of objects> * <number of parity slices>.
+// Even for 10 parity slices it makes only 80 items in array at max.
+func (ack *ackCT) remove(rt *retransmitCT) {
+	ack.mtx.Lock()
+	for idx, c := range ack.ct {
+		if !rt.equal(c) {
+			continue
+		}
+		l := len(ack.ct) - 1
+		if idx != l {
+			ack.ct[idx] = ack.ct[l]
+		}
+		ack.ct = ack.ct[:l]
+		break
+	}
+	ack.mtx.Unlock()
+}
+
+// Removes all waiting ACKs for the object. Used after sending slices
+// failed, so no ACK would be sent by a destination
+func (ack *ackCT) removeObject(bck cmn.Bck, objName string) {
+	ack.mtx.Lock()
+	l := len(ack.ct)
+	for idx := 0; idx < l; {
+		if ack.ct[idx].objName != objName || !ack.ct[idx].bck.Equal(bck) {
+			idx++
+			continue
+		}
+		l--
+		ack.ct[idx] = ack.ct[l]
+		ack.ct = ack.ct[:l]
+	}
+	ack.mtx.Unlock()
+}
+
+// Returns the number of ACKs that the node have not received yet
+func (ack *ackCT) waiting() int {
+	ack.mtx.Lock()
+	cnt := len(ack.ct)
+	ack.mtx.Unlock()
+	return cnt
+}
+
+// Keep allocated capacity for the next batch
+func (ack *ackCT) clear() {
+	ack.mtx.Lock()
+	ack.ct = ack.ct[:0]
+	ack.mtx.Unlock()
+}
+
 //
 //  Rebalance result methods
 //
@@ -378,7 +442,7 @@ func newECData(t cluster.Target) *ecData {
 		waiter:       newWaiter(t.GetMMSA()),
 		cts:          make(ctList),
 		localActions: make([]*rebCT, 0),
-		ackCTs:       ackCT{ct: make(map[string]*retransmitCT)},
+		ackCTs:       ackCT{ct: make([]*retransmitCT, 0)},
 	}
 }
 
@@ -456,26 +520,17 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 		return err
 	}
 
-	// temporary list of UIDs for proper cleanup if Send fails
-	rebUIDs := make([]string, 0, len(targets))
 	for _, tgt := range targets {
-		dest := &retransmitCT{daemonID: tgt.ID(), header: hdr}
-		ctUID := ctUID(int(ct.SliceID), tgt.ID())
-		uid := ackID(ct.Bck, ct.Objname, ctUID)
-		reb.ec.ackCTs.mtx.Lock()
-		reb.ec.ackCTs.ct[uid] = dest
-		reb.ec.ackCTs.mtx.Unlock()
-		rebUIDs = append(rebUIDs, uid)
+		dest := &retransmitCT{
+			bck: ct.Bck, objName: ct.Objname, sliceID: ct.SliceID,
+			daemonID: tgt.ID(), header: hdr, fqn: ct.hrwFQN}
+		reb.ec.ackCTs.add(dest)
 	}
 	reb.ec.onAir.Inc()
 	if err := reb.ec.data.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, targets...); err != nil {
 		reb.ec.onAir.Dec()
 		fh.Close()
-		reb.ec.ackCTs.mtx.Lock()
-		for _, uid := range rebUIDs {
-			delete(reb.ec.ackCTs.ct, uid)
-		}
-		reb.ec.ackCTs.mtx.Unlock()
+		reb.ec.ackCTs.removeObject(ct.Bck, ct.Objname)
 		return fmt.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].ID(), err)
 	}
 	reb.statRunner.AddMany(
@@ -495,7 +550,7 @@ func (reb *Manager) transportECCB(_ transport.Header, reader io.ReadCloser, _ un
 // fixed prior to sending.
 // Use the function to send only slices (not for replicas/full object)
 func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
-	ct *rebCT, sliceID int, xxhash string, target *cluster.Snode) error {
+	ct *rebCT, sliceID int, xxhash string, target *cluster.Snode, rt *retransmitCT) error {
 	cmn.AssertMsg(ct.meta != nil, ct.Objname)
 	newMeta := *ct.meta // copy meta (it does not contain pointers)
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
@@ -523,19 +578,15 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 		hdr.ObjAttrs.CksumType = cmn.ChecksumXXHash
 	}
 
-	sliceUID := ctUID(sliceID, target.ID())
-	uid := ackID(ct.Bck, ct.Objname, sliceUID)
-	dest := &retransmitCT{daemonID: target.ID(), header: hdr}
-	reb.ec.ackCTs.mtx.Lock()
-	reb.ec.ackCTs.ct[uid] = dest
-	reb.ec.ackCTs.mtx.Unlock()
+	cmn.Assert(rt != nil)
+	rt.daemonID = target.ID()
+	rt.header = hdr
+	reb.ec.ackCTs.add(rt)
 
 	reb.ec.onAir.Inc()
 	if err := reb.ec.data.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
 		reb.ec.onAir.Dec()
-		reb.ec.ackCTs.mtx.Lock()
-		delete(reb.ec.ackCTs.ct, uid)
-		reb.ec.ackCTs.mtx.Unlock()
+		reb.ec.ackCTs.remove(rt)
 		return fmt.Errorf("Failed to send slices to node %s: %v", target.Name(), err)
 	}
 
@@ -692,6 +743,9 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	packer.WriteAny(ack)
 	hdr.Opaque = packer.Bytes()
 	hdr.ObjAttrs.Size = 0
+	if bool(glog.FastV(4, glog.SmoduleReb)) {
+		glog.Infof("Sending ACK for %s/%s to %s", hdr.Bck, hdr.ObjName, tsi.ID())
+	}
 	if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
 		glog.Error(err)
 	}
@@ -1429,7 +1483,7 @@ func (reb *Manager) allCTReceived(_ *globArgs) bool {
 		batchCurr := int(reb.stages.currBatch.Load())
 		for j := 0; j+batchCurr < len(reb.ec.broken) && j < ecRebBatchSize; j++ {
 			o := reb.ec.broken[j+batchCurr]
-			if uid == uniqueWaitID(o.bck, o.objName) {
+			if uid == o.uid {
 				obj = o
 				break
 			}
@@ -1608,11 +1662,7 @@ func (reb *Manager) rebalanceObject(md *globArgs, obj *rebObject) (err error) {
 func (reb *Manager) cleanupBatch() {
 	reb.ec.waiter.cleanupBatch(reb.ec.broken, int(reb.stages.currBatch.Load()))
 	reb.releaseSGLs(reb.ec.broken)
-	reb.ec.ackCTs.mtx.Lock()
-	for id := range reb.ec.ackCTs.ct {
-		delete(reb.ec.ackCTs.ct, id)
-	}
-	reb.ec.ackCTs.mtx.Unlock()
+	reb.ec.ackCTs.clear()
 }
 
 // Wait for all targets to finish the current batch and then free allocated resources
@@ -1621,79 +1671,92 @@ func (reb *Manager) finalizeBatch(md *globArgs) error {
 	maxWait := md.config.Rebalance.Quiesce
 	if aborted := reb.waitQuiesce(md, maxWait, reb.allCTReceived); aborted {
 		reb.ec.waiter.waitFor.Store(0)
-		return errors.New("Aborted")
+		return ErrorAborted
 	}
 	// wait until all rebiult slices are sent
 	reb.waitECAck(md)
 
 	// mark batch done and notify other targets
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s batch %d done", reb.t.Snode().Name(), reb.stages.currBatch.Load())
+		glog.Infof("%s batch %d done. Wait cluster-wide quiescence",
+			reb.t.Snode().Name(), reb.stages.currBatch.Load())
 	}
-	reb.changeStage(rebStageECBatch, reb.stages.currBatch.Load())
 
+	reb.changeStage(rebStageECBatch, reb.stages.currBatch.Load())
 	// wait for all targets to finish sending/receiving
-	if aborted := reb.waitQuiesce(md, maxWait, reb.allNodesCompletedBatch); aborted {
+	if bool(glog.FastV(4, glog.SmoduleReb)) {
+		glog.Infof("%s waiting for ALL batch %d DONE", reb.t.Snode().ID(), reb.stages.currBatch.Load())
+	}
+	if aborted := reb.waitEvent(md, reb.allNodesCompletedBatch); aborted {
 		reb.ec.waiter.waitFor.Store(0)
-		return errors.New("Aborted")
+		return ErrorAborted
 	}
 
 	return nil
 }
 
-// Check the list of sent CTs and resent ones that did not
-// receive and acknowledge from a destination target.
+func (reb *Manager) tryRetransmit(md *globArgs, ct *retransmitCT,
+	wg *sync.WaitGroup, cnt *atomic.Int32) {
+	defer wg.Done()
+	si := md.smap.Tmap[ct.daemonID]
+	_, err := ec.RequestECMeta(ct.header.Bck, ct.header.ObjName, si)
+	if err == nil {
+		// Destination got new CT, but failed to send - cleanup ACK
+		if bool(glog.FastV(4, glog.SmoduleReb)) {
+			glog.Infof("%s Did not receive ACK %s/%s but the data transferred. Cleanup ACK",
+				reb.t.Snode().ID(), ct.header.Bck, ct.header.ObjName)
+		}
+		reb.ec.ackCTs.remove(ct)
+		return
+	}
+
+	// Destination still waits for the data, resend
+	glog.Warningf("Did not receive ACK from %s for %s/%s. Retransmit",
+		ct.daemonID, ct.header.Bck, ct.header.ObjName)
+	reb.resendCT(md, ct)
+
+	cnt.Inc()
+	reb.statRunner.AddMany(
+		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
+		stats.NamedVal64{Name: stats.TxRebSize, Value: ct.header.ObjAttrs.Size},
+	)
+}
+
+// Check the list of sent CTs and resent ones that have not been responded.
+// All targets are checked in parallel for better performance
 // Returns the number of resent CTs
-func (reb *Manager) retransmitEC(md *globArgs) (cnt int) {
+func (reb *Manager) retransmitEC(md *globArgs) int {
+	var (
+		counter = atomic.NewInt32(0)
+		wg      = &sync.WaitGroup{}
+	)
+	// Note on intended "double" `ackCTs` lock: it is locked for a short
+	// time while the loop is creating goroutines. And if a goroutine manages
+	// to send request and receive respond or resend the whole object before
+	// this loop finishes, that goroutine will wait on its internal lock
+	// until this loop completes before removing ACK from the list.
 	reb.ec.ackCTs.mtx.Lock()
-	defer reb.ec.ackCTs.mtx.Unlock()
-	if len(reb.ec.ackCTs.ct) == 0 {
+	for _, dest := range reb.ec.ackCTs.ct {
+		if reb.xreb.Aborted() {
+			break
+		}
+		wg.Add(1)
+		go reb.tryRetransmit(md, dest, wg, counter)
+	}
+	reb.ec.ackCTs.mtx.Unlock()
+	wg.Wait()
+
+	if reb.xreb.Aborted() {
 		return 0
 	}
-
-	for id, dest := range reb.ec.ackCTs.ct {
-		if reb.xreb.Aborted() {
-			return 0
-		}
-		si, ok := md.smap.Tmap[dest.daemonID]
-		if !ok {
-			glog.Errorf("Target %s not found in smap", dest.daemonID)
-			continue
-		}
-
-		_, err := ec.RequestECMeta(dest.header.Bck, dest.header.ObjName, si)
-		if err == nil {
-			// the destination got new slice/replica, but failed to send
-			// ACK, cleanup ACK wait right now
-			delete(reb.ec.ackCTs.ct, id)
-			continue
-		}
-
-		// destination still waits for the data, resend
-		glog.Errorf("Did not receive ACK from %s for %s/%s. Retransmit",
-			dest.daemonID, dest.header.Bck, dest.header.ObjName)
-		// TODO: resend the slice/replica with s.data.SendV
-
-		cnt++
-		// update stats with retransmitted data
-		delete(reb.ec.ackCTs.ct, id)
-		reb.statRunner.AddMany(
-			stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
-			stats.NamedVal64{Name: stats.TxRebSize, Value: dest.header.ObjAttrs.Size},
-		)
-	}
-
-	return cnt
+	return int(counter.Load())
 }
 
 func (reb *Manager) allAckReceived(_ *globArgs) bool {
 	if reb.xreb.Aborted() {
 		return false
 	}
-	reb.ec.ackCTs.mtx.Lock()
-	cnt := len(reb.ec.ackCTs.ct)
-	reb.ec.ackCTs.mtx.Unlock()
-	return cnt == 0
+	return reb.ec.ackCTs.waiting() == 0
 }
 
 func (reb *Manager) waitECAck(md *globArgs) {
@@ -1710,10 +1773,14 @@ func (reb *Manager) waitECAck(md *globArgs) {
 			return
 		}
 	}
+	// short wait for cluster-wide quiescence
+	if aborted := reb.waitQuiesce(md, sleep, reb.nodesQuiescent); aborted {
+		return
+	}
 
-	// ignore erros and continue
+	// now check that all ACKs received after quiescent state
 	maxWait := md.config.Rebalance.Quiesce
-	if aborted := reb.waitQuiesce(md, maxWait, reb.allAckReceived); aborted {
+	if aborted := reb.waitEvent(md, reb.allAckReceived, maxWait); aborted {
 		return
 	}
 	maxwt := md.config.Rebalance.DestRetryTime
@@ -1730,7 +1797,22 @@ func (reb *Manager) waitECAck(md *globArgs) {
 			return
 		}
 		curwt += sleep
+		for reb.ec.onAir.Load() > 0 {
+			// `retransmit` has resent some CTs, so we have to wait for
+			// transfer to finish, and then reset the time counter.
+			// Time counter does not increase while waiting.
+			if reb.xreb.AbortedAfter(sleep) {
+				reb.ec.onAir.Store(0)
+				glog.Infof("%s: abrt", loghdr)
+				return
+			}
+			curwt = 0
+		}
 		glog.Warningf("%s: retransmitted %d, more wack...", loghdr, cnt)
+	}
+	// short wait for cluster-wide quiescence after anything retransmitted
+	if aborted := reb.waitQuiesce(md, sleep, reb.nodesQuiescent); aborted {
+		return
 	}
 }
 
@@ -1739,7 +1821,7 @@ func (reb *Manager) rebalanceBatch(md *globArgs, batchCurr int64) error {
 	batchEnd := cmn.Min(int(batchCurr)+ecRebBatchSize, len(reb.ec.broken))
 	for objIdx := int(batchCurr); objIdx < batchEnd; objIdx++ {
 		if reb.xreb.Aborted() {
-			return fmt.Errorf("Aborted")
+			return ErrorAborted
 		}
 
 		obj := reb.ec.broken[objIdx]
@@ -1771,8 +1853,6 @@ func (reb *Manager) rebalanceGlobal(md *globArgs) (err error) {
 			return err
 		}
 
-		reb.waitECAck(md)
-		reb.stages.stage.Store(rebStageECBatch)
 		err = reb.finalizeBatch(md)
 		reb.cleanupBatch()
 		if err != nil {
@@ -1874,7 +1954,19 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
 			reader.Open()
-			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
+			dataSize := obj.sliceSize
+			sliceIdx := idx - 1
+			offset := int64(sliceIdx) * obj.sliceSize
+			if obj.sliceSize*int64(sliceIdx+1) > obj.objSize {
+				dataSize = obj.objSize - obj.sliceSize*(int64(sliceIdx))
+			}
+			padSize := obj.sliceSize - dataSize
+			dest := &retransmitCT{
+				objName: obj.objName, bck: obj.bck,
+				fqn: slice.hrwFQN, sliceOffset: offset, sliceSize: dataSize,
+				slicePad: padSize, sliceID: int16(idx),
+			}
+			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
 				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName, si.Name())
 				// continue to fix as many as possible
 				continue
@@ -1889,7 +1981,11 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
 			reader := memsys.NewReader(obj.rebuildSGLs[sglIdx])
-			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
+			dest := &retransmitCT{
+				objName: obj.objName, bck: obj.bck,
+				sliceID: int16(idx), sgl: obj.rebuildSGLs[sglIdx],
+			}
+			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
 				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName, si.Name())
 				// continue to fix as many as possible
 				continue
@@ -1979,7 +2075,12 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
 			reader.Open()
-			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
+			dest := &retransmitCT{
+				bck: obj.bck, objName: obj.objName,
+				sgl: slice.sgl, sliceOffset: int64(idx-1) * obj.sliceSize,
+				sliceSize: obj.sliceSize, sliceID: int16(idx),
+			}
+			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
 				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName, si.Name())
 				// keep on working to restore as many as possible
 				continue
@@ -1994,7 +2095,11 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
 			reader := memsys.NewReader(obj.rebuildSGLs[sglIdx])
-			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si); err != nil {
+			dest := &retransmitCT{
+				bck: obj.bck, objName: obj.objName,
+				sgl: obj.rebuildSGLs[sglIdx], sliceID: int16(idx),
+			}
+			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
 				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName, si.Name())
 				// keep on working to restore as many as possible
 				continue
@@ -2155,7 +2260,11 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 			meta:         &sliceMD,
 		}
 
-		if err := reb.sendFromReader(reader, sl, i+1, ckval, si); err != nil {
+		dest := &retransmitCT{
+			bck: obj.bck, objName: obj.objName,
+			sgl: obj.rebuildSGLs[i], sliceID: int16(i + 1),
+		}
+		if err := reb.sendFromReader(reader, sl, i+1, ckval, si, dest); err != nil {
 			return fmt.Errorf("Failed to send slice %d of %s to %s: %v", i, obj.uid, si.Name(), err)
 		}
 	}
@@ -2195,6 +2304,62 @@ func (reb *Manager) initEC(md *globArgs, netd string) {
 		Multiplier: int(md.config.Rebalance.Multiplier),
 	}
 	reb.ec.data = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), client, dataArgs)
+}
+
+// Resends any CTs that was sent to a target but the destination has not
+// received it (no ACK and the destination does not have the CT yet)
+func (reb *Manager) resendCT(md *globArgs, ct *retransmitCT) {
+	var err error
+	si := md.smap.Tmap[ct.daemonID]
+	reb.ec.onAir.Inc()
+	if ct.sgl != nil {
+		trObj := transport.Obj{Hdr: ct.header, Callback: reb.transportECCB}
+		// Resend from memory
+		if ct.sliceSize == 0 {
+			err = reb.ec.data.Send(trObj, memsys.NewReader(ct.sgl), si)
+		} else {
+			reader := memsys.NewSliceReader(ct.sgl, ct.sliceOffset, ct.sliceSize)
+			err = reb.ec.data.Send(trObj, reader, si)
+		}
+		if err != nil {
+			glog.Errorf("[sgl]Failed to retransmit %s/%s to %s: %v",
+				ct.header.Bck.Name, ct.header.ObjName, ct.daemonID, err)
+			reb.ec.onAir.Dec()
+		}
+		return
+	}
+
+	// Resend a file from local drive
+	cmn.Assert(ct.fqn != "")
+	fh, err := cmn.NewFileHandle(ct.fqn)
+	if err != nil {
+		// It was available, where it has gone? Maybe someone deleted the
+		// object in-between. Force clean the ACK and forget
+		reb.ec.onAir.Dec()
+		reb.ec.ackCTs.remove(ct)
+		return
+	}
+	cb := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+		// Reader is a file slice, so transport does not know about
+		// a file opened for it and cannot close it
+		fh.Close()
+		reb.ec.onAir.Dec()
+	}
+	trObj := transport.Obj{Hdr: ct.header, Callback: cb}
+	if ct.sliceSize == 0 {
+		// Entire file
+		err = reb.ec.data.Send(trObj, fh, si)
+	} else {
+		// A slice of a file. Constructor never fails
+		reader, _ := cmn.NewFileSectionHandle(fh, ct.sliceOffset, ct.sliceSize, ct.slicePad)
+		err = reb.ec.data.Send(trObj, reader, si)
+	}
+	if err != nil {
+		glog.Errorf("[disk]Failed to retransmit %s/%s to %s: %v",
+			ct.header.Bck.Name, ct.header.ObjName, ct.daemonID, err)
+		fh.Close()
+		reb.ec.onAir.Dec()
+	}
 }
 
 // Returns XXHash calculated for the reader

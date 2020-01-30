@@ -261,7 +261,7 @@ func (b *DlBody) Validate() error {
 	}
 	if b.Aborted {
 		// used to store abort status in db, should be unset
-		return fmt.Errorf("invalid flag 'aborteded'")
+		return fmt.Errorf("invalid flag 'aborted'")
 	}
 	for _, obj := range b.Objs {
 		if err := obj.Validate(); err != nil {

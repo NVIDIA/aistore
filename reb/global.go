@@ -415,10 +415,36 @@ func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func(md 
 	return aborted
 }
 
+// Wait until cb returns `true` or times out. Waits forever if `maxWait` is
+// omitted. The latter case is useful when it is unclear how much to wait.
+// Return true is xaction was aborted during wait loop.
+func (reb *Manager) waitEvent(md *globArgs, cb func(md *globArgs) bool, maxWait ...time.Duration) bool {
+	var (
+		sleep   = md.config.Timeout.CplaneOperation
+		waited  = time.Duration(0)
+		toWait  = time.Duration(0)
+		aborted = reb.xreb.Aborted()
+	)
+	if len(maxWait) != 0 {
+		toWait = maxWait[0]
+	}
+	for !aborted {
+		if cb(md) {
+			break
+		}
+		aborted = reb.xreb.AbortedAfter(sleep)
+		waited += sleep
+		if toWait > 0 && waited > toWait {
+			break
+		}
+	}
+	return aborted
+}
+
 func (reb *Manager) globalRebFini(md *globArgs) {
 	// 10.5. keep at it... (can't close the streams as long as)
 	maxWait := md.config.Rebalance.Quiesce
-	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuescent)
+	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
 		if err := cmn.RemoveFile(md.pmarker); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(reb.globRebID.Load(), md.smap), md.pmarker, err)

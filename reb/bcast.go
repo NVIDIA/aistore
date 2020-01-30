@@ -464,14 +464,15 @@ func (reb *Manager) waitForPushReqs(md *globArgs, stage uint32, timeout ...time.
 
 // Returns true if all targets in the cluster are quiescent: all
 // transport queues are empty
-func (reb *Manager) nodesQuescent(md *globArgs) bool {
+func (reb *Manager) nodesQuiescent(md *globArgs) bool {
 	quiescent := true
+	locStage := reb.stages.stage.Load()
 	for _, si := range md.smap.Tmap {
 		if si.ID() == reb.t.Snode().ID() && !reb.isQuiescent() {
 			quiescent = false
 			break
 		}
-		status, ok := reb.checkGlobStatus(si, md.smap.Version, rebStageFin, md)
+		status, ok := reb.checkGlobStatus(si, md.smap.Version, locStage, md)
 		if !ok || !status.Quiescent {
 			quiescent = false
 			break

@@ -557,17 +557,14 @@ func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
 		return
 	}
 
-	cid := ctUID(int(ack.sliceID), ack.daemonID)
-	uid := ackID(hdr.Bck, hdr.ObjName, cid)
-	if glog.FastV(5, glog.SmoduleReb) {
+	rt := &retransmitCT{bck: hdr.Bck, objName: hdr.ObjName, sliceID: int16(ack.sliceID), daemonID: ack.daemonID}
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof(
-			"%s: EC ack from %s on %s/%s",
-			reb.t.Snode().Name(), cid, hdr.Bck, hdr.ObjName,
+			"%s: EC ack from %s on %s/%s [%d]",
+			reb.t.Snode().Name(), ack.daemonID, hdr.Bck, hdr.ObjName, ack.sliceID,
 		)
 	}
-	reb.ec.ackCTs.mtx.Lock()
-	delete(reb.ec.ackCTs.ct, uid)
-	reb.ec.ackCTs.mtx.Unlock()
+	reb.ec.ackCTs.remove(rt)
 }
 
 func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Reader, err error) {
