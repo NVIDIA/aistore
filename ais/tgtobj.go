@@ -214,7 +214,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	var (
 		file   *os.File
 		buf    []byte
-		slab   *memsys.Slab2
+		slab   *memsys.Slab
 		reader = poi.r
 	)
 	if daemon.dryRun.disk {
@@ -226,9 +226,9 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	}
 
 	if poi.size == 0 {
-		buf, slab = daemon.mm.AllocDefault()
+		buf, slab = daemon.mm.Alloc()
 	} else {
-		buf, slab = daemon.mm.AllocForSize(poi.size)
+		buf, slab = daemon.mm.Alloc(poi.size)
 	}
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
@@ -574,7 +574,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	var (
 		file    *os.File
 		sgl     *memsys.SGL
-		slab    *memsys.Slab2
+		slab    *memsys.Slab
 		buf     []byte
 		reader  io.Reader
 		hdr     http.Header // if it is http request we will write also header
@@ -660,12 +660,12 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		reader = file
 		if goi.chunked {
 			w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
-			buf, slab = daemon.mm.AllocForSize(goi.lom.Size())
+			buf, slab = daemon.mm.Alloc(goi.lom.Size())
 		} else {
 			hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
 		}
 	} else {
-		buf, slab = daemon.mm.AllocForSize(goi.length)
+		buf, slab = daemon.mm.Alloc(goi.length)
 		reader = io.NewSectionReader(file, goi.offset, goi.length)
 		if cksumRange {
 			var cksumValue string
@@ -745,12 +745,12 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 		// append
 		var (
 			buf  []byte
-			slab *memsys.Slab2
+			slab *memsys.Slab
 		)
 		if aoi.size == 0 {
-			buf, slab = daemon.mm.AllocDefault()
+			buf, slab = daemon.mm.Alloc()
 		} else {
-			buf, slab = daemon.mm.AllocForSize(aoi.size)
+			buf, slab = daemon.mm.Alloc(aoi.size)
 		}
 		_, err = io.CopyBuffer(f, aoi.r, buf)
 

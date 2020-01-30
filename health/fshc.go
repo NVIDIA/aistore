@@ -43,7 +43,7 @@ type (
 
 		// pointers to common data
 		mountpaths *fs.MountedFS
-		mem2       *memsys.Mem2
+		mm         *memsys.MMSA
 
 		// listener is notified in case of a mountpath is disabled
 		dispatcher fspathDispatcher
@@ -57,10 +57,10 @@ type (
 // public API
 //
 
-func NewFSHC(dispatcher fspathDispatcher, mountpaths *fs.MountedFS, mem2 *memsys.Mem2, ctxResolver *fs.ContentSpecMgr) *FSHC {
+func NewFSHC(dispatcher fspathDispatcher, mountpaths *fs.MountedFS, mm *memsys.MMSA, ctxResolver *fs.ContentSpecMgr) *FSHC {
 	return &FSHC{
 		mountpaths:  mountpaths,
-		mem2:        mem2,
+		mm:          mm,
 		stopCh:      make(chan struct{}),
 		fileListCh:  make(chan string, 100),
 		dispatcher:  dispatcher,
@@ -257,7 +257,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 		return 0, 0, false
 	}
 
-	sgl := f.mem2.NewSGL(0)
+	sgl := f.mm.NewSGL(0)
 	defer sgl.Free()
 
 	totalReads, totalWrites := 0, 0

@@ -27,7 +27,7 @@ import (
 // a mountpath putJogger: processes PUT/DEL requests to one mountpath
 type putJogger struct {
 	parent *XactPut
-	slab   *memsys.Slab2
+	slab   *memsys.Slab
 	buffer []byte
 	mpath  string
 
@@ -39,7 +39,7 @@ type putJogger struct {
 
 func (c *putJogger) run() {
 	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
-	c.buffer, c.slab = mm.AllocDefault()
+	c.buffer, c.slab = mm.Alloc()
 
 	for {
 		select {
@@ -243,7 +243,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 // Fills slices with calculated checksums, reports errors to errCh
 func calculateDataSlicesHashes(slices []*slice, wg *sync.WaitGroup, errCh chan error, cksmReaders []io.Reader, sliceSize int64) {
 	defer wg.Done()
-	buf, slab := mm.AllocForSize(sliceSize)
+	buf, slab := mm.Alloc(sliceSize)
 	defer slab.Free(buf)
 	for i, reader := range cksmReaders {
 		cksm, err := cmn.ComputeXXHash(reader, buf)

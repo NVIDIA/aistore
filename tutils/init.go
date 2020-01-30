@@ -47,11 +47,11 @@ var (
 	HTTPClient        *http.Client
 	HTTPClientGetPut  *http.Client
 
-	Mem2 *memsys.Mem2
+	MMSA *memsys.MMSA
 )
 
 func init() {
-	Mem2 = memsys.GMM()
+	MMSA = memsys.DefaultPageMM()
 	HTTPClient = cmn.NewClient(transportArgs)
 
 	transportArgs.WriteBufferSize, transportArgs.ReadBufferSize = 65536, 65536

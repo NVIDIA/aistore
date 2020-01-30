@@ -63,7 +63,7 @@ func Test_Sleep(t *testing.T) {
 		duration = 4 * time.Second
 	}
 
-	mem := &memsys.Mem2{TimeIval: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
+	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
 	err := mem.Init(false /*panicOnErr*/)
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func Test_Sleep(t *testing.T) {
 	}
 	wg.Wait()
 	close(c)
-	mem.Release()
+	mem.Terminate()
 }
 
 func Test_NoSleep(t *testing.T) {
@@ -99,7 +99,7 @@ func Test_NoSleep(t *testing.T) {
 		duration = 4 * time.Second
 	}
 
-	mem := &memsys.Mem2{TimeIval: time.Second * 20, MinPctTotal: 5, Name: "bmem", Debug: verbose}
+	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinPctTotal: 5, Name: "bmem", Debug: verbose}
 	err := mem.Init(false /*panicOnErr*/)
 	if err != nil {
 		t.Fatal(err)
@@ -122,10 +122,10 @@ func Test_NoSleep(t *testing.T) {
 	}
 	wg.Wait()
 	close(c)
-	mem.Release()
+	mem.Terminate()
 }
 
-func printMaxRingLen(mem *memsys.Mem2, c chan struct{}) {
+func printMaxRingLen(mem *memsys.MMSA, c chan struct{}) {
 	for i := 0; i < 100; i++ {
 		select {
 		case <-c:
@@ -138,7 +138,7 @@ func printMaxRingLen(mem *memsys.Mem2, c chan struct{}) {
 	}
 }
 
-func memstress(mem *memsys.Mem2, id int, ttl time.Duration, siz, tot int64, wg *sync.WaitGroup) {
+func memstress(mem *memsys.MMSA, id int, ttl time.Duration, siz, tot int64, wg *sync.WaitGroup) {
 	defer wg.Done()
 	sgls := make([]*memsys.SGL, 0, 128)
 	x := cmn.B2S(siz, 1) + "/" + cmn.B2S(tot, 1)
@@ -171,16 +171,16 @@ func memstress(mem *memsys.Mem2, id int, ttl time.Duration, siz, tot int64, wg *
 	}
 }
 
-func printStats(mem *memsys.Mem2) {
+func printStats(mem *memsys.MMSA) {
 	var (
-		avgHits = make([]float64, memsys.NumSlabs)
+		avgHits = make([]float64, memsys.NumPageSlabs)
 	)
 
 	for {
 		time.Sleep(mem.TimeIval)
 		currStats := mem.GetStats()
 
-		for i := 0; i < memsys.NumSlabs; i++ {
+		for i := 0; i < memsys.NumPageSlabs; i++ {
 			ftot := float64(currStats.Hits[i])
 			if ftot == 0 {
 				continue
@@ -194,8 +194,8 @@ func printStats(mem *memsys.Mem2) {
 		}
 
 		str := ""
-		for i := 0; i < memsys.NumSlabs; i++ {
-			slab, err := mem.GetSlab2(int64(i+1) * cmn.KiB * 4)
+		for i := 0; i < memsys.NumPageSlabs; i++ {
+			slab, err := mem.GetSlab(int64(i+1) * cmn.KiB * 4)
 			if err != nil {
 				fmt.Println(err)
 				return

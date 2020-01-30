@@ -254,7 +254,7 @@ func (r *IntraReq) Unmarshal(b []byte) error {
 }
 
 var (
-	mm           = &memsys.Mem2{Name: "ec", MinPctFree: 10}
+	mm           = &memsys.MMSA{Name: "ec", MinPctFree: 10}
 	slicePadding = make([]byte, 64) // for padding EC slices
 	XactCount    atomic.Int32       // the number of currently active EC xactions
 
@@ -297,7 +297,7 @@ func readFile(lom *cluster.LOM) (sgl *memsys.SGL, err error) {
 	}
 
 	sgl = mm.NewSGL(lom.Size())
-	buf, slab := mm.AllocForSize(cmn.DefaultBufSize)
+	buf, slab := mm.Alloc()
 	_, err = io.CopyBuffer(sgl, f, buf)
 	f.Close()
 	slab.Free(buf)

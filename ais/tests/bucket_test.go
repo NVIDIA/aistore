@@ -506,7 +506,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				defer tutils.DestroyBucket(t, proxyURL, bck)
 			}
 
-			sgl := tutils.Mem2.NewSGL(fileSize)
+			sgl := tutils.MMSA.NewSGL(fileSize)
 			defer sgl.Free()
 			tutils.Logf("Create a list of %d objects\n", numFiles)
 

@@ -143,7 +143,7 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 		err  error
 		seed = time.Now().UnixNano()
 	)
-	slab, err := Mem2.GetSlab2(cmn.KiB * 32)
+	slab, err := MMSA.GetSlab(cmn.KiB * 32)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 
 	var hash string
 	if withHash {
-		buf, slab := Mem2.AllocForSize(cmn.DefaultBufSize)
+		buf, slab := MMSA.Alloc()
 		if _, hash, err = cmn.WriteWithHash(ioutil.Discard, f, buf); err != nil {
 			return nil, err
 		}

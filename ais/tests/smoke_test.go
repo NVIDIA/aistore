@@ -80,7 +80,7 @@ func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objSize int64, ratio f
 
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
-		sgls[i] = tutils.Mem2.NewSGL(objSize)
+		sgls[i] = tutils.MMSA.NewSGL(objSize)
 	}
 	defer func() {
 		for _, sgl := range sgls {

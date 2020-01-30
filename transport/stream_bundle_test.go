@@ -77,7 +77,7 @@ func Test_Bundle(t *testing.T) {
 func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	var (
 		numCompleted atomic.Int64
-		Mem2         = tutils.Mem2
+		MMSA         = tutils.MMSA
 		network      = cmn.NetworkIntraData
 		trname       = "bundle"
 	)
@@ -93,7 +93,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 
 	transport.SetMux(network, mux)
 
-	slab, _ := Mem2.GetSlab2(32 * cmn.KiB)
+	slab, _ := MMSA.GetSlab(32 * cmn.KiB)
 	rbuf := slab.Alloc()
 	defer slab.Free(rbuf)
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
@@ -114,7 +114,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		lsnode         = cluster.Snode{DaemonID: "local"}
 		random         = newRand(time.Now().UnixNano())
 		wbuf           = slab.Alloc()
-		extra          = &transport.Extra{Compression: nvs["compression"], Mem2: Mem2}
+		extra          = &transport.Extra{Compression: nvs["compression"], MMSA: MMSA}
 		size, prevsize int64
 		multiplier     = int(random.Int63()%13) + 4
 		num            int

@@ -131,7 +131,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 }
 
 func (m *ioContext) puts(dontFail ...bool) int {
-	sgl := tutils.Mem2.NewSGL(int64(m.fileSize))
+	sgl := tutils.MMSA.NewSGL(int64(m.fileSize))
 	defer sgl.Free()
 
 	filenameCh := make(chan string, m.num)

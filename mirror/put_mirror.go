@@ -26,7 +26,7 @@ type (
 		mpathers map[string]mpather
 		// init
 		mirror  cmn.MirrorConf
-		slab    *memsys.Slab2
+		slab    *memsys.Slab
 		total   atomic.Int64
 		dropped int64
 	}
@@ -42,7 +42,7 @@ type (
 // public methods
 //
 
-func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPutLRepl, err error) {
+func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err error) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()
 		mpathCount        = len(availablePaths)

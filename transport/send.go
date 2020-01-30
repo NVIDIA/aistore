@@ -95,7 +95,7 @@ type (
 		IdleTimeout time.Duration // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
 		Callback    SendCallback  // typical usage: to free SGLs, close files, etc.
 		Compression string        // see CompressAlways, etc. enum
-		Mem2        *memsys.Mem2  // compression-related buffering
+		MMSA        *memsys.MMSA  // compression-related buffering
 		Config      *cmn.Config
 	}
 	// stream stats
@@ -215,13 +215,13 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 			s.lz4s.s = s
 			s.lz4s.blockMaxSize = config.Compression.BlockMaxSize
 			s.lz4s.frameChecksum = config.Compression.Checksum
-			mem := extra.Mem2
+			mem := extra.MMSA
 			if mem == nil {
-				mem = memsys.GMM()
+				mem = memsys.DefaultPageMM()
 				glog.Warningln("Using global memory manager for streaming inline compression")
 			}
-			if s.lz4s.blockMaxSize >= memsys.MaxSlabSize {
-				s.lz4s.sgl = mem.NewSGL(memsys.MaxSlabSize, memsys.MaxSlabSize)
+			if s.lz4s.blockMaxSize >= memsys.MaxPageSlabSize {
+				s.lz4s.sgl = mem.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
 			} else {
 				s.lz4s.sgl = mem.NewSGL(cmn.KiB*64, cmn.KiB*64)
 			}

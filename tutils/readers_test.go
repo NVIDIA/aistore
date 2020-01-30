@@ -238,7 +238,7 @@ func TestSGReader(t *testing.T) {
 	{
 		// Basic read
 		size := int64(1024)
-		sgl := tutils.Mem2.NewSGL(size)
+		sgl := tutils.MMSA.NewSGL(size)
 		defer sgl.Free()
 
 		r, err := tutils.NewSGReader(sgl, size, true /* withHash */)
@@ -270,7 +270,7 @@ func TestSGReader(t *testing.T) {
 
 	{
 		size := int64(1024)
-		sgl := tutils.Mem2.NewSGL(size)
+		sgl := tutils.MMSA.NewSGL(size)
 		defer sgl.Free()
 
 		r, err := tutils.NewSGReader(sgl, size, true /* withHash */)
@@ -307,7 +307,7 @@ func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
-	sgl := tutils.Mem2.NewSGL(cmn.MiB)
+	sgl := tutils.MMSA.NewSGL(cmn.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -345,7 +345,7 @@ func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
-	sgl := tutils.Mem2.NewSGL(cmn.MiB)
+	sgl := tutils.MMSA.NewSGL(cmn.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {

@@ -37,7 +37,7 @@ const (
 var (
 	_ RecordExtractor = &RecordManager{}
 
-	mem *memsys.Mem2
+	mem *memsys.MMSA
 )
 
 type (
@@ -94,8 +94,8 @@ type (
 )
 
 func init() {
-	mem = &memsys.Mem2{
-		Name: cmn.DSortName + ".Extract.Mem2",
+	mem = &memsys.MMSA{
+		Name: cmn.DSortName + ".Extract.MMSA",
 	}
 	if err := mem.Init(false); err != nil {
 		glog.Error(err)

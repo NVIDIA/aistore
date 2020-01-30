@@ -50,12 +50,12 @@ func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader
 		f.Close()
 	}()
 
-	var slabSize int64 = memsys.MaxSlabSize
+	var slabSize int64 = memsys.MaxPageSlabSize
 	if r.Size() < cmn.MiB {
 		slabSize = 128 * cmn.KiB
 	}
 
-	slab, err := mem.GetSlab2(slabSize)
+	slab, err := mem.GetSlab(slabSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 	defer slab.Free(buf)

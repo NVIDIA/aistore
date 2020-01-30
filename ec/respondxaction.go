@@ -205,7 +205,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 
 		// save slice/object
 		tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
-		buf, slab := mm.AllocDefault()
+		buf, slab := mm.Alloc()
 		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false)
 		// save xattrs only for object replicas (slices have xattrs empty)
 		if err == nil && !iReq.IsSlice {

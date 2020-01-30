@@ -24,7 +24,7 @@ var _ = Describe("ECWaiter", func() {
 			sliceDone    = 2
 			toCleanLastN = 2
 		)
-		wt := newWaiter(memsys.GMM())
+		wt := newWaiter(memsys.DefaultPageMM())
 		// must have more than ecRebBatchSize items
 		objs := []testObject{
 			{bck: cmn.Bck{Name: "bck1", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal}, name: "obj1"},

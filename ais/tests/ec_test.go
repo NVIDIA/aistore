@@ -886,7 +886,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 	err := ecSliceNumInit(t, smap, o)
 	tassert.CheckFatal(t, err)
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	setBucketECProps(t, baseParams, bck, defaultECBckProps(o))
@@ -939,7 +939,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	err := ecSliceNumInit(t, smap, o)
 	tassert.CheckFatal(t, err)
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1020,7 +1020,7 @@ func TestECChecksum(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -1094,7 +1094,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1189,7 +1189,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1334,7 +1334,7 @@ func TestECStress(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -1387,7 +1387,7 @@ func TestECStressManyBuckets(t *testing.T) {
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o1))
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o2))
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -1460,7 +1460,7 @@ func TestECExtraStress(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -1576,7 +1576,7 @@ func TestECXattrs(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -1740,7 +1740,7 @@ func TestECDestroyBucket(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -1843,7 +1843,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	// Encoding will fail if even one is missing, restoring should still work
 	o.dataCnt++
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1956,7 +1956,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	// Encoding will fail if even one is missing, restoring should still work
 	o.dataCnt++
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -2101,7 +2101,7 @@ func TestECEmergencyMpath(t *testing.T) {
 		t.Fatalf("%s requires 2 or more mountpaths", t.Name())
 	}
 
-	sgl := tutils.Mem2.NewSGL(0)
+	sgl := tutils.MMSA.NewSGL(0)
 	defer sgl.Free()
 
 	bckProps := defaultECBckProps(o)
@@ -2569,7 +2569,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 	ldir := filepath.Join(LocalSrcDir, fshcDir)
 	errCh := make(chan error, len(fileList))
 	objsPutCh := make(chan string, len(fileList))
-	sgl := tutils.Mem2.NewSGL(fileSize)
+	sgl := tutils.MMSA.NewSGL(fileSize)
 	defer sgl.Free()
 	tutils.PutObjsFromList(proxyURL, bckReg, ldir, readerType, ecTestDir, fileSize, fileList, errCh, objsPutCh, sgl)
 

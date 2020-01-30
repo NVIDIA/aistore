@@ -59,7 +59,7 @@ type (
 		cli    cliFlags
 		dryRun dryRunConfig
 
-		mm *memsys.Mem2 // gen-purpose system-wide memory manager and slab/SGL allocator (instance, runner)
+		mm *memsys.MMSA // gen-purpose system-wide memory manager and slab/SGL allocator (instance, runner)
 		rg *rungroup
 	}
 
@@ -222,7 +222,7 @@ func aisinit(version, build string) {
 		runmap: make(map[string]cmn.Runner, 8),
 	}
 	// system-wide gen-purpose memory manager and slab/SGL allocator
-	daemon.mm = &memsys.Mem2{Name: "target-mm", MinPctTotal: 4, MinFree: cmn.GiB * 2}
+	daemon.mm = &memsys.MMSA{Name: "target-mm", MinPctTotal: 4, MinFree: cmn.GiB * 2}
 	if err := daemon.mm.Init(false /*panicOnErr*/); err != nil {
 		glog.Error(err)
 	}

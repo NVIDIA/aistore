@@ -46,14 +46,14 @@ const (
 var (
 	ctx dsortContext
 
-	mm       *memsys.Mem2
+	mm       *memsys.MMSA
 	once     sync.Once
 	initOnce = func() {
 		fs.CSM.RegisterFileType(filetype.DSortFileType, &filetype.DSortFile{})
 		fs.CSM.RegisterFileType(filetype.DSortWorkfileType, &filetype.DSortFile{})
 
-		mm = &memsys.Mem2{
-			Name:     cmn.DSortName + ".Mem2",
+		mm = &memsys.MMSA{
+			Name:     cmn.DSortName + ".MMSA",
 			TimeIval: time.Minute * 10,
 		}
 		if err := mm.Init(false); err != nil {
@@ -257,7 +257,7 @@ func (m *Manager) initStreams() error {
 		Extra: &transport.Extra{
 			Compression: cfg.DSort.Compression,
 			Config:      cfg,
-			Mem2:        mm,
+			MMSA:        mm,
 		},
 	}
 	if _, err := transport.Register(respNetwork, trname, m.makeRecvShardFunc()); err != nil {

@@ -295,7 +295,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 		return nil
 	}
 
-	slab, err := lom.T.GetMem2().GetSlab2(xattrBufSize)
+	slab, err := lom.T.GetMem2().GetSlab(xattrBufSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 
@@ -328,7 +328,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 	}
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	buf, slab := lom.T.GetMem2().AllocDefault()
+	buf, slab := lom.T.GetMem2().Alloc()
 	for path, mpathInfo := range availablePaths {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
@@ -586,7 +586,7 @@ func (lom *LOM) computeXXHash(fqn string, size int64) (cksumValue string, err er
 		err = fmt.Errorf("%s, err: %v", fqn, err)
 		return
 	}
-	buf, slab := lom.T.GetMem2().AllocForSize(size)
+	buf, slab := lom.T.GetMem2().Alloc(size)
 	cksumValue, err = cmn.ComputeXXHash(file, buf)
 	file.Close()
 	slab.Free(buf)
@@ -877,7 +877,7 @@ func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
 	return int(evicted.Load()), int(total.Load())
 }
 
-func LomCacheHousekeep(mem *memsys.Mem2, t Target) (housekeep hk.CleanupFunc, initialInterval time.Duration) {
+func LomCacheHousekeep(mem *memsys.MMSA, t Target) (housekeep hk.CleanupFunc, initialInterval time.Duration) {
 	initialInterval = 10 * time.Minute
 	housekeep = func() (d time.Duration) {
 		switch p := mem.MemPressure(); p { // TODO: heap-memory-arbiter (HMA) abstraction TBD

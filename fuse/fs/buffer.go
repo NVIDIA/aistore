@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	maxBlockSize = memsys.MaxSlabSize
-	minBlockSize = cmn.PageSize
+	maxBlockSize = memsys.MaxPageSlabSize
+	minBlockSize = memsys.PageSize
 )
 
 type (
@@ -32,7 +32,7 @@ type (
 	}
 )
 
-// Panics if blockSize has an invalid value, see memsys.(*Mem2).NewSGL
+// Panics if blockSize has an invalid value, see memsys.(*MMSA).NewSGL
 func newBlockBuffer(blockSize int64) *blockBuffer {
 	return &blockBuffer{
 		blockSize: blockSize,

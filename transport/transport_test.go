@@ -62,7 +62,7 @@ ut et voluptates repudiandae sint et molestiae non-recusandae.`
 )
 
 var (
-	Mem2     *memsys.Mem2
+	MMSA     *memsys.MMSA
 	duration time.Duration // test duration
 )
 
@@ -76,7 +76,7 @@ func TestMain(t *testing.M) {
 	if duration, err = time.ParseDuration(d); err != nil {
 		cmn.ExitInfof("Invalid duration %q", d)
 	}
-	Mem2 = memsys.GMM()
+	MMSA = memsys.DefaultPageMM()
 
 	sc := transport.Init()
 	sc.Setname("stream-collector")
@@ -130,7 +130,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	cb := func(transport.Header, io.ReadCloser, unsafe.Pointer, error) {
 		wg.Done()
 	}
-	sgl1 := Mem2.NewSGL(0)
+	sgl1 := MMSA.NewSGL(0)
 	sgl1.Write([]byte(txt1))
 	hdr := transport.Header{
 		Bck: cmn.Bck{
@@ -152,7 +152,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	stream.Send(transport.Obj{Hdr: hdr, Reader: sgl1, Callback: cb})
 	wg.Wait()
 
-	sgl2 := Mem2.NewSGL(0)
+	sgl2 := MMSA.NewSGL(0)
 	sgl2.Write([]byte(txt2))
 	hdr = transport.Header{
 		Bck: cmn.Bck{
@@ -435,7 +435,7 @@ func Test_ObjAttrs(t *testing.T) {
 			ObjAttrs: attrs,
 			Opaque:   []byte{byte(idx)},
 		}
-		slab, err := Mem2.GetSlab2(cmn.PageSize)
+		slab, err := MMSA.GetSlab(memsys.PageSize)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -525,7 +525,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
-		slab, _ := Mem2.GetSlab2(32 * cmn.KiB)
+		slab, _ := MMSA.GetSlab(32 * cmn.KiB)
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		if err != io.EOF {
@@ -585,13 +585,13 @@ func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 type randReader struct {
 	buf    []byte
 	hdr    transport.Header
-	slab   *memsys.Slab2
+	slab   *memsys.Slab
 	off    int64
 	random *rand.Rand
 	clone  bool
 }
 
-func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab2) *randReader {
+func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab) *randReader {
 	buf := slab.Alloc()
 	_, err := random.Read(buf)
 	if err != nil {
@@ -601,7 +601,7 @@ func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab2) 
 }
 
 func makeRandReader() (transport.Header, *randReader) {
-	slab, err := Mem2.GetSlab2(32 * cmn.KiB)
+	slab, err := MMSA.GetSlab(32 * cmn.KiB)
 	if err != nil {
 		panic("Failed getting slab: " + err.Error())
 	}

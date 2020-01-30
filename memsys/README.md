@@ -1,21 +1,21 @@
-Mem2: SGL allocator and memory manager
+MMSA: SGL allocator and memory manager
 -----------------------------------------------------------------
 
 ## Overview
 
 
-Mem2 is, simultaneously, a) Slab and SGL allocator, and b) memory manager
+MMSA is, simultaneously, a) Slab and SGL allocator, and b) memory manager
 responsible to optimize memory usage between different (more vs less) utilized
 Slabs.
 
-Multiple Mem2 instances may coexist in the system, each having its own
+Multiple MMSA instances may coexist in the system, each having its own
 constraints and managing its own Slabs and SGLs.
 
-Mem2 is a "runner" that can be Run() to monitor system resources, automatically
+MMSA is a "runner" that can be Run() to monitor system resources, automatically
 adjust Slab sizes based on their respective usages, and incrementally
 deallocate idle Slabs.
 
-There will be use cases, however, when actually running a Mem2 instance
+There will be use cases, however, when actually running a MMSA instance
 won't be necessary: e.g., when an app utilizes a single (or a few distinct)
 Slab size(s) for the duration of its relatively short lifecycle,
 while at the same time preferring minimal interference with other running apps.
@@ -25,18 +25,18 @@ while at the same time preferring minimal interference with other running apps.
 In that sense, a typical initialization sequence includes 2 or 3 steps, e.g.:
 1) construct:
 ```go
-	mem2 := &memsys.Mem2{TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
+	mm := &memsys.MMSA{TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
 ```
 2) initialize:
 ```go
-	err := mem2.Init()
+	err := mm.Init()
 	if err != nil {
 		...
 	}
 ```
 3) optionally, run:
 ```go
-	go mem2.Run()
+	go mm.Run()
 ```
 
 In addition, there are several environment variables that can be used
@@ -51,18 +51,18 @@ These names must be self-explanatory.
 
 ## Termination
 
-If the memory manager is no longer needed, terminating the Mem2 instance is recommended.
+If the memory manager is no longer needed, terminating the MMSA instance is recommended.
 This will free up all the slabs allocated to the memory manager instance.
-Halt a running or initialized Mem2 instance is done by:
+Halt a running or initialized MMSA instance is done by:
 ```go
-    mem2.Stop(nil)
+    mm.Stop(nil)
 ```
-Note that `nil` is used to denote that the Mem2 instance termination was done intentionally as part of cleanup.
+Note that `nil` is used to denote that the MMSA instance termination was done intentionally as part of cleanup.
 
 ## Operation
 
 Once constructed and initialized, memory-manager-and-slab-allocator
-(Mem2, for shortness) can be exercised via its public API that includes
+(MMSA, for shortness) can be exercised via its public API that includes
 `GetSlab2`, `SelectSlab2` and `AllocFromSlab2`. Notice the difference between
 the first and the second: `GetSlab2(128KB)` will return the Slab that contains
 size=128KB reusable buffers, while `SelectSlab2(128KB)` - the Slab that is
@@ -73,7 +73,7 @@ includes `Alloc` and `Free` methods. In addition, each allocated SGL internally
 utilizes one of the existing enumerated slabs to "grow" (that is, allocate more
 buffers from the slab) on demand. For details, look for "grow" in the iosgl.go.
 
-When being run (as in: `go mem2.Run()`), the memory manager periodically evaluates
+When running, the memory manager periodically evaluates
 the remaining free memory resource and adjusts its slabs accordingly.
 The entire logic is consolidated in one `work()` method that can, for instance,
 "cleanup" (see `cleanup()`) an existing "idle" slab,
@@ -103,8 +103,8 @@ AIS_DEBUG=memsys=1 go test -v -logtostderr=true -duration=2m
 
 In the interest of reusing a single memory manager instance across multiple packages outside the ais core package, the memsys package declares a `gMem2` variable that can be accessed through the matching exported Getter.
 The notable runtime parameters that are used for the global memory manager are MinFreePct and TimeIval which are set to 50% and 2 minutes, respectively.
-Note that more specialized use cases which warrant custom memory managers with finely tuned parameters are free to create their own separate `Mem2` instances.
+Note that more specialized use cases which warrant custom memory managers with finely tuned parameters are free to create their own separate `MMSA` instances.
 
 Usage:
 
-To access the global memory manager, a single call to `memsys.Init()` is all that is required. Separate `Init()` nor `Run()` calls should not be made on the returned Mem2 instance.
+To access the global memory manager, a single call to `memsys.Init()` is all that is required. Separate `Init()` nor `Run()` calls should not be made on the returned MMSA instance.

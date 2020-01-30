@@ -71,15 +71,15 @@ func testCheckerCleanup() {
 }
 
 func TestFSChecker(t *testing.T) {
-	mem2 := memsys.GMM()
-	defer mem2.Release()
+	mm := memsys.DefaultPageMM()
+	defer mm.Terminate()
 
 	updateTestConfig()
 
 	var (
 		failedMpath = fsCheckerTmpDir + "/3"
 		dispatcher  = newMockFSDispatcher(failedMpath)
-		fshc        = NewFSHC(dispatcher, testCheckerMountPaths(), mem2, fs.CSM)
+		fshc        = NewFSHC(dispatcher, testCheckerMountPaths(), mm, fs.CSM)
 	)
 
 	// initial state = 2 available FSes - must pass

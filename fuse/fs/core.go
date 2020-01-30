@@ -41,11 +41,11 @@ const (
 var (
 	ns *namespace // Namespace for files and directories.
 
-	glMem2 *memsys.Mem2 // Global memory manager
+	glMem2 *memsys.MMSA // Global memory manager
 )
 
 func init() {
-	glMem2 = memsys.GMM()
+	glMem2 = memsys.DefaultPageMM()
 }
 
 type (

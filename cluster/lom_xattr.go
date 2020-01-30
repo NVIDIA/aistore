@@ -40,7 +40,7 @@ const (
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
-	slab, err := lom.T.GetMem2().GetSlab2(xattrBufSize)
+	slab, err := lom.T.GetMem2().GetSlab(xattrBufSize)
 	cmn.AssertNoErr(err)
 	b := slab.Alloc()
 	read, err := fs.GetXattrBuf(lom.FQN, cmn.XattrLOM, b)
@@ -66,10 +66,10 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 // TODO: in case of error previous metadata should be restored.
 func (lom *LOM) Persist() (err error) {
 	var (
-		slab *memsys.Slab2
+		slab *memsys.Slab
 		buf  []byte
 	)
-	slab, err = lom.T.GetMem2().GetSlab2(xattrBufSize)
+	slab, err = lom.T.GetMem2().GetSlab(xattrBufSize)
 	cmn.AssertNoErr(err)
 	buf = slab.Alloc()
 	_, err = lom.persistMd(buf)

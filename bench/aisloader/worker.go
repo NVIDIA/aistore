@@ -20,7 +20,7 @@ import (
 func doPut(wo *workOrder) {
 	var sgl *memsys.SGL
 	if runParams.usingSG {
-		sgl = tutils.Mem2.NewSGL(wo.size)
+		sgl = tutils.MMSA.NewSGL(wo.size)
 		defer func() {
 			// FIXME: due to critical bug (https://github.com/golang/go/issues/30597)
 			// we need to postpone `sgl.Free` to a little bit later time, otherwise

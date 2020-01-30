@@ -197,7 +197,7 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 	}
 	defer resp.Body.Close()
 
-	buf, slab := Mem2.AllocForSize(cmn.DefaultBufSize)
+	buf, slab := MMSA.Alloc()
 	n, err = io.CopyBuffer(w, resp.Body, buf)
 	slab.Free(buf)
 
@@ -244,7 +244,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 	hdrHashType := resp.Header.Get(cmn.HeaderObjCksumType)
 
 	if hdrHashType == cmn.ChecksumXXHash {
-		buf, slab := Mem2.AllocForSize(cmn.DefaultBufSize)
+		buf, slab := MMSA.Alloc()
 		n, cksumVal, err = cmn.WriteWithHash(w, resp.Body, buf)
 		slab.Free(buf)
 

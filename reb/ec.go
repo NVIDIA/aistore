@@ -227,7 +227,7 @@ type (
 		waitFor   atomic.Int32 // the current number of slices local target awaits
 		toRebuild atomic.Int32 // the current number of objects the target has to rebuild
 		objs      ctWaitList   // the CT for the current batch
-		mem       *memsys.Mem2
+		mem       *memsys.MMSA
 	}
 )
 
@@ -601,7 +601,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 		lom.Uncache()
 	}
 
-	buffer, slab := reb.t.GetMem2().AllocDefault()
+	buffer, slab := reb.t.GetMem2().Alloc()
 	metaFQN := mpath.MakePathCT(ec.MetaType, hdr.Bck, hdr.ObjName)
 	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.md.Marshal()), buffer, false)
 	if err != nil {
@@ -1135,7 +1135,7 @@ func (reb *Manager) rebalanceLocalObject(fromMpath fs.ParsedFQN, fromFQN, toFQN 
 
 // Moves local misplaced CT to correct mpath
 func (reb *Manager) rebalanceLocal() error {
-	buf, slab := reb.t.GetMem2().AllocDefault()
+	buf, slab := reb.t.GetMem2().Alloc()
 	defer slab.Free(buf)
 	for _, act := range reb.ec.localActions {
 		if bool(glog.FastV(4, glog.SmoduleReb)) {
@@ -2082,7 +2082,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		glog.Infof("Saving restored full object %s to %q", obj.objName, lom.FQN)
 	}
 	tmpFQN := fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec")
-	buffer, slab := reb.t.GetMem2().AllocDefault()
+	buffer, slab := reb.t.GetMem2().Alloc()
 	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
@@ -2195,9 +2195,9 @@ func (reb *Manager) initEC(md *globArgs, netd string) {
 }
 
 // Returns XXHash calculated for the reader
-func cksumForSlice(reader cmn.ReadOpenCloser, sliceSize int64, mem *memsys.Mem2) (string, error) {
+func cksumForSlice(reader cmn.ReadOpenCloser, sliceSize int64, mem *memsys.MMSA) (string, error) {
 	reader.Open()
-	buf, slab := mem.AllocForSize(sliceSize)
+	buf, slab := mem.Alloc(sliceSize)
 	defer slab.Free(buf)
 	return cmn.ComputeXXHash(reader, buf)
 }
@@ -2206,7 +2206,7 @@ func cksumForSlice(reader cmn.ReadOpenCloser, sliceSize int64, mem *memsys.Mem2)
 // ctWaiter
 //
 
-func newWaiter(mem *memsys.Mem2) *ctWaiter {
+func newWaiter(mem *memsys.MMSA) *ctWaiter {
 	return &ctWaiter{
 		objs: make(ctWaitList),
 		mem:  mem,

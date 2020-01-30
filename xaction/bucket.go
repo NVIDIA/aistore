@@ -247,7 +247,7 @@ type mncEntry struct {
 }
 
 func (e *mncEntry) Start(id int64) error {
-	slab, err := e.t.GetMem2().GetSlab2(memsys.MaxSlabSize)
+	slab, err := e.t.GetMem2().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 	xmnc := mirror.NewXactMNC(id, e.bck, e.t, slab, e.copies)
 	go xmnc.Run()
@@ -357,7 +357,7 @@ type putLocReplicasEntry struct {
 }
 
 func (e *putLocReplicasEntry) Start(id int64) error {
-	slab, err := e.t.GetMem2().GetSlab2(memsys.MaxSlabSize) // TODO: estimate
+	slab, err := e.t.GetMem2().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
 	x, err := mirror.RunXactPutLRepl(id, e.lom, slab)
 
@@ -396,7 +396,7 @@ type bccEntry struct {
 }
 
 func (e *bccEntry) Start(id int64) error {
-	slab, err := e.t.GetMem2().GetSlab2(memsys.MaxSlabSize)
+	slab, err := e.t.GetMem2().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 	e.xact = mirror.NewXactBCC(id, e.bckFrom, e.bckTo, e.action, e.t, slab)
 	return nil

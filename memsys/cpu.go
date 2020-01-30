@@ -15,7 +15,7 @@ import (
 
 // This file provides additional functions to monitor system statistics, such as cpu and disk usage, using the memsys library
 
-func (r *Mem2) FetchSysInfo() cmn.SysInfo {
+func (r *MMSA) FetchSysInfo() cmn.SysInfo {
 	sysInfo := cmn.SysInfo{}
 
 	osMem, _ := sys.Mem()

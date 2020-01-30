@@ -229,7 +229,7 @@ func Test_putdeleteRange(t *testing.T) {
 	errCh := make(chan error, numfiles*5)
 	objsPutCh := make(chan string, numfiles)
 
-	sgl := tutils.Mem2.NewSGL(objSize)
+	sgl := tutils.MMSA.NewSGL(objSize)
 	defer sgl.Free()
 	objList := make([]string, 0, numfiles)
 	for i := 0; i < numfiles/2; i++ {
@@ -364,7 +364,7 @@ func Test_putdelete(t *testing.T) {
 	var (
 		errCh      = make(chan error, numfiles)
 		filesPutCh = make(chan string, numfiles)
-		sgl        = tutils.Mem2.NewSGL(fileSize)
+		sgl        = tutils.MMSA.NewSGL(fileSize)
 	)
 
 	if created := createBucketIfNotExists(t, proxyURL, bck); created {
@@ -782,7 +782,7 @@ func Test_coldgetmd5(t *testing.T) {
 	config := tutils.GetClusterConfig(t)
 	bcoldget := config.Cksum.ValidateColdGet
 
-	sgl := tutils.Mem2.NewSGL(largeFileSize)
+	sgl := tutils.MMSA.NewSGL(largeFileSize)
 	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bck, ldir, readerType, ColdValidStr, largeFileSize, numPuts, errCh, filesPutCh, sgl)
 	tassert.SelectErr(t, errCh, "put", false)
@@ -1250,7 +1250,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
-	sgl := tutils.Mem2.NewSGL(fileSize)
+	sgl := tutils.MMSA.NewSGL(fileSize)
 	defer sgl.Free()
 
 	tutils.Logf("Creating %d objects\n", numFiles)
@@ -1378,7 +1378,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		resetBucketProps(proxyURL, bck, t)
 	}()
 
-	sgl := tutils.Mem2.NewSGL(largeFileSize)
+	sgl := tutils.MMSA.NewSGL(largeFileSize)
 	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bck, ldir, readerType, EvictCBStr, largeFileSize, numPuts, errCh, filesPutCh, sgl)
 	tassert.SelectErr(t, errCh, "put", false)
@@ -1472,7 +1472,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	sgl := tutils.Mem2.NewSGL(fileSize)
+	sgl := tutils.MMSA.NewSGL(fileSize)
 	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr,
 		fileSize, numFiles, errCh, fileNameCh, sgl)
@@ -1574,7 +1574,7 @@ func TestRangeRead(t *testing.T) {
 		proxyURL = tutils.GetPrimaryURL()
 	)
 
-	sgl := tutils.Mem2.NewSGL(fileSize)
+	sgl := tutils.MMSA.NewSGL(fileSize)
 	defer sgl.Free()
 	created := createBucketIfNotExists(t, proxyURL, bck)
 	tutils.PutRandObjs(proxyURL, bck, RangeGetDir, readerType, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, sgl, true)
@@ -1762,7 +1762,7 @@ func Test_checksum(t *testing.T) {
 	ocoldget := config.Cksum.ValidateColdGet
 	ochksum := config.Cksum.Type
 
-	sgl := tutils.Mem2.NewSGL(largeFileSize)
+	sgl := tutils.MMSA.NewSGL(largeFileSize)
 	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bck, ldir, readerType, ChksumValidStr, largeFileSize, numPuts, errCh, filesPutCh, sgl)
 	tassert.SelectErr(t, errCh, "put", false)

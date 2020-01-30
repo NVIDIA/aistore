@@ -28,7 +28,7 @@ type (
 	// implements io.ReadWriteCloser  + Reset
 	SGL struct {
 		sgl  [][]byte
-		slab *Slab2
+		slab *Slab
 		woff int64 // stream
 		roff int64
 	}
@@ -52,9 +52,9 @@ type (
 // of allocated slabs or to react on memory pressure by dynamically shrinking slabs
 // at runtime. The responsibility to call sgl.Reclaim (see below) lies with the user.
 
-func (z *SGL) Cap() int64   { return int64(len(z.sgl)) * z.slab.Size() }
-func (z *SGL) Size() int64  { return z.woff }
-func (z *SGL) Slab() *Slab2 { return z.slab }
+func (z *SGL) Cap() int64  { return int64(len(z.sgl)) * z.slab.Size() }
+func (z *SGL) Size() int64 { return z.woff }
+func (z *SGL) Slab() *Slab { return z.slab }
 
 func (z *SGL) grow(toSize int64) {
 	z.slab.muget.Lock()

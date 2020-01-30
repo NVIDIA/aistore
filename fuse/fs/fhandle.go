@@ -9,7 +9,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/jacobsa/fuse/fuseops"
 )
 
@@ -69,7 +69,7 @@ func (fh *fileHandle) ensureReadBuffer() int64 {
 	} else if fh.fileSize > maxBlockSize {
 		blockSize = maxBlockSize
 	} else {
-		blockSize = ((fh.fileSize + cmn.PageSize - 1) / cmn.PageSize) * cmn.PageSize
+		blockSize = ((fh.fileSize + memsys.PageSize - 1) / memsys.PageSize) * memsys.PageSize
 	}
 
 	fh.readBuffer = newBlockBuffer(blockSize)

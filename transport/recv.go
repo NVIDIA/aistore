@@ -53,10 +53,10 @@ type (
 		sessions    sync.Map // map[uint64]*Stats
 		oldSessions sync.Map // map[uint64]time.Time
 		hkName      string   // house-keeping name
-		mem         *memsys.Mem2
+		mem         *memsys.MMSA
 	}
 	fixedBuffer struct {
-		slab *memsys.Slab2
+		slab *memsys.Slab
 		buf  []byte
 		roff int
 		woff int
@@ -118,8 +118,8 @@ func SetMux(network string, x *mux.ServeMux) {
 // http.ServeMux private map of its URL paths.
 // This map is protected by a private mutex and is read-accessed to route HTTP requests.
 //
-func Register(network, trname string, callback Receive, mems ...*memsys.Mem2) (upath string, err error) {
-	var mem *memsys.Mem2
+func Register(network, trname string, callback Receive, mems ...*memsys.MMSA) (upath string, err error) {
+	var mem *memsys.MMSA
 	mu.Lock()
 	mux, ok := muxers[network]
 	if !ok {
@@ -415,11 +415,11 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 //
 
 // TODO -- FIXME: move to memsys
-func newFixedBuffer(mem *memsys.Mem2) (bb *fixedBuffer) {
+func newFixedBuffer(mem *memsys.MMSA) (bb *fixedBuffer) {
 	if mem == nil {
-		mem = memsys.GMM()
+		mem = memsys.DefaultPageMM()
 	}
-	buf, slab := mem.AllocForSize(slabBufferSize)
+	buf, slab := mem.Alloc(slabBufferSize)
 	return &fixedBuffer{slab: slab, buf: buf}
 }
 

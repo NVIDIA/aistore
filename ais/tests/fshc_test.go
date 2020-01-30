@@ -307,7 +307,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
-	sgl := tutils.Mem2.NewSGL(md.fileSize)
+	sgl := tutils.MMSA.NewSGL(md.fileSize)
 	defer func() {
 		tutils.DestroyBucket(t, md.proxyURL, md.bck)
 		sgl.Free()
@@ -366,7 +366,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
-	sgl := tutils.Mem2.NewSGL(md.fileSize)
+	sgl := tutils.MMSA.NewSGL(md.fileSize)
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	defer func() {
 		sgl.Free()

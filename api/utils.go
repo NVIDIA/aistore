@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	Mem2 *memsys.Mem2
+	MMSA *memsys.MMSA
 )
 
 type BaseParams struct {
@@ -38,7 +38,7 @@ type OptionalParams struct {
 }
 
 func init() {
-	Mem2 = memsys.GMM()
+	MMSA = memsys.DefaultPageMM()
 }
 
 // DoHTTPRequest sends one HTTP request and returns only the body of the response
@@ -52,7 +52,8 @@ func DoHTTPRequest(baseParams BaseParams, path string, b []byte, optParams ...Op
 }
 
 // doHTTPRequestGetResp sends one HTTP request and returns the whole response
-func doHTTPRequestGetResp(baseParams BaseParams, path string, b []byte, optParams ...OptionalParams) (*http.Response, error) {
+func doHTTPRequestGetResp(baseParams BaseParams, path string, b []byte,
+	optParams ...OptionalParams) (*http.Response, error) {
 	var (
 		reqBody io.Reader
 	)

@@ -335,7 +335,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 		proxyURL   = tutils.GetPrimaryURL()
 	)
 
-	sgl := tutils.Mem2.NewSGL(filesize)
+	sgl := tutils.MMSA.NewSGL(filesize)
 	defer sgl.Free()
 
 	// Create a few objects

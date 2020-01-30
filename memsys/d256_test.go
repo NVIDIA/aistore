@@ -35,7 +35,7 @@ const (
 
 // largobj alloc
 func BenchmarkLargeAllocMax(b *testing.B) {
-	benchAlloc(b, largeobj, memsys.MaxSlabSize)
+	benchAlloc(b, largeobj, memsys.MaxPageSlabSize)
 }
 func BenchmarkLargeAlloc128K(b *testing.B) {
 	benchAlloc(b, largeobj, cmn.KiB*128)
@@ -49,7 +49,7 @@ func BenchmarkLargeAlloc32K(b *testing.B) {
 
 // smallobj alloc
 func BenchmarkSmallAllocMax(b *testing.B) {
-	benchAlloc(b, smallobj, memsys.MaxSlabSize)
+	benchAlloc(b, smallobj, memsys.MaxPageSlabSize)
 }
 func BenchmarkSmallAlloc128K(b *testing.B) {
 	benchAlloc(b, smallobj, cmn.KiB*128)
@@ -62,9 +62,9 @@ func BenchmarkSmallAlloc32K(b *testing.B) {
 }
 
 func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
-	mem := &memsys.Mem2{MinPctFree: 50, Name: "dmem"}
+	mem := &memsys.MMSA{MinPctFree: 50, Name: "dmem"}
 	err := mem.Init(false /*panicOnErr*/)
-	defer mem.Release()
+	defer mem.Terminate()
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
 
 // largobj write
 func BenchmarkLargeWriteMax(b *testing.B) {
-	benchWrite(b, largeobj, memsys.MaxSlabSize)
+	benchWrite(b, largeobj, memsys.MaxPageSlabSize)
 }
 func BenchmarkLargeWrite128K(b *testing.B) {
 	benchWrite(b, largeobj, cmn.KiB*128)
@@ -95,7 +95,7 @@ func BenchmarkLargeWrite32K(b *testing.B) {
 
 // smallobj write
 func BenchmarkSmallWriteMax(b *testing.B) {
-	benchWrite(b, smallobj, memsys.MaxSlabSize)
+	benchWrite(b, smallobj, memsys.MaxPageSlabSize)
 }
 func BenchmarkSmallWrite128K(b *testing.B) {
 	benchWrite(b, smallobj, cmn.KiB*128)
@@ -108,9 +108,9 @@ func BenchmarkSmallWrite32K(b *testing.B) {
 }
 
 func benchWrite(b *testing.B, objsiz, sbufSize int64) {
-	mem := &memsys.Mem2{MinPctFree: 50, Name: "dmem"}
+	mem := &memsys.MMSA{MinPctFree: 50, Name: "dmem"}
 	err := mem.Init(false /*panicOnErr*/)
-	defer mem.Release()
+	defer mem.Terminate()
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func benchWrite(b *testing.B, objsiz, sbufSize int64) {
 
 // largobj write => read => free
 func BenchmarkLargeWRFMax(b *testing.B) {
-	benchWRF(b, largeobj, memsys.MaxSlabSize)
+	benchWRF(b, largeobj, memsys.MaxPageSlabSize)
 }
 func BenchmarkLargeWRF128K(b *testing.B) {
 	benchWRF(b, largeobj, cmn.KiB*128)
@@ -144,7 +144,7 @@ func BenchmarkLargeWRF32K(b *testing.B) {
 
 // smallobj write => read => free
 func BenchmarkSmallWRFMax(b *testing.B) {
-	benchWRF(b, smallobj, memsys.MaxSlabSize)
+	benchWRF(b, smallobj, memsys.MaxPageSlabSize)
 }
 func BenchmarkSmallWRF128K(b *testing.B) {
 	benchWRF(b, smallobj, cmn.KiB*128)
@@ -157,10 +157,10 @@ func BenchmarkSmallWRF32K(b *testing.B) {
 }
 
 func benchWRF(b *testing.B, objsiz, sbufSize int64) {
-	mem := &memsys.Mem2{MinPctFree: 50, Name: "dmem"}
+	mem := &memsys.MMSA{MinPctFree: 50, Name: "dmem"}
 	err := mem.Init(false /*panicOnErr*/)
 	cha := make(chan *memsys.SGL, 1024*16)
-	defer mem.Release()
+	defer mem.Terminate()
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 
 // file read to sgl
 func BenchmarkLargeFileMax(b *testing.B) {
-	benchFile(b, memsys.MaxSlabSize)
+	benchFile(b, memsys.MaxPageSlabSize)
 }
 func BenchmarkLargeFile128K(b *testing.B) {
 	benchFile(b, cmn.KiB*128)
@@ -214,9 +214,9 @@ func BenchmarkLargeFile32K(b *testing.B) {
 }
 
 func benchFile(b *testing.B, sbufSize int64) {
-	mem := &memsys.Mem2{MinPctFree: 50, Name: "dmem"}
+	mem := &memsys.MMSA{MinPctFree: 50, Name: "dmem"}
 	err := mem.Init(false /*panicOnErr*/)
-	defer mem.Release()
+	defer mem.Terminate()
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func benchFile(b *testing.B, sbufSize int64) {
 		os.Remove(file.Name())
 	}()
 
-	slab, err := mem.GetSlab2(sbufSize)
+	slab, err := mem.GetSlab(sbufSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 	defer slab.Free(buf)

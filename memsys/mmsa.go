@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -23,35 +22,30 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
-// ===================== Theory Of Operations (TOO) =============================
+// ================= Memory Manager Slab Allocator =============================
 //
-// Mem2 is, simultaneously, a) Slab and SGL allocator, and b) memory manager
+// MMSA is, simultaneously, a Slab and SGL allocator, and a memory manager
 // responsible to optimize memory usage between different (more vs less) utilized
 // Slabs.
 //
-// Multiple Mem2 instances may coexist in the system, each having its own
+// Multiple MMSA instances may coexist in the system, each having its own
 // constraints and managing its own Slabs and SGLs.
 //
-// There will be use cases, however, when actually running a Mem2 instance
+// There will be use cases, however, when actually running a MMSA instance
 // won't be necessary: e.g., when an app utilizes a single (or a few distinct)
 // Slab size(s) for the duration of its relatively short lifecycle,
 // while at the same time preferring minimal interference with other running apps.
 //
 // In that sense, a typical initialization sequence includes 2 steps, e.g.:
 // 1) construct:
-// 	mem2 := &memsys.Mem2{TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
+// 	mm := &memsys.MMSA{TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
 // 2) initialize:
-// 	err := mem2.Init()
+// 	err := mm.Init()
 // 	if err != nil {
 //		...
 // 	}
 //
-// Mem register itself in hk which will periodically call garbageCollect
-// function which tries to free reclaim unused memory.
-//
-// Release:
-//
-// To clean up a Mem2 instance after it is used, call Release() on the Mem2 instance.
+// To free up all memory allocated by a given MMSA instance, use its Terminate() method.
 //
 // In addition, there are several environment variables that can be used
 // (to circumvent the need to change the code, for instance):
@@ -62,10 +56,10 @@ import (
 // These names must be self-explanatory.
 //
 // Once constructed and initialized, memory-manager-and-slab-allocator
-// (Mem2, for shortness) can be exercised via its public API that includes
-// GetSlab2() and AllocDefault().
+// (MMSA) can be exercised via its public API that includes
+// GetSlab() and Alloc*() methods.
 //
-// Once selected, each Slab2 instance can be used via its own public API that
+// Once selected, each Slab instance can be used via its own public API that
 // includes Alloc() and Free() methods. In addition, each allocated SGL internally
 // utilizes one of the existing enumerated slabs to "grow" (that is, allocate more
 // buffers from the slab) on demand. For details, look for "grow" in the iosgl.go.
@@ -85,13 +79,32 @@ import (
 // ========================== end of TOO ========================================
 
 const (
-	MaxSlabSize = 128 * cmn.KiB
-	NumSlabs    = MaxSlabSize / cmn.PageSize // [4K - 256K] at 4K increments
-
-	deadBEEF       = "DEADBEEF"
-	globalMem2Name = "GMem2"
-	pkgName        = "memsys"
+	PageSize            = cmn.KiB * 4
+	DefaultBufSize      = PageSize * 8
+	DefaultSmallBufSize = cmn.KiB
 )
+
+const (
+	defaultPageMM  = "DefaultPageMM"
+	defaultSmallMM = "DefaultSmallMM"
+	pkgName        = "memsys"
+	deadBEEF       = "DEADBEEF" // debug mode
+)
+
+// page slabs: pagesize increments up to MaxPageSlabSize
+const (
+	MaxPageSlabSize = 128 * cmn.KiB
+	PageSlabIncStep = PageSize
+	NumPageSlabs    = MaxPageSlabSize / PageSlabIncStep // = 32
+)
+
+// small slabs: 128 byte increments up to MaxSmallSlabSize
+const (
+	MaxSmallSlabSize = PageSize
+	SmallSlabIncStep = 128
+	NumSmallSlabs    = MaxSmallSlabSize / SmallSlabIncStep // = 32
+)
+const NumStats = NumPageSlabs // NOTE: must be greater or equal NumSmallSlabs, otherwise out-of-bounds at init time
 
 // mem subsystem defaults (potentially, tunables)
 const (
@@ -131,49 +144,48 @@ var memPressureText = map[int]string{
 // API types
 //
 type (
-	Slab2 struct {
-		m *Mem2 // pointer to the parent/creator
-
+	Slab struct {
+		m            *MMSA // parent
 		bufSize      int64
 		tag          string
 		get, put     [][]byte
 		muget, muput sync.Mutex
-		stats        struct {
-			Hits atomic.Int64
-		}
-		pMinDepth *atomic.Int64
-		pos       int
-		debug     bool
+		pMinDepth    *atomic.Int64
+		pos          int
+		hits         atomic.Uint32
 	}
-	Stats2 struct {
-		Hits    [NumSlabs]int64
-		Adeltas [NumSlabs]int64
-		Idle    [NumSlabs]time.Time
+	Stats struct {
+		Idle      [NumStats]time.Time
+		Hits      [NumStats]uint32
+		HitsDelta [NumStats]uint32
 	}
-	ReqStats2 struct {
+	ReqStats struct {
 		Wg    *sync.WaitGroup
-		Stats *Stats2
+		Stats *Stats
 	}
-	// nolint:maligned // no performance critical code
-	Mem2 struct {
-		time struct {
-			d time.Duration
-		}
-		lowWM    uint64
-		rings    [NumSlabs]*Slab2
-		stats    Stats2
-		sorted   []sortpair
-		toGC     atomic.Int64 // accumulates over time and triggers GC upon reaching the spec-ed limit
-		minDepth atomic.Int64 // minimum ring depth aka length
-		// for user to specify at construction time
+	MMSA struct {
+		// public
 		Name        string
 		MinFree     uint64        // memory that must be available at all times
 		TimeIval    time.Duration // interval of time to watch for low memory and make steps
-		swap        atomic.Uint64 // actual swap size
-		Swapping    atomic.Int32  // max = SwappingMax; halves every r.time.d unless swapping
 		MinPctTotal int           // same, via percentage of total
 		MinPctFree  int           // ditto, as % of free at init time
-		Debug       bool
+		// private
+		duration    time.Duration
+		lowWM       uint64
+		rings       []*Slab
+		ringsSorted []*Slab
+		stats       Stats
+		toGC        atomic.Int64  // accumulates over time and triggers GC upon reaching the spec-ed limit
+		minDepth    atomic.Int64  // minimum ring depth aka length
+		swap        atomic.Uint64 // actual swap size
+		slabIncStep int64
+		maxSlabSize int64
+		numSlabs    int
+		// public - aligned
+		Swapping atomic.Int32 // max = SwappingMax; halves every r.duration unless swapping
+		Small    bool         // defines the type of Slab rings (NumSmallSlabs x 128 | NumPageSlabs x 4K)
+		Debug    bool         // debug mode
 	}
 	FreeSpec struct {
 		IdleDuration time.Duration // reduce only the slabs that are idling for at least as much time
@@ -183,85 +195,31 @@ type (
 	}
 )
 
-// private types
-type sortpair struct {
-	s *Slab2
-	v int64
-}
-
 var (
-	// gmm is the global memory manager used in various packages outside ais.
-	// Its runtime params are set below and is intended to remain so.
-	gmm     = &Mem2{Name: globalMem2Name, TimeIval: time.Minute * 2, MinPctFree: 50}
-	gmmOnce sync.Once // ensures that there is only one initialization
+	// gmm is the global memory manager used in packages outside ais.
+	gmm    = &MMSA{Name: defaultPageMM, TimeIval: time.Minute * 2, MinPctFree: 50}
+	smm    = &MMSA{Name: defaultSmallMM, TimeIval: time.Minute * 2, MinPctFree: 50, Small: true}
+	mmOnce sync.Once // ensures that there is only one initialization
 )
 
 // Global memory manager getter
-func GMM() *Mem2 {
-	gmmOnce.Do(func() {
+func DefaultPageMM() *MMSA {
+	mmOnce.Do(func() {
 		_ = gmm.Init(true /*panicOnErr*/)
 	})
 	return gmm
 }
+func DefaultSmallMM() *MMSA { return smm }
 
-//
-// API methods
-//
+//////////////
+// MMSA API //
+//////////////
 
-func (r *Mem2) NewSGL(immediateSize int64 /* size to preallocate */, sbufSize ...int64 /* slab buffer size */) *SGL {
-	var (
-		slab *Slab2
-		n    int64
-		sgl  [][]byte
-	)
-	if len(sbufSize) > 0 {
-		var err error
-		slab, err = r.GetSlab2(sbufSize[0])
-		cmn.AssertNoErr(err)
-	} else {
-		slab = r.slabForSGL(immediateSize)
-	}
-	n = cmn.DivCeil(immediateSize, slab.Size())
-	sgl = make([][]byte, n)
-
-	slab.muget.Lock()
-	for i := 0; i < int(n); i++ {
-		sgl[i] = slab._alloc()
-	}
-	slab.muget.Unlock()
-	return &SGL{sgl: sgl, slab: slab}
-}
-
-// returns an estimate for the current memory pressured expressed as one of the enumerated values
-func (r *Mem2) MemPressure() int {
-	mem, _ := sys.Mem()
-	if mem.SwapUsed > r.swap.Load() {
-		r.Swapping.Store(SwappingMax)
-	}
-	if r.Swapping.Load() > 0 {
-		return OOM
-	}
-	if mem.ActualFree > r.lowWM {
-		return MemPressureLow
-	}
-	if mem.ActualFree <= r.MinFree {
-		return MemPressureExtreme
-	}
-	x := (mem.ActualFree - r.MinFree) * 100 / (r.lowWM - r.MinFree)
-	if x <= 25 {
-		return MemPressureHigh
-	}
-	return MemPressureModerate
-}
-func MemPressureText(v int) string { return memPressureText[v] }
-
-// NOTE: On error behavior is defined by the panicOnErr argument
-//  true:  proceed regardless and return error
-//  false: panic with error message
-func (r *Mem2) Init(panicOnErr bool) (err error) {
+// initialize new MMSA instance
+func (r *MMSA) Init(panicOnErr bool) (err error) {
 	cmn.Assert(r.Name != "")
 
-	// 1. environment overrides defaults and Mem2{...} hard-codings
+	// 1. environment overrides defaults and MMSA{...} hard-codings
 	if err = r.env(); err != nil {
 		if panicOnErr {
 			panic(err)
@@ -309,18 +267,23 @@ func (r *Mem2) Init(panicOnErr bool) (err error) {
 	if r.TimeIval == 0 {
 		r.TimeIval = memCheckAbove
 	}
-	r.time.d = r.TimeIval
+	r.duration = r.TimeIval
 
 	// 5. final construction steps
-	r.sorted = make([]sortpair, NumSlabs)
 	r.swap.Store(mem.SwapUsed)
 	r.minDepth.Store(minDepth)
 	r.toGC.Store(0)
 
-	// init slabs
-	for i := range &r.rings {
-		bufSize := int64(cmn.PageSize * (i + 1))
-		slab := &Slab2{
+	// init rings and slabs
+	r.slabIncStep, r.maxSlabSize, r.numSlabs = PageSlabIncStep, MaxPageSlabSize, NumPageSlabs
+	if r.Small {
+		r.slabIncStep, r.maxSlabSize, r.numSlabs = SmallSlabIncStep, MaxSmallSlabSize, NumSmallSlabs
+	}
+	r.rings = make([]*Slab, r.numSlabs)
+	r.ringsSorted = make([]*Slab, r.numSlabs)
+	for i := 0; i < r.numSlabs; i++ {
+		bufSize := r.slabIncStep * int64(i+1)
+		slab := &Slab{
 			m:       r,
 			tag:     r.Name + "." + cmn.B2S(bufSize, 0),
 			bufSize: bufSize,
@@ -328,61 +291,82 @@ func (r *Mem2) Init(panicOnErr bool) (err error) {
 			put:     make([][]byte, 0, minDepth),
 		}
 		slab.pMinDepth = &r.minDepth
-		slab.debug = r.Debug
 		r.rings[i] = slab
+		r.ringsSorted[i] = slab
 	}
 
-	// 6. always GC at init time
+	// 6. NOTE: always GC at init time
 	runtime.GC()
-	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect)
+	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect, r.TimeIval)
 	return
 }
 
-// on-demand memory freeing to the user-provided specification
-func (r *Mem2) Free(spec FreeSpec) {
-	var freed int64
-	if spec.Totally {
-		for _, s := range &r.rings {
-			freed += s.cleanup()
-		}
-	} else {
-		if spec.IdleDuration == 0 {
-			spec.IdleDuration = freeIdleMin // using default
-		}
-
-		currStats := r.GetStats()
-		for i, idle := range &currStats.Idle {
-			if idle.IsZero() {
-				continue
-			}
-			elapsed := time.Since(idle)
-			if elapsed > spec.IdleDuration {
-				s := r.rings[i]
-				x := s.cleanup()
-				freed += x
-				if x > 0 && bool(glog.FastV(4, glog.SmoduleMemsys)) {
-					glog.Infof("%s: idle for %v - cleanup", s.tag, elapsed)
-				}
-			}
-		}
-	}
-	if freed > 0 {
-		r.toGC.Add(freed)
-		if spec.MinSize == 0 {
-			spec.MinSize = sizeToGC // using default
-		}
-		mem, _ := sys.Mem()
-		r.doGC(mem.ActualFree, spec.MinSize, spec.ToOS /* force */, false)
+// terminate this MMSA
+func (r *MMSA) Terminate() {
+	hk.Housekeeper.Unregister(r.Name + ".gc")
+	for _, s := range r.rings {
+		_ = s.cleanup()
 	}
 }
 
-func (r *Mem2) GetSlab2(bufSize int64) (s *Slab2, err error) {
-	a, b := bufSize/cmn.PageSize, bufSize%cmn.PageSize
+// allocate SGL
+func (r *MMSA) NewSGL(immediateSize int64 /* size to preallocate */, sbufSize ...int64 /* slab buffer size */) *SGL {
+	var (
+		slab *Slab
+		n    int64
+		sgl  [][]byte
+	)
+	cmn.Assert(!r.Small) // no need
+
+	if len(sbufSize) > 0 {
+		var err error
+		slab, err = r.GetSlab(sbufSize[0])
+		cmn.AssertNoErr(err)
+	} else {
+		slab = r.slabForSGL(immediateSize)
+	}
+	n = cmn.DivCeil(immediateSize, slab.Size())
+	sgl = make([][]byte, n)
+
+	slab.muget.Lock()
+	for i := 0; i < int(n); i++ {
+		sgl[i] = slab._alloc()
+	}
+	slab.muget.Unlock()
+	return &SGL{sgl: sgl, slab: slab}
+}
+
+// returns an estimate for the current memory pressured expressed as one of the enumerated values
+func (r *MMSA) MemPressure() int {
+	mem, _ := sys.Mem()
+	if mem.SwapUsed > r.swap.Load() {
+		r.Swapping.Store(SwappingMax)
+	}
+	if r.Swapping.Load() > 0 {
+		return OOM
+	}
+	if mem.ActualFree > r.lowWM {
+		return MemPressureLow
+	}
+	if mem.ActualFree <= r.MinFree {
+		return MemPressureExtreme
+	}
+	x := (mem.ActualFree - r.MinFree) * 100 / (r.lowWM - r.MinFree)
+	if x <= 25 {
+		return MemPressureHigh
+	}
+	return MemPressureModerate
+}
+
+func MemPressureText(v int) string { return memPressureText[v] }
+
+func (r *MMSA) GetSlab(bufSize int64) (s *Slab, err error) {
+	a, b := bufSize/r.slabIncStep, bufSize%r.slabIncStep
 	if b != 0 {
 		err = fmt.Errorf("buf_size %d must be multiple of 4K", bufSize)
 		return
 	}
-	if a < 1 || a > NumSlabs {
+	if a < 1 || a > int64(r.numSlabs) {
 		err = fmt.Errorf("buf_size %d outside valid range", bufSize)
 		return
 	}
@@ -390,62 +374,53 @@ func (r *Mem2) GetSlab2(bufSize int64) (s *Slab2, err error) {
 	return
 }
 
-func (r *Mem2) AllocDefault() (buf []byte, slab *Slab2) {
-	return r.AllocForSize(cmn.DefaultBufSize)
-}
-
-func (r *Mem2) AllocForSize(size int64) (buf []byte, slab *Slab2) {
-	if size >= MaxSlabSize {
+func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
+	var size int64
+	if len(sizes) == 0 {
+		if !r.Small {
+			size = DefaultBufSize
+		} else {
+			size = DefaultSmallBufSize
+		}
+	}
+	if size >= r.maxSlabSize {
 		slab = r.rings[len(r.rings)-1]
-	} else if size <= cmn.PageSize {
+	} else if size <= r.slabIncStep {
 		slab = r.rings[0]
 	} else {
-		a := (size + cmn.PageSize - 1) / cmn.PageSize
+		a := (size + r.slabIncStep - 1) / r.slabIncStep
 		slab = r.rings[a-1]
 	}
 	buf = slab.Alloc()
 	return
 }
 
-func (r *Mem2) GetStats() *Stats2 {
-	now := time.Now()
-	for i, s := range &r.rings {
-		prev := r.stats.Hits[i]
-		r.stats.Hits[i] = s.stats.Hits.Load()
-		r.stats.Adeltas[i] = r.stats.Hits[i] - prev
-		isZero := r.stats.Idle[i].IsZero()
-		if r.stats.Adeltas[i] == 0 && isZero {
-			r.stats.Idle[i] = now
-		} else if r.stats.Adeltas[i] > 0 && !isZero {
-			r.stats.Idle[i] = time.Time{}
-		}
-	}
-
-	resp := &Stats2{}
-	for i := 0; i < NumSlabs; i++ {
+func (r *MMSA) GetStats() *Stats {
+	var resp = &Stats{}
+	r.refreshStats()
+	for i := 0; i < r.numSlabs; i++ {
 		resp.Hits[i] = r.stats.Hits[i]
-		resp.Adeltas[i] = r.stats.Adeltas[i]
+		resp.HitsDelta[i] = r.stats.HitsDelta[i]
 		resp.Idle[i] = r.stats.Idle[i]
 	}
-
 	return resp
 }
 
 ///////////////
-// Slab2 API //
+// Slab API //
 ///////////////
 
-func (s *Slab2) Size() int64 { return s.bufSize }
-func (s *Slab2) Tag() string { return s.tag }
+func (s *Slab) Size() int64 { return s.bufSize }
+func (s *Slab) Tag() string { return s.tag }
 
-func (s *Slab2) Alloc() (buf []byte) {
+func (s *Slab) Alloc() (buf []byte) {
 	s.muget.Lock()
 	buf = s._alloc()
 	s.muget.Unlock()
 	return
 }
 
-func (s *Slab2) Free(bufs ...[]byte) {
+func (s *Slab) Free(bufs ...[]byte) {
 	// NOTE: races are expected between getting length of the `s.put` slice
 	// and putting something in it. But since `maxdepth` is not hard limit,
 	// we cannot ever exceed we are trading this check in favor of maybe bigger
@@ -454,7 +429,7 @@ func (s *Slab2) Free(bufs ...[]byte) {
 	if len(s.put) < maxDepth {
 		s.muput.Lock()
 		for _, buf := range bufs {
-			if s.debug {
+			if s.m.Debug {
 				cmn.Assert(int64(len(buf)) == s.Size())
 				for i := 0; i < len(buf); i += len(deadBEEF) {
 					copy(buf[i:], deadBEEF)
@@ -476,13 +451,18 @@ func (s *Slab2) Free(bufs ...[]byte) {
 /////////////////////
 
 // select a slab for SGL given its immediate size to allocate
-func (r *Mem2) slabForSGL(immediateSize int64) *Slab2 {
+func (r *MMSA) slabForSGL(immediateSize int64) *Slab {
 	if immediateSize == 0 {
-		slab, _ := r.GetSlab2(cmn.DefaultBufSize)
+		if !r.Small {
+			immediateSize = DefaultBufSize
+		} else {
+			immediateSize = DefaultSmallBufSize
+		}
+		slab, _ := r.GetSlab(immediateSize)
 		return slab
 	}
 	size := cmn.DivCeil(immediateSize, countThreshold)
-	for _, slab := range &r.rings {
+	for _, slab := range r.rings {
 		if slab.Size() >= size {
 			return slab
 		}
@@ -490,7 +470,7 @@ func (r *Mem2) slabForSGL(immediateSize int64) *Slab2 {
 	return r.rings[len(r.rings)-1]
 }
 
-func (r *Mem2) env() (err error) {
+func (r *MMSA) env() (err error) {
 	var minfree int64
 	if a := os.Getenv("AIS_MINMEM_FREE"); a != "" {
 		if minfree, err = cmn.S2B(a); err != nil {
@@ -521,100 +501,9 @@ func (r *Mem2) env() (err error) {
 	return
 }
 
-// NOTE: notice enumerated heuristics
-func (r *Mem2) garbageCollect() time.Duration {
-	var (
-		depth int               // => current ring depth tbd
-		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
-	)
-	mem, _ := sys.Mem()
-	swapping := mem.SwapUsed > r.swap.Load()
-	if swapping {
-		r.Swapping.Store(SwappingMax)
-	} else {
-		r.Swapping.Store(r.Swapping.Load() / 2)
-	}
-	r.swap.Store(mem.SwapUsed)
-
-	// 1. enough => free idle
-	if mem.ActualFree > r.lowWM && !swapping {
-		r.minDepth.Store(minDepth)
-		if delta := r.freeIdle(freeIdleMin); delta > 0 {
-			r.toGC.Add(delta)
-			r.doGC(mem.ActualFree, sizeToGC, false, false)
-		}
-		goto timex
-	}
-	if mem.ActualFree <= r.MinFree || swapping { // 2. mem too low indicates "high watermark"
-		depth = minDepth / 4
-		if mem.ActualFree < r.MinFree {
-			depth = minDepth / 8
-		}
-		if swapping {
-			depth = 1
-		}
-		r.minDepth.Store(int64(depth))
-		limit = sizeToGC / 2
-	} else { // 3. in-between hysteresis
-		x := uint64(maxDepth-minDepth) * (mem.ActualFree - r.MinFree)
-		depth = minDepth + int(x/(r.lowWM-r.MinFree)) // Heu #2
-		cmn.Dassert(depth >= minDepth && depth <= maxDepth, pkgName)
-		r.minDepth.Store(minDepth / 4)
-	}
-	// idle first
-	for i, s := range &r.rings {
-		r.sorted[i] = sortpair{s, r.stats.Adeltas[i]}
-	}
-	sort.Slice(r.sorted, r.fsort)
-	for _, pair := range r.sorted {
-		s := pair.s
-		if delta := s.reduce(depth, pair.v == 0 /* idle */, true /* force */); delta > 0 {
-			if r.doGC(mem.ActualFree, limit, true, swapping) {
-				goto timex
-			}
-		}
-	}
-	// 4. red
-	if mem.ActualFree <= r.MinFree || swapping {
-		r.doGC(mem.ActualFree, limit, true, swapping)
-	}
-timex:
-	return r.getNextInterval(mem.ActualFree, mem.Total, swapping)
-}
-
-func (r *Mem2) getNextInterval(free, total uint64, swapping bool) time.Duration {
-	var changed bool
-	switch {
-	case free > r.lowWM && free > total-total/5:
-		if r.time.d != r.TimeIval*2 {
-			r.time.d = r.TimeIval * 2
-			changed = true
-		}
-	case free <= r.MinFree || swapping:
-		if r.time.d != r.TimeIval/4 {
-			r.time.d = r.TimeIval / 4
-			changed = true
-		}
-	case free <= r.lowWM:
-		if r.time.d != r.TimeIval/2 {
-			r.time.d = r.TimeIval / 2
-			changed = true
-		}
-	default:
-		if r.time.d != r.TimeIval {
-			r.time.d = r.TimeIval
-			changed = true
-		}
-	}
-	if changed && bool(glog.FastV(4, glog.SmoduleMemsys)) {
-		glog.Infof("timer %v, free %s", r.time.d, cmn.B2S(int64(free), 1))
-	}
-	return r.time.d
-}
-
 // freeIdle traverses and deallocates idle slabs- those that were not used for at
 // least the specified duration; returns freed size
-func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
+func (r *MMSA) freeIdle(duration time.Duration) (freed int64) {
 	for i, idle := range &r.stats.Idle {
 		if idle.IsZero() {
 			continue
@@ -640,62 +529,17 @@ func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
 	return
 }
 
-// The method is called in a few different cases:
-// 1) upon periodic freeing of idle slabs
-// 2) after forceful reduction of the /less/ active slabs (done when memory is running low)
-// 3) on demand via Mem2.Free()
-func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool) {
-	avg, err := sys.LoadAverage()
-	if err != nil {
-		glog.Errorf("Failed to load averages, err: %v", err)
-		avg.One = 999 // fall thru on purpose
-	}
-	if avg.One > loadAvg && !force && !swapping { // Heu #3
-		return
-	}
-	toGC := r.toGC.Load()
-	if toGC > minsize {
-		str := fmt.Sprintf(
-			"GC(force: %t, swapping: %t); load: %.2f; free: %s; toGC_size: %s",
-			force, swapping, avg.One, cmn.B2S(int64(free), 1), cmn.B2S(toGC, 2),
-		)
-		if force || swapping { // Heu #4
-			glog.Warningf("%s - freeing memory to the OS...", str)
-			cmn.FreeMemToOS() // forces GC followed by an attempt to return memory to the OS
-		} else { // Heu #5
-			if glog.FastV(4, glog.SmoduleMemsys) {
-				glog.Infof(str)
-			}
-			runtime.GC()
-		}
-		gced = true
-		r.toGC.Store(0)
-	}
-	return
-}
-
-func (r *Mem2) fsort(i, j int) bool {
-	return r.sorted[i].v < r.sorted[j].v
-}
-
-func (r *Mem2) Release() {
-	hk.Housekeeper.Unregister(r.Name + ".gc")
-	for _, s := range &r.rings {
-		_ = s.cleanup()
-	}
-}
-
-func (s *Slab2) _alloc() (buf []byte) {
+func (s *Slab) _alloc() (buf []byte) {
 	if len(s.get) > s.pos { // fast path
 		buf = s.get[s.pos]
 		s.pos++
-		s.stats.Hits.Inc()
+		s.hits.Inc()
 		return
 	}
 	return s._allocSlow()
 }
 
-func (s *Slab2) _allocSlow() (buf []byte) {
+func (s *Slab) _allocSlow() (buf []byte) {
 	curMinDepth := s.pMinDepth.Load()
 	if curMinDepth == 0 {
 		curMinDepth = 1
@@ -719,12 +563,12 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 	s.pos = 0
 	buf = s.get[s.pos]
 	s.pos++
-	s.stats.Hits.Inc()
+	s.hits.Inc()
 	return
 }
 
-func (s *Slab2) grow(cnt int) {
-	if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.debug {
+func (s *Slab) grow(cnt int) {
+	if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.m.Debug {
 		lput := len(s.put)
 		glog.Infof("%s: grow by %d => %d", s.tag, cnt, lput+cnt)
 	}
@@ -734,11 +578,11 @@ func (s *Slab2) grow(cnt int) {
 	}
 }
 
-func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
+func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 	s.muput.Lock()
 	lput := len(s.put)
 	cnt := lput - todepth
-	if isidle {
+	if isIdle {
 		if force {
 			cnt = cmn.Max(cnt, lput/2) // Heu #6
 		} else {
@@ -746,8 +590,8 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.debug {
-			glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isidle, lput, lput-cnt)
+		if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.m.Debug {
+			glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isIdle, lput, lput-cnt)
 		}
 		for ; cnt > 0; cnt-- {
 			lput--
@@ -761,7 +605,7 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 	s.muget.Lock()
 	lget := len(s.get) - s.pos
 	cnt = lget - todepth
-	if isidle {
+	if isIdle {
 		if force {
 			cnt = cmn.Max(cnt, lget/2) // Heu #9
 		} else {
@@ -769,8 +613,8 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.debug {
-			glog.Infof("%s(f=%t, i=%t): reduce lget %d => %d", s.tag, force, isidle, lget, lget-cnt)
+		if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.m.Debug {
+			glog.Infof("%s(f=%t, i=%t): reduce lget %d => %d", s.tag, force, isIdle, lget, lget-cnt)
 		}
 		for ; cnt > 0; cnt-- {
 			s.get[s.pos] = nil
@@ -782,7 +626,7 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 	return
 }
 
-func (s *Slab2) cleanup() (freed int64) {
+func (s *Slab) cleanup() (freed int64) {
 	s.muget.Lock()
 	s.muput.Lock()
 	for i := s.pos; i < len(s.get); i++ {

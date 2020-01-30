@@ -17,7 +17,7 @@ import (
 type (
 	XactBckCopy struct {
 		xactBckBase
-		slab  *memsys.Slab2
+		slab  *memsys.Slab
 		bckTo *cluster.Bck
 	}
 	bccJogger struct { // one per mountpath
@@ -31,7 +31,7 @@ type (
 // public methods
 //
 
-func NewXactBCC(id int64, bckFrom, bckTo *cluster.Bck, action string, t cluster.Target, slab *memsys.Slab2) *XactBckCopy {
+func NewXactBCC(id int64, bckFrom, bckTo *cluster.Bck, action string, t cluster.Target, slab *memsys.Slab) *XactBckCopy {
 	return &XactBckCopy{
 		xactBckBase: *newXactBckBase(id, action, bckFrom, t),
 		slab:        slab,

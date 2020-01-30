@@ -42,9 +42,6 @@ const (
 	GiB = 1024 * MiB
 	TiB = 1024 * GiB
 
-	DefaultBufSize = KiB * 32
-	PageSize       = KiB * 4
-
 	// Constant seeds for UUID generator
 	uuidWorker  = 1
 	u64idWorker = 2

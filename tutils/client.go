@@ -191,7 +191,7 @@ func readResponse(r *http.Response, w io.Writer, src string, validate bool) (int
 		return 0, "", fmt.Errorf("bad status %d from %s, err: %v", r.StatusCode, src, err)
 	}
 
-	buf, slab := Mem2.AllocForSize(cmn.DefaultBufSize)
+	buf, slab := MMSA.Alloc()
 	defer slab.Free(buf)
 
 	if validate {
@@ -779,7 +779,7 @@ func PutObjsFromList(proxyURL string, bck cmn.Bck, readerPath, readerType, objPa
 	if sgl != nil {
 		slabSize := sgl.Slab().Size()
 		for i := 0; i < numworkers; i++ {
-			sgls[i] = Mem2.NewSGL(slabSize)
+			sgls[i] = MMSA.NewSGL(slabSize)
 		}
 		defer func() {
 			for _, sgl := range sgls {

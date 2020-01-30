@@ -170,7 +170,7 @@ func (ds *dsorterGeneral) start() error {
 		Extra: &transport.Extra{
 			Compression: config.DSort.Compression,
 			Config:      config,
-			Mem2:        mm,
+			MMSA:        mm,
 		},
 	}
 	if _, err := transport.Register(respNetwork, trname, ds.makeRecvResponseFunc()); err != nil {
@@ -301,13 +301,13 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
 		loadLocal := func(w io.Writer) (written int64, err error) {
 			var (
-				slab      *memsys.Slab2
+				slab      *memsys.Slab
 				buf       []byte
 				storeType = obj.StoreType
 			)
 
 			if storeType != extract.SGLStoreType { // SGL does not need buffer as it is buffer itself
-				slab, err = mm.GetSlab2(memsys.MaxSlabSize)
+				slab, err = mm.GetSlab(memsys.MaxPageSlabSize)
 				cmn.AssertNoErr(err)
 				buf = slab.Alloc()
 			}
@@ -656,7 +656,7 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.Receive {
 			beforeSend = time.Now()
 		}
 
-		slab, err := mm.GetSlab2(memsys.MaxSlabSize)
+		slab, err := mm.GetSlab(memsys.MaxPageSlabSize)
 		cmn.AssertNoErr(err)
 		buf := slab.Alloc()
 

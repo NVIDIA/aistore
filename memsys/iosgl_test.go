@@ -17,7 +17,7 @@ import (
 )
 
 var _ = Describe("SGL", func() {
-	mm := GMM()
+	mm := DefaultPageMM()
 
 	randReader := func(size int64) ([]byte, io.Reader) {
 		buf := make([]byte, size)
@@ -46,7 +46,7 @@ var _ = Describe("SGL", func() {
 			size := int64(11*cmn.MiB + 2*cmn.KiB + 123)
 			buf, r := randReader(size)
 
-			sgl := mm.NewSGL(0, MaxSlabSize)
+			sgl := mm.NewSGL(0, MaxPageSlabSize)
 
 			n, err := sgl.ReadFrom(r)
 			Expect(err).ToNot(HaveOccurred())

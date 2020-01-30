@@ -420,8 +420,9 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 // * writer - where to save the slice/meta/replica data
 // * exists - if the remote target had the requested object
 // * reader - response body
-func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs, reader io.Reader) (err error) {
-	buf, slab := mm.AllocDefault()
+func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs,
+	reader io.Reader) (err error) {
+	buf, slab := mm.Alloc()
 
 	if !exists {
 		writer.wg.Done()

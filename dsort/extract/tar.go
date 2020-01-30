@@ -46,7 +46,7 @@ type tarExtractCreator struct{}
 
 // tarRecordDataReader is used for writing metadata as well as data to the buffer.
 type tarRecordDataReader struct {
-	slab *memsys.Slab2
+	slab *memsys.Slab
 
 	metadataSize int64
 	size         int64
@@ -86,7 +86,7 @@ func newTarRecordDataReader() *tarRecordDataReader {
 	var err error
 
 	rd := &tarRecordDataReader{}
-	rd.slab, err = mem.GetSlab2(4 * cmn.KiB)
+	rd.slab, err = mem.GetSlab(4 * cmn.KiB)
 	cmn.AssertNoErr(err)
 	rd.metadataBuf = rd.slab.Alloc()
 	return rd
@@ -145,12 +145,12 @@ func (t *tarExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 		header *tar.Header
 	)
 
-	var slabSize int64 = memsys.MaxSlabSize
+	var slabSize int64 = memsys.MaxPageSlabSize
 	if r.Size() < cmn.MiB {
 		slabSize = 128 * cmn.KiB
 	}
 
-	slab, err := mem.GetSlab2(slabSize)
+	slab, err := mem.GetSlab(slabSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 	defer slab.Free(buf)

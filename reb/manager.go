@@ -338,7 +338,7 @@ func (reb *Manager) beginStreams(md *globArgs) {
 		Extra: &transport.Extra{
 			Compression: md.config.Rebalance.Compression,
 			Config:      md.config,
-			Mem2:        reb.t.GetMem2()},
+			MMSA:        reb.t.GetMem2()},
 		Multiplier:   int(md.config.Rebalance.Multiplier),
 		ManualResync: true,
 	}

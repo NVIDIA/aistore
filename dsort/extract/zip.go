@@ -28,7 +28,7 @@ type (
 
 	// zipRecordDataReader is used for writing metadata as well as data to the buffer.
 	zipRecordDataReader struct {
-		slab *memsys.Slab2
+		slab *memsys.Slab
 
 		metadataSize int64
 		size         int64
@@ -43,7 +43,7 @@ type (
 
 func newZipRecordDataReader() *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
-	rd.metadataBuf, rd.slab = mem.AllocDefault()
+	rd.metadataBuf, rd.slab = mem.Alloc()
 	return rd
 }
 
@@ -108,12 +108,12 @@ func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 		return extractedSize, extractedCount, err
 	}
 
-	var slabSize int64 = memsys.MaxSlabSize
+	var slabSize int64 = memsys.MaxPageSlabSize
 	if r.Size() < cmn.MiB {
 		slabSize = 128 * cmn.KiB
 	}
 
-	slab, err := mem.GetSlab2(slabSize)
+	slab, err := mem.GetSlab(slabSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 	defer slab.Free(buf)

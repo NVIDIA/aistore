@@ -86,7 +86,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 
-	sgl = tutils.Mem2.NewSGL(filesize)
+	sgl = tutils.MMSA.NewSGL(filesize)
 	defer sgl.Free()
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -167,7 +167,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 
-	sgl = tutils.Mem2.NewSGL(fileSize)
+	sgl = tutils.MMSA.NewSGL(fileSize)
 	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bck, SmokeDir, readerType, prefix, fileSize, numberOfFiles, errCh, fileNameCh, sgl, true)
 	tassert.SelectErr(t, errCh, "put", true)
@@ -256,7 +256,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	sgl = tutils.Mem2.NewSGL(filesize)
+	sgl = tutils.MMSA.NewSGL(filesize)
 	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bck, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	tassert.SelectErr(t, errCh, "put", false)
@@ -349,7 +349,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		bck        = rtd.bck
 	)
 
-	sgl := tutils.Mem2.NewSGL(filesize)
+	sgl := tutils.MMSA.NewSGL(filesize)
 	defer sgl.Free()
 
 	tutils.PutRandObjs(proxyURL, rtd.bck, SmokeDir, readerType, SmokeStr, filesize, numPuts, errCh, filesPutCh, sgl)
@@ -457,7 +457,7 @@ func TestRenameObjects(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	sgl := tutils.Mem2.NewSGL(1024 * 1024)
+	sgl := tutils.MMSA.NewSGL(1024 * 1024)
 	defer sgl.Free()
 
 	tutils.PutRandObjs(proxyURL, bck, "", readerType, "", 0, numPuts, errCh, objsPutCh, sgl)

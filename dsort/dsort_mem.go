@@ -141,7 +141,7 @@ func (c *rwConnector) connectReader(key string, r io.Reader, size int64) (err er
 	c.mu.Unlock()
 
 	if !all {
-		rw.sgl = memsys.GMM().NewSGL(size)
+		rw.sgl = memsys.DefaultPageMM().NewSGL(size)
 		_, err = io.Copy(rw.sgl, r)
 		rw.wgr.Done()
 		return
@@ -237,7 +237,7 @@ func (ds *dsorterMem) start() error {
 		Extra: &transport.Extra{
 			Compression: config.DSort.Compression,
 			Config:      config,
-			Mem2:        mm,
+			MMSA:        mm,
 		},
 	}
 	if _, err := transport.Register(respNetwork, trname, ds.makeRecvResponseFunc()); err != nil {

@@ -56,7 +56,7 @@ func Test_CompressedOne(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	path, err := transport.Register(network, trname, receive10G, memsys.GMM() /* optionally, specify memsys*/)
+	path, err := transport.Register(network, trname, receive10G, memsys.DefaultPageMM() /* optionally, specify memsys*/)
 	tassert.CheckFatal(t, err)
 
 	httpclient := transport.NewIntraDataClient()
@@ -66,7 +66,7 @@ func Test_CompressedOne(t *testing.T) {
 	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
 	stream := transport.NewStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAlways})
 
-	slab, _ := Mem2.GetSlab2(memsys.MaxSlabSize)
+	slab, _ := MMSA.GetSlab(memsys.MaxPageSlabSize)
 	random := newRand(time.Now().UnixNano())
 	buf := slab.Alloc()
 	_, _ = random.Read(buf)
@@ -120,7 +120,7 @@ func Test_DryRun(t *testing.T) {
 	stream := transport.NewStream(nil, "dummy/null", nil)
 
 	random := newRand(time.Now().UnixNano())
-	slab, _ := Mem2.GetSlab2(cmn.KiB * 32)
+	slab, _ := MMSA.GetSlab(cmn.KiB * 32)
 	size, num, prevsize := int64(0), 0, int64(0)
 	hdr := genStaticHeader()
 
