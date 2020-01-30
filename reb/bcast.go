@@ -36,15 +36,6 @@ type (
 		Running     bool                    `json:"running"`             // running?
 		Quiescent   bool                    `json:"quiescent"`           // transport queue is empty
 	}
-
-	// push notification struct - a target sends it when it enters `stage`
-	pushReq struct {
-		DaemonID string `json:"sid"`             // sender's ID
-		RebID    int64  `json:"rebid,string"`    // sender's global rebalance ID
-		Stage    uint32 `json:"stage"`           // stage the sender has just reached
-		Batch    int    `json:"batch"`           // batch when restoring
-		Extra    []byte `json:"extra,omitempty"` // metadata
-	}
 )
 
 // via GET /v1/health (cmn.Health)

@@ -603,7 +603,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	// save object's metadata locally
 	mainMeta := *meta
 	mainMeta.SliceID = 0
-	metaBuf := mainMeta.marshal()
+	metaBuf := mainMeta.Marshal()
 	metaSize := len(metaBuf)
 
 	metaFQN := fs.CSM.GenContentFQN(mainFQN, MetaType, "")

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -150,19 +149,6 @@ const (
 )
 
 type (
-	// Metadata - EC information stored in metafiles for every encoded object
-	Metadata struct {
-		Size       int64  `json:"size"`                      // size of original file (after EC'ing the total size of slices differs from original)
-		ObjCksum   string `json:"obj_chk"`                   // checksum of the original object
-		ObjVersion string `json:"obj_version,omitempty"`     // object version
-		CksumType  string `json:"slice_ck_type,omitempty"`   // slice checksum type
-		CksumValue string `json:"slice_chk_value,omitempty"` // slice checksum of the slice if EC is used
-		Data       int    `json:"data"`                      // the number of data slices
-		Parity     int    `json:"parity"`                    // the number of parity slices
-		SliceID    int    `json:"sliceid,omitempty"`         // 0 for full replica, 1 to N for slices
-		IsCopy     bool   `json:"copy"`                      // object is replicated(true) or encoded(false)
-	}
-
 	// request - structure to request an object to be EC'ed or restored
 	Request struct {
 		LOM      *cluster.LOM // object info
@@ -267,26 +253,6 @@ func (r *IntraReq) Unmarshal(b []byte) error {
 	return jsoniter.Unmarshal(b, r)
 }
 
-func (m *Metadata) marshal() []byte {
-	return cmn.MustMarshal(m)
-}
-
-func MetaToString(m *Metadata) string {
-	if m == nil {
-		return ""
-	}
-	return string(m.marshal())
-}
-
-func StringToMeta(s string) (*Metadata, error) {
-	var md Metadata
-	err := jsoniter.Unmarshal([]byte(s), &md)
-	if err == nil {
-		return &md, nil
-	}
-	return nil, err
-}
-
 var (
 	mm           = &memsys.Mem2{Name: "ec", MinPctFree: 10}
 	slicePadding = make([]byte, 64) // for padding EC slices
@@ -388,31 +354,6 @@ func freeSlices(slices []*slice) {
 			s.free()
 		}
 	}
-}
-
-// LoadMetadata loads and parses EC metadata from a file
-func LoadMetadata(fqn string) (*Metadata, error) {
-	b, err := ioutil.ReadFile(fqn)
-	if err != nil {
-		err = fmt.Errorf("Failed to read metafile %q: %v", fqn, err)
-		return nil, err
-	}
-	md := &Metadata{}
-	if err := jsoniter.Unmarshal(b, md); err != nil {
-		err := fmt.Errorf("Damaged metafile %q: %v", fqn, err)
-		return nil, err
-	}
-
-	return md, nil
-}
-
-// ObjectMetadata returns metadata for an object or its slice if any exists
-func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
-	fqn, _, err := cluster.HrwFQN(MetaType, bck, objName)
-	if err != nil {
-		return nil, err
-	}
-	return LoadMetadata(fqn)
 }
 
 // RequestECMeta returns an EC metadata found on a remote target.

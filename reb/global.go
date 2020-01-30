@@ -675,14 +675,14 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	lomack.q[lom.Uname()] = lom
 	lomack.mu.Unlock()
 	// transmit
-	ack := regularAck{
-		GlobRebID: rj.m.GlobRebID(),
-		DaemonID:  rj.m.t.Snode().ID(),
-	}
+	ack := regularAck{globRebID: rj.m.GlobRebID(), daemonID: rj.m.t.Snode().ID()}
+	packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
+	packer.WriteByte(rebMsgAckRegular)
+	packer.WriteAny(&ack)
 	hdr := transport.Header{
 		Bck:     lom.Bck().Bck,
 		ObjName: lom.Objname,
-		Opaque:  cmn.MustMarshal(&ack), // self == src
+		Opaque:  packer.Bytes(), // self == src
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       lom.Size(),
 			Atime:      lom.Atime().UnixNano(),

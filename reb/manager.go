@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const pkgName = "rebalance"
@@ -411,16 +410,27 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 	}
 
 	ack := &regularAck{}
-	if err = jsoniter.Unmarshal(hdr.Opaque, ack); err != nil {
-		glog.Error(err)
+	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	act, err := unpacker.ReadByte()
+	if err != nil {
+		glog.Errorf("Failed to read message type: %v", err)
 		return
 	}
-	if ack.GlobRebID != reb.GlobRebID() {
-		glog.Warningf("Received object %s/%s: %s", hdr.Bck, hdr.ObjName, reb.rebIDMismatchMsg(ack.GlobRebID))
+	if act != rebMsgAckRegular {
+		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgAckRegular)
+	}
+
+	if err = unpacker.ReadAny(ack); err != nil {
+		glog.Errorf("Failed to parse acknowledge: %v", err)
+		return
+	}
+
+	if ack.globRebID != reb.GlobRebID() {
+		glog.Warningf("Received object %s/%s: %s", hdr.Bck, hdr.ObjName, reb.rebIDMismatchMsg(ack.globRebID))
 		io.Copy(ioutil.Discard, objReader) // drain the reader
 		return
 	}
-	tsid := ack.DaemonID // the sender
+	tsid := ack.daemonID // the sender
 	// Rx
 	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
 	if err = lom.Init(hdr.Bck); err != nil {
@@ -472,7 +482,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 		return
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
-		ack := &regularAck{GlobRebID: reb.GlobRebID(), DaemonID: reb.t.Snode().ID()}
+		ack := &regularAck{globRebID: reb.GlobRebID(), daemonID: reb.t.Snode().ID()}
 		packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
 		packer.WriteByte(rebMsgAckRegular)
 		packer.WriteAny(ack)
@@ -492,12 +502,12 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 	reb.stages.stage.Store(newStage)
 
 	req := pushReq{
-		DaemonID: reb.t.Snode().DaemonID, Stage: newStage,
-		RebID: reb.globRebID.Load(), Batch: int(batchID),
+		daemonID: reb.t.Snode().DaemonID, stage: newStage,
+		rebID: reb.globRebID.Load(), batch: int(batchID),
 	}
 	hdr := transport.Header{
 		ObjAttrs: transport.ObjectAttrs{Size: 0},
-		Opaque:   cmn.MustMarshal(req),
+		Opaque:   reb.encodePushReq(&req),
 	}
 	// second, notify all
 	if err := reb.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
@@ -511,33 +521,33 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 		return
 	}
 
-	var req pushReq
-	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
-		glog.Errorf("Invalid push notification: %v", err)
+	req, err := reb.decodePushReq(hdr.Opaque)
+	if err != nil {
+		glog.Error(err)
 		return
 	}
 
-	if reb.GlobRebID() != req.RebID {
-		glog.Warningf("Stage %v push notification: %s", stages[req.Stage], reb.rebIDMismatchMsg(req.RebID))
+	if reb.GlobRebID() != req.rebID {
+		glog.Warningf("Stage %v push notification: %s", stages[req.stage], reb.rebIDMismatchMsg(req.rebID))
 		return
 	}
 
-	if req.Stage == rebStageAbort {
+	if req.stage == rebStageAbort {
 		// a target aborted its xaction and sent the signal to others
-		glog.Warningf("Rebalance abort notification from %s", req.DaemonID)
+		glog.Warningf("Rebalance abort notification from %s", req.daemonID)
 		if reb.xreb != nil {
 			reb.xreb.Abort()
 		}
 		return
 	}
 
-	if req.Stage == rebStageECBatch {
+	if req.stage == rebStageECBatch {
 		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Infof("%s Target %s finished batch %d", reb.t.Snode().Name(), req.DaemonID, req.Batch)
+			glog.Infof("%s Target %s finished batch %d", reb.t.Snode().Name(), req.daemonID, req.batch)
 		}
 	}
 
-	reb.stages.setStage(req.DaemonID, req.Stage, int64(req.Batch))
+	reb.stages.setStage(req.daemonID, req.stage, int64(req.batch))
 }
 
 func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
@@ -586,8 +596,8 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Re
 		glog.Errorf("Failed to parse acknowledge: %v", err)
 		return
 	}
-	if ack.GlobRebID != reb.globRebID.Load() {
-		glog.Warningf("ACK from %s: %s", ack.DaemonID, reb.rebIDMismatchMsg(ack.GlobRebID))
+	if ack.globRebID != reb.globRebID.Load() {
+		glog.Warningf("ACK from %s: %s", ack.daemonID, reb.rebIDMismatchMsg(ack.globRebID))
 		return
 	}
 
@@ -684,13 +694,13 @@ func (reb *Manager) abortGlobal() {
 	glog.Info("Aborting global rebalance...")
 	reb.xreb.Abort()
 	req := pushReq{
-		DaemonID: reb.t.Snode().DaemonID,
-		RebID:    reb.GlobRebID(),
-		Stage:    rebStageAbort,
+		daemonID: reb.t.Snode().DaemonID,
+		rebID:    reb.GlobRebID(),
+		stage:    rebStageAbort,
 	}
 	hdr := transport.Header{
 		ObjAttrs: transport.ObjectAttrs{Size: 0},
-		Opaque:   cmn.MustMarshal(req),
+		Opaque:   reb.encodePushReq(&req),
 	}
 	if err := reb.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
 		glog.Errorf("Failed to broadcast abort notification: %v", err)

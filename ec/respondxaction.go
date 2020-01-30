@@ -234,7 +234,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 
 		// save its metadata
 		metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-		metaBuf := meta.marshal()
+		metaBuf := meta.Marshal()
 		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false)
 
 		slab.Free(buf)

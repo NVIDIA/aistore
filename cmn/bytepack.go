@@ -7,6 +7,7 @@ package cmn
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 // The module provides a way to encode/decode data as a compact binary slice.
@@ -232,7 +233,9 @@ func (bw *BytePack) WriteString(s string) {
 func (bw *BytePack) WriteAny(st Packer) {
 	curr := bw.off
 	st.Pack(bw)
-	Assert(bw.off-curr == st.PackedSize())
+	if bw.off-curr != st.PackedSize() {
+		AssertMsg(false, fmt.Sprintf("%T declared %d, saved %d: %+v", st, st.PackedSize(), bw.off-curr, st))
+	}
 }
 
 func (bw *BytePack) Bytes() []byte {

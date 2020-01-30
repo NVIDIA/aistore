@@ -216,10 +216,10 @@ type (
 	}
 	// a description of a CT that local target awaits from another target
 	waitCT struct {
-		sgl     *memsys.SGL // SGL to save the received CT
-		meta    []byte      // CT's EC metadata
-		sliceID int16       // slice ID to wait (special value `anySliceID` - wait for the first slice for the object)
-		recv    atomic.Bool // if this CT has been received already (for proper clean, rebuild, and check)
+		sgl     *memsys.SGL  // SGL to save the received CT
+		meta    *ec.Metadata // CT's EC metadata
+		sliceID int16        // slice ID to wait (special value `anySliceID` - wait for the first slice for the object)
+		recv    atomic.Bool  // if this CT has been received already (for proper clean, rebuild, and check)
 	}
 	// helper object that manages slices the local target waits for from remote targets
 	ctWaiter struct {
@@ -409,10 +409,10 @@ func (s *ecData) appendNodeData(daemonID string, ct *rebCT) {
 func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 	cmn.Assert(ct.meta != nil)
 	req := pushReq{
-		DaemonID: reb.t.Snode().ID(),
-		Stage:    rebStageECGlobRepair,
-		RebID:    reb.globRebID.Load(),
-		Extra:    cmn.MustMarshal(ct.meta),
+		daemonID: reb.t.Snode().ID(),
+		stage:    rebStageECGlobRepair,
+		rebID:    reb.globRebID.Load(),
+		md:       ct.meta,
 	}
 
 	fqn := ct.realFQN
@@ -429,7 +429,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 		ObjAttrs: transport.ObjectAttrs{
 			Size: ct.ObjSize,
 		},
-		Opaque: cmn.MustMarshal(req),
+		Opaque: reb.encodePushReq(&req),
 	}
 
 	if resolved.ContentType == fs.ObjectType {
@@ -503,10 +503,10 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	}
 	newMeta.SliceID = sliceID
 	req := pushReq{
-		DaemonID: reb.t.Snode().ID(),
-		Stage:    rebStageECGlobRepair,
-		RebID:    reb.globRebID.Load(),
-		Extra:    cmn.MustMarshal(&newMeta),
+		daemonID: reb.t.Snode().ID(),
+		stage:    rebStageECGlobRepair,
+		rebID:    reb.globRebID.Load(),
+		md:       &newMeta,
 	}
 	cmn.AssertMsg(ct.ObjSize != 0, ct.Objname)
 	size := ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
@@ -516,7 +516,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: size,
 		},
-		Opaque: cmn.MustMarshal(req),
+		Opaque: reb.encodePushReq(&req),
 	}
 	if xxhash != "" {
 		hdr.ObjAttrs.CksumValue = xxhash
@@ -551,7 +551,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 //   2. A CT is received and this target is not the default target (it
 //      means that the CTs came from default target after EC had been rebuilt)
 func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata, hdr transport.Header) error {
-	cmn.Assert(req.Extra != nil)
+	cmn.Assert(req.md != nil)
 	var (
 		ctFQN    string
 		lom      *cluster.LOM
@@ -603,7 +603,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 
 	buffer, slab := reb.t.GetMem2().AllocDefault()
 	metaFQN := mpath.MakePathCT(ec.MetaType, hdr.Bck, hdr.ObjName)
-	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.Extra), buffer, false)
+	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.md.Marshal()), buffer, false)
 	if err != nil {
 		slab.Free(buffer)
 		return err
@@ -638,17 +638,12 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 // Receives a CT from another target, saves to local drive because it is a missing one
 func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Reader) error {
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s GOT CT for %s/%s from %s", reb.t.Snode().Name(), hdr.Bck, hdr.ObjName, req.DaemonID)
+		glog.Infof("%s GOT CT for %s/%s from %s", reb.t.Snode().Name(), hdr.Bck, hdr.ObjName, req.daemonID)
 	}
-	var md ec.Metadata
-	cmn.Assert(req.Extra != nil)
-	if err := jsoniter.Unmarshal(req.Extra, &md); err != nil {
-		cmn.DrainReader(reader)
-		return err
-	}
+	cmn.Assert(req.md != nil)
 
 	reb.laterx.Store(true)
-	sliceID := md.SliceID
+	sliceID := req.md.SliceID
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
 		glog.Infof(">>> %s got CT %d for %s/%s", reb.t.Snode().Name(), sliceID, hdr.Bck, hdr.ObjName)
 	}
@@ -658,7 +653,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	cmn.Assert(waitFor.sgl != nil)
 	cmn.Assert(!waitFor.recv.Load())
 
-	waitFor.meta = req.Extra
+	waitFor.meta = req.md
 	n, err := io.Copy(waitFor.sgl, reader)
 	if err != nil {
 		return fmt.Errorf("failed to read slice %d for %s/%s: %v", sliceID, hdr.Bck, hdr.ObjName, err)
@@ -676,7 +671,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	waitRebuild := reb.ec.waiter.updateRebuildInfo(uid)
 
 	if !waitRebuild || sliceID == 0 {
-		if err := reb.saveCTToDisk(waitFor.sgl, req, &md, hdr); err != nil {
+		if err := reb.saveCTToDisk(waitFor.sgl, req, req.md, hdr); err != nil {
 			glog.Errorf("Failed to save CT %d of %s: %v", sliceID, hdr.ObjName, err)
 			reb.abortGlobal()
 		}
@@ -690,7 +685,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 
 	// send acknowledge back to the caller
 	smap := (*cluster.Smap)(reb.smap.Load())
-	tsi := smap.GetTarget(req.DaemonID)
+	tsi := smap.GetTarget(req.daemonID)
 	ack := &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.Snode().ID()}
 	packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
 	packer.WriteByte(rebMsgAckEC)
@@ -711,21 +706,21 @@ func (reb *Manager) onECData(w http.ResponseWriter, hdr transport.Header, reader
 		return
 	}
 
-	var req pushReq
-	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
+	req, err := reb.decodePushReq(hdr.Opaque)
+	if err != nil {
 		glog.Errorf("Invalid push notification: %v", err)
 		return
 	}
 
-	if req.RebID != reb.globRebID.Load() {
+	if req.rebID != reb.globRebID.Load() {
 		glog.Warningf("Local node has not started or already has finished rebalancing")
 		cmn.DrainReader(reader)
 		return
 	}
 
 	// a remote target sent CT
-	if req.Stage == rebStageECGlobRepair {
-		if err := reb.receiveCT(&req, hdr, reader); err != nil {
+	if req.stage == rebStageECGlobRepair {
+		if err := reb.receiveCT(req, hdr, reader); err != nil {
 			glog.Errorf("Failed to receive CT for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 			return
 		}
@@ -735,27 +730,27 @@ func (reb *Manager) onECData(w http.ResponseWriter, hdr transport.Header, reader
 	// otherwise a remote target sent collected list of its CTs:
 	// - receive the CT list
 	// - update the remote target stage
-	if req.Stage != rebStageECNamespace {
+	if req.stage != rebStageECNamespace {
 		glog.Errorf("Invalid stage %s : %s (must be %s)", hdr.ObjName,
-			stages[req.Stage], stages[rebStageECNamespace])
+			stages[req.stage], stages[rebStageECNamespace])
 		cmn.DrainReader(reader)
 		return
 	}
 
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
-		glog.Errorf("Failed to read data from %s: %v", req.DaemonID, err)
+		glog.Errorf("Failed to read data from %s: %v", req.daemonID, err)
 		return
 	}
 
 	cts := make([]*rebCT, 0)
 	if err = jsoniter.Unmarshal(b, &cts); err != nil {
-		glog.Errorf("Failed to unmarshal data from %s: %v", req.DaemonID, err)
+		glog.Errorf("Failed to unmarshal data from %s: %v", req.daemonID, err)
 		return
 	}
 
-	reb.ec.setNodeData(req.DaemonID, cts)
-	reb.stages.setStage(req.DaemonID, req.Stage, 0)
+	reb.ec.setNodeData(req.daemonID, cts)
+	reb.stages.setStage(req.daemonID, req.stage, 0)
 }
 
 // Build a list buckets with their objects from a flat list of all CTs
@@ -1068,14 +1063,14 @@ func (reb *Manager) exchange() error {
 			}
 
 			req := pushReq{
-				DaemonID: reb.t.Snode().ID(),
-				Stage:    rebStageECNamespace,
-				RebID:    globRebID,
+				daemonID: reb.t.Snode().ID(),
+				stage:    rebStageECNamespace,
+				rebID:    globRebID,
 			}
 			body := cmn.MustMarshal(cts)
 			hdr := transport.Header{
 				ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
-				Opaque:   cmn.MustMarshal(req),
+				Opaque:   reb.encodePushReq(&req),
 			}
 			rd := cmn.NewByteHandle(body)
 			if err := reb.ec.data.Send(transport.Obj{Hdr: hdr}, rd, node); err != nil {
@@ -1911,11 +1906,7 @@ func (reb *Manager) metadataForSlice(slices []*waitCT, sliceID int) *ec.Metadata
 		if !sl.recv.Load() {
 			continue
 		}
-		var md ec.Metadata
-		if err := jsoniter.Unmarshal(sl.meta, &md); err != nil {
-			glog.Errorf("Invalid metadata: %v", err)
-			continue
-		}
+		md := *sl.meta
 		md.SliceID = sliceID
 		return &md
 	}
@@ -2028,7 +2019,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 	// put existing slices to readers list, and create SGL as writers for missing ones
 	slicesFound := int16(0)
 	var (
-		meta  []byte
+		meta  *ec.Metadata
 		cksum *cmn.Cksum
 	)
 	for _, sl := range slices {
@@ -2044,12 +2035,9 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 			meta = sl.meta
 		}
 	}
+
 	cmn.Assert(meta != nil)
-
-	var ecMD ec.Metadata
-	err = jsoniter.Unmarshal(meta, &ecMD)
-	cmn.Assert(err == nil)
-
+	ecMD := *meta // clone
 	for i, rd := range readers {
 		if rd != nil {
 			continue
