@@ -44,7 +44,7 @@ func Test_smoke(t *testing.T) {
 	for _, fs := range objSizes {
 		for _, r := range ratios {
 			s := fmt.Sprintf("size:%s,GET/PUT:%.0f%%", cmn.B2S(fs, 0), r*100)
-			t.Run(s, func(t *testing.T) { oneSmoke(t, proxyURL, fs, r, fp) })
+			t.Run(s, func(t *testing.T) { oneSmoke(t, proxyURL, bck, fs, r, fp) })
 		}
 	}
 
@@ -69,18 +69,13 @@ func Test_smoke(t *testing.T) {
 	}
 }
 
-func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, filesPutCh chan string) {
+func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objSize int64, ratio float32, filesPutCh chan string) {
 	var (
 		nGet  = int(float32(numworkers) * ratio)
 		nPut  = numworkers - nGet
 		sgls  = make([]*memsys.SGL, numworkers)
 		errCh = make(chan error, 100)
 		wg    = &sync.WaitGroup{}
-
-		bck = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.Cloud,
-		}
 	)
 
 	// Get the workers started
