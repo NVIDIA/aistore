@@ -78,6 +78,7 @@ import (
 //
 // ========================== end of TOO ========================================
 
+const readme = "https://github.com/NVIDIA/aistore/blob/master/memsys/README.md"
 const (
 	PageSize            = cmn.KiB * 4
 	DefaultBufSize      = PageSize * 8
@@ -106,16 +107,31 @@ const (
 )
 const NumStats = NumPageSlabs // NOTE: must be greater or equal NumSmallSlabs, otherwise out-of-bounds at init time
 
-// mem subsystem defaults (potentially, tunables)
+// =================================== MMSA config defaults ==========================================
+// The minimum memory (that must remain available) gets computed as follows:
+// 1) environment AIS_MINMEM_FREE takes precedence over everything else;
+// 2) if AIS_MINMEM_FREE is not defined, environment variables AIS_MINMEM_PCT_TOTAL and/or
+//    AIS_MINMEM_PCT_FREE define percentages to compute the minimum based on total
+//    or the currently available memory, respectively;
+// 3) with no environment, the minimum is computed based on the following MMSA member variables:
+//	* MinFree     uint64        // memory that must be available at all times
+//	* MinPctTotal int           // same, via percentage of total
+//	* MinPctFree  int           // ditto, as % of free at init time
+//     (example:
+//         mm := &memsys.MMSA{MinPctTotal: 4, MinFree: cmn.GiB * 2}
+//     )
+//  4) finally, if none of the above is specified, the constant `minMemFree` below is used
+//  Other important defaults are also commented below.
+// =================================== MMSA config defaults ==========================================
 const (
-	minDepth      = 128             // ring cap min; default ring growth increment
-	maxDepth      = 1024 * 24       // ring cap max
-	sizeToGC      = cmn.GiB * 2     // see heuristics ("Heu")
-	loadAvg       = 10              // "idle" load average to deallocate Slabs when below
-	minMemFree    = cmn.GiB         // default minimum memory size that must remain available - see AIS_MINMEM_*
-	memCheckAbove = time.Minute     // default memory checking frequency when above low watermark (see lowwm, setTimer())
-	freeIdleMin   = memCheckAbove   // time to reduce an idle slab to a minimum depth (see mindepth)
-	freeIdleZero  = freeIdleMin * 2 // ... to zero
+	minDepth      = 128                   // ring cap min; default ring growth increment
+	maxDepth      = 1024 * 24             // ring cap max
+	loadAvg       = 10                    // "idle" load average to deallocate Slabs when below
+	sizeToGC      = cmn.GiB * 2           // see heuristics ("Heu")
+	minMemFree    = cmn.GiB + cmn.MiB*256 // default minimum memory - see extended comment above
+	memCheckAbove = 90 * time.Second      // default memory checking frequency when above low watermark (see lowwm, setTimer())
+	freeIdleMin   = memCheckAbove         // time to reduce an idle slab to a minimum depth (see mindepth)
+	freeIdleZero  = freeIdleMin * 2       // ... to zero
 )
 
 // slab constants
@@ -197,19 +213,19 @@ type (
 
 var (
 	// gmm is the global memory manager used in packages outside ais.
-	gmm    = &MMSA{Name: defaultPageMM, TimeIval: time.Minute * 2, MinPctFree: 50}
-	smm    = &MMSA{Name: defaultSmallMM, TimeIval: time.Minute * 2, MinPctFree: 50, Small: true}
+	gmm    = &MMSA{Name: defaultPageMM, MinPctFree: 50}
+	smm    = &MMSA{Name: defaultSmallMM, MinPctFree: 50, Small: true}
 	mmOnce sync.Once // ensures that there is only one initialization
 )
 
-// Global memory manager getter
+// Global MMSA for usage by external clients and tools
 func DefaultPageMM() *MMSA {
 	mmOnce.Do(func() {
 		_ = gmm.Init(true /*panicOnErr*/)
 	})
 	return gmm
 }
-func DefaultSmallMM() *MMSA { return smm }
+func DefaultSmallMM() *MMSA { return smm } // TODO -- FIXME
 
 //////////////
 // MMSA API //
@@ -253,9 +269,9 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		}
 	}
 	// 3. validate and compute free memory "low watermark"
-	m, f := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 2)
+	required, actual := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree < r.MinFree {
-		err = fmt.Errorf("insufficient free memory %s, minimum required %s", f, m)
+		err = fmt.Errorf("insufficient free memory %s, minimum required %s (see %s for guidance)", actual, required, readme)
 		if panicOnErr {
 			panic(err)
 		}

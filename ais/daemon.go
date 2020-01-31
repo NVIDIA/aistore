@@ -120,6 +120,7 @@ func (g *rungroup) run() error {
 }
 
 func init() {
+	// role aka `DaemonType`
 	flag.StringVar(&daemon.cli.role, "role", "", "role of this AIS daemon: proxy | target")
 
 	// config itself and its command line overrides
@@ -129,11 +130,12 @@ func init() {
 	flag.DurationVar(&daemon.cli.config.ListBucketTime, "list_time", 0, "list bucket timeout")
 	flag.StringVar(&daemon.cli.config.ProxyURL, "proxyurl", "", "primary proxy/gateway URL to override local configuration")
 	flag.StringVar(&daemon.cli.confjson, "confjson", "", "JSON formatted \"{name: value, ...}\" string to override selected knob(s)")
-	flag.BoolVar(&daemon.cli.persist, "persist", false, "true: apply command-line args to the configuration and save the latter to disk\nfalse: keep it transient (for this run only)")
-
-	flag.BoolVar(&daemon.cli.skipStartup, "skipstartup", false, "determines if primary proxy should skip waiting for target registrations when starting up")
+	flag.BoolVar(&daemon.cli.persist, "persist", false,
+		"true: apply command-line args to the configuration and save the latter to disk\nfalse: keep it transient (for this run only)")
+	flag.BoolVar(&daemon.cli.skipStartup, "skipstartup", false,
+		"determines if primary proxy should skip waiting for target registrations when starting up")
 	flag.IntVar(&daemon.cli.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
-
+	// dry-run
 	flag.BoolVar(&daemon.dryRun.disk, "nodiskio", false, "dry-run: if true, no disk operations for GET and PUT")
 	flag.StringVar(&daemon.dryRun.sizeStr, "dryobjsize", "8m", "dry-run: in-memory random content")
 }
@@ -221,9 +223,9 @@ func aisinit(version, build string) {
 		runarr: make([]cmn.Runner, 0, 8),
 		runmap: make(map[string]cmn.Runner, 8),
 	}
-	// system-wide gen-purpose memory manager and slab/SGL allocator
-	daemon.mm = &memsys.MMSA{Name: "target-mm", MinPctTotal: 4, MinFree: cmn.GiB * 2}
-	if err := daemon.mm.Init(false /*panicOnErr*/); err != nil {
+	// system memory manager and slab/SGL allocator
+	daemon.mm = &memsys.MMSA{Name: ".ais.MMSA"}
+	if err := daemon.mm.Init(true /*panicOnErr*/); err != nil {
 		glog.Error(err)
 	}
 

@@ -295,7 +295,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 		return nil
 	}
 
-	slab, err := lom.T.GetMem2().GetSlab(xattrBufSize)
+	slab, err := lom.T.GetMMSA().GetSlab(xattrBufSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 
@@ -328,7 +328,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 	}
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	buf, slab := lom.T.GetMem2().Alloc()
+	buf, slab := lom.T.GetMMSA().Alloc()
 	for path, mpathInfo := range availablePaths {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
@@ -586,7 +586,7 @@ func (lom *LOM) computeXXHash(fqn string, size int64) (cksumValue string, err er
 		err = fmt.Errorf("%s, err: %v", fqn, err)
 		return
 	}
-	buf, slab := lom.T.GetMem2().Alloc(size)
+	buf, slab := lom.T.GetMMSA().Alloc(size)
 	cksumValue, err = cmn.ComputeXXHash(file, buf)
 	file.Close()
 	slab.Free(buf)

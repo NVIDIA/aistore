@@ -44,24 +44,17 @@ const (
 )
 
 var (
-	ctx dsortContext
-
+	ctx      dsortContext
 	mm       *memsys.MMSA
 	once     sync.Once
 	initOnce = func() {
 		fs.CSM.RegisterContentType(filetype.DSortFileType, &filetype.DSortFile{})
 		fs.CSM.RegisterContentType(filetype.DSortWorkfileType, &filetype.DSortFile{})
+		if mm == nil {
+			mm = memsys.DefaultPageMM() // NOTE: only for unit tests
+		}
 
-		mm = &memsys.MMSA{
-			Name:     cmn.DSortName + ".MMSA",
-			TimeIval: time.Minute * 10,
-		}
-		if err := mm.Init(false); err != nil {
-			glog.Error(err)
-			return
-		}
 	}
-
 	_ cluster.Slistener = &Manager{}
 )
 
@@ -150,12 +143,17 @@ type (
 	}
 )
 
-func RegisterNode(smap cluster.Sowner, bmdowner cluster.Bowner, snode *cluster.Snode, t cluster.Target, stats stats.Tracker) {
+func RegisterNode(smap cluster.Sowner, bmdowner cluster.Bowner, snode *cluster.Snode, mmsa *memsys.MMSA,
+	t cluster.Target, stats stats.Tracker) {
 	ctx.smap = smap
 	ctx.bmdowner = bmdowner
 	ctx.node = snode
 	ctx.t = t
 	ctx.stats = stats
+	// TODO: try to introduce and benchmark a separate MMSA instance, e.g.:
+	//       mm = &memsys.MMSA{Name: cmn.DSortName + ".MMSA", TimeIval: time.Minute * 10, ...}
+	cmn.Assert(mm == nil)
+	mm = mmsa
 }
 
 // init initializes all necessary fields.
@@ -470,7 +468,8 @@ func (m *Manager) setExtractCreator() (err error) {
 		m.extractCreator = extract.NopExtractCreator(extractCreator)
 	}
 
-	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.Provider, m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
+	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.Provider,
+		m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
 
 	return nil
 }

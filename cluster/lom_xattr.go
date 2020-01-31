@@ -40,7 +40,7 @@ const (
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
-	slab, err := lom.T.GetMem2().GetSlab(xattrBufSize)
+	slab, err := lom.T.GetMMSA().GetSlab(xattrBufSize)
 	cmn.AssertNoErr(err)
 	b := slab.Alloc()
 	read, err := fs.GetXattrBuf(lom.FQN, cmn.XattrLOM, b)
@@ -69,7 +69,7 @@ func (lom *LOM) Persist() (err error) {
 		slab *memsys.Slab
 		buf  []byte
 	)
-	slab, err = lom.T.GetMem2().GetSlab(xattrBufSize)
+	slab, err = lom.T.GetMMSA().GetSlab(xattrBufSize)
 	cmn.AssertNoErr(err)
 	buf = slab.Alloc()
 	_, err = lom.persistMd(buf)

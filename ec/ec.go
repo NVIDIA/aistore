@@ -254,7 +254,7 @@ func (r *IntraReq) Unmarshal(b []byte) error {
 }
 
 var (
-	mm           = &memsys.MMSA{Name: "ec", MinPctFree: 10}
+	mm           *memsys.MMSA       // memory manager and slab/SGL allocator
 	slicePadding = make([]byte, 64) // for padding EC slices
 	XactCount    atomic.Int32       // the number of currently active EC xactions
 
@@ -265,9 +265,7 @@ var (
 )
 
 func Init(t cluster.Target, reg XactRegistry) {
-	if err := mm.Init(false /*panicOnErr*/); err != nil {
-		glog.Fatalf("Failed to initialize EC: %v", err)
-	}
+	mm = t.GetMMSA() // TODO: try to introduce and benchmark a separate MMSA for EC
 	fs.CSM.RegisterContentType(SliceType, &SliceSpec{})
 	fs.CSM.RegisterContentType(MetaType, &MetaSpec{})
 	if err := initManager(t, reg); err != nil {

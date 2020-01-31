@@ -53,7 +53,7 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	} else {
 		xreb = xaction.Registry.RenewLocalReb(len(availablePaths) * 2)
 	}
-	slab, err := reb.t.GetMem2().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	slab, err := reb.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
 
 	for _, mpathInfo := range availablePaths {

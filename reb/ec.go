@@ -375,7 +375,7 @@ func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
 
 func newECData(t cluster.Target) *ecData {
 	return &ecData{
-		waiter:       newWaiter(t.GetMem2()),
+		waiter:       newWaiter(t.GetMMSA()),
 		cts:          make(ctList),
 		localActions: make([]*rebCT, 0),
 		ackCTs:       ackCT{ct: make(map[string]*retransmitCT)},
@@ -601,7 +601,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 		lom.Uncache()
 	}
 
-	buffer, slab := reb.t.GetMem2().Alloc()
+	buffer, slab := reb.t.GetMMSA().Alloc()
 	metaFQN := mpath.MakePathFQN(hdr.Bck, ec.MetaType, hdr.ObjName)
 	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.md.Marshal()), buffer, false)
 	if err != nil {
@@ -662,7 +662,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.RxRebSize, Value: n},
 	)
-	ckval, _ := cksumForSlice(memsys.NewReader(waitFor.sgl), waitFor.sgl.Size(), reb.t.GetMem2())
+	ckval, _ := cksumForSlice(memsys.NewReader(waitFor.sgl), waitFor.sgl.Size(), reb.t.GetMMSA())
 	if hdr.ObjAttrs.CksumValue != "" && hdr.ObjAttrs.CksumValue != ckval {
 		return fmt.Errorf("received checksum mismatches checksum in header %s vs %s",
 			hdr.ObjAttrs.CksumValue, ckval)
@@ -1138,7 +1138,7 @@ func (reb *Manager) rebalanceLocalObject(fromMpath fs.ParsedFQN, fromFQN, toFQN 
 
 // Moves local misplaced CT to correct mpath
 func (reb *Manager) rebalanceLocal() error {
-	buf, slab := reb.t.GetMem2().Alloc()
+	buf, slab := reb.t.GetMMSA().Alloc()
 	defer slab.Free(buf)
 	for _, act := range reb.ec.localActions {
 		if bool(glog.FastV(4, glog.SmoduleReb)) {
@@ -1838,7 +1838,7 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 		sizeLeft -= obj.sliceSize
 	}
 	for i := 0; int16(i) < obj.paritySlices; i++ {
-		obj.rebuildSGLs[i] = reb.t.GetMem2().NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
+		obj.rebuildSGLs[i] = reb.t.GetMMSA().NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
 		writers[i] = obj.rebuildSGLs[i]
 	}
 
@@ -1869,7 +1869,7 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 			}
 			reader := readerSend[idx-1]
 			reader.Open()
-			ckval, err := cksumForSlice(reader, obj.sliceSize, reb.t.GetMem2())
+			ckval, err := cksumForSlice(reader, obj.sliceSize, reb.t.GetMMSA())
 			if err != nil {
 				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
@@ -1884,7 +1884,7 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 			if bool(glog.FastV(4, glog.SmoduleReb)) {
 				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si.Name())
 			}
-			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize, reb.t.GetMem2())
+			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize, reb.t.GetMMSA())
 			if err != nil {
 				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
@@ -1944,7 +1944,7 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 		readers[i] = readerSGLs[i]
 	}
 	for i := 0; int16(i) < obj.paritySlices; i++ {
-		obj.rebuildSGLs[i] = reb.t.GetMem2().NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
+		obj.rebuildSGLs[i] = reb.t.GetMMSA().NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
 		writers[i] = obj.rebuildSGLs[i]
 	}
 
@@ -1974,7 +1974,7 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 				glog.Infof("Sending %s data slice %d to %s", obj.objName, idx, si.Name())
 			}
 			reader := readerSGLs[idx-1]
-			ckval, err := cksumForSlice(readerSGLs[idx-1], obj.sliceSize, reb.t.GetMem2())
+			ckval, err := cksumForSlice(readerSGLs[idx-1], obj.sliceSize, reb.t.GetMMSA())
 			if err != nil {
 				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
@@ -1989,7 +1989,7 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 			if bool(glog.FastV(4, glog.SmoduleReb)) {
 				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si.Name())
 			}
-			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize, reb.t.GetMem2())
+			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize, reb.t.GetMMSA())
 			if err != nil {
 				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
@@ -2045,7 +2045,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		if rd != nil {
 			continue
 		}
-		obj.rebuildSGLs[i] = reb.t.GetMem2().NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
+		obj.rebuildSGLs[i] = reb.t.GetMMSA().NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
 		writers[i] = obj.rebuildSGLs[i]
 	}
 
@@ -2085,7 +2085,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		glog.Infof("Saving restored full object %s to %q", obj.objName, lom.FQN)
 	}
 	tmpFQN := fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec")
-	buffer, slab := reb.t.GetMem2().Alloc()
+	buffer, slab := reb.t.GetMMSA().Alloc()
 	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
@@ -2132,7 +2132,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		if len(freeTargets) == 0 {
 			return fmt.Errorf("Failed to send slice %d of %s - no free target", sliceID, obj.uid)
 		}
-		ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[i]), obj.sliceSize, reb.t.GetMem2())
+		ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[i]), obj.sliceSize, reb.t.GetMMSA())
 		if err != nil {
 			return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 		}

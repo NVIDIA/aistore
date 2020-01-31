@@ -141,7 +141,7 @@ func (c *rwConnector) connectReader(key string, r io.Reader, size int64) (err er
 	c.mu.Unlock()
 
 	if !all {
-		rw.sgl = memsys.DefaultPageMM().NewSGL(size)
+		rw.sgl = mm.NewSGL(size)
 		_, err = io.Copy(rw.sgl, r)
 		rw.wgr.Done()
 		return

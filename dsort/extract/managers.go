@@ -93,18 +93,9 @@ type (
 	}
 )
 
-func init() {
-	mem = &memsys.MMSA{
-		Name: cmn.DSortName + ".Extract.MMSA",
-	}
-	if err := mem.Init(false); err != nil {
-		glog.Error(err)
-		return
-	}
-}
-
 func FreeMemory() {
-	// Free memsys leftovers
+	// NOTE: forcefully free all MMSA memory to the OS
+	// TODO: another reason to use a separate MMSA for extractions
 	mem.Free(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
@@ -112,7 +103,13 @@ func FreeMemory() {
 	})
 }
 
-func NewRecordManager(t cluster.Target, daemonID, bucket, provider, extension string, extractCreator ExtractCreator, keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
+func NewRecordManager(t cluster.Target, daemonID, bucket, provider, extension string, extractCreator ExtractCreator,
+	keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
+	if t == nil {
+		mem = memsys.DefaultPageMM() // NOTE: only for unit tests
+	} else {
+		mem = t.GetMMSA() // TODO: try to introduce and benchmark a separate MMSA
+	}
 	return &RecordManager{
 		Records: NewRecords(1000),
 
