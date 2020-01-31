@@ -3241,21 +3241,26 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, sid, nil) {
 		return
 	}
-	if status, err := p.unregisterNode(sid, msg); err != nil {
+	clone, status, err := p.unregisterNode(sid)
+	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), status)
+		return
 	}
+	msgInt := p.newActionMsgInternal(msg, clone, nil)
+	p.setGlobRebID(clone, msgInt, true)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
 }
 
-func (p *proxyrunner) unregisterNode(sid string, msg *cmn.ActionMsg) (status int, err error) {
+func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err error) {
 	p.smapowner.Lock()
 	defer p.smapowner.Unlock()
 	var (
-		smap  = p.smapowner.get()
-		clone = smap.clone()
-		node  = smap.GetNode(sid)
+		smap = p.smapowner.get()
+		node = smap.GetNode(sid)
 	)
+	clone = smap.clone()
 	if node == nil {
-		return http.StatusNotFound, fmt.Errorf("Unknown node %s", sid)
+		return nil, http.StatusNotFound, fmt.Errorf("Unknown node %s", sid)
 	}
 	if node.IsProxy() {
 		clone.delProxy(sid)
@@ -3267,18 +3272,20 @@ func (p *proxyrunner) unregisterNode(sid string, msg *cmn.ActionMsg) (status int
 		if glog.V(3) {
 			glog.Infof("unregistered %s (num targets %d)", node.Name(), clone.CountTargets())
 		}
-		args := callArgs{
-			si: node,
-			req: cmn.ReqArgs{
-				Method: http.MethodDelete,
-				Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
-			},
-			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
-		}
-		res := p.call(args)
-		if res.err != nil {
-			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", node.Name(), res.err, res.details)
-		}
+		go func() {
+			args := callArgs{
+				si: node,
+				req: cmn.ReqArgs{
+					Method: http.MethodDelete,
+					Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
+				},
+				timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+			}
+			res := p.call(args)
+			if res.err != nil {
+				glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", node.Name(), res.err, res.details)
+			}
+		}()
 	}
 	if !p.startedUp.Load() {
 		p.smapowner.put(clone)
@@ -3288,13 +3295,9 @@ func (p *proxyrunner) unregisterNode(sid string, msg *cmn.ActionMsg) (status int
 		return
 	}
 	p.smapowner.put(clone)
-
-	if isPrimary := p.smapowner.get().isPrimary(p.si); !isPrimary {
-		return 0, fmt.Errorf("%s: is not a primary", p.si.Name())
+	if isPrimary := clone.isPrimary(p.si); !isPrimary {
+		return nil, 0, fmt.Errorf("%s: is not a primary", p.si.Name())
 	}
-	msgInt := p.newActionMsgInternal(msg, clone, nil)
-	p.setGlobRebID(clone, msgInt, true)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
 	return
 }
 
