@@ -100,15 +100,17 @@ func (r *xactBckBase) stop() {
 func (j *joggerBckBase) jog() {
 	j.stopCh = cmn.NewStopCh()
 
-	dir := j.mpathInfo.MakePathCT(j.parent.Bck(), fs.ObjectType)
 	opts := &fs.Options{
+		Mpath:    j.mpathInfo,
+		Bck:      j.parent.Bck(),
+		CTs:      []string{fs.ObjectType},
 		Callback: j.walk,
 		Sorted:   false,
 	}
-	if err := fs.Walk(dir, opts); err != nil {
+	if err := fs.Walk(opts); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
-			glog.Infof("%s: stopping traversal: %s", dir, s)
+			glog.Infof("stopping traversal: %s", s)
 		} else {
 			glog.Errorln(err)
 		}

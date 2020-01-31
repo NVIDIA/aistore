@@ -133,12 +133,15 @@ func (r *XactBckEncode) stop() {
 func (j *joggerBckEncode) stop() { j.stopCh.Close() }
 
 func (j *joggerBckEncode) jog() {
-	dir := j.mpathInfo.MakePathCT(j.parent.Bck(), fs.ObjectType)
 	opts := &fs.Options{
+		Mpath: j.mpathInfo,
+		Bck:   j.parent.Bck(),
+		CTs:   []string{fs.ObjectType},
+
 		Callback: j.walk,
 		Sorted:   false,
 	}
-	if err := fs.Walk(dir, opts); err != nil {
+	if err := fs.Walk(opts); err != nil {
 		glog.Errorln(err)
 	}
 	j.parent.done()

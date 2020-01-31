@@ -218,20 +218,18 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	}
 	for _, mpathInfo := range md.paths {
 		var (
-			sema   chan struct{}
-			mpathL string
-			bck    = cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			sema chan struct{}
+			bck  = cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 		)
-		mpathL = mpathInfo.MakePathBck(bck)
 		if multiplier > 1 {
 			sema = make(chan struct{}, multiplier)
 		}
 		rl := &globalJogger{
-			joggerBase: joggerBase{m: reb, mpath: mpathL, xreb: &reb.xreb.RebBase, wg: wg},
+			joggerBase: joggerBase{m: reb, xreb: &reb.xreb.RebBase, wg: wg},
 			smap:       md.smap, sema: sema, ver: ver,
 		}
 		wg.Add(1)
-		go rl.jog()
+		go rl.jog(mpathInfo, bck)
 	}
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range md.paths {
@@ -239,16 +237,15 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 				sema chan struct{}
 				bck  = cmn.Bck{Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
 			)
-			mpathC := mpathInfo.MakePathBck(bck)
 			if multiplier > 1 {
 				sema = make(chan struct{}, multiplier)
 			}
 			rc := &globalJogger{
-				joggerBase: joggerBase{m: reb, mpath: mpathC, xreb: &reb.xreb.RebBase, wg: wg},
+				joggerBase: joggerBase{m: reb, xreb: &reb.xreb.RebBase, wg: wg},
 				smap:       md.smap, sema: sema, ver: ver,
 			}
 			wg.Add(1)
-			go rc.jog()
+			go rc.jog(mpathInfo, bck)
 		}
 	}
 	wg.Wait()
@@ -554,19 +551,22 @@ func (reb *Manager) GlobECDataStatus() (body []byte, status int) {
 // globalJogger
 //
 
-func (rj *globalJogger) jog() {
+func (rj *globalJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 	if rj.sema != nil {
 		rj.errCh = make(chan error, cap(rj.sema)+1)
 	}
 	opts := &fs.Options{
+		Mpath:    mpathInfo,
+		Bck:      bck,
+		CTs:      []string{fs.ObjectType}, // TODO: handle rebalance for other content-type
 		Callback: rj.walk,
 		Sorted:   false,
 	}
-	if err := fs.Walk(rj.mpath, opts); err != nil {
+	if err := fs.Walk(opts); err != nil {
 		if rj.xreb.Aborted() || rj.xreb.Finished() {
-			glog.Infof("Aborting %s traversal", rj.mpath)
+			glog.Infof("aborting traversal")
 		} else {
-			glog.Errorf("%s: failed to traverse %s, err: %v", rj.m.t.Snode().Name(), rj.mpath, err)
+			glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode().Name(), err)
 		}
 	}
 	rj.xreb.NotifyDone()
@@ -599,7 +599,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		t   = rj.m.t
 	)
 	if rj.xreb.Aborted() || rj.xreb.Finished() {
-		return fmt.Errorf("%s: aborted, path %s", rj.xreb, rj.mpath)
+		return fmt.Errorf("%s: aborted traversal", rj.xreb)
 	}
 	if de.IsDir() {
 		return nil
@@ -611,10 +611,6 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 			glog.Infof("%s, err %s - skipping...", lom, err)
 		}
 		return nil
-	}
-	// TODO: handle rebalance for other content-type
-	if lom.ParsedFQN.ContentType != fs.ObjectType {
-		return filepath.SkipDir
 	}
 
 	// Skip a bucket with EC.Enabled - it is a job for EC rebalance
@@ -633,7 +629,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	nver := t.GetSowner().Get().Version
 	if nver > rj.ver {
 		rj.m.abortGlobal()
-		return fmt.Errorf("%s: Smap v%d < v%d, path %s", rj.xreb, rj.ver, nver, rj.mpath)
+		return fmt.Errorf("%s: Smap v%d < v%d", rj.xreb, rj.ver, nver)
 	}
 
 	// skip objects that were already sent via GFN (due to probabilistic filtering

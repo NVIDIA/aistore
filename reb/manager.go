@@ -53,10 +53,9 @@ const (
 type (
 	syncCallback func(tsi *cluster.Snode, md *globArgs) (ok bool)
 	joggerBase   struct {
-		m     *Manager
-		xreb  *xaction.RebBase
-		mpath string
-		wg    *sync.WaitGroup
+		m    *Manager
+		xreb *xaction.RebBase
+		wg   *sync.WaitGroup
 	}
 
 	Manager struct {

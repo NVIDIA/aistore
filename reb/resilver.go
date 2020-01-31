@@ -6,7 +6,6 @@ package reb
 
 import (
 	"fmt"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -58,17 +57,15 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 
 	for _, mpathInfo := range availablePaths {
 		var (
-			mpathL string
 			bck    = cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			jogger = &localJogger{
+				joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
+				slab:              slab,
+				skipGlobMisplaced: skipGlobMisplaced,
+			}
 		)
-		mpathL = mpathInfo.MakePathBck(bck)
-		jogger := &localJogger{
-			joggerBase:        joggerBase{m: reb, mpath: mpathL, xreb: &xreb.RebBase, wg: wg},
-			slab:              slab,
-			skipGlobMisplaced: skipGlobMisplaced,
-		}
 		wg.Add(1)
-		go jogger.jog()
+		go jogger.jog(mpathInfo, bck)
 	}
 	if bucket != "" {
 		goto wait
@@ -76,17 +73,15 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
 			var (
-				mpathC string
 				bck    = cmn.Bck{Name: bucket, Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
+				jogger = &localJogger{
+					joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
+					slab:              slab,
+					skipGlobMisplaced: skipGlobMisplaced,
+				}
 			)
-			mpathC = mpathInfo.MakePathBck(bck)
-			jogger := &localJogger{
-				joggerBase:        joggerBase{m: reb, mpath: mpathC, xreb: &xreb.RebBase, wg: wg},
-				slab:              slab,
-				skipGlobMisplaced: skipGlobMisplaced,
-			}
 			wg.Add(1)
-			go jogger.jog()
+			go jogger.jog(mpathInfo, bck)
 		}
 	}
 wait:
@@ -108,17 +103,20 @@ wait:
 // localJogger
 //
 
-func (rj *localJogger) jog() {
+func (rj *localJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 	rj.buf = rj.slab.Alloc()
 	opts := &fs.Options{
+		Mpath:    mpathInfo,
+		Bck:      bck,
+		CTs:      []string{fs.ObjectType},
 		Callback: rj.walk,
 		Sorted:   false,
 	}
-	if err := fs.Walk(rj.mpath, opts); err != nil {
+	if err := fs.Walk(opts); err != nil {
 		if rj.xreb.Aborted() {
-			glog.Infof("Aborting %s traversal", rj.mpath)
+			glog.Infof("aborting traversal")
 		} else {
-			glog.Errorf("%s: failed to traverse %s, err: %v", rj.m.t.Snode().Name(), rj.mpath, err)
+			glog.Errorf("%s: failed to traverse err: %v", rj.m.t.Snode().Name(), err)
 		}
 	}
 	rj.xreb.NotifyDone()
@@ -129,7 +127,7 @@ func (rj *localJogger) jog() {
 func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	var t = rj.m.t
 	if rj.xreb.Aborted() {
-		return fmt.Errorf("%s aborted, path %s", rj.xreb, rj.mpath)
+		return fmt.Errorf("%s aborted traversal", rj.xreb)
 	}
 	if de.IsDir() {
 		return nil
@@ -137,9 +135,6 @@ func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	lom := &cluster.LOM{T: t, FQN: fqn}
 	if err = lom.Init(cmn.Bck{}); err != nil {
 		return nil
-	}
-	if lom.ParsedFQN.ContentType != fs.ObjectType {
-		return filepath.SkipDir
 	}
 	// optionally, skip those that must be globally rebalanced
 	if rj.skipGlobMisplaced {

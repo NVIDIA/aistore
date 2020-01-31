@@ -137,7 +137,6 @@ func saveRandomFiles(t cluster.Target, filesPath string, filesNumber int) {
 
 var _ = Describe("LRU tests", func() {
 	Describe("InitAndRun", func() {
-
 		var (
 			t   *cluster.TargetMock
 			ini *InitLRU

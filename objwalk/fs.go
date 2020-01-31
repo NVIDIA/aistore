@@ -27,7 +27,6 @@ type (
 		lastFilePath string
 		bucket       string
 		fileCount    int
-		rootLength   int
 		limit        int
 
 		needSize    bool
@@ -45,22 +44,22 @@ type (
 //  - Object name is not in early processed directories by the previous call:
 //    paging support
 func (ci *allfinfos) processDir(fqn string) error {
-	if len(fqn) <= ci.rootLength {
+	ct, err := cluster.NewCTFromFQN(fqn, nil)
+	if err != nil {
 		return nil
 	}
 
 	// every directory has to either:
-	// - start with prefix (for levels higher than prefix: prefix="ab", directory="abcd/def")
-	// - or include prefix (for levels deeper than prefix: prefix="a/", directory="a/b/")
-	relname := fqn[ci.rootLength:]
-	if ci.prefix != "" && !strings.HasPrefix(ci.prefix, relname) && !strings.HasPrefix(relname, ci.prefix) {
+	// - be contained in prefix (for levels lower than prefix: prefix="abcd/def", directory="abcd")
+	// - or include prefix (for levels deeper than prefix: prefix="a/", directory="a/b")
+	if ci.prefix != "" && !(strings.HasPrefix(ci.prefix, ct.ObjName()) || strings.HasPrefix(ct.ObjName(), ci.prefix)) {
 		return filepath.SkipDir
 	}
 
 	// When markerDir = "b/c/d/" we should skip directories: "a/", "b/a/",
 	// "b/b/" etc. but should not skip entire "b/" or "b/c/" since it is our
 	// parent which we want to traverse (see that: "b/" < "b/c/d/").
-	if ci.markerDir != "" && relname < ci.markerDir && !strings.HasPrefix(ci.markerDir, relname) {
+	if ci.markerDir != "" && ct.ObjName() < ci.markerDir && !strings.HasPrefix(ci.markerDir, ct.ObjName()) {
 		return filepath.SkipDir
 	}
 
@@ -72,11 +71,11 @@ func (ci *allfinfos) processDir(fqn string) error {
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
 func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
-	relname := lom.FQN[ci.rootLength:]
-	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
+	objName := lom.ParsedFQN.ObjName
+	if ci.prefix != "" && !strings.HasPrefix(objName, ci.prefix) {
 		return nil
 	}
-	if ci.marker != "" && relname <= ci.marker {
+	if ci.marker != "" && objName <= ci.marker {
 		return nil
 	}
 
@@ -87,7 +86,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 	// add the obj to the page
 	ci.fileCount++
 	fileInfo := &cmn.BucketEntry{
-		Name:   relname,
+		Name:   objName,
 		Atime:  "",
 		Flags:  objStatus | cmn.EntryIsCached,
 		Copies: 1,
@@ -122,16 +121,20 @@ func (ci *allfinfos) listwalkfFast(fqn string, de fs.DirEntry) error {
 		return ci.processDir(fqn)
 	}
 
-	relname := fqn[ci.rootLength:]
-	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
+	ct, err := cluster.NewCTFromFQN(fqn, nil)
+	if err != nil {
 		return nil
 	}
-	if ci.marker != "" && relname <= ci.marker {
+
+	if ci.prefix != "" && !strings.HasPrefix(ct.ObjName(), ci.prefix) {
+		return nil
+	}
+	if ci.marker != "" && ct.ObjName() <= ci.marker {
 		return nil
 	}
 	ci.fileCount++
 	fileInfo := &cmn.BucketEntry{
-		Name:  relname,
+		Name:  ct.ObjName(),
 		Flags: cmn.ObjStatusOK,
 	}
 	if ci.needSize {

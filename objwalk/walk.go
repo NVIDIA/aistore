@@ -6,13 +6,11 @@ package objwalk
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -26,9 +24,8 @@ type (
 		msg *cmn.SelectMsg
 	}
 	mresp struct {
-		infos      *allfinfos
-		failedPath string
-		err        error
+		infos *allfinfos
+		err   error
 	}
 )
 
@@ -55,7 +52,6 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 		lastFilePath: "",
 		bucket:       bucket,
 		fileCount:    0,
-		rootLength:   0,
 		limit:        cmn.DefaultListPageSize, // maximum number files to return
 
 		needSize:    msg.WantProp(cmn.GetPropsSize),
@@ -91,39 +87,31 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 	wg := &sync.WaitGroup{}
 
 	// function to traverse one mountpoint
-	walkMpath := func(dir string) {
-		r := &mresp{w.newFileWalk(w.bck.Name, w.msg), "", nil}
+	walkMpath := func(mpathInfo *fs.MountpathInfo, bck cmn.Bck, cts []string) {
+		r := &mresp{w.newFileWalk(w.bck.Name, w.msg), nil}
 		if w.msg.Fast {
 			r.infos.limit = math.MaxInt64 // return all objects in one response
 		}
-		if err := fs.Access(dir); err != nil {
-			if !os.IsNotExist(err) {
-				r.failedPath = dir
-				r.err = err
-			}
-			ch <- r // not an error, just skip the path
-			wg.Done()
-			return
-		}
-		r.infos.rootLength = len(dir) + 1 // +1 for separator between bucket and filename
 		if w.msg.Fast {
-			err := fs.Walk(dir, &fs.Options{
+			err := fs.Walk(&fs.Options{
+				Mpath:    mpathInfo,
+				Bck:      bck,
+				CTs:      cts,
 				Callback: r.infos.listwalkfFast,
 				Sorted:   r.infos.marker != "",
 			})
 			if err != nil {
-				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
-				r.failedPath = dir
 				r.err = err
 			}
 		} else {
-			err := fs.Walk(dir, &fs.Options{
+			err := fs.Walk(&fs.Options{
+				Mpath:    mpathInfo,
+				Bck:      bck,
+				CTs:      cts,
 				Callback: r.infos.listwalkf,
 				Sorted:   true,
 			})
 			if err != nil {
-				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
-				r.failedPath = dir
 				r.err = err
 			}
 		}
@@ -135,15 +123,16 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 	// If any mountpoint traversing fails others keep running until they complete.
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
+	cts := make([]string, 0, 2)
 	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if !contentResolver.PermToProcess() {
 			continue
 		}
-		for _, mpathInfo := range availablePaths {
-			wg.Add(1)
-			dir := mpathInfo.MakePathCT(w.bck.Bck, contentType)
-			go walkMpath(dir)
-		}
+		cts = append(cts, contentType)
+	}
+	for _, mpathInfo := range availablePaths {
+		wg.Add(1)
+		go walkMpath(mpathInfo, w.bck.Bck, cts)
 	}
 	wg.Wait()
 	close(ch)
@@ -154,8 +143,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 	for r := range ch {
 		if r.err != nil {
 			if !os.IsNotExist(r.err) {
-				w.t.FSHC(r.err, r.failedPath)
-				return nil, fmt.Errorf("failed to read %s", r.failedPath)
+				return nil, r.err
 			}
 			continue
 		}

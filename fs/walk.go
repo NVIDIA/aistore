@@ -1,7 +1,11 @@
 package fs
 
 import (
+	"os"
+	"sort"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/karrick/godirwalk"
 )
@@ -23,6 +27,12 @@ type (
 	}
 
 	Options struct {
+		Dir string
+
+		Mpath *MountpathInfo
+		Bck   cmn.Bck
+		CTs   []string
+
 		ErrCallback errFunc
 		Callback    WalkFunc
 		Sorted      bool
@@ -76,7 +86,7 @@ func (opts *Options) callback(fqn string, de *godirwalk.Dirent) error {
 	return opts.Callback(fqn, de)
 }
 
-func Walk(fqn string, opts *Options) error {
+func Walk(opts *Options) error {
 	// For now `ErrCallback` is not used. Remove if something changes and ensure
 	// that we have
 	cmn.Assert(opts.ErrCallback == nil)
@@ -86,10 +96,59 @@ func Walk(fqn string, opts *Options) error {
 	// on `errThreshold` lom errors.
 	opts.ErrCallback = ew.PathErrToAction
 
+	var fqns []string
+	if opts.Dir != "" {
+		fqns = append(fqns, opts.Dir)
+	} else {
+		cmn.Assert(len(opts.CTs) > 0)
+		if opts.Bck.Name != "" {
+			// If bucket is defined we want to only walk specific content-types
+			// inside the bucket.
+			for _, ct := range opts.CTs {
+				fqns = append(fqns, opts.Mpath.MakePathCT(opts.Bck, ct))
+			}
+		} else {
+			// If bucket is undefined we must first list all of them and then
+			// for each of them generate the content-type paths.
+			fqn := opts.Mpath.MakePathBck(opts.Bck)
+			children, err := godirwalk.ReadDirnames(fqn, nil)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				}
+				return err
+			}
+			if opts.Sorted {
+				sort.Strings(children)
+			}
+
+			bck := opts.Bck
+			if len(opts.CTs) > 1 {
+				fqns = make([]string, 0, len(children)*len(opts.CTs))
+			} else {
+				fqns = children[:0] // optimization to reuse previously allocated slice
+			}
+			for _, child := range children {
+				for _, ct := range opts.CTs {
+					bck.Name = child
+					fqns = append(fqns, opts.Mpath.MakePathCT(bck, ct))
+				}
+			}
+		}
+	}
+
 	gOpts := &godirwalk.Options{
 		ErrorCallback: opts.ErrCallback,
 		Callback:      opts.callback,
 		Unsorted:      !opts.Sorted,
 	}
-	return godirwalk.Walk(fqn, gOpts)
+
+	var err error
+	for _, fqn := range fqns {
+		if err1 := godirwalk.Walk(fqn, gOpts); err1 != nil && !os.IsNotExist(err1) {
+			glog.Error(err1)
+			err = err1
+		}
+	}
+	return err
 }

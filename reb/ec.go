@@ -938,17 +938,21 @@ func (reb *Manager) checkCTs() {
 }
 
 // mountpath walker - walks through files in /meta/ directory
-func (reb *Manager) jogEC(path string, wg *sync.WaitGroup) {
+func (reb *Manager) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.WaitGroup) {
 	defer wg.Done()
 	opts := &fs.Options{
+		Mpath: mpathInfo,
+		Bck:   bck,
+		CTs:   []string{ec.MetaType},
+
 		Callback: reb.walkEC,
 		Sorted:   false,
 	}
-	if err := fs.Walk(path, opts); err != nil {
+	if err := fs.Walk(opts); err != nil {
 		if reb.xreb.Aborted() || reb.xreb.Finished() {
-			glog.Infof("Aborting %s traversal", path)
+			glog.Infof("aborting traversal")
 		} else {
-			glog.Warningf("failed to traverse %q, err: %v", path, err)
+			glog.Warningf("failed to traverse, err: %v", err)
 		}
 	}
 }
@@ -971,9 +975,6 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 	ct, err := cluster.NewCTFromFQN(fqn, reb.t.GetBowner())
 	if err != nil {
 		return nil
-	}
-	if ct.ContentType() != ec.MetaType {
-		return filepath.SkipDir
 	}
 	// do not touch directories for buckets with EC disabled (for now)
 	// TODO: what to do if we found metafile on a bucket with EC disabled?
@@ -1058,26 +1059,22 @@ func (reb *Manager) endECStreams() {
 // rebalancing: send collected data to other targets, rebuild slices etc
 func (reb *Manager) runEC() {
 	var (
-		mpath string
-
-		wg                = sync.WaitGroup{}
+		wg                = &sync.WaitGroup{}
 		availablePaths, _ = fs.Mountpaths.Get()
 		cfg               = cmn.GCO.Get()
 	)
 
 	for _, mpathInfo := range availablePaths {
 		bck := cmn.Bck{Name: reb.xreb.Bck().Name, Provider: cmn.ProviderAIS, Ns: reb.xreb.Bck().Ns}
-		mpath = mpathInfo.MakePathBck(bck)
 		wg.Add(1)
-		go reb.jogEC(mpath, &wg)
+		go reb.jogEC(mpathInfo, bck, wg)
 	}
 
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
 			bck := cmn.Bck{Name: reb.xreb.Bck().Name, Provider: cfg.Cloud.Provider, Ns: reb.xreb.Bck().Ns}
-			mpath = mpathInfo.MakePathBck(bck)
 			wg.Add(1)
-			go reb.jogEC(mpath, &wg)
+			go reb.jogEC(mpathInfo, bck, wg)
 		}
 	}
 	wg.Wait()

@@ -42,10 +42,11 @@ func NewXactDirPromote(id int64, dir string, bck *cluster.Bck, t cluster.Target,
 func (r *XactDirPromote) Run() (err error) {
 	glog.Infoln(r.String(), r.dir, "=>", r.bck)
 	opts := &fs.Options{
+		Dir:      r.dir,
 		Callback: r.walk,
 		Sorted:   false,
 	}
-	if err := fs.Walk(r.dir, opts); err != nil {
+	if err := fs.Walk(opts); err != nil {
 		glog.Errorln(err)
 	}
 	return

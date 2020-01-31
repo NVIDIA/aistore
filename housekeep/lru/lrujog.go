@@ -41,10 +41,14 @@ func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh ch
 	glog.Infof("%s: evicting %s", lctx.mpathInfo, cmn.B2S(lctx.totalSize, 2))
 	// phase 1: collect
 	opts := &fs.Options{
+		Mpath: lctx.mpathInfo,
+		Bck:   lctx.bck,
+		CTs:   []string{fs.WorkfileType, fs.ObjectType},
+
 		Callback: lctx.walk,
 		Sorted:   false,
 	}
-	if err := fs.Walk(lctx.bckTypeDir, opts); err != nil {
+	if err := fs.Walk(opts); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
 			glog.Infof("%s: stopping traversal: %s", lctx.bckTypeDir, s)
@@ -91,10 +95,9 @@ func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 			lctx.oldWork = append(lctx.oldWork, fqn)
 		}
 		return nil
-	} else if lom.ParsedFQN.ContentType != fs.ObjectType {
-		// TODO: extend LRU for other content types
-		return filepath.SkipDir
 	}
+	// TODO: extend LRU for other content types
+	cmn.Assert(lom.ParsedFQN.ContentType == fs.ObjectType)
 
 	// LRUEnabled is set by lom.Init(), no need to make FS call in Load if not enabled
 	if !lom.LRUEnabled() {

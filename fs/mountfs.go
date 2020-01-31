@@ -143,10 +143,9 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	// LRU will take care of removing the rest of the bucket.
 	var (
 		counter = mi.removeDirCounter.Inc()
-		// TODO: this should use restricted character to not conflict with existing bucket
-		nonExistingBucket = fmt.Sprintf("$removing-%d", counter)
-		bck               = cmn.Bck{Name: nonExistingBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-		tmpDir            = mi.MakePathBck(bck)
+		// TODO: this should be somehow rewritten and standardized
+		nonExistingDir = fmt.Sprintf("$removing-%d", counter)
+		tmpDir         = fmt.Sprintf("%s%c%s", mi.Path, filepath.Separator, nonExistingDir)
 	)
 	if err := cmn.CreateDir(filepath.Dir(tmpDir)); err != nil {
 		return err
@@ -243,14 +242,14 @@ func (mi *MountpathInfo) MakePathBck(bck cmn.Bck) string {
 }
 
 func (mi *MountpathInfo) MakePathCT(bck cmn.Bck, contentType string) string {
-	cmn.Assert(bck.Valid())
+	cmn.AssertMsg(bck.Valid(), bck.String())
 	cmn.Assert(contentType != "")
 	buf := mi.makePathBuf(bck, contentType, 0)
 	return *(*string)(unsafe.Pointer(&buf))
 }
 
 func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) string {
-	cmn.Assert(bck.Valid())
+	cmn.AssertMsg(bck.Valid(), bck.String())
 	cmn.Assert(contentType != "" && objName != "")
 	buf := mi.makePathBuf(bck, contentType, 1+len(objName))
 	buf = append(buf, filepath.Separator)
