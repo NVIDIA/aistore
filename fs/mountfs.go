@@ -627,11 +627,12 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, passMsg, failMsg string,
 	for _, mpathInfo := range availablePaths {
 		wg.Add(1)
 		go func(mi *MountpathInfo) {
+			defer wg.Done()
 			for _, bck := range bcks {
 				if !create {
 					dir := mi.MakePathBck(bck)
 					mi.FastRemoveDir(dir)
-					return
+					continue
 				}
 
 				num := 0
@@ -653,7 +654,6 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, passMsg, failMsg string,
 					glog.Infof("%q (bucket %s, num dirs %d)", passMsg, bck, num)
 				}
 			}
-			wg.Done()
 		}(mpathInfo)
 	}
 	wg.Wait()
