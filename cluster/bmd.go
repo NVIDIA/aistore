@@ -130,9 +130,9 @@ func (m *BMD) Add(bck *Bck) {
 		namespaces = make(Namespaces)
 		m.Providers[bck.Provider] = namespaces
 	}
-	if buckets, ok = namespaces[bck.Ns]; !ok {
+	if buckets, ok = namespaces[bck.Ns.Uname()]; !ok {
 		buckets = make(Buckets)
-		namespaces[bck.Ns] = buckets
+		namespaces[bck.Ns.Uname()] = buckets
 	}
 	buckets[bck.Name] = bck.Props
 }
@@ -148,16 +148,17 @@ func (m *BMD) IsECUsed() (yes bool) {
 }
 
 // providerQuery == nil: all providers; nsQuery == nil: all namespaces
-func (m *BMD) Range(providerQuery, nsQuery *string, callback func(*Bck) bool) {
+func (m *BMD) Range(providerQuery *string, nsQuery *cmn.Ns, callback func(*Bck) bool) {
 	for provider, namespaces := range m.Providers {
 		if providerQuery != nil && provider != *providerQuery {
 			continue
 		}
-		for ns, buckets := range namespaces {
-			if nsQuery != nil && ns != *nsQuery {
+		for nsUname, buckets := range namespaces {
+			if nsQuery != nil && nsUname != nsQuery.Uname() {
 				continue
 			}
 			for name, props := range buckets {
+				ns := cmn.MakeNs(nsUname)
 				bck := NewBck(name, provider, ns, props)
 				if callback(bck) { // break?
 					return
@@ -192,7 +193,7 @@ func (m *BMD) DeepCopy(dst *BMD) {
 func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 	cmn.Assert(bck.HasProvider()) // TODO -- FIXME: remove
 	if namespaces, ok := m.Providers[bck.Provider]; ok {
-		buckets = namespaces[bck.Ns]
+		buckets = namespaces[bck.Ns.Uname()]
 	}
 	return
 }
@@ -200,7 +201,7 @@ func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 func (m *BMD) initBckAnyProvider(bck *Bck) (provider string, p *cmn.BucketProps) {
 	var present bool
 	if namespaces, ok := m.Providers[cmn.ProviderAIS]; ok {
-		if buckets, ok := namespaces[bck.Ns]; ok {
+		if buckets, ok := namespaces[bck.Ns.Uname()]; ok {
 			if p, present = buckets[bck.Name]; present {
 				provider = cmn.ProviderAIS
 				return
@@ -216,7 +217,7 @@ func (m *BMD) initBckCloudProvider(bck *Bck) (provider string, p *cmn.BucketProp
 		if prov == cmn.ProviderAIS {
 			continue
 		}
-		if buckets, ok2 := namespaces[bck.Ns]; ok2 {
+		if buckets, ok2 := namespaces[bck.Ns.Uname()]; ok2 {
 			if p, present = buckets[bck.Name]; present {
 				provider = prov
 				return

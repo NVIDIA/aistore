@@ -85,7 +85,7 @@ func newBucketMD() *bucketMD {
 	namespaces := make(cluster.Namespaces, 1)
 	providers[cmn.ProviderAIS] = namespaces
 	buckets := make(cluster.Buckets, 16)
-	namespaces[cmn.NsGlobal] = buckets
+	namespaces[cmn.NsGlobal.Uname()] = buckets
 	return &bucketMD{BMD: cluster.BMD{Providers: providers, Origin: 0}}
 }
 

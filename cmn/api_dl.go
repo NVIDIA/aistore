@@ -148,7 +148,7 @@ func (b *DlBase) InitWithQuery(query url.Values) {
 		b.Bck.Name = query.Get(URLParamBucket)
 	}
 	b.Bck.Provider = query.Get(URLParamProvider)
-	b.Bck.Ns = query.Get(URLParamNamespace)
+	b.Bck.Ns = MakeNs(query.Get(URLParamNamespace))
 	b.Timeout = query.Get(URLParamTimeout)
 	b.Description = query.Get(URLParamDescription)
 }
@@ -161,8 +161,8 @@ func (b *DlBase) AsQuery() url.Values {
 	if b.Bck.Provider != "" {
 		query.Add(URLParamProvider, b.Bck.Provider)
 	}
-	if b.Bck.Ns != "" {
-		query.Add(URLParamNamespace, b.Bck.Ns)
+	if !b.Bck.Ns.IsGlobal() {
+		query.Add(URLParamNamespace, b.Bck.Ns.Uname())
 	}
 	if b.Timeout != "" {
 		query.Add(URLParamTimeout, b.Timeout)

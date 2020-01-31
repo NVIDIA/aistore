@@ -510,11 +510,11 @@ func AddBckToQuery(query url.Values, bck Bck) url.Values {
 		}
 		query.Set(URLParamProvider, bck.Provider)
 	}
-	if bck.Ns != "" {
+	if !bck.Ns.IsGlobal() {
 		if query == nil {
 			query = make(url.Values)
 		}
-		query.Set(URLParamNamespace, bck.Ns)
+		query.Set(URLParamNamespace, bck.Ns.Uname())
 	}
 	return query
 }

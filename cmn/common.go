@@ -179,6 +179,7 @@ var (
 	rtie      atomic.Int32
 	sid64     *shortid.Shortid
 	bucketReg *regexp.Regexp
+	nsReg     *regexp.Regexp
 )
 var (
 	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010..1}suffix'")
@@ -230,6 +231,7 @@ func init() {
 	rtie.Store(1013)
 
 	bucketReg = regexp.MustCompile(`^[.a-zA-Z0-9_-]*$`)
+	nsReg = regexp.MustCompile(`^[a-zA-Z0-9_-]*$`)
 
 	// Config related
 	config := &Config{}
@@ -763,7 +765,7 @@ func ValidateOmitBase(fqn, omitBase string) (err error) {
 	return
 }
 
-func ValidateBucketName(bucket string) (err error) {
+func ValidateBckName(bucket string) (err error) {
 	const nameErr = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
 	if bucket == "" {
 		return errors.New("bucket name is empty")

@@ -785,7 +785,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	// 3. createlb
 	if msg.Action == cmn.ActCreateLB {
-		if err = cmn.ValidateBucketName(bucket); err != nil {
+		if err = cmn.ValidateBckName(bucket); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -835,7 +835,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		if err := cmn.ValidateBucketName(bucketTo); err != nil {
+		if err := cmn.ValidateBckName(bucketTo); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}

@@ -443,7 +443,8 @@ func ExtHeader(body []byte, hlen int) (hdr Header) {
 	off, hdr.Bck.Name = extString(0, body)
 	off, hdr.ObjName = extString(off, body)
 	off, hdr.Bck.Provider = extString(off, body)
-	off, hdr.Bck.Ns = extString(off, body)
+	off, hdr.Bck.Ns.Name = extString(off, body)
+	off, hdr.Bck.Ns.UUID = extString(off, body)
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
 	if _, ok := cmn.CheckDebug(pkgName); ok {

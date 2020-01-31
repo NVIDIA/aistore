@@ -15,7 +15,7 @@ var _ = Describe("BMD", func() {
 	Describe("validateBucketName", func() {
 		DescribeTable("should accept bucket name",
 			func(bucket string) {
-				err := cmn.ValidateBucketName(bucket)
+				err := cmn.ValidateBckName(bucket)
 				Expect(err).NotTo(HaveOccurred())
 			},
 			Entry(
@@ -34,7 +34,7 @@ var _ = Describe("BMD", func() {
 
 		DescribeTable("should reject bucket name",
 			func(bucket string) {
-				err := cmn.ValidateBucketName(bucket)
+				err := cmn.ValidateBckName(bucket)
 				Expect(err).To(HaveOccurred())
 			},
 			Entry(

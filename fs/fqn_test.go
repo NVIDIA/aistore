@@ -26,7 +26,7 @@ func TestParseFQN(t *testing.T) {
 			"smoke test",
 			"/tmp/@ais/#namespace/bucket/%ob/objname",
 			[]string{"/tmp"},
-			"/tmp", cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: "namespace"}, fs.ObjectType, "objname", false,
+			"/tmp", cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: "namespace"}}, fs.ObjectType, "objname", false,
 		},
 		{
 			"smoke test (namespace global)",
@@ -53,16 +53,16 @@ func TestParseFQN(t *testing.T) {
 			"/tmp", cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle, Ns: cmn.NsGlobal}, fs.ObjectType, "objname", false,
 		},
 		{
-			"global namespace (empty)",
-			"/tmp/@ais/bucket/%ob/objname",
-			[]string{"/tmp"},
-			"/tmp", cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}, fs.ObjectType, "objname", false,
-		},
-		{
 			"non-empty namespace",
 			"/tmp/@ais/#namespace/bucket/%ob/objname",
 			[]string{"/tmp"},
-			"/tmp", cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: "namespace"}, fs.ObjectType, "objname", false,
+			"/tmp", cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: "namespace"}}, fs.ObjectType, "objname", false,
+		},
+		{
+			"cloud namespace",
+			"/tmp/@ais/:uuid#namespace/bucket/%ob/objname",
+			[]string{"/tmp"},
+			"/tmp", cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}}, fs.ObjectType, "objname", false,
 		},
 		{
 			"long mount path name",
@@ -157,6 +157,12 @@ func TestParseFQN(t *testing.T) {
 			"", cmn.Bck{}, "", "", true,
 		},
 		{
+			"invalid cloud namespace",
+			"/tmp/@cloud/:uuid/bucket/%ob/objname",
+			[]string{"/tmp"},
+			"", cmn.Bck{}, "", "", true,
+		},
+		{
 			"no matching mountpath",
 			"/tmp/@ais/bucket/%obj/objname",
 			[]string{"/tmp/a", "/tmp/b"},
@@ -238,7 +244,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			bck: cmn.Bck{
 				Name:     "bucket",
 				Provider: cmn.ProviderAmazon,
-				Ns:       "uuid10294",
+				Ns:       cmn.Ns{UUID: "uuid", Name: "namespace"},
 			},
 			contentType: fs.WorkfileType,
 			objName:     "object/name",
@@ -248,7 +254,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			bck: cmn.Bck{
 				Name:     "bucket",
 				Provider: cmn.ProviderAmazon,
-				Ns:       "alias",
+				Ns:       cmn.Ns{Name: "alias"},
 			},
 			contentType: fs.ObjectType,
 			objName:     "object/name",

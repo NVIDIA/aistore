@@ -21,6 +21,6 @@ func NewBaseBownerMock() *BownerMock {
 	namespaces := make(Namespaces)
 	providers[cmn.ProviderAIS] = namespaces
 	buckets := make(Buckets)
-	namespaces[cmn.NsGlobal] = buckets
+	namespaces[cmn.NsGlobal.Uname()] = buckets
 	return &BownerMock{BMD: BMD{Providers: providers}}
 }

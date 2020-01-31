@@ -645,7 +645,8 @@ func (s *Stream) insHeader(hdr Header) (l int) {
 	l = insString(l, s.maxheader, hdr.Bck.Name)
 	l = insString(l, s.maxheader, hdr.ObjName)
 	l = insString(l, s.maxheader, hdr.Bck.Provider)
-	l = insString(l, s.maxheader, hdr.Bck.Ns)
+	l = insString(l, s.maxheader, hdr.Bck.Ns.Name)
+	l = insString(l, s.maxheader, hdr.Bck.Ns.UUID)
 	l = insByte(l, s.maxheader, hdr.Opaque)
 	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
 	hlen := l - cmn.SizeofI64*2

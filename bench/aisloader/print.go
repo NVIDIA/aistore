@@ -321,7 +321,7 @@ func printRunParams(p params) {
 		URL:           p.proxyURL,
 		Bucket:        p.bck.Name,
 		Provider:      p.bck.Provider,
-		Namespace:     p.bck.Ns,
+		Namespace:     p.bck.Ns.String(),
 		Duration:      p.duration.String(),
 		MaxPutBytes:   p.putSizeUpperBound,
 		PutPct:        p.putPct,

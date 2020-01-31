@@ -197,8 +197,12 @@ func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int)
 
 		provLen = 1 + 1 + len(bck.Provider)
 	)
-	if bck.Ns != cmn.NsGlobal {
-		nsLen = 1 + 1 + len(bck.Ns)
+	if !bck.Ns.IsGlobal() {
+		nsLen = 1
+		if bck.Ns.IsCloud() {
+			nsLen += 1 + len(bck.Ns.UUID)
+		}
+		nsLen += 1 + len(bck.Ns.Name)
 	}
 	if bck.Name != "" {
 		bckNameLen = 1 + len(bck.Name)
@@ -214,8 +218,13 @@ func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int)
 	buf = append(buf, filepath.Separator, prefProvider)
 	buf = append(buf, bck.Provider...)
 	if nsLen > 0 {
-		buf = append(buf, filepath.Separator, prefNsLocal)
-		buf = append(buf, bck.Ns...)
+		buf = append(buf, filepath.Separator)
+		if bck.Ns.IsCloud() {
+			buf = append(buf, prefNsCloud)
+			buf = append(buf, bck.Ns.UUID...)
+		}
+		buf = append(buf, prefNsLocal)
+		buf = append(buf, bck.Ns.Name...)
 	}
 	if bckNameLen > 0 {
 		buf = append(buf, filepath.Separator)

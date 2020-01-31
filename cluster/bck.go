@@ -17,7 +17,7 @@ type Bck struct {
 	Props *cmn.BucketProps
 }
 
-func NewBck(name, provider, ns string, optProps ...*cmn.BucketProps) *Bck {
+func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck {
 	var props *cmn.BucketProps
 	if len(optProps) > 0 {
 		props = optProps[0]
@@ -35,12 +35,13 @@ func NewBckEmbed(bck cmn.Bck) *Bck { return &Bck{Bck: bck} }
 
 func (b *Bck) MakeUname(objName string) string {
 	var (
-		l   = len(b.Provider) + 1 + len(b.Ns) + 1 + len(b.Name) + 1 + len(objName)
-		buf = make([]byte, 0, l)
+		nsUname = b.Ns.Uname()
+		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName)
+		buf     = make([]byte, 0, l)
 	)
 	buf = append(buf, b.Provider...)
 	buf = append(buf, filepath.Separator)
-	buf = append(buf, b.Ns...)
+	buf = append(buf, nsUname...)
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, b.Name...)
 	buf = append(buf, filepath.Separator)
@@ -62,7 +63,7 @@ func ParseUname(uname string) (b Bck, objName string) {
 		case 0:
 			b.Provider = item
 		case 1:
-			b.Ns = item
+			b.Ns = cmn.MakeNs(item)
 		case 2:
 			b.Name = item
 			objName = uname[i+1:]

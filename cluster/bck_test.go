@@ -14,7 +14,7 @@ import (
 var _ = Describe("Bck", func() {
 	Describe("Uname", func() {
 		DescribeTable("should convert bucket and object name to uname and back",
-			func(bckName, bckProvider, bckNs, objName string) {
+			func(bckName, bckProvider string, bckNs cmn.Ns, objName string) {
 				bck := NewBck(bckName, bckProvider, bckNs)
 				uname := bck.MakeUname(objName)
 
@@ -33,8 +33,12 @@ var _ = Describe("Bck", func() {
 				"bck", cmn.ProviderAIS, cmn.NsGlobal, "obj/tmp1/tmp2",
 			),
 			Entry(
-				"non-empty namespace",
-				"bck", cmn.ProviderAIS, "namespace", "obj/tmp1/tmp2",
+				"non-empty local namespace",
+				"bck", cmn.ProviderAIS, cmn.Ns{Name: "namespace"}, "obj/tmp1/tmp2",
+			),
+			Entry(
+				"non-empty cloud namespace",
+				"bck", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "namespace"}, "obj/tmp1/tmp2",
 			),
 			Entry(
 				"aws provider",
@@ -67,9 +71,19 @@ var _ = Describe("Bck", func() {
 				NewBck("a", "", cmn.NsGlobal),
 			),
 			Entry(
-				"not matching namespace",
-				NewBck("a", "", "ns1"),
-				NewBck("a", "", "ns2"),
+				"not matching local namespace",
+				NewBck("a", "", cmn.Ns{Name: "ns1"}),
+				NewBck("a", "", cmn.Ns{Name: "ns2"}),
+			),
+			Entry(
+				"not matching cloud namespace #1",
+				NewBck("a", "", cmn.Ns{UUID: "uuid", Name: "ns1"}),
+				NewBck("a", "", cmn.Ns{UUID: "uuid", Name: "ns2"}),
+			),
+			Entry(
+				"not matching cloud namespace #2",
+				NewBck("a", "", cmn.Ns{UUID: "uuid1", Name: "ns"}),
+				NewBck("a", "", cmn.Ns{UUID: "uuid2", Name: "ns"}),
 			),
 			Entry(
 				"not matching providers",
@@ -98,9 +112,14 @@ var _ = Describe("Bck", func() {
 				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
 			),
 			Entry(
-				"matching namespaces",
-				NewBck("a", cmn.ProviderAIS, "ns"),
-				NewBck("a", cmn.ProviderAIS, "ns"),
+				"matching local namespaces",
+				NewBck("a", cmn.ProviderAIS, cmn.Ns{Name: "ns"}),
+				NewBck("a", cmn.ProviderAIS, cmn.Ns{Name: "ns"}),
+			),
+			Entry(
+				"matching cloud namespaces",
+				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
+				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
 			),
 			Entry(
 				"matching Cloud providers",

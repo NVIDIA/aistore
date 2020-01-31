@@ -7,6 +7,7 @@ package fs
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -74,10 +75,21 @@ func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 
 			switch item[0] {
 			case prefNsLocal:
-				parsed.Bck.Ns = item[1:]
+				parsed.Bck.Ns = cmn.Ns{
+					Name: item[1:],
+				}
 				itemIdx-- // we must visit this case again
 			case prefNsCloud:
-				cmn.AssertMsg(false, "not yet implemented")
+				ns := item[1:]
+				idx := strings.IndexRune(ns, prefNsLocal)
+				if idx == -1 {
+					err = fmt.Errorf("invalid fqn %s: bad namespace %q", fqn, ns)
+				}
+				parsed.Bck.Ns = cmn.Ns{
+					UUID: ns[:idx],
+					Name: ns[idx+1:],
+				}
+				itemIdx-- // we must visit this case again
 			default:
 				parsed.Bck.Name = item
 			}
