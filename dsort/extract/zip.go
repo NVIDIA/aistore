@@ -8,6 +8,7 @@ import (
 	"archive/zip"
 	"io"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -19,7 +20,9 @@ var (
 )
 
 type (
-	zipExtractCreator struct{}
+	zipExtractCreator struct {
+		t cluster.Target
+	}
 
 	zipFileHeader struct {
 		Name    string `json:"name"`
@@ -41,9 +44,9 @@ type (
 	}
 )
 
-func newZipRecordDataReader() *zipRecordDataReader {
+func newZipRecordDataReader(t cluster.Target) *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
-	rd.metadataBuf, rd.slab = mem.Alloc()
+	rd.metadataBuf, rd.slab = t.GetMMSA().Alloc()
 	return rd
 }
 
@@ -113,7 +116,7 @@ func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 		slabSize = 128 * cmn.KiB
 	}
 
-	slab, err := mem.GetSlab(slabSize)
+	slab, err := z.t.GetMMSA().GetSlab(slabSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 	defer slab.Free(buf)
@@ -166,8 +169,8 @@ func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 	return extractedSize, extractedCount, nil
 }
 
-func NewZipExtractCreator() ExtractCreator {
-	return &zipExtractCreator{}
+func NewZipExtractCreator(t cluster.Target) ExtractCreator {
+	return &zipExtractCreator{t: t}
 }
 
 // CreateShard creates a new shard locally based on the Shard.
@@ -177,7 +180,7 @@ func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadC
 	zw := zip.NewWriter(w)
 	defer zw.Close()
 
-	rdReader := newZipRecordDataReader()
+	rdReader := newZipRecordDataReader(z.t)
 	for _, rec := range s.Records.All() {
 		for _, obj := range rec.Objects {
 			rdReader.reinit(zw, obj.Size, obj.MetadataSize)

@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -42,7 +43,9 @@ type tarFileHeader struct {
 	Gname string `json:"gname"` // Group name of owner
 }
 
-type tarExtractCreator struct{}
+type tarExtractCreator struct {
+	t cluster.Target
+}
 
 // tarRecordDataReader is used for writing metadata as well as data to the buffer.
 type tarRecordDataReader struct {
@@ -82,11 +85,11 @@ func (h *tarFileHeader) toTarHeader(size int64) *tar.Header {
 	}
 }
 
-func newTarRecordDataReader() *tarRecordDataReader {
+func newTarRecordDataReader(t cluster.Target) *tarRecordDataReader {
 	var err error
 
 	rd := &tarRecordDataReader{}
-	rd.slab, err = mem.GetSlab(4 * cmn.KiB)
+	rd.slab, err = t.GetMMSA().GetSlab(4 * cmn.KiB)
 	cmn.AssertNoErr(err)
 	rd.metadataBuf = rd.slab.Alloc()
 	return rd
@@ -150,7 +153,7 @@ func (t *tarExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 		slabSize = 128 * cmn.KiB
 	}
 
-	slab, err := mem.GetSlab(slabSize)
+	slab, err := t.t.GetMMSA().GetSlab(slabSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 	defer slab.Free(buf)
@@ -208,8 +211,8 @@ func (t *tarExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 	}
 }
 
-func NewTarExtractCreator() ExtractCreator {
-	return &tarExtractCreator{}
+func NewTarExtractCreator(t cluster.Target) ExtractCreator {
+	return &tarExtractCreator{t: t}
 }
 
 // CreateShard creates a new shard locally based on the Shard.
@@ -220,7 +223,7 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 		needFlush bool
 		padBuf    = make([]byte, tarBlockSize)
 		tw        = tar.NewWriter(tarball)
-		rdReader  = newTarRecordDataReader()
+		rdReader  = newTarRecordDataReader(t.t)
 	)
 
 	defer func() {

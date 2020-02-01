@@ -10,6 +10,7 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
@@ -20,7 +21,9 @@ var (
 	_ ExtractCreator = &targzExtractCreator{}
 )
 
-type targzExtractCreator struct{}
+type targzExtractCreator struct {
+	t cluster.Target
+}
 
 // ExtractShard reads the tarball f and extracts its metadata.
 func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
@@ -55,7 +58,7 @@ func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader
 		slabSize = 128 * cmn.KiB
 	}
 
-	slab, err := mem.GetSlab(slabSize)
+	slab, err := t.t.GetMMSA().GetSlab(slabSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 	defer slab.Free(buf)
@@ -119,8 +122,8 @@ func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader
 	}
 }
 
-func NewTargzExtractCreator() ExtractCreator {
-	return &targzExtractCreator{}
+func NewTargzExtractCreator(t cluster.Target) ExtractCreator {
+	return &targzExtractCreator{t: t}
 }
 
 // CreateShard creates a new shard locally based on the Shard.
@@ -132,7 +135,7 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 		padBuf    = make([]byte, tarBlockSize)
 		gzw, _    = gzip.NewWriterLevel(tarball, gzip.BestSpeed)
 		tw        = tar.NewWriter(gzw)
-		rdReader  = newTarRecordDataReader()
+		rdReader  = newTarRecordDataReader(t.t)
 	)
 
 	defer func() {

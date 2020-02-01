@@ -50,10 +50,6 @@ var (
 	initOnce = func() {
 		fs.CSM.RegisterContentType(filetype.DSortFileType, &filetype.DSortFile{})
 		fs.CSM.RegisterContentType(filetype.DSortWorkfileType, &filetype.DSortFile{})
-		if mm == nil {
-			mm = memsys.DefaultPageMM() // NOTE: only for unit tests
-		}
-
 	}
 	_ cluster.Slistener = &Manager{}
 )
@@ -364,7 +360,6 @@ func (m *Manager) finalCleanup() {
 	// that this can be freed once we cleanup streams - streams are asynchronous
 	// and we may have race between in-flight request and cleanup.
 	m.recManager.Cleanup()
-	extract.FreeMemory()
 
 	m.creationPhase.metadata.SendOrder = nil
 	m.creationPhase.metadata.Shards = nil
@@ -453,11 +448,11 @@ func (m *Manager) setExtractCreator() (err error) {
 	var extractCreator extract.ExtractCreator
 	switch m.rs.Extension {
 	case ExtTar:
-		extractCreator = extract.NewTarExtractCreator()
+		extractCreator = extract.NewTarExtractCreator(m.ctx.t)
 	case ExtTarTgz, ExtTgz:
-		extractCreator = extract.NewTargzExtractCreator()
+		extractCreator = extract.NewTargzExtractCreator(m.ctx.t)
 	case ExtZip:
-		extractCreator = extract.NewZipExtractCreator()
+		extractCreator = extract.NewZipExtractCreator(m.ctx.t)
 	default:
 		cmn.AssertMsg(false, fmt.Sprintf("unknown extension %s", m.rs.Extension))
 	}

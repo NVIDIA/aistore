@@ -175,7 +175,7 @@ func (p *proxyrunner) Run() error {
 		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", config.Net.HTTP.RevProxy)
 	}
 
-	dsort.RegisterNode(p.smapowner, p.bmdowner, p.si, daemon.mm, nil, p.statsT)
+	dsort.RegisterNode(p.smapowner, p.bmdowner, p.si, nil, nil, p.statsT)
 	return p.httprunner.run()
 }
 

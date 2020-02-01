@@ -36,8 +36,6 @@ const (
 
 var (
 	_ RecordExtractor = &RecordManager{}
-
-	mem *memsys.MMSA
 )
 
 type (
@@ -93,23 +91,8 @@ type (
 	}
 )
 
-func FreeMemory() {
-	// NOTE: forcefully free all MMSA memory to the OS
-	// TODO: another reason to use a separate MMSA for extractions
-	mem.Free(memsys.FreeSpec{
-		Totally: true,
-		ToOS:    true,
-		MinSize: 1, // force toGC to free all (even small) memory to disk
-	})
-}
-
 func NewRecordManager(t cluster.Target, daemonID, bucket, provider, extension string, extractCreator ExtractCreator,
 	keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
-	if t == nil {
-		mem = memsys.DefaultPageMM() // NOTE: only for unit tests
-	} else {
-		mem = t.GetMMSA() // TODO: try to introduce and benchmark a separate MMSA
-	}
 	return &RecordManager{
 		Records: NewRecords(1000),
 
@@ -161,7 +144,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		storeType = SGLStoreType
 		contentPath, fullContentPath = rm.encodeRecordName(storeType, args.shardName, args.recordName)
 
-		sgl := mem.NewSGL(r.Size() + int64(len(args.metadata)))
+		sgl := rm.t.GetMMSA().NewSGL(r.Size() + int64(len(args.metadata)))
 		if _, err = io.CopyBuffer(sgl, bytes.NewReader(args.metadata), args.buf); err != nil {
 			return 0, errors.WithStack(err)
 		}
@@ -403,6 +386,14 @@ func (rm *RecordManager) Cleanup() {
 		return true
 	})
 	rm.contents = nil
+
+	// NOTE: forcefully free all MMSA memory to the OS
+	// TODO: another reason to use a separate MMSA for extractions
+	rm.t.GetMMSA().Free(memsys.FreeSpec{
+		Totally: true,
+		ToOS:    true,
+		MinSize: 1, // force toGC to free all (even small) memory to system
+	})
 }
 
 func copyMetadataAndData(dst io.Writer, src io.Reader, metadata []byte, buf []byte) (int64, error) {
