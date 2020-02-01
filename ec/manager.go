@@ -184,8 +184,8 @@ func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) *XactRespond {
 }
 
 func (mgr *Manager) getBckXacts(bckName string) *BckXacts {
-	mgr.RLock()
-	defer mgr.RUnlock()
+	mgr.Lock()
+	defer mgr.Unlock()
 
 	xacts, ok := mgr.xacts[bckName]
 
