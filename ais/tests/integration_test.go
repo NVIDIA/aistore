@@ -70,7 +70,7 @@ func (m *ioContext) init() {
 	}
 	m.wg = &sync.WaitGroup{}
 	if m.bck.Name == "" {
-		m.bck.Name = m.t.Name() + "Bucket"
+		m.bck.Name = tutils.GenRandomString(15)
 	}
 	if m.bck.Provider == "" {
 		m.bck.Provider = cmn.ProviderAIS

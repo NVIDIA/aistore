@@ -97,7 +97,7 @@ func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt int, fileSiz
 
 	// set up the output file
 	name := tarName + extension
-	tarball, err := os.Create(name)
+	tarball, err := cmn.CreateFile(name)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileT
 	// set up the output file
 	extension := ".tar"
 	name := tarName + extension
-	tarball, err := os.Create(name)
+	tarball, err := cmn.CreateFile(name)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func CreateZipWithRandomFiles(zipName string, fileCnt, fileSize int) error {
 
 	extension := ".zip"
 	name := zipName + extension
-	z, err := os.Create(name)
+	z, err := cmn.CreateFile(name)
 	if err != nil {
 		return err
 	}
