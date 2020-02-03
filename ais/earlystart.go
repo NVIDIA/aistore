@@ -229,9 +229,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	}
 
 	// 5:  persist and finalize w/ sync + BMD
-	if smap.Origin == 0 {
+	if smap.UUID == 0 {
 		clone := smap.clone()
-		clone.Origin, clone.CreationTime = newOriginMD() // new origin
+		clone.UUID, clone.CreationTime = newClusterUUID() // new uuid
 		clone.Version++
 		p.smapowner.put(clone)
 		smap = clone
@@ -246,7 +246,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	if bmd.Version == 0 {
 		clone := bmd.clone()
 		clone.Version = 1 // init BMD
-		clone.Origin = smap.Origin
+		clone.UUID = smap.UUID
 		p.bmdowner.put(clone)
 		bmd = clone
 	}
@@ -295,7 +295,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 			args := bcastArgs{req: cmn.ReqArgs{Path: url, Query: q}, smap: loadedSmap, to: cluster.AllNodes}
 			maxVerSmap, _, _, slowp = p.bcastMaxVer(args, nil, nil)
 			if maxVerSmap != nil && !slowp {
-				if maxVerSmap.Origin == loadedSmap.Origin && maxVerSmap.version() > loadedSmap.version() {
+				if maxVerSmap.UUID == loadedSmap.UUID && maxVerSmap.version() > loadedSmap.version() {
 					if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
 						glog.Infof("%s: %s <= max-ver %s",
 							pname, loadedSmap.StringEx(), maxVerSmap.StringEx())
@@ -333,10 +333,10 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		return
 	}
 	glog.Infof("%s: local %s max-ver %s", pname, smap.StringEx(), maxVerSmap.StringEx())
-	sameOrigin, sameVersion, eq := smap.Compare(&maxVerSmap.Smap)
-	if !sameOrigin {
+	sameUUID, sameVersion, eq := smap.Compare(&maxVerSmap.Smap)
+	if !sameUUID {
 		// FATAL: cluster integrity error (cie)
-		cmn.ExitLogf("%s: split-brain origin [%s %s] vs [%s %s]",
+		cmn.ExitLogf("%s: split-brain uuid [%s %s] vs [%s %s]",
 			ciError(10), pname, smap.StringEx(), maxVerSmap.ProxySI.Name(), maxVerSmap.StringEx())
 	}
 	if eq && sameVersion {
@@ -368,7 +368,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBMD *bucketMD) {
 	var (
 		err         error
-		sorigin     uint64
+		suuid       uint64
 		pname       = p.si.Name()
 		config      = cmn.GCO.Get()
 		now         = time.Now()
@@ -391,8 +391,8 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 		time.Sleep(config.Timeout.CplaneOperation)
 	}
 	if slowp {
-		if maxVerBMD, err = resolveOriginBMD(bmds); err != nil {
-			if _, split := err.(*errBmdOriginSplit); split {
+		if maxVerBMD, err = resolveUUIDBMD(bmds); err != nil {
+			if _, split := err.(*errBmdUUIDSplit); split {
 				cmn.ExitLogf("FATAL: %s (primary), err: %v", pname, err) // cluster integrity error
 			}
 			if !errors.Is(err, errNoBMD) {
@@ -403,19 +403,19 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 			if !si.IsTarget() {
 				continue
 			}
-			if sorigin == 0 {
-				sorigin = smap.Origin
-				if sorigin != 0 {
-					glog.Infof("%s: set Smap origin = %s(%d)", pname, si, sorigin)
+			if suuid == 0 {
+				suuid = smap.UUID
+				if suuid != 0 {
+					glog.Infof("%s: set Smap uuid = %s(%d)", pname, si, suuid)
 				}
-			} else if sorigin != smap.Origin && smap.Origin != 0 {
+			} else if suuid != smap.UUID && smap.UUID != 0 {
 				// FATAL: cluster integrity error (cie)
 				cmn.ExitLogf("%s: split-brain [%s %d] vs [%s %d]",
-					ciError(30), pname, sorigin, si.Name(), smap.Origin)
+					ciError(30), pname, suuid, si.Name(), smap.UUID)
 			}
 		}
 		for _, smap := range smaps {
-			if smap.Origin != sorigin {
+			if smap.UUID != suuid {
 				continue
 			}
 			if maxVerSmap == nil {
@@ -456,12 +456,12 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 		}
 		if svm.BucketMD != nil && svm.BucketMD.version() > 0 {
 			if maxVerBMD == nil { // 1. init
-				borigin, maxVerBMD = svm.BucketMD.Origin, svm.BucketMD
-			} else if borigin != 0 && borigin != svm.BucketMD.Origin { // 2. slow path
+				borigin, maxVerBMD = svm.BucketMD.UUID, svm.BucketMD
+			} else if borigin != 0 && borigin != svm.BucketMD.UUID { // 2. slow path
 				slowp = true
 			} else if !slowp && maxVerBMD.Version < svm.BucketMD.Version { // 3. fast path max(version)
 				maxVerBMD = svm.BucketMD
-				borigin = svm.BucketMD.Origin
+				borigin = svm.BucketMD.UUID
 			}
 		}
 		if svm.Smap != nil && svm.VoteInProgress {
@@ -476,12 +476,12 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 		}
 		if svm.Smap != nil && svm.Smap.version() > 0 {
 			if maxVerSmap == nil { // 1. init
-				sorigin, maxVerSmap = svm.Smap.Origin, svm.Smap
-			} else if sorigin != 0 && sorigin != svm.Smap.Origin { // 2. slow path
+				sorigin, maxVerSmap = svm.Smap.UUID, svm.Smap
+			} else if sorigin != 0 && sorigin != svm.Smap.UUID { // 2. slow path
 				slowp = true
 			} else if !slowp && maxVerSmap.Version < svm.Smap.Version { // 3. fast path max(version)
 				maxVerSmap = svm.Smap
-				sorigin = svm.Smap.Origin
+				sorigin = svm.Smap.UUID
 			}
 		}
 		if bmds != nil && svm.BucketMD != nil && svm.BucketMD.version() > 0 {

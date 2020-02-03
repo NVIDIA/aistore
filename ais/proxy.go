@@ -3027,7 +3027,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	if p.startedUp.Load() {
 		bmd := p.bmdowner.get()
-		if err := p.validateOriginBMD(bmd, nsi, regReq.BMD, ""); err != nil {
+		if err := bmd.validateUUID(regReq.BMD, p.si, nsi, ""); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -3109,7 +3109,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// check for cluster integrity errors (cie)
-	if err = p.validateOriginSmap(smap, nsi, regReq.Smap, ""); err != nil {
+	if err = smap.validateUUID(regReq.Smap, p.si, nsi, ""); err != nil {
 		p.smapowner.Unlock()
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -3442,7 +3442,7 @@ func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInterna
 	}
 	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
-	if err = p.validateOriginBMD(bmd, nil, newBMD, caller); err != nil {
+	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {
 		cmn.Assert(!p.smapowner.get().isPrimary(p.si))
 		// cluster integrity error: making exception for non-primary proxies
 		glog.Errorf("%s (non-primary): %v - proceeding to override BMD", pname, err)
@@ -3509,7 +3509,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 // 4. Metasync the merged BMD
 func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	var (
-		origin       uint64
+		uuid         uint64
 		rbmd         *bucketMD
 		err          error
 		bmds         map[*cluster.Snode]*bucketMD
@@ -3537,8 +3537,8 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 			glog.Infof("%s from %s", bmd, res.si.Name())
 		}
 		if rbmd == nil { // 1. init
-			origin, rbmd = bmd.Origin, bmd
-		} else if origin != bmd.Origin { // 2. slow path
+			uuid, rbmd = bmd.UUID, bmd
+		} else if uuid != bmd.UUID { // 2. slow path
 			slowp = true
 		} else if !slowp && rbmd.Version < bmd.Version { // 3. fast path max(version)
 			rbmd = bmd
@@ -3547,13 +3547,13 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	}
 	if slowp {
 		force, _ = cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
-		if rbmd, err = resolveOriginBMD(bmds); err != nil {
-			_, split := err.(*errBmdOriginSplit)
+		if rbmd, err = resolveUUIDBMD(bmds); err != nil {
+			_, split := err.(*errBmdUUIDSplit)
 			if !force || errors.Is(err, errNoBMD) || split {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
-			if _, ok := err.(*errTgtBmdOriginDiffer); ok {
+			if _, ok := err.(*errTgtBmdUUIDDiffer); ok {
 				glog.Error(err.Error())
 			}
 		}
@@ -3571,22 +3571,22 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 // misc utils //
 ////////////////
 
-func resolveOriginBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
+func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	var (
-		mlist = make(map[uint64][]targetRegMeta) // origin => list(targetRegMeta)
-		maxor = make(map[uint64]*bucketMD)       // origin => max-ver BMD
+		mlist = make(map[uint64][]targetRegMeta) // uuid => list(targetRegMeta)
+		maxor = make(map[uint64]*bucketMD)       // uuid => max-ver BMD
 	)
 	// results => (mlist, maxor)
 	for si, bmd := range bmds {
 		if bmd.Version == 0 {
 			continue
 		}
-		mlist[bmd.Origin] = append(mlist[bmd.Origin], targetRegMeta{nil, bmd, si})
+		mlist[bmd.UUID] = append(mlist[bmd.UUID], targetRegMeta{nil, bmd, si})
 
-		if rbmd, ok := maxor[bmd.Origin]; !ok {
-			maxor[bmd.Origin] = bmd
+		if rbmd, ok := maxor[bmd.UUID]; !ok {
+			maxor[bmd.UUID] = bmd
 		} else if rbmd.Version < bmd.Version {
-			maxor[bmd.Origin] = bmd
+			maxor[bmd.UUID] = bmd
 		}
 	}
 	cmn.Assert(len(maxor) == len(mlist)) // TODO: remove
@@ -3594,22 +3594,22 @@ func resolveOriginBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 		return nil, errNoBMD
 	}
 	// by simple majority
-	var origin, l = uint64(0), int(0)
-	for o, lst := range mlist {
+	var uuid, l = uint64(0), int(0)
+	for u, lst := range mlist {
 		if l < len(lst) {
-			origin, l = o, len(lst)
+			uuid, l = u, len(lst)
 		}
 	}
-	for o, lst := range mlist {
-		if l == len(lst) && o != origin {
-			s := fmt.Sprintf("%s: BMDs have different origins with no simple majority:\n%v", ciError(60), mlist)
-			return nil, &errBmdOriginSplit{s}
+	for u, lst := range mlist {
+		if l == len(lst) && u != uuid {
+			s := fmt.Sprintf("%s: BMDs have different uuids with no simple majority:\n%v", ciError(60), mlist)
+			return nil, &errBmdUUIDSplit{s}
 		}
 	}
-	s := fmt.Sprintf("%s: BMDs have different origins with simple majority: ...%d:\n%v", ciError(70), origin%1000, mlist)
-	bmd := maxor[origin]
-	cmn.Assert(bmd.Origin != 0)
-	return bmd, &errTgtBmdOriginDiffer{s}
+	s := fmt.Sprintf("%s: BMDs have different uuids with simple majority: ...%d:\n%v", ciError(70), uuid%1000, mlist)
+	bmd := maxor[uuid]
+	cmn.Assert(bmd.UUID != 0)
+	return bmd, &errTgtBmdUUIDDiffer{s}
 }
 
 func requiresRemirroring(prevm, newm cmn.MirrorConf) bool {

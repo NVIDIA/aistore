@@ -97,7 +97,7 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
 	if err = t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
 		glog.Errorf("%s: bad BMD, err: %v", tname, err)
-		if _, incompat := err.(*errPrxBmdOriginDiffer); incompat {
+		if _, incompat := err.(*errPrxBmdUUIDDiffer); incompat {
 			return
 		}
 		err = nil
@@ -511,7 +511,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
 			if err := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
 				glog.Errorf("error registering %s: %v", t.si.Name(), err)
-				if _, incompat := err.(*errPrxBmdOriginDiffer); incompat {
+				if _, incompat := err.(*errPrxBmdUUIDDiffer); incompat {
 					t.invalmsghdlr(w, r, err.Error())
 					return
 				}
@@ -743,7 +743,7 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 		cfg          = cmn.GCO.Get()
 		_, psi       = t.getPrimaryURLAndSI()
 	)
-	if err = t.validateOriginBMD(bmd, psi, newBMD, ""); err != nil {
+	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
 		t.bmdowner.Unlock()
 		cmn.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
 		return

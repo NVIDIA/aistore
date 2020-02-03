@@ -16,7 +16,7 @@ In many cases, the entirety of a troubleshooting step boils down to cleaning up 
 | Error | When | Description |
 |--- | --- | --- |
 | `cie#10` | When a primary proxy (gateway) starts up, it will use its own local (copy of) Smap to query other nodes for cluster-wide metadata. | The error indicates that either one of the nodes, or the primary itself, belongs (or did belong) to a different cluster. |
-| `cie#30` | Same as above. | There are at least 2 targets in the cluster that "disagree" between themselves wrt their respective origin. In other words, these two targets cannot be members of a single cluster. |
+| `cie#30` | Same as above. | There are at least 2 targets in the cluster that "disagree" between themselves wrt their respective UUIDs. In other words, these two targets cannot be members of a single cluster. |
 | `cie#40` | At node startup, or (secondly) when bucket metadata (BMD) changes at runtime. | In both cases, the node's local instance of bucket metadata conflicts with the cluster's version. |
 | `cie#50` | Non-primary proxy or storage target: when receiving an updated cluster map that conflicts with the local copy. Primary proxy: when a joining node's Smap does not pass the validation. | In both cases, the node is not permitted to join (or is removed from) the cluster. |
 | `cie#60` | When a primary proxy (gateway) is starting up, it uses its own local Smap to query other nodes for cluster-wide metadata. | The error is specific to bucket metadata and is triggered when there are two or more versions that are mutually incompatible. |

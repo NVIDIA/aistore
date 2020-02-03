@@ -86,19 +86,19 @@ func newBucketMD() *bucketMD {
 	providers[cmn.ProviderAIS] = namespaces
 	buckets := make(cluster.Buckets, 16)
 	namespaces[cmn.NsGlobal.Uname()] = buckets
-	return &bucketMD{BMD: cluster.BMD{Providers: providers, Origin: 0}}
+	return &bucketMD{BMD: cluster.BMD{Providers: providers, UUID: 0}}
 }
 
-func newOriginMD() (origin uint64, created string) {
+func newClusterUUID() (uuid uint64, created string) {
 	var (
 		now    = time.Now()
-		o, err = cmn.GenUUID64()
+		u, err = cmn.GenUUID64()
 	)
 	if err == nil {
-		origin = uint64(o)
+		uuid = uint64(u)
 	} else {
 		glog.Error(err)
-		origin = uint64(now.UnixNano())
+		uuid = uint64(now.UnixNano())
 	}
 	created = now.String()
 	return
@@ -184,6 +184,30 @@ func (m *bucketMD) clone() *bucketMD {
 func (m *bucketMD) deepCopy(dst *bucketMD) {
 	dst.vstr = m.vstr
 	m.DeepCopy(&dst.BMD)
+}
+
+func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller string) (err error) {
+	if nbmd == nil || nbmd.Version == 0 || m.Version == 0 {
+		return
+	}
+	if m.UUID == 0 || nbmd.UUID == 0 {
+		return
+	}
+	if m.UUID == nbmd.UUID {
+		return
+	}
+	nsiname := caller
+	if nsi != nil {
+		nsiname = nsi.Name()
+	} else if nsiname == "" {
+		nsiname = "???"
+	}
+	hname := si.Name()
+	// FATAL: cluster integrity error (cie)
+	s := fmt.Sprintf("%s: BMDs have different uuids: [%s: %s] vs [%s: %s]",
+		ciError(40), hname, m.StringEx(), nsiname, nbmd.StringEx())
+	err = &errPrxBmdUUIDDiffer{s}
+	return
 }
 
 //

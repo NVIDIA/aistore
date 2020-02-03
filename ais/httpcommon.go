@@ -124,12 +124,12 @@ type (
 
 	glogWriter struct{}
 
-	// BMD & its origin
-	errTgtBmdOriginDiffer struct{ detail string }
-	errPrxBmdOriginDiffer struct{ detail string }
-	errBmdOriginSplit     struct{ detail string }
+	// BMD & its uuid
+	errTgtBmdUUIDDiffer struct{ detail string }
+	errPrxBmdUUIDDiffer struct{ detail string }
+	errBmdUUIDSplit     struct{ detail string }
 	// ditto Smap
-	errSmapOriginDiffer struct{ detail string }
+	errSmapUUIDDiffer struct{ detail string }
 )
 
 const (
@@ -137,15 +137,15 @@ const (
 	initialBucketListSize = 128
 )
 
-/////////////////////
-// BMD origin errs //
-/////////////////////
+///////////////////
+// BMD uuid errs //
+///////////////////
 var errNoBMD = errors.New("no bucket metadata")
 
-func (e errTgtBmdOriginDiffer) Error() string { return e.detail }
-func (e errBmdOriginSplit) Error() string     { return e.detail }
-func (e errPrxBmdOriginDiffer) Error() string { return e.detail }
-func (e errSmapOriginDiffer) Error() string   { return e.detail }
+func (e errTgtBmdUUIDDiffer) Error() string { return e.detail }
+func (e errBmdUUIDSplit) Error() string     { return e.detail }
+func (e errPrxBmdUUIDDiffer) Error() string { return e.detail }
+func (e errSmapUUIDDiffer) Error() string   { return e.detail }
 
 ////////////////
 // glogWriter //
@@ -965,7 +965,7 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap 
 	if msgInt.Action != "" {
 		s = ", action " + msgInt.Action
 	}
-	if err = h.validateOriginSmap(smap, nil, newSmap, caller); err != nil {
+	if err = smap.validateUUID(newSmap, h.si, nil, caller); err != nil {
 		if h.si.IsProxy() {
 			cmn.Assert(!smap.isPrimary(h.si))
 			// cluster integrity error: making exception for non-primary proxies
@@ -1170,54 +1170,6 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 		return
 	}
 	url, proxysi = config.Proxy.PrimaryURL, smap.ProxySI
-	return
-}
-
-func (h *httprunner) validateOriginBMD(bmd *bucketMD, nsi *cluster.Snode, nbmd *bucketMD, caller string) (err error) {
-	if nbmd == nil || nbmd.Version == 0 || bmd.Version == 0 {
-		return
-	}
-	if bmd.Origin == 0 || nbmd.Origin == 0 {
-		return
-	}
-	if bmd.Origin == nbmd.Origin {
-		return
-	}
-	nsiname := caller
-	if nsi != nil {
-		nsiname = nsi.Name()
-	} else if nsiname == "" {
-		nsiname = "???"
-	}
-	hname := h.si.Name()
-	// FATAL: cluster integrity error (cie)
-	s := fmt.Sprintf("%s: BMDs have different origins: [%s: %s] vs [%s: %s]",
-		ciError(40), hname, bmd.StringEx(), nsiname, nbmd.StringEx())
-	err = &errPrxBmdOriginDiffer{s}
-	return
-}
-
-func (h *httprunner) validateOriginSmap(smap *smapX, nsi *cluster.Snode, newSmap *smapX, caller string) (err error) {
-	if newSmap == nil || newSmap.Version == 0 {
-		return
-	}
-	if smap.Origin == 0 || newSmap.Origin == 0 {
-		return
-	}
-	if smap.Origin == newSmap.Origin {
-		return
-	}
-	nsiname := caller
-	if nsi != nil {
-		nsiname = nsi.Name()
-	} else if nsiname == "" {
-		nsiname = "???"
-	}
-	hname := h.si.Name()
-	// FATAL: cluster integrity error (cie)
-	s := fmt.Sprintf("%s: Smaps have different origins: [%s: %s] vs [%s: %s]",
-		ciError(50), hname, smap.StringEx(), nsiname, newSmap.StringEx())
-	err = &errSmapOriginDiffer{s}
 	return
 }
 

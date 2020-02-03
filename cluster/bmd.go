@@ -28,7 +28,7 @@ type (
 	// - BMD versioning is monotonic and incremental
 	BMD struct {
 		Version   int64     `json:"version,string"` // version - gets incremented on every update
-		Origin    uint64    `json:"origin,string"`  // (unique) origin stays the same for the lifetime
+		UUID      uint64    `json:"uuid,string"`    // uuid stays the same for the lifetime
 		Providers Providers `json:"providers"`      // (provider, namespace, bucket) hierarchy
 	}
 )
@@ -74,7 +74,7 @@ func (m *BMD) StringEx() string {
 		return "BMD <nil>"
 	}
 	na, nc := m.NumAIS(nil), m.NumCloud(nil)
-	return fmt.Sprintf("BMD v%d[...%d, ais=%d, cloud=%d]", m.Version, m.Origin%1000, na, nc)
+	return fmt.Sprintf("BMD v%d[...%d, ais=%d, cloud=%d]", m.Version, m.UUID%1000, na, nc)
 }
 
 func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {

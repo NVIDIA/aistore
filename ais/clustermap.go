@@ -227,10 +227,34 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 			}
 		}
 	}
-	if m.Origin != 0 && dst.Origin == 0 {
-		dst.Origin = m.Origin
+	if m.UUID != 0 && dst.UUID == 0 {
+		dst.UUID = m.UUID
 		dst.CreationTime = m.CreationTime
 	}
+	return
+}
+
+func (m *smapX) validateUUID(newSmap *smapX, si, nsi *cluster.Snode, caller string) (err error) {
+	if newSmap == nil || newSmap.Version == 0 {
+		return
+	}
+	if m.UUID == 0 || newSmap.UUID == 0 {
+		return
+	}
+	if m.UUID == newSmap.UUID {
+		return
+	}
+	nsiname := caller
+	if nsi != nil {
+		nsiname = nsi.Name()
+	} else if nsiname == "" {
+		nsiname = "???"
+	}
+	hname := si.Name()
+	// FATAL: cluster integrity error (cie)
+	s := fmt.Sprintf("%s: Smaps have different uuids: [%s: %s] vs [%s: %s]",
+		ciError(50), hname, m.StringEx(), nsiname, newSmap.StringEx())
+	err = &errSmapUUIDDiffer{s}
 	return
 }
 
