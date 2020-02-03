@@ -186,14 +186,15 @@ func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) *XactRespond {
 func (mgr *Manager) getBckXacts(bckName string) *BckXacts {
 	mgr.Lock()
 	defer mgr.Unlock()
+	return mgr.getBckXactsUnlocked(bckName)
+}
 
+func (mgr *Manager) getBckXactsUnlocked(bckName string) *BckXacts {
 	xacts, ok := mgr.xacts[bckName]
-
 	if !ok {
 		xacts = &BckXacts{}
 		mgr.xacts[bckName] = xacts
 	}
-
 	return xacts
 }
 
@@ -409,11 +410,12 @@ func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 		if !ok {
 			// channel closed by Unreg
 			// We should end xactions and stop listening
+			mgr.RLock() // protect `mgr.xacts`
 			for _, bck := range mgr.xacts {
 				bck.StopGet()
 				bck.StopPut()
 			}
-
+			mgr.RUnlock()
 			return
 		}
 
@@ -425,7 +427,7 @@ func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 		targetCnt := mgr.smap.CountTargets()
 		mgr.targetCnt.Store(int32(targetCnt))
 
-		mgr.RLock()
+		mgr.Lock()
 
 		// Manager is initialized before being registered for smap changes
 		// bckMD will be present at this point
@@ -434,7 +436,7 @@ func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 		provider := cmn.ProviderAIS
 		mgr.bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 			bckName, bckProps := bck.Name, bck.Props
-			bckXacts := mgr.getBckXacts(bckName)
+			bckXacts := mgr.getBckXactsUnlocked(bckName)
 			if !bckProps.EC.Enabled {
 				return false
 			}
@@ -454,7 +456,7 @@ func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 			return false
 		})
 
-		mgr.RUnlock()
+		mgr.Unlock()
 	}
 }
 
