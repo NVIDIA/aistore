@@ -13,9 +13,9 @@ import (
 
 // Rebalance message types (for ACK or sending files)
 const (
-	rebMsgAckRegular = iota // acknowledge of regular rebalance
-	rebMsgAckEC             // acknowledge of EC rebalance
-	rebMsgPushStage         // push notification of target moved to the next stage
+	rebMsgRegular   = iota // regular rebalance: acknowledge/Object
+	rebMsgEC               // EC rebalance: acknowledge/CT/Namespace
+	rebMsgPushStage        // push notification of target moved to the next stage
 )
 const rebMsgKindSize = 1
 

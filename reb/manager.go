@@ -224,9 +224,6 @@ func (reb *Manager) initStreams() {
 	if _, err := transport.Register(reb.netc, RebalancePushName, reb.recvPush); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	if _, err := transport.Register(reb.netc, DataECRebStreamName, reb.onECData); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
 	// serialization: one at a time
 	reb.semaCh = make(chan struct{}, 1)
 	reb.semaCh <- struct{}{}
@@ -360,10 +357,6 @@ func (reb *Manager) beginStreams(md *globArgs) {
 	}
 	reb.pushes = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), client, pushArgs)
 
-	// Init ecRebalancer streams
-	if md.ecUsed {
-		reb.initEC(md, reb.netd)
-	}
 	reb.laterx.Store(false)
 	reb.inQueue.Store(0)
 }
@@ -374,52 +367,12 @@ func (reb *Manager) endStreams() {
 		reb.streams = nil
 		reb.acks.Close(true)
 		reb.pushes.Close(true)
-		reb.endECStreams()
 	}
 }
 
-func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-	smap := (*cluster.Smap)(reb.smap.Load())
-	if smap == nil {
-		var (
-			config = cmn.GCO.Get()
-			sleep  = config.Timeout.CplaneOperation
-			maxwt  = config.Rebalance.DestRetryTime
-			curwt  time.Duration
-		)
-		maxwt = cmn.MinDur(maxwt, config.Timeout.SendFile/3)
-		glog.Warningf("%s: waiting to start...", reb.t.Snode().Name())
-		time.Sleep(sleep)
-		for curwt < maxwt {
-			smap = (*cluster.Smap)(reb.smap.Load())
-			if smap != nil {
-				break
-			}
-			time.Sleep(sleep)
-			curwt += sleep
-		}
-		if curwt >= maxwt {
-			glog.Errorf("%s: timed-out waiting to start, dropping %s/%s", reb.t.Snode().Name(), hdr.Bck, hdr.ObjName)
-			return
-		}
-	}
-
+func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unpacker *cmn.ByteUnpack, objReader io.Reader) {
 	ack := &regularAck{}
-	unpacker := cmn.NewUnpacker(hdr.Opaque)
-	act, err := unpacker.ReadByte()
-	if err != nil {
-		glog.Errorf("Failed to read message type: %v", err)
-		return
-	}
-	if act != rebMsgAckRegular {
-		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgAckRegular)
-	}
-
-	if err = unpacker.ReadAny(ack); err != nil {
+	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse acknowledge: %v", err)
 		return
 	}
@@ -432,7 +385,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 	tsid := ack.daemonID // the sender
 	// Rx
 	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
-	if err = lom.Init(hdr.Bck); err != nil {
+	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -483,7 +436,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
 		ack := &regularAck{globRebID: reb.GlobRebID(), daemonID: reb.t.Snode().ID()}
 		packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
-		packer.WriteByte(rebMsgAckRegular)
+		packer.WriteByte(rebMsgRegular)
 		packer.WriteAny(ack)
 		hdr.Opaque = packer.Bytes()
 		hdr.ObjAttrs.Size = 0
@@ -491,6 +444,64 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
 		}
 	}
+}
+
+func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
+	smap := (*cluster.Smap)(reb.smap.Load())
+	if smap == nil {
+		var (
+			config = cmn.GCO.Get()
+			sleep  = config.Timeout.CplaneOperation
+			maxwt  = config.Rebalance.DestRetryTime
+			curwt  time.Duration
+		)
+		maxwt = cmn.MinDur(maxwt, config.Timeout.SendFile/3)
+		glog.Warningf("%s: waiting to start...", reb.t.Snode().Name())
+		time.Sleep(sleep)
+		for curwt < maxwt {
+			smap = (*cluster.Smap)(reb.smap.Load())
+			if smap != nil {
+				return smap, nil
+			}
+			time.Sleep(sleep)
+			curwt += sleep
+		}
+		if curwt >= maxwt {
+			err := fmt.Errorf("%s: timed-out waiting to start", reb.t.Snode().Name())
+			return nil, err
+		}
+	}
+	return smap, nil
+}
+
+func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+	smap, err := reb.waitForSmap()
+	if err != nil {
+		glog.Errorf("%v: dropping %s/%s", err, hdr.Bck, hdr.ObjName)
+		return
+	}
+
+	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	act, err := unpacker.ReadByte()
+	if err != nil {
+		glog.Errorf("Failed to read message type: %v", err)
+		return
+	}
+
+	if act == rebMsgRegular {
+		reb.recvObjRegular(hdr, smap, unpacker, objReader)
+		return
+	}
+
+	if act != rebMsgEC {
+		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgEC)
+	}
+
+	reb.recvECData(hdr, unpacker, objReader)
 }
 
 // Rebalance moves to the next stage:
@@ -566,29 +577,9 @@ func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
 	reb.ec.ackCTs.remove(rt)
 }
 
-func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Reader, err error) {
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-
-	unpacker := cmn.NewUnpacker(hdr.Opaque)
-	act, err := unpacker.ReadByte()
-	if err != nil {
-		glog.Errorf("Failed to read message type: %v", err)
-		return
-	}
-
-	if act == rebMsgAckEC {
-		reb.recvECAck(hdr, unpacker)
-		return
-	}
-	if act != rebMsgAckRegular {
-		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgAckRegular)
-	}
-
+func (reb *Manager) recvRegularAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
 	ack := &regularAck{}
-	if err = unpacker.ReadAny(ack); err != nil {
+	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse acknowledge: %v", err)
 		return
 	}
@@ -598,7 +589,7 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Re
 	}
 
 	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
-	if err = lom.Init(hdr.Bck); err != nil {
+	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -615,10 +606,34 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Re
 
 	// TODO: configurable delay - postponed or manual object deletion
 	lom.Lock(true)
-	if err = lom.Remove(); err != nil {
+	if err := lom.Remove(); err != nil {
 		glog.Errorf("%s: error removing %s, err: %v", reb.t.Snode().Name(), lom, err)
 	}
 	lom.Unlock(true)
+}
+
+func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Reader, err error) {
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+
+	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	act, err := unpacker.ReadByte()
+	if err != nil {
+		glog.Errorf("Failed to read message type: %v", err)
+		return
+	}
+
+	if act == rebMsgEC {
+		reb.recvECAck(hdr, unpacker)
+		return
+	}
+	if act != rebMsgRegular {
+		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgRegular)
+	}
+
+	reb.recvRegularAck(hdr, unpacker)
 }
 
 func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt int) {

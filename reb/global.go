@@ -703,7 +703,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	// transmit
 	ack := regularAck{globRebID: rj.m.GlobRebID(), daemonID: rj.m.t.Snode().ID()}
 	packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
-	packer.WriteByte(rebMsgAckRegular)
+	packer.WriteByte(rebMsgRegular)
 	packer.WriteAny(&ack)
 	hdr := transport.Header{
 		Bck:     lom.Bck().Bck,

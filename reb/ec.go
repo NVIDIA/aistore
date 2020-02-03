@@ -11,7 +11,6 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -211,8 +210,7 @@ type (
 	StageCallback = func(si *cluster.Snode) bool
 
 	ecData struct {
-		cts    ctList                  // maps daemonID <-> CT List
-		data   *transport.StreamBundle // to send CT and namespaces
+		cts    ctList // maps daemonID <-> CT List
 		mtx    sync.Mutex
 		waiter *ctWaiter // helper to manage a list of CT for current batch to wait by local target
 		broken []*rebObject
@@ -487,13 +485,16 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 	if err != nil {
 		return err
 	}
+	packer := cmn.NewPacker(rebMsgKindSize + req.PackedSize())
+	packer.WriteByte(rebMsgEC)
+	packer.WriteAny(&req)
 	hdr := transport.Header{
 		Bck:     ct.Bck,
 		ObjName: ct.Objname,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: ct.ObjSize,
 		},
-		Opaque: reb.encodePushReq(&req),
+		Opaque: packer.Bytes(),
 	}
 
 	if resolved.ContentType == fs.ObjectType {
@@ -527,7 +528,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 		reb.ec.ackCTs.add(dest)
 	}
 	reb.ec.onAir.Inc()
-	if err := reb.ec.data.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, targets...); err != nil {
+	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, targets...); err != nil {
 		reb.ec.onAir.Dec()
 		fh.Close()
 		reb.ec.ackCTs.removeObject(ct.Bck, ct.Objname)
@@ -565,13 +566,16 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	}
 	cmn.AssertMsg(ct.ObjSize != 0, ct.Objname)
 	size := ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
+	packer := cmn.NewPacker(rebMsgKindSize + req.PackedSize())
+	packer.WriteByte(rebMsgEC)
+	packer.WriteAny(&req)
 	hdr := transport.Header{
 		Bck:     ct.Bck,
 		ObjName: ct.Objname,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: size,
 		},
-		Opaque: reb.encodePushReq(&req),
+		Opaque: packer.Bytes(),
 	}
 	if xxhash != "" {
 		hdr.ObjAttrs.CksumValue = xxhash
@@ -584,7 +588,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	reb.ec.ackCTs.add(rt)
 
 	reb.ec.onAir.Inc()
-	if err := reb.ec.data.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
+	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
 		reb.ec.onAir.Dec()
 		reb.ec.ackCTs.remove(rt)
 		return fmt.Errorf("Failed to send slices to node %s: %v", target.Name(), err)
@@ -601,13 +605,13 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 //   1. Full object/replica is received
 //   2. A CT is received and this target is not the default target (it
 //      means that the CTs came from default target after EC had been rebuilt)
-func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata, hdr transport.Header) error {
+func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, hdr transport.Header) error {
 	cmn.Assert(req.md != nil)
 	var (
 		ctFQN    string
 		lom      *cluster.LOM
 		bck      = cluster.NewBckEmbed(hdr.Bck)
-		needSave = md.SliceID == 0 // full object always saved
+		needSave = req.md.SliceID == 0 // full object always saved
 	)
 	if err := bck.Init(reb.t.GetBowner()); err != nil {
 		return err
@@ -629,7 +633,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 	if err != nil {
 		return err
 	}
-	if md.SliceID != 0 {
+	if req.md.SliceID != 0 {
 		ctFQN = mpath.MakePathFQN(hdr.Bck, ec.SliceType, hdr.ObjName)
 	} else {
 		lom = &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
@@ -661,15 +665,15 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, md *ec.Metadata
 	}
 	tmpFQN := mpath.MakePathFQN(hdr.Bck, fs.WorkfileType, hdr.ObjName)
 	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, memsys.NewReader(data), buffer, true)
-	if md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
+	if req.md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
 		err = fmt.Errorf("Mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
-			hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, md.ObjCksum)
+			hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, req.md.ObjCksum)
 	}
 	slab.Free(buffer)
 	if err != nil {
 		// Persist may call FSHC, too. To avoid double FSHC call, do extra check now.
 		reb.t.FSHC(err, ctFQN)
-	} else if md.SliceID == 0 {
+	} else if req.md.SliceID == 0 {
 		err = lom.Persist()
 	}
 
@@ -722,7 +726,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	waitRebuild := reb.ec.waiter.updateRebuildInfo(uid)
 
 	if !waitRebuild || sliceID == 0 {
-		if err := reb.saveCTToDisk(waitFor.sgl, req, req.md, hdr); err != nil {
+		if err := reb.saveCTToDisk(waitFor.sgl, req, hdr); err != nil {
 			glog.Errorf("Failed to save CT %d of %s: %v", sliceID, hdr.ObjName, err)
 			reb.abortGlobal()
 		}
@@ -739,7 +743,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	tsi := smap.GetTarget(req.daemonID)
 	ack := &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.Snode().ID()}
 	packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
-	packer.WriteByte(rebMsgAckEC)
+	packer.WriteByte(rebMsgEC)
 	packer.WriteAny(ack)
 	hdr.Opaque = packer.Bytes()
 	hdr.ObjAttrs.Size = 0
@@ -753,14 +757,10 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	return nil
 }
 
-// On receiving a list of collected CT from another target.
-func (reb *Manager) onECData(w http.ResponseWriter, hdr transport.Header, reader io.Reader, err error) {
-	if err != nil {
-		glog.Errorf("Failed to get ack for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
-		return
-	}
-
-	req, err := reb.decodePushReq(hdr.Opaque)
+// On receiving an EC CT or EC namespace
+func (reb *Manager) recvECData(hdr transport.Header, unpacker *cmn.ByteUnpack, reader io.Reader) {
+	req := &pushReq{}
+	err := unpacker.ReadAny(req)
 	if err != nil {
 		glog.Errorf("Invalid push notification: %v", err)
 		return
@@ -781,7 +781,7 @@ func (reb *Manager) onECData(w http.ResponseWriter, hdr transport.Header, reader
 		return
 	}
 
-	// otherwise a remote target sent collected list of its CTs:
+	// otherwise a remote target sent collected namespace:
 	// - receive the CT list
 	// - update the remote target stage
 	if req.stage != rebStageECNamespace {
@@ -1047,13 +1047,6 @@ func (reb *Manager) cleanupEC() {
 	reb.ec.waiter.cleanup()
 }
 
-func (reb *Manager) endECStreams() {
-	if reb.ec.data != nil {
-		reb.ec.data.Close(true)
-		reb.ec.data = nil
-	}
-}
-
 // Main method - starts all mountpaths walkers, waits for them to finish, and
 // changes internal stage after that to 'traverse done', so the caller may continue
 // rebalancing: send collected data to other targets, rebuild slices etc
@@ -1122,12 +1115,15 @@ func (reb *Manager) exchange() error {
 				rebID:    globRebID,
 			}
 			body := cmn.MustMarshal(cts)
+			packer := cmn.NewPacker(rebMsgKindSize + req.PackedSize())
+			packer.WriteByte(rebMsgEC)
+			packer.WriteAny(&req)
 			hdr := transport.Header{
 				ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
-				Opaque:   reb.encodePushReq(&req),
+				Opaque:   packer.Bytes(),
 			}
 			rd := cmn.NewByteHandle(body)
-			if err := reb.ec.data.Send(transport.Obj{Hdr: hdr}, rd, node); err != nil {
+			if err := reb.streams.Send(transport.Obj{Hdr: hdr}, rd, node); err != nil {
 				glog.Errorf("Failed to send CTs to node %s: %v", node.ID(), err)
 				failed = append(failed, node)
 			}
@@ -2293,16 +2289,6 @@ func (reb *Manager) rebuildAndSend(obj *rebObject, slices []*waitCT) error {
 	return reb.rebuildFromSlices(obj, slices)
 }
 
-func (reb *Manager) initEC(md *globArgs, netd string) {
-	client := transport.NewIntraDataClient()
-	dataArgs := transport.SBArgs{
-		Network:    netd,
-		Trname:     DataECRebStreamName,
-		Multiplier: int(md.config.Rebalance.Multiplier),
-	}
-	reb.ec.data = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), client, dataArgs)
-}
-
 // Resends any CTs that was sent to a target but the destination has not
 // received it (no ACK and the destination does not have the CT yet)
 func (reb *Manager) resendCT(md *globArgs, ct *retransmitCT) {
@@ -2313,10 +2299,10 @@ func (reb *Manager) resendCT(md *globArgs, ct *retransmitCT) {
 		trObj := transport.Obj{Hdr: ct.header, Callback: reb.transportECCB}
 		// Resend from memory
 		if ct.sliceSize == 0 {
-			err = reb.ec.data.Send(trObj, memsys.NewReader(ct.sgl), si)
+			err = reb.streams.Send(trObj, memsys.NewReader(ct.sgl), si)
 		} else {
 			reader := memsys.NewSliceReader(ct.sgl, ct.sliceOffset, ct.sliceSize)
-			err = reb.ec.data.Send(trObj, reader, si)
+			err = reb.streams.Send(trObj, reader, si)
 		}
 		if err != nil {
 			glog.Errorf("[sgl]Failed to retransmit %s/%s to %s: %v",
@@ -2345,11 +2331,11 @@ func (reb *Manager) resendCT(md *globArgs, ct *retransmitCT) {
 	trObj := transport.Obj{Hdr: ct.header, Callback: cb}
 	if ct.sliceSize == 0 {
 		// Entire file
-		err = reb.ec.data.Send(trObj, fh, si)
+		err = reb.streams.Send(trObj, fh, si)
 	} else {
 		// A slice of a file. Constructor never fails
 		reader, _ := cmn.NewFileSectionHandle(fh, ct.sliceOffset, ct.sliceSize, ct.slicePad)
-		err = reb.ec.data.Send(trObj, reader, si)
+		err = reb.streams.Send(trObj, reader, si)
 	}
 	if err != nil {
 		glog.Errorf("[disk]Failed to retransmit %s/%s to %s: %v",
