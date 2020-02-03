@@ -189,8 +189,6 @@ lint-update: ## Update the linter version (removes previous one and downloads a 
 	@rm -f $(GOPATH)/bin/golangci-lint
 	@curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b $(GOPATH)/bin latest
 
-# TODO: For now golangci-lint is broken (https://github.com/golangci/golangci-lint/issues/840)
-# and we might be forced to rerun it couple of times until it works correctly.
 lint: ## Run linter on whole project
 	@([[ ! -f $(GOPATH)/bin/golangci-lint ]] && curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b $(GOPATH)/bin latest) || true
 	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" lint
