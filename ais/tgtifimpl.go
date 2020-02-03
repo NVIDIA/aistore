@@ -34,6 +34,7 @@ func (t *targetrunner) GetBowner() cluster.Bowner    { return t.bmdowner }
 func (t *targetrunner) GetSowner() cluster.Sowner    { return t.smapowner }
 func (t *targetrunner) FSHC(err error, path string)  { t.fshc(err, path) }
 func (t *targetrunner) GetMMSA() *memsys.MMSA        { return daemon.mm }
+func (t *targetrunner) GetSmallMMSA() *memsys.MMSA   { return daemon.mmSmall }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup    { return &t.fsprg }
 func (t *targetrunner) Snode() *cluster.Snode        { return t.si }
 func (t *targetrunner) Cloud() cluster.CloudProvider { return t.cloud }

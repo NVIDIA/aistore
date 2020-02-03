@@ -34,6 +34,12 @@ const (
 	xfshc            = "fshc"
 )
 
+// not to confuse with default ones, see memsys/mmsa.go
+const (
+	gmmName = ".ais.mm"
+	smmName = ".ais.mm.small"
+)
+
 type (
 	// - selective disabling of a disk and/or network IO.
 	// - dry-run is initialized at startup and cannot be changed.
@@ -56,11 +62,11 @@ type (
 
 	// daemon instance: proxy or storage target
 	daemonCtx struct {
-		cli    cliFlags
-		dryRun dryRunConfig
-
-		mm *memsys.MMSA // gen-purpose system-wide memory manager and slab/SGL allocator (instance, runner)
-		rg *rungroup
+		cli     cliFlags
+		dryRun  dryRunConfig
+		mm      *memsys.MMSA // system pagesize-based memory manager and slab allocator
+		mmSmall *memsys.MMSA // system MMSA for small-size allocations
+		rg      *rungroup
 	}
 
 	rungroup struct {
@@ -223,11 +229,11 @@ func aisinit(version, build string) {
 		runarr: make([]cmn.Runner, 0, 8),
 		runmap: make(map[string]cmn.Runner, 8),
 	}
-	// system memory manager and slab/SGL allocator
-	daemon.mm = &memsys.MMSA{Name: ".ais.MMSA"}
-	if err := daemon.mm.Init(true /*panicOnErr*/); err != nil {
-		glog.Error(err)
-	}
+	// system MMSAs
+	daemon.mm = &memsys.MMSA{Name: gmmName}
+	_ = daemon.mm.Init(true /*panic on error*/)
+	daemon.mmSmall = &memsys.MMSA{Name: smmName, Small: true}
+	_ = daemon.mmSmall.Init(true /* ditto */)
 
 	if daemon.cli.role == cmn.Proxy {
 		p := &proxyrunner{}

@@ -86,10 +86,13 @@ const (
 )
 
 const (
-	defaultPageMM  = "DefaultPageMM"
-	defaultSmallMM = "DefaultSmallMM"
-	pkgName        = "memsys"
-	deadBEEF       = "DEADBEEF" // debug mode
+	gmmName = ".mm"
+	smmName = ".mm.small"
+)
+
+const (
+	pkgName  = "memsys"
+	deadBEEF = "DEADBEEF" // debug mode
 )
 
 // page slabs: pagesize increments up to MaxPageSlabSize
@@ -212,20 +215,14 @@ type (
 )
 
 var (
-	// gmm is the global memory manager used in packages outside ais.
-	gmm    = &MMSA{Name: defaultPageMM, MinPctFree: 50}
-	smm    = &MMSA{Name: defaultSmallMM, MinPctFree: 50, Small: true}
-	mmOnce sync.Once // ensures that there is only one initialization
+	gmm              = &MMSA{Name: gmmName, MinPctFree: 50}              // page-based MMSA for usage by packages *outside* ais
+	smm              = &MMSA{Name: smmName, MinPctFree: 50, Small: true} // memory manager for *small-size* allocations
+	gmmOnce, smmOnce sync.Once                                           // ensures singleton-ness
 )
 
 // Global MMSA for usage by external clients and tools
-func DefaultPageMM() *MMSA {
-	mmOnce.Do(func() {
-		_ = gmm.Init(true /*panicOnErr*/)
-	})
-	return gmm
-}
-func DefaultSmallMM() *MMSA { return smm } // TODO -- FIXME
+func DefaultPageMM() *MMSA  { gmmOnce.Do(func() { gmm.Init(true) }); return gmm }
+func DefaultSmallMM() *MMSA { smmOnce.Do(func() { smm.Init(true) }); return smm }
 
 //////////////
 // MMSA API //
@@ -311,8 +308,10 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		r.ringsSorted[i] = slab
 	}
 
-	// 6. NOTE: always GC at init time
-	runtime.GC()
+	// 6. GC at init time
+	if !r.Small {
+		runtime.GC()
+	}
 	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect, r.TimeIval)
 	return
 }
@@ -379,11 +378,11 @@ func MemPressureText(v int) string { return memPressureText[v] }
 func (r *MMSA) GetSlab(bufSize int64) (s *Slab, err error) {
 	a, b := bufSize/r.slabIncStep, bufSize%r.slabIncStep
 	if b != 0 {
-		err = fmt.Errorf("buf_size %d must be multiple of 4K", bufSize)
+		err = fmt.Errorf("size %d must be a multiple of %d", bufSize, r.slabIncStep)
 		return
 	}
 	if a < 1 || a > int64(r.numSlabs) {
-		err = fmt.Errorf("buf_size %d outside valid range", bufSize)
+		err = fmt.Errorf("size %d outside valid range", bufSize)
 		return
 	}
 	s = r.rings[a-1]
@@ -398,6 +397,8 @@ func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
 		} else {
 			size = DefaultSmallBufSize
 		}
+	} else {
+		size = sizes[0]
 	}
 	if size >= r.maxSlabSize {
 		slab = r.rings[len(r.rings)-1]

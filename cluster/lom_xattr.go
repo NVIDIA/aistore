@@ -27,23 +27,26 @@ const (
 	lomObjCopies
 )
 
-// delimiters
+const (
+	XattrLOM     = "user.ais.lom"
+	xattrMaxSize = memsys.PageSize
+)
+
+// packing format separators
 const (
 	copyFQNSepa = "\x00"
 	recordSepa  = "\xe3/\xbd"
 	lenCopySepa = len(copyFQNSepa)
 	lenRecSepa  = len(recordSepa)
-
-	xattrBufSize = 4 * cmn.KiB
 )
 
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
-	slab, err := lom.T.GetMMSA().GetSlab(xattrBufSize)
+	slab, err := lom.T.GetMMSA().GetSlab(xattrMaxSize)
 	cmn.AssertNoErr(err)
 	b := slab.Alloc()
-	read, err := fs.GetXattrBuf(lom.FQN, cmn.XattrLOM, b)
+	read, err := fs.GetXattrBuf(lom.FQN, XattrLOM, b)
 	if err != nil {
 		slab.Free(b)
 		return
@@ -65,39 +68,26 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 
 // TODO: in case of error previous metadata should be restored.
 func (lom *LOM) Persist() (err error) {
-	var (
-		slab *memsys.Slab
-		buf  []byte
-	)
-	slab, err = lom.T.GetMMSA().GetSlab(xattrBufSize)
-	cmn.AssertNoErr(err)
-	buf = slab.Alloc()
-	_, err = lom.persistMd(buf)
+	buf, slab, off := lom.md.marshal(lom.T.GetSmallMMSA())
+	if err = fs.SetXattr(lom.FQN, XattrLOM, buf[:off]); err != nil {
+		lom.T.FSHC(err, lom.FQN)
+	}
 	slab.Free(buf)
 	return
 }
 
-func (lom *LOM) persistMd(buf []byte) (metaCksum uint64, err error) {
-	var off int
-	metaCksum, off = lom.md.marshal(buf)
-	if err = fs.SetXattr(lom.FQN, cmn.XattrLOM, buf[:off]); err != nil {
-		lom.T.FSHC(err, lom.FQN)
-	}
-	return
-}
-
-func (lom *LOM) persistMdOnCopies(buf []byte) (copyFQN string, err error) {
-	_, off := lom.md.marshal(buf)
-
-	// Try to set the xattr for all the copies
+func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
+	buf, slab, off := lom.md.marshal(lom.T.GetSmallMMSA())
+	// replicate for all the copies
 	for copyFQN = range lom.md.copies {
 		if copyFQN == lom.FQN {
 			continue
 		}
-		if err = fs.SetXattr(copyFQN, cmn.XattrLOM, buf[:off]); err != nil {
+		if err = fs.SetXattr(copyFQN, XattrLOM, buf[:off]); err != nil {
 			break
 		}
 	}
+	slab.Free(buf)
 	return
 }
 
@@ -191,11 +181,14 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 	return
 }
 
-func _writeCopies(copies fs.MPI, buf []byte, off, ll int) int {
+func _writeCopies(copies fs.MPI, buf []byte, off int) int {
 	for copyFQN := range copies {
+		if buf == nil {
+			off += len(copyFQN) + len(copyFQNSepa)
+			continue
+		}
 		off += copy(buf[off:], copyFQN)
 		off += copy(buf[off:], copyFQNSepa)
-		cmn.Assert(off < ll-1) // bounds check
 	}
 	if off > 0 {
 		off -= lenCopySepa
@@ -203,14 +196,23 @@ func _writeCopies(copies fs.MPI, buf []byte, off, ll int) int {
 	return off
 }
 
-func (md *lmeta) marshal(buf []byte) (metaCksum uint64, off int) {
+func (md *lmeta) marshal(mm *memsys.MMSA) (buf []byte, slab *memsys.Slab, off int) {
+	oof := md._marshal(nil)
+	buf, slab = mm.Alloc(int64(oof))
+	cmn.Assert(len(buf) >= oof)
+	off = md._marshal(buf)
+	cmn.Assert(off == oof)
+	return
+}
+
+// buf == nil: dry-run to compute buffer size
+func (md *lmeta) _marshal(buf []byte) (off int) {
 	var (
 		cksumType, cksumValue string
 		b8                    [cmn.SizeofI64]byte
-		ll                    = len(buf)
 	)
-	off = cmn.SizeofI64
-	appendMD := func(key int, value string, sepa bool) {
+	off = cmn.SizeofI64 // keep it for checksum
+	marshalMD := func(key int, value string, sepa bool) {
 		var (
 			bkey [cmn.SizeofI16]byte
 			bb   = bkey[0:]
@@ -221,27 +223,44 @@ func (md *lmeta) marshal(buf []byte) (metaCksum uint64, off int) {
 		if sepa {
 			off += copy(buf[off:], recordSepa)
 		}
-		cmn.Assert(off < ll-8) // bounds check
 	}
+	dryrunMD := func(key int, value string, sepa bool) {
+		off += cmn.SizeofI16
+		off += len(value)
+		if sepa {
+			off += len(recordSepa)
+		}
+	}
+	// use the one or the other
+	f := marshalMD
+	if buf == nil {
+		f = dryrunMD
+	}
+	// serialize
 	if md.cksum != nil {
 		cksumType, cksumValue = md.cksum.Get()
-		appendMD(lomCksumType, cksumType, true)
-		appendMD(lomCksumValue, cksumValue, true)
+		f(lomCksumType, cksumType, true)
+		f(lomCksumValue, cksumValue, true)
 	}
 	if md.version != "" {
-		appendMD(lomObjVersion, md.version, true)
+		f(lomObjVersion, md.version, true)
 	}
 	binary.BigEndian.PutUint64(b8[0:], uint64(md.size))
-	appendMD(lomObjSize, string(b8[0:]), false)
+	f(lomObjSize, string(b8[0:]), false)
 	if len(md.copies) > 0 {
-		off += copy(buf[off:], recordSepa)
-		appendMD(lomObjCopies, "", false)
-		off = _writeCopies(md.copies, buf, off, ll)
+		if buf == nil {
+			off += len(recordSepa)
+		} else {
+			off += copy(buf[off:], recordSepa)
+		}
+		f(lomObjCopies, "", false)
+		off = _writeCopies(md.copies, buf, off)
 	}
-	//
+	if buf == nil {
+		return // dry run done
+	}
 	// checksum, prepend, and return
-	//
-	metaCksum = xxhash.ChecksumString64S(string(buf[cmn.SizeofI64:off]), cmn.MLCG32)
+	metaCksum := xxhash.ChecksumString64S(string(buf[cmn.SizeofI64:off]), cmn.MLCG32)
 	binary.BigEndian.PutUint64(buf[0:], metaCksum)
 	return
 }

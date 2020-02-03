@@ -8,13 +8,8 @@ import (
 	"time"
 )
 
-// enum: http header, checksum, versioning
+// checksums
 const (
-	// FS extended attributes
-	XattrLOM = "user.ais.lom"
-	XattrBMD = "user.ais.bmd"
-
-	// checksum hash function
 	ChecksumNone   = "none"
 	ChecksumXXHash = "xxhash"
 	ChecksumMD5    = "md5"

@@ -48,6 +48,7 @@ type Target interface {
 	GetSowner() Sowner
 	FSHC(err error, path string)
 	GetMMSA() *memsys.MMSA
+	GetSmallMMSA() *memsys.MMSA
 	GetFSPRG() fs.PathRunGroup
 	Snode() *Snode
 	Cloud() CloudProvider

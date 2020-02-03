@@ -291,29 +291,20 @@ func (lom *LOM) DelExtraCopies() (err error) {
 // syncMetaWithCopies tries to make sure that all copies have identical metadata.
 // NOTE: uname for LOM must be already locked.
 func (lom *LOM) syncMetaWithCopies() (err error) {
+	var copyFQN string
 	if !lom.IsHRW() || !lom.HasCopies() { // must have copies and be at the default location
 		return nil
 	}
-
-	slab, err := lom.T.GetMMSA().GetSlab(xattrBufSize)
-	cmn.AssertNoErr(err)
-	buf := slab.Alloc()
-
-	var ok bool
-	for !ok {
-		ok = true
-		if copyFQN, err := lom.persistMdOnCopies(buf); err != nil {
-			ok = false
-			lom.delCopyMd(copyFQN)
-			if err1 := fs.Access(copyFQN); err1 != nil && !os.IsNotExist(err1) {
-				lom.T.FSHC(err, copyFQN) // NOTE: forward the error from SetXattr not os.Stat
-				// TODO: inform the scruber about the copy the failed to persist
-			}
+	for {
+		if copyFQN, err = lom.persistMdOnCopies(); err == nil {
+			break
+		}
+		lom.delCopyMd(copyFQN)
+		if err1 := fs.Access(copyFQN); err1 != nil && !os.IsNotExist(err1) {
+			lom.T.FSHC(err, copyFQN) // TODO: notify scrubber
 		}
 	}
-
-	slab.Free(buf)
-	return err
+	return
 }
 
 // RestoreObjectFromAny tries to restore the object at its default location.

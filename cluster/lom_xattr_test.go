@@ -35,7 +35,8 @@ var _ = Describe("LOM Xattributes", func() {
 		bmdMock       = cluster.NewBaseBownerMock()
 		tMock         = cluster.NewTargetMock(bmdMock)
 	)
-	bmdMock.Add(cluster.NewBck(bucketLocal, cmn.ProviderAIS, cmn.NsGlobal, &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}))
+	bmdMock.Add(cluster.NewBck(bucketLocal, cmn.ProviderAIS, cmn.NsGlobal,
+		&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}))
 
 	BeforeEach(func() {
 		_ = cmn.CreateDir(xattrMpath)
@@ -77,7 +78,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
 
-				b, err := fs.GetXattr(localFQN, cmn.XattrLOM)
+				b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
 				Expect(b).ToNot(BeEmpty())
 				Expect(err).NotTo(HaveOccurred())
 
@@ -103,7 +104,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
 
-				b, err := fs.GetXattr(localFQN, cmn.XattrLOM)
+				b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
 				Expect(b).ToNot(BeEmpty())
 				Expect(err).NotTo(HaveOccurred())
 
@@ -145,10 +146,10 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
 
-				b, err := fs.GetXattr(localFQN, cmn.XattrLOM)
+				b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
 				Expect(err).NotTo(HaveOccurred())
 				b[0] = b[0] + 1 // changing first byte of meta checksum
-				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, b)).NotTo(HaveOccurred())
+				Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
 
 				err = lom.LoadMetaFromFS()
 				Expect(err).To(HaveOccurred())
@@ -163,8 +164,8 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetVersion("dummy_version")
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
-
-				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("1321\nwr;as\n;, ;\n\n;;,,dadsa;aa\n"))).NotTo(HaveOccurred())
+				Expect(fs.SetXattr(localFQN, cluster.XattrLOM,
+					[]byte("1321\nwr;as\n;, ;\n\n;;,,dadsa;aa\n"))).NotTo(HaveOccurred())
 				err := lom.LoadMetaFromFS()
 				Expect(err).To(HaveOccurred())
 			})
