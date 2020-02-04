@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	// memory
-	daemon.mm = memsys.DefaultPageMM()
+	daemon.gmm = memsys.DefaultPageMM()
 
 	// target
 	t = &targetrunner{}

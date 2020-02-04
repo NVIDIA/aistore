@@ -226,9 +226,9 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	}
 
 	if poi.size == 0 {
-		buf, slab = daemon.mm.Alloc()
+		buf, slab = daemon.gmm.Alloc()
 	} else {
-		buf, slab = daemon.mm.Alloc(poi.size)
+		buf, slab = daemon.gmm.Alloc(poi.size)
 	}
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
@@ -660,16 +660,16 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		reader = file
 		if goi.chunked {
 			w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
-			buf, slab = daemon.mm.Alloc(goi.lom.Size())
+			buf, slab = daemon.gmm.Alloc(goi.lom.Size())
 		} else {
 			hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
 		}
 	} else {
-		buf, slab = daemon.mm.Alloc(goi.length)
+		buf, slab = daemon.gmm.Alloc(goi.length)
 		reader = io.NewSectionReader(file, goi.offset, goi.length)
 		if cksumRange {
 			var cksumValue string
-			sgl = daemon.mm.NewSGL(goi.length, slab.Size())
+			sgl = slab.MMSA().NewSGL(goi.length, slab.Size())
 			if _, cksumValue, err = cmn.WriteWithHash(sgl, reader, buf); err != nil {
 				return
 			}
@@ -748,9 +748,9 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 			slab *memsys.Slab
 		)
 		if aoi.size == 0 {
-			buf, slab = daemon.mm.Alloc()
+			buf, slab = daemon.gmm.Alloc()
 		} else {
-			buf, slab = daemon.mm.Alloc(aoi.size)
+			buf, slab = daemon.gmm.Alloc(aoi.size)
 		}
 		_, err = io.CopyBuffer(f, aoi.r, buf)
 

@@ -62,11 +62,11 @@ type (
 
 	// daemon instance: proxy or storage target
 	daemonCtx struct {
-		cli     cliFlags
-		dryRun  dryRunConfig
-		mm      *memsys.MMSA // system pagesize-based memory manager and slab allocator
-		mmSmall *memsys.MMSA // system MMSA for small-size allocations
-		rg      *rungroup
+		cli    cliFlags
+		dryRun dryRunConfig
+		gmm    *memsys.MMSA // system pagesize-based memory manager and slab allocator
+		smm    *memsys.MMSA // system MMSA for small-size allocations
+		rg     *rungroup
 	}
 
 	rungroup struct {
@@ -230,10 +230,11 @@ func aisinit(version, build string) {
 		runmap: make(map[string]cmn.Runner, 8),
 	}
 	// system MMSAs
-	daemon.mm = &memsys.MMSA{Name: gmmName}
-	_ = daemon.mm.Init(true /*panic on error*/)
-	daemon.mmSmall = &memsys.MMSA{Name: smmName, Small: true}
-	_ = daemon.mmSmall.Init(true /* ditto */)
+	daemon.gmm = &memsys.MMSA{Name: gmmName}
+	_ = daemon.gmm.Init(true /*panic on error*/)
+	daemon.smm = &memsys.MMSA{Name: smmName, Small: true}
+	_ = daemon.smm.Init(true /* ditto */)
+	daemon.gmm.Sibling, daemon.smm.Sibling = daemon.smm, daemon.gmm
 
 	if daemon.cli.role == cmn.Proxy {
 		p := &proxyrunner{}
@@ -281,10 +282,10 @@ func aisinit(version, build string) {
 			}
 		}
 
-		fshc := health.NewFSHC(t, fs.Mountpaths, daemon.mm, fs.CSM)
+		fshc := health.NewFSHC(t, fs.Mountpaths, daemon.gmm, fs.CSM)
 		daemon.rg.add(fshc, xfshc)
 
-		housekeep, initialInterval := cluster.LomCacheHousekeep(daemon.mm, t)
+		housekeep, initialInterval := cluster.LomCacheHousekeep(daemon.gmm, t)
 		hk.Housekeeper.Register("lom-cache", housekeep, initialInterval)
 		_ = ts.UpdateCapacityOOS(nil) // goes after fs.Mountpaths.Init
 	}

@@ -181,6 +181,7 @@ type (
 		TimeIval    time.Duration // interval of time to watch for low memory and make steps
 		MinPctTotal int           // same, via percentage of total
 		MinPctFree  int           // ditto, as % of free at init time
+		Sibling     *MMSA         // sibling mem manager to delegate allocations of need be
 		// private
 		duration      time.Duration
 		lowWM         uint64
@@ -224,8 +225,24 @@ var (
 )
 
 // Global MMSA for usage by external clients and tools
-func DefaultPageMM() *MMSA  { gmmOnce.Do(func() { gmm.Init(true) }); return gmm }
-func DefaultSmallMM() *MMSA { smmOnce.Do(func() { smm.Init(true) }); return smm }
+func DefaultPageMM() *MMSA {
+	gmmOnce.Do(func() {
+		gmm.Init(true)
+		if smm != nil {
+			smm.Sibling = gmm
+		}
+	})
+	return gmm
+}
+func DefaultSmallMM() *MMSA {
+	smmOnce.Do(func() {
+		smm.Init(true)
+		if gmm != nil {
+			gmm.Sibling = smm
+		}
+	})
+	return smm
+}
 
 //////////////
 // MMSA API //
@@ -352,8 +369,6 @@ func (r *MMSA) NewSGL(immediateSize int64 /* size to preallocate */, sbufSize ..
 		n    int64
 		sgl  [][]byte
 	)
-	cmn.Assert(!r.Small) // no need
-
 	if len(sbufSize) > 0 {
 		var err error
 		slab, err = r.GetSlab(sbufSize[0])
@@ -420,6 +435,12 @@ func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
 		}
 	} else {
 		size = sizes[0]
+		if size > r.maxSlabSize && r.Small && r.Sibling != nil {
+			return r.Sibling.Alloc(size)
+		}
+		if size < r.slabIncStep && !r.Small && r.Sibling != nil {
+			return r.Sibling.Alloc(size)
+		}
 	}
 	if size >= r.maxSlabSize {
 		slab = r.rings[len(r.rings)-1]
@@ -439,6 +460,7 @@ func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
 
 func (s *Slab) Size() int64 { return s.bufSize }
 func (s *Slab) Tag() string { return s.tag }
+func (s *Slab) MMSA() *MMSA { return s.m }
 
 func (s *Slab) Alloc() (buf []byte) {
 	s.muget.Lock()

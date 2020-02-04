@@ -101,7 +101,8 @@ func (rd *zipRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor,
+	toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
 		zr   *zip.Reader
 		size int64
@@ -111,10 +112,8 @@ func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 		return extractedSize, extractedCount, err
 	}
 
+	// TODO -- FIXME: take into account r.Size()
 	var slabSize int64 = memsys.MaxPageSlabSize
-	if r.Size() < cmn.MiB {
-		slabSize = 128 * cmn.KiB
-	}
 
 	slab, err := z.t.GetMMSA().GetSlab(slabSize)
 	cmn.AssertNoErr(err)

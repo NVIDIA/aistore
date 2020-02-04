@@ -2425,7 +2425,7 @@ func (wt *ctWaiter) lookupCreate(uid string, sliceID int16, waitType int) *waitC
 		// first slice of the object, initialize everything
 		slice := &waitCT{
 			sliceID: sliceID,
-			sgl:     wt.mem.NewSGL(32 * cmn.KiB),
+			sgl:     wt.mem.NewSGL(memsys.DefaultBufSize),
 		}
 		wt.objs[uid] = &waitObject{wt: waitType, cts: []*waitCT{slice}}
 		wt.waitFor.Inc()
@@ -2448,7 +2448,7 @@ func (wt *ctWaiter) lookupCreate(uid string, sliceID int16, waitType int) *waitC
 	// slice is not in wait list yet, add it
 	ct := &waitCT{
 		sliceID: sliceID,
-		sgl:     wt.mem.NewSGL(32 * cmn.KiB),
+		sgl:     wt.mem.NewSGL(memsys.DefaultBufSize),
 	}
 	wt.objs[uid].cts = append(wt.objs[uid].cts, ct)
 	wt.waitFor.Inc()

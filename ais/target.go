@@ -278,7 +278,7 @@ func (t *targetrunner) Run() error {
 		}()
 	}
 
-	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, daemon.mm, t, t.statsT)
+	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, daemon.gmm, t, t.statsT)
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}
@@ -1248,7 +1248,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		return
 	}
 
-	buf, slab := daemon.mm.Alloc()
+	buf, slab := daemon.gmm.Alloc()
 	ri := &replicInfo{smap: t.smapowner.get(), t: t, bckTo: lom.Bck(), buf: buf, localOnly: false, finalize: true}
 	copied, err := ri.copyObject(lom, msg.Name /* new objname */)
 	slab.Free(buf)
