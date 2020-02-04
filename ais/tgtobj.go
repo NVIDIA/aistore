@@ -119,14 +119,15 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 			return err, errCode
 		}
 	}
-
-	delta := time.Since(poi.started)
-	poi.t.statsT.AddMany(
-		stats.NamedVal64{Name: stats.PutCount, Value: 1},
-		stats.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
-	)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("PUT %s: %d µs", lom, int64(delta/time.Microsecond))
+	if !poi.migrated && !poi.cold {
+		delta := time.Since(poi.started)
+		poi.t.statsT.AddMany(
+			stats.NamedVal64{Name: stats.PutCount, Value: 1},
+			stats.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
+		)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("PUT %s: %d µs", lom, int64(delta/time.Microsecond))
+		}
 	}
 	return nil, 0
 }
@@ -552,20 +553,10 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		r:        resp.Body,
 		migrated: true,
 	}
-	if err = poi.writeToFile(); err != nil {
+	if err, _ := poi.putObject(); err != nil {
 		glog.Error(err)
 		return
 	}
-	// commit
-	if err = cmn.Rename(workFQN, lom.FQN); err != nil {
-		glog.Error(err)
-		return
-	}
-	if err = lom.Persist(); err != nil {
-		glog.Error(err)
-		return
-	}
-	lom.ReCache()
 	ok = true
 	return
 }

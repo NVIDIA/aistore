@@ -1121,7 +1121,7 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 // Cloud bucket:
 //  - returned version ID is the version
 // In both cases, new checksum is also generated and stored along with the new version.
-func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (err error, errcode int) {
+func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (err error, errCode int) {
 	var (
 		header     = r.Header
 		cksumType  = header.Get(cmn.HeaderObjCksumType)
