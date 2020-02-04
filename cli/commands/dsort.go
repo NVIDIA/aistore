@@ -10,7 +10,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -25,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	mpb "github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -449,7 +449,7 @@ func printMetrics(w io.Writer, id string) (aborted, finished bool, err error) {
 		finished = finished && targetMetrics.Creation.Finished
 	}
 
-	b, err := json.MarshalIndent(resp, "", "\t")
+	b, err := jsoniter.MarshalIndent(resp, "", "\t")
 	if err != nil {
 		return false, false, err
 	}

@@ -7,7 +7,6 @@ package cmn
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -63,7 +62,7 @@ func (e *HTTPError) String() string {
 func (e *HTTPError) Error() string {
 	// Stop from escaping <, > ,and &
 	buf := new(bytes.Buffer)
-	enc := json.NewEncoder(buf)
+	enc := jsoniter.NewEncoder(buf)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(e); err != nil {
 		return err.Error()

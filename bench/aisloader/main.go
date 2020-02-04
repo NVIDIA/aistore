@@ -33,7 +33,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -51,16 +50,16 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/NVIDIA/aistore/containers"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/OneOfOne/xxhash"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -433,7 +432,7 @@ func parseCmdLine() (params, error) {
 			jsonStr = "{" + strings.TrimRight(jsonStr, ",") + "}"
 		}
 
-		if err := json.Unmarshal([]byte(jsonStr), &bprops); err != nil {
+		if err := jsoniter.Unmarshal([]byte(jsonStr), &bprops); err != nil {
 			return params{}, fmt.Errorf("failed to parse bucket properties: %v", err)
 		}
 

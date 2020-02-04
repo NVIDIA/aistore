@@ -6,7 +6,6 @@
 package commands
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -373,7 +373,7 @@ func setBucketPropsJSON(c *cli.Context) (err error) {
 	if bck, err = validateBucket(c, bucket, "", false /*optional*/); err != nil {
 		return
 	}
-	if err := json.Unmarshal([]byte(inputProps), &props); err != nil {
+	if err := jsoniter.Unmarshal([]byte(inputProps), &props); err != nil {
 		return err
 	}
 	if err := api.SetBucketProps(defaultAPIParams, bck, props); err != nil {

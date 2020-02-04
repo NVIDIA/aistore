@@ -6,7 +6,6 @@
 package dsort
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/housekeep/hk"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	"github.com/sdomino/scribble"
 )
@@ -88,7 +88,7 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) []JobInfo {
 	}
 	for _, r := range records {
 		var m Manager
-		if err := json.Unmarshal([]byte(r), &m); err != nil {
+		if err := jsoniter.Unmarshal([]byte(r), &m); err != nil {
 			glog.Error(err)
 			continue
 		}

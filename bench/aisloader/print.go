@@ -5,7 +5,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -15,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats/statsd"
+	jsoniter "github.com/json-iterator/go"
 )
 
 var examples = `
@@ -301,7 +301,7 @@ func writeStats(to io.Writer, jsonFormat, final bool, s, t sts) {
 
 // printRunParams show run parameters in json format
 func printRunParams(p params) {
-	b, _ := json.MarshalIndent(struct {
+	b, _ := jsoniter.MarshalIndent(struct {
 		Seed          int64  `json:"seed,string"`
 		URL           string `json:"proxy"`
 		Bucket        string `json:"bucket"`

@@ -4,7 +4,6 @@
 package ais_test
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils/tassert"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Examples - Smap:
@@ -63,7 +63,7 @@ func dumpMeta(t *testing.T, fn string, v interface{}) {
 	err = cmn.LocalLoad(_fclean(fn), v, true /* compression */)
 	tassert.CheckFatal(t, err)
 
-	s, _ := json.MarshalIndent(v, "", "\t")
+	s, _ := jsoniter.MarshalIndent(v, "", "\t")
 	fmt.Fprintln(f, string(s))
 }
 

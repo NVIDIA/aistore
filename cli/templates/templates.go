@@ -5,7 +5,6 @@
 package templates
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"text/tabwriter"
@@ -16,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Templates for output
@@ -299,7 +299,6 @@ const (
 		"{{range $xact := $daemon}}" + // for each daemon's xactions, print BaseXactStats
 		XactionBaseBody +
 		"{{end}}" +
-
 		"{{range $xact := $daemon}}" + // for each daemon's xactions, print BaseXactExtStats
 		XactionExtBody +
 		"{{end}}" +
@@ -511,7 +510,7 @@ func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, 
 	}
 
 	if useJSON {
-		out, err := json.MarshalIndent(object, "", "    ")
+		out, err := jsoniter.MarshalIndent(object, "", "    ")
 		if err != nil {
 			return err
 		}

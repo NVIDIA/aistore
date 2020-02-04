@@ -5,7 +5,6 @@
 package api
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -35,7 +34,7 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (*cmn.MountpathLi
 		return nil, err
 	}
 	mpl := &cmn.MountpathList{}
-	err = json.Unmarshal(b, mpl)
+	err = jsoniter.Unmarshal(b, mpl)
 	return mpl, err
 }
 

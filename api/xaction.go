@@ -5,7 +5,6 @@
 package api
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -52,7 +51,7 @@ func MakeXactGetRequest(baseParams BaseParams, bck cmn.Bck, kind, action string,
 		if err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal(bod, &xactStats); err != nil {
+		if err := jsoniter.Unmarshal(bod, &xactStats); err != nil {
 			return nil, err
 		}
 		return xactStats, nil

@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/OneOfOne/xxhash"
+	jsoniter "github.com/json-iterator/go"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -66,6 +69,20 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 			It(fmt.Sprintf("should correctly save and load bmd for %s", node), func() {
 				bmdo.init()
 				Expect(bmdo.Get()).To(Equal(&bmd.BMD))
+			})
+
+			It(fmt.Sprintf("should marshal and unmarshal BMD using custom methods"), func() {
+				bmdo.init()
+				bmd := bmdo.get()
+
+				payload := cmn.MustMarshal(bmd.BMD)
+				cksum := xxhash.Checksum64S(payload, 0)
+
+				b, err := jsoniter.Marshal(bmd)
+				Expect(err).NotTo(HaveOccurred())
+				// Marshaled bytes contain checksum augmented in bmd.MarshalJSON method
+				Expect(strings.Contains(string(b), fmt.Sprintf("%v", cksum))).To(BeTrue())
+				Expect(jsoniter.Unmarshal(b, &bucketMD{})).NotTo(HaveOccurred())
 			})
 
 			It(fmt.Sprintf("should correctly save and check for incorrect data for %s", node), func() {

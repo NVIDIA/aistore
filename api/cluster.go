@@ -5,7 +5,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -39,7 +38,7 @@ func GetClusterMap(baseParams BaseParams) (smap *cluster.Smap, err error) {
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(body, &smap)
+	err = jsoniter.Unmarshal(body, &smap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
 	}
@@ -70,7 +69,7 @@ func GetNodeClusterMap(baseParams BaseParams, nodeID string) (smap *cluster.Smap
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(body, &smap)
+	err = jsoniter.Unmarshal(body, &smap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
 	}
@@ -96,7 +95,7 @@ func GetClusterSysInfo(baseParams BaseParams) (sysinfo cmn.ClusterSysInfo, err e
 	if err != nil {
 		return cmn.ClusterSysInfo{}, err
 	}
-	err = json.Unmarshal(body, &sysinfo)
+	err = jsoniter.Unmarshal(body, &sysinfo)
 	if err != nil {
 		return cmn.ClusterSysInfo{}, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
 	}
@@ -123,7 +122,7 @@ func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStats, er
 	if err != nil {
 		return stats.ClusterStats{}, err
 	}
-	err = json.Unmarshal(body, &clusterStats)
+	err = jsoniter.Unmarshal(body, &clusterStats)
 	if err != nil {
 		return stats.ClusterStats{}, fmt.Errorf("failed to unmarshal cluster stats, err: %v", err)
 	}
@@ -150,7 +149,7 @@ func GetTargetDiskStats(baseParams BaseParams, targetID string) (map[string]*ios
 	}
 
 	var diskStats map[string]*ios.SelectedDiskStats
-	err = json.Unmarshal(body, &diskStats)
+	err = jsoniter.Unmarshal(body, &diskStats)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal target disk stats, err: %v", err)
 	}

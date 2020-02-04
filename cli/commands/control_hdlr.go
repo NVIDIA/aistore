@@ -6,13 +6,13 @@
 package commands
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -259,7 +259,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 
 	var rs dsort.RequestSpec
 	body := c.Args().First()
-	if err := json.Unmarshal([]byte(body), &rs); err != nil {
+	if err := jsoniter.Unmarshal([]byte(body), &rs); err != nil {
 		return err
 	}
 

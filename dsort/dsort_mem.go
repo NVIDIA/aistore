@@ -7,7 +7,6 @@ package dsort
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,16 +15,15 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/fs"
-
-	"github.com/pkg/errors"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -590,7 +588,7 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.Receive {
 		defer io.Copy(ioutil.Discard, object) // drain to prevent unnecessary stream errors
 
 		req := buildingShardInfo{}
-		if err := json.Unmarshal(hdr.Opaque, &req); err != nil {
+		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 			ds.m.abort(err)
 			return
 		}
@@ -614,7 +612,7 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.Receive {
 		defer io.Copy(ioutil.Discard, object) // drain to prevent unnecessary stream errors
 
 		req := remoteResponse{}
-		if err := json.Unmarshal(hdr.Opaque, &req); err != nil {
+		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 			ds.m.abort(err)
 			return
 		}
