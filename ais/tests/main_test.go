@@ -1160,12 +1160,9 @@ func getAndCopyOne(t *testing.T, url string, bck cmn.Bck, id int, errCh chan err
 
 func deleteFiles(proxyURL string, bck cmn.Bck, keynames <-chan string, wg *sync.WaitGroup, errCh chan error) {
 	defer wg.Done()
-	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
-		dwg.Add(1)
-		go tutils.Del(proxyURL, bck, keyname, dwg, errCh, true)
+		tutils.Del(proxyURL, bck, keyname, nil, errCh, true)
 	}
-	dwg.Wait()
 }
 
 func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch string,

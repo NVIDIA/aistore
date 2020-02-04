@@ -71,8 +71,8 @@ func (reb *Manager) globalRebPrecheck(md *globArgs, globRebID int64) bool {
 func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
 	reb.stages.stage.Store(rebStageInit)
-	reb.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, globRebID, len(md.paths)*2, reb.statRunner)
-	cmn.Assert(reb.xreb != nil) // must renew given the CAS and checks above
+	reb.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, globRebID, reb.statRunner)
+	defer reb.xreb.MarkDone()
 
 	if len(buckets) > 0 {
 		reb.xreb.SetBucket(buckets[0]) // for better identity (limited usage)
@@ -552,6 +552,9 @@ func (reb *Manager) GlobECDataStatus() (body []byte, status int) {
 //
 
 func (rj *globalJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
+	// the jogger is running in separate goroutine, so use defer to be
+	// sure that `Done` is called even if the jogger crashes to avoid hang up
+	defer rj.wg.Done()
 	if rj.sema != nil {
 		rj.errCh = make(chan error, cap(rj.sema)+1)
 	}
@@ -569,8 +572,6 @@ func (rj *globalJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 			glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode().Name(), err)
 		}
 	}
-	rj.xreb.NotifyDone()
-	rj.wg.Done()
 }
 
 func (rj *globalJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, lomptr unsafe.Pointer, err error) {

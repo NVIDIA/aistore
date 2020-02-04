@@ -29,7 +29,6 @@ type (
 // TODO: support non-object content types
 func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	var (
-		xreb              *xaction.LocalReb
 		availablePaths, _ = fs.Mountpaths.Get()
 		cfg               = cmn.GCO.Get()
 		pmarker           = cmn.PersistentMarker(cmn.ActLocalReb)
@@ -43,14 +42,14 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	} else {
 		_ = file.Close()
 	}
+
+	xreb := xaction.Registry.RenewLocalReb()
+	defer xreb.MarkDone()
+
 	if len(buckets) > 0 {
 		bucket = buckets[0] // special case: ais bucket
-	}
-	if bucket != "" {
-		xreb = xaction.Registry.RenewLocalReb(len(availablePaths))
+		cmn.Assert(bucket != "")
 		xreb.SetBucket(bucket)
-	} else {
-		xreb = xaction.Registry.RenewLocalReb(len(availablePaths) * 2)
 	}
 	slab, err := reb.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
@@ -67,23 +66,24 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 		wg.Add(1)
 		go jogger.jog(mpathInfo, bck)
 	}
-	if bucket != "" {
+
+	if bucket != "" || !cfg.Cloud.Supported {
 		goto wait
 	}
-	if cfg.Cloud.Supported {
-		for _, mpathInfo := range availablePaths {
-			var (
-				bck    = cmn.Bck{Name: bucket, Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
-				jogger = &localJogger{
-					joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
-					slab:              slab,
-					skipGlobMisplaced: skipGlobMisplaced,
-				}
-			)
-			wg.Add(1)
-			go jogger.jog(mpathInfo, bck)
-		}
+
+	for _, mpathInfo := range availablePaths {
+		var (
+			bck    = cmn.Bck{Name: bucket, Provider: cfg.Cloud.Provider, Ns: cmn.NsGlobal}
+			jogger = &localJogger{
+				joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
+				slab:              slab,
+				skipGlobMisplaced: skipGlobMisplaced,
+			}
+		)
+		wg.Add(1)
+		go jogger.jog(mpathInfo, bck)
 	}
+
 wait:
 	glog.Infoln(xreb.String())
 	wg.Wait()
@@ -104,6 +104,9 @@ wait:
 //
 
 func (rj *localJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
+	// the jogger is running in separate goroutine, so use defer to be
+	// sure that `Done` is called even if the jogger crashes to avoid hang up
+	defer rj.wg.Done()
 	rj.buf = rj.slab.Alloc()
 	opts := &fs.Options{
 		Mpath:    mpathInfo,
@@ -119,9 +122,7 @@ func (rj *localJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 			glog.Errorf("%s: failed to traverse err: %v", rj.m.t.Snode().Name(), err)
 		}
 	}
-	rj.xreb.NotifyDone()
 	rj.slab.Free(rj.buf)
-	rj.wg.Done()
 }
 
 func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {

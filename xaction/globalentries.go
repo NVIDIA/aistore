@@ -5,6 +5,8 @@
 package xaction
 
 import (
+	"sync"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -70,12 +72,11 @@ type globalRebEntry struct {
 	statRunner  *stats.Trunner
 	smapVersion int64
 	globRebID   int64
-	runnerCnt   int
 }
 
 func (e *globalRebEntry) Start(id int64) error {
 	xGlobalReb := &GlobalReb{
-		RebBase:     makeXactRebBase(id, cmn.ActGlobalReb, e.runnerCnt),
+		RebBase:     makeXactRebBase(id, cmn.ActGlobalReb),
 		SmapVersion: e.smapVersion,
 	}
 	xGlobalReb.XactBase.SetGID(e.globRebID)
@@ -102,10 +103,7 @@ func (e *globalRebEntry) preRenewHook(previousEntry globalEntry) (keep bool) {
 func (e *globalRebEntry) postRenewHook(previousEntry globalEntry) {
 	xGlobalReb := previousEntry.(*globalRebEntry).xact
 	xGlobalReb.Abort()
-	for i := 0; i < xGlobalReb.runnerCnt; i++ {
-		<-xGlobalReb.confirmCh
-	}
-	close(xGlobalReb.confirmCh)
+	xGlobalReb.WaitForFinish()
 }
 
 func (e *globalRebEntry) Stats(xact cmn.Xact) stats.XactStats {
@@ -118,11 +116,12 @@ func (e *globalRebEntry) Stats(xact cmn.Xact) stats.XactStats {
 //
 // local|global reb helper
 //
-func makeXactRebBase(id int64, kind string, runnerCnt int) RebBase {
+func makeXactRebBase(id int64, kind string) RebBase {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	return RebBase{
-		XactBase:  *cmn.NewXactBase(id, kind),
-		runnerCnt: runnerCnt,
-		confirmCh: make(chan struct{}, runnerCnt),
+		XactBase: *cmn.NewXactBase(id, kind),
+		wg:       wg,
 	}
 }
 
@@ -131,13 +130,12 @@ func makeXactRebBase(id int64, kind string, runnerCnt int) RebBase {
 //
 type localRebEntry struct {
 	baseGlobalEntry
-	xact      *LocalReb
-	runnerCnt int
+	xact *LocalReb
 }
 
 func (e *localRebEntry) Start(id int64) error {
 	xLocalReb := &LocalReb{
-		RebBase: makeXactRebBase(id, cmn.ActLocalReb, e.runnerCnt),
+		RebBase: makeXactRebBase(id, cmn.ActLocalReb),
 	}
 	e.xact = xLocalReb
 	return nil
@@ -146,12 +144,9 @@ func (e *localRebEntry) Get() cmn.Xact { return e.xact }
 func (e *localRebEntry) Kind() string  { return cmn.ActLocalReb }
 
 func (e *localRebEntry) postRenewHook(previousEntry globalEntry) {
-	lRebEntry := previousEntry.(*localRebEntry)
-	lRebEntry.xact.Abort()
-	for i := 0; i < lRebEntry.xact.runnerCnt; i++ {
-		<-lRebEntry.xact.confirmCh
-	}
-	close(lRebEntry.xact.confirmCh)
+	lRebXact := previousEntry.(*localRebEntry).xact
+	lRebXact.Abort()
+	lRebXact.WaitForFinish()
 }
 
 //

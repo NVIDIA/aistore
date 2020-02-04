@@ -44,8 +44,7 @@ type (
 
 	RebBase struct {
 		cmn.XactBase
-		confirmCh chan struct{}
-		runnerCnt int
+		wg *sync.WaitGroup
 	}
 	GlobalReb struct {
 		RebBase
@@ -110,7 +109,8 @@ var Registry *registry
 // global descriptions
 //
 
-func (xact *RebBase) NotifyDone()                { xact.confirmCh <- struct{}{} }
+func (xact *RebBase) MarkDone()                  { xact.wg.Done() }
+func (xact *RebBase) WaitForFinish()             { xact.wg.Wait() }
 func (xact *RebBase) Description() string        { return "base for rebalance xactions" }
 func (xact *GlobalReb) Description() string      { return "cluster-wide global rebalancing" }
 func (xact *bckListTask) Description() string    { return "asynchronous bucket list task" }
@@ -148,10 +148,10 @@ func (xact *RebBase) String() string {
 	return s
 }
 func (xact *GlobalReb) String() string {
-	return fmt.Sprintf("%s(%d), Smap v%d", xact.RebBase.String(), xact.runnerCnt, xact.SmapVersion)
+	return fmt.Sprintf("%s, Smap v%d", xact.RebBase.String(), xact.SmapVersion)
 }
 func (xact *LocalReb) String() string {
-	return fmt.Sprintf("%s(%d)", xact.RebBase.String(), xact.runnerCnt)
+	return xact.RebBase.String()
 }
 
 func (xact *GlobalReb) AbortedAfter(d time.Duration) (aborted bool) {
@@ -689,8 +689,8 @@ func (r *registry) RenewLRU() *lru.Xaction {
 	return entry.xact
 }
 
-func (r *registry) RenewGlobalReb(smapVersion, globRebID int64, runnerCnt int, statRunner *stats.Trunner) *GlobalReb {
-	e := &globalRebEntry{smapVersion: smapVersion, globRebID: globRebID, runnerCnt: runnerCnt, statRunner: statRunner}
+func (r *registry) RenewGlobalReb(smapVersion, globRebID int64, statRunner *stats.Trunner) *GlobalReb {
+	e := &globalRebEntry{smapVersion: smapVersion, globRebID: globRebID, statRunner: statRunner}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*globalRebEntry)
 	if keep { // previous global rebalance is still running
@@ -699,8 +699,8 @@ func (r *registry) RenewGlobalReb(smapVersion, globRebID int64, runnerCnt int, s
 	return entry.xact
 }
 
-func (r *registry) RenewLocalReb(runnerCnt int) *LocalReb {
-	e := &localRebEntry{runnerCnt: runnerCnt}
+func (r *registry) RenewLocalReb() *LocalReb {
+	e := &localRebEntry{}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*localRebEntry)
 	if keep {
