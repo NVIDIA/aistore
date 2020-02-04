@@ -1245,3 +1245,11 @@ func KeepaliveRetryDuration(cs ...*Config) time.Duration {
 	}
 	return c.Timeout.CplaneOperation * time.Duration(c.KeepaliveTracker.RetryFactor)
 }
+
+func Printf(format string, a ...interface{}) {
+	if flag.Parsed() {
+		glog.Infof(format, a...)
+	} else {
+		fmt.Printf(format+"\n", a...)
+	}
+}

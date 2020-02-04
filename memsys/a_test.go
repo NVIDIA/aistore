@@ -110,7 +110,7 @@ func Test_NoSleep(t *testing.T) {
 	random := cmn.NowRand()
 	for i := 0; i < 500; i++ {
 		siz := random.Int63n(cmn.MiB) + cmn.KiB
-		tot := random.Int63n(cmn.DivCeil(cmn.MiB*10, siz))*siz + cmn.KiB
+		tot := random.Int63n(cmn.DivCeil(cmn.KiB*10, siz))*siz + cmn.KiB
 		wg.Add(1)
 		go memstress(mem, i, time.Millisecond, siz, tot, wg)
 	}
@@ -172,41 +172,18 @@ func memstress(mem *memsys.MMSA, id int, ttl time.Duration, siz, tot int64, wg *
 }
 
 func printStats(mem *memsys.MMSA) {
-	var (
-		avgHits = make([]float64, memsys.NumPageSlabs)
-	)
-
 	for {
 		time.Sleep(mem.TimeIval)
-		currStats := mem.GetStats()
-
+		stats := mem.GetStats()
 		for i := 0; i < memsys.NumPageSlabs; i++ {
-			ftot := float64(currStats.Hits[i])
-			if ftot == 0 {
-				continue
+			slab, err := mem.GetSlab(int64(i+1) * memsys.PageSize)
+			cmn.AssertNoErr(err)
+			x := ""
+			idle := stats.Idle[i]
+			if idle > 0 {
+				x = fmt.Sprintf(", idle=%v", idle)
 			}
-			if avgHits[i] == 0 {
-				avgHits[i] = float64(currStats.Hits[i]) / ftot
-			} else {
-				x := float64(currStats.Hits[i]) / ftot
-				avgHits[i] = avgHits[i]*0.4 + x*0.6
-			}
-		}
-
-		str := ""
-		for i := 0; i < memsys.NumPageSlabs; i++ {
-			slab, err := mem.GetSlab(int64(i+1) * cmn.KiB * 4)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			if avgHits[i] < 0.0001 || avgHits[i] > 0.9999 {
-				continue
-			}
-			str += fmt.Sprintf("%s (%.2f) ", slab.Tag(), avgHits[i])
-		}
-		if len(str) > 0 {
-			fmt.Println(str)
+			fmt.Printf("%s: hits %d%s\n", slab.Tag(), stats.Hits[i], x)
 		}
 	}
 }

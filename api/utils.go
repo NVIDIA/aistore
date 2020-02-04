@@ -37,10 +37,6 @@ type OptionalParams struct {
 	Password string
 }
 
-func init() {
-	MMSA = memsys.DefaultPageMM()
-}
-
 // DoHTTPRequest sends one HTTP request and returns only the body of the response
 func DoHTTPRequest(baseParams BaseParams, path string, b []byte, optParams ...OptionalParams) ([]byte, error) {
 	resp, err := doHTTPRequestGetResp(baseParams, path, b, optParams...)

@@ -28,23 +28,26 @@ import (
 
 const (
 	objsize = 100
-	objects = 1000
+	objects = 10000
 	workers = 1000
 )
 
 // creates 2 SGL, put some data to one of them and them copy from SGL to SGL
 func TestSGLStressN(t *testing.T) {
 	mem := &memsys.MMSA{MinPctFree: 50, Name: "cmem", Debug: verbose}
-	err := mem.Init(false /*panicOnErr*/)
+	err := mem.Init(true /*panic on error*/)
 	defer mem.Terminate()
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	num := objects
+	if testing.Short() {
+		num = objects / 10
+	}
 	wg := &sync.WaitGroup{}
 	fn := func(id int) {
 		defer wg.Done()
-		for i := 0; i < objects; i++ {
+		for i := 0; i < num; i++ {
 			sglR := mem.NewSGL(128)
 			sglW := mem.NewSGL(128)
 			bufR := make([]byte, objsize)

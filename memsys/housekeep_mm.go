@@ -1,14 +1,12 @@
-// Package memsys provides memory management and Slab allocation
-// with io.Reader and io.Writer interfaces on top of a scatter-gather lists
-// (of reusable buffers)
+// Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
+// on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
 import (
 	"fmt"
-	"math"
 	"runtime"
 	"sort"
 	"time"
@@ -27,21 +25,17 @@ func (r *MMSA) Free(spec FreeSpec) {
 		}
 	} else {
 		if spec.IdleDuration == 0 {
-			spec.IdleDuration = freeIdleMin // using default
+			spec.IdleDuration = freeIdleMin // using the default
 		}
-
-		currStats := r.GetStats()
-		for i, idle := range &currStats.Idle {
-			if idle.IsZero() {
-				continue
-			}
-			elapsed := time.Since(idle)
-			if elapsed > spec.IdleDuration {
-				s := r.rings[i]
+		stats := r.GetStats()
+		for _, s := range r.rings {
+			if idle := s.idleDur(stats); idle > spec.IdleDuration {
 				x := s.cleanup()
-				freed += x
-				if x > 0 && bool(glog.FastV(4, glog.SmoduleMemsys)) {
-					glog.Infof("%s: idle for %v - cleanup", s.tag, elapsed)
+				if x > 0 {
+					freed += x
+					if glog.FastV(4, glog.SmoduleMemsys) {
+						glog.Infof("%s: idle for %v - cleanup", s.tag, idle)
+					}
 				}
 			}
 		}
@@ -56,13 +50,28 @@ func (r *MMSA) Free(spec FreeSpec) {
 	}
 }
 
-// a CALLBACK - is executed by the system's house-keeper (hk)
-// NOTE: enumerated heuristics
+func (r *MMSA) GetStats() (stats *Stats) {
+	r.slabStats.RLock()
+	stats = r.snapStats()
+	r.slabStats.RUnlock()
+	return
+}
+
+//
+// private
+//
+
+// garbageCollect is called periodically by the system's house-keeper (hk)
 func (r *MMSA) garbageCollect() time.Duration {
 	var (
 		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
 		depth int               // => current ring depth tbd
 	)
+
+	// 1. refresh stats and sort idle < busy
+	r.refreshStatsSortIdle()
+
+	// 2. get system memory stats
 	mem, _ := sys.Mem()
 	swapping := mem.SwapUsed > r.swap.Load()
 	if swapping {
@@ -72,15 +81,17 @@ func (r *MMSA) garbageCollect() time.Duration {
 	}
 	r.swap.Store(mem.SwapUsed)
 
-	// 1. enough => free idle
+	// 3. memory is enough, free only those that are idle for a while
 	if mem.ActualFree > r.lowWM && !swapping {
 		r.minDepth.Store(minDepth)
-		if delta := r.freeIdle(freeIdleMin); delta > 0 {
-			r.toGC.Add(delta)
+		if freed := r.freeIdle(freeIdleMin); freed > 0 {
+			r.toGC.Add(freed)
 			r.doGC(mem.ActualFree, sizeToGC, false, false)
 		}
 		goto timex
 	}
+
+	// 4. calibrate and do more aggressive freeing
 	if mem.ActualFree <= r.MinFree || swapping { // 2. mem too low indicates "high watermark"
 		depth = minDepth / 4
 		if mem.ActualFree < r.MinFree {
@@ -97,17 +108,17 @@ func (r *MMSA) garbageCollect() time.Duration {
 		cmn.Dassert(depth >= minDepth && depth <= maxDepth, pkgName)
 		r.minDepth.Store(minDepth / 4)
 	}
-	// sort and reduce
-	r.refreshStats()
-	sort.Slice(r.ringsSorted, r.idleFirst /* idle first */)
-	for i, s := range r.ringsSorted {
-		if delta := s.reduce(depth, r.stats.HitsDelta[i] == 0 /* idle */, true /* force */); delta > 0 {
+	for _, s := range r.sorted { // idle first
+		idle := r.statsSnapshot.Idle[s.ringIdx()]
+		if freed := s.reduce(depth, idle > 0, true /* force */); freed > 0 {
+			r.toGC.Add(freed)
 			if r.doGC(mem.ActualFree, limit, true, swapping) {
 				goto timex
 			}
 		}
 	}
-	// 4. red
+
+	// 5. still not enough? do more
 	if mem.ActualFree <= r.MinFree || swapping {
 		r.doGC(mem.ActualFree, limit, true, swapping)
 	}
@@ -140,52 +151,78 @@ func (r *MMSA) getNextInterval(free, total uint64, swapping bool) time.Duration 
 		}
 	}
 	if changed && bool(glog.FastV(4, glog.SmoduleMemsys)) {
-		glog.Infof("timer %v, free %s", r.duration, cmn.B2S(int64(free), 1))
+		glog.Infof("%s: timer %v, free %s", r.Name, r.duration, cmn.B2S(int64(free), 1))
 	}
 	return r.duration
 }
 
-func (r *MMSA) refreshStats() {
-	now := time.Now()
-	for i, s := range r.rings {
-		prev := r.stats.Hits[i]
-		r.stats.Hits[i] = s.hits.Load()
-		if r.stats.Hits[i] >= prev {
-			r.stats.HitsDelta[i] = r.stats.Hits[i] - prev
+// 1) refresh internal stats
+// 2) "snapshot" internal stats
+// 3) sort by idle < less idle < busy (taking into account idle duration and hits inc, in that order)
+func (r *MMSA) refreshStatsSortIdle() {
+	r.slabStats.Lock()
+	now := time.Now().UnixNano()
+	for i := 0; i < r.numSlabs; i++ {
+		hits, prev := r.slabStats.hits[i].Load(), r.slabStats.prev[i]
+		hinc := hits - prev
+		if hinc == 0 {
+			if r.slabStats.idleTs[i] == 0 {
+				r.slabStats.idleTs[i] = now
+			}
 		} else {
-			r.stats.HitsDelta[i] = math.MaxUint32 - prev + r.stats.Hits[i]
+			r.slabStats.idleTs[i] = 0
 		}
-		isZero := r.stats.Idle[i].IsZero()
-		if r.stats.HitsDelta[i] == 0 && isZero {
-			r.stats.Idle[i] = now
-		} else if r.stats.HitsDelta[i] > 0 && !isZero {
-			r.stats.Idle[i] = time.Time{}
-		}
+		r.slabStats.hinc[i], r.slabStats.prev[i] = hinc, hits
 	}
+	_ = r.snapStats(r.statsSnapshot /* to fill in */)
+	r.slabStats.Unlock()
+	sort.Slice(r.sorted, r.idleLess /* idle < busy */)
 }
 
-// less (sorting) callback
-func (r *MMSA) idleFirst(i, j int) bool {
+func (r *MMSA) idleLess(i, j int) bool {
 	var (
-		hitsI = r.stats.HitsDelta[i]
-		hitsJ = r.stats.HitsDelta[j]
+		ii = r.sorted[i].ringIdx()
+		jj = r.sorted[j].ringIdx()
 	)
-	if hitsI != 0 || hitsJ != 0 {
-		return hitsI < hitsJ
+	if r.statsSnapshot.Idle[ii] > 0 {
+		if r.statsSnapshot.Idle[jj] > 0 {
+			return r.statsSnapshot.Idle[ii] > r.statsSnapshot.Idle[jj]
+		}
+		return true
 	}
-	var (
-		idleI = r.stats.Idle[i]
-		idleJ = r.stats.Idle[j]
-	)
-	if !idleI.IsZero() && !idleJ.IsZero() {
-		var (
-			now    = time.Now()
-			sinceI = now.Sub(idleI)
-			sinceJ = now.Sub(idleJ)
-		)
-		return sinceI > sinceJ
+	if r.slabStats.idleTs[jj] != 0 {
+		return false
 	}
-	return true
+	return r.slabStats.hinc[ii] < r.slabStats.hinc[jj]
+}
+
+// freeIdle traverses and deallocates idle slabs- those that were not used for at
+// least the specified duration; returns freed size
+func (r *MMSA) freeIdle(duration time.Duration) (freed int64) {
+	for _, s := range r.rings {
+		idle := r.statsSnapshot.Idle[s.ringIdx()]
+		if idle < duration {
+			continue
+		}
+		if idle > freeIdleZero {
+			x := s.cleanup()
+			if x > 0 {
+				freed += x
+				if glog.FastV(4, glog.SmoduleMemsys) {
+					glog.Infof("%s: idle for %v - cleanup", s.tag, idle)
+				}
+			}
+		} else {
+			x := s.reduce(minDepth, true /* idle */, false /* force */)
+			if x > 0 {
+				freed += x
+				if glog.FastV(4, glog.SmoduleMemsys) {
+					glog.Infof("%s: idle for %v - reduced %s", s.tag, idle, cmn.B2S(x, 1))
+				}
+			}
+		}
+	}
+	return
 }
 
 // The method is called:
@@ -202,22 +239,38 @@ func (r *MMSA) doGC(free uint64, minsize int64, force, swapping bool) (gced bool
 		return
 	}
 	toGC := r.toGC.Load()
-	if toGC > minsize {
-		str := fmt.Sprintf(
-			"GC(force: %t, swapping: %t); load: %.2f; free: %s; toGC_size: %s",
-			force, swapping, avg.One, cmn.B2S(int64(free), 1), cmn.B2S(toGC, 2),
-		)
-		if force || swapping { // Heu #4
-			glog.Warningf("%s - freeing memory to the OS...", str)
-			cmn.FreeMemToOS() // forces GC followed by an attempt to return memory to the OS
-		} else { // Heu #5
-			if glog.FastV(4, glog.SmoduleMemsys) {
-				glog.Infof(str)
-			}
-			runtime.GC()
+	if toGC < minsize {
+		return
+	}
+	str := fmt.Sprintf(
+		"%s: GC(force: %t, swapping: %t); load: %.2f; free: %s; toGC: %s",
+		r.Name, force, swapping, avg.One, cmn.B2S(int64(free), 1), cmn.B2S(toGC, 2))
+	if force || swapping { // Heu #4
+		glog.Warning(str)
+		glog.Warning("freeing memory to OS...")
+		cmn.FreeMemToOS() // forces GC followed by an attempt to return memory to the OS
+	} else { // Heu #5
+		glog.Infof(str)
+		runtime.GC()
+	}
+	gced = true
+	r.toGC.Store(0)
+	return
+}
+
+// copies (under lock) part of the internal stats into user-visible Stats
+func (r *MMSA) snapStats(sts ...*Stats) (stats *Stats) {
+	if len(sts) > 0 {
+		stats = sts[0]
+	} else {
+		stats = &Stats{}
+	}
+	now := time.Now().UnixNano()
+	for i := range r.rings {
+		stats.Hits[i] = r.slabStats.hits[i].Load()
+		if r.slabStats.idleTs[i] != 0 {
+			stats.Idle[i] = time.Duration(now - r.slabStats.idleTs[i])
 		}
-		gced = true
-		r.toGC.Store(0)
 	}
 	return
 }

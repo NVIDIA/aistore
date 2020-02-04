@@ -1,13 +1,11 @@
-// Package memsys provides memory management and Slab allocation
-// with io.Reader and io.Writer interfaces on top of a scatter-gather lists
-// (of reusable buffers)
+// Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
+// on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"runtime"
@@ -86,8 +84,8 @@ const (
 )
 
 const (
-	gmmName = ".mm"
-	smmName = ".mm.small"
+	gmmName = ".dflt.mm"
+	smmName = ".dflt.mm.small"
 )
 
 const (
@@ -171,16 +169,10 @@ type (
 		muget, muput sync.Mutex
 		pMinDepth    *atomic.Int64
 		pos          int
-		hits         atomic.Uint32
 	}
 	Stats struct {
-		Idle      [NumStats]time.Time
-		Hits      [NumStats]uint32
-		HitsDelta [NumStats]uint32
-	}
-	ReqStats struct {
-		Wg    *sync.WaitGroup
-		Stats *Stats
+		Hits [NumStats]uint64
+		Idle [NumStats]time.Duration
 	}
 	MMSA struct {
 		// public
@@ -190,17 +182,18 @@ type (
 		MinPctTotal int           // same, via percentage of total
 		MinPctFree  int           // ditto, as % of free at init time
 		// private
-		duration    time.Duration
-		lowWM       uint64
-		rings       []*Slab
-		ringsSorted []*Slab
-		stats       Stats
-		toGC        atomic.Int64  // accumulates over time and triggers GC upon reaching the spec-ed limit
-		minDepth    atomic.Int64  // minimum ring depth aka length
-		swap        atomic.Uint64 // actual swap size
-		slabIncStep int64
-		maxSlabSize int64
-		numSlabs    int
+		duration      time.Duration
+		lowWM         uint64
+		rings         []*Slab
+		sorted        []*Slab
+		slabStats     *slabStats    // private counters and idle timestamp
+		statsSnapshot *Stats        // is a limited "snapshot" of slabStats; preallocated to reuse when house-keeping
+		toGC          atomic.Int64  // accumulates over time and triggers GC upon reaching the spec-ed limit
+		minDepth      atomic.Int64  // minimum ring depth aka length
+		swap          atomic.Uint64 // actual swap size
+		slabIncStep   int64
+		maxSlabSize   int64
+		numSlabs      int
 		// public - aligned
 		Swapping atomic.Int32 // max = SwappingMax; halves every r.duration unless swapping
 		Small    bool         // defines the type of Slab rings (NumSmallSlabs x 128 | NumPageSlabs x 4K)
@@ -211,6 +204,16 @@ type (
 		MinSize      int64         // minimum freed size that'd warrant calling GC (default = sizetoGC)
 		Totally      bool          // true: free all slabs regardless of their idle-ness and size
 		ToOS         bool          // GC and then return the memory to the operating system
+	}
+	//
+	// private
+	//
+	slabStats struct {
+		sync.RWMutex
+		hits   [NumStats]atomic.Uint64
+		prev   [NumStats]uint64
+		hinc   [NumStats]uint64
+		idleTs [NumStats]int64
 	}
 )
 
@@ -231,7 +234,6 @@ func DefaultSmallMM() *MMSA { smmOnce.Do(func() { smm.Init(true) }); return smm 
 // initialize new MMSA instance
 func (r *MMSA) Init(panicOnErr bool) (err error) {
 	cmn.Assert(r.Name != "")
-
 	// 1. environment overrides defaults and MMSA{...} hard-codings
 	if err = r.env(); err != nil {
 		if panicOnErr {
@@ -258,14 +260,11 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 	}
 	if r.MinFree == 0 {
 		r.MinFree = minMemFree
+	} else if r.MinFree < cmn.GiB { // warn invalid config
+		cmn.Printf("Warning: configured minimum free memory %s < %s (actual free %s)\n",
+			cmn.B2S(int64(r.MinFree), 2), cmn.B2S(minMemFree, 2), cmn.B2S(int64(mem.ActualFree), 1))
 	}
-	if r.MinFree < cmn.GiB {
-		if flag.Parsed() {
-			glog.Warningf("Warning: configured minimum free memory %s < 1GiB (actual free %s)\n",
-				cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 1))
-		}
-	}
-	// 3. validate and compute free memory "low watermark"
+	// 3. validate actual
 	required, actual := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree < r.MinFree {
 		err = fmt.Errorf("insufficient free memory %s, minimum required %s (see %s for guidance)", actual, required, readme)
@@ -292,8 +291,10 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 	if r.Small {
 		r.slabIncStep, r.maxSlabSize, r.numSlabs = SmallSlabIncStep, MaxSmallSlabSize, NumSmallSlabs
 	}
+	r.slabStats = &slabStats{}
+	r.statsSnapshot = &Stats{}
 	r.rings = make([]*Slab, r.numSlabs)
-	r.ringsSorted = make([]*Slab, r.numSlabs)
+	r.sorted = make([]*Slab, r.numSlabs)
 	for i := 0; i < r.numSlabs; i++ {
 		bufSize := r.slabIncStep * int64(i+1)
 		slab := &Slab{
@@ -305,23 +306,43 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		}
 		slab.pMinDepth = &r.minDepth
 		r.rings[i] = slab
-		r.ringsSorted[i] = slab
+		r.sorted[i] = slab
 	}
 
-	// 6. GC at init time
+	// 6. GC at init time but only non-small
 	if !r.Small {
 		runtime.GC()
 	}
-	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect, r.TimeIval)
+	// 7. compute the first time for hk to call back
+	d := r.duration
+	if mem.ActualFree < r.lowWM || mem.ActualFree < minMemFree {
+		d = r.duration / 4
+		if d < 10*time.Second {
+			d = 10 * time.Second
+		}
+	}
+	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect, d)
+	cmn.Printf("mmsa '%s' started", r.Name)
 	return
 }
 
-// terminate this MMSA
+// terminate this MMSA instance and, possibly, GC as well
 func (r *MMSA) Terminate() {
+	var (
+		freed int64
+		gced  string
+	)
 	hk.Housekeeper.Unregister(r.Name + ".gc")
 	for _, s := range r.rings {
-		_ = s.cleanup()
+		freed += s.cleanup()
 	}
+	r.toGC.Add(freed)
+	mem, _ := sys.Mem()
+	swapping := mem.SwapUsed > 0
+	if r.doGC(mem.ActualFree, sizeToGC, true, swapping) {
+		gced = ", GC ran"
+	}
+	glog.Infof("mmsa '%s' terminated%s", r.Name, gced)
 }
 
 // allocate SGL
@@ -410,17 +431,6 @@ func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
 	}
 	buf = slab.Alloc()
 	return
-}
-
-func (r *MMSA) GetStats() *Stats {
-	var resp = &Stats{}
-	r.refreshStats()
-	for i := 0; i < r.numSlabs; i++ {
-		resp.Hits[i] = r.stats.Hits[i]
-		resp.HitsDelta[i] = r.stats.HitsDelta[i]
-		resp.Idle[i] = r.stats.Idle[i]
-	}
-	return resp
 }
 
 ///////////////
@@ -518,39 +528,11 @@ func (r *MMSA) env() (err error) {
 	return
 }
 
-// freeIdle traverses and deallocates idle slabs- those that were not used for at
-// least the specified duration; returns freed size
-func (r *MMSA) freeIdle(duration time.Duration) (freed int64) {
-	for i, idle := range &r.stats.Idle {
-		if idle.IsZero() {
-			continue
-		}
-		elapsed := time.Since(idle)
-		if elapsed > duration {
-			s := r.rings[i]
-			if elapsed > freeIdleZero {
-				x := s.cleanup()
-				freed += x
-				if x > 0 && glog.FastV(4, glog.SmoduleMemsys) {
-					glog.Infof("%s: idle for %v - cleanup", s.tag, elapsed)
-				}
-			} else {
-				x := s.reduce(minDepth, true /* idle */, false /* force */)
-				freed += x
-				if x > 0 && (bool(glog.FastV(4, glog.SmoduleMemsys)) || r.Debug) {
-					glog.Infof("%s: idle for %v - reduced %s", s.tag, elapsed, cmn.B2S(x, 1))
-				}
-			}
-		}
-	}
-	return
-}
-
 func (s *Slab) _alloc() (buf []byte) {
 	if len(s.get) > s.pos { // fast path
 		buf = s.get[s.pos]
 		s.pos++
-		s.hits.Inc()
+		s.hitsInc()
 		return
 	}
 	return s._allocSlow()
@@ -580,7 +562,7 @@ func (s *Slab) _allocSlow() (buf []byte) {
 	s.pos = 0
 	buf = s.get[s.pos]
 	s.pos++
-	s.hits.Inc()
+	s.hitsInc()
 	return
 }
 
@@ -661,5 +643,19 @@ func (s *Slab) cleanup() (freed int64) {
 	cmn.Dassert(len(s.get) == 0 && len(s.put) == 0, pkgName)
 	s.muput.Unlock()
 	s.muget.Unlock()
+	return
+}
+
+func (s *Slab) ringIdx() int { return int(s.bufSize/s.m.slabIncStep) - 1 }
+func (s *Slab) hitsInc()     { s.m.slabStats.hits[s.ringIdx()].Inc() }
+func (s *Slab) idleDur(statsSnapshot *Stats) (d time.Duration) {
+	var idx = s.ringIdx()
+	d = statsSnapshot.Idle[idx]
+	if d == 0 {
+		return
+	}
+	if statsSnapshot.Hits[idx] != s.m.slabStats.hits[idx].Load() {
+		d = 0
+	}
 	return
 }

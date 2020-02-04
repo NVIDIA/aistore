@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -197,6 +198,10 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 	}
 	defer resp.Body.Close()
 
+	if MMSA == nil { // on demand
+		MMSA = memsys.DefaultPageMM()
+	}
+
 	buf, slab := MMSA.Alloc()
 	n, err = io.CopyBuffer(w, resp.Body, buf)
 	slab.Free(buf)
@@ -244,6 +249,9 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 	hdrHashType := resp.Header.Get(cmn.HeaderObjCksumType)
 
 	if hdrHashType == cmn.ChecksumXXHash {
+		if MMSA == nil { // on demand
+			MMSA = memsys.DefaultPageMM()
+		}
 		buf, slab := MMSA.Alloc()
 		n, cksumVal, err = cmn.WriteWithHash(w, resp.Body, buf)
 		slab.Free(buf)

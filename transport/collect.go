@@ -8,7 +8,6 @@ package transport
 import (
 	"container/heap"
 	"errors"
-	"flag"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -38,10 +37,8 @@ func Init() *StreamCollector {
 }
 
 func (sc *StreamCollector) Run() (err error) {
-	if flag.Parsed() {
-		glog.Infof("Intra-cluster networking: %s client", whichClient())
-		glog.Infof("Starting %s", sc.Getname())
-	}
+	cmn.Printf("Intra-cluster networking: %s client", whichClient())
+	cmn.Printf("Starting %s", sc.Getname())
 	return gc.run()
 }
 func (sc *StreamCollector) Stop(err error) {
