@@ -891,7 +891,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
 	amsg cmn.ActionMsg, started time.Time, fast bool) {
 	var (
-		taskID  int64
+		taskID  string
 		err     error
 		bckList *cmn.BucketList
 		smsg    = cmn.SelectMsg{}
@@ -911,13 +911,8 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		smsg.Prefix = prefix
 	}
 
-	idstr := r.URL.Query().Get(cmn.URLParamTaskID)
-	if idstr != "" {
-		id, err := strconv.ParseInt(idstr, 10, 64)
-		if err != nil {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid task id: %s", idstr))
-			return
-		}
+	id := r.URL.Query().Get(cmn.URLParamTaskID)
+	if id != "" {
 		smsg.TaskID = id
 	}
 	headerID := r.URL.Query().Get(cmn.URLParamTaskID)
@@ -932,7 +927,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		if status == http.StatusGone {
 			// at this point we know that this cloud bucket exists and is offline
 			smsg.Cached = true
-			smsg.TaskID = 0
+			smsg.TaskID = ""
 			headerID = ""
 			bckList, taskID, err = p.listAISBucket(bck, smsg, headerID)
 		}
@@ -942,11 +937,11 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// taskID == 0 means that async runner has completed and the result is available
+	// taskID == "" means that async runner has completed and the result is available
 	// otherwise it is an ID of a still running task
-	if taskID != 0 {
+	if taskID != "" {
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(strconv.FormatInt(taskID, 10)))
+		w.Write([]byte(taskID))
 		return
 	}
 
@@ -980,7 +975,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 // bucket == "": all buckets for a given provider
 func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg cmn.ActionMsg) {
 	var (
-		taskID    int64
+		taskID    string
 		err       error
 		summaries cmn.BucketsSummaries
 		smsg      = cmn.SelectMsg{}
@@ -991,13 +986,8 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 		return
 	}
 
-	idstr := r.URL.Query().Get(cmn.URLParamTaskID)
-	if idstr != "" {
-		id, err := strconv.ParseInt(idstr, 10, 64)
-		if err != nil {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid task id: %s", idstr))
-			return
-		}
+	id := r.URL.Query().Get(cmn.URLParamTaskID)
+	if id != "" {
 		smsg.TaskID = id
 	}
 
@@ -1007,11 +997,11 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 		return
 	}
 
-	// taskID == 0 means that async runner has completed and the result is available
+	// taskID == "" means that async runner has completed and the result is available
 	// otherwise it is an ID of a still running task
-	if taskID != 0 {
+	if taskID != "" {
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(strconv.FormatInt(taskID, 10)))
+		w.Write([]byte(taskID))
 		return
 	}
 
@@ -1020,14 +1010,10 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 }
 
 func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg,
-	headerID string) (summaries cmn.BucketsSummaries, code int64, err error) {
+	headerID string) (summaries cmn.BucketsSummaries, taskID string, err error) {
 	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
 	// it is a request to start a new async task
-	isNew, q, err := p.initAsyncQuery(headerID, &msg)
-	if err != nil {
-		return nil, 0, err
-	}
-
+	isNew, q := p.initAsyncQuery(headerID, &msg)
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap   = p.smapowner.get()
@@ -1047,7 +1033,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg,
 	results := p.bcastPost(args)
 	allOK, _, err := p.checkBckTaskResp(msg.TaskID, results)
 	if err != nil {
-		return nil, 0, err
+		return nil, "", err
 	}
 
 	// some targets are still executing their tasks or it is request to start
@@ -1067,12 +1053,12 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg,
 	results = p.bcastPost(args)
 	for result := range results {
 		if result.err != nil {
-			return nil, 0, result.err
+			return nil, "", result.err
 		}
 
 		var targetSummary cmn.BucketsSummaries
 		if err := jsoniter.Unmarshal(result.outjson, &targetSummary); err != nil {
-			return nil, 0, err
+			return nil, "", err
 		}
 
 		for bckName, v := range targetSummary {
@@ -1085,7 +1071,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg,
 		}
 	}
 
-	return summaries, 0, nil
+	return summaries, "", nil
 }
 
 // POST { action } /v1/objects/bucket-name
@@ -1799,36 +1785,32 @@ func (p *proxyrunner) cbExists(bucket string) (header http.Header, err error) {
 	return
 }
 
-func (p *proxyrunner) initAsyncQuery(headerID string, msg *cmn.SelectMsg) (bool, url.Values, error) {
-	isNew := headerID == "" && msg.TaskID == 0
+func (p *proxyrunner) initAsyncQuery(headerID string, msg *cmn.SelectMsg) (bool, url.Values) {
+	isNew := headerID == "" && msg.TaskID == ""
 	q := url.Values{}
 	if isNew {
-		msg.TaskID, _ = cmn.GenUUID64()
+		msg.TaskID = cmn.GenUserID()
 		q.Set(cmn.URLParamTaskAction, cmn.TaskStart)
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("proxy: starting new async task %d", msg.TaskID)
+			glog.Infof("proxy: starting new async task %s", msg.TaskID)
 		}
 	} else {
 		// make both msg and headers to have the same taskID
-		if msg.TaskID == 0 {
-			n, err := strconv.ParseInt(headerID, 10, 64)
-			if err != nil {
-				return false, q, err
-			}
-			msg.TaskID = n
+		if msg.TaskID == "" {
+			msg.TaskID = headerID
 		}
 		// first request is always 'Status' to avoid wasting gigabytes of
 		// traffic in case when few targets have finished their tasks
 		q.Set(cmn.URLParamTaskAction, cmn.TaskStatus)
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("proxy: reading async task %d result", msg.TaskID)
+			glog.Infof("proxy: reading async task %s result", msg.TaskID)
 		}
 	}
 
-	return isNew, q, nil
+	return isNew, q
 }
 
-func (p *proxyrunner) checkBckTaskResp(taskID int64, results chan callResult) (allOK bool, status int, err error) {
+func (p *proxyrunner) checkBckTaskResp(taskID string, results chan callResult) (allOK bool, status int, err error) {
 	// check response codes of all targets
 	// Target that has completed its async task returns 200, and 202 otherwise
 	allOK = true
@@ -1848,7 +1830,7 @@ func (p *proxyrunner) checkBckTaskResp(taskID int64, results chan callResult) (a
 		}
 	}
 	if allNotFound {
-		err = fmt.Errorf("Task %d %s", taskID, cmn.DoesNotExist)
+		err = fmt.Errorf("Task %s %s", taskID, cmn.DoesNotExist)
 	}
 	return
 }
@@ -1859,13 +1841,9 @@ func (p *proxyrunner) checkBckTaskResp(taskID int64, results chan callResult) (a
 //      * non-zero taskID if the task is still running
 //      * error
 func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
-	headerID string) (allEntries *cmn.BucketList, taskID int64, err error) {
+	headerID string) (allEntries *cmn.BucketList, taskID string, err error) {
 	// Start new async task if client did not provide taskID (neither in headers nor in SelectMsg).
-	isNew, q, err := p.initAsyncQuery(headerID, &msg)
-	if err != nil {
-		return nil, 0, err
-	}
-
+	isNew, q := p.initAsyncQuery(headerID, &msg)
 	var (
 		msgInt = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, nil, nil)
 		body   = cmn.MustMarshal(msgInt)
@@ -1883,7 +1861,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 	results := p.bcastPost(args)
 	allOK, _, err := p.checkBckTaskResp(msg.TaskID, results)
 	if err != nil {
-		return nil, 0, err
+		return nil, "", err
 	}
 
 	// Some targets are still executing their tasks or it is request to start
@@ -1908,7 +1886,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 	bckLists := make([]*cmn.BucketList, 0, len(results))
 	for res := range results {
 		if res.err != nil {
-			return nil, 0, res.err
+			return nil, "", res.err
 		}
 		if len(res.outjson) == 0 {
 			continue
@@ -1940,7 +1918,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 	}
 
 	allEntries = objwalk.ConcatObjLists(bckLists, pageSize)
-	return allEntries, 0, nil
+	return allEntries, "", nil
 }
 
 // selects a random target to GET the list of objects from the cloud
@@ -1953,7 +1931,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 //      * error
 //
 func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
-	msg cmn.SelectMsg) (allEntries *cmn.BucketList, taskID int64, status int, err error) {
+	msg cmn.SelectMsg) (allEntries *cmn.BucketList, taskID string, status int, err error) {
 	if msg.PageSize > cmn.DefaultListPageSize {
 		glog.Warningf("list-bucket page size %d for bucket %s exceeds the default maximum %d ",
 			msg.PageSize, bck, cmn.DefaultListPageSize)
@@ -1964,10 +1942,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 	}
 
 	// start new async task if client did not provide taskID (neither in headers nor in SelectMsg)
-	isNew, q, err := p.initAsyncQuery(headerID, &msg)
-	if err != nil {
-		return nil, 0, 0, err
-	}
+	isNew, q := p.initAsyncQuery(headerID, &msg)
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap          = p.smapowner.get()
@@ -2006,7 +1981,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 
 	allOK, status, err := p.checkBckTaskResp(msg.TaskID, results)
 	if err != nil {
-		return nil, 0, status, err
+		return nil, "", status, err
 	}
 
 	// some targets are still executing their tasks or it is request to start
@@ -2030,7 +2005,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 			continue
 		}
 		if res.err != nil {
-			return nil, 0, res.status, res.err
+			return nil, "", res.status, res.err
 		}
 		if len(res.outjson) == 0 {
 			continue
@@ -2064,7 +2039,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, headerID string,
 	}
 
 	// no active tasks - return TaskID=0
-	return allEntries, 0, 0, nil
+	return allEntries, "", 0, nil
 }
 
 func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
@@ -3512,7 +3487,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 // 4. Metasync the merged BMD
 func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	var (
-		uuid         uint64
+		uuid         string
 		rbmd         *bucketMD
 		err          error
 		bmds         map[*cluster.Snode]*bucketMD
@@ -3576,8 +3551,8 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 
 func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	var (
-		mlist = make(map[uint64][]targetRegMeta) // uuid => list(targetRegMeta)
-		maxor = make(map[uint64]*bucketMD)       // uuid => max-ver BMD
+		mlist = make(map[string][]targetRegMeta) // uuid => list(targetRegMeta)
+		maxor = make(map[string]*bucketMD)       // uuid => max-ver BMD
 	)
 	// results => (mlist, maxor)
 	for si, bmd := range bmds {
@@ -3597,7 +3572,7 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 		return nil, errNoBMD
 	}
 	// by simple majority
-	var uuid, l = uint64(0), int(0)
+	var uuid, l = "", 0
 	for u, lst := range mlist {
 		if l < len(lst) {
 			uuid, l = u, len(lst)
@@ -3609,9 +3584,9 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 			return nil, &errBmdUUIDSplit{s}
 		}
 	}
-	s := fmt.Sprintf("%s: BMDs have different uuids with simple majority: ...%d:\n%v", ciError(70), uuid%1000, mlist)
+	s := fmt.Sprintf("%s: BMDs have different uuids with simple majority: %s:\n%v", ciError(70), uuid, mlist)
 	bmd := maxor[uuid]
-	cmn.Assert(bmd.UUID != 0)
+	cmn.Assert(bmd.UUID != "")
 	return bmd, &errTgtBmdUUIDDiffer{s}
 }
 

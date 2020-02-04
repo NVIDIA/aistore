@@ -300,7 +300,7 @@ func TestRenameBucket(t *testing.T) {
 		}
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		guid, _    = cmn.GenUUID()
+		guid       = cmn.GenUUID()
 		renamedBck = cmn.Bck{
 			Name:     bck.Name + "_" + guid,
 			Provider: cmn.ProviderAIS,

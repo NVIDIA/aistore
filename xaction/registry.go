@@ -85,7 +85,7 @@ type (
 		res atomic.Pointer
 	}
 	entry interface {
-		Start(id int64) error // supposed to start an xaction, will be called when entry is stored to into registry
+		Start(id string) error // supposed to start an xaction, will be called when entry is stored to into registry
 		Kind() string
 		Get() cmn.Xact
 		Stats(xact cmn.Xact) stats.XactStats
@@ -178,7 +178,7 @@ func newXactions() *registry {
 	return xar
 }
 
-func (r *registry) GetTaskXact(id int64) entry {
+func (r *registry) GetTaskXact(id string) entry {
 	val, loaded := r.byID.Load(id)
 
 	if loaded {
@@ -281,10 +281,8 @@ func (r *registry) IsRebalancing(kind string) (aborted, running bool) {
 	return
 }
 
-func (r *registry) uniqueID() int64 {
-	n, err := cmn.GenUUID64()
-	cmn.AssertNoErr(err)
-	return n
+func (r *registry) uniqueID() string {
+	return cmn.GenUserID()
 }
 
 func (r *registry) StopMountpathXactions() {
@@ -331,7 +329,7 @@ func (r *registry) GlobalXactRunning(kind string) bool {
 	return !entry.Get().Finished()
 }
 
-func (r *registry) globalXactStats(kind string, onlyRecent bool) (map[int64]stats.XactStats, error) {
+func (r *registry) globalXactStats(kind string, onlyRecent bool) (map[string]stats.XactStats, error) {
 	if _, ok := cmn.ValidXact(kind); !ok {
 		return nil, errors.New("unknown xaction " + kind)
 	}
@@ -343,7 +341,7 @@ func (r *registry) globalXactStats(kind string, onlyRecent bool) (map[int64]stat
 
 	if onlyRecent {
 		xact := entry.Get()
-		return map[int64]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
+		return map[string]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
 	}
 
 	return r.matchingXactsStats(func(xact cmn.Xact) bool {
@@ -365,7 +363,7 @@ func (r *registry) AbortGlobalXact(kind string) (aborted bool) {
 
 // Returns stats of xaction with given 'kind' on a given bucket
 func (r *registry) bucketSingleXactStats(kind string, bck *cluster.Bck,
-	onlyRecent bool) (map[int64]stats.XactStats, error) {
+	onlyRecent bool) (map[string]stats.XactStats, error) {
 	if onlyRecent {
 		bucketXats, ok := r.getBucketsXacts(bck)
 		if !ok {
@@ -376,7 +374,7 @@ func (r *registry) bucketSingleXactStats(kind string, bck *cluster.Bck,
 			return nil, cmn.NewXactionNotFoundError(kind + ", bucket=" + bck.Name)
 		}
 		xact := entry.Get()
-		return map[int64]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
+		return map[string]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
 	}
 	return r.matchingXactsStats(func(xact cmn.Xact) bool {
 		return xact.Bck().Equal(bck.Bck) && xact.Kind() == kind
@@ -384,12 +382,12 @@ func (r *registry) bucketSingleXactStats(kind string, bck *cluster.Bck,
 }
 
 // Returns stats of all present xactions
-func (r *registry) allXactsStats(onlyRecent bool) map[int64]stats.XactStats {
+func (r *registry) allXactsStats(onlyRecent bool) map[string]stats.XactStats {
 	if !onlyRecent {
 		return r.matchingXactsStats(func(_ cmn.Xact) bool { return true })
 	}
 
-	matching := make(map[int64]stats.XactStats)
+	matching := make(map[string]stats.XactStats)
 
 	// add these xactions which are the most recent ones, even if they are finished
 	r.RLock()
@@ -420,8 +418,8 @@ func (r *registry) allXactsStats(onlyRecent bool) map[int64]stats.XactStats {
 	return matching
 }
 
-func (r *registry) matchingXactsStats(xactMatches func(xact cmn.Xact) bool) map[int64]stats.XactStats {
-	sts := make(map[int64]stats.XactStats, 20)
+func (r *registry) matchingXactsStats(xactMatches func(xact cmn.Xact) bool) map[string]stats.XactStats {
+	sts := make(map[string]stats.XactStats, 20)
 
 	r.byID.Range(func(_, value interface{}) bool {
 		entry := value.(entry)
@@ -436,7 +434,7 @@ func (r *registry) matchingXactsStats(xactMatches func(xact cmn.Xact) bool) map[
 	return sts
 }
 
-func (r *registry) getNonBucketSpecificStats(kind string, onlyRecent bool) (map[int64]stats.XactStats, error) {
+func (r *registry) getNonBucketSpecificStats(kind string, onlyRecent bool) (map[string]stats.XactStats, error) {
 	// no bucket and no kind - request for all xactions
 	if kind == "" {
 		return r.allXactsStats(onlyRecent), nil
@@ -456,14 +454,14 @@ func (r *registry) getNonBucketSpecificStats(kind string, onlyRecent bool) (map[
 }
 
 // Returns stats of all xactions of a given bucket
-func (r *registry) bucketAllXactsStats(bck *cluster.Bck, onlyRecent bool) map[int64]stats.XactStats {
+func (r *registry) bucketAllXactsStats(bck *cluster.Bck, onlyRecent bool) map[string]stats.XactStats {
 	bucketsXacts, ok := r.getBucketsXacts(bck)
 
 	// bucketsXacts is not present, bucket might have never existed
 	// or has been removed, return empty result
 	if !ok {
 		if onlyRecent {
-			return map[int64]stats.XactStats{}
+			return map[string]stats.XactStats{}
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
 			return xact.Bck().Equal(bck.Bck)
@@ -473,7 +471,7 @@ func (r *registry) bucketAllXactsStats(bck *cluster.Bck, onlyRecent bool) map[in
 	return bucketsXacts.Stats()
 }
 
-func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map[int64]stats.XactStats, error) {
+func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map[string]stats.XactStats, error) {
 	if bck == nil {
 		// no bucket - either all xactions or a global xaction
 		return r.getNonBucketSpecificStats(kind, onlyRecent)
@@ -534,7 +532,7 @@ func (r *registry) BucketsXacts(bck *cluster.Bck) *bucketXactions {
 	return val.(*bucketXactions)
 }
 
-func (r *registry) removeFinishedByID(id int64) error {
+func (r *registry) removeFinishedByID(id string) error {
 	item, ok := r.byID.Load(id)
 	if !ok {
 		return nil
@@ -542,17 +540,17 @@ func (r *registry) removeFinishedByID(id int64) error {
 
 	xact := item.(entry)
 	if !xact.Get().Finished() {
-		return fmt.Errorf("xaction %s(%d, %T) is running - duplicate ID?", xact.Kind(), id, xact.Get())
+		return fmt.Errorf("xaction %s(%s, %T) is running - duplicate ID?", xact.Kind(), id, xact.Get())
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Found finished xaction %d with id %d. Deleting", xact.Get(), id)
+		glog.Infof("Found finished xaction %d with id %s. Deleting", xact.Get(), id)
 	}
 	r.byID.Delete(id)
 	r.byIDSize.Dec()
 	return nil
 }
 
-func (r *registry) storeByID(id int64, entry entry) {
+func (r *registry) storeByID(id string, entry entry) {
 	r.byID.Store(id, entry)
 
 	// Increase after cleanup to not force trigger it. If it was just added, for
@@ -863,7 +861,7 @@ func (r *bckSummaryTask) Run() {
 		return
 	}
 
-	si, err := cluster.HrwTargetTask(uint64(r.msg.TaskID), r.t.GetSowner().Get())
+	si, err := cluster.HrwTargetTask(r.msg.TaskID, r.t.GetSowner().Get())
 	if err != nil {
 		r.UpdateResult(nil, err)
 		return

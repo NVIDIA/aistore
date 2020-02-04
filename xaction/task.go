@@ -17,12 +17,12 @@ type bckListTaskEntry struct {
 	ctx  context.Context
 	xact *bckListTask
 	t    cluster.Target
-	id   int64
+	id   string
 	msg  *cmn.SelectMsg
 	bck  *cluster.Bck
 }
 
-func (e *bckListTaskEntry) Start(_ int64) error {
+func (e *bckListTaskEntry) Start(_ string) error {
 	xact := &bckListTask{
 		XactBase: *cmn.NewXactBase(e.id, cmn.ActAsyncTask),
 		ctx:      e.ctx,
@@ -49,12 +49,12 @@ type bckSummaryTaskEntry struct {
 	ctx  context.Context
 	xact *bckSummaryTask
 	t    cluster.Target
-	id   int64
+	id   string
 	msg  *cmn.SelectMsg
 	bck  *cluster.Bck
 }
 
-func (e *bckSummaryTaskEntry) Start(_ int64) error {
+func (e *bckSummaryTaskEntry) Start(_ string) error {
 	xact := &bckSummaryTask{
 		XactBase: *cmn.NewXactBase(e.id, cmn.ActAsyncTask),
 		t:        e.t,

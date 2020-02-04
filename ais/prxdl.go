@@ -277,13 +277,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := cmn.GenUUID()
-	if err != nil {
-		glog.Error(err)
-		p.invalmsghdlr(w, r, "Failed to generate id for the request.", http.StatusInternalServerError)
-		return
-	}
-
+	id := cmn.GenUserID()
 	if err, errCode := p.broadcastStartDownloadRequest(r, id); err != nil {
 		p.invalmsghdlr(w, r, fmt.Sprintf("Error starting download: %v.", err.Error()), errCode)
 		return

@@ -110,13 +110,7 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	managerUUID, err := cmn.GenUUID()
-	if err != nil {
-		s := fmt.Sprintf("unable to create new uuid for manager: %v", err)
-		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
-		return
-	}
-
+	managerUUID := cmn.GenUserID()
 	checkResponses := func(responses []response) error {
 		for _, resp := range responses {
 			if resp.err == nil {

@@ -94,7 +94,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	xactStats := xaction.Registry.GetTaskXact(msg.TaskID)
 	// task never started
 	if xactStats == nil {
-		s := fmt.Sprintf("Task %d not found", msg.TaskID)
+		s := fmt.Sprintf("Task %s not found", msg.TaskID)
 		if silent {
 			t.invalmsghdlrsilent(w, r, s, http.StatusNotFound)
 		} else {

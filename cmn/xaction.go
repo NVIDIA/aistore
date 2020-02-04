@@ -20,7 +20,7 @@ const xactIdleTimeout = time.Minute * 3
 type (
 	Xact interface {
 		XactCountStats
-		ID() int64
+		ID() string
 		Kind() string
 		Bck() Bck
 		SetBucket(bucket string)
@@ -37,7 +37,7 @@ type (
 	}
 	XactBase struct {
 		XactBaseCountStats
-		id      int64
+		id      string
 		gid     int64
 		sutime  atomic.Int64
 		eutime  atomic.Int64
@@ -80,20 +80,19 @@ func IsErrXactExpired(err error) bool              { _, ok := err.(*ErrXactExpir
 // XactBase - partially implements Xact interface
 //
 
-func NewXactBase(id int64, kind string) *XactBase {
+func NewXactBase(id, kind string) *XactBase {
 	stime := time.Now()
 	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{})}
 	xact.sutime.Store(stime.UnixNano())
 	return xact
 }
-func NewXactBaseWithBucket(id int64, kind string, bck Bck) *XactBase {
+func NewXactBaseWithBucket(id, kind string, bck Bck) *XactBase {
 	xact := NewXactBase(id, kind)
 	xact.bck = bck
 	return xact
 }
 
-func (xact *XactBase) ID() int64                  { return xact.id }
-func (xact *XactBase) ShortID() uint32            { return ShortID(xact.id) }
+func (xact *XactBase) ID() string                 { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bck() Bck                   { return xact.bck }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
@@ -112,9 +111,9 @@ func (xact *XactBase) String() string {
 	}
 	if !xact.Finished() {
 		if xact.gid == 0 {
-			return fmt.Sprintf("%s(%d)", prefix, xact.ShortID())
+			return fmt.Sprintf("%s(%s)", prefix, xact.ID())
 		}
-		return fmt.Sprintf("%s[%d, g%d]", prefix, xact.ShortID(), xact.gid)
+		return fmt.Sprintf("%s[%s, g%d]", prefix, xact.ID(), xact.gid)
 	}
 	var (
 		stime    = xact.StartTime()
@@ -123,11 +122,11 @@ func (xact *XactBase) String() string {
 		d        = etime.Sub(stime)
 	)
 	if xact.gid == 0 {
-		return fmt.Sprintf("%s(%d) started %s ended %s (%v)",
-			prefix, xact.ShortID(), stimestr, etime.Format(timeStampFormat), d)
+		return fmt.Sprintf("%s(%s) started %s ended %s (%v)",
+			prefix, xact.ID(), stimestr, etime.Format(timeStampFormat), d)
 	}
-	return fmt.Sprintf("%s[%d, g%d] started %s ended %s (%v)",
-		prefix, xact.ShortID(), xact.gid, stimestr, etime.Format(timeStampFormat), d)
+	return fmt.Sprintf("%s[%s, g%d] started %s ended %s (%v)",
+		prefix, xact.ID(), xact.gid, stimestr, etime.Format(timeStampFormat), d)
 }
 
 func (xact *XactBase) StartTime(s ...time.Time) time.Time {
@@ -177,7 +176,7 @@ func (xact *XactBase) Result() (interface{}, error) {
 // XactDemandBase - partially implements XactDemand interface
 //
 
-func NewXactDemandBase(id int64, kind string, bck Bck, idleTime ...time.Duration) *XactDemandBase {
+func NewXactDemandBase(id, kind string, bck Bck, idleTime ...time.Duration) *XactDemandBase {
 	tickTime := xactIdleTimeout
 	if len(idleTime) != 0 {
 		tickTime = idleTime[0]

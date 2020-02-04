@@ -86,22 +86,11 @@ func newBucketMD() *bucketMD {
 	providers[cmn.ProviderAIS] = namespaces
 	buckets := make(cluster.Buckets, 16)
 	namespaces[cmn.NsGlobal.Uname()] = buckets
-	return &bucketMD{BMD: cluster.BMD{Providers: providers, UUID: 0}}
+	return &bucketMD{BMD: cluster.BMD{Providers: providers, UUID: ""}}
 }
 
-func newClusterUUID() (uuid uint64, created string) {
-	var (
-		now    = time.Now()
-		u, err = cmn.GenUUID64()
-	)
-	if err == nil {
-		uuid = uint64(u)
-	} else {
-		glog.Error(err)
-		uuid = uint64(now.UnixNano())
-	}
-	created = now.String()
-	return
+func newClusterUUID() (uuid string, created string) {
+	return cmn.GenUUID(), time.Now().String()
 }
 
 //////////////
@@ -190,7 +179,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 	if nbmd == nil || nbmd.Version == 0 || m.Version == 0 {
 		return
 	}
-	if m.UUID == 0 || nbmd.UUID == 0 {
+	if m.UUID == "" || nbmd.UUID == "" {
 		return
 	}
 	if m.UUID == nbmd.UUID {

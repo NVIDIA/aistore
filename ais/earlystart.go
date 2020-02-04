@@ -229,7 +229,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	}
 
 	// 5:  persist and finalize w/ sync + BMD
-	if smap.UUID == 0 {
+	if smap.UUID == "" {
 		clone := smap.clone()
 		clone.UUID, clone.CreationTime = newClusterUUID() // new uuid
 		clone.Version++
@@ -368,7 +368,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBMD *bucketMD) {
 	var (
 		err         error
-		suuid       uint64
+		suuid       string
 		pname       = p.si.Name()
 		config      = cmn.GCO.Get()
 		now         = time.Now()
@@ -403,14 +403,14 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 			if !si.IsTarget() {
 				continue
 			}
-			if suuid == 0 {
+			if suuid == "" {
 				suuid = smap.UUID
-				if suuid != 0 {
-					glog.Infof("%s: set Smap uuid = %s(%d)", pname, si, suuid)
+				if suuid != "" {
+					glog.Infof("%s: set Smap uuid = %s(%s)", pname, si, suuid)
 				}
-			} else if suuid != smap.UUID && smap.UUID != 0 {
+			} else if suuid != smap.UUID && smap.UUID != "" {
 				// FATAL: cluster integrity error (cie)
-				cmn.ExitLogf("%s: split-brain [%s %d] vs [%s %d]",
+				cmn.ExitLogf("%s: split-brain [%s %s] vs [%s %s]",
 					ciError(30), pname, suuid, si.Name(), smap.UUID)
 			}
 		}
@@ -432,7 +432,7 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 	smaps map[*cluster.Snode]*smapX) (maxVerSmap *smapX, maxVerBMD *bucketMD, done, slowp bool) {
 	var (
 		results          chan callResult
-		borigin, sorigin uint64
+		borigin, sorigin string
 		err              error
 	)
 	done = true
@@ -457,7 +457,7 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 		if svm.BucketMD != nil && svm.BucketMD.version() > 0 {
 			if maxVerBMD == nil { // 1. init
 				borigin, maxVerBMD = svm.BucketMD.UUID, svm.BucketMD
-			} else if borigin != 0 && borigin != svm.BucketMD.UUID { // 2. slow path
+			} else if borigin != "" && borigin != svm.BucketMD.UUID { // 2. slow path
 				slowp = true
 			} else if !slowp && maxVerBMD.Version < svm.BucketMD.Version { // 3. fast path max(version)
 				maxVerBMD = svm.BucketMD
@@ -477,7 +477,7 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 		if svm.Smap != nil && svm.Smap.version() > 0 {
 			if maxVerSmap == nil { // 1. init
 				sorigin, maxVerSmap = svm.Smap.UUID, svm.Smap
-			} else if sorigin != 0 && sorigin != svm.Smap.UUID { // 2. slow path
+			} else if sorigin != "" && sorigin != svm.Smap.UUID { // 2. slow path
 				slowp = true
 			} else if !slowp && maxVerSmap.Version < svm.Smap.Version { // 3. fast path max(version)
 				maxVerSmap = svm.Smap

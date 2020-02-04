@@ -32,7 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/pierrec/lz4/v3"
+	lz4 "github.com/pierrec/lz4/v3"
 	"github.com/teris-io/shortid"
 )
 
@@ -43,9 +43,8 @@ const (
 	TiB = 1024 * GiB
 
 	// Constant seeds for UUID generator
-	uuidWorker  = 1
-	u64idWorker = 2
-	uuidSeed    = 17
+	uuidWorker = 1
+	uuidSeed   = 17
 	// Alphabet for generating UUIDs - similar to the shortid.DEFAULT_ABC
 	// NOTE: len(uuidABC) > 0x3f - see GenTie()
 	uuidABC = "-5nZJDft6LuzsjGNpPwY7rQa39vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk_"
@@ -177,7 +176,6 @@ type (
 
 var (
 	rtie      atomic.Int32
-	sid64     *shortid.Shortid
 	bucketReg *regexp.Regexp
 	nsReg     *regexp.Regexp
 )
@@ -224,7 +222,6 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 
 	sid := shortid.MustNew(uuidWorker /* worker */, uuidABC, uuidSeed /* seed */)
-	sid64 = shortid.MustNew(u64idWorker, uuidABC, uuidSeed)
 	// NOTE: `shortid` library uses 01/2016 as starting timestamp, maybe we
 	// should fork it and change it to the newer date?
 	shortid.SetDefault(sid)
@@ -255,8 +252,6 @@ func GenTie() string {
 	b2 := uuidABC[(tie>>2)&0x3f]
 	return string([]byte{b0, b1, b2})
 }
-
-func ShortID(id int64) uint32 { return uint32(id & int64(0xfffff)) }
 
 func RandString(n int) string {
 	b := make([]byte, n)
@@ -338,25 +333,22 @@ func (fpair PairF32) String() string {
 // misc utils
 //
 
-func GenUUID() (uuid string, err error) {
-	for {
-		uuid, err = shortid.Generate()
-		if err != nil {
-			return
-		}
-		if uuid[0] != '-' && uuid[0] != '_' {
-			return
-		}
-	}
+// GenUUID generates long and unique ID (optimizes possibility of collision and
+// length). It uses 8 character long strings and uses English alphabet as
+// characters. This gives a collision probability of ~1/(5*10^13) which should
+// suffice, even for most demanding use-cases.
+func GenUUID() (uuid string) {
+	return RandString(8)
 }
 
-func GenUUID64() (int64, error) {
-	s, err := sid64.Generate()
-	if err != nil {
-		return 0, err
+// GenUserID generates unique and user-friendly IDs.
+func GenUserID() (uuid string) {
+	for {
+		uuid = shortid.MustGenerate()
+		if uuid[0] != '-' && uuid[0] != '_' && uuid[len(uuid)-1] != '-' && uuid[len(uuid)-1] != '_' {
+			return
+		}
 	}
-
-	return int64(xxhash.ChecksumString64S(s, MLCG32)), nil
 }
 
 func S2B(s string) (int64, error) {

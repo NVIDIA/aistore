@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -27,18 +28,18 @@ type (
 	fsprungroup struct {
 		sync.RWMutex
 		t       *targetrunner
-		runners map[int64]fs.PathRunner // subgroup of the daemon.runners rungroup
+		runners map[string]fs.PathRunner // subgroup of the daemon.runners rungroup
 		nextid  atomic.Int64
 	}
 )
 
 func (g *fsprungroup) init(t *targetrunner) {
 	g.t = t
-	g.runners = make(map[int64]fs.PathRunner, 8)
+	g.runners = make(map[string]fs.PathRunner, 8)
 	g.nextid.Store(time.Now().UTC().UnixNano() & 0xfff)
 }
 
-func (g *fsprungroup) UID() int64 { return g.nextid.Add(1) }
+func (g *fsprungroup) UID() string { return fmt.Sprintf("%d", g.nextid.Add(1)) }
 
 func (g *fsprungroup) Reg(r fs.PathRunner) {
 	g.Lock()

@@ -42,7 +42,7 @@ type (
 // public methods
 //
 
-func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err error) {
+func RunXactPutLRepl(id string, lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err error) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()
 		mpathCount        = len(availablePaths)

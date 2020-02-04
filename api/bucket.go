@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -391,7 +390,7 @@ func waitForAsyncReqComplete(baseParams BaseParams, action, path string,
 func handleAsyncReqAccepted(resp *http.Response, action string, origMsg *cmn.SelectMsg,
 	optParams OptionalParams) (b []byte, err error) {
 	var (
-		id       int64
+		id       string
 		respBody []byte
 	)
 	respBody, err = ioutil.ReadAll(resp.Body)
@@ -399,9 +398,7 @@ func handleAsyncReqAccepted(resp *http.Response, action string, origMsg *cmn.Sel
 	if err != nil {
 		return
 	}
-	if id, err = strconv.ParseInt(string(respBody), 10, 64); err != nil {
-		return
-	}
+	id = string(respBody)
 	if origMsg != nil {
 		msg := cmn.SelectMsg{}
 		msg = *origMsg
@@ -410,7 +407,7 @@ func handleAsyncReqAccepted(resp *http.Response, action string, origMsg *cmn.Sel
 			return
 		}
 	}
-	optParams.Query.Set(cmn.URLParamTaskID, strconv.FormatInt(id, 10))
+	optParams.Query.Set(cmn.URLParamTaskID, id)
 	return
 }
 
@@ -445,7 +442,7 @@ func ListBucket(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjec
 	// decreases `toRead` by the number of received objects. When `toRead` gets less
 	// than `pageSize`, the loop does the final request with reduced `pageSize`.
 	toRead := numObjects
-	msg.TaskID = 0
+	msg.TaskID = ""
 
 	pageSize := msg.PageSize
 	if pageSize == 0 {

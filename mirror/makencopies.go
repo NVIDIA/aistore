@@ -50,7 +50,7 @@ func init() {
 // public methods
 //
 
-func NewXactMNC(id int64, bck *cluster.Bck, t cluster.Target, slab *memsys.Slab, copies int) *XactBckMakeNCopies {
+func NewXactMNC(id string, bck *cluster.Bck, t cluster.Target, slab *memsys.Slab, copies int) *XactBckMakeNCopies {
 	return &XactBckMakeNCopies{
 		xactBckBase: *newXactBckBase(id, cmn.ActMakeNCopies, bck, t),
 		slab:        slab,

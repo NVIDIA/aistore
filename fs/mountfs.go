@@ -54,8 +54,8 @@ type (
 	}
 	PathRunner interface {
 		cmn.Runner
-		SetID(int64)
-		ID() int64
+		SetID(string)
+		ID() string
 		ReqAddMountpath(mpath string)
 		ReqRemoveMountpath(mpath string)
 		ReqEnableMountpath(mpath string)

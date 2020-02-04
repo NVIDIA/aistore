@@ -34,7 +34,7 @@ type lruEntry struct {
 	xact *lru.Xaction
 }
 
-func (e *lruEntry) Start(id int64) error {
+func (e *lruEntry) Start(id string) error {
 	e.xact = &lru.Xaction{XactBase: *cmn.NewXactBase(id, cmn.ActLRU)}
 	return nil
 }
@@ -53,7 +53,7 @@ type prefetchEntry struct {
 //
 // prefetchEntry
 //
-func (e *prefetchEntry) Start(id int64) error {
+func (e *prefetchEntry) Start(id string) error {
 	e.xact = &prefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch), r: e.r}
 	return nil
 }
@@ -74,7 +74,7 @@ type globalRebEntry struct {
 	globRebID   int64
 }
 
-func (e *globalRebEntry) Start(id int64) error {
+func (e *globalRebEntry) Start(id string) error {
 	xGlobalReb := &GlobalReb{
 		RebBase:     makeXactRebBase(id, cmn.ActGlobalReb),
 		SmapVersion: e.smapVersion,
@@ -116,7 +116,7 @@ func (e *globalRebEntry) Stats(xact cmn.Xact) stats.XactStats {
 //
 // local|global reb helper
 //
-func makeXactRebBase(id int64, kind string) RebBase {
+func makeXactRebBase(id, kind string) RebBase {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	return RebBase{
@@ -133,7 +133,7 @@ type localRebEntry struct {
 	xact *LocalReb
 }
 
-func (e *localRebEntry) Start(id int64) error {
+func (e *localRebEntry) Start(id string) error {
 	xLocalReb := &LocalReb{
 		RebBase: makeXactRebBase(id, cmn.ActLocalReb),
 	}
@@ -157,7 +157,7 @@ type electionEntry struct {
 	xact *Election
 }
 
-func (e *electionEntry) Start(id int64) error {
+func (e *electionEntry) Start(id string) error {
 	xele := &Election{
 		XactBase: *cmn.NewXactBase(id, cmn.ActElection),
 	}
@@ -178,7 +178,7 @@ type evictDeleteEntry struct {
 	evict bool
 }
 
-func (e *evictDeleteEntry) Start(id int64) error {
+func (e *evictDeleteEntry) Start(id string) error {
 	xdel := &evictDelete{XactBase: *cmn.NewXactBase(id, e.Kind())}
 	e.xact = xdel
 	return nil
@@ -191,7 +191,7 @@ func (e *evictDeleteEntry) Kind() string {
 	return cmn.ActDelete
 }
 
-func (e *evictDeleteEntry) preRenewHook(previousEntry globalEntry) bool { return true }
+func (e *evictDeleteEntry) preRenewHook(_ globalEntry) bool { return true }
 
 type downloaderEntry struct {
 	baseGlobalEntry
@@ -200,7 +200,7 @@ type downloaderEntry struct {
 	statsT stats.Tracker
 }
 
-func (e *downloaderEntry) Start(id int64) error {
+func (e *downloaderEntry) Start(id string) error {
 	xdl := downloader.NewDownloader(e.t, e.statsT, fs.Mountpaths, id, cmn.Download)
 	e.xact = xdl
 	go xdl.Run()

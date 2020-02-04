@@ -43,7 +43,7 @@ type (
 	}
 )
 
-func newXactBckBase(id int64, kind string, bck *cluster.Bck, t cluster.Target) *xactBckBase {
+func newXactBckBase(id, kind string, bck *cluster.Bck, t cluster.Target) *xactBckBase {
 	return &xactBckBase{XactBase: *cmn.NewXactBaseWithBucket(id, kind, bck.Bck), t: t}
 }
 

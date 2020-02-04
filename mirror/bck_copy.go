@@ -31,7 +31,7 @@ type (
 // public methods
 //
 
-func NewXactBCC(id int64, bckFrom, bckTo *cluster.Bck, action string, t cluster.Target, slab *memsys.Slab) *XactBckCopy {
+func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, action string, t cluster.Target, slab *memsys.Slab) *XactBckCopy {
 	return &XactBckCopy{
 		xactBckBase: *newXactBckBase(id, action, bckFrom, t),
 		slab:        slab,

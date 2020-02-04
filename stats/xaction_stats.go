@@ -13,7 +13,7 @@ import (
 )
 
 type XactStats interface {
-	ID() int64
+	ID() string
 	Kind() string
 	Bucket() string
 	StartTime() time.Time
@@ -26,7 +26,7 @@ type XactStats interface {
 }
 
 type BaseXactStats struct {
-	IDX         int64     `json:"id,string"`
+	IDX         string    `json:"id"`
 	KindX       string    `json:"kind"`
 	BucketX     string    `json:"bucket"`
 	ProviderX   string    `json:"provider"`
@@ -43,8 +43,7 @@ type BaseXactStatsExt struct {
 	Ext interface{} `json:"ext"`
 }
 
-func (b *BaseXactStats) ID() int64            { return b.IDX }
-func (b *BaseXactStats) ShortID() uint32      { return cmn.ShortID(b.IDX) }
+func (b *BaseXactStats) ID() string           { return b.IDX }
 func (b *BaseXactStats) Kind() string         { return b.KindX }
 func (b *BaseXactStats) Bucket() string       { return b.BucketX }
 func (b *BaseXactStats) StartTime() time.Time { return b.StartTimeX }

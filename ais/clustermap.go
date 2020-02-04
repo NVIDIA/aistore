@@ -227,7 +227,7 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 			}
 		}
 	}
-	if m.UUID != 0 && dst.UUID == 0 {
+	if m.UUID != "" && dst.UUID == "" {
 		dst.UUID = m.UUID
 		dst.CreationTime = m.CreationTime
 	}
@@ -238,7 +238,7 @@ func (m *smapX) validateUUID(newSmap *smapX, si, nsi *cluster.Snode, caller stri
 	if newSmap == nil || newSmap.Version == 0 {
 		return
 	}
-	if m.UUID == 0 || newSmap.UUID == 0 {
+	if m.UUID == "" || newSmap.UUID == "" {
 		return
 	}
 	if m.UUID == newSmap.UUID {

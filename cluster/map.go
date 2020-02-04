@@ -55,7 +55,7 @@ type (
 		NonElects    cmn.SimpleKVs `json:"non_electable"`  // non-electable proxies: DaemonID => [info]
 		ProxySI      *Snode        `json:"proxy_si"`       // primary
 		Version      int64         `json:"version,string"` // version
-		UUID         uint64        `json:"uuid,string"`    // UUID - assigned at creation time
+		UUID         string        `json:"uuid"`           // UUID - assigned at creation time
 		CreationTime string        `json:"creation_time"`  // creation time
 	}
 )
@@ -166,7 +166,7 @@ func (m *Smap) StringEx() string {
 	if m == nil {
 		return "Smap <nil>"
 	}
-	return fmt.Sprintf("Smap v%d[...%d, t=%d, p=%d]", m.Version, m.UUID%1000, m.CountTargets(), m.CountProxies())
+	return fmt.Sprintf("Smap v%d[%s, t=%d, p=%d]", m.Version, m.UUID, m.CountTargets(), m.CountProxies())
 }
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }
@@ -227,7 +227,7 @@ func (m *Smap) IsDuplicateURL(nsi *Snode) (osi *Snode, err error) {
 
 func (a *Smap) Compare(b *Smap) (sameOrigin, sameVersion, eq bool) {
 	sameOrigin, sameVersion, eq = true, true, true
-	if a.UUID != 0 && b.UUID != 0 && a.UUID != b.UUID {
+	if a.UUID != "" && b.UUID != "" && a.UUID != b.UUID {
 		sameOrigin = false
 	}
 	if a.Version != b.Version {

@@ -38,7 +38,7 @@ type (
 	}
 )
 
-func NewXactBckEncode(id int64, bck *cluster.Bck, t cluster.Target) *XactBckEncode {
+func NewXactBckEncode(id string, bck *cluster.Bck, t cluster.Target) *XactBckEncode {
 	return &XactBckEncode{
 		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActECEncode, bck.Bck),
 		t:        t,

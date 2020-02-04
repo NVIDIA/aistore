@@ -53,8 +53,8 @@ func (b *bucketXactions) GetL(kind string) bucketEntry {
 	return b.entries[kind]
 }
 
-func (b *bucketXactions) Stats() map[int64]stats.XactStats {
-	statsList := make(map[int64]stats.XactStats, len(b.entries))
+func (b *bucketXactions) Stats() map[string]stats.XactStats {
+	statsList := make(map[string]stats.XactStats, len(b.entries))
 	b.RLock()
 	for _, e := range b.entries {
 		xact := e.Get()
@@ -86,8 +86,8 @@ func (b *bucketXactions) AbortAll() bool {
 	return sleep
 }
 
-func (b *bucketXactions) uniqueID() int64 { return b.r.uniqueID() }
-func (b *bucketXactions) len() int        { return len(b.entries) }
+func (b *bucketXactions) uniqueID() string { return b.r.uniqueID() }
+func (b *bucketXactions) len() int         { return len(b.entries) }
 
 // generic bucket-xaction renewal
 func (b *bucketXactions) renewBucketXaction(e bucketEntry) (bucketEntry, error) {
@@ -130,7 +130,7 @@ type ecGetEntry struct {
 	xact *ec.XactGet
 }
 
-func (e *ecGetEntry) Start(id int64) error {
+func (e *ecGetEntry) Start(id string) error {
 	xec := ec.ECM.NewGetXact(e.bck.Name)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, e.bck.Bck)
 	e.xact = xec
@@ -156,7 +156,7 @@ type ecPutEntry struct {
 	xact *ec.XactPut
 }
 
-func (e *ecPutEntry) Start(id int64) error {
+func (e *ecPutEntry) Start(id string) error {
 	xec := ec.ECM.NewPutXact(e.bck.Name)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, e.bck.Bck)
 	go xec.Run()
@@ -180,7 +180,7 @@ type ecRespondEntry struct {
 	xact *ec.XactRespond
 }
 
-func (e *ecRespondEntry) Start(id int64) error {
+func (e *ecRespondEntry) Start(id string) error {
 	xec := ec.ECM.NewRespondXact(e.bck.Name)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, e.bck.Bck)
 	go xec.Run()
@@ -206,7 +206,7 @@ type ecEncodeEntry struct {
 	phase string
 }
 
-func (e *ecEncodeEntry) Start(id int64) error {
+func (e *ecEncodeEntry) Start(id string) error {
 	xec := ec.NewXactBckEncode(id, e.bck, e.t)
 	e.xact = xec
 	return nil
@@ -246,7 +246,7 @@ type mncEntry struct {
 	copies int
 }
 
-func (e *mncEntry) Start(id int64) error {
+func (e *mncEntry) Start(id string) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 	xmnc := mirror.NewXactMNC(id, e.bck, e.t, slab, e.copies)
@@ -299,7 +299,7 @@ type dpromoteEntry struct {
 	params *cmn.ActValPromote
 }
 
-func (e *dpromoteEntry) Start(id int64) error {
+func (e *dpromoteEntry) Start(id string) error {
 	xact := mirror.NewXactDirPromote(id, e.dir, e.bck, e.t, e.params)
 	go xact.Run()
 	e.xact = xact
@@ -327,7 +327,7 @@ type loadLomCacheEntry struct {
 	xact *mirror.XactBckLoadLomCache
 }
 
-func (e *loadLomCacheEntry) Start(id int64) error {
+func (e *loadLomCacheEntry) Start(id string) error {
 	x := mirror.NewXactLLC(e.t, id, e.bck)
 	go x.Run()
 	e.xact = x
@@ -343,7 +343,7 @@ func (r *registry) RenewBckLoadLomCache(t cluster.Target, bck *cluster.Bck) {
 	b.renewBucketXaction(e)
 }
 
-func (e *loadLomCacheEntry) preRenewHook(previousEntry bucketEntry) (bool, error) {
+func (e *loadLomCacheEntry) preRenewHook(_ bucketEntry) (bool, error) {
 	return true, nil
 }
 
@@ -357,7 +357,7 @@ type putLocReplicasEntry struct {
 	xact *mirror.XactPutLRepl
 }
 
-func (e *putLocReplicasEntry) Start(id int64) error {
+func (e *putLocReplicasEntry) Start(id string) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
 	x, err := mirror.RunXactPutLRepl(id, e.lom, slab)
@@ -396,7 +396,7 @@ type bccEntry struct {
 	phase   string
 }
 
-func (e *bccEntry) Start(id int64) error {
+func (e *bccEntry) Start(id string) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 	e.xact = mirror.NewXactBCC(id, e.bckFrom, e.bckTo, e.action, e.t, slab)
@@ -488,7 +488,7 @@ func (r *FastRen) Run(globRebID int64) {
 	r.EndTime(time.Now())
 }
 
-func (e *FastRenEntry) Start(id int64) error {
+func (e *FastRenEntry) Start(id string) error {
 	e.xact = &FastRen{
 		XactBase:   *cmn.NewXactBaseWithBucket(id, e.Kind(), e.bck.Bck),
 		t:          e.t,
