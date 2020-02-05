@@ -86,14 +86,8 @@ func (h *tarFileHeader) toTarHeader(size int64) *tar.Header {
 }
 
 func newTarRecordDataReader(t cluster.Target) *tarRecordDataReader {
-	var err error
-
 	rd := &tarRecordDataReader{}
-	// TODO -- FIXME: consider bigger size, e.g.: memsys.DefaultBufSize
-	//                or, better yet:             metadataBuf, rd.slab = t.GetMMSA().Alloc()
-	rd.slab, err = t.GetMMSA().GetSlab(memsys.PageSize)
-	cmn.AssertNoErr(err)
-	rd.metadataBuf = rd.slab.Alloc()
+	rd.metadataBuf, rd.slab = t.GetSmallMMSA().Alloc()
 	return rd
 }
 

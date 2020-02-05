@@ -46,7 +46,7 @@ type (
 
 func newZipRecordDataReader(t cluster.Target) *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
-	rd.metadataBuf, rd.slab = t.GetMMSA().Alloc()
+	rd.metadataBuf, rd.slab = t.GetSmallMMSA().Alloc()
 	return rd
 }
 
