@@ -1004,7 +1004,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(lom.Size(), 10))
 		hdr.Set(cmn.HeaderObjVersion, lom.Version())
 		if lom.AtimeUnix() != 0 {
-			hdr.Set(cmn.HeaderObjAtime, lom.Atime().Format(time.RFC822))
+			hdr.Set(cmn.HeaderObjAtime, cmn.FormatTime(lom.AtimeUnix(), time.RFC822))
 		}
 		hdr.Set(cmn.HeaderObjNumCopies, strconv.Itoa(lom.NumCopies()))
 		if cksum := lom.Cksum(); cksum != nil {

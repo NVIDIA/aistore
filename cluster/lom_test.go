@@ -297,7 +297,7 @@ var _ = Describe("LOM", func() {
 				err = lom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(lom.Atime()).To(BeEquivalentTo(desiredAtime))
+				Expect(time.Unix(0, lom.AtimeUnix())).To(BeEquivalentTo(desiredAtime))
 			})
 			It("should fetch atime for bucket with LRU enabled", func() {
 				localFQN := mis[0].MakePathFQN(localBckB, fs.ObjectType, testObjectName)
@@ -311,7 +311,7 @@ var _ = Describe("LOM", func() {
 				err = lom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(lom.Atime()).To(BeEquivalentTo(desiredAtime))
+				Expect(time.Unix(0, lom.AtimeUnix())).To(BeEquivalentTo(desiredAtime))
 			})
 		})
 
@@ -524,7 +524,7 @@ var _ = Describe("LOM", func() {
 					Expect(lom2.Cksum()).To(BeEquivalentTo(lom1.Cksum()))
 					Expect(lom2.Version()).To(BeEquivalentTo(lom1.Version()))
 					Expect(lom2.Size()).To(BeEquivalentTo(testFileSize))
-					Expect(lom2.Atime().After(startTime)).To(BeTrue())
+					Expect(time.Unix(0, lom2.AtimeUnix()).After(startTime)).To(BeTrue())
 				})
 			})
 		})

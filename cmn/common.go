@@ -1373,7 +1373,8 @@ func (pq ParsedQuantity) String() string {
 // time formatting //
 /////////////////////
 
-func FormatTime(t time.Time, format string) string {
+func FormatTime(unixnano int64, format string) string {
+	t := time.Unix(0, unixnano)
 	switch format {
 	case "", RFC822:
 		return t.Format(time.RFC822)

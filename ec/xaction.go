@@ -196,7 +196,7 @@ func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, fqn string
 	}
 	attrs.Size = lom.Size()
 	attrs.Version = lom.Version()
-	attrs.Atime = lom.Atime().UnixNano()
+	attrs.Atime = lom.AtimeUnix()
 	if lom.Cksum() != nil {
 		attrs.CksumType, attrs.CksumValue = lom.Cksum().Get()
 	}
@@ -380,7 +380,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	objAttrs := transport.ObjectAttrs{
 		Size:    src.size,
 		Version: lom.Version(),
-		Atime:   lom.Atime().UnixNano(),
+		Atime:   lom.AtimeUnix(),
 	}
 	if src.metadata != nil && src.metadata.SliceID != 0 {
 		// for a slice read everything from slice's metadata

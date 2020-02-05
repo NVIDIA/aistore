@@ -597,12 +597,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 			hdr.Set(cmn.HeaderObjVersion, goi.lom.Version())
 		}
 		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(goi.lom.Size(), 10))
-
-		var timeInt int64
-		if !goi.lom.Atime().IsZero() {
-			timeInt = goi.lom.Atime().UnixNano()
-		}
-		hdr.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
+		hdr.Set(cmn.HeaderObjAtime, strconv.FormatInt(goi.lom.AtimeUnix(), 10))
 	}
 
 	// loopback if disk IO is disabled

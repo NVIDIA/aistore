@@ -711,7 +711,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 		Opaque:  packer.Bytes(), // self == src
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       lom.Size(),
-			Atime:      lom.Atime().UnixNano(),
+			Atime:      lom.AtimeUnix(),
 			CksumType:  cksumType,
 			CksumValue: cksumValue,
 			Version:    lom.Version(),

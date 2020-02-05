@@ -135,10 +135,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objnameTo string, si *cluster.
 	req.Header.Set(cmn.HeaderObjCksumType, cksumType)
 	req.Header.Set(cmn.HeaderObjCksumVal, cksumValue)
 	req.Header.Set(cmn.HeaderObjVersion, lom.Version())
-	timeInt := lom.Atime().UnixNano()
-	if lom.Atime().IsZero() {
-		timeInt = 0
-	}
+	timeInt := lom.AtimeUnix()
 	req.Header.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
 
 	_, err = ri.t.httpclientGetPut.Do(req)
