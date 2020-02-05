@@ -29,18 +29,12 @@ import (
 
 const rebalanceObjectDistributionTestCoef = 0.3
 
-type repFile struct {
-	repetitions int
-	filename    string
-}
-
 type ioContext struct {
 	t                   *testing.T
 	smap                *cluster.Smap
-	semaphore           chan struct{}
 	controlCh           chan struct{}
 	stopCh              chan struct{}
-	repFilenameCh       chan repFile
+	objNames            []string
 	wg                  *sync.WaitGroup
 	bck                 cmn.Bck
 	fileSize            uint64
@@ -69,12 +63,11 @@ func (m *ioContext) init() {
 		m.fileSize = cmn.KiB
 	}
 	if m.num > 0 {
-		m.repFilenameCh = make(chan repFile, m.num)
+		m.objNames = make([]string, 0, m.num)
 	}
 	if m.otherTasksToTrigger > 0 {
 		m.controlCh = make(chan struct{}, m.otherTasksToTrigger)
 	}
-	m.semaphore = make(chan struct{}, 10) // 10 concurrent GET requests at a time
 	m.wg = &sync.WaitGroup{}
 	if m.bck.Name == "" {
 		m.bck.Name = m.t.Name() + "Bucket"
@@ -145,7 +138,7 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	close(filenameCh)
 	close(errCh)
 	for f := range filenameCh {
-		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+		m.objNames = append(m.objNames, f)
 	}
 	return len(errCh)
 }
@@ -250,58 +243,65 @@ func (m *ioContext) cloudDelete() {
 }
 
 func (m *ioContext) gets() {
+	var (
+		semaphore  = make(chan struct{}, 10)
+		baseParams = tutils.DefaultBaseAPIParams(m.t)
+	)
+
 	for i := 0; i < 10; i++ {
-		m.semaphore <- struct{}{}
+		semaphore <- struct{}{}
 	}
 	if m.numGetsEachFile == 1 {
 		tutils.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bck)
 	} else {
 		tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bck)
 	}
-	baseParams := tutils.DefaultBaseAPIParams(m.t)
-	for i := 0; i < m.num*m.numGetsEachFile; i++ {
-		go func() {
-			<-m.semaphore
-			defer func() {
-				m.semaphore <- struct{}{}
-				m.wg.Done()
-			}()
-			repFile := <-m.repFilenameCh
-			if repFile.repetitions > 0 {
-				repFile.repetitions--
-				m.repFilenameCh <- repFile
-			}
-			_, err := api.GetObject(baseParams, m.bck, path.Join(SmokeStr, repFile.filename))
-			if err != nil {
-				if m.getErrIsFatal {
-					m.t.Error(err)
-				}
-				m.numGetErrs.Inc()
-			}
-			if m.getErrIsFatal && m.numGetErrs.Load() > 0 {
-				return
-			}
-			g := m.getsCompleted.Inc()
 
-			if g%5000 == 0 {
-				tutils.Logf(" %d/%d GET requests completed...\n", g, m.num*m.numGetsEachFile)
-			}
-
-			// Tell other tasks they can begin to do work in parallel
-			if int(g) == m.num*m.numGetsEachFile/2 {
-				for i := 0; i < m.otherTasksToTrigger; i++ {
-					m.controlCh <- struct{}{}
+	for i := 0; i < m.num; i++ {
+		for j := 0; j < m.numGetsEachFile; j++ {
+			go func(idx int) {
+				<-semaphore
+				defer func() {
+					semaphore <- struct{}{}
+					m.wg.Done()
+				}()
+				objName := m.objNames[idx]
+				_, err := api.GetObject(baseParams, m.bck, path.Join(SmokeStr, objName))
+				if err != nil {
+					if m.getErrIsFatal {
+						m.t.Error(err)
+					}
+					m.numGetErrs.Inc()
 				}
-			}
-		}()
+				if m.getErrIsFatal && m.numGetErrs.Load() > 0 {
+					return
+				}
+				g := m.getsCompleted.Inc()
+
+				if g%5000 == 0 {
+					tutils.Logf(" %d/%d GET requests completed...\n", g, m.num*m.numGetsEachFile)
+				}
+
+				// Tell other tasks they can begin to do work in parallel
+				if int(g) == m.num*m.numGetsEachFile/2 {
+					for i := 0; i < m.otherTasksToTrigger; i++ {
+						m.controlCh <- struct{}{}
+					}
+				}
+			}(i)
+		}
 	}
 }
 
 func (m *ioContext) getsUntilStop() {
+	var (
+		semaphore  = make(chan struct{}, 10)
+		baseParams = tutils.DefaultBaseAPIParams(m.t)
+	)
+
 	for i := 0; i < 10; i++ {
-		m.semaphore <- struct{}{}
+		semaphore <- struct{}{}
 	}
-	baseParams := tutils.DefaultBaseAPIParams(m.t)
 	i := 0
 	for {
 		select {
@@ -310,14 +310,8 @@ func (m *ioContext) getsUntilStop() {
 		default:
 			m.wg.Add(1)
 			go func() {
-				<-m.semaphore
-				defer func() {
-					m.semaphore <- struct{}{}
-					m.wg.Done()
-				}()
-				repFile := <-m.repFilenameCh
-				m.repFilenameCh <- repFile
-				_, err := api.GetObject(baseParams, m.bck, path.Join(SmokeStr, repFile.filename))
+				objName := m.objNames[i%len(m.objNames)]
+				_, err := api.GetObject(baseParams, m.bck, path.Join(SmokeStr, objName))
 				if err != nil {
 					if m.getErrIsFatal {
 						m.t.Error(err)
