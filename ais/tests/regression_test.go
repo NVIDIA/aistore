@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
-	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -237,7 +236,6 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	const filesize = 1024
 	var (
 		sgl *memsys.SGL
-		fqn string
 
 		num        = 2
 		filenameCh = make(chan string, num)
@@ -266,23 +264,12 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	// Test corrupting the file contents
 	// Note: The following tests can only work when running on a local setup(targets are co-located with
 	//       where this test is running from, because it searches a local file system)
-	var fName string
-	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if err != nil || info == nil {
-			return err
-		}
-		if filepath.Base(path) == fName && strings.Contains(path, bck.Name) {
-			fqn = path
-		}
-		return nil
-	}
-
-	fName = <-filenameCh
-	filepath.Walk(rootDir, fsWalkFunc)
-	tutils.Logf("Corrupting file data[%s]: %s\n", fName, fqn)
+	objName := <-filenameCh
+	fqn := findObjOnDisk(bck, objName)
+	tutils.Logf("Corrupting file data[%s]: %s\n", objName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
 	tassert.CheckFatal(t, err)
-	_, err = api.GetObjectWithValidation(baseParams, bck, path.Join(SmokeStr, fName))
+	_, err = api.GetObjectWithValidation(baseParams, bck, path.Join(SmokeStr, objName))
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
 	}

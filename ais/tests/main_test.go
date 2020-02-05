@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -1228,7 +1227,6 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		numFiles    = 3
 		errCh       = make(chan error, numFiles*5)
 		fileNameCh  = make(chan string, numfiles)
-		fqn         string
 		fileName    string
 		oldFileInfo os.FileInfo
 		filesList   = make([]string, 0, numFiles)
@@ -1261,16 +1259,9 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	// Fetch the file from cloud bucket.
-	_, err := api.GetObjectWithValidation(tutils.DefaultBaseAPIParams(t), bck, path.Join(ChecksumWarmValidateStr, fileName))
+	_, err := api.GetObjectWithValidation(tutils.DefaultBaseAPIParams(t), bck, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("Failed while fetching the file from the cloud bucket. Error: [%v]", err)
-	}
-
-	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if filepath.Base(path) == fileName && strings.Contains(path, filepath.Join(bck.Name, ChecksumWarmValidateStr)) {
-			fqn = path
-		}
-		return nil
 	}
 
 	config := tutils.GetClusterConfig(t)
@@ -1278,12 +1269,10 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	oldChecksum := config.Cksum.Type
 	if !oldWarmGet {
 		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.validate_warm_get": "true"})
-		if t.Failed() {
-			goto cleanup
-		}
 	}
 
-	filepath.Walk(rootDir, fsWalkFunc)
+	objName := filepath.Join(ChecksumWarmValidateStr, fileName)
+	fqn := findObjOnDisk(bck, objName)
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ = os.Stat(fqn)
 
@@ -1296,7 +1285,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	// Test when the xxHash of the file is changed
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
-	filepath.Walk(rootDir, fsWalkFunc)
+	fqn = findObjOnDisk(bck, objName)
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ = os.Stat(fqn)
 
@@ -1308,19 +1297,15 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	// Test for no checksum algo
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
-	filepath.Walk(rootDir, fsWalkFunc)
+	fqn = findObjOnDisk(bck, objName)
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
-	if t.Failed() {
-		goto cleanup
-	}
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
 
-	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), bck, path.Join(ChecksumWarmValidateStr, fileName))
+	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), bck, filepath.Join(ChecksumWarmValidateStr, fileName))
 	tassert.Errorf(t, err == nil, "A GET on an object when checksum algo is none should pass. Error: %v", err)
 
-cleanup:
 	// Restore old config
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{
 		"cksum.type":              oldChecksum,
@@ -1429,7 +1414,7 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, file
 			Provider: cmn.Cloud,
 		}
 	)
-	_, err := api.GetObjectWithValidation(baseParams, bck, path.Join(ChecksumWarmValidateStr, fileName))
+	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("Unable to GET file. Error: %v", err)
 	}
@@ -1483,56 +1468,38 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	oldWarmGet := config.Cksum.ValidateWarmGet
 	oldChecksum := config.Cksum.Type
 
-	var fileName string
-	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if info == nil {
-			return filepath.SkipDir
-		}
-		if strings.HasSuffix(path, filepath.Join(ChecksumWarmValidateStr, fileName)) && strings.Contains(path, bck.Name) {
-			fqn = path
-		}
-		return nil
-	}
-
 	if !oldWarmGet {
 		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.validate_warm_get": "true"})
-		if t.Failed() {
-			goto cleanup
-		}
 	}
 
 	// Test changing the file content
-	fileName = <-fileNameCh
-	filepath.Walk(rootDir, fsWalkFunc)
-	tutils.Logf("Changing contents of the file [%s]: %s\n", fileName, fqn)
+	objName := filepath.Join(ChecksumWarmValidateStr, <-fileNameCh)
+	fqn = findObjOnDisk(bck, objName)
+	tutils.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
 	tassert.CheckFatal(t, err)
-	executeTwoGETsForChecksumValidation(proxyURL, bck, fileName, t)
+	executeTwoGETsForChecksumValidation(proxyURL, bck, objName, t)
 
 	// Test changing the file xattr
-	fileName = <-fileNameCh
-	filepath.Walk(rootDir, fsWalkFunc)
-	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
+	objName = filepath.Join(ChecksumWarmValidateStr, <-fileNameCh)
+	fqn = findObjOnDisk(bck, objName)
+	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
-	executeTwoGETsForChecksumValidation(proxyURL, bck, fileName, t)
+	executeTwoGETsForChecksumValidation(proxyURL, bck, objName, t)
 
 	// Test for none checksum algo
-	fileName = <-fileNameCh
-	filepath.Walk(rootDir, fsWalkFunc)
+	objName = filepath.Join(ChecksumWarmValidateStr, <-fileNameCh)
+	fqn = findObjOnDisk(bck, objName)
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
-	if t.Failed() {
-		goto cleanup
-	}
-	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
+	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
-	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), bck, path.Join(ChecksumWarmValidateStr, fileName))
+	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), bck, objName)
 	if err != nil {
 		t.Error("A GET on an object when checksum algo is none should pass")
 	}
 
-cleanup:
 	// Restore old config
 	tutils.DestroyBucket(t, proxyURL, bck)
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{
@@ -1543,16 +1510,16 @@ cleanup:
 	close(fileNameCh)
 }
 
-func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, fName string, t *testing.T) {
+func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName string, t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	_, err := api.GetObjectWithValidation(baseParams, bck, path.Join(ChecksumWarmValidateStr, fName))
+	_, err := api.GetObjectWithValidation(baseParams, bck, objName)
 	if err == nil {
 		t.Error("Error is nil, expected internal server error on a GET for an object")
 	} else if !strings.Contains(err.Error(), "500") {
 		t.Errorf("Expected internal server error on a GET for a corrupted object, got [%s]", err.Error())
 	}
 	// Execute another GET to make sure that the object is deleted
-	_, err = api.GetObjectWithValidation(baseParams, bck, path.Join(ChecksumWarmValidateStr, fName))
+	_, err = api.GetObjectWithValidation(baseParams, bck, objName)
 	if err == nil {
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
 	} else if !strings.Contains(err.Error(), "404") {
@@ -1643,14 +1610,7 @@ func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, fileSize uint64,
 
 func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, fileName string,
 	offset, length, expectedLength int64, checkEntireObjCksum bool, checkDir string) {
-	var fqn string
-	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if strings.HasSuffix(path, filepath.Join(checkDir, fileName)) && strings.Contains(path, bck.Name) {
-			fqn = path
-		}
-		return nil
-	}
-	filepath.Walk(rootDir, fsWalkFunc)
+	fqn := findObjOnDisk(bck, filepath.Join(checkDir, fileName))
 
 	q := url.Values{}
 	q.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
@@ -1659,7 +1619,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, fileName stri
 	w := bufio.NewWriter(&b)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	options := api.GetObjectInput{Writer: w, Query: q}
-	_, err := api.GetObjectWithValidation(baseParams, bck, path.Join(RangeGetStr, fileName), options)
+	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(RangeGetStr, fileName), options)
 	if err != nil {
 		if !checkEntireObjCksum {
 			t.Errorf("Failed to get object %s/%s! Error: %v", bck, fileName, err)
@@ -1721,7 +1681,7 @@ func verifyInvalidParams(t *testing.T, proxyURL string, bck cmn.Bck, fileName st
 	q.Add(cmn.URLParamLength, length)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	options := api.GetObjectInput{Query: q}
-	_, err := api.GetObjectWithValidation(baseParams, bck, path.Join(RangeGetStr, fileName), options)
+	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(RangeGetStr, fileName), options)
 	if err == nil {
 		t.Errorf("Must fail for invalid offset %s and length %s combination.", offset, length)
 	}
@@ -1922,4 +1882,16 @@ func resetBucketProps(proxyURL string, bck cmn.Bck, t *testing.T) {
 	if err := api.ResetBucketProps(baseParams, bck); err != nil {
 		t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
 	}
+}
+
+func findObjOnDisk(bck cmn.Bck, objName string) string {
+	var fqn string
+	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
+		if strings.HasSuffix(path, "/"+objName) && strings.Contains(path, "/"+bck.Name+"/") {
+			fqn = path
+		}
+		return nil
+	}
+	filepath.Walk(rootDir, fsWalkFunc)
+	return fqn
 }
