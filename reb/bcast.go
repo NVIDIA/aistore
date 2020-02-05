@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -48,7 +47,7 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 		rsmap      = (*cluster.Smap)(reb.smap.Load())
 		tsmap      = reb.t.GetSowner().Get()
 	)
-	status.Aborted, status.Running = xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
+	status.Aborted, status.Running = IsRebalancing(cmn.ActGlobalReb)
 	status.Stage = reb.stages.stage.Load()
 	status.GlobRebID = reb.globRebID.Load()
 	status.Quiescent = reb.isQuiescent()

@@ -24,8 +24,8 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -438,7 +438,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 		tsi, gfnNode     *cluster.Snode
 		smap             = goi.t.smapowner.get()
 		tname            = goi.t.si.Name()
-		aborted, running = xaction.Registry.IsRebalancing(cmn.ActLocalReb)
+		aborted, running = reb.IsRebalancing(cmn.ActLocalReb)
 		gfnActive        = goi.t.gfn.local.active()
 	)
 	tsi, err = cluster.HrwTarget(goi.lom.Uname(), &smap.Smap)
@@ -462,7 +462,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= goi.t.smapowner.Get().CountTargets()
 
 	// cluster-wide lookup ("get from neighbor")
-	aborted, running = xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
+	aborted, running = reb.IsRebalancing(cmn.ActGlobalReb)
 	if running {
 		doubleCheck = true
 	}

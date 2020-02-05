@@ -1379,21 +1379,3 @@ func S2TimeUnix(timeStr string) (tunix int64, err error) {
 	tunix, err = strconv.ParseInt(timeStr, 10, 64)
 	return
 }
-
-// persistent mark indicating rebalancing in progress
-func PersistentMarker(kind string) (pm string) {
-	const (
-		globRebMarker  = ".global_rebalancing"
-		localRebMarker = ".resilvering"
-	)
-
-	switch kind {
-	case ActLocalReb:
-		pm = filepath.Join(GCO.Get().Confdir, localRebMarker)
-	case ActGlobalReb:
-		pm = filepath.Join(GCO.Get().Confdir, globRebMarker)
-	default:
-		Assert(false)
-	}
-	return
-}

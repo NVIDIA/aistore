@@ -286,7 +286,7 @@ func (t *targetrunner) Run() error {
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
 	ec.Init(t, xaction.Registry)
 
-	aborted, _ := xaction.Registry.IsRebalancing(cmn.ActLocalReb)
+	aborted, _ := reb.IsRebalancing(cmn.ActLocalReb)
 	if aborted {
 		go func() {
 			glog.Infoln("resuming local rebalance...")

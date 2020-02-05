@@ -1375,8 +1375,9 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom, bckTo *cluster.Bck, msgInt *a
 
 		t.gfn.local.Activate()
 		t.gfn.global.activateTimed()
-		go xact.Run(msgInt.GlobRebID)      // do the work
-		time.Sleep(100 * time.Millisecond) // FIXME: likely no need
+		_, running := reb.IsRebalancing(cmn.ActLocalReb)
+		go xact.Run(msgInt.GlobRebID, running) // do the work
+		time.Sleep(100 * time.Millisecond)     // FIXME: likely no need
 	case cmn.ActCopyBucket:
 		var xact *mirror.XactBckCopy
 		xact, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)

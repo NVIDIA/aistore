@@ -35,7 +35,6 @@ type (
 		smap      *cluster.Smap
 		config    *cmn.Config
 		paths     fs.MPI
-		pmarker   string
 		ecUsed    bool
 		singleBck bool // rebalance running for a single bucket (e.g. after rename)
 	}
@@ -89,13 +88,9 @@ func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...stri
 	}
 
 	// 4. create persistent mark
-	md.pmarker = cmn.PersistentMarker(cmn.ActGlobalReb)
-	file, err := cmn.CreateFile(md.pmarker)
+	err := putMarker(cmn.ActGlobalReb)
 	if err != nil {
-		glog.Errorln("Failed to create", md.pmarker, err)
-		md.pmarker = ""
-	} else {
-		_ = file.Close()
+		glog.Errorf("Failed to create marker: %v", err)
 	}
 
 	// 5. ready - can receive objects
@@ -443,8 +438,8 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 	maxWait := md.config.Rebalance.Quiesce
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
-		if err := cmn.RemoveFile(md.pmarker); err != nil {
-			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(reb.globRebID.Load(), md.smap), md.pmarker, err)
+		if err := removeMarker(cmn.ActGlobalReb); err != nil {
+			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.loghdr(reb.globRebID.Load(), md.smap), err)
 		}
 	}
 	reb.endStreams()

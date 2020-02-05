@@ -389,7 +389,7 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 		glog.Error(err)
 		return
 	}
-	aborted, running := xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
+	aborted, running := IsRebalancing(cmn.ActGlobalReb)
 	if aborted || !running {
 		io.Copy(ioutil.Discard, objReader) // drain the reader
 		return

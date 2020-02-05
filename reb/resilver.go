@@ -34,16 +34,12 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()
 		cfg               = cmn.GCO.Get()
-		pmarker           = cmn.PersistentMarker(cmn.ActLocalReb)
-		file, err         = cmn.CreateFile(pmarker)
+		err               = putMarker(cmn.ActLocalReb)
 		bucket            string
 		wg                = &sync.WaitGroup{}
 	)
 	if err != nil {
-		glog.Errorln("Failed to create", pmarker, err)
-		pmarker = ""
-	} else {
-		_ = file.Close()
+		glog.Errorln("Failed to create local rebalance marker", err)
 	}
 
 	xreb := xaction.Registry.RenewLocalReb()
@@ -91,11 +87,9 @@ wait:
 	glog.Infoln(xreb.String())
 	wg.Wait()
 
-	if pmarker != "" {
-		if !xreb.Aborted() {
-			if err := cmn.RemoveFile(pmarker); err != nil {
-				glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.t.Snode().Name(), pmarker, err)
-			}
+	if !xreb.Aborted() {
+		if err := removeMarker(cmn.ActLocalReb); err != nil {
+			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode().Name(), err)
 		}
 	}
 	reb.t.GetGFN(cluster.GFNLocal).Deactivate()

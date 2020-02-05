@@ -263,24 +263,6 @@ func (r *registry) AbortAll() bool {
 	return sleep
 }
 
-func (r *registry) IsRebalancing(kind string) (aborted, running bool) {
-	cmn.Assert(kind == cmn.ActGlobalReb || kind == cmn.ActLocalReb)
-	pmarker := cmn.PersistentMarker(kind)
-	if err := fs.Access(pmarker); err == nil {
-		aborted = true
-	}
-	entry := r.GetL(kind)
-	if entry == nil {
-		return
-	}
-	xact := entry.Get()
-	running = !xact.Finished()
-	if running {
-		aborted = false
-	}
-	return
-}
-
 func (r *registry) uniqueID() string {
 	return cmn.GenUserID()
 }

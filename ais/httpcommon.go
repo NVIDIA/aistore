@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/OneOfOne/xxhash"
@@ -1112,8 +1113,10 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	query url.Values, keepalive bool) (res callResult) {
 	req := targetRegMeta{SI: h.si}
 	if h.si.IsTarget() && !keepalive {
+		aborted, running := reb.IsRebalancing(cmn.ActGlobalReb)
 		req.BMD = h.bmdowner.get()
 		req.Smap = h.smapowner.get()
+		req.RebAborted = !running && aborted
 	}
 	info := cmn.MustMarshal(req)
 

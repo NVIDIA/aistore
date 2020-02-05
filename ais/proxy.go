@@ -50,9 +50,10 @@ type (
 	}
 	// two pieces of metadata a self-registering (joining) target wants to know right away
 	targetRegMeta struct {
-		Smap *smapX         `json:"smap"`
-		BMD  *bucketMD      `json:"bmd"`
-		SI   *cluster.Snode `json:"si"`
+		Smap       *smapX         `json:"smap"`
+		BMD        *bucketMD      `json:"bmd"`
+		SI         *cluster.Snode `json:"si"`
+		RebAborted bool           `json:"reb_aborted"`
 	}
 
 	reverseProxy struct {
@@ -3018,7 +3019,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s := fmt.Sprintf("register %s, (keepalive, user, self)=(%t, %t, %t)", nsi, keepalive, userRegister, selfRegister)
+	s := fmt.Sprintf("register %s, (keepalive, user, self, globReb)=(%t, %t, %t, %t)", nsi, keepalive, userRegister, selfRegister, regReq.RebAborted)
 	msg := &cmn.ActionMsg{Action: cmn.ActRegTarget}
 	if isProxy {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
@@ -3061,7 +3062,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 			// when registration is done by user send the current BMD and Smap
 			bmd := p.bmdowner.get()
-			meta := &targetRegMeta{smap, bmd, p.si}
+			meta := &targetRegMeta{smap, bmd, p.si, false}
 			body := cmn.MustMarshal(meta)
 
 			args := callArgs{
@@ -3099,7 +3100,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.smapowner.put(clone)
 		p.smapowner.Unlock()
 		if !isProxy && selfRegister {
-			glog.Infof("%s: joining %s (%s)", pname, nsi, regReq.Smap)
+			glog.Infof("%s: joining %s (%s), globReb aborted %t",
+				pname, nsi, regReq.Smap, regReq.RebAborted)
 		}
 		return
 	}
@@ -3112,9 +3114,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	// Return current metadata to registering target
 	if !isProxy && selfRegister { // case: self-registering target
-		glog.Infof("%s: joining %s (%s)", pname, nsi, regReq.Smap)
+		glog.Infof("%s: joining %s (%s), globReb aborted %t",
+			pname, nsi, regReq.Smap, regReq.RebAborted)
 		bmd := p.bmdowner.get()
-		meta := &targetRegMeta{smap, bmd, p.si}
+		meta := &targetRegMeta{smap, bmd, p.si, false}
 		body := cmn.MustMarshal(meta)
 		p.writeJSON(w, r, body, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
@@ -3569,7 +3572,7 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 		if bmd.Version == 0 {
 			continue
 		}
-		mlist[bmd.UUID] = append(mlist[bmd.UUID], targetRegMeta{nil, bmd, si})
+		mlist[bmd.UUID] = append(mlist[bmd.UUID], targetRegMeta{nil, bmd, si, false})
 
 		if rbmd, ok := maxor[bmd.UUID]; !ok {
 			maxor[bmd.UUID] = bmd

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/housekeep/lru"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -52,8 +53,8 @@ func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
 }
 
 func (t *targetrunner) RebalanceInfo() cluster.RebalanceInfo {
-	_, running := xaction.Registry.IsRebalancing(cmn.ActGlobalReb)
-	_, runningLocal := xaction.Registry.IsRebalancing(cmn.ActLocalReb)
+	_, running := reb.IsRebalancing(cmn.ActGlobalReb)
+	_, runningLocal := reb.IsRebalancing(cmn.ActLocalReb)
 	return cluster.RebalanceInfo{
 		IsRebalancing: running || runningLocal,
 		GlobalRebID:   t.rebManager.GlobRebID(),
