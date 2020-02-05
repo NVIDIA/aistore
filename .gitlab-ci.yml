@@ -46,14 +46,14 @@ build:darwin:
 lint:linux:
   stage: build
   script:
-    - for i in {1..5}; do make lint && r=0 && break || r=$? && sleep 0.5; done; (exit $r)
+    - make lint
     - make fmt-check
     - make spell-check
 
 lint:darwin:
   stage: build
   script:
-    - for i in {1..5}; do GOOS="darwin" make lint && r=0 && break || r=$? && sleep 0.5; done; (exit $r)
+    - GOOS="darwin" make lint
     - GOOS="darwin" make fmt-check
     - GOOS="darwin" make spell-check
 
