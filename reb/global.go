@@ -703,13 +703,11 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	lomack.mu.Unlock()
 	// transmit
 	ack := regularAck{globRebID: rj.m.GlobRebID(), daemonID: rj.m.t.Snode().ID()}
-	packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
-	packer.WriteByte(rebMsgRegular)
-	packer.WriteAny(&ack)
+	opaque := ack.NewPack()
 	hdr := transport.Header{
 		Bck:     lom.Bck().Bck,
 		ObjName: lom.Objname,
-		Opaque:  packer.Bytes(), // self == src
+		Opaque:  opaque,
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       lom.Size(),
 			Atime:      lom.AtimeUnix(),

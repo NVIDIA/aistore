@@ -63,6 +63,13 @@ func (rack *regularAck) Pack(packer *cmn.BytePack) {
 	packer.WriteString(rack.daemonID)
 }
 
+func (rack *regularAck) NewPack() []byte { // TODO: consider adding as another cmn.Packer interface
+	packer := cmn.NewPacker(rebMsgKindSize + rack.PackedSize())
+	packer.WriteByte(rebMsgRegular)
+	packer.WriteAny(rack)
+	return packer.Bytes()
+}
+
 // globRebID + length of DaemonID + Daemon
 func (rack *regularAck) PackedSize() int {
 	return cmn.SizeofI64 + cmn.SizeofLen + len(rack.daemonID)
@@ -83,6 +90,13 @@ func (eack *ecAck) Pack(packer *cmn.BytePack) {
 	packer.WriteInt64(eack.globRebID)
 	packer.WriteUint16(eack.sliceID)
 	packer.WriteString(eack.daemonID)
+}
+
+func (eack *ecAck) NewPack() []byte {
+	packer := cmn.NewPacker(rebMsgKindSize + eack.PackedSize())
+	packer.WriteByte(rebMsgEC)
+	packer.WriteAny(eack)
+	return packer.Bytes()
 }
 
 // globRebID + sliceID + length of DaemonID + Daemon
@@ -111,6 +125,13 @@ func (req *pushReq) Pack(packer *cmn.BytePack) {
 		packer.WriteByte(1)
 		packer.WriteAny(req.md)
 	}
+}
+
+func (req *pushReq) NewPack() []byte {
+	packer := cmn.NewPacker(rebMsgKindSize + req.PackedSize())
+	packer.WriteByte(rebMsgEC)
+	packer.WriteAny(req)
+	return packer.Bytes()
 }
 
 func (req *pushReq) Unpack(unpacker *cmn.ByteUnpack) error {

@@ -435,10 +435,7 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
 		ack := &regularAck{globRebID: reb.GlobRebID(), daemonID: reb.t.Snode().ID()}
-		packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
-		packer.WriteByte(rebMsgRegular)
-		packer.WriteAny(ack)
-		hdr.Opaque = packer.Bytes()
+		hdr.Opaque = ack.NewPack()
 		hdr.ObjAttrs.Size = 0
 		if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"

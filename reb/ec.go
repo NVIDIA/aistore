@@ -485,16 +485,12 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 	if err != nil {
 		return err
 	}
-	packer := cmn.NewPacker(rebMsgKindSize + req.PackedSize())
-	packer.WriteByte(rebMsgEC)
-	packer.WriteAny(&req)
+	opaque := req.NewPack()
 	hdr := transport.Header{
-		Bck:     ct.Bck,
-		ObjName: ct.Objname,
-		ObjAttrs: transport.ObjectAttrs{
-			Size: ct.ObjSize,
-		},
-		Opaque: packer.Bytes(),
+		Bck:      ct.Bck,
+		ObjName:  ct.Objname,
+		ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
+		Opaque:   opaque,
 	}
 
 	if resolved.ContentType == fs.ObjectType {
@@ -566,16 +562,12 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	}
 	cmn.AssertMsg(ct.ObjSize != 0, ct.Objname)
 	size := ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
-	packer := cmn.NewPacker(rebMsgKindSize + req.PackedSize())
-	packer.WriteByte(rebMsgEC)
-	packer.WriteAny(&req)
+	opaque := req.NewPack()
 	hdr := transport.Header{
-		Bck:     ct.Bck,
-		ObjName: ct.Objname,
-		ObjAttrs: transport.ObjectAttrs{
-			Size: size,
-		},
-		Opaque: packer.Bytes(),
+		Bck:      ct.Bck,
+		ObjName:  ct.Objname,
+		ObjAttrs: transport.ObjectAttrs{Size: size},
+		Opaque:   opaque,
 	}
 	if xxhash != "" {
 		hdr.ObjAttrs.CksumValue = xxhash
@@ -742,10 +734,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	smap := (*cluster.Smap)(reb.smap.Load())
 	tsi := smap.GetTarget(req.daemonID)
 	ack := &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.Snode().ID()}
-	packer := cmn.NewPacker(rebMsgKindSize + ack.PackedSize())
-	packer.WriteByte(rebMsgEC)
-	packer.WriteAny(ack)
-	hdr.Opaque = packer.Bytes()
+	hdr.Opaque = ack.NewPack()
 	hdr.ObjAttrs.Size = 0
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
 		glog.Infof("Sending ACK for %s/%s to %s", hdr.Bck, hdr.ObjName, tsi.ID())
@@ -1115,12 +1104,10 @@ func (reb *Manager) exchange() error {
 				rebID:    globRebID,
 			}
 			body := cmn.MustMarshal(cts)
-			packer := cmn.NewPacker(rebMsgKindSize + req.PackedSize())
-			packer.WriteByte(rebMsgEC)
-			packer.WriteAny(&req)
+			opaque := req.NewPack()
 			hdr := transport.Header{
 				ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
-				Opaque:   packer.Bytes(),
+				Opaque:   opaque,
 			}
 			rd := cmn.NewByteHandle(body)
 			if err := reb.streams.Send(transport.Obj{Hdr: hdr}, rd, node); err != nil {
