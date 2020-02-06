@@ -19,10 +19,10 @@ import (
 )
 
 const (
-	someError  = "error"
-	stop       = "stop"
-	register   = "register"
-	unregister = "unregister"
+	kaErrorMsg      = "error"
+	kaStopMsg       = "stop"
+	kaRegisterMsg   = "register"
+	kaUnregisterMsg = "unregister"
 )
 
 var (
@@ -111,7 +111,7 @@ func newTargetKeepaliveRunner(t *targetrunner, statsT stats.Tracker, startedUp *
 	tkr.keepalive.startedUp = startedUp
 	tkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Target)
 	tkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
-	tkr.controlCh = make(chan controlSignal, 1)
+	tkr.controlCh = make(chan controlSignal) // unbuffered on purpose
 	tkr.interval = config.KeepaliveTracker.Target.Interval
 	tkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
 	return tkr
@@ -126,7 +126,7 @@ func newProxyKeepaliveRunner(p *proxyrunner, statsT stats.Tracker, startedUp *at
 	pkr.keepalive.startedUp = startedUp
 	pkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Proxy)
 	pkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
-	pkr.controlCh = make(chan controlSignal, 1)
+	pkr.controlCh = make(chan controlSignal) // unbuffered on purpose
 	pkr.interval = config.KeepaliveTracker.Proxy.Interval
 	pkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
 	return pkr
@@ -345,7 +345,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 			}
 			glog.Warningf("keepalive: unexpected status %d, err: %v", res.status, res.err)
 		case sig := <-pkr.controlCh:
-			if sig.msg == stop {
+			if sig.msg == kaStopMsg {
 				return false, true
 			}
 		}
@@ -367,15 +367,15 @@ func (k *keepalive) Run() error {
 			k.k.doKeepalive()
 		case sig := <-k.controlCh:
 			switch sig.msg {
-			case register:
+			case kaRegisterMsg:
 				ticker.Stop()
 				ticker = time.NewTicker(k.interval)
-			case unregister:
+			case kaUnregisterMsg:
 				ticker.Stop()
-			case stop:
+			case kaStopMsg:
 				ticker.Stop()
 				return nil
-			case someError:
+			case kaErrorMsg:
 				if time.Since(lastCheck) >= cmn.KeepaliveRetryDuration() {
 					lastCheck = time.Now()
 					glog.Infof("keepalive triggered by err: %v", sig.err)
@@ -428,7 +428,7 @@ func (k *keepalive) register(r registerer, primaryProxyID, hname string) (stoppe
 			}
 			glog.Warningf("%s: unexpected response (err %v, status %d)", hname, err, status)
 		case sig := <-k.controlCh:
-			if sig.msg == stop {
+			if sig.msg == kaStopMsg {
 				return true
 			}
 		}
@@ -472,7 +472,7 @@ func (k *keepalive) timeoutStatsForDaemon(sid string) *timeoutStats {
 
 func (k *keepalive) onerr(err error, status int) {
 	if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
-		k.controlCh <- controlSignal{msg: someError, err: err}
+		k.controlCh <- controlSignal{msg: kaErrorMsg, err: err}
 	}
 }
 
@@ -486,8 +486,13 @@ func (k *keepalive) isTimeToPing(sid string) bool {
 
 func (k *keepalive) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", k.Getname(), err)
-	k.controlCh <- controlSignal{msg: stop}
+	k.controlCh <- controlSignal{msg: kaStopMsg}
 	close(k.controlCh)
+}
+
+func (k *keepalive) send(msg string) {
+	glog.Infof("Sending message: %s", msg)
+	gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: msg}
 }
 
 //

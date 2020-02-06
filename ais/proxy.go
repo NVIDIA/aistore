@@ -3230,12 +3230,36 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err error) {
+	// Synchronously call the target to inform it that it no longer is part of
+	// the cluster. The target should stop sending keepalive messages which could
+	// potentially reregister the target.
+	node := p.smapowner.get().GetNode(sid)
+	if node != nil && node.IsTarget() {
+		args := callArgs{
+			si: node,
+			req: cmn.ReqArgs{
+				Method: http.MethodDelete,
+				Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
+			},
+			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		}
+		res := p.call(args)
+		if res.err != nil {
+			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", node.Name(), res.err, res.details)
+		}
+		// TODO: The call is fairly simple and we need to take care of scenarios:
+		//  * "intermittent network failure" - probably we need a retry
+		//  * "target's too busy to respond in time" - this will result in
+		//    context deadline exceeded so retry is also a good idea
+		//  * "read and write being routed to the target that is being unregistered resulting in errors..."
+	}
+
 	p.smapowner.Lock()
 	defer p.smapowner.Unlock()
 	var (
 		smap = p.smapowner.get()
-		node = smap.GetNode(sid)
 	)
+	node = smap.GetNode(sid)
 	clone = smap.clone()
 	if node == nil {
 		return nil, http.StatusNotFound, fmt.Errorf("Unknown node %s", sid)
@@ -3250,20 +3274,6 @@ func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err 
 		if glog.V(3) {
 			glog.Infof("unregistered %s (num targets %d)", node.Name(), clone.CountTargets())
 		}
-		go func() {
-			args := callArgs{
-				si: node,
-				req: cmn.ReqArgs{
-					Method: http.MethodDelete,
-					Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
-				},
-				timeout: cmn.GCO.Get().Timeout.CplaneOperation,
-			}
-			res := p.call(args)
-			if res.err != nil {
-				glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", node.Name(), res.err, res.details)
-			}
-		}()
 	}
 	if !p.startedUp.Load() {
 		p.smapowner.put(clone)

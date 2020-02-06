@@ -500,7 +500,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			if glog.V(3) {
 				glog.Infoln("Sending register signal to target keepalive control channel")
 			}
-			gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: register}
+			gettargetkeepalive().keepalive.send(kaRegisterMsg)
 
 			// Receive most recent smap and bmd.
 			var meta targetRegMeta
@@ -612,8 +612,9 @@ func (t *targetrunner) handleUnregisterReq() {
 	if glog.V(3) {
 		glog.Infoln("Sending unregister on target keepalive control channel")
 	}
+
 	// Stop keepaliving
-	gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: unregister}
+	gettargetkeepalive().keepalive.send(kaUnregisterMsg)
 
 	// Abort all dSort jobs
 	dsort.Managers.AbortAll(errors.New("target was removed from the cluster"))
