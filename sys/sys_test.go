@@ -57,11 +57,11 @@ func TestMemoryStats(t *testing.T) {
 	mem, err := Mem()
 	tassert.CheckFatal(t, err)
 
-	tassert.Errorf(t, mem.Total > 0 && mem.Free > 0, "Free or Total memory is zero: %+v", mem)
+	tassert.Errorf(t, mem.Total > 0 && mem.Free > 0 && mem.ActualFree > 0 && mem.ActualUsed > 0,
+		"All items must be greater than zero: %+v", mem)
 	tassert.Errorf(t, mem.Total > mem.Free, "Free is greater than Total memory: %+v", mem)
 	tassert.Errorf(t, mem.Total > mem.Used, "Used is greater than Total memory: %+v", mem)
-	tassert.Errorf(t, mem.ActualFree >= mem.Free, "Free is lower than ActualFree memory: %+v", mem)
-	tassert.Errorf(t, mem.ActualUsed <= mem.Used, "Used is greater than ActualUsed memory: %+v", mem)
+	tassert.Errorf(t, mem.Total == mem.Free+mem.Used, "Total must be = Free + Used: %+v", mem)
 	t.Logf("Memory stats: %+v", mem)
 
 	memOS, err := HostMem()
