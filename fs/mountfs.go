@@ -145,8 +145,12 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 		counter = mi.removeDirCounter.Inc()
 		// TODO: this should be somehow rewritten and standardized
 		nonExistingDir = fmt.Sprintf("$removing-%d", counter)
-		tmpDir         = fmt.Sprintf("%s%c%s", mi.Path, filepath.Separator, nonExistingDir)
+		tmpDir         = filepath.Join(mi.Path, nonExistingDir)
 	)
+	// loose assumption: removing something which doesn't exist is fine
+	if err := Access(dir); err != nil && os.IsNotExist(err) {
+		return nil
+	}
 	if err := cmn.CreateDir(filepath.Dir(tmpDir)); err != nil {
 		return err
 	}
@@ -155,6 +159,10 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 			if os.Remove(tmpDir) == nil {
 				err = os.Rename(dir, tmpDir)
 			}
+		}
+		// Someone removed dir before os.Rename, nothing more to do.
+		if os.IsNotExist(err) {
+			return nil
 		}
 		if err != nil {
 			return err
@@ -511,21 +519,22 @@ func (mfs *MountedFS) Get() (MPI, MPI) {
 // DisableFsIDCheck disables fsid checking when adding new mountpath
 func (mfs *MountedFS) DisableFsIDCheck() { mfs.checkFsID = false }
 
-func (mfs *MountedFS) CreateDestroyBuckets(op string, create bool, bcks ...cmn.Bck) {
-	const (
-		failFmt    = "%s: failed to %s"
-		passFmt    = "%s: %s"
-		createStr  = "create-ais-bucket-dir"
-		destroyStr = "destroy-ais-bucket-dir"
-	)
-	text := createStr
-	if !create {
-		text = destroyStr
-	}
-	failMsg := fmt.Sprintf(failFmt, op, text)
-	passMsg := fmt.Sprintf(passFmt, op, text)
+func (mfs *MountedFS) CreateBuckets(op string, bcks ...cmn.Bck) error {
+	const createStr = "create-ais-bucket-dir"
 
-	mfs.createDestroyBuckets(create, passMsg, failMsg, bcks...)
+	bckFailMsg := fmt.Sprintf("%s: failed to %s", op, createStr)
+	bckPassMsg := fmt.Sprintf("%s: %s", op, createStr)
+
+	return mfs.createBuckets(bckPassMsg, bckFailMsg, bcks...)
+}
+
+func (mfs *MountedFS) DestroyBuckets(op string, bcks ...cmn.Bck) error {
+	const destroyStr = "destroy-ais-bucket-dir"
+
+	failMsg := fmt.Sprintf("%s: failed to %s", op, destroyStr)
+	passMsg := fmt.Sprintf("%s: %s", op, destroyStr)
+
+	return mfs.destroyBuckets(passMsg, failMsg, bcks...)
 }
 
 func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
@@ -555,53 +564,23 @@ func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
 	return fsInfo
 }
 
-func (mfs *MountedFS) CreateBucketDirs(bck cmn.Bck, destroyUponRet bool) (err error) {
-	availablePaths, _ := mfs.Get()
-	created := make([]string, 0, len(availablePaths))
-
-mpathsLoop:
-	for _, mpathInfo := range availablePaths {
-		created = append(created, mpathInfo.MakePathBck(bck))
-
-		for contentType := range CSM.RegisteredContentTypes {
-			dir := mpathInfo.MakePathCT(bck, contentType)
-			if err = Access(dir); err == nil {
-				if isDirEmpty(dir) {
-					continue
-				}
-				err = fmt.Errorf("bucket %q: directory %s already exists", bck, dir)
-				break mpathsLoop
-			}
-			if err = cmn.CreateDir(dir); err != nil {
-				err = fmt.Errorf("bucket %q: failed to create directory %s: %v", bck, dir, err)
-				break mpathsLoop
-			}
-		}
-	}
-	if err != nil || destroyUponRet {
-		for _, bdir := range created {
-			if erd := os.RemoveAll(bdir); erd != nil {
-				glog.Error(erd)
-				if err == nil {
-					err = erd
-				}
-			}
-		}
-	}
-	return
-}
-
 func (mfs *MountedFS) RenameBucketDirs(bckFrom, bckTo cmn.Bck) (err error) {
 	availablePaths, _ := mfs.Get()
 	renamed := make([]*MountpathInfo, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
 		fromPath := mpathInfo.MakePathBck(bckFrom)
 		toPath := mpathInfo.MakePathBck(bckTo)
+
+		// os.Rename fails when renaming to a directory which already exists.
+		// We should remove destination bucket directory before rename. It's reasonable to do so
+		// as all targets agreed to rename and rename was committed in BMD.
+		os.RemoveAll(toPath)
 		if err = os.Rename(fromPath, toPath); err != nil {
 			break
 		}
 		renamed = append(renamed, mpathInfo)
 	}
+
 	if err == nil {
 		return
 	}
@@ -625,46 +604,93 @@ func (mfs *MountedFS) updatePaths(available, disabled MPI) {
 	mfs.xattrMpath.Store(unsafe.Pointer(nil))
 }
 
-// TODO: create path is very similar to `CreateBucketDirs` - should be consolidated.
-func (mfs *MountedFS) createDestroyBuckets(create bool, passMsg, failMsg string, bcks ...cmn.Bck) {
-	var (
-		contentTypes      = CSM.RegisteredContentTypes
-		availablePaths, _ = mfs.Get()
-		wg                = &sync.WaitGroup{}
-	)
-	for _, mpathInfo := range availablePaths {
-		wg.Add(1)
-		go func(mi *MountpathInfo) {
-			defer wg.Done()
-			for _, bck := range bcks {
-				if !create {
-					dir := mi.MakePathBck(bck)
-					mi.FastRemoveDir(dir)
-					continue
-				}
+// Creates directories for a single bucket on a singe mountpath, which is one directory for each content type.
+func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (int, error) {
+	num := 0
 
-				num := 0
-				for contentType := range contentTypes {
-					dir := mi.MakePathCT(bck, contentType)
-					if !create {
-						if err := Access(dir); os.IsNotExist(err) {
-							continue
-						}
-					}
-					// TODO: on error abort and rollback
-					if err := cmn.CreateDir(dir); err != nil {
-						glog.Errorf("%q (dir: %q, err: %q)", failMsg, dir, err)
-					} else {
-						num++
-					}
-				}
-				if glog.FastV(4, glog.SmoduleFS) {
-					glog.Infof("%q (bucket %s, num dirs %d)", passMsg, bck, num)
-				}
+	for contentType := range CSM.RegisteredContentTypes {
+		dir := mi.MakePathCT(bck, contentType)
+		if err := Access(dir); err == nil {
+			if empty, errEmpty := cmn.IsDirEmpty(dir); empty {
+				continue
+			} else if errEmpty != nil {
+				return num, errEmpty
 			}
-		}(mpathInfo)
+			return num, fmt.Errorf("bucket %q: directory %s already exists and is not empty", bck, dir)
+		}
+		if err := cmn.CreateDir(dir); err != nil {
+			return num, fmt.Errorf("bucket %q: failed to create directory %s: %v", bck, dir, err)
+		}
+		num++
 	}
-	wg.Wait()
+
+	return num, nil
+}
+
+func (mfs *MountedFS) createBuckets(bckPassMsg, bckFailMsg string, bcks ...cmn.Bck) error {
+	var (
+		availablePaths, _ = mfs.Get()
+		totals            = make(map[string]int, len(bcks))
+		totalDirs         = len(availablePaths) * len(bcks) * len(CSM.RegisteredContentTypes)
+	)
+
+	for _, bck := range bcks {
+		totals[bck.Name] = 0
+	}
+	for _, mi := range availablePaths {
+		for _, bck := range bcks {
+			num, err := mi.createBckDirs(bck)
+			totals[bck.Name] += num
+
+			if err != nil {
+				glog.Errorf("%q (bck: %q, mpath: %q, err: %q)", bckFailMsg, bck, mi.Path, err)
+			}
+		}
+	}
+
+	totalCreatedDirs := 0
+	for _, bck := range bcks {
+		totalCreatedDirs += totals[bck.Name]
+	}
+
+	if totalCreatedDirs != totalDirs {
+		return fmt.Errorf("failed to create %d out of %d buckets' directories", totalDirs-totalCreatedDirs, totalDirs)
+	}
+
+	if glog.FastV(4, glog.SmoduleFS) {
+		glog.Infof("%q (buckets %v, num dirs %d)", bckPassMsg, bcks, totalDirs)
+	}
+
+	return nil
+}
+
+func (mfs *MountedFS) destroyBuckets(passMsg, failMsg string, bcks ...cmn.Bck) error {
+	var (
+		availablePaths, _  = mfs.Get()
+		totalDestroyedDirs = 0
+		totalDirs          = len(availablePaths) * len(bcks)
+	)
+
+	for _, mpathInfo := range availablePaths {
+		for _, bck := range bcks {
+			dir := mpathInfo.MakePathBck(bck)
+			if err := mpathInfo.FastRemoveDir(dir); err != nil {
+				glog.Errorf("%q (dir: %q, err: %q)", failMsg, dir, err)
+			} else {
+				totalDestroyedDirs++
+			}
+		}
+	}
+
+	if totalDestroyedDirs != totalDirs {
+		return fmt.Errorf("failed to destroy %d out of %d buckets' %v directories", totalDirs-totalDestroyedDirs, totalDirs, bcks)
+	}
+
+	if glog.FastV(4, glog.SmoduleFS) {
+		glog.Infof("%q (buckets %v, num dirs %d)", passMsg, bcks, totalDirs)
+	}
+
+	return nil
 }
 
 // mountpathsCopy returns shallow copy of current mountpaths
@@ -719,20 +745,4 @@ func (mfs *MountedFS) MpathForMetadata() (mpath *MountpathInfo, err error) {
 	}
 	mfs.xattrMpath.Store(unsafe.Pointer(mpath))
 	return mpath, nil
-}
-
-func (mfs *MountedFS) CreateBckDir(bck cmn.Bck) error {
-	cmn.AssertMsg(cmn.IsValidProvider(bck.Provider), "unknown cloud provider: '"+bck.Provider+"'")
-
-	availablePaths, _ := Mountpaths.Get()
-	for _, mpathInfo := range availablePaths {
-		dir := mpathInfo.MakePathBck(bck)
-		if _, exists := availablePaths[dir]; exists {
-			return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo, dir)
-		}
-		if err := cmn.CreateDir(dir); err != nil {
-			return fmt.Errorf("cannot create %q buckets dir %q, err: %v", bck.Provider, dir, err)
-		}
-	}
-	return nil
 }

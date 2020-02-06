@@ -785,7 +785,7 @@ func CreateFile(fname string) (*os.File, error) {
 	return os.Create(fname)
 }
 
-// Rename renames file ensuring that the directory of dst exists. Creates
+// Rename renames file ensuring that the parent's directory of dst exists. Creates
 // destination directory when it does not exist.
 // NOTE: Rename should not be used to move objects across different disks, see: fs.MvFile.
 func Rename(src, dst string) error {
@@ -809,6 +809,20 @@ func RemoveFile(path string) error {
 		return err
 	}
 	return nil
+}
+
+func IsDirEmpty(dir string) (bool, error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	_, err = f.Readdirnames(1)
+	if err == io.EOF {
+		return true, nil
+	}
+	return false, err
 }
 
 // computes xxhash if requested

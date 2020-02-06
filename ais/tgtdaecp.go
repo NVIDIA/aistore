@@ -742,7 +742,6 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 		na           = bmd.NumAIS(nil /*all namespaces*/)
 		bcksToDelete = make([]*cluster.Bck, 0, na)
 		provider     = cmn.ProviderAIS
-		cfg          = cmn.GCO.Get()
 		_, psi       = t.getPrimaryURLAndSI()
 	)
 	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
@@ -783,7 +782,10 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 		})
 		if !present {
 			bcksToDelete = append(bcksToDelete, obck)
-			fs.Mountpaths.CreateDestroyBuckets("receive-bmd", false /*destroy*/, obck.Bck)
+			// don't stop receiveBMD even if there was an error
+			if err := fs.Mountpaths.DestroyBuckets("receive-bmd", obck.Bck); err != nil {
+				glog.Error(err)
+			}
 		}
 		return false
 	})
@@ -801,13 +803,15 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 
 	// Create buckets that have been added
 	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {
-		if bck.IsCloud() {
-			if cfg.Cloud.Supported {
-				fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*create*/, bck.Bck)
-			}
-		} else {
-			fs.Mountpaths.CreateDestroyBuckets("receive-bmd", true /*create*/, bck.Bck)
+		if bmd.Exists(bck, bck.Props.BID) {
+			return false
 		}
+
+		if errCreate := fs.Mountpaths.CreateBuckets("receive-bmd", bck.Bck); errCreate != nil {
+			glog.Error(errCreate)
+			err = errCreate
+		}
+
 		return false
 	})
 
@@ -1325,7 +1329,21 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 	case cmn.ActRenameLB:
 		_, err = xaction.Registry.RenewBckFastRename(t, bckFrom, bckTo, cmn.ActBegin, t.rebManager)
 		if err == nil {
-			err = fs.Mountpaths.CreateBucketDirs(bckTo.Bck, true /*destroy*/)
+			availablePaths, _ := fs.Mountpaths.Get()
+			for _, mpathInfo := range availablePaths {
+				path := mpathInfo.MakePathCT(bckTo.Bck, fs.ObjectType)
+				errAccess := fs.Access(path)
+				if errAccess == nil {
+					if empty, errEmpty := cmn.IsDirEmpty(path); empty {
+						continue
+					} else if errEmpty != nil {
+						return errEmpty
+					}
+					return fmt.Errorf("directory %q already exists and is not empty", path)
+				} else if !os.IsNotExist(err) {
+					return errAccess
+				}
+			}
 		}
 	case cmn.ActCopyBucket:
 		_, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActBegin)

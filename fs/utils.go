@@ -5,7 +5,6 @@
 package fs
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -82,9 +81,4 @@ func pathPrefixMatch(mpath, targ string) (rel string, match bool) {
 		return "", false
 	}
 	return targ[t0:], true
-}
-
-func isDirEmpty(dir string) bool {
-	dentries, err := ioutil.ReadDir(dir)
-	return err == nil && len(dentries) == 0
 }

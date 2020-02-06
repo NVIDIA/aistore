@@ -36,6 +36,8 @@ const (
 	bucketMDFixup    = "fixup"
 	bucketMDReceive  = "receive"
 	bucketMDRegister = "register"
+
+	evictCBOp = "evict-cb"
 )
 
 type (
@@ -211,14 +213,6 @@ func (t *targetrunner) Run() error {
 		cmn.ExitLogf("%v", err)
 	}
 
-	if err := fs.Mountpaths.CreateBckDir(cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-	if config.Cloud.Supported {
-		if err := fs.Mountpaths.CreateBckDir(cmn.Bck{Provider: config.Cloud.Provider, Ns: config.Cloud.Ns}); err != nil {
-			cmn.ExitLogf("%v", err)
-		}
-	}
 	t.detectMpathChanges()
 
 	// cloud provider (empty stubs that may get populated via build tags)
@@ -621,7 +615,10 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	switch msgInt.Action {
 	case cmn.ActEvictCB:
 		cluster.EvictLomCache(bck)
-		fs.Mountpaths.CreateDestroyBuckets("evict-cb", false /*destroy*/, bck.Bck)
+		if err := fs.Mountpaths.DestroyBuckets(evictCBOp, bck.Bck); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) > 0 { // must be a List/Range request
 			err := t.listRangeOperation(r, bck, msgInt)
