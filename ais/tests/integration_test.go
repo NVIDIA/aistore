@@ -310,6 +310,12 @@ func (m *ioContext) getsUntilStop() {
 		default:
 			m.wg.Add(1)
 			go func() {
+				<-semaphore
+				defer func() {
+					semaphore <- struct{}{}
+					m.wg.Done()
+				}()
+
 				objName := m.objNames[i%len(m.objNames)]
 				_, err := api.GetObject(baseParams, m.bck, path.Join(SmokeStr, objName))
 				if err != nil {
