@@ -138,36 +138,82 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom1.GetCopies()).To(BeEquivalentTo(lom2.GetCopies()))
 			})
 
-			It("should fail when checksum does not match", func() {
-				createTestFile(localFQN, testFileSize)
-				lom := NewBasicLom(localFQN, tMock)
-				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
-				lom.SetVersion("dummy_version")
-				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
-				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
+			Describe("error cases", func() {
+				var lom *cluster.LOM
 
-				b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
-				Expect(err).NotTo(HaveOccurred())
-				b[0] = b[0] + 1 // changing first byte of meta checksum
-				Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
+				BeforeEach(func() {
+					createTestFile(localFQN, testFileSize)
+					lom = NewBasicLom(localFQN, tMock)
+					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
+					lom.SetVersion("dummy_version")
+					Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
+					Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
+				})
 
-				err = lom.LoadMetaFromFS()
-				Expect(err).To(HaveOccurred())
-			})
+				It("should fail when checksum does not match", func() {
+					b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
+					Expect(err).NotTo(HaveOccurred())
 
-			It("should fail when meta is corrupted", func() {
-				// This test is supposed to end with LoadMetaFromFS error
-				// not with nil pointer exception / panic
-				createTestFile(localFQN, testFileSize)
-				lom := NewBasicLom(localFQN, tMock)
-				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
-				lom.SetVersion("dummy_version")
-				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
-				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
-				Expect(fs.SetXattr(localFQN, cluster.XattrLOM,
-					[]byte("1321\nwr;as\n;, ;\n\n;;,,dadsa;aa\n"))).NotTo(HaveOccurred())
-				err := lom.LoadMetaFromFS()
-				Expect(err).To(HaveOccurred())
+					b[2]++ // changing first byte of meta checksum
+					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
+					err = lom.LoadMetaFromFS()
+					Expect(err).To(MatchError(&cmn.BadCksumError{}))
+				})
+
+				It("should fail when checksum type is invalid", func() {
+					b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
+					Expect(err).NotTo(HaveOccurred())
+
+					b[1] = 200 // changing byte which determines the checksum type
+					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
+					err = lom.LoadMetaFromFS()
+					Expect(err).To(MatchError("invalid lmeta: metadata checksum type is invalid (got: 200, expected: (0, 2))"))
+
+					b, err = fs.GetXattr(localFQN, cluster.XattrLOM)
+					Expect(err).NotTo(HaveOccurred())
+
+					b[1] = 0 // changing byte which determines the checksum type
+					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
+					err = lom.LoadMetaFromFS()
+					Expect(err).To(MatchError("invalid lmeta: metadata checksum type is invalid (got: 0, expected: (0, 2))"))
+				})
+
+				It("should fail when metadata version is invalid", func() {
+					b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
+					Expect(err).NotTo(HaveOccurred())
+
+					b[0] = 128 // changing byte which determines the metadata version
+					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
+					err = lom.LoadMetaFromFS()
+					Expect(err).To(MatchError("invalid lmeta: version of metadata is invalid (got: 128, expected: (0, 1])"))
+
+					b[0] = 0 // changing byte which determines the metadata version
+					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
+					err = lom.LoadMetaFromFS()
+					Expect(err).To(MatchError("invalid lmeta: version of metadata is invalid (got: 0, expected: (0, 1])"))
+				})
+
+				It("should fail when metadata is too short", func() {
+					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, []byte{1})).NotTo(HaveOccurred())
+					err := lom.LoadMetaFromFS()
+					Expect(err).To(MatchError("invalid lmeta: metadata too short (got: 1, expected at least: 2)"))
+
+					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, []byte{1, 1, 2})).NotTo(HaveOccurred())
+					err = lom.LoadMetaFromFS()
+					Expect(err).To(MatchError("invalid lmeta: metadata too short (got: 3, expected at least: 10)"))
+				})
+
+				It("should fail when meta is corrupted", func() {
+					// This test is supposed to end with LoadMetaFromFS error
+					// not with nil pointer exception / panic
+					b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
+					Expect(err).NotTo(HaveOccurred())
+					copy(b[40:], "1321wr")
+					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
+
+					err = lom.LoadMetaFromFS()
+					Expect(err).To(MatchError(&cmn.BadCksumError{}))
+				})
 			})
 		})
 	})

@@ -64,6 +64,11 @@ func (e *BadCksumError) Error() string {
 	return fmt.Sprintf("%s (%v != %v)%s", e.prefix, e.a, e.b, context)
 }
 
+func (e *BadCksumError) Is(target error) bool {
+	_, ok := target.(*BadCksumError)
+	return ok
+}
+
 func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
 }

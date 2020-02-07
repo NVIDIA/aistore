@@ -18,8 +18,8 @@ require (
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/onsi/ginkgo v1.10.2
-	github.com/onsi/gomega v1.7.0
+	github.com/onsi/ginkgo v1.12.0
+	github.com/onsi/gomega v1.9.0
 	github.com/pierrec/lz4/v3 v3.1.0
 	github.com/pkg/errors v0.8.1
 	github.com/sdomino/scribble v0.0.0-20190805145214-552710ac067a
@@ -30,6 +30,6 @@ require (
 	github.com/valyala/fasthttp v1.8.0
 	github.com/vbauerster/mpb/v4 v4.10.1
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20190927073244-c990c680b611
+	golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e
 	google.golang.org/api v0.14.0
 )
