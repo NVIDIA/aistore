@@ -38,7 +38,7 @@ var (
 )
 
 type registerer interface {
-	register(keepalive bool, t time.Duration) (int, error)
+	register(keepalive bool, t time.Duration) (string, int, error)
 }
 
 type keepaliver interface {
@@ -428,10 +428,10 @@ func (k *keepalive) Run() error {
 // register is called by non-primary proxies and targets to send a keepalive to the primary proxy.
 func (k *keepalive) register(r registerer, primaryProxyID, hname string) (stopped bool) {
 	var (
-		timeout     = time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
-		now         = time.Now()
-		status, err = r.register(true, timeout) // register
-		delta       = time.Since(now)
+		timeout        = time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
+		now            = time.Now()
+		_, status, err = r.register(true, timeout) // register
+		delta          = time.Since(now)
 	)
 
 	k.statsT.Add(stats.KeepAliveLatency, int64(delta))
@@ -449,7 +449,7 @@ func (k *keepalive) register(r registerer, primaryProxyID, hname string) (stoppe
 		case <-ticker.C:
 			i++
 			now = time.Now()
-			status, err = r.register(true, timeout)
+			_, status, err = r.register(true, timeout)
 			timeout = k.updateTimeoutForDaemon(primaryProxyID, time.Since(now))
 			if err == nil {
 				glog.Infof("%s: keepalive OK after %d attempt(s)", hname, i)

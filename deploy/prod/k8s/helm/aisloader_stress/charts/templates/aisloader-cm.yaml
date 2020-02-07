@@ -5,7 +5,7 @@ metadata:
   labels:
      ais_aisloader: "anyvalue"
 data:
-  config.sh: |-
+  aisnode_config.sh: |-
     #
     # This bash shell snippet is sourced from the container start script, and then the
     # function run_aisloader below is called.

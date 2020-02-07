@@ -191,7 +191,7 @@ func (t *targetrunner) Run() error {
 	t.owner.smap.put(smap)
 	for i := 0; i < maxRetryCnt; i++ {
 		var status int
-		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
+		if _, status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
 				glog.Errorf("%s: retrying registration...", t.si)
 				time.Sleep(time.Second)

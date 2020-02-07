@@ -1076,7 +1076,7 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, err
 // Here's how a node joins a AIStore cluster:
 // - first, there's the primary proxy/gateway referenced by the current cluster map (Smap)
 //   or - during the cluster deployment time - by the the configured "primary_url"
-//   (see setup/config.sh)
+//   (see /deploy/dev/local/aisnode_config.sh)
 //
 // - if that one fails, the new node goes ahead and tries the alternatives:
 // 	- config.Proxy.DiscoveryURL ("discovery_url")
@@ -1084,10 +1084,11 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, err
 // - but only if those are defined and different from the previously tried.
 //
 // ================================== Background =========================================
-func (h *httprunner) join(query url.Values) (res callResult) {
+func (h *httprunner) join(query url.Values) (primaryURL string, res callResult) {
 	url, psi := h.getPrimaryURLAndSI()
 	res = h.registerToURL(url, psi, cmn.DefaultTimeout, query, false)
 	if res.err == nil {
+		primaryURL = url
 		return
 	}
 	config := cmn.GCO.Get()
@@ -1098,6 +1099,7 @@ func (h *httprunner) join(query url.Values) (res callResult) {
 			res = resAlt
 			return
 		}
+		primaryURL = config.Proxy.DiscoveryURL
 	}
 	if config.Proxy.OriginalURL != "" && config.Proxy.OriginalURL != url &&
 		config.Proxy.OriginalURL != config.Proxy.DiscoveryURL {
@@ -1107,6 +1109,7 @@ func (h *httprunner) join(query url.Values) (res callResult) {
 			res = resAlt
 			return
 		}
+		primaryURL = config.Proxy.OriginalURL
 	}
 	return
 }

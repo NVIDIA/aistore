@@ -121,7 +121,7 @@ deploy_mode() {
 }
 
 deploy_quickstart() {
-    cp $DIR/../../../ais/setup/config.sh config.sh
+    cp $DIR/../local/aisnode_config.sh aisnode_config.sh
 
     QS_AWSDIR=${1:-'~/.aws/'}
     QS_AWSDIR="${QS_AWSDIR/#\~/$HOME}"
@@ -142,7 +142,7 @@ deploy_quickstart() {
     container_id=`docker ps | grep ais-quickstart | awk '{ print $1 }'`
     docker exec -it $container_id /bin/bash -c "echo 'Hello from AIS!'; /bin/bash;"
 
-    rm -rf config.sh
+    rm -rf aisnode_config.sh
 }
 
 
@@ -425,7 +425,7 @@ if [ "${NETWORK}" = "multi" ]; then
     composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.multinet.yml"
 fi
 
-cp $DIR/../../../ais/setup/config.sh config.sh
+cp $DIR/../local/aisnode_config.sh aisnode_config.sh
 
 docker network create docker_default
 if [ "$GRAFANA" == true ]; then
@@ -533,7 +533,7 @@ if [ "$GRAFANA" == true ]; then
 fi
 
 # Consider moving these to a folder instead of deleting - for future reference
-rm config.sh
+rm aisnode_config.sh
 docker ps
 
 # Install the CLI

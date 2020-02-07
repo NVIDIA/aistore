@@ -141,7 +141,7 @@ format:
 Grafana helps visualize the collected statistics. It is convenient to use and
 provides numerous tools to measure and calculate different metrics.
 
-We provide simple [script](/ais/setup/deploy_grafana.sh) which allows you to set
+We provide simple [script](/deploy/dev/local/deploy_grafana.sh) which allows you to set
 up the Graphite and Grafana servers which run inside separate dockers. To add
 new dashboards and panels, please follow: [grafana tutorial](http://docs.grafana.org/guides/getting_started/).
 

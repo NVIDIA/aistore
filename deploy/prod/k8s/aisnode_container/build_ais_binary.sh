@@ -27,17 +27,15 @@ function check_go_version {
     gobin=$(which go)
     [[ -n "$gobin" ]] || whinge "go not found"
 
-    ver=$(go version | awk '{print $3}')
-    echo "Using $gobin (go version $ver)" >&2
-    [[ $ver =~ go1.13 ]] || whinge "Go version 1.13.* is required"
+    gover=$(go version)
+    echo "Using $gobin $gover" >&2
+    [[ $gover =~ go1.13 || $gover =~ go1.14 ]] || whinge "Go version 1.13.* or 1.14.* is required"
 }
 
 if (( $# < 1 )); then
     usage
     exit 1
 fi
-
-DEST=$(readlink -f $1)     # need an absolute path for subshell below
 
 set -e
 
@@ -80,7 +78,7 @@ fi
 # image that is then also cloud-specific).
 #
 echo "Cloud provider set to: ${CLDPROVIDER}"
-cd "${GOPATH}/src/${AISTORE_SRC}" && MODE=$2 GOBIN=${DEST} make node
+cd "${GOPATH}/src/${AISTORE_SRC}" && MODE=$2 GOBIN=$1 make node
 [[ $? -eq 0 ]] || whinge "failed to compile 'node'"
 
 exit 0

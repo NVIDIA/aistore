@@ -129,7 +129,7 @@ This command runs a test that matches the specified string ("download"). The tes
 
 ## Build, Make and Development Tools
 
-As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](dev/kubernetes/Dockerfile). As the very first step, run `make help` for help on:
+As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
 
 * **building** AIS binary (called `aisnode`) deployable as both a storage target _or_ a proxy/gateway;
 * **building** [CLI](cli/README.md), FUSE [aisfs](fuse/README.md), and benchmark binaries;
@@ -152,7 +152,7 @@ To get started with AIStore and Docker, see: [Getting started with Docker](docs/
 
 ### Local Kubernetes
 
-The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/kubernetes).
+The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/k8s).
 
 ## Containerized Deployments: Host Resource Sharing
 
@@ -196,9 +196,11 @@ As far as Graphite/Grafana, AIS integrates with these popular backends via [Stat
 
 > The scripts for easy deployment of both Graphite and Grafana are included (see below).
 
-> For [local non-containerized deployments](#deployment-local-non-containerized), use `./ais/setup/deploy_grafana.sh` to start Graphite and Grafana containers. Local deployment scripts will automatically "notice" the presence of the containers and will send statistics to the Graphite.
+> For local non-containerized deployments, use `./deploy/dev/local/deploy_grafana.sh` to start Graphite and Grafana containers.
+> Local deployment scripts will automatically "notice" the presence of the containers and will send statistics to the Graphite.
 
-> For [local docker-compose based deployments](#deployment-local-docker-compose), make sure to use `-grafana` command-line option. The `deploy_docker.sh` script will then spin-up Graphite and Grafana containers.
+> For local docker-compose based deployments, make sure to use `-grafana` command-line option.
+> The `./deploy/dev/docker/deploy_docker.sh` script will then spin-up Graphite and Grafana containers.
 
 In both of these cases, Grafana will be accessible at [localhost:3000](http://localhost:3000).
 
@@ -206,7 +208,7 @@ In both of these cases, Grafana will be accessible at [localhost:3000](http://lo
 
 ## Configuration
 
-AIS configuration is consolidated in a single [JSON template](ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, whereby the majority of those (except maybe just a few) have pre-assigned default values. The configuration template serves as a **single source for all deployment-specific configurations**, examples of which can be found under the folder that consolidates both [containerized-development and production deployment scripts](deploy).
+AIS configuration is consolidated in a single [JSON template](/deploy/dev/local/aisnode_config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, whereby the majority of those (except maybe just a few) have pre-assigned default values. The configuration template serves as a **single source for all deployment-specific configurations**, examples of which can be found under the folder that consolidates both [containerized-development and production deployment scripts](deploy).
 
 AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
 
@@ -214,7 +216,7 @@ AIS production deployment, in particular, requires careful consideration of at l
 * intra-cluster control
 * intra-cluster data
 
-with the corresponding [JSON names](ais/setup/config.sh), respectively:
+with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respectively:
 
 * `ipv4`
 * `ipv4_intra_control`

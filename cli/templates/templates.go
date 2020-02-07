@@ -240,7 +240,7 @@ const (
 	GlobalConfTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.Cloud.Provider}}\n"
 
 	// hidden config sections: replication
-	// Application Config has this sections but setup/config.sh does not expose them
+	// Application Config has this sections but /deploy/dev/local/aisnode_config.sh does not expose them
 	ReplicationConfTmpl = "\n{{$obj := .Replication}}Replication Config\n" +
 		" On Cold Get:\t{{$obj.OnColdGet}}\n" +
 		" On Put:\t{{$obj.OnPut}}\n" +

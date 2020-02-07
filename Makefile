@@ -1,6 +1,7 @@
 SHELL := /bin/bash
-BUILD_DIR = ./ais/setup
-BUILD_SRC = $(BUILD_DIR)/aisnode.go
+DEPLOY_DIR = ./deploy/dev/local
+SCRIPTS_DIR = ./deploy/scripts
+BUILD_SRC = ./cmd/aisnode/main.go
 
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
@@ -9,6 +10,10 @@ MAKEFLAGS += --no-print-directory
 VERSION = $(shell git rev-parse --short HEAD)
 BUILD = $(shell date +%FT%T%z)
 BUILD_FLAGS += $(if $(strip $(GORACE)),-race,)
+BUILD_DEST = $(GOPATH)/bin
+ifdef GOBIN
+	BUILD_DEST = $(GOBIN)
+endif
 ifdef TAGS
 	BUILD_TAGS = "$(CLDPROVIDER) $(TAGS)"
 else
@@ -20,11 +25,11 @@ endif
 # Note that MEMPROFILE (memprofile) option requires graceful shutdown (see `kill:`)
 ifdef MEMPROFILE
 	export PROFILE = -memprofile=$(MEMPROFILE)
-	BUILD_SRC = ./ais/setup/profile/aisnode.go
+	BUILD_SRC = ./cmd/aisnodeprofile/main.go
 endif
 ifdef CPUPROFILE
 	export PROFILE += -cpuprofile=$(CPUPROFILE)
-	BUILD_SRC = ./ais/setup/profile/aisnode.go
+	BUILD_SRC = ./cmd/aisnodeprofile/main.go
 endif
 
 # Intra-cluster networking: two alternative ways to build AIS `transport` package:
@@ -61,7 +66,7 @@ ifneq ($(strip $(GORACE)),)
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
 	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
-		go install $(BUILD_FLAGS) -tags=$(BUILD_TAGS) $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+		go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags=$(BUILD_TAGS) $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
 	@echo "done."
 
 aisfs: ## Build 'aisfs' binary
@@ -92,7 +97,7 @@ aisloader: ## Build 'aisloader' binary
 .PHONY: deploy
 
 deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies and targets
-	@"$(BUILD_DIR)/deploy.sh"
+	@"$(DEPLOY_DIR)/deploy.sh"
 
 #
 # cleanup local deployment (cached objects, logs, and executables)
@@ -110,7 +115,7 @@ kill: ## Kill all locally deployed targets and proxies
 
 # delete only caches, not logs
 rmcache: ## Delete AIS related caches
-	@"$(BUILD_DIR)/rmcache.sh"
+	@"$(SCRIPTS_DIR)/rmcache.sh"
 
 clean: ## Remove all AIS related files and binaries
 	@echo -n "Cleaning... "
@@ -162,22 +167,22 @@ endif
 
 
 test-envcheck:
-	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" test-env
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-env
 
 test-short: test-envcheck ## Run short tests (requires BUCKET variable to be set)
-	@BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) "$(BUILD_DIR)/bootstrap.sh" test-short
+	@BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
 
 test-long: test-envcheck ## Run all (long) tests (requires BUCKET variable to be set)
-	@BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) "$(BUILD_DIR)/bootstrap.sh" test-long
+	@BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
 
 test-run: test-envcheck # runs tests matching a specific regex
 ifeq ($(RE),)
 	$(error missing environment variable: RE="testnameregex")
 endif
-	@RE=$(RE) BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) "$(BUILD_DIR)/bootstrap.sh" test-run
+	@RE=$(RE) BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-run
 
 test-docker: ## Run tests inside docker
-	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" test-docker
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-docker
 
 ci: spell-check fmt-check lint test-short ## Run CI related checkers and linters (requires BUCKET variable to be set)
 
@@ -191,21 +196,21 @@ lint-update: ## Update the linter version (removes previous one and downloads a 
 
 lint: ## Run linter on whole project
 	@([[ ! -f $(GOPATH)/bin/golangci-lint ]] && curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b $(GOPATH)/bin latest) || true
-	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" lint
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
 
 fmt-check: ## Check code formatting
-	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" fmt
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" fmt
 
 fmt-fix: ## Fix code formatting
-	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" fmt --fix
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" fmt --fix
 
 spell-check: ## Run spell checker on the project
 	@GOOS="" GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell
-	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" spell
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" spell
 
 spell-fix: ## Fix spell checking issues
 	@GOOS="" GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell
-	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" spell --fix
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" spell --fix
 
 
 # Misc Targets
@@ -213,7 +218,7 @@ spell-fix: ## Fix spell checking issues
 
 # example extracting 'numget' stats out of all local logs
 numget:
-	@"$(BUILD_DIR)/numget.sh"
+	@"$(SCRIPTS_DIR)/numget.sh"
 
 # run benchmarks 10 times to generate cpu.prof
 cpuprof:
@@ -223,7 +228,7 @@ flamegraph: cpuprof
 	@go tool pprof -http ":6060" /tmp/cpu.prof
 
 code-coverage:
-	@"$(BUILD_DIR)/code_coverage.sh"
+	@"$(SCRIPTS_DIR)/code_coverage.sh"
 
 # Target for devinit
 .PHONY: devinit
@@ -231,7 +236,7 @@ code-coverage:
 # To help with working with a non-github remote
 # It replaces existing github.com AIStore remote with the one specified by REMOTE
 devinit:
-	@$(SHELL) "$(BUILD_DIR)/bootstrap.sh" devinit
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" devinit
 
 .PHONY: help
 help:

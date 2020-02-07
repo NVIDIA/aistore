@@ -11,7 +11,7 @@ RUN apk upgrade --no-cache && \
 
 WORKDIR /build
 COPY entrypoint entrypoint/
-COPY config.sh ./
+COPY aisnode_config.sh ./
 COPY aisnode_ aisnode_gcp aisnode_aws bin/
 
 EXPOSE 51080/tcp

@@ -21,7 +21,7 @@ import (
 // The LRU module implements a well-known least-recently-used cache replacement policy.
 //
 // LRU-driven eviction is based on the two configurable watermarks: config.LRU.LowWM and
-// config.LRU.HighWM (section "lru" in the setup/config.sh).
+// config.LRU.HighWM (section "lru" in the /deploy/dev/local/aisnode_config.sh).
 // When and if exceeded, AIStore target will start gradually evicting objects from its
 // stable storage: oldest first access-time wise.
 //

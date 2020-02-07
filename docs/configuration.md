@@ -3,7 +3,7 @@
 - [Runtime configuration](#runtime-configuration)
 - [Configuration persistence](#configuration-persistence)
 - [Startup override](#startup-override)
-- [Managing filesystems](#managing-filesystems)
+- [Managing mountpaths](#managing-mountpaths)
 - [Disabling extended attributes](#disabling-extended-attributes)
 - [Enabling HTTPS](#enabling-https)
 - [Filesystem Health Checker](#filesystem-health-checker)
@@ -12,7 +12,7 @@
 - [Curl examples](#curl-examples)
 - [CLI examples](#cli-examples)
 
-AIS configuration is consolidated in a single [JSON template](/ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The configuration template serves as a single source for all deployment-specific configurations, examples of which can be found under [/deploy](the folder that consolidates containerized-development and production deployment scripts).
+AIS configuration is consolidated in a single [JSON template](/deploy/dev/local/aisnode_config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The configuration template serves as a single source for all deployment-specific configurations, examples of which can be found under [/deploy](the folder that consolidates containerized-development and production deployment scripts).
 
 AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are: user (aka public), intra-cluster control, and intra-cluster data - the corresponding JSON names are, respectively: `ipv4`, `ipv4_intra_control`, and `ipv4_intra_data`.
 
@@ -24,7 +24,7 @@ Further, `test_fspaths` section (see below) corresponds to a **single local file
 
 <img src="images/ais-config-2-commented.png" alt="Configuration: local filesystems" width="600">
 
-In production we use an alternative configuration called `fspaths`: the section of the [config](/ais/setup/config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
+In production we use an alternative configuration called `fspaths`: the section of the [config](/deploy/dev/local/aisnode_config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
 
 > Terminology: *mountpath* is a triplet **(local filesystem (LFS), disks that this LFS utilizes, LFS directory)**. The following rules are enforced: 1) different mountpaths use different LFSes, and 2) different LFSes use different disks.
 
@@ -175,15 +175,15 @@ AIStore [HTTP API](/docs/http_api.md) makes it possible to list, add, remove, en
 
 ## Disabling extended attributes
 
-To make sure that AIStore does not utilize xattrs, configure `checksum`=`none` and `versioning`=`none` for all targets in a AIStore cluster. This can be done via the [common configuration "part"](/ais/setup/config.sh) that'd be further used to deploy the cluster.
+To make sure that AIStore does not utilize xattrs, configure `checksum`=`none` and `versioning`=`none` for all targets in a AIStore cluster. This can be done via the [common configuration "part"](/deploy/dev/local/aisnode_config.sh) that'd be further used to deploy the cluster.
 
 ## Enabling HTTPS
 
-To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_certificate` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/ais/setup/config.sh)).
+To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_certificate` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).
 
 ## Filesystem Health Checker
 
-Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fshc" of the [configuration](/ais/setup/config.sh).
+Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fshc" of the [configuration](/deploy/dev/local/aisnode_config.sh).
 
 When enabled, FSHC gets notified on every I/O error upon which it performs extensive checks on the corresponding local filesystem. One possible outcome of this health-checking process is that FSHC disables the faulty filesystems leaving the target with one filesystem less to distribute incoming data.
 
@@ -191,13 +191,13 @@ Please see [FSHC readme](/health/fshc.md) for further details.
 
 ## Networking
 
-In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [net section of the configuration](/ais/setup/config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](/docs/ha.md#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
+In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [net section of the configuration](/deploy/dev/local/aisnode_config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](/docs/ha.md#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
 
 All the 3 (three) networking options are enumerated [here](/cmn/network.go).
 
 ## Reverse proxy
 
-AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/ais/setup/config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](/docs/rproxy.md).
+AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/deploy/dev/local/aisnode_config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](/docs/rproxy.md).
 
 ## Curl examples
 

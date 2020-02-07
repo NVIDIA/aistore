@@ -53,7 +53,7 @@ ENV MOUNTPATH /tmp/ais
 ARG QUICK
 ENV QUICK=${QUICK}
 
-COPY config.sh config.sh
+COPY aisnode_config.sh aisnode_config.sh
 COPY entrypoint/entrypoint.sh entrypoint.sh
 
 EXPOSE 8080 9080 10080

@@ -57,9 +57,9 @@ The following table describes JSON/YAML keys which can be used in the specificat
 | `algorithm.format_type` | `string` | format type (`int`, `float` or `string`) describes how the content of the file should be interpreted, used when `kind=content` | yes (only when `kind=content`) |
 | `order_file` | `string` | URL to the file containing external key map (it should contain lines in format: `record_key[sep]shard-%d-fmt`) | yes (only when `output_format` not provided) | `""` |
 | `order_file_sep` | `string` | separator used for splitting `record_key` and `shard-%d-fmt` in the lines in external key map | no | `\t` (TAB) |
-| `max_mem_usage` | `string` | limits the amount of total system memory allocated by both dSort and other running processes. Once and if this threshold is crossed, dSort will continue extracting onto local drives. Can be in format 60% or 10GB | no | same as in `config.sh` |
-| `extract_concurrency_limit` | `string` | limits number of concurrent shards extracted per disk | no | same as in `config.sh` |
-| `create_concurrency_limit` | `string` | limits number of concurrent shards created per disk | no | same as in `config.sh` |
+| `max_mem_usage` | `string` | limits the amount of total system memory allocated by both dSort and other running processes. Once and if this threshold is crossed, dSort will continue extracting onto local drives. Can be in format 60% or 10GB | no | same as in `/deploy/dev/local/aisnode_config.sh` |
+| `extract_concurrency_limit` | `string` | limits number of concurrent shards extracted per disk | no | same as in `/deploy/dev/local/aisnode_config.sh` |
+| `create_concurrency_limit` | `string` | limits number of concurrent shards created per disk | no | same as in `/deploy/dev/local/aisnode_config.sh` |
 | `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no | `false` |
 
 There's also the possibility to override some of the values from global `distributed_sort` config via job specification.

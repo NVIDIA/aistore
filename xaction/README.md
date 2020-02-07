@@ -1,7 +1,7 @@
 ## Table of Contents
 
 - [Extended Actions (xactions)](#extended-actions-xactions)
-    - [Start & Stop](#start-stop)
+    - [Start and Stop](#start-and-stop)
 	- [Stats](#stats)
 
 ## Extended Actions (xactions)
@@ -15,17 +15,19 @@ Xactions start running based on a wide variety of runtime conditions that includ
 * certain type of workload (e.g., PUT into a mirrored or erasure-coded bucket)
 * user request (e.g., to reduce the number of local object copies in a given bucket)
 * adding or removing storage targets (the events that trigger cluster-wide rebalancing)
-* adding or removing local disks (the events that cause local rebalancer to start moving stored content between *mountpaths* - see [Managing filesystems](/docs/configuration.md#managing-filesystems))
+* adding or removing local disks (the events that cause local rebalancer to start moving stored content between *mountpaths* - see [Managing mountpaths](/docs/configuration.md#managing-mountpaths))
 * and more...
 
-Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](/ais/setup/config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.
+Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](/deploy/dev/local/aisnode_config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.
 
-The amount of throttling that a given xaction imposes on itself is always defined by a combination of dynamic factors. To give concrete examples, an extended action that runs LRU evictions performs its "balancing act" by taking into account the remaining storage capacity _and_ the current utilization of the local filesystems. The two-way mirroring (xaction) takes into account congestion on its communication channel that callers use for posting requests to create local replicas. And the `atimer` - extended action responsible for [access time updates](/atime/atime.go) - self-throttles based on the remaining space (to buffer atimes), etc.
+The amount of throttling that a given xaction imposes on itself is always defined by a combination of dynamic factors. 
+To give concrete examples, an extended action that runs LRU evictions performs its "balancing act" by taking into account the remaining storage capacity **and** the current utilization of the local filesystems.
+The mirroring (xaction) takes into account congestion on its communication channel that callers use for posting requests to create local replicas.
 
 Supported extended actions are enumerated in the [user-facing API](/cmn/api.go) and include:
 
 * cluster-wide rebalancing (denoted as `ActGlobalReb` in the [API](/cmn/api.go)) that gets triggered when storage targets join or leave the cluster
-* LRU-based cache eviction (see [LRU](/docs/storage_svcs.md#lru)) that depends on the remaining free capacity and [configuration](/ais/setup/config.sh)
+* LRU-based cache eviction (see [LRU](/docs/storage_svcs.md#lru)) that depends on the remaining free capacity and [configuration](/deploy/dev/local/aisnode_config.sh)
 * prefetching batches of objects (or arbitrary size) from the Cloud (see [List/Range Operations](/docs/batch.md))
 * consensus voting (when conducting new leader [election](/docs/ha.md#election))
 * erasure-encoding objects in a EC-configured bucket (see [Erasure coding](/docs/storage_svcs.md#erasure-coding))
@@ -37,7 +39,7 @@ Actions include stats, start and stop.
 List of supported actions can be found in the [API](/cmn/api.go)
 
 Xaction requests are generic for all xactions, but responses from each xaction are different.
-See [below](#start-&-stop).
+See [below](#start-and-stop).
 The request looks as follows:
 
 1. Single target request:
@@ -58,7 +60,7 @@ The request looks as follows:
     will result in the same error response.
 
 
-### Start & Stop
+### Start and Stop
 
 For a successful request, the response only contains the HTTP status code. If the request was sent to the proxy and all targets
 responded with a successful HTTP code, the proxy would respond with the successful HTTP code. The response body should be omitted.

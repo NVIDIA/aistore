@@ -70,10 +70,7 @@ create_local_repo() {
 }
 
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-if [ "${PWD##*/}" != "docker" ]; then
-    cd $DIR
-fi
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd -P)"
 
 AISCONFDIR=/aisconfig
 if [ ! -d "$AISCONFDIR" ]; then
@@ -245,7 +242,7 @@ export PROXY_LABEL=$PROXY_LABEL
 export TARGET_LABEL=$TARGET_LABEL
 
 echo $DIR
-source $DIR/../../../ais/setup/config.sh
+source $DIR/../local/aisnode_config.sh
 
 create_local_repo $TARGET_CNT $CLDPROVIDER
 

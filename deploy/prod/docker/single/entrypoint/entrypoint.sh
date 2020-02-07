@@ -9,7 +9,7 @@ fi
 export FSPATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": \"\""; done | paste -sd ",")
 
 function start_node {
-  # Required for `config.sh`.
+  # Required for `aisnode_config.sh`.
   export CONFDIR=/etc/aisnode/$1
   export CONFFILE=${CONFDIR}/ais.json
   export CONFFILE_COLLECTD=${CONFDIR}/collectd.conf
@@ -21,7 +21,7 @@ function start_node {
   mkdir -p ${CONFDIR}
   mkdir -p ${LOGDIR}
   
-  source config.sh
+  source aisnode_config.sh
 
   AIS_DAEMONID="$1-${HOSTNAME}" AIS_PRIMARYPROXY="true" bin/aisnode_${CLDPROVIDER} \
     -config=${CONFFILE} \

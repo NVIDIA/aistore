@@ -121,7 +121,7 @@ For these and similar use cases we have [AIS Downloader](downloader/README.md) -
 AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation is limited to Google Cloud Storage (GCS) and requires:
 
 1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment
-2. AIS configuration: set `rproxy=cloud` in the [configuration](ais/setup/config.sh)
+2. AIS configuration: set `rproxy=cloud` in the [configuration](/deploy/dev/local/aisnode_config.sh)
 
 Note that `http_proxy` is supported by most UNIX systems and is recognized by most (but not all) HTTP clients:
 

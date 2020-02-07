@@ -192,7 +192,7 @@ func (p *proxyrunner) setGlobRebID(smap *smapX, msgInt *actionMsgInternal, inc b
 	msgInt.GlobRebID = p.globRebID
 }
 
-func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
+func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (primaryURL string, status int, err error) {
 	var (
 		res  callResult
 		smap = p.owner.smap.get()
@@ -204,15 +204,16 @@ func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status in
 		if cmn.GCO.Get().Proxy.NonElectable {
 			query := url.Values{}
 			query.Add(cmn.URLParamNonElectable, "true")
-			res = p.join(query)
+			primaryURL, res = p.join(query)
 		} else {
-			res = p.join(nil)
+			primaryURL, res = p.join(nil)
 		}
 	} else { // keepalive
 		url, psi := p.getPrimaryURLAndSI()
 		res = p.registerToURL(url, psi, timeout, nil, keepalive)
+		primaryURL = url
 	}
-	return res.status, res.err
+	return primaryURL, res.status, res.err
 }
 
 func (p *proxyrunner) unregisterSelf() (int, error) {

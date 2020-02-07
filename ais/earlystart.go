@@ -126,26 +126,24 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 		return nil
 	}
 
-	// Get smap and use it to register self.
-	if err := retrievePrimarySmap(getSmapURL); err != nil {
-		return err
-	}
-	if err := p.registerWithRetry(); err != nil {
+	// Get smap and use it to register self. Ignoring error - the smap
+	// is not required to register right now but it is definitely helpful.
+	_ = retrievePrimarySmap(getSmapURL)
+
+	primaryURL, err := p.registerWithRetry()
+	if err != nil {
 		return fmt.Errorf("%s (non-primary), err: %v", p.si, err)
 	}
 
-	// Wait a while and retrieve smap from the primary once again. This time
-	// we should be in the smap...
+	// Wait a while and retrieve smap from the primary that we have joined in a while.
 	time.Sleep(time.Second)
-	smap := p.owner.smap.get()
-	primaryURL := smap.ProxySI.URL(cmn.NetworkPublic)
 	if err := retrievePrimarySmap(primaryURL); err != nil {
 		return err
 	}
 
 	p.owner.smap.Lock()
 	defer p.owner.smap.Unlock()
-	smap = p.owner.smap.get()
+	smap := p.owner.smap.get()
 	if !smap.isPresent(p.si) {
 		return fmt.Errorf("%s failed to register self - not present in the %s", p.si, smap.pp())
 	}
@@ -504,18 +502,19 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 	return
 }
 
-func (p *proxyrunner) registerWithRetry() error {
-	if status, err := p.register(false, cmn.DefaultTimeout); err != nil {
+func (p *proxyrunner) registerWithRetry() (primaryURL string, err error) {
+	var status int
+	if primaryURL, status, err = p.register(false, cmn.DefaultTimeout); err != nil {
 		if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 			glog.Warningf("%s: retrying registration...", p.si)
 			time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
-			if _, err = p.register(false, cmn.DefaultTimeout); err != nil {
+			if primaryURL, _, err = p.register(false, cmn.DefaultTimeout); err != nil {
 				glog.Errorf("%s: failed the 2nd attempt to register, err: %v", p.si, err)
-				return err
+				return "", err
 			}
 		} else {
-			return err
+			return "", err
 		}
 	}
-	return nil
+	return primaryURL, nil
 }

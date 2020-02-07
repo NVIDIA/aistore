@@ -36,7 +36,7 @@ spec:
             - name: STATSDCONF
               value: "/var/statsd_config/statsd.json"
             - name: RUNSCRIPTSOURCE
-              value: "/var/aisloader_script/config.sh"
+              value: "/var/aisloader_script/aisnode_config.sh"
           volumeMounts:
             - name: statsd-config
               mountPath: "/var/statsd_config"

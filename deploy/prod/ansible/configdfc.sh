@@ -26,5 +26,5 @@ export IPV4LIST=$(awk -vORS=, '{ print $1 }' ./inventory/cluster.txt | sed 's/,$
 sudo rm -rf aisproxy.json || true
 sudo rm -rf ais.json || true
 source /etc/profile.d/aispaths.sh
-$AISSRC/setup/config.sh
+$AISSRC/deploy/dev/local/aisnode_config.sh
 

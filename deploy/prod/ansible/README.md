@@ -31,7 +31,7 @@ $ ansible-playbook -i inventory/cluster.ini setupnodes.yml
 $ ansible-playbook -i inventory/cluster.ini getgais.yml
 ```
 
-4. Config AIS - runs $AISSRC/setup/config.sh to create ais.json on all nodes in $HOME dir
+4. Config AIS - runs `${AISSRC}/deploy/dev/local/aisnode_config.sh` to create `ais.json` on all nodes in $HOME dir
 
 ```console
 $ ansible-playbook -i inventory/cluster.ini configais.yml

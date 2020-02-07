@@ -36,7 +36,7 @@ runCmd() {
   { set +x; } 2>/dev/null
 }
 
-AISTORE_DIR=$(cd "$(dirname "$0")/../../"; pwd -P) # absolute path to aistore directory
+AISTORE_DIR=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
 
 # Used to determine ProjectID field for *your* Google Cloud project.
 # Must be set iff CLDPROVIDER (see below) is Google (aka GCP or "gcp").
@@ -167,7 +167,7 @@ fi
 
 mkdir -p $CONFDIR
 
-# Not really used for local testing but to keep config.sh quiet
+# Not really used for local testing but to keep aisnode_config.sh quiet
 GRAPHITE_PORT=2003
 GRAPHITE_SERVER="127.0.0.1"
 CONFFILE_COLLECTD=$CONFDIR/collectd.conf
@@ -182,7 +182,7 @@ for (( c=START; c<=END; c++ )); do
   mkdir -p $CONFDIR
   CONFFILE="$CONFDIR/ais.json"
   LOGDIR="$LOGROOT/$c/log"
-  source "${AISTORE_DIR}/ais/setup/config.sh"
+  source "${AISTORE_DIR}/deploy/dev/local/aisnode_config.sh"
 
   ((PORT++))
   ((PORT_INTRA_CONTROL++))
@@ -218,7 +218,7 @@ if [[ $AUTHENABLED = "true" ]]; then
   mkdir -p $CONFDIR
   CONFFILE="$CONFDIR/authn.json"
   LOGDIR="$LOGROOT/authn/log"
-  source "${AISTORE_DIR}/ais/setup/authn.sh"
+  source "${AISTORE_DIR}/deploy/dev/local/authn_config.sh"
 
   if ! make --no-print-directory -C ${AISTORE_DIR} authn; then
     printError "failed to compile 'authn' binary"

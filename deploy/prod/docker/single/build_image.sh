@@ -6,11 +6,11 @@ DIR=$(cd "$(dirname "$0")"; pwd -P)
 AISTORE_PATH=$(git rev-parse --show-toplevel)
 
 function cleanup {
-  rm -rf aisnode_* config.sh
+  rm -rf aisnode_*
 }
 trap cleanup INT TERM EXIT
 
-cp ${AISTORE_PATH}/ais/setup/config.sh config.sh
+cp ${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh aisnode_config.sh
 
 # Build `aisnode` binaries statically so that it can be executed without any additions.
 # https://blog.codeship.com/building-minimal-docker-containers-for-go-applications

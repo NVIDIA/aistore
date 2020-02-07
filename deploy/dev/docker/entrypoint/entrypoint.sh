@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# required for `source /config.sh`
+# required for `source /aisnode_config.sh`
 export TEST_FSPATH_ROOT=${MOUNTPATH}/${HOSTNAME}
 export LOGDIR=${TEST_FSPATH_ROOT}/log
 mkdir -p ${CONFDIR}
@@ -13,7 +13,7 @@ if [ -n "${QUICK}" ]; then
   go get -u -v github.com/NVIDIA/aistore && /bin/bash
 else
   cd ${GOPATH}/src/github.com/NVIDIA/aistore
-  source /config.sh
+  source /aisnode_config.sh
 
   exec node /statsd/stats.js ${CONFFILE_STATSD} 2>&1 | tee -a ${LOGDIR}/statsd.log &
 

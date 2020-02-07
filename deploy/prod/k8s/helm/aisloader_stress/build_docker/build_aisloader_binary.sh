@@ -25,15 +25,13 @@ function check_go_version {
 
     gover=$(go version)
     echo "Using $gobin $gover" >&2
-    [[ $gover =~ go1.13 ]] || whinge "Go version 1.13.* is required"
+    [[ $gover =~ go1.13 || $gover =~ go1.14 ]] || whinge "Go version 1.13.* or 1.14.* is required"
 }
 
 if (( $# < 1 )); then
     usage
     exit 1
 fi
-
-DEST=$(readlink -f $1) # need an absolute path for subshell below
 
 set -e
 
@@ -62,7 +60,7 @@ else
     [[ -d $GOPATH/src/$AISTORE_SRC ]] || whinge "$AISTORE_SRC not found in $GOPATH/src"
 fi
 
-cd $GOPATH/src/$AISTORE_SRC && GOBIN=${DEST} make aisloader
+cd $GOPATH/src/$AISTORE_SRC && GOBIN=$1 make aisloader
 [[ $? -eq 0 ]] || whinge "failed to compile 'aisloader'"
 
 exit 0

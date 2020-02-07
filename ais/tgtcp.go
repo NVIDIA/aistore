@@ -61,21 +61,22 @@ func (t *targetrunner) initHostIP() {
 }
 
 // register (join | keepalive) with primary
-func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
+func (t *targetrunner) register(keepalive bool, timeout time.Duration) (primaryURL string, status int, err error) {
 	var (
 		res      callResult
 		url, psi = t.getPrimaryURLAndSI()
 	)
 	if !keepalive {
-		res = t.join(nil)
+		primaryURL, res = t.join(nil)
 	} else { // keepalive
 		res = t.registerToURL(url, psi, timeout, nil, keepalive)
+		primaryURL = url
 	}
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
 			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
 		}
-		return res.status, res.err
+		return primaryURL, res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive
 	if len(res.outjson) == 0 {
@@ -511,7 +512,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if status, err := t.register(false, cmn.DefaultTimeout); err != nil {
+	if _, status, err := t.register(false, cmn.DefaultTimeout); err != nil {
 		s := fmt.Sprintf("%s: failed to register, status %d, err: %v", t.si, status, err)
 		t.invalmsghdlr(w, r, s)
 		return
@@ -1303,7 +1304,7 @@ func (t *targetrunner) enable() error {
 
 	glog.Infof("Enabling %s", t.si)
 	for i := 0; i < maxRetryCnt; i++ {
-		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
+		if _, status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
 				glog.Errorf("%s: retrying registration...", t.si)
 				time.Sleep(time.Second)
