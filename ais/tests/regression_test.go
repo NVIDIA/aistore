@@ -542,7 +542,8 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-targetsToUnregister {
-		t.Fatalf("%d target(s) expected after unregister, actually %d target(s)", m.originalTargetCount-targetsToUnregister, n)
+		t.Fatalf("%d target(s) expected after unregister, actually %d target(s)",
+			m.originalTargetCount-targetsToUnregister, n)
 	}
 	tutils.Logf("The cluster now has %d target(s)\n", n)
 

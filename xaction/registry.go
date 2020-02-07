@@ -543,7 +543,7 @@ func (r *registry) removeFinishedByID(id string) error {
 		return fmt.Errorf("xaction %s(%s, %T) is running - duplicate ID?", xact.Kind(), id, xact.Get())
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Found finished xaction %d with id %s. Deleting", xact.Get(), id)
+		glog.Infof("cleanup: removing xaction %s (ID %s)", xact.Get(), id)
 	}
 	r.byID.Delete(id)
 	r.byIDSize.Dec()
