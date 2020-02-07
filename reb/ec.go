@@ -310,10 +310,8 @@ func (so *rebObject) emptyTargets(skip *cluster.Snode) cluster.Nodes {
 
 func (rt *retransmitCT) equal(rhs *retransmitCT) bool {
 	return rt.sliceID == rhs.sliceID &&
-		// rt.objName == rhs.objName &&
 		rt.header.ObjName == rhs.header.ObjName &&
 		rt.daemonID == rhs.daemonID &&
-		// rt.bck.Equal(rhs.bck)
 		rt.header.Bck.Equal(rhs.header.Bck)
 }
 
