@@ -2614,3 +2614,98 @@ func TestECAndRegularRebalance(t *testing.T) {
 		tassert.CheckError(t, err)
 	}
 }
+
+// Simple local rebalance for EC bucket
+// 1. Create a bucket
+// 2. Remove mpath from one target
+// 3. Creates enough objects to have at least one per mpath
+//    So, minimal is <target count>*<mpath count>*2.
+//    For tests 150 looks good
+// 4. Attach removed mpath
+// 5. Wait for rebalance to finish
+// 6. Check that all objects returns the non-zero number of Data and Parity
+//    slices in HEAD response
+// 7. Extra check: the number of objects after rebalance equals initial number
+func TestECLocalRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	var (
+		bck = cmn.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		}
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+	o := ecOptions{
+		objCount:  150,
+		concurr:   8,
+		pattern:   "obj-reb-loc-%04d",
+		isAIS:     true,
+		dataCnt:   1,
+		parityCnt: 2,
+		silent:    true,
+	}.init()
+
+	smap := tutils.GetClusterMap(t, proxyURL)
+	err := ecSliceNumInit(t, smap, o)
+	tassert.CheckFatal(t, err)
+
+	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	tgtList := tutils.ExtractTargetNodes(smap)
+	tgtLost := tgtList[0]
+	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
+	tassert.CheckFatal(t, err)
+	if len(lostFSList.Available) < 2 {
+		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtLost.ID(), len(lostFSList.Available))
+	}
+	lostPath := lostFSList.Available[0]
+	err = api.RemoveMountpath(baseParams, tgtLost.ID(), lostPath)
+	tassert.CheckFatal(t, err)
+
+	wg := sync.WaitGroup{}
+
+	wg.Add(o.objCount)
+	for i := 0; i < o.objCount; i++ {
+		objName := fmt.Sprintf(o.pattern, i)
+		go func(i int) {
+			defer wg.Done()
+			createECObject(t, baseParams, bck, objName, i, o)
+		}(i)
+	}
+	wg.Wait()
+	tutils.Logf("Created %d objects\n", o.objCount)
+
+	err = api.AddMountpath(baseParams, tgtLost, lostPath)
+	tassert.CheckFatal(t, err)
+	// loop above may fail (even if AddMountpath works) and mark a test failed
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	tutils.Logf("Wait for local rebalance to complete...\n")
+	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size"}
+	resEC, err := api.ListBucket(baseParams, bck, msg, 0)
+	tassert.CheckError(t, err)
+	newECList := filterObjListOK(resEC.Entries)
+	tutils.Logf("%d objects in %s after rebalance\n", len(newECList), bck)
+	if len(newECList) != o.objCount {
+		t.Errorf("Expected %d objects after rebalance, found %d", o.objCount, len(newECList))
+	}
+
+	for i := 0; i < o.objCount; i++ {
+		objName := ecTestDir + fmt.Sprintf(o.pattern, i)
+		props, err := api.HeadObject(baseParams, bck, objName)
+		if err != nil {
+			t.Errorf("HEAD for %s failed: %v", objName, err)
+		} else if props.DataSlices == 0 || props.ParitySlices == 0 {
+			t.Errorf("%s has not EC info", objName)
+		}
+	}
+}
