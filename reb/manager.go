@@ -564,7 +564,10 @@ func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
 		return
 	}
 
-	rt := &retransmitCT{bck: hdr.Bck, objName: hdr.ObjName, sliceID: int16(ack.sliceID), daemonID: ack.daemonID}
+	rt := &retransmitCT{
+		header:  transport.Header{Bck: hdr.Bck, ObjName: hdr.ObjName},
+		sliceID: int16(ack.sliceID), daemonID: ack.daemonID,
+	}
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof(
 			"%s: EC ack from %s on %s/%s [%d]",

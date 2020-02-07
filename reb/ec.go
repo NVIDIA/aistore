@@ -184,9 +184,6 @@ type (
 
 	// CT destination (to use later for retransmitting lost CTs)
 	retransmitCT struct {
-		bck         cmn.Bck
-		objName     string
-		sliceID     int16
 		daemonID    string           // destination
 		header      transport.Header // original transport header copy
 		fqn         string           // for sending CT from local drives
@@ -194,6 +191,7 @@ type (
 		sliceOffset int64            // slice offset for data slice
 		sliceSize   int64            // slice data size for data slice
 		slicePad    int64            // slice padding size for data slice
+		sliceID     int16
 	}
 
 	// a list of CTs waiting for receive acknowledge from remote targets
@@ -312,13 +310,15 @@ func (so *rebObject) emptyTargets(skip *cluster.Snode) cluster.Nodes {
 
 func (rt *retransmitCT) equal(rhs *retransmitCT) bool {
 	return rt.sliceID == rhs.sliceID &&
-		rt.objName == rhs.objName &&
+		// rt.objName == rhs.objName &&
+		rt.header.ObjName == rhs.header.ObjName &&
 		rt.daemonID == rhs.daemonID &&
-		rt.bck.Equal(rhs.bck)
+		// rt.bck.Equal(rhs.bck)
+		rt.header.Bck.Equal(rhs.header.Bck)
 }
 
 func (ack *ackCT) add(rt *retransmitCT) {
-	cmn.Assert(rt.objName != "" && rt.bck.Name != "")
+	cmn.Assert(rt.header.ObjName != "" && rt.header.Bck.Name != "")
 	ack.mtx.Lock()
 	ack.ct = append(ack.ct, rt)
 	ack.mtx.Unlock()
@@ -351,7 +351,7 @@ func (ack *ackCT) removeObject(bck cmn.Bck, objName string) {
 	ack.mtx.Lock()
 	l := len(ack.ct)
 	for idx := 0; idx < l; {
-		if ack.ct[idx].objName != objName || !ack.ct[idx].bck.Equal(bck) {
+		if ack.ct[idx].header.ObjName != objName || !ack.ct[idx].header.Bck.Equal(bck) {
 			idx++
 			continue
 		}
@@ -518,9 +518,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 	}
 
 	for _, tgt := range targets {
-		dest := &retransmitCT{
-			bck: ct.Bck, objName: ct.Objname, sliceID: ct.SliceID,
-			daemonID: tgt.ID(), header: hdr, fqn: ct.hrwFQN}
+		dest := &retransmitCT{sliceID: ct.SliceID, daemonID: tgt.ID(), header: hdr, fqn: ct.hrwFQN}
 		reb.ec.ackCTs.add(dest)
 	}
 	reb.ec.onAir.Inc()
@@ -1942,7 +1940,6 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 			}
 			padSize := obj.sliceSize - dataSize
 			dest := &retransmitCT{
-				objName: obj.objName, bck: obj.bck,
 				fqn: slice.hrwFQN, sliceOffset: offset, sliceSize: dataSize,
 				slicePad: padSize, sliceID: int16(idx),
 			}
@@ -1962,7 +1959,6 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 			}
 			reader := memsys.NewReader(obj.rebuildSGLs[sglIdx])
 			dest := &retransmitCT{
-				objName: obj.objName, bck: obj.bck,
 				sliceID: int16(idx), sgl: obj.rebuildSGLs[sglIdx],
 			}
 			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
@@ -2056,7 +2052,6 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 			}
 			reader.Open()
 			dest := &retransmitCT{
-				bck: obj.bck, objName: obj.objName,
 				sgl: slice.sgl, sliceOffset: int64(idx-1) * obj.sliceSize,
 				sliceSize: obj.sliceSize, sliceID: int16(idx),
 			}
@@ -2075,10 +2070,7 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 				return fmt.Errorf("Failed to calculate checksum of %s: %v", obj.objName, err)
 			}
 			reader := memsys.NewReader(obj.rebuildSGLs[sglIdx])
-			dest := &retransmitCT{
-				bck: obj.bck, objName: obj.objName,
-				sgl: obj.rebuildSGLs[sglIdx], sliceID: int16(idx),
-			}
+			dest := &retransmitCT{sgl: obj.rebuildSGLs[sglIdx], sliceID: int16(idx)}
 			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
 				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName, si.Name())
 				// keep on working to restore as many as possible
@@ -2240,10 +2232,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 			meta:         &sliceMD,
 		}
 
-		dest := &retransmitCT{
-			bck: obj.bck, objName: obj.objName,
-			sgl: obj.rebuildSGLs[i], sliceID: int16(i + 1),
-		}
+		dest := &retransmitCT{sgl: obj.rebuildSGLs[i], sliceID: int16(i + 1)}
 		if err := reb.sendFromReader(reader, sl, i+1, ckval, si, dest); err != nil {
 			return fmt.Errorf("Failed to send slice %d of %s to %s: %v", i, obj.uid, si.Name(), err)
 		}
