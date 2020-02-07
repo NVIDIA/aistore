@@ -740,6 +740,7 @@ func broadcast(method, path string, urlParams url.Values, body []byte, nodes clu
 			return
 		}
 		out, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
 
 		responses[idx] = response{
 			si:         node,

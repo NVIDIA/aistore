@@ -674,6 +674,7 @@ func (m *Manager) doWithAbort(reqArgs *cmn.ReqArgs) error {
 			errCh <- err
 			return
 		}
+		defer resp.Body.Close()
 
 		if resp.StatusCode >= http.StatusBadRequest {
 			b, err := ioutil.ReadAll(resp.Body)

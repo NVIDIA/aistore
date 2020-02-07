@@ -67,18 +67,17 @@ func doHTTPRequestGetResp(baseParams BaseParams, path string, b []byte,
 	}
 	setAuthToken(req, baseParams)
 
-	resp, err := baseParams.Client.Do(req)
+	resp, err := baseParams.Client.Do(req) // nolint:bodyclose // it should be closed by the caller
 	if err != nil {
 		sleep := httpRetrySleep
 		if cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(sleep)
-				resp, err = baseParams.Client.Do(req)
+				resp, err = baseParams.Client.Do(req) // nolint:bodyclose // it should be closed by the caller
 				sleep += sleep / 2
 			}
 		}
 	}
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to %s, err: %v", baseParams.Method, err)
 	}

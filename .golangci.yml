@@ -23,6 +23,8 @@ linters:
     - unparam
     - maligned
     - gofmt
+    - bodyclose
+    - goprintffuncname
     # following linters produce a lot false positives, enable only when needed:
     # - gosec
     # - scopelint

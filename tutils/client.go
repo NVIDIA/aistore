@@ -391,13 +391,13 @@ func PutWithTrace(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.
 	tctx := newTraceCtx()
 
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
-	resp, err := tctx.tracedClient.Do(req)
+	resp, err := tctx.tracedClient.Do(req) // nolint:bodyclose // it's closed later
 	if err != nil {
 		sleep := httpRetrySleep
 		if cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(sleep)
-				resp, err = tctx.tracedClient.Do(req)
+				resp, err = tctx.tracedClient.Do(req) // nolint:bodyclose // it's closed later
 				sleep += sleep / 2
 			}
 		}

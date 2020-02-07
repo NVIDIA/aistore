@@ -313,13 +313,13 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	}
 
 	setAuthToken(req, args.BaseParams)
-	resp, err := args.BaseParams.Client.Do(req)
+	resp, err := args.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
 	if err != nil {
 		sleep := httpRetrySleep
 		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(sleep)
-				resp, err = args.BaseParams.Client.Do(req)
+				resp, err = args.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
 				sleep += sleep / 2
 			}
 		}
@@ -328,9 +328,8 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	if err != nil {
 		return fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
-	defer resp.Body.Close()
-
-	_, err = checkBadStatus(req, resp)
+	_, err = checkBadStatus(req, resp) // nolint:bodyclose // it's closed later
+	resp.Body.Close()
 	return err
 }
 
@@ -373,13 +372,13 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 		return args.Reader.Open()
 	}
 	setAuthToken(req, args.BaseParams)
-	resp, err := args.BaseParams.Client.Do(req)
+	resp, err := args.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
 	if err != nil {
 		sleep := httpRetrySleep
 		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(sleep)
-				resp, err = args.BaseParams.Client.Do(req)
+				resp, err = args.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
 				sleep += sleep / 2
 			}
 		}
@@ -389,8 +388,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
 	defer resp.Body.Close()
-
-	_, err = checkBadStatus(req, resp)
+	_, err = checkBadStatus(req, resp) // nolint:bodyclose // it's closed in defer
 	return resp.Header.Get(cmn.HeaderAppendHandle), err
 }
 

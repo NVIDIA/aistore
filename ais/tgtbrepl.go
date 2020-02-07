@@ -138,11 +138,12 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objnameTo string, si *cluster.
 	timeInt := lom.AtimeUnix()
 	req.Header.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
 
-	_, err = ri.t.httpclientGetPut.Do(req)
-	if err != nil {
-		err = fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
+	resp, err1 := ri.t.httpclientGetPut.Do(req)
+	if err1 != nil {
+		err = fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err1)
 	} else {
 		copied = true
 	}
+	resp.Body.Close()
 	return
 }
