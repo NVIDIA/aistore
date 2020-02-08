@@ -6,11 +6,11 @@
 package ios
 
 import (
+	"flag"
 	"os/exec"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -46,7 +46,9 @@ func fs2disks(fs string) (disks fsDisks) {
 		return
 	}
 	findDevDisks(lsBlkOutput.BlockDevices, device, disks)
-	cmn.Printf("%s: %+v", fs, disks)
+	if flag.Parsed() {
+		glog.Infof("%s: %+v", fs, disks)
+	}
 	return disks
 }
 

@@ -575,7 +575,9 @@ func (rj *globalJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, l
 		t   = rj.m.t
 	)
 	rj.m.inQueue.Dec()
-	lom.Unlock(false)
+	lom.Unlock(false) // NOTE: can unlock now
+
+	rj.m.t.GetSmallMMSA().Free(hdr.Opaque)
 
 	if err != nil {
 		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode().Name(), hdr.Bck, hdr.ObjName, err)
@@ -697,27 +699,32 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	lomack.q[lom.Uname()] = lom
 	lomack.mu.Unlock()
 	// transmit
-	ack := regularAck{globRebID: rj.m.GlobRebID(), daemonID: rj.m.t.Snode().ID()}
-	opaque := ack.NewPack()
-	hdr := transport.Header{
-		Bck:     lom.Bck().Bck,
-		ObjName: lom.Objname,
-		Opaque:  opaque,
-		ObjAttrs: transport.ObjectAttrs{
-			Size:       lom.Size(),
-			Atime:      lom.AtimeUnix(),
-			CksumType:  cksumType,
-			CksumValue: cksumValue,
-			Version:    lom.Version(),
-		},
-	}
+	var (
+		ack    = regularAck{globRebID: rj.m.GlobRebID(), daemonID: rj.m.t.Snode().ID()}
+		mm     = rj.m.t.GetSmallMMSA()
+		opaque = ack.NewPack(mm)
+		hdr    = transport.Header{
+			Bck:     lom.Bck().Bck,
+			ObjName: lom.Objname,
+			Opaque:  opaque,
+			ObjAttrs: transport.ObjectAttrs{
+				Size:       lom.Size(),
+				Atime:      lom.AtimeUnix(),
+				CksumType:  cksumType,
+				CksumValue: cksumValue,
+				Version:    lom.Version(),
+			},
+		}
+		o = transport.Obj{Hdr: hdr, Callback: rj.objSentCallback, CmplPtr: unsafe.Pointer(lom)}
+	)
+
 	rj.m.inQueue.Inc()
-	o := transport.Obj{Hdr: hdr, Callback: rj.objSentCallback, CmplPtr: unsafe.Pointer(lom)}
 	if err = rj.m.streams.Send(o, file, tsi); err != nil {
 		rj.m.inQueue.Dec()
 		lomack.mu.Lock()
 		delete(lomack.q, lom.Uname())
 		lomack.mu.Unlock()
+		mm.Free(opaque)
 		return
 	}
 	rj.m.laterx.Store(true)

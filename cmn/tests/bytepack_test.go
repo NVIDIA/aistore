@@ -103,7 +103,7 @@ func TestBytePackStruct(t *testing.T) {
 		},
 	}
 
-	packer := cmn.NewPacker(first.PackedSize() + second.PackedSize())
+	packer := cmn.NewPacker(nil, first.PackedSize()+second.PackedSize())
 	packer.WriteAny(first)
 	packer.WriteAny(second)
 

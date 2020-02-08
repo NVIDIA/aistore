@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // Rebalance message types (for ACK or sending files)
@@ -63,8 +64,10 @@ func (rack *regularAck) Pack(packer *cmn.BytePack) {
 	packer.WriteString(rack.daemonID)
 }
 
-func (rack *regularAck) NewPack() []byte { // TODO: consider adding as another cmn.Packer interface
-	packer := cmn.NewPacker(rebMsgKindSize + rack.PackedSize())
+func (rack *regularAck) NewPack(mm *memsys.MMSA) []byte { // TODO: consider adding as another cmn.Packer interface
+	l := rebMsgKindSize + rack.PackedSize()
+	buf, _ := mm.Alloc(int64(l))
+	packer := cmn.NewPacker(buf, l)
 	packer.WriteByte(rebMsgRegular)
 	packer.WriteAny(rack)
 	return packer.Bytes()
@@ -92,8 +95,10 @@ func (eack *ecAck) Pack(packer *cmn.BytePack) {
 	packer.WriteString(eack.daemonID)
 }
 
-func (eack *ecAck) NewPack() []byte {
-	packer := cmn.NewPacker(rebMsgKindSize + eack.PackedSize())
+func (eack *ecAck) NewPack(mm *memsys.MMSA) []byte {
+	l := rebMsgKindSize + eack.PackedSize()
+	buf, _ := mm.Alloc(int64(l))
+	packer := cmn.NewPacker(buf, l)
 	packer.WriteByte(rebMsgEC)
 	packer.WriteAny(eack)
 	return packer.Bytes()
@@ -127,8 +132,15 @@ func (req *pushReq) Pack(packer *cmn.BytePack) {
 	}
 }
 
-func (req *pushReq) NewPack() []byte {
-	packer := cmn.NewPacker(rebMsgKindSize + req.PackedSize())
+func (req *pushReq) NewPack(mm *memsys.MMSA) []byte {
+	var (
+		buf []byte
+		l   = rebMsgKindSize + req.PackedSize()
+	)
+	if mm != nil {
+		buf, _ = mm.Alloc(int64(l))
+	}
+	packer := cmn.NewPacker(buf, l)
 	packer.WriteByte(rebMsgEC)
 	packer.WriteAny(req)
 	return packer.Bytes()
@@ -169,8 +181,11 @@ func (req *pushReq) Unpack(unpacker *cmn.ByteUnpack) error {
 // so there is no need for a caller to read the first byte and decide
 // which unpacker to call.
 // The function below is to simplify sending/receiving push notifications
-func (reb *Manager) encodePushReq(req *pushReq) []byte {
-	packer := cmn.NewPacker(rebMsgKindSize + req.PackedSize())
+// TODO -- FIXME: copy-paste vs `(req *pushReq) NewPack`
+func (reb *Manager) encodePushReq(req *pushReq, mm *memsys.MMSA) []byte {
+	l := rebMsgKindSize + req.PackedSize()
+	buf, _ := mm.Alloc(int64(l))
+	packer := cmn.NewPacker(buf, l)
 	packer.WriteByte(rebMsgPushStage)
 	packer.WriteAny(req)
 	return packer.Bytes()

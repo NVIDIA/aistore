@@ -369,8 +369,11 @@ func (ack *ackCT) waiting() int {
 }
 
 // Keep allocated capacity for the next batch
-func (ack *ackCT) clear() {
+func (ack *ackCT) clear(mm *memsys.MMSA) {
 	ack.mtx.Lock()
+	for _, rt := range ack.ct {
+		mm.Free(rt.header.Opaque)
+	}
 	ack.ct = ack.ct[:0]
 	ack.mtx.Unlock()
 }
@@ -467,39 +470,47 @@ func (s *ecData) appendNodeData(daemonID string, ct *rebCT) {
 // Sends local CT along with EC metadata to remote targets.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
 func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
+	var (
+		lom *cluster.LOM
+		fqn = ct.realFQN
+	)
 	cmn.Assert(ct.meta != nil)
-	req := pushReq{
-		daemonID: reb.t.Snode().ID(),
-		stage:    rebStageECGlobRepair,
-		rebID:    reb.globRebID.Load(),
-		md:       ct.meta,
-	}
-
-	fqn := ct.realFQN
 	if ct.hrwFQN != "" {
 		fqn = ct.hrwFQN
 	}
-	resolved, _, err := cluster.ResolveFQN(fqn)
-	if err != nil {
+	lom = &cluster.LOM{T: reb.t, FQN: fqn}
+	if err := lom.Init(ct.Bck); err != nil {
 		return err
 	}
-	opaque := req.NewPack()
-	hdr := transport.Header{
-		Bck:      ct.Bck,
-		ObjName:  ct.Objname,
-		ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
-		Opaque:   opaque,
-	}
-
-	if resolved.ContentType == fs.ObjectType {
-		lom := cluster.LOM{T: reb.t, FQN: fqn}
-		if err := lom.Init(ct.Bck); err != nil {
-			return err
-		}
+	if lom.ParsedFQN.ContentType == fs.ObjectType {
 		if err := lom.Load(false); err != nil {
 			return err
 		}
+	} else {
+		lom = nil // sending slice
+	}
+	// open
+	fh, err := cmn.NewFileHandle(fqn)
+	if err != nil {
+		return err
+	}
 
+	// transmit
+	var (
+		req = pushReq{
+			daemonID: reb.t.Snode().ID(),
+			stage:    rebStageECGlobRepair,
+			rebID:    reb.globRebID.Load(),
+			md:       ct.meta,
+		}
+		mm  = reb.t.GetSmallMMSA()
+		hdr = transport.Header{
+			Bck:      ct.Bck,
+			ObjName:  ct.Objname,
+			ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
+		}
+	)
+	if lom != nil {
 		hdr.ObjAttrs.Atime = lom.AtimeUnix()
 		hdr.ObjAttrs.Version = lom.Version()
 		if cksum := lom.Cksum(); cksum != nil {
@@ -509,19 +520,16 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 	if ct.SliceID != 0 {
 		hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
 	}
-
-	fh, err := cmn.NewFileHandle(ct.hrwFQN)
-	if err != nil {
-		return err
-	}
-
 	for _, tgt := range targets {
 		dest := &retransmitCT{sliceID: ct.SliceID, daemonID: tgt.ID(), header: hdr, fqn: ct.hrwFQN}
 		reb.ec.ackCTs.add(dest)
 	}
 	reb.ec.onAir.Inc()
+	hdr.Opaque = req.NewPack(mm)
+
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, targets...); err != nil {
 		reb.ec.onAir.Dec()
+		mm.Free(hdr.Opaque)
 		fh.Close()
 		reb.ec.ackCTs.removeObject(ct.Bck, ct.Objname)
 		return fmt.Errorf("Failed to send slices to nodes [%s..]: %v", targets[0].ID(), err)
@@ -534,8 +542,9 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 }
 
 // Track the number of sent CTs
-func (reb *Manager) transportECCB(_ transport.Header, reader io.ReadCloser, _ unsafe.Pointer, _ error) {
+func (reb *Manager) transportECCB(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, _ error) {
 	reb.ec.onAir.Dec()
+	reb.t.GetSmallMMSA().Free(hdr.Opaque)
 }
 
 // Sends reconstructed slice along with EC metadata to remote target.
@@ -545,43 +554,45 @@ func (reb *Manager) transportECCB(_ transport.Header, reader io.ReadCloser, _ un
 func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	ct *rebCT, sliceID int, xxhash string, target *cluster.Snode, rt *retransmitCT) error {
 	cmn.AssertMsg(ct.meta != nil, ct.Objname)
-	newMeta := *ct.meta // copy meta (it does not contain pointers)
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("Sending slice %d[%s] of %s to %s", sliceID, xxhash, ct.Objname, target.Name())
-	}
-	newMeta.SliceID = sliceID
-	req := pushReq{
-		daemonID: reb.t.Snode().ID(),
-		stage:    rebStageECGlobRepair,
-		rebID:    reb.globRebID.Load(),
-		md:       &newMeta,
-	}
 	cmn.AssertMsg(ct.ObjSize != 0, ct.Objname)
-	size := ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
-	opaque := req.NewPack()
-	hdr := transport.Header{
-		Bck:      ct.Bck,
-		ObjName:  ct.Objname,
-		ObjAttrs: transport.ObjectAttrs{Size: size},
-		Opaque:   opaque,
-	}
+	cmn.Assert(rt != nil)
+	var (
+		newMeta = *ct.meta // copy of meta (flat struct of primitive types)
+		req     = pushReq{
+			daemonID: reb.t.Snode().ID(),
+			stage:    rebStageECGlobRepair,
+			rebID:    reb.globRebID.Load(),
+			md:       &newMeta,
+		}
+		size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
+		hdr  = transport.Header{
+			Bck:      ct.Bck,
+			ObjName:  ct.Objname,
+			ObjAttrs: transport.ObjectAttrs{Size: size},
+		}
+		mm = reb.t.GetSmallMMSA()
+	)
+	newMeta.SliceID = sliceID
+	hdr.Opaque = req.NewPack(mm)
 	if xxhash != "" {
 		hdr.ObjAttrs.CksumValue = xxhash
 		hdr.ObjAttrs.CksumType = cmn.ChecksumXXHash
 	}
 
-	cmn.Assert(rt != nil)
 	rt.daemonID = target.ID()
 	rt.header = hdr
 	reb.ec.ackCTs.add(rt)
 
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("Sending slice %d[%s] of %s/%s to %s", sliceID, xxhash, ct.Bck.Name, ct.Objname, target.Name())
+	}
 	reb.ec.onAir.Inc()
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
 		reb.ec.onAir.Dec()
+		mm.Free(hdr.Opaque)
 		reb.ec.ackCTs.remove(rt)
 		return fmt.Errorf("Failed to send slices to node %s: %v", target.Name(), err)
 	}
-
 	reb.statRunner.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.TxRebSize, Value: size},
@@ -726,20 +737,28 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 		glog.Infof("CTs to get remains: %d", remains)
 	}
 
-	// send acknowledge back to the caller
-	smap := (*cluster.Smap)(reb.smap.Load())
-	tsi := smap.GetTarget(req.daemonID)
-	ack := &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.Snode().ID()}
-	hdr.Opaque = ack.NewPack()
+	// ACK
+	var (
+		smap = (*cluster.Smap)(reb.smap.Load())
+		tsi  = smap.GetTarget(req.daemonID)
+		mm   = reb.t.GetSmallMMSA()
+		ack  = &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.Snode().ID()}
+	)
+	hdr.Opaque = ack.NewPack(mm)
 	hdr.ObjAttrs.Size = 0
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
 		glog.Infof("Sending ACK for %s/%s to %s", hdr.Bck, hdr.ObjName, tsi.ID())
 	}
-	if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
+	if err := reb.acks.Send(transport.Obj{Hdr: hdr, Callback: reb.eackSentCallback}, nil, tsi); err != nil {
+		mm.Free(hdr.Opaque)
 		glog.Error(err)
 	}
 
 	return nil
+}
+
+func (reb *Manager) eackSentCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+	reb.t.GetSmallMMSA().Free(hdr.Opaque)
 }
 
 // On receiving an EC CT or EC namespace
@@ -1059,51 +1078,47 @@ func (reb *Manager) runEC() {
 	reb.changeStage(rebStageECNamespace, 0)
 }
 
-// send collected CTs to all targets with retry
+// send collected CTs to all targets with retry (to assemble the entire namespace)
 func (reb *Manager) exchange() error {
 	const (
 		retries = 3               // number of retries to send collected CT info
 		sleep   = 5 * time.Second // delay between retries
 	)
-
-	globRebID := reb.globRebID.Load()
-	smap := reb.t.GetSowner().Get()
-
-	// TODO -- FIXME: add a helper in the cluster pkg: NodeMap => Nodes skipping self
-
-	sendTo := make(cluster.Nodes, 0, len(smap.Tmap))
-	failed := make(cluster.Nodes, 0, len(smap.Tmap))
+	var (
+		globRebID = reb.globRebID.Load()
+		smap      = reb.t.GetSowner().Get()
+		sendTo    = make(cluster.Nodes, 0, len(smap.Tmap))
+		failed    = make(cluster.Nodes, 0, len(smap.Tmap))
+		emptyCT   = make([]*rebCT, 0)
+	)
 	for _, node := range smap.Tmap {
 		if node.ID() == reb.t.Snode().ID() {
 			continue
 		}
 		sendTo = append(sendTo, node)
 	}
-
-	emptyCT := make([]*rebCT, 0)
+	cts, ok := reb.ec.nodeData(reb.t.Snode().ID())
+	if !ok {
+		cts = emptyCT // no data collected for the target, send empty notification
+	}
+	var (
+		req = pushReq{
+			daemonID: reb.t.Snode().ID(),
+			stage:    rebStageECNamespace,
+			rebID:    globRebID,
+		}
+		body   = cmn.MustMarshal(cts)
+		opaque = req.NewPack(nil)
+		hdr    = transport.Header{
+			ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
+			Opaque:   opaque,
+		}
+	)
 	for i := 0; i < retries; i++ {
 		failed = failed[:0]
 		for _, node := range sendTo {
 			if reb.xreb.Aborted() {
 				return fmt.Errorf("%d: aborted", globRebID)
-			}
-
-			cts, ok := reb.ec.nodeData(reb.t.Snode().ID())
-			if !ok {
-				// no data collected for the target, send empty notification
-				cts = emptyCT
-			}
-
-			req := pushReq{
-				daemonID: reb.t.Snode().ID(),
-				stage:    rebStageECNamespace,
-				rebID:    globRebID,
-			}
-			body := cmn.MustMarshal(cts)
-			opaque := req.NewPack()
-			hdr := transport.Header{
-				ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
-				Opaque:   opaque,
 			}
 			rd := cmn.NewByteHandle(body)
 			if err := reb.streams.Send(transport.Obj{Hdr: hdr}, rd, node); err != nil {
@@ -1115,17 +1130,14 @@ func (reb *Manager) exchange() error {
 				stats.NamedVal64{Name: stats.TxRebSize, Value: int64(len(body))},
 			)
 		}
-
 		if len(failed) == 0 {
 			reb.changeStage(rebStageECDetect, 0)
 			return nil
 		}
-
 		time.Sleep(sleep)
 		copy(sendTo, failed)
 	}
-
-	return fmt.Errorf("Could not sent data to %d nodes", len(failed))
+	return fmt.Errorf("Could not send data to %d nodes", len(failed))
 }
 
 func (reb *Manager) rebalanceLocalSlice(fromFQN, toFQN string, buf []byte) error {
@@ -1638,7 +1650,7 @@ func (reb *Manager) rebalanceObject(md *globArgs, obj *rebObject) (err error) {
 func (reb *Manager) cleanupBatch() {
 	reb.ec.waiter.cleanupBatch(reb.ec.broken, int(reb.stages.currBatch.Load()))
 	reb.releaseSGLs(reb.ec.broken)
-	reb.ec.ackCTs.clear()
+	reb.ec.ackCTs.clear(reb.t.GetSmallMMSA())
 }
 
 // Wait for all targets to finish the current batch and then free allocated resources

@@ -654,6 +654,7 @@ func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 	}
 	return
 }
+
 func (lom *LOM) IsLoaded() (ok bool) {
 	var (
 		hkey, idx = lom.Hkey()

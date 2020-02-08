@@ -389,7 +389,7 @@ func (rm *RecordManager) Cleanup() {
 
 	// NOTE: forcefully free all MMSA memory to the OS
 	// TODO: another reason to use a separate MMSA for extractions
-	rm.t.GetMMSA().Free(memsys.FreeSpec{
+	rm.t.GetMMSA().FreeSpec(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
 		MinSize: 1, // force toGC to free all (even small) memory to system

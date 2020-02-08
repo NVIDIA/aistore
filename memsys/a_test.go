@@ -87,7 +87,7 @@ func Test_Sleep(t *testing.T) {
 	go printMaxRingLen(mem, c)
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
-		mem.Free(memsys.FreeSpec{IdleDuration: 1, MinSize: cmn.MiB})
+		mem.FreeSpec(memsys.FreeSpec{IdleDuration: 1, MinSize: cmn.MiB})
 	}
 	wg.Wait()
 	close(c)
@@ -118,7 +118,7 @@ func Test_NoSleep(t *testing.T) {
 	go printMaxRingLen(mem, c)
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
-		mem.Free(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: cmn.MiB * 10})
+		mem.FreeSpec(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: cmn.MiB * 10})
 	}
 	wg.Wait()
 	close(c)

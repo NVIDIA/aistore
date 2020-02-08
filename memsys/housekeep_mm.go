@@ -17,7 +17,7 @@ import (
 )
 
 // API: on-demand memory freeing to the user-provided specification
-func (r *MMSA) Free(spec FreeSpec) {
+func (r *MMSA) FreeSpec(spec FreeSpec) {
 	var freed int64
 	if spec.Totally {
 		for _, s := range r.rings {

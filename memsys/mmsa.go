@@ -442,16 +442,36 @@ func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
 			return r.Sibling.Alloc(size)
 		}
 	}
+	slab = r._selectSlab(size)
+	buf = slab.Alloc()
+	return
+}
+
+// used by the above and the below
+func (r *MMSA) _selectSlab(size int64) (slab *Slab) {
 	if size >= r.maxSlabSize {
 		slab = r.rings[len(r.rings)-1]
 	} else if size <= r.slabIncStep {
 		slab = r.rings[0]
 	} else {
-		a := (size + r.slabIncStep - 1) / r.slabIncStep
-		slab = r.rings[a-1]
+		i := (size + r.slabIncStep - 1) / r.slabIncStep
+		slab = r.rings[i-1]
 	}
-	buf = slab.Alloc()
 	return
+}
+
+func (r *MMSA) Free(buf []byte) {
+	size := int64(cap(buf))
+	if size > r.maxSlabSize && r.Small && r.Sibling != nil {
+		r.Sibling.Free(buf)
+	} else if size < r.slabIncStep && !r.Small && r.Sibling != nil {
+		r.Sibling.Free(buf)
+	} else {
+		a, b := size/r.slabIncStep, size%r.slabIncStep
+		cmn.Assert(b == 0 && a <= int64(r.numSlabs))
+		slab := r._selectSlab(size)
+		slab.Free(buf)
+	}
 }
 
 ///////////////
@@ -478,13 +498,15 @@ func (s *Slab) Free(bufs ...[]byte) {
 	if len(s.put) < maxDepth {
 		s.muput.Lock()
 		for _, buf := range bufs {
+			size := cap(buf)
+			b := buf[:size] // NOTE: always freeing the original (full) size
 			if s.m.Debug {
-				cmn.Assert(int64(len(buf)) == s.Size())
-				for i := 0; i < len(buf); i += len(deadBEEF) {
-					copy(buf[i:], deadBEEF)
+				cmn.Assert(int64(size) == s.Size())
+				for i := 0; i < len(b); i += len(deadBEEF) {
+					copy(b[i:], deadBEEF)
 				}
 			}
-			s.put = append(s.put, buf)
+			s.put = append(s.put, b)
 		}
 		s.muput.Unlock()
 	} else {

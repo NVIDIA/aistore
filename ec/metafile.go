@@ -15,7 +15,7 @@ import (
 
 // Metadata - EC information stored in metafiles for every encoded object
 type Metadata struct {
-	Size       int64  `json:"size"`                      // size of original file (after EC'ing the total size of slices differs from original)
+	Size       int64  `json:"size"`                      // obj size (after EC'ing sum size of slices differs from the original)
 	ObjCksum   string `json:"obj_chk"`                   // checksum of the original object
 	ObjVersion string `json:"obj_version,omitempty"`     // object version
 	CksumType  string `json:"slice_ck_type,omitempty"`   // slice checksum type

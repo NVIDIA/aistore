@@ -90,12 +90,14 @@ const SizeofLen = SizeofI32
 var ErrorBufferUnderrun = errors.New("buffer underrun")
 
 func NewUnpacker(buf []byte) *ByteUnpack {
-	return &ByteUnpack{off: 0, b: buf}
+	return &ByteUnpack{b: buf}
 }
 
-func NewPacker(bufLen int) *BytePack {
-	Assert(bufLen > 0)
-	return &BytePack{off: 0, b: make([]byte, bufLen)}
+func NewPacker(buf []byte, bufLen int) *BytePack {
+	if buf == nil {
+		return &BytePack{b: make([]byte, bufLen)}
+	}
+	return &BytePack{b: buf}
 }
 
 //

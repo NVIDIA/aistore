@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -434,13 +435,21 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 		return
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
-		ack := &regularAck{globRebID: reb.GlobRebID(), daemonID: reb.t.Snode().ID()}
-		hdr.Opaque = ack.NewPack()
+		var (
+			ack = &regularAck{globRebID: reb.GlobRebID(), daemonID: reb.t.Snode().ID()}
+			mm  = reb.t.GetSmallMMSA()
+		)
+		hdr.Opaque = ack.NewPack(mm)
 		hdr.ObjAttrs.Size = 0
-		if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
+		if err := reb.acks.Send(transport.Obj{Hdr: hdr, Callback: reb.rackSentCallback}, nil, tsi); err != nil {
+			mm.Free(hdr.Opaque)
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
 		}
 	}
+}
+
+func (reb *Manager) rackSentCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+	reb.t.GetSmallMMSA().Free(hdr.Opaque)
 }
 
 func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
@@ -507,19 +516,24 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objRead
 func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 	// first, set own stage
 	reb.stages.stage.Store(newStage)
-
-	req := pushReq{
-		daemonID: reb.t.Snode().DaemonID, stage: newStage,
-		rebID: reb.globRebID.Load(), batch: int(batchID),
-	}
-	hdr := transport.Header{
-		ObjAttrs: transport.ObjectAttrs{Size: 0},
-		Opaque:   reb.encodePushReq(&req),
-	}
+	var (
+		req = pushReq{
+			daemonID: reb.t.Snode().DaemonID, stage: newStage,
+			rebID: reb.globRebID.Load(), batch: int(batchID),
+		}
+		hdr = transport.Header{}
+		mm  = reb.t.GetSmallMMSA()
+	)
+	hdr.Opaque = reb.encodePushReq(&req, mm)
 	// second, notify all
-	if err := reb.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
+	if err := reb.pushes.Send(transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {
 		glog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
+		mm.Free(hdr.Opaque)
 	}
+}
+
+func (reb *Manager) pushSentCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+	reb.t.GetSmallMMSA().Free(hdr.Opaque)
 }
 
 func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
@@ -704,16 +718,17 @@ func (reb *Manager) abortGlobal() {
 	}
 	glog.Info("Aborting global rebalance...")
 	reb.xreb.Abort()
-	req := pushReq{
-		daemonID: reb.t.Snode().DaemonID,
-		rebID:    reb.GlobRebID(),
-		stage:    rebStageAbort,
-	}
-	hdr := transport.Header{
-		ObjAttrs: transport.ObjectAttrs{Size: 0},
-		Opaque:   reb.encodePushReq(&req),
-	}
-	if err := reb.pushes.Send(transport.Obj{Hdr: hdr}, nil); err != nil {
+	var (
+		req = pushReq{
+			daemonID: reb.t.Snode().DaemonID,
+			rebID:    reb.GlobRebID(),
+			stage:    rebStageAbort,
+		}
+		hdr = transport.Header{}
+		mm  = reb.t.GetSmallMMSA()
+	)
+	hdr.Opaque = reb.encodePushReq(&req, mm)
+	if err := reb.pushes.Send(transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {
 		glog.Errorf("Failed to broadcast abort notification: %v", err)
 	}
 }
