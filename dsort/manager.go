@@ -692,7 +692,7 @@ func (m *Manager) doWithAbort(reqArgs *cmn.ReqArgs) error {
 	case <-m.listenAborted():
 		cancel()
 		<-doneCh
-		return newAbortError(m.ManagerUUID)
+		return newDsortAbortedError(m.ManagerUUID)
 	case <-doneCh:
 		break
 	}

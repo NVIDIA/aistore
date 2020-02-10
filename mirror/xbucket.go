@@ -5,8 +5,8 @@
 package mirror
 
 import (
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -69,7 +69,7 @@ func (r *xactBckBase) run(mpathersCount int) error {
 		select {
 		case <-r.ChanAbort():
 			r.stop()
-			return fmt.Errorf("%s aborted, exiting", r)
+			return cmn.NewAbortedError(r.String())
 		case <-r.doneCh:
 			mpathersCount--
 			if mpathersCount == 0 {
@@ -108,9 +108,8 @@ func (j *joggerBckBase) jog() {
 		Sorted:   false,
 	}
 	if err := fs.Walk(opts); err != nil {
-		s := err.Error()
-		if strings.Contains(s, "xaction") {
-			glog.Infof("stopping traversal: %s", s)
+		if errors.As(err, &cmn.AbortedError{}) {
+			glog.Infof("stopping traversal: %v", err)
 		} else {
 			glog.Errorln(err)
 		}

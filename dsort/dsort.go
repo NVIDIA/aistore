@@ -166,7 +166,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		phaseInfo.adjuster.acquireSema(lom.ParsedFQN.MpathInfo)
 		if m.aborted() {
 			phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
-			return newAbortError(m.ManagerUUID)
+			return cmn.NewAbortedErrorDetails(cmn.DSortName, m.ManagerUUID)
 		}
 		//
 		// TODO -- FIXME: all targets must check t.AvgCapUsed() for high watermark *prior* to starting
@@ -276,7 +276,7 @@ ExtractAllShards:
 		select {
 		case <-m.listenAborted():
 			group.Wait()
-			return newAbortError(m.ManagerUUID)
+			return newDsortAbortedError(m.ManagerUUID)
 		case <-ctx.Done():
 			break ExtractAllShards // context was canceled, therefore we have an error
 		default:
@@ -321,7 +321,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// Check if aborted
 	select {
 	case <-m.listenAborted():
-		return newAbortError(m.ManagerUUID)
+		return newDsortAbortedError(m.ManagerUUID)
 	default:
 	}
 
@@ -369,7 +369,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			w.CloseWithError(err)
 		}
 	case <-m.listenAborted():
-		err = newAbortError(m.ManagerUUID)
+		err = newDsortAbortedError(m.ManagerUUID)
 		r.CloseWithError(err)
 		w.CloseWithError(err)
 	}
@@ -540,7 +540,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 			select {
 			case <-m.listenReceived():
 			case <-m.listenAborted():
-				err = newAbortError(m.ManagerUUID)
+				err = newDsortAbortedError(m.ManagerUUID)
 				return
 			}
 		}

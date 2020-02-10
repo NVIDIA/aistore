@@ -5,7 +5,6 @@
 package mirror
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -95,7 +94,7 @@ func (r *XactPutLRepl) Run() error {
 			}
 		case <-r.ChanAbort():
 			r.stop()
-			return fmt.Errorf("%s aborted, exiting", r)
+			return cmn.NewAbortedError(r.String())
 		}
 	}
 }

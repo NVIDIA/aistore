@@ -316,7 +316,7 @@ func (ds *dsorterMem) postShardCreation(mpathInfo *fs.MountpathInfo) {
 func (ds *dsorterMem) loadContent() extract.LoadContentFunc {
 	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
 		if ds.m.aborted() {
-			return 0, newAbortError(ds.m.ManagerUUID)
+			return 0, newDsortAbortedError(ds.m.ManagerUUID)
 		}
 
 		return ds.creationPhase.connector.connectWriter(rec.MakeUniqueName(obj), w)
@@ -332,7 +332,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 	case <-ds.m.startShardCreation:
 		break
 	case <-ds.m.listenAborted():
-		return newAbortError(ds.m.ManagerUUID)
+		return newDsortAbortedError(ds.m.ManagerUUID)
 	}
 
 	var (
@@ -416,7 +416,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 			case <-ds.m.listenAborted():
 				stopCh.Close()
 				group.Wait()
-				errCh <- newAbortError(ds.m.ManagerUUID)
+				errCh <- newDsortAbortedError(ds.m.ManagerUUID)
 				return
 			case <-ctx.Done(): // context was canceled, therefore we have an error
 				stopCh.Close()
@@ -440,7 +440,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 			case <-ds.m.listenAborted():
 				stopCh.Close()
 				group.Wait()
-				errCh <- newAbortError(ds.m.ManagerUUID)
+				errCh <- newDsortAbortedError(ds.m.ManagerUUID)
 				return
 			case <-ctx.Done(): // context was canceled, therefore we have an error
 				stopCh.Close()
@@ -501,7 +501,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 
 	// Check if aborted
 	if ds.m.aborted() {
-		return newAbortError(ds.m.ManagerUUID)
+		return newDsortAbortedError(ds.m.ManagerUUID)
 	}
 
 	if ds.m.Metrics.extended {

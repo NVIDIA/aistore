@@ -244,7 +244,7 @@ func (ds *dsorterGeneral) createShardsLocally() (err error) {
 	case <-ds.m.startShardCreation:
 		break
 	case <-ds.m.listenAborted():
-		return newAbortError(ds.m.ManagerUUID)
+		return newDsortAbortedError(ds.m.ManagerUUID)
 	}
 
 	var (
@@ -268,7 +268,7 @@ CreateAllShards:
 		select {
 		case <-ds.m.listenAborted():
 			_ = group.Wait()
-			return newAbortError(ds.m.ManagerUUID)
+			return newDsortAbortedError(ds.m.ManagerUUID)
 		case <-ctx.Done():
 			break CreateAllShards // context was canceled, therefore we have an error
 		default:
@@ -475,7 +475,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				// We managed to pull the writer, we can safely return error.
 				var err error
 				if stopped {
-					err = errors.Errorf("wait for remote content was aborted")
+					err = cmn.NewAbortedError("wait for remote content")
 				} else if timed {
 					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)", ds.m.ctx.node.DaemonID, daemonID)
 				} else {
@@ -488,7 +488,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 		}
 
 		if ds.m.aborted() {
-			return 0, newAbortError(ds.m.ManagerUUID)
+			return 0, newDsortAbortedError(ds.m.ManagerUUID)
 		}
 
 		if rec.DaemonID != ds.m.ctx.node.DaemonID { // File source contents are located on a different target.

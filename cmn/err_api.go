@@ -5,6 +5,7 @@
 package cmn
 
 import (
+	"errors"
 	"fmt"
 	"os"
 )
@@ -58,6 +59,11 @@ type (
 	ObjDefunctErr struct {
 		name   string // object's name
 		d1, d2 uint64 // lom.md.(bucket-ID) and lom.bck.(bucket-ID), respectively
+	}
+	AbortedError struct {
+		what    string
+		details string
+		cause   error
 	}
 )
 
@@ -147,6 +153,47 @@ func (e ObjDefunctErr) Error() string {
 	return fmt.Sprintf("%s is defunct (%d != %d)", e.name, e.d1, e.d2)
 }
 func NewObjDefunctError(name string, d1, d2 uint64) ObjDefunctErr { return ObjDefunctErr{name, d1, d2} }
+
+func NewAbortedError(what string) AbortedError {
+	return AbortedError{
+		what:    what,
+		details: "",
+	}
+}
+
+func NewAbortedErrorDetails(what, details string) AbortedError {
+	return AbortedError{
+		what:    what,
+		details: details,
+	}
+}
+
+func NewAbortedErrorWrapped(what string, cause error) AbortedError {
+	return AbortedError{
+		what:  what,
+		cause: cause,
+	}
+}
+
+func (e AbortedError) Error() string {
+	if e.cause != nil {
+		return fmt.Sprintf("%s aborted. %s", e.what, e.cause.Error())
+	}
+	if e.details != "" {
+		return fmt.Sprintf("%s aborted. %s", e.what, e.details)
+	}
+	return fmt.Sprintf("%s aborted", e.what)
+}
+
+func (e *AbortedError) As(target error) bool {
+	_, ok := target.(*AbortedError)
+
+	if e.cause == nil {
+		return ok
+	}
+
+	return ok || errors.As(e.cause, &target)
+}
 
 //////////////////////////////////
 // error grouping, error levels //

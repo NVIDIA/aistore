@@ -174,7 +174,7 @@ func (r *XactGet) Run() (err error) {
 			}
 		case <-r.ChanAbort():
 			r.stop()
-			return fmt.Errorf("%s aborted, exiting", r)
+			return cmn.NewAbortedError(r.String())
 		}
 	}
 }

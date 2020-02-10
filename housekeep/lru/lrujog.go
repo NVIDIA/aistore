@@ -7,10 +7,9 @@ package lru
 
 import (
 	"container/heap"
-	"fmt"
+	"errors"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -49,9 +48,8 @@ func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh ch
 		Sorted:   false,
 	}
 	if err := fs.Walk(opts); err != nil {
-		s := err.Error()
-		if strings.Contains(s, "xaction") {
-			glog.Infof("%s: stopping traversal: %s", lctx.bckTypeDir, s)
+		if errors.As(err, &cmn.AbortedError{}) {
+			glog.Infof("%s: stopping traversal: %v", lctx.bckTypeDir, err)
 		} else {
 			glog.Errorf("%s: failed to traverse, err: %v", lctx.bckTypeDir, err)
 		}
@@ -265,10 +263,10 @@ func (lctx *lruCtx) yieldTerm() error {
 	case <-xlru.ChanAbort():
 		stopAll(lctx.joggers, lctx.mpathInfo.Path)
 		lctx.aborted = true
-		return fmt.Errorf("%s aborted, exiting", xlru)
+		return cmn.NewAbortedError(xlru.String())
 	case <-lctx.stopCh:
 		lctx.aborted = true
-		return fmt.Errorf("%s aborted, exiting", xlru)
+		return cmn.NewAbortedError(xlru.String())
 	default:
 		if lctx.throttle {
 			time.Sleep(cmn.ThrottleSleepMin)
@@ -278,7 +276,7 @@ func (lctx *lruCtx) yieldTerm() error {
 		break
 	}
 	if xlru.Finished() {
-		return fmt.Errorf("%s aborted, exiting", xlru)
+		return cmn.NewAbortedError(xlru.String())
 	}
 	return nil
 }
