@@ -254,6 +254,10 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmd)
 	p.setGlobRebID(smap, msgInt, false /*set*/)
+	if p.rebalance.Load() {
+		glog.Infof("Global rebalance did not finish, restarting...")
+		msgInt.Action = cmn.ActGlobalReb
+	}
 	p.metasyncer.sync(false, revspair{smap, msgInt}, revspair{bmd, msgInt})
 
 	// 6: started up as primary

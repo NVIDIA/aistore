@@ -71,10 +71,11 @@ type (
 	proxyrunner struct {
 		httprunner
 		authn      *authManager
-		startedUp  atomic.Bool
 		metasyncer *metasyncer
 		rproxy     reverseProxy
 		globRebID  int64
+		startedUp  atomic.Bool
+		rebalance  atomic.Bool
 	}
 )
 
@@ -3103,6 +3104,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if !isProxy && selfRegister {
 			glog.Infof("%s: joining %s (%s), globReb aborted %t",
 				pname, nsi, regReq.Smap, regReq.RebAborted)
+			// CAS to avoid overwriting `true` with `false` by `Load+&&+Store`
+			p.rebalance.CAS(false, regReq.RebAborted)
 		}
 		return
 	}
