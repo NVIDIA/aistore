@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 type (
@@ -40,7 +40,7 @@ var (
 // If primary proxy change is detected then the current Smap is saved
 func newProxy(configPath, defaultURL string) *proxy {
 	p := &proxy{}
-	err := cmn.LocalLoad(configPath, p, false /* compression */)
+	err := jsp.Load(configPath, p, jsp.Plain())
 	if err != nil {
 		// first run: read the current Smap and save to local file
 		baseParams := api.BaseParams{
@@ -68,7 +68,7 @@ func newProxy(configPath, defaultURL string) *proxy {
 }
 
 func (p *proxy) saveSmap() {
-	err := cmn.LocalSave(p.configPath, p, false /* compression */)
+	err := jsp.Save(p.configPath, p, jsp.Plain())
 	if err != nil {
 		glog.Errorf("Failed to save configuration: %v", err)
 	}

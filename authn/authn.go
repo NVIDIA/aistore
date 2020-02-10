@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 var (
@@ -65,7 +66,7 @@ func main() {
 	if glog.V(4) {
 		glog.Infof("Reading configuration from %s", configPath)
 	}
-	if err = cmn.LocalLoad(configPath, conf, false /* compression */); err != nil {
+	if err = jsp.Load(configPath, conf, jsp.Plain()); err != nil {
 		glog.Fatalf("Failed to load configuration: %v", err)
 	}
 	if err = conf.validate(); err != nil {

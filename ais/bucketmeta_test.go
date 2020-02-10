@@ -8,19 +8,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/OneOfOne/xxhash"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("BMD marshal and unmarshal", func() {
 	const (
-		mpath = "/tmp"
+		mpath    = "/tmp"
+		testpath = "/tmp/.ais.test.bmd"
 	)
 
 	var (
@@ -46,46 +45,66 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 
 	for _, node := range []string{cmn.Target, cmn.Proxy} {
 		makeBMDOwner := func() bmdOwner {
-			var bmdo bmdOwner
+			var bowner bmdOwner
 			switch node {
 			case cmn.Target:
-				bmdo = newBMDOwnerTgt()
+				bowner = newBMDOwnerTgt()
 			case cmn.Proxy:
-				bmdo = newBMDOwnerPrx(cfg)
+				bowner = newBMDOwnerPrx(cfg)
 			}
-			return bmdo
+			return bowner
 		}
 
 		Describe(node, func() {
 			var (
-				bmdo bmdOwner
+				bowner bmdOwner
 			)
 
 			BeforeEach(func() {
-				bmdo = makeBMDOwner()
-				bmdo.put(bmd)
+				bowner = makeBMDOwner()
+				bowner.put(bmd)
 			})
 
-			It(fmt.Sprintf("should correctly save and load bmd for %s", node), func() {
-				bmdo.init()
-				Expect(bmdo.Get()).To(Equal(&bmd.BMD))
+			It(fmt.Sprintf("should correctly load bmd for %s", node), func() {
+				bowner.init()
+				Expect(bowner.Get()).To(Equal(&bmd.BMD))
 			})
 
-			It(fmt.Sprintf("should marshal and unmarshal BMD using custom methods"), func() {
-				bmdo.init()
-				bmd := bmdo.get()
+			It(fmt.Sprintf("should save and load bmd using jsp methods"), func() {
+				bowner.init()
+				bmd := bowner.get()
+				clone := bmd
+				for _, signature := range []bool{false, true} {
+					for _, compression := range []bool{false, true} {
+						for _, checksum := range []bool{false, true} {
+							opts := jsp.Options{
+								Compression: compression,
+								Checksum:    checksum,
+								Signature:   signature,
+							}
+							// clone clone
+							clone := clone.clone()
+							bck := cluster.NewBck("abc"+cmn.GenTie(), cmn.ProviderAIS, cmn.NsGlobal)
 
-				payload := cmn.MustMarshal(bmd.BMD)
-				cksum := xxhash.Checksum64S(payload, 0)
+							// add bucket and save
+							clone.add(bck, cmn.DefaultBucketProps())
+							err := jsp.Save(testpath, clone, opts)
+							Expect(err).NotTo(HaveOccurred())
 
-				b, err := jsoniter.Marshal(bmd)
-				Expect(err).NotTo(HaveOccurred())
-				// Marshaled bytes contain checksum augmented in bmd.MarshalJSON method
-				Expect(strings.Contains(string(b), fmt.Sprintf("%v", cksum))).To(BeTrue())
-				Expect(jsoniter.Unmarshal(b, &bucketMD{})).NotTo(HaveOccurred())
+							// load elsewhere and check
+							loaded := newBucketMD()
+							err = jsp.Load(testpath, loaded, opts)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(loaded.UUID).To(BeEquivalentTo(clone.UUID))
+							Expect(loaded.Version).To(BeEquivalentTo(clone.Version))
+							_, present := loaded.Get(bck)
+							Expect(present).To(BeTrue())
+						}
+					}
+				}
 			})
 
-			It(fmt.Sprintf("should correctly save and check for incorrect data for %s", node), func() {
+			It(fmt.Sprintf("should correctly detect bmd corruption %s", node), func() {
 				bmdFullPath := filepath.Join(mpath, bmdFname)
 				f, err := os.OpenFile(bmdFullPath, os.O_RDWR, 0)
 				Expect(err).NotTo(HaveOccurred())
@@ -93,10 +112,12 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(f.Close()).NotTo(HaveOccurred())
 
-				bmdo = makeBMDOwner()
-				bmdo.init()
+				fmt.Println("NOTE: error on screen is expected at this point...")
+				fmt.Println("")
+				bowner = makeBMDOwner()
+				bowner.init()
 
-				Expect(bmdo.Get()).NotTo(Equal(&bmd.BMD))
+				Expect(bowner.Get()).NotTo(Equal(&bmd.BMD))
 			})
 		})
 	}

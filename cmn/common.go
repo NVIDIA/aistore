@@ -32,7 +32,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
-	lz4 "github.com/pierrec/lz4/v3"
 	"github.com/teris-io/shortid"
 )
 
@@ -1022,61 +1021,6 @@ func CheckI64Range(v, low, high int64) (int64, error) {
 	return v, nil
 }
 
-////////////////////////////
-// local save and restore //
-////////////////////////////
-
-func LocalSave(path string, v interface{}, compress bool) error {
-	var (
-		zw        *lz4.Writer
-		encoder   *jsoniter.Encoder
-		tmp       = path + ".tmp"
-		file, err = CreateFile(tmp)
-	)
-	if err != nil {
-		return err
-	}
-	if compress {
-		zw = lz4.NewWriter(file)
-		encoder = jsoniter.NewEncoder(zw)
-	} else {
-		encoder = jsoniter.NewEncoder(file)
-	}
-	encoder.SetIndent("", "  ")
-	if err = encoder.Encode(v); err != nil {
-		file.Close()
-		os.Remove(file.Name())
-		return err
-	}
-	if compress {
-		_ = zw.Close()
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
-
-func LocalLoad(path string, v interface{}, decompress bool) error {
-	var (
-		decoder   *jsoniter.Decoder
-		zr        *lz4.Reader
-		file, err = os.Open(path)
-	)
-	if err != nil {
-		return err
-	}
-	if decompress {
-		zr = lz4.NewReader(file)
-		decoder = jsoniter.NewDecoder(zr)
-	} else {
-		decoder = jsoniter.NewDecoder(file)
-	}
-	err = decoder.Decode(v)
-	_ = file.Close()
-	return err
-}
-
 //////////////////////////////
 // config: path, load, save //
 //////////////////////////////
@@ -1098,31 +1042,6 @@ func AppConfigPath(appName string) (configDir string) {
 		configDir = filepath.Join(homeDir(), ".config", appName)
 	}
 	return
-}
-
-// LoadAppConfig reads a config object from the config file.
-func LoadAppConfig(appName, configFileName string, v interface{}) (err error) {
-	// Check if config file exists.
-	configDir := AppConfigPath(appName)
-	configFilePath := filepath.Join(configDir, configFileName)
-	if _, err = os.Stat(configFilePath); err != nil {
-		return err
-	}
-
-	// Load config from file.
-	err = LocalLoad(configFilePath, v, false /*compression*/)
-	if err != nil {
-		return fmt.Errorf("failed to load config file %q: %v", configFilePath, err)
-	}
-	return
-}
-
-// SaveAppConfig writes the config object to the config file.
-func SaveAppConfig(appName, configFileName string, v interface{}) (err error) {
-	// Check if config dir exists; if not, create one with default config.
-	configDir := AppConfigPath(appName)
-	configFilePath := filepath.Join(configDir, configFileName)
-	return LocalSave(configFilePath, v, false /*compression*/)
 }
 
 ///////////////////////

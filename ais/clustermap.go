@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -295,7 +296,7 @@ func newSmapowner() *smapowner {
 }
 
 func (r *smapowner) load(smap *smapX, config *cmn.Config) error {
-	return cmn.LocalLoad(filepath.Join(config.Confdir, smapFname), smap, true /* compression */)
+	return jsp.Load(filepath.Join(config.Confdir, smapFname), smap, jsp.CCSign())
 }
 
 func (r *smapowner) Get() *cluster.Smap {
@@ -354,13 +355,13 @@ func (r *smapowner) persist(newSmap *smapX) error {
 
 	origURL := config.Proxy.PrimaryURL
 	config.Proxy.PrimaryURL = newSmap.ProxySI.PublicNet.DirectURL
-	if err := cmn.LocalSave(confFile, config, false /* compression */); err != nil {
+	if err := jsp.Save(confFile, config, jsp.Plain()); err != nil {
 		err = fmt.Errorf("failed writing config file %s, err: %v", confFile, err)
 		config.Proxy.PrimaryURL = origURL
 		return err
 	}
 	smapPathName := filepath.Join(config.Confdir, smapFname)
-	if err := cmn.LocalSave(smapPathName, newSmap, true /* compression */); err != nil {
+	if err := jsp.Save(smapPathName, newSmap, jsp.CCSign()); err != nil {
 		glog.Errorf("error writing Smap to %s: %v", smapPathName, err)
 	}
 	return nil

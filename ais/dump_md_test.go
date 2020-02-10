@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -22,8 +23,10 @@ import (
 // 1. go test -v ./ais/. -run=DumpSmap -fsmap=~/.ais0/.ais.smap
 // 2. go test -v ./ais/. -run=DumpSmap -fsmap=~/.ais0/.ais.smap -fout=/tmp/smap.txt
 // 3. go test -v ./ais/. -run=CompressSmap -fsmap=/tmp/smap.txt -fout=/tmp/.ais.smap
+//
 // Example - BMD:
-// go test -v ./ais/. -run=DumpBMD -fbmd=~/.ais0/.ais.bmd
+// 4. go test -v ./ais/. -run=DumpBMD -fbmd=~/.ais0/.ais.bmd -fout=/tmp/bmd.txt
+// 5. go test -v ./ais/. -run=CompressBMD -fbmd=/tmp/bmd.txt -fout=/tmp/.ais.bmd
 
 var (
 	fsmap, fbmd, fout string
@@ -42,7 +45,7 @@ func TestDumpSmap(t *testing.T) {
 		t.Skip()
 	}
 	smap := &cluster.Smap{}
-	dumpMeta(t, fsmap, smap)
+	dumpMeta(t, fsmap, smap, jsp.Options{Signature: true})
 }
 
 func TestDumpBMD(t *testing.T) {
@@ -50,20 +53,20 @@ func TestDumpBMD(t *testing.T) {
 		t.Skip()
 	}
 	bmd := &cluster.BMD{}
-	dumpMeta(t, fbmd, bmd)
+	dumpMeta(t, fbmd, bmd, jsp.Options{Signature: true})
 }
 
-func dumpMeta(t *testing.T, fn string, v interface{}) {
+func dumpMeta(t *testing.T, fn string, v interface{}, opts jsp.Options) {
 	var f = os.Stdout
 	var err error
 	if fout != "" {
 		f, err = cmn.CreateFile(_fclean(fout))
 		tassert.CheckFatal(t, err)
 	}
-	err = cmn.LocalLoad(_fclean(fn), v, true /* compression */)
+	err = jsp.Load(_fclean(fn), v, opts)
 	tassert.CheckFatal(t, err)
 
-	s, _ := jsoniter.MarshalIndent(v, "", "\t")
+	s, _ := jsoniter.MarshalIndent(v, "", " ")
 	fmt.Fprintln(f, string(s))
 }
 
@@ -77,7 +80,7 @@ func TestCompressSmap(t *testing.T) {
 		t.Fatal("empty output filename")
 	}
 	smap := &cluster.Smap{}
-	compressMeta(t, fsmap, smap)
+	compressMeta(t, fsmap, smap, jsp.CCSign())
 }
 
 func TestCompressBMD(t *testing.T) {
@@ -88,13 +91,13 @@ func TestCompressBMD(t *testing.T) {
 		t.Fatal("empty output filename")
 	}
 	bmd := &cluster.BMD{}
-	compressMeta(t, fbmd, bmd)
+	compressMeta(t, fbmd, bmd, jsp.CCSign())
 }
 
-func compressMeta(t *testing.T, fn string, v interface{}) {
-	err := cmn.LocalLoad(_fclean(fn), v, false /* compression */)
+func compressMeta(t *testing.T, fn string, v interface{}, opts jsp.Options) {
+	err := jsp.Load(_fclean(fn), v, jsp.Plain())
 	tassert.CheckFatal(t, err)
-	err = cmn.LocalSave(_fclean(fout), v, true /* compression */)
+	err = jsp.Save(_fclean(fout), v, opts)
 	tassert.CheckFatal(t, err)
 }
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 const (
@@ -75,14 +76,14 @@ func Location() string {
 
 func Load() (*Config, error) {
 	cfg := &Config{}
-	if err := cmn.LoadAppConfig(configDirName, configFileName, &cfg); err != nil {
+	if err := jsp.LoadAppConfig(configDirName, configFileName, &cfg); err != nil {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to load config: %v", err)
 		}
 
 		// Use default config in case of error.
 		cfg = &defaultConfig
-		err = cmn.SaveAppConfig(configDirName, configFileName, cfg)
+		err = jsp.SaveAppConfig(configDirName, configFileName, cfg)
 		if err != nil {
 			err = fmt.Errorf("failed to generate config file: %v", err)
 		}

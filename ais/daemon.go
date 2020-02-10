@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
 	"github.com/NVIDIA/aistore/housekeep/hk"
@@ -53,7 +54,7 @@ type (
 
 	cliFlags struct {
 		role        string        // proxy | target
-		config      cmn.ConfigCLI // selected config overrides
+		config      jsp.ConfigCLI // selected config overrides
 		confjson    string        // JSON formatted "{name: value, ...}" string to override selected knob(s)
 		persist     bool          // true: make cmn.ConfigCLI settings permanent, false: leave them transient
 		skipStartup bool          // determines if the proxy should skip waiting for targets
@@ -195,9 +196,9 @@ func aisinit(version, build string) {
 		str += "Usage: ... -role=<proxy|target> -config=<conf.json> ..."
 		cmn.ExitLogf(str)
 	}
-	config, confChanged = cmn.LoadConfig(&daemon.cli.config)
+	config, confChanged = jsp.LoadConfig(&daemon.cli.config)
 	if confChanged {
-		if err := cmn.LocalSave(cmn.GCO.GetConfigFile(), config, false /* compression */); err != nil {
+		if err := jsp.Save(cmn.GCO.GetConfigFile(), config, jsp.Plain()); err != nil {
 			cmn.ExitLogf("CLI %s: failed to write, err: %s", cmn.ActSetConfig, err)
 		}
 		glog.Infof("CLI %s: stored", cmn.ActSetConfig)
@@ -298,7 +299,7 @@ func aisinit(version, build string) {
 		if err = jsoniter.Unmarshal([]byte(daemon.cli.confjson), &nvmap); err != nil {
 			cmn.ExitLogf("Failed to unmarshal JSON [%s], err: %s", daemon.cli.confjson, err)
 		}
-		if err := cmn.SetConfigMany(nvmap); err != nil {
+		if err := jsp.SetConfigMany(nvmap); err != nil {
 			cmn.ExitLogf("Failed to set config: %s", err)
 		}
 	}

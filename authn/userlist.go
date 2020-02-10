@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	jwt "github.com/dgrijalva/jwt-go"
 )
 
@@ -75,7 +76,7 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 		return mgr
 	}
 
-	if err = cmn.LocalLoad(dbPath, &mgr.Users, false /* compression */); err != nil {
+	if err = jsp.Load(dbPath, &mgr.Users, jsp.Plain()); err != nil {
 		glog.Fatalf("Failed to load user list: %v\n", err)
 	}
 
@@ -114,7 +115,7 @@ func (m *userManager) saveUsers() (err error) {
 		}
 	}
 
-	if err = cmn.LocalSave(m.Path, &filtered, false /* compression */); err != nil {
+	if err = jsp.Save(m.Path, &filtered, jsp.Plain()); err != nil {
 		err = fmt.Errorf("UserManager: Failed to save user list: %v", err)
 	}
 	return err

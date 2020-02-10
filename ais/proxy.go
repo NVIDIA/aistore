@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
@@ -2430,7 +2431,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 			kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
-			if err := cmn.SetConfigMany(kvs); err != nil {
+			if err := jsp.SetConfigMany(kvs); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -2456,7 +2457,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if err := cmn.SetConfigMany(kvs); err != nil {
+		if err := jsp.SetConfigMany(kvs); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -3315,7 +3316,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 			query := r.URL.Query()
 			kvs := cmn.NewSimpleKVsFromQuery(query)
-			if err := cmn.SetConfigMany(kvs); err != nil {
+			if err := jsp.SetConfigMany(kvs); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -3357,7 +3358,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if err := cmn.SetConfigMany(kvs); err != nil {
+		if err := jsp.SetConfigMany(kvs); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}

@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
@@ -608,7 +609,7 @@ func damageMetadataCksum(t *testing.T, slicePath string) {
 	md, err := ec.LoadMetadata(metaFQN)
 	tassert.CheckFatal(t, err)
 	md.CksumValue = "01234"
-	err = cmn.LocalSave(metaFQN, md, false /* compression */)
+	err = jsp.Save(metaFQN, md, jsp.Plain())
 	tassert.CheckFatal(t, err)
 }
 

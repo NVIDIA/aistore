@@ -1,4 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package commands
 
 import (
@@ -8,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 func initAuthParams() {
@@ -18,7 +22,7 @@ func initAuthParams() {
 
 	// TODO: `credDir` should be `home/.config/ais/`
 	tokenPath := filepath.Join(home, credDir, credFile)
-	cmn.LocalLoad(tokenPath, &loggedUserToken, false /* compression */)
+	jsp.Load(tokenPath, &loggedUserToken, jsp.Plain())
 }
 
 func initClusterParams() {

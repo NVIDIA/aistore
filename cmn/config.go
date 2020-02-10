@@ -101,14 +101,6 @@ type (
 	ConfigListener interface {
 		ConfigUpdate(oldConf, newConf *Config)
 	}
-	// selected config overrides via command line
-	ConfigCLI struct {
-		ConfFile       string        // config filename
-		LogLevel       string        // takes precedence over config.Log.Level
-		StatsTime      time.Duration // overrides config.Periodic.StatsTime
-		ListBucketTime time.Duration // overrides config.Timeout.ListBucket
-		ProxyURL       string        // primary proxy URL to override config.Proxy.PrimaryURL
-	}
 )
 
 // globalConfigOwner implements ConfigOwner interface. The implementation is
@@ -399,8 +391,8 @@ type DiskConf struct {
 }
 
 type RebalanceConf struct {
-	DestRetryTimeStr string        `json:"dest_retry_time"` // max time to wait for ACKs and for neighbors to complete
-	QuiesceStr       string        `json:"quiescent"`       // max time to wait for no object is received before moving to the next stage/batch
+	DestRetryTimeStr string        `json:"dest_retry_time"` // max wait for ACKs and for neighbors to complete
+	QuiesceStr       string        `json:"quiescent"`       // max wait for no object received before moving to next stage/batch
 	Compression      string        `json:"compression"`     // see CompressAlways, etc. enum
 	Quiesce          time.Duration `json:"-"`               // (runtime)
 	DestRetryTime    time.Duration `json:"-"`               // (runtime)
@@ -570,94 +562,6 @@ func SetLogLevel(config *Config, loglevel string) (err error) {
 	return
 }
 
-func LoadConfig(clivars *ConfigCLI) (config *Config, changed bool) {
-	config, changed, err := LoadConfigErr(clivars)
-
-	if err != nil {
-		ExitLogf(err.Error())
-	}
-	return
-}
-
-func LoadConfigErr(clivars *ConfigCLI) (config *Config, changed bool, err error) {
-	GCO.SetConfigFile(clivars.ConfFile)
-
-	config = GCO.BeginUpdate()
-	defer GCO.CommitUpdate(config)
-
-	err = LocalLoad(clivars.ConfFile, &config, false /*compression*/)
-
-	// NOTE: glog.Errorf + os.Exit is used instead of glog.Fatalf to not crash
-	// with dozens of backtraces on screen - this is user error not some
-	// internal error.
-
-	if err != nil {
-		return nil, false, fmt.Errorf("Failed to load config %q, err: %s", clivars.ConfFile, err)
-	}
-	if err = flag.Lookup("log_dir").Value.Set(config.Log.Dir); err != nil {
-		return nil, false, fmt.Errorf("Failed to flag-set glog dir %q, err: %s", config.Log.Dir, err)
-	}
-	if err = CreateDir(config.Log.Dir); err != nil {
-		return nil, false, fmt.Errorf("Failed to create log dir %q, err: %s", config.Log.Dir, err)
-	}
-	if err := config.Validate(); err != nil {
-		return nil, false, err
-	}
-
-	// glog rotate
-	glog.MaxSize = config.Log.MaxSize
-	if glog.MaxSize > GiB {
-		glog.Errorf("Log.MaxSize %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
-		glog.MaxSize = MiB
-	}
-
-	config.Net.HTTP.Proto = "http" // not validating: read-only, and can take only two values
-	if config.Net.HTTP.UseHTTPS {
-		config.Net.HTTP.Proto = "https"
-	}
-
-	differentIPs := config.Net.IPv4 != config.Net.IPv4IntraControl
-	differentPorts := config.Net.L4.Port != config.Net.L4.PortIntraControl
-	config.Net.UseIntraControl = false
-	if config.Net.IPv4IntraControl != "" && config.Net.L4.PortIntraControl != 0 && (differentIPs || differentPorts) {
-		config.Net.UseIntraControl = true
-	}
-
-	differentIPs = config.Net.IPv4 != config.Net.IPv4IntraData
-	differentPorts = config.Net.L4.Port != config.Net.L4.PortIntraData
-	config.Net.UseIntraData = false
-	if config.Net.IPv4IntraData != "" && config.Net.L4.PortIntraData != 0 && (differentIPs || differentPorts) {
-		config.Net.UseIntraData = true
-	}
-
-	// CLI override
-	if clivars.StatsTime != 0 {
-		config.Periodic.StatsTime = clivars.StatsTime
-		changed = true
-	}
-	if clivars.ListBucketTime != 0 {
-		config.Timeout.ListBucket = clivars.ListBucketTime
-		changed = true
-	}
-	if clivars.ProxyURL != "" {
-		config.Proxy.PrimaryURL = clivars.ProxyURL
-		changed = true
-	}
-	if clivars.LogLevel != "" {
-		if err = SetLogLevel(config, clivars.LogLevel); err != nil {
-			return nil, false, fmt.Errorf("Failed to set log level = %s, err: %s", clivars.LogLevel, err)
-		}
-		config.Log.Level = clivars.LogLevel
-		changed = true
-	} else if err = SetLogLevel(config, config.Log.Level); err != nil {
-		return nil, false, fmt.Errorf("Failed to set log level = %s, err: %s", config.Log.Level, err)
-	}
-	glog.Infof("Logdir: %q Proto: %s Port: %d Verbosity: %s",
-		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)
-	glog.Infof("Config: %q StatsTime: %v", clivars.ConfFile, config.Periodic.StatsTime)
-	return
-}
-
 // TestingEnv returns true if config is set to a development environment
 // where a single local filesystem is partitioned between all (locally running)
 // targets and is used for both local and Cloud buckets
@@ -797,7 +701,8 @@ func (c *DiskConf) Validate(_ *Config) (err error) {
 		return fmt.Errorf("disk.iostat_time_short is zero")
 	}
 	if c.IostatTimeLong < c.IostatTimeShort {
-		return fmt.Errorf("disk.iostat_time_long %v shorter than disk.iostat_time_short %v", c.IostatTimeLong, c.IostatTimeShort)
+		return fmt.Errorf("disk.iostat_time_long %v shorter than disk.iostat_time_short %v",
+			c.IostatTimeLong, c.IostatTimeShort)
 	}
 
 	return nil
@@ -873,11 +778,13 @@ func (c *ECConf) Validate(_ *Config) error {
 		return fmt.Errorf("invalid ec.obj_size_limit: %d (expected >=0)", c.ObjSizeLimit)
 	}
 	if c.DataSlices < MinSliceCount || c.DataSlices > MaxSliceCount {
-		return fmt.Errorf("invalid ec.data_slices: %d (expected value in range [%d, %d])", c.DataSlices, MinSliceCount, MaxSliceCount)
+		return fmt.Errorf("invalid ec.data_slices: %d (expected value in range [%d, %d])",
+			c.DataSlices, MinSliceCount, MaxSliceCount)
 	}
 	// TODO: warn about performance if number is OK but large?
 	if c.ParitySlices < MinSliceCount || c.ParitySlices > MaxSliceCount {
-		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])", c.ParitySlices, MinSliceCount, MaxSliceCount)
+		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])",
+			c.ParitySlices, MinSliceCount, MaxSliceCount)
 	}
 	return nil
 }
@@ -1029,13 +936,16 @@ func (c *DSortConf) Validate(_ *Config) (err error) {
 			c.DuplicatedRecords, SupportedReactions)
 	}
 	if !StringInSlice(c.MissingShards, SupportedReactions) {
-		return fmt.Errorf("invalid distributed_sort.missing_records: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
+		return fmt.Errorf("invalid distributed_sort.missing_records: %s (expecting one of: %s)",
+			c.MissingShards, SupportedReactions)
 	}
 	if !StringInSlice(c.EKMMalformedLine, SupportedReactions) {
-		return fmt.Errorf("invalid distributed_sort.ekm_malformed_line: %s (expecting one of: %s)", c.EKMMalformedLine, SupportedReactions)
+		return fmt.Errorf("invalid distributed_sort.ekm_malformed_line: %s (expecting one of: %s)",
+			c.EKMMalformedLine, SupportedReactions)
 	}
 	if !StringInSlice(c.EKMMissingKey, SupportedReactions) {
-		return fmt.Errorf("invalid distributed_sort.ekm_missing_key: %s (expecting one of: %s)", c.EKMMissingKey, SupportedReactions)
+		return fmt.Errorf("invalid distributed_sort.ekm_missing_key: %s (expecting one of: %s)",
+			c.EKMMissingKey, SupportedReactions)
 	}
 	if _, err := ParseQuantity(c.DefaultMaxMemUsage); err != nil {
 		return fmt.Errorf("invalid distributed_sort.default_max_mem_usage: %s (err: %s)", c.DefaultMaxMemUsage, err)
@@ -1159,72 +1069,6 @@ func ConfigPropList() []string {
 		return nil, false
 	})
 	return propList
-}
-
-func (conf *Config) update(key, value string) (err error) {
-	switch key {
-	//
-	// 1. TOP LEVEL CONFIG
-	//
-	case "vmodule":
-		if err := SetGLogVModule(value); err != nil {
-			return fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
-		}
-	case "log_level", "log.level":
-		if err := SetLogLevel(conf, value); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", value, err)
-		}
-	default:
-		return UpdateFieldValue(conf, key, value)
-	}
-	return nil
-}
-
-func SetConfigMany(nvmap SimpleKVs) (err error) {
-	if len(nvmap) == 0 {
-		return errors.New("setConfig: empty nvmap")
-	}
-
-	var (
-		persist bool
-		conf    = GCO.BeginUpdate()
-	)
-
-	for name, value := range nvmap {
-		if name == ActPersist {
-			if persist, err = ParseBool(value); err != nil {
-				err = fmt.Errorf("invalid value set for %s, err: %v", name, err)
-				GCO.DiscardUpdate()
-				return
-			}
-		} else {
-			err := conf.update(name, value)
-			if err != nil {
-				GCO.DiscardUpdate()
-				return err
-			}
-		}
-
-		glog.Infof("%s: %s=%s", ActSetConfig, name, value)
-	}
-
-	// Validate config after everything is set
-	if err := conf.Validate(); err != nil {
-		GCO.DiscardUpdate()
-		return err
-	}
-
-	GCO.CommitUpdate(conf)
-
-	if persist {
-		conf := GCO.Get()
-		if err := LocalSave(GCO.GetConfigFile(), conf, false /*compression*/); err != nil {
-			glog.Errorf("%s: failed to write, err: %v", ActSetConfig, err)
-		} else {
-			glog.Infof("%s: stored", ActSetConfig)
-		}
-	}
-	return
 }
 
 // ========== Cluster Wide Config =========

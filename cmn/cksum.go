@@ -41,11 +41,10 @@ func NewBadMetaCksumError(a, b uint64, context ...string) error {
 }
 
 func (e *BadCksumError) Error() string {
-	context := ""
+	var context string
 	if e.context != "" {
-		context = fmt.Sprintf(" (context: %s)", e.context)
+		context = " (context: " + e.context + ")"
 	}
-
 	_, ok1 := e.a.(*Cksum)
 	_, ok2 := e.b.(*Cksum)
 	if ok1 && ok2 {
@@ -62,8 +61,7 @@ func (e *BadCksumError) Error() string {
 			return fmt.Sprintf("%s %s(%s != %s)%s", e.prefix, t1, v1, v2, context)
 		}
 	}
-
-	return fmt.Sprintf("%s (%s != %s)%s", e.prefix, e.a, e.b, context)
+	return fmt.Sprintf("%s (%v != %v)%s", e.prefix, e.a, e.b, context)
 }
 
 func NewCRC32C() hash.Hash {

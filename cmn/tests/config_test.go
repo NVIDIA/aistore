@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -19,12 +20,11 @@ func TestConfigTestEnv(t *testing.T) {
 		cmn.GCO.CommitUpdate(oldConfig)
 	}()
 
-	mockVars := &cmn.ConfigCLI{
+	mockVars := &jsp.ConfigCLI{
 		ConfFile: filepath.Join(thisFileDir(t), "configs", "configtest.json"),
 	}
 
-	_, _, err := cmn.LoadConfigErr(mockVars)
-	tassert.CheckFatal(t, err)
+	jsp.LoadConfig(mockVars)
 }
 
 func TestConfigFSPaths(t *testing.T) {
@@ -34,27 +34,11 @@ func TestConfigFSPaths(t *testing.T) {
 		cmn.GCO.CommitUpdate(oldConfig)
 	}()
 
-	mockVars := &cmn.ConfigCLI{
+	mockVars := &jsp.ConfigCLI{
 		ConfFile: filepath.Join(thisFileDir(t), "configs", "configfspaths.json"),
 	}
 
-	_, _, err := cmn.LoadConfigErr(mockVars)
-	tassert.CheckFatal(t, err)
-}
-
-func TestConfigNoFSPaths(t *testing.T) {
-	oldConfig := cmn.GCO.Get()
-	defer func() {
-		cmn.GCO.BeginUpdate()
-		cmn.GCO.CommitUpdate(oldConfig)
-	}()
-
-	mockVars := &cmn.ConfigCLI{
-		ConfFile: filepath.Join(thisFileDir(t), "configs", "confignofspaths.json"),
-	}
-
-	_, _, err := cmn.LoadConfigErr(mockVars)
-	tassert.Fatalf(t, err != nil, "Expected LoadConfigErr to return error")
+	jsp.LoadConfig(mockVars)
 }
 
 func thisFileDir(t *testing.T) string {

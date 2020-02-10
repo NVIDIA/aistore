@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,10 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
-
-	"github.com/OneOfOne/xxhash"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // NOTE: to access bucket metadata and related structures, external
@@ -72,11 +69,9 @@ type (
 )
 
 var (
-	_ json.Marshaler   = &bucketMD{}
-	_ json.Unmarshaler = &bucketMD{}
-	_ cluster.Bowner   = &bmdOwnerBase{}
-	_ bmdOwner         = &bmdOwnerPrx{}
-	_ bmdOwner         = &bmdOwnerTgt{}
+	_ cluster.Bowner = &bmdOwnerBase{}
+	_ bmdOwner       = &bmdOwnerPrx{}
+	_ bmdOwner       = &bmdOwnerTgt{}
 )
 
 // c-tor
@@ -209,41 +204,6 @@ func (m *bucketMD) marshal() ([]byte, error) {
 	return jsonCompat.Marshal(m) // jsoniter + sorting
 }
 
-// Extracts JSON payload and its checksum from []byte.
-func (m *bucketMD) UnmarshalJSON(b []byte) error {
-	aux := &struct {
-		BMD   *cluster.BMD `json:"bmd"`
-		Cksum uint64       `json:"cksum,string"`
-	}{
-		BMD: &m.BMD,
-	}
-
-	if err := jsoniter.Unmarshal(b, &aux); err != nil {
-		return err
-	}
-
-	payload := cmn.MustMarshal(m.BMD)
-	expectedCksum := xxhash.Checksum64S(payload, 0)
-	if aux.Cksum != expectedCksum {
-		return fmt.Errorf("checksum %v mismatches, expected %v", aux.Cksum, expectedCksum)
-	}
-	return nil
-}
-
-// Marshals bucketMD into JSON, calculates JSON checksum.
-func (m *bucketMD) MarshalJSON() ([]byte, error) {
-	payload := cmn.MustMarshal(m.BMD)
-	cksum := xxhash.Checksum64S(payload, 0)
-
-	return cmn.MustMarshal(&struct {
-		BMD   cluster.BMD `json:"bmd"`
-		Cksum uint64      `json:"cksum,string"`
-	}{
-		BMD:   m.BMD,
-		Cksum: cksum,
-	}), nil
-}
-
 //////////////////
 // bmdOwnerBase //
 //////////////////
@@ -266,7 +226,7 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 
 func (bo *bmdOwnerPrx) init() {
 	var bmd = newBucketMD()
-	err := cmn.LocalLoad(bo.fpath, bmd, true /*compression*/)
+	err := jsp.Load(bo.fpath, bmd, jsp.CCSign())
 	if err != nil && !os.IsNotExist(err) {
 		glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bo.fpath, err)
 	}
@@ -275,7 +235,7 @@ func (bo *bmdOwnerPrx) init() {
 
 func (bo *bmdOwnerPrx) put(bmd *bucketMD) {
 	bo._put(bmd)
-	err := cmn.LocalSave(bo.fpath, bmd, true /*compression*/)
+	err := jsp.Save(bo.fpath, bmd, jsp.CCSign())
 	if err != nil {
 		glog.Errorf("failed to write %s as %s, err: %v", bmdTermName, bo.fpath, err)
 	}
@@ -313,7 +273,7 @@ func (bo *bmdOwnerTgt) init() {
 			if suffix {
 				fpath += bmdFext
 			}
-			err := cmn.LocalLoad(fpath, bmd, true /*compression*/)
+			err := jsp.Load(fpath, bmd, jsp.CCSign())
 			if err == nil {
 				break
 			}
@@ -351,7 +311,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	// write new
 	for mpath := range avail {
 		fpath := filepath.Join(mpath, bmdFname)
-		if err := cmn.LocalSave(fpath, bmd, true /*compression*/); err != nil {
+		if err := jsp.Save(fpath, bmd, jsp.CCSign()); err != nil {
 			glog.Errorf("failed to store %s as %s, err: %v", bmdTermName, fpath, err)
 			continue
 		}

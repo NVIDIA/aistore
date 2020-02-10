@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fuse/fs"
 )
 
@@ -118,13 +119,13 @@ func (c *Config) writeTo(srvCfg *fs.ServerConfig) {
 func loadConfig(bucket string) (cfg *Config, err error) {
 	cfg = &Config{}
 	configFileName := bucket + "_mount.json"
-	if err = cmn.LoadAppConfig(configDirName, configFileName, &cfg); err != nil {
+	if err = jsp.LoadAppConfig(configDirName, configFileName, &cfg); err != nil {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to load config: %v", err)
 		}
 
 		cfg = &defaultConfig
-		err = cmn.SaveAppConfig(configDirName, configFileName, cfg)
+		err = jsp.SaveAppConfig(configDirName, configFileName, cfg)
 		if err != nil {
 			err = fmt.Errorf("failed to generate config file: %v", err)
 		}

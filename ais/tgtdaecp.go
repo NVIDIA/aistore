@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
@@ -239,7 +240,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) {
 	prevConfig := cmn.GCO.Get()
-	if err := cmn.SetConfigMany(kvs); err != nil {
+	if err := jsp.SetConfigMany(kvs); err != nil {
 		return err
 	}
 
@@ -943,7 +944,7 @@ func (t *targetrunner) detectMpathChanges() {
 		newfs.Disabled[mpath] = struct{}{}
 	}
 
-	if err := cmn.LocalLoad(mpathconfigfqn, &oldfs, false /* compression */); err != nil {
+	if err := jsp.Load(mpathconfigfqn, &oldfs, jsp.Plain()); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
 		}
@@ -967,7 +968,7 @@ func (t *targetrunner) detectMpathChanges() {
 		glog.Errorln(newfsPprint)
 	}
 	// persist
-	if err := cmn.LocalSave(mpathconfigfqn, newfs, false /* compression */); err != nil {
+	if err := jsp.Save(mpathconfigfqn, newfs, jsp.Plain()); err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
 }

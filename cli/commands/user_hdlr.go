@@ -1,3 +1,8 @@
+// Package commands provides the set of CLI commands used to communicate with the AIS cluster.
+// This specific file handles the CLI commands that create entities in the cluster.
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package commands
 
 import (
@@ -9,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/urfave/cli"
 )
 
@@ -175,7 +181,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 		return fmt.Errorf(tokenSaveFailFmt, err)
 	}
 	tokenPath := filepath.Join(tokenDir, credFile)
-	err = cmn.LocalSave(tokenPath, token, false /* compression */)
+	err = jsp.Save(tokenPath, token, jsp.Plain())
 	if err != nil {
 		return fmt.Errorf(tokenSaveFailFmt, err)
 	}
