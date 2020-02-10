@@ -509,7 +509,7 @@ func splitBucketObject(objname string) (bucket string, object string) {
 		object = strings.Join(s[1:], "/")
 		return
 	}
-	return "", s[0]
+	return s[0], ""
 }
 
 func bucketsFromArgsOrEnv(c *cli.Context) ([]string, error) {

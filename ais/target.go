@@ -1348,6 +1348,11 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	// 3b. promote file
+	if params.Objname == "" {
+		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
+		t.invalmsghdlr(w, r, loghdr+"missing object name")
+		return
+	}
 	if err = t.PromoteFile(srcFQN, bck, params.Objname, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
 		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
