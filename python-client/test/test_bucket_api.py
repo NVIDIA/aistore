@@ -181,7 +181,7 @@ class TestBucketApi(unittest.TestCase):
             wait=True, objnames=[object_name])
         log.info("Prefetch object list [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
-        self.bucket.perform_operation(self.BUCKET_NAME, input_params, bprovider="cloud")
+        self.bucket.perform_operation(self.BUCKET_NAME, input_params, provider="cloud")
         log.info("Get object [%s/%s] from cache",
                  self.BUCKET_NAME, object_name)
         self.object.get_properties(
@@ -206,7 +206,7 @@ class TestBucketApi(unittest.TestCase):
                              prefix="", regex="", range="")
         log.info("Prefetch object range [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
-        self.bucket.perform_operation(self.BUCKET_NAME, input_params, bprovider="cloud")
+        self.bucket.perform_operation(self.BUCKET_NAME, input_params, provider="cloud")
         log.info("Prefetch object list [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.get_properties(
@@ -298,14 +298,14 @@ class TestBucketApi(unittest.TestCase):
             self.models.Actions.EVICTCB)
         log.info("Evict bucket [%s] InputParameters [%s]",
                  self.BUCKET_NAME, input_params)
-        self.bucket.delete(self.BUCKET_NAME, input_parameters=input_params, bprovider="cloud")
+        self.bucket.delete(self.BUCKET_NAME, input_parameters=input_params, provider="cloud")
         self.__execute_operation_on_unavailable_object(
             self.object.get_properties, self.BUCKET_NAME, object_name,
             check_cached=True)
 
     def __check_if_local_bucket_exists(self, bucket_name):
         log.info("LIST BUCKET local names [%s]", bucket_name)
-        bucket_names = self.bucket.list_names(bprovider="ais")
+        bucket_names = self.bucket.list_names(provider="ais")
         self.assertTrue(len(bucket_names.cloud) == 0,
                         "Cloud buckets returned when requesting for only "
                         "local buckets")

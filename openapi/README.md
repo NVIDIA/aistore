@@ -39,9 +39,9 @@ Should you have any difficulty with these instructions, please open a ticket, an
 
 1. Obtain the latest, as of v2.0, openapi-generator jar by running the following command:
 
-    ```shell
-    wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.4/openapi-generator-cli-3.3.4.jar -O openapi-generator-cli.jar
-    ```
+```shell
+wget https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/4.2.3/openapi-generator-cli-4.2.3.jar -O openapi-generator-cli.jar
+```
 
 2. Run the following commands:
 

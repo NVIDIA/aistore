@@ -73,7 +73,7 @@ class TestSortApi(unittest.TestCase):
         output_prefix="output-"
         spec = self.models.SortSpec(
             bucket=self.BUCKET_NAME,
-            bprovider="ais",
+            provider="ais",
             extension=".tar",
             output_shard_size="1024",
             input_format=self.PREFIX+'{0..'+str(self.SHARDS-1)+'}',
@@ -109,7 +109,7 @@ class TestSortApi(unittest.TestCase):
         output_prefix="output-"
         spec = self.models.SortSpec(
             bucket=self.BUCKET_NAME,
-            bprovider="ais",
+            provider="ais",
             extension=".tar",
             output_shard_size="1024",
             input_format=self.PREFIX+'{0..'+str(self.SHARDS-1)+'}',

@@ -1,6 +1,6 @@
 openapi: "3.0.0"
 info:
-  version: "1.1.0"
+  version: "3.0"
   title: AIS
   description: "AIStore is a scalable object-storage based caching system with Amazon and Google Cloud backends."
   termsOfService: ""
@@ -38,22 +38,12 @@ paths:
   /objects/{bucket-name}/{object-name}:
     get:
       summary: Get object
-      operationId: get
+      operationId: getObject
       tags:
         - Object
       parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-        - name: object-name
-          in: path
-          description: Object name
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/bucketNameParam'
+        - $ref: '#/components/parameters/objectNameParam'
         - name: offset
           in: query
           description: Starting byte from where the read needs to be performed
@@ -66,12 +56,8 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: bprovider
-          in: query
-          description: Bucket locality
-          schema:
-            type: string
-            enum: [local, cloud, none]
+        - $ref: '#/components/parameters/providerParam'
+        - $ref: '#/components/parameters/namespaceParam'
       responses:
         '200':
           description: Object at the location bucket-name/object-name
@@ -93,36 +79,20 @@ paths:
             Location:
               schema:
                 type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     put:
       summary: Put object
-      operationId: put
+      operationId: putObject
       tags:
         - Object
       parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-        - name: object-name
-          in: path
-          description: Object name
-          required: true
-          schema:
-            type: string
-        - name: bprovider
-          in: query
-          description: Bucket locality
-          schema:
-            type: string
-            enum: [local, cloud, none]
+        - $ref: '#/components/parameters/bucketNameParam'
+        - $ref: '#/components/parameters/objectNameParam'
+        - $ref: '#/components/parameters/providerParam'
+        - $ref: '#/components/parameters/namespaceParam'
       requestBody:
         content:
           application/octet-stream:
@@ -139,35 +109,17 @@ paths:
               schema:
                 type: string
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     delete:
       summary: Delete object
-      operationId: delete
+      operationId: deleteObject
       tags:
         - Object
       parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-        - name: object-name
-          in: path
-          description: Object name
-          required: true
-          schema:
-            type: string
-        - name: bprovider
-          in: query
-          description: Bucket locality
-          schema:
-            type: string
-            enum: [local, cloud, none]
+        - $ref: '#/components/parameters/bucketNameParam'
+        - $ref: '#/components/parameters/objectNameParam'
+        - $ref: '#/components/parameters/providerParam'
+        - $ref: '#/components/parameters/namespaceParam'
       requestBody:
         content:
           application/json:
@@ -182,30 +134,20 @@ paths:
             Location:
               schema:
                 type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     post:
       summary: Perform operations on object such as rename
-      operationId: performOperation
+      operationId: performOperationOnObject
       tags:
         - Object
       parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-        - name: object-name
-          in: path
-          description: Object name
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/bucketNameParam'
+        - $ref: '#/components/parameters/objectNameParam'
+        - $ref: '#/components/parameters/providerParam'
+        - $ref: '#/components/parameters/namespaceParam'
       requestBody:
         required: true
         content:
@@ -222,40 +164,22 @@ paths:
               schema:
                 type: string
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     head:
       summary: Query object properties
-      operationId: getProperties
+      operationId: getObjectProperties
       tags:
         - Object
       parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-        - name: object-name
-          in: path
-          description: Object name
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/bucketNameParam'
+        - $ref: '#/components/parameters/objectNameParam'
         - name: check_cached
           in: query
           description: Check if the object is cached
           schema:
             type: boolean
-        - name: bprovider
-          in: query
-          description: Bucket locality
-          schema:
-            type: string
-            enum: [local, cloud, none]
+        - $ref: '#/components/parameters/providerParam'
+        - $ref: '#/components/parameters/namespaceParam'
       responses:
         '200':
           description: Properties of the object at the location bucket-name/object-name
@@ -276,25 +200,34 @@ paths:
             Location:
               schema:
                 type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /buckets/*:
     get:
       summary: Get bucket names
-      operationId: listNames
+      operationId: listBucketNames
       tags:
         - Bucket
       parameters:
-        - name: bprovider
+        - name: provider
           in: query
-          description: Get only local, cloud, or all buckets
+          description: Determines the cloud provider for which we should get defined buckets
           schema:
             type: string
-            enum: [local, cloud, none]
+            enum: [ais, aws, gcp, cloud]
+          examples:
+            all:
+              value: null
+              summary: Get buckets from all providers
+            cloud:
+              value: cloud
+              summary: Get buckets only for defined cloud provider
+            ais:
+              value: ais
+              summary: Get buckets only defined in cluster that the request refers to
+        - $ref: '#/components/parameters/namespaceParam'
       responses:
         '200':
           description: Cloud and local bucket names
@@ -303,35 +236,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/BucketNames'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /buckets/{bucket-name}:
     put:
       summary: Set bucket properties
-      operationId: setProperties
+      operationId: setBucketProperties
       tags:
         - Bucket
       parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-        - name: cloud_provider
-          in: query
-          description: Bucket's cloud provider
-          schema:
-            type: string
-        - name: bprovider
-          in: query
-          description: Bucket locality
-          schema:
-            type: string
-            enum: [local, cloud, none]
+        - $ref: '#/components/parameters/bucketNameParam'
+        - $ref: '#/components/parameters/providerParam'
+        - $ref: '#/components/parameters/namespaceParam'
       requestBody:
         required: true
         content:
@@ -341,30 +256,19 @@ paths:
       responses:
         '200':
           description: Bucket properties set successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     post:
       summary: Perform operations on bucket such as create
-      operationId: performOperation
+      operationId: performOperationOnBucket
       tags:
         - Bucket
       parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-        - name: bprovider
-          in: query
-          description: Bucket locality
-          schema:
-            type: string
-            enum: [local, cloud, none]
+        - $ref: '#/components/parameters/bucketNameParam'
+        - $ref: '#/components/parameters/providerParam'
+        - $ref: '#/components/parameters/namespaceParam'
       requestBody:
         required: true
         content:
@@ -389,29 +293,16 @@ paths:
                   - $ref: '#/components/schemas/TaskID'
                   - $ref: '#/components/schemas/ObjectPropertyList'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     delete:
       summary: Delete operations on bucket and its contained objects
-      operationId: delete
+      operationId: deleteBucket
       tags:
         - Bucket
       parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-        - name: bprovider
-          in: query
-          description: Bucket locality
-          schema:
-            type: string
-            enum: [local, cloud, none]
+        - $ref: '#/components/parameters/bucketNameParam'
+        - $ref: '#/components/parameters/providerParam'
+        - $ref: '#/components/parameters/namespaceParam'
       requestBody:
         required: true
         content:
@@ -421,30 +312,19 @@ paths:
       responses:
         '200':
           description: Bucket-name deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     head:
       summary: Query bucket properties
-      operationId: getProperties
+      operationId: getBucketProperties
       tags:
         - Bucket
       parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-        - name: bprovider
-          in: query
-          description: Bucket locality
-          schema:
-            type: string
-            enum: [local, cloud, none]
+        - $ref: '#/components/parameters/bucketNameParam'
+        - $ref: '#/components/parameters/providerParam'
+        - $ref: '#/components/parameters/namespaceParam'
       responses:
         '200':
           description: Properties of bucket-name
@@ -470,16 +350,14 @@ paths:
             Location:
               schema:
                 type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /cluster/:
     get:
       summary: Get cluster related details
-      operationId: get
+      operationId: getClusterInfo
       tags:
         - Cluster
       parameters:
@@ -501,18 +379,13 @@ paths:
             application/json:
               schema:
                 anyOf:
-                  - $ref: '#/components/schemas/RebalanceClusterStatistics'
-                  - $ref: '#/components/schemas/PrefetchClusterStatistics'
+                  - $ref: '#/components/schemas/SysInfoStats'
                   - $ref: '#/components/schemas/ClusterStatistics'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     put:
       summary: Perform cluster wide operations such as setting config value, shutting down proxy/target etc.
-      operationId: performOperation
+      operationId: performOperationOnCluster
       tags:
         - Cluster
       requestBody:
@@ -524,6 +397,8 @@ paths:
       responses:
         '200':
           description: Cluster operation triggered successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
           description: An unexpected error was encountered
           content:
@@ -546,11 +421,7 @@ paths:
         '200':
           description: Target registered successfully
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /cluster/daemon/{daemonId}:
     delete:
       summary: Unregister the storage target
@@ -567,12 +438,10 @@ paths:
       responses:
         '200':
           description: Storage target unregistered successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /cluster/proxy/{primary-proxy-id}:
     put:
       summary: Set primary proxy
@@ -582,7 +451,7 @@ paths:
       parameters:
         - name: primary-proxy-id
           in: path
-          description: Bucket name
+          description: ID of the proxy that should be set as primary
           required: true
           schema:
             type: string
@@ -590,15 +459,11 @@ paths:
         '200':
           description: Primary proxy set successfully
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /daemon/:
     get:
       summary: Get daemon related details
-      operationId: get
+      operationId: getDaemonInfo
       tags:
         - Daemon
       parameters:
@@ -618,15 +483,13 @@ paths:
                   - $ref: '#/components/schemas/ClusterMap'
                   - $ref: '#/components/schemas/TargetStatistics'
                   - $ref: '#/components/schemas/DaemonConfiguration'
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     put:
       summary: Perform operations such as setting config value, shutting down proxy/target etc. on a AIS daemon
-      operationId: performOperation
+      operationId: performOperationOnDaemon
       tags:
         - Daemon
       requestBody:
@@ -639,11 +502,7 @@ paths:
         '200':
           description: Operation on AIS daemon triggered successfully
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /daemon/mountpaths:
     post:
       summary: Perform operations on mountpath such as disable and enable
@@ -664,11 +523,7 @@ paths:
         '404':
           description: Return status if the mountpath was not found
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     put:
       summary: Create mountpath on target
       operationId: createMountpath
@@ -684,11 +539,7 @@ paths:
         '200':
           description: Operation on AIS daemon triggered successfully
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
     delete:
       summary: Remove mountpath from target
       operationId: removeMountpath
@@ -704,11 +555,7 @@ paths:
         '200':
           description: Operation on AIS daemon triggered successfully
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /sort:
     post:
       summary: Starts distributed sort operation on cluster
@@ -757,11 +604,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MapOfMetrics'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /sort/abort:
     delete:
       summary: Abort distributed sort operation
@@ -780,11 +623,7 @@ paths:
         '200':
           description: Operation was successfully aborted
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /download:
     delete:
       summary: Cancel a previous download request
@@ -835,11 +674,7 @@ paths:
                 schema:
                   type: string
           default:
-            description: An unexpected error was encountered
-            content:
-              text/plain:
-                schema:
-                  type: string
+            $ref: '#/components/responses/Unexpected'
   /download/single:
     post:
       summary: Queues a single object to be downloaded by AIS.
@@ -872,11 +707,7 @@ paths:
               schema:
                 type: string
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /download/multi:
     post:
       summary: Queues multiple objects to be downloaded by AIS. Requires either an object_map or object_list request body field.
@@ -909,11 +740,7 @@ paths:
               schema:
                 type: string
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
   /download/list:
     post:
       summary: Queues for download all the objects that can be constructed from url= base + prefix + n + suffix. Where n is known as the key space. start <= n <= end. The key space can be modified using the step and digit_count modifiers in the request body.
@@ -936,23 +763,99 @@ paths:
         '400':
           description: Bad request, check formatting and/or fields provided in the request body.
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Error'
         '409':
           description: Object with the same bucket and objname already exists on AIS.
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Error'
         default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/Unexpected'
+
 components:
+  parameters:
+    bucketNameParam:
+      name: bucket-name
+      in: path
+      description: Bucket name
+      required: true
+      schema:
+        type: string
+    objectNameParam:
+      name: object-name
+      in: path
+      description: Object name
+      required: true
+      schema:
+        type: string
+    providerParam:
+      name: provider
+      in: query
+      description: Determines the cloud provider where a given bucket and object is defined
+      schema:
+        type: string
+        enum: [ais, aws, gcp, cloud]
+    namespaceParam:
+      name: namespace
+      in: query
+      description: Unique name of the namespace
+      schema:
+        type: string
+      examples:
+        single-namespace:
+          value: ns1
+          summary: Specify only the name of the namespace
+        uuid-and-namespace:
+          value: uuid#ns1
+          summary: Specify the name of the namespace with UUID to remote cluster that it refers to
+
+  responses:
+    NotFound:
+      description: The specified resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unexpected:
+      description: An unexpected error was encountered
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
   schemas:
+    # Schema for error response body
+    Error:
+      type: object
+      properties:
+        status:
+          type: integer
+        message:
+          type: string
+        method:
+          type: string
+        url_path:
+          type: string
+        remote_addr:
+          type: string
+        trace:
+          type: string
+      required:
+        - status
+        - message
+        - method
+        - url_path
+        - remote_addr
+
     DownloadAdmin:
       type: object
       properties:
@@ -1070,11 +973,11 @@ components:
         output_bucket:
           type: string
           description: Name of the bucket where data is written/saved. By default it is same as bucket.
-        bprovider:
+        provider:
           type: string
           description: Describes if the bucket is local or cloud
           default: "ais"
-        output_bprovider:
+        output_provider:
           type: string
           description: Describes if the output bucket is local or cloud
           default: "ais"
@@ -1343,7 +1246,7 @@ components:
           type: array
           items:
             type: string
-        local:
+        ais:
           type: array
           items:
             type: string
@@ -1417,6 +1320,9 @@ components:
       properties:
         daemon_id:
           type: string
+        deamon_type:
+          type: string
+          enum: [target, proxy]
         public_net:
           $ref: '#/components/schemas/NetInfo'
         intra_control_net:
@@ -1436,6 +1342,8 @@ components:
       type: string
       enum:
         - smap
+        - bmd
+        - smapvote
         - config
         - stats
         - xaction
@@ -1443,7 +1351,7 @@ components:
         - snode
         - status
         - sysinfo
-        - bucketmd
+        - disk
     GetProps:
       type: string
       enum: [rebalance, prefetch]
@@ -1469,34 +1377,37 @@ components:
     DaemonCoreStatistics:
       type: object
       properties:
-        numget:
+        get.n:
           type: integer
           format: int64
-        numput:
+        put.n:
           type: integer
           format: int64
-        numpost:
+        append.n:
           type: integer
           format: int64
-        numdelete:
+        pst.n:
           type: integer
           format: int64
-        numrename:
+        del.n:
           type: integer
           format: int64
-        numlist:
+        ren.n:
           type: integer
           format: int64
-        getlatency:
+        lst.n:
           type: integer
           format: int64
-        putlatency:
+        get.µs:
           type: integer
           format: int64
-        listlatency:
+        put.µs:
           type: integer
           format: int64
-        numerr:
+        lst.µs:
+          type: integer
+          format: int64
+        err.n:
           type: integer
           format: int64
     TargetCoreStatistics:
@@ -1504,46 +1415,109 @@ components:
         - $ref: '#/components/schemas/DaemonCoreStatistics'
         - type: object
           properties:
-            numcoldget:
+            get.n:
               type: integer
               format: int64
-            bytesloaded:
+            put.n:
               type: integer
               format: int64
-            bytesevicted:
+            append.n:
               type: integer
               format: int64
-            filesevicted:
+            pst.n:
               type: integer
               format: int64
-            numsentfiles:
+            del.n:
               type: integer
               format: int64
-            numsentbytes:
+            ren.n:
               type: integer
               format: int64
-            numrecvfiles:
+            lst.n:
               type: integer
               format: int64
-            numrecvbytes:
+            lru.evict.n:
               type: integer
               format: int64
-            numprefetch:
+            lru.evict.size:
               type: integer
               format: int64
-            bytesprefetched:
+            tx.reb.n:
               type: integer
               format: int64
-            numvchanged:
+            tx.reb.size:
               type: integer
               format: int64
-            bytesvchanged:
+            rx.reb.n:
               type: integer
               format: int64
-            numbadchecksum:
+            rx.reb.size:
               type: integer
               format: int64
-            bytesbadchecksum:
+            pre.n:
+              type: integer
+              format: int64
+            pre.size:
+              type: integer
+              format: int64
+            vchange.n:
+              type: integer
+              format: int64
+            vchange.size:
+              type: integer
+              format: int64
+            get.µs:
+              type: integer
+              format: int64
+            put.µs:
+              type: integer
+              format: int64
+            lst.µs:
+              type: integer
+              format: int64
+            err.n:
+              type: integer
+              format: int64
+            err.get.n:
+              type: integer
+              format: int64
+            err.delete.n:
+              type: integer
+              format: int64
+            err.post.n:
+              type: integer
+              format: int64
+            err.put.n:
+              type: integer
+              format: int64
+            err.head.n:
+              type: integer
+              format: int64
+            err.list.n:
+              type: integer
+              format: int64
+            err.range.n:
+              type: integer
+              format: int64
+            err.dl.n:
+              type: integer
+              format: int64
+            up.µs.time:
+              type: integer
+              format: int64
+            err.cksum.n:
+              type: integer
+              format: int64
+            err.cksum.size:
+              type: integer
+              format: int64
+            err.md.n:
+              type: integer
+              format: int64
+            err.md.size:
+              type: integer
+              format: int64
+            err.io.n:
               type: integer
               format: int64
     FileSystemCapacity:
@@ -1580,6 +1554,46 @@ components:
           $ref: '#/components/schemas/DaemonCoreStatistics'
         target:
           $ref: '#/components/schemas/TargetStatistics'
+    SysInfoStats:
+      type: object
+      properties:
+        proxy:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              mem_used:
+                type: integer
+              mem_avail:
+                type: integer
+              pct_mem_used:
+                type: number
+                format: float
+              pct_cpu_used:
+                type: number
+                format: float
+        target:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              mem_used:
+                type: integer
+              mem_avail:
+                type: integer
+              pct_mem_used:
+                type: number
+                format: float
+              pct_cpu_used:
+                type: number
+                format: float
+              fs_used:
+                type: string
+              fs_capacity:
+                type: string
+              pct_fs_used:
+                type: number
+                format: float
     ProxyConfiguration:
       type: object
       properties:
@@ -1596,8 +1610,6 @@ components:
           type: string
         name:
           type: string
-        max:
-          type: string
         factor:
           type: integer
           format: int32
@@ -1606,8 +1618,22 @@ components:
       properties:
         confdir:
           type: string
-        cloud_provider:
-          type: string
+        cloud:
+          type: object
+        ec:
+          type: object
+          properties:
+            objsize_limit:
+              type: integer
+            data_slices:
+              type: integer
+            parity_slices:
+              type: integer
+            compression:
+              type: string
+              enum: [never, always]
+            enabled:
+              type: boolean
         mirror:
           type: object
           properties:
@@ -1707,6 +1733,11 @@ components:
           properties:
             dest_retry_time:
               type: string
+            quiescent:
+              type: string
+            compression:
+              type: string
+              enum: [never, always]
             multiplier:
               type: integer
             enabled:
@@ -1720,15 +1751,13 @@ components:
               type: boolean
             validate_warm_get:
               type: boolean
-            validate_obj_move:
+            validate_cluster_migration:
               type: boolean
             enable_read_range:
               type: boolean
         version:
           type: object
           properties:
-            type:
-              type: string
             enabled:
               type: boolean
             validate_warm_get:
@@ -1752,6 +1781,10 @@ components:
           type: object
           properties:
             ipv4:
+              type: string
+            ipv4_intra_control:
+              type: string
+            ipv4_intra_data:
               type: string
             l4:
               type: object
@@ -1781,7 +1814,7 @@ components:
                   type: string
                 chunked_transfer:
                   type: boolean
-        fsch:
+        fshc:
           type: object
           properties:
             enabled:
@@ -1815,6 +1848,13 @@ components:
           properties:
             timeout:
               type: string
+        compression:
+          type: object
+          properties:
+            block_size:
+              type: integer
+            checksum:
+              type: boolean
         distributed_sort:
           type: object
           properties:
@@ -1832,65 +1872,48 @@ components:
               type: string
             call_timeout:
               type: string
-    XactionDetails:
+    BaseXactStats:
       type: object
       properties:
         id:
+          type: string
+        kind:
+          type: string
+        bucket:
+          type: string
+        provider:
+          type: string
+        start_time:
+          type: string
+        end_time:
+          type: string
+        obj_count:
           type: integer
           format: int64
-        startTime:
-          type: string
-        endTime:
-          type: string
-        status:
-          type: string
+        bytes_count:
+          type: integer
+          format: int64
+        aborted:
+          type: boolean
     RebalanceTargetStatistics:
       type: object
       properties:
         xactionDetails:
           type: array
           items:
-            $ref: '#/components/schemas/XactionDetails'
-        numSentFiles:
+            $ref: '#/components/schemas/BaseXactStats'
+        tx.reb.n:
           type: integer
           format: int64
-        numSentBytes:
+        tx.reb.size:
           type: integer
           format: int64
-        numRecvFiles:
+        rx.reb.n:
           type: integer
           format: int64
-        numRecvBytes:
+        rx.reb.size:
           type: integer
           format: int64
-    PrefetchTargetStatistics:
-      type: object
-      properties:
-        xactionDetails:
-          type: array
-          items:
-            $ref: '#/components/schemas/XactionDetails'
-        numFilesPrefetched:
+        reb.glob.id:
           type: integer
           format: int64
-        numBytesPrefetched:
-          type: integer
-          format: int64
-    RebalanceClusterStatistics:
-      type: object
-      properties:
-        kind:
-          type: string
-        target:
-          type: object
-          additionalProperties:
-              $ref: '#/components/schemas/RebalanceTargetStatistics'
-    PrefetchClusterStatistics:
-      type: object
-      properties:
-        kind:
-          type: string
-        target:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/PrefetchTargetStatistics'
