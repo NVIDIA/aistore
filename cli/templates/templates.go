@@ -28,7 +28,7 @@ const (
 	SmapHeader = "DaemonID\t Type\t PublicURL" +
 		"{{ if (eq $.ExtendedURLs true) }}\t IntraControlURL\t IntraDataURL{{end}}" +
 		"\n"
-	SmapBody = "{{FormatDaemonID $value.ID() $.Smap}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}" +
+	SmapBody = "{{FormatDaemonID $value.ID $.Smap}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}" +
 		"{{ if (eq $.ExtendedURLs true) }}\t {{$value.IntraControlNet.DirectURL}}\t {{$value.IntraDataNet.DirectURL}}{{end}}" +
 		"\n"
 
@@ -38,11 +38,11 @@ const (
 		"{{ range $key, $value := .Smap.Tmap }}" + SmapBody + "{{end}}\n" +
 		"Non-Electable:\n" +
 		"{{ range $key, $ := .Smap.NonElects }} ProxyID: {{$key}}\n{{end}}\n" +
-		"PrimaryProxy: {{.Smap.ProxySI.ID()}}\t Proxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
+		"PrimaryProxy: {{.Smap.ProxySI.ID}}\t Proxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
 
 	// Proxy Info
 	ProxyInfoHeader = "Proxy\t %MemUsed\t MemAvail\t %CpuUsed\t Uptime\n"
-	ProxyInfoBody   = "{{$value.Snode.ID()}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
+	ProxyInfoBody   = "{{$value.Snode.ID}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
 
@@ -51,7 +51,7 @@ const (
 	ProxyInfoSingleBodyTmpl = "{{$value := . }}" + ProxyInfoBody
 	ProxyInfoSingleTmpl     = ProxyInfoHeader + ProxyInfoSingleBodyTmpl
 
-	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.DaemonID $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
+	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
 	AllProxyInfoBodyTmpl = "{{ range $key, $value := .Status }}" + AllProxyInfoBody + "{{end}}"
@@ -59,7 +59,7 @@ const (
 
 	// Target Info
 	TargetInfoHeader = "Target\t %MemUsed\t MemAvail\t %CapUsed\t CapAvail\t %CpuUsed\t Rebalance\n"
-	TargetInfoBody   = "{{$value.Snode.DaemonID}}\t " +
+	TargetInfoBody   = "{{$value.Snode.ID}}\t " +
 		"{{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
 		"{{CalcCap $value `percent` | printf `%d`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
 		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
@@ -70,7 +70,7 @@ const (
 	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoBody
 	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
 
-	ClusterSummary = "Summary:\n Proxies:\t{{len .Pmap}} ({{len .NonElects}} - unelectable)\n Targets:\t{{len .Tmap}}\n Primary Proxy:\t{{.ProxySI.DaemonID}}\n Smap Version:\t{{.Version}}\n"
+	ClusterSummary = "Summary:\n Proxies:\t{{len .Pmap}} ({{len .NonElects}} - unelectable)\n Targets:\t{{len .Tmap}}\n Primary Proxy:\t{{.ProxySI.ID}}\n Smap Version:\t{{.Version}}\n"
 
 	// Stats
 	StatsHeader = "{{$obj := . }}Daemon:\t{{ .Snode.DaemonID }}\nType:\t{{ .Snode.DaemonType }}\n\nStats\n-----\n"
