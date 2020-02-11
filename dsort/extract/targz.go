@@ -18,6 +18,7 @@ import (
 )
 
 var (
+	// interface guard
 	_ ExtractCreator = &targzExtractCreator{}
 )
 
@@ -132,7 +133,6 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 	var (
 		n         int64
 		needFlush bool
-		padBuf    = make([]byte, tarBlockSize)
 		gzw, _    = gzip.NewWriterLevel(tarball, gzip.BestSpeed)
 		tw        = tar.NewWriter(gzw)
 		rdReader  = newTarRecordDataReader(t.t)

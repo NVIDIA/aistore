@@ -21,42 +21,48 @@ const (
 )
 
 var (
+	// Predefined padding buffer (zero-initialized).
+	padBuf [tarBlockSize]byte
+
+	// interface guard
 	_ ExtractCreator = &tarExtractCreator{}
 )
 
-// tarFileHeader represents a single record's file metadata. The fields here are
-// taken from tar.Header. It is very costly to marshal and unmarshal time.Time
-// to and from JSON, so all time.Time fields are omitted. Furthermore, the
-// time.Time fields are updated upon creating the new tarballs, so there is no
-// need to maintain the original values.
-type tarFileHeader struct {
-	Typeflag byte `json:"typeflag"` // Type of header entry (should be TypeReg for most files)
+type (
+	// tarFileHeader represents a single record's file metadata. The fields here
+	// are taken from `tar.Header`. It is very costly to marshal and unmarshal
+	// `time.Time` to and from JSON, so all `time.Time` fields are omitted.
+	// Furthermore, the `time.Time` fields are updated upon creating the new
+	// tarballs, so there is no need to maintain the original values.
+	tarFileHeader struct {
+		Typeflag byte `json:"typeflag"` // Type of header entry (should be TypeReg for most files)
 
-	Name     string `json:"name"`     // Name of file entry
-	Linkname string `json:"linkname"` // Target name of link (valid for TypeLink or TypeSymlink)
+		Name     string `json:"name"`     // Name of file entry
+		Linkname string `json:"linkname"` // Target name of link (valid for TypeLink or TypeSymlink)
 
-	Size  int64  `json:"size"`  // Logical file size in bytes
-	Mode  int64  `json:"mode"`  // Permission and mode bits
-	UID   int    `json:"uid"`   // User ID of owner
-	GID   int    `json:"gid"`   // Group ID of owner
-	Uname string `json:"uname"` // User name of owner
-	Gname string `json:"gname"` // Group name of owner
-}
+		Size  int64  `json:"size"`  // Logical file size in bytes
+		Mode  int64  `json:"mode"`  // Permission and mode bits
+		UID   int    `json:"uid"`   // User ID of owner
+		GID   int    `json:"gid"`   // Group ID of owner
+		Uname string `json:"uname"` // User name of owner
+		Gname string `json:"gname"` // Group name of owner
+	}
 
-type tarExtractCreator struct {
-	t cluster.Target
-}
+	tarExtractCreator struct {
+		t cluster.Target
+	}
 
-// tarRecordDataReader is used for writing metadata as well as data to the buffer.
-type tarRecordDataReader struct {
-	slab *memsys.Slab
+	// tarRecordDataReader is used for writing metadata as well as data to the buffer.
+	tarRecordDataReader struct {
+		slab *memsys.Slab
 
-	metadataSize int64
-	size         int64
-	written      int64
-	metadataBuf  []byte
-	tarWriter    *tar.Writer
-}
+		metadataSize int64
+		size         int64
+		written      int64
+		metadataBuf  []byte
+		tarWriter    *tar.Writer
+	}
+)
 
 func newTarFileHeader(header *tar.Header) tarFileHeader {
 	return tarFileHeader{
@@ -217,7 +223,6 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 	var (
 		n         int64
 		needFlush bool
-		padBuf    = make([]byte, tarBlockSize)
 		tw        = tar.NewWriter(tarball)
 		rdReader  = newTarRecordDataReader(t.t)
 	)

@@ -16,6 +16,7 @@ import (
 )
 
 var (
+	// interface guard
 	_ ExtractCreator = &zipExtractCreator{}
 )
 
