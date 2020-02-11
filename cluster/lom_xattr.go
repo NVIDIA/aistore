@@ -264,16 +264,23 @@ func (md *lmeta) marshal(mm *memsys.MMSA) (buf []byte, slab *memsys.Slab, off in
 }
 
 func _writeCopies(buf []byte, off int, copies fs.MPI) int {
+	var (
+		i   int
+		num = len(copies)
+	)
 	for copyFQN := range copies {
+		i++
 		if buf == nil {
-			off += len(copyFQN) + len(copyFQNSepa)
+			off += len(copyFQN)
+			if i < num {
+				off += lenCopySepa
+			}
 			continue
 		}
 		off += copy(buf[off:], copyFQN)
-		off += copy(buf[off:], copyFQNSepa)
-	}
-	if off > 0 {
-		off -= lenCopySepa
+		if i < num {
+			off += copy(buf[off:], copyFQNSepa)
+		}
 	}
 	return off
 }
