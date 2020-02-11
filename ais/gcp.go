@@ -166,23 +166,23 @@ func createClient(ctx context.Context) (*storage.Client, context.Context, string
 	return client, ctx, creds.projectID, nil
 }
 
-func gcpErrorToAISError(bucket string, gcpError error) (error, int) {
+func gcpErrorToAISError(gcpError error, bck *cluster.Bck, node string) (error, int) {
 	if gcpError == storage.ErrBucketNotExist {
-		return cmn.NewErrorCloudBucketDoesNotExist(bucket), http.StatusNotFound
+		return cmn.NewErrorCloudBucketDoesNotExist(bck.Bck, node), http.StatusNotFound
 	}
 
 	return gcpError, http.StatusBadRequest
 }
 
-func handleObjectError(objErr error, bckName string, bucket *storage.BucketHandle, gctx context.Context) (error, int) {
+func handleObjectError(objErr error, lom *cluster.LOM, gcpBucket *storage.BucketHandle, gctx context.Context) (error, int) {
 	if objErr != storage.ErrObjectNotExist {
 		return objErr, http.StatusBadRequest
 	}
 
 	// Object does not exist, but in gcp it doesn't mean that the bucket existed. Check if the buckets exists
-	_, err := bucket.Attrs(gctx)
+	_, err := gcpBucket.Attrs(gctx)
 	if err != nil {
-		return gcpErrorToAISError(bckName, err)
+		return gcpErrorToAISError(err, lom.Bck(), lom.T.Snode().Name())
 	}
 
 	return objErr, http.StatusBadRequest
@@ -221,7 +221,7 @@ func (gcpp *gcpProvider) ListBucket(ctx context.Context, bucket string, msg *cmn
 	objs := make([]*storage.ObjectAttrs, 0)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {
-		err, errCode = gcpErrorToAISError(bucket, err)
+		err, errCode = gcpErrorToAISError(err, cluster.NewBck(bucket, cmn.ProviderGoogle, cmn.NsGlobal), "")
 		return
 	}
 
@@ -262,7 +262,7 @@ func (gcpp *gcpProvider) headBucket(ctx context.Context, bucket string) (bckProp
 	}
 	_, err = gcpClient.Bucket(bucket).Attrs(gctx)
 	if err != nil {
-		err, errCode = gcpErrorToAISError(bucket, err)
+		err, errCode = gcpErrorToAISError(err, cluster.NewBck(bucket, cmn.ProviderGoogle, cmn.NsGlobal), "")
 		return
 	}
 	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
@@ -292,7 +292,7 @@ func (gcpp *gcpProvider) getBucketNames(ctx context.Context) (buckets []string, 
 			break
 		}
 		if err != nil {
-			err, errCode = gcpErrorToAISError(battrs.Name, err)
+			err, errCode = gcpErrorToAISError(err, cluster.NewBck(battrs.Name, cmn.ProviderGoogle, cmn.NsGlobal), "")
 			return
 		}
 		buckets = append(buckets, battrs.Name)
@@ -316,7 +316,7 @@ func (gcpp *gcpProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	}
 	attrs, err := gcpClient.Bucket(lom.BckName()).Object(lom.Objname).Attrs(gctx)
 	if err != nil {
-		err, errCode = handleObjectError(err, lom.BckName(), gcpClient.Bucket(lom.BckName()), gctx)
+		err, errCode = handleObjectError(err, lom, gcpClient.Bucket(lom.BckName()), gctx)
 		return
 	}
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
@@ -339,7 +339,7 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	o := gcpClient.Bucket(lom.BckName()).Object(lom.Objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		err, errCode = handleObjectError(err, lom.BckName(), gcpClient.Bucket(lom.BckName()), gctx)
+		err, errCode = handleObjectError(err, lom, gcpClient.Bucket(lom.BckName()), gctx)
 		return
 	}
 
@@ -397,7 +397,7 @@ func (gcpp *gcpProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 	}
 	attr, err := gcpObj.Attrs(gctx)
 	if err != nil {
-		err, errCode = handleObjectError(err, lom.BckName(), gcpClient.Bucket(lom.BckName()), gctx)
+		err, errCode = handleObjectError(err, lom, gcpClient.Bucket(lom.BckName()), gctx)
 		return
 	}
 	version = fmt.Sprintf("%d", attr.Generation)
@@ -419,7 +419,7 @@ func (gcpp *gcpProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err e
 	o := gcpClient.Bucket(lom.BckName()).Object(lom.Objname)
 	err = o.Delete(gctx)
 	if err != nil {
-		err, errCode = handleObjectError(err, lom.BckName(), gcpClient.Bucket(lom.BckName()), gctx)
+		err, errCode = handleObjectError(err, lom, gcpClient.Bucket(lom.BckName()), gctx)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

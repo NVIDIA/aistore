@@ -182,7 +182,7 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 		description = multiPayload.Describe()
 	} else if err := cloudPayload.Validate(); err == nil {
 		bck := cluster.NewBckEmbed(cloudPayload.Bck)
-		if err := bck.Init(t.bmdowner); err != nil {
+		if err := bck.Init(t.bmdowner, t.si.Name()); err != nil {
 			return nil, err
 		}
 		if !bck.IsCloud() {
@@ -200,7 +200,7 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 	}
 
 	bck := cluster.NewBckEmbed(payload.Bck)
-	if err = bck.Init(t.bmdowner); err != nil {
+	if err = bck.Init(t.bmdowner, t.si.Name()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 			return nil, err
 		}

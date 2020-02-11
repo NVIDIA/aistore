@@ -73,6 +73,9 @@ func (d *Snode) String() string {
 	return d.ID()
 }
 func (d *Snode) Name() string {
+	if d == nil {
+		return ""
+	}
 	if d.DaemonType == cmn.Proxy {
 		return "p[" + d.ID() + "]"
 	}

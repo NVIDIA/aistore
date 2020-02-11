@@ -23,11 +23,12 @@ var (
 
 func newEmptyCloud() (cloudProvider, error) { return &emptyCloudProvider{}, nil }
 
-func (m *emptyCloudProvider) ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
-	return nil, cmn.NewErrorCloudBucketOffline(bucket, ""), http.StatusNotFound
+func (m *emptyCloudProvider) ListBucket(ctx context.Context, bucket string,
+	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+	return nil, cmn.NewErrorCloudBucketOffline(cmn.Bck{Name: bucket}, ""), http.StatusNotFound
 }
 func (m *emptyCloudProvider) headBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
-	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketOffline(bucket, ""), http.StatusNotFound
+	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketOffline(cmn.Bck{Name: bucket}, ""), http.StatusNotFound
 }
 
 // the function must not fail - it should return empty list
@@ -35,14 +36,18 @@ func (m *emptyCloudProvider) getBucketNames(ctx context.Context) (buckets []stri
 	return []string{}, nil, 0
 }
 func (m *emptyCloudProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
-	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketDoesNotExist(lom.BckName()), http.StatusNotFound
+	bck, node := lom.Bck().Bck, lom.T.Snode().Name()
+	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }
 func (m *emptyCloudProvider) getObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int) {
-	return cmn.NewErrorCloudBucketDoesNotExist(lom.BckName()), http.StatusNotFound
+	bck, node := lom.Bck().Bck, lom.T.Snode().Name()
+	return cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }
 func (m *emptyCloudProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
-	return "", cmn.NewErrorCloudBucketDoesNotExist(lom.BckName()), http.StatusNotFound
+	bck, node := lom.Bck().Bck, lom.T.Snode().Name()
+	return "", cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }
 func (m *emptyCloudProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
-	return cmn.NewErrorCloudBucketDoesNotExist(lom.BckName()), http.StatusNotFound
+	bck, node := lom.Bck().Bck, lom.T.Snode().Name()
+	return cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }

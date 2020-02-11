@@ -14,10 +14,14 @@ import (
 ///////////////////////////////////////////////////////
 
 type (
-	ErrorBucketAlreadyExists     struct{ bucket string }
-	ErrorCloudBucketDoesNotExist struct{ bucket string }
-	ErrorCloudBucketOffline      struct{ bucket, provider string }
-	ErrorBucketDoesNotExist      struct{ bucket string }
+	nodeBckPair struct {
+		node string
+		bck  Bck
+	}
+	ErrorBucketAlreadyExists     nodeBckPair
+	ErrorCloudBucketDoesNotExist nodeBckPair
+	ErrorCloudBucketOffline      nodeBckPair
+	ErrorBucketDoesNotExist      nodeBckPair
 
 	ErrorCapacityExceeded struct {
 		prefix string
@@ -57,35 +61,39 @@ type (
 	}
 )
 
-func NewErrorBucketAlreadyExists(bucket string) *ErrorBucketAlreadyExists {
-	return &ErrorBucketAlreadyExists{bucket: bucket}
+func _errBucket(msg, node string) string {
+	if node != "" {
+		return node + ": " + msg
+	}
+	return msg
+}
+
+func NewErrorBucketAlreadyExists(bck Bck, node string) *ErrorBucketAlreadyExists {
+	return &ErrorBucketAlreadyExists{node: node, bck: bck}
 }
 func (e *ErrorBucketAlreadyExists) Error() string {
-	return fmt.Sprintf("bucket %q already exists", e.bucket)
+	return _errBucket(fmt.Sprintf("bucket %s already exists", e.bck), e.node)
 }
 
-func NewErrorCloudBucketDoesNotExist(bucket string) *ErrorCloudBucketDoesNotExist {
-	return &ErrorCloudBucketDoesNotExist{bucket: bucket}
+func NewErrorCloudBucketDoesNotExist(bck Bck, node string) *ErrorCloudBucketDoesNotExist {
+	return &ErrorCloudBucketDoesNotExist{node: node, bck: bck}
 }
 func (e *ErrorCloudBucketDoesNotExist) Error() string {
-	return fmt.Sprintf("cloud bucket %q does not exist", e.bucket)
+	return _errBucket(fmt.Sprintf("cloud bucket %s does not exist", e.bck), e.node)
 }
 
-func NewErrorCloudBucketOffline(bucket, provider string) *ErrorCloudBucketOffline {
-	return &ErrorCloudBucketOffline{bucket: bucket, provider: provider}
+func NewErrorCloudBucketOffline(bck Bck, node string) *ErrorCloudBucketOffline {
+	return &ErrorCloudBucketOffline{node: node, bck: bck}
 }
 func (e *ErrorCloudBucketOffline) Error() string {
-	if e.provider == "" {
-		return fmt.Sprintf("cloud bucket %q is unreachable", e.bucket)
-	}
-	return fmt.Sprintf("%s bucket %q is currently unreachable", e.provider, e.bucket)
+	return _errBucket(fmt.Sprintf("bucket %s is currently unreachable", e.bck), e.node)
 }
 
-func NewErrorBucketDoesNotExist(bucket string) *ErrorBucketDoesNotExist {
-	return &ErrorBucketDoesNotExist{bucket: bucket}
+func NewErrorBucketDoesNotExist(bck Bck, node string) *ErrorBucketDoesNotExist {
+	return &ErrorBucketDoesNotExist{node: node, bck: bck}
 }
 func (e *ErrorBucketDoesNotExist) Error() string {
-	return fmt.Sprintf("%q does not appear to be an ais bucket or does not exist", e.bucket)
+	return _errBucket(fmt.Sprintf("bucket %s does not appear to be an ais bucket or it does not exist", e.bck), e.node)
 }
 
 func (e *errAccessDenied) String() string {

@@ -121,7 +121,7 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 //       - for Cloud bucket - fills in the props with defaults from config
 //       - for AIS bucket - sets the props to nil
 //       - for Cloud bucket, the caller can type-cast err.(*cmn.ErrorCloudBucketDoesNotExist) and proceed
-func (b *Bck) Init(bowner Bowner) (err error) {
+func (b *Bck) Init(bowner Bowner, node ...string) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
@@ -134,10 +134,14 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 		b.Props, _ = bmd.Get(b)
 	}
 	if b.Props == nil {
-		if cmn.IsProviderAIS(b.Bck) {
-			return cmn.NewErrorBucketDoesNotExist(b.Name)
+		var name string
+		if len(node) > 0 {
+			name = node[0]
 		}
-		return cmn.NewErrorCloudBucketDoesNotExist(b.Name)
+		if cmn.IsProviderAIS(b.Bck) {
+			return cmn.NewErrorBucketDoesNotExist(b.Bck, name)
+		}
+		return cmn.NewErrorCloudBucketDoesNotExist(b.Bck, name)
 	}
 	return
 }

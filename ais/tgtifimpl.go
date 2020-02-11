@@ -123,7 +123,7 @@ loop:
 			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
 				continue
 			}
-			if err := fwd.bck.Init(t.bmdowner); err != nil {
+			if err := fwd.bck.Init(t.bmdowner, t.si.Name()); err != nil {
 				glog.Errorf("prefetch: %s, err: %v", fwd.bck, err)
 			} else if fwd.bck.IsAIS() {
 				glog.Errorf("prefetch: %s is ais bucket, nothing to do", fwd.bck)

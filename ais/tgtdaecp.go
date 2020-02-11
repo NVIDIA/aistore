@@ -213,7 +213,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		)
 		if bucket != "" {
 			bck = newBckFromQuery(bucket, r.URL.Query())
-			if err := bck.Init(t.bmdowner); err != nil {
+			if err := bck.Init(t.bmdowner, t.si.Name()); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -339,7 +339,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			var bck *cluster.Bck
 			if xactMsg.Bck.Name != "" {
 				bck = cluster.NewBckEmbed(xactMsg.Bck)
-				if err := bck.Init(t.bmdowner); err != nil {
+				if err := bck.Init(t.bmdowner, t.si.Name()); err != nil {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 					return
 				}

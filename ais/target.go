@@ -585,7 +585,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(t.bmdowner); err != nil {
+	if err = bck.Init(t.bmdowner, t.si.Name()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -718,10 +718,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	bucket = apiItems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(t.bmdowner); err != nil {
+	if err = bck.Init(t.bmdowner, t.si.Name()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
-			err = bck.Init(t.bmdowner)
+			err = bck.Init(t.bmdowner, t.si.Name())
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -875,7 +875,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, query)
-	if err = bck.Init(t.bmdowner); err != nil {
+	if err = bck.Init(t.bmdowner, tname); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -895,9 +895,9 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
-				err = cmn.NewErrorCloudBucketDoesNotExist(bucket)
+				err = cmn.NewErrorCloudBucketDoesNotExist(bck.Bck, tname)
 			} else {
-				err = fmt.Errorf("%s: bucket %s, err: %v", t.si.Name(), bucket, err)
+				err = fmt.Errorf("%s: bucket %s, err: %v", tname, bucket, err)
 			}
 			t.invalmsghdlr(w, r, err.Error(), code)
 			return
@@ -943,7 +943,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		// should do it before LOM is initialized because the target may
 		// have a slice instead of object/replica
 		bck := newBckFromQuery(bucket, query)
-		if err = bck.Init(t.bmdowner); err != nil {
+		if err = bck.Init(t.bmdowner, t.si.Name()); err != nil {
 			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 				t.invalmsghdlr(w, r, err.Error())
 				return
@@ -1319,10 +1319,10 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(t.bmdowner); err != nil {
+	if err = bck.Init(t.bmdowner, t.si.Name()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
-			err = bck.Init(t.bmdowner)
+			err = bck.Init(t.bmdowner, t.si.Name())
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
