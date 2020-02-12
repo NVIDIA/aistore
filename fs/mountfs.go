@@ -378,11 +378,12 @@ func (mfs *MountedFS) Add(mpath string) error {
 	if _, exists := availablePaths[mp.Path]; exists {
 		return fmt.Errorf("tried to add already registered mountpath: %v", mp.Path)
 	}
-	mfs.ios.AddMpath(mp.Path, mp.FileSystem)
 
 	if existingPath, exists := mfs.fsIDs[mp.Fsid]; exists && mfs.checkFsID {
 		return fmt.Errorf("tried to add path %v but same fsid was already registered by %v", mpath, existingPath)
 	}
+
+	mfs.ios.AddMpath(mp.Path, mp.FileSystem)
 
 	availablePaths[mp.Path] = mp
 	mfs.fsIDs[mp.Fsid] = cleanMpath
