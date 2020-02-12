@@ -2710,3 +2710,148 @@ func TestECLocalRebalance(t *testing.T) {
 		}
 	}
 }
+
+// 1. Create bucket
+// 2. Choose 2 random nodes, unregister the first one
+// 3. Put N objects to EC-enabled bucket
+// 4. Register the target back, rebalance kicks in
+// 5. Start reading objects in a loop (nothing should fail)
+// 6. Unregister the second target while rebalance is running
+// 7. Wait until rebalance finishes (if any is running)
+// 8. Stop reading loop and read all objects once more (nothing should fail)
+// 9. Get the number of objects in the bucket (must be the same as at start)
+// TODO: when rebalance restarts on a node unregister, the step
+//       9 must be: check the number of objects == at start
+func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+	if containers.DockerRunning() {
+		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
+	}
+
+	var (
+		bckEC = cmn.Bck{
+			Name:     TestBucketName + "-EC",
+			Provider: cmn.ProviderAIS,
+		}
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+	o := ecOptions{
+		objCount:  750,
+		concurr:   8,
+		pattern:   "obj-reb-chk-%04d",
+		isAIS:     true,
+		dataCnt:   1,
+		parityCnt: 2,
+		silent:    true,
+	}.init()
+
+	smap := tutils.GetClusterMap(t, proxyURL)
+	err := ecSliceNumInit(t, smap, o)
+	tassert.CheckFatal(t, err)
+	if len(smap.Tmap) < 4 {
+		t.Skip(fmt.Sprintf("%q requires at least 4 targets to have parity>=2, found %d", t.Name(), len(smap.Tmap)))
+	}
+
+	newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
+	defer tutils.DestroyBucket(t, proxyURL, bckEC)
+
+	// select a target that loses its mpath(simulate drive death),
+	// and that has mpaths changed (simulate mpath added)
+	tgtList := tutils.ExtractTargetNodes(smap)
+	tgtLost := tgtList[0]
+	tgtGone := tgtList[1]
+
+	tutils.Logf("Unregistering %s...\n", tgtLost.ID())
+	err = tutils.UnregisterNode(proxyURL, tgtLost.ID())
+	tassert.CheckFatal(t, err)
+	registered := false
+	smap = tutils.GetClusterMap(t, proxyURL)
+	defer func() {
+		if !registered {
+			err = tutils.RegisterNode(proxyURL, tgtLost, smap)
+			tassert.CheckError(t, err)
+		}
+	}()
+
+	// fill EC bucket
+	wg := sync.WaitGroup{}
+	wg.Add(o.objCount)
+	for i := 0; i < o.objCount; i++ {
+		objName := fmt.Sprintf(o.pattern, i)
+		go func(i int) {
+			defer wg.Done()
+			createECObject(t, baseParams, bckEC, objName, i, o)
+		}(i)
+	}
+	wg.Wait()
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	msg := &cmn.SelectMsg{}
+	resECOld, err := api.ListBucket(baseParams, bckEC, msg, 0)
+	tassert.CheckError(t, err)
+	oldECList := filterObjListOK(resECOld.Entries)
+	tutils.Logf("Created %d objects in %s. Starting global rebalance\n", len(oldECList), bckEC)
+
+	tutils.Logf("Registering node %s\n", tgtLost.Name())
+	err = tutils.RegisterNode(proxyURL, tgtLost, smap)
+	tassert.CheckFatal(t, err)
+	registered = true
+
+	stopCh := make(chan struct{}, 1)
+	go func() {
+		for {
+			for _, obj := range oldECList {
+				_, err := api.GetObject(baseParams, bckEC, obj.Name)
+				tassert.CheckError(t, err)
+				select {
+				case <-stopCh:
+					return
+				default:
+				}
+			}
+		}
+	}()
+
+	tutils.Logf("Unregistering %s...\n", tgtGone.ID())
+	err = tutils.UnregisterNode(proxyURL, tgtGone.ID())
+	tassert.CheckFatal(t, err)
+	smap = tutils.GetClusterMap(t, proxyURL)
+	defer tutils.RegisterNode(proxyURL, tgtGone, smap)
+
+	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	close(stopCh)
+
+	tutils.Logln("Getting the number of objects after rebalance")
+	resECNew, err := api.ListBucket(baseParams, bckEC, msg, 0)
+	tassert.CheckError(t, err)
+	newECList := filterObjListOK(resECNew.Entries)
+	tutils.Logf("%d objects in %s after rebalance\n",
+		len(newECList), bckEC)
+	if len(newECList) != len(oldECList) {
+		// TODO: make it error when autorebalance on target loss is done
+		t.Logf("The number of objects before and after rebalance mismatches")
+	}
+
+	tutils.Logln("Test object readability after rebalance")
+	for _, obj := range oldECList {
+		_, err := api.GetObject(baseParams, bckEC, obj.Name)
+		tassert.CheckError(t, err)
+	}
+
+	tutils.Logln("Getting the number of objects after reading")
+	resECNew, err = api.ListBucket(baseParams, bckEC, msg, 0)
+	tassert.CheckError(t, err)
+	newECList = filterObjListOK(resECNew.Entries)
+	tutils.Logf("%d objects in %s after reading\n",
+		len(newECList), bckEC)
+	if len(newECList) != len(oldECList) {
+		t.Errorf("Incorrect number of objects: %d (expected %d)",
+			len(newECList), len(oldECList))
+	}
+}
