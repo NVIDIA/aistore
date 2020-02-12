@@ -58,7 +58,12 @@ table describes json keys which can be used in specification.
 | `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no | `false` |
 
 #### Examples:
-* Starts (alphanumeric) sorting dSort job with extended metrics for shards with names `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`. Each of output shards will have at least `10240` bytes and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
+
+#### Sort records inside the shards
+
+Command defined below starts (alphanumeric) sorting job with extended metrics for **input** shards with names `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
+Each of the **output** shards will have at least `10240` bytes and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
+
 ```bash
 ais start dsort '{
     "extension": ".tar",
@@ -74,6 +79,69 @@ ais start dsort '{
     "create_concurrency_limit": 5,
     "extended_metrics": true
 }'
+```
+
+#### Pack records into shards with different categories - EKM (External Key Map)
+
+One of the key features of the dSort is that user can specify the exact mapping from the record key to the output shard.
+To use this feature `output_format` should be empty and `order_file` as well as `order_file_sep` must be set.
+The output shards will be created with provided format which must contain mandatory `%d` which is required to enumerate the shards.
+
+Assuming that `order_file` (URL: `http://website.web/static/order_file.txt`) has content:
+```
+cat_0.txt shard-cats-%d
+cat_1.txt shard-cats-%d
+...
+dog_0.txt shard-dogs-%d
+dog_1.txt shard-dogs-%d
+...
+car_0.txt shard-car-%d
+car_1.txt shard-car-%d
+...
+```
+
+And content of the **input** shards looks more or less like this:
+```
+shard-0.tar:
+- cat_0.txt
+- dog_0.txt
+- car_0.txt
+...
+shard-1.tar:
+- cat_1.txt
+- dog_1.txt
+- car_1.txt
+...
+```
+
+You can run:
+```bash
+ais start dsort '{
+    "extension": ".tar",
+    "bucket": "dsort-testing",
+    "input_format": "shard-{0..9}",
+    "output_shard_size": "200KB",
+    "description": "pack records into categorized shards",
+    "order_file": "http://website.web/static/order_file.txt",
+    "order_file_sep": " ",
+    "extract_concurrency_limit": 3,
+    "create_concurrency_limit": 5
+}'
+```
+
+After the run, the **output** shards will look more or less like this (the number of records in given shard depends on provided `output_shard_size`):
+```
+shard-cats-0.tar:
+- cat_1.txt
+- cat_2.txt
+shard-cats-1.tar:
+- cat_3.txt
+- cat_4.txt
+...
+shard-dogs-0.tar:
+- dog_1.txt
+- dog_2.txt
+...
 ```
 
 ### Show jobs and job status
