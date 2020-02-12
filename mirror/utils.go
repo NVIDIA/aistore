@@ -22,6 +22,7 @@ type mpather interface {
 
 func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 	lom.Lock(true)
+	defer lom.Unlock(true)
 
 	// Reload metadata, it is necessary to have it fresh.
 	lom.Uncache()
@@ -31,7 +32,6 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 
 	ndel := lom.NumCopies() - copies
 	if ndel <= 0 {
-		lom.Unlock(true)
 		return
 	}
 
@@ -52,7 +52,6 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 		lom.ReCache()
 	}
 
-	lom.Unlock(true)
 	return
 }
 
