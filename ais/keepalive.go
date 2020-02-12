@@ -352,9 +352,45 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 	}
 }
 
+func (k *keepalive) waitStatsRunner() (stopped bool) {
+	const (
+		waitStartupSleep = 300 * time.Millisecond
+	)
+	var (
+		i      time.Duration
+		ticker = time.NewTicker(waitStartupSleep)
+	)
+
+	defer ticker.Stop()
+
+	// Wait for stats runner to start
+	for {
+		select {
+		case <-ticker.C:
+			if k.startedUp.Load() {
+				return false
+			}
+
+			i += waitStartupSleep
+			if i > cmn.GCO.Get().Timeout.Startup {
+				glog.Errorf("waiting unusually long time...")
+				i = 0
+			}
+		case sig := <-k.controlCh:
+			switch sig.msg {
+			case kaStopMsg:
+				return true
+			default:
+			}
+		}
+	}
+}
+
 func (k *keepalive) Run() error {
-	// wait for stats runner to start
-	cmn.WaitStartup(cmn.GCO.Get(), k.startedUp)
+	if k.waitStatsRunner() {
+		// Stopped during waiting - must return.
+		return nil
+	}
 
 	glog.Infof("Starting %s", k.GetRunName())
 	ticker := time.NewTicker(k.interval)

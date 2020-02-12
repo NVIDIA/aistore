@@ -170,7 +170,7 @@ func (t *targetrunner) Run() error {
 	t.registerStats()
 	t.httprunner.keepalive = gettargetkeepalive()
 
-	dryinit()
+	dryRunInit()
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
 	// init meta-owners and load local instances

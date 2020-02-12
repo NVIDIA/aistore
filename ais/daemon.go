@@ -74,7 +74,6 @@ type (
 		runarr []cmn.Runner
 		runmap map[string]cmn.Runner // redundant, named
 		errCh  chan error
-		stopCh chan error
 	}
 )
 
@@ -104,11 +103,10 @@ func (g *rungroup) run() error {
 		return nil
 	}
 	g.errCh = make(chan error, len(g.runarr))
-	g.stopCh = make(chan error, 1)
 	for _, r := range g.runarr {
 		go func(r cmn.Runner) {
 			err := r.Run()
-			glog.Warningf("Runner [%s] exited with err [%v].", r.GetRunName(), err)
+			glog.Warningf("runner [%s] exited with err [%v]", r.GetRunName(), err)
 			g.errCh <- err
 		}(r)
 	}
@@ -118,11 +116,9 @@ func (g *rungroup) run() error {
 	for _, r := range g.runarr {
 		r.Stop(err)
 	}
-	for i := 0; i < cap(g.errCh)-1; i++ {
+	for i := 0; i < len(g.runarr)-1; i++ {
 		<-g.errCh
 	}
-	glog.Flush()
-	g.stopCh <- nil
 	return err
 }
 
@@ -148,7 +144,7 @@ func init() {
 }
 
 // dry-run environment overrides dry-run clivars
-func dryinit() {
+func dryRunInit() {
 	str := os.Getenv("AIS_NODISKIO")
 	if b, err := cmn.ParseBool(str); err == nil {
 		daemon.dryRun.disk = b
@@ -166,16 +162,9 @@ func dryinit() {
 	}
 }
 
-//==================
-//
-// daemon init & run
-//
-//==================
-func aisinit(version, build string) {
+func initDaemon(version, build string) {
 	var (
-		err         error
-		config      *cmn.Config
-		confChanged bool
+		err error
 	)
 	flag.Parse()
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
@@ -196,7 +185,7 @@ func aisinit(version, build string) {
 		str += "Usage: ... -role=<proxy|target> -config=<conf.json> ..."
 		cmn.ExitLogf(str)
 	}
-	config, confChanged = jsp.LoadConfig(&daemon.cli.config)
+	config, confChanged := jsp.LoadConfig(&daemon.cli.config)
 	if confChanged {
 		if err := jsp.Save(cmn.GCO.GetConfigFile(), config, jsp.Plain()); err != nil {
 			cmn.ExitLogf("CLI %s: failed to write, err: %s", cmn.ActSetConfig, err)
@@ -217,11 +206,11 @@ func aisinit(version, build string) {
 	glog.Infof("Memory total: %s, free: %s(actual free %s)",
 		cmn.B2S(int64(memStat.Total), 0), cmn.B2S(int64(memStat.Free), 0), cmn.B2S(int64(memStat.ActualFree), 0))
 
-	// optimize GOMAXPROCS if the daemon is running inside a container with
-	// limited amount of memory and CPU
+	// Optimize GOMAXPROCS if the daemon is running inside a container with
+	// limited amount of memory and CPU.
 	sys.UpdateMaxProcs()
 
-	// init daemon
+	// Initialize filesystem/mountpaths manager.
 	fs.InitMountedFS()
 
 	// NOTE: proxy and, respectively, target terminations are executed in the same
@@ -307,21 +296,22 @@ func aisinit(version, build string) {
 
 // Run is the 'main' where everything gets started
 func Run(version, build string) {
-	aisinit(version, build)
-	var ok bool
+	// Always flush the logger (even in case of panic).
+	defer glog.Flush()
 
+	initDaemon(version, build)
+
+	// Start all the runners
 	err := daemon.rg.run()
 	if err == nil {
-		goto m
+		glog.Infoln("Terminated OK")
+		return
 	}
-	_, ok = err.(*signalError)
-	if ok {
-		goto m
+	if _, ok := err.(*signalError); ok {
+		glog.Infoln("Terminated OK (via signal)")
+		return
 	}
 	cmn.ExitLogf("Terminated with err: %s", err)
-m:
-	glog.Infoln("Terminated OK")
-	glog.Flush()
 }
 
 //==================

@@ -1102,19 +1102,6 @@ func loadDebugMap() {
 	}
 }
 
-func WaitStartup(config *Config, startedUp *atomic.Bool) {
-	const sleep = 300 * time.Millisecond
-	var i time.Duration
-	for !startedUp.Load() {
-		time.Sleep(sleep)
-		i++
-		if i*sleep > config.Timeout.Startup {
-			glog.Errorf("waiting unusually long time...")
-			i = 0
-		}
-	}
-}
-
 func KeepaliveRetryDuration(cs ...*Config) time.Duration {
 	var c *Config
 	if len(cs) != 0 {
