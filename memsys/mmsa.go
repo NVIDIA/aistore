@@ -339,7 +339,9 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		}
 	}
 	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect, d)
-	cmn.Printf("mmsa '%s' started", r.Name)
+	if r.Debug {
+		cmn.Printf("mmsa '%s' started", r.Name)
+	}
 	return
 }
 
@@ -359,7 +361,9 @@ func (r *MMSA) Terminate() {
 	if r.doGC(mem.ActualFree, sizeToGC, true, swapping) {
 		gced = ", GC ran"
 	}
-	glog.Infof("mmsa '%s' terminated%s", r.Name, gced)
+	if r.Debug {
+		glog.Infof("mmsa '%s' terminated%s", r.Name, gced)
+	}
 }
 
 // allocate SGL

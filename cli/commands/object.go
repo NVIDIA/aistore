@@ -78,6 +78,11 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 		objLen, err = api.GetObject(defaultAPIParams, bck, object, objArgs)
 	}
 	if err != nil {
+		if httpErr, ok := err.(*cmn.HTTPError); ok {
+			if httpErr.Status == http.StatusNotFound {
+				return fmt.Errorf("object %s/%s does not exist", bck, object)
+			}
+		}
 		return
 	}
 
@@ -323,7 +328,7 @@ func buildObjStatTemplate(props string, showHeaders bool) string {
 	bodySb.WriteString("\n")
 
 	if showHeaders {
-		return headSb.String() + bodySb.String() + "\n"
+		return headSb.String() + bodySb.String()
 	}
 
 	return bodySb.String()

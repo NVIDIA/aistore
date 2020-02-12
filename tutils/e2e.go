@@ -7,6 +7,7 @@ package tutils
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
@@ -28,6 +29,12 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		bucket = GenRandomString(10)
 		space  = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
 	)
+
+	tmpFile, err := ioutil.TempFile("", "e2e-")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	object := tmpFile.Name()
+	tmpFile.Close()
+	defer os.RemoveAll(object)
 
 	inFile, err := os.Open(inputFileName)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
@@ -62,12 +69,14 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 					lastIdx := strings.LastIndex(comment, `"`)
 					expectFailMsg = comment[firstIdx+1 : lastIdx]
 					expectFailMsg = strings.ReplaceAll(expectFailMsg, "$BUCKET", bucket)
+					expectFailMsg = strings.ReplaceAll(expectFailMsg, "$OBJECT", object)
 					expectFailMsg = strings.ToLower(expectFailMsg)
 				}
 			}
 		}
 
 		scmd = strings.ReplaceAll(scmd, "$BUCKET", bucket)
+		scmd = strings.ReplaceAll(scmd, "$OBJECT", object)
 		scmd = strings.ReplaceAll(scmd, "$DIR", f.Dir)
 		cmd := exec.Command("bash", "-c", scmd)
 		b, err := cmd.Output()
@@ -112,6 +121,7 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		expectedOut := scanner.Text()
 		expectedOut = space.ReplaceAllString(expectedOut, "")
 		expectedOut = strings.ReplaceAll(expectedOut, "$BUCKET", bucket)
+		expectedOut = strings.ReplaceAll(expectedOut, "$OBJECT", object)
 		expectedOut = strings.ReplaceAll(expectedOut, "$DIR", f.Dir)
 
 		out := strings.TrimSpace(outs[idx])
@@ -119,7 +129,11 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		// Sometimes quotation marks are returned which are not visible on
 		// console so we just remove them.
 		out = strings.ReplaceAll(out, "&#34;", "")
-		gomega.Expect(out).To(gomega.Equal(expectedOut))
+		if len(expectedOut) > 2 && expectedOut[0] == '^' && expectedOut[len(expectedOut)-1] == '$' {
+			gomega.Expect(out).To(gomega.MatchRegexp(expectedOut))
+		} else {
+			gomega.Expect(out).To(gomega.Equal(expectedOut))
+		}
 	}
 
 	gomega.Expect(idx).To(

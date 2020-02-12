@@ -1,0 +1,11 @@
+Name	Objects	Size	Used(%)	Provider
+$BUCKET_1 bucket created
+$BUCKET_2 bucket created
+Name	Objects	Size	Used(%)	Provider
+$BUCKET_1	0	0B	0%	ais
+$BUCKET_2	0	0B	0%	ais
+Name	Objects	Size	Used(%)	Provider
+$BUCKET_1	0	0B	0%	ais
+Name	Objects	Size	Used(%)	Provider
+$BUCKET_1	150 375.00KiB	0%	ais
+$BUCKET_2	20 320.00KiB	0%	ais

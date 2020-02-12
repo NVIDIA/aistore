@@ -830,10 +830,11 @@ func (r *bckSummaryTask) Run() {
 	}
 
 	var (
+		mtx               sync.Mutex
 		wg                = &sync.WaitGroup{}
 		availablePaths, _ = fs.Mountpaths.Get()
 		errCh             = make(chan error, len(buckets))
-		summaries         = make(cmn.BucketsSummaries)
+		summaries         = make(cmn.BucketsSummaries, len(buckets))
 	)
 	wg.Add(len(buckets))
 
@@ -929,7 +930,9 @@ func (r *bckSummaryTask) Run() {
 				}
 			}
 
+			mtx.Lock()
 			summaries[bck.Name] = summary
+			mtx.Unlock()
 		}(bck)
 	}
 

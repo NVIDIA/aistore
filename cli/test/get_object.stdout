@@ -1,0 +1,4 @@
+$BUCKET_1 bucket created
+PUT object_1.txt into bucket $BUCKET_1
+11
+11
