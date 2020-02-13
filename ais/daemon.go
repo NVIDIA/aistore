@@ -94,7 +94,7 @@ var (
 //
 //====================
 func (g *rungroup) add(r cmn.Runner, name string) {
-	r.Setname(name)
+	r.SetRunName(name)
 	g.runarr = append(g.runarr, r)
 	g.runmap[name] = r
 }
@@ -108,7 +108,7 @@ func (g *rungroup) run() error {
 	for _, r := range g.runarr {
 		go func(r cmn.Runner) {
 			err := r.Run()
-			glog.Warningf("Runner [%s] exited with err [%v].", r.Getname(), err)
+			glog.Warningf("Runner [%s] exited with err [%v].", r.GetRunName(), err)
 			g.errCh <- err
 		}(r)
 	}

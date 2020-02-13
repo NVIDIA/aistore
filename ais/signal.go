@@ -59,7 +59,7 @@ func (r *sigrunner) Run() error {
 }
 
 func (r *sigrunner) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
+	glog.Infof("Stopping %s, err: %v", r.GetRunName(), err)
 	signal.Stop(r.chsig)
 	close(r.chsig)
 }

@@ -70,7 +70,7 @@ func NewFSHC(dispatcher fspathDispatcher, mountpaths *fs.MountedFS, mm *memsys.M
 
 // as a runner
 func (f *FSHC) Run() error {
-	glog.Infof("Starting %s", f.Getname())
+	glog.Infof("Starting %s", f.GetRunName())
 
 	for {
 		select {
@@ -89,7 +89,7 @@ func (f *FSHC) Run() error {
 }
 
 func (f *FSHC) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", f.Getname(), err)
+	glog.Infof("Stopping %s, err: %v", f.GetRunName(), err)
 	f.stopCh <- struct{}{}
 }
 

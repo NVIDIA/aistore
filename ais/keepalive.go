@@ -337,7 +337,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 			}
 			i++
 			if i == 3 {
-				glog.Warningf("keepalive failed after %d attempts, removing %s from Smap", i, si.Name())
+				glog.Warningf("keepalive failed after %d attempts, removing %s from Smap", i, si)
 				return false, false
 			}
 			if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
@@ -356,7 +356,7 @@ func (k *keepalive) Run() error {
 	// wait for stats runner to start
 	cmn.WaitStartup(cmn.GCO.Get(), k.startedUp)
 
-	glog.Infof("Starting %s", k.Getname())
+	glog.Infof("Starting %s", k.GetRunName())
 	ticker := time.NewTicker(k.interval)
 	lastCheck := time.Time{}
 
@@ -485,7 +485,7 @@ func (k *keepalive) isTimeToPing(sid string) bool {
 }
 
 func (k *keepalive) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", k.Getname(), err)
+	glog.Infof("Stopping %s, err: %v", k.GetRunName(), err)
 	k.controlCh <- controlSignal{msg: kaStopMsg}
 	close(k.controlCh)
 }

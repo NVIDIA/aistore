@@ -159,7 +159,6 @@ func (gfn *globalGFN) activateTimed() {
 func (t *targetrunner) Run() error {
 	var (
 		config = cmn.GCO.Get()
-		tname  = t.si.Name()
 		ereg   error
 	)
 	if err := t.si.Validate(); err != nil {
@@ -180,7 +179,7 @@ func (t *targetrunner) Run() error {
 	if err := t.smapowner.load(smap, config); err == nil {
 		smap.Tmap[t.si.ID()] = t.si
 	} else if !os.IsNotExist(err) {
-		glog.Errorf("%s: cannot load Smap (- corruption?), err: %v", tname, err)
+		glog.Errorf("%s: cannot load Smap (- corruption?), err: %v", t.si, err)
 	}
 	//
 	// join cluster
@@ -190,7 +189,7 @@ func (t *targetrunner) Run() error {
 		var status int
 		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying registration...", tname)
+				glog.Errorf("%s: retrying registration...", t.si)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -198,8 +197,8 @@ func (t *targetrunner) Run() error {
 		break
 	}
 	if ereg != nil {
-		glog.Errorf("%s failed to register, err: %v", tname, ereg)
-		glog.Errorf("%s is terminating", tname)
+		glog.Errorf("%s failed to register, err: %v", t.si, ereg)
+		glog.Errorf("%s is terminating", t.si)
 		return ereg
 	}
 
@@ -330,7 +329,7 @@ func (t *targetrunner) registerStats() {
 
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", t.Getname(), err)
+	glog.Infof("Stopping %s, err: %v", t.GetRunName(), err)
 	sleep := xaction.Registry.AbortAll()
 	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
@@ -406,7 +405,6 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 // verifyProxyRedirection returns if the http request was redirected from a proxy
 func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Request, action ...string) bool {
 	var (
-		tname  = t.si.Name()
 		query  = r.URL.Query()
 		pid    = query.Get(cmn.URLParamProxyID)
 		method = r.Method
@@ -415,13 +413,13 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 		method = action[0]
 	}
 	if pid == "" {
-		s := fmt.Sprintf("%s: %s is expected to be redirected", tname, method)
+		s := fmt.Sprintf("%s: %s is expected to be redirected", t.si, method)
 		t.invalmsghdlr(w, r, s)
 		return false
 	}
 	smap := t.smapowner.get()
 	if smap.GetProxy(pid) == nil {
-		s := fmt.Sprintf("%s: %s from unknown [%s], %s", tname, method, pid, smap.StringEx())
+		s := fmt.Sprintf("%s: %s from unknown [%s], %s", t.si, method, pid, smap.StringEx())
 		t.invalmsghdlr(w, r, s)
 		return false
 	}
@@ -585,7 +583,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(t.bmdowner, t.si.Name()); err != nil {
+	if err = bck.Init(t.bmdowner, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -718,10 +716,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	bucket = apiItems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(t.bmdowner, t.si.Name()); err != nil {
+	if err = bck.Init(t.bmdowner, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
-			err = bck.Init(t.bmdowner, t.si.Name())
+			err = bck.Init(t.bmdowner, t.si)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -864,7 +862,6 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketProps cmn.SimpleKVs
 		hdr         = w.Header()
 		query       = r.URL.Query()
-		tname       = t.si.Name()
 		config      = cmn.GCO.Get()
 		code        int
 		inBMD       = true
@@ -875,7 +872,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, query)
-	if err = bck.Init(t.bmdowner, tname); err != nil {
+	if err = bck.Init(t.bmdowner, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -895,15 +892,15 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
-				err = cmn.NewErrorCloudBucketDoesNotExist(bck.Bck, tname)
+				err = cmn.NewErrorCloudBucketDoesNotExist(bck.Bck, t.si.String())
 			} else {
-				err = fmt.Errorf("%s: bucket %s, err: %v", tname, bucket, err)
+				err = fmt.Errorf("%s: bucket %s, err: %v", t.si, bucket, err)
 			}
 			t.invalmsghdlr(w, r, err.Error(), code)
 			return
 		}
 		bucketProps = make(cmn.SimpleKVs)
-		glog.Warningf("%s: %s bucket %s, err: %v(%d)", tname, bck.Provider, bucket, err, code)
+		glog.Warningf("%s: %s bucket %s, err: %v(%d)", t.si, bck.Provider, bucket, err, code)
 		bucketProps[cmn.HeaderCloudProvider] = bck.Provider
 		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
 	}
@@ -943,7 +940,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		// should do it before LOM is initialized because the target may
 		// have a slice instead of object/replica
 		bck := newBckFromQuery(bucket, query)
-		if err = bck.Init(t.bmdowner, t.si.Name()); err != nil {
+		if err = bck.Init(t.bmdowner, t.si); err != nil {
 			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 				t.invalmsghdlr(w, r, err.Error())
 				return
@@ -1286,7 +1283,6 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	const fmtErr = "%s: %s failed: "
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Objects)
-	tname := t.si.Name()
 	if err != nil {
 		return
 	}
@@ -1298,18 +1294,18 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 
 	if params.Target != "" && params.Target != t.si.ID() {
-		glog.Errorf("%s: unexpected target ID %s mismatch", tname, params.Target)
+		glog.Errorf("%s: unexpected target ID %s mismatch", t.si, params.Target)
 	}
 
 	// 2. init & validate
 	srcFQN := msg.Name
 	if srcFQN == "" {
-		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
+		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+"missing source filename")
 		return
 	}
 	if err = cmn.ValidateOmitBase(srcFQN, params.OmitBase); err != nil {
-		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
+		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
 		return
 	}
@@ -1319,10 +1315,10 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(t.bmdowner, t.si.Name()); err != nil {
+	if err = bck.Init(t.bmdowner, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
-			err = bck.Init(t.bmdowner, t.si.Name())
+			err = bck.Init(t.bmdowner, t.si)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -1333,7 +1329,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	// 3a. promote dir
 	if finfo.IsDir() {
 		if params.Verbose {
-			glog.Infof("%s: promote %+v", tname, params)
+			glog.Infof("%s: promote %+v", t.si, params)
 		}
 		var xact *mirror.XactDirPromote
 		xact, err = xaction.Registry.RenewDirPromote(srcFQN, bck, t, &params)
@@ -1346,12 +1342,12 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 	// 3b. promote file
 	if params.Objname == "" {
-		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
+		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+"missing object name")
 		return
 	}
 	if err = t.PromoteFile(srcFQN, bck, params.Objname, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
-		loghdr := fmt.Sprintf(fmtErr, tname, msg.Action)
+		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
 	}
 }

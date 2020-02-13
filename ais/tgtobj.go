@@ -437,7 +437,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 	var (
 		tsi, gfnNode     *cluster.Snode
 		smap             = goi.t.smapowner.get()
-		tname            = goi.t.si.Name()
+		tname            = goi.t.si.String()
 		aborted, running = reb.IsRebalancing(cmn.ActLocalReb)
 		gfnActive        = goi.t.gfn.local.active()
 	)
@@ -481,7 +481,7 @@ gfn:
 	if gfnNode != nil {
 		if goi.getFromNeighbor(goi.lom, gfnNode) {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s: GFN %s <= %s", tname, goi.lom, gfnNode.Name())
+				glog.Infof("%s: GFN %s <= %s", tname, goi.lom, gfnNode)
 			}
 			return
 		}

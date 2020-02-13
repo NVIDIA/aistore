@@ -38,11 +38,11 @@ func Init() *StreamCollector {
 
 func (sc *StreamCollector) Run() (err error) {
 	cmn.Printf("Intra-cluster networking: %s client", whichClient())
-	cmn.Printf("Starting %s", sc.Getname())
+	cmn.Printf("Starting %s", sc.GetRunName())
 	return gc.run()
 }
 func (sc *StreamCollector) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", sc.Getname(), err)
+	glog.Infof("Stopping %s, err: %v", sc.GetRunName(), err)
 	gc.stop()
 }
 

@@ -267,7 +267,7 @@ func (d *Downloader) init() {
 // TODO: Downloader doesn't necessarily has to be a go routine
 // all it does is forwards the requests to dispatcher
 func (d *Downloader) Run() (err error) {
-	glog.Infof("Starting %s", d.Getname())
+	glog.Infof("Starting %s", d.GetRunName())
 	d.t.GetFSPRG().Reg(d)
 	d.init()
 Loop:
@@ -293,11 +293,11 @@ Loop:
 			break Loop
 		case <-d.ChanCheckTimeout():
 			if d.Timeout() {
-				glog.Infof("%s has timed out. Exiting...", d.Getname())
+				glog.Infof("%s has timed out. Exiting...", d.GetRunName())
 				break Loop
 			}
 		case <-d.ChanAbort():
-			glog.Infof("%s has been aborted. Exiting...", d.Getname())
+			glog.Infof("%s has been aborted. Exiting...", d.GetRunName())
 			break Loop
 		}
 	}
@@ -311,7 +311,7 @@ func (d *Downloader) Stop(err error) {
 	d.XactDemandBase.Stop()
 	d.dispatcher.Abort()
 	d.EndTime(time.Now())
-	glog.Infof("Stopped %s", d.Getname())
+	glog.Infof("Stopped %s", d.GetRunName())
 	if err != nil {
 		glog.Errorf("stopping downloader; %s", err.Error())
 	}

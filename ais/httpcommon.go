@@ -517,7 +517,7 @@ func (h *httprunner) run() error {
 // stop gracefully
 func (h *httprunner) stop(err error) {
 	config := cmn.GCO.Get()
-	glog.Infof("Stopping %s, err: %v", h.Getname(), err)
+	glog.Infof("Stopping %s, err: %v", h.GetRunName(), err)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -718,7 +718,7 @@ func (h *httprunner) bcast2Phase(args bcastArgs, errmsg string, commit bool) (er
 	results = h.bcastTo(args)
 	for res := range results {
 		if res.err != nil {
-			err = fmt.Errorf("%s: %s: %v(%d)", res.si.Name(), errmsg, res.err, res.status)
+			err = fmt.Errorf("%s: %s: %v(%d)", res.si, errmsg, res.err, res.status)
 			glog.Errorln(err.Error())
 			nr++
 		}
@@ -739,7 +739,7 @@ func (h *httprunner) bcast2Phase(args bcastArgs, errmsg string, commit bool) (er
 	results = h.bcastTo(args)
 	for res := range results {
 		if res.err != nil {
-			err = fmt.Errorf("%s: %s: %v(%d)", res.si.Name(), errmsg, res.err, res.status)
+			err = fmt.Errorf("%s: %s: %v(%d)", res.si, errmsg, res.err, res.status)
 			glog.Error(err)
 			break
 		}
@@ -949,7 +949,6 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap 
 	}
 	var (
 		s           string
-		hname       = h.si.Name()
 		smap        = h.smapowner.get()
 		myver       = smap.version()
 		isManualReb = msgInt.Action == cmn.ActGlobalReb && msgInt.Value != nil
@@ -959,7 +958,7 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap 
 		return
 	}
 	if !newSmap.isValid() {
-		err = fmt.Errorf("%s: invalid %s - lacking or missing primary", hname, newSmap)
+		err = fmt.Errorf("%s: invalid %s - lacking or missing primary", h.si, newSmap)
 		newSmap = nil
 		return
 	}
@@ -970,29 +969,28 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap 
 		if h.si.IsProxy() {
 			cmn.Assert(!smap.isPrimary(h.si))
 			// cluster integrity error: making exception for non-primary proxies
-			glog.Errorf("%s (non-primary): %v - proceeding to override Smap", hname, err)
+			glog.Errorf("%s (non-primary): %v - proceeding to override Smap", h.si, err)
 			return
 		}
 		cmn.ExitLogf("%v", err) // otherwise, FATAL
 	}
 
-	glog.Infof("%s: receive %s (local %s)%s", hname, newSmap.StringEx(), smap.StringEx(), s)
+	glog.Infof("%s: receive %s (local %s)%s", h.si, newSmap.StringEx(), smap.StringEx(), s)
 	sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	cmn.Assert(sameOrigin)
 	if newSmap.version() < myver {
 		if !eq {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", hname, smap.StringEx(), newSmap.StringEx())
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", h.si, smap.StringEx(), newSmap.StringEx())
 			newSmap = nil
 			return
 		}
-		glog.Warningf("%s: %s and %s are otherwise identical", hname, newSmap.StringEx(), smap.StringEx())
+		glog.Warningf("%s: %s and %s are otherwise identical", h.si, newSmap.StringEx(), smap.StringEx())
 		newSmap = nil
 	}
 	return
 }
 
 func (h *httprunner) extractBMD(payload cmn.SimpleKVs) (newBMD *bucketMD, msgInt *actionMsgInternal, err error) {
-	hname := h.si.Name()
 	if _, ok := payload[bmdtag]; !ok {
 		return
 	}
@@ -1000,20 +998,20 @@ func (h *httprunner) extractBMD(payload cmn.SimpleKVs) (newBMD *bucketMD, msgInt
 	bmdValue := payload[bmdtag]
 	if err1 := jsoniter.Unmarshal([]byte(bmdValue), newBMD); err1 != nil {
 		err = fmt.Errorf("%s: failed to unmarshal new %s, value (%+v, %T), err: %v",
-			hname, bmdTermName, bmdValue, bmdValue, err1)
+			h.si, bmdTermName, bmdValue, bmdValue, err1)
 		return
 	}
 	if msgValue, ok := payload[bmdtag+actiontag]; ok {
 		if err1 := jsoniter.Unmarshal([]byte(msgValue), msgInt); err1 != nil {
 			err = fmt.Errorf("%s: failed to unmarshal action message, value (%+v, %T), err: %v",
-				hname, msgValue, msgValue, err1)
+				h.si, msgValue, msgValue, err1)
 			return
 		}
 	}
 	bmd := h.bmdowner.get()
 	if newBMD.version() <= bmd.version() {
 		if newBMD.version() < bmd.version() {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", hname, bmd.StringEx(), newBMD.StringEx())
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", h.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		newBMD = nil
 	}

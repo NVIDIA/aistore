@@ -89,7 +89,7 @@ wait:
 
 	if !xreb.Aborted() {
 		if err := removeMarker(cmn.ActLocalReb); err != nil {
-			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode().Name(), err)
+			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode(), err)
 		}
 	}
 	reb.t.GetGFN(cluster.GFNLocal).Deactivate()
@@ -116,7 +116,7 @@ func (rj *localJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 		if rj.xreb.Aborted() {
 			glog.Infof("aborting traversal")
 		} else {
-			glog.Errorf("%s: failed to traverse err: %v", rj.m.t.Snode().Name(), err)
+			glog.Errorf("%s: failed to traverse err: %v", rj.m.t.Snode(), err)
 		}
 	}
 	rj.slab.Free(rj.buf)

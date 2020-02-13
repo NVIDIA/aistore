@@ -83,12 +83,12 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	// large file the bucket can be easily deleted).
 
 	bck := cluster.NewBck(parsedRS.Bucket, parsedRS.Provider, cmn.NsGlobal)
-	if err = bck.Init(ctx.bmdowner); err != nil {
+	if err = bck.Init(ctx.bmdowner, nil); err != nil { // TODO: ctx.t.Snode()
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
 	bck = cluster.NewBck(parsedRS.OutputBucket, parsedRS.OutputProvider, cmn.NsGlobal)
-	if err = bck.Init(ctx.bmdowner); err != nil {
+	if err = bck.Init(ctx.bmdowner, nil); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}

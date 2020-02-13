@@ -79,7 +79,7 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 		return
 	}
 	if status.SmapVersion != status.RebVersion {
-		glog.Warningf("%s: Smap version %d != %d", reb.t.Snode().Name(), status.SmapVersion, status.RebVersion)
+		glog.Warningf("%s: Smap version %d != %d", reb.t.Snode(), status.SmapVersion, status.RebVersion)
 		return
 	}
 
@@ -175,18 +175,18 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *globArgs) (ok bool) {
 		_, err := reb.t.Health(tsi, false, md.config.Timeout.MaxKeepalive)
 		if err == nil {
 			if i > 0 {
-				glog.Infof("%s: %s is online", loghdr, tsi.Name())
+				glog.Infof("%s: %s is online", loghdr, tsi)
 			}
 			return true
 		}
-		glog.Warningf("%s: waiting for %s, err %v", loghdr, tsi.Name(), err)
+		glog.Warningf("%s: waiting for %s, err %v", loghdr, tsi, err)
 		time.Sleep(sleep)
 		nver := reb.t.GetSowner().Get().Version
 		if nver > ver {
 			return
 		}
 	}
-	glog.Errorf("%s: timed-out waiting for %s", loghdr, tsi.Name())
+	glog.Errorf("%s: timed-out waiting for %s", loghdr, tsi)
 	return
 }
 
@@ -213,7 +213,7 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *globArgs) (ok bool) {
 		}
 		curwt += sleep
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s state", loghdr, tsi.Name(), stages[rebStageTraverse])
+	glog.Errorf("%s: timed out waiting for %s to reach %s state", loghdr, tsi, stages[rebStageTraverse])
 	return
 }
 
@@ -248,7 +248,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 			return
 		}
 		if status.Stage <= rebStageECNamespace {
-			glog.Infof("%s: keep waiting for %s[%s]", loghdr, tsi.Name(), stages[status.Stage])
+			glog.Infof("%s: keep waiting for %s[%s]", loghdr, tsi, stages[status.Stage])
 			time.Sleep(sleepRetry)
 			curwt += sleepRetry
 			if status.Stage != rebStageInactive {
@@ -262,20 +262,20 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 		var w4me bool // true: this target is waiting for ACKs from me
 		for tid := range status.Tmap {
 			if tid == reb.t.Snode().ID() {
-				glog.Infof("%s: keep wack <= %s[%s]", loghdr, tsi.Name(), stages[status.Stage])
+				glog.Infof("%s: keep wack <= %s[%s]", loghdr, tsi, stages[status.Stage])
 				w4me = true
 				break
 			}
 		}
 		if !w4me {
-			glog.Infof("%s: %s[%s] ok (not waiting for me)", loghdr, tsi.Name(), stages[status.Stage])
+			glog.Infof("%s: %s[%s] ok (not waiting for me)", loghdr, tsi, stages[status.Stage])
 			ok = true
 			return
 		}
 		time.Sleep(sleepRetry)
 		curwt += sleepRetry
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s", loghdr, tsi.Name(), stages[rebStageFin])
+	glog.Errorf("%s: timed out waiting for %s to reach %s", loghdr, tsi, stages[rebStageFin])
 	return
 }
 
@@ -297,37 +297,37 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 		outjson, err = reb.t.Health(tsi, true, cmn.DefaultTimeout) // retry once
 	}
 	if err != nil {
-		glog.Errorf("%s: failed to call %s, err: %v", loghdr, tsi.Name(), err)
+		glog.Errorf("%s: failed to call %s, err: %v", loghdr, tsi, err)
 		reb.abortGlobal()
 		return
 	}
 	status = &Status{}
 	err = jsoniter.Unmarshal(outjson, status)
 	if err != nil {
-		glog.Errorf("%s: unexpected: failed to unmarshal %s response, err: %v", loghdr, tsi.Name(), err)
+		glog.Errorf("%s: unexpected: failed to unmarshal %s response, err: %v", loghdr, tsi, err)
 		reb.abortGlobal()
 		return
 	}
 	// enforce Smap consistency across this xreb
 	tver, rver := status.SmapVersion, status.RebVersion
 	if tver > ver || rver > ver {
-		glog.Errorf("%s: %s has newer Smap (v%d, v%d) - aborting...", loghdr, tsi.Name(), tver, rver)
+		glog.Errorf("%s: %s has newer Smap (v%d, v%d) - aborting...", loghdr, tsi, tver, rver)
 		reb.abortGlobal()
 		return
 	}
 	// enforce same global transaction ID
 	if status.GlobRebID > reb.globRebID.Load() {
-		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", loghdr, tsi.Name(), status.GlobRebID)
+		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", loghdr, tsi, status.GlobRebID)
 		reb.abortGlobal()
 		return
 	}
 	// let the target to catch-up
 	if tver < ver || rver < ver {
-		glog.Warningf("%s: %s has older Smap (v%d, v%d) - keep waiting...", loghdr, tsi.Name(), tver, rver)
+		glog.Warningf("%s: %s has older Smap (v%d, v%d) - keep waiting...", loghdr, tsi, tver, rver)
 		return
 	}
 	if status.GlobRebID < reb.GlobRebID() {
-		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", loghdr, tsi.Name(), status.GlobRebID)
+		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", loghdr, tsi, status.GlobRebID)
 		return
 	}
 	// Remote target has aborted its running rebalance with the same ID as local,
@@ -343,7 +343,7 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 		ok = true
 		return
 	}
-	glog.Infof("%s: %s[%s] not yet at the right stage %s", loghdr, tsi.Name(), stages[status.Stage], stages[desiredStage])
+	glog.Infof("%s: %s[%s] not yet at the right stage %s", loghdr, tsi, stages[status.Stage], stages[desiredStage])
 	return
 }
 
@@ -405,7 +405,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 		outjson, status, err := reb.t.RebalanceNamespace(si)
 		if err != nil {
 			// something bad happened, aborting
-			glog.Errorf("[g%d]: failed to call %s, err: %v", reb.globRebID.Load(), si.Name(), err)
+			glog.Errorf("[g%d]: failed to call %s, err: %v", reb.globRebID.Load(), si, err)
 			reb.abortGlobal()
 			return false
 		}
@@ -420,7 +420,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 			// TODO: send the number of items in push request and preallocate `slices`?
 			if err := jsoniter.Unmarshal(outjson, &slices); err != nil {
 				// not a severe error: next wait loop re-requests the data
-				glog.Warningf("Invalid JSON received from %s: %v", si.Name(), err)
+				glog.Warningf("Invalid JSON received from %s: %v", si, err)
 				curwt += sleep
 				time.Sleep(sleep)
 				continue

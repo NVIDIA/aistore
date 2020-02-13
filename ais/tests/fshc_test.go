@@ -312,10 +312,10 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		tutils.DestroyBucket(t, md.proxyURL, md.bck)
 		sgl.Free()
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
-			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
+			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 		if err := api.AddMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
-			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
+			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 
 		tutils.WaitForRebalanceToComplete(t, md.baseParams, rebalanceTimeout)
@@ -372,10 +372,10 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 		sgl.Free()
 		tutils.DestroyBucket(t, md.proxyURL, md.bck)
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
-			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
+			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 		if err := api.AddMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
-			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.Name(), err)
+			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 
 		tutils.WaitForRebalanceToComplete(t, md.baseParams, rebalanceTimeout)

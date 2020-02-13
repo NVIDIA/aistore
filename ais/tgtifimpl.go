@@ -82,7 +82,7 @@ func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cm
 	}
 	capInfo.High = int64(capInfo.UsedPct) > config.LRU.HighWM
 	if capInfo.OOS || capInfo.High {
-		capInfo.Err = cmn.NewErrorCapacityExceeded(t.si.Name(), config.LRU.HighWM, capInfo.UsedPct, capInfo.OOS)
+		capInfo.Err = cmn.NewErrorCapacityExceeded(t.si.String(), config.LRU.HighWM, capInfo.UsedPct, capInfo.OOS)
 	}
 	return
 }
@@ -123,7 +123,7 @@ loop:
 			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
 				continue
 			}
-			if err := fwd.bck.Init(t.bmdowner, t.si.Name()); err != nil {
+			if err := fwd.bck.Init(t.bmdowner, t.si); err != nil {
 				glog.Errorf("prefetch: %s, err: %v", fwd.bck, err)
 			} else if fwd.bck.IsAIS() {
 				glog.Errorf("prefetch: %s is ais bucket, nothing to do", fwd.bck)

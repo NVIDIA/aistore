@@ -2587,7 +2587,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 	tutils.Logf("Created %d objects in %s, %d objects in %s. Starting global rebalance\n",
 		len(oldECList), bckEC, len(oldRegList), bckReg)
 
-	tutils.Logf("Registering node %s\n", tgtLost.Name())
+	tutils.Logf("Registering node %s\n", tgtLost)
 	err = tutils.RegisterNode(proxyURL, tgtLost, smap)
 	tassert.CheckFatal(t, err)
 	registered = true

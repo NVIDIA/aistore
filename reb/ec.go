@@ -400,7 +400,7 @@ func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
 	if !ok {
 		// first CT of the object
 		b := cluster.NewBckEmbed(ct.Bck)
-		if err := b.Init(tgt.GetBowner()); err != nil {
+		if err := b.Init(tgt.GetBowner(), tgt.Snode()); err != nil {
 			return err
 		}
 		si, err := cluster.HrwTarget(b.MakeUname(ct.Objname), tgt.GetSowner().Get())
@@ -584,14 +584,14 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	reb.ec.ackCTs.add(rt)
 
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("Sending slice %d[%s] of %s/%s to %s", sliceID, xxhash, ct.Bck.Name, ct.Objname, target.Name())
+		glog.Infof("Sending slice %d[%s] of %s/%s to %s", sliceID, xxhash, ct.Bck.Name, ct.Objname, target)
 	}
 	reb.ec.onAir.Inc()
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
 		reb.ec.onAir.Dec()
 		mm.Free(hdr.Opaque)
 		reb.ec.ackCTs.remove(rt)
-		return fmt.Errorf("Failed to send slices to node %s: %v", target.Name(), err)
+		return fmt.Errorf("Failed to send slices to node %s: %v", target, err)
 	}
 	reb.statRunner.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
@@ -612,7 +612,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, hdr transport.H
 		bck      = cluster.NewBckEmbed(hdr.Bck)
 		needSave = req.md.SliceID == 0 // full object always saved
 	)
-	if err := bck.Init(reb.t.GetBowner()); err != nil {
+	if err := bck.Init(reb.t.GetBowner(), reb.t.Snode()); err != nil {
 		return err
 	}
 	uname := bck.MakeUname(hdr.ObjName)
@@ -691,15 +691,15 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, hdr transport.H
 
 // Receives a CT from another target, saves to local drive because it is a missing one
 func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Reader) error {
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s GOT CT for %s/%s from %s", reb.t.Snode().Name(), hdr.Bck, hdr.ObjName, req.daemonID)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("%s GOT CT for %s/%s from %s", reb.t.Snode(), hdr.Bck, hdr.ObjName, req.daemonID)
 	}
 	cmn.Assert(req.md != nil)
 
 	reb.laterx.Store(true)
 	sliceID := req.md.SliceID
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof(">>> %s got CT %d for %s/%s", reb.t.Snode().Name(), sliceID, hdr.Bck, hdr.ObjName)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof(">>> %s got CT %d for %s/%s", reb.t.Snode(), sliceID, hdr.Bck, hdr.ObjName)
 	}
 	uid := uniqueWaitID(hdr.Bck, hdr.ObjName)
 	waitFor := reb.ec.waiter.lookupCreate(uid, int16(sliceID), waitForSingleSlice)
@@ -830,7 +830,7 @@ func (reb *Manager) mergeCTs() *globalCTList {
 		for _, ct := range ctList {
 			if ct.SliceID != 0 && local {
 				b := cluster.NewBckEmbed(ct.Bck)
-				if err := b.Init(reb.t.GetBowner()); err != nil {
+				if err := b.Init(reb.t.GetBowner(), reb.t.Snode()); err != nil {
 					reb.abortGlobal()
 					return nil
 				}
@@ -848,7 +848,7 @@ func (reb *Manager) mergeCTs() *globalCTList {
 			if local && ct.hrwFQN != ct.realFQN {
 				reb.ec.localActions = append(reb.ec.localActions, ct)
 				if bool(glog.FastV(4, glog.SmoduleReb)) {
-					glog.Infof("%s %s -> %s", reb.t.Snode().Name(), ct.hrwFQN, ct.realFQN)
+					glog.Infof("%s %s -> %s", reb.t.Snode(), ct.hrwFQN, ct.realFQN)
 				}
 			}
 		}
@@ -877,7 +877,7 @@ func (reb *Manager) detectBroken(res *globalCTList) {
 			}
 
 			bck := cluster.NewBck(bckName, provider, cmn.NsGlobal)
-			if err := bck.Init(bowner); err != nil {
+			if err := bck.Init(bowner, reb.t.Snode()); err != nil {
 				// bucket might be deleted while rebalancing - skip it
 				glog.Errorf("Invalid bucket %s: %v", bckName, err)
 				delete(tp, bckName)
@@ -909,7 +909,7 @@ func (reb *Manager) detectBroken(res *globalCTList) {
 
 				if bool(glog.FastV(4, glog.SmoduleReb)) {
 					glog.Infof("[%s] BROKEN: %s [Main %d on %s], CTs %d of %d",
-						reb.t.Snode().Name(), objName, obj.mainSliceID, obj.mainDaemon, obj.foundCT(), obj.requiredCT())
+						reb.t.Snode(), objName, obj.mainSliceID, obj.mainDaemon, obj.foundCT(), obj.requiredCT())
 				}
 				reb.ec.broken = append(reb.ec.broken, obj)
 			}
@@ -1001,7 +1001,7 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 		_, err = os.Stat(fileFQN)
 		// found metadata without a corresponding CT
 		if err != nil {
-			glog.Warningf("%s no CT for metadata: %s", reb.t.Snode().Name(), fileFQN)
+			glog.Warningf("%s no CT for metadata: %s", reb.t.Snode(), fileFQN)
 			return nil
 		}
 	}
@@ -1183,8 +1183,8 @@ func (reb *Manager) rebalanceLocal() error {
 	buf, slab := reb.t.GetMMSA().Alloc()
 	defer slab.Free(buf)
 	for _, act := range reb.ec.localActions {
-		if bool(glog.FastV(4, glog.SmoduleReb)) {
-			glog.Infof("%s Repair local %s -> %s", reb.t.Snode().Name(), act.realFQN, act.hrwFQN)
+		if glog.FastV(4, glog.SmoduleReb) {
+			glog.Infof("%s Repair local %s -> %s", reb.t.Snode(), act.realFQN, act.hrwFQN)
 		}
 		mpathSrc, _, err := cluster.ResolveFQN(act.realFQN)
 		if err != nil {
@@ -1302,14 +1302,11 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	}
 
 	cmn.Assert(obj.sender != nil) // must not happen
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		if obj.sender == nil {
-			glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], slice found %d vs required %d[all slices: %v], is in HRW %v",
-				reb.t.Snode().Name(), obj.uid, obj.hasCT, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID, ctFound, ctReq, obj.hasAllSlices, obj.inHrwList)
-		} else {
-			glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], slice found %d vs required %d[all slices: %v], is in HRW %v [sender %s]",
-				reb.t.Snode().Name(), obj.uid, obj.hasCT, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID, ctFound, ctReq, obj.hasAllSlices, obj.inHrwList, obj.sender.Name())
-		}
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d]",
+			reb.t.Snode(), obj.uid, obj.hasCT, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID)
+		glog.Infof("slice found %d vs required %d[all slices: %v], is in HRW %v [sender %s]",
+			ctFound, ctReq, obj.hasAllSlices, obj.inHrwList, obj.sender)
 	}
 	return nil
 }
@@ -1392,7 +1389,7 @@ func (reb *Manager) sendLocalData(md *globArgs, obj *rebObject, si ...*cluster.S
 		target = mainSI
 	}
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s sending a slice/replica #%d of %s to main %s", reb.t.Snode().Name(), ct.SliceID, ct.Objname, target.Name())
+		glog.Infof("%s sending a slice/replica #%d of %s to main %s", reb.t.Snode(), ct.SliceID, ct.Objname, target)
 	}
 	return reb.sendFromDisk(ct, target)
 }
@@ -1403,7 +1400,7 @@ func (reb *Manager) sendLocalData(md *globArgs, obj *rebObject, si ...*cluster.S
 func (reb *Manager) bcastLocalReplica(obj *rebObject) error {
 	cmn.Assert(obj.sender != nil) // mustn't happen
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s Object %s sender %s", reb.t.Snode().Name(), obj.uid, obj.sender.Name())
+		glog.Infof("%s Object %s sender %s", reb.t.Snode(), obj.uid, obj.sender)
 	}
 	// Another node should send replicas, do noting
 	if obj.sender.DaemonID != reb.t.Snode().ID() {
@@ -1426,7 +1423,7 @@ func (reb *Manager) bcastLocalReplica(obj *rebObject) error {
 		}
 		sendTo = append(sendTo, si)
 		if bool(glog.FastV(4, glog.SmoduleReb)) {
-			glog.Infof("%s #4.4 - sending %s a replica of %s to %s", reb.t.Snode().Name(), ct.hrwFQN, ct.Objname, si.Name())
+			glog.Infof("%s #4.4 - sending %s a replica of %s to %s", reb.t.Snode(), ct.hrwFQN, ct.Objname, si)
 		}
 		ctDiff--
 		if ctDiff == 0 {
@@ -1640,7 +1637,7 @@ func (reb *Manager) rebalanceObject(md *globArgs, obj *rebObject) (err error) {
 	// The last case: must be main with object. Rebuild and send missing slices
 	cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
 		fmt.Sprintf("%s%s/%s: isMain %t - mainHasSome %t - mainID %d",
-			reb.t.Snode().Name(), obj.bck, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID))
+			reb.t.Snode(), obj.bck, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID))
 	if bool(glog.FastV(4, glog.SmoduleReb)) {
 		glog.Infof("rebuilding slices of %s and send them", obj.objName)
 	}
@@ -1665,14 +1662,13 @@ func (reb *Manager) finalizeBatch(md *globArgs) error {
 	reb.waitECAck(md)
 
 	// mark batch done and notify other targets
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s batch %d done. Wait cluster-wide quiescence",
-			reb.t.Snode().Name(), reb.stages.currBatch.Load())
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("%s batch %d done. Wait cluster-wide quiescence", reb.t.Snode(), reb.stages.currBatch.Load())
 	}
 
 	reb.changeStage(rebStageECBatch, reb.stages.currBatch.Load())
 	// wait for all targets to finish sending/receiving
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s waiting for ALL batch %d DONE", reb.t.Snode().ID(), reb.stages.currBatch.Load())
 	}
 	if aborted := reb.waitEvent(md, reb.allNodesCompletedBatch); aborted {
@@ -1876,8 +1872,8 @@ func (reb *Manager) releaseSGLs(objList []*rebObject) {
 // TODO: rebuildFromDisk, rebuildFromMem, and rebuildFromSlices shares some
 // code. See what can be done to deduplicate it. Some code may go to EC package
 func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s rebuilding slices of %s and send them", reb.t.Snode().Name(), obj.objName)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("%s rebuilding slices of %s and send them", reb.t.Snode(), obj.objName)
 	}
 	slice, ok := obj.locCT[reb.t.Snode().ID()]
 	cmn.Assert(ok && slice.SliceID == 0)
@@ -1932,8 +1928,8 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
 		if idx <= int(obj.dataSlices) {
-			if bool(glog.FastV(4, glog.SmoduleReb)) {
-				glog.Infof("Sending %s data slice %d to %s", obj.objName, idx, si.Name())
+			if glog.FastV(4, glog.SmoduleReb) {
+				glog.Infof("Sending %s data slice %d to %s", obj.objName, idx, si)
 			}
 			reader := readerSend[idx-1]
 			reader.Open()
@@ -1954,14 +1950,14 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 				slicePad: padSize, sliceID: int16(idx),
 			}
 			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
-				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName, si.Name())
+				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName, si)
 				// continue to fix as many as possible
 				continue
 			}
 		} else {
 			sglIdx := idx - int(obj.dataSlices) - 1
-			if bool(glog.FastV(4, glog.SmoduleReb)) {
-				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si.Name())
+			if glog.FastV(4, glog.SmoduleReb) {
+				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si)
 			}
 			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize, reb.t.GetMMSA())
 			if err != nil {
@@ -1972,7 +1968,7 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 				sliceID: int16(idx), sgl: obj.rebuildSGLs[sglIdx],
 			}
 			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
-				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName, si.Name())
+				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName, si)
 				// continue to fix as many as possible
 				continue
 			}
@@ -2001,8 +1997,8 @@ func (reb *Manager) metadataForSlice(slices []*waitCT, sliceID int) *ec.Metadata
 // The object is misplaced and few slices are missing. The default target
 // receives the object into SGL, rebuilds missing slices, and sends them
 func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error) {
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s rebuilding slices of %s and send them", reb.t.Snode().Name(), obj.objName)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("%s rebuilding slices of %s and send them", reb.t.Snode(), obj.objName)
 	}
 	cmn.Assert(len(slices) != 0)
 	slice := slices[0]
@@ -2052,8 +2048,8 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
 		if idx <= int(obj.dataSlices) {
-			if bool(glog.FastV(4, glog.SmoduleReb)) {
-				glog.Infof("Sending %s data slice %d to %s", obj.objName, idx, si.Name())
+			if glog.FastV(4, glog.SmoduleReb) {
+				glog.Infof("Sending %s data slice %d to %s", obj.objName, idx, si)
 			}
 			reader := readerSGLs[idx-1]
 			ckval, err := cksumForSlice(readerSGLs[idx-1], obj.sliceSize, reb.t.GetMMSA())
@@ -2066,14 +2062,14 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 				sliceSize: obj.sliceSize, sliceID: int16(idx),
 			}
 			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
-				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName, si.Name())
+				glog.Errorf("Failed to send data slice %d[%s] to %s", idx, obj.objName, si)
 				// keep on working to restore as many as possible
 				continue
 			}
 		} else {
 			sglIdx := idx - int(obj.dataSlices) - 1
-			if bool(glog.FastV(4, glog.SmoduleReb)) {
-				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si.Name())
+			if glog.FastV(4, glog.SmoduleReb) {
+				glog.Infof("Sending %s parity slice %d[%d] to %s", obj.objName, idx, sglIdx, si)
 			}
 			ckval, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[sglIdx]), obj.sliceSize, reb.t.GetMMSA())
 			if err != nil {
@@ -2082,7 +2078,7 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 			reader := memsys.NewReader(obj.rebuildSGLs[sglIdx])
 			dest := &retransmitCT{sgl: obj.rebuildSGLs[sglIdx], sliceID: int16(idx)}
 			if err := reb.sendFromReader(reader, ecSliceMD, idx, ckval, si, dest); err != nil {
-				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName, si.Name())
+				glog.Errorf("Failed to send parity slice %d[%s] to %s", idx, obj.objName, si)
 				// keep on working to restore as many as possible
 				continue
 			}
@@ -2095,8 +2091,8 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 // existing slices into SGLs, restores the object, rebuilds slices, and finally
 // send missing slices to other targets
 func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err error) {
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("%s rebuilding slices of %s and send them(mem)", reb.t.Snode().Name(), obj.objName)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("%s rebuilding slices of %s and send them(mem)", reb.t.Snode(), obj.objName)
 	}
 
 	sliceCnt := obj.dataSlices + obj.paritySlices
@@ -2244,7 +2240,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 
 		dest := &retransmitCT{sgl: obj.rebuildSGLs[i], sliceID: int16(i + 1)}
 		if err := reb.sendFromReader(reader, sl, i+1, ckval, si, dest); err != nil {
-			return fmt.Errorf("Failed to send slice %d of %s to %s: %v", i, obj.uid, si.Name(), err)
+			return fmt.Errorf("Failed to send slice %d of %s to %s: %v", i, obj.uid, si, err)
 		}
 	}
 

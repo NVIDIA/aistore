@@ -296,7 +296,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 	if err != nil {
 		glog.Warningf("Error when pinging primary %s: %v", primaryURL, err)
 	}
-	glog.Infof("%s: primary proxy %v is confirmed down\n", p.si.Name(), primaryURL)
+	glog.Infof("%s: primary proxy %v is confirmed down\n", p.si, primaryURL)
 
 	glog.Info("Moving to election state phase 1 (prepare)")
 	elected, votingErrors := p.electAmongProxies(vr, xact)
@@ -316,7 +316,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 		}
 	}
 
-	glog.Infof("Moving %s(self) to primary state", p.si.Name())
+	glog.Infof("Moving %s(self) to primary state", p.si)
 	// Begin Primary State
 	if err := p.becomeNewPrimary(vr.Primary /* proxyIDToRemove */); err != nil {
 		glog.Error(err)
@@ -437,7 +437,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 	if !clone.isValid() {
 		return
 	}
-	glog.Infof("%s: primary %s @%v has failed\n", p.si.Name(), clone.ProxySI.Name(), clone.ProxySI.IntraControlNet.DirectURL)
+	glog.Infof("%s: primary %s has failed\n", p.si, clone.ProxySI.NameEx())
 
 	// Find out the first proxy (using HRW algorithm) that is running and can be
 	// elected as the primary one.
@@ -453,7 +453,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 		}
 		if nextPrimaryProxy.ID() == p.si.ID() {
 			// If this proxy is the next primary proxy candidate, it starts the election directly.
-			glog.Infof("%s: Starting election (candidate = self)", p.si.Name())
+			glog.Infof("%s: Starting election (candidate = self)", p.si)
 			vr := &VoteRecord{
 				Candidate: nextPrimaryProxy.ID(),
 				Primary:   clone.ProxySI.ID(),
@@ -491,7 +491,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 	if !clone.isValid() {
 		return
 	}
-	glog.Infof("%s: primary proxy (%s @ %v) failed\n", t.si.Name(), clone.ProxySI.Name(), clone.ProxySI.IntraControlNet.DirectURL)
+	glog.Infof("%s: primary %s failed\n", t.si, clone.ProxySI.NameEx())
 
 	// Find out the first proxy (using HRW algorithm) that is running and can be
 	// elected as the primary one.

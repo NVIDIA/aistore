@@ -6,8 +6,8 @@ package cmn
 
 type (
 	Runner interface {
-		Setname(string)
-		Getname() string
+		SetRunName(string)
+		GetRunName() string
 		Run() error
 		Stop(error)
 	}
@@ -20,7 +20,7 @@ type (
 	}
 )
 
-func (r *Named) Setname(n string)  { r.name = n }
-func (r *Named) Getname() string   { return r.name }
-func (r *NamedID) SetID(id string) { Assert(r.id == ""); r.id = id } // at construction
-func (r *NamedID) ID() string      { return r.id }
+func (r *Named) SetRunName(n string) { r.name = n }
+func (r *Named) GetRunName() string  { return r.name }
+func (r *NamedID) SetID(id string)   { Assert(r.id == ""); r.id = id } // at construction
+func (r *NamedID) ID() string        { return r.id }

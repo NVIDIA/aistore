@@ -88,16 +88,6 @@ func (m *smapX) isPresent(si *cluster.Snode) bool {
 	return tsi != nil
 }
 
-func (m *smapX) printname(id string) string {
-	if si := m.GetProxy(id); si != nil {
-		return si.Name()
-	}
-	if si := m.GetTarget(id); si != nil {
-		return si.Name()
-	}
-	return "???[" + id + "]"
-}
-
 func (m *smapX) containsID(id string) bool {
 	if tsi := m.GetTarget(id); tsi != nil {
 		return true
@@ -150,10 +140,10 @@ func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) {
 		m.addProxy(nsi)
 		if nonElectable {
 			m.NonElects[id] = ""
-			glog.Warningf("%s won't be electable", nsi.Name())
+			glog.Warningf("%s won't be electable", nsi)
 		}
 		if glog.V(3) {
-			glog.Infof("joined %s (num proxies %d)", nsi.Name(), m.CountProxies())
+			glog.Infof("joined %s (num proxies %d)", nsi, m.CountProxies())
 		}
 	} else {
 		cmn.Assert(nsi.IsTarget())
@@ -162,7 +152,7 @@ func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) {
 		}
 		m.addTarget(nsi)
 		if glog.V(3) {
-			glog.Infof("joined %s (num targets %d)", nsi.Name(), m.CountTargets())
+			glog.Infof("joined %s (num targets %d)", nsi, m.CountTargets())
 		}
 	}
 }
@@ -251,10 +241,9 @@ func (m *smapX) validateUUID(newSmap *smapX, si, nsi *cluster.Snode, caller stri
 	} else if nsiname == "" {
 		nsiname = "???"
 	}
-	hname := si.Name()
 	// FATAL: cluster integrity error (cie)
 	s := fmt.Sprintf("%s: Smaps have different uuids: [%s: %s] vs [%s: %s]",
-		ciError(50), hname, m.StringEx(), nsiname, newSmap.StringEx())
+		ciError(50), si, m.StringEx(), nsiname, newSmap.StringEx())
 	err = &errSmapUUIDDiffer{s}
 	return
 }
@@ -400,6 +389,12 @@ func newSnode(id, proto, daeType string, publicAddr, intraControlAddr, intraData
 		PublicNet:       publicNet,
 		IntraControlNet: intraControlNet,
 		IntraDataNet:    intraDataNet,
+	}
+	if daeType == cmn.Proxy {
+		snode.SetName("p[" + id + "]")
+	} else {
+		cmn.Assert(daeType == cmn.Target)
+		snode.SetName("t[" + id + "]")
 	}
 	snode.Digest()
 	return

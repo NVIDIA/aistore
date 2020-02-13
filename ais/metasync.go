@@ -144,7 +144,7 @@ func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 }
 
 func (y *metasyncer) Run() error {
-	glog.Infof("Starting %s", y.Getname())
+	glog.Infof("Starting %s", y.GetRunName())
 	for {
 		config := cmn.GCO.Get()
 		select {
@@ -187,7 +187,7 @@ func (y *metasyncer) Run() error {
 }
 
 func (y *metasyncer) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", y.Getname(), err)
+	glog.Infof("Stopping %s, err: %v", y.GetRunName(), err)
 
 	y.stopCh <- struct{}{}
 	close(y.stopCh)
@@ -320,7 +320,7 @@ outer:
 		if msgInt.Action != "" {
 			s = ", action " + msgInt.Action
 		}
-		glog.Infof("%s: sync %s v%d%s", y.p.si.Name(), tag[:2], revs.version(), s)
+		glog.Infof("%s: sync %s v%d%s", y.p.si, tag[:2], revs.version(), s)
 
 		y.last[tag] = revs
 		revJSON, err := revs.marshal()
@@ -384,7 +384,7 @@ outer:
 			return
 		}
 
-		y.handleRefused(method, urlPath, body, refused, pairsToSend, config, smap)
+		y.handleRefused(method, urlPath, body, refused, pairsToSend, config)
 	}
 	// step 6: housekeep and return new pending
 	smap = y.p.smapowner.get()
@@ -410,8 +410,7 @@ func (y *metasyncer) syncDone(sid string, pairs []revspair) {
 	}
 }
 
-func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair,
-	config *cmn.Config, smap *smapX) {
+func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair, config *cmn.Config) {
 	res := y.p.bcast(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: method,
@@ -427,10 +426,9 @@ func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused 
 		if r.err == nil {
 			delete(refused, r.si.ID())
 			y.syncDone(r.si.ID(), pairs)
-			glog.Infof("handle-refused: sync-ed %s", smap.printname(r.si.ID()))
+			glog.Infof("handle-refused: sync-ed %s", r.si)
 		} else {
-			glog.Warningf("handle-refused: failing to sync %s, err: %v (%d)",
-				smap.printname(r.si.ID()), r.err, r.status)
+			glog.Warningf("handle-refused: failing to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		}
 	}
 }
@@ -511,11 +509,10 @@ func (y *metasyncer) handlePending() (cnt int) {
 	for r := range res {
 		if r.err == nil {
 			y.syncDone(r.si.ID(), pairs)
-			glog.Infof("handle-pending: sync-ed %s", smap.printname(r.si.ID()))
+			glog.Infof("handle-pending: sync-ed %s", r.si)
 		} else {
 			cnt++
-			glog.Warningf("handle-pending: failing to sync %s, err: %v (%d)",
-				smap.printname(r.si.ID()), r.err, r.status)
+			glog.Warningf("handle-pending: failing to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		}
 	}
 	return

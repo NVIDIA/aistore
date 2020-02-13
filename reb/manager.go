@@ -236,11 +236,8 @@ func (reb *Manager) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 func (reb *Manager) lomAcks() *[cmn.MultiSyncMapCount]*LomAcks { return &reb.lomacks }
 
 func (reb *Manager) loghdr(globRebID int64, smap *cluster.Smap) string {
-	var (
-		tname = reb.t.Snode().Name()
-		stage = stages[reb.stages.stage.Load()]
-	)
-	return fmt.Sprintf("%s[g%d,v%d,%s]", tname, globRebID, smap.Version, stage)
+	var stage = stages[reb.stages.stage.Load()]
+	return fmt.Sprintf("%s[g%d,v%d,%s]", reb.t.Snode(), globRebID, smap.Version, stage)
 }
 func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
 	return fmt.Sprintf("rebalance IDs mismatch: local %d, remote %d", reb.GlobRebID(), remoteID)
@@ -323,7 +320,7 @@ func (reb *Manager) beginStreams(md *globArgs) {
 		md.config.Rebalance.Multiplier = 1
 	} else if md.config.Rebalance.Multiplier > 8 {
 		glog.Errorf("%s: stream-and-mp-jogger multiplier=%d - misconfigured?",
-			reb.t.Snode().Name(), md.config.Rebalance.Multiplier)
+			reb.t.Snode(), md.config.Rebalance.Multiplier)
 	}
 	//
 	// objects
@@ -402,9 +399,9 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 		if stage > rebStageFin {
 			f = glog.Errorf
 		}
-		f("%s: late receive from %s %s (stage %s)", reb.t.Snode().Name(), tsid, lom, stages[stage])
+		f("%s: late receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
 	} else if stage < rebStageTraverse {
-		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t.Snode().Name(), tsid, lom, stages[stage])
+		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
 	}
 	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
 	lom.SetVersion(hdr.ObjAttrs.Version)
@@ -422,7 +419,7 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 	}
 
 	if glog.FastV(5, glog.SmoduleReb) {
-		glog.Infof("%s: from %s %s", reb.t.Snode().Name(), tsid, lom)
+		glog.Infof("%s: from %s %s", reb.t.Snode(), tsid, lom)
 	}
 	reb.statRunner.AddMany(
 		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
@@ -462,7 +459,7 @@ func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
 			curwt  time.Duration
 		)
 		maxwt = cmn.MinDur(maxwt, config.Timeout.SendFile/3)
-		glog.Warningf("%s: waiting to start...", reb.t.Snode().Name())
+		glog.Warningf("%s: waiting to start...", reb.t.Snode())
 		time.Sleep(sleep)
 		for curwt < maxwt {
 			smap = (*cluster.Smap)(reb.smap.Load())
@@ -473,7 +470,7 @@ func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
 			curwt += sleep
 		}
 		if curwt >= maxwt {
-			err := fmt.Errorf("%s: timed-out waiting to start", reb.t.Snode().Name())
+			err := fmt.Errorf("%s: timed-out waiting to start", reb.t.Snode())
 			return nil, err
 		}
 	}
@@ -564,7 +561,7 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 
 	if req.stage == rebStageECBatch {
 		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Infof("%s Target %s finished batch %d", reb.t.Snode().Name(), req.daemonID, req.batch)
+			glog.Infof("%s Target %s finished batch %d", reb.t.Snode(), req.daemonID, req.batch)
 		}
 	}
 
@@ -583,10 +580,7 @@ func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
 		sliceID: int16(ack.sliceID), daemonID: ack.daemonID,
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof(
-			"%s: EC ack from %s on %s/%s [%d]",
-			reb.t.Snode().Name(), ack.daemonID, hdr.Bck, hdr.ObjName, ack.sliceID,
-		)
+		glog.Infof("%s: EC ack from %s on %s/%s [%d]", reb.t.Snode(), ack.daemonID, hdr.Bck, hdr.ObjName, ack.sliceID)
 	}
 	reb.ec.ackCTs.remove(rt)
 }
@@ -608,7 +602,7 @@ func (reb *Manager) recvRegularAck(hdr transport.Header, unpacker *cmn.ByteUnpac
 		return
 	}
 	if glog.FastV(5, glog.SmoduleReb) {
-		glog.Infof("%s: ack from %s on %s", reb.t.Snode().Name(), string(hdr.Opaque), lom)
+		glog.Infof("%s: ack from %s on %s", reb.t.Snode(), string(hdr.Opaque), lom)
 	}
 	var (
 		_, idx = lom.Hkey()
@@ -621,7 +615,7 @@ func (reb *Manager) recvRegularAck(hdr transport.Header, unpacker *cmn.ByteUnpac
 	// TODO: configurable delay - postponed or manual object deletion
 	lom.Lock(true)
 	if err := lom.Remove(); err != nil {
-		glog.Errorf("%s: error removing %s, err: %v", reb.t.Snode().Name(), lom, err)
+		glog.Errorf("%s: error removing %s, err: %v", reb.t.Snode(), lom, err)
 	}
 	lom.Unlock(true)
 }
@@ -680,17 +674,17 @@ func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt in
 			tsi, _ := cluster.HrwTarget(lom.Uname(), smap)
 			if reb.t.LookupRemoteSingle(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleReb) {
-					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi.Name())
+					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi)
 				}
 				delete(lomack.q, uname)
 				continue
 			}
 			// send obj
 			if err := rj.send(lom, tsi); err == nil {
-				glog.Warningf("%s: resending %s => %s", reb.loghdr(globRebID, smap), lom, tsi.Name())
+				glog.Warningf("%s: resending %s => %s", reb.loghdr(globRebID, smap), lom, tsi)
 				cnt++
 			} else {
-				glog.Errorf("%s: failed resending %s => %s, err: %v", reb.loghdr(globRebID, smap), lom, tsi.Name(), err)
+				glog.Errorf("%s: failed resending %s => %s, err: %v", reb.loghdr(globRebID, smap), lom, tsi, err)
 			}
 			if aborted() {
 				lomack.mu.Unlock()

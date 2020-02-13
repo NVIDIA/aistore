@@ -79,7 +79,7 @@ func TestMain(t *testing.M) {
 	MMSA = memsys.DefaultPageMM()
 
 	sc := transport.Init()
-	sc.Setname("stream-collector")
+	sc.SetRunName("stream-collector")
 	go sc.Run()
 
 	os.Exit(t.Run())

@@ -64,7 +64,6 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	var (
 		res      callResult
 		meta     targetRegMeta
-		tname    = t.si.Name()
 		url, psi = t.getPrimaryURLAndSI()
 	)
 	if !keepalive {
@@ -97,19 +96,19 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	// bmd
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
 	if err = t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
-		glog.Errorf("%s: bad BMD, err: %v", tname, err)
+		glog.Errorf("%s: bad BMD, err: %v", t.si, err)
 		if _, incompat := err.(*errPrxBmdUUIDDiffer); incompat {
 			return
 		}
 		err = nil
 	} else {
-		glog.Infof("%s: %s", tname, t.bmdowner.get())
+		glog.Infof("%s: %s", t.si, t.bmdowner.get())
 	}
 	// smap
 	if err := t.smapowner.synchronize(meta.Smap, true /* lesserIsErr */); err != nil {
-		glog.Errorf("%s: sync Smap err %v", tname, err)
+		glog.Errorf("%s: sync Smap err %v", t.si, err)
 	} else {
-		glog.Infof("%s: sync %s", tname, t.smapowner.get())
+		glog.Infof("%s: sync %s", t.si, t.smapowner.get())
 	}
 	return
 }
@@ -166,7 +165,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if err := t.smapowner.synchronize(newsmap, true /* lesserIsErr */); err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", err))
 			}
-			glog.Infof("%s: %s %s done", t.si.Name(), cmn.SyncSmap, newsmap)
+			glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -213,7 +212,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		)
 		if bucket != "" {
 			bck = newBckFromQuery(bucket, r.URL.Query())
-			if err := bck.Init(t.bmdowner, t.si.Name()); err != nil {
+			if err := bck.Init(t.bmdowner, t.si); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -339,7 +338,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			var bck *cluster.Bck
 			if xactMsg.Bck.Name != "" {
 				bck = cluster.NewBckEmbed(xactMsg.Bck)
-				if err := bck.Init(t.bmdowner, t.si.Name()); err != nil {
+				if err := bck.Init(t.bmdowner, t.si); err != nil {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 					return
 				}
@@ -511,7 +510,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 
 			msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
 			if err := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
-				glog.Errorf("error registering %s: %v", t.si.Name(), err)
+				glog.Errorf("error registering %s: %v", t.si, err)
 				if _, incompat := err.(*errPrxBmdUUIDDiffer); incompat {
 					t.invalmsghdlr(w, r, err.Error())
 					return
@@ -535,7 +534,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if glog.V(3) {
-		glog.Infof("Registered %s(self)", t.si.Name())
+		glog.Infof("Registered %s(self)", t.si)
 	}
 }
 
@@ -722,17 +721,14 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 
 // FIXME: use the message
 func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
-	var (
-		from  string
-		tname = t.si.Name()
-	)
+	var from string
 	if caller != "" {
 		from = " from " + caller
 	}
 	if msgInt.Action == "" {
-		glog.Infof("%s: %s %s%s", tname, tag, newBMD, from)
+		glog.Infof("%s: %s %s%s", t.si, tag, newBMD, from)
 	} else {
-		glog.Infof("%s: %s %s%s, action %s", tname, tag, newBMD, from, msgInt.Action)
+		glog.Infof("%s: %s %s%s, action %s", t.si, tag, newBMD, from, msgInt.Action)
 	}
 
 	t.bmdowner.Lock()
@@ -753,7 +749,7 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 	if newBMD.version() <= myver {
 		t.bmdowner.Unlock()
 		if newBMD.version() < myver {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", tname, bmd.StringEx(), newBMD.StringEx())
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", t.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		return
 	}
@@ -821,7 +817,6 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, caller string) (err error) {
 	var (
 		newTargetID, s, from       string
-		tname                      = t.si.Name()
 		iPresent, newTargetPresent bool
 	)
 	if caller != "" {
@@ -835,19 +830,19 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 	} else if msgInt.Action != "" {
 		s = ", action " + msgInt.Action
 	}
-	glog.Infof("%s: receive %s%s, primary %s%s", tname, newsmap.StringEx(), from, newsmap.ProxySI.Name(), s)
+	glog.Infof("%s: receive %s%s, primary %s%s", t.si, newsmap.StringEx(), from, newsmap.ProxySI, s)
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.ID() {
 			iPresent = true
-			glog.Infof("%s <= self", si.Name())
+			glog.Infof("%s <= self", si)
 		} else if id == newTargetID {
 			newTargetPresent = true // only if not self
 		} else {
-			glog.Infof("%s", si.Name())
+			glog.Infof("%s", si)
 		}
 	}
 	if !iPresent {
-		err = fmt.Errorf("%s: not finding self in the new %s", tname, newsmap.StringEx())
+		err = fmt.Errorf("%s: not finding self in the new %s", t.si, newsmap.StringEx())
 		glog.Warningf("Error: %s\n%s", err, newsmap.pp())
 		return
 	}
@@ -870,7 +865,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 	if newTargetID == "" {
 		return
 	}
-	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", tname, newTargetID)
+	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si, newTargetID)
 	go t.rebManager.RunGlobalReb(t.smapowner.Get(), msgInt.GlobRebID)
 	return
 }
@@ -965,7 +960,7 @@ func (t *targetrunner) detectMpathChanges() {
 			newfs.Available.String(), newfs.Disabled.String(),
 		)
 
-		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si.Name(), mpathconfigfqn)
+		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si, mpathconfigfqn)
 		glog.Errorln("OLD: ====================")
 		glog.Errorln(oldfsPprint)
 		glog.Errorln("NEW: ====================")
@@ -1137,23 +1132,23 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		// which are most probably not relevant to the user as it only wants
 		// to get 200 in case everything is fine.
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: external health-ping from %s", t.si.Name(), r.RemoteAddr)
+			glog.Infof("%s: external health-ping from %s", t.si, r.RemoteAddr)
 		}
 		return
 	} else if callerID == "" || callerName == "" {
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si.Name(), callerID, callerName))
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si, callerID, callerName))
 		return
 	}
 
 	if !smap.containsID(callerID) {
-		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si.Name(), callerID, callerName)
+		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si, callerID, callerName)
 	}
 
 	callerSmapVer, _ := strconv.ParseInt(r.Header.Get(cmn.HeaderCallerSmapVersion), 10, 64)
 	if smap.version() != callerSmapVer {
 		glog.Warningf(
 			"%s: health-ping from node (%s, %s) which has different smap version: our (%d), node's (%d)",
-			t.si.Name(), callerID, callerName, smap.version(), callerSmapVer,
+			t.si, callerID, callerName, smap.version(), callerSmapVer,
 		)
 	}
 
@@ -1169,11 +1164,11 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	if smap.GetProxy(callerID) != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: health-ping from %s", t.si.Name(), callerName)
+			glog.Infof("%s: health-ping from %s", t.si, callerName)
 		}
 		t.keepalive.heardFrom(callerID, false)
 	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: health-ping from %s", t.si.Name(), callerName)
+		glog.Infof("%s: health-ping from %s", t.si, callerName)
 	}
 }
 
@@ -1233,11 +1228,11 @@ func (t *targetrunner) disable() error {
 		return nil
 	}
 
-	glog.Infof("Disabling %s", t.si.Name())
+	glog.Infof("Disabling %s", t.si)
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, eunreg = t.unregister(); eunreg != nil {
 			if cmn.IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying unregistration...", t.si.Name())
+				glog.Errorf("%s: retrying unregistration...", t.si)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -1248,13 +1243,13 @@ func (t *targetrunner) disable() error {
 	if status >= http.StatusBadRequest || eunreg != nil {
 		// do not update state on error
 		if eunreg == nil {
-			eunreg = fmt.Errorf("error unregistering %s, http status %d", t.si.Name(), status)
+			eunreg = fmt.Errorf("error unregistering %s, http status %d", t.si, status)
 		}
 		return eunreg
 	}
 
 	t.regstate.disabled = true
-	glog.Infof("%s has been disabled (unregistered)", t.si.Name())
+	glog.Infof("%s has been disabled (unregistered)", t.si)
 	return nil
 }
 
@@ -1272,11 +1267,11 @@ func (t *targetrunner) enable() error {
 		return nil
 	}
 
-	glog.Infof("Enabling %s", t.si.Name())
+	glog.Infof("Enabling %s", t.si)
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying registration...", t.si.Name())
+				glog.Errorf("%s: retrying registration...", t.si)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -1287,13 +1282,13 @@ func (t *targetrunner) enable() error {
 	if status >= http.StatusBadRequest || ereg != nil {
 		// do not update state on error
 		if ereg == nil {
-			ereg = fmt.Errorf("error registering %s, http status: %d", t.si.Name(), status)
+			ereg = fmt.Errorf("error registering %s, http status: %d", t.si, status)
 		}
 		return ereg
 	}
 
 	t.regstate.disabled = false
-	glog.Infof("%s has been enabled", t.si.Name())
+	glog.Infof("%s has been enabled", t.si)
 	return nil
 }
 
@@ -1313,10 +1308,10 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 		return capInfo.Err
 	}
 
-	if err = bckFrom.Init(t.bmdowner); err != nil {
+	if err = bckFrom.Init(t.bmdowner, t.si); err != nil {
 		return
 	}
-	if err = bckTo.Init(t.bmdowner); err != nil {
+	if err = bckTo.Init(t.bmdowner, t.si); err != nil {
 		return
 	}
 
@@ -1374,7 +1369,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 }
 
 func (t *targetrunner) commitCopyRenameLB(bckFrom, bckTo *cluster.Bck, msgInt *actionMsgInternal) (err error) {
-	if err := bckTo.Init(t.bmdowner); err != nil {
+	if err := bckTo.Init(t.bmdowner, t.si); err != nil {
 		return err
 	}
 

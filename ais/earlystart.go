@@ -28,7 +28,6 @@ func (p *proxyrunner) bootstrap() {
 	var (
 		smap              *smapX
 		url               string
-		pname             = p.si.Name()
 		config            = cmn.GCO.Get()
 		secondary, loaded bool
 	)
@@ -40,7 +39,7 @@ func (p *proxyrunner) bootstrap() {
 	}
 	// 2: am primary (tentative)
 	primaryEnv, _ := cmn.ParseBool(os.Getenv("AIS_PRIMARYPROXY"))
-	glog.Infof("%s: %s, loaded=%t, primary-env=%t", pname, smap.StringEx(), loaded, primaryEnv)
+	glog.Infof("%s: %s, loaded=%t, primary-env=%t", p.si, smap.StringEx(), loaded, primaryEnv)
 	if loaded {
 		secondary = !smap.isPrimary(p.si)
 		if secondary {
@@ -56,25 +55,25 @@ func (p *proxyrunner) bootstrap() {
 	}
 	// 4: join cluster as secondary
 	if secondary {
-		glog.Infof("%s: starting up as non-primary, joining via %s", pname, url)
+		glog.Infof("%s: starting up as non-primary, joining via %s", p.si, url)
 		var err error
 		if err = p.secondaryStartup(url); err != nil {
 			if loaded {
 				maxVerSmap, _ := p.uncoverMeta(smap)
 				if maxVerSmap != nil && maxVerSmap.ProxySI != nil {
 					url = maxVerSmap.ProxySI.IntraControlNet.DirectURL
-					glog.Infof("%s: second attempt - join via %s", pname, url)
+					glog.Infof("%s: second attempt - join via %s", p.si, url)
 					err = p.secondaryStartup(url)
 				}
 			}
 		}
 		if err != nil {
-			cmn.ExitLogf("FATAL: %s (non-primary) failed to join cluster, err: %v", pname, err)
+			cmn.ExitLogf("FATAL: %s (non-primary) failed to join cluster, err: %v", p.si, err)
 		}
 		return
 	}
 	// 5: keep starting up as a primary
-	glog.Infof("%s: assuming the primary role for now, starting up...", pname)
+	glog.Infof("%s: assuming the primary role for now, starting up...", p.si)
 	go p.primaryStartup(smap, config, daemon.cli.ntargets)
 }
 
@@ -83,7 +82,6 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 	var (
 		config = cmn.GCO.Get()
 		query  = url.Values{}
-		pname  = p.si.Name()
 	)
 	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
 	req := cmn.ReqArgs{
@@ -106,7 +104,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 			res = p.call(args)
 			if res.err != nil {
 				if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
-					glog.Errorf("%s: get Smap from primary %s - retrying...", pname, getSmapURL)
+					glog.Errorf("%s: get Smap from primary %s - retrying...", p.si, getSmapURL)
 					time.Sleep(config.Timeout.CplaneOperation)
 					continue
 				}
@@ -121,7 +119,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 		cmn.AssertNoErr(err)
 		if !smap.isValid() {
 			cmn.ExitLogf("FATAL: %s (non-primary) invalid %s at startup/registration, err: %v",
-				pname, smap, err)
+				p.si, smap, err)
 		}
 		p.smapowner.put(smap) // put Smap
 		return nil
@@ -132,7 +130,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 		return err
 	}
 	if err := p.registerWithRetry(); err != nil {
-		cmn.ExitLogf("FATAL: %s (non-primary), err: %v", pname, err)
+		cmn.ExitLogf("FATAL: %s (non-primary), err: %v", p.si, err)
 	}
 	time.Sleep(time.Second)
 	f()
@@ -140,14 +138,14 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if !smap.isPresent(p.si) {
-		cmn.ExitLogf("FATAL: %s failed to register self - not present in the %s", pname, smap.pp())
+		cmn.ExitLogf("FATAL: %s failed to register self - not present in the %s", p.si, smap.pp())
 	}
 	if err := p.smapowner.persist(smap); err != nil {
-		cmn.ExitLogf("FATAL: %s (non-primary), err: %v", pname, err)
+		cmn.ExitLogf("FATAL: %s (non-primary), err: %v", p.si, err)
 	}
 	p.smapowner.Unlock()
 	p.startedUp.Store(true)
-	glog.Infof("%s: joined as non-primary, %s", pname, smap.StringEx())
+	glog.Infof("%s: joined as non-primary, %s", p.si, smap.StringEx())
 	return nil
 }
 
@@ -161,7 +159,6 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	)
 	var (
 		smap             = newSmap()
-		pname            = p.si.Name()
 		haveRegistratons bool
 	)
 
@@ -178,7 +175,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 			maxVerSmap.Pmap[p.si.ID()] = p.si
 			p.smapowner.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
-				pname, maxVerSmap.ProxySI.ID(), maxVerSmap.ProxySI.IntraControlNet.DirectURL)
+				p.si, maxVerSmap.ProxySI.ID(), maxVerSmap.ProxySI.IntraControlNet.DirectURL)
 			p.secondaryStartup(maxVerSmap.ProxySI.IntraControlNet.DirectURL)
 			return
 		}
@@ -200,14 +197,14 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 			p.smapowner.put(smap)
 			p.smapowner.Unlock()
 		}
-		glog.Infof("%s: initial %s, curr %s, added=%d", pname, loadedSmap, smap.StringEx(), added)
+		glog.Infof("%s: initial %s, curr %s, added=%d", p.si, loadedSmap, smap.StringEx(), added)
 		bmd := p.bmdowner.get()
 		msgInt := p.newActionMsgInternalStr(metaction1, smap, bmd)
 		p.metasyncer.sync(true, revspair{smap, msgInt}, revspair{bmd, msgInt})
 	} else {
-		glog.Infof("%s: no registrations yet", pname)
+		glog.Infof("%s: no registrations yet", p.si)
 		if loadedSmap != nil {
-			glog.Infof("%s: keep going w/ local %s", pname, loadedSmap.StringEx())
+			glog.Infof("%s: keep going w/ local %s", p.si, loadedSmap.StringEx())
 			p.smapowner.Lock()
 			smap = loadedSmap
 			p.smapowner.put(smap)
@@ -223,7 +220,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	smap = p.smapowner.get()
 	if !smap.isPrimary(p.si) {
 		p.smapowner.Unlock()
-		glog.Infof("%s: registering with %s(%s)", pname, smap.ProxySI.ID(), smap.ProxySI.IntraControlNet.DirectURL)
+		glog.Infof("%s: registering with %s", p.si, smap.ProxySI.NameEx())
 		p.secondaryStartup(smap.ProxySI.IntraControlNet.DirectURL)
 		return
 	}
@@ -237,7 +234,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		smap = clone
 	}
 	if err := p.smapowner.persist(smap); err != nil {
-		cmn.ExitLogf("FATAL: %s (primary), err: %v", pname, err)
+		cmn.ExitLogf("FATAL: %s (primary), err: %v", p.si, err)
 	}
 	p.smapowner.Unlock()
 
@@ -261,14 +258,13 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.metasyncer.sync(false, revspair{smap, msgInt}, revspair{bmd, msgInt})
 
 	// 6: started up as primary
-	glog.Infof("%s: primary/cluster startup complete, %s", pname, smap.StringEx())
+	glog.Infof("%s: primary/cluster startup complete, %s", p.si, smap.StringEx())
 	p.startedUp.Store(true)
 }
 
 func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config, ntargets int) (maxVerSmap *smapX) {
 	var (
 		started  = time.Now()
-		pname    = p.si.Name()
 		deadline = config.Timeout.Startup
 		wtime    = deadline / 2 // note below
 		nt       int
@@ -284,7 +280,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 		}
 		nt = smap.CountTargets()
 		if nt >= ntargets && ntargets > 0 {
-			glog.Infof("%s: reached the specified ntargets %d (curr=%d)", pname, ntargets, nt)
+			glog.Infof("%s: reached the specified ntargets %d (curr=%d)", p.si, ntargets, nt)
 			return
 		}
 		if nt > 0 {
@@ -302,7 +298,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 				if maxVerSmap.UUID == loadedSmap.UUID && maxVerSmap.version() > loadedSmap.version() {
 					if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
 						glog.Infof("%s: %s <= max-ver %s",
-							pname, loadedSmap.StringEx(), maxVerSmap.StringEx())
+							p.si, loadedSmap.StringEx(), maxVerSmap.StringEx())
 						return
 					}
 				}
@@ -312,7 +308,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 	}
 	nt = p.smapowner.get().CountTargets()
 	if nt > 0 {
-		glog.Warningf("%s: timed-out waiting for %d ntargets (curr=%d)", pname, ntargets, nt)
+		glog.Warningf("%s: timed-out waiting for %d ntargets (curr=%d)", p.si, ntargets, nt)
 	}
 	return
 }
@@ -321,7 +317,6 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 // discover cluster-wide metadata and resolve remaining conflicts
 func (p *proxyrunner) discoverMeta(smap *smapX) {
 	var (
-		pname                 = p.si.Name()
 		maxVerSmap, maxVerBMD = p.uncoverMeta(smap)
 	)
 	if maxVerBMD != nil {
@@ -333,47 +328,46 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		p.bmdowner.Unlock()
 	}
 	if maxVerSmap == nil || maxVerSmap.version() == 0 {
-		glog.Infof("%s: no max-ver Smaps", pname)
+		glog.Infof("%s: no max-ver Smaps", p.si)
 		return
 	}
-	glog.Infof("%s: local %s max-ver %s", pname, smap.StringEx(), maxVerSmap.StringEx())
+	glog.Infof("%s: local %s max-ver %s", p.si, smap.StringEx(), maxVerSmap.StringEx())
 	sameUUID, sameVersion, eq := smap.Compare(&maxVerSmap.Smap)
 	if !sameUUID {
 		// FATAL: cluster integrity error (cie)
 		cmn.ExitLogf("%s: split-brain uuid [%s %s] vs [%s %s]",
-			ciError(10), pname, smap.StringEx(), maxVerSmap.ProxySI.Name(), maxVerSmap.StringEx())
+			ciError(10), p.si, smap.StringEx(), maxVerSmap.ProxySI, maxVerSmap.StringEx())
 	}
 	if eq && sameVersion {
 		return
 	}
 	if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
 		if maxVerSmap.version() > smap.version() {
-			glog.Infof("%s: change-of-mind #2 %s <= max-ver %s", pname, smap.StringEx(), maxVerSmap.StringEx())
+			glog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p.si, smap.StringEx(), maxVerSmap.StringEx())
 			maxVerSmap.Pmap[p.si.ID()] = p.si
 			p.smapowner.put(maxVerSmap)
 			return
 		}
 		// FATAL: cluster integrity error (cie)
 		cmn.ExitLogf("%s: split-brain local [%s %s] vs [%s %s]",
-			ciError(20), pname, smap.StringEx(), maxVerSmap.ProxySI.Name(), maxVerSmap.StringEx())
+			ciError(20), p.si, smap.StringEx(), maxVerSmap.ProxySI, maxVerSmap.StringEx())
 	}
 	p.smapowner.Lock()
 	clone := p.smapowner.get().clone()
 	if !eq {
 		_, err := maxVerSmap.merge(clone, false /*err if detected (IP, port) duplicates*/)
-		cmn.ExitLogf("%s: %s vs [%s %s]", pname, err, maxVerSmap.ProxySI.Name(), maxVerSmap.StringEx())
+		cmn.ExitLogf("%s: %s vs [%s %s]", p.si, err, maxVerSmap.ProxySI, maxVerSmap.StringEx())
 	}
 	clone.Version = cmn.MaxI64(clone.version(), maxVerSmap.version()) + 1
 	p.smapowner.put(clone)
 	p.smapowner.Unlock()
-	glog.Infof("%s: merged %s", pname, clone.pp())
+	glog.Infof("%s: merged %s", p.si, clone.pp())
 }
 
 func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBMD *bucketMD) {
 	var (
 		err         error
 		suuid       string
-		pname       = p.si.Name()
 		config      = cmn.GCO.Get()
 		now         = time.Now()
 		deadline    = now.Add(config.Timeout.Startup)
@@ -397,7 +391,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 	if slowp {
 		if maxVerBMD, err = resolveUUIDBMD(bmds); err != nil {
 			if _, split := err.(*errBmdUUIDSplit); split {
-				cmn.ExitLogf("FATAL: %s (primary), err: %v", pname, err) // cluster integrity error
+				cmn.ExitLogf("FATAL: %s (primary), err: %v", p.si, err) // cluster integrity error
 			}
 			if !errors.Is(err, errNoBMD) {
 				glog.Error(err.Error())
@@ -410,12 +404,12 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 			if suuid == "" {
 				suuid = smap.UUID
 				if suuid != "" {
-					glog.Infof("%s: set Smap uuid = %s(%s)", pname, si, suuid)
+					glog.Infof("%s: set Smap uuid = %s(%s)", p.si, si, suuid)
 				}
 			} else if suuid != smap.UUID && smap.UUID != "" {
 				// FATAL: cluster integrity error (cie)
 				cmn.ExitLogf("%s: split-brain [%s %s] vs [%s %s]",
-					ciError(30), pname, suuid, si.Name(), smap.UUID)
+					ciError(30), p.si, suuid, si, smap.UUID)
 			}
 		}
 		for _, smap := range smaps {
@@ -473,7 +467,7 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 			if svm.Smap.ProxySI != nil {
 				s = " of the current one " + svm.Smap.ProxySI.ID()
 			}
-			glog.Warningf("%s: starting up as primary(?) during reelection%s", p.si.Name(), s)
+			glog.Warningf("%s: starting up as primary(?) during reelection%s", p.si, s)
 			maxVerSmap, maxVerBMD = nil, nil // zero-out as unusable
 			done = false
 			break
@@ -501,10 +495,10 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 func (p *proxyrunner) registerWithRetry() error {
 	if status, err := p.register(false, cmn.DefaultTimeout); err != nil {
 		if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
-			glog.Warningf("%s: retrying registration...", p.si.Name())
+			glog.Warningf("%s: retrying registration...", p.si)
 			time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
 			if _, err = p.register(false, cmn.DefaultTimeout); err != nil {
-				glog.Errorf("%s: failed the 2nd attempt to register, err: %v", p.si.Name(), err)
+				glog.Errorf("%s: failed the 2nd attempt to register, err: %v", p.si, err)
 				return err
 			}
 		} else {

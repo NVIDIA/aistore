@@ -564,7 +564,7 @@ func (rj *globalJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 		if rj.xreb.Aborted() || rj.xreb.Finished() {
 			glog.Infof("aborting traversal")
 		} else {
-			glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode().Name(), err)
+			glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode(), err)
 		}
 	}
 }
@@ -580,7 +580,7 @@ func (rj *globalJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, l
 	rj.m.t.GetSmallMMSA().Free(hdr.Opaque)
 
 	if err != nil {
-		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode().Name(), hdr.Bck, hdr.ObjName, err)
+		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode(), hdr.Bck, hdr.ObjName, err)
 		return
 	}
 	cmn.AssertMsg(hdr.ObjAttrs.Size == lom.Size(), lom.String()) // TODO: remove

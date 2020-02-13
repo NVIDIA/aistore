@@ -36,7 +36,7 @@ func NewRespondXact(t cluster.Target, smap cluster.Sowner, si *cluster.Snode, bu
 }
 
 func (r *XactRespond) Run() (err error) {
-	glog.Infof("Starting %s", r.Getname())
+	glog.Infof("Starting %s", r.GetRunName())
 
 	conf := cmn.GCO.Get()
 	tck := time.NewTicker(conf.Periodic.StatsTime)

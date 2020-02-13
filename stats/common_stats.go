@@ -423,7 +423,7 @@ dummy:
 	ticker.Stop()
 
 	// for real now
-	glog.Infof("Starting %s", r.Getname())
+	glog.Infof("Starting %s", r.GetRunName())
 	r.ticker = time.NewTicker(config.Periodic.StatsTime)
 	startTime := time.Now()
 	r.startedUp.Store(true)
@@ -454,7 +454,7 @@ func (r *statsRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 }
 
 func (r *statsRunner) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
+	glog.Infof("Stopping %s, err: %v", r.GetRunName(), err)
 	r.stopCh <- struct{}{}
 	close(r.stopCh)
 }

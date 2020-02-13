@@ -634,7 +634,7 @@ func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 	}
 	bowner := lom.T.GetBowner()
 	lom.bck = NewBckEmbed(bck)
-	if err = lom.bck.Init(bowner, lom.T.Snode().Name()); err != nil {
+	if err = lom.bck.Init(bowner, lom.T.Snode()); err != nil {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.Objname)
@@ -704,7 +704,7 @@ func (lom *LOM) checkBucket() error {
 		bprops, present = bmd.Get(lom.bck)
 	)
 	if !present { // bucket does not exist
-		node := lom.T.Snode().Name()
+		node := lom.T.Snode().String()
 		if lom.bck.IsCloud() {
 			return cmn.NewErrorCloudBucketDoesNotExist(lom.Bck().Bck, node)
 		}

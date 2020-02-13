@@ -760,7 +760,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	// }
 
 	bck := cluster.NewBck(m.rs.OutputBucket, m.rs.OutputProvider, cmn.NsGlobal)
-	if err := bck.Init(m.ctx.bmdowner); err != nil {
+	if err := bck.Init(m.ctx.bmdowner, m.ctx.t.Snode()); err != nil {
 		return err
 	}
 

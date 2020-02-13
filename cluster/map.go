@@ -20,7 +20,6 @@ const (
 	Proxies
 	AllNodes
 )
-const snfmt = "%s[ID: %s, pub: %s, control: %s, data: %s]"
 
 type (
 	// interface to Get current cluster-map instance
@@ -44,6 +43,7 @@ type (
 		IntraControlNet NetInfo `json:"intra_control_net"` // cmn.NetworkIntraControl
 		IntraDataNet    NetInfo `json:"intra_data_net"`    // cmn.NetworkIntraData
 		idDigest        uint64
+		name            string
 		LocalNet        *net.IPNet `json:"-"`
 	}
 	Nodes   []*Snode          // slice of Snodes
@@ -67,27 +67,18 @@ func (d *Snode) Digest() uint64 {
 	return d.idDigest
 }
 
-func (d *Snode) ID() string { return d.DaemonID }
+func (d *Snode) ID() string          { return d.DaemonID }
+func (d *Snode) Name() string        { return d.name }
+func (d *Snode) SetName(name string) { d.name = name }
+func (d *Snode) String() string      { return d.Name() }
 
-func (d *Snode) String() string {
-	return d.ID()
-}
-func (d *Snode) Name() string {
-	if d == nil {
-		return ""
-	}
-	if d.DaemonType == cmn.Proxy {
-		return "p[" + d.ID() + "]"
-	}
-	return "t[" + d.ID() + "]"
-}
 func (d *Snode) NameEx() string {
-	var t = "t"
-	if d.DaemonType == cmn.Proxy {
-		t = "p"
+	if d.PublicNet.DirectURL != d.IntraControlNet.DirectURL ||
+		d.PublicNet.DirectURL != d.IntraDataNet.DirectURL {
+		return fmt.Sprintf("%s(pub: %s, control: %s, data: %s)", d.Name(),
+			d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL)
 	}
-	return fmt.Sprintf(snfmt, t, d.ID(),
-		d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL)
+	return fmt.Sprintf("%s(%s)", d.Name(), d.PublicNet.DirectURL)
 }
 
 func (d *Snode) URL(network string) string {

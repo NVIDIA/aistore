@@ -860,7 +860,7 @@ func (r *bckSummaryTask) Run() {
 		go func(bck *cluster.Bck) {
 			defer wg.Done()
 
-			if err := bck.Init(r.t.GetBowner()); err != nil {
+			if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
 				errCh <- err
 				return
 			}
