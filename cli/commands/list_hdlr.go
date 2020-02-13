@@ -68,18 +68,18 @@ var (
 				{
 					Name:         subcmdListAIS,
 					Usage:        "lists ais buckets",
-					ArgsUsage:    optionalBucketWithSeparatorArgument,
+					ArgsUsage:    optionalBucketArgument,
 					Flags:        listCmdsFlags[subcmdListAIS],
 					Action:       listAISBucketsHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */, cmn.ProviderAIS),
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */, cmn.ProviderAIS),
 				},
 				{
 					Name:         subcmdListCloud,
 					Usage:        "lists cloud buckets",
-					ArgsUsage:    optionalBucketWithSeparatorArgument,
+					ArgsUsage:    optionalBucketArgument,
 					Flags:        listCmdsFlags[subcmdListCloud],
 					Action:       listCloudBucketsHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */, cmn.Cloud),
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */, cmn.Cloud),
 				},
 				{
 					Name:         subcmdListBckProps,

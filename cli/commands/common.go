@@ -126,20 +126,18 @@ const (
 	optionalJobIDArgument = "[JOB_ID]"
 
 	// Buckets
-	bucketArgument                      = "BUCKET_NAME"
-	optionalBucketArgument              = "[BUCKET_NAME]"
-	optionalBucketWithSeparatorArgument = "[BUCKET_NAME/]"
-	bucketsArgument                     = "BUCKET_NAME [BUCKET_NAME...]"
-	bucketOldNewArgument                = bucketArgument + " NEW_NAME"
-	bucketPropsArgument                 = bucketArgument + " " + keyValuePairsArgument
+	bucketArgument         = "BUCKET_NAME"
+	optionalBucketArgument = "[BUCKET_NAME]"
+	bucketsArgument        = "BUCKET_NAME [BUCKET_NAME...]"
+	bucketOldNewArgument   = bucketArgument + " NEW_NAME"
+	bucketPropsArgument    = bucketArgument + " " + keyValuePairsArgument
 
 	// Objects
-	getObjectArgument            = "BUCKET_NAME/OBJECT_NAME OUT_FILE"
-	putPromoteObjectArgument     = "FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]"
-	objectArgument               = "BUCKET_NAME/OBJECT_NAME"
-	optionalObjectsArgument      = "BUCKET_NAME/[OBJECT_NAME]..."
-	prefetchObjectBucketArgument = "BUCKET_NAME/"
-	objectOldNewArgument         = "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME"
+	getObjectArgument        = "BUCKET_NAME/OBJECT_NAME OUT_FILE"
+	putPromoteObjectArgument = "FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]"
+	objectArgument           = "BUCKET_NAME/OBJECT_NAME"
+	optionalObjectsArgument  = "BUCKET_NAME/[OBJECT_NAME]..."
+	objectOldNewArgument     = "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME"
 
 	// Daemons
 	daemonIDArgument           = "DAEMON_ID"

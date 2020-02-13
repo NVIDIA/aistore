@@ -53,10 +53,10 @@ var (
 		{
 			Name:         commandPrefetch,
 			Usage:        "prefetches objects from cloud buckets",
-			ArgsUsage:    prefetchObjectBucketArgument,
+			ArgsUsage:    bucketArgument,
 			Flags:        objectSpecificCmdsFlags[commandPrefetch],
 			Action:       prefetchHandler,
-			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, true /* multiple */, true /* separator */, cmn.Cloud),
+			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, true /* multiple */, false /* separator */, cmn.Cloud),
 		},
 		{
 			Name:         commandEvict,
