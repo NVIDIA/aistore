@@ -2600,28 +2600,28 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	smap := p.smapowner.get()
 	psi := smap.GetProxy(proxyID)
-
 	if psi == nil {
 		s := fmt.Sprintf("New primary proxy %s not present in the %s", proxyID, smap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}
+
 	if prepare {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Info("Preparation step: do nothing")
 		}
 		return
 	}
+
 	p.smapowner.Lock()
-	clone := smap.clone()
+	defer p.smapowner.Unlock()
+	clone := p.smapowner.get().clone()
 	clone.ProxySI = psi
 	if err := p.smapowner.persist(clone); err != nil {
-		p.smapowner.Unlock()
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	p.smapowner.put(clone)
-	p.smapowner.Unlock()
 }
 
 func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
