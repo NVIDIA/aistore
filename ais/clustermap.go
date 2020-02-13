@@ -356,6 +356,24 @@ func (r *smapowner) persist(newSmap *smapX) error {
 	return nil
 }
 
+func (r *smapowner) modify(pre func(clone *smapX) error, post ...func(clone *smapX)) (*smapX, error) {
+	r.Lock()
+	defer r.Unlock()
+	clone := r.get().clone()
+	if err := pre(clone); err != nil {
+		return nil, err
+	}
+
+	if err := r.persist(clone); err != nil {
+		glog.Errorf("failed to persist smap: %v", err)
+	}
+	r.put(clone)
+	if len(post) == 1 {
+		post[0](clone)
+	}
+	return clone, nil
+}
+
 //=====================================================================
 //
 // new cluster.Snode

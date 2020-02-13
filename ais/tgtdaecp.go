@@ -254,18 +254,18 @@ func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) {
 	return
 }
 
-func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apitems []string) {
+func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apiItems []string) {
 	var (
 		err     error
 		prepare bool
 	)
-	if len(apitems) != 2 {
-		s := fmt.Sprintf("Incorrect number of API items: %d, should be: %d", len(apitems), 2)
+	if len(apiItems) != 2 {
+		s := fmt.Sprintf("Incorrect number of API items: %d, should be: %d", len(apiItems), 2)
 		t.invalmsghdlr(w, r, s)
 		return
 	}
 
-	proxyid := apitems[1]
+	proxyID := apiItems[1]
 	query := r.URL.Query()
 	preparestr := query.Get(cmn.URLParamPrepare)
 	if prepare, err = cmn.ParseBool(preparestr); err != nil {
@@ -275,31 +275,26 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	}
 
 	smap := t.smapowner.get()
-	psi := smap.GetProxy(proxyid)
+	psi := smap.GetProxy(proxyID)
 	if psi == nil {
-		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyid, smap.pp())
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlr(w, r, fmt.Sprintf("new primary proxy %s not present in the local %s", proxyID, smap.pp()))
 		return
 	}
+
 	if prepare {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Info("Preparation step: do nothing")
 		}
 		return
 	}
-	t.smapowner.Lock()
-	smap = t.smapowner.get()
-	if smap.ProxySI.ID() != psi.ID() {
-		clone := smap.clone()
-		clone.ProxySI = psi
-		if err := t.smapowner.persist(clone); err != nil {
-			t.smapowner.Unlock()
-			t.invalmsghdlr(w, r, err.Error())
-			return
+
+	_, err = t.smapowner.modify(func(clone *smapX) error {
+		if clone.ProxySI.ID() != psi.ID() {
+			clone.ProxySI = psi
 		}
-		t.smapowner.put(clone)
-	}
-	t.smapowner.Unlock()
+		return nil
+	})
+	cmn.AssertNoErr(err)
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {

@@ -182,29 +182,22 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	vr := msg.Result
 	glog.Infof("%s: received vote result: new primary %s", h.si, vr.Candidate)
 
-	newprimary, oldprimary := vr.Candidate, vr.Primary
-
-	h.smapowner.Lock()
-	defer h.smapowner.Unlock()
-
-	smap := h.smapowner.get()
-	psi := smap.GetProxy(newprimary)
-	if psi == nil {
-		s := fmt.Sprintf("New primary proxy %s not present in the local %s", newprimary, smap.pp())
-		h.invalmsghdlr(w, r, s)
-		return
-	}
-	clone := smap.clone()
-	clone.ProxySI = psi
-	if oldprimary != "" && clone.GetProxy(oldprimary) != nil {
-		clone.delProxy(oldprimary)
-	}
-	if err := h.smapowner.persist(clone); err != nil {
+	newPrimary, oldPrimary := vr.Candidate, vr.Primary
+	_, err := h.smapowner.modify(func(clone *smapX) error {
+		psi := clone.GetProxy(newPrimary)
+		if psi == nil {
+			return fmt.Errorf("new primary proxy %s not present in the local %s", newPrimary, clone.pp())
+		}
+		clone.ProxySI = psi
+		if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {
+			clone.delProxy(oldPrimary)
+		}
+		glog.Infof("resulting %s", clone.pp())
+		return nil
+	})
+	if err != nil {
 		h.invalmsghdlr(w, r, err.Error())
-		return
 	}
-	h.smapowner.put(clone)
-	glog.Infof("resulting %s", clone.pp())
 }
 
 // PUT /v1/vote/init

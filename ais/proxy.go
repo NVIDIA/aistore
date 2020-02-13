@@ -2613,41 +2613,36 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	p.smapowner.Lock()
-	defer p.smapowner.Unlock()
-	clone := p.smapowner.get().clone()
-	clone.ProxySI = psi
-	if err := p.smapowner.persist(clone); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	p.smapowner.put(clone)
+	_, err = p.smapowner.modify(func(clone *smapX) error {
+		clone.ProxySI = psi
+		return nil
+	})
+	cmn.AssertNoErr(err)
 }
 
 func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
-	p.smapowner.Lock()
-	smap := p.smapowner.get()
-	if !smap.isPresent(p.si) {
-		cmn.AssertMsg(false, "This proxy '"+p.si.ID()+"' must always be present in the "+smap.pp())
-	}
-	clone := smap.clone()
-	// FIXME: may be premature at this point
-	if proxyIDToRemove != "" {
-		glog.Infof("Removing failed primary proxy %s", proxyIDToRemove)
-		clone.delProxy(proxyIDToRemove)
-	}
+	var msgInt *actionMsgInternal
+	clone, err := p.smapowner.modify(
+		func(clone *smapX) error {
+			if !clone.isPresent(p.si) {
+				cmn.AssertMsg(false, "This proxy '"+p.si.ID()+"' must always be present in the "+clone.pp())
+			}
+			// FIXME: may be premature at this point
+			if proxyIDToRemove != "" {
+				glog.Infof("Removing failed primary proxy %s", proxyIDToRemove)
+				clone.delProxy(proxyIDToRemove)
+			}
 
-	clone.ProxySI = p.si
-	clone.Version += 100
-	if err = p.smapowner.persist(clone); err != nil {
-		p.smapowner.Unlock()
-		glog.Error(err)
-		return
-	}
-	p.smapowner.put(clone)
-	msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
-	p.setGlobRebID(clone, msgInt, true)
-	p.smapowner.Unlock()
+			clone.ProxySI = p.si
+			clone.Version += 100
+			return nil
+		},
+		func(clone *smapX) {
+			msgInt = p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
+			p.setGlobRebID(clone, msgInt, true)
+		},
+	)
+	cmn.AssertNoErr(err)
 
 	bmd := p.bmdowner.get()
 	if glog.V(3) {
@@ -2705,15 +2700,12 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	// (I.5) commit locally
-	p.smapowner.Lock()
-	clone := p.smapowner.get().clone()
-	clone.ProxySI = psi
-	p.metasyncer.becomeNonPrimary()
-	if err := p.smapowner.persist(clone); err != nil {
-		glog.Errorf("Failed to save Smap locally after having transitioned to non-primary:\n%s", err)
-	}
-	p.smapowner.put(clone)
-	p.smapowner.Unlock()
+	_, err = p.smapowner.modify(func(clone *smapX) error {
+		clone.ProxySI = psi
+		p.metasyncer.becomeNonPrimary()
+		return nil
+	})
+	cmn.AssertNoErr(err)
 
 	// (II) commit phase
 	q.Set(cmn.URLParamPrepare, "false")
@@ -3128,30 +3120,32 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	// update and distribute Smap
 	go func(nsi *cluster.Snode) {
-		p.smapowner.Lock()
+		var msgInt *actionMsgInternal
+		clone, err := p.smapowner.modify(
+			func(clone *smapX) error {
+				clone.putNode(nsi, nonElectable)
 
-		clone := p.smapowner.get().clone()
-		clone.putNode(nsi, nonElectable)
-
-		// Notify all nodes about a new one (targets probably need to set up GFN)
-		notifyMsgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
-		notifyPairs := revspair{clone, notifyMsgInt}
-		failCnt := p.metasyncer.notify(true, notifyPairs)
-		if failCnt > 1 {
-			p.smapowner.Unlock()
-			glog.Errorf("FATAL: cannot join %s - unable to reach %d nodes", nsi, failCnt)
+				// Notify all nodes about a new one (targets probably need to set up GFN)
+				notifyMsgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
+				notifyPairs := revspair{clone, notifyMsgInt}
+				failCnt := p.metasyncer.notify(true, notifyPairs)
+				if failCnt > 1 {
+					return fmt.Errorf("cannot join %s - unable to reach %d nodes", nsi, failCnt)
+				} else if failCnt > 0 {
+					glog.Warning("unable to reach 1 node")
+				}
+				return nil
+			},
+			func(clone *smapX) {
+				msgInt = p.newActionMsgInternal(msg, clone, nil)
+				p.setGlobRebID(clone, msgInt, true)
+			},
+		)
+		if err != nil {
+			glog.Errorf("FATAL: %v", err)
 			return
-		} else if failCnt > 0 {
-			glog.Warning("unable to reach 1 node")
 		}
 
-		p.smapowner.put(clone)
-		if err := p.smapowner.persist(clone); err != nil {
-			glog.Error(err)
-		}
-		msgInt := p.newActionMsgInternal(msg, clone, nil)
-		p.setGlobRebID(clone, msgInt, true)
-		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
 		msgInt.NewDaemonID = nsi.ID()
 
@@ -3260,35 +3254,30 @@ func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err 
 		//  * "read and write being routed to the target that is being unregistered resulting in errors..."
 	}
 
-	p.smapowner.Lock()
-	defer p.smapowner.Unlock()
-	var (
-		smap = p.smapowner.get()
-	)
-	node = smap.GetNode(sid)
-	clone = smap.clone()
-	if node == nil {
-		return nil, http.StatusNotFound, fmt.Errorf("Unknown node %s", sid)
-	}
-	if node.IsProxy() {
-		clone.delProxy(sid)
-		if glog.V(3) {
-			glog.Infof("unregistered %s (num proxies %d)", node, clone.CountProxies())
+	clone, err = p.smapowner.modify(func(clone *smapX) error {
+		node = clone.GetNode(sid)
+		if node == nil {
+			return fmt.Errorf("unknown node %s", sid)
 		}
-	} else {
-		clone.delTarget(sid)
-		if glog.V(3) {
-			glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
+		if node.IsProxy() {
+			clone.delProxy(sid)
+			if glog.V(3) {
+				glog.Infof("unregistered %s (num proxies %d)", node, clone.CountProxies())
+			}
+		} else {
+			clone.delTarget(sid)
+			if glog.V(3) {
+				glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, http.StatusNotFound, err
 	}
 	if !p.startedUp.Load() {
-		p.smapowner.put(clone)
 		return
 	}
-	if err = p.smapowner.persist(clone); err != nil {
-		return
-	}
-	p.smapowner.put(clone)
 	if isPrimary := clone.isPrimary(p.si); !isPrimary {
 		return nil, 0, fmt.Errorf("%s: is not a primary", p.si)
 	}
