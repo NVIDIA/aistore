@@ -55,9 +55,9 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		)
 
 		// Parse comment if present.
-		if strings.Contains(scmd, "//") {
+		if strings.Contains(scmd, " //") {
 			var comment string
-			tmp := strings.Split(scmd, "//")
+			tmp := strings.Split(scmd, " //")
 			scmd, comment = tmp[0], tmp[1]
 			if strings.Contains(comment, "IGNORE") {
 				ignoreOutput = true

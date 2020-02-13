@@ -184,6 +184,14 @@ func startDownloadHandler(c *cli.Context) error {
 	if c.NArg() == 1 {
 		return missingArgumentsError(c, "destination")
 	}
+	if c.NArg() > 2 {
+		return &usageError{
+			context:      c,
+			message:      fmt.Sprintf("too many arguments. Got %d, expected 2. For range download please put source link in quotation marks", len(c.Args())),
+			helpData:     c.Command,
+			helpTemplate: cli.CommandHelpTemplate,
+		}
+	}
 
 	source, dest := c.Args().Get(0), c.Args().Get(1)
 	link, err := parseSource(source)
