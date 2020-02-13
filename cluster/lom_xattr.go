@@ -233,9 +233,16 @@ func (md *lmeta) unmarshal(mdBuf []byte) (err error) {
 			haveCopies = true
 			md.copies = make(fs.MPI, len(copyFQNs))
 			for _, copyFQN := range copyFQNs {
+				if copyFQN == "" {
+					return errors.New(invalid + " #5.1")
+				}
+
 				mpathInfo, _, err := fs.Mountpaths.ParseMpathInfo(copyFQN)
 				if err != nil {
-					glog.Warning(err)
+					// Mountpath with the copy is missing.
+					if glog.V(4) {
+						glog.Warning(err)
+					}
 					continue
 				}
 				md.copies[copyFQN] = mpathInfo
@@ -269,6 +276,8 @@ func _writeCopies(buf []byte, off int, copies fs.MPI) int {
 		num = len(copies)
 	)
 	for copyFQN := range copies {
+		cmn.Assert(copyFQN != "")
+
 		i++
 		if buf == nil {
 			off += len(copyFQN)
