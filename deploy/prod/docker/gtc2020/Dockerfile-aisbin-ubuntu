@@ -1,0 +1,37 @@
+#
+# Build a trivial container delivering aisnode and ais CLI
+# binaries, prebuilt for Alpine containers to copy these
+# from their Dockerfiles. This unlinks GTC Dockerfiles from
+# our ais repo. Run from root of ais clone.
+
+FROM ubuntu:18.04
+
+RUN apt-get -qqy update && \
+  apt-get install -qqy \
+    bash \
+    lsof \
+    git \
+    sysstat \
+    attr \
+    make \
+    util-linux \
+    wget \
+  ;
+
+RUN wget --quiet https://dl.google.com/go/go1.13.8.linux-amd64.tar.gz -O go.tgz && \
+    tar --directory=/usr/local/ -xf go.tgz && \
+    rm -f go.tgz
+
+ENV GOPATH /go
+ENV GOBIN $GOPATH/bin
+ENV PATH $PATH:/usr/local/go/bin
+
+COPY . $GOPATH/src/github.com/NVIDIA/aistore/
+WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
+
+RUN CLDPROVIDER="" make node
+RUN make cli
+ARG AIS_VERSION=unknown
+RUN echo $AIS_VERSION > /repo.HEAD-rev
+
+COPY deploy/prod/docker/gtc2020/config/cli-config.json /cli-config.json

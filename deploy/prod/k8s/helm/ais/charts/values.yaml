@@ -263,6 +263,11 @@ ingress:
     externalIP:
     port:       51080
     targetPort: 51080
+  grafana:
+    externalIP:
+    port:       3000
+    targetPort: 3000
+
 
 #
 # Note that out target/proxy/ne_proxy DaemonSets use any resource values from their

@@ -49,7 +49,7 @@ spec:
       - name: pre-install-job
         image: "alpine:3.3"
         command: ["/bin/sh"]
-        args: [ "-c", "rm -f /etc/ais/*/smap.json /etc/ais/*/helminstall.timestamp; touch /etc/ais/rmhookdone.timestamp" ]
+        args: [ "-c", "rm -f /etc/ais/*/ais.json /etc/ais/*/.ais* /etc/ais/*/helminstall.timestamp; touch /etc/ais/rmhookdone.timestamp" ]
         volumeMounts:
            - name: etc-mount
              mountPath: "{{ .Values.ais_config_common.confdir }}"

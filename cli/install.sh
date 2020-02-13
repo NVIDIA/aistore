@@ -32,7 +32,6 @@ if [[ $? -eq 0 ]]; then
         exit 0
     fi
 
-    # Install autocompletions
     bash ${AUTOCOMPLETE_INSTALL_SCRIPT}
 else
     echo "Error installing AIS CLI"

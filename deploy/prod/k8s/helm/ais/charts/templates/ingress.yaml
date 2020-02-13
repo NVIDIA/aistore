@@ -1,4 +1,5 @@
 ---
+{{ if and .Values.ingress.gateway.externalIP .Values.ingress.gateway.port }}
 #
 # LoadBalancer gateway service to expose AIS proxy service.
 # The selector matches only electable proxies.
@@ -25,4 +26,23 @@ spec:
   type: LoadBalancer
   externalTrafficPolicy: Local
   loadBalancerIP: {{ .Values.ingress.gateway.externalIP | quote }}
-
+{{ end }}
+---
+{{ if and .Values.ingress.grafana.externalIP .Values.ingress.grafana.port }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{  template "ais.fullname" . }}-grafana
+spec:
+  ports:
+  - name: grafana
+    port: {{ .Values.ingress.grafana.port }}
+    protocol: TCP
+    targetPort: {{ .Values.ingress.grafana.targetPort }}
+  selector:
+    app: grafana
+    release: {{ .Release.Name }}
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  loadBalancerIP: {{ .Values.ingress.grafana.externalIP | quote }}
+{{ end }}

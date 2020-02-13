@@ -10,9 +10,12 @@
 # Example usage:
 #
 #       ansible-playbook -i hosts.ini ais_datafs_mkfs.yml \
-#               -e '{"ais_hosts": ["cpu01", "cpu02", "cpu03", "cpu04", "cpu05", "cpu06", "cpu07"], \
+#               -e '{"ais_hosts": ["cpu01", "cpu02"], \
 #               "ais_devices": ["sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg", "sdh", "sdi", "sdj"]}' \
 #               --become
+#
+# In initial establishment of a set of hosts you might use an inventory group to target hosts,
+# such as ... -e '{"ais_hosts": ["cpu-worker-node"] ...
 #
 ---
 - hosts: "{{ ais_hosts }}"

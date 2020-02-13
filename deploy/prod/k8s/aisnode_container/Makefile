@@ -12,6 +12,8 @@
 #
 # Must be run from the directory in which this Makefile resides.
 #
+# Assumes docker is setup to run without sudo.
+#
 
 #
 # We expect these to be provided by environment, so set them to
@@ -64,7 +66,7 @@ aisnode_image:
 	cp $(DOCKERFILE_AISNODE) $(DOCKER_CTXDIR)/Dockerfile
 	cp $(DOCKER_START) $(DOCKER_CTXDIR)
 	git show-branch --more=10 > $(DOCKER_CTXDIR)/git-showbranch.out
-	sudo $(DOCKER) build \
+	$(DOCKER) build \
 		-f $(DOCKER_CTXDIR)/Dockerfile \
 		-t $(NAME_AISNODE):$(TAG_AISNODE) \
 		--build-arg start_script=$(DOCKER_START_BASENAME) \
@@ -76,7 +78,7 @@ aisnode_debug_image:
 	cp $(DOCKER_START) $(DOCKER_CTXDIR)
 	mkdir $(DOCKER_CTXDIR)/go
 	cp -r $(HOME)/go $(DOCKER_CTXDIR)/go
-	sudo $(DOCKER) build \
+	$(DOCKER) build \
 		-f $(DOCKER_CTXDIR)/Dockerfile \
 		-t $(NAME_AISNODE_DEBUG):$(TAG_AISNODE_DEBUG) \
 		--build-arg start_script=$(DOCKER_START_BASENAME) \
@@ -85,7 +87,7 @@ aisnode_debug_image:
 
 initcontainer_image:
 	cp $(DOCKERFILE_INITCONTAINER) $(DOCKER_CTXDIR)/Dockerfile
-	sudo $(DOCKER) build \
+	$(DOCKER) build \
 		-f $(DOCKER_CTXDIR)/Dockerfile \
 		-t $(NAME_INITCONTAINER):$(TAG_INITCONTAINER) \
 		$(DOCKER_CTXDIR)
@@ -95,16 +97,16 @@ initcontainer_image:
 # Targets to tag and push an already-built image
 #
 push_aisnode:
-	sudo $(DOCKER) image tag $(NAME_AISNODE):$(TAG_AISNODE) $(REPO_AISNODE):$(REPO_TAG_AISNODE)
-	sudo $(DOCKER) push $(REPO_AISNODE):$(REPO_TAG_AISNODE)
+	$(DOCKER) image tag $(NAME_AISNODE):$(TAG_AISNODE) $(REPO_AISNODE):$(REPO_TAG_AISNODE)
+	$(DOCKER) push $(REPO_AISNODE):$(REPO_TAG_AISNODE)
 
 push_aisnode_debug:
-	sudo $(DOCKER) image tag $(NAME_AISNODE_DEBUG):$(TAG_AISNODE_DEBUG) $(REPO_AISNODE_DEBUG):$(REPO_TAG_AISNODE_DEBUG)
-	sudo $(DOCKER) push $(REPO_AISNODE_DEBUG):$(REPO_TAG_AISNODE_DEBUG)
+	$(DOCKER) image tag $(NAME_AISNODE_DEBUG):$(TAG_AISNODE_DEBUG) $(REPO_AISNODE_DEBUG):$(REPO_TAG_AISNODE_DEBUG)
+	$(DOCKER) push $(REPO_AISNODE_DEBUG):$(REPO_TAG_AISNODE_DEBUG)
 
 push_initcontainer:
-	sudo $(DOCKER) image tag $(NAME_INITCONTAINER):$(TAG_INITCONTAINER) $(REPO_INITCONTAINER):$(REPO_TAG_INITCONTAINER)
-	sudo $(DOCKER) push $(REPO_INITCONTAINER):$(REPO_TAG_INITCONTAINER)
+	$(DOCKER) image tag $(NAME_INITCONTAINER):$(TAG_INITCONTAINER) $(REPO_INITCONTAINER):$(REPO_TAG_INITCONTAINER)
+	$(DOCKER) push $(REPO_INITCONTAINER):$(REPO_TAG_INITCONTAINER)
 
 #
 # Build, tag & push container images

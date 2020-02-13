@@ -11,6 +11,9 @@ AUTOCOMPLETE_FILE_ZSH="${AUTOCOMPLETE_DIR_ZSH}/_ais"
 BASH_AUTOCOMPLETE_SOURCE_FILE="${DIR}/bash"
 ZSH_AUTOCOMPLETE_SOURCE_FILE="${DIR}/zsh"
 
+SUDO=sudo
+[[ $(id -u) == 0 ]] && SUDO=""
+
 echo "*** Installing AIS CLI autocompletions into:"
 echo "***     ${AUTOCOMPLETE_DIR_BASH} and"
 echo "***     ${AUTOCOMPLETE_DIR_ZSH}"
@@ -25,18 +28,22 @@ echo "***"
 read -r -p "Proceed? [Y/n] " response
 case "$response" in
     [yY]|"")
-        [[ -d ${AUTOCOMPLETE_DIR_BASH} ]] && sudo cp ${BASH_AUTOCOMPLETE_SOURCE_FILE} ${AUTOCOMPLETE_FILE_BASH}
-        if [[ $? -ne 0 ]]; then
-            echo "Bash completions not installed (some error occurred)."
-	    exit 1
+        if [[ -d ${AUTOCOMPLETE_DIR_BASH} ]]; then
+            $SUDO cp ${BASH_AUTOCOMPLETE_SOURCE_FILE} ${AUTOCOMPLETE_FILE_BASH}
+            [[ $? -ne 0 ]] && echo "Bash completions not installed (some error occurred)."
+        else
+            echo "Skipping bash completions - target directory absent"
         fi
 
-        [[ -d ${AUTOCOMPLETE_DIR_ZSH} ]] && sudo cp ${ZSH_AUTOCOMPLETE_SOURCE_FILE} ${AUTOCOMPLETE_FILE_ZSH}
-        if [[ $? -eq 0 ]]; then
-            rm ~/.zcompdump* &> /dev/null # Sometimes needed for zsh users (see: https://github.com/robbyrussell/oh-my-zsh/issues/3356)
+        if [[ -d ${AUTOCOMPLETE_DIR_ZSH} ]]; then
+            $SUDO cp ${ZSH_AUTOCOMPLETE_SOURCE_FILE} ${AUTOCOMPLETE_FILE_ZSH}
+            if [[ $? -eq 0 ]]; then
+                rm ~/.zcompdump* &> /dev/null # Sometimes needed for zsh users (see: https://github.com/robbyrussell/oh-my-zsh/issues/3356)
+            else
+                echo "Zsh completions not installed (some error occurred)."
+            fi
         else
-            echo "Zsh completions not installed (some error occurred)."
-	    exit 1
+            echo "Skipping zsh completions - target directory absent"
         fi
         echo "Done."
         ;;
