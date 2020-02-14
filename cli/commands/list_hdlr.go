@@ -99,7 +99,7 @@ var (
 				},
 				{
 					Name:         subcmdListSmap,
-					Usage:        "displays an smap copy of a node",
+					Usage:        "displays a smap copy of a node",
 					ArgsUsage:    optionalDaemonIDArgument,
 					Flags:        listCmdsFlags[subcmdListSmap],
 					Action:       listSmapHandler,

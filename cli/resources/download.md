@@ -1,6 +1,7 @@
 ## Downloader
 
 The CLI allows users to view and manage [AIS Downloader](/downloader/README.md) jobs.
+It is used for downloading files and datasets from internet to AIS cluster.
 
 ### Start
 
@@ -9,7 +10,7 @@ The CLI allows users to view and manage [AIS Downloader](/downloader/README.md) 
 Downloads the object(s) from `SOURCE` location and saves it as specified in `DESTINATION` location.
 `SOURCE` location can be a link to single or range download:
 * `gs://lpr-vision/imagenet/imagenet_train-000000.tgz`
-* `gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz`
+* `"gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz"`
 
 Currently, the schemas supported for `SOURCE` location are:
 * `gs://` - refers to Google Cloud Storage, eg. `gs://bucket/sub_folder/object_name.tar`

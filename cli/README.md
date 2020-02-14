@@ -1,6 +1,7 @@
 # AIS CLI
 
-AIS CLI is a tool used to interact with resources of AIStore. Users are able to query information from specific daemons, create or delete resources or download files to buckets directly from the command line.
+AIS Command Line Interface is a tool used to interact with resources of AIStore. It gives users ability to query information from specific daemons,
+create or delete resources or download files to buckets directly from the command line.
 
 ## Getting Started
 
@@ -61,7 +62,7 @@ List of available CLI resources
 
 ## Info For Developers
 
-The framework that the CLI uses is [urfave/cli](https://github.com/urfave/cli). It is a simple framework that enables developers to create custom CLI commands quickly.
+The CLI uses [urfave/cli](https://github.com/urfave/cli) framework.
 
 ### Adding New Commands
 

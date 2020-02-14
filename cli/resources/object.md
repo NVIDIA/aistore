@@ -16,6 +16,8 @@ Gets the object from the bucket.
 | `--checksum` | `bool` | Validate the checksum of the object | `false` |
 | `--is-cached` | `bool` | Check if the object is cached locally, without downloading it. | `false` |
 
+`OUT_FILE`: filename in already existing directory or `-` for `stdout`
+
 #### Examples
 
 | Command | Explanation |
@@ -27,14 +29,14 @@ Gets the object from the bucket.
 
 ### SHOW
 
-`ais show BUCKET_NAME/OBJECT_NAME [PROP_LIST]`
+`ais show object BUCKET_NAME/OBJECT_NAME [PROP_LIST]`
 
 Gets object detailed information. `PROP_LIST` is a comma separated list of properties to display.
-If `PROP_LIST` is omitted default properties are shown(all except `ais` property).
+If `PROP_LIST` is omitted default properties are shown(all except `provider` property).
 
 Supported properties:
 
-- `ais` - whether the object is on an AIS bucket, or on a Cloud one
+- `provider` - provider of the object's bucket, `ais` returned if local bucket
 - `iscached` - is the object cached on local drives (always `true` for AIS buckets)
 - `size` - object size
 - `version` - object version (it is empty if versioning is disabled for the bucket)
@@ -45,7 +47,7 @@ Supported properties:
 
 #### Examples
 
-`ais show mybucket/myobj.txt`
+`ais show object mybucket/myobj.txt`
 
 Display all properties of object `myobj.txt` from bucket `mybucket`. Output example:
 
@@ -58,7 +60,7 @@ Checksum                Size    Atime                   Iscached        Version 
 Show only selected properties:
 
 ```
-$ ais show mybucket/myobj2.txt -props size,version,ec`
+$ ais show object mybucket/myobj2.txt -props size,version,ec`
 Size    Version Ec
 7.63MiB 1       2:2[replicated]
 ```
@@ -68,7 +70,7 @@ Size    Version Ec
 
 `ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>
 
-Puts a file or a directory content into the bucket. If `ais` detects that a user is going to put more than one file, it calculates the total number or files, total data size and checks if bucket is empty,  then shows all gathered info to the user and ask for confirmation to continue. Confirmation request can be disabled with option `--yes` for use in scripts.
+Puts a file or a directory content into the bucket. If CLI detects that a user is going to put more than one file, it calculates the total number or files, total data size and checks if bucket is empty, then shows all gathered info to the user and ask for confirmation to continue. Confirmation request can be disabled with option `--yes` for use in scripts.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -80,7 +82,9 @@ Puts a file or a directory content into the bucket. If `ais` detects that a user
 | `--recursive` or `-r` | `bool` | Enable recursive directory upload | `false` |
 | `--refresh` | `string` | Frequency of the reporting the progress (in milliseconds), may contain multiplicative suffix `s`(second) or `m`(minute). Zero value disables periodical refresh | `0` if verbose mode is on, `5s` otherwise |
 
-<a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards: symbols `*` and `?` can be used only in file name pattern, directory names cannot include wildcards. Also `ais` always matches a file name only, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory. This makes shell wildcards like `**` redundant, and the following patterns won't work in `ais`: `/home/user/img-set-*/*.tar` or `/home/user/bck/**/*.tar.gz`
+<a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
+ Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
+ This makes shell wildcards like `**` redundant, and the following patterns won't work in `ais`: `/home/user/img-set-*/*.tar` or `/home/user/bck/**/*.tar.gz`
 
 <a name="ft2">2</a> Option `--base` and argument `OBJECT_NAME` are mutually exclusive and `OBJECT_NAME` has higher priority. When `OBJECT_NAME` is given, options `--base` and `--recursive` are ignored, and `FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
 
@@ -88,7 +92,7 @@ Puts a file or a directory content into the bucket. If `ais` detects that a user
 
 `ais promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>
 
-Promote **AIS-colocated** files and directories to AIS objects in a specified bucket. Colocation in the context simply means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
+Promote **AIS-colocated** files and directories to AIS objects in a specified bucket. Colocation in the context means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
 
 For instance, let's say some (or all) of the deployed storage nodes contain a directory called `/tmp/examples`. To make AIS objects out of this directory's files (**one file = one object**), run:
 

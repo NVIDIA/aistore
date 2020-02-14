@@ -11,11 +11,11 @@ Puts randomly generated shards that can be used for dSort testing.
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--ext` | `string` | Extension for shards (either `.tar` or `.tgz`) | `.tar` |
-| `--bucket` | `string` | Bucket where shards will be put | `dsort-testing` |
+| `--bucket` | `string` | Bucket which shards will be put into | `dsort-testing` |
 | `--template` | `string` | Template of input shard name | `shard-{0..9}` |
 | `--fsize` | `string` | Single file size inside the shard, can end with size suffix (k, MB, GiB, ...) | `1024`  (`1KB`)|
 | `--fcount` | `int` | Number of files inside single shard | `5` |
-| `--cleanup` | `bool` |When set, the old bucket will be deleted and created again | `false` |
+| `--cleanup` | `bool` | When set, the old bucket will be deleted and created again | `false` |
 | `--conc` | `int` | Limits number of concurrent `PUT` requests and number of concurrent shards created | `10` |
 
 

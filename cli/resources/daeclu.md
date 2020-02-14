@@ -1,6 +1,7 @@
 ## Daemon/Cluster
 
 The CLI allows users to interact with AIS daemons or cluster.
+A daemon is either proxy or target. 
 
 ### Cluster or daemon status
 
@@ -26,7 +27,7 @@ Returns the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either 
 
 `ais ls smap [DAEMON_ID]`
 
-Shows the cluster map (smap) copy of the `DAEMON_ID`. If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_URL` points at.
+Shows a copy of the cluster map (smap) present on `DAEMON_ID`. If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_URL` points at.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -42,7 +43,7 @@ Shows the cluster map (smap) copy of the `DAEMON_ID`. If `DAEMON_ID` isn't given
 
 `ais show node [DAEMON_ID]`
 
-Shows details about `DAEMON_ID`. If `DAEMON_ID` is omitted, shows details about the current primary proxy and all the targets in the cluster.
+Shows details about `DAEMON_ID`. If `DAEMON_ID` is omitted, shows details about the current primary proxy and all targets in the cluster.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |

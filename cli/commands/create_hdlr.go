@@ -21,7 +21,7 @@ var (
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdCreateBucket,
-					Usage:        "creates an ais buckets",
+					Usage:        "creates ais buckets",
 					ArgsUsage:    bucketsArgument,
 					Flags:        createCmdsFlags[subcmdCreateBucket],
 					Action:       createBucketHandler,

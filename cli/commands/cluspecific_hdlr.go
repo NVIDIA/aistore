@@ -72,7 +72,7 @@ func registerNodeHandler(c *cli.Context) (err error) {
 
 	socketAddrParts = strings.Split(socketAddr, ":")
 	if len(socketAddrParts) != 2 {
-		return fmt.Errorf("invalid socket address, should be in format: 'IP:PORT'")
+		return fmt.Errorf("invalid socket address, expected format: 'IP:PORT'")
 	}
 
 	daemonID = c.Args().Get(1) // user-given ID
