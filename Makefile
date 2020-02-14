@@ -8,7 +8,7 @@ MAKEFLAGS += --no-print-directory
 # Build version, flags, and tags
 VERSION = $(shell git rev-parse --short HEAD)
 BUILD = $(shell date +%FT%T%z)
-GOFLAGS = $(if $(strip $(GORACE)),-race,)
+BUILD_FLAGS += $(if $(strip $(GORACE)),-race,)
 ifdef TAGS
 	BUILD_TAGS = "$(CLDPROVIDER) $(TAGS)"
 else
@@ -61,7 +61,7 @@ ifneq ($(strip $(GORACE)),)
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
 	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
-		go install $(GOFLAGS) -tags=$(BUILD_TAGS) $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+		go install $(BUILD_FLAGS) -tags=$(BUILD_TAGS) $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
 	@echo "done."
 
 aisfs: ## Build 'aisfs' binary
@@ -78,7 +78,7 @@ cli-autocomplete: ## Add CLI autocompletions
 
 authn: ## Build 'authn' binary
 	@echo -n "Building authn... "
-	@go install $(GOFLAGS) $(LDFLAGS) ./authn
+	@go install $(BUILD_FLAGS) $(LDFLAGS) ./authn
 	@echo "done."
 
 aisloader: ## Build 'aisloader' binary

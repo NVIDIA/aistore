@@ -6,28 +6,24 @@ if ! [[ $CLDPROVIDER =~ ^(|aws|gcp)$ ]]; then
   exit 1
 fi
 
-AISTORE_PATH=$GOPATH/src/github.com/NVIDIA/aistore
-cd ${AISTORE_PATH}
-make node
-
 export FSPATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": \"\""; done | paste -sd ",")
 
 function start_node {
-  # Required for `ais/setup/config.sh`.
+  # Required for `config.sh`.
   export CONFDIR=/etc/aisnode/$1
   export CONFFILE=${CONFDIR}/ais.json
   export CONFFILE_COLLECTD=${CONFDIR}/collectd.conf
   export CONFFILE_STATSD=${CONFDIR}/statsd.conf
   
   export PORT=$2
-  export PROXYURL="http://localhost:51080"
+  export PROXYURL="http://172.17.0.2:51080"
   export LOGDIR=/var/log/aisnode/$1
   mkdir -p ${CONFDIR}
   mkdir -p ${LOGDIR}
   
-  source ais/setup/config.sh
-  
-  AIS_DAEMONID="$1-${HOSTNAME}" AIS_PRIMARYPROXY="true" ${GOBIN}/aisnode \
+  source config.sh
+
+  AIS_DAEMONID="$1-${HOSTNAME}" AIS_PRIMARYPROXY="true" bin/aisnode_${CLDPROVIDER} \
     -config=${CONFFILE} \
     -role=$1 \
     -ntargets=1 \
