@@ -105,6 +105,8 @@ const (
 	numSeverity = 4
 )
 
+const recycleBufMaxSize = 1024
+
 const severityChar = "IWEF"
 
 var severityName = []string{
@@ -524,7 +526,7 @@ func (l *loggingT) getBuffer() *buffer {
 
 // putBuffer returns a buffer to the free list.
 func (l *loggingT) putBuffer(b *buffer) {
-	if b.Len() >= 256 {
+	if b.Len() > recycleBufMaxSize {
 		// Let big buffers die a natural death.
 		return
 	}
