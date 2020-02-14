@@ -88,6 +88,8 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Get [bucket properties](bucket.md#properties-and-options) | HEAD /v1/buckets/bucket-name | `curl -L --head 'http://G/v1/buckets/mybucket'` |
 | Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject'` |
 | Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject' -T filenameToUpload` |
+| Put multi-part object (proxy) | PUT /v1/objects/bucket-name/object-name?appendty=append&handle= | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=append&handle=' -T filenameToUpload-partN`  <sup>[8](#ft8)</sup> |
+| Finalize multi-part object (proxy) | PUT /v1/objects/bucket-name/object-name?appendty=flush&handle=obj-handle | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=flush&handle=obj-handle'  <sup>[8](#ft8)</sup> |
 | Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L 'http://G/v1/objects/mybucket/myobject'` |
 | Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | Delete a range of objects | DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
@@ -105,8 +107,9 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Enable mountpath (target) | POST {"action": "enable", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "enable", "value":"/mount/path"}' 'http://T/v1/daemon/mountpaths'`<sup>[5](#ft5)</sup> |
 | Add mountpath (target) | PUT {"action": "add", "value": "/new/mountpath"} /v1/daemon/mountpaths | `curl -X PUT -L -H 'Content-Type: application/json' -d '{"action": "add", "value":"/mount/path"}' 'http://T/v1/daemon/mountpaths'` |
 | Remove mountpath from target | DELETE {"action": "remove", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "remove", "value":"/mount/path"}' 'http://T/v1/daemon/mountpaths'` |
-| Promote file/directory(proxy) | POST {"action": "promote", "name": "/home/user/dirname", "value": {"target": "234ed78", "omit_base": "/home/user/", "recurs": true}} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote", "name":"/user/dir", "value": {"target": "234ed78", "omit_base": "/user/", "recurs": true} }' 'http://G/v1/buckets/abc'` <sup>[8](#ft8)</sup>|
+| Promote file/directory(proxy) | POST {"action": "promote", "name": "/home/user/dirname", "value": {"target": "234ed78", "omit_base": "/home/user/", "recurs": true}} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote", "name":"/user/dir", "value": {"target": "234ed78", "omit_base": "/user/", "recurs": true} }' 'http://G/v1/buckets/abc'` <sup>[7](#ft7)</sup>|
 ___
+
 <a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
 <a name="ft2">2</a>: See the [List Bucket section](bucket.md#list-bucket) for details. [↩](#a2)
@@ -119,9 +122,9 @@ ___
 
 <a name="ft6">6</a>: Advanced usage only. Use it to reassign the primary *role* administratively or if a cluster ever gets in a so-called [split-brain mode](https://en.wikipedia.org/wiki/Split-brain_(computing)). [↩](#a6)
 
-<a name="ft7">7</a>: The difference between "Set all bucket properties" and "Set bucket properties" is that the "Set bucket properties" action takes in key-value pairs of properties via URL query string. In the case of "Set all bucket properties", the `value` must be correctly-filled `cmn.BucketProps` structure (all fields must be set!). For the list of supported properties, see [API constants](/cmn/api.go) and look for a section titled 'Header Key enum'[↩](#a7)
+<a name="ft7">7</a>: The request promotes files to objects; note that the files must be present inside AIStore targets and be referenceable via local directories or fully qualified names. The example request promotes recursively all files of a directory `/user/dir` that is on the target with ID `234ed78` to objects of a bucket `abc`. As `omit_base` is set, the names of objects are the file paths with the base trimmed: `dir/file1`, `dir/file2`, `dir/subdir/file3` etc.
 
-<a name="ft8">8</a>: The request promotes files to objects; note that the files must be present inside AIStore targets and be referenceable via local directories or fully qualified names. The example request promotes recursively all files of a directory `/user/dir` that is on the target with ID `234ed78` to objects of a bucket `abc`. As `omit_base` is set, the names of objects are the file paths with the base trimmed: `dir/file1`, `dir/file2`, `dir/subdir/file3` etc.
+<a name="ft8">8</a>: When putting the first part of an object, `handle` value must be empty string or omitted. On success, the first request returns an object handle. The subsequent `AppendObject` and `FlushObject` requests must pass the handle to the API calls. The object gets accessible and appears in a bucket only after `FlushObject` is done.
 
 ### Bucket Provider
 

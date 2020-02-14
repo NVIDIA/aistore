@@ -5,6 +5,7 @@
 package ais_test
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"testing"
@@ -102,5 +103,57 @@ func TestCloudBucketObject(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAppendObject(t *testing.T) {
+	var (
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		proxyURL   = tutils.GetPrimaryURL()
+		bck        = cmn.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		}
+		objHead = "1111111111"
+		objBody = "222222222222222"
+		objTail = "333333333"
+		objName = "test/obj1"
+		content = objHead + objBody + objTail
+		objSize = len(content)
+	)
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	args := api.AppendArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     objName,
+		Reader:     cmn.NewByteHandle([]byte(objHead)),
+		Size:       int64(objSize),
+	}
+	// First call with empty `handle` to start writing the object
+	handle, err := api.AppendObject(args)
+	tassert.CheckFatal(t, err)
+	// Use the handle returned by the first call (it never changes)
+	args.Handle = handle
+	args.Reader = cmn.NewByteHandle([]byte(objBody))
+	_, err = api.AppendObject(args)
+	tassert.CheckFatal(t, err)
+	args.Reader = cmn.NewByteHandle([]byte(objTail))
+	_, err = api.AppendObject(args)
+	tassert.CheckFatal(t, err)
+	// Flush object to make it persistent one in the bucket
+	err = api.FlushObject(args)
+	tassert.CheckFatal(t, err)
+
+	// Read the object from the bucket
+	buf := make([]byte, 0, objSize*2)
+	writer := bytes.NewBuffer(buf)
+	getArgs := api.GetObjectInput{Writer: writer}
+	n, err := api.GetObject(baseParams, bck, objName, getArgs)
+	tassert.CheckFatal(t, err)
+	if writer.String() != content {
+		t.Errorf("Invalid object content [%d]%q, expected [%d]%q",
+			n, writer.String(), objSize, content)
 	}
 }
