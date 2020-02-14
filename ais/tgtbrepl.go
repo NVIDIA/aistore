@@ -40,7 +40,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	defer lom.Unlock(false)
 
 	if err = lom.Load(false); err != nil {
-		if !cmn.IsNotObjExist(err) {
+		if !cmn.IsObjNotExist(err) {
 			err = fmt.Errorf("%s: err: %v", lom, err)
 		}
 		return

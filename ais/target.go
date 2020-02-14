@@ -672,8 +672,11 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	err = t.objDelete(t.contextWithAuth(r.Header), lom, evict)
 	if err != nil {
-		s := fmt.Sprintf("Error deleting %s: %v", lom, err)
-		t.invalmsghdlr(w, r, s)
+		if cmn.IsObjNotExist(err) {
+			t.invalmsghdlrsilent(w, r, fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.Objname), http.StatusNotFound)
+		} else {
+			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err))
+		}
 		return
 	}
 	// EC cleanup if EC is enabled
@@ -963,7 +966,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lom.Lock(false)
-	if err = lom.Load(true); err != nil && !cmn.IsNotObjExist(err) { // (doesnotexist -> ok, other)
+	if err = lom.Load(true); err != nil && !cmn.IsObjNotExist(err) { // (doesnotexist -> ok, other)
 		lom.Unlock(false)
 		invalidHandler(w, r, err.Error())
 		return
@@ -1199,7 +1202,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	delFromCloud := lom.Bck().IsCloud() && !evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
-	} else if !cmn.IsNotObjExist(err) {
+	} else if !cmn.IsObjNotExist(err) || (!delFromCloud && cmn.IsObjNotExist(err)) {
 		return err
 	}
 

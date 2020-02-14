@@ -337,7 +337,7 @@ do:
 	}
 	err = goi.lom.Load()
 	if err != nil {
-		coldGet = cmn.IsNotObjExist(err)
+		coldGet = cmn.IsObjNotExist(err)
 		if !coldGet {
 			goi.lom.Unlock(false)
 			return err, http.StatusInternalServerError

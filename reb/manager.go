@@ -663,7 +663,7 @@ func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt in
 		lomack.mu.Lock()
 		for uname, lom := range lomack.q {
 			if err := lom.Load(false); err != nil {
-				if cmn.IsNotObjExist(err) {
+				if cmn.IsObjNotExist(err) {
 					glog.Warningf("%s: %s %s", reb.loghdr(globRebID, smap), lom, cmn.DoesNotExist)
 				} else {
 					glog.Errorf("%s: failed loading %s, err: %s", reb.loghdr(globRebID, smap), lom, err)

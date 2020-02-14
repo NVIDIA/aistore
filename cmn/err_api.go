@@ -213,7 +213,7 @@ func IsErrBucketNought(err error) bool {
 }
 
 func IsErrObjNought(err error) bool {
-	if IsNotObjExist(err) {
+	if IsObjNotExist(err) {
 		return true
 	}
 	if _, ok := err.(ObjDefunctErr); ok {
@@ -222,6 +222,6 @@ func IsErrObjNought(err error) bool {
 	return false
 }
 
-func IsNotObjExist(err error) bool    { return os.IsNotExist(err) }
+func IsObjNotExist(err error) bool    { return os.IsNotExist(err) }
 func IsErrBucketLevel(err error) bool { return IsErrBucketNought(err) }
 func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
