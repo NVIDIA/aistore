@@ -79,10 +79,6 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 		return nil
 	}
 
-	if err := lom.Load(); os.IsNotExist(err) { // NOTE: all other errors: proceed to list this object anyway
-		return nil
-	}
-
 	// add the obj to the page
 	ci.fileCount++
 	fileInfo := &cmn.BucketEntry{
@@ -163,6 +159,7 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 	if err := lom.Init(cmn.Bck{}); err != nil {
 		return err
 	}
+
 	if err := lom.Load(); err != nil {
 		if cmn.IsErrObjNought(err) {
 			return nil

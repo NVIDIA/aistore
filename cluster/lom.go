@@ -764,7 +764,7 @@ beg:
 				goto beg
 			}
 		}
-		err = fmt.Errorf("%s: errmeta %v, %T", lom, err, err)
+		err = cmn.NewObjMetaErr(lom.Objname, err)
 		lom.T.FSHC(err, lom.FQN)
 		return
 	}

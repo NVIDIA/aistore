@@ -60,6 +60,10 @@ type (
 		name   string // object's name
 		d1, d2 uint64 // lom.md.(bucket-ID) and lom.bck.(bucket-ID), respectively
 	}
+	ObjMetaErr struct {
+		name string // object's name
+		err  error  // underlying error
+	}
 	AbortedError struct {
 		what    string
 		details string
@@ -154,6 +158,12 @@ func (e ObjDefunctErr) Error() string {
 }
 func NewObjDefunctError(name string, d1, d2 uint64) ObjDefunctErr { return ObjDefunctErr{name, d1, d2} }
 
+func (e ObjMetaErr) Error() string {
+	return fmt.Sprintf("object %s failed to load meta: %v", e.name, e.err)
+}
+
+func NewObjMetaErr(name string, err error) ObjMetaErr { return ObjMetaErr{name: name, err: err} }
+
 func NewAbortedError(what string) AbortedError {
 	return AbortedError{
 		what:    what,
@@ -214,6 +224,9 @@ func IsErrBucketNought(err error) bool {
 
 func IsErrObjNought(err error) bool {
 	if IsObjNotExist(err) {
+		return true
+	}
+	if _, ok := err.(ObjMetaErr); ok {
 		return true
 	}
 	if _, ok := err.(ObjDefunctErr); ok {
