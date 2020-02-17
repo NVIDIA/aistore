@@ -335,13 +335,9 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 		proxyURL   = tutils.GetPrimaryURL()
 	)
 
-	sgl := tutils.MMSA.NewSGL(filesize)
-	defer sgl.Free()
-
 	// Create a few objects
 	tutils.Logf("Creating %d objects...\n", numPuts)
-	ldir := LocalSrcDir + "/" + versionDir
-	tutils.PutRandObjs(proxyURL, bck, ldir, readerType, versionDir, filesize, numPuts, errCh, filesPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, versionDir, filesize, numPuts, errCh, filesPutCh)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh)
 	close(errCh)

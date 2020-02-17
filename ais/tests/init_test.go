@@ -12,27 +12,20 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
 )
 
 const (
 	baseDir                 = "/tmp/ais"
 	LocalDestDir            = "/tmp/ais/dest" // client-side download destination
-	LocalSrcDir             = "/tmp/ais/src"  // client-side src directory for upload
 	ColdValidStr            = "coldmd5"
 	ChksumValidStr          = "chksum"
 	ColdMD5str              = "coldmd5"
 	EvictCBStr              = "evictCB"
-	DeleteDir               = "/tmp/ais/delete"
-	ChecksumWarmValidateDir = "/tmp/ais/checksumWarmValidate"
 	ChecksumWarmValidateStr = "checksumWarmValidate"
-	RangeGetDir             = "/tmp/ais/rangeGet"
 	RangeGetStr             = "rangeGet"
 	DeleteStr               = "delete"
-	SmokeDir                = "/tmp/ais/smoke" // smoke test dir
 	SmokeStr                = "smoke"
 	largeFileSize           = 4 * cmn.MiB
-	readerType              = tutils.ReaderTypeSG
 	rebalanceTimeout        = 5 * time.Minute
 	rebalanceStartTimeout   = 10 * time.Second
 )

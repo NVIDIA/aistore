@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -68,8 +67,6 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		filesize = 1024
 	)
 	var (
-		sgl *memsys.SGL
-
 		filenameCh = make(chan string, num)
 		errCh      = make(chan error, num)
 		targets    = make(map[string]struct{})
@@ -84,13 +81,10 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	if smap.CountTargets() == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
-
-	sgl = tutils.MMSA.NewSGL(filesize)
-	defer sgl.Free()
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tutils.PutRandObjs(proxyURL, bck, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl, true)
+	tutils.PutRandObjs(proxyURL, bck, SmokeStr, filesize, num, errCh, filenameCh, true)
 	tassert.SelectErr(t, errCh, "put", true)
 	close(filenameCh)
 	close(errCh)
@@ -145,7 +139,6 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	)
 
 	var (
-		sgl        *memsys.SGL
 		fileNameCh = make(chan string, numberOfFiles)
 		errCh      = make(chan error, numberOfFiles)
 		targets    = make(map[string]struct{})
@@ -166,9 +159,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 
-	sgl = tutils.MMSA.NewSGL(fileSize)
-	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bck, SmokeDir, readerType, prefix, fileSize, numberOfFiles, errCh, fileNameCh, sgl, true)
+	tutils.PutRandObjs(proxyURL, bck, prefix, fileSize, numberOfFiles, errCh, fileNameCh, true)
 	tassert.SelectErr(t, errCh, "put", true)
 	close(fileNameCh)
 	close(errCh)
@@ -235,8 +226,6 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 func TestGetCorruptFileAfterPut(t *testing.T) {
 	const filesize = 1024
 	var (
-		sgl *memsys.SGL
-
 		num        = 2
 		filenameCh = make(chan string, num)
 		errCh      = make(chan error, 100)
@@ -254,9 +243,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	sgl = tutils.MMSA.NewSGL(filesize)
-	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bck, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, SmokeStr, filesize, num, errCh, filenameCh)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filenameCh)
 	close(errCh)
@@ -336,10 +323,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		bck        = rtd.bck
 	)
 
-	sgl := tutils.MMSA.NewSGL(filesize)
-	defer sgl.Free()
-
-	tutils.PutRandObjs(proxyURL, rtd.bck, SmokeDir, readerType, SmokeStr, filesize, numPuts, errCh, filesPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, rtd.bck, SmokeStr, filesize, numPuts, errCh, filesPutCh)
 	close(filesPutCh)
 	filesPut := make([]string, 0, len(filesPutCh))
 	for fname := range filesPutCh {
@@ -444,10 +428,7 @@ func TestRenameObjects(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	sgl := tutils.MMSA.NewSGL(1024 * 1024)
-	defer sgl.Free()
-
-	tutils.PutRandObjs(proxyURL, bck, "", readerType, "", 0, numPuts, errCh, objsPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, "", 0, numPuts, errCh, objsPutCh)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(objsPutCh)
 	i := 0

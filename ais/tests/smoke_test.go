@@ -13,7 +13,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -22,7 +21,7 @@ var (
 	ratios   = [5]float32{0, 0.25, 0.50, 0.75, 1} // #gets / #puts
 )
 
-func Test_smoke(t *testing.T) {
+func TestSmoke(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
@@ -31,13 +30,6 @@ func Test_smoke(t *testing.T) {
 		bck      = cmn.Bck{Name: clibucket}
 		proxyURL = tutils.GetPrimaryURL()
 	)
-	if err := cmn.CreateDir(LocalDestDir); err != nil {
-		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
-	}
-
-	if err := cmn.CreateDir(SmokeDir); err != nil {
-		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
-	}
 
 	created := createBucketIfNotExists(t, proxyURL, bck)
 	fp := make(chan string, len(objSizes)*len(ratios)*numops*numworkers)
@@ -73,29 +65,17 @@ func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objSize int64, ratio f
 	var (
 		nGet  = int(float32(numworkers) * ratio)
 		nPut  = numworkers - nGet
-		sgls  = make([]*memsys.SGL, numworkers)
 		errCh = make(chan error, 100)
 		wg    = &sync.WaitGroup{}
 	)
 
-	// Get the workers started
-	for i := 0; i < numworkers; i++ {
-		sgls[i] = tutils.MMSA.NewSGL(objSize)
-	}
-	defer func() {
-		for _, sgl := range sgls {
-			sgl.Free()
-		}
-	}()
-
 	for i := 0; i < numworkers; i++ {
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			wg.Add(1)
-			go func(i int) {
+			go func() {
 				defer wg.Done()
-				sgl := sgls[i]
-				tutils.PutRandObjs(proxyURL, bck, SmokeDir, readerType, SmokeStr, uint64(objSize), numops, errCh, filesPutCh, sgl)
-			}(i)
+				tutils.PutRandObjs(proxyURL, bck, SmokeStr, uint64(objSize), numops, errCh, filesPutCh)
+			}()
 			nPut--
 		} else {
 			wg.Add(1)

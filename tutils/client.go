@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -25,12 +26,10 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
@@ -658,30 +657,6 @@ func UnregisterNode(proxyURL, sid string) error {
 	return nil
 }
 
-func determineReaderType(sgl *memsys.SGL, readerPath, readerType, objName string, size uint64) (reader Reader, err error) {
-	if sgl != nil {
-		sgl.Reset()
-		reader, err = NewSGReader(sgl, int64(size), true /* with Hash */)
-	} else {
-		if readerType == ReaderTypeFile && readerPath == "" {
-			err = fmt.Errorf("path to reader cannot be empty when reader type is %s", ReaderTypeFile)
-			return
-		}
-		// need to ensure that readerPath exists before trying to create a file there
-		if err = cmn.CreateDir(readerPath); err != nil {
-			return
-		}
-		reader, err = NewReader(ParamReader{
-			Type: readerType,
-			SGL:  nil,
-			Path: readerPath,
-			Name: objName,
-			Size: int64(size),
-		})
-	}
-	return
-}
-
 func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName string, timeout time.Duration) error {
 	maxTime := time.Now().Add(timeout)
 
@@ -714,7 +689,7 @@ func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck cmn.Bck, object
 	}
 }
 
-func putObjs(proxyURL string, bck cmn.Bck, readerPath, readerType, objPath string, objSize uint64, sgl *memsys.SGL, errCh chan error, objCh, objsPutCh chan string) {
+func putObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, errCh chan error, objCh, objsPutCh chan string) {
 	var (
 		size   = objSize
 		reader Reader
@@ -728,14 +703,10 @@ func putObjs(proxyURL string, bck cmn.Bck, readerPath, readerType, objPath strin
 		if size == 0 {
 			size = uint64(cmn.NowRand().Intn(1024)+1) * 1024
 		}
-		reader, err = determineReaderType(sgl, readerPath, readerType, objName, size)
-		if err != nil {
-			Logf("Failed to generate random file %s, err: %v\n", path.Join(readerPath, objName), err)
-			if errCh != nil {
-				errCh <- err
-			}
-			return
-		}
+
+		sgl := MMSA.NewSGL(int64(size))
+		reader, err = NewSGReader(sgl, int64(size), true /* with Hash */)
+		cmn.AssertNoErr(err)
 
 		fullObjName := path.Join(objPath, objName)
 		// We could PUT while creating files, but that makes it
@@ -761,49 +732,40 @@ func putObjs(proxyURL string, bck cmn.Bck, readerPath, readerType, objPath strin
 		if objsPutCh != nil {
 			objsPutCh <- objName
 		}
+
+		// FIXME: due to critical bug (https://github.com/golang/go/issues/30597)
+		// we need to postpone `sgl.Free` to a little bit later time, otherwise
+		// we will experience 'read after free'. Sleep time is number taken
+		// from thin air - increase if panics are still happening.
+		go func() {
+			time.Sleep(3 * time.Second)
+			sgl.Free()
+		}()
 	}
 }
 
-func PutObjsFromList(proxyURL string, bck cmn.Bck, readerPath, readerType, objPath string, objSize uint64, objList []string,
-	errCh chan error, objsPutCh chan string, sgl *memsys.SGL, fixedSize ...bool) {
+func PutObjsFromList(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, objList []string,
+	errCh chan error, objsPutCh chan string, fixedSize ...bool) {
 	var (
-		wg         = &sync.WaitGroup{}
-		objCh      = make(chan string, len(objList))
-		numworkers = 10
+		wg        = &sync.WaitGroup{}
+		objCh     = make(chan string, len(objList))
+		workerCnt = 10
 	)
-	// if len(objList) < numworkers, only need as many workers as there are objects to be PUT
-	numworkers = cmn.Min(numworkers, len(objList))
-	sgls := make([]*memsys.SGL, numworkers)
+	// if len(objList) < workerCnt, only need as many workers as there are objects to be PUT
+	workerCnt = cmn.Min(workerCnt, len(objList))
 
-	// need an SGL for each worker with its size being that of the original SGL
-	if sgl != nil {
-		slabSize := sgl.Slab().Size()
-		for i := 0; i < numworkers; i++ {
-			sgls[i] = MMSA.NewSGL(slabSize)
-		}
-		defer func() {
-			for _, sgl := range sgls {
-				sgl.Free()
-			}
-		}()
-	}
-
-	for i := 0; i < numworkers; i++ {
+	for i := 0; i < workerCnt; i++ {
 		wg.Add(1)
-		var sgli *memsys.SGL
-		if sgl != nil {
-			sgli = sgls[i]
-		}
-		go func(sgli *memsys.SGL) {
+		go func() {
+			defer wg.Done()
+
 			size := objSize
 			// randomize sizes
 			if len(fixedSize) == 0 || !fixedSize[0] {
-				x := uintptr(unsafe.Pointer(sgli)) & 0xfff
-				size = objSize + uint64(x)
+				size = objSize + uint64(rand.Int63n(512))
 			}
-			putObjs(proxyURL, bck, readerPath, readerType, objPath, size, sgli, errCh, objCh, objsPutCh)
-			wg.Done()
-		}(sgli)
+			putObjs(proxyURL, bck, objPath, size, errCh, objCh, objsPutCh)
+		}()
 	}
 
 	for _, objName := range objList {
@@ -813,7 +775,7 @@ func PutObjsFromList(proxyURL string, bck cmn.Bck, readerPath, readerType, objPa
 	wg.Wait()
 }
 
-func PutRandObjs(proxyURL string, bck cmn.Bck, readerPath, readerType, objPath string, objSize uint64, numPuts int, errCh chan error, objsPutCh chan string, sgl *memsys.SGL, fixedSize ...bool) {
+func PutRandObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, numPuts int, errCh chan error, objsPutCh chan string, fixedSize ...bool) {
 	var (
 		fNameLen = 16
 		objList  = make([]string, 0, numPuts)
@@ -822,7 +784,7 @@ func PutRandObjs(proxyURL string, bck cmn.Bck, readerPath, readerType, objPath s
 		fname := GenRandomString(fNameLen)
 		objList = append(objList, fname)
 	}
-	PutObjsFromList(proxyURL, bck, readerPath, readerType, objPath, objSize, objList, errCh, objsPutCh, sgl, fixedSize...)
+	PutObjsFromList(proxyURL, bck, objPath, objSize, objList, errCh, objsPutCh, fixedSize...)
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET

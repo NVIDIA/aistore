@@ -506,8 +506,6 @@ func TestListObjectsPrefix(t *testing.T) {
 				defer tutils.DestroyBucket(t, proxyURL, bck)
 			}
 
-			sgl := tutils.MMSA.NewSGL(fileSize)
-			defer sgl.Free()
 			tutils.Logf("Create a list of %d objects\n", numFiles)
 
 			fileList := make([]string, 0, numFiles)
@@ -516,7 +514,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				fileList = append(fileList, fname)
 			}
 
-			tutils.PutObjsFromList(proxyURL, bck, "", readerType, prefix, fileSize, fileList, errCh, filesPutCh, sgl)
+			tutils.PutObjsFromList(proxyURL, bck, prefix, fileSize, fileList, errCh, filesPutCh)
 			defer func() {
 				// Cleanup objects created by the test
 				for _, fname := range fileList {

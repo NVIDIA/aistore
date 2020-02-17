@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -21,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -101,9 +99,9 @@ func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, m
 	return
 }
 
-func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, sgl *memsys.SGL) {
+func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList) {
 	md.wg.Add(1)
-	go runAsyncJob(md.t, md.bck, md.wg, method, mpath, fileNames, md.chfail, md.chstop, sgl)
+	go runAsyncJob(md.t, md.bck, md.wg, method, mpath, fileNames, md.chfail, md.chstop)
 	// let the job run for a while and then make a mountpath broken
 	time.Sleep(2 * time.Second)
 	md.chfail <- struct{}{}
@@ -117,8 +115,7 @@ func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath st
 	repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled))
 }
 
-func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, objList []string, sgl *memsys.SGL) {
-	ldir := filepath.Join(LocalSrcDir, fshcDir)
+func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, objList []string) {
 	os.RemoveAll(mpath)
 	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled))
 
@@ -131,7 +128,7 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 
 	switch method {
 	case http.MethodPut:
-		tutils.PutObjsFromList(md.proxyURL, md.bck, ldir, readerType, fshcDir, uint64(md.fileSize), objList, nil, nil, sgl)
+		tutils.PutObjsFromList(md.proxyURL, md.bck, fshcDir, uint64(md.fileSize), objList, nil, nil)
 	case http.MethodGet:
 		for _, objName := range objList {
 			// GetObject must fail - so no error checking
@@ -237,7 +234,7 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	}
 }
 
-func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, sgl *memsys.SGL) {
+func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}) {
 	defer wg.Done()
 
 	const fileSize = 64 * cmn.KiB
@@ -272,8 +269,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 			switch op {
 			case "PUT":
 				fileList := []string{fname}
-				ldir := filepath.Join(LocalSrcDir, fshcDir)
-				tutils.PutObjsFromList(proxyURL, bck, ldir, readerType, fshcDir, fileSize, fileList, errCh, objsPutCh, sgl)
+				tutils.PutObjsFromList(proxyURL, bck, fshcDir, fileSize, fileList, errCh, objsPutCh)
 			case "GET":
 				api.GetObject(tutils.DefaultBaseAPIParams(t), bck, path.Join(fshcDir, fname))
 				time.Sleep(time.Millisecond * 10)
@@ -307,10 +303,8 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
-	sgl := tutils.MMSA.NewSGL(md.fileSize)
 	defer func() {
 		tutils.DestroyBucket(t, md.proxyURL, md.bck)
-		sgl.Free()
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
@@ -325,9 +319,9 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	generateRandomData(md.numObjs)
 
 	// Checking detection on object PUT
-	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMpathList, sgl)
+	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMpathList)
 	// Checking detection on object GET
-	md.runTestAsync(http.MethodGet, selectedTarget, selectedMpath, selectedMpathList, sgl)
+	md.runTestAsync(http.MethodGet, selectedTarget, selectedMpath, selectedMpathList)
 
 	// Checking that reading "bad" objects does not disable mpath if the mpath is OK
 	tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
@@ -366,10 +360,8 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
-	sgl := tutils.MMSA.NewSGL(md.fileSize)
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	defer func() {
-		sgl.Free()
 		tutils.DestroyBucket(t, md.proxyURL, md.bck)
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
@@ -389,9 +381,9 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	}
 
 	// Checking detection on object PUT
-	md.runTestSync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, objList, sgl)
+	md.runTestSync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, objList)
 	// Checking detection on object GET
-	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, objList, sgl)
+	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, objList)
 
 	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(md.proxyURL), rebalanceTimeout)
 }

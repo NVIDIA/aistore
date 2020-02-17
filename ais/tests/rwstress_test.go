@@ -370,7 +370,7 @@ func rwstressCleanup(t *testing.T) {
 	}
 }
 
-func TestRWStress(t *testing.T) {
+func TestRWStressShort(t *testing.T) {
 	numFiles = 25
 	numLoops = 8
 
@@ -385,7 +385,7 @@ func TestRWStress(t *testing.T) {
 //    complete the test runs DEL loop to clean up
 // If the test runs asynchronusly all three kinds of operations then after the
 //    test finishes it executes extra loop to delete all files
-func Test_rwstress(t *testing.T) {
+func TestRWStress(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}

@@ -2570,12 +2570,9 @@ func TestECAndRegularRebalance(t *testing.T) {
 	for i := 0; i < o.objCount; i++ {
 		fileList = append(fileList, fmt.Sprintf(rpattern, i))
 	}
-	ldir := filepath.Join(LocalSrcDir, fshcDir)
 	errCh := make(chan error, len(fileList))
 	objsPutCh := make(chan string, len(fileList))
-	sgl := tutils.MMSA.NewSGL(fileSize)
-	defer sgl.Free()
-	tutils.PutObjsFromList(proxyURL, bckReg, ldir, readerType, ecTestDir, fileSize, fileList, errCh, objsPutCh, sgl)
+	tutils.PutObjsFromList(proxyURL, bckReg, ecTestDir, fileSize, fileList, errCh, objsPutCh)
 
 	msg := &cmn.SelectMsg{}
 	resECOld, err := api.ListBucket(baseParams, bckEC, msg, 0)

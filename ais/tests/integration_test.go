@@ -124,14 +124,11 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 }
 
 func (m *ioContext) puts(dontFail ...bool) int {
-	sgl := tutils.MMSA.NewSGL(int64(m.fileSize))
-	defer sgl.Free()
-
 	filenameCh := make(chan string, m.num)
 	errCh := make(chan error, m.num)
 
 	tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
-	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeDir, readerType, SmokeStr, m.fileSize, m.num, errCh, filenameCh, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeStr, m.fileSize, m.num, errCh, filenameCh)
 	if len(dontFail) == 0 {
 		tassert.SelectErr(m.t, errCh, "put", false)
 	}

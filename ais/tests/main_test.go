@@ -57,6 +57,10 @@ func Test_download(t *testing.T) {
 	err := tutils.PingURL(proxyURL)
 	tassert.CheckFatal(t, err)
 
+	if err := cmn.CreateDir(LocalDestDir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
+	}
+
 	// Declare one channel per worker to pass the keyname
 	keynameChans := make([]chan string, numworkers)
 	resultChans := make([]chan workres, numworkers)
@@ -64,16 +68,7 @@ func Test_download(t *testing.T) {
 
 	defer func() {
 		close(filesCreated)
-		var err error
-		for file := range filesCreated {
-			e := os.Remove(filepath.Join(LocalDestDir, file))
-			if e != nil {
-				err = e
-			}
-		}
-		if err != nil {
-			t.Error(err)
-		}
+		os.RemoveAll(LocalDestDir)
 	}()
 
 	for i := 0; i < numworkers; i++ {
@@ -218,9 +213,6 @@ func Test_putdeleteRange(t *testing.T) {
 		objSize      = 16 * 1024
 	)
 
-	if err := cmn.CreateDir(DeleteDir); err != nil {
-		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
-	}
 	if created := createBucketIfNotExists(t, proxyURL, bck); created {
 		defer tutils.DestroyBucket(t, proxyURL, bck)
 	}
@@ -228,8 +220,6 @@ func Test_putdeleteRange(t *testing.T) {
 	errCh := make(chan error, numfiles*5)
 	objsPutCh := make(chan string, numfiles)
 
-	sgl := tutils.MMSA.NewSGL(objSize)
-	defer sgl.Free()
 	objList := make([]string, 0, numfiles)
 	for i := 0; i < numfiles/2; i++ {
 		fname := fmt.Sprintf("a-%04d", i)
@@ -237,7 +227,7 @@ func Test_putdeleteRange(t *testing.T) {
 		fname = fmt.Sprintf("b-%04d", i)
 		objList = append(objList, fname)
 	}
-	tutils.PutObjsFromList(proxyURL, bck, DeleteDir, readerType, commonPrefix, objSize, objList, errCh, objsPutCh, sgl)
+	tutils.PutObjsFromList(proxyURL, bck, commonPrefix, objSize, objList, errCh, objsPutCh)
 	tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
 	close(objsPutCh)
 	type testParams struct {
@@ -356,22 +346,16 @@ func Test_putdelete(t *testing.T) {
 		t.Skipf("don't run when short mode and cloud bucket")
 	}
 
-	if err := cmn.CreateDir(DeleteDir); err != nil {
-		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
-	}
-
 	var (
 		errCh      = make(chan error, numfiles)
 		filesPutCh = make(chan string, numfiles)
-		sgl        = tutils.MMSA.NewSGL(fileSize)
 	)
 
 	if created := createBucketIfNotExists(t, proxyURL, bck); created {
 		defer tutils.DestroyBucket(t, proxyURL, bck)
 	}
 
-	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bck, DeleteDir, readerType, DeleteStr, fileSize, numfiles, errCh, filesPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, DeleteStr, fileSize, numfiles, errCh, filesPutCh)
 	close(filesPutCh)
 	tassert.SelectErr(t, errCh, "put", true)
 
@@ -773,17 +757,10 @@ func Test_coldgetmd5(t *testing.T) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
-	ldir := filepath.Join(LocalSrcDir, ColdValidStr)
-	if err := cmn.CreateDir(ldir); err != nil {
-		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
-	}
-
 	config := tutils.GetClusterConfig(t)
 	bcoldget := config.Cksum.ValidateColdGet
 
-	sgl := tutils.MMSA.NewSGL(largeFileSize)
-	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bck, ldir, readerType, ColdValidStr, largeFileSize, numPuts, errCh, filesPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, ColdValidStr, largeFileSize, numPuts, errCh, filesPutCh)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
@@ -1113,12 +1090,9 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
-	sgl := tutils.MMSA.NewSGL(fileSize)
-	defer sgl.Free()
 
 	tutils.Logf("Creating %d objects\n", numFiles)
-	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr, fileSize,
-		numFiles, errCh, fileNameCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh)
 	tassert.SelectErr(t, errCh, "put", false)
 
 	fileName = <-fileNameCh
@@ -1209,13 +1183,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
-	ldir := filepath.Join(LocalSrcDir, EvictCBStr)
-	if err = cmn.CreateDir(ldir); err != nil {
-		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
-	}
-
 	defer func() {
-		os.RemoveAll(LocalSrcDir)
 		// Cleanup
 		for _, fn := range filesList {
 			wg.Add(1)
@@ -1228,9 +1196,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		resetBucketProps(proxyURL, bck, t)
 	}()
 
-	sgl := tutils.MMSA.NewSGL(largeFileSize)
-	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bck, ldir, readerType, EvictCBStr, largeFileSize, numPuts, errCh, filesPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, EvictCBStr, largeFileSize, numPuts, errCh, filesPutCh)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
@@ -1322,10 +1288,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	sgl := tutils.MMSA.NewSGL(fileSize)
-	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr,
-		fileSize, numFiles, errCh, fileNameCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh)
 	tassert.SelectErr(t, errCh, "put", false)
 
 	// Get Current Config
@@ -1406,10 +1369,8 @@ func TestRangeRead(t *testing.T) {
 		proxyURL = tutils.GetPrimaryURL()
 	)
 
-	sgl := tutils.MMSA.NewSGL(fileSize)
-	defer sgl.Free()
 	created := createBucketIfNotExists(t, proxyURL, bck)
-	tutils.PutRandObjs(proxyURL, bck, RangeGetDir, readerType, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, sgl, true)
+	tutils.PutRandObjs(proxyURL, bck, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, true)
 	tassert.SelectErr(t, errCh, "put", false)
 
 	// Get Current Config
@@ -1577,19 +1538,13 @@ func Test_checksum(t *testing.T) {
 	if !isCloudBucket(t, proxyURL, bck) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
-	ldir := filepath.Join(LocalSrcDir, ChksumValidStr)
-	if err := cmn.CreateDir(ldir); err != nil {
-		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
-	}
 
 	// Get Current Config
 	config := tutils.GetClusterConfig(t)
 	ocoldget := config.Cksum.ValidateColdGet
 	ochksum := config.Cksum.Type
 
-	sgl := tutils.MMSA.NewSGL(largeFileSize)
-	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bck, ldir, readerType, ChksumValidStr, largeFileSize, numPuts, errCh, filesPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, bck, ChksumValidStr, largeFileSize, numPuts, errCh, filesPutCh)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
