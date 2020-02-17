@@ -1,0 +1,5 @@
+$BUCKET bucket created
+APPEND object.txt into bucket $BUCKET of size 20
+0123456789abcdefghi
+APPEND object1.txt into bucket $BUCKET of size 7
+012345

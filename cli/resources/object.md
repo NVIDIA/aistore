@@ -227,3 +227,19 @@ Renames object from an ais bucket.
 | Command | Explanation |
 | --- | --- |
 | `ais rename object mybucket/obj obj1` | Renames object `obj` from bucket `mybucket` to `obj1` |
+
+### Append
+
+`ais append DIRNAME|FILENAME [DIRNAME|FILENAME...] BUCKET/OBJECT_NAME`
+
+Creates an object in a bucket by concatenating provided files, keeping the order as in the arguments list.
+If directory provided, files within directory are sorted by filename.
+For each file sends separate request to the cluster.
+Supports recursive iteration through directories and wildcards in the same way as PUT operation does. 
+
+| Command | Explanation |
+| --- | --- |
+| `ais append file1.txt dir/file2.txt mybucket/obj` | In two separate requests sends `file1.txt` and `dir/file2.txt` to the cluster, concatenates the files keeping the order and saves them as `obj` in bucket `mybucket`  |
+| `ais append file1.txt dir/file2.txt mybucket/obj --verbose` | Same as above, but additionally shows progress bar of sending the files to the cluster  |
+
+| `ais append dirB dirA mybucket/obj` | Creates `obj` in bucket `mybucket` which is concatenation of sorted files from `dirB` with sorted files from `dirA` |

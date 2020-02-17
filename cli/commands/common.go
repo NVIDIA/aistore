@@ -35,6 +35,7 @@ const (
 	commandPut       = "put"
 	commandPromote   = "promote"
 	commandECEncode  = "ec-encode"
+	commandAppend    = "append"
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase
@@ -135,6 +136,7 @@ const (
 	// Objects
 	getObjectArgument        = "BUCKET_NAME/OBJECT_NAME OUT_FILE"
 	putPromoteObjectArgument = "FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]"
+	appendObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET_NAME/OBJECT_NAME"
 	objectArgument           = "BUCKET_NAME/OBJECT_NAME"
 	optionalObjectsArgument  = "BUCKET_NAME/[OBJECT_NAME]..."
 	objectOldNewArgument     = "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME"

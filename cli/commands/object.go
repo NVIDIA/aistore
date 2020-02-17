@@ -11,17 +11,19 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cli/templates"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
+	"github.com/vbauerster/mpb/v4"
+	"github.com/vbauerster/mpb/v4/decor"
 )
 
 type uploadParams struct {
@@ -206,6 +208,86 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 		totalSize: totalSize,
 	}
 	return uploadFiles(c, params)
+}
+
+func appendObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) (err error) {
+	var (
+		bar        *mpb.Bar
+		barText    = fmt.Sprintf("Appending %d files to object %s/%s", len(fileNames), bck.Name, objName)
+		filesToObj = make([]FileToObjSlice, len(fileNames))
+		p          *mpb.Progress
+		sizes      = make(map[string]int64, len(fileNames))
+		totalSize  = int64(0)
+		verbose    = flagIsSet(c, verboseFlag)
+	)
+
+	for i, fileName := range fileNames {
+		filesToObj[i], err = generateFileList(fileName, "", flagIsSet(c, recursiveFlag))
+		if err != nil {
+			return err
+		}
+
+		sort.Sort(filesToObj[i])
+		for _, f := range filesToObj[i] {
+			totalSize += f.size
+		}
+	}
+
+	if verbose {
+		p = mpb.New(mpb.WithWidth(progressBarWidth))
+		bar = p.AddBar(
+			totalSize,
+			mpb.PrependDecorators(
+				decor.Name(barText, decor.WC{W: len(barText) + 1, C: decor.DidentRight}),
+				decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidth),
+			),
+			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)))
+	}
+
+	var handle string
+	for _, filesSlice := range filesToObj {
+		for _, f := range filesSlice {
+			fh, err := cmn.NewFileHandle(f.path)
+			if err != nil {
+				return err
+			}
+
+			appendArgs := api.AppendArgs{
+				BaseParams: defaultAPIParams,
+				Bck:        bck,
+				Object:     objName,
+				Reader:     fh,
+				Handle:     handle,
+			}
+			handle, err = api.AppendObject(appendArgs)
+			if err != nil {
+				return fmt.Errorf("%v. Object not created", err)
+			}
+
+			if bar != nil {
+				bar.IncrInt64(sizes[fh.Name()])
+			}
+		}
+	}
+
+	if p != nil {
+		p.Wait()
+	}
+
+	err = api.FlushObject(api.AppendArgs{
+		BaseParams: defaultAPIParams,
+		Bck:        bck,
+		Object:     objName,
+		Handle:     handle,
+	})
+
+	if err != nil {
+		return fmt.Errorf("%v. Object not created", err)
+	}
+
+	_, _ = fmt.Fprintf(c.App.Writer, "APPEND %s into bucket %s of size %d\n", objName, bck.Name, totalSize)
+
+	return nil
 }
 
 func objectCheckExists(c *cli.Context, bck cmn.Bck, object string) error {

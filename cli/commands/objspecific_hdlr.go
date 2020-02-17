@@ -47,6 +47,11 @@ var (
 			targetFlag,
 			verboseFlag,
 		},
+		commandAppend: {
+			providerFlag,
+			verboseFlag,
+			recursiveFlag,
+		},
 	}
 
 	objectSpecificCmds = []cli.Command{
@@ -89,6 +94,13 @@ var (
 			Flags:        objectSpecificCmdsFlags[commandPromote],
 			Action:       promoteHandler,
 			BashComplete: putPromoteObjectCompletions,
+		},
+		{
+			Name:      commandAppend,
+			Usage:     "appends multiple files one by one into new, single object to the specified bucket",
+			ArgsUsage: appendObjectArgument,
+			Flags:     objectSpecificCmdsFlags[commandAppend],
+			Action:    appendHandler,
 		},
 	}
 )
@@ -186,6 +198,35 @@ func putHandler(c *cli.Context) (err error) {
 		return
 	}
 	return putObject(c, bck, objName, fileName)
+}
+
+func appendHandler(c *cli.Context) (err error) {
+	var (
+		bck             cmn.Bck
+		bucket, objName string
+	)
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "at least one file to upload", "object name in the form bucket/[object]")
+	}
+	if c.NArg() < 2 {
+		return missingArgumentsError(c, "object name in the form bucket/object")
+	}
+
+	fullObjName := c.Args().Get(len(c.Args()) - 1)
+	fileNames := make([]string, len(c.Args())-1)
+	for i := 0; i < len(c.Args())-1; i++ {
+		fileNames[i] = c.Args().Get(i)
+	}
+
+	bucket, objName = splitBucketObject(fullObjName)
+	if objName == "" {
+		return fmt.Errorf("object name is required")
+	}
+	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+		return
+	}
+
+	return appendObject(c, bck, objName, fileNames)
 }
 
 func promoteHandler(c *cli.Context) (err error) {

@@ -27,6 +27,11 @@ type (
 		Size int64
 	}
 )
+type FileToObjSlice []fileToObj
+
+func (a FileToObjSlice) Len() int           { return len(a) }
+func (a FileToObjSlice) Less(i, j int) bool { return a[i].path < a[j].path }
+func (a FileToObjSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // removes base part from the path making object name from it.
 // Extra step - removing leading '/' if base does not end with it
