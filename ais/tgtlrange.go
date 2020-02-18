@@ -80,7 +80,7 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 //
 //=============
 
-func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []string,
+func (t *targetrunner) doListEvictDelete(ctx context.Context, evict bool, objs []string,
 	bck *cluster.Bck, deadline time.Duration, done chan struct{}) error {
 	xdel := xaction.Registry.RenewEvictDelete(evict)
 	defer func() {
@@ -110,8 +110,11 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 			glog.Error(err)
 			continue
 		}
-		err = t.objDelete(ct, lom, evict)
+		err = t.objDelete(ctx, lom, evict)
 		if err != nil {
+			if evict && cmn.IsObjNotExist(err) {
+				continue
+			}
 			return err
 		}
 		xdel.ObjectsInc()
@@ -121,14 +124,14 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 	return nil
 }
 
-func (t *targetrunner) doListDelete(ct context.Context, objs []string, bck *cluster.Bck,
+func (t *targetrunner) doListDelete(ctx context.Context, objs []string, bck *cluster.Bck,
 	deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(ct, false /* evict */, objs, bck, deadline, done)
+	return t.doListEvictDelete(ctx, false /* evict */, objs, bck, deadline, done)
 }
 
-func (t *targetrunner) doListEvict(ct context.Context, objs []string, bck *cluster.Bck,
+func (t *targetrunner) doListEvict(ctx context.Context, objs []string, bck *cluster.Bck,
 	deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(ct, true /* evict */, objs, bck, deadline, done)
+	return t.doListEvictDelete(ctx, true /* evict */, objs, bck, deadline, done)
 }
 
 //=========

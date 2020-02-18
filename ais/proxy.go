@@ -693,7 +693,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	clone := p.bmdowner.get().clone()
 	bucketProps := cmn.DefaultBucketProps()
 	if len(cloudHeader) != 0 {
-		p.copyBckPropsFromHeader(bucketProps, cloudHeader[0])
+		bucketProps = cmn.CloudBucketProps(cloudHeader[0])
 	}
 	if !clone.add(bck, bucketProps) {
 		p.bmdowner.Unlock()
@@ -1158,8 +1158,7 @@ func (p *proxyrunner) applyNewProps(bck *cluster.Bck, propsToUpdate cmn.BucketPr
 		if cloudProps, err = p.cbExists(bck.Name); err != nil {
 			return nprops, err
 		}
-		bprops = cmn.DefaultBucketProps()
-		p.copyBckPropsFromHeader(bprops, cloudProps)
+		bprops = cmn.CloudBucketProps(cloudProps)
 	}
 
 	nprops = bprops.Clone()
@@ -1221,8 +1220,7 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, propsToUpdate cmn.Buck
 			p.bmdowner.Unlock()
 			return nprops, err
 		}
-		bprops := cmn.DefaultBucketProps()
-		p.copyBckPropsFromHeader(bprops, cloudProps)
+		bprops := cmn.CloudBucketProps(cloudProps)
 		clone.add(bck, bprops)
 	}
 
@@ -1302,13 +1300,12 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		bprops := cmn.DefaultBucketProps()
-		p.copyBckPropsFromHeader(bprops, cloudProps)
+		bprops := cmn.CloudBucketProps(cloudProps)
 		clone.add(bck, bprops)
+	} else {
+		bprops := cmn.DefaultBucketProps()
+		clone.set(bck, bprops)
 	}
-
-	bprops := cmn.DefaultBucketProps()
-	clone.set(bck, bprops)
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
 
@@ -1746,18 +1743,6 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 	err = bck.Init(p.bmdowner, p.si)
 	cmn.AssertNoErr(err)
 	return
-}
-
-func (p *proxyrunner) copyBckPropsFromHeader(props *cmn.BucketProps, header http.Header) {
-	if props == nil || len(header) == 0 {
-		return
-	}
-
-	if verStr := header.Get(cmn.HeaderBucketVerEnabled); verStr != "" {
-		if versioning, err := cmn.ParseBool(verStr); err == nil {
-			props.Versioning.Enabled = versioning
-		}
-	}
 }
 
 func (p *proxyrunner) cbExists(bucket string) (header http.Header, err error) {

@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -412,6 +413,20 @@ func DefaultBucketProps() *BucketProps {
 		AccessAttrs: AllowAllAccess,
 		EC:          c.EC,
 	}
+}
+
+func CloudBucketProps(header http.Header) (props *BucketProps) {
+	props = DefaultBucketProps()
+	if props == nil || len(header) == 0 {
+		return
+	}
+
+	if verStr := header.Get(HeaderBucketVerEnabled); verStr != "" {
+		if versioning, err := ParseBool(verStr); err == nil {
+			props.Versioning.Enabled = versioning
+		}
+	}
+	return props
 }
 
 func (to *BucketProps) CopyFrom(from *BucketProps) {
