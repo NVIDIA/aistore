@@ -18,43 +18,31 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-// The whole layout of the lom xattr looks like this:
+// On-disk metadata layout - changing any of this must be done with respect
+// to backward compatibility (and with caution).
 //
 // | ------------------ PREAMBLE ----------------- | --- MD VALUES ---- |
 // | --- 1 --- | ----- 1 ----- | -- [CKSUM LEN] -- | - [METADATA LEN] - |
 // |  version  | checksum-type |   checksum-value  | ---- metadata ---- |
 //
-// version - determines the layout version. Thanks to this we can be backward
-//  compatible and deprecate old versions if needed.
-// checksum-type - determines the checksum algorithm used to compute checksum
-//  of the metadata.
-// checksum-value - computed checksum of the metadata. The length of the checksum
-//  can vary depending on the checksum algorithm.
-// metadata - the rest of the layout. The content of the metadata can vary depending
-//  on the version of the layout.
+// * version - determines the layout version. Thanks to this we can be backward
+//   compatible and deprecate old versions if needed.
+// * checksum-type - determines the checksum algorithm used to compute checksum
+//   of the metadata.
+// * checksum-value - computed checksum of the metadata. The length of the checksum
+//   can vary depending on the checksum algorithm.
+// * metadata - the rest of the layout. The content of the metadata can vary depending
+//   on the version of the layout.
 
 const (
-	// Describes the latest version of lom xattr layout used in AIS.
-	mdVerLatest = 1
+	mdVersion       = 1 // the one and only currently supported version
+	mdCksumTyXXHash = 1 // the one and only currently supported checksum type == xxhash
 )
 
-const (
-	// TODO: This should be merged with `cmn/cksum.go`
-	// NOTE: These constants are append only. It is forbidden to remove or change
-	//  the order of the `mdCksumTy*`.
-	mdCksumTyNone = iota
-	mdCksumTyXXHash
-	mdCksumTyLast
-)
+const XattrLOM = "user.ais.lom" // on-disk xattr name
+const xattrMaxSize = memsys.MaxSmallSlabSize
 
-var (
-	mdCksumValueLen = [mdCksumTyLast]uint16{
-		0,                     // mdCksumTyNone
-		uint16(cmn.SizeofI64), // mdCksumTyXXHash
-	}
-)
-
-// on-disk LOM attribute names (NOTE: changing any of this might break compatibility)
+// packing format internal attrs
 const (
 	lomCksumType = iota
 	lomCksumValue
@@ -63,34 +51,47 @@ const (
 	lomObjCopies
 )
 
-const (
-	XattrLOM     = "user.ais.lom"
-	xattrMaxSize = memsys.PageSize
-)
-
 // packing format separators
 const (
 	copyFQNSepa = "\x00"
 	recordSepa  = "\xe3/\xbd"
-	lenCopySepa = len(copyFQNSepa)
 	lenRecSepa  = len(recordSepa)
 )
 
+const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
+
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
+// TODO -- FIXME: xattrMaxSize == MaxSmallSlabSize is the hard limit
+//                support runtime switch small => page allocator
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
-	slab, err := lom.T.GetMMSA().GetSlab(xattrMaxSize)
-	cmn.AssertNoErr(err)
-	b := slab.Alloc()
-	read, err := fs.GetXattrBuf(lom.FQN, XattrLOM, b)
+	var (
+		size      int64
+		read      []byte
+		mdSize    = maxLmeta.Load()
+		mm        = lom.T.GetSmallMMSA()
+		buf, slab = mm.Alloc(mdSize)
+	)
+	read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 	if err != nil {
-		slab.Free(b)
-		return
+		slab.Free(buf)
+		if err != syscall.ERANGE {
+			return
+		}
+		cmn.Assert(mdSize < xattrMaxSize)
+		// 2nd attempt: max-size
+		buf, slab = mm.Alloc(xattrMaxSize)
+		read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
+		if err != nil {
+			slab.Free(buf)
+			return
+		}
 	}
-	if len(read) == 0 {
+	size = int64(len(read))
+	if size == 0 {
 		glog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
 		err = syscall.ENOENT
-		slab.Free(b)
+		slab.Free(buf)
 		return
 	}
 	md = &lom.md
@@ -98,32 +99,62 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		md = &lmeta{}
 	}
 	err = md.unmarshal(read)
-	slab.Free(b)
-	return
-}
-
-// TODO: in case of error previous metadata should be restored.
-func (lom *LOM) Persist() (err error) {
-	buf, slab, off := lom.md.marshal(lom.T.GetSmallMMSA())
-	if err = fs.SetXattr(lom.FQN, XattrLOM, buf[:off]); err != nil {
-		lom.T.FSHC(err, lom.FQN)
+	if err == nil {
+		lom._recomputeMdSize(size, mdSize)
 	}
 	slab.Free(buf)
 	return
 }
 
+func (lom *LOM) Persist() (err error) {
+	buf, mm := lom._persist()
+	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
+		lom.T.FSHC(err, lom.FQN)
+	}
+	mm.Free(buf)
+	return
+}
+
+// TODO -- FIXME: xattrMaxSize == MaxSmallSlabSize is the hard limit
+//                support runtime switch small => page allocator
+func (lom *LOM) _persist() (buf []byte, mm *memsys.MMSA) {
+	var (
+		size   int64
+		lmsize = maxLmeta.Load()
+	)
+	mm = lom.T.GetSmallMMSA()
+	buf = lom.md.marshal(mm, lmsize)
+
+	size = int64(len(buf))
+	cmn.Assert(size <= xattrMaxSize)
+	lom._recomputeMdSize(size, lmsize)
+	return
+}
+
+func (lom *LOM) _recomputeMdSize(size, mdSize int64) {
+	const grow = memsys.SmallSlabIncStep
+	var nsize int64
+	if size > mdSize {
+		nsize = cmn.MinI64(size+grow, xattrMaxSize)
+		maxLmeta.CAS(mdSize, nsize)
+	} else if mdSize == xattrMaxSize && size < xattrMaxSize-grow {
+		nsize = cmn.MinI64(size+grow, (size+xattrMaxSize)/2)
+		maxLmeta.CAS(mdSize, nsize)
+	}
+}
+
 func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
-	buf, slab, off := lom.md.marshal(lom.T.GetSmallMMSA())
+	buf, mm := lom._persist()
 	// replicate for all the copies
 	for copyFQN = range lom.md.copies {
 		if copyFQN == lom.FQN {
 			continue
 		}
-		if err = fs.SetXattr(copyFQN, XattrLOM, buf[:off]); err != nil {
+		if err = fs.SetXattr(copyFQN, XattrLOM, buf); err != nil {
 			break
 		}
 	}
-	slab.Free(buf)
+	mm.Free(buf)
 	return
 }
 
@@ -131,7 +162,7 @@ func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
 // lmeta
 //
 
-func (md *lmeta) unmarshal(mdBuf []byte) (err error) {
+func (md *lmeta) unmarshal(buf []byte) (err error) {
 	const invalid = "invalid lmeta"
 	var (
 		payload                           string
@@ -141,46 +172,18 @@ func (md *lmeta) unmarshal(mdBuf []byte) (err error) {
 		haveCksumType, haveCksumValue     bool
 		last                              bool
 	)
-
-	if len(mdBuf) < 2 {
-		return fmt.Errorf(
-			"%s: metadata too short (got: %d, expected at least: 2)",
-			invalid, len(mdBuf),
-		)
+	if len(buf) < prefLen {
+		return fmt.Errorf("%s: too short (%d)", invalid, len(buf))
 	}
-
-	version := mdBuf[0]
-	if version > mdVerLatest || version == 0 {
-		return fmt.Errorf(
-			"%s: version of metadata is invalid (got: %d, expected: (0, %d])",
-			invalid, version, mdVerLatest,
-		)
+	if buf[0] != mdVersion {
+		return fmt.Errorf("%s: unknown version %d", invalid, buf[0])
 	}
-
-	mdCksumTy := mdBuf[1]
-	if mdCksumTy >= mdCksumTyLast || mdCksumTy <= mdCksumTyNone {
-		return fmt.Errorf(
-			"%s: metadata checksum type is invalid (got: %d, expected: (%d, %d))",
-			invalid, mdCksumTy, mdCksumTyNone, mdCksumTyLast,
-		)
+	if buf[1] != mdCksumTyXXHash {
+		return fmt.Errorf("%s: unknown checksum %d", invalid, buf[1])
 	}
-
-	preambleLen := 1 + 1 + mdCksumValueLen[mdCksumTy]
-	if len(mdBuf) < int(preambleLen) {
-		return fmt.Errorf(
-			"%s: metadata too short (got: %d, expected at least: %d)",
-			invalid, len(mdBuf), preambleLen,
-		)
-	}
-
-	switch mdCksumTy {
-	case mdCksumTyXXHash:
-		payload = string(mdBuf[preambleLen:])
-		actualCksum = xxhash.Checksum64S(mdBuf[preambleLen:], cmn.MLCG32)
-		expectedCksum = binary.BigEndian.Uint64(mdBuf[2:])
-	default:
-		cmn.AssertMsg(false, "not yet implemented")
-	}
+	payload = string(buf[prefLen:])
+	actualCksum = xxhash.Checksum64S(buf[prefLen:], cmn.MLCG32)
+	expectedCksum = binary.BigEndian.Uint64(buf[2:])
 	if expectedCksum != actualCksum {
 		s := fmt.Sprintf("%v", md)
 		return cmn.NewBadMetaCksumError(expectedCksum, actualCksum, s)
@@ -261,110 +264,62 @@ func (md *lmeta) unmarshal(mdBuf []byte) (err error) {
 	return
 }
 
-func (md *lmeta) marshal(mm *memsys.MMSA) (buf []byte, slab *memsys.Slab, off int) {
-	oof := md._marshal(nil, mdCksumTyXXHash)
-	buf, slab = mm.Alloc(int64(oof))
-	cmn.Assert(len(buf) >= oof)
-	off = md._marshal(buf, mdCksumTyXXHash)
-	cmn.Assert(off == oof)
+func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
+	var (
+		cksumType, cksumValue string
+		b8                    [cmn.SizeofI64]byte
+	)
+	buf, _ = mm.Alloc(mdSize)
+	buf = buf[:prefLen] // hold it for md-xattr checksum (below)
+
+	// serialize
+	if md.cksum != nil {
+		cksumType, cksumValue = md.cksum.Get()
+		buf = _marshRecord(mm, buf, lomCksumType, cksumType, true)
+		buf = _marshRecord(mm, buf, lomCksumValue, cksumValue, true)
+	}
+	if md.version != "" {
+		buf = _marshRecord(mm, buf, lomObjVersion, md.version, true)
+	}
+	binary.BigEndian.PutUint64(b8[:], uint64(md.size))
+	buf = _marshRecord(mm, buf, lomObjSize, string(b8[:]), false)
+	if len(md.copies) > 0 {
+		buf = mm.Append(buf, recordSepa)
+		buf = _marshRecord(mm, buf, lomObjCopies, "", false)
+		buf = _marshCopies(mm, buf, md.copies)
+	}
+
+	// checksum, prepend, and return
+	buf[0] = mdVersion
+	buf[1] = mdCksumTyXXHash
+	mdCksumValue := xxhash.Checksum64S(buf[prefLen:], cmn.MLCG32)
+	binary.BigEndian.PutUint64(buf[2:], mdCksumValue)
 	return
 }
 
-func _writeCopies(buf []byte, off int, copies fs.MPI) int {
+func _marshRecord(mm *memsys.MMSA, buf []byte, key int, value string, sepa bool) []byte {
+	var bkey [cmn.SizeofI16]byte
+	binary.BigEndian.PutUint16(bkey[:], uint16(key))
+	buf = mm.Append(buf, string(bkey[:]))
+	buf = mm.Append(buf, value)
+	if sepa {
+		buf = mm.Append(buf, recordSepa)
+	}
+	return buf
+}
+
+func _marshCopies(mm *memsys.MMSA, buf []byte, copies fs.MPI) []byte {
 	var (
 		i   int
 		num = len(copies)
 	)
 	for copyFQN := range copies {
 		cmn.Assert(copyFQN != "")
-
 		i++
-		if buf == nil {
-			off += len(copyFQN)
-			if i < num {
-				off += lenCopySepa
-			}
-			continue
-		}
-		off += copy(buf[off:], copyFQN)
+		buf = mm.Append(buf, copyFQN)
 		if i < num {
-			off += copy(buf[off:], copyFQNSepa)
+			buf = mm.Append(buf, copyFQNSepa)
 		}
 	}
-	return off
-}
-
-func _marshalMD(buf []byte, off, key int, value string, sepa bool) int {
-	var (
-		bkey [cmn.SizeofI16]byte
-		bb   = bkey[0:]
-	)
-	binary.BigEndian.PutUint16(bb, uint16(key))
-	off += copy(buf[off:], bb)
-	off += copy(buf[off:], value)
-	if sepa {
-		off += copy(buf[off:], recordSepa)
-	}
-	return off
-}
-
-func _dryRunMD(_ []byte, off, _ int, value string, sepa bool) int {
-	off += cmn.SizeofI16
-	off += len(value)
-	if sepa {
-		off += lenRecSepa
-	}
-	return off
-}
-
-// buf == nil: dry-run to compute buffer size
-func (md *lmeta) _marshal(mdBuf []byte, mdCksumType uint8) (off int) {
-	var (
-		cksumType, cksumValue string
-		b8                    [cmn.SizeofI64]byte
-
-		dryRun      = mdBuf == nil
-		preambleLen = 1 + 1 + mdCksumValueLen[mdCksumType]
-	)
-	off = int(preambleLen) // Keep it for metadata checksum
-	// use the one or the other
-	f := _marshalMD
-	if dryRun {
-		f = _dryRunMD
-	}
-	// serialize
-	if md.cksum != nil {
-		cksumType, cksumValue = md.cksum.Get()
-		off = f(mdBuf, off, lomCksumType, cksumType, true)
-		off = f(mdBuf, off, lomCksumValue, cksumValue, true)
-	}
-	if md.version != "" {
-		off = f(mdBuf, off, lomObjVersion, md.version, true)
-	}
-	binary.BigEndian.PutUint64(b8[0:], uint64(md.size))
-	off = f(mdBuf, off, lomObjSize, string(b8[0:]), false)
-	if len(md.copies) > 0 {
-		if dryRun {
-			off += lenRecSepa
-		} else {
-			off += copy(mdBuf[off:], recordSepa)
-		}
-		off = f(mdBuf, off, lomObjCopies, "", false)
-		off = _writeCopies(mdBuf, off, md.copies)
-	}
-	if dryRun {
-		return // dry run done
-	}
-
-	// Checksum the metadata, prepend, and return.
-	mdBuf[0] = mdVerLatest
-	mdBuf[1] = mdCksumType
-	switch mdCksumType {
-	case mdCksumTyXXHash:
-		mdCksumValue := xxhash.Checksum64S(mdBuf[preambleLen:off], cmn.MLCG32)
-		binary.BigEndian.PutUint64(mdBuf[2:], mdCksumValue)
-	default:
-		cmn.AssertMsg(false, "not yet implemented")
-	}
-	return
+	return buf
 }

@@ -25,10 +25,8 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 	if !cmn.IsValidProvider(provider) {
 		cmn.Assert(provider == "" || provider == cmn.Cloud)
 	}
-	return &Bck{
-		Bck:   cmn.Bck{Name: name, Provider: provider, Ns: ns},
-		Props: props,
-	}
+	b := &Bck{Bck: cmn.Bck{Name: name, Provider: provider, Ns: ns}, Props: props}
+	return b
 }
 
 func NewBckEmbed(bck cmn.Bck) *Bck { return &Bck{Bck: bck} }

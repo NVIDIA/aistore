@@ -164,43 +164,43 @@ var _ = Describe("LOM Xattributes", func() {
 					b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
 					Expect(err).NotTo(HaveOccurred())
 
-					b[1] = 200 // changing byte which determines the checksum type
+					b[1] = 200 // corrupting checksum type
 					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: metadata checksum type is invalid (got: 200, expected: (0, 2))"))
+					Expect(err).To(MatchError("invalid lmeta: unknown checksum 200"))
 
 					b, err = fs.GetXattr(localFQN, cluster.XattrLOM)
 					Expect(err).NotTo(HaveOccurred())
 
-					b[1] = 0 // changing byte which determines the checksum type
+					b[1] = 0 // corrupting checksum type
 					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: metadata checksum type is invalid (got: 0, expected: (0, 2))"))
+					Expect(err).To(MatchError("invalid lmeta: unknown checksum 0"))
 				})
 
 				It("should fail when metadata version is invalid", func() {
 					b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
 					Expect(err).NotTo(HaveOccurred())
 
-					b[0] = 128 // changing byte which determines the metadata version
+					b[0] = 128 // corrupting metadata version
 					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: version of metadata is invalid (got: 128, expected: (0, 1])"))
+					Expect(err).To(MatchError("invalid lmeta: unknown version 128"))
 
-					b[0] = 0 // changing byte which determines the metadata version
+					b[0] = 0 // corrupting metadata version
 					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: version of metadata is invalid (got: 0, expected: (0, 1])"))
+					Expect(err).To(MatchError("invalid lmeta: unknown version 0"))
 				})
 
 				It("should fail when metadata is too short", func() {
 					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, []byte{1})).NotTo(HaveOccurred())
 					err := lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: metadata too short (got: 1, expected at least: 2)"))
+					Expect(err).To(HaveOccurred())
 
 					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, []byte{1, 1, 2})).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: metadata too short (got: 3, expected at least: 10)"))
+					Expect(err).To(MatchError("invalid lmeta: too short (3)"))
 				})
 
 				It("should fail when meta is corrupted", func() {

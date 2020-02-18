@@ -471,11 +471,31 @@ func (r *MMSA) Free(buf []byte) {
 	} else if size < r.slabIncStep && !r.Small && r.Sibling != nil {
 		r.Sibling.Free(buf)
 	} else {
-		a, b := size/r.slabIncStep, size%r.slabIncStep
-		cmn.Assert(b == 0 && a <= int64(r.numSlabs))
+		if r.Debug {
+			a, b := size/r.slabIncStep, size%r.slabIncStep
+			cmn.Assert(b == 0)
+			cmn.Assert(a <= int64(r.numSlabs))
+		}
 		slab := r._selectSlab(size)
 		slab.Free(buf)
 	}
+}
+
+func (r *MMSA) Append(buf []byte, bytes string) (nbuf []byte) {
+	var (
+		ll, l, c = len(buf), len(bytes), cap(buf)
+		a        = ll + l - c
+	)
+	if a > 0 {
+		nbuf, _ = r.Alloc(int64(c + a))
+		copy(nbuf, buf)
+		r.Free(buf)
+		nbuf = nbuf[:ll+l]
+	} else {
+		nbuf = buf[:ll+l]
+	}
+	copy(nbuf[ll:], bytes)
+	return
 }
 
 ///////////////

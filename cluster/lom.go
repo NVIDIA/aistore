@@ -63,6 +63,7 @@ type (
 
 var (
 	lomLocker nameLocker
+	maxLmeta  atomic.Int64
 )
 
 func init() {
@@ -71,6 +72,7 @@ func init() {
 	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
 		glog.SetV(glog.SmoduleCluster, logLvl)
 	}
+	maxLmeta.Store(xattrMaxSize)
 }
 
 //
