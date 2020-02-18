@@ -225,7 +225,6 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.state.cleanWait = sync.NewCond(&m.mu)
 
 	m.callTimeout = cmn.GCO.Get().DSort.CallTimeout
-
 	return nil
 }
 
@@ -424,7 +423,6 @@ func (m *Manager) setDSorter() (err error) {
 // setExtractCreator sets what type of file extraction and creation is used based on the RequestSpec.
 func (m *Manager) setExtractCreator() (err error) {
 	var (
-		cfg          = cmn.GCO.Get().DSort
 		keyExtractor extract.KeyExtractor
 	)
 
@@ -442,7 +440,7 @@ func (m *Manager) setExtractCreator() (err error) {
 	}
 
 	onDuplicatedRecords := func(msg string) error {
-		return m.react(cfg.DuplicatedRecords, msg)
+		return m.react(m.rs.DuplicatedRecords, msg)
 	}
 
 	var extractCreator extract.ExtractCreator

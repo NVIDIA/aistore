@@ -29,13 +29,17 @@ import (
 
 const (
 	dsortDescAllPrefix = cmn.DSortNameLowercase + "-test-integration"
+
+	scopeConfig = "config"
+	scopeSpec   = "spec"
 )
 
 var (
 	dsortDescCurPrefix = fmt.Sprintf("%s-%d-", dsortDescAllPrefix, os.Getpid())
 
-	dsorterTypes = []string{dsort.DSorterGeneralType, dsort.DSorterMemType}
-	dsortPhases  = []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase}
+	dsorterTypes       = []string{dsort.DSorterGeneralType, dsort.DSorterMemType}
+	dsortPhases        = []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase}
+	dsortSettingScopes = []string{scopeConfig, scopeSpec}
 )
 
 type (
@@ -44,6 +48,7 @@ type (
 		types     []string
 		phases    []string
 		reactions []string
+		scopes    []string
 	}
 
 	// nolint:maligned // no performance critical code
@@ -73,6 +78,9 @@ type (
 		outputShardSize string
 		maxMemUsage     string
 		dryRun          bool
+
+		missingShards     string
+		duplicatedRecords string
 
 		baseParams  api.BaseParams
 		managerUUID string
@@ -112,14 +120,29 @@ func runDSortTest(t *testing.T, dts dsortTestSpec, f interface{}) {
 					})
 				}
 			} else if len(dts.reactions) > 0 {
-				g := f.(func(dsorterType, reaction string, t *testing.T))
 				for _, reaction := range dts.reactions {
 					reaction := reaction // pin
 					t.Run(reaction, func(t *testing.T) {
 						if dts.p {
 							t.Parallel()
 						}
-						g(dsorterType, reaction, t)
+
+						if len(dts.scopes) > 0 {
+							for _, scope := range dts.scopes {
+								scope := scope // pin
+								t.Run(scope, func(t *testing.T) {
+									if dts.p {
+										t.Parallel()
+									}
+
+									g := f.(func(dsorterType, reaction, scope string, t *testing.T))
+									g(dsorterType, reaction, scope, t)
+								})
+							}
+						} else {
+							g := f.(func(dsorterType, reaction string, t *testing.T))
+							g(dsorterType, reaction, t)
+						}
 					})
 				}
 			} else {
@@ -179,6 +202,11 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 		MaxMemUsage:      df.maxMemUsage,
 		DSorterType:      df.dsorterType,
 		DryRun:           df.dryRun,
+
+		DSortConf: cmn.DSortConf{
+			MissingShards:     df.missingShards,
+			DuplicatedRecords: df.duplicatedRecords,
+		},
 	}
 }
 
@@ -1610,6 +1638,7 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 					tarballCnt:       1000,
 					fileInTarballCnt: 100,
 					maxMemUsage:      "99%",
+					missingShards:    cmn.AbortReaction,
 				}
 			)
 
@@ -1699,8 +1728,12 @@ func TestDistributedSortMissingShards(t *testing.T) {
 	}
 
 	runDSortTest(
-		t, dsortTestSpec{p: false, types: dsorterTypes, reactions: cmn.SupportedReactions},
-		func(dsorterType, reaction string, t *testing.T) {
+		t, dsortTestSpec{p: false, types: dsorterTypes, reactions: cmn.SupportedReactions, scopes: dsortSettingScopes},
+		func(dsorterType, reaction, scope string, t *testing.T) {
+			if scope != scopeConfig {
+				t.Parallel()
+			}
+
 			var (
 				m = &ioContext{
 					t: t,
@@ -1725,10 +1758,19 @@ func TestDistributedSortMissingShards(t *testing.T) {
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-			defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.AbortReaction})
-			tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
 
-			tutils.Logf("changed `missing_shards` config to: %s\n", reaction)
+			switch scope {
+			case scopeConfig:
+				defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.IgnoreReaction})
+				tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
+
+				tutils.Logf("changed `missing_shards` config to: %s\n", reaction)
+			case scopeSpec:
+				df.missingShards = reaction
+				tutils.Logf("set `missing_shards` in request spec to: %s\n", reaction)
+			default:
+				cmn.AssertMsg(false, scope)
+			}
 
 			df.init()
 			df.createInputShards()
@@ -1751,8 +1793,12 @@ func TestDistributedSortDuplications(t *testing.T) {
 	}
 
 	runDSortTest(
-		t, dsortTestSpec{p: false, types: dsorterTypes, reactions: cmn.SupportedReactions},
-		func(dsorterType, reaction string, t *testing.T) {
+		t, dsortTestSpec{p: false, types: dsorterTypes, reactions: cmn.SupportedReactions, scopes: dsortSettingScopes},
+		func(dsorterType, reaction, scope string, t *testing.T) {
+			if scope != scopeConfig {
+				t.Parallel()
+			}
+
 			var (
 				m = &ioContext{
 					t: t,
@@ -1777,8 +1823,19 @@ func TestDistributedSortDuplications(t *testing.T) {
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-			defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
-			tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
+
+			switch scope {
+			case scopeConfig:
+				defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
+				tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
+
+				tutils.Logf("changed `duplicated_records` config to: %s\n", reaction)
+			case scopeSpec:
+				df.duplicatedRecords = reaction
+				tutils.Logf("set `duplicated_records` in request spec to: %s\n", reaction)
+			default:
+				cmn.AssertMsg(false, scope)
+			}
 
 			df.init()
 			df.createInputShards()

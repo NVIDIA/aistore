@@ -504,6 +504,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 			cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 			return
 		}
+
 		if !dsortManager.inProgress() {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("no %s process in progress", cmn.DSortName))
 			return
@@ -514,10 +515,18 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		decoder := js.NewDecoder(r.Body)
-		if err := decoder.Decode(&dsortManager.creationPhase.metadata); err != nil {
+		var tmpMetadata creationPhaseMetadata
+		if err := decoder.Decode(&tmpMetadata); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
 			return
 		}
+
+		if !dsortManager.inProgress() || dsortManager.aborted() {
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("no %s process", cmn.DSortName))
+			return
+		}
+
+		dsortManager.creationPhase.metadata = tmpMetadata
 		dsortManager.startShardCreation <- struct{}{}
 	}
 }
@@ -796,14 +805,14 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 
 	// Get memory stats from targets
 	var (
-		cfg  = cmn.GCO.Get().DSort
+		err  error
 		path = cmn.URLPath(cmn.Version, cmn.Daemon)
 
 		totalAvailMemory  = uint64(0)
 		moreThanThreshold = true
 	)
 
-	dsorterMemThreshold, err := cmn.S2B(cfg.DSorterMemThreshold)
+	dsorterMemThreshold, err := cmn.S2B(parsedRS.DSorterMemThreshold)
 	cmn.AssertNoErr(err)
 
 	query := make(url.Values)

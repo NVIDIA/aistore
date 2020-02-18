@@ -931,29 +931,39 @@ func (c *DownloaderConf) Validate(_ *Config) (err error) {
 }
 
 func (c *DSortConf) Validate(_ *Config) (err error) {
-	if !StringInSlice(c.DuplicatedRecords, SupportedReactions) {
+	return c.ValidateWithOpts(nil, false)
+}
+
+func (c *DSortConf) ValidateWithOpts(_ *Config, allowEmpty bool) (err error) {
+	checkReaction := func(reaction string) bool {
+		return StringInSlice(reaction, SupportedReactions) || (allowEmpty && reaction == "")
+	}
+
+	if !checkReaction(c.DuplicatedRecords) {
 		return fmt.Errorf("invalid distributed_sort.duplicated_records: %s (expecting one of: %s)",
 			c.DuplicatedRecords, SupportedReactions)
 	}
-	if !StringInSlice(c.MissingShards, SupportedReactions) {
-		return fmt.Errorf("invalid distributed_sort.missing_records: %s (expecting one of: %s)",
+	if !checkReaction(c.MissingShards) {
+		return fmt.Errorf("invalid distributed_sort.missing_shards: %s (expecting one of: %s)",
 			c.MissingShards, SupportedReactions)
 	}
-	if !StringInSlice(c.EKMMalformedLine, SupportedReactions) {
+	if !checkReaction(c.EKMMalformedLine) {
 		return fmt.Errorf("invalid distributed_sort.ekm_malformed_line: %s (expecting one of: %s)",
 			c.EKMMalformedLine, SupportedReactions)
 	}
-	if !StringInSlice(c.EKMMissingKey, SupportedReactions) {
+	if !checkReaction(c.EKMMissingKey) {
 		return fmt.Errorf("invalid distributed_sort.ekm_missing_key: %s (expecting one of: %s)",
 			c.EKMMissingKey, SupportedReactions)
 	}
-	if _, err := ParseQuantity(c.DefaultMaxMemUsage); err != nil {
-		return fmt.Errorf("invalid distributed_sort.default_max_mem_usage: %s (err: %s)", c.DefaultMaxMemUsage, err)
+	if !allowEmpty {
+		if _, err := ParseQuantity(c.DefaultMaxMemUsage); err != nil {
+			return fmt.Errorf("invalid distributed_sort.default_max_mem_usage: %s (err: %s)", c.DefaultMaxMemUsage, err)
+		}
+		if c.CallTimeout, err = time.ParseDuration(c.CallTimeoutStr); err != nil {
+			return fmt.Errorf("invalid distributed_sort.call_timeout: %s", c.CallTimeoutStr)
+		}
 	}
-	if c.CallTimeout, err = time.ParseDuration(c.CallTimeoutStr); err != nil {
-		return fmt.Errorf("invalid distributed_sort.call_timeout: %s", c.CallTimeoutStr)
-	}
-	if _, err := S2B(c.DSorterMemThreshold); err != nil {
+	if _, err := S2B(c.DSorterMemThreshold); err != nil && (!allowEmpty || c.DSorterMemThreshold != "") {
 		return fmt.Errorf("invalid distributed_sort.dsorter_mem_threshold: %s (err: %s)", c.DSorterMemThreshold, err)
 	}
 	return nil

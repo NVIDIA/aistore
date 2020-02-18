@@ -101,6 +101,8 @@ type RequestSpec struct {
 	// debug
 	DSorterType string `json:"dsorter_type"`
 	DryRun      bool   `json:"dry_run"` // Default: false
+
+	cmn.DSortConf
 }
 
 // nolint:maligned // no performance critical code
@@ -127,6 +129,8 @@ type ParsedRequestSpec struct {
 	// debug
 	DSorterType string `json:"dsorter_type"`
 	DryRun      bool   `json:"dry_run"`
+
+	cmn.DSortConf
 }
 
 type SortAlgorithm struct {
@@ -146,7 +150,11 @@ type SortAlgorithm struct {
 // Parse returns a non-nil error if a RequestSpec is invalid. When RequestSpec
 // is valid it parses all the fields, sets the values and returns ParsedRequestSpec.
 func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
-	parsedRS := &ParsedRequestSpec{}
+	var (
+		cfg      = cmn.GCO.Get().DSort
+		parsedRS = &ParsedRequestSpec{}
+	)
+
 	if rs.Bucket == "" {
 		return parsedRS, errMissingBucket
 	}
@@ -205,7 +213,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 
 	if rs.MaxMemUsage == "" {
-		rs.MaxMemUsage = cmn.GCO.Get().DSort.DefaultMaxMemUsage
+		rs.MaxMemUsage = cfg.DefaultMaxMemUsage
 	}
 
 	parsedRS.MaxMemUsage, err = cmn.ParseQuantity(rs.MaxMemUsage)
@@ -226,6 +234,28 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	parsedRS.ExtendedMetrics = rs.ExtendedMetrics
 	parsedRS.DSorterType = rs.DSorterType
 	parsedRS.DryRun = rs.DryRun
+
+	// Check for values that override the global config.
+	if err := rs.DSortConf.ValidateWithOpts(nil, true); err != nil {
+		return nil, err
+	}
+	parsedRS.DSortConf = rs.DSortConf
+	if parsedRS.MissingShards == "" {
+		parsedRS.MissingShards = cfg.MissingShards
+	}
+	if parsedRS.EKMMalformedLine == "" {
+		parsedRS.EKMMalformedLine = cfg.EKMMalformedLine
+	}
+	if parsedRS.EKMMissingKey == "" {
+		parsedRS.EKMMissingKey = cfg.EKMMissingKey
+	}
+	if parsedRS.DuplicatedRecords == "" {
+		parsedRS.DuplicatedRecords = cfg.DuplicatedRecords
+	}
+	if parsedRS.DSorterMemThreshold == "" {
+		parsedRS.DSorterMemThreshold = cfg.DSorterMemThreshold
+	}
+
 	return parsedRS, nil
 }
 

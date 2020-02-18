@@ -282,16 +282,15 @@ func (ds *dsorterMem) cleanupStreams() error {
 	return nil
 }
 
-func (ds *dsorterMem) cleanup() {
-	ds.creationPhase.connector.free()
-	ds.creationPhase.connector = nil
-}
+func (ds *dsorterMem) cleanup() {}
 
 func (ds *dsorterMem) finalCleanup() error {
 	if err := ds.cleanupStreams(); err != nil {
 		return err
 	}
 	close(ds.creationPhase.requestedShards)
+	ds.creationPhase.connector.free()
+	ds.creationPhase.connector = nil
 	return nil
 }
 

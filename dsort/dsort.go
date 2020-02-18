@@ -132,7 +132,7 @@ func (m *Manager) start() (err error) {
 	return nil
 }
 
-func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.DSortConf) func() error {
+func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() error {
 	return func() error {
 		var (
 			warnPossibleOOM          bool
@@ -158,7 +158,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		if err = lom.Load(false); err != nil {
 			if cmn.IsErrObjNought(err) {
 				msg := fmt.Sprintf("shard %q does not exist (is missing)", shardName)
-				return m.react(cfg.MissingShards, msg)
+				return m.react(m.rs.MissingShards, msg)
 			}
 			return err
 		}
@@ -253,7 +253,6 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 // calls ExtractShard on matching files based on the given ParsedRequestSpec.
 func (m *Manager) extractLocalShards() (err error) {
 	var (
-		cfg       = &cmn.GCO.Get().DSort
 		phaseInfo = &m.extractionPhase
 	)
 
@@ -283,7 +282,7 @@ ExtractAllShards:
 		}
 
 		phaseInfo.adjuster.acquireGoroutineSema()
-		group.Go(m.extractShard(name, metrics, cfg))
+		group.Go(m.extractShard(name, metrics))
 	}
 	if err := group.Wait(); err != nil {
 		return err
@@ -615,7 +614,6 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 
 func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shard, error) {
 	var (
-		cfg            = cmn.GCO.Get().DSort
 		shards         = make([]*extract.Shard, 0)
 		externalKeyMap = make(map[string]string)
 		shardsBuilder  = make(map[string][]*extract.Shard)
@@ -654,7 +652,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		parts := strings.Split(line, m.rs.OrderFileSep)
 		if len(parts) != 2 {
 			msg := fmt.Sprintf("malformed line (%d) in external key map: %s", idx, line)
-			if err := m.react(cfg.EKMMalformedLine, msg); err != nil {
+			if err := m.react(m.rs.EKMMalformedLine, msg); err != nil {
 				return nil, err
 			}
 		}
@@ -668,7 +666,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		shardNameFmt, ok := externalKeyMap[key]
 		if !ok {
 			msg := fmt.Sprintf("extracted record %q which does not belong in external key map", key)
-			if err := m.react(cfg.EKMMissingKey, msg); err != nil {
+			if err := m.react(m.rs.EKMMissingKey, msg); err != nil {
 				return nil, err
 			}
 		}

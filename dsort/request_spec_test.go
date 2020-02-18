@@ -208,6 +208,40 @@ var _ = Describe("RequestSpec", func() {
 			Expect(parsed.CreateConcLimit).To(BeEquivalentTo(0))
 			Expect(parsed.ExtractConcLimit).To(BeEquivalentTo(0))
 		})
+
+		It("should parse spec and set the global config values or override them", func() {
+			cfg := cmn.GCO.BeginUpdate()
+			cfg.DSort.DSorterMemThreshold = "80%"
+			cfg.DSort.MissingShards = cmn.IgnoreReaction
+			cmn.GCO.CommitUpdate(cfg)
+
+			rs := RequestSpec{
+				Bucket:           "test",
+				Extension:        ExtTar,
+				InputFormat:      "prefix-{0010..0111}-suffix",
+				OutputFormat:     "prefix-{0010..0111}-suffix",
+				OutputShardSize:  "10KB",
+				CreateConcLimit:  0,
+				ExtractConcLimit: 0,
+				Algorithm:        SortAlgorithm{Kind: SortKindNone},
+
+				DSortConf: cmn.DSortConf{
+					DuplicatedRecords:   cmn.AbortReaction,
+					MissingShards:       "", // should be set to default
+					EKMMalformedLine:    cmn.IgnoreReaction,
+					EKMMissingKey:       cmn.WarnReaction,
+					DSorterMemThreshold: "",
+				},
+			}
+			parsed, err := rs.Parse()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(parsed.DuplicatedRecords).To(Equal(cmn.AbortReaction))
+			Expect(parsed.MissingShards).To(Equal(cmn.IgnoreReaction))
+			Expect(parsed.EKMMalformedLine).To(Equal(cmn.IgnoreReaction))
+			Expect(parsed.EKMMissingKey).To(Equal(cmn.WarnReaction))
+			Expect(parsed.DSorterMemThreshold).To(Equal("80%"))
+		})
 	})
 
 	Context("request specs which shall NOT pass", func() {
@@ -351,6 +385,21 @@ var _ = Describe("RequestSpec", func() {
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
 			Expect(err).To(Equal(errNegativeConcurrencyLimit))
+		})
+
+		It("should fail due to invalid dsort config value", func() {
+			rs := RequestSpec{
+				Bucket:          "test",
+				Extension:       ExtTar,
+				InputFormat:     "prefix-{0010..0111..2}-suffix",
+				OutputFormat:    "prefix-{10..111}-suffix",
+				OutputShardSize: "10KB",
+				MaxMemUsage:     "80%",
+				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				DSortConf:       cmn.DSortConf{DuplicatedRecords: "something"},
+			}
+			_, err := rs.Parse()
+			Expect(err).Should(HaveOccurred())
 		})
 	})
 })

@@ -40,7 +40,7 @@ table describes json keys which can be used in specification.
 | `input_format` | `string` | name template for input shard | yes | |
 | `output_format` | `string` | name template for output shard | yes | |
 | `bucket` | `string` | bucket where shards objects are stored | yes | |
-| `provider` | `string` | Cloud provider (ais or cloudi) | no | `"ais"` |
+| `provider` | `string` | cloud provider (ais or cloud) | no | `"ais"` |
 | `output_bucket` | `string` | bucket where new output shards will be saved | no | same as `bucket` |
 | `output_provider` | `string` | determines whether the output bucket is ais or cloud | no | same as `provider` |
 | `description` | `string` | description of dsort job | no | `""` |
@@ -56,6 +56,18 @@ table describes json keys which can be used in specification.
 | `extract_concurrency_limit` | `string` | limits number of concurrent shards extracted per disk | no | same as in `config.sh` |
 | `create_concurrency_limit` | `string` | limits number of concurrent shards created per disk | no | same as in `config.sh` |
 | `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no | `false` |
+
+There's also the possibility to override some of the values from global `distributed_sort` config via job specification.
+All values are optional - if empty, the value from global `distributed_sort` config will be used.
+For more information refer to [configuration](/docs/configuration.md).
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `duplicated_records` | `string` | what to do when duplicated records are found: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| `missing_shards` | `string` | what to do when missing shards are detected: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| `ekm_malformed_line` | `string`| what to do when extraction key map notices a malformed line: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| `ekm_missing_key` | `string` | what to do when extraction key map have a missing key: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| `dsorter_mem_threshold` | `string`| minimum free memory threshold which will activate specialized dsorter type which uses memory in creation phase - benchmarks shows that this type of dsorter behaves better than general type |
 
 #### Examples:
 

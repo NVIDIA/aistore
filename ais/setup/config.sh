@@ -142,7 +142,7 @@ cat > $CONFFILE <<EOL
 	},
 	"distributed_sort": {
 		"duplicated_records":    "ignore",
-		"missing_shards":        "abort",
+		"missing_shards":        "ignore",
 		"ekm_malformed_line":    "abort",
 		"ekm_missing_key":       "abort",
 		"default_max_mem_usage": "80%",

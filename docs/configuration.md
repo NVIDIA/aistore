@@ -105,6 +105,8 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | mirror.util_thresh | 20 | If mirroring is enabled, loadbalancer chooses an object replica to read but only if main object's mountpath utilization exceeds the replica' s mountpath utilization by this value. Main object's mountpath is the mountpath used to store the object when mirroring is disabled |
 | distributed_sort.duplicated_records | "ignore" | what to do when duplicated records are found: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
 | distributed_sort.missing_shards | "ignore" | what to do when missing shards are detected: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| distributed_sort.ekm_malformed_line | "abort" | what to do when extraction key map notices a malformed line: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| distributed_sort.ekm_missing_key | "abort" | what to do when extraction key map have a missing key: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
 | distributed_sort.call_timeout | "10m" | a maximum time a target waits for another target to respond |
 | distributed_sort.default_max_mem_usage | "80%" | a maximum amount of memory used by running dSort. Can be set as a percent of total memory(e.g `80%`) or as the number of bytes(e.g, `12G`) |
 | distributed_sort.dsorter_mem_threshold | "100GB" | minimum free memory threshold which will activate specialized dsorter type which uses memory in creation phase - benchmarks shows that this type of dsorter behaves better than general type |
