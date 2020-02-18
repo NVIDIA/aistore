@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 //
@@ -156,8 +157,10 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				if errCh != nil {
 					errCh <- err
 				}
+				tassert.CheckFatal(t, r.Close())
 				return
 			}
+
 			if ok := tryLockFile(idx); ok {
 				n := putCounter.Load()
 				if rwCanRunAsync(n, numops) {
@@ -184,6 +187,8 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 					unlockFile(idx, rwFileCreated)
 				}
 				totalOps++
+			} else {
+				tassert.CheckFatal(t, r.Close())
 			}
 			filesPut++
 			newPrc := 100 * filesPut / totalCount

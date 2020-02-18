@@ -205,18 +205,23 @@ func (r *fileReader) Description() string {
 	return description("FileReader "+r.name, r.xxHash)
 }
 
-// NewFileReader creates/opens the file, populates it with random data, closes it and returns a new fileReader
+// NewFileReader creates/opens the file, populates it with random data, and returns a new fileReader
+// Caller is responsible for closing
 func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, error) {
 	fn := path.Join(filepath, name)
 
-	f, err := os.OpenFile(fn, os.O_WRONLY|os.O_CREATE, 0666) // wr-wr-wr-
+	f, err := os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0666) // wr-wr-wr-
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 
 	hash, err := copyRandWithHash(f, size, withHash, cmn.NowRand())
 	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		f.Close()
 		return nil, err
 	}
 
@@ -224,15 +229,15 @@ func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, er
 	return &fileReader{f, fn, name, hash}, nil
 }
 
-// NewFileReaderFromFile opens an existing file, reads it to compute checksum, closes it,
+// NewFileReaderFromFile opens an existing file, reads it to compute checksum,
 // and returns a new reader.
 // See also (and note the difference from): NewFileReader
+// Caller responsible for closing
 func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 	f, err := os.Open(fn)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 
 	var hash string
 	if withHash {
@@ -243,7 +248,7 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 		slab.Free(buf)
 	}
 
-	return &fileReader{nil, fn, "" /* ais prefix */, hash}, nil
+	return &fileReader{f, fn, "" /* ais prefix */, hash}, nil
 }
 
 type sgReader struct {

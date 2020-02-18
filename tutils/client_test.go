@@ -59,7 +59,6 @@ func putFile(size int64, withHash bool) error {
 		Reader:     r,
 	}
 	err = api.PutObject(putArgs)
-	r.Close()
 	os.Remove(path.Join(dir, fn))
 	return err
 }
@@ -69,7 +68,6 @@ func putRand(size int64, withHash bool) error {
 	if err != nil {
 		return err
 	}
-	defer r.Close()
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
@@ -86,7 +84,6 @@ func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
 	if err != nil {
 		return err
 	}
-	defer r.Close()
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS},

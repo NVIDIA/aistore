@@ -118,8 +118,9 @@ func createTestFile(filePath, objName string, size int64) {
 	err := cmn.CreateDir(filePath)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	_, err = tutils.NewFileReader(filePath, objName, size, false)
+	r, err := tutils.NewFileReader(filePath, objName, size, false)
 	Expect(err).ShouldNot(HaveOccurred())
+	Expect(r.Close()).ShouldNot(HaveOccurred())
 }
 
 func newBasicLom(fqn string, t cluster.Target) *cluster.LOM {

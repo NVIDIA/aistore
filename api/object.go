@@ -276,20 +276,27 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 // The object name is specified by the 'object' argument.
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"
-func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error {
-	handle, err := args.Reader.Open()
-	if err != nil {
-		return fmt.Errorf("failed to open reader, err: %v", err)
-	}
-	defer handle.Close()
+// Assumes that args.Reader is already opened and ready for usage
+func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) (err error) {
+	defer func() {
+		if errc := args.Reader.Close(); errc != nil && err == nil {
+			err = errc
+		}
+	}()
 
+	// BodyR: ioutil.NopCloser(args.Reader):
+	// Don't allow Client.Do(req) to close the original readcloser.
+	// Despite the fact that http.Request.Body is io.Reader (not io.ReadCloser)
+	// http.NewRequest makes type assertion for io.ReadCloser and Client.Do
+	// calls Close() method at the very end. With wrapping in NopCloser, Close()
+	// call in Client.Do will have no effect and we can close the reader on our own.
 	query := cmn.AddBckToQuery(nil, args.Bck)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, args.Bck.Name, args.Object),
 		Query:  query,
-		BodyR:  handle,
+		BodyR:  ioutil.NopCloser(args.Reader),
 	}
 	req, err := reqArgs.Req()
 	if err != nil {

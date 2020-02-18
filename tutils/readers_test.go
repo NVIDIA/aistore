@@ -12,13 +12,15 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func TestFileReader(t *testing.T) {
-	_, err := tutils.NewFileReader("/tmp", "seek", 10240, false /* withHash */)
+	r, err := tutils.NewFileReader("/tmp", "seek", 10240, false /* withHash */)
 	if err != nil {
 		t.Fatal("Failed to create file reader", err)
 	}
+	tassert.CheckFatal(t, r.Close())
 }
 
 func testReaderBasic(t *testing.T, r tutils.Reader, size int64) {
@@ -288,11 +290,15 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		r, err := tutils.NewFileReader(filepath, fn, cmn.MiB, true /* withHash */)
-		r.Close()
-		os.Remove(path.Join(filepath, fn))
 		if err != nil {
+			os.Remove(path.Join(filepath, fn))
 			b.Fatal(err)
 		}
+		if err := r.Close(); err != nil {
+			os.Remove(path.Join(filepath, fn))
+			b.Fatal(err)
+		}
+		os.Remove(path.Join(filepath, fn))
 	}
 }
 
@@ -326,11 +332,15 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		r, err := tutils.NewFileReader(filepath, fn, cmn.MiB, false /* withHash */)
-		r.Close()
-		os.Remove(path.Join(filepath, fn))
 		if err != nil {
+			os.Remove(path.Join(filepath, fn))
 			b.Fatal(err)
 		}
+		if err := r.Close(); err != nil {
+			os.Remove(path.Join(filepath, fn))
+			b.Fatal(err)
+		}
+		os.Remove(path.Join(filepath, fn))
 	}
 }
 
