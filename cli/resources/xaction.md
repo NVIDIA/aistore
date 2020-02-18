@@ -28,6 +28,7 @@ The second argument is used to determine the bucket name if it is required.
 | `--json` | `bool` | Output details in JSON format | `false` |
 | `--all-items` | `bool` | If set, additionally displays old, finished xactions | `false` |
 | `--active` | `bool` | If set, displays only running xactions | `false` |
+| `--verbose` `-v` | `bool` | If set, displays extended information about xactions where available | `false` |
 
 Certain extended actions have additional CLI. In particular, global rebalance stats can also be displayed using the following command:
 

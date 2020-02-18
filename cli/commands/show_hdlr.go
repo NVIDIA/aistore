@@ -17,6 +17,18 @@ import (
 	"github.com/urfave/cli"
 )
 
+type (
+	daemonTemplateStats struct {
+		DaemonID string
+		Stats    []*stats.BaseXactStatsExt
+	}
+
+	xactionTemplateCtx struct {
+		S       *[]daemonTemplateStats
+		Verbose bool
+	}
+)
+
 var (
 	showCmdsFlags = map[string][]cli.Flag{
 		subcmdShowBucket: {
@@ -55,6 +67,7 @@ var (
 			jsonFlag,
 			allItemsFlag,
 			activeFlag,
+			verboseFlag,
 		},
 		subcmdShowRebalance: {
 			refreshFlag,
@@ -249,7 +262,22 @@ func showXactionHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	return templates.DisplayOutput(xactStatsMap, c.App.Writer, templates.XactStatsTmpl, flagIsSet(c, jsonFlag))
+	dts := make([]daemonTemplateStats, len(xactStatsMap))
+	i := 0
+	for daemonID, daemonStats := range xactStatsMap {
+		s := daemonTemplateStats{
+			DaemonID: daemonID,
+			Stats:    daemonStats,
+		}
+		dts[i] = s
+		i++
+	}
+	ctx := xactionTemplateCtx{
+		S:       &dts,
+		Verbose: flagIsSet(c, verboseFlag),
+	}
+
+	return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionsBodyTmpl, flagIsSet(c, jsonFlag))
 }
 
 func showObjectHandler(c *cli.Context) (err error) {

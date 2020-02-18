@@ -283,26 +283,33 @@ const (
 		"{{end}}\t {{FormatTime $value.StartedTime}}\t {{FormatTime $value.FinishTime}} \t {{$value.Description}}\n"
 	DSortListTmpl = DSortListHeader + "{{ range $value := . }}" + DSortListBody + "{{end}}"
 
-	XactionBaseStatsHeader = "Daemon\t Kind\t Bucket\t Objects\t Bytes\t Start\t End\t Aborted\n"
-	XactionBaseBody        = "{{$key}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t " +
-		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}} \t" +
-		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}} \t {{FormatTime $xact.StartTimeX}}\t " +
-		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}} \t {{$xact.AbortedX}}\n"
-	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
-		"Kind: {{$xact.KindX}}\n" +
-		"{{range $name, $val := $xact.Ext}}" +
-		"{{$name}}: {{$val | printf `%s`}}\t " +
-		"{{end}}" +
-		"{{end}}{{if $xact.Ext}}\n{{end}}"
-	XactStatsTmpl = XactionBaseStatsHeader +
-		"{{range $key, $daemon := .}}" + // iterate through the entire map
-		"{{range $xact := $daemon}}" + // for each daemon's xactions, print BaseXactStats
-		XactionBaseBody +
-		"{{end}}" +
-		"{{range $xact := $daemon}}" + // for each daemon's xactions, print BaseXactExtStats
-		XactionExtBody +
-		"{{end}}" +
+	// Xactions templates
+
+	XactionsBodyTmpl = XactionStatsHeader +
+		"{{range $daemon := $.S }}" +
+		XactionBody +
 		"{{end}}"
+	XactionStatsHeader = "DaemonID\tKind\tBucket\tObjects\tBytes\tStart\tEnd\tAborted" +
+		"{{if $.Verbose}}\tMore{{end}}\n" +
+		"\t\t\t\t\t\t\t{{if $.Verbose}}\t{{end}}\n" // hack - make tabwriter think that we are still in the same table
+	XactionBody = "{{range $key, $xact := $daemon.Stats}}" +
+		XactionStatsBody +
+		"{{end}}\n"
+
+	XactionStatsBody = XactionBaseBody + "{{if $.Verbose}}" + XactionExtBody + "{{end}}\n"
+	XactionBaseBody  = "{{ $daemon.DaemonID }}\t{{$xact.KindX}}\t" +
+		"{{if $xact.BucketX}}{{$xact.BucketX}}{{else}}-{{end}}\t" +
+		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t" +
+		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t{{FormatTime $xact.StartTimeX}}\t" +
+		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t{{$xact.AbortedX}}\t"
+	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
+		"{{$first := true}}" +
+		"{{range $name, $val := $xact.Ext}}" +
+		"{{if $first}}{{$first = false}}{{else}}, {{end}}{{$name}}: {{$val | printf `%s`}}" +
+		"{{end}}" +
+		"{{else}}-{{end}}"
+
+	// Buckets templates
 
 	bucketsSummariesBody = "{{range $k, $v := . }}" +
 		"{{$v.Name}}\t{{$v.ObjCount}}\t{{FormatBytesUnsigned $v.Size 2}}\t{{$v.UsedPct}}%\t{{$v.Provider}}\n" +
