@@ -1231,13 +1231,23 @@ func TestGetDuringRebalance(t *testing.T) {
 	}
 
 	var (
+		bck1 = cmn.Bck{
+			Name:     t.Name() + "_1",
+			Provider: cmn.ProviderAIS,
+		}
 		md = ioContext{
 			t:               t,
+			bck:             bck1,
 			num:             10000,
 			numGetsEachFile: 1,
 		}
+		bck2 = cmn.Bck{
+			Name:     t.Name() + "_2",
+			Provider: cmn.ProviderAIS,
+		}
 		mdAfterRebalance = ioContext{
 			t:               t,
+			bck:             bck2,
 			num:             10000,
 			numGetsEachFile: 1,
 		}
@@ -1255,6 +1265,8 @@ func TestGetDuringRebalance(t *testing.T) {
 	// Create ais bucket
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
+	tutils.CreateFreshBucket(t, mdAfterRebalance.proxyURL, mdAfterRebalance.bck)
+	defer tutils.DestroyBucket(t, mdAfterRebalance.proxyURL, mdAfterRebalance.bck)
 
 	// Unregister a target
 	err := tutils.UnregisterNode(md.proxyURL, target.ID())
@@ -1264,7 +1276,7 @@ func TestGetDuringRebalance(t *testing.T) {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-1, n)
 	}
 
-	// Start putting files into bucket
+	// PUT
 	md.puts()
 	mdAfterRebalance.puts()
 
@@ -1281,7 +1293,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	md.wg.Wait()
 
-	// read files once again
+	// read objects once again
 	mdAfterRebalance.wg.Add(mdAfterRebalance.num * mdAfterRebalance.numGetsEachFile)
 	mdAfterRebalance.gets()
 	mdAfterRebalance.wg.Wait()
@@ -1459,7 +1471,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		tutils.DestroyBucket(t, m.proxyURL, m.bck)
 	}()
 
-	// Put random files
+	// PUT random objects
 	m.puts()
 
 	// Add new mountpath to target
@@ -1468,7 +1480,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
 
-	// Read files after rebalance
+	// GET
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
 	m.wg.Wait()
@@ -1521,7 +1533,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		tutils.DestroyBucket(t, m.proxyURL, m.bck)
 	}()
 
-	// Put random files
+	// PUT random objects
 	m.puts()
 
 	if containers.DockerRunning() {
@@ -1719,7 +1731,7 @@ func TestAtimeRebalance(t *testing.T) {
 	err := tutils.UnregisterNode(m.proxyURL, target.ID())
 	tassert.CheckFatal(t, err)
 
-	// Put random files
+	// PUT random objects
 	m.puts()
 
 	// Get atime in a format that includes nanoseconds to properly check if it
