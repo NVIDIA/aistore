@@ -67,10 +67,22 @@ func (d *Snode) Digest() uint64 {
 	return d.idDigest
 }
 
-func (d *Snode) ID() string          { return d.DaemonID }
-func (d *Snode) Name() string        { return d.name }
-func (d *Snode) SetName(name string) { d.name = name }
-func (d *Snode) String() string      { return d.Name() }
+func (d *Snode) ID() string   { return d.DaemonID }
+func (d *Snode) Name() string { return d.name }
+func (d *Snode) SetName() {
+	if d.IsProxy() {
+		d.name = "p[" + d.DaemonID + "]"
+	} else {
+		cmn.Assert(d.IsTarget())
+		d.name = "t[" + d.DaemonID + "]"
+	}
+}
+func (d *Snode) String() string {
+	if d.Name() == "" {
+		d.SetName()
+	}
+	return d.Name()
+}
 
 func (d *Snode) NameEx() string {
 	if d.PublicNet.DirectURL != d.IntraControlNet.DirectURL ||

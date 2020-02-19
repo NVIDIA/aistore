@@ -408,12 +408,7 @@ func newSnode(id, proto, daeType string, publicAddr, intraControlAddr, intraData
 		IntraControlNet: intraControlNet,
 		IntraDataNet:    intraDataNet,
 	}
-	if daeType == cmn.Proxy {
-		snode.SetName("p[" + id + "]")
-	} else {
-		cmn.Assert(daeType == cmn.Target)
-		snode.SetName("t[" + id + "]")
-	}
+	snode.SetName()
 	snode.Digest()
 	return
 }
