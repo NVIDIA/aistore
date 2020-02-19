@@ -327,7 +327,10 @@ func (poi *putObjInfo) writeToFile() (err error) {
 ////////////////
 
 func (goi *getObjInfo) getObject() (err error, errCode int) {
-	var doubleCheck, retry, retried, coldGet bool
+	var (
+		doubleCheck, retry, retried, coldGet, capRead bool
+		capInfo                                       cmn.CapacityInfo
+	)
 	// under lock: lom init, restore from cluster
 	goi.lom.Lock(false)
 do:
@@ -342,7 +345,15 @@ do:
 			goi.lom.Unlock(false)
 			return err, http.StatusInternalServerError
 		}
+		capRead = true // set flag to avoid reading capUsed extra time later
+		capInfo = goi.t.AvgCapUsed(goi.lom.Config())
+		if capInfo.OOS {
+			// immediate return for no space left to restore object
+			goi.lom.Unlock(false)
+			return capInfo.Err, http.StatusInternalServerError
+		}
 	}
+
 	if coldGet && goi.lom.Bck().IsAIS() {
 		// try lookup and restore
 		goi.lom.Unlock(false)
@@ -404,6 +415,14 @@ do:
 	// 3. coldget
 	if coldGet {
 		goi.lom.Unlock(false) // `GetCold` will lock again and return with object locked
+		if !capRead {
+			capRead = true
+			capInfo = goi.t.AvgCapUsed(goi.lom.Config())
+		}
+		if capInfo.OOS {
+			// no space left to refetch object
+			return capInfo.Err, http.StatusBadRequest
+		}
 		if err := goi.lom.AllowColdGET(); err != nil {
 			return err, http.StatusBadRequest
 		}

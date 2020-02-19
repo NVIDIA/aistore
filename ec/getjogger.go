@@ -331,6 +331,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	for k, v := range nodes {
 		if v.SliceID < 1 || v.SliceID > sliceCnt {
 			glog.Errorf("Node %s has invalid slice ID %d", k, v.SliceID)
+			continue
 		}
 
 		if glog.V(4) {
