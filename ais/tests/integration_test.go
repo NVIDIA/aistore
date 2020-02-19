@@ -843,8 +843,13 @@ func TestStressRebalance(t *testing.T) {
 
 func testStressRebalance(t *testing.T, rand *rand.Rand, createlb, destroylb bool) {
 	var (
+		bck = cmn.Bck{
+			Name:     t.Name() + "Bucket",
+			Provider: cmn.ProviderAIS,
+		}
 		md = ioContext{
 			t:               t,
+			bck:             bck,
 			num:             50000,
 			numGetsEachFile: 1,
 			getErrIsFatal:   true,
