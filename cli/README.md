@@ -90,4 +90,4 @@ Setting `--provider` flag overwrites the default value.
 
 | Enum | Values | Description |
 | --- | --- | --- |
-| Provider | `local`, `cloud`, `""` | Locality of the bucket. If empty, AIS automatically determines the locality. |
+| Provider | `ais`, `cloud`, `""` | Locality of the bucket. If empty, AIS automatically determines the locality. |
