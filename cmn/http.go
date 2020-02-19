@@ -183,7 +183,7 @@ func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, 
 	}
 	var errMsg bytes.Buffer
 	if !strings.Contains(msg, ".go, #") {
-		for i := 1; i < 4; i++ {
+		for i := 1; i < 5; i++ {
 			if _, file, line, ok := runtime.Caller(i); ok {
 				f := filepath.Base(file)
 				if i > 1 {
