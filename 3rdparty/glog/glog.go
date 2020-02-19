@@ -85,6 +85,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -445,6 +446,7 @@ type loggingT struct {
 	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
 	toStderr     bool // The -logtostderr flag.
 	alsoToStderr bool // The -alsologtostderr flag.
+	oos          bool // if filesystem used for logs is out of space
 
 	// Level flag. Handled atomically.
 	stderrThreshold severity // The -stderrthreshold flag.
@@ -704,6 +706,12 @@ func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoTo
 		}
 	}
 	data := buf.Bytes()
+	if l.oos {
+		os.Stderr.Write([]byte("ERROR: out of space: "))
+		os.Stderr.Write(data)
+		l.mu.Unlock()
+		return
+	}
 	if !flag.Parsed() {
 		os.Stderr.Write([]byte("ERROR: logging before flag.Parse: "))
 		os.Stderr.Write(data)
@@ -715,22 +723,33 @@ func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoTo
 		}
 		if l.file[s] == nil {
 			if err := l.createFiles(s); err != nil {
+				if errors.Is(err, syscall.ENOSPC) {
+					l.oos = true
+				}
 				os.Stderr.Write(data) // Make sure the message appears somewhere.
 				l.exit(err)
 			}
 		}
 		switch s {
 		case fatalLog:
-			l.file[fatalLog].Write(data)
+			if l.file[fatalLog] != nil {
+				l.file[fatalLog].Write(data)
+			}
 			fallthrough
 		case errorLog:
-			l.file[errorLog].Write(data)
+			if l.file[errorLog] != nil {
+				l.file[errorLog].Write(data)
+			}
 			fallthrough
 		case warningLog:
-			l.file[warningLog].Write(data)
+			if l.file[warningLog] != nil {
+				l.file[warningLog].Write(data)
+			}
 			fallthrough
 		case infoLog:
-			l.file[infoLog].Write(data)
+			if l.file[infoLog] != nil {
+				l.file[infoLog].Write(data)
+			}
 		}
 	}
 	if s == fatalLog {
