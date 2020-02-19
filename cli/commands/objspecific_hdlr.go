@@ -47,7 +47,7 @@ var (
 			targetFlag,
 			verboseFlag,
 		},
-		commandAppend: {
+		commandCompose: {
 			providerFlag,
 			verboseFlag,
 			recursiveFlag,
@@ -96,11 +96,11 @@ var (
 			BashComplete: putPromoteObjectCompletions,
 		},
 		{
-			Name:      commandAppend,
-			Usage:     "appends multiple files one by one into new, single object to the specified bucket",
-			ArgsUsage: appendObjectArgument,
-			Flags:     objectSpecificCmdsFlags[commandAppend],
-			Action:    appendHandler,
+			Name:      commandCompose,
+			Usage:     "composes multiple files one by one into new, single object to the specified bucket",
+			ArgsUsage: composeObjectArgument,
+			Flags:     objectSpecificCmdsFlags[commandCompose],
+			Action:    composeHandler,
 		},
 	}
 )
@@ -200,7 +200,7 @@ func putHandler(c *cli.Context) (err error) {
 	return putObject(c, bck, objName, fileName)
 }
 
-func appendHandler(c *cli.Context) (err error) {
+func composeHandler(c *cli.Context) (err error) {
 	var (
 		bck             cmn.Bck
 		bucket, objName string
@@ -226,7 +226,7 @@ func appendHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	return appendObject(c, bck, objName, fileNames)
+	return composeObject(c, bck, objName, fileNames)
 }
 
 func promoteHandler(c *cli.Context) (err error) {

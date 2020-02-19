@@ -210,10 +210,10 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 	return uploadFiles(c, params)
 }
 
-func appendObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) (err error) {
+func composeObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) (err error) {
 	var (
 		bar        *mpb.Bar
-		barText    = fmt.Sprintf("Appending %d files to object %s/%s", len(fileNames), bck.Name, objName)
+		barText    = fmt.Sprintf("Composing %d files into object %s/%s", len(fileNames), bck.Name, objName)
 		filesToObj = make([]FileToObjSlice, len(fileNames))
 		p          *mpb.Progress
 		sizes      = make(map[string]int64, len(fileNames))
@@ -285,7 +285,7 @@ func appendObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		return fmt.Errorf("%v. Object not created", err)
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "APPEND %s into bucket %s of size %d\n", objName, bck.Name, totalSize)
+	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %s of size %d into bucket %s\n", objName, totalSize, bck.Name)
 
 	return nil
 }
