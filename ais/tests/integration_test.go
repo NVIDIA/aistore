@@ -243,6 +243,7 @@ func (m *ioContext) gets() {
 	var (
 		semaphore  = make(chan struct{}, 10)
 		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		totalGets  = m.num * m.numGetsEachFile
 	)
 
 	for i := 0; i < 10; i++ {
@@ -254,6 +255,7 @@ func (m *ioContext) gets() {
 		tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bck)
 	}
 
+	m.getsCompleted.Store(0)
 	for i := 0; i < m.num; i++ {
 		for j := 0; j < m.numGetsEachFile; j++ {
 			go func(idx int) {
@@ -276,7 +278,7 @@ func (m *ioContext) gets() {
 				g := m.getsCompleted.Inc()
 
 				if g%5000 == 0 {
-					tutils.Logf(" %d/%d GET requests completed...\n", g, m.num*m.numGetsEachFile)
+					tutils.Logf(" %d/%d GET requests completed...\n", g, totalGets)
 				}
 
 				// Tell other tasks they can begin to do work in parallel
@@ -788,9 +790,7 @@ func TestAckRebalance(t *testing.T) {
 		}
 	)
 
-	// Init. ioContext
 	md.saveClusterState()
-
 	if md.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", md.originalTargetCount)
 	}
@@ -819,7 +819,6 @@ func TestAckRebalance(t *testing.T) {
 	// wait for everything to finish
 	baseParams := tutils.BaseAPIParams(md.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
-	md.wg.Wait()
 
 	md.wg.Add(md.num * md.numGetsEachFile)
 	md.gets()
@@ -833,21 +832,31 @@ func TestStressRebalance(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
-	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	var (
+		md = &ioContext{
+			t: t,
+		}
+	)
+
+	md.saveClusterState()
+	if md.originalTargetCount < 4 {
+		t.Fatalf("Must have 4 or more targets in the cluster, have only %d", md.originalTargetCount)
+	}
+
+	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
+	defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
+
 	max := 3
 	for i := 1; i <= max; i++ {
-		tutils.Logf("Test #%d ======\n", i)
-		testStressRebalance(t, rand, i == 1, i == max)
+		tutils.Logf("Iteration #%d ======\n", i)
+		testStressRebalance(t, md.bck)
 	}
 }
 
-func testStressRebalance(t *testing.T, rand *rand.Rand, createlb, destroylb bool) {
+func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	var (
-		bck = cmn.Bck{
-			Name:     t.Name() + "Bucket",
-			Provider: cmn.ProviderAIS,
-		}
-		md = ioContext{
+		md = &ioContext{
 			t:               t,
 			bck:             bck,
 			num:             50000,
@@ -855,22 +864,13 @@ func testStressRebalance(t *testing.T, rand *rand.Rand, createlb, destroylb bool
 			getErrIsFatal:   true,
 		}
 	)
+
 	md.saveClusterState()
-	if md.originalTargetCount < 4 {
-		t.Fatalf("Must have 4 or more targets in the cluster, have only %d", md.originalTargetCount)
-	}
+
 	tgts := tutils.ExtractTargetNodes(md.smap)
 	i1 := rand.Intn(len(tgts))
 	i2 := (i1 + 1) % len(tgts)
 	target1, target2 := tgts[i1], tgts[i2]
-
-	// Create ais bucket
-	if createlb {
-		tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
-	}
-	if destroylb {
-		defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
-	}
 
 	// Unregister a target
 	tutils.Logf("Unregister targets: %s and %s\n", target1.URL(cmn.NetworkPublic), target2.URL(cmn.NetworkPublic))
@@ -879,25 +879,26 @@ func testStressRebalance(t *testing.T, rand *rand.Rand, createlb, destroylb bool
 	time.Sleep(time.Second)
 	err = tutils.UnregisterNode(md.proxyURL, target2.ID())
 	tassert.CheckFatal(t, err)
-	n := len(tutils.GetClusterMap(t, md.proxyURL).Tmap)
+	n := tutils.GetClusterMap(t, md.proxyURL).CountTargets()
 	if n != md.originalTargetCount-2 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-2, n)
 	}
 
-	// Start putting files into bucket
+	// Start putting objects into bucket
 	md.puts()
 
-	// read in parallel
+	// Get objects and register targets in parallel
 	md.wg.Add(md.num * md.numGetsEachFile)
-	md.gets() // TODO: add m.getAll() method to GET both already existing and recently added
+	md.gets()
 
 	// and join 2 targets in parallel
+	time.Sleep(time.Second)
 	tutils.Logf("Register 1st target %s\n", target1.URL(cmn.NetworkPublic))
 	err = tutils.RegisterNode(md.proxyURL, target1, md.smap)
 	tassert.CheckFatal(t, err)
 
 	// random sleep between the first and the second join
-	time.Sleep(time.Duration(rand.Intn(8)) * time.Second)
+	time.Sleep(time.Duration(rand.Intn(3)+1) * time.Second)
 
 	tutils.Logf("Register 2nd target %s\n", target2.URL(cmn.NetworkPublic))
 	err = tutils.RegisterNode(md.proxyURL, target2, md.smap)
@@ -1231,31 +1232,14 @@ func TestGetDuringRebalance(t *testing.T) {
 	}
 
 	var (
-		bck1 = cmn.Bck{
-			Name:     t.Name() + "_1",
-			Provider: cmn.ProviderAIS,
-		}
 		md = ioContext{
 			t:               t,
-			bck:             bck1,
-			num:             10000,
-			numGetsEachFile: 1,
-		}
-		bck2 = cmn.Bck{
-			Name:     t.Name() + "_2",
-			Provider: cmn.ProviderAIS,
-		}
-		mdAfterRebalance = ioContext{
-			t:               t,
-			bck:             bck2,
-			num:             10000,
+			num:             30000,
 			numGetsEachFile: 1,
 		}
 	)
 
-	// Init. ioContext
 	md.saveClusterState()
-	mdAfterRebalance.saveClusterState()
 
 	if md.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", md.originalTargetCount)
@@ -1265,20 +1249,17 @@ func TestGetDuringRebalance(t *testing.T) {
 	// Create ais bucket
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
-	tutils.CreateFreshBucket(t, mdAfterRebalance.proxyURL, mdAfterRebalance.bck)
-	defer tutils.DestroyBucket(t, mdAfterRebalance.proxyURL, mdAfterRebalance.bck)
 
 	// Unregister a target
 	err := tutils.UnregisterNode(md.proxyURL, target.ID())
 	tassert.CheckFatal(t, err)
-	n := len(tutils.GetClusterMap(t, md.proxyURL).Tmap)
+	n := tutils.GetClusterMap(t, md.proxyURL).CountTargets()
 	if n != md.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-1, n)
 	}
 
 	// PUT
 	md.puts()
-	mdAfterRebalance.puts()
 
 	// Start getting objects and register target in parallel
 	md.wg.Add(md.num * md.numGetsEachFile)
@@ -1293,12 +1274,12 @@ func TestGetDuringRebalance(t *testing.T) {
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	md.wg.Wait()
 
-	// read objects once again
-	mdAfterRebalance.wg.Add(mdAfterRebalance.num * mdAfterRebalance.numGetsEachFile)
-	mdAfterRebalance.gets()
-	mdAfterRebalance.wg.Wait()
+	// Get objects once again to check if they are still accessible after rebalance
+	md.wg.Add(md.num * md.numGetsEachFile)
+	md.gets()
+	md.wg.Wait()
 
-	mdAfterRebalance.ensureNoErrors()
+	md.ensureNoErrors()
 	md.assertClusterState()
 }
 
