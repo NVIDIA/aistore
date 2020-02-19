@@ -5,7 +5,6 @@
 package reb
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -251,7 +250,7 @@ func (rj *localJogger) moveObject(fqn string, ct *cluster.CT) {
 func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	var t = rj.m.t
 	if rj.xreb.Aborted() {
-		return fmt.Errorf("%s aborted traversal", rj.xreb)
+		return cmn.NewAbortedErrorDetails("traversal", rj.xreb.String())
 	}
 	if de.IsDir() {
 		return nil

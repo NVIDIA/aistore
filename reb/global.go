@@ -597,7 +597,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		t   = rj.m.t
 	)
 	if rj.xreb.Aborted() || rj.xreb.Finished() {
-		return fmt.Errorf("%s: aborted traversal", rj.xreb)
+		return cmn.NewAbortedErrorDetails("traversal", rj.xreb.String())
 	}
 	if de.IsDir() {
 		return nil

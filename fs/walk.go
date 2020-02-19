@@ -152,7 +152,6 @@ func Walk(opts *Options) error {
 	for _, fqn := range fqns {
 		if err1 := godirwalk.Walk(fqn, gOpts); err1 != nil && !os.IsNotExist(err1) {
 			if errors.As(err1, &cmn.AbortedError{}) {
-				glog.Info(err1)
 				// Errors different from cmn.AbortedError should not be overwritten
 				// by cmn.AbortedError. Assign err = err1 only when there wasn't any other error
 				if err == nil {
