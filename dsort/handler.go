@@ -330,7 +330,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 			cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if !metrics.Archived {
+		if !metrics.Archived.Load() {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("%s process %s still in progress and cannot be removed", cmn.DSortName, managerUUID))
 			return
 		}
@@ -613,7 +613,7 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 		return
 	}
-	if dsortManager.Metrics.Archived {
+	if dsortManager.Metrics.Archived.Load() {
 		s := fmt.Sprintf("invalid request: %s job with uuid %s has already finished", cmn.DSortName, managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusGone)
 		return

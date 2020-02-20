@@ -23,6 +23,7 @@
 package atomic
 
 import (
+	"encoding/json"
 	"math"
 	"sync/atomic"
 	"time"
@@ -238,6 +239,11 @@ type Bool struct {
 	v      uint32
 }
 
+var (
+	_ json.Marshaler   = &Bool{}
+	_ json.Unmarshaler = &Bool{}
+)
+
 // NewBool creates a Bool.
 func NewBool(initial bool) *Bool {
 	return &Bool{v: boolToInt(initial)}
@@ -266,6 +272,19 @@ func (b *Bool) Swap(new bool) bool {
 // Toggle atomically negates the Boolean and returns the previous value.
 func (b *Bool) Toggle() bool {
 	return truthy(atomic.AddUint32(&b.v, 1) - 1)
+}
+
+func (b *Bool) MarshalJSON() ([]byte, error) {
+	return json.Marshal(b.Load())
+}
+
+func (b *Bool) UnmarshalJSON(data []byte) error {
+	var y bool
+	if err := json.Unmarshal(data, &y); err != nil {
+		return err
+	}
+	b.Store(y)
+	return nil
 }
 
 func truthy(n uint32) bool {

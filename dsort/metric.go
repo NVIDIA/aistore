@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -187,9 +188,9 @@ type Metrics struct {
 	Creation   *ShardCreation   `json:"shard_creation,omitempty"`
 
 	// Aborted specifies if the DSort has been aborted or not.
-	Aborted bool `json:"aborted,omitempty"`
+	Aborted atomic.Bool `json:"aborted,omitempty"`
 	// Archived specifies if the DSort has been archived to persistent storage.
-	Archived bool `json:"archived,omitempty"`
+	Archived atomic.Bool `json:"archived,omitempty"`
 
 	// Description of the job.
 	Description string `json:"description,omitempty"`
@@ -236,7 +237,7 @@ func newMetrics(description string, extended bool) *Metrics {
 
 // setAbortedTo updates aborted state of DSort.
 func (m *Metrics) setAbortedTo(b bool) {
-	m.Aborted = b
+	m.Aborted.Store(b)
 }
 
 // Lock locks all phases to make sure that all of them can be updated.
@@ -311,8 +312,8 @@ func (m *Metrics) ToJobInfo(id string) JobInfo {
 		SortingDuration:   m.Sorting.Elapsed,
 		CreationDuration:  m.Creation.Elapsed,
 
-		Aborted:     m.Aborted,
-		Archived:    m.Archived,
+		Aborted:     m.Aborted.Load(),
+		Archived:    m.Archived.Load(),
 		Description: m.Description,
 	}
 }

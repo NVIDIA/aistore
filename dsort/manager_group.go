@@ -137,7 +137,7 @@ func (mg *ManagerGroup) Remove(managerUUID string) error {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 
-	if manager, ok := mg.managers[managerUUID]; ok && !manager.Metrics.Archived {
+	if manager, ok := mg.managers[managerUUID]; ok && !manager.Metrics.Archived.Load() {
 		return errors.Errorf("%s process %s still in progress and cannot be removed", cmn.DSortName, managerUUID)
 	} else if ok {
 		delete(mg.managers, managerUUID)
@@ -167,7 +167,7 @@ func (mg *ManagerGroup) persist(managerUUID string) {
 		return
 	}
 
-	manager.Metrics.Archived = true
+	manager.Metrics.Archived.Store(true)
 	config := cmn.GCO.Get()
 	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
 	if err != nil {

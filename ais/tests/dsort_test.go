@@ -413,7 +413,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 	case cmn.AbortReaction:
 		totalErrors := 0
 		for target, metrics := range allMetrics {
-			if !metrics.Aborted {
+			if !metrics.Aborted.Load() {
 				df.m.t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
 			}
 			totalErrors += len(metrics.Errors)
@@ -470,9 +470,9 @@ func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.Metri
 	}
 
 	for target, metrics := range allMetrics {
-		if expectAbort && !metrics.Aborted {
+		if expectAbort && !metrics.Aborted.Load() {
 			df.m.t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
-		} else if !expectAbort && metrics.Aborted {
+		} else if !expectAbort && metrics.Aborted.Load() {
 			df.m.t.Errorf("%s was aborted by target: %s", cmn.DSortName, target)
 		}
 	}
@@ -1217,7 +1217,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 					}
 
 					for target, metrics := range allMetrics {
-						if entry.missingKeys && !metrics.Aborted {
+						if entry.missingKeys && !metrics.Aborted.Load() {
 							t.Errorf("%s was not aborted by target: %s", target, cmn.DSortName)
 						}
 					}
@@ -1392,7 +1392,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			}
 
 			for target, metrics := range allMetrics {
-				if !metrics.Aborted {
+				if !metrics.Aborted.Load() {
 					t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
 				}
 			}

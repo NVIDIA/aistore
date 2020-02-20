@@ -834,8 +834,8 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 		allAborted := true
 		allFinished := true
 		for _, metrics := range allMetrics {
-			allAborted = allAborted && metrics.Aborted
-			allFinished = allFinished && !metrics.Aborted && metrics.Extraction.Finished && metrics.Sorting.Finished && metrics.Creation.Finished
+			allAborted = allAborted && metrics.Aborted.Load()
+			allFinished = allFinished && !metrics.Aborted.Load() && metrics.Extraction.Finished && metrics.Sorting.Finished && metrics.Creation.Finished
 		}
 
 		if allAborted {

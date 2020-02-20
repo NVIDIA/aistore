@@ -327,7 +327,7 @@ func (b *dsortProgressBar) run() (dsortResult, error) {
 			break
 		}
 
-		if targetMetrics.Aborted {
+		if targetMetrics.Aborted.Load() {
 			b.aborted = true
 			break
 		}
@@ -445,7 +445,7 @@ func printMetrics(w io.Writer, id string) (aborted, finished bool, err error) {
 	aborted = false
 	finished = true
 	for _, targetMetrics := range resp {
-		aborted = aborted || targetMetrics.Aborted
+		aborted = aborted || targetMetrics.Aborted.Load()
 		finished = finished && targetMetrics.Creation.Finished
 	}
 
@@ -474,7 +474,7 @@ func printCondensedStats(w io.Writer, id string) error {
 		creationTime   time.Duration
 	)
 	for _, tm := range resp {
-		aborted = aborted || tm.Aborted
+		aborted = aborted || tm.Aborted.Load()
 		finished = finished && tm.Creation.Finished
 
 		elapsedTime = cmn.MaxDuration(elapsedTime, tm.ElapsedTime())
