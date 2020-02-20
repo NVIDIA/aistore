@@ -824,7 +824,7 @@ func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object
 // all jobs abort.
 func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err error) {
 	baseParams := BaseAPIParams(proxyURL)
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
 		allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
 		if err != nil {
