@@ -52,6 +52,21 @@ is causing significant overhead, a performance weak spot for FUSE filesystems
 in general. One of the main goals of FUSE client for AIStore is to give as good
 performance as possible by reducing the effect of mentioned overhead.
 
+#### Namespace caching
+
+Due to FUSE limitations and in favor of usability namespace caching was introduced. 
+It is a mechanism which enables faster files and directories access for a mounted bucket.
+It periodically queries AIS cluster with list bucket operation and stores directories hierarchy.
+The cache significantly improves the access time of the files and directories, but it does not improve the performance of reading/writing.
+Thanks to the cache, the overhead of accessing nested objects and directories is reduced to couple of milliseconds - without the cache it can take seconds due to unavoidable HTTP requests.
+FUSE cache updates on the spot for operations made on the local machine. The changes are also reflected in the cluster.
+External changes made by other cluster clients are reflected after next periodical request.  
+Performance of the cache depends on its configuration, which is described in latter [configuration section](#configuration). 
+However, actual cache implementation has its limitations - it's not as efficient for flat-structured buckets as for deeply nested ones.
+
+When the cache is overfilled, meaning that the space required to store whole directories structure is larger than memory limit set in configuration,
+it falls back to the slower mechanism which requires additional HTTP requests to AIS cluster.
+
 ## Prerequisites
 
 * Linux
