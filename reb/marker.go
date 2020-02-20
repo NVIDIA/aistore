@@ -68,7 +68,7 @@ func putMarker(kind string) error {
 		break
 	}
 	if mpath == nil {
-		return errors.New("Could not create rebalance marker: no mountpaths")
+		return errors.New("could not create rebalance marker: no mountpaths")
 	}
 
 	path := makeMarkerPath(mpath.Path, kind)
@@ -83,7 +83,7 @@ func removeMarker(kind string) error {
 	for _, mp := range avail {
 		path := makeMarkerPath(mp.Path, kind)
 		if errRm := os.Remove(path); errRm != nil && !os.IsNotExist(errRm) {
-			glog.Errorf("Failed to cleanup rebalance %s marker from %s: %v",
+			glog.Errorf("failed to cleanup rebalance %s marker from %s: %v",
 				kind, mp.Path, err)
 			err = errRm
 		} else if errRm == nil {
@@ -91,7 +91,7 @@ func removeMarker(kind string) error {
 		}
 	}
 	if err == nil && !deleted {
-		err = errors.New("%s marker not found on any mpath")
+		err = errors.New("marker not found on any mpath")
 	}
 	return err
 }
