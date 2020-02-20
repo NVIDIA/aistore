@@ -278,65 +278,54 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 // in the request header with the default checksum type "xxhash"
 // Assumes that args.Reader is already opened and ready for usage
 func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) (err error) {
-	defer func() {
-		if errc := args.Reader.Close(); errc != nil && err == nil {
-			err = errc
-		}
-	}()
-
-	// BodyR: ioutil.NopCloser(args.Reader):
-	// Don't allow Client.Do(req) to close the original readcloser.
-	// Despite the fact that http.Request.Body is io.Reader (not io.ReadCloser)
-	// http.NewRequest makes type assertion for io.ReadCloser and Client.Do
-	// calls Close() method at the very end. With wrapping in NopCloser, Close()
-	// call in Client.Do will have no effect and we can close the reader on our own.
+	var (
+		resp *http.Response
+		req  *http.Request
+	)
 	query := cmn.AddBckToQuery(nil, args.Bck)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, args.Bck.Name, args.Object),
 		Query:  query,
-		BodyR:  ioutil.NopCloser(args.Reader),
-	}
-	req, err := reqArgs.Req()
-	if err != nil {
-		return fmt.Errorf("failed to create new HTTP request, err: %v", err)
+		BodyR:  args.Reader,
 	}
 
-	// The HTTP package doesn't automatically set this for files, so it has to be done manually
-	// If it wasn't set, we would need to deal with the redirect manually.
-	req.GetBody = func() (io.ReadCloser, error) {
-		return args.Reader.Open()
-	}
-	if args.Hash != "" {
-		req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
-		req.Header.Set(cmn.HeaderObjCksumVal, args.Hash)
-	}
-	if len(replicateOpts) > 0 {
-		req.Header.Set(cmn.HeaderObjReplicSrc, replicateOpts[0].SourceURL)
-	}
-	if args.Size != 0 {
-		req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
-	}
-
-	setAuthToken(req, args.BaseParams)
-	resp, err := args.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
-	if err != nil {
-		sleep := httpRetrySleep
-		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
-			for i := 0; i < httpMaxRetries && err != nil; i++ {
-				time.Sleep(sleep)
-				resp, err = args.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
-				sleep += sleep / 2
-			}
+	newRequest := func(reqArgs cmn.ReqArgs) (*http.Request, error) {
+		req, err := reqArgs.Req()
+		if err != nil {
+			return nil, cmn.NewFailedToCreateHTTPRequest(err)
 		}
+
+		// The HTTP package doesn't automatically set this for files, so it has to be done manually
+		// If it wasn't set, we would need to deal with the redirect manually.
+		req.GetBody = func() (io.ReadCloser, error) {
+			return args.Reader.Open()
+		}
+		if args.Hash != "" {
+			req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
+			req.Header.Set(cmn.HeaderObjCksumVal, args.Hash)
+		}
+		if len(replicateOpts) > 0 {
+			req.Header.Set(cmn.HeaderObjReplicSrc, replicateOpts[0].SourceURL)
+		}
+		if args.Size != 0 {
+			req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
+		}
+
+		setAuthToken(req, args.BaseParams)
+		return req, nil
 	}
+
+	resp, req, err = doReqWithRetry(args.BaseParams.Client, newRequest, reqArgs)
 
 	if err != nil {
 		return fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
 	_, err = checkBadStatus(req, resp) // nolint:bodyclose // it's closed later
-	resp.Body.Close()
+	if errC := resp.Body.Close(); err == nil {
+		return errC
+	}
 	return err
 }
 
@@ -356,7 +345,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 
 	var header http.Header
 	if args.Size > 0 {
-		header := make(http.Header)
+		header = make(http.Header)
 		header.Add("Content-Length", strconv.FormatInt(args.Size, 10))
 	}
 
@@ -368,35 +357,67 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 		Query:  query,
 		BodyR:  args.Reader,
 	}
-	req, err := reqArgs.Req()
-	if err != nil {
-		return "", fmt.Errorf("failed to create new HTTP request, err: %v", err)
-	}
 
-	// The HTTP package doesn't automatically set this for files, so it has to be done manually
-	// If it wasn't set, we would need to deal with the redirect manually.
-	req.GetBody = func() (io.ReadCloser, error) {
-		return args.Reader.Open()
-	}
-	setAuthToken(req, args.BaseParams)
-	resp, err := args.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
-	if err != nil {
-		sleep := httpRetrySleep
-		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
-			for i := 0; i < httpMaxRetries && err != nil; i++ {
-				time.Sleep(sleep)
-				resp, err = args.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
-				sleep += sleep / 2
-			}
+	newRequest := func(reqArgs cmn.ReqArgs) (*http.Request, error) {
+		req, err := reqArgs.Req()
+		if err != nil {
+			return nil, cmn.NewFailedToCreateHTTPRequest(err)
 		}
+
+		// The HTTP package doesn't automatically set this for files, so it has to be done manually
+		// If it wasn't set, we would need to deal with the redirect manually.
+		req.GetBody = func() (io.ReadCloser, error) {
+			return args.Reader.Open()
+		}
+		setAuthToken(req, args.BaseParams)
+		return req, nil
 	}
 
+	resp, req, err := doReqWithRetry(args.BaseParams.Client, newRequest, reqArgs)
 	if err != nil {
 		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
+
 	defer resp.Body.Close()
 	_, err = checkBadStatus(req, resp) // nolint:bodyclose // it's closed in defer
 	return resp.Header.Get(cmn.HeaderAppendHandle), err
+}
+
+// Makes Client.Do request and retries it when got Broken Pipe or Connection Refused error
+// Should be used for PUT requests as it puts reader into a request
+func doReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.Request, error), reqArgs cmn.ReqArgs) (resp *http.Response, req *http.Request, err error) {
+	var r io.ReadCloser
+	reader := reqArgs.BodyR.(cmn.ReadOpenCloser)
+	if req, err = newRequest(reqArgs); err != nil {
+		return
+	}
+	if resp, err = client.Do(req); !shouldRetryHTTP(err) { // nolint:bodyclose // it's closed by a caller
+		return
+	}
+
+	sleep := httpRetrySleep
+	for i := 0; i < httpMaxRetries; i++ {
+		time.Sleep(sleep)
+		sleep += sleep / 2
+
+		if r, err = reader.Open(); err != nil {
+			return
+		}
+		reqArgs.BodyR = r
+
+		if req, err = newRequest(reqArgs); err != nil {
+			r.Close()
+			return
+		}
+		if resp, err = client.Do(req); !shouldRetryHTTP(err) { // nolint:bodyclose // closed by a caller
+			return
+		}
+	}
+	return
+}
+
+func shouldRetryHTTP(err error) bool {
+	return err != nil && (cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err))
 }
 
 // FlushObject API

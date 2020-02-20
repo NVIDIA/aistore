@@ -205,6 +205,10 @@ func (e *AbortedError) As(target error) bool {
 	return ok || errors.As(e.cause, &target)
 }
 
+func NewFailedToCreateHTTPRequest(err error) error {
+	return fmt.Errorf("failed to create new HTTP request, err: %v", err)
+}
+
 //////////////////////////////////
 // error grouping, error levels //
 //////////////////////////////////
