@@ -394,9 +394,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		mpList     = make(cluster.NodeMap, 10)
-		allMps     = make(map[*cluster.Snode]*cmn.MountpathList, 10)
 		origAvail  = 0
-		origOff    = 0
 	)
 
 	for targetID, tinfo := range smap.Tmap {
@@ -408,10 +406,8 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		for _, fqn := range lst.Available {
 			mpList[fqn] = tinfo
 		}
-		allMps[tinfo] = lst
 
 		origAvail += len(lst.Available)
-		origOff += len(lst.Disabled)
 	}
 
 	if origAvail == 0 {
@@ -427,9 +423,6 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		selectedTarget, selectedMpath = t, m
 		break
 	}
-
-	// create an ais bucket to write to
-	tutils.Logf("mountpath %s of %s is going offline\n", selectedMpath, selectedTarget.ID())
 
 	err := api.EnableMountpath(baseParams, selectedTarget, selectedMpath)
 	if err != nil {

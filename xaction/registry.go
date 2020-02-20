@@ -179,6 +179,7 @@ func newXactions() *registry {
 }
 
 func (r *registry) GetTaskXact(id string) entry {
+	cmn.Assert(id != "")
 	val, loaded := r.byID.Load(id)
 
 	if loaded {

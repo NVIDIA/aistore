@@ -82,6 +82,7 @@ func IsErrXactExpired(err error) bool              { _, ok := err.(*ErrXactExpir
 
 func NewXactBase(id, kind string) *XactBase {
 	stime := time.Now()
+	Assert(id != "" && kind != "")
 	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{})}
 	xact.sutime.Store(stime.UnixNano())
 	return xact
