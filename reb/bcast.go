@@ -389,7 +389,9 @@ func (reb *Manager) waitECCleanup(si *cluster.Snode, md *globArgs) bool {
 }
 
 // Wait until all nodes finishes exchanging slice lists (do pull request if
-// the remote target's data is still missing)
+// the remote target's data is still missing).
+// Returns `true` if a target has sent its namespace or the xaction
+// has been aborted, indicating that no need to do extra pull requests.
 func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 	sleep := md.config.Timeout.CplaneOperation * 2
 	locStage := uint32(rebStageECDetect)
@@ -397,6 +399,9 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 	curwt := time.Duration(0)
 
 	for curwt < maxwt {
+		if reb.xreb.Aborted() {
+			return true
+		}
 		_, exists := reb.ec.nodeData(si.ID())
 		if reb.stages.isInStage(si, locStage) && exists {
 			return true
@@ -434,10 +439,10 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 }
 
 // The loop waits until the minimal number of targets have sent push notifications.
-// If this targets has received notifications from all other targets the function
-// returns true, indicating that there is no need to do extra pull requests.
 // First stages are very short and fast targets may send their notifications too
-// quickly. So, for the first notifications there is no wait loop - just a single check
+// quickly. So, for the first notifications there is no wait loop - just a single check.
+// Returns `true` if all targets have sent push notifications or the xaction
+// has been aborted, indicating that no need to do extra pull requests.
 func (reb *Manager) waitForPushReqs(md *globArgs, stage uint32, timeout ...time.Duration) bool {
 	const defaultWaitTime = time.Minute
 	maxMissing := len(md.smap.Tmap) / 2 // TODO: is it OK to wait for half of them?
@@ -449,7 +454,7 @@ func (reb *Manager) waitForPushReqs(md *globArgs, stage uint32, timeout ...time.
 	}
 	for curWait < maxWait {
 		if reb.xreb.Aborted() {
-			return false
+			return true
 		}
 		cnt := reb.nodesNotInStage(stage)
 		if cnt < maxMissing || stage <= rebStageECNamespace {
