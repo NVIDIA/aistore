@@ -172,7 +172,7 @@ To that end, AIStore supports switching off disk IO to, effectively, perform dry
 
 | CLI argument | Environment variable | Default value | Description |
 |---|---|---|---|
-| nodiskio | AIS_NODISKIO | false | true - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and falseor 0 |
+| nodiskio | AIS_NODISKIO | false | true - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and false or 0 |
 | dryobjsize | AIS_DRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. The default value is '8m' - the size of an object is 8 megabytes |
 
 Example of deploying a cluster with disk IO disabled and object size 256KB:

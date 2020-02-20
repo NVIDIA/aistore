@@ -15,7 +15,7 @@ AIS configuration is consolidated in a single [JSON template](/ais/setup/config.
 
 AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are: user (aka public), intra-cluster control, and intra-cluster data - the corresponding JSON names are, respectively: `ipv4`, `ipv4_intra_control`, and `ipv4_intra_data`.
 
-The following picture illustrates one section of the confuration template that, in part, includes listening port:
+The following picture illustrates one section of the configuration template that, in part, includes listening port:
 
 <img src="images/ais-config-1.png" alt="Configuration: TCP port and URL" width="600">
 

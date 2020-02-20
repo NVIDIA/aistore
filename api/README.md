@@ -475,7 +475,7 @@ ___
 ### URL Query Values
 | Name | Fields | Description |
 | --- | --- | --- |
-| provider | "", "cloud", "ais" | Cloud provider - "cloud" or "ais". Other supported values include "gcp" and "aws", for Amazon and Google clouds, res    pectively. If omitted, provider of the bucket is determined by checking bucket metadata |
+| provider | "", "cloud", "ais" | Cloud provider - "cloud" or "ais". Other supported values include "gcp" and "aws", for Amazon and Google clouds, respectively. If omitted, provider of the bucket is determined by checking bucket metadata |
 
 ## Basic API Workflow
 A sample demo of the APIs listed above:

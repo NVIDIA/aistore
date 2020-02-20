@@ -7,9 +7,9 @@
 
 2. xxhash is the system-default checksum.
 
-3. user can override the system default on a bucket level, by setting checksum=none.
+3. user can override the system default on a bucket level by setting checksum=none.
 
-4. bucket (re)configuration can be done at any time. Bucket's checksumming option can be changed from xxhash to none and back, potentially multiple times and with no limitations.
+4. bucket (re)configuration can be done anytime. Bucket's checksumming option can be changed from xxhash to none and back, potentially multiple times and with no limitations.
 
 5. an object with a bad checksum cannot be retrieved (via GET) and cannot be replicated or migrated. Corrupted objects get eventually removed from the system.
 

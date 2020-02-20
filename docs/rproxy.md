@@ -61,7 +61,7 @@ When caching objects, AIStore supports **two URL schemas** for HTTP requests to 
 * XML API
 * JSON API
 
-Below are the examples of requesting the same object using these two schemas. AIStore handles both types of URLs the same way: the requested object is downloaded and cached upon the first request; all the subsequent JSON (and XML) API requests will retrive the object from the AIS storage.
+Below are the examples of requesting the same object using these two schemas. AIStore handles both types of URLs the same way: the requested object is downloaded and cached upon the first request; all the subsequent JSON (and XML) API requests will retrieve the object from the AIS storage.
 
 Example XML API:
 

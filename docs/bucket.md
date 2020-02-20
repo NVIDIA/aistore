@@ -16,9 +16,9 @@
 
 ## Bucket
 
-As one would normally expect from an object store, AIS uses the bucket abstraction.
+AIS, as an object store, uses the bucket abstraction.
 
-Buckets in AIS serve as the basic container in which objects are stored, similar to the buckets in [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html) and [Google Cloud (GCP)](https://cloud.google.com/storage/docs/key-terms#buckets).
+Each object is assigned to and stored in a basic container called bucket. AIS buckets are similar to the buckets in [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html) and [Google Cloud (GCP)](https://cloud.google.com/storage/docs/key-terms#buckets).
 
 AIS supports two kinds of buckets: **ais buckets** and **3rd party Cloud-based buckets** (or simply **cloud buckets**).
 

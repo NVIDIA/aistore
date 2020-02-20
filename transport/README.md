@@ -31,14 +31,14 @@ To test with net/http, run:
 $ go test -v -tags=nethttp
 ```
 
-or, the same, with logs reditrected to stdout:
+or, the same, with logs redirected to stdout:
 
 ```sh
 
 $ go test -v -logtostderr=true -tags=nethttp
 ```
 
-For more examplesi, see [testing](#testing) below.
+For more examples, see [testing](#testing) below.
 
 ## Description
 
@@ -54,7 +54,7 @@ A stream preserves ordering: the objects posted for sending will get *completed*
 | Object | Any [io.ReadCloser](https://golang.org/pkg/io/#ReadCloser) that is accompanied by a transport header that specifies, in part, the object's size and the object's (bucket, name) at the destination | `transport.Header{"abc", "X", nil, 1024*1024}` - specifies a 1MB object that will be named `abc/X` at the destination |
 | Object Attributes | Objects are often associated with their attributes like size, access time, checksum and version. When sending the object it is often necessary to also send these attributes with the object so the receiver can update the object metadata. | `transport.ObjectAttrs{Atime: time.Now(), Size: 13, CksumType: "xxhash", Chksum: "s0m3ck5um", Version: "2"}`
 | Object Header | A `transport.Header` structure that, in addition to bucket name, object name, and object size, carries an arbitrary (*opaque*) sequence of bytes that, for instance, may be a JSON message or anything else. | `transport.Header{"abracadabra", "p/q/s", false, []byte{'1', '2', '3'}, transport.ObjectAttrs{Size: 13}}` - describes a 13-byte object that, in the example, has some application-specific and non-nil *opaque* field in the header |
-| Receive callback | A function that has the following signature: `Receive func(http.ResponseWriter, transport.Header, io.Reader)`. Receive callback must be *registered* prior to the very first object being transferred over the stream - see next. | Notice the last parameter in the receive callback: `io.Reader`. Behind this (reading) interface, there's a special type reader supporting, in part, object boundaries. In other words, each callback invocation corresponds to one ransferred and received object. Note as well the object header that is also delivered to the receiving endpoint via the same callback. |
+| Receive callback | A function that has the following signature: `Receive func(http.ResponseWriter, transport.Header, io.Reader)`. Receive callback must be *registered* prior to the very first object being transferred over the stream - see next. | Notice the last parameter in the receive callback: `io.Reader`. Behind this (reading) interface, there's a special type reader supporting, in part, object boundaries. In other words, each callback invocation corresponds to one transferred and received object. Note as well the object header that is also delivered to the receiving endpoint via the same callback. |
 | Registering receive callback | An API to establish the one-to-one correspondence between the stream sender and the stream receiver | For instance, to register the same receive callback `foo` with two different HTTP endpoints named "ep1" and "ep2", we could call `transport.Register("n1", "ep1", foo)` and `transport.Register("n1", "ep2", foo)`, where `n1` is an http request multiplexer ("muxer") that corresponds to one of the documented networking options - see [README, section Networking](README.md). The transport will then be calling `foo()` to separately deliver the "ep1" stream to the "ep1" endpoint and "ep2" - to, respectively, "ep2". Needless to say that a per-endpoint callback is also supported and permitted. To allow registering endpoints to different http request multiplexers, one can change network parameter `transport.Register("different-network", "ep1", foo)` |
 | Object-has-been-sent callback (not to be confused with the Receive callback above) | A function or a method of the following signature: `SendCallback func(Header, io.ReadCloser, error)`, where `transport.Header` and `io.ReadCloser` represent the object that has been transmitted and error is the send error or nil | This callback can optionally be defined on a) per-stream basis (via NewStream constructor) and/or b) for a given object that is being sent (for instance, to support some sort of batch semantics). Note that object callback *overrides* the per-stream one: when (object callback) is defined i.e., non-nil, the stream callback is ignored and skipped.<br/><br/>**BEWARE:**<br/>Latency of this callback adds to the latency of the entire stream operation on the send side. It is critically important, therefore, that user implementations do not take extra locks, do not execute system calls and, generally, return as soon as possible. |
 | Header-only objects | Header-only (data-less) objects are supported - when there's no data to send (that is, when the `transport.Header.Dsize` field is set to zero), the reader (`io.ReadCloser`) is not required and the corresponding argument in the the `Send()` API can be set to nil | Header-only objects can be used to implement L6 control plane over streams, where the header's `Opaque` field gets utilized to transfer the entire (control message's) payload |
@@ -191,7 +191,7 @@ The provided implementation aggregates transport streams. A stream (or, a `trans
 
 The important distinction, though, is that while transport streams are devoid of any clustering "awareness", a *stream bundle* is fully integrated with a cluster. Internally, the implementation utilizes cluster-level abstractions, such as a *node* (`cluster.Snode`), a *cluster map* (`cluster.Smap`), and more.
 
-The provided API includes `StreamBundle` constructor that allows to establish streams between the local node and (a) all storage argets, (b) all gateways, or (c) all nodes in the cluster - in one shot:
+The provided API includes `StreamBundle` constructor that allows to establish streams between the local node and (a) all storage targets, (b) all gateways, or (c) all nodes in the cluster - in one shot:
 
 ```
 sbArgs := &SBArgs{
@@ -213,7 +213,7 @@ NewStreamBundle(
 
 ### A note on connection establishment and termination
 
->> For each of the invidual transport streams in a bundle, constructing a stream (`transport.Stream`) does not necessarily entail establishing TCP connection. Actual connection establishment is delayed until arrival (via `Send` or `SendV`) of the very first object.
+>> For each of the individual transport streams in a bundle, constructing a stream (`transport.Stream`) does not necessarily entail establishing TCP connection. Actual connection establishment is delayed until arrival (via `Send` or `SendV`) of the very first object.
 
 >> The underlying HTTP/TCP session will also terminate after a (configurable) period of inactivity, only to be re-established when (and if) the traffic picks up again.
 
@@ -225,7 +225,7 @@ The two main API methods are `Send` and `SendV`:
 * otherwise, use `SendV()` with the destinations specified as a comma-separated list, or
 * use `Send()` with a list of nodes on the receive side.
 
-Other provided APIs include terminating all contained streams - gracefully or instanteneously via `Close`, and more.
+Other provided APIs include terminating all contained streams - gracefully or instantaneously via `Close`, and more.
 
 Finally, there are two important facts to remember:
 

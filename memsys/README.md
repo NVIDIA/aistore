@@ -33,7 +33,7 @@ A typical initialization sequence includes steps, e.g.:
 ```
 The example above shows initialization that ignores errors - in particular, insifficient minimum required memory (see the previous section).
 
-Alternaitvely, MMSA can be initialized *not* to panic on errors:
+Alternatively, MMSA can be initialized *not* to panic on errors:
 ```go
 	 mm.Init(true /* panic on error */)
 ```
