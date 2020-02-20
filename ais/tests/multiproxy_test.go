@@ -151,8 +151,8 @@ func primaryCrashElectRestart(t *testing.T) {
 
 	oldPrimaryURL := smap.ProxySI.PublicNet.DirectURL
 	oldPrimaryID := smap.ProxySI.ID()
-	tutils.Logf("New primary: %s --> %s\nKilling primary: %s --> %s\n",
-		newPrimaryID, newPrimaryURL, oldPrimaryURL, smap.ProxySI.PublicNet.DaemonPort)
+	tutils.Logf("New primary: %s --> %s\n", newPrimaryID, newPrimaryURL)
+	tutils.Logf("Killing primary: %s --> %s\n", oldPrimaryURL, oldPrimaryID)
 	cmd, args, err := kill(smap.ProxySI.ID(), smap.ProxySI.PublicNet.DaemonPort)
 	// cmd and args are the original command line of how the proxy is started
 	tassert.CheckFatal(t, err)

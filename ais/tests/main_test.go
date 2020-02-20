@@ -1116,7 +1116,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	oldFileInfo, _ = os.Stat(fqn)
 
 	// Test when the contents of the file are changed
-	tutils.Logf("\nChanging contents of the file [%s]: %s\n", fileName, fqn)
+	tutils.Logf("Changing contents of the file [%s]: %s\n", fileName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
 	tassert.CheckFatal(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
@@ -1128,7 +1128,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ = os.Stat(fqn)
 
-	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
+	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
 	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
@@ -1138,7 +1138,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	fqn = findObjOnDisk(bck, objName)
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
-	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
+	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
 
