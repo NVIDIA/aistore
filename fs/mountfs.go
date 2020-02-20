@@ -52,6 +52,11 @@ type (
 		Reg(r PathRunner)
 		Unreg(r PathRunner)
 	}
+	// As a rule, running xactions are aborted and restarted on any mountpath change.
+	// But for a few xactions it can be too harsh. E.g, aborting and restarting
+	// `download` xaction results in waste of time and network traffic to
+	// redownload objects. These xactions should subscribe to mountpath changes
+	// as a `PathRunner`s to `PathRunGroup` events and adapt on the fly.
 	PathRunner interface {
 		cmn.Runner
 		SetID(string)

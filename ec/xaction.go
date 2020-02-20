@@ -452,20 +452,6 @@ func (r *xactECBase) Stats() *ECStats {
 	return r.stats.stats()
 }
 
-//
-// fsprunner methods
-//
-func (r *xactReqBase) ReqAddMountpath(mpath string) {
-	r.mpathReqCh <- mpathReq{action: cmn.ActMountpathAdd, mpath: mpath}
-}
-
-func (r *xactReqBase) ReqRemoveMountpath(mpath string) {
-	r.mpathReqCh <- mpathReq{action: cmn.ActMountpathRemove, mpath: mpath}
-}
-
-func (r *xactECBase) ReqEnableMountpath(mpath string)  { /* do nothing */ }
-func (r *xactECBase) ReqDisableMountpath(mpath string) { /* do nothing */ }
-
 type (
 	BckXacts struct {
 		get atomic.Pointer // *XactGet

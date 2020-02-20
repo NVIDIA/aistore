@@ -104,13 +104,6 @@ func (r *XactPut) Run() (err error) {
 				glog.Errorf("Invalid request's action %s for putxaction", req.Action)
 			}
 			r.dispatchRequest(req)
-		case mpathRequest := <-r.mpathReqCh:
-			switch mpathRequest.action {
-			case cmn.ActMountpathAdd:
-				r.addMpath(mpathRequest.mpath)
-			case cmn.ActMountpathRemove:
-				r.removeMpath(mpathRequest.mpath)
-			}
 		case <-r.ChanCheckTimeout():
 			idleEnds := lastAction.Add(idleTimeout)
 			if idleEnds.Before(time.Now()) && r.Timeout() {
@@ -227,37 +220,4 @@ func (r *XactPut) dispatchRequest(req *Request) {
 
 func (r *XactPut) Description() string {
 	return "encode objects upon PUT into an EC-enabled bucket"
-}
-
-//
-// fsprunner methods
-//
-func (r *XactPut) ReqAddMountpath(mpath string) {
-	r.mpathReqCh <- mpathReq{action: cmn.ActMountpathAdd, mpath: mpath}
-}
-
-func (r *XactPut) ReqRemoveMountpath(mpath string) {
-	r.mpathReqCh <- mpathReq{action: cmn.ActMountpathRemove, mpath: mpath}
-}
-
-func (r *XactPut) ReqEnableMountpath(mpath string)  { /* do nothing */ }
-func (r *XactPut) ReqDisableMountpath(mpath string) { /* do nothing */ }
-
-func (r *XactPut) addMpath(mpath string) {
-	jogger, ok := r.putJoggers[mpath]
-	if ok && jogger != nil {
-		glog.Warningf("Attempted to add already existing mountpath: %s", mpath)
-		return
-	}
-
-	putJog := r.newPutJogger(mpath)
-	r.putJoggers[mpath] = putJog
-	go putJog.run()
-}
-
-func (r *XactPut) removeMpath(mpath string) {
-	putJog, ok := r.putJoggers[mpath]
-	cmn.AssertMsg(ok, "Mountpath unregister handler for EC called with invalid mountpath")
-	putJog.stop()
-	delete(r.putJoggers, mpath)
 }
