@@ -660,7 +660,10 @@ func (c *CloudConf) Validate(_ *Config) (err error) {
 			}
 
 			// NOTE: For now assuming only single "cluster uuid" is provided.
-			for clusterUUID := range aisConf {
+			for clusterUUID, urls := range aisConf {
+				if len(urls) == 0 {
+					return fmt.Errorf("missing URL(s) to connect to remote AIS cluster")
+				}
 				c.Ns.UUID = clusterUUID
 				break
 			}

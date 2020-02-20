@@ -35,7 +35,8 @@ Cloud-based and ais buckets support the same API with minor exceptions. Cloud bu
 
 ### Bucket Provider
 
-Any storage bucket handled by AIS may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an ais bucket, that happen to share the same name? To resolve the potential naming conflict, AIS introduces the concept of *bucket provider*.
+Any storage bucket handled by AIS may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself.
+For more information about 3rd party Cloud Providers please refer to [providers readme](docs/providers.md)
 
 > Bucket provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` for ais buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
 
