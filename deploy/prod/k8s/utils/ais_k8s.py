@@ -40,35 +40,37 @@ class Ais:
     """Kitchen sink class for AIS validation on k8s
     """
 
-    #
-    # Node label selectors
-    #
-    nodeProxyLabel = 'ais-proxy-type=electable'
-    nodeNeProxyLabel = 'ais-proxy-type=nonelectable'
-    nodeTargetLabel = 'ais-target-node=yes'
-
-    #
-    # Pod label selectors
-    #
-    podProxyLabel = "app=ais,component=proxy"
-    podNeProxyLabel = "app=ais,component=ne_proxy"
-    podTargetLabel = "app=ais,component=target"
-
-    openapi_models = ais_client.models
-    openapi_params = openapi_models.InputParameters
-    openapi_actions = openapi_models.Actions
+    appname = "ais"
 
     #
     # Proxy clusterIP service selector
     #
     proxySvcLabel = "app=ais"
 
-    def __init__(self):
+    def __init__(self, relname):
         """ Load current kube config context and initialize API handles we require. """
 
         config.load_kube_config()
+        self.relname = relname
         self.v1api = client.CoreV1Api()
 
+        #
+        # Node label selectors
+        #
+        nodeProxyLabel = 'nvidia.com/ais-proxy=%s-%s-electable' % (relname, self.appname)
+        nodeNeProxyLabel = 'nvidia.com/ais-proxy=%s-%s-nonelectable' % (relname, self.appname)
+        nodeTargetLabel = 'nvidia.com/ais-target=%s-%s' % (relname, self.appname)
+    
+        #
+        # Pod label selectors
+        #
+        podProxyLabel = "release=%s,app=ais,component=proxy" % (relname)
+        podNeProxyLabel = "release=%s,app=ais,component=ne_proxy" % (relname)
+        podTargetLabel = "release=%s,app=ais,component=target" % (relname)
+    
+        openapi_models = ais_client.models
+        openapi_params = openapi_models.InputParameters
+        openapi_actions = openapi_models.Actions
         self.refreshAisK8sState()
         self.refreshAisDaemonState()
 
@@ -88,7 +90,7 @@ class Ais:
         # Look for node labeled as initial primary proxy
         #
         for node in self.nodes_proxy:
-            if node.metadata.labels.get(u'initial_primary_proxy', None) == 'yes':
+            if node.metadata.labels.get(u'nvidia.com/ais-initial-primary-proxy', None) == slef.relname:
                 self.initialPrimaryNodeName = node.metadata.name
                 break
         else:
@@ -301,7 +303,10 @@ class Ais:
         port = self.service["proxyClusterIP"].get('port', '-')
         return ip, port
 
-aisk8s = Ais()
+if len(sys.argv) != 2:
+    raise "require ais Helm release name as first argument"
+
+aisk8s = Ais(sys.argv[1])
 
 def print_ais_topo(aishdl):
     nodename_ipp = aishdl.getInitialPrimaryNodeName()

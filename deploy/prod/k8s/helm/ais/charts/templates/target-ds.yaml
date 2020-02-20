@@ -121,7 +121,7 @@ spec:
           value: "10240 65535"
       serviceAccount: {{ template "ais.name" . }}-sa
       nodeSelector:
-         {{ .Values.target.nodeSelector.key }}: {{ .Values.target.nodeSelector.value | quote }}
+         {{ .Values.target.nodeSelector.key }}: {{ template "ais.fullname" . }}
       volumes:
         - name: config-mount
           configMap:

@@ -297,12 +297,11 @@ At this stage we have an operational k8s cluster with candidate AIS target nodes
 ### Node Labeling
 
 The target and gateway pods are created in DaemonSets, controlled by k8s node labeling. You need to label:
+*   All designated gateway nodes (ie k8s nodes to host gateway pods, one per node) with `nvidia.com/ais-proxy=<release>-electable`
+*   Exactly one, it doesn’t matter which, of the gateway nodes must also be labeled `nvidia.com/ais-initial-primary-proxy=<release>`
+*   All designated target nodes must be labeled `nvidia.com/ais-target=<release>`
+in which <release> is the name of the Helm release you use in `helm install --name=...`
 
-
-
-*   All intended gateway nodes (ie k8s nodes to host gateway pods, one per node) with `ais-proxy-type=electable`
-*   Exactly one, it doesn’t matter which, of the gateway nodes must also be labeled `initial_primary_proxy=yes`
-*   All intended target nodes must be labeled `ais-target-node=yes`
 
 There’s no need to start in the final intended configuration, for example you can start a cluster with just one proxy (which will have to be that labeled initial primary) and a single target node and label additional nodes as required. You can label nodes before Helm install or after.
 
@@ -310,14 +309,15 @@ There’s no playbook for labeling, so use shell such as:
 
 
 ```
-    $ kubectl label node cpu01 initial_primary_proxy=yes
+    $ kubectl label node cpu01 nvidia.com/ais-initial-primary-proxy=demo
     $ for ((i=1; i<=12; i=i+1 )); do
     	nodename=$(printf "cpu%02d" $i)
-    	kubectl label node $nodename ais-proxy-type=electable
-    	kubectl label node $nodename ais-target-node=yes
+    	kubectl label node $nodename nvidia.com/ais-proxy=demo-electable
+    	kubectl label node $nodename ais-target=demo
     done
 ```
 
+for the case of using 'demo' as the Helm release name (i.e., `helm install --name=demo ...`)
 
 
 ### Storage For AIS
@@ -391,9 +391,9 @@ When AIS is installed with Helm, a service will be created requesting the extern
 
 You may need to open firewall rules to AIS traffic. AIS uses HTTP, but not on the usual http ports. It uses (by default) port 51080 for the gateway service, and 51081 for target pods. It is possible to configure different host port numbers to pod port numbers - but it’s less confusing to keep them the same.
 
-Port 51080 (or other value if you over-ride below) must be open on all k8s nodes that run proxy pods (are labeled `ais-proxy-type=electable`). The externalIP will only resolve to one of the nodes at a time, but it can move around over time.
+Port 51080 (or other value if you override below) must be open on all k8s nodes that run proxy pods. The externalIP will only resolve to one of the nodes at a time, but it can move around over time.
 
-Port 51081 must be open on all k8s nodes that run target pods (are labeled `ais-target-node=yes`). Client requests to the gateway service are redirected to hostPort 51081 on the target node (and from there into the target pod it hosts).
+Port 51081 must be open on all k8s nodes that run target pods. Client requests to the gateway service are redirected to hostPort 51081 on the target node (and from there into the target pod it hosts).
 
 
 ### AIS Containers
@@ -518,7 +518,6 @@ If you configured external access, then the following should show an endpoint (a
 ## http Endpoint For Clients to Access
 
 External clients use `http://<external-IP-or-dns-name>:51080` for AIS access.
-
 
 
 ## Grafana Access

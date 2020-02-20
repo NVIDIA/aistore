@@ -114,7 +114,7 @@ spec:
           value: "10240 65535"
       serviceAccount: {{ template "ais.name" . }}-sa
       nodeSelector:
-         {{ .Values.proxy.nodeSelector.key }}: {{ .Values.proxy.nodeSelector.value | quote }}
+         {{ .Values.proxy.nodeSelector.key }}: {{ template "ais.fullname" . }}-electable
       volumes:
         - name: config-mount
           configMap:

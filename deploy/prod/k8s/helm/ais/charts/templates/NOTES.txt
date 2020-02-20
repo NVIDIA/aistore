@@ -37,7 +37,7 @@
 
     ssh -NL 11111:10.132.179.45:31028 dcjb
 
-   in which 11111 is the local desktop port to forward, 10.132.179.45 the IP of a k8s node
+   where 11111 is the local desktop port to forward, 10.132.179.45 the IP of a k8s node
    located beyond the jumpbox, 31028 is the NodePort discovered as above, and dcjb
    is the jumpbox to use (ideally with an entry in .ssh/config to make access easier).
    Then browse to http://localhost:11111

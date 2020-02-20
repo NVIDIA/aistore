@@ -14,11 +14,10 @@
 # daemonset spec for the name of the init container.
 #
 
-filter="{{ .Values.proxy.initialPrimaryProxyNodeLabel.name }}={{ .Values.proxy.initialPrimaryProxyNodeLabel.value }}"
+filter="{{ .Values.proxy.initialPrimaryProxyNodeLabel.name }}={{ template "ais.fullname" . }}"
 
 #
 # XXX TODO should check the primary node is also labeled as a proxy node
-# XXX TODO Defeats running multiple AIS helm app instances.
 #
 function listmatchingnodes {
     kubectl get nodes --selector="$filter" -o="custom-columns=NAME:.metadata.name" | tail -n +2

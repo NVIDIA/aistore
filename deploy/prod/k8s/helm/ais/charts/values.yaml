@@ -151,13 +151,11 @@ proxy:
     type: ClusterIP
     port: 51080
   nodeSelector:
-    key: ais-proxy-type
-    value: "electable"
+    key: nvidia.com/ais-proxy
   resources: {}
   # Apply the below node label on any node (just 1), the proxy runs on that node will become a primary at launch
   initialPrimaryProxyNodeLabel:
-    name:  "initial_primary_proxy"
-    value: "yes"
+    name:  "nvidia.com/ais-initial-primary-proxy"
   # The path of the environment file to be passed into the ais container
   envMountPath:
     hostPath: /tmp/
@@ -194,8 +192,7 @@ ne_proxy:
     type: ClusterIP
     port: 51080      # must match that of proxy since they go behind same clusterIP service
   nodeSelector:
-    key:   ais-proxy-type
-    value: "nonelectable"
+    key:   nvidia.com/ais-proxy
   resources: {}
   # The path of the environment file to be passed into the ais container
   envMountPath:
@@ -234,8 +231,7 @@ target:
     port:     51081
     hostport: 0
   nodeSelector:
-    key:   ais-target-node
-    value: "yes"
+    key:   nvidia.com/ais-target
   resources: {}
   etcMountPath:
     hostPath: /etc/ais/target

@@ -76,7 +76,7 @@ echo "Our ais daemon id will be $AIS_DAEMONID"
 # but if it happens too quickly k8s will apply a backoff time and can eventually
 # place us in error state.
 #
-# A helm preinstall hook removes smap.json and helminstall.timestamp. We use the
+# A helm preinstall hook removes .ais./smap and helminstall.timestamp. We use the
 # latter file to record the approximate time of initial cluster deployment - approximate
 # because we only create it below and our execution may have been delayed by image download
 # etc. Really, it is a measure of the first time this proxy or target container has
@@ -116,17 +116,17 @@ if $early_startup; then
 fi
 
 #
-# The following is informational. Since smap.json is removed by the preinstall hook, seeing
-# an smap.json usually means this is an aisnode restart in an established cluster. But if
-# an aisnode exits and we restart during early startup it may already have created an smap.json
+# The following is informational. Since .ais.smap is removed by the preinstall hook, seeing
+# an .ais.smap usually means this is an aisnode restart in an established cluster. But if
+# an aisnode exits and we restart during early startup it may already have created an .ais.smap
 # which will change the startup logic for the new instance - perhaps there's a case for
-# removing the cached smap.json in the early start case, but we'll just log the existence
+# removing the cached .ais.smap in the early start case, but we'll just log the existence
 # or absence of the file.
 #
-if [[ -f /etc/ais/smap.json ]]; then
-    echo "A cached smap.json is present"
+if [[ -f /etc/ais/.ais.smap ]]; then
+    echo "A cached .ais.smap is present"
 else
-    echo "No cached smap.json"
+    echo "No cached .ais.smap"
 fi
 
 total_wait=0

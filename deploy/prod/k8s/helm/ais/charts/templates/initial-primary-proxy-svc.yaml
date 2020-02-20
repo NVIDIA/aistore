@@ -22,4 +22,4 @@ spec:
     app: {{ template "ais.name" . }}
     component: "{{ .Values.proxy.name }}"
     release: {{ .Release.Name }}
-    initial_primary_proxy: "yes"
+    nvidia.com/ais-initial-primary-proxy: {{ template "ais.fullname" . }}

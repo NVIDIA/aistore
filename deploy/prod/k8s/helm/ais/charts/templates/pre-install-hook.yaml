@@ -65,11 +65,11 @@ spec:
               - key: {{ .Values.proxy.nodeSelector.key }}
                 operator: In
                 values:
-                  - {{ .Values.proxy.nodeSelector.value | quote }}
-                  - {{ .Values.ne_proxy.nodeSelector.value | quote }}
+                  - {{ template "ais.fullname" . }}-electable
+                  - {{ template "ais.fullname" . }}-nonelectable
             - matchExpressions:
               - key: {{ .Values.target.nodeSelector.key }}
                 operator: In
                 values:
-                  - {{ .Values.target.nodeSelector.value | quote }}
+                  - {{ template "ais.fullname" . }}
 
