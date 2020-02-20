@@ -14,13 +14,7 @@ type (
 	Named struct {
 		name string
 	}
-	NamedID struct {
-		Named
-		id string
-	}
 )
 
 func (r *Named) SetRunName(n string) { r.name = n }
 func (r *Named) GetRunName() string  { return r.name }
-func (r *NamedID) SetID(id string)   { Assert(r.id == ""); r.id = id } // at construction
-func (r *NamedID) ID() string        { return r.id }

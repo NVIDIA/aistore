@@ -37,7 +37,7 @@ type (
 		DisableMountpath(path, reason string) (disabled bool, err error)
 	}
 	FSHC struct {
-		cmn.NamedID
+		cmn.Named
 		stopCh     chan struct{}
 		fileListCh chan string
 

@@ -5,11 +5,8 @@
 package ais
 
 import (
-	"fmt"
 	"sync"
-	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -29,23 +26,19 @@ type (
 		sync.RWMutex
 		t       *targetrunner
 		runners map[string]fs.PathRunner // subgroup of the daemon.runners rungroup
-		nextid  atomic.Int64
 	}
 )
 
 func (g *fsprungroup) init(t *targetrunner) {
 	g.t = t
 	g.runners = make(map[string]fs.PathRunner, 8)
-	g.nextid.Store(time.Now().UTC().UnixNano() & 0xfff)
 }
 
-func (g *fsprungroup) UID() string { return fmt.Sprintf("%d", g.nextid.Add(1)) }
-
 func (g *fsprungroup) Reg(r fs.PathRunner) {
+	cmn.Assert(r.ID() != "")
 	g.Lock()
 	_, ok := g.runners[r.ID()]
 	cmn.Assert(!ok)
-	r.SetID(g.UID())
 	g.runners[r.ID()] = r
 	g.Unlock()
 }

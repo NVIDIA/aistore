@@ -131,7 +131,7 @@ type (
 	// download related requests are made to AIS using the download endpoint,
 	// Downloader dispatches these requests to the corresponding jogger.
 	Downloader struct {
-		cmn.NamedID
+		cmn.Named
 		cmn.XactDemandBase
 		cmn.MountpathXact
 
@@ -228,23 +228,20 @@ func (pr *progressReader) Close() error {
 }
 
 // ============================= Downloader ====================================
-/*
- * Downloader implements the fs.PathRunner interface
- */
 
-var _ fs.PathRunner = &Downloader{}
+var (
+	// interface guard
+	_ fs.PathRunner = &Downloader{}
+)
 
-func (d *Downloader) ReqAddMountpath(mpath string)     { d.mpathReqCh <- fs.MountpathAdd(mpath) }
-func (d *Downloader) ReqRemoveMountpath(mpath string)  { d.mpathReqCh <- fs.MountpathRem(mpath) }
-func (d *Downloader) ReqEnableMountpath(mpath string)  {}
-func (d *Downloader) ReqDisableMountpath(mpath string) {}
+func (d *Downloader) ReqAddMountpath(mpath string)    { d.mpathReqCh <- fs.MountpathAdd(mpath) }
+func (d *Downloader) ReqRemoveMountpath(mpath string) { d.mpathReqCh <- fs.MountpathRem(mpath) }
+func (d *Downloader) ReqEnableMountpath(_ string)     {}
+func (d *Downloader) ReqDisableMountpath(_ string)    {}
 func (d *Downloader) Description() string {
 	return "download objects into a bucket"
 }
 
-/*
- * Downloader constructors
- */
 func NewDownloader(t cluster.Target, statsT stats.Tracker, f *fs.MountedFS, id, kind string) (d *Downloader) {
 	downloader := &Downloader{
 		XactDemandBase: *cmn.NewXactDemandBase(id, kind, cmn.Bck{Provider: cmn.ProviderAIS}),
