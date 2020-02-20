@@ -1049,7 +1049,10 @@ func TestCloudMirror(t *testing.T) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
-	// evict
+	m.cloudPuts()
+	defer m.cloudDelete()
+
+	tutils.Logln("evicting cloud bucket...")
 	err := api.EvictCloudBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
@@ -1065,11 +1068,8 @@ func TestCloudMirror(t *testing.T) {
 	// list
 	objectList, err := api.ListBucket(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(objectList.Entries) == m.num, "insufficient number of objects in the Cloud bucket %s, required %d", m.bck, m.num)
 
-	l := len(objectList.Entries)
-	if l < m.num {
-		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s, required %d", t.Name(), m.bck, m.num)
-	}
 	smap := tutils.GetClusterMap(t, baseParams.URL)
 	{
 		target := tutils.ExtractTargetNodes(smap)[0]
@@ -1083,15 +1083,9 @@ func TestCloudMirror(t *testing.T) {
 	}
 
 	// cold GET - causes local mirroring
-	tutils.Logf("cold GET %d object into a 2-way mirror...\n", m.num)
-	j := int(time.Now().UnixNano() % int64(l))
-	for i := 0; i < m.num; i++ {
-		e := objectList.Entries[(j+i)%l]
-		_, err := api.GetObject(baseParams, m.bck, e.Name)
-		tassert.CheckFatal(t, err)
-	}
+	m.cloudPrefetch(m.num)
 	m.ensureNumCopies(2)
-	time.Sleep(4 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	// Increase number of copies
 	makeNCopies(t, baseParams, m.bck, 3)
