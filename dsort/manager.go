@@ -75,8 +75,8 @@ type (
 	// progressState abstracts all information meta information about progress of
 	// the job.
 	progressState struct {
-		inProgress bool
-		aborted    bool
+		inProgress atomic.Bool
+		aborted    atomic.Bool
 		cleaned    uint8      // current state of the cleanliness - no cleanup, initial cleanup, final cleanup
 		cleanWait  *sync.Cond // waiting room for `cleanup` and `finalCleanup` method so then can run in correct order
 		wg         *sync.WaitGroup
@@ -534,11 +534,11 @@ func (m *Manager) decrementRef(by int64) {
 }
 
 func (m *Manager) inProgress() bool {
-	return m.state.inProgress
+	return m.state.inProgress.Load()
 }
 
 func (m *Manager) aborted() bool {
-	return m.state.aborted
+	return m.state.aborted.Load()
 }
 
 // listenAborted returns channel which is closed when DSort job was aborted.
@@ -561,7 +561,7 @@ func (m *Manager) waitForFinish() {
 func (m *Manager) setInProgressTo(inProgress bool) {
 	// If marking as finished and job was aborted to need to free everyone
 	// who is waiting.
-	m.state.inProgress = inProgress
+	m.state.inProgress.Store(inProgress)
 	if !inProgress && m.aborted() {
 		m.state.wg.Done()
 	}
@@ -585,7 +585,7 @@ func (m *Manager) setAbortedTo(aborted bool) {
 		m.state.doneCh = make(chan struct{})
 		m.state.wg = &sync.WaitGroup{}
 	}
-	m.state.aborted = aborted
+	m.state.aborted.Store(aborted)
 	m.Metrics.setAbortedTo(aborted)
 }
 
