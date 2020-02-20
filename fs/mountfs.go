@@ -615,10 +615,10 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (int, error) {
 			if empty, errEmpty := cmn.IsDirEmpty(dir); errEmpty != nil {
 				return num, errEmpty
 			} else if !empty {
-				return num, fmt.Errorf("bucket %q: directory %s already exists and is not empty", bck, dir)
+				return num, fmt.Errorf("bucket %s: directory %s already exists and is not empty", bck, dir)
 			}
 		} else if err := cmn.CreateDir(dir); err != nil {
-			return num, fmt.Errorf("bucket %q: failed to create directory %s: %v", bck, dir, err)
+			return num, fmt.Errorf("bucket %s: failed to create directory %s: %v", bck, dir, err)
 		}
 		num++
 	}
@@ -642,7 +642,7 @@ func (mfs *MountedFS) createBuckets(bckPassMsg, bckFailMsg string, bcks ...cmn.B
 			totals[bck.Name] += num
 
 			if err != nil {
-				glog.Errorf("%q (bck: %q, mpath: %q, err: %q)", bckFailMsg, bck, mi.Path, err)
+				glog.Errorf("%q (bck: %s, mpath: %q, err: %v)", bckFailMsg, bck, mi.Path, err)
 			}
 		}
 	}
@@ -674,7 +674,7 @@ func (mfs *MountedFS) destroyBuckets(passMsg, failMsg string, bcks ...cmn.Bck) e
 		for _, bck := range bcks {
 			dir := mpathInfo.MakePathBck(bck)
 			if err := mpathInfo.FastRemoveDir(dir); err != nil {
-				glog.Errorf("%q (dir: %q, err: %q)", failMsg, dir, err)
+				glog.Errorf("%q (dir: %q, err: %v)", failMsg, dir, err)
 			} else {
 				totalDestroyedDirs++
 			}

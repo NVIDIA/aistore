@@ -3180,7 +3180,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, ke
 	return true
 }
 
-// unregisters a target/proxy
+// unregister node
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster, cmn.Daemon)
 	if err != nil {
@@ -3215,11 +3215,15 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err error) {
-	// Synchronously call the target to inform it that it no longer is part of
-	// the cluster. The target should stop sending keepalive messages which could
-	// potentially reregister the target.
 	node := p.smapowner.get().GetNode(sid)
-	if node != nil && node.IsTarget() {
+	if node == nil {
+		err = fmt.Errorf("unknown node %s", sid)
+		return
+	}
+	// Synchronously call the target to inform it that it no longer is part of
+	// the cluster. The target should stop sending keepalive messages (that could
+	// potentially reregister it back into the cluster).
+	if node.IsTarget() {
 		args := callArgs{
 			si: node,
 			req: cmn.ReqArgs{
@@ -3228,17 +3232,17 @@ func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err 
 			},
 			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 		}
-		res := p.call(args)
-		if res.err != nil {
-			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", node, res.err, res.details)
+		for i := 0; i < 3; /*retries*/ i++ {
+			res := p.call(args)
+			if res.err == nil {
+				break
+			}
+			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s",
+				node, res.err, res.details)
+			time.Sleep(time.Second / 2)
 		}
-		// TODO: The call is fairly simple and we need to take care of scenarios:
-		//  * "intermittent network failure" - probably we need a retry
-		//  * "target's too busy to respond in time" - this will result in
-		//    context deadline exceeded so retry is also a good idea
-		//  * "read and write being routed to the target that is being unregistered resulting in errors..."
 	}
-
+	// NOTE: "failure to respond back" may have legitimate reasons - proceeeding even when all retries fail
 	clone, err = p.smapowner.modify(func(clone *smapX) error {
 		node = clone.GetNode(sid)
 		if node == nil {
@@ -3246,14 +3250,10 @@ func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err 
 		}
 		if node.IsProxy() {
 			clone.delProxy(sid)
-			if glog.V(3) {
-				glog.Infof("unregistered %s (num proxies %d)", node, clone.CountProxies())
-			}
+			glog.Infof("unregistered %s (num proxies %d)", node, clone.CountProxies())
 		} else {
 			clone.delTarget(sid)
-			if glog.V(3) {
-				glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
-			}
+			glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
 		}
 		return nil
 	})
