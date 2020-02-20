@@ -44,14 +44,9 @@ const (
 )
 
 var (
-	ctx      dsortContext
-	mm       *memsys.MMSA
-	once     sync.Once
-	initOnce = func() {
-		fs.CSM.RegisterContentType(filetype.DSortFileType, &filetype.DSortFile{})
-		fs.CSM.RegisterContentType(filetype.DSortWorkfileType, &filetype.DSortFile{})
-	}
-	_ cluster.Slistener = &Manager{}
+	ctx dsortContext
+	mm  *memsys.MMSA
+	_   cluster.Slistener = &Manager{}
 )
 
 type (
@@ -150,16 +145,19 @@ func RegisterNode(smap cluster.Sowner, bmdowner cluster.Bowner, snode *cluster.S
 	//       mm = &memsys.MMSA{Name: cmn.DSortName + ".MMSA", TimeIval: time.Minute * 10, ...}
 	cmn.Assert(mm == nil)
 	mm = mmsa
+
+	if t != nil {
+		err := fs.CSM.RegisterContentType(filetype.DSortFileType, &filetype.DSortFile{})
+		cmn.AssertNoErr(err)
+		err = fs.CSM.RegisterContentType(filetype.DSortWorkfileType, &filetype.DSortFile{})
+		cmn.AssertNoErr(err)
+	}
 }
 
 // init initializes all necessary fields.
 //
 // NOTE: should be done under lock.
 func (m *Manager) init(rs *ParsedRequestSpec) error {
-	// Initialize memsys and register dsort file type but only at the first
-	// time some manager will be initialized.
-	once.Do(initOnce)
-
 	// smap, nameLocker setup
 	m.ctx = ctx
 	m.smap = m.ctx.smap.Get()
