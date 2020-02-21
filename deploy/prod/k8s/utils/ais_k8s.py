@@ -57,16 +57,16 @@ class Ais:
         #
         # Node label selectors
         #
-        nodeProxyLabel = 'nvidia.com/ais-proxy=%s-%s-electable' % (relname, self.appname)
-        nodeNeProxyLabel = 'nvidia.com/ais-proxy=%s-%s-nonelectable' % (relname, self.appname)
-        nodeTargetLabel = 'nvidia.com/ais-target=%s-%s' % (relname, self.appname)
+        self.nodeProxyLabel = 'nvidia.com/ais-proxy=%s-%s-electable' % (relname, self.appname)
+        self.nodeNeProxyLabel = 'nvidia.com/ais-proxy=%s-%s-nonelectable' % (relname, self.appname)
+        self.nodeTargetLabel = 'nvidia.com/ais-target=%s-%s' % (relname, self.appname)
     
         #
         # Pod label selectors
         #
-        podProxyLabel = "release=%s,app=ais,component=proxy" % (relname)
-        podNeProxyLabel = "release=%s,app=ais,component=ne_proxy" % (relname)
-        podTargetLabel = "release=%s,app=ais,component=target" % (relname)
+        self.podProxyLabel = "release=%s,app=ais,component=proxy" % relname
+        self.podNeProxyLabel = "release=%s,app=ais,component=ne_proxy" % relname
+        self.podTargetLabel = "release=%s,app=ais,component=target" % relname
     
         openapi_models = ais_client.models
         openapi_params = openapi_models.InputParameters
@@ -90,7 +90,7 @@ class Ais:
         # Look for node labeled as initial primary proxy
         #
         for node in self.nodes_proxy:
-            if node.metadata.labels.get(u'nvidia.com/ais-initial-primary-proxy', None) == slef.relname:
+            if node.metadata.labels.get(u'nvidia.com/ais-initial-primary-proxy', None) == self.relname:
                 self.initialPrimaryNodeName = node.metadata.name
                 break
         else:
@@ -268,15 +268,15 @@ class Ais:
 
     def aisProxyPods(self):
         """Return list of electable proxy pods."""
-        return [ d.pod for d in self.daemons.proxy ]
+        return [ d.pod for d in self.daemons['proxy'] ]
 
     def aisNeProxyPods(self):
         """Return list of non electable proxy pods."""
-        return [ d.pod for d in self.daemons.ne_proxy ]
+        return [ d.pod for d in self.daemons['ne_proxy'] ]
 
     def aisTargetPods(self):
         """Return list of target pods."""
-        return [ d.pod for d in self.daemons.target ]
+        return [ d.pod for d in self.daemons['target'] ]
 
     def walkProxyPods(self, cbfunc):
         """Walk proxy pods with callback."""
@@ -304,7 +304,7 @@ class Ais:
         return ip, port
 
 if len(sys.argv) != 2:
-    raise "require ais Helm release name as first argument"
+    raise Exception("require ais Helm release name as first argument")
 
 aisk8s = Ais(sys.argv[1])
 
