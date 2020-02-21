@@ -521,8 +521,8 @@ func (s *Stream) doRequest() (err error) {
 func (s *Stream) Read(b []byte) (n int, err error) {
 	s.time.inSend.Store(true) // indication for Collector to delay cleanup
 	obj := &s.sendoff.obj
-	if obj.Reader != nil { // have object
-		if s.sendoff.dod != 0 { // fast path
+	if obj.Reader != nil { // have object - fast path
+		if s.sendoff.dod != 0 {
 			if !obj.Hdr.IsHeaderOnly() {
 				return s.sendData(b)
 			}
@@ -591,15 +591,21 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 }
 
 func (s *Stream) sendData(b []byte) (n int, err error) {
-	obj := &s.sendoff.obj
+	var (
+		obj     = &s.sendoff.obj
+		objSize = obj.Hdr.ObjAttrs.Size
+	)
 	n, err = obj.Reader.Read(b)
 	s.sendoff.off += int64(n)
 	if err != nil {
 		if err == io.EOF {
+			if s.sendoff.off < objSize {
+				return n, fmt.Errorf("%s: read (%d) shorter than expected (%d)", s, s.sendoff.off, objSize)
+			}
 			err = nil
 		}
 		s.eoObj(err)
-	} else if s.sendoff.off >= obj.Hdr.ObjAttrs.Size {
+	} else if s.sendoff.off >= objSize {
 		s.eoObj(err)
 	}
 	return
