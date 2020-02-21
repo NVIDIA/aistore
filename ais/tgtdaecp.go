@@ -17,6 +17,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -248,7 +249,7 @@ func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) {
 		lruRunning := xaction.Registry.GlobalXactRunning(cmn.ActLRU)
 		if lruRunning {
 			glog.V(3).Infof("Aborting LRU due to lru.enabled config change")
-			xaction.Registry.AbortGlobalXact(cmn.ActLRU)
+			xaction.Registry.DoAbort(cmn.ActLRU, nil)
 		}
 	}
 	return
@@ -763,17 +764,24 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 		newBMD.Range(&provider, nil, func(nbck *cluster.Bck) bool {
 			if obck.Equal(nbck, false /*ignore BID*/) {
 				present = true
-				// TODO -- FIXME: the logic applies to make-n-copies and EC xactions
 				if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
-					xaction.Registry.AbortBucketXact(cmn.ActPutCopies, obck)
+					xaction.Registry.DoAbort(cmn.ActPutCopies, nbck)
+					xaction.Registry.DoAbort(cmn.ActMakeNCopies, nbck)
 				}
+				if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
+					xaction.Registry.DoAbort(cmn.ActECEncode, nbck)
+				}
+				// TODO: in case Mirroring or EC is re-enabled we should
+				//  restart/start these xactions to handle case when we they
+				//  in the middle of the job. Revisit `ec.ECM.BucketsMDChanged`.
 				return true
 			}
 			return false
 		})
 		if !present {
 			bcksToDelete = append(bcksToDelete, obck)
-			// don't stop receiveBMD even if there was an error
+			// TODO: errors from `DestroyBuckets` should be handled locally. If we
+			//  would like to propagate them, the code in metasyncer should be revisited.
 			if err := fs.Mountpaths.DestroyBuckets("receive-bmd", obck.Bck); err != nil {
 				glog.Error(err)
 			}
@@ -798,11 +806,11 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 			return false
 		}
 
-		if errCreate := fs.Mountpaths.CreateBuckets("receive-bmd", bck.Bck); errCreate != nil {
-			glog.Error(errCreate)
-			err = errCreate
+		// TODO: errors from `CreateBuckets` should be handled locally. If we
+		//  would like to propagate them, the code in metasyncer should be revisited.
+		if err := fs.Mountpaths.CreateBuckets("receive-bmd", bck.Bck); err != nil {
+			glog.Error(err)
 		}
-
 		return false
 	})
 
@@ -1322,16 +1330,16 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 			availablePaths, _ := fs.Mountpaths.Get()
 			for _, mpathInfo := range availablePaths {
 				path := mpathInfo.MakePathCT(bckTo.Bck, fs.ObjectType)
-				errAccess := fs.Access(path)
-				if errAccess == nil {
-					if empty, errEmpty := cmn.IsDirEmpty(path); empty {
-						continue
-					} else if errEmpty != nil {
-						return errEmpty
+				if err := fs.Access(path); err != nil {
+					if !os.IsNotExist(err) {
+						return err
 					}
+					continue
+				}
+				if empty, err := cmn.IsDirEmpty(path); err != nil {
+					return err
+				} else if !empty {
 					return fmt.Errorf("directory %q already exists and is not empty", path)
-				} else if !os.IsNotExist(err) {
-					return errAccess
 				}
 			}
 		}
@@ -1384,9 +1392,10 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom, bckTo *cluster.Bck, msgInt *a
 
 		t.gfn.local.Activate()
 		t.gfn.global.activateTimed()
-		_, running := reb.IsRebalancing(cmn.ActLocalReb)
-		go xact.Run(msgInt.GlobRebID, running) // do the work
-		time.Sleep(100 * time.Millisecond)     // FIXME: likely no need
+		waiter := &sync.WaitGroup{}
+		waiter.Add(1)
+		go xact.Run(waiter, msgInt.GlobRebID)
+		waiter.Wait()
 	case cmn.ActCopyBucket:
 		var xact *mirror.XactBckCopy
 		xact, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)

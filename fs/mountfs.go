@@ -526,20 +526,59 @@ func (mfs *MountedFS) DisableFsIDCheck() { mfs.checkFsID = false }
 
 func (mfs *MountedFS) CreateBuckets(op string, bcks ...cmn.Bck) error {
 	const createStr = "create-ais-bucket-dir"
+	var (
+		availablePaths, _ = mfs.Get()
+		totalDirs         = len(availablePaths) * len(bcks) * len(CSM.RegisteredContentTypes)
+		totalCreatedDirs  = 0
+	)
 
-	bckFailMsg := fmt.Sprintf("%s: failed to %s", op, createStr)
-	bckPassMsg := fmt.Sprintf("%s: %s", op, createStr)
+	for _, mi := range availablePaths {
+		for _, bck := range bcks {
+			num, err := mi.createBckDirs(bck)
+			if err != nil {
+				glog.Errorf("%s: failed to %s (bck: %s, mpath: %q, err: %v)", op, createStr, bck, mi.Path, err)
+			}
+			totalCreatedDirs += num
+		}
+	}
 
-	return mfs.createBuckets(bckPassMsg, bckFailMsg, bcks...)
+	if totalCreatedDirs != totalDirs {
+		return fmt.Errorf("failed to create %d out of %d buckets' directories: %v", totalDirs-totalCreatedDirs, totalDirs, bcks)
+	}
+
+	if glog.FastV(4, glog.SmoduleFS) {
+		glog.Infof("%s: %s (buckets %v, num dirs %d)", op, createStr, bcks, totalDirs)
+	}
+	return nil
 }
 
 func (mfs *MountedFS) DestroyBuckets(op string, bcks ...cmn.Bck) error {
 	const destroyStr = "destroy-ais-bucket-dir"
+	var (
+		availablePaths, _  = mfs.Get()
+		totalDirs          = len(availablePaths) * len(bcks)
+		totalDestroyedDirs = 0
+	)
 
-	failMsg := fmt.Sprintf("%s: failed to %s", op, destroyStr)
-	passMsg := fmt.Sprintf("%s: %s", op, destroyStr)
+	for _, mpathInfo := range availablePaths {
+		for _, bck := range bcks {
+			dir := mpathInfo.MakePathBck(bck)
+			if err := mpathInfo.FastRemoveDir(dir); err != nil {
+				glog.Errorf("%s: failed to %s (dir: %q, err: %v)", op, destroyStr, dir, err)
+			} else {
+				totalDestroyedDirs++
+			}
+		}
+	}
 
-	return mfs.destroyBuckets(passMsg, failMsg, bcks...)
+	if totalDestroyedDirs != totalDirs {
+		return fmt.Errorf("failed to destroy %d out of %d buckets' directories: %v", totalDirs-totalDestroyedDirs, totalDirs, bcks)
+	}
+
+	if glog.FastV(4, glog.SmoduleFS) {
+		glog.Infof("%s: %s (buckets %v, num dirs %d)", op, destroyStr, bcks, totalDirs)
+	}
+	return nil
 }
 
 func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
@@ -610,9 +649,7 @@ func (mfs *MountedFS) updatePaths(available, disabled MPI) {
 }
 
 // Creates directories for a single bucket on a singe mountpath, which is one directory for each content type.
-func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (int, error) {
-	num := 0
-
+func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
 	for contentType := range CSM.RegisteredContentTypes {
 		dir := mi.MakePathCT(bck, contentType)
 		if err := Access(dir); err == nil {
@@ -626,74 +663,7 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (int, error) {
 		}
 		num++
 	}
-
 	return num, nil
-}
-
-func (mfs *MountedFS) createBuckets(bckPassMsg, bckFailMsg string, bcks ...cmn.Bck) error {
-	var (
-		availablePaths, _ = mfs.Get()
-		totals            = make(map[string]int, len(bcks))
-		totalDirs         = len(availablePaths) * len(bcks) * len(CSM.RegisteredContentTypes)
-	)
-
-	for _, bck := range bcks {
-		totals[bck.Name] = 0
-	}
-	for _, mi := range availablePaths {
-		for _, bck := range bcks {
-			num, err := mi.createBckDirs(bck)
-			totals[bck.Name] += num
-
-			if err != nil {
-				glog.Errorf("%q (bck: %s, mpath: %q, err: %v)", bckFailMsg, bck, mi.Path, err)
-			}
-		}
-	}
-
-	totalCreatedDirs := 0
-	for _, bck := range bcks {
-		totalCreatedDirs += totals[bck.Name]
-	}
-
-	if totalCreatedDirs != totalDirs {
-		return fmt.Errorf("failed to create %d out of %d buckets' directories", totalDirs-totalCreatedDirs, totalDirs)
-	}
-
-	if glog.FastV(4, glog.SmoduleFS) {
-		glog.Infof("%q (buckets %v, num dirs %d)", bckPassMsg, bcks, totalDirs)
-	}
-
-	return nil
-}
-
-func (mfs *MountedFS) destroyBuckets(passMsg, failMsg string, bcks ...cmn.Bck) error {
-	var (
-		availablePaths, _  = mfs.Get()
-		totalDestroyedDirs = 0
-		totalDirs          = len(availablePaths) * len(bcks)
-	)
-
-	for _, mpathInfo := range availablePaths {
-		for _, bck := range bcks {
-			dir := mpathInfo.MakePathBck(bck)
-			if err := mpathInfo.FastRemoveDir(dir); err != nil {
-				glog.Errorf("%q (dir: %q, err: %v)", failMsg, dir, err)
-			} else {
-				totalDestroyedDirs++
-			}
-		}
-	}
-
-	if totalDestroyedDirs != totalDirs {
-		return fmt.Errorf("failed to destroy %d out of %d buckets' %v directories", totalDirs-totalDestroyedDirs, totalDirs, bcks)
-	}
-
-	if glog.FastV(4, glog.SmoduleFS) {
-		glog.Infof("%q (buckets %v, num dirs %d)", passMsg, bcks, totalDirs)
-	}
-
-	return nil
 }
 
 // mountpathsCopy returns shallow copy of current mountpaths

@@ -282,7 +282,7 @@ func (r *registry) StopMountpathXactions() {
 	})
 }
 
-func (r *registry) AbortBucketXact(kind string, bck *cluster.Bck) {
+func (r *registry) abortBucketXact(kind string, bck *cluster.Bck) {
 	bckUname := bck.MakeUname("")
 	val, ok := r.bucketXacts.Load(bckUname)
 	if !ok {
@@ -332,7 +332,7 @@ func (r *registry) globalXactStats(kind string, onlyRecent bool) (map[string]sta
 	}), nil
 }
 
-func (r *registry) AbortGlobalXact(kind string) (aborted bool) {
+func (r *registry) abortGlobalXact(kind string) (aborted bool) {
 	entry := r.GetL(kind)
 	if entry == nil {
 		return
@@ -471,25 +471,27 @@ func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map
 	return r.bucketAllXactsStats(bck, onlyRecent), nil
 }
 
-func (r *registry) DoAbort(kind string, bck *cluster.Bck) {
-	// no bucket and no kind - request for all available xactions
-	if bck == nil && kind == "" {
-		r.AbortAll()
+func (r *registry) DoAbort(kind string, bck *cluster.Bck) (aborted bool) {
+	if kind == "" {
+		if bck == nil {
+			// No bucket and no kind - request for all available xactions.
+			r.AbortAll()
+		} else {
+			// Bucket present and no kind - request for all available bucket's xactions.
+			r.AbortAllBuckets(false, bck)
+		}
+		aborted = true
+	} else {
+		if bck == nil {
+			// No bucket but kind present - request for specific global xaction.
+			aborted = r.abortGlobalXact(kind)
+		} else {
+			// Both bucket and kind present - request for specific bucket's xactions.
+			r.abortBucketXact(kind, bck)
+			aborted = true
+		}
 	}
-	// bucket present and no kind - request for all available bucket's xactions
-	if bck != nil && kind == "" {
-		cmn.Assert(bck.HasProvider()) // TODO -- FIXME: remove
-		r.AbortAllBuckets(false, bck)
-	}
-	// both bucket and kind present - request for specific bucket's xaction
-	if bck != nil && kind != "" {
-		cmn.Assert(bck.HasProvider()) // TODO -- FIXME: remove
-		r.AbortBucketXact(kind, bck)
-	}
-	// no bucket, but kind present - request for specific global xaction
-	if bck == nil && kind != "" {
-		r.AbortGlobalXact(kind)
-	}
+	return
 }
 
 func (r *registry) getBucketsXacts(bck *cluster.Bck) (xactions *bucketXactions, ok bool) {

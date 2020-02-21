@@ -458,22 +458,25 @@ func (r *FastRen) Description() string {
 }
 func (r *FastRen) IsMountpathXact() bool { return false }
 
-//
-// TODO -- FIXME: if rebalancing don't "scope" it to a bucket
-//
-func (r *FastRen) Run(globRebID int64, locRebRunning bool) {
+func (r *FastRen) Run(waiter *sync.WaitGroup, globRebID int64) {
 	var (
 		wg               = &sync.WaitGroup{}
 		gbucket, lbucket = r.bucketTo, r.bucketTo // scoping
 	)
+
 	glog.Infoln(r.String(), r.Bck(), "=>", r.bucketTo)
-	if Registry.AbortGlobalXact(cmn.ActGlobalReb) {
+
+	if Registry.DoAbort(cmn.ActLocalReb, nil) {
+		glog.Infof("%s: restarting local rebalance upon rename...", r)
+		lbucket = ""
+	}
+	if Registry.DoAbort(cmn.ActGlobalReb, nil) {
 		glog.Infof("%s: restarting global rebalance upon rename...", r)
 		gbucket = ""
 	}
-	if locRebRunning {
-		lbucket = ""
-	}
+
+	waiter.Done() // notify the waiter that we are ready to start
+
 	// run in parallel
 	wg.Add(1)
 	go func() {
