@@ -31,7 +31,7 @@ Gets the object from the bucket.
 
 `ais show object BUCKET_NAME/OBJECT_NAME [PROP_LIST]`
 
-Gets object detailed information. `PROP_LIST` is a comma separated list of properties to display.
+Gets object detailed information. `PROP_LIST` is a comma-separated list of properties to display.
 If `PROP_LIST` is omitted default properties are shown(all except `provider` property).
 
 Supported properties:
@@ -70,7 +70,7 @@ Size    Version Ec
 
 `ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>
 
-Puts a file or a directory content into the bucket. If CLI detects that a user is going to put more than one file, it calculates the total number or files, total data size and checks if bucket is empty, then shows all gathered info to the user and ask for confirmation to continue. Confirmation request can be disabled with option `--yes` for use in scripts.
+Puts a file or a directory content into the bucket. If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty, then shows all gathered info to the user and asks for confirmation to continue. Confirmation request can be disabled with the option `--yes` for use in scripts.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -117,7 +117,7 @@ $ ais promote /tmp/examples mybucket/ -r
 
 #### Object names
 
-While uploading `ais` assigns names to object by following the rules (staring with the highest priority):
+While uploading `ais` assigns names to object by following the rules (starting with the highest priority):
 
 1. If `OBJECT_NAME` is set, the object's name is the value of `OBJECT_NAME`
 2. If `--base` is set, the object's name is the file path without leading `--base` prefix. A trailing `/` in `--base` can be omitted.
@@ -233,9 +233,9 @@ Renames object from an ais bucket.
 `ais compose DIRNAME|FILENAME [DIRNAME|FILENAME...] BUCKET/OBJECT_NAME`
 
 Creates an object in a bucket by concatenating provided files, keeping the order as in the arguments list.
-If directory provided, files within directory are sorted by filename.
-For each file sends separate request to the cluster.
-Supports recursive iteration through directories and wildcards in the same way as PUT operation does. 
+If directory provided, files within the directory are sorted by filename.
+For each file sends a separate request to the cluster.
+Supports recursive iteration through directories and wildcards in the same way as PUT operation does.
 
 | Command | Explanation |
 | --- | --- |

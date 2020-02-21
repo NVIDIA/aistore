@@ -35,7 +35,7 @@ In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief
 
 2. Hostname (or IPv4 address) and TCP port of one of the AIStore daemons.
 
-Most RESTful operation performed on an AIStore proxy/gateway will likely have a *clustered* scope. Exceptions may include querying proxy's own configuration via `?what=config`, and more.
+Most RESTful operations performed on an AIStore proxy/gateway will likely have a *clustered* scope. Exceptions may include querying proxy's own configuration via `?what=config`, and more.
 
 3. URL path: version of the REST API, RESTful *resource* that is operated upon, and possibly more forward-slash delimited specifiers.
 

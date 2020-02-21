@@ -1,6 +1,6 @@
 # AIS CLI
 
-AIS Command Line Interface is a tool used to interact with resources of AIStore. It gives users ability to query information from specific daemons,
+AIS Command Line Interface is a tool used to interact with resources of AIStore. It gives users the ability to query information from specific daemons,
 create or delete resources or download files to buckets directly from the command line.
 
 ## Getting Started
@@ -24,7 +24,7 @@ This command returns the list of commands for the CLI.
  ```sh
  $ ais --help
  ```
-This command returns status of the cluster; if successful, cluster address was resolved correctly.
+This command returns the status of the cluster; if successful, the cluster address was resolved correctly.
  ```sh
  $ ais status
  ```

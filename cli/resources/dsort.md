@@ -30,9 +30,9 @@ Puts randomly generated shards that can be used for dSort testing.
 
 `ais start dsort JSON_SPECIFICATION`
 
-Starts new dSort job with provided specification. Upon creation, `JOB_ID` of the
-job is returned - it can then be used to abort it or retrieve metrics. Following
-table describes json keys which can be used in specification.
+Starts new dSort job with the provided specification. Upon creation, `JOB_ID` of the
+job is returned - it can then be used to abort it or retrieve metrics. The following
+table describes JSON keys which can be used in the specification.
 
 | Key | Type | Description | Required | Default |
 | --- | --- | --- | --- | --- |
@@ -96,7 +96,7 @@ ais start dsort '{
 #### Pack records into shards with different categories - EKM (External Key Map)
 
 One of the key features of the dSort is that user can specify the exact mapping from the record key to the output shard.
-To use this feature `output_format` should be empty and `order_file` as well as `order_file_sep` must be set.
+To use this feature `output_format` should be empty and `order_file`, as well as `order_file_sep`, must be set.
 The output shards will be created with provided format which must contain mandatory `%d` which is required to enumerate the shards.
 
 Assuming that `order_file` (URL: `http://website.web/static/order_file.txt`) has content:
@@ -160,7 +160,7 @@ shard-dogs-0.tar:
 
 `ais show dsort [JOB_ID]`
 
-Retrieves status of the dSort with provided `JOB_ID` which is returned upon creation.
+Retrieves the status of the dSort with provided `JOB_ID` which is returned upon creation.
 Lists all dSort jobs if the `JOB_ID` argument is omitted.
 
 | Flag | Type | Description | Default |

@@ -2,31 +2,31 @@
 
 Soak Testing (also referred to as endurance testing) is defined [here](https://www.katalon.com/resources-center/blog/soak-testing/) as a test where the system is "evaluated to see whether it could perform well under a significant load for an extended period, thereby measuring its reaction and analyzing its behavior under sustained use".
 
-`soaktest.sh` is the script that builds and runs a Soak Test executable (SK for short) on a currently running AIS custer.
+`soaktest.sh` is the script that builds and runs a Soak Test executable (SK for short) on a currently running AIS cluster.
 
 ## Dependencies
 
 SK assumes that you have [Go 1.10 or later](https://golang.org/dl/) installed, and that `$PATH` is set to include the go installation (can be checked by running `go version`). This is used to build the executable.
 
-SK also assumes that working code for `aisloader` is in the location `${GOPATH}/src/github.com/NVIDIA/aistore/bench/aisloader`, since the executable works by building and running a copy of `aisloader` from there.
+SK also assumes that the working code for `aisloader` is in the location `${GOPATH}/src/github.com/NVIDIA/aistore/bench/aisloader`, since the executable works by building and running a copy of `aisloader` from there.
 
 ## Design
 
-SK simulates a wide variety of scenarios on the ais cluster using recipes. They are constantly run in a random order.
+SK simulates a wide variety of scenarios on the ais cluster using recipes. They are constantly run in random order.
 
 These are the terms used in describing the design of recipes:
 
 - Recipe: A file that describes a possible scenario in our system. Recipes are written in go and can be found [here](recipes). All recipes are also registered [here](recipes/register.go). Recipes are comprised of primitives arranged in phases, with minimal go code in between.
-- Recipe Cycle: SK runs recipes by constantly running a random permutation of all available recipes. The run of a particular permutation is considered a Recipe Cycle. 
+- Recipe Cycle: SK runs recipes by constantly running a random permutation of all available recipes. The run of a particular permutation is considered a Recipe Cycle.
 - Primitive: A function call within a recipe that communicates with the AIS cluster. Examples: `GET(...)`, `PUT(...)`, `DELETE(...)` etc. Some of these are measured to track performance. The file that defines all primitives can be found [here](soakprim/primitives.go).
 - Phase: A set of primitives surrounded by a call to `Pre(...)` at the start and ending with `Post(...)` is considered a phase within a recipe. Phases are run sequentially, while the primitives within a phase are run asynchronously. The call to `Pre(...)` ensures that the recipe meets all the prerequisites before proceeding with the phase, while the call to `Post(..)` checks if the phase was successful and saves summary information about the phase to the report.
-- Regression: A continuous workload that continuously GETs from a bucket. Designed to simulate a neural network using training data hosted by AIS. Regression can either run alongside another recipe, or run by itself (called a regression phase). SK alternates between running a recipe and running regression phase. Multiple instances of this can be run in parallel and will point to the same bucket.
+- Regression: A continuous workload that continuously GETs from a bucket. Designed to simulate a neural network using training data hosted by AIS. Regression can either run alongside another recipe or run by itself (called a regression phase). SK alternates between running a recipe and running regression phase. Multiple instances of this can be run in parallel and will point to the same bucket.
 
 ## Usage
 
 SK can be run by running `soaktest.sh` the usual way bash scripts are run, and accepts command line args. Once running, it continues to run forever until the user specifies to stop it by pressing `ctrl+c` on the controlling console. Then it gracefully exits and prints reports to the specified directory. The paths to the reports are printed to the controlling console when SK exits.
 
-SK accepts a number of command line arguments, all of which can also be passed by passing the arguments into `soaktest.sh`:
+SK accepts a number of command-line arguments, all of which can also be passed by passing the arguments into `soaktest.sh`:
  - `-ip` -  IP address for proxy server (assumes running locally if not set).
  - `-port` - Port number for proxy server (assumes running locally if not set).
 
@@ -61,7 +61,7 @@ SK supports additional commands:
  - `./soaktest.sh usage` displays an extended help menu with examples.
 
  ## Usage Examples
- 
+
  - `./soaktest.sh`
     - Run soaktest with all default parameters
  - `./soaktest.sh --short`
@@ -73,7 +73,7 @@ SK supports additional commands:
  - `./soaktest.sh --ip=my-k8-cluster --port=8081`
     - Run soaktest with default parameters on the proxy at http://my-k8-cluster:8081
  - `./soaktest.sh --rec-list=1,3 --rec-pctcap=0.2 --reg-pctcap=0.1`
-    - Run soaktest using RecipeID 1 and 3, allocating 0.2% of capacity to recipes, and 0.1% to regression 
+    - Run soaktest using RecipeID 1 and 3, allocating 0.2% of capacity to recipes, and 0.1% to regression
  - `./soaktest.sh --rec-disable --reg-phasedisable`
     - Don't run anything and just cleanup
 
@@ -96,7 +96,7 @@ SK prints information about what's happening within the soak test to the control
 In addition to the console, SK also creates a folder in the directory specified by the `reportdir` argument. This folder has a name that's unique to the running instance of SK. Files in this folder are also suffixed with the folder name.
 
 The report folder contains a number of files. `*` is used to indicate suffix of the folder name:
- - `detail-*.log` -  A detailed log of everything that's happening within the soak test. Note that this is more detailed than what is displayed to the console. 
+ - `detail-*.log` -  A detailed log of everything that's happening within the soak test. Note that this is more detailed than what is displayed to the console.
  - `summary-*.log` - A log of all the errors encountered during the run of the soak test. Every entry present in this log should also be present in `detail-*.log`.
 
  - `detail-*.csv` - Records the metrics from AISLoader that are returned when called by a primitive.
@@ -106,11 +106,11 @@ The report folder contains a number of files. `*` is used to indicate suffix of 
 
  ## Formatting Excel Timestamp
 
-Some csv files in the SK output folder have columns that report timestamps in `excel timestamp`. They can be formatted to a user friendly format in LibreOffice Calc and Excel.
+Some csv files in the SK output folder have columns that report timestamps in `excel timestamp`. They can be formatted to a user-friendly format in LibreOffice Calc and Excel.
 
 ### LibreOffice Calc
 
-First, right click on the heading above the column and click `Format Cells ...`.
+First, right-click on the heading above the column and click `Format Cells ...`.
 
 <img src="/docs/images/soak-time-libreoffice-step1.png" width="50%" >
 
@@ -120,12 +120,12 @@ Next, in the displayed dialog window, select the `Date` option in the `Category`
 
 ### Excel
 
-First, right click on the heading above the column and click `Format Cells ...`.
+First, right-click on the heading above the column and click `Format Cells ...`.
 
 <img src="/docs/images/soak-time-excel-step1.png" width="50%" >
 
 Next, in the displayed dialog window, select the `Custom` option in the `Category` box, and change the text in the `Type` textbox to `MM/DD/YY HH:MM:SS.000`. Then, click the `ok` button.
 
-> If the column is used in a graph, `HH:MM:SS` should be used instead of `MM/DD/YY HH:MM:SS.000` to reduce clutter in the resulting graph. 
+> If the column is used in a graph, `HH:MM:SS` should be used instead of `MM/DD/YY HH:MM:SS.000` to reduce clutter in the resulting graph.
 
 <img src="/docs/images/soak-time-excel-step2.png" width="50%" >

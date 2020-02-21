@@ -5,7 +5,7 @@ AIStore Authentication Server (AuthN)
 
 AIStore Authentication Server (AuthN) provides a token-based secure access to AIStore. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details.
 
-AuthN is a standalone process that manages users and their tokens. It reports to the primary AIStore proxy all changes on the fly and immediately after each user login or logout. The result is that the AIStore primary proxy (aka AIStore gateway) always has updated set of valid tokens that grant access to the AIStore and Cloud resources.
+AuthN is a standalone process that manages users and their tokens. It reports to the primary AIStore proxy all changes on the fly and immediately after each user login or logout. The result is that the AIStore primary proxy (aka AIStore gateway) always has an updated set of valid tokens that grant access to the AIStore and Cloud resources.
 
 For a client, a typical workflow looks as follows:
 
@@ -29,13 +29,13 @@ Environment variables used by the deployment script to setup AuthN server:
 | AUTHN_PORT | 52001 | Port on which AuthN listens to requests |
 | AUTHN_TTL | 24h | A token expiration time. Can be set to 0 that means "no expiration time" |
 
-All variables can be set at AIStore launch. Example of starting AuthN with default configuration:
+All variables can be set at AIStore launch. Example of starting AuthN with the default configuration:
 
 ```
 $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
 ```
 
-Note: before starting deployment process don't forget to change the default secret key used to encrypt and decrypt tokens.
+Note: don't forget to change the default secret key used to encrypt and decrypt tokens before starting the deployment process.
 
 To change AuthN settings after deployment, modify the server's configuration file and restart the server. If you change the server's secret key make sure to modify AIStore proxy configuration as well.
 
@@ -57,10 +57,10 @@ In this README:
 
 ### How to enable AuthN server after deployment
 
-By default, AIStore deployment currently won't launch AuthN server. To start AuthN, perform the following steps:
+By default, AIStore deployment currently won't launch the AuthN server. To start AuthN, perform the following steps:
 
 - Change AIStore proxy configuration to enable token-based access: look for `{"auth": { "enabled": false } }` in proxy configuration file and replace `false` with `true`. Restart the proxy to apply changes
-- Start authn server: <path_to_ais_binaries>/authn -config=<path_to_config_dir>/authn.json. Path to config directory is set at the time of cluster deployment and it is the same as the directory for AIStore proxies and AIStore targets
+- Start authn server: <path_to_ais_binaries>/authn -config=<path_to_config_dir>/authn.json. Path to config directory is set at the time of cluster deployment and it is the same as the directory for AIStore proxies and targets
 
 ## User management
 
@@ -83,7 +83,7 @@ Adding and deleting usernames requires superuser authentication. Super user cred
 
 ## Token management
 
-Generating a token for data access does not require superuser credentials. Users must provide correct their username and password to get their tokens. Token has expiration time that is 24 hours by default. After that the token must be reissued. To change default expiration time, look for `expiration_time` in configuration file.
+Generating a token for data access does not require superuser credentials. Users must provide correct their username and password to get their tokens. Token has expiration time that is 24 hours by default. After that, the token must be reissued. To change default expiration time, look for `expiration_time` in the configuration file.
 
 Call revoke token API to forcefully invalidate a token before it expires.
 
@@ -101,11 +101,11 @@ A generated token is returned as a JSON formatted message. Example: `{"token": "
 AIStore proxies and targets require a valid token in a request header - but only if AuthN is enabled. Every token includes all the information needed by the target:
 
 - UserID (username)
-- Time when the the token was generated
+- Time when the token was generated
 - Time when the token expires
 - User's AWS/GCP credentials
 
-A token is validated by target. The token must not be expired and it must not be in black list. Black list is a list of revoked tokens: tokens that are revoked with REST API or belong to deleted users. List of revoked tokens is broadcast over the cluster on change. Periodically the list is cleaned up by removing expired tokens.
+A token is validated by a target. The token must not be expired and it must not be in the blacklist. The blacklist is a list of revoked tokens: tokens that are revoked with REST API or belong to deleted users. The list of revoked tokens is broadcast over the cluster on change. Periodically the list is cleaned up by removing expired tokens.
 
 ### Calling AIStore proxy API
 
@@ -115,7 +115,7 @@ At this moment, only requests to buckets and objects API require a token.
 
 ### AuthN server typical workflow
 
-If AuthN server is enabled then all requests to buckets and objects should contain a valid token issued by AuthN. Requests without a token are rejected unless the AIS cluster is deployed with guest support enabled. In this case GET, HEAD, and list bucket requests do not require authorization - anyone can read the data but modifications are allowed only for registered users.
+If the AuthN server is enabled then all requests to buckets and objects should contain a valid token issued by AuthN. Requests without a token are rejected unless the AIS cluster is deployed with guest support enabled. In this case GET, HEAD, and list bucket requests do not require authorization - anyone can read the data but modifications are allowed only for registered users.
 
 Steps to generate and use a token:
 
@@ -157,5 +157,5 @@ $ curl -L  http://PROXY/v1/buckets/* -X GET \
 
 ## Known limitations
 
-- **Per-bucket authentication**. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users login, they have full access to all the data;
-- **Token refresh**. There is no automatic token refreshing. By default a token expires in 24 hours. So, if you are going to run something for longer time you should either add manual token refresh on getting 'No authorized' error or increase expiration time in settings.
+- **Per-bucket authentication**. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users log in, they have full access to all the data;
+- **Token refresh**. There is no automatic token refreshing. By default, a token expires in 24 hours. So, if you are going to run something for a longer time you should either add manual token refresh on getting 'No authorized' error or increase expiration time in settings.

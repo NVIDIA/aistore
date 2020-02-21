@@ -56,7 +56,7 @@ Name | Type | Description | Optional?
 ## Multi Download
 
 A *multi* object download requires either a map or a list in JSON body:
-* **Map** - in map, each entry should contain `custom_object_name` (key) -> `external_link` (value). This format allows to name objects to not depend on automatic naming as it is done in *list* format.
+* **Map** - in map, each entry should contain `custom_object_name` (key) -> `external_link` (value). This format allows object names to not depend on automatic naming as it is done in *list* format.
 * **List** - in list, each entry should contain `external_link` to resource. Objects names are created from the base of the link (query parameters are stripped).
 
 This request returns *id* on successful request which can then be used to check the status or abort the download job.
@@ -115,11 +115,11 @@ Name | Type | Description | Optional?
 | Download a (range) list of objects into a subdirectory inside a bucket | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&subdir=some/subdir/&template=randomwebsite.com/some_dir/object{200..300}log.txt'` |
 | Download a (range) list of objects, selecting every tenth | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&template=randomwebsite.com/some_dir/object{1..1000..10}log.txt'` |
 
-**Tip:** use `-g` option in curl to turn of URL globbing parser - it will allow to use `{` and `}` without escaping them.
+**Tip:** use `-g` option in curl to turn off URL globbing parser - it will allow to use `{` and `}` without escaping them.
 
 ## Cloud download
 
-A *cloud* download prefetches multiple objects which names match provided prefix and suffix and are contained in given cloud bucket.
+A *cloud* download prefetches multiple objects which names match provided prefix and suffix and are contained in a given cloud bucket.
 
 ### Request Query Parameters
 

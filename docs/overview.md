@@ -174,7 +174,7 @@ Most notably, AIStore provides **[dSort](dsort/README.md)** - a MapReduce layer 
 
 DSort “views” AIS objects as named shards that comprise archived key/value data. In its 1.0 realization, dSort supports tar, zip, and tar-gzip formats and a variety of built-in sorting algorithms; it is designed, though, to incorporate other popular archival formats including tf.Record and tf.Example ([TensorFlow](https://www.tensorflow.org/tutorials/load_data/tf-records)) and [MessagePack](https://msgpack.org/index.html). The user runs dSort by specifying an input dataset, by-key or by-value (i.e., by content) sorting algorithm, and a desired size of the resulting shards. The rest is done automatically and in parallel by the AIS storage targets, with no part of the processing that’d involve a single-host centralization and with dSort stage and progress-within-stage that can be monitored via user-friendly statistics.
 
-By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. Which ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
+By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. This ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
 
 ## CLI
 
@@ -187,7 +187,7 @@ AIStore includes an easy-to-use management-and-monitoring facility called [AIS C
 
 where `G` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
 
-One salient feature of AIS CLI is its Bash style **auto-completions** that allow users to easily navigate supported operations and options by simply pressing TAB key. For instance, when you type:
+One salient feature of AIS CLI is its Bash style **auto-completions** that allow users to easily navigate supported operations and options by simply pressing the TAB key. For instance, when you type:
 
  ```sh
  $ ais s[TAB-TAB]
@@ -272,7 +272,7 @@ There are **no** designed-in limitations on the:
 
 * object sizes
 * total number of objects and buckets in AIS cluster
-* number of objects in a single AIS bucket
+* the number of objects in a single AIS bucket
 * numbers of gateways and storage targets in AIS cluster
 
 Ultimately, the limit on object size may be imposed by a local filesystem of choice and a physical disk capacity. While limit on the cluster size - by the capacity of the hosting AIStore Data Center. But as far as AIS itself, it does not impose any limitations whatsoever.

@@ -226,7 +226,7 @@ $ aisloader -bucket=abc -duration 1h -pctput=0 -cleanup=true
 
 The first line in this example above fills the bucket "abc" with 16MiB of random data. The second - uses existing data to test read performance for 1 hour, and then removes all data.
 
-If you just need to cleanup old data prior to running a test, run the loader with 0 (zero) total put size and zero duration:
+If you just need to clean up old data prior to running a test, run the loader with 0 (zero) total put size and zero duration:
 
 ```shell
 $ aisloader -bucket=<bucket to cleanup> -duration 0s -totalputsize=0

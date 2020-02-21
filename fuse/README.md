@@ -76,7 +76,7 @@ fusermount version: 2.9.7
 
 ### Installation
 
-In order to install `aisfs` on your system, execute the following commands:
+To install `aisfs` on your system, execute the following commands:
 
 ```shell
 $ cd $GOPATH/src/github.com/NVIDIA/aistore
@@ -98,7 +98,7 @@ $ aisfs --help
 
 ### Quick Local Setup
 
-In order to quickly set up and try `aisfs` on your local machine, first
+To quickly set up and try `aisfs` on your local machine, first
 deploy an AIStore cluster (for more info see AIStore [README](../README.md)):
 
 ```shell
@@ -212,8 +212,8 @@ Success or failure of the operation is reflected in the debug logs (if enabled).
 
 ### Mounting
 
-It is not necessary to use a separate utility in order to mount a filesystem,
-`aisfs` it is both a filesystem server and a mount utility.
+It is not necessary to use a separate utility to mount a filesystem,
+`aisfs` is both a filesystem server and a mount utility.
 
 Assuming `mybucket` is a bucket name, `localdir` is an empty directory
 in your local filesystem and an instance of AIStore cluster is running

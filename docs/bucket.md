@@ -39,7 +39,7 @@ Any storage bucket handled by AIS may originate in a 3rd party Cloud, or be crea
 
 > Bucket provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` for ais buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
 
-For detailed documentation please refer [to the RESTful API reference and examples](http_api.md). Rest of this document serves to further explain features and concepts specific to storage buckets.
+For detailed documentation please refer [to the RESTful API reference and examples](http_api.md). The rest of this document serves to further explain features and concepts specific to storage buckets.
 
 ## AIS Bucket
 AIS buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.
@@ -66,9 +66,9 @@ Cloud buckets are existing buckets in the cloud storage when AIS is deployed as 
 
 ### Prefetch/Evict Objects
 
-Objects within cloud buckets are automatically fetched into storage targets when accessed through AIS, and are evicted based on the monitored capacity and configurable high/low watermarks when [LRU](storage_svcs.md#lru) is enabled.
+Objects within cloud buckets are automatically fetched into storage targets when accessed through AIS and are evicted based on the monitored capacity and configurable high/low watermarks when [LRU](storage_svcs.md#lru) is enabled.
 
-The [RESTful API](docs/http_api.md) can be used to manually fetch a group of objects from the cloud bucket (called prefetch) into storage targets, or to remove them from AIS (called evict).
+The [RESTful API](docs/http_api.md) can be used to manually fetch a group of objects from the cloud bucket (called prefetch) into storage targets or to remove them from AIS (called evict).
 
 Objects are prefetched or evicted using [List/Range Operations](batch.md#listrange-operations).
 
@@ -128,7 +128,7 @@ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setprops",
 
 ## List Bucket
 
-ListBucket API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that servers as a cursor or a marker for the *next* page retrieval.
+ListBucket API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor or a marker for the *next* page retrieval.
 
 ### Properties and options
 The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see examples). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
@@ -140,9 +140,9 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 | prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
 | pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
 | pagesize | The maximum number of object names returned in response | Default value is 1000. GCP and ais bucket support greater page sizes. AWS is unable to return more than [1000 objects in one page](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html) |
-| fast | Perform fast traversal of bucket contents | If `true`, the list of objects is generated much faster but the result is less accurate and has a few limitations: only name of object is returned(props is ignored) and paging is unsupported as it always returns the entire bucket list(unless prefix is defined) |
+| fast | Perform fast traversal of bucket contents | If `true`, the list of objects is generated much faster but the result is less accurate and has a few limitations: the only name of object is returned(props is ignored) and paging is unsupported as it always returns the entire bucket list(unless prefix is defined) |
 | cached | Return only objects that are cached on local drives | For ais buckets the option is ignored. For cloud buckets, if `cached` is `true`, the cluster does not retrieve any data from the cloud, it reads only information from local drives |
-| taskid | ID of the list bucket operation (string) | Listing a bucket is an asynchronous operation. First, a client should start the operation by sending `"0"` as `taskid` - `"0"` means initialize a new list operation. In response a proxy returns a `taskid` generated for the operation. Then the client should poll the operation status using the same JSON-encoded structure but with `taskid` set to the received value. If the operation is still in progress the proxy returns status code 202(Accepted) and empty body. If the operation is completed, it returns 200(OK) and the list of objects. The proxy can return status 410(Gone) indicating that the operation restarted and got a new ID. In this case the client should read new operation ID from the response body |
+| taskid | ID of the list bucket operation (string) | Listing a bucket is an asynchronous operation. First, a client should start the operation by sending `"0"` as `taskid` - `"0"` means initialize a new list operation. In response, a proxy returns a `taskid` generated for the operation. Then the client should poll the operation status using the same JSON-encoded structure but with `taskid` set to the received value. If the operation is still in progress the proxy returns status code 202(Accepted) and an empty body. If the operation is completed, it returns 200(OK) and the list of objects. The proxy can return status 410(Gone) indicating that the operation restarted and got a new ID. In this case, the client should read new operation ID from the response body |
 
 The full list of bucket properties are:
 
@@ -156,7 +156,7 @@ The full list of bucket properties are:
 | Versioning | versioning | Configuration for object versioning support. `enabled` represents if object versioning is enabled for a bucket. For Cloud-based bucket, its versioning must be enabled in the cloud prior to enabling on AIS side. `validate_warm_get`: determines if the object's version is checked(if in Cloud-based bucket) | `"versioning": { "enabled": true, "validate_warm_get": false }`|
 | AccessAttrs | aatrs | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"aatrs": "0" ` |
 | BID | bid | Readonly property: unique bucket ID  | `"bid": "10e45"` |
-| InProgress | in_progress | Readonly property: determines if the bucket has been binded to some action and currently cannot be updated or changed in anyway until the action finishes | `"in_progress": true |
+| InProgress | in_progress | Readonly property: determines if the bucket has been binded to some action and currently cannot be updated or changed in anyway until the action finishes | `"in_progress": true` |
 
 
 `SetBucketProps` allows the following configurations to be changed:
@@ -212,7 +212,7 @@ $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobject
 }
 ```
 
-The listing can be truncated: API returns at most 1000 objects per requests. If a bucket contains more objects, one has to requests the list page by page. Please, note the field `pagemarker`: empty `pagemarker` in response means that there are no more objects left, it is the last page. Non-empty `pagemarker` should be used to request the next page. Example of requesting two pages:
+The listing can be truncated: API returns at most 1000 objects per request. If a bucket contains more objects, one has to requests the list page by page. Please, note the field `pagemarker`: empty `pagemarker` in response means that there are no more objects left, it is the last page. Non-empty `pagemarker` should be used to request the next page. Example of requesting two pages:
 
 Start listing bucket from the first object (`taskid` is 0, and `pagemarker` is empty):
 
@@ -282,7 +282,7 @@ $ ais ls props mybucket
 
 After rebuilding a cluster and redeploying proxies, the primary proxy does not have information about buckets used in a previous session. But targets still contain the old data. The primary proxy can retrieve bucket metadata from all targets and then recreate the buckets.
 
-Bucket recovering comes in two flavors: safe and forced. In safe mode the primary proxy requests bucket metadata from all targets in the cluster. If all the targets have the same metadata version, the primary applies received metadata and then synchronize the new information across the cluster. Otherwise, API returns an error. When force mode is enabled, the primary does not require all the targets to have the same version. The primary chooses the metadata with highest version and proceeds with it.
+Bucket recovering comes in two flavors: safe and forced. In safe mode the primary proxy requests bucket metadata from all targets in the cluster. If all the targets have the same metadata version, the primary proxy applies received metadata and then synchronize the new information across the cluster. Otherwise, API returns an error. When force mode is enabled, the primary does not require all the targets to have the same version. The primary chooses the metadata with the highest version and proceeds with it.
 
 ### Example: recovering buckets
 

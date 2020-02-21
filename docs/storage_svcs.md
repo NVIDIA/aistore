@@ -22,13 +22,13 @@ Checksumming on bucket level is configured by setting bucket properties:
 
 * `cksum.type`: `"none"`,`"xxhash"` or `"inherit"` configure hashing type. Value
 `"inherit"` indicates that the global checksumming configuration should be used.
-* `cksum.validate_cold_get`: `true` or `false` indicate
+* `cksum.validate_cold_get`: `true` or `false` indicates
 whether to perform checksum validation during cold GET.
-* `cksum.validate_warm_get`: `true` or `false` indicate
+* `cksum.validate_warm_get`: `true` or `false` indicates
 whether to perform checksum validation during warm GET.
-* `cksum.enable_read_range`: `true` or `false` indicate whether to perform checksum validation during byte serving.
+* `cksum.enable_read_range`: `true` or `false` indicates whether to perform checksum validation during byte serving.
 
-Value for the `type` field (see above) *must* be provided *every* time the bucket properties are updated, otherwise the request will be rejected.
+Value for the `type` field (see above) *must* be provided *every* time the bucket properties are updated, otherwise, the request will be rejected.
 
 Example of setting bucket properties:
 ```shell
@@ -46,7 +46,7 @@ Overriding the global configuration can be achieved by specifying the fields of 
 * `lru.capacity_upd_time`: string indicating the minimum time to update capacity
 * `lru.enabled`: bool that determines whether LRU is run or not; only runs when true
 
-**NOTE**: In setting bucket properties for LRU, any field that is not explicitly specified is defaulted to the data type's zero value.
+**NOTE**: In setting bucket properties for LRU, any field that is not explicitly specified defaults to the data type's zero value.
 
 Example of setting bucket properties:
 ```shell
@@ -74,9 +74,9 @@ A bucket inherits EC settings from global configuration. But it can be overridde
 * `ec.objsize_limit`: integer indicating the minimum size of an object that is erasure encoded. Smaller objects are just replicated.
 * `ec.compression`: string that contains rules for LZ4 compression used by EC when it sends its fragments and replicas over network. Value "never" disables compression. Other values enable compression: it can be "always" - use compression for all transfers, or list of compression options, like "ratio=1.5" that means "disable compression automatically when compression ratio drops below 1.5"
 
-Choose the number data and parity slices depending on required level of protection and the cluster configuration. The number of storage targets must be greater than sum of the number of data and parity slices. If the cluster uses only replication (by setting `objsize_limit` to a very high value), the number of storage targets must exceed the number of parity slices.
+Choose the number data and parity slices depending on the required level of protection and the cluster configuration. The number of storage targets must be greater than the sum of the number of data and parity slices. If the cluster uses only replication (by setting `objsize_limit` to a very high value), the number of storage targets must exceed the number of parity slices.
 
-Global rebalance supports erasure coded buckets. Besides moving existing objects between targets, it repairs damaged objects and their slices if possible. As of version 2.6, global rebalance running in EC mode skips buckets which have EC disabled. Before start, global rebalance checks properties of all buckets to be rebalanced and automatically enters EC mode if it detects an erasure coded bucket.
+Global rebalance supports erasure-coded buckets. Besides moving existing objects between targets, it repairs damaged objects and their slices if possible.
 
 Notes:
 

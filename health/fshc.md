@@ -7,9 +7,9 @@ FSHC monitors and manages filesystems used by AIStore. Every time AIStore trigge
 
 ### How FSHC detects a faulty filesystem
 
-When an error is triggered, FSHC receives the error and a filename. If the error is not an IO error or it is not severe one(e.g, file not found error does not mean a trouble) no extra tests are performed. If the error needs attention, FSHC tries to find out to which filesystem the filename belongs. In case of the filesystem is already disabled, or it is being tested at that moment, or filename is outside of any filesystem utilized by AIStore, FSHC returns immediately. Otherwise FSHC starts the filesystem check.
+When an error is triggered, FSHC receives the error and a filename. If the error is not an IO error or it is not severe one(e.g, file not found error does not mean trouble) no extra tests are performed. If the error needs attention, FSHC tries to find out to which filesystem the filename belongs. In case of the filesystem is already disabled, or it is being tested at that moment, or filename is outside of any filesystem utilized by AIStore, FSHC returns immediately. Otherwise, FSHC starts the filesystem check.
 
-Filesystem check includes the following tests: availability, reading existing files, and writing to temporary files. Unavailable or readonly filesystem is disabled immediately without extra tests. For other filesystems FSHC selects a few random file to read, then creates a few temporary files filled with random data. The final decision about filesystem health is based on the number of errors of each operation and their severity.
+Filesystem check includes the following tests: availability, reading existing files, and writing to temporary files. Unavailable or readonly filesystem is disabled immediately without extra tests. For other filesystems FSHC selects a few random files to read, then creates a few temporary files filled with random data. The final decision about filesystem health is based on the number of errors of each operation and their severity.
 
 ## Getting started
 

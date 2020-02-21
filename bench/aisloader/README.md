@@ -12,7 +12,7 @@ $ make aisloader
 
 ## Bytes Multiplicative Suffix
 
-Parameters in AISLoader that represent a number of bytes can be specified with a multiplicative suffix. For example: `8M` would specify 8 MiB. The following multiplicative suffixes are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Note that this is entirely optional, and therefore an input such as `300` will be interpreted as 300 Bytes.
+Parameters in AISLoader that represent the number of bytes can be specified with a multiplicative suffix. For example: `8M` would specify 8 MiB. The following multiplicative suffixes are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Note that this is entirely optional, and therefore an input such as `300` will be interpreted as 300 Bytes.
 
 ## Using AIS Loader
 
@@ -109,7 +109,7 @@ $ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20
 
 ## Dry-Run Performance Tests
 
-AIStore support two variations of "dry" deployment: AIS_NODISKIO.
+AIStore supports a "dry" deployment: AIS_NODISKIO.
 
 Example of deploying a cluster with disk IO disabled and object size 256KB:
 
@@ -124,7 +124,7 @@ $ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
 | nodiskio | AIS_NODISKIO | `false` | If `true` - disables disk IO. For GET requests, a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests, it reads the request's body to `/dev/null`. <br> Valid values are `true` or `1`, and `false` or `0`. |
 | dryobjsize | AIS_DRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. <br> Default value is '8m' - the size of an object is 8 megabytes |
 
-**Warning:** The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.
+**Warning:** The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case, the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of the previous test that had network IO enabled.
 
 ## Collecting stats
 
@@ -150,6 +150,6 @@ We provide simple [script](/ais/setup/deploy_grafana.sh) which allows you to set
 up the Graphite and Grafana servers which run inside separate dockers. To add
 new dashboards and panels, please follow: [grafana tutorial](http://docs.grafana.org/guides/getting_started/).
 
-When selecting series in panel view, it should be in format: `stats.aisloader.<loader>.*`.
+When selecting a series in panel view, it should be in the format: `stats.aisloader.<loader>.*`.
 Remember that metrics will not be visible (and you will not be able to select
 them) until you start the loader.

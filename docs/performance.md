@@ -62,7 +62,7 @@ iperf -P 20 -l 128K -i 1 -t 30 -w 512K -c <IP-address>
 
 #### Maximum open files
 
-To ensure that AIStore works properly you probably need to increase the default number of open files. To check current setting you can use `ulimit -n`.
+To ensure that AIStore works properly you probably need to increase the default number of open files. To check the current settings, you can use `ulimit -n`.
 
 > It is strongly recommended to raise ulimit to at least `100,000`.
 
@@ -126,7 +126,7 @@ More: [Tune hard disk with `hdparm`](http://www.linux-magazine.com/Online/Featur
 #### Underlying filesystem
 
 Another way to increase storage performance is to benchmark different filesystems: `ext`, `xfs`, `openzfs`.
-Tuning the IO scheduler can be very important part in this process:
+Tuning the IO scheduler can be a very important part of this process:
  * http://blackbird.si/tips-for-optimizing-disk-performance-on-linux/
  * https://cromwell-intl.com/open-source/performance-tuning/disks.html
 
@@ -154,8 +154,8 @@ External links:
 
 AIStore node (proxy and target) must be deployed as a single VM on a given bare-metal host.
 There must be no sharing of host resources between two or more VMs.
-Even if there is a single VM, the host may decide to swap it out when idle, or give it a single hyperthreaded vCPU instead of a full blown physical core - this condition must be prevented.
-AIStore node needs to have a physical resource in its entirety: RAM, CPU, network and storage. Hypervisor must resort to the remaining absolutely required minimum.
+Even if there is a single VM, the host may decide to swap it out when idle, or give it a single hyperthreaded vCPU instead of a full-blown physical core - this condition must be prevented.
+AIStore node needs to have a physical resource in its entirety: RAM, CPU, network, and storage. Hypervisor must resort to the remaining absolutely required minimum.
 Make sure to use PCI passthrough to assign a device (NIC, HDD) directly to the AIStore node VM.
 
 AIStore's primary goal is to scale with clustered drives. Therefore, the choice of a drive (type and capabilities) is very important.
@@ -164,16 +164,16 @@ AIStore's primary goal is to scale with clustered drives. Therefore, the choice 
 
 [AIStore load generator](/docs/howto_benchmark.md) is a built-in tool to test performance. One of the most common questions that arise when analyzing performance results is whether the bottleneck is imposed by the hardware - namely, HDDs.
 
-To that end, AIStore supports switching off disk IO to, effectively, perform dry-run type benchmarking. This can be done by passing command line arguments or by setting environment variables (see below).
+To that end, AIStore supports switching off disk IO to, effectively, perform dry-run type benchmarking. This can be done by passing command-line arguments or by setting environment variables (see below).
 
-> The environment variables have higher priority: if both environment and command line are specified the former takes precedence.
+> The environment variables have higher priority: if both environment and command-line are specified the former takes precedence.
 
 > Disabling disk IO must be done at startup; disabling/enabling disk IO at runtime is not supported.
 
 | CLI argument | Environment variable | Default value | Description |
 |---|---|---|---|
 | nodiskio | AIS_NODISKIO | false | true - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and falseor 0 |
-| dryobjsize | AIS_DRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m' - the size of an object is 8 megabytes |
+| dryobjsize | AIS_DRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. The default value is '8m' - the size of an object is 8 megabytes |
 
 Example of deploying a cluster with disk IO disabled and object size 256KB:
 
@@ -181,4 +181,4 @@ Example of deploying a cluster with disk IO disabled and object size 256KB:
 /opt/aistore/ais$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
 ```
 
->> The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.
+>> The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case, the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of the previous test that had network IO enabled.

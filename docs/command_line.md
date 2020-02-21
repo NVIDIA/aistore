@@ -24,8 +24,6 @@ AIS proxy and AIS target (executables) both support the following command-line a
         log to standard error instead of files
   -nodiskio
         dry-run: if true, no disk operations for GET and PUT
-  -nonetio
-        dry-run: if true, no network operations for GET and PUT
   -ntargets int
         number of storage targets to expect at startup (hint, proxy-only)
   -persist
