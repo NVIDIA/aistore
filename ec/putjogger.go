@@ -118,8 +118,13 @@ func (c *putJogger) encode(req *Request) error {
 	if glog.V(4) {
 		glog.Infof("Encoding %q...", req.LOM.FQN)
 	}
-	ecConf := req.LOM.Bprops().EC
-	_, cksumValue := req.LOM.Cksum().Get()
+	var (
+		cksumValue string
+		ecConf     = req.LOM.Bprops().EC
+	)
+	if req.LOM.Cksum() != nil {
+		_, cksumValue = req.LOM.Cksum().Get()
+	}
 	meta := &Metadata{
 		Size:     req.LOM.Size(),
 		Data:     ecConf.DataSlices,
