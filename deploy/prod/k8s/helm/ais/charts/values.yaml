@@ -129,7 +129,6 @@ proxy:
   config:
     proxy:
       non_electable: false
-      discovery_url: ""
     test_fspaths:
       count:    0
       instance: 0
@@ -170,7 +169,6 @@ ne_proxy:
   config:
     proxy:
       non_electable: true
-      discovery_url: ""
     test_fspaths:
       count:    0
       instance: 0
