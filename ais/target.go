@@ -185,7 +185,7 @@ func (t *targetrunner) Run() error {
 	// join cluster
 	//
 	t.owner.smap.put(smap)
-	for i := 0; i < maxRetrySeconds; i++ {
+	for i := 0; i < maxRetryCnt; i++ {
 		var status int
 		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {

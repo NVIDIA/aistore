@@ -6,6 +6,7 @@ package ais
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,7 +18,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const maxRetrySeconds = 4
+const maxRetryCnt = 4
 
 // Background:
 // 	- Each proxy/gateway stores a local copy of the cluster map (Smap)
@@ -27,7 +28,7 @@ const maxRetrySeconds = 4
 func (p *proxyrunner) bootstrap() {
 	var (
 		smap              *smapX
-		url               string
+		primaryURL        string
 		config            = cmn.GCO.Get()
 		secondary, loaded bool
 	)
@@ -43,27 +44,27 @@ func (p *proxyrunner) bootstrap() {
 	if loaded {
 		secondary = !smap.isPrimary(p.si)
 		if secondary {
-			url = smap.ProxySI.IntraControlNet.DirectURL
+			primaryURL = smap.ProxySI.IntraControlNet.DirectURL
 			// TODO if disagreement: url2 = found.ProxySI.IntraControlNet.DirectURL - and use it
 		}
 	} else {
 		secondary = !primaryEnv
 		smap = nil
 		if secondary {
-			url = config.Proxy.PrimaryURL // NOTE: PublicNet, not IntraControlNet
+			primaryURL = config.Proxy.PrimaryURL
 		}
 	}
 	// 4: join cluster as secondary
 	if secondary {
-		glog.Infof("%s: starting up as non-primary, joining via %s", p.si, url)
+		glog.Infof("%s: starting up as non-primary, joining via %s", p.si, primaryURL)
 		var err error
-		if err = p.secondaryStartup(url); err != nil {
+		if err = p.secondaryStartup(primaryURL); err != nil {
 			if loaded {
 				maxVerSmap, _ := p.uncoverMeta(smap)
 				if maxVerSmap != nil && maxVerSmap.ProxySI != nil {
-					url = maxVerSmap.ProxySI.IntraControlNet.DirectURL
-					glog.Infof("%s: second attempt - join via %s", p.si, url)
-					err = p.secondaryStartup(url)
+					primaryURL = maxVerSmap.ProxySI.IntraControlNet.DirectURL
+					glog.Infof("%s: second attempt - join via %s", p.si, primaryURL)
+					err = p.secondaryStartup(primaryURL)
 				}
 			}
 		}
@@ -84,27 +85,27 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 		query  = url.Values{}
 	)
 	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
-	req := cmn.ReqArgs{
-		Method: http.MethodGet,
-		Base:   getSmapURL,
-		Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-		Query:  query,
-	}
-	// get Smap
-	f := func() error {
+
+	retrievePrimarySmap := func(primaryURL string) error {
 		var (
-			res  callResult
+			res callResult
+			req = cmn.ReqArgs{
+				Method: http.MethodGet,
+				Base:   primaryURL,
+				Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+				Query:  query,
+			}
 			args = callArgs{
-				si:      p.si,
 				req:     req,
 				timeout: cmn.DefaultTimeout,
 			}
 		)
-		for i := 0; i < maxRetrySeconds; i++ {
+
+		for i := 0; i < maxRetryCnt; i++ {
 			res = p.call(args)
 			if res.err != nil {
 				if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
-					glog.Errorf("%s: get Smap from primary %s - retrying...", p.si, getSmapURL)
+					glog.Errorf("%s: get Smap from primary %s - retrying...", p.si, primaryURL)
 					time.Sleep(config.Timeout.CplaneOperation)
 					continue
 				}
@@ -115,35 +116,42 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 			return res.err
 		}
 		smap := &smapX{}
-		err := jsoniter.Unmarshal(res.outjson, smap)
-		cmn.AssertNoErr(err)
-		if !smap.isValid() {
-			cmn.ExitLogf("FATAL: %s (non-primary) invalid %s at startup/registration, err: %v",
-				p.si, smap, err)
+		if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
+			return err
 		}
-		p.owner.smap.put(smap) // put Smap
+		if !smap.isValid() {
+			return fmt.Errorf("%s (non-primary) invalid %s at startup/registration", p.si, smap)
+		}
+		p.owner.smap.put(smap) // put primary smap
 		return nil
 	}
 
-	// get Smap -- wait some -- use the Smap to register self
-	if err := f(); err != nil {
+	// Get smap and use it to register self.
+	if err := retrievePrimarySmap(getSmapURL); err != nil {
 		return err
 	}
 	if err := p.registerWithRetry(); err != nil {
-		cmn.ExitLogf("FATAL: %s (non-primary), err: %v", p.si, err)
+		return fmt.Errorf("%s (non-primary), err: %v", p.si, err)
 	}
+
+	// Wait a while and retrieve smap from the primary once again. This time
+	// we should be in the smap...
 	time.Sleep(time.Second)
-	f()
+	smap := p.owner.smap.get()
+	primaryURL := smap.ProxySI.URL(cmn.NetworkPublic)
+	if err := retrievePrimarySmap(primaryURL); err != nil {
+		return err
+	}
 
 	p.owner.smap.Lock()
-	smap := p.owner.smap.get()
+	defer p.owner.smap.Unlock()
+	smap = p.owner.smap.get()
 	if !smap.isPresent(p.si) {
-		cmn.ExitLogf("FATAL: %s failed to register self - not present in the %s", p.si, smap.pp())
+		return fmt.Errorf("%s failed to register self - not present in the %s", p.si, smap.pp())
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
-		cmn.ExitLogf("FATAL: %s (non-primary), err: %v", p.si, err)
+		return fmt.Errorf("%s (non-primary), err: %v", p.si, err)
 	}
-	p.owner.smap.Unlock()
 	p.startedUp.Store(true)
 	glog.Infof("%s: joined as non-primary, %s", p.si, smap.StringEx())
 	return nil
@@ -176,7 +184,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 			p.owner.smap.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
 				p.si, maxVerSmap.ProxySI.ID(), maxVerSmap.ProxySI.IntraControlNet.DirectURL)
-			p.secondaryStartup(maxVerSmap.ProxySI.IntraControlNet.DirectURL)
+			if err := p.secondaryStartup(maxVerSmap.ProxySI.IntraControlNet.DirectURL); err != nil {
+				cmn.ExitLogf("FATAL: %v", err)
+			}
 			return
 		}
 	}
@@ -221,7 +231,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	if !smap.isPrimary(p.si) {
 		p.owner.smap.Unlock()
 		glog.Infof("%s: registering with %s", p.si, smap.ProxySI.NameEx())
-		p.secondaryStartup(smap.ProxySI.IntraControlNet.DirectURL)
+		if err := p.secondaryStartup(smap.ProxySI.IntraControlNet.DirectURL); err != nil {
+			cmn.ExitLogf("FATAL: %v", err)
+		}
 		return
 	}
 

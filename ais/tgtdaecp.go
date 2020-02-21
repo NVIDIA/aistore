@@ -1243,7 +1243,7 @@ func (t *targetrunner) disable() error {
 	}
 
 	glog.Infof("Disabling %s", t.si)
-	for i := 0; i < maxRetrySeconds; i++ {
+	for i := 0; i < maxRetryCnt; i++ {
 		if status, eunreg = t.unregister(); eunreg != nil {
 			if cmn.IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
 				glog.Errorf("%s: retrying unregistration...", t.si)
@@ -1282,7 +1282,7 @@ func (t *targetrunner) enable() error {
 	}
 
 	glog.Infof("Enabling %s", t.si)
-	for i := 0; i < maxRetrySeconds; i++ {
+	for i := 0; i < maxRetryCnt; i++ {
 		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
 				glog.Errorf("%s: retrying registration...", t.si)
