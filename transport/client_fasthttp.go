@@ -10,8 +10,10 @@ package transport
 import (
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -24,10 +26,16 @@ type Client interface {
 
 func whichClient() string { return "fasthttp" }
 
+// overriding fasthttp default `const DefaultDialTimeout = 3 * time.Second`
+func dialTimeout(addr string) (net.Conn, error) {
+	return fasthttp.DialTimeout(addr, 10*time.Second)
+}
+
 // intra-cluster networking: fasthttp client
 func NewIntraDataClient() Client {
 	config := cmn.GCO.Get()
 	return &fasthttp.Client{
+		Dial:            dialTimeout,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 	}
