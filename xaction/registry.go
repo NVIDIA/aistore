@@ -390,11 +390,12 @@ func (r *registry) allXactsStats(onlyRecent bool) map[string]stats.XactStats {
 	})
 
 	r.taskXacts.Range(func(_, val interface{}) bool {
-		taskXact := val.(*bckListTaskEntry)
+		xact := val.(entry)
+		taskXact := xact.Get()
 
 		stat := &stats.BaseXactStats{}
-		stat.FillFromXact(taskXact.xact)
-		matching[taskXact.xact.ID()] = stat
+		stat.FillFromXact(taskXact)
+		matching[taskXact.ID()] = stat
 		return true
 	})
 
