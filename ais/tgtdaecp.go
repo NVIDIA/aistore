@@ -766,7 +766,13 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 				present = true
 				if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
 					xaction.Registry.DoAbort(cmn.ActPutCopies, nbck)
-					xaction.Registry.DoAbort(cmn.ActMakeNCopies, nbck)
+					// TODO:
+					// Due to implementation flow:
+					//   First, it broadcasts command to start MakeNCopies xaction
+					//   Second, it updates BMD and sends it
+					// MakeNCopies will never work with this line uncommented:
+					//   the xaction is aborted right after start on receiving new BMD
+					// xaction.Registry.DoAbort(cmn.ActMakeNCopies, nbck)
 				}
 				if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
 					xaction.Registry.DoAbort(cmn.ActECEncode, nbck)
