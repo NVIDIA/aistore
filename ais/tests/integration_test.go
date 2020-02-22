@@ -939,9 +939,12 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	// Unregister target 0
-	err := tutils.UnregisterNode(m.proxyURL, targets[0].ID())
+	// Unregister target
+	target0, target1 := targets[0], targets[1]
+	tutils.Logf("Unregister target %s\n", target0.URL(cmn.NetworkPublic))
+	err := tutils.UnregisterNode(m.proxyURL, target0.ID())
 	tassert.CheckFatal(t, err)
+
 	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -954,9 +957,8 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-
-		tutils.Logf("Register target %s\n", targets[0].URL(cmn.NetworkPublic))
-		err = tutils.RegisterNode(m.proxyURL, targets[0], m.smap)
+		tutils.Logf("Register target %s\n", target0.URL(cmn.NetworkPublic))
+		err = tutils.RegisterNode(m.proxyURL, target0, m.smap)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -964,9 +966,8 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-
-		tutils.Logf("Unregister target %s\n", targets[1].URL(cmn.NetworkPublic))
-		err = tutils.UnregisterNode(m.proxyURL, targets[1].ID())
+		tutils.Logf("Unregister target %s\n", target1.URL(cmn.NetworkPublic))
+		err = tutils.UnregisterNode(m.proxyURL, target1.ID())
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -974,8 +975,13 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	m.wg.Wait()
 
 	// Register target 1 to bring cluster to original state
-	m.reregisterTarget(targets[1])
+	sleep := time.Duration(rand.Intn(5))*time.Second + time.Millisecond
+	time.Sleep(sleep)
+	tutils.Logf("Register target %s\n", target1.URL(cmn.NetworkPublic))
+	err = tutils.RegisterNode(m.proxyURL, target1, m.smap)
+	tassert.CheckFatal(t, err)
 
+	tutils.Logf("Wait for rebalance...\n")
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 

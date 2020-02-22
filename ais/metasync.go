@@ -300,12 +300,12 @@ outer:
 		switch lversion := y.lversion(tag); {
 		case lversion == revs.version():
 			if newCnt == 0 {
-				glog.Errorf("%s duplicated - already sync-ed or pending", s)
+				glog.Errorf("%s: %s duplicated - already sync-ed or pending", y.p.si, s)
 				continue outer
 			}
-			glog.Infof("%s duplicated - proceeding to sync %d new member(s)", s, newCnt)
+			glog.Infof("%s: %s duplicated - proceeding to sync %d new member(s)", y.p.si, s, newCnt)
 		case lversion > revs.version():
-			glog.Errorf("skipping %s: < current v%d", s, lversion)
+			glog.Errorf("%s: skipping %s: < current v%d", y.p.si, s, lversion)
 			continue outer
 		}
 

@@ -1342,10 +1342,11 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 					}
 					continue
 				}
-				if empty, err := cmn.IsDirEmpty(path); err != nil {
+				if names, empty, err := cmn.IsDirEmpty(path); err != nil {
 					return err
 				} else if !empty {
-					return fmt.Errorf("directory %q already exists and is not empty", path)
+					return fmt.Errorf("directory %q already exists and is not empty (%v...)",
+						path, names)
 				}
 			}
 		}

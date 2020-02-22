@@ -811,18 +811,19 @@ func RemoveFile(path string) error {
 	return nil
 }
 
-func IsDirEmpty(dir string) (bool, error) {
+func IsDirEmpty(dir string) ([]string, bool, error) {
+	var names []string
 	f, err := os.Open(dir)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	defer f.Close()
 
-	_, err = f.Readdirnames(1)
+	names, err = f.Readdirnames(2)
 	if err == io.EOF {
-		return true, nil
+		return nil, true, nil
 	}
-	return false, err
+	return names, false, err
 }
 
 // computes xxhash if requested

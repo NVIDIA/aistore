@@ -653,10 +653,11 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
 	for contentType := range CSM.RegisteredContentTypes {
 		dir := mi.MakePathCT(bck, contentType)
 		if err := Access(dir); err == nil {
-			if empty, errEmpty := cmn.IsDirEmpty(dir); errEmpty != nil {
+			if names, empty, errEmpty := cmn.IsDirEmpty(dir); errEmpty != nil {
 				return num, errEmpty
 			} else if !empty {
-				return num, fmt.Errorf("bucket %s: directory %s already exists and is not empty", bck, dir)
+				return num, fmt.Errorf("bucket %s: directory %s already exists and is not empty (%v...)",
+					bck, dir, names)
 			}
 		} else if err := cmn.CreateDir(dir); err != nil {
 			return num, fmt.Errorf("bucket %s: failed to create directory %s: %v", bck, dir, err)
