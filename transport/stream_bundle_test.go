@@ -70,6 +70,7 @@ func Test_Bundle(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testBundle(t, test.nvs)
+			time.Sleep(time.Second)
 		})
 	}
 }
@@ -80,15 +81,21 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		MMSA         = tutils.MMSA
 		network      = cmn.NetworkIntraData
 		trname       = "bundle"
+		tss          = make([]*httptest.Server, 0, 32)
 	)
 	mux := mux.NewServeMux()
 
 	smap.Tmap = make(cluster.NodeMap, 100)
 	for i := 0; i < 10; i++ {
 		ts := httptest.NewServer(mux)
-		defer ts.Close()
+		tss = append(tss, ts)
 		addTarget(&smap, ts, i)
 	}
+	defer func() {
+		for _, ts := range tss {
+			ts.Close()
+		}
+	}()
 	smap.Version = 1
 
 	transport.SetMux(network, mux)
@@ -97,7 +104,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	rbuf := slab.Alloc()
 	defer slab.Free(rbuf)
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
-		cmn.Assert(err == nil)
+		tassert.CheckFatal(t, err)
 		written, _ := io.CopyBuffer(ioutil.Discard, objReader, rbuf)
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 	}
