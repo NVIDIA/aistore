@@ -8,9 +8,11 @@ package dsort
 
 import (
 	"os"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/housekeep/hk"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -20,7 +22,10 @@ const (
 )
 
 var _ = Describe("ManagerGroup", func() {
-	var mgrp *ManagerGroup
+	var (
+		mgrp    *ManagerGroup
+		validRS = &ParsedRequestSpec{Extension: ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+	)
 
 	BeforeEach(func() {
 		err := cmn.CreateDir(testingConfigDir)
@@ -83,8 +88,7 @@ var _ = Describe("ManagerGroup", func() {
 
 		It("should persist manager but not return by default", func() {
 			m, err := mgrp.Add("uuid")
-			rs := &ParsedRequestSpec{Extension: ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
-			m.init(rs)
+			m.init(validRS)
 			m.unlock()
 			m.setInProgressTo(false)
 
@@ -97,8 +101,7 @@ var _ = Describe("ManagerGroup", func() {
 
 		It("should persist manager and return it when requested", func() {
 			m, err := mgrp.Add("uuid")
-			rs := &ParsedRequestSpec{Extension: ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
-			m.init(rs)
+			m.init(validRS)
 			m.unlock()
 			m.setInProgressTo(false)
 
@@ -108,6 +111,37 @@ var _ = Describe("ManagerGroup", func() {
 			Expect(exists).To(BeTrue())
 			Expect(m).ToNot(BeNil())
 			Expect(m.ManagerUUID).To(Equal("uuid"))
+		})
+	})
+
+	Context("housekeep", func() {
+		persistManager := func(uuid string, finishedAgo time.Duration) {
+			m, err := mgrp.Add(uuid)
+			Expect(err).ShouldNot(HaveOccurred())
+			err = m.init(validRS)
+			Expect(err).ShouldNot(HaveOccurred())
+			m.Metrics.Extraction.End = time.Now().Add(-finishedAgo)
+			m.unlock()
+			mgrp.persist(m.ManagerUUID)
+		}
+
+		It("should not clean anything when manager group is empty", func() {
+			Expect(mgrp.housekeep()).To(Equal(hk.DayInterval))
+			jobs := mgrp.List(nil)
+			Expect(jobs).To(HaveLen(0))
+		})
+
+		It("should clean managers which are old", func() {
+			persistManager("uuid1", 48*time.Hour)
+			persistManager("uuid2", 24*time.Hour)
+			persistManager("uuid3", 23*time.Hour)
+			persistManager("uuid4", 1*time.Hour)
+
+			Expect(mgrp.housekeep()).To(Equal(hk.DayInterval))
+			jobs := mgrp.List(nil)
+			Expect(jobs).To(HaveLen(2))
+			Expect(jobs[0].ID).To(Equal("uuid3"))
+			Expect(jobs[1].ID).To(Equal("uuid4"))
 		})
 	})
 })

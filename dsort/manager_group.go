@@ -88,7 +88,7 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) []JobInfo {
 	}
 	for _, r := range records {
 		var m Manager
-		if err := jsoniter.Unmarshal([]byte(r), &m); err != nil {
+		if err := jsoniter.Unmarshal(r, &m); err != nil {
 			glog.Error(err)
 			continue
 		}
@@ -206,7 +206,7 @@ func (mg *ManagerGroup) housekeep() time.Duration {
 		return retryInterval
 	}
 
-	managersUUID, err := db.ReadAll(managersCollection)
+	records, err := db.ReadAll(managersCollection)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return regularInterval
@@ -216,15 +216,14 @@ func (mg *ManagerGroup) housekeep() time.Duration {
 		return retryInterval
 	}
 
-	var manager Manager
-	for _, managerUUID := range managersUUID {
-		if err = db.Read(managersCollection, managerUUID, &manager); err != nil {
+	for _, r := range records {
+		var m Manager
+		if err := jsoniter.Unmarshal(r, &m); err != nil {
 			glog.Error(err)
 			return retryInterval
 		}
-
-		if time.Since(manager.Metrics.Extraction.End) > regularInterval {
-			_ = db.Delete(managersCollection, managerUUID)
+		if time.Since(m.Metrics.Extraction.End) > regularInterval {
+			_ = db.Delete(managersCollection, m.ManagerUUID)
 		}
 	}
 

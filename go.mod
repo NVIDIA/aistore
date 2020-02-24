@@ -22,7 +22,7 @@ require (
 	github.com/onsi/gomega v1.9.0
 	github.com/pierrec/lz4/v3 v3.1.0
 	github.com/pkg/errors v0.8.1
-	github.com/sdomino/scribble v0.0.0-20190805145214-552710ac067a
+	github.com/sdomino/scribble v0.0.0-20191024200645-4116320640ba
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
 	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
