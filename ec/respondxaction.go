@@ -38,15 +38,18 @@ func NewRespondXact(t cluster.Target, smap cluster.Sowner, si *cluster.Snode, bu
 func (r *XactRespond) Run() (err error) {
 	glog.Infof("Starting %s", r.GetRunName())
 
-	conf := cmn.GCO.Get()
-	tck := time.NewTicker(conf.Periodic.StatsTime)
-	lastAction := time.Now()
-	idleTimeout := conf.Timeout.SendFile * 3
+	var (
+		cfg         = cmn.GCO.Get()
+		lastAction  = time.Now()
+		idleTimeout = 3 * cfg.Timeout.SendFile
+		ticker      = time.NewTicker(cfg.Periodic.StatsTime)
+	)
+	defer ticker.Stop()
 
 	// as of now all requests are equal. Some may get throttling later
 	for {
 		select {
-		case <-tck.C:
+		case <-ticker.C:
 			if s := fmt.Sprintf("%v", r.stats.stats()); s != "" {
 				glog.Info(s)
 			}
@@ -59,10 +62,8 @@ func (r *XactRespond) Run() (err error) {
 				}
 
 				r.stop()
-
 				return nil
 			}
-
 		case <-r.ChanAbort():
 			r.stop()
 			return cmn.NewAbortedError(r.String())

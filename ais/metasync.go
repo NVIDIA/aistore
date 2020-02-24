@@ -441,8 +441,8 @@ func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap, 
 		y.becomeNonPrimary()
 		return
 	}
-	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
-		for id, si := range serverMap {
+	for _, nodes := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
+		for id, si := range nodes {
 			rvd, ok := y.revsmap[id]
 			if !ok {
 				rvd = revsdaemon{vermap: make(map[string]int64)}

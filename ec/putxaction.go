@@ -69,10 +69,14 @@ func (r *XactPut) Run() (err error) {
 	for _, jog := range r.putJoggers {
 		go jog.run()
 	}
-	conf := cmn.GCO.Get()
-	tck := time.NewTicker(conf.Periodic.StatsTime)
-	lastAction := time.Now()
-	idleTimeout := conf.Timeout.SendFile * 3
+
+	var (
+		cfg         = cmn.GCO.Get()
+		lastAction  = time.Now()
+		idleTimeout = 3 * cfg.Timeout.SendFile
+		ticker      = time.NewTicker(cfg.Periodic.StatsTime)
+	)
+	defer ticker.Stop()
 
 	// as of now all requests are equal. Some may get throttling later
 	for {
@@ -89,7 +93,7 @@ func (r *XactPut) Run() (err error) {
 		}
 
 		select {
-		case <-tck.C:
+		case <-ticker.C:
 			if s := fmt.Sprintf("%v", r.Stats()); s != "" {
 				glog.Info(s)
 			}
