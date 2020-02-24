@@ -1,4 +1,16 @@
-## Cloud Providers
+## Terminology
+
+AIS supports *cloud* buckets provided by remote storages. A storage bucket that is visible/accessible/modifiable via AIS may originate in a 3rd party Cloud, or in another (remote) AIS cluster, or - the 3rd option - be created, filled-in, updated, and otherwise accessed inside this "local" AIS cluster. Respectively, there's a term and a notion of a [cloud provider](#supported-cloud-providers) realized via all relevant API calls.
+
+In that precise sense, the term "ais bucket" is a **shortcut** to indicate a "local" bucket. It is difficult, though, without creating at least some confusion, to use the word "local" with respect to a content that may be distributed across thousands of storage nodes. That's why we stick with the terminology: *cloud buckets* vs *ais buckets*.
+
+Needless to say that *cloud buckets* will often serve as a cache or a tier in front of remote AIS cluster or 3rd party Cloud storage.
+
+Further, cloud-based and ais buckets support the same API. All the [supported storage services](storage_svcs.md) equally apply to both kinds of buckets with a few exceptions: e.g., only ais buckets can be renamed.
+
+Finally, iff a cloud-based and an ais bucket share the same name and are simultaneously accessible, users can explicitly let AIS know - via `-provider` option and [the API](bucket.md) - which bucket to access.
+
+## Supported Cloud Providers
 
 AIS can be deployed as a fast tier in front of several storage backends. Supported cloud providers include: AIS (`ais`) itself, as well as AWS (`aws`), GCP (`gcp`), and all S3 and Google Cloud compliant storages.
 

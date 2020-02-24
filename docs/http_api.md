@@ -57,7 +57,6 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 
 > The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](../cli/README.md).
 
-
 ### API Reference
 
 | Operation | HTTP action | Example |
@@ -129,6 +128,8 @@ ___
 ### Cloud Provider
 
 Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in another AIS cluster, or - the 3rd option - be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an AIS bucket that happen to share the same name? To resolve all potential naming, and (arguably, more importantly) partition namespace with respect to both physical isolation and QoS, AIS introduces the concept of *provider*.
+
+* [Cloud Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
 > Cloud provider (aka "bucket provider") is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. Supported providers, on the other hand, are enumerated and documented: `ais` - for AIS buckets, `aws`, or `gcp` - for S3 and Google Cloud buckets, respectively.
 

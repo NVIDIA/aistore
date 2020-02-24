@@ -142,7 +142,7 @@ In particular, the `make` provides a growing number of developer-friendly comman
 
 ## Deployment
 
-As previously stated, AIStore can be deployed in a vast variety of [ways](deploy). This section focuses on a single Linux machine; as such, it is intended for developers and development, or for a quick trial.
+As previously stated, AIStore can be deployed in a vast variety of [ways](deploy). This section focuses on a single Linux machine; as such, it is intended for developers and development, *or* for a quick trial.
 
 ### Local Docker-Compose
 
@@ -232,9 +232,9 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 
 > For `aisnode` command-line options, see: [command-line options](docs/command_line.md).
 
-> For general helpful links and background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful-links.md).
+> For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful-links.md).
 
-> And again, run `make help` to find out how to build and run AIS executables and tests.
+> And again, run `make help` to find out how to build, run, and test AIStore and tools.
 
 ## Guides and References
 - [AIS Overview](docs/overview.md)

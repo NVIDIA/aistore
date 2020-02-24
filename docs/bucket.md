@@ -1,6 +1,6 @@
 ## Table of Contents
 - [Bucket](#bucket)
-  - [Bucket Provider](#bucket-provider)
+  - [Cloud Provider](#cloud-provider)
 - [AIS Bucket](#ais-bucket)
   - [Curl examples: create, rename and, destroy ais bucket](#curl-examples-create-rename-and-destroy-ais-bucket)
 - [Cloud Bucket](#cloud-bucket)
@@ -16,7 +16,7 @@
 
 ## Bucket
 
-AIS, as an object store, uses the bucket abstraction.
+AIS uses the popular-and-well-known bucket abstraction. In a flat storage hierarchy, bucket is a named container of user dataset(s) (represented as objects) and, simultaneously, a point of applying storage management policies: erasure coding, mirroring, etc.
 
 Each object is assigned to and stored in a basic container called bucket. AIS buckets are similar to the buckets in [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html) and [Google Cloud (GCP)](https://cloud.google.com/storage/docs/key-terms#buckets).
 
@@ -33,14 +33,13 @@ Cloud-based and ais buckets support the same API with minor exceptions. Cloud bu
 
 > Most of the examples below are `curl` based; it is possible, however, and often even preferable, to execute the same operations using [AIS CLI](../cli/README.md). In particular, for the commands that operate on buckets, please refer to [this CLI resource](../cli/resources/bucket.md).
 
-### Bucket Provider
+### Cloud Provider
 
-Any storage bucket handled by AIS may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself.
-For more information about 3rd party Cloud Providers please refer to [providers readme](docs/providers.md)
+[Cloud Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. For complete definition and details, plase refer to the [Cloud Provider](./providers.md) document.
 
-> Bucket provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` for ais buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
+> Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` for ais buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
 
-For detailed documentation please refer [to the RESTful API reference and examples](http_api.md). The rest of this document serves to further explain features and concepts specific to storage buckets.
+For API reference, please refer [to the RESTful API and examples](http_api.md). The rest of this document serves to further explain features and concepts specific to storage buckets.
 
 ## AIS Bucket
 AIS buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.

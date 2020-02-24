@@ -42,7 +42,7 @@ Lists cloud bucket names.
 
 `ais ls BUCKET_NAME`
 
-Lists object names in the bucket `BUCKET_NAME`. Bucket provider is auto-detected.
+Lists object names in the bucket `BUCKET_NAME`. Cloud provider is auto-detected.
 
 #### From the specific provider
 
