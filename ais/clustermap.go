@@ -313,25 +313,25 @@ func (r *smapowner) get() (smap *smapX) {
 	return (*smapX)(r.smap.Load())
 }
 
-func (r *smapowner) synchronize(newsmap *smapX, lesserVersionIsErr bool) (err error) {
-	if !newsmap.isValid() {
-		err = fmt.Errorf("invalid smapX: %s", newsmap.pp())
+func (r *smapowner) synchronize(newSmap *smapX, lesserVersionIsErr bool) (err error) {
+	if !newSmap.isValid() {
+		err = fmt.Errorf("invalid smapX: %s", newSmap.pp())
 		return
 	}
 	r.Lock()
 	smap := r.Get()
 	if smap != nil {
-		myver := smap.Version
-		if newsmap.version() <= myver {
-			if lesserVersionIsErr && newsmap.version() < myver {
-				err = fmt.Errorf("attempt to downgrade local smapX v%d to v%d", myver, newsmap.version())
+		curVer, newVer := smap.Version, newSmap.version()
+		if newVer <= curVer {
+			if lesserVersionIsErr && newVer < curVer {
+				err = fmt.Errorf("attempt to downgrade local smapX v%d to v%d", curVer, newVer)
 			}
 			r.Unlock()
 			return
 		}
 	}
-	if err = r.persist(newsmap); err == nil {
-		r.put(newsmap)
+	if err = r.persist(newSmap); err == nil {
+		r.put(newSmap)
 	}
 	r.Unlock()
 	return

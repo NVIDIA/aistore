@@ -610,21 +610,23 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		return
 	}
-	caller := r.Header.Get(cmn.HeaderCallerName)
+
+	var (
+		errs   []error
+		caller = r.Header.Get(cmn.HeaderCallerName)
+	)
+
 	newSmap, _, err := p.extractSmap(payload, caller)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if newSmap != nil {
+		errs = append(errs, err)
+	} else if newSmap != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("new %s from %s", newSmap.StringEx(), caller)
 		}
 		err = p.smapowner.synchronize(newSmap, true /* lesserIsErr */)
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
+			errs = append(errs, err)
+			goto ExtractBMD
 		}
 
 		// When some node was removed from the cluster we need to clean up the
@@ -636,35 +638,33 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 			}
 			return true
 		})
-
-		if !newSmap.isPresent(p.si) {
-			s := fmt.Sprintf("Warning: not finding self '%s' in the received %s", p.si, newSmap.pp())
-			glog.Errorln(s)
-		}
 	}
 
-	newBMD, actionLB, err := p.extractBMD(payload)
+ExtractBMD:
+	newBMD, msgBMD, err := p.extractBMD(payload)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if newBMD != nil {
-		caller := r.Header.Get(cmn.HeaderCallerName)
+		errs = append(errs, err)
+	} else if newBMD != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("new %s from %s", newBMD.StringEx(), caller)
 		}
-		if err = p.receiveBucketMD(newBMD, actionLB, caller); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
+		if err = p.receiveBucketMD(newBMD, msgBMD, caller); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
 	revokedTokens, err := p.extractRevokedTokenList(payload)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		errs = append(errs, err)
+	} else {
+		p.authn.updateRevokedList(revokedTokens)
+	}
+
+	if len(errs) > 0 {
+		msg := fmt.Sprintf("%v", errs)
+		p.invalmsghdlr(w, r, msg)
 		return
 	}
-	p.authn.updateRevokedList(revokedTokens)
 }
 
 // POST /v1/metasync

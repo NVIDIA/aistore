@@ -715,7 +715,6 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed and is unusable", mountpath))
 }
 
-// FIXME: use the message
 func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
 	var from string
 	if caller != "" {
@@ -825,8 +824,8 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 
 func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, caller string) (err error) {
 	var (
-		newTargetID, s, from       string
-		iPresent, newTargetPresent bool
+		newTargetID, s, from string
+		newTargetPresent     bool
 	)
 	if caller != "" {
 		from = " from " + caller
@@ -842,7 +841,6 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 	glog.Infof("%s: receive %s%s, primary %s%s", t.si, newsmap.StringEx(), from, newsmap.ProxySI, s)
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.ID() {
-			iPresent = true
 			glog.Infof("%s <= self", si)
 		} else if id == newTargetID {
 			newTargetPresent = true // only if not self
@@ -850,11 +848,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 			glog.Infof("%s", si)
 		}
 	}
-	if !iPresent {
-		err = fmt.Errorf("%s: not finding self in the new %s", t.si, newsmap.StringEx())
-		glog.Warningf("Error: %s\n%s", err, newsmap.pp())
-		return
-	}
+	cmn.Assert(newsmap.isPresent(t.si)) // This must be checked beforehand.
 	if newTargetID != "" && newTargetID != t.si.ID() && !newTargetPresent {
 		err = fmt.Errorf("not finding %s(new target) in the new v%d", newTargetID, newsmap.version())
 		glog.Warningf("Error: %s\n%s", err, newsmap.pp())
@@ -1069,41 +1063,48 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		return
 	}
-	caller := r.Header.Get(cmn.HeaderCallerName)
-	newSmap, actionSmap, err := t.extractSmap(payload, caller)
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
 
-	if newSmap != nil {
-		err = t.receiveSmap(newSmap, actionSmap, caller)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
+	var (
+		errs   []error
+		caller = r.Header.Get(cmn.HeaderCallerName)
+	)
+
+	newSmap, msgSmap, err := t.extractSmap(payload, caller)
+	if err != nil {
+		errs = append(errs, err)
+	} else if newSmap != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("new %s from %s", newSmap.StringEx(), caller)
+		}
+		if err := t.receiveSmap(newSmap, msgSmap, caller); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
-	newBMD, actionLB, err := t.extractBMD(payload)
+	newBMD, msgBMD, err := t.extractBMD(payload)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if newBMD != nil {
-		caller := r.Header.Get(cmn.HeaderCallerName)
-		if err = t.receiveBucketMD(newBMD, actionLB, bucketMDReceive, caller); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
+		errs = append(errs, err)
+	} else if newBMD != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("new %s from %s", newBMD.StringEx(), caller)
+		}
+		if err := t.receiveBucketMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
 	revokedTokens, err := t.extractRevokedTokenList(payload)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		errs = append(errs, err)
+	} else {
+		t.authn.updateRevokedList(revokedTokens)
+	}
+
+	if len(errs) > 0 {
+		msg := fmt.Sprintf("%v", errs)
+		t.invalmsghdlr(w, r, msg)
 		return
 	}
-	t.authn.updateRevokedList(revokedTokens)
 }
 
 // POST /v1/metasync

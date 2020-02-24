@@ -789,7 +789,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addProxy(newSnode("proxy1", httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+		clone.addProxy(newSnode("p1", httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		proxy1 := newSecondary("p1")

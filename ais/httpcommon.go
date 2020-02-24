@@ -959,7 +959,10 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap 
 	}
 	if !newSmap.isValid() {
 		err = fmt.Errorf("%s: invalid %s - lacking or missing primary", h.si, newSmap)
-		newSmap = nil
+		return
+	}
+	if !newSmap.isPresent(h.si) {
+		err = fmt.Errorf("%s: invalid %s - not finding ourselves in smap", h.si, newSmap)
 		return
 	}
 	if msgInt.Action != "" {
@@ -981,7 +984,6 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap 
 	if newSmap.version() < myver {
 		if !eq {
 			err = fmt.Errorf("%s: attempt to downgrade %s to %s", h.si, smap.StringEx(), newSmap.StringEx())
-			newSmap = nil
 			return
 		}
 		glog.Warningf("%s: %s and %s are otherwise identical", h.si, newSmap.StringEx(), smap.StringEx())
