@@ -239,6 +239,7 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 ## Guides and References
 - [AIS Overview](docs/overview.md)
 - [CLI](cli/README.md)
+- [On-Disk Layout](docs/on-disk-layout.md)
 - [Command line parameters](docs/command_line.md)
 - [AIS Load Generator: integrated benchmark tool](bench/aisloader/README.md)
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
