@@ -605,8 +605,11 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	lom = &cluster.LOM{T: t, FQN: fqn}
 	err = lom.Init(cmn.Bck{})
 	if err != nil {
+		if cmn.IsErrBucketLevel(err) {
+			return err
+		}
 		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Infof("%s, err %s - skipping...", lom, err)
+			glog.Warningf("%s, err %s - skipping...", lom, err)
 		}
 		return nil
 	}

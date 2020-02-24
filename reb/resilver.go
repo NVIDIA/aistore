@@ -258,16 +258,23 @@ func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {
 
 	ct, err := cluster.NewCTFromFQN(fqn, t.GetBowner())
 	if err != nil {
-		glog.Warningf("CT for %q: %v", fqn, err)
+		if cmn.IsErrBucketLevel(err) {
+			return err
+		}
+		if glog.FastV(4, glog.SmoduleReb) {
+			glog.Warningf("CT for %q: %v", fqn, err)
+		}
 		return nil
 	}
 	// optionally, skip those that must be globally rebalanced
 	if rj.skipGlobMisplaced {
 		uname := ct.Bck().MakeUname(ct.ObjName())
-		if tsi, err := cluster.HrwTarget(uname, t.GetSowner().Get()); err == nil {
-			if tsi.ID() != t.Snode().ID() {
-				return nil
-			}
+		tsi, err := cluster.HrwTarget(uname, t.GetSowner().Get())
+		if err != nil {
+			return err
+		}
+		if tsi.ID() != t.Snode().ID() {
+			return nil
 		}
 	}
 	if ct.ContentType() == ec.SliceType {
