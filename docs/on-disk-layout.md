@@ -10,7 +10,7 @@ At a high level, with v3.0:
 
 In addition, release 3.0 adds configurable namespaces whereby users can choose to group selected buckets for the purposes of physical isolation from all other buckets and datasets, and/or applying common (for this group) storage management policies: erasure coding, n-way mirroring, etc. But more about it later.
 
-Here's a simplified drawing depicting two providers, AIS and AWS, and two buckets, `ABC` and `XYZ`, respectively. In the picture, `mpath` is a single [mountpath](./configuration.md) - a single disk **or** a volume formatted with a local filesystem of choice, **and** a local directory (`mpath/`):
+Here's a simplified drawing depicting two [providers](./providers.md), AIS and AWS, and two buckets, `ABC` and `XYZ`, respectively. In the picture, `mpath` is a single [mountpath](./configuration.md) - a single disk **or** a volume formatted with a local filesystem of choice, **and** a local directory (`mpath/`):
 
 <img src="images/PBCT.png" alt="on-disk hierarchy" width="160">
 

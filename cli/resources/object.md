@@ -65,7 +65,6 @@ Size    Version Ec
 7.63MiB 1       2:2[replicated]
 ```
 
-
 ### PUT
 
 `ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>

@@ -4,7 +4,7 @@
 - [Notation](#notation)
 - [Overview](#overview)
 - [API Reference](#api-reference)
-- [Bucket Provider](#bucket-provider)
+- [Cloud Provider](#cloud-provider)
 - [Querying information](#querying-information)
 - [Example: querying runtime statistics](#example-querying-runtime-statistics)
 
@@ -126,23 +126,29 @@ ___
 
 <a name="ft8">8</a>: When putting the first part of an object, `handle` value must be empty string or omitted. On success, the first request returns an object handle. The subsequent `AppendObject` and `FlushObject` requests must pass the handle to the API calls. The object gets accessible and appears in a bucket only after `FlushObject` is done.
 
-### Bucket Provider
+### Cloud Provider
 
-Any storage bucket that AIS handles may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an AIS bucket that happen to share the same name? To resolve the potential naming conflict, AIS supports user-specified *Cloud provider* or, simply, *provider*.
+Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in another AIS cluster, or - the 3rd option - be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an AIS bucket that happen to share the same name? To resolve all potential naming, and (arguably, more importantly) partition namespace with respect to both physical isolation and QoS, AIS introduces the concept of *provider*.
 
-> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` - for AIS buckets, and `cloud`, `aws`, or `gcp` - for Cloud buckets.
+> Cloud provider (aka "bucket provider") is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. Supported providers, on the other hand, are enumerated and documented: `ais` - for AIS buckets, `aws`, or `gcp` - for S3 and Google Cloud buckets, respectively.
 
-In all those cases users can add an optional `?provider=ais` or `?provider=cloud` query to the GET (PUT, DELETE, List/Range) request.
+In all those cases users can add an optional `?provider=ais` or `?provider=aws` or `?provider=gcp` query to the GET (PUT, DELETE, List/Range) request.
 
-Example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=ais'`
+Curl example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=ais'`
 
-#### Supported APIs for Bucket Provider
+For more information, CLI examples, and the most recent updates, please see:
+- [Cloud Providers](./providers.md)
+- [CLI: operations on buckets](/cli/resources/bucket.md)
+- [CLI: operations on objects](/cli/resources/object.md)
+- [On-Disk Layout](./on-disk-layout.md)
 
-| Method | Supported APIs |
+#### Supported APIs
+
+| RESTful verb | AIS APIs |
 | --- | --- |
-| GET | Get object, Read range, Get bucket names |
-| PUT | Put object, Append object, Set single bucket property, Set bucket properties |
-| DELETE | Delete object, Delete list of objects, Delete range of objects |
+| GET | GET object, Read range, Get bucket names |
+| PUT | PUT object, APPEND object, Set single bucket property, Set bucket properties |
+| DELETE | DELETE object, DELETE list of objects, DELETE range of objects |
 | HEAD | Get bucket properties, Get object properties |
 
 
