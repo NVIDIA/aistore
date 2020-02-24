@@ -322,30 +322,30 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	}
 
 	// 3.5. RebID
-	p.owner.smap.Lock()
-	p.setRebID(c.smap, c.msgInt, true)
-	p.owner.smap.Unlock()
+	cloneRMD := p.owner.rmd.modify(func(clone *rebMD) {
+		clone.inc()
+	})
+	c.msgInt.RMDVersion = cloneRMD.Version
 
 	// 4. lock and update BMD locally; unlock bucket
 	p.owner.bmd.Lock()
-	clone := p.owner.bmd.get().clone()
-	bprops, present := clone.Get(bckFrom)
+	cloneBMD := p.owner.bmd.get().clone()
+	bprops, present := cloneBMD.Get(bckFrom)
 	cmn.Assert(present)
 
 	bckFrom.Props = bprops.Clone()
 	bckTo.Props = bprops.Clone()
 
-	added := clone.add(bckTo, bckTo.Props)
+	added := cloneBMD.add(bckTo, bckTo.Props)
 	cmn.Assert(added)
 	bckFrom.Props.Renamed = cmn.ActRenameLB
-	clone.set(bckFrom, bckFrom.Props)
+	cloneBMD.set(bckFrom, bckFrom.Props)
 
-	p.owner.bmd.put(clone)
+	p.owner.bmd.put(cloneBMD)
 
 	// 5. metasync updated BMD; unlock BMD
-
-	c.msgInt.BMDVersion = clone.version()
-	wg := p.metasyncer.sync(revsPair{clone, c.msgInt})
+	c.msgInt.BMDVersion = cloneBMD.version()
+	wg := p.metasyncer.sync(revsPair{cloneBMD, c.msgInt})
 	p.owner.bmd.Unlock()
 
 	wg.Wait()
@@ -454,12 +454,6 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	}
 
 	// Commit
-	if msg.Action == cmn.ActRenameLB {
-		p.owner.smap.Lock()
-		p.setRebID(smap, msgInt, true) // FIXME: race vs change in membership
-		p.owner.smap.Unlock()
-		body = cmn.MustMarshal(msgInt)
-	}
 	args.req.Body = body
 	args.req.Path = cmn.URLPath(path, cmn.ActCommit)
 	results := p.bcastPost(args)
@@ -473,24 +467,6 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		errHandler()
 		return
 	}
-
-	p.owner.bmd.Lock()
-	clone = p.owner.bmd.get().clone()
-
-	// TODO: Buckets should be upgraded after we have **finished** the xaction
-	//  not when we committed it.
-
-	if msg.Action == cmn.ActRenameLB {
-		bckFromProps := bckFrom.Props.Clone()
-		bckFromProps.Renamed = cmn.ActRenameLB
-		clone.set(bckFrom, bckFromProps)
-	}
-	p.owner.bmd.put(clone)
-
-	// Finalize
-	msgInt = p.newActionMsgInternal(msg, nil, clone)
-	_ = p.metasyncer.sync(revsPair{clone, msgInt})
-	p.owner.bmd.Unlock()
 	return
 }
 

@@ -100,8 +100,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 
 	// BMD
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
-	err = t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, caller)
-	if err == nil {
+	if err = t.receiveBMD(meta.BMD, msgInt, bucketMDRegister, caller); err != nil {
 		glog.Infof("%s: %s", t.si, t.owner.bmd.get())
 	}
 	// Smap
@@ -292,7 +291,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, err = t.owner.smap.modify(true /*lock*/, func(clone *smapX) error {
+	err = t.owner.smap.modify(func(clone *smapX) error {
 		if clone.ProxySI.ID() != psi.ID() {
 			clone.ProxySI = psi
 		}
@@ -705,7 +704,7 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed and is unusable", mountpath))
 }
 
-func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
+func (t *targetrunner) receiveBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
 	err = t._recvBMD(newBMD, msgInt, tag, caller)
 	if msgInt.TxnID == "" {
 		return
@@ -850,54 +849,65 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 	return
 }
 
-func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, caller string) (err error) {
+func (t *targetrunner) receiveSmap(newSmap *smapX, msgInt *actionMsgInternal, caller string) (err error) {
 	var (
-		newTargetID, s, from string
-		newTargetPresent     bool
+		s, from string
 	)
 	if caller != "" {
 		from = " from " + caller
 	}
 	// proxy => target control protocol (see p.httpclupost)
-	action, newDaemonID := msgInt.Action, msgInt.NewDaemonID
-	if action == cmn.ActRegTarget {
-		newTargetID = newDaemonID
-		s = fmt.Sprintf(", %s %s(new target ID)", msgInt.Action, newTargetID)
-	} else if msgInt.Action != "" {
+	if msgInt.Action != "" {
 		s = ", action " + msgInt.Action
 	}
-	glog.Infof("%s: receive %s%s, primary %s%s", t.si, newsmap.StringEx(), from, newsmap.ProxySI, s)
-	for id, si := range newsmap.Tmap { // log
-		if id == t.si.ID() {
-			glog.Infof("%s <= self", si)
-		} else if id == newTargetID {
-			newTargetPresent = true // only if not self
-		} else {
-			glog.Infof("%s", si)
-		}
-	}
-	cmn.Assert(newsmap.isPresent(t.si)) // This must be checked beforehand.
-	if newTargetID != "" && newTargetID != t.si.ID() && !newTargetPresent {
-		err = fmt.Errorf("not finding %s(new target) in the new v%d", newTargetID, newsmap.version())
-		glog.Warningf("Error: %s\n%s", err, newsmap.pp())
+	glog.Infof("%s: receive %s%s, primary %s%s", t.si, newSmap.StringEx(), from, newSmap.ProxySI, s)
+	if !newSmap.isPresent(t.si) {
+		err = fmt.Errorf("%s: not finding self in the new %s", t.si, newSmap.StringEx())
+		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
 		return
 	}
-	if err = t.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
+	if err = t.owner.smap.synchronize(newSmap, true /* lesserIsErr */); err != nil {
 		return
 	}
+	return
+}
+
+func (t *targetrunner) receiveRMD(newRMD *rebMD, msgInt *actionMsgInternal, caller string) (err error) {
+	var (
+		s, from string
+	)
+	if caller != "" {
+		from = " from " + caller
+	}
+	// proxy => target control protocol (see p.httpclupost)
+	if msgInt.Action != "" {
+		s = ", action " + msgInt.Action
+	}
+	glog.Infof("%s: receive %s%s%s", t.si, newRMD.String(), from, s)
+
+	t.owner.rmd.Lock()
+	defer t.owner.rmd.Unlock()
+
+	rmd := t.owner.rmd.get()
+	if newRMD.Version < rmd.Version {
+		return fmt.Errorf("attempt to downgrade local RMD v%d to v%d", rmd.Version, newRMD.Version)
+	} else if newRMD.Version == rmd.Version {
+		return
+	}
+
+	smap := t.owner.smap.Get()
 	if msgInt.Action == cmn.ActRebalance { // manual
-		go t.rebManager.RunRebalance(t.owner.smap.Get(), msgInt.RebID)
+		go t.rebManager.RunRebalance(smap, newRMD.Version)
 		return
 	}
+
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		glog.Infoln("auto-rebalancing disabled")
 		return
 	}
-	if newTargetID == "" {
-		return
-	}
-	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si, newTargetID)
-	go t.rebManager.RunRebalance(t.owner.smap.Get(), msgInt.RebID)
+
+	glog.Infof("%s receiveSmap: go rebalance(newTargetIDs=%v)", t.si, newRMD.TargetIDs)
+	go t.rebManager.RunRebalance(smap, newRMD.Version)
 	return
 }
 
@@ -1054,7 +1064,9 @@ func (t *targetrunner) smapVersionFixup(r *http.Request) {
 	if r != nil {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	}
-	t.receiveSmap(newSmap, msgInt, caller)
+	if err := t.receiveSmap(newSmap, msgInt, caller); err != nil {
+		glog.Error(err)
+	}
 }
 
 func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool) {
@@ -1063,8 +1075,7 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 		time.Sleep(200 * time.Millisecond) // TODO -- FIXME: request proxy to execute syncCBmeta()
 	}
 	newBucketMD := &bucketMD{}
-	err := t.fetchPrimaryMD(cmn.GetWhatBMD, newBucketMD, bck.Name)
-	if err != nil {
+	if err := t.fetchPrimaryMD(cmn.GetWhatBMD, newBucketMD, bck.Name); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -1072,7 +1083,9 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 	if r != nil {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	}
-	t.receiveBucketMD(newBucketMD, msgInt, bucketMDFixup, caller)
+	if err := t.receiveBMD(newBucketMD, msgInt, bucketMDFixup, caller); err != nil {
+		glog.Error(err)
+	}
 }
 
 // handler for: /v1/tokens
@@ -1122,6 +1135,18 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	newRMD, msgRMD, err := t.extractRMD(payload)
+	if err != nil {
+		errs = append(errs, err)
+	} else if newRMD != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("new %s from %s", newRMD.String(), caller)
+		}
+		if err := t.receiveRMD(newRMD, msgRMD, caller); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	newBMD, msgBMD, err := t.extractBMD(payload)
 	if err != nil {
 		errs = append(errs, err)
@@ -1129,7 +1154,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("new %s from %s", newBMD.StringEx(), caller)
 		}
-		if err := t.receiveBucketMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil {
+		if err := t.receiveBMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil {
 			errs = append(errs, err)
 		}
 	}

@@ -289,14 +289,18 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if err != nil {
 			return err // ditto
 		}
+
+		globalRebID := c.msgInt.RMDVersion
+		cmn.Assert(globalRebID > 0)
+
 		t.gfn.local.Activate()
 		t.gfn.global.activateTimed()
 		waiter := &sync.WaitGroup{}
 		waiter.Add(1)
-		go xact.Run(waiter, c.msgInt.RebID)
+		go xact.Run(waiter, globalRebID) // FIXME: #654
 		waiter.Wait()
 
-		time.Sleep(200 * time.Millisecond) // FIXME: !1727
+		time.Sleep(200 * time.Millisecond) // FIXME: !1727, #654
 	default:
 		cmn.Assert(false)
 	}

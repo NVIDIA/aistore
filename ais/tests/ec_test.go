@@ -2804,14 +2804,15 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	registered = true
 
-	stopCh := make(chan struct{}, 1)
+	stopCh := cmn.NewStopCh()
+	defer stopCh.Close()
 	go func() {
 		for {
 			for _, obj := range oldECList {
 				_, err := api.GetObject(baseParams, bckEC, obj.Name)
 				tassert.CheckError(t, err)
 				select {
-				case <-stopCh:
+				case <-stopCh.Listen():
 					return
 				default:
 				}
@@ -2826,7 +2827,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 	defer tutils.RegisterNode(proxyURL, tgtGone, smap)
 
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
-	close(stopCh)
+	stopCh.Close()
 
 	tutils.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListBucket(baseParams, bckEC, msg, 0)

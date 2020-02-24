@@ -48,10 +48,9 @@ type (
 	}
 	// two pieces of metadata a self-registering (joining) target wants to know right away
 	targetRegMeta struct {
-		Smap       *smapX         `json:"smap"`
-		BMD        *bucketMD      `json:"bmd"`
-		SI         *cluster.Snode `json:"si"`
-		RebAborted bool           `json:"reb_aborted"`
+		Smap *smapX         `json:"smap"`
+		BMD  *bucketMD      `json:"bmd"`
+		SI   *cluster.Snode `json:"si"`
 	}
 
 	reverseProxy struct {
@@ -70,9 +69,7 @@ type (
 		authn      *authManager
 		metasyncer *metasyncer
 		rproxy     reverseProxy
-		rebID      int64
 		startedUp  atomic.Bool
-		rebalance  atomic.Bool
 	}
 )
 
@@ -179,17 +176,6 @@ func (p *proxyrunner) Run() error {
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, nil, p.statsT)
 	return p.httprunner.run()
-}
-
-// NOTE: caller is responsible to take smapOwner lock
-func (p *proxyrunner) setRebID(smap *smapX, msgInt *actionMsgInternal, inc bool) {
-	ngid := smap.version() * 100
-	if inc && p.rebID >= ngid {
-		p.rebID++
-	} else {
-		p.rebID = ngid
-	}
-	msgInt.RebID = p.rebID
 }
 
 func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (primaryURL string, status int, err error) {
@@ -628,7 +614,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 		err = p.owner.smap.synchronize(newSmap, true /* lesserIsErr */)
 		if err != nil {
 			errs = append(errs, err)
-			goto ExtractBMD
+			goto ExtractRMD
 		}
 
 		// When some node was removed from the cluster we need to clean up the
@@ -642,7 +628,19 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 		})
 	}
 
-ExtractBMD:
+ExtractRMD:
+	newRMD, msgRMD, err := p.extractRMD(payload)
+	if err != nil {
+		errs = append(errs, err)
+	} else if newRMD != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("new %s from %s", newRMD.String(), caller)
+		}
+		if err = p.receiveRMD(newRMD, msgRMD); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	newBMD, msgBMD, err := p.extractBMD(payload)
 	if err != nil {
 		errs = append(errs, err)
@@ -650,7 +648,7 @@ ExtractBMD:
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("new %s from %s", newBMD.StringEx(), caller)
 		}
-		if err = p.receiveBucketMD(newBMD, msgBMD, caller); err != nil {
+		if err = p.receiveBMD(newBMD, msgBMD, caller); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -2303,9 +2301,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	if p.si.ID() == proxyID {
 		if !prepare {
-			if err := p.becomeNewPrimary(""); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-			}
+			p.becomeNewPrimary("")
 		}
 		return
 	}
@@ -2325,17 +2321,15 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	_, err = p.owner.smap.modify(true /*lock*/, func(clone *smapX) error {
+	err = p.owner.smap.modify(func(clone *smapX) error {
 		clone.ProxySI = psi
 		return nil
 	})
 	cmn.AssertNoErr(err)
 }
 
-func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
-	var msgInt *actionMsgInternal
-	p.owner.smap.Lock()
-	clone, err := p.owner.smap.modify(false, // lock==false
+func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
+	err := p.owner.smap.modify(
 		func(clone *smapX) error {
 			if !clone.isPresent(p.si) {
 				cmn.AssertMsg(false, "This proxy '"+p.si.ID()+"' must always be present in the "+clone.pp())
@@ -2351,21 +2345,17 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 			return nil
 		},
 		func(clone *smapX) {
-			msgInt = p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
-			p.setRebID(clone, msgInt, true)
+			bmd := p.owner.bmd.get()
+			if glog.V(3) {
+				glog.Infof("%s: distributing %s with newly elected primary (self)", p.si, clone)
+				glog.Infof("%s: distributing %s as well", p.si, bmd)
+			}
+
+			msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
+			_ = p.metasyncer.sync(revsPair{clone, msgInt}, revsPair{bmd, msgInt})
 		},
 	)
 	cmn.AssertNoErr(err)
-
-	bmd := p.owner.bmd.get()
-	if glog.V(3) {
-		glog.Infof("%s: distributing %s with newly elected primary (self)", p.si, clone)
-		glog.Infof("%s: distributing %s as well", p.si, bmd)
-	}
-
-	_ = p.metasyncer.sync(revsPair{clone, msgInt}, revsPair{bmd, msgInt})
-	p.owner.smap.Unlock()
-	return
 }
 
 func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Request) {
@@ -2415,7 +2405,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	// (I.5) commit locally
-	_, err = p.owner.smap.modify(true /*lock*/, func(clone *smapX) error {
+	err = p.owner.smap.modify(func(clone *smapX) error {
 		clone.ProxySI = psi
 		p.metasyncer.becomeNonPrimary()
 		return nil
@@ -2731,8 +2721,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s := fmt.Sprintf("register %s, (keepalive, user, self, reb)=(%t, %t, %t, %t)",
-		nsi, keepalive, userRegister, selfRegister, regReq.RebAborted)
+	s := fmt.Sprintf("register %s, (keepalive, user, self)=(%t, %t, %t)",
+		nsi, keepalive, userRegister, selfRegister)
 	msg := &cmn.ActionMsg{Action: cmn.ActRegTarget}
 	if isProxy {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
@@ -2774,7 +2764,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 			// when registration is done by user send the current BMD and Smap
 			bmd := p.owner.bmd.get()
-			meta := &targetRegMeta{smap, bmd, p.si, false}
+			meta := &targetRegMeta{smap, bmd, p.si}
 			body := cmn.MustMarshal(meta)
 
 			args := callArgs{
@@ -2811,11 +2801,6 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		clone.putNode(nsi, nonElectable)
 		p.owner.smap.put(clone)
 		p.owner.smap.Unlock()
-		if !isProxy && selfRegister {
-			glog.Infof("%s: joining %s (%s), reb aborted %t", p.si, nsi, regReq.Smap, regReq.RebAborted)
-			// CAS to avoid overwriting `true` with `false` by `Load+&&+Store`
-			p.rebalance.CAS(false, regReq.RebAborted)
-		}
 		return
 	}
 	if _, err = smap.IsDuplicateURL(nsi); err != nil {
@@ -2827,59 +2812,60 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	// Return current metadata to registering target
 	if !isProxy && selfRegister { // case: self-registering target
-		glog.Infof("%s: joining %s (%s), reb aborted %t", p.si, nsi, regReq.Smap, regReq.RebAborted)
+		glog.Infof("%s: joining %s (%s)", p.si, nsi, regReq.Smap)
 		bmd := p.owner.bmd.get()
-		meta := &targetRegMeta{smap, bmd, p.si, false}
+		meta := &targetRegMeta{smap, bmd, p.si}
 		body := cmn.MustMarshal(meta)
 		p.writeJSON(w, r, body, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
+	go p.updateAndDistribute(nsi, msg, nonElectable)
+}
 
-	// update and distribute Smap
-	go func(nsi *cluster.Snode) {
-		var msgInt *actionMsgInternal
-		p.owner.smap.Lock()
-		clone, err := p.owner.smap.modify(false, // lock = false (already taken)
-			func(clone *smapX) error {
-				clone.putNode(nsi, nonElectable)
+func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, nonElectable bool) {
+	var smap *smapX
+	err := p.owner.smap.modify(
+		func(clone *smapX) error {
+			smap = p.owner.smap.get()
+			clone.putNode(nsi, nonElectable)
 
-				// Notify all nodes about a new one (targets probably need to set up GFN)
-				notifyMsgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
-				notifyPairs := revsPair{clone, notifyMsgInt}
-				failCnt := p.metasyncer.notify(true, notifyPairs)
-				if failCnt > 1 {
-					return fmt.Errorf("cannot join %s - unable to reach %d nodes", nsi, failCnt)
-				} else if failCnt > 0 {
-					glog.Warning("unable to reach 1 node")
-				}
-				return nil
-			},
-			func(clone *smapX) {
-				msgInt = p.newActionMsgInternal(msg, clone, nil)
-				p.setRebID(clone, msgInt, true)
-			},
-		)
-		if err != nil {
-			p.owner.smap.Unlock()
-			glog.Errorf("FATAL: %v", err)
-			return
-		}
+			// Notify all nodes about a new one (targets probably need to set up GFN)
+			notifyMsgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
+			notifyPairs := revsPair{clone, notifyMsgInt}
+			failCnt := p.metasyncer.notify(true, notifyPairs)
+			if failCnt > 1 {
+				return fmt.Errorf("cannot join %s - unable to reach %d nodes", nsi, failCnt)
+			} else if failCnt > 0 {
+				glog.Warning("unable to reach 1 node")
+			}
+			return nil
+		},
+		func(clone *smapX) {
+			tokens := p.authn.revokedTokenList()
+			// metasync
+			msgInt := p.newActionMsgInternal(msg, clone, nil)
+			pairs := []revsPair{{clone, msgInt}}
+			if nsi.IsTarget() {
+				bmd := p.owner.bmd.get()
+				pairs = append(pairs, revsPair{bmd, msgInt})
 
-		tokens := p.authn.revokedTokenList()
-		msgInt.NewDaemonID = nsi.ID()
-
-		// metasync
-		pairs := []revsPair{{clone, msgInt}}
-		if !isProxy {
-			bmd := p.owner.bmd.get()
-			pairs = append(pairs, revsPair{bmd, msgInt})
-		}
-		if len(tokens.Tokens) > 0 {
-			pairs = append(pairs, revsPair{tokens, msgInt})
-		}
-		_ = p.metasyncer.sync(pairs...)
-
-		p.owner.smap.Unlock()
-	}(nsi)
+				// Trigger rebalance
+				cmn.Assert(p.requiresRebalance(smap, clone))
+				clone := p.owner.rmd.modify(func(clone *rebMD) {
+					clone.TargetIDs = []string{nsi.ID()}
+					clone.inc()
+				})
+				pairs = append(pairs, revsPair{clone, msgInt})
+			}
+			if len(tokens.Tokens) > 0 {
+				pairs = append(pairs, revsPair{tokens, msgInt})
+			}
+			_ = p.metasyncer.sync(pairs...)
+		},
+	)
+	if err != nil {
+		glog.Errorf("FATAL: %v", err)
+		return
+	}
 }
 
 func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) bool {
@@ -2940,25 +2926,38 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.owner.smap.Lock()
-	clone, status, err := p.unregisterNode(sid)
+	var status int
+	err = p.owner.smap.modify(
+		func(clone *smapX) error {
+			smap = p.owner.smap.get()
+			status, err = p.unregisterNode(clone, sid)
+			return err
+		},
+		func(clone *smapX) {
+			msgInt := p.newActionMsgInternal(msg, clone, nil)
+			pairs := []revsPair{{clone, msgInt}}
+			if p.requiresRebalance(smap, clone) {
+				// FIXME (#654): for now `TestECAndRegularUnregisterWhileRebalancing` seems
+				//  to be stuck with this code (it starts rebalance on unregistering).
+				//  clone := p.owner.rmd.modify(func(clone *rebMD) {
+				// 	 clone.inc()
+				//  })
+				//  pairs = append(pairs, revsPair{clone, msgInt})
+				glog.Warningf("requires rebalance but it was not started - NYI")
+			}
+			_ = p.metasyncer.sync(pairs...)
+		},
+	)
 	if err != nil {
-		p.owner.smap.Unlock()
 		p.invalmsghdlr(w, r, err.Error(), status)
 		return
 	}
-	msgInt := p.newActionMsgInternal(msg, clone, nil)
-	p.setRebID(clone, msgInt, true)
-	_ = p.metasyncer.sync(revsPair{clone, msgInt})
-
-	p.owner.smap.Unlock()
 }
 
-func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err error) {
+func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err error) {
 	node := p.owner.smap.get().GetNode(sid)
 	if node == nil {
-		err = fmt.Errorf("unknown node %s", sid)
-		return
+		return http.StatusNotFound, fmt.Errorf("unknown node %s", sid)
 	}
 	// Synchronously call the target to inform it that it no longer is part of
 	// the cluster. The target should stop sending keepalive messages (that could
@@ -2983,29 +2982,24 @@ func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err 
 		}
 	}
 	// NOTE: "failure to respond back" may have legitimate reasons - proceeeding even when all retries fail
-	// TODO -- FIXME: must be under the same lock as the
-	clone, err = p.owner.smap.modify(false, func(clone *smapX) error {
-		node = clone.GetNode(sid)
-		if node == nil {
-			return fmt.Errorf("unknown node %s", sid)
-		}
-		if node.IsProxy() {
-			clone.delProxy(sid)
-			glog.Infof("unregistered %s (num proxies %d)", node, clone.CountProxies())
-		} else {
-			clone.delTarget(sid)
-			glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, http.StatusNotFound, err
+	node = clone.GetNode(sid)
+	if node == nil {
+		return http.StatusNotFound, fmt.Errorf("unknown node %s", sid)
 	}
+	if node.IsProxy() {
+		clone.delProxy(sid)
+		glog.Infof("unregistered %s (num proxies %d)", node, clone.CountProxies())
+	} else {
+		clone.delTarget(sid)
+		glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
+	}
+
 	if !p.startedUp.Load() {
 		return
 	}
+
 	if isPrimary := clone.isPrimary(p.si); !isPrimary {
-		return nil, 0, fmt.Errorf("%s: is not a primary", p.si)
+		return http.StatusInternalServerError, fmt.Errorf("%s: is not a primary", p.si)
 	}
 	return
 }
@@ -3105,13 +3099,11 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActRebalance:
-		p.owner.smap.Lock()
-		smap := p.owner.smap.get()
-		msgInt := p.newActionMsgInternal(msg, smap, nil)
-		p.setRebID(smap, msgInt, true)
-
-		_ = p.metasyncer.sync(revsPair{smap, msgInt})
-		p.owner.smap.Unlock()
+		clone := p.owner.rmd.modify(func(clone *rebMD) {
+			clone.inc()
+		})
+		msgInt := p.newActionMsgInternal(msg, nil, nil)
+		_ = p.metasyncer.sync(revsPair{clone, msgInt})
 	case cmn.ActXactStart, cmn.ActXactStop:
 		body := cmn.MustMarshal(msg)
 		results := p.bcastTo(bcastArgs{
@@ -3138,7 +3130,30 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 // broadcasts: Rx and Tx
 //
 //========================
-func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, caller string) (err error) {
+func (p *proxyrunner) receiveRMD(newRMD *rebMD, msgInt *actionMsgInternal) (err error) {
+	if glog.V(3) {
+		s := fmt.Sprintf("receive %s", newRMD.String())
+		if msgInt.Action == "" {
+			glog.Infoln(s)
+		} else {
+			glog.Infof("%s, action %s", s, msgInt.Action)
+		}
+	}
+	p.owner.rmd.Lock()
+	rmd := p.owner.rmd.get()
+	if newRMD.version() <= rmd.version() {
+		p.owner.rmd.Unlock()
+		if newRMD.version() < rmd.version() {
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", p.si, rmd, newRMD)
+		}
+		return
+	}
+	p.owner.rmd.put(newRMD)
+	p.owner.rmd.Unlock()
+	return
+}
+
+func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msgInt *actionMsgInternal, caller string) (err error) {
 	if glog.V(3) {
 		s := fmt.Sprintf("receive %s", newBMD.StringEx())
 		if msgInt.Action == "" {
@@ -3258,6 +3273,29 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	p.owner.bmd.Unlock()
 }
 
+func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
+	if cur.CountTargets() > prev.CountTargets() {
+		return true
+	}
+	for _, si := range cur.Tmap {
+		if !prev.isPresent(si) {
+			return true
+		}
+	}
+
+	bmd := p.owner.bmd.get()
+	if bmd.IsECUsed() {
+		// If there is any target missing we must start rebalance.
+		for _, si := range prev.Tmap {
+			if !cur.isPresent(si) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 ////////////////
 // misc utils //
 ////////////////
@@ -3272,7 +3310,7 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 		if bmd.Version == 0 {
 			continue
 		}
-		mlist[bmd.UUID] = append(mlist[bmd.UUID], targetRegMeta{nil, bmd, si, false})
+		mlist[bmd.UUID] = append(mlist[bmd.UUID], targetRegMeta{nil, bmd, si})
 
 		if rbmd, ok := maxor[bmd.UUID]; !ok {
 			maxor[bmd.UUID] = bmd

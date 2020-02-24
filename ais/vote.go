@@ -183,7 +183,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	glog.Infof("%s: received vote result: new primary %s", h.si, vr.Candidate)
 
 	newPrimary, oldPrimary := vr.Candidate, vr.Primary
-	_, err := h.owner.smap.modify(true /* lock */, func(clone *smapX) error {
+	err := h.owner.smap.modify(func(clone *smapX) error {
 		psi := clone.GetProxy(newPrimary)
 		if psi == nil {
 			return fmt.Errorf("new primary proxy %s not present in the local %s", newPrimary, clone.pp())
@@ -311,9 +311,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 
 	glog.Infof("Moving %s(self) to primary state", p.si)
 	// Begin Primary State
-	if err := p.becomeNewPrimary(vr.Primary /* proxyIDToRemove */); err != nil {
-		glog.Error(err)
-	}
+	p.becomeNewPrimary(vr.Primary /* proxyIDToRemove */)
 }
 
 func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact *xaction.Election) (winner bool, errors map[string]bool) {

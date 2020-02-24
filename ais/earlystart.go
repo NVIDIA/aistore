@@ -155,9 +155,9 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 	return nil
 }
 
-// proxy/gateway that is, potentially, the leader of the cluster
-// waits a configured time for other nodes to join,
-// discoveris cluster-wide metadata, and resolve remaining conflicts
+// Proxy/gateway that is, potentially, the leader of the cluster.
+// It waits a configured time for other nodes to join,
+// discovers cluster-wide metadata, and resolve remaining conflicts.
 func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int) {
 	const (
 		metaction1 = "early-start-have-registrations"
@@ -261,11 +261,6 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.owner.bmd.Unlock()
 
 	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmd)
-	p.setRebID(smap, msgInt, false /*set*/)
-	if p.rebalance.Load() {
-		glog.Infof("rebalance did not finish, restarting...")
-		msgInt.Action = cmn.ActRebalance
-	}
 	_ = p.metasyncer.sync(revsPair{smap, msgInt}, revsPair{bmd, msgInt})
 
 	// 6: started up as primary

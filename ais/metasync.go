@@ -20,6 +20,7 @@ import (
 
 const (
 	revsSmapTag   = "smap"
+	revsRMDTag    = "rmd"
 	revsBMDTag    = "bmd"
 	revsTokenTag  = "token"
 	revsActionTag = "-action" // to make a pair (revs, action)
@@ -250,11 +251,12 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (cnt int) {
 	var (
 		refused     cluster.NodeMap
 		pairsToSend []revsPair
-		newTargetID string
 		method      string
 
 		smap   = y.p.owner.smap.get()
 		config = cmn.GCO.Get()
+
+		newTargetIDs []string
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
@@ -323,9 +325,9 @@ outer:
 		y.lastClone[tag] = revsBody
 		msgJSON := cmn.MustMarshal(msgInt)
 
-		action, id := msgInt.Action, msgInt.NewDaemonID
-		if action == cmn.ActRegTarget {
-			newTargetID = id
+		if revs.tag() == revsRMDTag {
+			md := revs.(*rebMD)
+			newTargetIDs = md.TargetIDs
 		}
 
 		payload[tag] = revsBody              // payload
@@ -358,7 +360,7 @@ outer:
 		}
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		// in addition to "connection-refused" always retry newTargetID - the joining one
-		if cmn.IsErrConnectionRefused(r.err) || r.si.ID() == newTargetID {
+		if cmn.IsErrConnectionRefused(r.err) || cmn.StringInSlice(r.si.ID(), newTargetIDs) {
 			if refused == nil {
 				refused = make(cluster.NodeMap, 4)
 			}

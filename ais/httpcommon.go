@@ -28,7 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/OneOfOne/xxhash"
@@ -84,10 +83,9 @@ type (
 	// actionMsgInternal is an extended ActionMsg with extra information for node <=> node control plane communications
 	actionMsgInternal struct {
 		cmn.ActionMsg
+		RMDVersion  int64  `json:"rmdversion,string"`
 		BMDVersion  int64  `json:"bmdversion,string"`
 		SmapVersion int64  `json:"smapversion,string"`
-		NewDaemonID string `json:"newdaemonid"` // used when a node joins cluster
-		RebID       int64  `json:"reb_id,string"`
 		TxnID       string `json:"txn_id"`
 	}
 
@@ -110,6 +108,7 @@ type (
 		owner              struct {
 			smap *smapOwner
 			bmd  bmdOwner
+			rmd  *rmdOwner
 		}
 		statsT stats.Tracker
 	}
@@ -379,6 +378,7 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	}
 
 	h.owner.smap = newSmapOwner()
+	h.owner.rmd = newRMDOwner()
 }
 
 // initSI initializes this cluster.Snode
@@ -1019,6 +1019,34 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	return
 }
 
+func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msgInt *actionMsgInternal, err error) {
+	if _, ok := payload[revsRMDTag]; !ok {
+		return
+	}
+	newRMD, msgInt = &rebMD{}, &actionMsgInternal{}
+	rmdValue := payload[revsRMDTag]
+	if err1 := jsoniter.Unmarshal(rmdValue, newRMD); err1 != nil {
+		err = fmt.Errorf("%s: failed to unmarshal new RMD, value (%+v, %T), err: %v",
+			h.si, rmdValue, rmdValue, err1)
+		return
+	}
+	if msgValue, ok := payload[revsRMDTag+revsActionTag]; ok {
+		if err1 := jsoniter.Unmarshal(msgValue, msgInt); err1 != nil {
+			err = fmt.Errorf("%s: failed to unmarshal action message, value (%+v, %T), err: %v",
+				h.si, msgValue, msgValue, err1)
+			return
+		}
+	}
+	rmd := h.owner.rmd.get()
+	if newRMD.version() <= rmd.version() {
+		if newRMD.version() < rmd.version() {
+			err = fmt.Errorf("%s: attempt to downgrade %s to %s", h.si, rmd.String(), newRMD.String())
+		}
+		newRMD = nil
+	}
+	return
+}
+
 func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msgInt *actionMsgInternal, err error) {
 	if _, ok := payload[revsBMDTag]; !ok {
 		return
@@ -1141,10 +1169,8 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	query url.Values, keepalive bool) (res callResult) {
 	req := targetRegMeta{SI: h.si}
 	if h.si.IsTarget() && !keepalive {
-		aborted, running := reb.IsRebalancing(cmn.ActRebalance)
 		req.BMD = h.owner.bmd.get()
 		req.Smap = h.owner.smap.get()
-		req.RebAborted = !running && aborted
 	}
 	info := cmn.MustMarshal(req)
 

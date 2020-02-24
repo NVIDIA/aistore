@@ -50,7 +50,7 @@ type (
 	NodeMap map[string]*Snode // map of Snodes: DaemonID => Snodes
 
 	Smap struct {
-		Tmap         NodeMap       `json:"tmap"`           // daemonID -> Snode
+		Tmap         NodeMap       `json:"tmap"`           // targetID -> targetInfo
 		Pmap         NodeMap       `json:"pmap"`           // proxyID -> proxyInfo
 		NonElects    cmn.SimpleKVs `json:"non_electable"`  // non-electable proxies: DaemonID => [info]
 		ProxySI      *Snode        `json:"proxy_si"`       // primary

@@ -1,0 +1,94 @@
+// Package ais provides core functionality for the AIStore object storage.
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ */
+package ais
+
+import (
+	"fmt"
+	"path/filepath"
+	"sync"
+	"unsafe"
+
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
+)
+
+// Rebalance metadata is distributed to start rebalance. We must do it:
+// - when new target(s) joins the cluster - classical case
+// - at startup when cluster starts with unfinished rebalance (was aborted)
+// - when we unregister a target and some bucket(s) use EC - we must redistribute
+//   the slices
+// - on bucket rename:
+//    1. bucket is renamed (and the paths of the objects change)
+//    2. rebalance must be started to redistribute the objects to the targets
+//       depending on HRW
+// - when requested by the user - `ais start xaction rebalance` or via HTTP API
+
+const (
+	rmdFname = ".ais.smap" // rmd persistent file basename
+)
+
+type (
+	// rebMD is revs (see metasync) which is distributed by primary proxy to
+	// the targets. It is distributed when some kind of rebalance is required.
+	rebMD struct {
+		TargetIDs []string `json:"target_ids"`
+		Version   int64    `json:"version"`
+	}
+
+	// rmdOwner is used to keep the information about the rebalances. Currently
+	// it keeps the Version of the latest rebalance.
+	rmdOwner struct {
+		sync.Mutex
+		rmd atomic.Pointer
+	}
+)
+
+var (
+	// interface guard
+	_ revs = &rebMD{}
+)
+
+func (r *rebMD) tag() string     { return revsRMDTag }
+func (r *rebMD) version() int64  { return r.Version }
+func (r *rebMD) marshal() []byte { return cmn.MustMarshal(r) }
+func (r *rebMD) inc()            { r.Version++ }
+func (r *rebMD) clone() *rebMD {
+	dst := &rebMD{}
+	cmn.CopyStruct(dst, r)
+	return dst
+}
+func (r *rebMD) String() string {
+	if r == nil {
+		return "RMD <nil>"
+	}
+	return fmt.Sprintf("RMD v%d", r.Version)
+}
+
+func newRMDOwner() *rmdOwner {
+	rmdo := &rmdOwner{}
+	rmdo.put(&rebMD{})
+	return rmdo
+}
+func (r *rmdOwner) persist(rmd *rebMD) {
+	rmdPathName := filepath.Join(cmn.GCO.Get().Confdir, rmdFname)
+	if err := jsp.Save(rmdPathName, rmd, jsp.CCSign()); err != nil {
+		glog.Errorf("error writing rmd to %s: %v", rmdPathName, err)
+	}
+}
+func (r *rmdOwner) put(rmd *rebMD) {
+	r.rmd.Store(unsafe.Pointer(rmd))
+}
+func (r *rmdOwner) get() *rebMD { return (*rebMD)(r.rmd.Load()) }
+func (r *rmdOwner) modify(pre func(clone *rebMD)) *rebMD {
+	r.Lock()
+	defer r.Unlock()
+	clone := r.get().clone()
+	pre(clone)
+	r.persist(clone)
+	r.put(clone)
+	return clone
+}
