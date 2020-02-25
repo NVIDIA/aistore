@@ -47,7 +47,7 @@ var (
 			targetFlag,
 			verboseFlag,
 		},
-		commandCompose: {
+		commandConcat: {
 			providerFlag,
 			verboseFlag,
 			recursiveFlag,
@@ -96,11 +96,11 @@ var (
 			BashComplete: putPromoteObjectCompletions,
 		},
 		{
-			Name:      commandCompose,
-			Usage:     "composes multiple files one by one into new, single object to the specified bucket",
-			ArgsUsage: composeObjectArgument,
-			Flags:     objectSpecificCmdsFlags[commandCompose],
-			Action:    composeHandler,
+			Name:      commandConcat,
+			Usage:     "concatenates multiple files one by one into new, single object to the specified bucket",
+			ArgsUsage: concatObjectArgument,
+			Flags:     objectSpecificCmdsFlags[commandConcat],
+			Action:    concatHandler,
 		},
 	}
 )
@@ -200,7 +200,7 @@ func putHandler(c *cli.Context) (err error) {
 	return putObject(c, bck, objName, fileName)
 }
 
-func composeHandler(c *cli.Context) (err error) {
+func concatHandler(c *cli.Context) (err error) {
 	var (
 		bck             cmn.Bck
 		bucket, objName string
@@ -226,7 +226,7 @@ func composeHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	return composeObject(c, bck, objName, fileNames)
+	return concatObject(c, bck, objName, fileNames)
 }
 
 func promoteHandler(c *cli.Context) (err error) {

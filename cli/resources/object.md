@@ -311,9 +311,9 @@ Renames object from an ais bucket.
 ais rename object mybucket/obj1 obj2
 ```
 
-### Compose
+### Concat
 
-`ais compose DIRNAME|FILENAME [DIRNAME|FILENAME...] BUCKET/OBJECT_NAME`
+`ais concat DIRNAME|FILENAME [DIRNAME|FILENAME...] BUCKET/OBJECT_NAME`
 
 Creates an object in a bucket by concatenating provided files, keeping the order as in the arguments list.
 If directory provided, files within the directory are sorted by filename.
@@ -322,6 +322,6 @@ Supports recursive iteration through directories and wildcards in the same way a
 
 | Command | Description |
 | --- | --- |
-| `ais compose file1.txt dir/file2.txt mybucket/obj` | In two separate requests sends `file1.txt` and `dir/file2.txt` to the cluster, concatenates the files keeping the order and saves them as `obj` in bucket `mybucket`  |
-| `ais compose file1.txt dir/file2.txt mybucket/obj --verbose` | Same as above, but additionally shows progress bar of sending the files to the cluster  |
-| `ais compose dirB dirA mybucket/obj` | Creates `obj` in bucket `mybucket` which is concatenation of sorted files from `dirB` with sorted files from `dirA` |
+| `ais concat file1.txt dir/file2.txt mybucket/obj` | In two separate requests sends `file1.txt` and `dir/file2.txt` to the cluster, concatenates the files keeping the order and saves them as `obj` in bucket `mybucket`  |
+| `ais concat file1.txt dir/file2.txt mybucket/obj --verbose` | Same as above, but additionally shows progress bar of sending the files to the cluster  |
+| `ais concat dirB dirA mybucket/obj` | Creates `obj` in bucket `mybucket` which is concatenation of sorted files from `dirB` with sorted files from `dirA` |

@@ -210,7 +210,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 	return uploadFiles(c, params)
 }
 
-func composeObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) (err error) {
+func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) (err error) {
 	var (
 		bar        *mpb.Bar
 		barText    = fmt.Sprintf("Composing %d files into object %s/%s", len(fileNames), bck.Name, objName)
