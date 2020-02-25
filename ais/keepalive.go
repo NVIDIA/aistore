@@ -141,7 +141,7 @@ func (tkr *targetKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 }
 
 func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
-	smap := tkr.t.smapowner.get()
+	smap := tkr.t.owner.smap.get()
 	if smap == nil || !smap.isValid() {
 		return
 	}
@@ -160,7 +160,7 @@ func (pkr *proxyKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 }
 
 func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
-	smap := pkr.p.smapowner.get()
+	smap := pkr.p.owner.smap.get()
 	if smap == nil || !smap.isValid() {
 		return
 	}
@@ -188,7 +188,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	defer pkr.primaryKeepaliveInProgress.CAS(t, 0)
 
 	var (
-		smap       = pkr.p.smapowner.get()
+		smap       = pkr.p.owner.smap.get()
 		wg         = &sync.WaitGroup{}
 		daemonCnt  = smap.CountProxies() + smap.CountTargets()
 		stoppedCh  = make(chan struct{}, daemonCnt)
@@ -231,20 +231,20 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 
 	pkr.statsMinMaxLat(latencyCh)
 
-	pkr.p.smapowner.Lock()
-	newSmap := pkr.p.smapowner.get()
+	pkr.p.owner.smap.Lock()
+	newSmap := pkr.p.owner.smap.get()
 	if !newSmap.isPrimary(pkr.p.si) {
 		glog.Infoln("primary proxy changed while sending its keepalives," +
 			" not removing non-responding daemons from the smap this time")
-		pkr.p.smapowner.Unlock()
+		pkr.p.owner.smap.Unlock()
 		return false
 	}
 	if len(stoppedCh) > 0 {
-		pkr.p.smapowner.Unlock()
+		pkr.p.owner.smap.Unlock()
 		return true
 	}
 	if len(toRemoveCh) == 0 {
-		pkr.p.smapowner.Unlock()
+		pkr.p.owner.smap.Unlock()
 		return false
 	}
 	clone := newSmap.clone()
@@ -260,14 +260,14 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	}
 	metaction += " ]"
 
-	pkr.p.smapowner.put(clone)
-	if err := pkr.p.smapowner.persist(clone); err != nil {
+	pkr.p.owner.smap.put(clone)
+	if err := pkr.p.owner.smap.persist(clone); err != nil {
 		glog.Error(err)
 	}
-	pkr.p.smapowner.Unlock()
+	pkr.p.owner.smap.Unlock()
 
 	msgInt := pkr.p.newActionMsgInternalStr(metaction, clone, nil)
-	pkr.p.metasyncer.sync(true, revspair{clone, msgInt})
+	pkr.p.metasyncer.sync(true, revsPair{clone, msgInt})
 	return
 }
 

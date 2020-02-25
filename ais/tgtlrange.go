@@ -256,7 +256,7 @@ func (t *targetrunner) listRangeOperation(r *http.Request, bck *cluster.Bck, msg
 	if err := cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
 		return t.iterateBucketListPages(r, bck, rangeMsg, operation)
 	} else if err := cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
-		if err := bck.Init(t.bmdowner, t.si); err != nil {
+		if err := bck.Init(t.owner.bmd, t.si); err != nil {
 			return err
 		}
 		return t.listOperation(r, bck, listMsg, operation)
@@ -270,7 +270,7 @@ func (t *targetrunner) listOperation(r *http.Request, bck *cluster.Bck, listMsg 
 	var (
 		err  error
 		objs = make([]string, 0, len(listMsg.Objnames))
-		smap = t.smapowner.get()
+		smap = t.owner.smap.get()
 	)
 	for _, obj := range listMsg.Objnames {
 		si, err := cluster.HrwTarget(bck.MakeUname(obj), &smap.Smap)
@@ -326,7 +326,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, bck *cluster.Bck,
 		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	)
 
-	if err := bck.Init(t.bmdowner, t.si); err != nil {
+	if err := bck.Init(t.owner.bmd, t.si); err != nil {
 		return err
 	}
 

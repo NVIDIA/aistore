@@ -242,8 +242,8 @@ func (ds *dsorterMem) start() error {
 		return errors.WithStack(err)
 	}
 
-	ds.streams.builder = transport.NewStreamBundle(ds.m.ctx.smap, ds.m.ctx.node, client, reqSbArgs)
-	ds.streams.records = transport.NewStreamBundle(ds.m.ctx.smap, ds.m.ctx.node, client, respSbArgs)
+	ds.streams.builder = transport.NewStreamBundle(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
+	ds.streams.records = transport.NewStreamBundle(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
 	return nil
 }
 
@@ -392,10 +392,10 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 						defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
 
 						bck := cluster.NewBck(ds.m.rs.OutputBucket, ds.m.rs.OutputProvider, cmn.NsGlobal)
-						if err := bck.Init(ds.m.ctx.bmdowner, ds.m.ctx.t.Snode()); err != nil {
+						if err := bck.Init(ds.m.ctx.bmdOwner, ds.m.ctx.t.Snode()); err != nil {
 							return err
 						}
-						toNode, err := cluster.HrwTarget(bck.MakeUname(shard.Name), ds.m.ctx.smap.Get())
+						toNode, err := cluster.HrwTarget(bck.MakeUname(shard.Name), ds.m.ctx.smapOwner.Get())
 						if err != nil {
 							return err
 						}

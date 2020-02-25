@@ -237,7 +237,7 @@ func initDaemon(version, build string) {
 		daemon.rg.add(ps, xproxystats)
 
 		daemon.rg.add(newProxyKeepaliveRunner(p, ps, psStartedUp), xproxykeepalive)
-		daemon.rg.add(newmetasyncer(p), xmetasyncer)
+		daemon.rg.add(newMetasyncer(p), xmetasyncer)
 	} else {
 		t := &targetrunner{}
 		t.initSI(cmn.Target)

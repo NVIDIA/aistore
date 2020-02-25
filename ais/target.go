@@ -165,7 +165,7 @@ func (t *targetrunner) Run() error {
 		cmn.ExitLogf("%v", err)
 	}
 	t.httprunner.init(getstorstatsrunner(), config)
-	t.bmdowner = newBMDOwnerTgt()
+	t.owner.bmd = newBMDOwnerTgt()
 
 	t.registerStats()
 	t.httprunner.keepalive = gettargetkeepalive()
@@ -174,9 +174,9 @@ func (t *targetrunner) Run() error {
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
 	// init meta-owners and load local instances
-	t.bmdowner.init() // BMD
-	smap := newSmap() // Smap
-	if err := t.smapowner.load(smap, config); err == nil {
+	t.owner.bmd.init() // BMD
+	smap := newSmap()  // Smap
+	if err := t.owner.smap.load(smap, config); err == nil {
 		smap.Tmap[t.si.ID()] = t.si
 	} else if !os.IsNotExist(err) {
 		glog.Errorf("%s: cannot load Smap (- corruption?), err: %v", t.si, err)
@@ -184,7 +184,7 @@ func (t *targetrunner) Run() error {
 	//
 	// join cluster
 	//
-	t.smapowner.put(smap)
+	t.owner.smap.put(smap)
 	for i := 0; i < maxRetrySeconds; i++ {
 		var status int
 		if status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
@@ -287,7 +287,7 @@ func (t *targetrunner) Run() error {
 		}()
 	}
 
-	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, daemon.gmm, t, t.statsT)
+	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, daemon.gmm, t, t.statsT)
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}
@@ -390,7 +390,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		what := query.Get(cmn.URLParamWhat)
 		if what == cmn.GetWhatBMD {
-			body := cmn.MustMarshal(t.bmdowner.get())
+			body := cmn.MustMarshal(t.owner.bmd.get())
 			t.writeJSON(w, r, body, "get-what-bmd")
 		} else {
 			provider := r.URL.Query().Get(cmn.URLParamProvider)
@@ -417,7 +417,7 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 		t.invalmsghdlr(w, r, s)
 		return false
 	}
-	smap := t.smapowner.get()
+	smap := t.owner.smap.get()
 	if smap.GetProxy(pid) == nil {
 		s := fmt.Sprintf("%s: %s from unknown [%s], %s", t.si, method, pid, smap.StringEx())
 		t.invalmsghdlr(w, r, s)
@@ -583,7 +583,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(t.bmdowner, t.si); err != nil {
+	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -719,10 +719,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	bucket = apiItems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(t.bmdowner, t.si); err != nil {
+	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
-			err = bck.Init(t.bmdowner, t.si)
+			err = bck.Init(t.owner.bmd, t.si)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -875,7 +875,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, query)
-	if err = bck.Init(t.bmdowner, t.si); err != nil {
+	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -943,7 +943,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		// should do it before LOM is initialized because the target may
 		// have a slice instead of object/replica
 		bck := newBckFromQuery(bucket, query)
-		if err = bck.Init(t.bmdowner, t.si); err != nil {
+		if err = bck.Init(t.owner.bmd, t.si); err != nil {
 			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 				t.invalmsghdlr(w, r, err.Error())
 				return
@@ -1087,7 +1087,7 @@ func (t *targetrunner) checkCloudVersion(ctx context.Context, lom *cluster.LOM) 
 
 func (t *targetrunner) getBucketNames(w http.ResponseWriter, r *http.Request, provider string) {
 	var (
-		bmd         = t.bmdowner.get()
+		bmd         = t.owner.bmd.get()
 		bucketNames = &cmn.BucketNames{}
 		all         = provider == "" /*all providers*/
 		bck         = cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
@@ -1263,7 +1263,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 
 	buf, slab := daemon.gmm.Alloc()
-	ri := &replicInfo{smap: t.smapowner.get(), t: t, bckTo: lom.Bck(), buf: buf, localOnly: false, finalize: true}
+	ri := &replicInfo{smap: t.owner.smap.get(), t: t, bckTo: lom.Bck(), buf: buf, localOnly: false, finalize: true}
 	copied, err := ri.copyObject(lom, msg.Name /* new objname */)
 	slab.Free(buf)
 	if err != nil {
@@ -1318,10 +1318,10 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(t.bmdowner, t.si); err != nil {
+	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
-			err = bck.Init(t.bmdowner, t.si)
+			err = bck.Init(t.owner.bmd, t.si)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())

@@ -111,11 +111,11 @@ func (p *proxyrunner) initClusterCIDR() {
 func (p *proxyrunner) Run() error {
 	config := cmn.GCO.Get()
 	p.httprunner.init(getproxystatsrunner(), config)
-	p.bmdowner = newBMDOwnerPrx(config)
+	p.owner.bmd = newBMDOwnerPrx(config)
 
 	p.httprunner.keepalive = getproxykeepalive()
 
-	p.bmdowner.init() // initialize owner and load BMD
+	p.owner.bmd.init() // initialize owner and load BMD
 	p.metasyncer = getmetasyncer()
 
 	// startup sequence - see earlystart.go for the steps and commentary
@@ -178,11 +178,11 @@ func (p *proxyrunner) Run() error {
 		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", config.Net.HTTP.RevProxy)
 	}
 
-	dsort.RegisterNode(p.smapowner, p.bmdowner, p.si, nil, nil, p.statsT)
+	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, nil, p.statsT)
 	return p.httprunner.run()
 }
 
-// NOTE: caller is responsible to take smapowner lock
+// NOTE: caller is responsible to take smapOwner lock
 func (p *proxyrunner) setGlobRebID(smap *smapX, msgInt *actionMsgInternal, inc bool) {
 	ngid := smap.version() * 100
 	if inc && p.globRebID >= ngid {
@@ -196,7 +196,7 @@ func (p *proxyrunner) setGlobRebID(smap *smapX, msgInt *actionMsgInternal, inc b
 func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
 	var (
 		res  callResult
-		smap = p.smapowner.get()
+		smap = p.owner.smap.get()
 	)
 	if smap != nil && smap.isPrimary(p.si) {
 		return
@@ -217,7 +217,7 @@ func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status in
 }
 
 func (p *proxyrunner) unregisterSelf() (int, error) {
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	args := callArgs{
 		si: smap.ProxySI,
 		req: cmn.ReqArgs{
@@ -233,7 +233,7 @@ func (p *proxyrunner) unregisterSelf() (int, error) {
 // stop gracefully
 func (p *proxyrunner) Stop(err error) {
 	var isPrimary bool
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	if smap != nil { // in tests
 		isPrimary = smap.isPrimary(p.si)
 	}
@@ -245,7 +245,7 @@ func (p *proxyrunner) Stop(err error) {
 		version := smap.version()
 		for i := 0; i < 20; i++ {
 			time.Sleep(time.Second)
-			v := p.smapowner.get().version()
+			v := p.owner.smap.get().version()
 			if version == v {
 				break
 			}
@@ -310,7 +310,7 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	if p.smapowner.get().CountTargets() < 1 {
+	if p.owner.smap.get().CountTargets() < 1 {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
 	}
@@ -339,12 +339,12 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if _, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
 	}
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -383,7 +383,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
@@ -392,7 +392,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -426,7 +426,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	bucket, objName := apiItems[0], apiItems[1]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
@@ -434,7 +434,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		si       *cluster.Snode
-		smap     = p.smapowner.get()
+		smap     = p.owner.smap.get()
 		appendTy = query.Get(cmn.URLParamAppendType)
 		nodeID   string
 	)
@@ -486,7 +486,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
@@ -495,7 +495,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -522,7 +522,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
@@ -599,14 +599,14 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/metasync
 func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
 		vote := xaction.Registry.GlobalXactRunning(cmn.ActElection)
 		s := fmt.Sprintf("primary %s cannot receive cluster meta (election=%t)", p.si, vote)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-	var payload = make(cmn.SimpleKVs)
+	var payload = make(msPayload)
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		return
 	}
@@ -623,7 +623,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("new %s from %s", newSmap.StringEx(), caller)
 		}
-		err = p.smapowner.synchronize(newSmap, true /* lesserIsErr */)
+		err = p.owner.smap.synchronize(newSmap, true /* lesserIsErr */)
 		if err != nil {
 			errs = append(errs, err)
 			goto ExtractBMD
@@ -669,12 +669,12 @@ ExtractBMD:
 
 // POST /v1/metasync
 func (p *proxyrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
-	var msgInt actionMsgInternal
-	if err := cmn.ReadJSON(w, r, &msgInt); err != nil {
+	var payload = make(msPayload)
+	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	glog.Infof("metasync NIY: %+v", msgInt) // TODO
+	glog.Infof("metasync NIY: %+v", payload)
 }
 
 // GET /v1/health
@@ -689,49 +689,49 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHeader ...http.Header) error {
-	p.bmdowner.Lock()
-	clone := p.bmdowner.get().clone()
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
 	bucketProps := cmn.DefaultBucketProps()
 	if len(cloudHeader) != 0 {
 		bucketProps = cmn.CloudBucketProps(cloudHeader[0])
 	}
 	if !clone.add(bck, bucketProps) {
-		p.bmdowner.Unlock()
+		p.owner.bmd.Unlock()
 		return cmn.NewErrorBucketAlreadyExists(bck.Bck, p.si.String())
 	}
-	p.bmdowner.put(clone)
-	p.bmdowner.Unlock()
+	p.owner.bmd.put(clone)
+	p.owner.bmd.Unlock()
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
+	p.metasyncer.sync(true, revsPair{clone, msgInt})
 	return nil
 }
 
 func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (*bucketMD, error, int) {
-	p.bmdowner.Lock()
-	bmd := p.bmdowner.get()
+	p.owner.bmd.Lock()
+	bmd := p.owner.bmd.get()
 	_, present := bmd.Get(bck)
 	if bck.IsAIS() {
 		if !present {
-			p.bmdowner.Unlock()
+			p.owner.bmd.Unlock()
 			return bmd, cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String()), http.StatusNotFound
 		}
 	} else if !present {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bck, cmn.DoesNotExist)
 		}
-		p.bmdowner.Unlock()
+		p.owner.bmd.Unlock()
 		return bmd, nil, 0
 	}
 	clone := bmd.clone()
 	if !clone.del(bck) {
-		p.bmdowner.Unlock()
+		p.owner.bmd.Unlock()
 		return nil, cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String()), http.StatusNotFound
 	}
-	p.bmdowner.put(clone)
-	p.bmdowner.Unlock()
+	p.owner.bmd.put(clone)
+	p.owner.bmd.Unlock()
 
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
+	p.metasyncer.sync(true, revsPair{clone, msgInt})
 
 	return clone, nil, 0
 }
@@ -765,9 +765,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			if p.forwardCP(w, r, &msg, "", nil) {
 				return
 			}
-			bmd := p.bmdowner.get()
+			bmd := p.owner.bmd.get()
 			msgInt := p.newActionMsgInternal(&msg, nil, bmd)
-			p.metasyncer.sync(false, revspair{bmd, msgInt})
+			p.metasyncer.sync(false, revsPair{bmd, msgInt})
 		case cmn.ActSummaryBucket:
 			bck := newBckFromQuery("", r.URL.Query())
 			p.bucketSummary(w, r, bck, msg)
@@ -810,7 +810,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		_, ok := err.(*cmn.ErrorCloudBucketDoesNotExist)
 		if ok && msg.Action == cmn.ActRenameLB {
 			errMsg := fmt.Sprintf("cannot %q: ais bucket %q does not exist", msg.Action, bucket)
@@ -1016,7 +1016,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg) (
 	isNew, q := p.initAsyncQuery(&msg)
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
-		smap   = p.smapowner.get()
+		smap   = p.owner.smap.get()
 		msgInt = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &msg}, smap, nil)
 		body   = cmn.MustMarshal(msgInt)
 
@@ -1083,7 +1083,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1117,7 +1117,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apiItems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 			return
@@ -1131,7 +1131,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.bucketPropsToHdr(bck, w.Header(), cmn.GCO.Get(), "")
 		return
 	}
-	si, err := p.smapowner.get().GetRandTarget()
+	si, err := p.owner.smap.get().GetRandTarget()
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -1149,7 +1149,7 @@ func (p *proxyrunner) applyNewProps(bck *cluster.Bck, propsToUpdate cmn.BucketPr
 		cloudProps http.Header
 	)
 
-	bprops, exists := p.bmdowner.get().Get(bck)
+	bprops, exists := p.owner.bmd.get().Get(bck)
 	if !exists {
 		cmn.Assert(!bck.IsAIS())
 		if cloudProps, err = p.cbExists(bck.Name); err != nil {
@@ -1187,7 +1187,7 @@ func (p *proxyrunner) applyNewProps(bck *cluster.Bck, propsToUpdate cmn.BucketPr
 		nprops.Cksum.Type = cfg.Cksum.Type
 	}
 
-	targetCnt := p.smapowner.Get().CountTargets()
+	targetCnt := p.owner.smap.Get().CountTargets()
 	err = nprops.Validate(targetCnt, p.urlOutsideCluster)
 	return
 }
@@ -1204,8 +1204,8 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, propsToUpdate cmn.Buck
 	}
 
 	// 2. Commit update
-	p.bmdowner.Lock()
-	clone := p.bmdowner.get().clone()
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
 	_, exists := clone.Get(bck)
 	// TODO: Bucket props could have changed between applying new props and this
 	// lock. We should check and merge the bucket props if such situation happens.
@@ -1214,7 +1214,7 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, propsToUpdate cmn.Buck
 		cmn.Assert(!bck.IsAIS())
 		var cloudProps http.Header
 		if cloudProps, err = p.cbExists(bck.Name); err != nil {
-			p.bmdowner.Unlock()
+			p.owner.bmd.Unlock()
 			return nprops, err
 		}
 		bprops := cmn.CloudBucketProps(cloudProps)
@@ -1222,16 +1222,16 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, propsToUpdate cmn.Buck
 	}
 
 	clone.set(bck, nprops)
-	p.bmdowner.put(clone)
-	p.bmdowner.Unlock()
+	p.owner.bmd.put(clone)
+	p.owner.bmd.Unlock()
 	msgInt := p.newActionMsgInternalStr(cmn.ActSetProps, nil, clone)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
+	p.metasyncer.sync(true, revsPair{clone, msgInt})
 	return
 }
 
 func (p *proxyrunner) beginUpdateBckProps(bck *cluster.Bck, nprops *cmn.BucketProps) error {
 	var (
-		smap = p.smapowner.get()
+		smap = p.owner.smap.get()
 		msg  = &cmn.ActionMsg{
 			Action: cmn.ActSetProps,
 			Value:  nprops,
@@ -1262,7 +1262,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
@@ -1283,8 +1283,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.bmdowner.Lock()
-	clone := p.bmdowner.get().clone()
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
 	_, exists := clone.Get(bck)
 	if !exists {
 		cmn.Assert(!bck.IsAIS())
@@ -1293,7 +1293,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			cloudProps http.Header
 		)
 		if cloudProps, err = p.cbExists(bucket); err != nil {
-			p.bmdowner.Unlock()
+			p.owner.bmd.Unlock()
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -1303,11 +1303,11 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		bprops := cmn.DefaultBucketProps()
 		clone.set(bck, bprops)
 	}
-	p.bmdowner.put(clone)
-	p.bmdowner.Unlock()
+	p.owner.bmd.put(clone)
+	p.owner.bmd.Unlock()
 
 	msgInt := p.newActionMsgInternal(&msg, nil, clone)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
+	p.metasyncer.sync(true, revsPair{clone, msgInt})
 }
 
 // PATCH /v1/buckets/bucket-name
@@ -1318,7 +1318,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
@@ -1372,7 +1372,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bck := newBckFromQuery(bucket, r.URL.Query())
-	if err = bck.Init(p.bmdowner, p.si); err != nil {
+	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
@@ -1381,7 +1381,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
@@ -1405,7 +1405,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 // forward control plane request to the current primary proxy
 // return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
 func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, s string, body []byte) (forf bool) {
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	if smap == nil || !smap.isValid() {
 		s := fmt.Sprintf("%s must be starting up: cannot execute %s:%s", p.si, msg.Action, s)
 		p.invalmsghdlr(w, r, s)
@@ -1474,22 +1474,22 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *cmn.ActionMsg,
 	config *cmn.Config) (err error) {
 	var (
-		smap  = p.smapowner.get()
+		smap  = p.owner.smap.get()
 		tout  = config.Timeout.Default
 		bckTo = cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
 	)
 
-	p.bmdowner.Lock()
-	clone := p.bmdowner.get().clone()
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
 
 	// Re-init under a lock
-	if err = bckFrom.Init(p.bmdowner, p.si); err != nil {
-		p.bmdowner.Unlock()
+	if err = bckFrom.Init(p.owner.bmd, p.si); err != nil {
+		p.owner.bmd.Unlock()
 		return
 	}
-	if err := bckTo.Init(p.bmdowner, p.si); err == nil {
+	if err := bckTo.Init(p.owner.bmd, p.si); err == nil {
 		if msg.Action == cmn.ActRenameLB {
-			p.bmdowner.Unlock()
+			p.owner.bmd.Unlock()
 			return cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
 		}
 		// Allow to copy into existing bucket
@@ -1501,25 +1501,25 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 	}
 	clone.downgrade(bckFrom)
 	clone.downgrade(bckTo)
-	p.bmdowner.put(clone)
-	p.bmdowner.Unlock()
+	p.owner.bmd.put(clone)
+	p.owner.bmd.Unlock()
 
 	// Distribute temporary bucket
 	msgInt := p.newActionMsgInternal(msg, smap, clone)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
+	p.metasyncer.sync(true, revsPair{clone, msgInt})
 	glog.Infof("%s ais bucket %s => %s %s", msg.Action, bckFrom, bckTo, clone)
 
 	errHandler := func() {
-		p.bmdowner.Lock()
-		clone := p.bmdowner.get().clone()
+		p.owner.bmd.Lock()
+		clone := p.owner.bmd.get().clone()
 		clone.upgrade(bckFrom)
 		clone.upgrade(bckTo)
 		clone.del(bckTo)
-		p.bmdowner.put(clone)
-		p.bmdowner.Unlock()
+		p.owner.bmd.put(clone)
+		p.owner.bmd.Unlock()
 
 		msgInt := p.newActionMsgInternal(msg, smap, clone)
-		p.metasyncer.sync(true, revspair{clone, msgInt})
+		p.metasyncer.sync(true, revsPair{clone, msgInt})
 	}
 
 	// Begin
@@ -1538,9 +1538,9 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 
 	// Commit
 	if msg.Action == cmn.ActRenameLB {
-		p.smapowner.Lock()
+		p.owner.smap.Lock()
 		p.setGlobRebID(smap, msgInt, true) // FIXME: race vs change in membership
-		p.smapowner.Unlock()
+		p.owner.smap.Unlock()
 		body = cmn.MustMarshal(msgInt)
 	}
 	args.req.Body = body
@@ -1558,8 +1558,8 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		return
 	}
 
-	p.bmdowner.Lock()
-	clone = p.bmdowner.get().clone()
+	p.owner.bmd.Lock()
+	clone = p.owner.bmd.get().clone()
 	clone.upgrade(bckFrom)
 	clone.upgrade(bckTo)
 	if msg.Action == cmn.ActRenameLB {
@@ -1567,12 +1567,12 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		bckFromProps.Renamed = cmn.ActRenameLB
 		clone.set(bckFrom, bckFromProps)
 	}
-	p.bmdowner.put(clone)
-	p.bmdowner.Unlock()
+	p.owner.bmd.put(clone)
+	p.owner.bmd.Unlock()
 
 	// Finalize
 	msgInt = p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
+	p.metasyncer.sync(true, revsPair{clone, msgInt})
 	glog.Infof("%s ais bucket %s => %s, %s", msg.Action, bckFrom, bckTo, clone)
 	return
 }
@@ -1584,7 +1584,7 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *c
 		return
 	}
 	var (
-		smap   = p.smapowner.get()
+		smap   = p.owner.smap.get()
 		msgInt = p.newActionMsgInternal(msg, smap, nil)
 		body   = cmn.MustMarshal(msgInt)
 		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
@@ -1597,7 +1597,7 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *c
 	}
 
 	if updateBckProps {
-		if err := bck.Init(p.bmdowner, p.si); err != nil {
+		if err := bck.Init(p.owner.bmd, p.si); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -1619,7 +1619,7 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *c
 
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
-		msgInt  = p.newActionMsgInternal(msg, nil, p.bmdowner.get())
+		msgInt  = p.newActionMsgInternal(msg, nil, p.owner.bmd.get())
 		body    = cmn.MustMarshal(msgInt)
 		urlPath = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 		errmsg  = fmt.Sprintf("cannot %s bucket %s", msg.Action, bck)
@@ -1631,7 +1631,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error)
 
 func (p *proxyrunner) getBucketNames(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
 	var (
-		bmd      = p.bmdowner.get()
+		bmd      = p.owner.bmd.get()
 		bckQuery = fmt.Sprintf(
 			"?%s=%s&%s=%s",
 			cmn.URLParamProvider, bck.Provider, cmn.URLParamNamespace, bck.Ns,
@@ -1645,7 +1645,7 @@ func (p *proxyrunner) getBucketNames(w http.ResponseWriter, r *http.Request, bck
 		return
 	}
 
-	si, err := p.smapowner.get().GetRandTarget()
+	si, err := p.owner.smap.get().GetRandTarget()
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -1673,7 +1673,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	var (
 		nodeURL string
 		query   = url.Values{}
-		bmd     = p.bmdowner.get()
+		bmd     = p.owner.bmd.get()
 	)
 	if p.si.LocalNet == nil {
 		nodeURL = si.URL(cmn.NetworkPublic)
@@ -1737,7 +1737,7 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 			return
 		}
 	}
-	err = bck.Init(p.bmdowner, p.si)
+	err = bck.Init(p.owner.bmd, p.si)
 	cmn.AssertNoErr(err)
 	return
 }
@@ -1747,7 +1747,7 @@ func (p *proxyrunner) cbExists(bucket string) (header http.Header, err error) {
 		tsi   *cluster.Snode
 		pname = p.si.String()
 	)
-	if tsi, err = p.smapowner.get().GetRandTarget(); err != nil {
+	if tsi, err = p.owner.smap.get().GetRandTarget(); err != nil {
 		return
 	}
 	args := callArgs{
@@ -1928,7 +1928,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
 	isNew, q := p.initAsyncQuery(&msg)
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
-		smap          = p.smapowner.get()
+		smap          = p.owner.smap.get()
 		reqTimeout    = cmn.GCO.Get().Timeout.ListBucket
 		msgInt        = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, smap, nil)
 		body          = cmn.MustMarshal(msgInt)
@@ -2032,7 +2032,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 		return
 	}
 	objname := apitems[1]
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -2065,7 +2065,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 
 	var (
 		started = time.Now()
-		smap    = p.smapowner.get()
+		smap    = p.owner.smap.get()
 		bucket  = apiItems[0]
 		srcFQN  = msg.Name
 	)
@@ -2128,8 +2128,8 @@ func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query
 		}
 	}
 	// Send json message to all
-	smap := p.smapowner.get()
-	bmd := p.bmdowner.get()
+	smap := p.owner.smap.get()
+	bmd := p.owner.bmd.get()
 	msgInt := p.newActionMsgInternal(msg, smap, bmd)
 	body := cmn.MustMarshal(msgInt)
 	if wait {
@@ -2178,9 +2178,9 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 
 	p.authn.updateRevokedList(tokenList)
 
-	if p.smapowner.get().isPrimary(p.si) {
+	if p.owner.smap.get().isPrimary(p.si) {
 		msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, nil, nil)
-		p.metasyncer.sync(false, revspair{p.authn.revokedTokenList(), msgInt})
+		p.metasyncer.sync(false, revsPair{p.authn.revokedTokenList(), msgInt})
 	}
 }
 
@@ -2265,7 +2265,7 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, "node_id was not provided in header")
 		return
 	}
-	si := p.smapowner.get().GetNode(nodeID)
+	si := p.owner.smap.get().GetNode(nodeID)
 	if si != nil {
 		p.reverseNodeRequest(w, r, si)
 		return
@@ -2311,22 +2311,22 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
-	p.bmdowner.Lock()
-	bmd := p.bmdowner.get()
+	p.owner.bmd.Lock()
+	bmd := p.owner.bmd.get()
 	bck := cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.bmdowner, p.si); err != nil {
-		p.bmdowner.Unlock() // already removed via the the very first target calling here..
+	if err := bck.Init(p.owner.bmd, p.si); err != nil {
+		p.owner.bmd.Unlock() // already removed via the the very first target calling here..
 		return
 	}
 	if bck.Props.Renamed == "" {
 		glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, renamedBucket, *bck.Props)
-		p.bmdowner.Unlock()
+		p.owner.bmd.Unlock()
 		return
 	}
 	bmd = bmd.clone()
 	bmd.del(bck)
-	p.bmdowner.put(bmd)
-	p.bmdowner.Unlock()
+	p.owner.bmd.put(bmd)
+	p.owner.bmd.Unlock()
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
@@ -2351,16 +2351,16 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		body := cmn.MustMarshal(daemon.gmm.FetchSysInfo())
 		p.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatSmap:
-		smap := p.smapowner.get()
+		smap := p.owner.smap.get()
 		for smap == nil || !smap.isValid() {
 			if p.startedUp.Load() { // must be starting up
-				smap = p.smapowner.get()
+				smap = p.owner.smap.get()
 				cmn.Assert(smap.isValid())
 				break
 			}
 			glog.Errorf("%s is starting up: cannot execute GET %s yet...", p.si, cmn.GetWhatSmap)
 			time.Sleep(time.Second)
-			smap = p.smapowner.get()
+			smap = p.owner.smap.get()
 		}
 		body := cmn.MustMarshal(smap)
 		p.writeJSON(w, r, body, httpdaeWhat)
@@ -2368,7 +2368,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		pst := getproxystatsrunner()
 		msg := &stats.DaemonStatus{
 			Snode:       p.httprunner.si,
-			SmapVersion: p.smapowner.get().Version,
+			SmapVersion: p.owner.smap.get().Version,
 			SysInfo:     daemon.gmm.FetchSysInfo(),
 			Stats:       pst.Core,
 		}
@@ -2404,7 +2404,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, s)
 				return
 			}
-			if err := p.smapowner.synchronize(newsmap, true /* lesserIsErr */); err != nil {
+			if err := p.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -2445,7 +2445,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActShutdown:
 		q := r.URL.Query()
 		force, _ := cmn.ParseBool(q.Get(cmn.URLParamForce))
-		if p.smapowner.get().isPrimary(p.si) && !force {
+		if p.owner.smap.get().isPrimary(p.si) && !force {
 			s := fmt.Sprintf("Cannot shutdown primary proxy without %s=true query parameter", cmn.URLParamForce)
 			p.invalmsghdlr(w, r, s)
 			return
@@ -2494,7 +2494,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 		glog.Warningf("%s is already the primary", p.si)
 		return
 	}
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil && newPrimaryURL == "" {
 		s := fmt.Sprintf("%s: failed to find new primary %s in %s", p.si, proxyID, smap.pp())
@@ -2522,7 +2522,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 
 	// notify metasync to cancel all pending sync requests
 	p.metasyncer.becomeNonPrimary()
-	p.smapowner.put(newSmap)
+	p.owner.smap.put(newSmap)
 	res := p.registerToURL(newSmap.ProxySI.IntraControlNet.DirectURL, newSmap.ProxySI, cmn.DefaultTimeout, nil, false)
 	if res.err != nil {
 		p.invalmsghdlr(w, r, res.err.Error())
@@ -2544,7 +2544,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	force, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
 	// forceful primary change
 	if force && apitems[0] == cmn.Proxy {
-		if !p.smapowner.get().isPrimary(p.si) {
+		if !p.owner.smap.get().isPrimary(p.si) {
 			s := fmt.Sprintf("%s is not the primary", p.si)
 			p.invalmsghdlr(w, r, s)
 		}
@@ -2560,7 +2560,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if p.smapowner.get().isPrimary(p.si) {
+	if p.owner.smap.get().isPrimary(p.si) {
 		s := fmt.Sprint("Expecting 'cluster' (RESTful) resource when designating primary proxy via API")
 		p.invalmsghdlr(w, r, s)
 		return
@@ -2575,7 +2575,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil {
 		s := fmt.Sprintf("New primary proxy %s not present in the %s", proxyID, smap.pp())
@@ -2590,7 +2590,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	_, err = p.smapowner.modify(func(clone *smapX) error {
+	_, err = p.owner.smap.modify(func(clone *smapX) error {
 		clone.ProxySI = psi
 		return nil
 	})
@@ -2599,7 +2599,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 	var msgInt *actionMsgInternal
-	clone, err := p.smapowner.modify(
+	clone, err := p.owner.smap.modify(
 		func(clone *smapX) error {
 			if !clone.isPresent(p.si) {
 				cmn.AssertMsg(false, "This proxy '"+p.si.ID()+"' must always be present in the "+clone.pp())
@@ -2621,12 +2621,12 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 	)
 	cmn.AssertNoErr(err)
 
-	bmd := p.bmdowner.get()
+	bmd := p.owner.bmd.get()
 	if glog.V(3) {
 		glog.Infof("%s: distributing %s with newly elected primary (self)", p.si, clone)
 		glog.Infof("%s: distributing %s as well", p.si, bmd)
 	}
-	p.metasyncer.sync(true, revspair{clone, msgInt}, revspair{bmd, msgInt})
+	p.metasyncer.sync(true, revsPair{clone, msgInt}, revsPair{bmd, msgInt})
 	return
 }
 
@@ -2640,7 +2640,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	if p.forwardCP(w, r, &cmn.ActionMsg{}, s, nil) {
 		return
 	}
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	psi, ok := smap.Pmap[proxyid]
 	if !ok {
 		s := fmt.Sprintf("New primary proxy %s not present in the %s", proxyid, smap.pp())
@@ -2677,7 +2677,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	// (I.5) commit locally
-	_, err = p.smapowner.modify(func(clone *smapX) error {
+	_, err = p.owner.smap.modify(func(clone *smapX) error {
 		clone.ProxySI = psi
 		p.metasyncer.becomeNonPrimary()
 		return nil
@@ -2978,7 +2978,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.startedUp.Load() {
-		bmd := p.bmdowner.get()
+		bmd := p.owner.bmd.get()
 		if err := bmd.validateUUID(regReq.BMD, p.si, nsi, ""); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -3010,12 +3010,12 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	p.statsT.Add(stats.PostCount, 1)
 
-	p.smapowner.Lock()
-	smap := p.smapowner.get()
+	p.owner.smap.Lock()
+	smap := p.owner.smap.get()
 	if isProxy {
 		osi := smap.GetProxy(nsi.ID())
 		if !p.addOrUpdateNode(nsi, osi, keepalive) {
-			p.smapowner.Unlock()
+			p.owner.smap.Unlock()
 			return
 		}
 	} else {
@@ -3025,7 +3025,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		// updated target or target has powercycled. Except 'updated target' case,
 		// rebalance needs to be triggered and updating smap is the easiest.
 		if keepalive && !p.addOrUpdateNode(nsi, osi, keepalive) {
-			p.smapowner.Unlock()
+			p.owner.smap.Unlock()
 			return
 		}
 
@@ -3034,7 +3034,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 				glog.Infof("%s: register %s => (%s)", p.si, nsi, smap.StringEx())
 			}
 			// when registration is done by user send the current BMD and Smap
-			bmd := p.bmdowner.get()
+			bmd := p.owner.bmd.get()
 			meta := &targetRegMeta{smap, bmd, p.si, false}
 			body := cmn.MustMarshal(meta)
 
@@ -3049,7 +3049,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 			res := p.call(args)
 			if res.err != nil {
-				p.smapowner.Unlock()
+				p.owner.smap.Unlock()
 				msg := fmt.Sprintf("failed to register %s: %v, %s", nsi, res.err, res.details)
 				if cmn.IsErrConnectionRefused(res.err) {
 					msg = fmt.Sprintf("failed to reach %s on %s:%s",
@@ -3062,7 +3062,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	// check for cluster integrity errors (cie)
 	if err = smap.validateUUID(regReq.Smap, p.si, nsi, ""); err != nil {
-		p.smapowner.Unlock()
+		p.owner.smap.Unlock()
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -3070,8 +3070,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if !p.startedUp.Load() {
 		clone := smap.clone()
 		clone.putNode(nsi, nonElectable)
-		p.smapowner.put(clone)
-		p.smapowner.Unlock()
+		p.owner.smap.put(clone)
+		p.owner.smap.Unlock()
 		if !isProxy && selfRegister {
 			glog.Infof("%s: joining %s (%s), globReb aborted %t", p.si, nsi, regReq.Smap, regReq.RebAborted)
 			// CAS to avoid overwriting `true` with `false` by `Load+&&+Store`
@@ -3080,16 +3080,16 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err = smap.IsDuplicateURL(nsi); err != nil {
-		p.smapowner.Unlock()
+		p.owner.smap.Unlock()
 		p.invalmsghdlr(w, r, p.si.String()+": "+err.Error())
 		return
 	}
-	p.smapowner.Unlock()
+	p.owner.smap.Unlock()
 
 	// Return current metadata to registering target
 	if !isProxy && selfRegister { // case: self-registering target
 		glog.Infof("%s: joining %s (%s), globReb aborted %t", p.si, nsi, regReq.Smap, regReq.RebAborted)
-		bmd := p.bmdowner.get()
+		bmd := p.owner.bmd.get()
 		meta := &targetRegMeta{smap, bmd, p.si, false}
 		body := cmn.MustMarshal(meta)
 		p.writeJSON(w, r, body, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
@@ -3098,13 +3098,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	// update and distribute Smap
 	go func(nsi *cluster.Snode) {
 		var msgInt *actionMsgInternal
-		clone, err := p.smapowner.modify(
+		clone, err := p.owner.smap.modify(
 			func(clone *smapX) error {
 				clone.putNode(nsi, nonElectable)
 
 				// Notify all nodes about a new one (targets probably need to set up GFN)
 				notifyMsgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
-				notifyPairs := revspair{clone, notifyMsgInt}
+				notifyPairs := revsPair{clone, notifyMsgInt}
 				failCnt := p.metasyncer.notify(true, notifyPairs)
 				if failCnt > 1 {
 					return fmt.Errorf("cannot join %s - unable to reach %d nodes", nsi, failCnt)
@@ -3127,13 +3127,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		msgInt.NewDaemonID = nsi.ID()
 
 		// metasync
-		pairs := []revspair{{clone, msgInt}}
+		pairs := []revsPair{{clone, msgInt}}
 		if !isProxy {
-			bmd := p.bmdowner.get()
-			pairs = append(pairs, revspair{bmd, msgInt})
+			bmd := p.owner.bmd.get()
+			pairs = append(pairs, revsPair{bmd, msgInt})
 		}
 		if len(tokens.Tokens) > 0 {
-			pairs = append(pairs, revspair{tokens, msgInt})
+			pairs = append(pairs, revsPair{tokens, msgInt})
 		}
 		p.metasyncer.sync(false, pairs...)
 	}(nsi)
@@ -3181,7 +3181,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg  *cmn.ActionMsg
 		sid  = apitems[0]
-		smap = p.smapowner.get()
+		smap = p.owner.smap.get()
 		node = smap.GetNode(sid)
 	)
 	if node == nil {
@@ -3203,11 +3203,11 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 	msgInt := p.newActionMsgInternal(msg, clone, nil)
 	p.setGlobRebID(clone, msgInt, true)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
+	p.metasyncer.sync(true, revsPair{clone, msgInt})
 }
 
 func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err error) {
-	node := p.smapowner.get().GetNode(sid)
+	node := p.owner.smap.get().GetNode(sid)
 	if node == nil {
 		err = fmt.Errorf("unknown node %s", sid)
 		return
@@ -3235,7 +3235,7 @@ func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err 
 		}
 	}
 	// NOTE: "failure to respond back" may have legitimate reasons - proceeeding even when all retries fail
-	clone, err = p.smapowner.modify(func(clone *smapX) error {
+	clone, err = p.owner.smap.modify(func(clone *smapX) error {
 		node = clone.GetNode(sid)
 		if node == nil {
 			return fmt.Errorf("unknown node %s", sid)
@@ -3356,12 +3356,12 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActGlobalReb:
-		p.smapowner.Lock()
-		smap := p.smapowner.get()
+		p.owner.smap.Lock()
+		smap := p.owner.smap.get()
 		msgInt := p.newActionMsgInternal(msg, smap, nil)
 		p.setGlobRebID(smap, msgInt, true)
-		p.smapowner.Unlock()
-		p.metasyncer.sync(false, revspair{smap, msgInt})
+		p.owner.smap.Unlock()
+		p.metasyncer.sync(false, revsPair{smap, msgInt})
 	case cmn.ActXactStart, cmn.ActXactStop:
 		body := cmn.MustMarshal(msg)
 		results := p.bcastTo(bcastArgs{
@@ -3397,26 +3397,26 @@ func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInterna
 			glog.Infof("%s, action %s", s, msgInt.Action)
 		}
 	}
-	p.bmdowner.Lock()
-	bmd := p.bmdowner.get()
+	p.owner.bmd.Lock()
+	bmd := p.owner.bmd.get()
 	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {
-		cmn.Assert(!p.smapowner.get().isPrimary(p.si))
+		cmn.Assert(!p.owner.smap.get().isPrimary(p.si))
 		// cluster integrity error: making exception for non-primary proxies
 		glog.Errorf("%s (non-primary): %v - proceeding to override BMD", p.si, err)
 	} else if newBMD.version() <= bmd.version() {
-		p.bmdowner.Unlock()
+		p.owner.bmd.Unlock()
 		if newBMD.version() < bmd.version() {
 			err = fmt.Errorf("%s: attempt to downgrade %s to %s", p.si, bmd, newBMD)
 		}
 		return
 	}
-	p.bmdowner.put(newBMD)
-	p.bmdowner.Unlock()
+	p.owner.bmd.put(newBMD)
+	p.owner.bmd.Unlock()
 	return
 }
 
 func (p *proxyrunner) urlOutsideCluster(url string) bool {
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	for _, proxyInfo := range smap.Pmap {
 		if proxyInfo.PublicNet.DirectURL == url || proxyInfo.IntraControlNet.DirectURL == url ||
 			proxyInfo.IntraDataNet.DirectURL == url {
@@ -3516,12 +3516,12 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		}
 	}
 	rbmd.Version += 100
-	p.bmdowner.Lock()
-	p.bmdowner.put(rbmd)
-	p.bmdowner.Unlock()
+	p.owner.bmd.Lock()
+	p.owner.bmd.put(rbmd)
+	p.owner.bmd.Unlock()
 
 	msgInt := p.newActionMsgInternal(msg, nil, rbmd)
-	p.metasyncer.sync(true, revspair{rbmd, msgInt})
+	p.metasyncer.sync(true, revsPair{rbmd, msgInt})
 }
 
 ////////////////

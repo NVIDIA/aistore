@@ -73,6 +73,11 @@ type (
 	}
 )
 
+var (
+	// interface guard
+	_ revs = &TokenList{}
+)
+
 var guestAcc = &authRec{
 	userID:  "guest",
 	isGuest: true,
@@ -266,22 +271,15 @@ func (a *authManager) revokedTokenList() *TokenList {
 	return tlist
 }
 
-var _ revs = &TokenList{}
-
-func (t *TokenList) tag() string {
-	return tokentag
-}
-
 //
-// metasync interface impl-s
+// Implementation of revs interface
 //
-
-// as a revs:
-// token list doesn't need versioning: receivers keep adding received tokens to their internal lists
-func (t *TokenList) version() int64 {
-	return t.Version
-}
-
-func (t *TokenList) marshal() ([]byte, error) {
-	return jsonCompat.Marshal(t)
+// Token list doesn't need versioning: receivers keep adding received tokens to their internal lists
+//
+func (t *TokenList) tag() string    { return revsTokenTag }
+func (t *TokenList) version() int64 { return t.Version }
+func (t *TokenList) marshal() []byte {
+	b, err := jsonCompat.Marshal(t)
+	cmn.AssertNoErr(err)
+	return b
 }

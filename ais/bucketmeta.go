@@ -69,6 +69,8 @@ type (
 )
 
 var (
+	// interface guard
+	_ revs           = &bucketMD{}
 	_ cluster.Bowner = &bmdOwnerBase{}
 	_ bmdOwner       = &bmdOwnerPrx{}
 	_ bmdOwner       = &bmdOwnerTgt{}
@@ -195,13 +197,14 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 }
 
 //
-// revs interface
+// Implementation of revs interface
 //
-func (m *bucketMD) tag() string    { return bmdtag }
+func (m *bucketMD) tag() string    { return revsBMDTag }
 func (m *bucketMD) version() int64 { return m.Version }
-
-func (m *bucketMD) marshal() ([]byte, error) {
-	return jsonCompat.Marshal(m) // jsoniter + sorting
+func (m *bucketMD) marshal() []byte {
+	b, err := jsonCompat.Marshal(m) // jsoniter + sorting
+	cmn.AssertNoErr(err)
+	return b
 }
 
 //////////////////

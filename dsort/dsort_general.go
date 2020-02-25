@@ -177,8 +177,8 @@ func (ds *dsorterGeneral) start() error {
 		return errors.WithStack(err)
 	}
 
-	ds.streams.request = transport.NewStreamBundle(ds.m.ctx.smap, ds.m.ctx.node, client, reqSbArgs)
-	ds.streams.response = transport.NewStreamBundle(ds.m.ctx.smap, ds.m.ctx.node, client, respSbArgs)
+	ds.streams.request = transport.NewStreamBundle(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
+	ds.streams.response = transport.NewStreamBundle(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
 
 	// start watching memory
 	return ds.mw.watch()

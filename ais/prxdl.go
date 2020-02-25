@@ -55,7 +55,7 @@ func (p *proxyrunner) targetDownloadRequest(method string, path string, body []b
 
 func (p *proxyrunner) broadcastDownloadRequest(method string, path string, body []byte, query url.Values) []dlResponse {
 	var (
-		smap        = p.smapowner.get()
+		smap        = p.owner.smap.get()
 		wg          = &sync.WaitGroup{}
 		targetCnt   = smap.CountTargets()
 		responsesCh = make(chan dlResponse, targetCnt)
@@ -296,7 +296,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 	)
 	payload.InitWithQuery(query)
 	bck := cluster.NewBckEmbed(payload.Bck)
-	if err := bck.Init(p.bmdowner, p.si); err != nil {
+	if err := bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}

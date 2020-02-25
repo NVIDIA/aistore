@@ -44,11 +44,11 @@ func newDiscoverServerPrimary() *proxyrunner {
 	config.Timeout.Startup = time.Second
 	cmn.GCO.CommitUpdate(config)
 
-	p.smapowner = newSmapowner()
-	p.smapowner.put(newSmap())
+	p.owner.smap = newSmapOwner()
+	p.owner.smap.put(newSmap())
 	owner := newBMDOwnerPrx(config)
 	owner._put(newBucketMD())
-	p.bmdowner = owner
+	p.owner.bmd = owner
 	p.keepalive = newProxyKeepaliveRunner(p, tracker, &p.startedUp)
 	return p
 }

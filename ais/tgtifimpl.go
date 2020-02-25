@@ -31,8 +31,8 @@ import (
 
 var _ cluster.Target = &targetrunner{}
 
-func (t *targetrunner) GetBowner() cluster.Bowner    { return t.bmdowner }
-func (t *targetrunner) GetSowner() cluster.Sowner    { return t.smapowner }
+func (t *targetrunner) GetBowner() cluster.Bowner    { return t.owner.bmd }
+func (t *targetrunner) GetSowner() cluster.Sowner    { return t.owner.smap }
 func (t *targetrunner) FSHC(err error, path string)  { t.fshc(err, path) }
 func (t *targetrunner) GetMMSA() *memsys.MMSA        { return daemon.gmm }
 func (t *targetrunner) GetSmallMMSA() *memsys.MMSA   { return daemon.smm }
@@ -123,7 +123,7 @@ loop:
 			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
 				continue
 			}
-			if err := fwd.bck.Init(t.bmdowner, t.si); err != nil {
+			if err := fwd.bck.Init(t.owner.bmd, t.si); err != nil {
 				glog.Errorf("prefetch: %s, err: %v", fwd.bck, err)
 			} else if fwd.bck.IsAIS() {
 				glog.Errorf("prefetch: %s is ais bucket, nothing to do", fwd.bck)
@@ -179,7 +179,7 @@ func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *clus
 }
 
 func (t *targetrunner) CopyObject(lom *cluster.LOM, bckTo *cluster.Bck, buf []byte, localOnly bool) (copied bool, err error) {
-	ri := &replicInfo{smap: t.smapowner.get(),
+	ri := &replicInfo{smap: t.owner.smap.get(),
 		bckTo:     bckTo,
 		t:         t,
 		buf:       buf,
@@ -262,7 +262,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 	// local or remote?
 	var (
 		si   *cluster.Snode
-		smap = t.smapowner.get()
+		smap = t.owner.smap.get()
 	)
 	if si, err = cluster.HrwTarget(lom.Uname(), &smap.Smap); err != nil {
 		return

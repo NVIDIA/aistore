@@ -106,9 +106,11 @@ type (
 		httpclient         *http.Client // http client for intra-cluster comm
 		httpclientGetPut   *http.Client // http client to execute target <=> target GET & PUT (object)
 		keepalive          keepaliver
-		smapowner          *smapowner
-		bmdowner           bmdOwner
-		statsT             stats.Tracker
+		owner              struct {
+			smap *smapOwner
+			bmd  bmdOwner
+		}
+		statsT stats.Tracker
 	}
 
 	// AWS and GCP provider interface
@@ -376,7 +378,7 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 		}
 	}
 
-	h.smapowner = newSmapowner()
+	h.owner.smap = newSmapOwner()
 }
 
 // initSI initializes this cluster.Snode
@@ -611,7 +613,7 @@ func (h *httprunner) call(args callArgs) callResult {
 
 	req.Header.Set(cmn.HeaderCallerID, h.si.ID())
 	req.Header.Set(cmn.HeaderCallerName, h.si.Name())
-	if smap := h.smapowner.get(); smap.isValid() {
+	if smap := h.owner.smap.get(); smap.isValid() {
 		req.Header.Set(cmn.HeaderCallerSmapVersion, strconv.FormatInt(smap.version(), 10))
 	}
 
@@ -680,7 +682,7 @@ func (h *httprunner) bcastPut(args bcastArgs) chan callResult {
 
 func (h *httprunner) bcastTo(args bcastArgs) chan callResult {
 	if args.smap == nil {
-		args.smap = h.smapowner.get()
+		args.smap = h.owner.smap.get()
 	}
 	if args.network == "" {
 		args.network = cmn.NetworkIntraControl
@@ -788,21 +790,21 @@ func (h *httprunner) bcast(bargs bcastArgs) chan callResult {
 	return ch
 }
 
-func (h *httprunner) newActionMsgInternalStr(msgStr string, smap *smapX, bmdowner *bucketMD) *actionMsgInternal {
-	return h.newActionMsgInternal(&cmn.ActionMsg{Value: msgStr}, smap, bmdowner)
+func (h *httprunner) newActionMsgInternalStr(msgStr string, smap *smapX, bmd *bucketMD) *actionMsgInternal {
+	return h.newActionMsgInternal(&cmn.ActionMsg{Value: msgStr}, smap, bmd)
 }
 
-func (h *httprunner) newActionMsgInternal(actionMsg *cmn.ActionMsg, smap *smapX, bmdowner *bucketMD) *actionMsgInternal {
+func (h *httprunner) newActionMsgInternal(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucketMD) *actionMsgInternal {
 	msgInt := &actionMsgInternal{ActionMsg: *actionMsg}
 	if smap != nil {
 		msgInt.SmapVersion = smap.Version
 	} else {
-		msgInt.SmapVersion = h.smapowner.Get().Version
+		msgInt.SmapVersion = h.owner.smap.Get().Version
 	}
-	if bmdowner != nil {
-		msgInt.BMDVersion = bmdowner.Version
+	if bmd != nil {
+		msgInt.BMDVersion = bmd.Version
 	} else {
-		msgInt.BMDVersion = h.bmdowner.Get().Version
+		msgInt.BMDVersion = h.owner.bmd.Get().Version
 	}
 	return msgInt
 }
@@ -894,12 +896,12 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatConfig:
 		body = cmn.MustMarshal(cmn.GCO.Get())
 	case cmn.GetWhatSmap:
-		body = cmn.MustMarshal(h.smapowner.get())
+		body = cmn.MustMarshal(h.owner.smap.get())
 	case cmn.GetWhatBMD:
-		body = cmn.MustMarshal(h.bmdowner.get())
+		body = cmn.MustMarshal(h.owner.bmd.get())
 	case cmn.GetWhatSmapVote:
 		voteInProgress := xaction.Registry.GlobalXactRunning(cmn.ActElection)
-		msg := SmapVoteMsg{VoteInProgress: voteInProgress, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
+		msg := SmapVoteMsg{VoteInProgress: voteInProgress, Smap: h.owner.smap.get(), BucketMD: h.owner.bmd.get()}
 		body = cmn.MustMarshal(msg)
 	case cmn.GetWhatSnode:
 		body = cmn.MustMarshal(h.si)
@@ -931,29 +933,29 @@ func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, 
 // metasync Rx handlers //
 //////////////////////////
 
-func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap *smapX, msgInt *actionMsgInternal, err error) {
-	if _, ok := payload[smaptag]; !ok {
+func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *smapX, msgInt *actionMsgInternal, err error) {
+	if _, ok := payload[revsSmapTag]; !ok {
 		return
 	}
 	newSmap, msgInt = &smapX{}, &actionMsgInternal{}
-	smapValue := payload[smaptag]
-	if err1 := jsoniter.Unmarshal([]byte(smapValue), newSmap); err1 != nil {
+	smapValue := payload[revsSmapTag]
+	if err1 := jsoniter.Unmarshal(smapValue, newSmap); err1 != nil {
 		err = fmt.Errorf("failed to unmarshal new Smap, value (%+v, %T), err: %v", smapValue, smapValue, err1)
 		return
 	}
-	if msgValue, ok := payload[smaptag+actiontag]; ok {
-		if err1 := jsoniter.Unmarshal([]byte(msgValue), msgInt); err1 != nil {
+	if msgValue, ok := payload[revsSmapTag+revsActionTag]; ok {
+		if err1 := jsoniter.Unmarshal(msgValue, msgInt); err1 != nil {
 			err = fmt.Errorf("failed to unmarshal action message, value (%+v, %T), err: %v", msgValue, msgValue, err1)
 			return
 		}
 	}
 	var (
 		s           string
-		smap        = h.smapowner.get()
-		myver       = smap.version()
+		smap        = h.owner.smap.get()
+		curVer      = smap.version()
 		isManualReb = msgInt.Action == cmn.ActGlobalReb && msgInt.Value != nil
 	)
-	if newSmap.version() == myver && !isManualReb {
+	if newSmap.version() == curVer && !isManualReb {
 		newSmap = nil
 		return
 	}
@@ -981,7 +983,7 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap 
 	glog.Infof("%s: receive %s (local %s)%s", h.si, newSmap.StringEx(), smap.StringEx(), s)
 	sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	cmn.Assert(sameOrigin)
-	if newSmap.version() < myver {
+	if newSmap.version() < curVer {
 		if !eq {
 			err = fmt.Errorf("%s: attempt to downgrade %s to %s", h.si, smap.StringEx(), newSmap.StringEx())
 			return
@@ -992,25 +994,25 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs, caller string) (newSmap 
 	return
 }
 
-func (h *httprunner) extractBMD(payload cmn.SimpleKVs) (newBMD *bucketMD, msgInt *actionMsgInternal, err error) {
-	if _, ok := payload[bmdtag]; !ok {
+func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msgInt *actionMsgInternal, err error) {
+	if _, ok := payload[revsBMDTag]; !ok {
 		return
 	}
 	newBMD, msgInt = &bucketMD{}, &actionMsgInternal{}
-	bmdValue := payload[bmdtag]
-	if err1 := jsoniter.Unmarshal([]byte(bmdValue), newBMD); err1 != nil {
+	bmdValue := payload[revsBMDTag]
+	if err1 := jsoniter.Unmarshal(bmdValue, newBMD); err1 != nil {
 		err = fmt.Errorf("%s: failed to unmarshal new %s, value (%+v, %T), err: %v",
 			h.si, bmdTermName, bmdValue, bmdValue, err1)
 		return
 	}
-	if msgValue, ok := payload[bmdtag+actiontag]; ok {
-		if err1 := jsoniter.Unmarshal([]byte(msgValue), msgInt); err1 != nil {
+	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
+		if err1 := jsoniter.Unmarshal(msgValue, msgInt); err1 != nil {
 			err = fmt.Errorf("%s: failed to unmarshal action message, value (%+v, %T), err: %v",
 				h.si, msgValue, msgValue, err1)
 			return
 		}
 	}
-	bmd := h.bmdowner.get()
+	bmd := h.owner.bmd.get()
 	if newBMD.version() <= bmd.version() {
 		if newBMD.version() < bmd.version() {
 			err = fmt.Errorf("%s: attempt to downgrade %s to %s", h.si, bmd.StringEx(), newBMD.StringEx())
@@ -1020,15 +1022,15 @@ func (h *httprunner) extractBMD(payload cmn.SimpleKVs) (newBMD *bucketMD, msgInt
 	return
 }
 
-func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList, error) {
-	bytes, ok := payload[tokentag]
+func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, error) {
+	bytes, ok := payload[revsTokenTag]
 	if !ok {
 		return nil, nil
 	}
 
 	msgInt := actionMsgInternal{}
-	if msgValue, ok := payload[tokentag+actiontag]; ok {
-		if err := jsoniter.Unmarshal([]byte(msgValue), &msgInt); err != nil {
+	if msgValue, ok := payload[revsTokenTag+revsActionTag]; ok {
+		if err := jsoniter.Unmarshal(msgValue, &msgInt); err != nil {
 			err := fmt.Errorf(
 				"failed to unmarshal action message, value (%+v, %T), err: %v",
 				msgValue, msgValue, err)
@@ -1037,7 +1039,7 @@ func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList,
 	}
 
 	tokenList := &TokenList{}
-	if err := jsoniter.Unmarshal([]byte(bytes), tokenList); err != nil {
+	if err := jsoniter.Unmarshal(bytes, tokenList); err != nil {
 		return nil, fmt.Errorf(
 			"failed to unmarshal blocked token list, value (%+v, %T), err: %v",
 			bytes, bytes, err)
@@ -1114,8 +1116,8 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	req := targetRegMeta{SI: h.si}
 	if h.si.IsTarget() && !keepalive {
 		aborted, running := reb.IsRebalancing(cmn.ActGlobalReb)
-		req.BMD = h.bmdowner.get()
-		req.Smap = h.smapowner.get()
+		req.BMD = h.owner.bmd.get()
+		req.Smap = h.owner.smap.get()
 		req.RebAborted = !running && aborted
 	}
 	info := cmn.MustMarshal(req)
@@ -1163,7 +1165,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 // receiving smap during metasync)
 func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 	config := cmn.GCO.Get()
-	smap := h.smapowner.get()
+	smap := h.owner.smap.get()
 	if smap == nil || smap.ProxySI == nil {
 		url, proxysi = config.Proxy.PrimaryURL, nil
 		return

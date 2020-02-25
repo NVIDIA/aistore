@@ -15,8 +15,8 @@ import (
 
 var _ = Describe("Init", func() {
 	BeforeEach(func() {
-		ctx.smap = newTestSmap("target")
-		ctx.node = ctx.smap.Get().Tmap["target"]
+		ctx.smapOwner = newTestSmap("target")
+		ctx.node = ctx.smapOwner.Get().Tmap["target"]
 		fs.InitMountedFS()
 	})
 

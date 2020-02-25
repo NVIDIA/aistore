@@ -253,7 +253,7 @@ func (tctx *testContext) setup() {
 	// that we close server faster than it starts and many bad things can happen.
 	time.Sleep(time.Millisecond * 100)
 
-	ctx.smap = smap
+	ctx.smapOwner = smap
 	bmdMock := cluster.NewBaseBownerMock()
 	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
 	bmdMock.Add(cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal, props))
@@ -437,7 +437,7 @@ var _ = Describe("Distributed Sort", func() {
 							MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0},
 							DSorterType: DSorterGeneralType,
 						}
-						ctx.node = ctx.smap.Get().Tmap[target.daemonID]
+						ctx.node = ctx.smapOwner.Get().Tmap[target.daemonID]
 						err := manager.init(rs)
 						if err != nil {
 							tctx.errCh <- err

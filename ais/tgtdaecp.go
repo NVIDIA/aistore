@@ -103,19 +103,19 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 		}
 		err = nil
 	} else {
-		glog.Infof("%s: %s", t.si, t.bmdowner.get())
+		glog.Infof("%s: %s", t.si, t.owner.bmd.get())
 	}
 	// smap
-	if err := t.smapowner.synchronize(meta.Smap, true /* lesserIsErr */); err != nil {
+	if err := t.owner.smap.synchronize(meta.Smap, true /* lesserIsErr */); err != nil {
 		glog.Errorf("%s: sync Smap err %v", t.si, err)
 	} else {
-		glog.Infof("%s: sync %s", t.si, t.smapowner.get())
+		glog.Infof("%s: sync %s", t.si, t.owner.smap.get())
 	}
 	return
 }
 
 func (t *targetrunner) unregister() (int, error) {
-	smap := t.smapowner.get()
+	smap := t.owner.smap.get()
 	if smap == nil || !smap.isValid() {
 		return 0, nil
 	}
@@ -163,7 +163,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if cmn.ReadJSON(w, r, newsmap) != nil {
 				return
 			}
-			if err := t.smapowner.synchronize(newsmap, true /* lesserIsErr */); err != nil {
+			if err := t.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", err))
 			}
 			glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
@@ -213,7 +213,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		)
 		if bucket != "" {
 			bck = newBckFromQuery(bucket, r.URL.Query())
-			if err := bck.Init(t.bmdowner, t.si); err != nil {
+			if err := bck.Init(t.owner.bmd, t.si); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -275,7 +275,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	smap := t.smapowner.get()
+	smap := t.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("new primary proxy %s not present in the local %s", proxyID, smap.pp()))
@@ -289,7 +289,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, err = t.smapowner.modify(func(clone *smapX) error {
+	_, err = t.owner.smap.modify(func(clone *smapX) error {
 		if clone.ProxySI.ID() != psi.ID() {
 			clone.ProxySI = psi
 		}
@@ -334,7 +334,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			var bck *cluster.Bck
 			if xactMsg.Bck.Name != "" {
 				bck = cluster.NewBckEmbed(xactMsg.Bck)
-				if err := bck.Init(t.bmdowner, t.si); err != nil {
+				if err := bck.Init(t.owner.bmd, t.si); err != nil {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 					return
 				}
@@ -387,7 +387,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 		msg := &stats.DaemonStatus{
 			Snode:       t.httprunner.si,
-			SmapVersion: t.smapowner.get().Version,
+			SmapVersion: t.owner.smap.get().Version,
 			SysInfo:     daemon.gmm.FetchSysInfo(),
 			Stats:       tstats.Core,
 			Capacity:    tstats.Capacity,
@@ -512,7 +512,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			t.smapowner.synchronize(meta.Smap, true /* lesserIsErr */)
+			t.owner.smap.synchronize(meta.Smap, true /* lesserIsErr */)
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -726,9 +726,9 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 		glog.Infof("%s: %s %s%s, action %s", t.si, tag, newBMD, from, msgInt.Action)
 	}
 
-	t.bmdowner.Lock()
+	t.owner.bmd.Lock()
 	var (
-		bmd          = t.bmdowner.get()
+		bmd          = t.owner.bmd.get()
 		myver        = bmd.version()
 		na           = bmd.NumAIS(nil /*all namespaces*/)
 		bcksToDelete = make([]*cluster.Bck, 0, na)
@@ -736,20 +736,20 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 		_, psi       = t.getPrimaryURLAndSI()
 	)
 	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
-		t.bmdowner.Unlock()
+		t.owner.bmd.Unlock()
 		cmn.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
 		return
 	}
 
 	if newBMD.version() <= myver {
-		t.bmdowner.Unlock()
+		t.owner.bmd.Unlock()
 		if newBMD.version() < myver {
 			err = fmt.Errorf("%s: attempt to downgrade %s to %s", t.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		return
 	}
-	t.bmdowner.put(newBMD)
-	t.bmdowner.Unlock()
+	t.owner.bmd.put(newBMD)
+	t.owner.bmd.Unlock()
 
 	if tag != bucketMDRegister {
 		// Don't call ecmanager as it has not been initialized just yet
@@ -854,11 +854,11 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		glog.Warningf("Error: %s\n%s", err, newsmap.pp())
 		return
 	}
-	if err = t.smapowner.synchronize(newsmap, true /* lesserIsErr */); err != nil {
+	if err = t.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
 		return
 	}
 	if msgInt.Action == cmn.ActGlobalReb { // manual
-		go t.rebManager.RunGlobalReb(t.smapowner.Get(), msgInt.GlobRebID)
+		go t.rebManager.RunGlobalReb(t.owner.smap.Get(), msgInt.GlobRebID)
 		return
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
@@ -869,12 +869,12 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		return
 	}
 	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si, newTargetID)
-	go t.rebManager.RunGlobalReb(t.smapowner.Get(), msgInt.GlobRebID)
+	go t.rebManager.RunGlobalReb(t.owner.smap.Get(), msgInt.GlobRebID)
 	return
 }
 
 func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
-	smap := t.smapowner.Get()
+	smap := t.owner.smap.Get()
 	smapVersion := msgInt.SmapVersion
 	if smap.Version < smapVersion {
 		glog.Errorf("own %s < v%d - fetching latest for %v", smap, smapVersion, msgInt.Action)
@@ -886,7 +886,7 @@ func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 	}
 
-	bucketmd := t.bmdowner.Get()
+	bucketmd := t.owner.bmd.Get()
 	bmdVersion := msgInt.BMDVersion
 	if bucketmd.Version < bmdVersion {
 		glog.Errorf("own %s < v%d - fetching latest for %v", bucketmd, bmdVersion, msgInt.Action)
@@ -976,7 +976,7 @@ func (t *targetrunner) detectMpathChanges() {
 }
 
 func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, renamed string) (err error) {
-	smap := t.smapowner.get()
+	smap := t.owner.smap.get()
 	if smap == nil || !smap.isValid() {
 		return errors.New("smap nil or missing")
 	}
@@ -1059,7 +1059,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/metasync
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
-	var payload = make(cmn.SimpleKVs)
+	var payload = make(msPayload)
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		return
 	}
@@ -1109,7 +1109,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 
 // POST /v1/metasync
 func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
-	var payload = make(cmn.SimpleKVs)
+	var payload = make(msPayload)
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		return
 	}
@@ -1130,7 +1130,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		callerID   = r.Header.Get(cmn.HeaderCallerID)
 		callerName = r.Header.Get(cmn.HeaderCallerName)
-		smap       = t.smapowner.get()
+		smap       = t.owner.smap.get()
 		query      = r.URL.Query()
 	)
 
@@ -1185,7 +1185,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
 	for i := 1; ; i++ {
 		time.Sleep(time.Duration(i) * time.Second)
-		smap := t.smapowner.get()
+		smap := t.owner.smap.get()
 		if !smap.isValid() {
 			continue
 		}
@@ -1318,10 +1318,10 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 		return capInfo.Err
 	}
 
-	if err = bckFrom.Init(t.bmdowner, t.si); err != nil {
+	if err = bckFrom.Init(t.owner.bmd, t.si); err != nil {
 		return
 	}
-	if err = bckTo.Init(t.bmdowner, t.si); err != nil {
+	if err = bckTo.Init(t.owner.bmd, t.si); err != nil {
 		return
 	}
 
@@ -1360,7 +1360,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 }
 
 func (t *targetrunner) abortCopyRenameLB(bckFrom, bckTo *cluster.Bck, action string) {
-	_, ok := t.bmdowner.get().Get(bckTo)
+	_, ok := t.owner.bmd.get().Get(bckTo)
 	if !ok {
 		return
 	}
@@ -1380,7 +1380,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 }
 
 func (t *targetrunner) commitCopyRenameLB(bckFrom, bckTo *cluster.Bck, msgInt *actionMsgInternal) (err error) {
-	if err := bckTo.Init(t.bmdowner, t.si); err != nil {
+	if err := bckTo.Init(t.owner.bmd, t.si); err != nil {
 		return err
 	}
 

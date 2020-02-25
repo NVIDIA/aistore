@@ -51,11 +51,11 @@ var (
 
 type (
 	dsortContext struct {
-		smap     cluster.Sowner
-		bmdowner cluster.Bowner
-		node     *cluster.Snode
-		t        cluster.Target
-		stats    stats.Tracker
+		smapOwner cluster.Sowner
+		bmdOwner  cluster.Bowner
+		node      *cluster.Snode
+		t         cluster.Target
+		stats     stats.Tracker
 	}
 
 	creationPhaseMetadata struct {
@@ -134,10 +134,10 @@ type (
 	}
 )
 
-func RegisterNode(smap cluster.Sowner, bmdowner cluster.Bowner, snode *cluster.Snode, mmsa *memsys.MMSA,
+func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *cluster.Snode, mmsa *memsys.MMSA,
 	t cluster.Target, stats stats.Tracker) {
-	ctx.smap = smap
-	ctx.bmdowner = bmdowner
+	ctx.smapOwner = smapOwner
+	ctx.bmdOwner = bmdOwner
 	ctx.node = snode
 	ctx.t = t
 	ctx.stats = stats
@@ -160,9 +160,9 @@ func RegisterNode(smap cluster.Sowner, bmdowner cluster.Bowner, snode *cluster.S
 func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// smap, nameLocker setup
 	m.ctx = ctx
-	m.smap = m.ctx.smap.Get()
+	m.smap = m.ctx.smapOwner.Get()
 
-	m.ctx.smap.Listeners().Reg(m)
+	m.ctx.smapOwner.Listeners().Reg(m)
 
 	targetCount := m.smap.CountTargets()
 
@@ -256,7 +256,7 @@ func (m *Manager) initStreams() error {
 	}
 
 	client := transport.NewIntraDataClient()
-	m.streams.shards = transport.NewStreamBundle(m.ctx.smap, m.ctx.node, client, shardsSbArgs)
+	m.streams.shards = transport.NewStreamBundle(m.ctx.smapOwner, m.ctx.node, client, shardsSbArgs)
 	return nil
 }
 
@@ -313,7 +313,7 @@ func (m *Manager) cleanup() {
 	m.extractCreator = nil
 	m.client = nil
 
-	m.ctx.smap.Listeners().Unreg(m)
+	m.ctx.smapOwner.Listeners().Unreg(m)
 
 	if !m.aborted() {
 		m.updateFinishedAck(m.ctx.node.DaemonID)
@@ -711,7 +711,7 @@ func (m *Manager) ListenSmapChanged(ch chan int64) {
 			continue
 		}
 
-		newSmap := m.ctx.smap.Get()
+		newSmap := m.ctx.smapOwner.Get()
 		if newSmap.CountTargets() != m.smap.CountTargets() {
 			// Currently adding new target as well as removing one is not
 			// supported during the run.

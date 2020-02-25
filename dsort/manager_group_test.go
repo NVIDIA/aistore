@@ -83,8 +83,8 @@ var _ = Describe("ManagerGroup", func() {
 	})
 
 	Context("persist", func() {
-		ctx.smap = newTestSmap("target")
-		ctx.node = ctx.smap.Get().Tmap["target"]
+		ctx.smapOwner = newTestSmap("target")
+		ctx.node = ctx.smapOwner.Get().Tmap["target"]
 
 		It("should persist manager but not return by default", func() {
 			m, err := mgrp.Add("uuid")

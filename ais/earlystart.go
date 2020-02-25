@@ -34,7 +34,7 @@ func (p *proxyrunner) bootstrap() {
 	// 1: load a local copy and try to utilize it for discovery
 	smap = newSmap()
 	smap.Pmap[p.si.ID()] = p.si
-	if err := p.smapowner.load(smap, config); err == nil {
+	if err := p.owner.smap.load(smap, config); err == nil {
 		loaded = true
 	}
 	// 2: am primary (tentative)
@@ -121,7 +121,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 			cmn.ExitLogf("FATAL: %s (non-primary) invalid %s at startup/registration, err: %v",
 				p.si, smap, err)
 		}
-		p.smapowner.put(smap) // put Smap
+		p.owner.smap.put(smap) // put Smap
 		return nil
 	}
 
@@ -135,15 +135,15 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 	time.Sleep(time.Second)
 	f()
 
-	p.smapowner.Lock()
-	smap := p.smapowner.get()
+	p.owner.smap.Lock()
+	smap := p.owner.smap.get()
 	if !smap.isPresent(p.si) {
 		cmn.ExitLogf("FATAL: %s failed to register self - not present in the %s", p.si, smap.pp())
 	}
-	if err := p.smapowner.persist(smap); err != nil {
+	if err := p.owner.smap.persist(smap); err != nil {
 		cmn.ExitLogf("FATAL: %s (non-primary), err: %v", p.si, err)
 	}
-	p.smapowner.Unlock()
+	p.owner.smap.Unlock()
 	p.startedUp.Store(true)
 	glog.Infof("%s: joined as non-primary, %s", p.si, smap.StringEx())
 	return nil
@@ -163,17 +163,17 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	)
 
 	// 1: init Smap to accept reg-s
-	p.smapowner.Lock()
+	p.owner.smap.Lock()
 	smap.Pmap[p.si.ID()] = p.si
 	smap.ProxySI = p.si
-	p.smapowner.put(smap)
-	p.smapowner.Unlock()
+	p.owner.smap.put(smap)
+	p.owner.smap.Unlock()
 
 	if !daemon.cli.skipStartup {
 		maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
 		if maxVerSmap != nil {
 			maxVerSmap.Pmap[p.si.ID()] = p.si
-			p.smapowner.put(maxVerSmap)
+			p.owner.smap.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
 				p.si, maxVerSmap.ProxySI.ID(), maxVerSmap.ProxySI.IntraControlNet.DirectURL)
 			p.secondaryStartup(maxVerSmap.ProxySI.IntraControlNet.DirectURL)
@@ -181,7 +181,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		}
 	}
 
-	smap = p.smapowner.get()
+	smap = p.owner.smap.get()
 	haveRegistratons = smap.CountTargets() > 0 || smap.CountProxies() > 1
 
 	// 2: merging local => boot
@@ -189,26 +189,26 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		var added int
 		if loadedSmap != nil {
 			added, _ = smap.merge(loadedSmap, true /*override (IP, port) duplicates*/)
-			p.smapowner.Lock()
+			p.owner.smap.Lock()
 			smap = loadedSmap
 			if added > 0 {
 				smap.Version = smap.Version + int64(added) + 1
 			}
-			p.smapowner.put(smap)
-			p.smapowner.Unlock()
+			p.owner.smap.put(smap)
+			p.owner.smap.Unlock()
 		}
 		glog.Infof("%s: initial %s, curr %s, added=%d", p.si, loadedSmap, smap.StringEx(), added)
-		bmd := p.bmdowner.get()
+		bmd := p.owner.bmd.get()
 		msgInt := p.newActionMsgInternalStr(metaction1, smap, bmd)
-		p.metasyncer.sync(true, revspair{smap, msgInt}, revspair{bmd, msgInt})
+		p.metasyncer.sync(true, revsPair{smap, msgInt}, revsPair{bmd, msgInt})
 	} else {
 		glog.Infof("%s: no registrations yet", p.si)
 		if loadedSmap != nil {
 			glog.Infof("%s: keep going w/ local %s", p.si, loadedSmap.StringEx())
-			p.smapowner.Lock()
+			p.owner.smap.Lock()
 			smap = loadedSmap
-			p.smapowner.put(smap)
-			p.smapowner.Unlock()
+			p.owner.smap.put(smap)
+			p.owner.smap.Unlock()
 		}
 	}
 
@@ -216,10 +216,10 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.discoverMeta(smap)
 
 	// 4: still primary?
-	p.smapowner.Lock()
-	smap = p.smapowner.get()
+	p.owner.smap.Lock()
+	smap = p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
-		p.smapowner.Unlock()
+		p.owner.smap.Unlock()
 		glog.Infof("%s: registering with %s", p.si, smap.ProxySI.NameEx())
 		p.secondaryStartup(smap.ProxySI.IntraControlNet.DirectURL)
 		return
@@ -230,24 +230,24 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		clone := smap.clone()
 		clone.UUID, clone.CreationTime = newClusterUUID() // new uuid
 		clone.Version++
-		p.smapowner.put(clone)
+		p.owner.smap.put(clone)
 		smap = clone
 	}
-	if err := p.smapowner.persist(smap); err != nil {
+	if err := p.owner.smap.persist(smap); err != nil {
 		cmn.ExitLogf("FATAL: %s (primary), err: %v", p.si, err)
 	}
-	p.smapowner.Unlock()
+	p.owner.smap.Unlock()
 
-	p.bmdowner.Lock()
-	bmd := p.bmdowner.get()
+	p.owner.bmd.Lock()
+	bmd := p.owner.bmd.get()
 	if bmd.Version == 0 {
 		clone := bmd.clone()
 		clone.Version = 1 // init BMD
 		clone.UUID = smap.UUID
-		p.bmdowner.put(clone)
+		p.owner.bmd.put(clone)
 		bmd = clone
 	}
-	p.bmdowner.Unlock()
+	p.owner.bmd.Unlock()
 
 	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmd)
 	p.setGlobRebID(smap, msgInt, false /*set*/)
@@ -255,7 +255,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		glog.Infof("Global rebalance did not finish, restarting...")
 		msgInt.Action = cmn.ActGlobalReb
 	}
-	p.metasyncer.sync(false, revspair{smap, msgInt}, revspair{bmd, msgInt})
+	p.metasyncer.sync(false, revsPair{smap, msgInt}, revsPair{bmd, msgInt})
 
 	// 6: started up as primary
 	glog.Infof("%s: primary/cluster startup complete, %s", p.si, smap.StringEx())
@@ -274,7 +274,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 	cmn.Assert(smap.CountTargets() == 0)
 	for time.Since(started) < wtime {
 		time.Sleep(time.Second)
-		smap = p.smapowner.get()
+		smap = p.owner.smap.get()
 		if !smap.isPrimary(p.si) {
 			break
 		}
@@ -306,7 +306,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 			maxVerSmap = nil
 		}
 	}
-	nt = p.smapowner.get().CountTargets()
+	nt = p.owner.smap.get().CountTargets()
 	if nt > 0 {
 		glog.Warningf("%s: timed-out waiting for %d ntargets (curr=%d)", p.si, ntargets, nt)
 	}
@@ -320,12 +320,12 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		maxVerSmap, maxVerBMD = p.uncoverMeta(smap)
 	)
 	if maxVerBMD != nil {
-		p.bmdowner.Lock()
-		bmd := p.bmdowner.get()
+		p.owner.bmd.Lock()
+		bmd := p.owner.bmd.get()
 		if bmd == nil || bmd.version() < maxVerBMD.version() {
-			p.bmdowner.put(maxVerBMD)
+			p.owner.bmd.put(maxVerBMD)
 		}
-		p.bmdowner.Unlock()
+		p.owner.bmd.Unlock()
 	}
 	if maxVerSmap == nil || maxVerSmap.version() == 0 {
 		glog.Infof("%s: no max-ver Smaps", p.si)
@@ -345,22 +345,22 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		if maxVerSmap.version() > smap.version() {
 			glog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p.si, smap.StringEx(), maxVerSmap.StringEx())
 			maxVerSmap.Pmap[p.si.ID()] = p.si
-			p.smapowner.put(maxVerSmap)
+			p.owner.smap.put(maxVerSmap)
 			return
 		}
 		// FATAL: cluster integrity error (cie)
 		cmn.ExitLogf("%s: split-brain local [%s %s] vs [%s %s]",
 			ciError(20), p.si, smap.StringEx(), maxVerSmap.ProxySI, maxVerSmap.StringEx())
 	}
-	p.smapowner.Lock()
-	clone := p.smapowner.get().clone()
+	p.owner.smap.Lock()
+	clone := p.owner.smap.get().clone()
 	if !eq {
 		_, err := maxVerSmap.merge(clone, false /*err if detected (IP, port) duplicates*/)
 		cmn.ExitLogf("%s: %s vs [%s %s]", p.si, err, maxVerSmap.ProxySI, maxVerSmap.StringEx())
 	}
 	clone.Version = cmn.MaxI64(clone.version(), maxVerSmap.version()) + 1
-	p.smapowner.put(clone)
-	p.smapowner.Unlock()
+	p.owner.smap.put(clone)
+	p.owner.smap.Unlock()
 	glog.Infof("%s: merged %s", p.si, clone.pp())
 }
 

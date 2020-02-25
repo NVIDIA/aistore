@@ -115,7 +115,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		h.invalmsghdlr(w, r, fmt.Sprintln("Cannot request vote without Candidate field"))
 		return
 	}
-	smap := h.smapowner.get()
+	smap := h.owner.smap.get()
 	if smap.ProxySI == nil {
 		h.invalmsghdlr(w, r, fmt.Sprintf("Cannot vote: current primary undefined, local %s", smap))
 		return
@@ -136,7 +136,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.smapowner.synchronize(newsmap, false /* lesserIsErr */); err != nil {
+	if err := h.owner.smap.synchronize(newsmap, false /* lesserIsErr */); err != nil {
 		glog.Errorf("Failed to synchronize VoteRecord %s, err %s - voting No", newsmap, err)
 		if _, err := w.Write([]byte(VoteNo)); err != nil {
 			glog.Errorf("Error writing a No vote: %v", err)
@@ -183,7 +183,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	glog.Infof("%s: received vote result: new primary %s", h.si, vr.Candidate)
 
 	newPrimary, oldPrimary := vr.Candidate, vr.Primary
-	_, err := h.smapowner.modify(func(clone *smapX) error {
+	_, err := h.owner.smap.modify(func(clone *smapX) error {
 		psi := clone.GetProxy(newPrimary)
 		if psi == nil {
 			return fmt.Errorf("new primary proxy %s not present in the local %s", newPrimary, clone.pp())
@@ -222,11 +222,11 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := p.smapowner.synchronize(newsmap, false /* lesserIsErr */); err != nil {
+	if err := p.owner.smap.synchronize(newsmap, false /* lesserIsErr */); err != nil {
 		glog.Error(err)
 	}
 
-	smap := p.smapowner.get()
+	smap := p.owner.smap.get()
 	psi, err := cluster.HrwProxy(&smap.Smap, smap.ProxySI.ID())
 	if err != nil {
 		s := fmt.Sprintf("Error preforming HRW: %s", err)
@@ -250,7 +250,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		Initiator: p.si.ID(),
 	}
 	// include resulting Smap in the response
-	smap = p.smapowner.get()
+	smap = p.owner.smap.get()
 	smap.deepCopy(&vr.Smap)
 
 	// election should be started in a goroutine as it must not hang the http handler
@@ -264,7 +264,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 //===================
 
 func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
-	if p.smapowner.get().isPrimary(p.si) {
+	if p.owner.smap.get().isPrimary(p.si) {
 		glog.Infoln("Already in primary state")
 		return
 	}
@@ -426,7 +426,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 }
 
 func (p *proxyrunner) onPrimaryProxyFailure() {
-	clone := p.smapowner.get().clone()
+	clone := p.owner.smap.get().clone()
 	if !clone.isValid() {
 		return
 	}
@@ -480,7 +480,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 }
 
 func (t *targetrunner) onPrimaryProxyFailure() {
-	clone := t.smapowner.get().clone()
+	clone := t.owner.smap.get().clone()
 	if !clone.isValid() {
 		return
 	}
@@ -570,7 +570,7 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 
 	// Second: Vote according to whether or not the candidate is the Highest Random Weight remaining
 	// in the Smap
-	smap := h.smapowner.get()
+	smap := h.owner.smap.get()
 	nextPrimaryProxy, err := cluster.HrwProxy(&smap.Smap, currPrimaryID)
 	if err != nil {
 		return false, fmt.Errorf("error executing HRW: %v", err)

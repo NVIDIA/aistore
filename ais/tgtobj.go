@@ -180,7 +180,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 
 	// check if bucket was destroyed while PUT was in the progress.
 	var (
-		bmd        = poi.t.bmdowner.Get()
+		bmd        = poi.t.owner.bmd.Get()
 		_, present = bmd.Get(bck)
 	)
 	if !present {
@@ -455,7 +455,7 @@ get:
 func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode int) {
 	var (
 		tsi, gfnNode     *cluster.Snode
-		smap             = goi.t.smapowner.get()
+		smap             = goi.t.owner.smap.get()
 		tname            = goi.t.si.String()
 		aborted, running = reb.IsRebalancing(cmn.ActLocalReb)
 		gfnActive        = goi.t.gfn.local.active()
@@ -478,7 +478,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 	// we might be able to restore it if it was replicated. In this case even
 	// just one additional target might be sufficient. This won't succeed if
 	// an object was sliced, neither will ecmanager.RestoreObject(lom)
-	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= goi.t.smapowner.Get().CountTargets()
+	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= goi.t.owner.smap.Get().CountTargets()
 
 	// cluster-wide lookup ("get from neighbor")
 	aborted, running = reb.IsRebalancing(cmn.ActGlobalReb)

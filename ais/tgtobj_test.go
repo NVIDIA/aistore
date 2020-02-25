@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 	t = &targetrunner{}
 	t.initSI(cmn.Target)
 	t.init(nil, cmn.GCO.Get())
-	t.bmdowner = newBMDOwnerTgt()
+	t.owner.bmd = newBMDOwnerTgt()
 
 	bmd := newBucketMD()
 	bmd.add(cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 			Type: cmn.ChecksumNone,
 		},
 	})
-	t.bmdowner.put(bmd)
+	t.owner.bmd.put(bmd)
 	t.statsT = stats.NewTrackerMock()
 
 	os.Exit(m.Run())

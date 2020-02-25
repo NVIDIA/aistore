@@ -27,13 +27,13 @@ import (
 //
 // - smapX is a server-side extension of the cluster.Smap
 // - smapX represents AIStore cluster in terms of its member nodes and their properties
-// - smapX (instance) can be obtained via smapowner.get()
+// - smapX (instance) can be obtained via smapOwner.get()
 // - smapX is immutable and versioned
 // - smapX versioning is monotonic and incremental
 // - smapX uniquely and solely defines the current primary proxy in the AIStore cluster
 //
 // smapX typical update transaction:
-// lock -- clone() -- modify the clone -- smapowner.put(clone) -- unlock
+// lock -- clone() -- modify the clone -- smapOwner.put(clone) -- unlock
 //
 // (*) for merges and conflict resolution, check smapX version prior to put()
 //     (version check must be protected by the same critical section)
@@ -45,6 +45,11 @@ const smapFname = ".ais.smap" // Smap basename
 type smapX struct {
 	cluster.Smap
 }
+
+var (
+	// interface guard
+	_ revs = &smapX{}
+)
 
 func newSmap() (smap *smapX) {
 	smap = &smapX{}
@@ -58,9 +63,13 @@ func (m *smapX) init(tsize, psize, elsize int) {
 	m.NonElects = make(cmn.SimpleKVs, elsize)
 }
 
-func (m *smapX) tag() string                    { return smaptag }
-func (m *smapX) version() int64                 { return m.Version }
-func (m *smapX) marshal() (b []byte, err error) { return jsonCompat.Marshal(m) } // jsoniter + sorting
+func (m *smapX) tag() string    { return revsSmapTag }
+func (m *smapX) version() int64 { return m.Version }
+func (m *smapX) marshal() (b []byte) {
+	b, err := jsonCompat.Marshal(m) // jsoniter + sorting
+	cmn.AssertNoErr(err)
+	return b
+}
 
 func (m *smapX) isValid() bool {
 	if m == nil {
@@ -265,34 +274,34 @@ func (m *smapX) pp() string {
 
 //=====================================================================
 //
-// smapowner
+// smapOwner
 //
 //=====================================================================
 
-type smapowner struct {
+type smapOwner struct {
 	sync.Mutex
 	smap      atomic.Pointer
 	listeners *smaplisteners
 }
 
 // implements cluster.Sowner
-var _ cluster.Sowner = &smapowner{}
+var _ cluster.Sowner = &smapOwner{}
 
-func newSmapowner() *smapowner {
-	return &smapowner{
+func newSmapOwner() *smapOwner {
+	return &smapOwner{
 		listeners: newSmapListeners(),
 	}
 }
 
-func (r *smapowner) load(smap *smapX, config *cmn.Config) error {
+func (r *smapOwner) load(smap *smapX, config *cmn.Config) error {
 	return jsp.Load(filepath.Join(config.Confdir, smapFname), smap, jsp.CCSign())
 }
 
-func (r *smapowner) Get() *cluster.Smap {
+func (r *smapOwner) Get() *cluster.Smap {
 	return &r.get().Smap
 }
 
-func (r *smapowner) Listeners() cluster.SmapListeners {
+func (r *smapOwner) Listeners() cluster.SmapListeners {
 	return r.listeners
 }
 
@@ -300,7 +309,7 @@ func (r *smapowner) Listeners() cluster.SmapListeners {
 // private to the package
 //
 
-func (r *smapowner) put(smap *smapX) {
+func (r *smapOwner) put(smap *smapX) {
 	smap.InitDigests()
 	r.smap.Store(unsafe.Pointer(smap))
 
@@ -309,11 +318,11 @@ func (r *smapowner) put(smap *smapX) {
 	}
 }
 
-func (r *smapowner) get() (smap *smapX) {
+func (r *smapOwner) get() (smap *smapX) {
 	return (*smapX)(r.smap.Load())
 }
 
-func (r *smapowner) synchronize(newSmap *smapX, lesserVersionIsErr bool) (err error) {
+func (r *smapOwner) synchronize(newSmap *smapX, lesserVersionIsErr bool) (err error) {
 	if !newSmap.isValid() {
 		err = fmt.Errorf("invalid smapX: %s", newSmap.pp())
 		return
@@ -337,7 +346,7 @@ func (r *smapowner) synchronize(newSmap *smapX, lesserVersionIsErr bool) (err er
 	return
 }
 
-func (r *smapowner) persist(newSmap *smapX) error {
+func (r *smapOwner) persist(newSmap *smapX) error {
 	confFile := cmn.GCO.GetConfigFile()
 	config := cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
@@ -356,7 +365,7 @@ func (r *smapowner) persist(newSmap *smapX) error {
 	return nil
 }
 
-func (r *smapowner) modify(pre func(clone *smapX) error, post ...func(clone *smapX)) (*smapX, error) {
+func (r *smapOwner) modify(pre func(clone *smapX) error, post ...func(clone *smapX)) (*smapX, error) {
 	r.Lock()
 	defer r.Unlock()
 	clone := r.get().clone()

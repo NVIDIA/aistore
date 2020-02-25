@@ -24,7 +24,7 @@ import (
 type (
 	Status struct {
 		Tmap        cluster.NodeMap         `json:"tmap"`                // targets I'm waiting for ACKs from
-		SmapVersion int64                   `json:"smap_version,string"` // current Smap version (via smapowner)
+		SmapVersion int64                   `json:"smap_version,string"` // current Smap version (via smapOwner)
 		RebVersion  int64                   `json:"reb_version,string"`  // Smap version of *this* rebalancing op
 		GlobRebID   int64                   `json:"glob_reb_id,string"`  // global rebalance ID
 		StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`         // objects and sizes transmitted/received by this reb oper
