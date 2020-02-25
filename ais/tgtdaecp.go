@@ -1403,6 +1403,9 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom, bckTo *cluster.Bck, msgInt *a
 		waiter.Add(1)
 		go xact.Run(waiter, msgInt.GlobRebID)
 		waiter.Wait()
+
+		time.Sleep(200 * time.Millisecond) // FIXME: !1727
+
 	case cmn.ActCopyBucket:
 		var xact *mirror.XactBckCopy
 		xact, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)

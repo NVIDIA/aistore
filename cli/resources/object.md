@@ -1,12 +1,10 @@
-## Object
-
-The CLI allows users to interact with objects in the AIS cluster.
+## Operations on objects
 
 ### GET
 
 `ais get BUCKET_NAME/OBJECT_NAME OUT_FILE`
 
-Gets the object from the bucket.
+GET object from bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -221,14 +219,27 @@ Deletes an object or list/range of objects from the bucket.
 <a name="ft3">3</a> Options `--list,--range` and argument(s) `OBJECT_NAME` are mutually exclusive. List and range deletions expect only a bucket name; if one or more
 `OBJECT_NAME`s are given, a separate `DELETE` request is sent for each object.
 
-#### More Examples
+#### Examples
 
-| Command | Description |
-| --- | --- |
-| `ais rm object mybucket/myobj` | Deletes object `myobj` from bucket `mybucket` |
-| `ais rm object aisbck/obj1 cloudbck/obj2` | Deletes two objects (`obj1`, `obj2`) from different buckets (`aisbck`, `cloudbck`) |
-| `ais rm object mybucket/ --list "obj1,obj2,obj3"` | Deletes a list of objects (`obj1`, `obj2`, `obj3`) from bucket `mybucket` |
-| `ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"` | Deletes objects in range `001-003`, with prefix `test-`, matching `[0-9][0-9][0-9]` regex, from bucket `mybucket` |
+1) Delete object `myobj` from bucket `mybucket`
+```sh
+$ ais rm object mybucket/myobj
+```
+
+2) Delete objects (`obj1`, `obj2`) from buckets (`aisbck`, `cloudbck`) respectively
+```sh
+$ ais rm object aisbck/obj1 cloudbck/obj2
+```
+
+3) Delete a list of objects (`obj1`, `obj2`, `obj3`) from bucket `mybucket`
+```sh
+$ ais rm object mybucket/ --list "obj1,obj2,obj3"
+```
+
+4) Delete all objects in range `001-003`, with prefix `test-`, matching `[0-9][0-9][0-9]` regex, from bucket `mybucket`
+```sh
+$ ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"
+```
 
 ### Evict
 
@@ -295,9 +306,10 @@ Renames object from an ais bucket.
 
 #### Examples
 
-| Command | Description |
-| --- | --- |
-| `ais rename object mybucket/obj obj1` | Renames object `obj` from bucket `mybucket` to `obj1` |
+1) Rename object `obj1` as `obj2`
+```sh
+ais rename object mybucket/obj1 obj2
+```
 
 ### Compose
 
