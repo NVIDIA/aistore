@@ -811,7 +811,7 @@ func RemoveFile(path string) error {
 	return nil
 }
 
-func IsDirEmpty(dir string, ignoreEmptySubdirs ...bool) ([]string, bool /* is empty */, error) {
+func IsDirEmpty(dir string) ([]string, bool, error) {
 	var names []string
 	f, err := os.Open(dir)
 	if err != nil {
@@ -819,30 +819,11 @@ func IsDirEmpty(dir string, ignoreEmptySubdirs ...bool) ([]string, bool /* is em
 	}
 	defer f.Close()
 
-	names, err = f.Readdirnames(3)
+	names, err = f.Readdirnames(2)
 	if err == io.EOF {
 		return nil, true, nil
 	}
-	if err != nil {
-		return names, false, err
-	}
-	if len(names) == 0 {
-		return names, true, nil
-	}
-	if len(names) > 1 {
-		return names, false, nil
-	}
-	if len(ignoreEmptySubdirs) == 0 || !ignoreEmptySubdirs[0] {
-		return names, false, nil
-	}
-	// FIXME: #625
-	subdir := filepath.Join(dir, names[0])
-	if finfo, erc := os.Stat(subdir); erc == nil {
-		if finfo.IsDir() {
-			return IsDirEmpty(subdir)
-		}
-	}
-	return names, false, nil
+	return names, false, err
 }
 
 // computes xxhash if requested

@@ -653,8 +653,7 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
 	for contentType := range CSM.RegisteredContentTypes {
 		dir := mi.MakePathCT(bck, contentType)
 		if err := Access(dir); err == nil {
-			// FIXME: ignore empty subdirs #625
-			if names, empty, errEmpty := cmn.IsDirEmpty(dir, true /*ignore empty subdirs*/); errEmpty != nil {
+			if names, empty, errEmpty := cmn.IsDirEmpty(dir); errEmpty != nil {
 				return num, errEmpty
 			} else if !empty {
 				return num, fmt.Errorf("bucket %s: directory %s already exists and is not empty (%v...)",
