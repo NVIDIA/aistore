@@ -1,4 +1,4 @@
-## Extended Actions (Xactions)
+## Extended Actions (X-actions or xactions)
 
 The CLI allows users to interact with AIStore [Xactions](../../docs/xaction.md).
 
@@ -9,12 +9,21 @@ The CLI allows users to interact with AIStore [Xactions](../../docs/xaction.md).
 Starts xaction(s). Some xactions require a bucket name to execute.
 The second argument is used to determine the bucket name if it is required.
 
+| Command | Description |
+| --- | --- |
+| `ais start xaction lru` | Starts clusterwide LRU xaction |
+
 ### Stop
 
 `ais stop xaction XACTION_NAME|all [BUCKET_NAME]`
 
 Stops xaction(s). If the first argument is `all`, all xactions are stopped.
 The second argument is used to determine the bucket name if it is required.
+
+
+| Command | Description |
+| --- | --- |
+| `ais stop xaction rebalance` | Stops cluster rebalance. No effect if rebalance is not running |
 
 ### Show stats
 
