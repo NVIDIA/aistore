@@ -176,7 +176,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 		reader:   srcReader,
 		size:     lom.Size(),
 		metadata: metadata,
-		reqType:  ReqPut,
+		reqType:  reqPut,
 	}
 	if err := c.parent.writeRemote(daemons, lom, src, cb); err != nil {
 		glog.Errorf("Failed to copy replica %s/%s to %v: %v", lom.Bck(), lom.Objname, daemons, err)
@@ -189,19 +189,24 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 // * nodes - filled by requestMeta the list of targets what responsed to GET
 //      metadata request with valid metafile
 func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, nodes map[string]*Metadata, buffer []byte) error {
-	var writer *memsys.SGL
+	var (
+		writer *memsys.SGL
+		mm     = c.parent.t.GetSmallMMSA()
+	)
 	// try read a replica from targets one by one until the replica is got
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bck(), req.LOM.Objname)
-		iReqBuf := c.parent.newIntraReq(reqGet, nil).Marshal()
+		iReqBuf := c.parent.newIntraReq(reqGet, nil).NewPack(mm)
 
 		w := mm.NewSGL(cmn.KiB)
 		if _, err := c.parent.readRemote(req.LOM, node, uname, iReqBuf, w); err != nil {
 			glog.Errorf("Failed to read from %s", node)
 			w.Free()
+			mm.Free(iReqBuf)
 			w = nil
 			continue
 		}
+		mm.Free(iReqBuf)
 		if w.Size() != 0 {
 			// a valid replica is found - break and do not free SGL
 			writer = w
@@ -251,6 +256,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 	var (
 		writer *os.File
 		n      int64
+		mm     = c.parent.t.GetSmallMMSA()
 	)
 	// try read a replica from targets one by one until the replica is got
 	objFQN := req.LOM.FQN
@@ -258,15 +264,16 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bck(), req.LOM.Objname)
-		iReqBuf := c.parent.newIntraReq(reqGet, nil).Marshal()
 
 		w, err := cmn.CreateFile(tmpFQN)
 		if err != nil {
 			glog.Errorf("Failed to create file: %v", err)
 			break
 		}
+		iReqBuf := c.parent.newIntraReq(reqGet, nil).NewPack(mm)
 		req.LOM.FQN = tmpFQN
 		n, err = c.parent.readRemote(req.LOM, node, uname, iReqBuf, w)
+		mm.Free(iReqBuf)
 		w.Close()
 
 		if err == nil && n != 0 {
@@ -371,8 +378,9 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	}
 
 	iReq := c.parent.newIntraReq(reqGet, meta)
-	iReq.IsSlice = true
-	request := iReq.Marshal()
+	iReq.isSlice = true
+	mm := c.parent.t.GetSmallMMSA()
+	request := iReq.NewPack(mm)
 	hdr := transport.Header{
 		Bck:     req.LOM.Bck().Bck,
 		ObjName: req.LOM.Objname,
@@ -385,12 +393,14 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	}
 	if err := c.parent.sendByDaemonID(daemons, hdr, nil, nil, true); err != nil {
 		freeSlices(slices)
+		mm.Free(request)
 		return nil, nil, err
 	}
 	conf := cmn.GCO.Get()
 	if wgSlices.WaitTimeout(conf.Timeout.SendFile) {
 		glog.Errorf("Timed out waiting for %s/%s slices", req.LOM.Bck(), req.LOM.Objname)
 	}
+	mm.Free(request)
 	return slices, idToNode, nil
 }
 
@@ -736,7 +746,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 			size:     sl.n,
 			metadata: &sliceMeta,
 			isSlice:  true,
-			reqType:  ReqPut,
+			reqType:  reqPut,
 		}
 
 		if glog.V(4) {

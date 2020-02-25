@@ -175,6 +175,13 @@ func (c *putJogger) encode(req *Request) error {
 	return nil
 }
 
+func (c *putJogger) ctSendCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+	c.parent.t.GetSmallMMSA().Free(hdr.Opaque)
+	if err != nil {
+		glog.Errorf("failed to send o[%s/%s], err: %v", hdr.Bck, hdr.ObjName, err)
+	}
+}
+
 // a client has deleted the main object and requested to cleanup all its
 // replicas and slices
 // Just remove local metafile if it exists and broadcast the request to all
@@ -190,7 +197,8 @@ func (c *putJogger) cleanup(req *Request) error {
 		glog.Errorf("Error removing metafile %q", fqnMeta)
 	}
 
-	request := c.parent.newIntraReq(reqDel, nil).Marshal()
+	mm := c.parent.t.GetSmallMMSA()
+	request := c.parent.newIntraReq(reqDel, nil).NewPack(mm)
 	hdr := transport.Header{
 		Bck:     req.LOM.Bck().Bck,
 		ObjName: req.LOM.Objname,
@@ -199,7 +207,7 @@ func (c *putJogger) cleanup(req *Request) error {
 			Size: 0,
 		},
 	}
-	return c.parent.reqBundle.Send(transport.Obj{Hdr: hdr}, nil)
+	return c.parent.reqBundle.Send(transport.Obj{Hdr: hdr, Callback: c.ctSendCallback}, nil)
 }
 
 // Sends object replicas to targets that must have replicas after the client
@@ -238,7 +246,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 		reader:   fh,
 		size:     req.LOM.Size(),
 		metadata: metadata,
-		reqType:  ReqPut,
+		reqType:  reqPut,
 	}
 	err = c.parent.writeRemote(nodes, req.LOM, src, cb)
 
@@ -553,7 +561,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			obj:      data,
 			metadata: &mcopy,
 			isSlice:  true,
-			reqType:  ReqPut,
+			reqType:  reqPut,
 		}
 
 		// Put in lom actual object's checksum. It will be stored in slice's xattrs on dest target

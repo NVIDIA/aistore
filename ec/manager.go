@@ -210,8 +210,9 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.Header, obj
 		return
 	}
 
-	iReq := IntraReq{}
-	if err := iReq.Unmarshal(hdr.Opaque); err != nil {
+	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	iReq := intraReq{}
+	if err := unpacker.ReadAny(&iReq); err != nil {
 		glog.Errorf("Failed to unmarshal request: %v", err)
 		return
 	}
@@ -247,8 +248,9 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 		return
 	}
 
-	iReq := IntraReq{}
-	if err := iReq.Unmarshal(hdr.Opaque); err != nil {
+	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	iReq := intraReq{}
+	if err := unpacker.ReadAny(&iReq); err != nil {
 		glog.Errorf("Failed to unmarshal request: %v", err)
 		cmn.DrainReader(object)
 		return
@@ -261,15 +263,15 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 			return
 		}
 	}
-	switch iReq.Act {
-	case ReqPut:
+	switch iReq.act {
+	case reqPut:
 		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, bck, hdr.ObjName, hdr.ObjAttrs, object)
-	case RespPut:
+	case respPut:
 		// Process this request even if there might not be enough targets. It might have been started when there was,
 		// so there is a chance to complete restore successfully
 		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.ObjName, hdr.ObjAttrs, object)
 	default:
-		glog.Errorf("Unknown EC response action %d", iReq.Act)
+		glog.Errorf("Unknown EC response action %d", iReq.act)
 		cmn.DrainReader(object)
 	}
 }

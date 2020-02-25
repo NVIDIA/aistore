@@ -127,15 +127,15 @@ func (r *xactReqBase) ecRequestsEnabled() bool {
 // daemon ID, and sets `Exists:true` that means "local object exists".
 // Later `Exists` can be changed to `false` if local file is unreadable or does
 // not exist
-func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata) *IntraReq {
-	req := &IntraReq{
-		Act:    act,
-		Sender: r.si.ID(),
-		Meta:   meta,
-		Exists: true,
+func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata) *intraReq {
+	req := &intraReq{
+		act:    act,
+		sender: r.si.ID(),
+		meta:   meta,
+		exists: true,
 	}
 	if act == reqGet && meta != nil {
-		req.IsSlice = !meta.IsCopy
+		req.isSlice = !meta.IsCopy
 	}
 	return req
 }
@@ -219,11 +219,11 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 	} else if md.SliceID != 0 {
 		// slice request
 		reader, err = r.newSliceResponse(md, &objAttrs, fqn)
-		ireq.Exists = err == nil
+		ireq.exists = err == nil
 	} else {
 		// replica/full object request
 		reader, err = r.newReplicaResponse(&objAttrs, fqn)
-		ireq.Exists = err == nil
+		ireq.exists = err == nil
 	}
 	cmn.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
 
@@ -232,12 +232,13 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 		ObjName:  objname,
 		ObjAttrs: objAttrs,
 	}
-	rHdr.Opaque = ireq.Marshal()
+	rHdr.Opaque = ireq.NewPack(r.t.GetSmallMMSA())
 
 	r.ObjectsInc()
 	r.BytesAdd(objAttrs.Size)
 
 	cb := func(hdr transport.Header, c io.ReadCloser, _ unsafe.Pointer, err error) {
+		r.t.GetSmallMMSA().Free(hdr.Opaque)
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		}
@@ -374,9 +375,10 @@ func (r *xactECBase) unregWriter(uname string) (writer *slice, ok bool) {
 //		cannot help to track automatically when SGL should be freed.
 func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSource, cb transport.SendCallback) error {
 	req := r.newIntraReq(src.reqType, src.metadata)
-	req.IsSlice = src.isSlice
+	req.isSlice = src.isSlice
 
-	putData := req.Marshal()
+	mm := r.t.GetSmallMMSA()
+	putData := req.NewPack(mm)
 	objAttrs := transport.ObjectAttrs{
 		Size:    src.size,
 		Version: lom.Version(),
@@ -402,11 +404,21 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	if cb == nil && src.obj != nil {
 		obj := src.obj
 		cb = func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+			mm.Free(hdr.Opaque)
 			if obj != nil {
 				obj.release()
 			}
 			if err != nil {
 				glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bck(), lom.Objname, daemonIDs, err)
+			}
+		}
+	} else {
+		// wrapper to properly cleanup memory allocated by MMSA
+		oldCallback := cb
+		cb = func(hdr transport.Header, reader io.ReadCloser, ptr unsafe.Pointer, err error) {
+			mm.Free(hdr.Opaque)
+			if oldCallback != nil {
+				oldCallback(hdr, reader, ptr, err)
 			}
 		}
 	}

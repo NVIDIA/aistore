@@ -78,33 +78,25 @@ func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
 }
 
 func (md *Metadata) Unpack(unpacker *cmn.ByteUnpack) (err error) {
-	var (
-		i uint16
-		b byte
-	)
+	var i uint16
 	if md.Size, err = unpacker.ReadInt64(); err != nil {
 		return
 	}
-	i, err = unpacker.ReadUint16()
-	if err != nil {
+	if i, err = unpacker.ReadUint16(); err != nil {
 		return
 	}
 	md.Data = int(i)
-	i, err = unpacker.ReadUint16()
-	if err != nil {
+	if i, err = unpacker.ReadUint16(); err != nil {
 		return
 	}
 	md.Parity = int(i)
-	i, err = unpacker.ReadUint16()
-	if err != nil {
+	if i, err = unpacker.ReadUint16(); err != nil {
 		return
 	}
 	md.SliceID = int(i)
-	b, err = unpacker.ReadByte()
-	if err != nil {
+	if md.IsCopy, err = unpacker.ReadBool(); err != nil {
 		return
 	}
-	md.IsCopy = b != 0
 	if md.ObjCksum, err = unpacker.ReadString(); err != nil {
 		return
 	}
@@ -123,11 +115,7 @@ func (md *Metadata) Pack(packer *cmn.BytePack) {
 	packer.WriteUint16(uint16(md.Data))
 	packer.WriteUint16(uint16(md.Parity))
 	packer.WriteUint16(uint16(md.SliceID))
-	if md.IsCopy {
-		packer.WriteByte(1)
-	} else {
-		packer.WriteByte(0)
-	}
+	packer.WriteBool(md.IsCopy)
 	packer.WriteString(md.ObjCksum)
 	packer.WriteString(md.ObjVersion)
 	packer.WriteString(md.CksumType)

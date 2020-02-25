@@ -98,9 +98,9 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 }
 
 // DispatchReq is responsible for handling request from other targets
-func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName string) {
-	daemonID := iReq.Sender
-	switch iReq.Act {
+func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName string) {
+	daemonID := iReq.sender
+	switch iReq.act {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
 		if err := r.removeObjAndMeta(bck, objName); err != nil {
@@ -113,9 +113,9 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName strin
 			md           *Metadata
 			err          error
 		)
-		if iReq.IsSlice {
+		if iReq.isSlice {
 			if glog.V(4) {
-				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, objName)
+				glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 			}
 			fqn, _, err = cluster.HrwFQN(bck, SliceType, objName)
 			if err != nil {
@@ -139,17 +139,17 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName strin
 			return
 		}
 
-		if err := r.dataResponse(RespPut, fqn, bck, objName, daemonID, md); err != nil {
+		if err := r.dataResponse(respPut, fqn, bck, objName, daemonID, md); err != nil {
 			glog.Errorf("Failed to send back [GET req] %q: %v", fqn, err)
 		}
 	default:
 		// invalid request detected
-		glog.Errorf("Invalid request type %d", iReq.Act)
+		glog.Errorf("Invalid request type %d", iReq.act)
 	}
 }
 
-func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
-	uname := unique(iReq.Sender, bck, objName)
+func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
+	uname := unique(iReq.sender, bck, objName)
 
 	drain := func() {
 		if err := cmn.DrainReader(object); err != nil {
@@ -157,18 +157,18 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 		}
 	}
 
-	switch iReq.Act {
-	case ReqPut:
+	switch iReq.act {
+	case reqPut:
 		// a remote target sent a replica/slice while it was
 		// encoding or restoring an object. In this case it just saves
 		// the sent replica or slice to a local file along with its metadata
 		// look for metadata in request
 		if glog.V(4) {
-			glog.Infof("Response from %s, %s", iReq.Sender, uname)
+			glog.Infof("Response from %s, %s", iReq.sender, uname)
 		}
 
 		// First check if the request is valid: it must contain metadata
-		meta := iReq.Meta
+		meta := iReq.meta
 		if meta == nil {
 			drain()
 			glog.Errorf("No metadata in request for %s/%s", bck.Name, objName)
@@ -182,9 +182,9 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 			lom    *cluster.LOM
 			err    error
 		)
-		if iReq.IsSlice {
+		if iReq.isSlice {
 			if glog.V(4) {
-				glog.Infof("Got slice response from %s (#%d of %s/%s)", iReq.Sender, iReq.Meta.SliceID, bck.Name, objName)
+				glog.Infof("Got slice response from %s (#%d of %s/%s)", iReq.sender, iReq.meta.SliceID, bck.Name, objName)
 			}
 			objFQN, _, err = cluster.HrwFQN(bck, SliceType, objName)
 			if err != nil {
@@ -194,7 +194,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 			}
 		} else {
 			if glog.V(4) {
-				glog.Infof("Got replica response from %s (%s/%s)", iReq.Sender, bck.Name, objName)
+				glog.Infof("Got replica response from %s (%s/%s)", iReq.sender, bck.Name, objName)
 			}
 			objFQN, _, err = cluster.HrwFQN(bck, fs.ObjectType, objName)
 			if err != nil {
@@ -209,7 +209,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 		buf, slab := mm.Alloc()
 		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false)
 		// save xattrs only for object replicas (slices have xattrs empty)
-		if err == nil && !iReq.IsSlice {
+		if err == nil && !iReq.isSlice {
 			lom = &cluster.LOM{T: r.t, FQN: objFQN}
 			err = lom.Init(bck.Bck)
 			if err != nil {
@@ -244,7 +244,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 		}
 	default:
 		// should be unreachable
-		glog.Errorf("Invalid request type: %d", iReq.Act)
+		glog.Errorf("Invalid request type: %d", iReq.act)
 	}
 }
 

@@ -114,6 +114,11 @@ func (br *ByteUnpack) ReadByte() (byte, error) {
 	return b, nil
 }
 
+func (br *ByteUnpack) ReadBool() (bool, error) {
+	bt, err := br.ReadByte()
+	return bt != 0, err
+}
+
 func (br *ByteUnpack) ReadInt64() (int64, error) {
 	n, err := br.ReadUint64()
 	return int64(n), err
@@ -187,6 +192,15 @@ func (br *ByteUnpack) ReadAny(st Unpacker) error {
 
 func (bw *BytePack) WriteByte(b byte) {
 	bw.b[bw.off] = b
+	bw.off++
+}
+
+func (bw *BytePack) WriteBool(b bool) {
+	if b {
+		bw.b[bw.off] = 1
+	} else {
+		bw.b[bw.off] = 0
+	}
 	bw.off++
 }
 

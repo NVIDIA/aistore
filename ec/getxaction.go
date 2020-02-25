@@ -60,19 +60,19 @@ func NewGetXact(t cluster.Target, smap cluster.Sowner,
 	return runner
 }
 
-func (r *XactGet) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs,
+func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs,
 	object io.Reader) {
-	uname := unique(iReq.Sender, bck, objName)
+	uname := unique(iReq.sender, bck, objName)
 
-	switch iReq.Act {
+	switch iReq.act {
 	// It is response to slice/replica request by an object
 	// restoration process. In this case there should exists
 	// a slice waiting for the data to come(registered with `regWriter`.
 	// Read the data into the slice writer and notify the slice when
 	// the transfer is completed
-	case RespPut:
+	case respPut:
 		if glog.V(4) {
-			glog.Infof("Response from %s, %s", iReq.Sender, uname)
+			glog.Infof("Response from %s, %s", iReq.sender, uname)
 		}
 		r.dOwner.mtx.Lock()
 		writer, ok := r.dOwner.slices[uname]
@@ -83,12 +83,12 @@ func (r *XactGet) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, 
 			return
 		}
 
-		if err := r.writerReceive(writer, iReq.Exists, objAttrs, object); err != nil {
+		if err := r.writerReceive(writer, iReq.exists, objAttrs, object); err != nil {
 			glog.Errorf("Failed to read replica: %v", err)
 		}
 	default:
 		// should be unreachable
-		glog.Errorf("Invalid request: %d", iReq.Act)
+		glog.Errorf("Invalid request: %d", iReq.act)
 	}
 }
 

@@ -1027,8 +1027,8 @@ func WaitForBucketXactionToStart(t *testing.T, baseParams api.BaseParams, bck cm
 // and returns. If timeout set, if any of rebalances doesn't complete before timeout
 // the function ends with fatal
 func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeouts ...time.Duration) {
+	sleep := 10 * time.Second
 	start := time.Now()
-	time.Sleep(time.Second * 10)
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	ch := make(chan error, 2)
@@ -1037,7 +1037,6 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	sleep := time.Second * 10
 	go func() {
 		var logged bool
 		defer wg.Done()

@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // EC module provides data protection on a per bucket basis. By default, the
@@ -129,25 +128,6 @@ const (
 	objSizeHighMem = 50 * cmn.MiB
 )
 
-// type of EC request between targets. If the destination has to respond it
-// must set the same request type in response header
-type intraReqType = int
-
-const (
-	// a target sends a replica or slice to store on another target
-	// the destionation does not have to respond
-	ReqPut intraReqType = iota
-	// response for requested slice/replica by another target
-	RespPut
-	// a target requests a slice or replica from another target
-	// if the destination has the object/slice it sends it back, otherwise
-	//    it sets Exists=false in response header
-	reqGet
-	// a target cleans up the object and notifies all other targets to do
-	// cleanup as well. Destinations do not have to respond
-	reqDel
-)
-
 type (
 	// request - structure to request an object to be EC'ed or restored
 	Request struct {
@@ -168,24 +148,6 @@ type (
 )
 
 type (
-	// An EC request sent via transport using Opaque field of transport.Header
-	// between targets inside a cluster
-	IntraReq struct {
-		// request type
-		Act intraReqType `json:"act"`
-		// Sender's daemonID, used by the destination to send the response
-		// to the correct target
-		Sender string `json:"sender"`
-		// object metadata, used when a target copies replicas/slices after
-		// encoding or restoring the object data
-		Meta *Metadata `json:"meta"`
-		// used only by destination to answer to the sender if the destination
-		// has the requested metafile or replica/slice
-		Exists bool `json:"exists"`
-		// the sent data is slice or full replica
-		IsSlice bool `json:"slice,omitempty"`
-	}
-
 	// keeps temporarily a slice of object data until it is sent to remote node
 	slice struct {
 		obj     cmn.ReadOpenCloser // the whole object or its replica
@@ -243,14 +205,6 @@ func (s *slice) release() {
 			s.free()
 		}
 	}
-}
-
-func (r *IntraReq) Marshal() []byte {
-	return cmn.MustMarshal(r)
-}
-
-func (r *IntraReq) Unmarshal(b []byte) error {
-	return jsoniter.Unmarshal(b, r)
 }
 
 var (
