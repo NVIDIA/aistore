@@ -54,18 +54,13 @@ performance as possible by reducing the effect of mentioned overhead.
 
 #### Namespace caching
 
-Due to FUSE limitations and in favor of usability namespace caching was introduced. 
-It is a mechanism which enables faster files and directories access for a mounted bucket.
-It periodically queries AIS cluster with list bucket operation and stores directories hierarchy.
-The cache significantly improves the access time of the files and directories, but it does not improve the performance of reading/writing.
-Thanks to the cache, the overhead of accessing nested objects and directories is reduced to couple of milliseconds - without the cache it can take seconds due to unavoidable HTTP requests.
-FUSE cache updates on the spot for operations made on the local machine. The changes are also reflected in the cluster.
-External changes made by other cluster clients are reflected after next periodical request.  
-Performance of the cache depends on its configuration, which is described in latter [configuration section](#configuration). 
-However, actual cache implementation has its limitations - it's not as efficient for flat-structured buckets as for deeply nested ones.
+To provide for faster access, `aisfs` periodically queries cluster via list-bucket API and then updates its local cache. By totally eliminating or greatly reducing POSIX lookups, `aisfs` cache may significantly improve I/O throughput, especially when the workload "concentrates" inside few selected POSIX directories. Caching, however, does not affect read/write performance on the level of individual objects (ie., files). To state the same differently, user data is currently _not_ being cached on the file-client side.
 
-When the cache is overfilled, meaning that the space required to store whole directories structure is larger than memory limit set in configuration,
-it falls back to the slower mechanism which requires additional HTTP requests to AIS cluster.
+Performance of the cache depends in part on its configuration described in the [configuration section](#configuration) below.
+
+Note that the current implementation may not be as efficient for buckets containing large numbers of objects (files) with no subdirectories.
+
+When the space required to cache the entire directory hiearchy and file names is larger than the configured memory limit the current implementations "falls" back to the regular mechanism that involves additional HTTP requests to AIS cluster.
 
 ## Prerequisites
 
