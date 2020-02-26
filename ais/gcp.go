@@ -292,7 +292,7 @@ func (gcpp *gcpProvider) getBucketNames(ctx context.Context) (buckets []string, 
 			break
 		}
 		if err != nil {
-			err, errCode = gcpErrorToAISError(err, cluster.NewBck(battrs.Name, cmn.ProviderGoogle, cmn.NsGlobal), "")
+			err, errCode = gcpErrorToAISError(err, cluster.NewBck("", cmn.ProviderGoogle, cmn.NsGlobal), "")
 			return
 		}
 		buckets = append(buckets, battrs.Name)
