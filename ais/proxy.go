@@ -322,7 +322,11 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 	switch apiItems[0] {
 	case cmn.AllBuckets:
-		bck := newBckFromQuery("", r.URL.Query())
+		bck, err := newBckFromQuery("", r.URL.Query())
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			return
+		}
 		p.getBucketNames(w, r, bck)
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
@@ -338,7 +342,11 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if _, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -382,7 +390,11 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -425,7 +437,11 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	bucket, objName := apiItems[0], apiItems[1]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -485,7 +501,11 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -521,7 +541,11 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -769,7 +793,11 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			msgInt := p.newActionMsgInternal(&msg, nil, bmd)
 			p.metasyncer.sync(false, revsPair{bmd, msgInt})
 		case cmn.ActSummaryBucket:
-			bck := newBckFromQuery("", r.URL.Query())
+			bck, err := newBckFromQuery("", r.URL.Query())
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+				return
+			}
 			p.bucketSummary(w, r, bck, msg)
 		default:
 			p.invalmsghdlr(w, r, "URL path is too short: expecting bucket name")
@@ -778,7 +806,11 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket := apiItems[0]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	config := cmn.GCO.Get()
 
 	if msg.Action != cmn.ActListObjects && guestAccess {
@@ -1082,7 +1114,11 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -1116,7 +1152,11 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apiItems[0]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
@@ -1261,7 +1301,11 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -1317,7 +1361,11 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
@@ -1371,7 +1419,11 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return

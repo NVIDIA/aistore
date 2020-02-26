@@ -451,7 +451,11 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	lom := &cluster.LOM{T: t, Objname: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
@@ -532,7 +536,11 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, capInfo.Err.Error())
 		return
 	}
-	bck := newBckFromQuery(bucket, query)
+	bck, err := newBckFromQuery(bucket, query)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	lom := &cluster.LOM{T: t, Objname: objname}
 	if err = lom.Init(bck.Bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
@@ -582,7 +590,11 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
@@ -660,7 +672,11 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		evict = msg.Action == cmn.ActEvictObjects
 	}
 
-	bck := newBckFromQuery(bucket, query)
+	bck, err := newBckFromQuery(bucket, query)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	lom := &cluster.LOM{T: t, Objname: objname}
 	if err = lom.Init(bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -707,7 +723,11 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if len(apiItems) == 0 {
 		switch msgInt.Action {
 		case cmn.ActSummaryBucket:
-			bck := newBckFromQuery("", r.URL.Query())
+			bck, err := newBckFromQuery("", r.URL.Query())
+			if err != nil {
+				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+				return
+			}
 			if ok := t.bucketSummary(w, r, bck, msgInt); !ok {
 				return
 			}
@@ -718,7 +738,11 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket = apiItems[0]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
@@ -874,7 +898,11 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	bck := newBckFromQuery(bucket, query)
+	bck, err := newBckFromQuery(bucket, query)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
@@ -942,7 +970,11 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if checkEC {
 		// should do it before LOM is initialized because the target may
 		// have a slice instead of object/replica
-		bck := newBckFromQuery(bucket, query)
+		bck, err := newBckFromQuery(bucket, query)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			return
+		}
 		if err = bck.Init(t.owner.bmd, t.si); err != nil {
 			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 				t.invalmsghdlr(w, r, err.Error())
@@ -958,7 +990,11 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bck := newBckFromQuery(bucket, query)
+	bck, err := newBckFromQuery(bucket, query)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	lom := &cluster.LOM{T: t, Objname: objName}
 	if err = lom.Init(bck.Bck); err != nil {
 		invalidHandler(w, r, err.Error())
@@ -1246,7 +1282,11 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		return
 	}
 	bucket, objnameFrom := apitems[0], apitems[1]
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	lom := &cluster.LOM{T: t, Objname: objnameFrom}
 	if err = lom.Init(bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -1317,7 +1357,11 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	bck := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)

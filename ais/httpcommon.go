@@ -1216,8 +1216,11 @@ func (h *httprunner) getBucketNamesAIS(bmd *bucketMD) *cmn.BucketNames {
 	return bucketNames
 }
 
-func newBckFromQuery(bckName string, query url.Values) *cluster.Bck {
+func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
 	provider := query.Get(cmn.URLParamProvider)
+	if provider != "" && provider != cmn.Cloud && !cmn.IsValidProvider(provider) {
+		return nil, fmt.Errorf("invalid provider %q", provider)
+	}
 	namespace := cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
-	return cluster.NewBck(bckName, provider, namespace)
+	return cluster.NewBck(bckName, provider, namespace), nil
 }

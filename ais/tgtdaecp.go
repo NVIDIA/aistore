@@ -212,7 +212,11 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			bucket = msg.Value.(string)
 		)
 		if bucket != "" {
-			bck = newBckFromQuery(bucket, r.URL.Query())
+			bck, err = newBckFromQuery(bucket, r.URL.Query())
+			if err != nil {
+				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+				return
+			}
 			if err := bck.Init(t.owner.bmd, t.si); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
