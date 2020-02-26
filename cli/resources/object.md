@@ -95,12 +95,31 @@ PUT an object or entire directory (of objects) into the specified bucket. If CLI
 | `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
 | `--recursive` or `-r` | `bool` | Enable recursive directory upload | `false` |
 | `--refresh` | `string` | Frequency of the reporting the progress (in milliseconds), may contain multiplicative suffix `s`(second) or `m`(minute). Zero value disables periodical refresh | `0` if verbose mode is on, `5s` otherwise |
+| `--dry-run` | `bool` | Do not actually perform PUT. Shows a few files to be uploaded and corresponding object names for used arguments
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
  This makes shell wildcards like `**` redundant, and the following patterns won't work in `ais`: `/home/user/img-set-*/*.tar` or `/home/user/bck/**/*.tar.gz`
 
 <a name="ft2">2</a> Option `--base` and argument `OBJECT_NAME` are mutually exclusive and `OBJECT_NAME` has higher priority. When `OBJECT_NAME` is given, options `--base` and `--recursive` are ignored, and `FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
+
+#### Object names
+
+PUT command handles two possible ways to specify resulting object names:
+- Object name is not provided: `ais put path/to/(..)/file.go bucket/` creates object `file.go` in `bucket`
+- Explicit object name is provided: `ais put path/to/(..)/file.go bucket/path/to/object.go` creates object `path/to/object.go` in `bucket`
+
+PUT command uses implicit object names if its source references multiple files:
+
+- If source is specified as an absolute path, or is abbreviation like `~`, (for example `/tmp/*.go` or `~/dir`))
+resulting objects names will be the same as the absolute path (`~` will be resolved to for example `/home/user`).
+- If source is specified as relative path (for example `dir/*.go` or `dir/file{0..10}.txt`) resulting objects names
+will be the same as the relative path.
+- Abbreviations like `../` are not supported at the moment.
+
+Leading prefix can be removed with `--base`.
+
+#### Examples
 
 All examples below put into an empty bucket and the source directory structure is:
 
@@ -113,26 +132,81 @@ All examples below put into an empty bucket and the source directory structure i
 
 The current user HOME directory is `/home/user`.
 
-#### Examples
-
 1) PUT a single file `img1.tar` into bucket `mybucket`, name it `img-set-1.tar`
 ```sh
 $ ais put "/home/user/bck/img1.tar" mybucket/img-set-1.tar
+
+# PUT /home/user/bck/img1.tar => mybucket/img-set-1.tar
 ```
 
-2) PUT two objects, `img1.tar` and `img2.zip`, into the root of bucket `mybucket`. Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default
+1) PUT a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name
+```sh
+$ ais put "~/bck/img1.tar" mybucket/
+
+# PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img-set-1.tar
+```
+
+2) PUT two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into the root of bucket `mybucket`. Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default
 ```sh
 $ ais put "/home/user/bck" mybucket
+
+# PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img1.tar
+# PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img2.zip
 ```
 
 3) `--base` is expanded with user's home directory into `/home/user/bck`, so the final bucket content is `img1.tar`, `img2.zip`, `extra/img1.tar` and `extra/img3.zip`
 ```sh
 $ ais put "/home/user/bck" mybucket/ --base ~/bck --recursive
+
+# PUT /home/user/bck/img1.tar => mybucket/img1.tar
+# PUT /home/user/bck/img1.tar => mybucket/img2.zip
+# PUT /home/user/bck/extra/img1.tar => mybucket/extra/img1.tar
+# PUT /home/user/bck/extra/img3.zip => mybucket/extra/img3.zip
 ```
 
 4) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `img1.tar` and `extra/img1.tar
 ```sh
 $ ais put "~/bck/*.tar" mybucket/ --base ~/bck --recursive
+
+# PUT /home/user/bck/img1.tar => mybucket/img1.tar
+# PUT /home/user/bck/extra/img1.tar => mybucket/extra/img1.tar
+```
+
+5) PUT 9 files to `mybucket` using range request. Object names formatted as `/home/user/dir/test${d1}${d2}.txt`
+```shell script
+$ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
+$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
+9 objects put into "mybucket" bucket
+
+# PUT /home/user/dir/test00.txt => /home/user/dir/test00.txt and 8 more
+```
+
+6) Same as above, except object names are in format `test${d1}${d2}.txt`
+```shell script
+$ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
+$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --base ~/dir
+9 objects put into "mybucket" bucket
+
+# PUT /home/user/dir/test00.txt => test00.txt and 8 more
+```
+
+
+7) Preview the files that would be sent to the cluster, without really putting them.
+```shell script
+$ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
+$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --base ~/dir --dry-run
+[DRY RUN] No modifications on the cluster
+/home/user/dir/test00.txt => mybucket/test00.txt
+(...)
+```
+
+8) Put multiple directories into the cluster with range syntax
+```shell script
+$ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/test${d2}.txt; done; done
+$ ais put "dir{0..10}" mybucket -y
+33 objects put into "mybucket" bucket
+
+# PUT "/home/user/dir0/test0.txt" => b/dir0/test0.txt and 32 more
 ```
 
 #### Example: invalid file

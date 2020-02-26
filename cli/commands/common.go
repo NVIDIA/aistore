@@ -234,6 +234,7 @@ var (
 	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 	resetFlag       = cli.BoolFlag{Name: "reset", Usage: "reset to original state"}
+	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "do not actually perform the action"}
 
 	// Bucket
 	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}

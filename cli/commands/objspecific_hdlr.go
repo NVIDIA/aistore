@@ -38,6 +38,7 @@ var (
 			refreshFlag,
 			verboseFlag,
 			yesFlag,
+			dryRunFlag,
 		},
 		commandPromote: {
 			providerFlag,
@@ -197,6 +198,7 @@ func putHandler(c *cli.Context) (err error) {
 	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
+
 	return putObject(c, bck, objName, fileName)
 }
 

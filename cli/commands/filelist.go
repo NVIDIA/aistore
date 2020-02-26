@@ -111,9 +111,6 @@ func generateFileList(path, base string, recursive bool) ([]fileToObj, error) {
 	if err != nil {
 		// files from a directory by mask.
 		// path must end with a mask that contains '*' or '?'
-		if base == "" {
-			base = filepath.Dir(path)
-		}
 		mask = filepath.Base(path)
 		if strings.Contains(mask, "*") || strings.Contains(mask, "?") {
 			path = filepath.Dir(path)
@@ -130,20 +127,16 @@ func generateFileList(path, base string, recursive bool) ([]fileToObj, error) {
 	} else if info.IsDir() {
 		// the entire directory. Mask '*' is applied automatically
 		mask = "*"
-		if base == "" {
-			base = path
-		}
 	} else {
 		// one file without custom name.
-		objName := filepath.Base(path)
-		if base != "" {
-			objName = cutBasePath(objName, base)
-		}
+		objName := cutBasePath(path, base)
+
 		fo := fileToObj{
 			name: objName,
 			path: path,
 			size: info.Size(),
 		}
+
 		files := []fileToObj{fo}
 		return files, nil
 	}

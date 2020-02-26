@@ -6,6 +6,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -33,6 +34,14 @@ type uploadParams struct {
 	refresh   time.Duration
 	totalSize int64
 }
+
+const (
+	dryRunExamplesCnt = 10
+	dryRunHeader      = "[DRY RUN]"
+	dryRunExplanation = "No modifications on the cluster"
+)
+
+var errObjNameNotExpected = fmt.Errorf("neither bucket subdirectory nor object name as destination supported")
 
 func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) {
 	// just check if object is cached, don't get object
@@ -124,61 +133,64 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 	return
 }
 
-func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error) {
-	path := cmn.ExpandPath(fileName)
-	if path, err = filepath.Abs(path); err != nil {
-		return
-	}
+// PUT methods
 
-	omitBase := parseStrFlag(c, baseFlag)
-	if omitBase != "" {
-		omitBase = cmn.ExpandPath(omitBase)
-		if omitBase, err = filepath.Abs(omitBase); err != nil {
-			return
-		}
-	}
-
-	// upload single file
-	if objName != "" {
-		if omitBase != "" {
-			return fmt.Errorf("pathname prefix '%s' cannot be used to upload a single file", omitBase)
-		}
-		fh, err := cmn.NewFileHandle(path)
-		if err != nil {
-			return err
-		}
-
-		putArgs := api.PutObjectArgs{
-			BaseParams: defaultAPIParams,
-			Bck:        bck,
-			Object:     objName,
-			Reader:     fh,
-		}
-		err = api.PutObject(putArgs)
-		if err != nil {
-			return err
-		}
-
-		fmt.Fprintf(c.App.Writer, "PUT %s into bucket %s\n", objName, bck)
-		return nil
-	}
-
-	// upload many
-	fmt.Fprintf(c.App.Writer, "Enumerating files\n")
-	files, err := generateFileList(path, omitBase, flagIsSet(c, recursiveFlag))
+func putSingleObject(bck cmn.Bck, objName, path string) (err error) {
+	fh, err := cmn.NewFileHandle(path)
 	if err != nil {
-		return
+		return err
 	}
+
+	putArgs := api.PutObjectArgs{
+		BaseParams: defaultAPIParams,
+		Bck:        bck,
+		Object:     objName,
+		Reader:     fh,
+	}
+
+	return api.PutObject(putArgs)
+}
+
+func putRangeObjects(c *cli.Context, pt cmn.ParsedTemplate, bck cmn.Bck, omitBase string) (err error) {
+	if flagIsSet(c, verboseFlag) {
+		fmt.Fprintln(c.App.Writer, "Enumerating files")
+	}
+
+	getNext := pt.Iter()
+	allFiles := make([]fileToObj, 0, pt.Count())
+	for file, hasNext := getNext(); hasNext; file, hasNext = getNext() {
+		files, err := generateFileList(file, omitBase, flagIsSet(c, recursiveFlag))
+		if err != nil {
+			return err
+		}
+		allFiles = append(allFiles, files...)
+	}
+
+	return putMultipleObjects(c, allFiles, bck)
+}
+
+func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err error) {
 	if len(files) == 0 {
 		return fmt.Errorf("no files found")
-	}
-	if objName != "" {
-		return fmt.Errorf("object name '%s' cannot be used to upload multiple files", objName)
 	}
 
 	// calculate total size, group by extension
 	totalSize, extSizes := groupByExt(files)
 	totalCount := int64(len(files))
+
+	if flagIsSet(c, dryRunFlag) {
+		i := 0
+		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
+		for ; i < len(files) && i < dryRunExamplesCnt; i++ {
+			fmt.Fprintf(c.App.Writer, "PUT %q => %s/%s\n", files[i].path, bck.Name, files[i].name)
+		}
+		if i < len(files) {
+			fmt.Fprintf(c.App.Writer, "(and %d more)\n", len(files)-i)
+		}
+
+		return nil
+	}
+
 	tmpl := templates.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cmn.B2S(totalSize, 2) + "\n"
 	if err = templates.DisplayOutput(extSizes, c.App.Writer, tmpl); err != nil {
 		return
@@ -190,7 +202,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 		fmt.Fprintf(c.App.Writer, "Proceed? [y/n]: ")
 		fmt.Scanln(&input)
 		if ok, _ := cmn.ParseBool(input); !ok {
-			return fmt.Errorf("Operation canceled")
+			return errors.New("Operation canceled")
 		}
 	}
 
@@ -208,6 +220,88 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 		totalSize: totalSize,
 	}
 	return uploadFiles(c, params)
+}
+
+// clears fileName from unnecessary elements like '.'
+func clearFileName(fileName string) string {
+	return cmn.ExpandPath(fileName)
+}
+
+// expects fileName to be already cleared
+// base + fileName = path
+// if fileName is already absolute path, base is empty
+func getPathAndBaseFromFileName(fileName string) (path, base string, err error) {
+	path = cmn.ExpandPath(fileName)
+	if path, err = filepath.Abs(path); err != nil {
+		return "", "", err
+	}
+
+	return path, strings.TrimSuffix(path, fileName), err
+}
+
+func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error) {
+	fileName = clearFileName(fileName)
+	path, base, err := getPathAndBaseFromFileName(fileName)
+	if err != nil {
+		return err
+	}
+
+	omitBase := parseStrFlag(c, baseFlag)
+	if omitBase != "" {
+		omitBase = cmn.ExpandPath(omitBase)
+		if base, err = filepath.Abs(omitBase); err != nil {
+			return
+		}
+	}
+
+	left := strings.Index(path, "{")
+	right := strings.LastIndex(path, "}")
+	if left < right && left != -1 {
+		var pt cmn.ParsedTemplate
+		if pt, err = cmn.ParseBashTemplate(path); err == nil {
+			if objName != "" {
+				return errObjNameNotExpected
+			}
+
+			return putRangeObjects(c, pt, bck, base)
+		}
+		// if parse failed continue to other options
+	}
+
+	// Upload single file
+	if fh, err := os.Stat(path); err == nil && !fh.IsDir() {
+		if omitBase != "" {
+			return fmt.Errorf("pathname prefix '%s' cannot be used to upload a single file", omitBase)
+		}
+		if objName == "" {
+			// objName was not provided, only bucket name, use full path
+			objName = strings.TrimPrefix(fileName, string(os.PathSeparator))
+		}
+
+		if flagIsSet(c, dryRunFlag) {
+			fmt.Fprintf(c.App.Writer, dryRunHeader+" "+dryRunExplanation+"\nPUT %q => %s/%s.", path, bck.Name, objName)
+			return nil
+		}
+		if err = putSingleObject(bck, objName, path); err == nil {
+			fmt.Fprintf(c.App.Writer, "PUT %s into bucket %s\n", objName, bck)
+		}
+		return err
+	}
+
+	// Upload multiple files
+	if objName != "" {
+		return errObjNameNotExpected
+	}
+	if flagIsSet(c, verboseFlag) {
+		fmt.Fprintf(c.App.Writer, "Enumerating files\n")
+	}
+
+	files, err := generateFileList(path, base, flagIsSet(c, recursiveFlag))
+	if err != nil {
+		return
+	}
+
+	return putMultipleObjects(c, files, bck)
 }
 
 func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) (err error) {
