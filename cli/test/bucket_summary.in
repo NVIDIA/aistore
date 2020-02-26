@@ -1,5 +1,3 @@
-ais rm bucket $(ais ls ais --H | tr '\n' '\0') // IGNORE - remove all existing buckets
-
 ais show bucket
 ais show bucket tmp // FAIL
 ais create bucket $BUCKET_1

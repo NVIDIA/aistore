@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/onsi/gomega"
 )
 
@@ -22,6 +24,35 @@ type (
 	}
 )
 
+func destroyMatchingBuckets(name string) (err error) {
+	proxyURL := GetPrimaryURL()
+	baseParams := BaseAPIParams(proxyURL)
+
+	bucketNames, err := api.GetBucketNames(baseParams, cmn.Bck{
+		Provider: cmn.ProviderAIS,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, bckName := range bucketNames.AIS {
+		if !strings.Contains(bckName, name) {
+			continue
+		}
+
+		bck := cmn.Bck{
+			Name:     bckName,
+			Provider: cmn.ProviderAIS,
+		}
+
+		if errD := api.DestroyBucket(baseParams, bck); errD != nil && err == nil {
+			err = errD
+		}
+	}
+
+	return err
+}
+
 func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 	var (
 		outs []string
@@ -29,6 +60,12 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		bucket = GenRandomString(10)
 		space  = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
 	)
+
+	defer func() {
+		if err := destroyMatchingBuckets(bucket); err != nil {
+			Logf("failed to remove buckets: %v", err)
+		}
+	}()
 
 	tmpFile, err := ioutil.TempFile("", "e2e-")
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
