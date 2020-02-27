@@ -196,7 +196,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	// try read a replica from targets one by one until the replica is got
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bck(), req.LOM.Objname)
-		iReqBuf := c.parent.newIntraReq(reqGet, nil).NewPack(mm)
+		iReqBuf := c.parent.newIntraReq(reqGet, meta).NewPack(mm)
 
 		w := mm.NewSGL(cmn.KiB)
 		if _, err := c.parent.readRemote(req.LOM, node, uname, iReqBuf, w); err != nil {
@@ -270,7 +270,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 			glog.Errorf("Failed to create file: %v", err)
 			break
 		}
-		iReqBuf := c.parent.newIntraReq(reqGet, nil).NewPack(mm)
+		iReqBuf := c.parent.newIntraReq(reqGet, meta).NewPack(mm)
 		req.LOM.FQN = tmpFQN
 		n, err = c.parent.readRemote(req.LOM, node, uname, iReqBuf, w)
 		mm.Free(iReqBuf)

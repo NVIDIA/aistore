@@ -124,7 +124,7 @@ func (reb *Manager) buildECNamespace(md *globArgs) int {
 //		data transfer
 func (reb *Manager) distributeECNamespace(md *globArgs) error {
 	const distributeTimeout = 5 * time.Minute
-	if err := reb.exchange(); err != nil {
+	if err := reb.exchange(md); err != nil {
 		return err
 	}
 	if reb.waitForPushReqs(md, rebStageECDetect, distributeTimeout) {
@@ -138,8 +138,8 @@ func (reb *Manager) distributeECNamespace(md *globArgs) error {
 }
 
 // find out which objects are broken and how to fix them
-func (reb *Manager) generateECFixList() {
-	reb.checkCTs()
+func (reb *Manager) generateECFixList(md *globArgs) {
+	reb.checkCTs(md)
 	glog.Infof("Number of objects misplaced locally: %d", len(reb.ec.localActions))
 	glog.Infof("Number of objects to be reconstructed/resent: %d", len(reb.ec.broken))
 }
@@ -181,7 +181,7 @@ func (reb *Manager) globalRebRunEC(md *globArgs) error {
 		return err
 	}
 	// Detect objects with misplaced or missing parts
-	reb.generateECFixList()
+	reb.generateECFixList(md)
 
 	// Fix objects that are on local target but they are misplaced
 	if err := reb.ecFixLocal(md); err != nil {

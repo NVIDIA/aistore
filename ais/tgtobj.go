@@ -459,6 +459,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 		tname            = goi.t.si.String()
 		aborted, running = reb.IsRebalancing(cmn.ActLocalReb)
 		gfnActive        = goi.t.gfn.local.active()
+		ecEnabled        = goi.lom.Bprops().EC.Enabled
 	)
 	tsi, err = cluster.HrwTarget(goi.lom.Uname(), &smap.Smap)
 	if err != nil {
@@ -492,7 +493,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 			goto gfn
 		}
 	}
-	if running || aborted || gfnActive || !enoughECRestoreTargets {
+	if running || !enoughECRestoreTargets || ((aborted || gfnActive) && !ecEnabled) {
 		gfnNode = goi.t.lookupRemoteAll(goi.lom, smap)
 	}
 

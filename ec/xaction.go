@@ -374,6 +374,9 @@ func (r *xactECBase) unregWriter(uname string) (writer *slice, ok bool) {
 //		this case every slice must be sent to only one target, and transport bundle
 //		cannot help to track automatically when SGL should be freed.
 func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSource, cb transport.SendCallback) error {
+	if src.metadata != nil && src.metadata.ObjVersion == "" {
+		src.metadata.ObjVersion = lom.Version()
+	}
 	req := r.newIntraReq(src.reqType, src.metadata)
 	req.isSlice = src.isSlice
 

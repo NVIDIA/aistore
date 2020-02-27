@@ -385,7 +385,7 @@ func (ack *ackCT) clear(mm *memsys.MMSA) {
 // Merge given CT with already existing CTs of an object.
 // It checks if the CT is unique(in case of the object is erasure coded),
 // and the CT's info about object matches previously found CTs.
-func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
+func (rr *globalCTList) addCT(md *globArgs, ct *rebCT, tgt cluster.Target) error {
 	bckList := rr.ais
 	if cmn.IsProviderCloud(ct.Bck, false /*acceptAnon*/) {
 		bckList = rr.cloud
@@ -403,7 +403,7 @@ func (rr *globalCTList) addCT(ct *rebCT, tgt cluster.Target) error {
 		if err := b.Init(tgt.GetBowner(), tgt.Snode()); err != nil {
 			return err
 		}
-		si, err := cluster.HrwTarget(b.MakeUname(ct.Objname), tgt.GetSowner().Get())
+		si, err := cluster.HrwTarget(b.MakeUname(ct.Objname), md.smap)
 		if err != nil {
 			return err
 		}
@@ -812,7 +812,7 @@ func (reb *Manager) recvECData(hdr transport.Header, unpacker *cmn.ByteUnpack, r
 }
 
 // Build a list buckets with their objects from a flat list of all CTs
-func (reb *Manager) mergeCTs() *globalCTList {
+func (reb *Manager) mergeCTs(md *globArgs) *globalCTList {
 	res := &globalCTList{
 		ais:   make(map[string]*rebBck),
 		cloud: make(map[string]*rebBck),
@@ -820,8 +820,7 @@ func (reb *Manager) mergeCTs() *globalCTList {
 
 	// process all received CTs
 	localDaemon := reb.t.Snode().ID()
-	smap := reb.t.GetSowner().Get()
-	for sid := range smap.Tmap {
+	for sid := range md.smap.Tmap {
 		local := sid == localDaemon
 		ctList, ok := reb.ec.nodeData(sid)
 		if !ok {
@@ -834,14 +833,14 @@ func (reb *Manager) mergeCTs() *globalCTList {
 					reb.abortGlobal()
 					return nil
 				}
-				t, err := cluster.HrwTarget(b.MakeUname(ct.Objname), smap)
+				t, err := cluster.HrwTarget(b.MakeUname(ct.Objname), md.smap)
 				cmn.Assert(err == nil)
 				if t.ID() == localDaemon {
 					glog.Infof("Skipping CT %d of %s (it must have main object)", ct.SliceID, ct.Objname)
 					continue
 				}
 			}
-			if err := res.addCT(ct, reb.t); err != nil {
+			if err := res.addCT(md, ct, reb.t); err != nil {
 				glog.Warning(err)
 				continue
 			}
@@ -859,11 +858,10 @@ func (reb *Manager) mergeCTs() *globalCTList {
 // Find objects that have either missing or misplaced parts. If a part is a
 // slice or replica(not the "default" object) and mpath is correct the object
 // is not considered as broken one even if its target is not in HRW list
-func (reb *Manager) detectBroken(res *globalCTList) {
+func (reb *Manager) detectBroken(md *globArgs, res *globalCTList) {
 	reb.ec.broken = make([]*rebObject, 0)
 	bowner := reb.t.GetBowner()
 	bmd := bowner.Get()
-	smap := reb.t.GetSowner().Get()
 
 	providers := map[string]map[string]*rebBck{
 		cmn.ProviderAIS:              res.ais,
@@ -891,7 +889,7 @@ func (reb *Manager) detectBroken(res *globalCTList) {
 				continue
 			}
 			for objName, obj := range objs.objs {
-				if err := reb.calcLocalProps(bck, obj, smap, &bprops.EC); err != nil {
+				if err := reb.calcLocalProps(bck, obj, md.smap, &bprops.EC); err != nil {
 					glog.Warningf("Detect %s failed, skipping: %v", obj.objName, err)
 					continue
 				}
@@ -933,12 +931,12 @@ func (reb *Manager) detectBroken(res *globalCTList) {
 }
 
 // merge, sort, and detect what to fix and how
-func (reb *Manager) checkCTs() {
-	cts := reb.mergeCTs()
+func (reb *Manager) checkCTs(md *globArgs) {
+	cts := reb.mergeCTs(md)
 	if cts == nil {
 		return
 	}
-	reb.detectBroken(cts)
+	reb.detectBroken(md, cts)
 }
 
 // mountpath walker - walks through files in /meta/ directory
@@ -1079,19 +1077,18 @@ func (reb *Manager) runEC() {
 }
 
 // send collected CTs to all targets with retry (to assemble the entire namespace)
-func (reb *Manager) exchange() error {
+func (reb *Manager) exchange(md *globArgs) error {
 	const (
 		retries = 3               // number of retries to send collected CT info
 		sleep   = 5 * time.Second // delay between retries
 	)
 	var (
 		globRebID = reb.globRebID.Load()
-		smap      = reb.t.GetSowner().Get()
-		sendTo    = make(cluster.Nodes, 0, len(smap.Tmap))
-		failed    = make(cluster.Nodes, 0, len(smap.Tmap))
+		sendTo    = make(cluster.Nodes, 0, len(md.smap.Tmap))
+		failed    = make(cluster.Nodes, 0, len(md.smap.Tmap))
 		emptyCT   = make([]*rebCT, 0)
 	)
-	for _, node := range smap.Tmap {
+	for _, node := range md.smap.Tmap {
 		if node.ID() == reb.t.Snode().ID() {
 			continue
 		}

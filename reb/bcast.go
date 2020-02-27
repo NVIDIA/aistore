@@ -118,11 +118,10 @@ ret:
 // returns the number of targets that have not reached `stage` yet. It is
 // assumed that this target checks other nodes only after it has reached
 // the `stage`, that is why it is skipped inside the loop
-func (reb *Manager) nodesNotInStage(stage uint32) int {
-	smap := reb.t.GetSowner().Get()
+func (reb *Manager) nodesNotInStage(md *globArgs, stage uint32) int {
 	count := 0
 	reb.stages.mtx.Lock()
-	for _, si := range smap.Tmap {
+	for _, si := range md.smap.Tmap {
 		if si.ID() == reb.t.Snode().ID() {
 			continue
 		}
@@ -456,7 +455,7 @@ func (reb *Manager) waitForPushReqs(md *globArgs, stage uint32, timeout ...time.
 		if reb.xreb.Aborted() {
 			return true
 		}
-		cnt := reb.nodesNotInStage(stage)
+		cnt := reb.nodesNotInStage(md, stage)
 		if cnt < maxMissing || stage <= rebStageECNamespace {
 			return cnt == 0
 		}

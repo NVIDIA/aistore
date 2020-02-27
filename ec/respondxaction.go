@@ -184,7 +184,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 		)
 		if iReq.isSlice {
 			if glog.V(4) {
-				glog.Infof("Got slice response from %s (#%d of %s/%s)", iReq.sender, iReq.meta.SliceID, bck.Name, objName)
+				glog.Infof("Got slice response from %s (#%d of %s/%s) v%s", iReq.sender, iReq.meta.SliceID, bck.Name, objName, meta.ObjVersion)
 			}
 			objFQN, _, err = cluster.HrwFQN(bck, SliceType, objName)
 			if err != nil {
@@ -194,7 +194,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 			}
 		} else {
 			if glog.V(4) {
-				glog.Infof("Got replica response from %s (%s/%s)", iReq.sender, bck.Name, objName)
+				glog.Infof("Got replica response from %s (%s/%s) v%s", iReq.sender, bck.Name, objName, meta.ObjVersion)
 			}
 			objFQN, _, err = cluster.HrwFQN(bck, fs.ObjectType, objName)
 			if err != nil {

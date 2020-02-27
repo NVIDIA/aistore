@@ -569,6 +569,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		if mcopy.SliceID != 0 && slices[i].cksum != nil {
 			mcopy.CksumType, mcopy.CksumValue = slices[i].cksum.Get()
 		}
+		mcopy.ObjVersion = lom.Version()
 
 		err = c.parent.writeRemote([]string{targets[i+1].ID()}, &lom, src, nil)
 		if err != nil {

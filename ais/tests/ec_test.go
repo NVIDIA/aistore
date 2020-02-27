@@ -619,7 +619,7 @@ func TestECChange(t *testing.T) {
 	var (
 		proxyURL = tutils.GetPrimaryURL()
 		bck      = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-ec-change",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -921,7 +921,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 func TestECRestoreObjAndSlice(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-obj-n-slice",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
@@ -1007,7 +1007,7 @@ func TestECChecksum(t *testing.T) {
 	var (
 		proxyURL = tutils.GetPrimaryURL()
 		bck      = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-ec-cksum",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -1077,7 +1077,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-ec-props",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
@@ -1172,7 +1172,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-ec-load",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
@@ -1318,7 +1318,7 @@ func TestECStress(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-ec-stress",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.GetPrimaryURL()
@@ -1442,7 +1442,7 @@ func TestECExtraStress(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-extrastress",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL    = tutils.GetPrimaryURL()
@@ -1560,7 +1560,7 @@ func TestECXattrs(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-attrs",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.GetPrimaryURL()
@@ -1822,7 +1822,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-slice-emergency",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
@@ -1925,7 +1925,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-replica-emergency",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.GetPrimaryURL()
@@ -2077,7 +2077,7 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-mpath-emergency",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
@@ -2239,7 +2239,7 @@ func TestECRebalance(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-ec-rebalance",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
@@ -2631,7 +2631,7 @@ func TestECLocalRebalance(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     TestBucketName + "-ec-resilver",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
