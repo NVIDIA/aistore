@@ -39,7 +39,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 
 	// Iterations of PUT
 	startPut := time.Now()
-	tutils.Logf("\n%d workers each performing PUT of %d objects of size %d\n", workerCount, objectCountPerWorker, objSize)
+	tutils.Logf("%d workers each performing PUT of %d objects of size %d\n", workerCount, objectCountPerWorker, objSize)
 	for wid := 0; wid < workerCount; wid++ {
 		wg.Add(1)
 		go func() {
@@ -78,7 +78,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 
 		// Iterations of PUT
 		startPut := time.Now()
-		tutils.Logf("\n%d workers each performing PUT of %d objects of size %d\n", workerCount, numObjs, objSize)
+		tutils.Logf("%d workers each performing PUT of %d objects of size %d\n", workerCount, numObjs, objSize)
 		for wid := 0; wid < workerCount; wid++ {
 			wg.Add(1)
 			go func() {

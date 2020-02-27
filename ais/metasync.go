@@ -258,9 +258,8 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (cnt int) {
 		newTargetID string
 		method      string
 
-		payload = make(msPayload)
-		smap    = y.p.owner.smap.get()
-		config  = cmn.GCO.Get()
+		smap   = y.p.owner.smap.get()
+		config = cmn.GCO.Get()
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
@@ -314,7 +313,9 @@ outer:
 	if len(pairsToSend) == 0 {
 		return
 	}
+
 	// step 2: build payload and update last sync-ed
+	payload := make(msPayload, 2*len(pairsToSend))
 	for _, pair := range pairsToSend {
 		var revs, msgInt, tag, s = pair.revs, pair.msgInt, pair.revs.tag(), ""
 		if msgInt.Action != "" {
@@ -396,15 +397,15 @@ outer:
 	return
 }
 
-// keeping track of per-daemon versioning - FIXME TODO: extend to take care of msgInt where pais may be empty
+// keeping track of per-daemon versioning - FIXME TODO: extend to take care of msgInt where pairs may be empty
 func (y *metasyncer) syncDone(sid string, pairs []revsPair) {
 	rvd, ok := y.nodesRevs[sid]
 	if !ok {
-		rvd = nodeRevs{versions: make(map[string]int64)}
+		rvd = nodeRevs{versions: make(map[string]int64, len(pairs))}
 		y.nodesRevs[sid] = rvd
 	}
-	for _, revspair := range pairs {
-		revs := revspair.revs
+	for _, revsPair := range pairs {
+		revs := revsPair.revs
 		rvd.versions[revs.tag()] = revs.version()
 	}
 }
@@ -482,13 +483,13 @@ func (y *metasyncer) handlePending() (cnt int) {
 		return
 	}
 
-	payload := make(cmn.SimpleKVs)
+	payload := make(msPayload, 2*len(y.lastSynced))
 	pairs := make([]revsPair, 0, len(y.lastSynced))
 	msgInt := y.p.newActionMsgInternalStr("metasync: handle-pending", smap, nil) // the same action msg for all
 	msgBody := cmn.MustMarshal(msgInt)
 	for tag, revs := range y.lastSynced {
-		payload[tag] = string(revs.marshal())
-		payload[tag+revsActionTag] = string(msgBody)
+		payload[tag] = revs.marshal()
+		payload[tag+revsActionTag] = msgBody
 		pairs = append(pairs, revsPair{revs, msgInt})
 	}
 
