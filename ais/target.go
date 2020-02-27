@@ -14,6 +14,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -1375,6 +1376,10 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 
 	// 3a. promote dir
 	if finfo.IsDir() {
+		if params.Objname != "" {
+			t.invalmsghdlr(w, r, "object name not supported for promoting directories")
+			return
+		}
 		if params.Verbose {
 			glog.Infof("%s: promote %+v", t.si, params)
 		}
@@ -1388,12 +1393,11 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	// 3b. promote file
-	if params.Objname == "" {
-		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
-		t.invalmsghdlr(w, r, loghdr+"missing object name")
-		return
+	objName := params.Objname
+	if objName == "" {
+		objName = strings.TrimPrefix(srcFQN, string(os.PathSeparator))
 	}
-	if err = t.PromoteFile(srcFQN, bck, params.Objname, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
+	if err = t.PromoteFile(srcFQN, bck, objName, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
 		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
 	}

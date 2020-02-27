@@ -237,18 +237,32 @@ Colocation in the context means that the files in question are already located *
 #### Examples
 
 1) Make AIS objects out of `/tmp/examples` files (**one file = one object**). `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes. Created objects names have prefix `example`
-```sh
+```shell script
 $ ais promote /tmp/examples mybucket/ -r
 ```
 
 2) Promote /tmp/examples files to AIS objects. Objects names won't have `/tmp/examples` prefix
-```sh
+```shell script
 $ ais promote /tmp/examples mybucket/ -r --trim-prefix=/tmp
+```
+
+3) Promote /tmp/examples/example1.txt as object with name `example1.txt`
+```shell script
+$ ais promote /tmp/examples/example1.txt mybucket/example1.txt
+
+# PROMOTE /tmp/examples/example1.txt => mybucket/example1.txt
+```
+
+4) Promote /tmp/examples/example1.txt without specified object name
+```shell script
+$ ais promote /tmp/examples/example1.txt mybucket
+
+# PROMOTE /tmp/examples/example1.txt => mybucket/tmp/examples/example1.txt
 ```
 
 #### Example: no such file or directory
 
-```sh
+```shell script
 $ ais create bucket testbucket
 testbucket created
 
@@ -264,15 +278,19 @@ $ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t
 
 >> On the one hand, it is easy to transform files using `tar`, `gzip` and any number of other very familiar Unix tools. On the other hand, it is easy to **promote** files and directories that are locally present inside AIS servers. Once the original file-based content becomes distributed across AIStore cluster, running massive computations (or any other workloads that require scalable storage) also becomes easy and fast.
 
-#### PUT and PROMOTE: Object names
+#### Object names
 
-While uploading `ais` assigns names to object by following the rules (starting with the highest priority):
-
-1. If `OBJECT_NAME` is set, the object's name is the value of `OBJECT_NAME`
-2. If `--trim-prefix` is set, the object's name is the file path without leading `--trim-prefix`. A trailing `/` in `--trim-prefix` can be omitted.
-3. If neither `OBJECT_NAME` nor `--trim-prefix` is defined, the name of the object is the filename - the last element of the path.
+1. `PROMOTE` with directory as source
+- `OBJECT_NAME` parameter is not supported
+- If `--trim-prefix` is set, the object's name is the file path without leading `--trim-prefix`. A trailing `/` in `--trim-prefix` can be omitted.
+- If `--trim-prefix` is not defined, resulting object names will be the same as full paths to files
 
 Be careful when putting a directory recursively without setting `--trim-prefix`: it may result in overwriting objects with the same names.
+
+2. `PROMOTE` with single file as source
+- `--trim-prefix` flag is omitted
+- If `OBJECT_NAME` provided it will be used as object name
+- If `OBJECT_NAME` not provided, object name will be the same as the full path to the file, without leading `/`
 
 ### Delete
 
