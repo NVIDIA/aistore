@@ -88,7 +88,7 @@ test-env)
 
 test-short)
   echo "Running short tests..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 30m -short "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 30m -short "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL")
   err_count=$(echo "${errs}" | wc -l)
   if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
@@ -100,7 +100,7 @@ test-short)
 
 test-long)
   echo "Running long tests..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 2h "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 2h "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL")
   err_count=$(echo "${errs}" | wc -l)
   if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
@@ -112,7 +112,7 @@ test-long)
 
 test-run)
   echo "Running test with regex..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 2h  -run="${RE}" "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 2h  -run="${RE}" "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
   if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
