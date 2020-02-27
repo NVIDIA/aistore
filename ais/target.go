@@ -1347,7 +1347,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		t.invalmsghdlr(w, r, loghdr+"missing source filename")
 		return
 	}
-	if err = cmn.ValidateOmitBase(srcFQN, params.OmitBase); err != nil {
+	if err = cmn.ValidatePromoteTrimPrefix(srcFQN, params.TrimPrefix); err != nil {
 		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
 		return

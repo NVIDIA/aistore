@@ -21,7 +21,7 @@ ais create bucket $BUCKET_2
 ais put "/tmp/rdir/{0..4}/{0..4}/test.txt" $BUCKET_2 -y // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_2/tmp/rdir/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
-ais put "/tmp/rdir/{0..4}/{0..4}/test.txt" $BUCKET_2 -y --base "/tmp/rdir" // IGNORE
+ais put "/tmp/rdir/{0..4}/{0..4}/test.txt" $BUCKET_2 -y --trim-prefix "/tmp/rdir" // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_2/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
 # test range relative paths
@@ -29,7 +29,7 @@ RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_2/$d1/$d2/tes
 ais create bucket $BUCKET_3
 cd /tmp && ais put "rdir/{0..2}/{0..2}/test.txt" $BUCKET_3 -y // IGNORE
 RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais get $BUCKET_3/rdir/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
-cd /tmp && ais put "./rdir/{0..2}/{0..2}/test.txt" $BUCKET_3 -y --base rdir // IGNORE
+cd /tmp && ais put "./rdir/{0..2}/{0..2}/test.txt" $BUCKET_3 -y --trim-prefix rdir // IGNORE
 RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais get $BUCKET_3/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
 # test put * absolute paths
@@ -37,7 +37,7 @@ RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais get $BUCKET_3/$d1/$d2/tes
 ais create bucket $BUCKET_4
 ais put "/tmp/rdir/*.txt" $BUCKET_4 -y -r // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_4/tmp/rdir/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
-ais put "/tmp/rdir/*.txt" $BUCKET_4 -y -r --base "/tmp/rdir" // IGNORE
+ais put "/tmp/rdir/*.txt" $BUCKET_4 -y -r --trim-prefix "/tmp/rdir" // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_4/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
 # test put * relative paths
@@ -45,7 +45,7 @@ RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_4/$d1/$d2/tes
 ais create bucket $BUCKET_5
 cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_5/rdir/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
-cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r --base "rdir" // IGNORE
+cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r --trim-prefix "rdir" // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_5/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
 rm -rf /tmp/rdir // IGNORE

@@ -68,11 +68,11 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		}
 	}
 	// NOTE: destination objname is the entire path including the directory (r.dir)
-	//       that's being promoted - use OmitBase (CLI baseFlag) to control
+	//       that's being promoted - use TrimPrefix (CLI trimPrefixFlag) to control
 	cmn.Assert(filepath.IsAbs(fqn))
 	objName := fqn[1:]
-	if r.params.OmitBase != "" {
-		fname, err := filepath.Rel(r.params.OmitBase, fqn)
+	if r.params.TrimPrefix != "" {
+		fname, err := filepath.Rel(r.params.TrimPrefix, fqn)
 		cmn.AssertNoErr(err)
 		objName = fname
 	}

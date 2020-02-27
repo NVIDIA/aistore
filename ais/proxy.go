@@ -2121,7 +2121,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		bucket  = apiItems[0]
 		srcFQN  = msg.Name
 	)
-	if err = cmn.ValidateOmitBase(srcFQN, params.OmitBase); err != nil {
+	if err = cmn.ValidatePromoteTrimPrefix(srcFQN, params.TrimPrefix); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}

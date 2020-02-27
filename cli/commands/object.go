@@ -111,8 +111,8 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 //////
 func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err error) {
 	target := parseStrFlag(c, targetFlag)
-	omitBase := parseStrFlag(c, baseFlag)
-	if err = cmn.ValidateOmitBase(fqn, omitBase); err != nil {
+	userTrimPrefix := parseStrFlag(c, trimPrefixFlag)
+	if err = cmn.ValidatePromoteTrimPrefix(fqn, userTrimPrefix); err != nil {
 		return
 	}
 	promoteArgs := &api.PromoteArgs{
@@ -120,7 +120,7 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 		Bck:        bck,
 		Object:     objName,
 		Target:     target,
-		OmitBase:   omitBase,
+		TrimPrefix: userTrimPrefix,
 		FQN:        fqn,
 		Recurs:     flagIsSet(c, recursiveFlag),
 		Overwrite:  flagIsSet(c, overwriteFlag),
@@ -151,7 +151,7 @@ func putSingleObject(bck cmn.Bck, objName, path string) (err error) {
 	return api.PutObject(putArgs)
 }
 
-func putRangeObjects(c *cli.Context, pt cmn.ParsedTemplate, bck cmn.Bck, omitBase string) (err error) {
+func putRangeObjects(c *cli.Context, pt cmn.ParsedTemplate, bck cmn.Bck, trimPrefix string) (err error) {
 	if flagIsSet(c, verboseFlag) {
 		fmt.Fprintln(c.App.Writer, "Enumerating files")
 	}
@@ -159,7 +159,7 @@ func putRangeObjects(c *cli.Context, pt cmn.ParsedTemplate, bck cmn.Bck, omitBas
 	getNext := pt.Iter()
 	allFiles := make([]fileToObj, 0, pt.Count())
 	for file, hasNext := getNext(); hasNext; file, hasNext = getNext() {
-		files, err := generateFileList(file, omitBase, flagIsSet(c, recursiveFlag))
+		files, err := generateFileList(file, trimPrefix, flagIsSet(c, recursiveFlag))
 		if err != nil {
 			return err
 		}
@@ -241,15 +241,16 @@ func getPathAndBaseFromFileName(fileName string) (path, base string, err error) 
 
 func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error) {
 	fileName = clearFileName(fileName)
-	path, base, err := getPathAndBaseFromFileName(fileName)
+	// By default trimPrefix is difference between fileName and its absolute path
+	path, trimPrefix, err := getPathAndBaseFromFileName(fileName)
 	if err != nil {
 		return err
 	}
 
-	omitBase := parseStrFlag(c, baseFlag)
-	if omitBase != "" {
-		omitBase = cmn.ExpandPath(omitBase)
-		if base, err = filepath.Abs(omitBase); err != nil {
+	userTrimPrefix := parseStrFlag(c, trimPrefixFlag)
+	if userTrimPrefix != "" {
+		userTrimPrefix = cmn.ExpandPath(userTrimPrefix)
+		if trimPrefix, err = filepath.Abs(userTrimPrefix); err != nil {
 			return
 		}
 	}
@@ -263,15 +264,15 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 				return errObjNameNotExpected
 			}
 
-			return putRangeObjects(c, pt, bck, base)
+			return putRangeObjects(c, pt, bck, trimPrefix)
 		}
 		// if parse failed continue to other options
 	}
 
 	// Upload single file
 	if fh, err := os.Stat(path); err == nil && !fh.IsDir() {
-		if omitBase != "" {
-			return fmt.Errorf("pathname prefix '%s' cannot be used to upload a single file", omitBase)
+		if userTrimPrefix != "" {
+			return fmt.Errorf("pathname prefix '%s' cannot be used to upload a single file", userTrimPrefix)
 		}
 		if objName == "" {
 			// objName was not provided, only bucket name, use full path
@@ -296,7 +297,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 		fmt.Fprintf(c.App.Writer, "Enumerating files\n")
 	}
 
-	files, err := generateFileList(path, base, flagIsSet(c, recursiveFlag))
+	files, err := generateFileList(path, trimPrefix, flagIsSet(c, recursiveFlag))
 	if err != nil {
 		return
 	}

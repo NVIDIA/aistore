@@ -33,7 +33,7 @@ var (
 		commandPut: {
 			providerFlag,
 			recursiveFlag,
-			baseFlag,
+			trimPrefixFlag,
 			concurrencyFlag,
 			refreshFlag,
 			verboseFlag,
@@ -44,7 +44,7 @@ var (
 			providerFlag,
 			recursiveFlag,
 			overwriteFlag,
-			baseFlag,
+			trimPrefixFlag,
 			targetFlag,
 			verboseFlag,
 		},

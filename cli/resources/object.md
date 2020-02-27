@@ -89,7 +89,7 @@ PUT an object or entire directory (of objects) into the specified bucket. If CLI
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
-| `--base` | `string` | Prefix that is removed when constructing object name from file name. Used if `OBJECT_NAME` is not given set <sup id="a2">[2](#ft2)</sup> | `""` |
+| `--trim-prefix` | `string` | Prefix that is removed when constructing object name from file name. Used if `OBJECT_NAME` is not given set <sup id="a2">[2](#ft2)</sup> | `""` |
 | `--verbose` or `-v` | `bool` | Enable printing the result of every PUT | `false` |
 | `--yes` or `-y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
 | `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
@@ -101,7 +101,7 @@ PUT an object or entire directory (of objects) into the specified bucket. If CLI
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
  This makes shell wildcards like `**` redundant, and the following patterns won't work in `ais`: `/home/user/img-set-*/*.tar` or `/home/user/bck/**/*.tar.gz`
 
-<a name="ft2">2</a> Option `--base` and argument `OBJECT_NAME` are mutually exclusive and `OBJECT_NAME` has higher priority. When `OBJECT_NAME` is given, options `--base` and `--recursive` are ignored, and `FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
+<a name="ft2">2</a> Option `--trim-prefix` and argument `OBJECT_NAME` are mutually exclusive and `OBJECT_NAME` has higher priority. When `OBJECT_NAME` is given, options `--trim-prefix` and `--recursive` are ignored, and `FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
 
 #### Object names
 
@@ -117,7 +117,7 @@ resulting objects names will be the same as the absolute path (`~` will be resol
 will be the same as the relative path.
 - Abbreviations like `../` are not supported at the moment.
 
-Leading prefix can be removed with `--base`.
+Leading prefix can be removed with `--trim-prefix`.
 
 #### Examples
 
@@ -154,9 +154,9 @@ $ ais put "/home/user/bck" mybucket
 # PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img2.zip
 ```
 
-3) `--base` is expanded with user's home directory into `/home/user/bck`, so the final bucket content is `img1.tar`, `img2.zip`, `extra/img1.tar` and `extra/img3.zip`
+3) `--trim-prefix` is expanded with user's home directory into `/home/user/bck`, so the final bucket content is `img1.tar`, `img2.zip`, `extra/img1.tar` and `extra/img3.zip`
 ```sh
-$ ais put "/home/user/bck" mybucket/ --base ~/bck --recursive
+$ ais put "/home/user/bck" mybucket/ --trim-prefix=~/bck --recursive
 
 # PUT /home/user/bck/img1.tar => mybucket/img1.tar
 # PUT /home/user/bck/img1.tar => mybucket/img2.zip
@@ -166,7 +166,7 @@ $ ais put "/home/user/bck" mybucket/ --base ~/bck --recursive
 
 4) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `img1.tar` and `extra/img1.tar
 ```sh
-$ ais put "~/bck/*.tar" mybucket/ --base ~/bck --recursive
+$ ais put "~/bck/*.tar" mybucket/ --trim-prefix=~/bck --recursive
 
 # PUT /home/user/bck/img1.tar => mybucket/img1.tar
 # PUT /home/user/bck/extra/img1.tar => mybucket/extra/img1.tar
@@ -184,7 +184,7 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
 6) Same as above, except object names are in format `test${d1}${d2}.txt`
 ```shell script
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
-$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --base ~/dir
+$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --trim-prefix=~/dir
 9 objects put into "mybucket" bucket
 
 # PUT /home/user/dir/test00.txt => test00.txt and 8 more
@@ -194,7 +194,7 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --base ~/dir
 7) Preview the files that would be sent to the cluster, without really putting them.
 ```shell script
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
-$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --base ~/dir --dry-run
+$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --trim-prefix=~/dir --dry-run
 [DRY RUN] No modifications on the cluster
 /home/user/dir/test00.txt => mybucket/test00.txt
 (...)
@@ -212,10 +212,10 @@ $ ais put "dir{0..10}" mybucket -y
 #### Example: invalid file
 
 ```sh
-$ ais put "/home/user/bck/*.tar" mybucket/img1.tar --base ~/bck --recursive
+$ ais put "/home/user/bck/*.tar" mybucket/img1.tar --trim-prefix=~/bck --recursive
 ```
 
-Note that `OBJECT_NAME` has a priority over `--base` and `--recursive` and `/home/user/bck/*.tar` is not a valid file.
+Note that `OBJECT_NAME` has a priority over flags (`--trim-prefix` and `--recursive`) and `/home/user/bck/*.tar` is not a valid because only single file is expected.
 
 ### PROMOTE
 
@@ -227,7 +227,7 @@ Colocation in the context means that the files in question are already located *
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
-| `--base` | `string` | Pathname prefix that is omitted i.e., not used to generate object names | `""` |
+| `--trim-prefix` | `string` | Pathname prefix that is omitted i.e., not used to generate object names | `""` |
 | `--verbose` or `-v` | `bool` | Verbose printout | `false` |
 | `--target` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
 | `--recursive` or `-r` | `bool` | Promote nested directories | `false` |
@@ -243,7 +243,7 @@ $ ais promote /tmp/examples mybucket/ -r
 
 2) Promote /tmp/examples files to AIS objects. Objects names won't have `/tmp/examples` prefix
 ```sh
-$ ais promote /tmp/examples mybucket/ -r --base /tmp
+$ ais promote /tmp/examples mybucket/ -r --trim-prefix=/tmp
 ```
 
 #### Example: no such file or directory
@@ -269,10 +269,10 @@ $ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t
 While uploading `ais` assigns names to object by following the rules (starting with the highest priority):
 
 1. If `OBJECT_NAME` is set, the object's name is the value of `OBJECT_NAME`
-2. If `--base` is set, the object's name is the file path without leading `--base` prefix. A trailing `/` in `--base` can be omitted.
-3. If neither `OBJECT_NAME` nor `--base` is defined, the name of the object is the filename - the last element of the path.
+2. If `--trim-prefix` is set, the object's name is the file path without leading `--trim-prefix`. A trailing `/` in `--trim-prefix` can be omitted.
+3. If neither `OBJECT_NAME` nor `--trim-prefix` is defined, the name of the object is the filename - the last element of the path.
 
-Be careful when putting a directory recursively without setting `--base`: it may result in overwriting objects with the same names.
+Be careful when putting a directory recursively without setting `--trim-prefix`: it may result in overwriting objects with the same names.
 
 ### Delete
 

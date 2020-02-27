@@ -22,12 +22,12 @@ type ActionMsg struct {
 }
 
 type ActValPromote struct {
-	Target    string `json:"target"`
-	Objname   string `json:"objname"`
-	OmitBase  string `json:"omit_base"`
-	Recurs    bool   `json:"recurs"`
-	Overwrite bool   `json:"overwrite"`
-	Verbose   bool   `json:"verbose"`
+	Target     string `json:"target"`
+	Objname    string `json:"objname"`
+	TrimPrefix string `json:"trim_prefix"`
+	Recurs     bool   `json:"recurs"`
+	Overwrite  bool   `json:"overwrite"`
+	Verbose    bool   `json:"verbose"`
 }
 
 type XactKindMeta struct {
