@@ -298,7 +298,7 @@ const (
 
 	XactionStatsBody = XactionBaseBody + "{{if $.Verbose}}" + XactionExtBody + "{{end}}\n"
 	XactionBaseBody  = "{{ $daemon.DaemonID }}\t{{$xact.KindX}}\t" +
-		"{{if $xact.BucketX}}{{$xact.BucketX}}{{else}}-{{end}}\t" +
+		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t" +
 		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t" +
 		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t{{FormatTime $xact.StartTimeX}}\t" +
 		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t{{$xact.AbortedX}}\t"

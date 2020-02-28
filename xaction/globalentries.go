@@ -34,7 +34,7 @@ type lruEntry struct {
 	xact *lru.Xaction
 }
 
-func (e *lruEntry) Start(id string) error {
+func (e *lruEntry) Start(id string, _ cmn.Bck) error {
 	e.xact = &lru.Xaction{XactBase: *cmn.NewXactBase(id, cmn.ActLRU)}
 	return nil
 }
@@ -53,7 +53,7 @@ type prefetchEntry struct {
 //
 // prefetchEntry
 //
-func (e *prefetchEntry) Start(id string) error {
+func (e *prefetchEntry) Start(id string, _ cmn.Bck) error {
 	e.xact = &prefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch), r: e.r}
 	return nil
 }
@@ -68,13 +68,12 @@ func (e *prefetchEntry) preRenewHook(_ globalEntry) bool { return true }
 type globalRebEntry struct {
 	baseGlobalEntry
 	xact        *GlobalReb
-	stats       stats.RebalanceTargetStats
 	statRunner  *stats.Trunner
 	smapVersion int64
 	globRebID   int64
 }
 
-func (e *globalRebEntry) Start(id string) error {
+func (e *globalRebEntry) Start(id string, _ cmn.Bck) error {
 	xGlobalReb := &GlobalReb{
 		RebBase:     makeXactRebBase(id, cmn.ActGlobalReb),
 		SmapVersion: e.smapVersion,
@@ -108,9 +107,9 @@ func (e *globalRebEntry) postRenewHook(previousEntry globalEntry) {
 
 func (e *globalRebEntry) Stats(xact cmn.Xact) stats.XactStats {
 	cmn.Assert(xact == e.xact)
-	e.stats.FillFromXact(e.xact)
-	e.stats.FillFromTrunner(e.statRunner)
-	return &e.stats
+	rebStats := &stats.RebalanceTargetStats{BaseXactStats: *stats.NewXactStats(e.xact)}
+	rebStats.FillFromTrunner(e.statRunner)
+	return rebStats
 }
 
 //
@@ -133,7 +132,7 @@ type localRebEntry struct {
 	xact *LocalReb
 }
 
-func (e *localRebEntry) Start(id string) error {
+func (e *localRebEntry) Start(id string, _ cmn.Bck) error {
 	xLocalReb := &LocalReb{
 		RebBase: makeXactRebBase(id, cmn.ActLocalReb),
 	}
@@ -157,7 +156,7 @@ type electionEntry struct {
 	xact *Election
 }
 
-func (e *electionEntry) Start(id string) error {
+func (e *electionEntry) Start(id string, _ cmn.Bck) error {
 	xele := &Election{
 		XactBase: *cmn.NewXactBase(id, cmn.ActElection),
 	}
@@ -167,7 +166,7 @@ func (e *electionEntry) Start(id string) error {
 func (e *electionEntry) Get() cmn.Xact { return e.xact }
 func (e *electionEntry) Kind() string  { return cmn.ActElection }
 
-func (e *electionEntry) preRenewHook(previousEntry globalEntry) bool { return true }
+func (e *electionEntry) preRenewHook(_ globalEntry) bool { return true }
 
 //
 // evictDeleteEntry
@@ -178,7 +177,7 @@ type evictDeleteEntry struct {
 	evict bool
 }
 
-func (e *evictDeleteEntry) Start(id string) error {
+func (e *evictDeleteEntry) Start(id string, _ cmn.Bck) error {
 	xdel := &evictDelete{XactBase: *cmn.NewXactBase(id, e.Kind())}
 	e.xact = xdel
 	return nil
@@ -200,7 +199,7 @@ type downloaderEntry struct {
 	statsT stats.Tracker
 }
 
-func (e *downloaderEntry) Start(id string) error {
+func (e *downloaderEntry) Start(id string, _ cmn.Bck) error {
 	xdl := downloader.NewDownloader(e.t, e.statsT, fs.Mountpaths, id, cmn.Download)
 	e.xact = xdl
 	go xdl.Run()
@@ -213,12 +212,7 @@ func (e *downloaderEntry) Kind() string  { return cmn.ActDownload }
 // base*Entry
 //
 type (
-	baseEntry struct {
-		stats stats.BaseXactStats
-	}
-	baseGlobalEntry struct {
-		baseEntry
-	}
+	baseGlobalEntry struct{}
 )
 
 func (*baseGlobalEntry) IsGlobal() bool { return true }
@@ -235,4 +229,6 @@ func (b *baseGlobalEntry) preRenewHook(previousEntry globalEntry) (done bool) {
 
 func (b *baseGlobalEntry) postRenewHook(_ globalEntry) {}
 
-func (b *baseGlobalEntry) Stats(xact cmn.Xact) stats.XactStats { return b.stats.FillFromXact(xact) }
+func (b *baseGlobalEntry) Stats(xact cmn.Xact) stats.XactStats {
+	return stats.NewXactStats(xact)
+}

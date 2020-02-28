@@ -33,7 +33,7 @@ type (
 
 func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, action string, t cluster.Target, slab *memsys.Slab) *XactBckCopy {
 	return &XactBckCopy{
-		xactBckBase: *newXactBckBase(id, action, bckFrom, t),
+		xactBckBase: *newXactBckBase(id, action, bckFrom.Bck, t),
 		slab:        slab,
 		bckTo:       bckTo,
 	}

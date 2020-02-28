@@ -31,6 +31,7 @@ type (
 	bucketXactions struct {
 		sync.RWMutex
 		r       *registry
+		bck     cmn.Bck
 		entries map[string]bucketEntry
 	}
 )
@@ -43,8 +44,8 @@ var (
 // bucketXactions
 //
 
-func newBucketXactions(r *registry) *bucketXactions {
-	return &bucketXactions{r: r, entries: make(map[string]bucketEntry)}
+func newBucketXactions(r *registry, bck cmn.Bck) *bucketXactions {
+	return &bucketXactions{r: r, bck: bck, entries: make(map[string]bucketEntry)}
 }
 
 func (b *bucketXactions) GetL(kind string) bucketEntry {
@@ -111,11 +112,11 @@ func (b *bucketXactions) renewBucketXaction(e bucketEntry) (bucketEntry, error) 
 			return previousEntry, err
 		}
 	}
-	if err := e.Start(b.uniqueID()); err != nil {
+	if err := e.Start(b.uniqueID(), b.bck); err != nil {
 		return nil, err
 	}
 	b.entries[e.Kind()] = e
-	b.r.storeByID(e.Get().ID(), e)
+	b.r.storeEntry(e)
 	if running {
 		e.postRenewHook(previousEntry)
 	}
@@ -130,12 +131,11 @@ type ecGetEntry struct {
 	xact *ec.XactGet
 }
 
-func (e *ecGetEntry) Start(id string) error {
-	xec := ec.ECM.NewGetXact(e.bck.Name)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, e.bck.Bck)
+func (e *ecGetEntry) Start(id string, bck cmn.Bck) error {
+	xec := ec.ECM.NewGetXact(bck.Name) // TODO: we should pass whole `cmn.Bck`
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, bck)
 	e.xact = xec
 	go xec.Run()
-
 	return nil
 }
 
@@ -143,8 +143,7 @@ func (*ecGetEntry) Kind() string    { return cmn.ActECGet }
 func (e *ecGetEntry) Get() cmn.Xact { return e.xact }
 func (r *registry) RenewGetEC(bck *cluster.Bck) *ec.XactGet {
 	b := r.BucketsXacts(bck)
-	e := &ecGetEntry{baseBckEntry: baseBckEntry{bck: bck}}
-	ee, _ := b.renewBucketXaction(e) // TODO: handle error
+	ee, _ := b.renewBucketXaction(&ecGetEntry{}) // TODO: handle error
 	return ee.Get().(*ec.XactGet)
 }
 
@@ -156,9 +155,9 @@ type ecPutEntry struct {
 	xact *ec.XactPut
 }
 
-func (e *ecPutEntry) Start(id string) error {
-	xec := ec.ECM.NewPutXact(e.bck.Name)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, e.bck.Bck)
+func (e *ecPutEntry) Start(id string, bck cmn.Bck) error {
+	xec := ec.ECM.NewPutXact(bck.Name) // TODO: we should pass whole `cmn.Bck`
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, bck)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -167,7 +166,7 @@ func (*ecPutEntry) Kind() string    { return cmn.ActECPut }
 func (e *ecPutEntry) Get() cmn.Xact { return e.xact }
 func (r *registry) RenewPutEC(bck *cluster.Bck) *ec.XactPut {
 	b := r.BucketsXacts(bck)
-	e := &ecPutEntry{baseBckEntry: baseBckEntry{bck: bck}}
+	e := &ecPutEntry{}
 	ee, _ := b.renewBucketXaction(e) // TODO: handle error
 	return ee.Get().(*ec.XactPut)
 }
@@ -180,9 +179,9 @@ type ecRespondEntry struct {
 	xact *ec.XactRespond
 }
 
-func (e *ecRespondEntry) Start(id string) error {
-	xec := ec.ECM.NewRespondXact(e.bck.Name)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, e.bck.Bck)
+func (e *ecRespondEntry) Start(id string, bck cmn.Bck) error {
+	xec := ec.ECM.NewRespondXact(bck.Name) // TODO: we should pass whole `cmn.Bck`
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, bck)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -191,7 +190,7 @@ func (*ecRespondEntry) Kind() string    { return cmn.ActECRespond }
 func (e *ecRespondEntry) Get() cmn.Xact { return e.xact }
 func (r *registry) RenewRespondEC(bck *cluster.Bck) *ec.XactRespond {
 	b := r.BucketsXacts(bck)
-	e := &ecRespondEntry{baseBckEntry: baseBckEntry{bck: bck}}
+	e := &ecRespondEntry{}
 	ee, _ := b.renewBucketXaction(e)
 	return ee.Get().(*ec.XactRespond)
 }
@@ -206,8 +205,8 @@ type ecEncodeEntry struct {
 	phase string
 }
 
-func (e *ecEncodeEntry) Start(id string) error {
-	xec := ec.NewXactBckEncode(id, e.bck, e.t)
+func (e *ecEncodeEntry) Start(id string, bck cmn.Bck) error {
+	xec := ec.NewXactBckEncode(id, bck, e.t)
 	e.xact = xec
 	return nil
 }
@@ -216,7 +215,7 @@ func (*ecEncodeEntry) Kind() string    { return cmn.ActECEncode }
 func (e *ecEncodeEntry) Get() cmn.Xact { return e.xact }
 func (r *registry) RenewECEncodeXact(t cluster.Target, bck *cluster.Bck, phase string) (*ec.XactBckEncode, error) {
 	b := r.BucketsXacts(bck)
-	e := &ecEncodeEntry{baseBckEntry: baseBckEntry{bck: bck}, t: t, phase: phase}
+	e := &ecEncodeEntry{t: t, phase: phase}
 	ee, err := b.renewBucketXaction(e)
 	if err == nil {
 		return ee.Get().(*ec.XactBckEncode), nil
@@ -232,7 +231,7 @@ func (e *ecEncodeEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err 
 		keep = true
 		return
 	}
-	err = fmt.Errorf("%s(%s, phase %s): cannot %s", e.Kind(), prev.bck.Name, prev.phase, e.phase)
+	err = fmt.Errorf("%s(%s, phase %s): cannot %s", e.Kind(), prev.xact.Bck().Name, prev.phase, e.phase)
 	return
 }
 
@@ -246,10 +245,10 @@ type mncEntry struct {
 	copies int
 }
 
-func (e *mncEntry) Start(id string) error {
+func (e *mncEntry) Start(id string, bck cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
-	xmnc := mirror.NewXactMNC(id, e.bck, e.t, slab, e.copies)
+	xmnc := mirror.NewXactMNC(id, bck, e.t, slab, e.copies)
 	go xmnc.Run()
 	e.xact = xmnc
 	return nil
@@ -284,7 +283,7 @@ func (r *registry) RenewObjsRedundancy(t cluster.Target) {
 
 func (r *registry) RenewBckMakeNCopies(bck *cluster.Bck, t cluster.Target, copies int) {
 	b := r.BucketsXacts(bck)
-	e := &mncEntry{t: t, copies: copies, baseBckEntry: baseBckEntry{bck: bck}}
+	e := &mncEntry{t: t, copies: copies}
 	_, _ = b.renewBucketXaction(e)
 }
 
@@ -299,8 +298,8 @@ type dpromoteEntry struct {
 	params *cmn.ActValPromote
 }
 
-func (e *dpromoteEntry) Start(id string) error {
-	xact := mirror.NewXactDirPromote(id, e.dir, e.bck, e.t, e.params)
+func (e *dpromoteEntry) Start(id string, bck cmn.Bck) error {
+	xact := mirror.NewXactDirPromote(id, e.dir, bck, e.t, e.params)
 	go xact.Run()
 	e.xact = xact
 	return nil
@@ -310,7 +309,7 @@ func (e *dpromoteEntry) Get() cmn.Xact { return e.xact }
 
 func (r *registry) RenewDirPromote(dir string, bck *cluster.Bck, t cluster.Target, params *cmn.ActValPromote) (*mirror.XactDirPromote, error) {
 	b := r.BucketsXacts(bck)
-	e := &dpromoteEntry{t: t, dir: dir, baseBckEntry: baseBckEntry{bck: bck}, params: params}
+	e := &dpromoteEntry{t: t, dir: dir, params: params}
 	ee, err := b.renewBucketXaction(e)
 	if err == nil {
 		return ee.Get().(*mirror.XactDirPromote), nil
@@ -327,8 +326,8 @@ type loadLomCacheEntry struct {
 	xact *mirror.XactBckLoadLomCache
 }
 
-func (e *loadLomCacheEntry) Start(id string) error {
-	x := mirror.NewXactLLC(e.t, id, e.bck)
+func (e *loadLomCacheEntry) Start(id string, bck cmn.Bck) error {
+	x := mirror.NewXactLLC(e.t, id, bck)
 	go x.Run()
 	e.xact = x
 
@@ -339,7 +338,7 @@ func (e *loadLomCacheEntry) Get() cmn.Xact { return e.xact }
 
 func (r *registry) RenewBckLoadLomCache(t cluster.Target, bck *cluster.Bck) {
 	b := r.BucketsXacts(bck)
-	e := &loadLomCacheEntry{t: t, baseBckEntry: baseBckEntry{bck: bck}}
+	e := &loadLomCacheEntry{t: t}
 	b.renewBucketXaction(e)
 }
 
@@ -357,7 +356,7 @@ type putLocReplicasEntry struct {
 	xact *mirror.XactPutLRepl
 }
 
-func (e *putLocReplicasEntry) Start(id string) error {
+func (e *putLocReplicasEntry) Start(id string, _ cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
 	x, err := mirror.RunXactPutLRepl(id, e.lom, slab)
@@ -375,7 +374,7 @@ func (*putLocReplicasEntry) Kind() string    { return cmn.ActPutCopies }
 
 func (r *registry) RenewPutLocReplicas(lom *cluster.LOM) *mirror.XactPutLRepl {
 	b := r.BucketsXacts(lom.Bck())
-	e := &putLocReplicasEntry{t: lom.T, lom: lom, baseBckEntry: baseBckEntry{bck: lom.Bck()}}
+	e := &putLocReplicasEntry{t: lom.T, lom: lom}
 	ee, err := b.renewBucketXaction(e)
 	if err != nil {
 		return nil
@@ -396,7 +395,7 @@ type bccEntry struct {
 	phase   string
 }
 
-func (e *bccEntry) Start(id string) error {
+func (e *bccEntry) Start(id string, _ cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 	e.xact = mirror.NewXactBCC(id, e.bckFrom, e.bckTo, e.action, e.t, slab)
@@ -418,7 +417,7 @@ func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error
 
 func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, phase string) (*mirror.XactBckCopy, error) {
 	b := r.BucketsXacts(bckTo)
-	e := &bccEntry{baseBckEntry: baseBckEntry{bck: bckTo},
+	e := &bccEntry{
 		t:       t,
 		bckFrom: bckFrom,
 		bckTo:   bckTo,
@@ -441,7 +440,8 @@ type (
 		t          cluster.Target
 		rebManager cluster.RebManager
 		xact       *FastRen
-		bucketTo   string
+		bckFrom    *cluster.Bck
+		bckTo      *cluster.Bck
 		action     string
 		phase      string
 	}
@@ -449,7 +449,8 @@ type (
 		cmn.XactBase
 		rebManager cluster.RebManager
 		t          cluster.Target
-		bucketTo   string
+		bckFrom    *cluster.Bck
+		bckTo      *cluster.Bck
 	}
 )
 
@@ -461,10 +462,10 @@ func (r *FastRen) IsMountpathXact() bool { return false }
 func (r *FastRen) Run(waiter *sync.WaitGroup, globRebID int64) {
 	var (
 		wg               = &sync.WaitGroup{}
-		gbucket, lbucket = r.bucketTo, r.bucketTo // scoping
+		gbucket, lbucket = r.bckTo.Name, r.bckTo.Name // scoping
 	)
 
-	glog.Infoln(r.String(), r.Bck(), "=>", r.bucketTo)
+	glog.Infoln(r.String(), r.bckFrom, "=>", r.bckTo)
 
 	if Registry.DoAbort(cmn.ActLocalReb, nil) {
 		glog.Infof("%s: restarting local rebalance upon rename...", r)
@@ -490,47 +491,47 @@ func (r *FastRen) Run(waiter *sync.WaitGroup, globRebID int64) {
 	r.EndTime(time.Now())
 }
 
-func (e *FastRenEntry) Start(id string) error {
+func (e *FastRenEntry) Start(id string, bck cmn.Bck) error {
 	e.xact = &FastRen{
-		XactBase:   *cmn.NewXactBaseWithBucket(id, e.Kind(), e.bck.Bck),
+		XactBase:   *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
 		t:          e.t,
-		bucketTo:   e.bucketTo,
+		bckFrom:    e.bckFrom,
+		bckTo:      e.bckTo,
 		rebManager: e.rebManager,
 	}
 	return nil
 }
-func (e *FastRenEntry) Kind() string   { return e.action }
-func (e *FastRenEntry) Get() cmn.Xact  { return e.xact }
-func (r *FastRenEntry) Bucket() string { return r.bck.Name }
+func (e *FastRenEntry) Kind() string  { return e.action }
+func (e *FastRenEntry) Get() cmn.Xact { return e.xact }
 
 func (e *FastRenEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
 	if e.phase == cmn.ActBegin {
-		bckTo := cluster.NewBck(e.bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
-		bb := Registry.BucketsXacts(bckTo)
+		bb := Registry.BucketsXacts(e.bckTo)
 		if num := bb.len(); num > 0 {
-			err = fmt.Errorf("%s: cannot(%s=>%s) with %d in progress", e.Kind(), e.bck.Name, e.bucketTo, num)
+			err = fmt.Errorf("%s: cannot(%s=>%s) with %d in progress", e.Kind(), e.bckFrom, e.bckTo, num)
 			return
 		}
 		// TODO: more checks
 	}
 	prev := previousEntry.(*FastRenEntry)
-	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bucketTo == e.bucketTo {
+	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bckTo.Equal(e.bckTo, false /*sameID*/) {
 		prev.phase = cmn.ActCommit // transition
 		keep = true
 		return
 	}
 	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(=>%s)",
-		e.Kind(), prev.bck.Name, prev.bucketTo, prev.phase, e.phase, e.bucketTo)
+		e.Kind(), prev.bckFrom, prev.bckTo, prev.phase, e.phase, e.bckFrom)
 	return
 }
 
 func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, phase string,
 	mgr cluster.RebManager) (*FastRen, error) {
 	b := r.BucketsXacts(bckFrom)
-	e := &FastRenEntry{baseBckEntry: baseBckEntry{bck: bckFrom},
+	e := &FastRenEntry{
 		t:          t,
 		rebManager: mgr,
-		bucketTo:   bckTo.Name,
+		bckFrom:    bckFrom,
+		bckTo:      bckTo,
 		action:     cmn.ActRenameLB, // kind
 		phase:      phase,
 	}
@@ -544,10 +545,7 @@ func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.
 //
 // baseBckEntry
 //
-type baseBckEntry struct {
-	baseEntry
-	bck *cluster.Bck
-}
+type baseBckEntry struct{}
 
 func (*baseBckEntry) IsGlobal() bool { return false }
 func (*baseBckEntry) IsTask() bool   { return false }
@@ -565,5 +563,5 @@ func (b *baseBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err e
 func (b *baseBckEntry) postRenewHook(_ bucketEntry) {}
 
 func (b *baseBckEntry) Stats(xact cmn.Xact) stats.XactStats {
-	return b.stats.FillFromXact(xact, b.bck)
+	return stats.NewXactStats(xact)
 }

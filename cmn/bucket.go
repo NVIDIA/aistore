@@ -109,6 +109,10 @@ func (b Bck) String() string {
 	return fmt.Sprintf("%s/%s/%s", b.Provider, b.Ns, b.Name)
 }
 
+func (b Bck) IsAIS() bool       { return IsProviderAIS(b) }
+func (b Bck) IsCloud() bool     { return IsProviderCloud(b, false /*acceptAnon*/) }
+func (b Bck) HasProvider() bool { return b.IsAIS() || b.IsCloud() }
+
 func IsProviderAIS(bck Bck) bool {
 	return bck.Provider == ProviderAIS && bck.Ns == NsGlobal
 }

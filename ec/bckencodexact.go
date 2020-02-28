@@ -23,7 +23,7 @@ type (
 		doneCh   chan struct{}
 		mpathers map[string]*joggerBckEncode
 		t        cluster.Target
-		bck      *cluster.Bck
+		bck      cmn.Bck
 		wg       *sync.WaitGroup // to wait for EC finishes all objects
 	}
 	joggerBckEncode struct { // per mountpath
@@ -38,9 +38,9 @@ type (
 	}
 )
 
-func NewXactBckEncode(id string, bck *cluster.Bck, t cluster.Target) *XactBckEncode {
+func NewXactBckEncode(id string, bck cmn.Bck, t cluster.Target) *XactBckEncode {
 	return &XactBckEncode{
-		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActECEncode, bck.Bck),
+		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActECEncode, bck),
 		t:        t,
 		bck:      bck,
 		wg:       &sync.WaitGroup{},
@@ -65,7 +65,12 @@ func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 
 func (r *XactBckEncode) Run() (err error) {
 	var numjs int
-	if !r.bck.Props.EC.Enabled {
+
+	bck := cluster.NewBckEmbed(r.bck)
+	if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+		return err
+	}
+	if !bck.Props.EC.Enabled {
 		return fmt.Errorf("Bucket %q does not have EC enabled", r.bck.Name)
 	}
 	if numjs, err = r.init(); err != nil {

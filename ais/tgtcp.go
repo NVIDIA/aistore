@@ -1404,7 +1404,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 		return
 	}
 	ee := e.(*xaction.FastRenEntry)
-	if ee.Bucket() != bckFrom.Name {
+	if !ee.Get().Bck().Equal(bckFrom.Bck) {
 		return
 	}
 	e.Get().Abort()

@@ -8,14 +8,13 @@ package stats
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
 type XactStats interface {
 	ID() string
 	Kind() string
-	Bucket() string
+	Bck() cmn.Bck
 	StartTime() time.Time
 	EndTime() time.Time
 	ObjCount() int64
@@ -28,8 +27,7 @@ type XactStats interface {
 type BaseXactStats struct {
 	IDX         string    `json:"id"`
 	KindX       string    `json:"kind"`
-	BucketX     string    `json:"bucket"`
-	ProviderX   string    `json:"provider"`
+	BckX        cmn.Bck   `json:"bck"`
 	StartTimeX  time.Time `json:"start_time"`
 	EndTimeX    time.Time `json:"end_time"`
 	ObjCountX   int64     `json:"obj_count,string"`
@@ -43,9 +41,22 @@ type BaseXactStatsExt struct {
 	Ext interface{} `json:"ext"`
 }
 
+func NewXactStats(xact cmn.Xact) *BaseXactStats {
+	return &BaseXactStats{
+		IDX:         xact.ID(),
+		KindX:       xact.Kind(),
+		StartTimeX:  xact.StartTime(),
+		EndTimeX:    xact.EndTime(),
+		BckX:        xact.Bck(),
+		ObjCountX:   xact.ObjectsCnt(),
+		BytesCountX: xact.BytesCnt(),
+		AbortedX:    xact.Aborted(),
+	}
+}
+
 func (b *BaseXactStats) ID() string           { return b.IDX }
 func (b *BaseXactStats) Kind() string         { return b.KindX }
-func (b *BaseXactStats) Bucket() string       { return b.BucketX }
+func (b *BaseXactStats) Bck() cmn.Bck         { return b.BckX }
 func (b *BaseXactStats) StartTime() time.Time { return b.StartTimeX }
 func (b *BaseXactStats) EndTime() time.Time   { return b.EndTimeX }
 func (b *BaseXactStats) ObjCount() int64      { return b.ObjCountX }
@@ -53,20 +64,6 @@ func (b *BaseXactStats) BytesCount() int64    { return b.BytesCountX }
 func (b *BaseXactStats) Aborted() bool        { return b.AbortedX }
 func (b *BaseXactStats) Running() bool        { return b.EndTimeX.IsZero() }
 func (b *BaseXactStats) Finished() bool       { return !b.EndTimeX.IsZero() }
-func (b *BaseXactStats) FillFromXact(xact cmn.Xact, bcks ...*cluster.Bck) *BaseXactStats {
-	b.IDX = xact.ID()
-	b.KindX = xact.Kind()
-	b.StartTimeX = xact.StartTime()
-	b.EndTimeX = xact.EndTime()
-	if len(bcks) > 0 {
-		bck := bcks[0]
-		b.BucketX, b.ProviderX = bck.Name, bck.Provider
-	}
-	b.ObjCountX = xact.ObjectsCnt()
-	b.BytesCountX = xact.BytesCnt()
-	b.AbortedX = xact.Aborted()
-	return b
-}
 
 type RebalanceTargetStats struct {
 	BaseXactStats

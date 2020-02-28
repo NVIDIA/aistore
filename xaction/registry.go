@@ -73,19 +73,17 @@ type (
 		ctx context.Context
 		res atomic.Pointer
 		t   cluster.Target
-		bck *cluster.Bck
 		msg *cmn.SelectMsg
 	}
 	bckSummaryTask struct {
 		cmn.XactBase
 		ctx context.Context
 		t   cluster.Target
-		bck *cluster.Bck
 		msg *cmn.SelectMsg
 		res atomic.Pointer
 	}
 	entry interface {
-		Start(id string) error // supposed to start an xaction, will be called when entry is stored to into registry
+		Start(id string, bck cmn.Bck) error // supposed to start an xaction, will be called when entry is stored to into registry
 		Kind() string
 		Get() cmn.Xact
 		Stats(xact cmn.Xact) stats.XactStats
@@ -392,10 +390,7 @@ func (r *registry) allXactsStats(onlyRecent bool) map[string]stats.XactStats {
 	r.taskXacts.Range(func(_, val interface{}) bool {
 		xact := val.(entry)
 		taskXact := xact.Get()
-
-		stat := &stats.BaseXactStats{}
-		stat.FillFromXact(taskXact)
-		matching[taskXact.ID()] = stat
+		matching[taskXact.ID()] = stats.NewXactStats(taskXact)
 		return true
 	})
 
@@ -514,7 +509,7 @@ func (r *registry) BucketsXacts(bck *cluster.Bck) *bucketXactions {
 	if loaded {
 		return val.(*bucketXactions)
 	}
-	val, _ = r.bucketXacts.LoadOrStore(bckUname, newBucketXactions(r))
+	val, _ = r.bucketXacts.LoadOrStore(bckUname, newBucketXactions(r, bck.Bck))
 	return val.(*bucketXactions)
 }
 
@@ -536,8 +531,8 @@ func (r *registry) removeFinishedByID(id string) error {
 	return nil
 }
 
-func (r *registry) storeByID(id string, entry entry) {
-	r.byID.Store(id, entry)
+func (r *registry) storeEntry(entry entry) {
+	r.byID.Store(entry.Get().ID(), entry)
 
 	// Increase after cleanup to not force trigger it. If it was just added, for
 	// sure it didn't yet finish.
@@ -640,11 +635,11 @@ func (r *registry) renewGlobalXaction(e globalEntry) (ee globalEntry, keep bool,
 			return
 		}
 	}
-	if err = e.Start(r.uniqueID()); err != nil {
+	if err = e.Start(r.uniqueID(), cmn.Bck{}); err != nil {
 		return
 	}
 	r.globalXacts[e.Kind()] = e
-	r.storeByID(e.Get().ID(), e)
+	r.storeEntry(e)
 
 	if running {
 		e.postRenewHook(previousEntry)
@@ -731,14 +726,13 @@ func (r *registry) RenewBckListXact(ctx context.Context, t cluster.Target, bck *
 		ctx: ctx,
 		t:   t,
 		id:  id,
-		bck: bck,
 		msg: msg,
 	}
-	if err := e.Start(id); err != nil {
+	if err := e.Start(id, bck.Bck); err != nil {
 		return nil, err
 	}
 	r.taskXacts.Store(e.Kind(), e)
-	r.storeByID(e.Get().ID(), e)
+	r.storeEntry(e)
 	return e.xact, nil
 }
 
@@ -752,14 +746,13 @@ func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bc
 		id:  id,
 		ctx: ctx,
 		t:   t,
-		bck: bck,
 		msg: msg,
 	}
-	if err := e.Start(id); err != nil {
+	if err := e.Start(id, bck.Bck); err != nil {
 		return nil, err
 	}
 	r.taskXacts.Store(e.Kind(), e)
-	r.storeByID(e.Get().ID(), e)
+	r.storeEntry(e)
 	return e.xact, nil
 }
 
@@ -767,13 +760,11 @@ func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bc
 // bckListTask
 //
 
-func (r *bckListTask) IsGlobal() bool        { return false }
-func (r *bckListTask) IsTask() bool          { return true }
 func (r *bckListTask) IsMountpathXact() bool { return false }
 
 func (r *bckListTask) Run() {
-	walk := objwalk.NewWalk(r.ctx, r.t, r.bck, r.msg)
-	if r.bck.IsAIS() || r.msg.Cached {
+	walk := objwalk.NewWalk(r.ctx, r.t, r.Bck(), r.msg)
+	if r.Bck().IsAIS() || r.msg.Cached {
 		r.UpdateResult(walk.LocalObjPage())
 	} else {
 		r.UpdateResult(walk.CloudObjPage())
@@ -801,8 +792,6 @@ func (r *bckListTask) Result() (interface{}, error) {
 // bckSummaryTask
 //
 
-func (r *bckSummaryTask) IsGlobal() bool        { return false }
-func (r *bckSummaryTask) IsTask() bool          { return true }
 func (r *bckSummaryTask) IsMountpathXact() bool { return false }
 
 func (r *bckSummaryTask) Run() {
@@ -811,17 +800,17 @@ func (r *bckSummaryTask) Run() {
 		bmd     = r.t.GetBowner().Get()
 		cfg     = cmn.GCO.Get()
 	)
-	if r.bck.Name != "" {
-		buckets = append(buckets, r.bck)
+	if r.Bck().Name != "" {
+		buckets = append(buckets, cluster.NewBckEmbed(r.Bck()))
 	} else {
-		if r.bck.Provider == "" || cmn.IsProviderAIS(r.bck.Bck) {
+		if !r.Bck().HasProvider() || r.Bck().IsAIS() {
 			provider := cmn.ProviderAIS
 			bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 				buckets = append(buckets, bck)
 				return false
 			})
 		}
-		if r.bck.Provider == "" || cmn.IsProviderCloud(r.bck.Bck, true /*acceptAnon*/) {
+		if !r.Bck().HasProvider() || cmn.IsProviderCloud(r.Bck(), true /*acceptAnon*/) {
 			var (
 				provider  = cfg.Cloud.Provider
 				namespace = cfg.Cloud.Ns
@@ -903,7 +892,7 @@ func (r *bckSummaryTask) Run() {
 				)
 
 				for {
-					walk := objwalk.NewWalk(context.Background(), r.t, bck, r.msg)
+					walk := objwalk.NewWalk(context.Background(), r.t, bck.Bck, r.msg)
 					if bck.IsAIS() {
 						list, err = walk.LocalObjPage()
 					} else {

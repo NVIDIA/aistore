@@ -342,7 +342,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, bck *cluster.Bck,
 
 	for {
 		if bck.IsAIS() {
-			walk := objwalk.NewWalk(context.Background(), t, bck, msg)
+			walk := objwalk.NewWalk(context.Background(), t, bck.Bck, msg)
 			bucketListPage, err = walk.LocalObjPage()
 		} else {
 			bucketListPage, err, _ = t.Cloud().ListBucket(ctx, bck.Name, msg)

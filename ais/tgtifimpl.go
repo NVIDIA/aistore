@@ -252,6 +252,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 }
 
 func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string, overwrite, safe, verbose bool) (err error) {
+	cmn.Assert(bck.IsInitialized())
 	if err = bck.AllowPUT(); err != nil {
 		return
 	}

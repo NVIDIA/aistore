@@ -21,7 +21,6 @@ type (
 	XactDirPromote struct {
 		xactBckBase
 		dir    string
-		bck    *cluster.Bck
 		params *cmn.ActValPromote
 	}
 )
@@ -30,17 +29,16 @@ type (
 // public methods
 //
 
-func NewXactDirPromote(id, dir string, bck *cluster.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
+func NewXactDirPromote(id, dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
 	return &XactDirPromote{
 		xactBckBase: *newXactBckBase(id, cmn.ActPromote, bck, t),
 		dir:         dir,
-		bck:         bck,
 		params:      params,
 	}
 }
 
 func (r *XactDirPromote) Run() (err error) {
-	glog.Infoln(r.String(), r.dir, "=>", r.bck)
+	glog.Infoln(r.String(), r.dir, "=>", r.Bck())
 	opts := &fs.Options{
 		Dir:      r.dir,
 		Callback: r.walk,
@@ -76,7 +74,11 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		cmn.AssertNoErr(err)
 		objName = fname
 	}
-	err := r.Target().PromoteFile(fqn, r.bck, objName, r.params.Overwrite, true /*safe*/, r.params.Verbose)
+	bck := cluster.NewBckEmbed(r.Bck())
+	if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+		return err
+	}
+	err := r.Target().PromoteFile(fqn, bck, objName, r.params.Overwrite, true /*safe*/, r.params.Verbose)
 	if err != nil {
 		if finfo, ers := os.Stat(fqn); ers == nil {
 			if finfo.Mode().IsRegular() {

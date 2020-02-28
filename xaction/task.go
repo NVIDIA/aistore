@@ -13,22 +13,19 @@ import (
 )
 
 type bckListTaskEntry struct {
-	baseEntry
 	ctx  context.Context
 	xact *bckListTask
 	t    cluster.Target
 	id   string
 	msg  *cmn.SelectMsg
-	bck  *cluster.Bck
 }
 
-func (e *bckListTaskEntry) Start(_ string) error {
+func (e *bckListTaskEntry) Start(_ string, bck cmn.Bck) error {
 	xact := &bckListTask{
-		XactBase: *cmn.NewXactBase(e.id, cmn.ActAsyncTask),
+		XactBase: *cmn.NewXactBaseWithBucket(e.id, cmn.ActAsyncTask, bck),
 		ctx:      e.ctx,
 		t:        e.t,
 		msg:      e.msg,
-		bck:      e.bck,
 	}
 	e.xact = xact
 	go xact.Run()
@@ -41,25 +38,22 @@ func (e *bckListTaskEntry) IsTask() bool   { return true }
 func (e *bckListTaskEntry) Get() cmn.Xact  { return e.xact }
 func (e *bckListTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
 	cmn.Assert(e.xact == xact)
-	return e.stats.FillFromXact(e.xact)
+	return stats.NewXactStats(e.xact)
 }
 
 type bckSummaryTaskEntry struct {
-	baseEntry
 	ctx  context.Context
 	xact *bckSummaryTask
 	t    cluster.Target
 	id   string
 	msg  *cmn.SelectMsg
-	bck  *cluster.Bck
 }
 
-func (e *bckSummaryTaskEntry) Start(_ string) error {
+func (e *bckSummaryTaskEntry) Start(_ string, bck cmn.Bck) error {
 	xact := &bckSummaryTask{
-		XactBase: *cmn.NewXactBase(e.id, cmn.ActAsyncTask),
+		XactBase: *cmn.NewXactBaseWithBucket(e.id, cmn.ActAsyncTask, bck),
 		t:        e.t,
 		msg:      e.msg,
-		bck:      e.bck,
 		ctx:      e.ctx,
 	}
 	e.xact = xact
@@ -73,5 +67,5 @@ func (e *bckSummaryTaskEntry) IsTask() bool   { return true }
 func (e *bckSummaryTaskEntry) Get() cmn.Xact  { return e.xact }
 func (e *bckSummaryTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
 	cmn.Assert(e.xact == xact)
-	return e.stats.FillFromXact(e.xact)
+	return stats.NewXactStats(e.xact)
 }
