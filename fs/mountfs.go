@@ -6,6 +6,7 @@ package fs
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,13 +117,15 @@ func MountpathDis(p string) ChangeReq { return ChangeReq{Action: Disable, Path: 
 //
 
 func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *MountpathInfo {
-	return &MountpathInfo{
+	mi := &MountpathInfo{
 		Path:       cleanPath,
 		OrigPath:   origPath,
 		Fsid:       fsid,
 		FileSystem: fs,
 		PathDigest: xxhash.ChecksumString64S(cleanPath, cmn.MLCG32),
 	}
+	mi.removeDirCounter.Store(uint64(time.Now().UnixNano()))
+	return mi
 }
 
 func (mi *MountpathInfo) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
@@ -146,8 +149,7 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	// try to remove it asynchronously. In case of power cycle we expect that
 	// LRU will take care of removing the rest of the bucket.
 	var (
-		counter = mi.removeDirCounter.Inc()
-		// TODO: this should be somehow rewritten and standardized
+		counter        = mi.removeDirCounter.Inc()
 		nonExistingDir = fmt.Sprintf("$removing-%d", counter)
 		tmpDir         = filepath.Join(mi.Path, nonExistingDir)
 	)
@@ -160,9 +162,34 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	}
 	if err := os.Rename(dir, tmpDir); err != nil {
 		if os.IsExist(err) {
-			if os.Remove(tmpDir) == nil {
-				err = os.Rename(dir, tmpDir)
+			// Slow path - `tmpDir` (or rather `nonExistingDir`) for some reason already exists...
+			//
+			// Even though `nonExistingDir` should not exist we cannot fully be sure.
+			// There are at least two cases when this might not be true:
+			//  1. `nonExistingDir` is leftover after target crash.
+			//  2. Mountpath was removed and then added again. The counter
+			//     will be reset and if we will be removing dirs quickly enough
+			//     the counter will catch up with counter of the previous mountpath.
+			//     If the directories from the previous mountpath were not yet removed
+			//     (slow disk or filesystem) we can end up with the same name.
+			//     For now we try to fight this with randomizing the initial counter.
+
+			// In background remove leftover directory.
+			go func() {
+				glog.Errorf("%s already exists, removing...", tmpDir)
+				if err := os.RemoveAll(tmpDir); err != nil {
+					glog.Errorf("removing leftover %s failed, err: %v", tmpDir, err)
+				}
+			}()
+
+			// This time generate fully unique name...
+			tmpDir, err = ioutil.TempDir(mi.Path, nonExistingDir)
+			if err != nil {
+				return err
 			}
+
+			// Retry renaming - hopefully it should succeed now.
+			err = os.Rename(dir, tmpDir)
 		}
 		// Someone removed dir before os.Rename, nothing more to do.
 		if os.IsNotExist(err) {
