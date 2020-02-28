@@ -53,7 +53,6 @@ var (
 			logFlag,
 		},
 		subcmdShowObject: {
-			providerFlag,
 			objPropsFlag,
 			noHeaderFlag,
 			jsonFlag,
@@ -149,13 +148,11 @@ var (
 )
 
 func showBucketHandler(c *cli.Context) (err error) {
-	var (
-		bck    cmn.Bck
-		bucket string
-	)
-
-	bucket = c.Args().First()
-	if bck, err = validateBucket(c, bucket, "", true /* optional */); err != nil {
+	bck, objName := parseBckObjectURI(c.Args().First())
+	if objName != "" {
+		return objectNameArgumentNotSupported(c, objName)
+	}
+	if bck, err = validateBucket(c, bck, "", true); err != nil {
 		return
 	}
 	return bucketDetails(c, bck)
@@ -211,10 +208,22 @@ func showNodeHandler(c *cli.Context) (err error) {
 
 func showXactionHandler(c *cli.Context) (err error) {
 	var (
-		bck     cmn.Bck
-		xaction = c.Args().Get(0) // empty string if no arg given
-		bucket  = c.Args().Get(1) // empty string if no arg given
+		bck        cmn.Bck
+		objName    string
+		xaction    = c.Args().Get(0) // empty string if no arg given
+		bucketName = c.Args().Get(1) // empty string if no arg given
 	)
+
+	if bucketName != "" {
+		bck, objName = parseBckObjectURI(bucketName)
+		if objName != "" {
+			return objectNameArgumentNotSupported(c, objName)
+		}
+		if bck, err = validateBucket(c, bck, "", false); err != nil {
+			return
+		}
+	}
+
 	if xaction != "" {
 		if _, ok := cmn.ValidXact(xaction); !ok {
 			return fmt.Errorf("%q is not a valid xaction", xaction)
@@ -222,17 +231,11 @@ func showXactionHandler(c *cli.Context) (err error) {
 
 		// valid xaction
 		if bucketXactions.Contains(xaction) {
-			if bucket == "" {
+			if bck.Name == "" {
 				return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction '%s'", xaction))
 			}
 		} else if c.NArg() > 1 {
 			fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name\n", xaction)
-		}
-	}
-
-	if bucket != "" {
-		if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
-			return
 		}
 	}
 
@@ -281,20 +284,18 @@ func showXactionHandler(c *cli.Context) (err error) {
 
 func showObjectHandler(c *cli.Context) (err error) {
 	var (
-		bck            cmn.Bck
-		bucket, object string
-		fullObjName    = c.Args().Get(0) // empty string if no arg given
+		fullObjName = c.Args().Get(0) // empty string if no arg given
 	)
 
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in format bucket/object")
 	}
-	bucket, object = splitBucketObject(fullObjName)
-	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+	bck, object := parseBckObjectURI(fullObjName)
+	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 	if object == "" {
-		return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", fullObjName))
+		return incorrectUsageMsg(c, "no object specified in '%s'", fullObjName)
 	}
 	return objectStats(c, bck, object)
 }

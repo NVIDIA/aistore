@@ -16,11 +16,8 @@ import (
 
 var (
 	removeCmdsFlags = map[string][]cli.Flag{
-		subcmdRemoveBucket: {},
-		subcmdRemoveObject: append(
-			baseLstRngFlags,
-			providerFlag,
-		),
+		subcmdRemoveBucket:   {},
+		subcmdRemoveObject:   baseLstRngFlags,
 		subcmdRemoveNode:     {},
 		subcmdRemoveDownload: {},
 		subcmdRemoveDsort:    {},
@@ -77,47 +74,45 @@ var (
 )
 
 func removeBucketHandler(c *cli.Context) (err error) {
-	var buckets []string
+	var buckets []cmn.Bck
 
 	if buckets, err = bucketsFromArgsOrEnv(c); err != nil {
 		return
+	}
+	if err := validateOnlyLocalBuckets(buckets); err != nil {
+		return err
 	}
 
 	return destroyBuckets(c, buckets)
 }
 
 func removeObjectHandler(c *cli.Context) (err error) {
-	var (
-		bck    cmn.Bck
-		bucket string
-	)
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket name")
+	}
 
-	// default bucket or bucket argument given by the user
-	if c.NArg() == 0 || (c.NArg() == 1 && strings.HasSuffix(c.Args().Get(0), "/")) {
-		if c.NArg() == 1 {
-			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
-		}
-		if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	// single fullObjName provided. Either remove one object or listFlag/rangeFlag provided
+	if c.NArg() == 1 {
+		bck, objName := parseBckObjectURI(c.Args().First())
+		if bck, err = validateBucket(c, bck, "", false); err != nil {
 			return
 		}
+
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 			// list or range operation on a given bucket
 			return listOrRangeOp(c, commandRemove, bck)
 		}
 
-		err = fmt.Errorf("%s or %s flag not set with a single bucket argument", listFlag.Name, rangeFlag.Name)
-		return incorrectUsageError(c, err)
-	}
+		if objName == "" {
+			return incorrectUsageMsg(c, "%s or %s flag not set with a single bucket argument", listFlag.Name, rangeFlag.Name)
+		}
 
-	if c.NArg() > 0 && (flagIsSet(c, rangeFlag) || flagIsSet(c, listFlag)) {
-		err = fmt.Errorf(invalidFlagsMsgFmt, strings.Join([]string{listFlag.Name, rangeFlag.Name}, ","))
-		return incorrectUsageError(c, err)
+		// ais rm BUCKET/OBJECT_NAME - pass, multiObjOp will handle it
 	}
 
 	// list and range flags are invalid with object argument(s)
 	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
-		err = fmt.Errorf(invalidFlagsMsgFmt, strings.Join([]string{listFlag.Name, rangeFlag.Name}, ","))
-		return incorrectUsageError(c, err)
+		return incorrectUsageMsg(c, "flags %s are invalid when object names have been provided", strings.Join([]string{listFlag.Name, rangeFlag.Name}, ","))
 	}
 
 	// object argument(s) given by the user; operation on given object(s)

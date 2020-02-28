@@ -2,9 +2,9 @@ echo "0123456789" > $OBJECT_1.txt
 ais create bucket $BUCKET_1
 
 ais put $OBJECT_1.txt $BUCKET_2/object_1.txt // FAIL "Bucket with name "$BUCKET_1" does not exist."
-ais put $OBJECT_1.txt $BUCKET_1/object_1.txt --provider=cloud // FAIL "Bucket with name "cloud/$BUCKET_1" does not exist."
+ais put $OBJECT_1.txt cloud://$BUCKET_1/object_1.txt // FAIL "Bucket with name "cloud/$BUCKET_1" does not exist."
 
-ais put $OBJECT_1.txt $BUCKET_1/object_1.txt --provider=ais
+ais put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt
 ais put $OBJECT_1.txt $BUCKET_1/object_2.txt
 ais ls $BUCKET_1
 

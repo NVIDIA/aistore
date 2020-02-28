@@ -58,8 +58,7 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 	)
 
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
-		err = fmt.Errorf("%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
-		return incorrectUsageError(c, err)
+		return incorrectUsageMsg(c, "%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
 	}
 	if offset, err = getByteFlagValue(c, offsetFlag); err != nil {
 		return
@@ -540,7 +539,7 @@ func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		return
 	}
 	if flagIsSet(c, listFlag) && flagIsSet(c, rangeFlag) {
-		return incorrectUsageError(c, fmt.Errorf("flags %s and %s cannot be both set", listFlag.Name, rangeFlag.Name))
+		return incorrectUsageMsg(c, "flags %s and %s cannot be both set", listFlag.Name, rangeFlag.Name)
 	}
 
 	if flagIsSet(c, listFlag) {
@@ -619,26 +618,29 @@ func multiObjOp(c *cli.Context, command string) (err error) {
 	// stops iterating if it encounters an error
 	for _, fullObjName := range c.Args() {
 		var (
-			bck            cmn.Bck
-			bucket, object = splitBucketObject(fullObjName)
+			bck, objectName = parseBckObjectURI(fullObjName)
 		)
-		if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+		if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
 			return
 		}
-		if object == "" {
-			return incorrectUsageError(c, fmt.Errorf("'%s: missing object name", fullObjName))
+		if objectName == "" {
+			return incorrectUsageMsg(c, "'%s: missing object name", fullObjName)
 		}
+
 		switch command {
 		case commandRemove:
-			if err = api.DeleteObject(defaultAPIParams, bck, object); err != nil {
+			if err = api.DeleteObject(defaultAPIParams, bck, objectName); err != nil {
 				return
 			}
-			fmt.Fprintf(c.App.Writer, "%s deleted from %s bucket\n", object, bucket)
+			fmt.Fprintf(c.App.Writer, "%s deleted from %s bucket\n", objectName, bck)
 		case commandEvict:
-			if err = api.EvictObject(defaultAPIParams, bck, object); err != nil {
+			if cmn.IsProviderAIS(bck) {
+				return fmt.Errorf("evicting objects from AIS bucket is not allowed")
+			}
+			if err = api.EvictObject(defaultAPIParams, bck, objectName); err != nil {
 				return
 			}
-			fmt.Fprintf(c.App.Writer, "%s evicted from %s bucket\n", object, bucket)
+			fmt.Fprintf(c.App.Writer, "%s evicted from %s bucket\n", objectName, bck)
 		}
 	}
 	return

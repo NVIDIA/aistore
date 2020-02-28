@@ -1,6 +1,8 @@
 ais create bucket $BUCKET_1 $BUCKET_2
 ais cp bucket $BUCKET_1/ $BUCKET_2/
 
+ais cp bucket ais://$BUCKET_1 cloud://$BUCKET_2 // FAIL "Copying of cloud buckets not supported"
+
 sleep 2
 ais show xaction copybck $BUCKET_1/ // FAIL "Xaction '<any>, bucket=$BUCKET_1' not found"
 ais show xaction copybck $BUCKET_2/ // IGNORE

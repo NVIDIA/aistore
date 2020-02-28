@@ -13,12 +13,9 @@ import (
 var (
 	bucketSpecificCmdsFlags = map[string][]cli.Flag{
 		commandSetCopies: {
-			providerFlag,
 			copiesFlag,
 		},
-		commandECEncode: {
-			providerFlag,
-		},
+		commandECEncode: {},
 	}
 
 	bucketSpecificCmds = []cli.Command{
@@ -43,10 +40,13 @@ var (
 
 func setCopiesHandler(c *cli.Context) (err error) {
 	var (
-		bck    cmn.Bck
-		bucket = c.Args().First()
+		bck cmn.Bck
 	)
-	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	bck, objectName := parseBckObjectURI(c.Args().First())
+	if objectName != "" {
+		return objectNameArgumentNotSupported(c, objectName)
+	}
+	if bck, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
 	return configureNCopies(c, bck)
@@ -54,10 +54,13 @@ func setCopiesHandler(c *cli.Context) (err error) {
 
 func ecEncodeHandler(c *cli.Context) (err error) {
 	var (
-		bck    cmn.Bck
-		bucket = c.Args().First()
+		bck cmn.Bck
 	)
-	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	bck, objectName := parseBckObjectURI(c.Args().First())
+	if objectName != "" {
+		return objectNameArgumentNotSupported(c, objectName)
+	}
+	if bck, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
 	return ecEncode(c, bck)

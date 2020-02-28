@@ -15,7 +15,6 @@ var (
 	setCmdsFlags = map[string][]cli.Flag{
 		subcmdSetConfig: {},
 		subcmdSetProps: {
-			providerFlag,
 			jsonspecFlag,
 			resetFlag,
 		},
@@ -55,10 +54,18 @@ func setConfigHandler(c *cli.Context) (err error) {
 }
 
 func setPropsHandler(c *cli.Context) (err error) {
-	if flagIsSet(c, resetFlag) { // ignores all arguments, just resets bucket props
-		return resetBucketProps(c)
+	bck, objName := parseBckObjectURI(c.Args().First())
+	if objName != "" {
+		return objectNameArgumentNotSupported(c, objName)
 	}
-	if err = setBucketProps(c); err != nil {
+	if bck, err = validateBucket(c, bck, "", false); err != nil {
+		return
+	}
+
+	if flagIsSet(c, resetFlag) { // ignores all arguments, just resets bucket props
+		return resetBucketProps(c, bck)
+	}
+	if err = setBucketProps(c, bck); err != nil {
 		helpMsg := fmt.Sprintf("To list bucket properties, run: %s %s %s BUCKET_NAME", cliName, commandList, subcmdListBckProps)
 		return newAdditionalInfoError(err, helpMsg)
 	}

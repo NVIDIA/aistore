@@ -36,7 +36,6 @@ var (
 		subcmdListAIS:   listObjectFlags,
 		subcmdListCloud: listObjectFlags,
 		subcmdListBckProps: {
-			providerFlag,
 			jsonFlag,
 		},
 		subcmdListConfig: {
@@ -110,14 +109,12 @@ var (
 	}
 )
 
-// Note: This handler ignores aisBucketEnvVar and aisProviderEnvVar
-// because the intention is to list all buckets or auto-detect bucket provider
-// for a given bucket.
 func defaultListHandler(c *cli.Context) (err error) {
-	bck := cmn.Bck{
-		Name:     c.Args().First(),
-		Provider: "", /* any provider*/
+	bck, objName := parseBckObjectURI(c.Args().First())
+	if objName != "" {
+		return objectNameArgumentNotSupported(c, objName)
 	}
+
 	if bck.Name == "" {
 		return listBucketNames(c, bck)
 	}

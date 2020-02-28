@@ -1,0 +1,6 @@
+ais create bucket $BUCKET_1
+ais rm bucket $BUCKET_1
+
+ais rm bucket aws://$BUCKET_2 // FAIL "Cloud buckets not allowed"
+ais rm bucket cloud://$BUCKET_2 // FAIL "Cloud buckets not allowed"
+ais rm bucket gcp://$BUCKET_2 // FAIL "Cloud buckets not allowed"

@@ -1,5 +1,5 @@
 $BUCKET_1 bucket created
-PUT object_1.txt into bucket ais/$BUCKET_1
+PUT object_1.txt into bucket ais://$BUCKET_1
 PUT object_2.txt into bucket $BUCKET_1
 Name			Size	Version
 object_1.txt		11B	1

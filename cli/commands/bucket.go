@@ -6,7 +6,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -30,59 +29,52 @@ const (
 	longCommandTime = 10 * time.Second
 )
 
-func validateBucket(c *cli.Context, b string, tag string, optional bool) (bck cmn.Bck, err error) {
-	bck.Provider = bucketProvider(c)
-	bck.Name = cleanBucketName(b)
+func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn.Bck, error) {
+	var err error
+	bck.Provider = bucketProvider(c, bck.Provider)
+	bck.Name = cleanBucketName(bck.Name)
 	if bck.Name == "" {
 		if optional {
-			return
+			return bck, nil
 		}
 		if tag != "" {
-			err = incorrectUsageError(c, fmt.Errorf("'%s': missing bucket name", tag))
+			err = incorrectUsageMsg(c, "'%s': missing bucket name", tag)
 		} else {
-			err = incorrectUsageError(c, errors.New("missing bucket name"))
+			err = incorrectUsageMsg(c, "missing bucket name")
 		}
-		return
+		return bck, err
 	}
 	err = canReachBucket(bck)
-	return
+	return bck, err
 }
 
 // Creates new ais buckets
-func createBuckets(c *cli.Context, buckets []string) (err error) {
+func createBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 	// TODO: on "soft" error (bucket already exists) we will
 	// emit zero exit code - this may be problematic when using
 	// in scripts.
-	for _, bucket := range buckets {
-		bck := cmn.Bck{
-			Name:     bucket,
-			Provider: cmn.ProviderAIS,
-		}
-		if err := api.CreateBucket(defaultAPIParams, bck); err != nil {
+	for _, bck := range buckets {
+		if err = api.CreateBucket(defaultAPIParams, bck); err != nil {
 			if herr, ok := err.(*cmn.HTTPError); ok {
 				if herr.Status == http.StatusConflict {
-					fmt.Fprintf(c.App.Writer, "Bucket %q already exists\n", bucket)
+					fmt.Fprintf(c.App.Writer, "Bucket %q already exists\n", bck)
 					continue
 				}
 			}
-			return err
+			return fmt.Errorf("(%s) %s", bck, err.Error())
 		}
-		fmt.Fprintf(c.App.Writer, "%s bucket created\n", bucket)
+		fmt.Fprintf(c.App.Writer, "%s bucket created\n", bck)
 	}
 	return nil
 }
 
 // Destroy ais buckets
-func destroyBuckets(c *cli.Context, buckets []string) (err error) {
+func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 	// TODO: on "soft" error (bucket does not exist) we will
 	// emit zero exit code - this may be problematic when using
 	// in scripts.
-	for _, bucket := range buckets {
-		bck := cmn.Bck{
-			Name:     bucket,
-			Provider: cmn.ProviderAIS,
-		}
-		if err := api.DestroyBucket(defaultAPIParams, bck); err != nil {
+	for _, bck := range buckets {
+		if err = api.DestroyBucket(defaultAPIParams, bck); err != nil {
 			if herr, ok := err.(*cmn.HTTPError); ok {
 				if herr.Status == http.StatusNotFound {
 					fmt.Fprintf(c.App.Writer, "Bucket %q does not exist\n", bck)
@@ -91,21 +83,13 @@ func destroyBuckets(c *cli.Context, buckets []string) (err error) {
 			}
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "%s bucket destroyed\n", bucket)
+		fmt.Fprintf(c.App.Writer, "%s bucket destroyed\n", bck)
 	}
 	return nil
 }
 
 // Rename ais bucket
-func renameBucket(c *cli.Context, fromBucket, toBucket string) (err error) {
-	fromBck := cmn.Bck{
-		Name:     fromBucket,
-		Provider: cmn.ProviderAIS,
-	}
-	toBck := cmn.Bck{
-		Name:     toBucket,
-		Provider: cmn.ProviderAIS,
-	}
+func renameBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	if err = canReachBucket(fromBck); err != nil {
 		return
 	}
@@ -176,7 +160,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 
 	msg := &cmn.SelectMsg{Props: props, Prefix: prefix, Cached: flagIsSet(c, cachedFlag)}
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, parseStrFlag(c, providerFlag))
+	query = cmn.AddBckToQuery(query, bck)
 	query.Add(cmn.URLParamPrefix, prefix)
 	if flagIsSet(c, cachedFlag) && cmn.IsProviderAIS(bck) {
 		fmt.Fprintf(c.App.ErrWriter, "warning: ignoring %s flag: irrelevant for ais buckets\n", cachedFlag.Name)
@@ -312,27 +296,18 @@ func reformatBucketProps(bck cmn.Bck, nvs cmn.SimpleKVs) error {
 }
 
 // Sets bucket properties
-func setBucketProps(c *cli.Context) (err error) {
+func setBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 	var (
-		bck       cmn.Bck
 		propsArgs = c.Args().Tail()
-		bucket    = c.Args().First()
 	)
 
 	// For setting bucket props via action message
 	if flagIsSet(c, jsonspecFlag) {
-		return setBucketPropsJSON(c)
+		return setBucketPropsJSON(c, bck)
 	}
-	if strings.Contains(bucket, keyAndValueSeparator) {
-		// First argument is a key-value pair -> bucket should be read from env variable
-		bucket = ""
-		propsArgs = c.Args()
-	}
+
 	if len(propsArgs) == 0 {
 		return missingArgumentsError(c, "property key-value pairs")
-	}
-	if bck, err = validateBucket(c, bucket, "", false /*optional*/); err != nil {
-		return
 	}
 
 	// For setting bucket props via URL query string
@@ -356,16 +331,11 @@ func setBucketProps(c *cli.Context) (err error) {
 	return
 }
 
-func setBucketPropsJSON(c *cli.Context) (err error) {
+func setBucketPropsJSON(c *cli.Context, bck cmn.Bck) (err error) {
 	var (
-		bck        cmn.Bck
 		props      cmn.BucketPropsToUpdate
-		bucket     = c.Args().First()
 		inputProps = parseStrFlag(c, jsonspecFlag)
 	)
-	if bck, err = validateBucket(c, bucket, "", false /*optional*/); err != nil {
-		return
-	}
 	if err := jsoniter.Unmarshal([]byte(inputProps), &props); err != nil {
 		return err
 	}
@@ -378,14 +348,7 @@ func setBucketPropsJSON(c *cli.Context) (err error) {
 }
 
 // Resets bucket props
-func resetBucketProps(c *cli.Context) (err error) {
-	var (
-		bck    cmn.Bck
-		bucket = c.Args().First()
-	)
-	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
-		return
-	}
+func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = canReachBucket(bck); err != nil {
 		return
 	}
@@ -401,10 +364,13 @@ func resetBucketProps(c *cli.Context) (err error) {
 // Get bucket props
 func listBucketProps(c *cli.Context) (err error) {
 	var (
-		bck    cmn.Bck
-		bucket = c.Args().First()
+		bck cmn.Bck
 	)
-	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	bck, objName := parseBckObjectURI(c.Args().First())
+	if objName != "" {
+		return objectNameArgumentNotSupported(c, objName)
+	}
+	if bck, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
 	bckProps, err := api.HeadBucket(defaultAPIParams, bck)

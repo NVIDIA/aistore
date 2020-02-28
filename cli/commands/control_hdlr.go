@@ -109,9 +109,9 @@ var (
 
 func startXactionHandler(c *cli.Context) (err error) {
 	var (
-		bck     cmn.Bck
 		xaction = c.Args().First() // empty string if no args given
-		bucket  string
+		bck     cmn.Bck
+		objName string
 	)
 
 	if c.NArg() == 0 {
@@ -127,8 +127,11 @@ func startXactionHandler(c *cli.Context) (err error) {
 			fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name\n", xaction)
 		}
 	} else { // bucket related xaction
-		bucket = c.Args().Get(1)
-		if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+		bck, objName = parseBckObjectURI(c.Args().Get(1))
+		if objName != "" {
+			return objectNameArgumentNotSupported(c, objName)
+		}
+		if bck, err = validateBucket(c, bck, "", false); err != nil {
 			return
 		}
 	}
@@ -143,6 +146,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 func stopXactionHandler(c *cli.Context) (err error) {
 	var (
 		bck     cmn.Bck
+		objName string
 		xaction = c.Args().First() // empty string if no args given
 	)
 
@@ -157,8 +161,11 @@ func stopXactionHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("%q is not a valid xaction", xaction)
 	} else { // valid xaction
 		if bucketXactions.Contains(xaction) {
-			bucket := c.Args().Get(1)
-			if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+			bck, objName = parseBckObjectURI(c.Args().Get(1))
+			if objName != "" {
+				return objectNameArgumentNotSupported(c, objName)
+			}
+			if bck, err = validateBucket(c, bck, "", false); err != nil {
 				return
 			}
 		} else if c.NArg() > 1 {

@@ -36,10 +36,9 @@ const (
 	fileStdIO            = "-"
 
 	// Error messages
-	dockerErrMsgFmt    = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
-	invalidDaemonMsg   = "%s is not a valid DAEMON_ID"
-	invalidCmdMsg      = "invalid command name '%s'"
-	invalidFlagsMsgFmt = "flags %s are invalid when arguments have been provided"
+	dockerErrMsgFmt  = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
+	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
+	invalidCmdMsg    = "invalid command name '%s'"
 
 	// Scheme parsing
 	defaultScheme = "https"
@@ -100,6 +99,19 @@ func incorrectUsageError(c *cli.Context, err error) error {
 		helpData:     c.Command,
 		helpTemplate: cli.CommandHelpTemplate,
 	}
+}
+
+func incorrectUsageMsg(c *cli.Context, fmtString string, args ...interface{}) error {
+	return &usageError{
+		context:      c,
+		message:      fmt.Sprintf(fmtString, args...),
+		helpData:     c.Command,
+		helpTemplate: cli.CommandHelpTemplate,
+	}
+}
+
+func objectNameArgumentNotSupported(c *cli.Context, objectName string) error {
+	return incorrectUsageMsg(c, "object name (%s) argument not supported", objectName)
 }
 
 func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
@@ -464,28 +476,52 @@ func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 	return tmplLong
 }
 
-func splitBucketObject(objname string) (bucket string, object string) {
-	s := strings.Split(objname, "/")
-	if len(s) > 1 {
-		bucket = s[0]
-		object = strings.Join(s[1:], "/")
-		return
+func parseBckObjectURI(objName string) (bck cmn.Bck, object string) {
+	const (
+		bucketSepa = "/"
+	)
+
+	providerSplit := strings.SplitN(objName, cmn.BckProviderSeparator, 2)
+	if len(providerSplit) > 1 && (cmn.IsValidProvider(providerSplit[0]) || providerSplit[0] == cmn.Cloud) {
+		bck.Provider = providerSplit[0]
+		objName = providerSplit[1]
 	}
-	return s[0], ""
+
+	s := strings.SplitN(objName, bucketSepa, 2)
+	bck.Name = s[0]
+	if len(s) > 1 {
+		object = s[1]
+	}
+
+	return
 }
 
-func bucketsFromArgsOrEnv(c *cli.Context) ([]string, error) {
-	buckets := c.Args()
+func validateOnlyLocalBuckets(buckets []cmn.Bck) error {
+	for _, bck := range buckets {
+		if cmn.IsProviderCloud(bck, true) {
+			return fmt.Errorf("cloud buckets not allowed (%s)", bck)
+		}
+		bck.Provider = cmn.ProviderAIS
+	}
+	return nil
+}
 
-	var nonEmptyBuckets cli.Args
-	for _, bucket := range buckets {
+func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
+	bucketNames := c.Args()
+	bcks := make([]cmn.Bck, 0, len(bucketNames))
+
+	for _, bucket := range bucketNames {
+		bck, objName := parseBckObjectURI(bucket)
+		if objName != "" {
+			return nil, objectNameArgumentNotSupported(c, objName)
+		}
 		if bucket != "" {
-			nonEmptyBuckets = append(nonEmptyBuckets, cleanBucketName(bucket))
+			bcks = append(bcks, bck)
 		}
 	}
 
-	if len(nonEmptyBuckets) != 0 {
-		return nonEmptyBuckets, nil
+	if len(bcks) != 0 {
+		return bcks, nil
 	}
 
 	return nil, missingArgumentsError(c, "bucket name")

@@ -15,23 +15,15 @@ import (
 
 var (
 	objectSpecificCmdsFlags = map[string][]cli.Flag{
-		commandPrefetch: append(
-			baseLstRngFlags,
-			providerFlag,
-		),
-		commandEvict: append(
-			baseLstRngFlags,
-			providerFlag,
-		),
+		commandPrefetch: baseLstRngFlags,
+		commandEvict:    baseLstRngFlags,
 		commandGet: {
-			providerFlag,
 			offsetFlag,
 			lengthFlag,
 			checksumFlag,
 			isCachedFlag,
 		},
 		commandPut: {
-			providerFlag,
 			recursiveFlag,
 			trimPrefixFlag,
 			concurrencyFlag,
@@ -41,7 +33,6 @@ var (
 			dryRunFlag,
 		},
 		commandPromote: {
-			providerFlag,
 			recursiveFlag,
 			overwriteFlag,
 			trimPrefixFlag,
@@ -49,7 +40,6 @@ var (
 			verboseFlag,
 		},
 		commandConcat: {
-			providerFlag,
 			verboseFlag,
 			recursiveFlag,
 		},
@@ -121,16 +111,28 @@ var (
 
 func prefetchHandler(c *cli.Context) (err error) {
 	var (
-		bck    cmn.Bck
-		bucket string
+		bck cmn.Bck
 	)
 
-	if c.NArg() > 0 {
-		bucket = strings.TrimSuffix(c.Args().Get(0), "/")
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket name")
 	}
-	if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+	if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "too many arguments")
+	}
+
+	bck, objectName := parseBckObjectURI(c.Args().First())
+	if cmn.IsProviderAIS(bck) {
+		return fmt.Errorf("prefetch command doesn't support local buckets")
+	}
+	if bck, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
+	//FIXME: it can be easily handled
+	if objectName != "" {
+		return incorrectUsageMsg(c, "object name not supported, use list flag or range flag")
+	}
+
 	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 		return listOrRangeOp(c, commandPrefetch, bck)
 	}
@@ -139,32 +141,40 @@ func prefetchHandler(c *cli.Context) (err error) {
 }
 
 func evictHandler(c *cli.Context) (err error) {
-	var (
-		bck    cmn.Bck
-		bucket string
-	)
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket name")
+	}
 
 	// default bucket or bucket argument given by the user
-	if c.NArg() == 0 || (c.NArg() == 1 && strings.HasSuffix(c.Args().Get(0), "/")) {
-		if c.NArg() == 1 {
-			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
+	if c.NArg() == 1 {
+		bck, objName := parseBckObjectURI(c.Args().First())
+		if cmn.IsProviderAIS(bck) {
+			return fmt.Errorf("evict command doesn't support local buckets")
 		}
-		if bck, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
+
+		if bck, err = validateBucket(c, bck, "", false); err != nil {
 			return
 		}
+
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
+			if objName != "" {
+				return incorrectUsageMsg(c, "object name (%s) not supported when list or range flag provided", objName)
+			}
 			// list or range operation on a given bucket
 			return listOrRangeOp(c, commandEvict, bck)
 		}
 
-		// operation on a given bucket
-		return evictBucket(c, bck)
+		if objName == "" {
+			// operation on a given bucket
+			return evictBucket(c, bck)
+		}
+
+		// evict single object from cloud bucket - multiObjOp will handle
 	}
 
 	// list and range flags are invalid with object argument(s)
 	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
-		err = fmt.Errorf(invalidFlagsMsgFmt, strings.Join([]string{listFlag.Name, rangeFlag.Name}, ","))
-		return incorrectUsageError(c, err)
+		return incorrectUsageMsg(c, "flags %s are invalid when object names have been provided", strings.Join([]string{listFlag.Name, rangeFlag.Name}, ","))
 	}
 
 	// object argument(s) given by the user; operation on given object(s)
@@ -173,10 +183,10 @@ func evictHandler(c *cli.Context) (err error) {
 
 func getHandler(c *cli.Context) (err error) {
 	var (
-		bck             cmn.Bck
-		bucket, objName string
-		fullObjName     = c.Args().Get(0) // empty string if arg not given
-		outFile         = c.Args().Get(1) // empty string if arg not given
+		bck         cmn.Bck
+		objName     string
+		fullObjName = c.Args().Get(0) // empty string if arg not given
+		outFile     = c.Args().Get(1) // empty string if arg not given
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
@@ -184,22 +194,22 @@ func getHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 && !flagIsSet(c, isCachedFlag) {
 		return missingArgumentsError(c, "output file")
 	}
-	bucket, objName = splitBucketObject(fullObjName)
-	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+	bck, objName = parseBckObjectURI(fullObjName)
+	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 	if objName == "" {
-		return incorrectUsageError(c, fmt.Errorf("'%s': missing object name", fullObjName))
+		return incorrectUsageMsg(c, "'%s': missing object name", fullObjName)
 	}
 	return getObject(c, bck, objName, outFile)
 }
 
 func putHandler(c *cli.Context) (err error) {
 	var (
-		bck             cmn.Bck
-		bucket, objName string
-		fileName        = c.Args().Get(0)
-		fullObjName     = c.Args().Get(1)
+		bck         cmn.Bck
+		objName     string
+		fileName    = c.Args().Get(0)
+		fullObjName = c.Args().Get(1)
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "file to upload", "object name in the form bucket/[object]")
@@ -207,8 +217,9 @@ func putHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
-	bucket, objName = splitBucketObject(fullObjName)
-	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+	bck, objName = parseBckObjectURI(fullObjName)
+
+	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 
@@ -217,8 +228,8 @@ func putHandler(c *cli.Context) (err error) {
 
 func concatHandler(c *cli.Context) (err error) {
 	var (
-		bck             cmn.Bck
-		bucket, objName string
+		bck     cmn.Bck
+		objName string
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "at least one file to upload", "object name in the form bucket/[object]")
@@ -233,11 +244,11 @@ func concatHandler(c *cli.Context) (err error) {
 		fileNames[i] = c.Args().Get(i)
 	}
 
-	bucket, objName = splitBucketObject(fullObjName)
+	bck, objName = parseBckObjectURI(fullObjName)
 	if objName == "" {
 		return fmt.Errorf("object name is required")
 	}
-	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 
@@ -246,10 +257,10 @@ func concatHandler(c *cli.Context) (err error) {
 
 func promoteHandler(c *cli.Context) (err error) {
 	var (
-		bck             cmn.Bck
-		bucket, objName string
-		fqn             = c.Args().Get(0)
-		fullObjName     = c.Args().Get(1)
+		bck         cmn.Bck
+		objName     string
+		fqn         = c.Args().Get(0)
+		fullObjName = c.Args().Get(1)
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "file|directory to promote")
@@ -257,8 +268,9 @@ func promoteHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
-	bucket, objName = splitBucketObject(fullObjName)
-	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+
+	bck, objName = parseBckObjectURI(fullObjName)
+	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 	return promoteFileOrDir(c, bck, objName, fqn)
@@ -266,7 +278,6 @@ func promoteHandler(c *cli.Context) (err error) {
 
 func catHandler(c *cli.Context) (err error) {
 	var (
-		bucket      string
 		bck         cmn.Bck
 		objName     string
 		fullObjName = c.Args().Get(0) // empty string if arg not given
@@ -278,12 +289,12 @@ func catHandler(c *cli.Context) (err error) {
 		return incorrectUsageError(c, fmt.Errorf("too many arguments"))
 	}
 
-	bucket, objName = splitBucketObject(fullObjName)
-	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+	bck, objName = parseBckObjectURI(fullObjName)
+	if bck, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
 		return
 	}
 	if objName == "" {
-		return incorrectUsageError(c, fmt.Errorf("'%s': missing object name", fullObjName))
+		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
 	}
 	return getObject(c, bck, objName, fileStdIO)
 }

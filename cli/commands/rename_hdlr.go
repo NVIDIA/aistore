@@ -6,7 +6,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
@@ -47,36 +46,52 @@ var (
 )
 
 func renameBucketHandler(c *cli.Context) (err error) {
-	bucket, newBucket, err := getOldNewBucketName(c)
+	bucketName, newBucketName, err := getOldNewBucketName(c)
 	if err != nil {
 		return
 	}
-	return renameBucket(c, bucket, newBucket)
+	bck, objName := parseBckObjectURI(bucketName)
+	newBck, newObjName := parseBckObjectURI(newBucketName)
+
+	if cmn.IsProviderCloud(bck, true) || cmn.IsProviderCloud(newBck, true) {
+		return fmt.Errorf("renaming of cloud buckets not supported")
+	}
+	if objName != "" {
+		return objectNameArgumentNotSupported(c, objName)
+	}
+	if newObjName != "" {
+		return objectNameArgumentNotSupported(c, objName)
+	}
+
+	bck.Provider, newBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS
+
+	return renameBucket(c, bck, newBck)
 }
 
 func renameObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() != 2 {
-		return incorrectUsageError(c, errors.New("invalid number of arguments"))
+		return incorrectUsageMsg(c, "invalid number of arguments")
 	}
 	var (
 		oldObjFull = c.Args().Get(0)
 		newObj     = c.Args().Get(1)
-		bucket     string
-		oldObj     string
+
+		oldObj string
+		bck    cmn.Bck
 	)
 
-	bucket, oldObj = splitBucketObject(oldObjFull)
+	bck, oldObj = parseBckObjectURI(oldObjFull)
 	if oldObj == "" {
-		return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", oldObjFull))
+		return incorrectUsageMsg(c, "no object specified in '%s'", oldObjFull)
 	}
-	if bucket == "" {
-		return incorrectUsageError(c, fmt.Errorf("no bucket specified for object '%s'", oldObj))
+	if bck.Name == "" {
+		return incorrectUsageMsg(c, "no bucket specified for object '%s'", oldObj)
+	}
+	if bck.Provider != "" && !bck.IsAIS() {
+		return incorrectUsageMsg(c, "provider '%s' not supported", bck.Provider)
 	}
 
-	bck := cmn.Bck{
-		Name:     bucket,
-		Provider: cmn.ProviderAIS,
-	}
+	bck.Provider = cmn.ProviderAIS
 	if err = api.RenameObject(defaultAPIParams, bck, oldObj, newObj); err != nil {
 		return
 	}

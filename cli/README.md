@@ -83,11 +83,10 @@ To add a new resource to a new command,
 ## Default flag and argument values via environment variables
 
 #### Bucket Provider
-If `AIS_BUCKET_PROVIDER` environment variable is set, the `--provider` flag is set to the value of this variable.
-Setting `--provider` flag overwrites the default value.
+If `AIS_BUCKET_PROVIDER` environment variable is set, the default bucket provider is set to the value of this variable.
+If provider is given in `BUCKET_NAME` ie `aws://BUCKET_NAME`, `AIS_BUCKET_PROVIDER` is ignored.
+Provider syntax `[provider://]BUCKET_NAME` is valid CLI-wide, meaning that every command supporting `BUCKET_NAME` argument
+also supports provider syntax. For more details refer to each command's documentation.
 
-## Enums
-
-| Enum | Values | Description |
-| --- | --- | --- |
-| Provider | `ais`, `cloud`, `""` | Locality of the bucket. If empty, AIS automatically determines the locality. |
+Allowed values: `''` (autodetect provider), `ais` (local cluster), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform),
+`cloud` (anonymous - cloud provider determined automatically)

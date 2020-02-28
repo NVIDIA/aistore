@@ -6,6 +6,8 @@
 package commands
 
 import (
+	"fmt"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -34,17 +36,24 @@ var (
 )
 
 func copyBucketHandler(c *cli.Context) (err error) {
-	bucket, newBucket, err := getOldNewBucketName(c)
+	bucketName, newBucketName, err := getOldNewBucketName(c)
 	if err != nil {
 		return
 	}
-	fromBck := cmn.Bck{
-		Name:     bucket,
-		Provider: cmn.ProviderAIS,
+	fromBck, objName := parseBckObjectURI(bucketName)
+	toBck, newObjName := parseBckObjectURI(newBucketName)
+
+	if cmn.IsProviderCloud(fromBck, true) || cmn.IsProviderCloud(toBck, true) {
+		return fmt.Errorf("copying of cloud buckets not supported")
 	}
-	toBck := cmn.Bck{
-		Name:     newBucket,
-		Provider: cmn.ProviderAIS,
+	if objName != "" {
+		return objectNameArgumentNotSupported(c, objName)
 	}
+	if newObjName != "" {
+		return objectNameArgumentNotSupported(c, objName)
+	}
+
+	fromBck.Provider, toBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS
+
 	return copyBucket(c, fromBck, toBck)
 }

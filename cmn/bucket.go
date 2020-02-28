@@ -18,6 +18,8 @@ const (
 	ProviderAIS    = "ais"
 
 	nsSeparator = '#'
+
+	BckProviderSeparator = "://"
 )
 
 type (
@@ -101,12 +103,12 @@ func (b Bck) String() string {
 		if b.Provider == "" {
 			return b.Name
 		}
-		return fmt.Sprintf("%s/%s", b.Provider, b.Name)
+		return fmt.Sprintf("%s%s%s", b.Provider, BckProviderSeparator, b.Name)
 	}
 	if b.Provider == "" {
 		return fmt.Sprintf("%s/%s", b.Ns, b.Name)
 	}
-	return fmt.Sprintf("%s/%s/%s", b.Provider, b.Ns, b.Name)
+	return fmt.Sprintf("%s%s%s/%s", b.Provider, BckProviderSeparator, b.Ns, b.Name)
 }
 
 func (b Bck) IsAIS() bool       { return IsProviderAIS(b) }

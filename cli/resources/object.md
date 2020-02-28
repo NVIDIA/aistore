@@ -10,7 +10,6 @@ GET object from bucket.
 | --- | --- | --- | --- |
 | `--offset` | `string` | Read offset, which can end with size suffix (k, MB, GiB, ...) | `""` |
 | `--length` | `string` | Read length, which can end with size suffix (k, MB, GiB, ...) |  `""` |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--checksum` | `bool` | Validate the checksum of the object | `false` |
 | `--is-cached` | `bool` | Check if the object is cached locally, without downloading it. | `false` |
 
@@ -24,10 +23,10 @@ GET object from bucket.
 $ ais get mybucket/myobj.txt ~/obj.txt
 ```
 
-2) GET object `myobj.txt` from bucket `mybucket` and write it to standard output
+2) GET object `myobj.txt` from cloud bucket `mybucket` and write it to standard output
 
 ```sh
-$ ais get mybucket/myobj.txt -
+$ ais get cloud://mybucket/myobj.txt -
 ```
 
 3) Check if object `myobj.txt` from bucket `mybucket` is cached locally
@@ -108,7 +107,6 @@ PUT an object or entire directory (of objects) into the specified bucket. If CLI
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--trim-prefix` | `string` | Prefix that is removed when constructing object name from file name. Used if `OBJECT_NAME` is not given set <sup id="a2">[2](#ft2)</sup> | `""` |
 | `--verbose` or `-v` | `bool` | Enable printing the result of every PUT | `false` |
 | `--yes` or `-y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
@@ -152,21 +150,21 @@ All examples below put into an empty bucket and the source directory structure i
 
 The current user HOME directory is `/home/user`.
 
-1) PUT a single file `img1.tar` into bucket `mybucket`, name it `img-set-1.tar`
+1) PUT a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`
 ```sh
-$ ais put "/home/user/bck/img1.tar" mybucket/img-set-1.tar
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 
-# PUT /home/user/bck/img1.tar => mybucket/img-set-1.tar
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
-1) PUT a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name
+2) PUT a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name
 ```sh
 $ ais put "~/bck/img1.tar" mybucket/
 
 # PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img-set-1.tar
 ```
 
-2) PUT two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into the root of bucket `mybucket`. Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default
+3) PUT two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into the root of bucket `mybucket`. Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default
 ```sh
 $ ais put "/home/user/bck" mybucket
 
@@ -174,7 +172,7 @@ $ ais put "/home/user/bck" mybucket
 # PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img2.zip
 ```
 
-3) `--trim-prefix` is expanded with user's home directory into `/home/user/bck`, so the final bucket content is `img1.tar`, `img2.zip`, `extra/img1.tar` and `extra/img3.zip`
+4) `--trim-prefix` is expanded with user's home directory into `/home/user/bck`, so the final bucket content is `img1.tar`, `img2.zip`, `extra/img1.tar` and `extra/img3.zip`
 ```sh
 $ ais put "/home/user/bck" mybucket/ --trim-prefix=~/bck --recursive
 
@@ -184,7 +182,7 @@ $ ais put "/home/user/bck" mybucket/ --trim-prefix=~/bck --recursive
 # PUT /home/user/bck/extra/img3.zip => mybucket/extra/img3.zip
 ```
 
-4) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `img1.tar` and `extra/img1.tar
+5) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `img1.tar` and `extra/img1.tar
 ```sh
 $ ais put "~/bck/*.tar" mybucket/ --trim-prefix=~/bck --recursive
 
@@ -192,7 +190,7 @@ $ ais put "~/bck/*.tar" mybucket/ --trim-prefix=~/bck --recursive
 # PUT /home/user/bck/extra/img1.tar => mybucket/extra/img1.tar
 ```
 
-5) PUT 9 files to `mybucket` using range request. Object names formatted as `/home/user/dir/test${d1}${d2}.txt`
+6) PUT 9 files to `mybucket` using range request. Object names formatted as `/home/user/dir/test${d1}${d2}.txt`
 ```shell script
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
@@ -201,7 +199,7 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
 # PUT /home/user/dir/test00.txt => /home/user/dir/test00.txt and 8 more
 ```
 
-6) Same as above, except object names are in format `test${d1}${d2}.txt`
+7) Same as above, except object names are in format `test${d1}${d2}.txt`
 ```shell script
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --trim-prefix=~/dir
@@ -211,7 +209,7 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --trim-prefix=~/dir
 ```
 
 
-7) Preview the files that would be sent to the cluster, without really putting them.
+8) Preview the files that would be sent to the cluster, without really putting them.
 ```shell script
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --trim-prefix=~/dir --dry-run
@@ -220,7 +218,7 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --trim-prefix=~/dir --dry-run
 (...)
 ```
 
-8) Put multiple directories into the cluster with range syntax
+9) Put multiple directories into the cluster with range syntax
 ```shell script
 $ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/test${d2}.txt; done; done
 $ ais put "dir{0..10}" mybucket -y
@@ -246,7 +244,6 @@ Colocation in the context means that the files in question are already located *
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--trim-prefix` | `string` | Pathname prefix that is omitted i.e., not used to generate object names | `""` |
 | `--verbose` or `-v` | `bool` | Verbose printout | `false` |
 | `--target` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
@@ -325,7 +322,6 @@ Delete an object or list/range of objects from the bucket.
 | `--prefix` | `string` | Prefix for range deletion | `""` |
 | `--regex` | `string` | Regex for range deletion | `""` |
 | `--deadline` | `string` | Time duration before the request expires [(Go's time.Duration string)](https://golang.org/pkg/time/#Duration.String) | `0s` (no deadline) |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--wait` | `bool` | Wait for operation to finish before returning response | `true` |
 
 <a name="ft3">3</a> Options `--list,--range` and argument(s) `OBJECT_NAME` are mutually exclusive. List and range deletions expect only a bucket name; if one or more
@@ -366,7 +362,6 @@ $ ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"
 | `--prefix` | `string` | Prefix for range deletion | `""` |
 | `--regex` | `string` | Regex for range deletion | `""` |
 | `--deadline` | `string` | Time duration before the request expires [(Go's time.Duration string)](https://golang.org/pkg/time/#Duration.String) | `0s` (no deadline) |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--wait` | `bool` | Wait for operation to finish before returning response | `true` |
 
 <a name="ft4">4</a> Options `--list,--range` and argument(s) `OBJECT_NAME` are mutually exclusive. List and range evictions expect only a bucket name; if one or more
@@ -402,13 +397,12 @@ cloudbucket	0	    0B	    0%	    aws
 | `--prefix` | `string` | Prefix for range deletion | `""` |
 | `--regex` | `string` | Regex for range deletion | `""` |
 | `--deadline` | `string` | Time duration before the request expires [(Go's time.Duration string)](https://golang.org/pkg/time/#Duration.String) | `0s` (no deadline) |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--wait` | `bool` | Wait for operation to finish before returning response | `true` |
 
 
 | Command | Description |
 | --- | --- |
-| `ais prefetch cloudbucket --provider aws --list 'o1,o2,o3` | Downloads copies of objects o1,o2,o3 from AWS bucket named `cloudbucket` and stores them in the AIS cluster  |
+| `ais prefetch aws://cloudbucket --list 'o1,o2,o3` | Downloads copies of objects o1,o2,o3 from AWS bucket named `cloudbucket` and stores them in the AIS cluster  |
 
 ### Rename
 

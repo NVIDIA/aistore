@@ -27,7 +27,6 @@ As for `DESTINATION` location, the only supported schema is `ais://` and the lin
 | --- | --- | --- | --- |
 | `--description, --desc` | `string` | Description of the download job | `""` |
 | `--timeout` | `string` | Timeout for request to external resource | `""` |
-| `--provider` | [Provider](../README.md#enums) | Provider of the destination bucket | `""` or [default](../README.md#bucket-provider) |
 
 #### Examples
 
