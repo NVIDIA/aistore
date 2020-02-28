@@ -101,8 +101,8 @@ func (m *Manager) start() (err error) {
 		return err
 	}
 
-	// Run phase 3. only if you are final target (and actually have any sorted records)
-	if curTargetIsFinal && m.recManager.Records.Len() > 0 {
+	// Phase 3. - run only by the final target
+	if curTargetIsFinal {
 		shardSize := m.rs.OutputShardSize
 		if m.extractCreator.UsingCompression() {
 			// By making the assumption that the input content is reasonably
@@ -121,6 +121,15 @@ func (m *Manager) start() (err error) {
 	}
 
 	cmn.FreeMemToOS()
+
+	// Wait for signal to start shard creations. This will happen when manager
+	// notice that the specification for shards to be created locally was received.
+	select {
+	case <-m.startShardCreation:
+		break
+	case <-m.listenAborted():
+		return newDsortAbortedError(m.ManagerUUID)
+	}
 
 	// After each target participates in the cluster-wide record distribution,
 	// start listening for the signal to start creating shards locally.

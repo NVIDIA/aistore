@@ -641,6 +641,48 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 	)
 }
 
+func TestDistributedSortWithEmptyBucket(t *testing.T) {
+	runDSortTest(
+		t, dsortTestSpec{p: true, types: dsorterTypes, reactions: cmn.SupportedReactions},
+		func(dsorterType, reaction string, t *testing.T) {
+			var (
+				m = &ioContext{
+					t: t,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       100,
+					fileInTarballCnt: 10,
+					maxMemUsage:      "99%",
+					missingShards:    reaction,
+				}
+			)
+
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+			df.init()
+
+			tutils.Logln("starting distributed sort...")
+			df.start()
+
+			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(reaction == cmn.AbortReaction /*expectAbort*/)
+			df.checkReactionResult(reaction, df.tarballCnt)
+		},
+	)
+}
+
 func TestDistributedSortWithOutputBucket(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)

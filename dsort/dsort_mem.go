@@ -325,15 +325,6 @@ func (ds *dsorterMem) loadContent() extract.LoadContentFunc {
 // createShardsLocally waits until it's given the signal to start creating
 // shards, then creates shards in parallel.
 func (ds *dsorterMem) createShardsLocally() (err error) {
-	// Wait for signal to start shard creations. This will happen when manager
-	// notice that specification for shards to be created locally was received.
-	select {
-	case <-ds.m.startShardCreation:
-		break
-	case <-ds.m.listenAborted():
-		return newDsortAbortedError(ds.m.ManagerUUID)
-	}
-
 	var (
 		phaseInfo = &ds.m.creationPhase
 	)
