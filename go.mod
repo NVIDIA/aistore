@@ -33,4 +33,5 @@ require (
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e
 	google.golang.org/api v0.14.0
+	gopkg.in/yaml.v2 v2.2.4
 )

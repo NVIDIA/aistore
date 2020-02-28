@@ -78,25 +78,36 @@ type parsedOutputTemplate struct {
 // nolint:maligned // no performance critical code
 type RequestSpec struct {
 	// Required
-	Bucket          string `json:"bucket"`
-	Extension       string `json:"extension"`
-	InputFormat     string `json:"input_format"`
-	OutputFormat    string `json:"output_format"`
-	OutputShardSize string `json:"output_shard_size"`
+	Bucket          string `json:"bucket" yaml:"bucket"`
+	Extension       string `json:"extension" yaml:"extension"`
+	InputFormat     string `json:"input_format" yaml:"input_format"`
+	OutputFormat    string `json:"output_format" yaml:"output_format"`
+	OutputShardSize string `json:"output_shard_size" yaml:"output_shard_size"`
 
 	// Optional
-	Description      string        `json:"description"`
-	OutputBucket     string        `json:"output_bucket"`             // Default: same as `bucket` field
-	Algorithm        SortAlgorithm `json:"algorithm"`                 // Default: alphanumeric, increasing
-	OrderFileURL     string        `json:"order_file"`                // Default: ""
-	OrderFileSep     string        `json:"order_file_sep"`            // Default: "\t"
-	MaxMemUsage      string        `json:"max_mem_usage"`             // Default: "80%"
-	Provider         string        `json:"provider"`                  // Default: "ais"
-	OutputProvider   string        `json:"output_provider"`           // Default: "ais"
-	ExtractConcLimit int           `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
-	CreateConcLimit  int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
-	StreamMultiplier int           `json:"stream_multiplier"`         // Default: transport.IntraBundleMultiplier
-	ExtendedMetrics  bool          `json:"extended_metrics"`          // Default: false
+	Description string `json:"description" yaml:"description"`
+	// Default: same as `bucket` field
+	OutputBucket string `json:"output_bucket" yaml:"output_bucket"`
+	// Default: alphanumeric, increasing
+	Algorithm SortAlgorithm `json:"algorithm" yaml:"algorithm"`
+	// Default: ""
+	OrderFileURL string `json:"order_file" yaml:"order_file"`
+	// Default: "\t"
+	OrderFileSep string `json:"order_file_sep" yaml:"order_file_sep"`
+	// Default: "80%"
+	MaxMemUsage string `json:"max_mem_usage" yaml:"max_mem_usage"`
+	// Default: "ais"
+	Provider string `json:"provider" yaml:"provider"`
+	// Default: "ais"
+	OutputProvider string `json:"output_provider" yaml:"output_provider"`
+	// Default: DefaultConcLimit
+	ExtractConcLimit int `json:"extract_concurrency_limit" yaml:"extract_concurrency_limit"`
+	// Default: DefaultConcLimit
+	CreateConcLimit int `json:"create_concurrency_limit" yaml:"create_concurrency_limit"`
+	// Default: transport.IntraBundleMultiplier
+	StreamMultiplier int `json:"stream_multiplier" yaml:"stream_multiplier"`
+	// Default: false
+	ExtendedMetrics bool `json:"extended_metrics" yaml:"extended_metrics"`
 
 	// debug
 	DSorterType string `json:"dsorter_type"`

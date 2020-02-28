@@ -6,7 +6,11 @@
 package commands
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
@@ -14,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -26,7 +31,9 @@ var (
 			timeoutFlag,
 			descriptionFlag,
 		},
-		subcmdStartDsort: {},
+		subcmdStartDsort: {
+			specFileFlag,
+		},
 	}
 
 	stopCmdsFlags = map[string][]cli.Flag{
@@ -259,16 +266,57 @@ func stopDownloadHandler(c *cli.Context) (err error) {
 }
 
 func startDsortHandler(c *cli.Context) (err error) {
-	var id string
-
-	if c.NArg() == 0 {
+	var (
+		id       string
+		specPath = parseStrFlag(c, specFileFlag)
+	)
+	if c.NArg() == 0 && specPath == "" {
 		return missingArgumentsError(c, "job specification")
+	} else if c.NArg() > 0 && specPath != "" {
+		return &usageError{
+			context:      c,
+			message:      "multiple job specifications provided, expected one",
+			helpData:     c.Command,
+			helpTemplate: cli.CommandHelpTemplate,
+		}
+	}
+
+	var specBytes []byte
+	if specPath == "" {
+		// Specification provided as an argument.
+		specBytes = []byte(c.Args().First())
+	} else {
+		// Specification provided as path to the file (flag).
+		var r io.Reader
+		if specPath == fileStdIO {
+			r = os.Stdin
+		} else {
+			f, err := os.Open(specPath)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			r = f
+		}
+
+		var b bytes.Buffer
+		// Read at most 1MB so we don't blow up when reading a malicious file.
+		if _, err := io.CopyN(&b, r, cmn.MiB); err == nil {
+			return errors.New("file too big")
+		} else if err != io.EOF {
+			return err
+		}
+		specBytes = b.Bytes()
 	}
 
 	var rs dsort.RequestSpec
-	body := c.Args().First()
-	if err := jsoniter.Unmarshal([]byte(body), &rs); err != nil {
-		return err
+	if errj := jsoniter.Unmarshal(specBytes, &rs); errj != nil {
+		if erry := yaml.Unmarshal(specBytes, &rs); erry != nil {
+			return fmt.Errorf(
+				"failed to determine the type of the job specification, errs: (%v, %v)",
+				errj, erry,
+			)
+		}
 	}
 
 	if id, err = api.StartDSort(defaultAPIParams, rs); err != nil {

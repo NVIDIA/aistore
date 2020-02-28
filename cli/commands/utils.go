@@ -33,7 +33,7 @@ import (
 const (
 	Infinity             = -1
 	keyAndValueSeparator = "="
-	outFileStdout        = "-"
+	fileStdIO            = "-"
 
 	// Error messages
 	dockerErrMsgFmt       = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"

@@ -72,7 +72,7 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 	query.Add(cmn.URLParamOffset, offset)
 	query.Add(cmn.URLParamLength, length)
 
-	if outFile == outFileStdout {
+	if outFile == fileStdIO {
 		objArgs = api.GetObjectInput{Writer: os.Stdout, Query: query}
 	} else {
 		var file *os.File

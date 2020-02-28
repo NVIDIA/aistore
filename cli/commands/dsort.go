@@ -449,7 +449,7 @@ func printMetrics(w io.Writer, id string) (aborted, finished bool, err error) {
 		finished = finished && targetMetrics.Creation.Finished
 	}
 
-	b, err := jsoniter.MarshalIndent(resp, "", "\t")
+	b, err := jsoniter.MarshalIndent(resp, "", "  ")
 	if err != nil {
 		return false, false, err
 	}

@@ -18,7 +18,6 @@ Puts randomly generated shards that can be used for dSort testing.
 | `--cleanup` | `bool` | When set, the old bucket will be deleted and created again | `false` |
 | `--conc` | `int` | Limits number of concurrent `PUT` requests and number of concurrent shards created | `10` |
 
-
 #### Examples
 
 | Command | Explanation |
@@ -28,11 +27,17 @@ Puts randomly generated shards that can be used for dSort testing.
 
 ### Start
 
-`ais start dsort JSON_SPECIFICATION`
+`ais start dsort JOB_SPEC` or `ais start dsort -f <PATH_TO_JOB_SPEC>`
 
-Starts new dSort job with the provided specification. Upon creation, `JOB_ID` of the
-job is returned - it can then be used to abort it or retrieve metrics. The following
-table describes JSON keys which can be used in the specification.
+Starts new dSort job with the provided specification.
+Specification should be provided by either argument or `-f` flag - providing both argument and flag will result in error.
+Upon creation, `JOB_ID` of the job is returned - it can then be used to abort it or retrieve metrics.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--file, -f` | `string` | Path to file containing JSON or YAML job specification. Providing `-` will result in reading from STDIN | `""` |
+
+The following table describes JSON/YAML keys which can be used in the specification.
 
 | Key | Type | Description | Required | Default |
 | --- | --- | --- | --- | --- |
@@ -74,10 +79,11 @@ For more information refer to [configuration](/docs/configuration.md).
 #### Sort records inside the shards
 
 Command defined below starts (alphanumeric) sorting job with extended metrics for **input** shards with names `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
-Each of the **output** shards will have at least `10240` bytes and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
+Each of the **output** shards will have at least `10240` bytes (`10KB`) and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
 
-```bash
-ais start dsort '{
+Assuming that `dsort_spec.json` contains:
+```
+{
     "extension": ".tar",
     "bucket": "dsort-testing",
     "input_format": "shard-{0..9}",
@@ -90,7 +96,32 @@ ais start dsort '{
     "extract_concurrency_limit": 3,
     "create_concurrency_limit": 5,
     "extended_metrics": true
-}'
+}
+```
+
+You can start dSort job with:
+```bash
+$ ais start dsort -f dsort_spec.json
+JGHEoo89gg
+```
+
+#### Shuffle records
+
+Command defined below starts basic shuffle job for **input** shards with names `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
+Each of the **output** shards will have at least `10240` bytes (`10KB`) and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
+
+```bash
+$ ais start dsort -f - <<EOM
+extension: .tar
+bucket: dsort-testing
+input_format: shard-{0..9}
+output_format: new-shard-{0000..1000}
+output_shard_size: 10KB
+description: shuffle shards from 0 to 9
+algorithm:
+    kind: shuffle
+EOM
+JGHEoo89gg
 ```
 
 #### Pack records into shards with different categories - EKM (External Key Map)
@@ -128,7 +159,7 @@ shard-1.tar:
 
 You can run:
 ```bash
-ais start dsort '{
+$ ais start dsort '{
     "extension": ".tar",
     "bucket": "dsort-testing",
     "input_format": "shard-{0..9}",
@@ -139,6 +170,7 @@ ais start dsort '{
     "extract_concurrency_limit": 3,
     "create_concurrency_limit": 5
 }'
+JGHEoo89gg
 ```
 
 After the run, the **output** shards will look more or less like this (the number of records in given shard depends on provided `output_shard_size`):
@@ -171,6 +203,7 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 | `--log` | `string` | Path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
 
 #### Examples
+
 | Command | Explanation |
 | --- | --- |
 | `ais show dsort` | Shows all dSort jobs |
@@ -200,6 +233,7 @@ Stops the dSort job with given `JOB_ID`.
 Removes the finished dSort job with given `JOB_ID` from the job list.
 
 #### Examples
+
 | Command | Explanation |
 | --- | --- |
 | `ais rm dsort 5JjIuGemR` | Removes the dSort job with ID `5JjIuGemR` from the list of dSort jobs |
