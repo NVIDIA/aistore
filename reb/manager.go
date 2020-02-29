@@ -77,6 +77,7 @@ type (
 		semaCh     chan struct{}
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
 		xreb       *xaction.GlobalReb
+		xrebMx     sync.Mutex
 		stages     *nodeStages
 		ec         *ecData
 		globRebID  atomic.Int64

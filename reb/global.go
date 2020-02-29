@@ -70,7 +70,14 @@ func (reb *Manager) globalRebPrecheck(md *globArgs, globRebID int64) bool {
 func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
 	reb.stages.stage.Store(rebStageInit)
+	// It the only place that modifies `reb.xreb`. Since only single rebalance
+	// can be active at a time, we have to protect `xreb` from races just
+	// because `xreb` can be read by another goroutine: it is node health
+	// handler that reads GetGlobStatus. Using atomic pointer reads for only
+	// two places looked overhead, so a separate mutex is used.
+	reb.xrebMx.Lock()
 	reb.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, globRebID, reb.statRunner)
+	reb.xrebMx.Unlock()
 	defer reb.xreb.MarkDone()
 
 	if len(buckets) > 0 {

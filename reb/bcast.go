@@ -50,7 +50,9 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 	status.Aborted, status.Running = IsRebalancing(cmn.ActGlobalReb)
 	status.Stage = reb.stages.stage.Load()
 	status.GlobRebID = reb.globRebID.Load()
+	reb.xrebMx.Lock()
 	status.Quiescent = reb.isQuiescent()
+	reb.xrebMx.Unlock()
 	if status.Stage > rebStageECGlobRepair && status.Stage < rebStageECCleanup {
 		status.BatchCurr = int(reb.stages.currBatch.Load())
 		status.BatchLast = int(reb.stages.lastBatch.Load())

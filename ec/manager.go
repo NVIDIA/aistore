@@ -373,13 +373,13 @@ func (mgr *Manager) enableBck(bck *cluster.Bck) {
 }
 
 func (mgr *Manager) BucketsMDChanged() {
+	mgr.Lock()
 	newBckMD := mgr.t.GetBowner().Get()
 	oldBckMD := mgr.bmd
 	if newBckMD.Version <= mgr.bmd.Version {
+		mgr.Unlock()
 		return
 	}
-
-	mgr.Lock()
 	mgr.bmd = newBckMD
 	mgr.Unlock()
 
