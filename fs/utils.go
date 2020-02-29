@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -81,4 +82,38 @@ func pathPrefixMatch(mpath, targ string) (rel string, match bool) {
 		return "", false
 	}
 	return targ[t0:], true
+}
+
+func IsDirEmpty(dir string) (names []string, empty bool, err error) {
+	var f *os.File
+	f, err = os.Open(dir)
+	if err != nil {
+		return nil, false, err
+	}
+	defer f.Close()
+	names, err = f.Readdirnames(-1)
+	if err == io.EOF {
+		return nil, true, nil
+	}
+	if err != nil {
+		return
+	}
+	l := len(names)
+	empty = true
+	if l == 0 {
+		return
+	}
+	for _, sub := range names {
+		subdir := filepath.Join(dir, sub)
+		if finfo, erc := os.Stat(subdir); erc == nil {
+			if !finfo.IsDir() {
+				empty = false
+				break
+			}
+			if _, empty, _ = IsDirEmpty(subdir); !empty { // recurs
+				break
+			}
+		}
+	}
+	return names[:cmn.Min(8, l)], empty, nil
 }

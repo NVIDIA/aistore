@@ -257,16 +257,6 @@ func (m *smapX) validateUUID(newSmap *smapX, si, nsi *cluster.Snode, caller stri
 	return
 }
 
-/* TODO -- FIXME: make use
-func (m *smapX) lostTargets(check *smapX) (lost []string) {
-	for id := range m.Tmap {
-		if _, ok := check.Tmap[id]; !ok {
-			lost = append(lost, id)
-		}
-	}
-	return
-}
-*/
 func (m *smapX) pp() string {
 	s, _ := jsoniter.MarshalIndent(m, "", " ")
 	return string(s)
@@ -297,13 +287,8 @@ func (r *smapOwner) load(smap *smapX, config *cmn.Config) error {
 	return jsp.Load(filepath.Join(config.Confdir, smapFname), smap, jsp.CCSign())
 }
 
-func (r *smapOwner) Get() *cluster.Smap {
-	return &r.get().Smap
-}
-
-func (r *smapOwner) Listeners() cluster.SmapListeners {
-	return r.listeners
-}
+func (r *smapOwner) Get() *cluster.Smap               { return &r.get().Smap }
+func (r *smapOwner) Listeners() cluster.SmapListeners { return r.listeners }
 
 //
 // private to the package

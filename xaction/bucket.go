@@ -486,7 +486,7 @@ func (r *FastRen) Run(waiter *sync.WaitGroup, globRebID int64) {
 	r.rebManager.RunGlobalReb(r.t.GetSowner().Get(), globRebID, gbucket)
 	wg.Wait()
 
-	r.t.BMDVersionFixup(r.Bck(), false) // piggyback bucket renaming (last step) on getting updated BMD
+	r.t.BMDVersionFixup(nil, r.Bck(), false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.EndTime(time.Now())
 }
 

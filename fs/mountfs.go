@@ -551,32 +551,30 @@ func (mfs *MountedFS) Get() (MPI, MPI) {
 // DisableFsIDCheck disables fsid checking when adding new mountpath
 func (mfs *MountedFS) DisableFsIDCheck() { mfs.checkFsID = false }
 
-func (mfs *MountedFS) CreateBuckets(op string, bcks ...cmn.Bck) error {
-	const createStr = "create-ais-bucket-dir"
+func (mfs *MountedFS) CreateBuckets(op string, bcks ...cmn.Bck) (errs []error) {
 	var (
 		availablePaths, _ = mfs.Get()
 		totalDirs         = len(availablePaths) * len(bcks) * len(CSM.RegisteredContentTypes)
-		totalCreatedDirs  = 0
+		totalCreatedDirs  int
 	)
-
 	for _, mi := range availablePaths {
 		for _, bck := range bcks {
 			num, err := mi.createBckDirs(bck)
 			if err != nil {
-				glog.Errorf("%s: failed to %s (bck: %s, mpath: %q, err: %v)", op, createStr, bck, mi.Path, err)
+				errs = append(errs, err)
+			} else {
+				totalCreatedDirs += num
 			}
-			totalCreatedDirs += num
 		}
 	}
-
-	if totalCreatedDirs != totalDirs {
-		return fmt.Errorf("failed to create %d out of %d buckets' directories: %v", totalDirs-totalCreatedDirs, totalDirs, bcks)
+	if errs == nil && totalCreatedDirs != totalDirs {
+		errs = append(errs, fmt.Errorf("failed to create %d out of %d buckets' directories: %v",
+			totalDirs-totalCreatedDirs, totalDirs, bcks))
 	}
-
-	if glog.FastV(4, glog.SmoduleFS) {
-		glog.Infof("%s: %s (buckets %v, num dirs %d)", op, createStr, bcks, totalDirs)
+	if errs == nil && glog.FastV(4, glog.SmoduleFS) {
+		glog.Infof("%s(create bucket dirs): %v, num=%d", op, bcks, totalDirs)
 	}
-	return nil
+	return
 }
 
 func (mfs *MountedFS) DestroyBuckets(op string, bcks ...cmn.Bck) error {
@@ -675,16 +673,22 @@ func (mfs *MountedFS) updatePaths(available, disabled MPI) {
 	mfs.xattrMpath.Store(unsafe.Pointer(nil))
 }
 
-// Creates directories for a single bucket on a singe mountpath, which is one directory for each content type.
+// Creates all CT directories for a given (mountpath, bck)
+// NOTE handling of empty dirs
 func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
 	for contentType := range CSM.RegisteredContentTypes {
 		dir := mi.MakePathCT(bck, contentType)
 		if err := Access(dir); err == nil {
-			if names, empty, errEmpty := cmn.IsDirEmpty(dir); errEmpty != nil {
+			names, empty, errEmpty := IsDirEmpty(dir)
+			if errEmpty != nil {
 				return num, errEmpty
-			} else if !empty {
-				return num, fmt.Errorf("bucket %s: directory %s already exists and is not empty (%v...)",
-					bck, dir, names)
+			}
+			if !empty {
+				err = fmt.Errorf("bucket %s: directory %s already exists and is not empty (%v...)", bck, dir, names)
+				if contentType != WorkfileType {
+					return num, err
+				}
+				glog.Warning(err)
 			}
 		} else if err := cmn.CreateDir(dir); err != nil {
 			return num, fmt.Errorf("bucket %s: failed to create directory %s: %v", bck, dir, err)
@@ -694,7 +698,7 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
 	return num, nil
 }
 
-// mountpathsCopy returns shallow copy of current mountpaths
+// mountpathsCopy returns a shallow copy of current mountpaths
 func (mfs *MountedFS) mountpathsCopy() (MPI, MPI) {
 	availablePaths, disabledPaths := mfs.Get()
 	availableCopy := make(MPI, len(availablePaths))

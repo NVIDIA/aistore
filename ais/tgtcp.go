@@ -60,11 +60,10 @@ func (t *targetrunner) initHostIP() {
 	glog.Infof("AIS_HOSTIP[Public Network]: %s[%s]", hostIP, t.si.URL(cmn.NetworkPublic))
 }
 
-// target registration with proxy
+// register (join | keepalive) with primary
 func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
 	var (
 		res      callResult
-		meta     targetRegMeta
 		url, psi = t.getPrimaryURLAndSI()
 	)
 	if !keepalive {
@@ -83,29 +82,29 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 		return
 	}
 	cmn.Assert(!keepalive)
+	err = t.applyRegMeta(res.outjson, "")
+	return
+}
 
-	err = jsoniter.Unmarshal(res.outjson, &meta)
+func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
+	var meta targetRegMeta
+	err = jsoniter.Unmarshal(body, &meta)
 	cmn.AssertNoErr(err)
 
 	// There's a window of time between:
 	// a) target joining existing cluster and b) cluster starting to rebalance itself
-	// The latter is driven by metasync (see metasync.go) distributing the new Smap.
+	// The latter is driven by metasync (see metasync.go) distributing updated cluster map.
 	// To handle incoming GETs within this window (which would typically take a few seconds or less)
 	// we need to have the current cluster-wide metadata and the temporary gfn state:
 	t.gfn.global.activateTimed()
 
-	// bmd
+	// BMD
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
-	if err = t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
-		glog.Errorf("%s: bad BMD, err: %v", t.si, err)
-		if _, incompat := err.(*errPrxBmdUUIDDiffer); incompat {
-			return
-		}
-		err = nil
-	} else {
+	err = t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, caller)
+	if err == nil {
 		glog.Infof("%s: %s", t.si, t.owner.bmd.get())
 	}
-	// smap
+	// Smap
 	if err := t.owner.smap.synchronize(meta.Smap, true /* lesserIsErr */); err != nil {
 		glog.Errorf("%s: sync Smap err %v", t.si, err)
 	} else {
@@ -487,36 +486,16 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if len(apiItems) > 0 {
 		switch apiItems[0] {
 		case cmn.UserRegister:
-			// TODO: this is duplicated in `t.register`. The difference is that
-			// here we are reregistered by the user and in `t.register` is
-			// registering new target. This needs to be consolidated somehow.
-			//
-			// There's a window of time between:
-			// a) target joining existing cluster and b) cluster starting to rebalance itself
-			// The latter is driven by metasync (see metasync.go) distributing the new Smap.
-			// To handle incoming GETs within this window (which would typically take a few seconds or less)
-			t.gfn.global.activateTimed()
-
-			if glog.V(3) {
-				glog.Infoln("Sending register signal to target keepalive control channel")
-			}
 			gettargetkeepalive().keepalive.send(kaRegisterMsg)
-
-			// Receive most recent smap and bmd.
-			var meta targetRegMeta
-			if err := cmn.ReadJSON(w, r, &meta); err != nil {
+			body, err := cmn.ReadBytes(r)
+			if err != nil {
+				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
-
-			msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
-			if err := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
-				glog.Errorf("error registering %s: %v", t.si, err)
-				if _, incompat := err.(*errPrxBmdUUIDDiffer); incompat {
-					t.invalmsghdlr(w, r, err.Error())
-					return
-				}
+			caller := r.Header.Get(cmn.HeaderCallerName)
+			if err := t.applyRegMeta(body, caller); err != nil {
+				t.invalmsghdlr(w, r, err.Error())
 			}
-			t.owner.smap.synchronize(meta.Smap, true /* lesserIsErr */)
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -528,12 +507,12 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if status, err := t.register(false, cmn.DefaultTimeout); err != nil {
-		s := fmt.Sprintf("%s failed to register with proxy, status %d, err: %v", t.si, status, err)
+		s := fmt.Sprintf("%s: failed to register, status %d, err: %v", t.si, status, err)
 		t.invalmsghdlr(w, r, s)
 		return
 	}
 
-	if glog.V(3) {
+	if glog.FastV(3, glog.SmoduleAIS) {
 		glog.Infof("Registered %s(self)", t.si)
 	}
 }
@@ -707,7 +686,8 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 	// files directly and put them directly on mountpaths. This can lead to
 	// problems where we get from new mountpath without asking other (old)
 	// mountpaths if they have it (local rebalance has not yet finished).
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been added during %s job - aborting due to possible errors", mountpath, cmn.DSortName))
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been added during %s job - aborting due to possible errors",
+		mountpath, cmn.DSortName))
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -720,20 +700,42 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
-	var from string
-	if caller != "" {
-		from = " from " + caller
-	}
-	if msgInt.Action == "" {
-		glog.Infof("%s: %s %s%s", t.si, tag, newBMD, from)
-	} else {
-		glog.Infof("%s: %s %s%s, action %s", t.si, tag, newBMD, from, msgInt.Action)
-	}
-
-	t.owner.bmd.Lock()
+	err = t._recvBMD(newBMD, msgInt, tag, caller)
+	t.transactions.callback(newBMD, err, caller)
+	return
+}
+func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
+	const (
+		downgrade = "attempt to downgrade"
+		failed    = "failed to receive BMD"
+	)
 	var (
-		bmd          = t.owner.bmd.get()
-		myver        = bmd.version()
+		call, act               string
+		createErrs, destroyErrs string
+		bmd                     = t.owner.bmd.get()
+		curVer                  = bmd.version()
+	)
+	if newBMD.version() <= curVer {
+		if newBMD.version() < curVer {
+			err = fmt.Errorf("%s: %s %s to %s", t.si, downgrade, bmd.StringEx(), newBMD.StringEx())
+			glog.Error(err)
+		}
+		return
+	}
+	if caller != "" {
+		call = ", caller " + caller
+	}
+	if msgInt.Action != "" {
+		act = ", action " + msgInt.Action
+	}
+	glog.Infof("%s: %s cur=%s, new=%s%s%s", t.si, tag, bmd, newBMD, act, call)
+	//
+	// under lock =======================
+	//
+	t.owner.bmd.Lock()
+	bmd = t.owner.bmd.get()
+	curVer = bmd.version()
+	var (
 		na           = bmd.NumAIS(nil /*all namespaces*/)
 		bcksToDelete = make([]*cluster.Bck, 0, na)
 		provider     = cmn.ProviderAIS
@@ -744,24 +746,39 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 		cmn.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
 		return
 	}
-
-	if newBMD.version() <= myver {
+	if newBMD.version() <= curVer {
 		t.owner.bmd.Unlock()
-		if newBMD.version() < myver {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", t.si, bmd.StringEx(), newBMD.StringEx())
+		if newBMD.version() < curVer {
+			err = fmt.Errorf("%s: %s %s to %s", t.si, downgrade, bmd.StringEx(), newBMD.StringEx())
+			glog.Error(err)
 		}
 		return
 	}
-	t.owner.bmd.put(newBMD)
-	t.owner.bmd.Unlock()
 
-	if tag != bucketMDRegister {
-		// Don't call ecmanager as it has not been initialized just yet
-		// ecmanager will pick up fresh bucketMD when initialized
-		ec.ECM.BucketsMDChanged()
+	// create buckets dirs under lock
+	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {
+		if bmd.Exists(bck, bck.Props.BID) {
+			return false
+		}
+		errs := fs.Mountpaths.CreateBuckets("receive-bmd-create-bck", bck.Bck)
+		for _, err := range errs {
+			createErrs += "[" + err.Error() + "]"
+		}
+		return false
+	})
+
+	// NOTE: create-dir errors are _not_ ignored
+	if createErrs != "" {
+		t.owner.bmd.Unlock()
+		glog.Errorf("%s: %s - create err: %s", t.si, failed, createErrs)
+		err = errors.New(createErrs)
+		return
 	}
 
-	// Delete buckets that do not exist in the new BMD
+	// accept the new one
+	t.owner.bmd.put(newBMD)
+
+	// delete buckets dirs under lock - errors tolerated
 	bmd.Range(&provider, nil, func(obck *cluster.Bck) bool {
 		var present bool
 		newBMD.Range(&provider, nil, func(nbck *cluster.Bck) bool {
@@ -791,12 +808,19 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 			bcksToDelete = append(bcksToDelete, obck)
 			// TODO: errors from `DestroyBuckets` should be handled locally. If we
 			//  would like to propagate them, the code in metasyncer should be revisited.
-			if err := fs.Mountpaths.DestroyBuckets("receive-bmd", obck.Bck); err != nil {
-				glog.Error(err)
+			if err := fs.Mountpaths.DestroyBuckets("receive-bmd-destroy-bck", obck.Bck); err != nil {
+				destroyErrs = err.Error()
 			}
 		}
 		return false
 	})
+
+	t.owner.bmd.Unlock() // unlocked ================
+
+	if destroyErrs != "" {
+		glog.Errorf("%s: %s - destroy err: %s", t.si, failed, destroyErrs)
+		err = errors.New(createErrs)
+	}
 
 	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
 	//       disable mirroring (needed in part for cloud buckets)
@@ -808,20 +832,11 @@ func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgIntern
 			}
 		}(bcksToDelete...)
 	}
-
-	// Create buckets that have been added
-	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {
-		if bmd.Exists(bck, bck.Props.BID) {
-			return false
-		}
-
-		// TODO: errors from `CreateBuckets` should be handled locally. If we
-		//  would like to propagate them, the code in metasyncer should be revisited.
-		if err := fs.Mountpaths.CreateBuckets("receive-bmd", bck.Bck); err != nil {
-			glog.Error(err)
-		}
-		return false
-	})
+	if tag != bucketMDRegister {
+		// Don't call ecmanager as it has not been initialized just yet
+		// ecmanager will pick up fresh bucketMD when initialized
+		ec.ECM.BucketsMDChanged()
+	}
 
 	return
 }
@@ -877,25 +892,27 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 	return
 }
 
-func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
+func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal, r *http.Request) {
+	// Smap
 	smap := t.owner.smap.Get()
 	smapVersion := msgInt.SmapVersion
 	if smap.Version < smapVersion {
 		glog.Errorf("own %s < v%d - fetching latest for %v", smap, smapVersion, msgInt.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
-		t.smapVersionFixup()
+		t.smapVersionFixup(r)
 	} else if smap.Version > smapVersion {
 		// if metasync outraces the request, we end up here, just log it and continue
 		glog.Errorf("own %s > v%d - encountered during %v", smap, smapVersion, msgInt.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 	}
+	// BMD
 
 	bucketmd := t.owner.bmd.Get()
 	bmdVersion := msgInt.BMDVersion
 	if bucketmd.Version < bmdVersion {
 		glog.Errorf("own %s < v%d - fetching latest for %v", bucketmd, bmdVersion, msgInt.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
-		t.BMDVersionFixup(cmn.Bck{}, false)
+		t.BMDVersionFixup(r, cmn.Bck{}, false)
 	} else if bucketmd.Version > bmdVersion {
 		// if metasync outraces the request, we end up here, just log it and continue
 		glog.Errorf("own %s > v%d - encountered during %v", bucketmd, bmdVersion, msgInt.Action)
@@ -1014,20 +1031,27 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	return nil
 }
 
-func (t *targetrunner) smapVersionFixup() {
-	newSmap := &smapX{}
+func (t *targetrunner) smapVersionFixup(r *http.Request) {
+	var (
+		newSmap = &smapX{}
+		caller  string
+	)
 	err := t.fetchPrimaryMD(cmn.GetWhatSmap, newSmap, "")
 	if err != nil {
 		glog.Error(err)
 		return
 	}
 	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatSmap, newSmap, nil)
-	t.receiveSmap(newSmap, msgInt, "")
+	if r != nil {
+		caller = r.Header.Get(cmn.HeaderCallerName)
+	}
+	t.receiveSmap(newSmap, msgInt, caller)
 }
 
-func (t *targetrunner) BMDVersionFixup(bck cmn.Bck, sleep bool) {
+func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool) {
+	var caller string
 	if sleep {
-		time.Sleep(200 * time.Millisecond) // FIXME: request proxy to execute syncCBmeta()
+		time.Sleep(200 * time.Millisecond) // TODO -- FIXME: request proxy to execute syncCBmeta()
 	}
 	newBucketMD := &bucketMD{}
 	err := t.fetchPrimaryMD(cmn.GetWhatBMD, newBucketMD, bck.Name)
@@ -1036,7 +1060,10 @@ func (t *targetrunner) BMDVersionFixup(bck cmn.Bck, sleep bool) {
 		return
 	}
 	msgInt := t.newActionMsgInternalStr("get-what="+cmn.GetWhatBMD, nil, newBucketMD)
-	t.receiveBucketMD(newBucketMD, msgInt, bucketMDFixup, "")
+	if r != nil {
+		caller = r.Header.Get(cmn.HeaderCallerName)
+	}
+	t.receiveBucketMD(newBucketMD, msgInt, bucketMDFixup, caller)
 }
 
 // handler for: /v1/tokens
@@ -1132,13 +1159,13 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 // GET /v1/health (cmn.Health)
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		callerID   = r.Header.Get(cmn.HeaderCallerID)
-		callerName = r.Header.Get(cmn.HeaderCallerName)
-		smap       = t.owner.smap.get()
-		query      = r.URL.Query()
+		callerID = r.Header.Get(cmn.HeaderCallerID)
+		caller   = r.Header.Get(cmn.HeaderCallerName)
+		smap     = t.owner.smap.get()
+		query    = r.URL.Query()
 	)
 
-	if callerID == "" && callerName == "" {
+	if callerID == "" && caller == "" {
 		// External call - eg. by user to check if target is alive or by kubernetes service.
 		//
 		// TODO: we most probably need to split the external API call and
@@ -1149,20 +1176,20 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("%s: external health-ping from %s", t.si, r.RemoteAddr)
 		}
 		return
-	} else if callerID == "" || callerName == "" {
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si, callerID, callerName))
+	} else if callerID == "" || caller == "" {
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si, callerID, caller))
 		return
 	}
 
 	if !smap.containsID(callerID) {
-		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si, callerID, callerName)
+		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si, callerID, caller)
 	}
 
 	callerSmapVer, _ := strconv.ParseInt(r.Header.Get(cmn.HeaderCallerSmapVersion), 10, 64)
 	if smap.version() != callerSmapVer {
 		glog.Warningf(
 			"%s: health-ping from node (%s, %s) which has different smap version: our (%d), node's (%d)",
-			t.si, callerID, callerName, smap.version(), callerSmapVer,
+			t.si, callerID, caller, smap.version(), callerSmapVer,
 		)
 	}
 
@@ -1178,11 +1205,11 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	if smap.GetProxy(callerID) != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: health-ping from %s", t.si, callerName)
+			glog.Infof("%s: health-ping from %s", t.si, caller)
 		}
 		t.keepalive.heardFrom(callerID, false)
 	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: health-ping from %s", t.si, callerName)
+		glog.Infof("%s: health-ping from %s", t.si, caller)
 	}
 }
 
@@ -1347,7 +1374,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 					}
 					continue
 				}
-				if names, empty, err := cmn.IsDirEmpty(path); err != nil {
+				if names, empty, err := fs.IsDirEmpty(path); err != nil {
 					return err
 				} else if !empty {
 					return fmt.Errorf("directory %q already exists and is not empty (%v...)",

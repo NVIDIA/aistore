@@ -62,13 +62,12 @@ type (
 		timedLookup atomic.Bool
 		refCount    uint32
 	}
-
 	capUsed struct {
 		sync.RWMutex
 		used int32
 		oos  bool
 	}
-
+	// main
 	targetrunner struct {
 		httprunner
 		cloud         cloudProvider // multi-cloud backend
@@ -77,16 +76,19 @@ type (
 		fsprg         fsprungroup
 		rebManager    *reb.Manager
 		capUsed       capUsed
+		transactions  transactions
 		gfn           struct {
 			local  localGFN
 			global globalGFN
 		}
-		regstate       regstate // the state of being registered with the primary (can be en/disabled via API)
+		regstate       regstate // the state of being registered with the primary, can be (en/dis)abled via API
 		clusterStarted atomic.Bool
 	}
 )
 
-// BASE GFN
+//////////////
+// base gfn //
+//////////////
 
 func (gfn *baseGFN) active() bool { return gfn.lookup.Load() }
 func (gfn *baseGFN) Activate() bool {
@@ -96,7 +98,9 @@ func (gfn *baseGFN) Activate() bool {
 }
 func (gfn *baseGFN) Deactivate() { gfn.lookup.Store(false); glog.Infoln(gfn.tag, "deactivated") }
 
-// GLOBAL GFN
+////////////////
+// global gfn //
+////////////////
 
 func (gfn *globalGFN) active() bool {
 	return gfn.lookup.Load() || gfn.timedLookup.Load()
@@ -154,9 +158,10 @@ func (gfn *globalGFN) activateTimed() {
 	}()
 }
 
-//
-// target runner
-//
+///////////////////
+// target runner //
+///////////////////
+
 func (t *targetrunner) Run() error {
 	var (
 		config = cmn.GCO.Get()
@@ -249,6 +254,9 @@ func (t *targetrunner) Run() error {
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}
+
+	// transactions
+	t.transactions.init(t)
 
 	//
 	// REST API: register storage target's handler(s) and start listening
@@ -353,6 +361,8 @@ func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpbckget(w, r)
 	case http.MethodDelete:
 		t.httpbckdelete(w, r)
+	case http.MethodPut:
+		t.httpbckput(w, r)
 	case http.MethodPost:
 		t.httpbckpost(w, r)
 	case http.MethodHead:
@@ -460,7 +470,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	lom := &cluster.LOM{T: t, Objname: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = lom.Init(bck.Bck, config)
 		}
 		if err != nil {
@@ -545,7 +555,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	lom := &cluster.LOM{T: t, Objname: objname}
 	if err = lom.Init(bck.Bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = lom.Init(bck.Bck, config)
 		}
 		if err != nil {
@@ -621,7 +631,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, s)
 		return
 	}
-	t.ensureLatestMD(msgInt)
+	t.ensureLatestMD(msgInt, r)
 
 	switch msgInt.Action {
 	case cmn.ActEvictCB:
@@ -703,6 +713,72 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PUT /v1/buckets/bucket-name
+func (t *targetrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
+	var (
+		msgInt = &actionMsgInternal{}
+		bck    *cluster.Bck
+	)
+	if cmn.ReadJSON(w, r, msgInt) != nil {
+		return
+	}
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
+	if err != nil {
+		return
+	}
+	if len(apiItems) < 3 {
+		t.invalmsghdlr(w, r, "url path is too short: expecting bucket, phase, uuid", http.StatusBadRequest)
+		return
+	}
+	var (
+		bucket, phase, uuid = apiItems[0], apiItems[1], apiItems[2]
+	)
+	bck, err = newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+	switch phase {
+	case cmn.ActBegin:
+		// don't allow creating buckets when capInfo.High (let alone OOS)
+		config := cmn.GCO.Get()
+		if capInfo := t.AvgCapUsed(config); capInfo.Err != nil {
+			t.invalmsghdlr(w, r, capInfo.Err.Error())
+			return
+		}
+		txn := newTxnCtxBmdRecv(
+			uuid,
+			msgInt.Action,
+			t.owner.smap.get().version(),
+			t.owner.bmd.get().version(),
+			r.Header.Get(cmn.HeaderCallerName),
+			bck,
+		)
+		if err := t.transactions.begin(txn); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+	case cmn.ActAbort:
+		t.transactions.find(uuid, true /* remove */)
+	case cmn.ActCommit:
+		var (
+			config   = cmn.GCO.Get()
+			txn, err = t.transactions.find(uuid, false)
+		)
+		if err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("%s: %v", txn, err))
+			return
+		}
+		// wait for newBMD w/timeout
+		if err = t.transactions.wait(txn, config.Timeout.CplaneOperation); err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("%s: %v", txn, err))
+			return
+		}
+	default:
+		cmn.Assert(false)
+	}
+}
+
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -719,7 +795,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.ensureLatestMD(msgInt)
+	t.ensureLatestMD(msgInt, r)
 
 	if len(apiItems) == 0 {
 		switch msgInt.Action {
@@ -733,7 +809,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		default:
-			t.invalmsghdlr(w, r, "path is too short: bucket name expected")
+			t.invalmsghdlr(w, r, "url path is too short: bucket name is missing", http.StatusBadRequest)
 		}
 		return
 	}
@@ -746,7 +822,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = bck.Init(t.owner.bmd, t.si)
 		}
 		if err != nil {
@@ -1079,10 +1155,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 //     In case of StatusOK it returns a JSON with all found slices for a given target.
 func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		callerID = r.Header.Get(cmn.HeaderCallerID)
-		query    = r.URL.Query()
+		caller = r.Header.Get(cmn.HeaderCallerName)
+		query  = r.URL.Query()
 	)
-
 	getRebData, _ := cmn.ParseBool(query.Get(cmn.URLParamRebData))
 	if !getRebData {
 		t.invalmsghdlr(w, r, "invalid request", http.StatusBadRequest)
@@ -1096,7 +1171,7 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if ok := t.writeJSON(w, r, body, "rebalance-data"); !ok {
-		glog.Errorf("Failed to send data to %s", callerID)
+		glog.Errorf("Failed to send data to %s", caller)
 	}
 }
 
@@ -1365,7 +1440,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			t.BMDVersionFixup(cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = bck.Init(t.owner.bmd, t.si)
 		}
 		if err != nil {

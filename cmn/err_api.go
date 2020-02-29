@@ -50,9 +50,6 @@ type (
 		mpath string
 		cause string
 	}
-	TimeoutError struct {
-		cause string
-	}
 	XactionNotFoundError struct {
 		cause string
 	}
@@ -144,9 +141,6 @@ func (e InvalidMountpathError) Error() string {
 func NewInvalidaMountpathError(mpath, cause string) InvalidMountpathError {
 	return InvalidMountpathError{mpath: mpath, cause: cause}
 }
-
-func (e TimeoutError) Error() string            { return e.cause + " timed out" }
-func NewTimeoutError(cause string) TimeoutError { return TimeoutError{cause} }
 
 func (e XactionNotFoundError) Error() string { return "xaction '" + e.cause + "' not found" }
 func NewXactionNotFoundError(cause string) XactionNotFoundError {

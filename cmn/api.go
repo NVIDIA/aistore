@@ -253,8 +253,8 @@ type BucketProps struct {
 	// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
 	Renamed string `list:"omit"`
 
-	// Determines if the bucket has been binded to some action and currently
-	// cannot be updated or changed in anyway until the action finishes.
+	// Determines if the bucket has been bound to some action and currently
+	// cannot be updated or changed in any way, shape, or form until the action finishes.
 	InProgress bool `json:"in_progress,omitempty" list:"omit"`
 }
 

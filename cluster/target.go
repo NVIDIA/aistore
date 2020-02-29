@@ -7,6 +7,7 @@ package cluster
 import (
 	"context"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -68,7 +69,7 @@ type Target interface {
 	GetGFN(gfnType GFNType) GFN
 	Health(si *Snode, includeReb bool, timeout time.Duration) ([]byte, error)
 	RebalanceNamespace(si *Snode) ([]byte, int, error)
-	BMDVersionFixup(bck cmn.Bck, sleep bool)
+	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 }
 
 type RebalanceInfo struct {

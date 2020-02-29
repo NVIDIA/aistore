@@ -712,21 +712,69 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHeader ...http.Header) error {
+func (p *proxyrunner) undoCreateBucket(msg *cmn.ActionMsg, bck *cluster.Bck) {
 	p.owner.bmd.Lock()
 	clone := p.owner.bmd.get().clone()
-	bucketProps := cmn.DefaultBucketProps()
+	clone.del(bck)
+	p.owner.bmd.put(clone)
+	p.owner.bmd.Unlock()
+
+	msgInt := p.newActionMsgInternal(msg, nil, clone)
+	p.metasyncer.sync(true, revsPair{clone, msgInt})
+}
+
+func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHeader ...http.Header) error {
+	var (
+		q           = cmn.AddBckToQuery(nil, bck.Bck)
+		bucketProps = cmn.DefaultBucketProps()
+	)
 	if len(cloudHeader) != 0 {
 		bucketProps = cmn.CloudBucketProps(cloudHeader[0])
 	}
+
+	// try add
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
 	if !clone.add(bck, bucketProps) {
 		p.owner.bmd.Unlock()
 		return cmn.NewErrorBucketAlreadyExists(bck.Bck, p.si.String())
 	}
+	// begin
+	var (
+		smap   = p.owner.smap.get()
+		msgInt = p.newActionMsgInternal(msg, smap, nil)
+		body   = cmn.MustMarshal(msgInt)
+		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		uuid   = cmn.GenUUID()
+		req    = cmn.ReqArgs{Path: cmn.URLPath(path, cmn.ActBegin, uuid), Query: q, Body: body}
+	)
+	results := p.bcastPut(bcastArgs{req: req, smap: smap})
+	for result := range results {
+		if result.err != nil {
+			p.owner.bmd.Unlock()
+			// abort
+			req.Path = cmn.URLPath(path, cmn.ActAbort, uuid)
+			_ = p.bcastPut(bcastArgs{req: req, smap: smap})
+			return result.err
+		}
+	}
+	// add
 	p.owner.bmd.put(clone)
 	p.owner.bmd.Unlock()
-	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, revsPair{clone, msgInt})
+
+	// distribute
+	msgInt = p.newActionMsgInternal(msg, nil, clone)
+	p.metasyncer.sync(false /* don't wait */, revsPair{clone, msgInt})
+
+	// commit... or not
+	req.Path = cmn.URLPath(path, cmn.ActCommit, uuid)
+	results = p.bcastPut(bcastArgs{req: req, smap: smap})
+	for result := range results {
+		if result.err != nil {
+			p.undoCreateBucket(msg, bck)
+			return result.err
+		}
+	}
 	return nil
 }
 

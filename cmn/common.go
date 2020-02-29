@@ -811,21 +811,6 @@ func RemoveFile(path string) error {
 	return nil
 }
 
-func IsDirEmpty(dir string) ([]string, bool, error) {
-	var names []string
-	f, err := os.Open(dir)
-	if err != nil {
-		return nil, false, err
-	}
-	defer f.Close()
-
-	names, err = f.Readdirnames(2)
-	if err == io.EOF {
-		return nil, true, nil
-	}
-	return names, false, err
-}
-
 // computes xxhash if requested
 func CopyFile(src, dst string, buf []byte, needCksum bool) (written int64, cksum *Cksum, err error) {
 	var (
@@ -1308,6 +1293,8 @@ func FormatTime(unixnano int64, format string) string {
 		return t.Format(format)
 	}
 }
+
+func FormatTimestamp(tm time.Time) string { return tm.Format(timeStampFormat) }
 
 func S2TimeUnix(timeStr string) (tunix int64, err error) {
 	tunix, err = strconv.ParseInt(timeStr, 10, 64)

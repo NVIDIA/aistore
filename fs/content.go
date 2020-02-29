@@ -31,9 +31,8 @@ import (
 
 const (
 	contentTypeLen = 2
-
-	ObjectType   = "ob"
-	WorkfileType = "wk"
+	ObjectType     = "ob"
+	WorkfileType   = "wk"
 )
 
 type (
@@ -66,23 +65,17 @@ type (
 	}
 )
 
-// RegisterContentType registers new object and workfile type with given content resolver.
-//
-// NOTE: fileType should not contain dot since it is separator for additional
-// info and parsing can fail.
-//
-// NOTE: FIXME: All registration must happen at the startup, otherwise panic can
-// be expected.
+// RegisterContentType registers new content type with a given content resolver.
+// NOTE: all content type registrations must happen at startup.
 func (f *ContentSpecMgr) RegisterContentType(contentType string, spec ContentResolver) error {
 	if strings.ContainsRune(contentType, filepath.Separator) {
-		return fmt.Errorf("content type %s cannot contain dot '.'", contentType)
+		return fmt.Errorf("%s content type cannot contain %q", contentType, filepath.Separator)
 	}
 	if len(contentType) != contentTypeLen {
-		return fmt.Errorf("content type %s must have length %d", contentType, contentTypeLen)
+		return fmt.Errorf("%s content type must have length %d", contentType, contentTypeLen)
 	}
-
 	if _, ok := f.RegisteredContentTypes[contentType]; ok {
-		return fmt.Errorf("content type %s is already registered", contentType)
+		return fmt.Errorf("%s content type is already registered", contentType)
 	}
 	f.RegisteredContentTypes[contentType] = spec
 	return nil
