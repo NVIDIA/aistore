@@ -4,10 +4,15 @@
 PROG=ais
 
 _cli_bash_autocomplete() {
-    local cur opts
+  if [[ "${COMP_WORDS[0]}" != "source" ]]; then
+    local cur opts base
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
-    opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} --generate-bash-completion )
+    if [[ "$cur" == "-"* ]]; then
+      opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} ${cur} --generate-bash-completion )
+    else
+      opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} --generate-bash-completion )
+    fi
     COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
 
     # append single space after a suggestion if it doesn't end with a /
@@ -21,8 +26,9 @@ _cli_bash_autocomplete() {
                  ;;
         esac
     done
-
     return 0
+  fi
 }
 
-complete -F _cli_bash_autocomplete -o nospace $PROG 1>/dev/null 2>&1
+complete -o bashdefault -o default -o nospace -F _cli_bash_autocomplete $PROG
+unset PROG

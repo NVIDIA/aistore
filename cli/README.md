@@ -33,14 +33,14 @@ $ ais status
 
 ## AIS CLI Shell Auto-Complete
 
-The CLI tool supports bash and zsh auto-complete functionality.
+The CLI tool supports `bash` and `zsh` auto-complete functionality.
 
-##### Installing
+### Installing
 
 When running `install.sh` you will be asked if you want to install autocompletions.
 To install them manually, run `bash autocomplete/install.sh`.
 
-##### Uninstalling
+### Uninstalling
 
 To uninstall autocompletions run `bash autocomplete/uninstall.sh`.
 
