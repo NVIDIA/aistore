@@ -6,7 +6,7 @@ The CLI allows users to manage [AIS DSort](/dsort/README.md) jobs.
 
 `ais gen-shards --template <value> --fsize <value> --fcount <value>`
 
-Puts randomly generated shards that can be used for dSort testing.
+Put randomly generated shards that can be used for dSort testing.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -29,7 +29,7 @@ Puts randomly generated shards that can be used for dSort testing.
 
 `ais start dsort JOB_SPEC` or `ais start dsort -f <PATH_TO_JOB_SPEC>`
 
-Starts new dSort job with the provided specification.
+Start new dSort job with the provided specification.
 Specification should be provided by either argument or `-f` flag - providing both argument and flag will result in error.
 Upon creation, `JOB_ID` of the job is returned - it can then be used to abort it or retrieve metrics.
 
@@ -192,7 +192,7 @@ shard-dogs-0.tar:
 
 `ais show dsort [JOB_ID]`
 
-Retrieves the status of the dSort with provided `JOB_ID` which is returned upon creation.
+Retrieve the status of the dSort with provided `JOB_ID` which is returned upon creation.
 Lists all dSort jobs if the `JOB_ID` argument is omitted.
 
 | Flag | Type | Description | Default |
@@ -218,7 +218,7 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 
 `ais stop dsort JOB_ID`
 
-Stops the dSort job with given `JOB_ID`.
+Stop the dSort job with given `JOB_ID`.
 
 #### Examples
 
@@ -230,7 +230,7 @@ Stops the dSort job with given `JOB_ID`.
 
 `ais rm dsort JOB_ID`
 
-Removes the finished dSort job with given `JOB_ID` from the job list.
+Remove the finished dSort job with given `JOB_ID` from the job list.
 
 #### Examples
 

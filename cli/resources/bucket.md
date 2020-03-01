@@ -6,28 +6,28 @@ The CLI allows users to interact with [buckets](../../docs/bucket.md) in the AIS
 
 `ais create bucket BUCKET_NAME [BUCKET_NAME...]`
 
-Creates an ais bucket or buckets.
+Create an ais bucket or buckets.
 
 
 ### Delete
 
 `ais rm bucket BUCKET [BUCKET...]`
 
-Deletes an ais bucket or buckets.
+Delete an ais bucket or buckets.
 
 ### List bucket names
 
 `ais ls`
 
-Lists all bucket names.
+List all bucket names.
 
 `ais ls ais`
 
-Lists AIS bucket names.
+List AIS bucket names.
 
 `ais ls cloud`
 
-Lists cloud bucket names.
+List cloud bucket names.
 
 #### Flags for listing bucket names
 
@@ -42,17 +42,17 @@ Lists cloud bucket names.
 
 `ais ls BUCKET_NAME`
 
-Lists object names in the bucket `BUCKET_NAME`. Cloud provider is auto-detected.
+List object names in the bucket `BUCKET_NAME`. Cloud provider is auto-detected.
 
 #### From the specific provider
 
 `ais ls ais BUCKET_NAME`
 
-Lists objects in the AIS bucket `BUCKET_NAME`.
+List objects in the AIS bucket `BUCKET_NAME`.
 
 `ais ls cloud BUCKET_NAME`
 
-Lists objects in the cloud bucket `BUCKET_NAME`.
+List objects in the cloud bucket `BUCKET_NAME`.
 
 #### Flags for listing object names
 
@@ -77,25 +77,25 @@ Lists objects in the cloud bucket `BUCKET_NAME`.
 
 `ais evict BUCKET_NAME`
 
-Evicts a cloud bucket. It also resets the properties of the bucket (if changed).
+Evict a cloud bucket. It also resets the properties of the bucket (if changed).
 
 ### Rename
 
 `ais rename bucket BUCKET_NAME NEW_NAME`
 
-Renames an ais bucket.
+Rename an ais bucket.
 
 ### Copy
 
 `ais cp bucket BUCKET_NAME NEW_NAME`
 
-Copies an existing ais bucket to a new ais bucket.
+Copy an existing ais bucket to a new ais bucket.
 
 ### Summary
 
 `ais show bucket [BUCKET_NAME]`
 
-Shows aggregated information about objects in the bucket `BUCKET_NAME`.
+Show aggregated information about objects in the bucket `BUCKET_NAME`.
 If `BUCKET_NAME` is omitted, shows information about all buckets.
 
 | Flag | Type | Description | Default |
@@ -107,7 +107,7 @@ If `BUCKET_NAME` is omitted, shows information about all buckets.
 
 `ais set-copies BUCKET_NAME --copies <value>`
 
-Starts an extended action to bring a given bucket to a certain redundancy level (num copies). Read more about this feature [here](../../docs/storage_svcs.md#n-way-mirror).
+Start an extended action to bring a given bucket to a certain redundancy level (num copies). Read more about this feature [here](../../docs/storage_svcs.md#n-way-mirror).
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -118,7 +118,7 @@ Starts an extended action to bring a given bucket to a certain redundancy level 
 
 `ais ec-encode BUCKET_NAME`
 
-Starts an extended action that enables data protection for all objects of a given bucket. Erasure coding must be set up for the bucket prior to running `ec-encode` extended action. Read more about this feature [here](../../docs/storage_svcs.md#erasure-coding).
+Start an extended action that enables data protection for all objects of a given bucket. Erasure coding must be set up for the bucket prior to running `ec-encode` extended action. Read more about this feature [here](../../docs/storage_svcs.md#erasure-coding).
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -128,7 +128,7 @@ Starts an extended action that enables data protection for all objects of a give
 
 `ais ls props BUCKET_NAME`
 
-Lists [properties](../../docs/bucket.md#properties-and-options) of the bucket.
+List [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -139,7 +139,7 @@ Lists [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
 `ais set props BUCKET_NAME KEY=VALUE [KEY=VALUE...]`
 
-Sets bucket properties. For the available options, see [bucket-properties](../../docs/bucket.md#properties-and-options).
+Set bucket properties. For the available options, see [bucket-properties](../../docs/bucket.md#properties-and-options).
 If `--reset` flag is set, arguments are ignored and bucket properties are reset to original state.
 If `--jsonspec` option is used, **all** properties of the bucket are set based on the values in the JSON object.
 

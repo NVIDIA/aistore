@@ -23,11 +23,11 @@ var (
 	renameCmds = []cli.Command{
 		{
 			Name:  commandRename,
-			Usage: "renames entities in the cluster",
+			Usage: "rename entities in the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdRenameBucket,
-					Usage:        "renames an ais bucket",
+					Usage:        "rename an ais bucket",
 					ArgsUsage:    bucketOldNewArgument,
 					Flags:        renameCmdsFlags[subcmdRenameBucket],
 					Action:       renameBucketHandler,
@@ -35,7 +35,7 @@ var (
 				},
 				{
 					Name:         subcmdRenameObject,
-					Usage:        "renames an object of the ais bucket",
+					Usage:        "rename an object of the ais bucket",
 					ArgsUsage:    objectOldNewArgument,
 					Flags:        renameCmdsFlags[subcmdRenameObject],
 					Action:       renameObjectHandler,

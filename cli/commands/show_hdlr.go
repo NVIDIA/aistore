@@ -76,11 +76,11 @@ var (
 	showCmds = []cli.Command{
 		{
 			Name:  commandShow,
-			Usage: "shows control info about entities in the cluster",
+			Usage: "show control info about entities in the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdShowBucket,
-					Usage:        "shows bucket details",
+					Usage:        "show bucket details",
 					ArgsUsage:    optionalBucketArgument,
 					Flags:        showCmdsFlags[subcmdShowBucket],
 					Action:       showBucketHandler,
@@ -88,7 +88,7 @@ var (
 				},
 				{
 					Name:         subcmdShowDisk,
-					Usage:        "shows disk stats for targets",
+					Usage:        "show disk stats for targets",
 					ArgsUsage:    optionalTargetIDArgument,
 					Flags:        showCmdsFlags[subcmdShowDisk],
 					Action:       showDisksHandler,
@@ -96,7 +96,7 @@ var (
 				},
 				{
 					Name:         subcmdShowDownload,
-					Usage:        "shows information about download jobs",
+					Usage:        "show information about download jobs",
 					ArgsUsage:    optionalJobIDArgument,
 					Flags:        showCmdsFlags[subcmdShowDownload],
 					Action:       showDownloadsHandler,
@@ -104,7 +104,7 @@ var (
 				},
 				{
 					Name:         subcmdShowDsort,
-					Usage:        fmt.Sprintf("shows information about %s jobs", cmn.DSortName),
+					Usage:        fmt.Sprintf("show information about %s jobs", cmn.DSortName),
 					ArgsUsage:    optionalJobIDArgument,
 					Flags:        showCmdsFlags[subcmdShowDsort],
 					Action:       showDsortHandler,
@@ -112,7 +112,7 @@ var (
 				},
 				{
 					Name:         subcmdShowObject,
-					Usage:        "shows object details",
+					Usage:        "show object details",
 					ArgsUsage:    objectArgument,
 					Flags:        showCmdsFlags[subcmdShowObject],
 					Action:       showObjectHandler,
@@ -120,7 +120,7 @@ var (
 				},
 				{
 					Name:         subcmdShowNode,
-					Usage:        "shows node details",
+					Usage:        "show node details",
 					ArgsUsage:    optionalDaemonIDArgument,
 					Flags:        showCmdsFlags[subcmdShowNode],
 					Action:       showNodeHandler,
@@ -128,7 +128,7 @@ var (
 				},
 				{
 					Name:         subcmdShowXaction,
-					Usage:        "shows xaction details",
+					Usage:        "show xaction details",
 					ArgsUsage:    optionalXactionWithOptionalBucketArgument,
 					Description:  xactKindsMsg,
 					Flags:        showCmdsFlags[subcmdShowXaction],
@@ -137,7 +137,7 @@ var (
 				},
 				{
 					Name:         subcmdShowRebalance,
-					Usage:        "shows rebalance details",
+					Usage:        "show rebalance details",
 					ArgsUsage:    noArguments,
 					Flags:        showCmdsFlags[subcmdShowRebalance],
 					Action:       showRebalanceHandler,

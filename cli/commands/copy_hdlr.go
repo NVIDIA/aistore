@@ -18,11 +18,11 @@ var (
 	copyCmds = []cli.Command{
 		{
 			Name:  commandCopy,
-			Usage: "copies buckets and objects in the cluster",
+			Usage: "copy buckets and objects in the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdCopyBucket,
-					Usage:        "copies ais buckets",
+					Usage:        "copy ais buckets",
 					ArgsUsage:    bucketOldNewArgument,
 					Flags:        copyCmdsFlags[subcmdCopyBucket],
 					Action:       copyBucketHandler,

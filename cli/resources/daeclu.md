@@ -7,7 +7,7 @@ A daemon is either proxy or target.
 
 `ais status [DAEMON_TYPE]|[DAEMON_ID]`
 
-Returns the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either `proxy` or `target`. If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the AIS cluster.
+Return the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either `proxy` or `target`. If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the AIS cluster.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -27,7 +27,7 @@ Returns the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either 
 
 `ais ls smap [DAEMON_ID]`
 
-Shows a copy of the cluster map (smap) present on `DAEMON_ID`. If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_URL` points at.
+Show a copy of the cluster map (smap) present on `DAEMON_ID`. If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_URL` points at.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -43,7 +43,7 @@ Shows a copy of the cluster map (smap) present on `DAEMON_ID`. If `DAEMON_ID` is
 
 `ais show node [DAEMON_ID]`
 
-Shows details about `DAEMON_ID`. If `DAEMON_ID` is omitted, shows details about the current primary proxy and all targets in the cluster.
+Show details about `DAEMON_ID`. If `DAEMON_ID` is omitted, shows details about the current primary proxy and all targets in the cluster.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -63,7 +63,7 @@ Shows details about `DAEMON_ID`. If `DAEMON_ID` is omitted, shows details about 
 
 `ais show disk [TARGET_ID]`
 
-Shows the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats for all targets will be shown.
+Show the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats for all targets will be shown.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -84,11 +84,11 @@ Shows the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats 
 
 `ais register proxy IP:PORT [DAEMON_ID]`
 
-Registers a proxy in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+Register a proxy in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
 
 `ais register target IP:PORT [DAEMON_ID]`
 
-Registers a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+Register a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
 
 #### Examples
 
@@ -100,9 +100,10 @@ Registers a target in the cluster. If `DAEMON_ID` isn't given, it will be random
 
 `ais rm node DAEMON_ID`
 
-Removes an existing node from the cluster.
+Remove an existing node from the cluster.
 
 #### Examples
+
 | Command | Explanation |
 | --- | --- |
 | `ais rm node 23kfa10f` | Removes node with ID `23kfa10f` from the cluster |
@@ -111,7 +112,7 @@ Removes an existing node from the cluster.
 
 `ais ls config DAEMON_ID [CONFIG_SECTION]`
 
-Displays the configuration of `DAEMON_ID`. If `CONFIG_SECTION` is given, only that specific section will be shown.
+Display the configuration of `DAEMON_ID`. If `CONFIG_SECTION` is given, only that specific section will be shown.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -128,7 +129,7 @@ Displays the configuration of `DAEMON_ID`. If `CONFIG_SECTION` is given, only th
 
 `ais set config [DAEMON_ID] KEY=VALUE [KEY=VALUE...]`
 
-Sets configuration for a specific daemon or the entire cluster by specifying key-value pairs. To set config for the entire cluster, omit the `DEAMON_ID` argument. For the list of available runtime configurations, see [here](../../docs/configuration.md#runtime-configuration).
+Set configuration for a specific daemon or the entire cluster by specifying key-value pairs. To set config for the entire cluster, omit the `DEAMON_ID` argument. For the list of available runtime configurations, see [here](../../docs/configuration.md#runtime-configuration).
 
 Key and value can be separated with `=` character or with a space. The former case supports both short and fully-qualified option names. The latter case requires the key to be a fully-qualified name.
 

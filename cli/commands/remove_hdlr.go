@@ -29,11 +29,11 @@ var (
 	removeCmds = []cli.Command{
 		{
 			Name:  commandRemove,
-			Usage: "removes entities from the cluster",
+			Usage: "remove entities from the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdRemoveBucket,
-					Usage:        "removes ais buckets",
+					Usage:        "remove ais buckets",
 					ArgsUsage:    bucketsArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveBucket],
 					Action:       removeBucketHandler,
@@ -41,7 +41,7 @@ var (
 				},
 				{
 					Name:         subcmdRemoveObject,
-					Usage:        "removes an object from the bucket",
+					Usage:        "remove an object from the bucket",
 					ArgsUsage:    optionalObjectsArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveObject],
 					Action:       removeObjectHandler,
@@ -49,7 +49,7 @@ var (
 				},
 				{
 					Name:         subcmdRemoveNode,
-					Usage:        "removes node from the cluster",
+					Usage:        "remove node from the cluster",
 					ArgsUsage:    daemonIDArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveNode],
 					Action:       removeNodeHandler,
@@ -57,7 +57,7 @@ var (
 				},
 				{
 					Name:         subcmdRemoveDownload,
-					Usage:        "removes finished download job with given id from the list",
+					Usage:        "remove finished download job with given id from the list",
 					ArgsUsage:    jobIDArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveDownload],
 					Action:       removeDownloadHandler,

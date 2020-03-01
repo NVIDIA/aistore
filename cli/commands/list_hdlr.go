@@ -59,7 +59,7 @@ var (
 	listCmds = []cli.Command{
 		{
 			Name:         commandList,
-			Usage:        "lists cluster metadata information",
+			Usage:        "list cluster metadata information",
 			Action:       defaultListHandler,
 			ArgsUsage:    listCommandArgument,
 			Flags:        listCmdsFlags[commandList],
@@ -67,7 +67,7 @@ var (
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdListAIS,
-					Usage:        "lists ais buckets",
+					Usage:        "list ais buckets",
 					ArgsUsage:    optionalBucketArgument,
 					Flags:        listCmdsFlags[subcmdListAIS],
 					Action:       listAISBucketsHandler,
@@ -75,7 +75,7 @@ var (
 				},
 				{
 					Name:         subcmdListCloud,
-					Usage:        "lists cloud buckets",
+					Usage:        "list cloud buckets",
 					ArgsUsage:    optionalBucketArgument,
 					Flags:        listCmdsFlags[subcmdListCloud],
 					Action:       listCloudBucketsHandler,
@@ -83,7 +83,7 @@ var (
 				},
 				{
 					Name:         subcmdListBckProps,
-					Usage:        "lists bucket properties",
+					Usage:        "list bucket properties",
 					ArgsUsage:    bucketArgument,
 					Flags:        listCmdsFlags[subcmdListBckProps],
 					Action:       listBckPropsHandler,
@@ -91,7 +91,7 @@ var (
 				},
 				{
 					Name:         subcmdListConfig,
-					Usage:        "lists daemon configuration",
+					Usage:        "list daemon configuration",
 					ArgsUsage:    listConfigArgument,
 					Flags:        listCmdsFlags[subcmdListConfig],
 					Action:       listConfigHandler,
@@ -99,7 +99,7 @@ var (
 				},
 				{
 					Name:         subcmdListSmap,
-					Usage:        "displays a smap copy of a node",
+					Usage:        "display an smap copy of a node",
 					ArgsUsage:    optionalDaemonIDArgument,
 					Flags:        listCmdsFlags[subcmdListSmap],
 					Action:       listSmapHandler,

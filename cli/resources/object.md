@@ -46,8 +46,9 @@ $ ais get mybucket/myobj.txt ~/obj.txt --offset 1024 --length 1024
 
 `ais show object BUCKET_NAME/OBJECT_NAME [PROP_LIST]`
 
-Gets object detailed information. `PROP_LIST` is a comma-separated list of properties to display.
-If `PROP_LIST` is omitted default properties are shown(all except `provider` property).
+Get object detailed information.
+`PROP_LIST` is a comma-separated list of properties to display.
+If `PROP_LIST` is omitted default properties are shown (all except `provider` property).
 
 Supported properties:
 
@@ -264,7 +265,7 @@ $ ais promote /tmp/examples/example1.txt mybucket
 
 ```shell script
 $ ais create bucket testbucket
-testbucket created
+testbucket bucket created
 
 $ ais status
 Target		 %MemUsed	 MemAvail	 %CapUsed	 CapAvail	 %CpuUsed	 Rebalance
@@ -296,7 +297,7 @@ Be careful when putting a directory recursively without setting `--trim-prefix`:
 
 `ais rm object BUCKET_NAME/[OBJECT_NAME]...`
 
-Deletes an object or list/range of objects from the bucket.
+Delete an object or list/range of objects from the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -337,7 +338,7 @@ $ ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"
 
 `ais evict BUCKET_NAME/[OBJECT_NAME]...`
 
-[Evicts](../../docs/bucket.md#prefetchevict-objects) objects from a cloud bucket.
+[Evict](../../docs/bucket.md#prefetchevict-objects) objects from a cloud bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -373,7 +374,7 @@ cloudbucket	0	    0B	    0%	    aws
 
 `ais prefetch BUCKET_NAME/ --list|--range <value>`
 
-[Prefetches](../../docs/bucket.md#prefetchevict-objects) objects from the cloud bucket.
+[Prefetch](../../docs/bucket.md#prefetchevict-objects) objects from the cloud bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -394,7 +395,7 @@ cloudbucket	0	    0B	    0%	    aws
 
 `ais rename object BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME`
 
-Renames object from an ais bucket.
+Rename object from an ais bucket.
 
 #### Examples
 
@@ -407,7 +408,7 @@ ais rename object mybucket/obj1 obj2
 
 `ais concat DIRNAME|FILENAME [DIRNAME|FILENAME...] BUCKET/OBJECT_NAME`
 
-Creates an object in a bucket by concatenating provided files, keeping the order as in the arguments list.
+Create an object in a bucket by concatenating provided files, keeping the order as in the arguments list.
 If directory provided, files within the directory are sorted by filename.
 For each file sends a separate request to the cluster.
 Supports recursive iteration through directories and wildcards in the same way as PUT operation does.

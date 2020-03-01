@@ -45,11 +45,11 @@ var (
 	controlCmds = []cli.Command{
 		{
 			Name:  commandStart,
-			Usage: "starts jobs in the cluster",
+			Usage: "start jobs in the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdStartXaction,
-					Usage:        "starts an xaction",
+					Usage:        "start an xaction",
 					ArgsUsage:    xactionWithOptionalBucketArgument,
 					Description:  xactKindsMsg,
 					Flags:        startCmdsFlags[subcmdStartXaction],
@@ -58,7 +58,7 @@ var (
 				},
 				{
 					Name:         subcmdStartDownload,
-					Usage:        "starts a download job (downloads objects from external source)",
+					Usage:        "start a download job (downloads objects from external source)",
 					ArgsUsage:    startDownloadArgument,
 					Flags:        startCmdsFlags[subcmdStartDownload],
 					Action:       startDownloadHandler,
@@ -66,7 +66,7 @@ var (
 				},
 				{
 					Name:         subcmdStartDsort,
-					Usage:        fmt.Sprintf("starts a new %s job with given specification", cmn.DSortName),
+					Usage:        fmt.Sprintf("start a new %s job with given specification", cmn.DSortName),
 					ArgsUsage:    jsonSpecArgument,
 					Flags:        startCmdsFlags[subcmdStartDsort],
 					Action:       startDsortHandler,

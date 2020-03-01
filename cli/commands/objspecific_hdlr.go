@@ -58,7 +58,7 @@ var (
 	objectSpecificCmds = []cli.Command{
 		{
 			Name:         commandPrefetch,
-			Usage:        "prefetches objects from cloud buckets",
+			Usage:        "prefetch objects from cloud buckets",
 			ArgsUsage:    bucketArgument,
 			Flags:        objectSpecificCmdsFlags[commandPrefetch],
 			Action:       prefetchHandler,
@@ -66,7 +66,7 @@ var (
 		},
 		{
 			Name:         commandEvict,
-			Usage:        "evicts objects from the cache",
+			Usage:        "evict objects from the cache",
 			ArgsUsage:    optionalObjectsArgument,
 			Flags:        objectSpecificCmdsFlags[commandEvict],
 			Action:       evictHandler,
@@ -74,7 +74,7 @@ var (
 		},
 		{
 			Name:         commandGet,
-			Usage:        "gets the object from the specified bucket",
+			Usage:        "get the object from the specified bucket",
 			ArgsUsage:    getObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandGet],
 			Action:       getHandler,
@@ -82,7 +82,7 @@ var (
 		},
 		{
 			Name:         commandPut,
-			Usage:        "puts objects to the specified bucket",
+			Usage:        "put the objects to the specified bucket",
 			ArgsUsage:    putPromoteObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandPut],
 			Action:       putHandler,
@@ -90,7 +90,7 @@ var (
 		},
 		{
 			Name:         commandPromote,
-			Usage:        "promotes AIStore-local files and directories to objects",
+			Usage:        "promote AIStore-local files and directories to objects",
 			ArgsUsage:    putPromoteObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandPromote],
 			Action:       promoteHandler,
@@ -98,7 +98,7 @@ var (
 		},
 		{
 			Name:      commandConcat,
-			Usage:     "concatenates multiple files one by one into new, single object to the specified bucket",
+			Usage:     "concatenate multiple files one by one into new, single object to the specified bucket",
 			ArgsUsage: concatObjectArgument,
 			Flags:     objectSpecificCmdsFlags[commandConcat],
 			Action:    concatHandler,

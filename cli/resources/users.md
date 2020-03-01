@@ -36,7 +36,7 @@ Superuser login:
 
 `ais auth add USER_NAME USER_PASS`
 
-Registers the user if a user with the same name does not exist yet and grants full access permissions to cluster data. For security reasons, user\'s password can be omitted(and user\'s name as well). In this case, the CLI prompts for every missing argument in interactive mode.
+Register the user if a user with the same name does not exist yet and grants full access permissions to cluster data. For security reasons, user\'s password can be omitted(and user\'s name as well). In this case, the CLI prompts for every missing argument in interactive mode.
 
 **Examples:**
 
@@ -56,16 +56,16 @@ User password: password
 
 `ais auth rm USER_NAME`
 
-Removes an existing user and revokes all tokens issued for the user.
+Remove an existing user and revokes all tokens issued for the user.
 
 ### Log in to AIS cluster
 
 `ais auth login USER_NAME USER_PASS`
 
-Issues a token for a user. After successful login, user\'s token is saved to `~/.ais/token` and next CLI runs automatically load and use the token in every request to AIS cluster. The saved token can be used by other applications, like `curl`. Please see [AuthN documentation](/authn/README.md) to read how to use AuthN API directly.
+Issue a token for a user. After successful login, user\'s token is saved to `~/.ais/token` and next CLI runs automatically load and use the token in every request to AIS cluster. The saved token can be used by other applications, like `curl`. Please see [AuthN documentation](/authn/README.md) to read how to use AuthN API directly.
 
 ### Log out
 
 `ais auth logout`
 
-Erases user\'s token from a local machine, so the CLI switches to read-only mode(if guest access is enabled for AIS cluster). But other applications still can use the issued token. To forbid using the token from any application, the token must be revoked in addition to logging out.
+Erase user\'s token from a local machine, so the CLI switches to read-only mode(if guest access is enabled for AIS cluster). But other applications still can use the issued token. To forbid using the token from any application, the token must be revoked in addition to logging out.

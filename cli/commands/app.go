@@ -175,7 +175,7 @@ func setupCommandHelp(commands []cli.Command) {
 // This is a copy-paste from urfave/cli/help.go. It is done to remove the 'h' alias of the 'help' command
 var helpCommand = cli.Command{
 	Name:      "help",
-	Usage:     "shows a list of commands or help for one command",
+	Usage:     "show a list of commands or help for one command",
 	ArgsUsage: "[COMMAND]",
 	Action: func(c *cli.Context) error {
 		args := c.Args()

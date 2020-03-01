@@ -24,11 +24,11 @@ var (
 	setCmds = []cli.Command{
 		{
 			Name:  commandSet,
-			Usage: "sets property or configuration values",
+			Usage: "set property or configuration values",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdSetConfig,
-					Usage:        "updates configuration of a single node or the cluster",
+					Usage:        "update configuration of a single node or the cluster",
 					ArgsUsage:    setConfigArgument,
 					Flags:        setCmdsFlags[subcmdSetConfig],
 					Action:       setConfigHandler,
@@ -36,7 +36,7 @@ var (
 				},
 				{
 					Name:         subcmdSetProps,
-					Usage:        "updates/resets bucket properties",
+					Usage:        "update/reset bucket properties",
 					ArgsUsage:    bucketPropsArgument,
 					Flags:        setCmdsFlags[subcmdSetProps],
 					Action:       setPropsHandler,

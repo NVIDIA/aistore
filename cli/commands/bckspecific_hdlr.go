@@ -24,7 +24,7 @@ var (
 	bucketSpecificCmds = []cli.Command{
 		{
 			Name:         commandSetCopies,
-			Usage:        "configures a bucket for n-way mirroring",
+			Usage:        "configure a bucket for n-way mirroring",
 			ArgsUsage:    bucketArgument,
 			Flags:        bucketSpecificCmdsFlags[commandSetCopies],
 			Action:       setCopiesHandler,
@@ -32,7 +32,7 @@ var (
 		},
 		{
 			Name:         commandECEncode,
-			Usage:        "makes all objects in a bucket erasure coded",
+			Usage:        "make all objects in a bucket erasure coded",
 			ArgsUsage:    bucketArgument,
 			Flags:        bucketSpecificCmdsFlags[commandECEncode],
 			Action:       ecEncodeHandler,

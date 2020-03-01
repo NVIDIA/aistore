@@ -28,18 +28,18 @@ var (
 	cluSpecificCmds = []cli.Command{
 		{
 			Name:  commandRegister,
-			Usage: "adds a node to the cluster",
+			Usage: "add a node to the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:      subcmdRegisterProxy,
-					Usage:     "adds a proxy node to the cluster",
+					Usage:     "add a proxy node to the cluster",
 					ArgsUsage: registerNodeArgument,
 					Flags:     registerCmdsFlags[subcmdRegisterProxy],
 					Action:    registerNodeHandler,
 				},
 				{
 					Name:      subcmdRegisterTarget,
-					Usage:     "adds a target node to the cluster",
+					Usage:     "add a target node to the cluster",
 					ArgsUsage: registerNodeArgument,
 					Flags:     registerCmdsFlags[subcmdRegisterTarget],
 					Action:    registerNodeHandler,
@@ -48,7 +48,7 @@ var (
 		},
 		{
 			Name:         commandStatus,
-			Usage:        "displays status of a daemon",
+			Usage:        "display status of a daemon",
 			ArgsUsage:    daemonStatusArgument,
 			Action:       statusHandler,
 			Flags:        cluSpecificCmdsFlags[commandStatus],

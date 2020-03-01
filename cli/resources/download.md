@@ -7,7 +7,7 @@ It is used for downloading files and datasets from internet to AIS cluster.
 
 `ais start download SOURCE DESTINATION`
 
-Downloads the object(s) from `SOURCE` location and saves it as specified in `DESTINATION` location.
+Download the object(s) from `SOURCE` location and saves it as specified in `DESTINATION` location.
 `SOURCE` location can be a link to single or range download:
 * `gs://lpr-vision/imagenet/imagenet_train-000000.tgz`
 * `"gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz"`
@@ -45,7 +45,7 @@ As for `DESTINATION` location, the only supported schema is `ais://` and the lin
 
 `ais stop download JOB_ID`
 
-Stops download job with given `JOB_ID`.
+Stop download job with given `JOB_ID`.
 
 #### Examples
 
@@ -57,7 +57,7 @@ Stops download job with given `JOB_ID`.
 
 `ais rm download JOB_ID`
 
-Removes the finished download job with given `JOB_ID` from the job list.
+Remove the finished download job with given `JOB_ID` from the job list.
 
 #### Examples
 
@@ -69,7 +69,7 @@ Removes the finished download job with given `JOB_ID` from the job list.
 
 `ais show download [JOB_ID]`
 
-Shows download jobs or status of a specific job.
+Show download jobs or status of a specific job.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |

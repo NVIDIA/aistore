@@ -39,29 +39,29 @@ var (
 	authCmds = []cli.Command{
 		{
 			Name:  commandAuth,
-			Usage: "manages users",
+			Usage: "manage users",
 			Subcommands: []cli.Command{
 				{
 					Name:      subcmdAuthAdd,
-					Usage:     "adds a new user",
+					Usage:     "add a new user",
 					ArgsUsage: addUserArgument,
 					Action:    addUserHandler,
 				},
 				{
 					Name:      subcmdAuthRemove,
-					Usage:     "removes an existing user",
+					Usage:     "remove an existing user",
 					ArgsUsage: deleteUserArgument,
 					Action:    deleteUserHandler,
 				},
 				{
 					Name:      subcmdAuthLogin,
-					Usage:     "logs in with existing user credentials",
+					Usage:     "log in with existing user credentials",
 					ArgsUsage: userLoginArgument,
 					Action:    loginUserHandler,
 				},
 				{
 					Name:   subcmdAuthLogout,
-					Usage:  "logs out",
+					Usage:  "log out",
 					Action: logoutUserHandler,
 				},
 			},

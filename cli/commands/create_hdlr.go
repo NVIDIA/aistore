@@ -17,11 +17,11 @@ var (
 	createCmds = []cli.Command{
 		{
 			Name:  commandCreate,
-			Usage: "creates entities in the cluster",
+			Usage: "create entities in the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdCreateBucket,
-					Usage:        "creates ais buckets",
+					Usage:        "create ais buckets",
 					ArgsUsage:    bucketsArgument,
 					Flags:        createCmdsFlags[subcmdCreateBucket],
 					Action:       createBucketHandler,
