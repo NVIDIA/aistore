@@ -7,7 +7,6 @@ package commands
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -301,11 +300,5 @@ func showObjectHandler(c *cli.Context) (err error) {
 }
 
 func showRebalanceHandler(c *cli.Context) (err error) {
-	var refreshRate time.Duration
-
-	if refreshRate, err = calcRefreshRate(c); err != nil {
-		return err
-	}
-
-	return showGlobalRebalance(c, flagIsSet(c, refreshFlag), refreshRate)
+	return showGlobalRebalance(c, flagIsSet(c, refreshFlag), calcRefreshRate(c))
 }

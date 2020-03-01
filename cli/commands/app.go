@@ -66,11 +66,7 @@ func (aisCLI *AISCLI) Run(input []string) error {
 }
 
 func (aisCLI *AISCLI) runOnce(input []string) error {
-	if err := aisCLI.app.Run(input); err != nil {
-		return err
-	}
-
-	return nil
+	return aisCLI.app.Run(input)
 }
 
 func (aisCLI *AISCLI) runForever(input []string) error {
@@ -135,9 +131,6 @@ func (aisCLI *AISCLI) init(build, version string) {
 		Name:  "version, V",
 		Usage: "print only the version",
 	}
-	cli.AppHelpTemplate = AISHelpTemplate
-	cli.CommandHelpTemplate = AISCommandHelpTemplate
-	cli.SubcommandHelpTemplate = AISSubcommandHelpTemplate
 
 	aisCLI.setupCommands()
 }

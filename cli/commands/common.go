@@ -168,87 +168,36 @@ const (
 	userLoginArgument  = "USER_NAME USER_PASSWORD"
 )
 
-// Help command templates
-const (
-	AISHelpTemplate = `DESCRIPTION:
-   {{ .Name }}{{ if .Usage }} - {{ .Usage }}{{end}}
-   Ver. {{ if .Version }}{{ if not .HideVersion }}{{ .Version }}{{end}}{{end}}
-
-USAGE:
-   {{ .Name }} [GLOBAL OPTIONS...] COMMAND
-
-COMMANDS:{{ range .VisibleCategories }}{{ if .Name }}
-   {{ .Name }}:{{end}}{{ range .VisibleCommands }}
-     {{ join .Names ", " }}{{ "\t" }}{{ .Usage }}{{end}}{{end}}
-
-GLOBAL OPTIONS:
-   {{- range .VisibleFlags }}
-   {{.}}
-   {{- end}}
-`
-
-	AISCommandHelpTemplate = `NAME:
-   {{.HelpName}} - {{.Usage}}
-
-USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[ARGUMENTS...]{{end}}{{if .VisibleFlags}} [OPTIONS...]{{end}}{{end}}{{if .Description}}
-
-DESCRIPTION:
-   {{.Description}}{{end}}{{if .VisibleFlags}}
-
-OPTIONS:
-   {{- range .VisibleFlags}}
-   {{.}}
-   {{- end}}
-{{end}}`
-
-	AISSubcommandHelpTemplate = `NAME:
-   {{.HelpName}} - {{if .Description}}{{.Description}}{{else}}{{.Usage}}{{end}}
-
-USAGE:
-   {{.HelpName}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}COMMAND{{end}}{{if .VisibleFlags}} [COMMAND OPTIONS...]{{end}}
-
-COMMANDS:{{range .VisibleCategories}}{{if .Name}}
-   {{.Name}}:{{end}}{{range .VisibleCommands}}
-     {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}
-{{end}}{{if .VisibleFlags}}
-OPTIONS:
-   {{- range .VisibleFlags}}
-   {{.}}
-   {{- end}}
-{{end}}`
-)
-
 // Flags
 var (
 	// Common
 	providerFlag = cli.StringFlag{Name: "provider",
-		Usage:  "determines which type bucket ('ais' or 'cloud') should be used. Other supported values include '' (empty), 'gcp', and 'aws'. By default (i.e., when unspecified), provider of the bucket is determined automatically",
+		Usage:  "determine which type bucket ('ais' or 'cloud') should be used. Other supported values include '' (empty), 'gcp', and 'aws'. By default (i.e., when unspecified), provider of the bucket is determined automatically",
 		EnvVar: aisProviderEnvVar,
 	}
 	objPropsFlag    = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
 	prefixFlag      = cli.StringFlag{Name: "prefix", Usage: "prefix for string matching"}
-	refreshFlag     = cli.StringFlag{Name: "refresh", Usage: "refresh period", Value: refreshRateDefault.String()}
+	refreshFlag     = cli.DurationFlag{Name: "refresh", Usage: "refresh period", Value: refreshRateDefault}
 	regexFlag       = cli.StringFlag{Name: "regex", Usage: "regex pattern for matching"}
 	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 	resetFlag       = cli.BoolFlag{Name: "reset", Usage: "reset to original state"}
-	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "do not actually perform the action"}
+	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the action without really doing it"}
 
 	// Bucket
 	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}
 	markerFlag        = cli.StringFlag{Name: "marker", Usage: "list bucket objects alphabetically starting from the object after the marker"}
-	objLimitFlag      = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
-	pageSizeFlag      = cli.StringFlag{Name: "page-size", Usage: "maximum number of entries by list bucket call", Value: "1000"}
+	objLimitFlag      = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0}
+	pageSizeFlag      = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list bucket call", Value: 1000}
 	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
-	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
+	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag      = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
 	allItemsFlag      = cli.BoolTFlag{Name: "all-items", Usage: "show all items including old and duplicated"}
 	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all-items', 'limit', and 'page-size' are ignored in this mode"}
 	fastDetailsFlag   = cli.BoolFlag{Name: "fast", Usage: "enforce using faster methods to find out the buckets' details, note: the output may not be accurate"}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
-	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list objects that were not matched by regex and template"}
+	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}
 
 	// Daeclu
@@ -265,16 +214,16 @@ var (
 	extFlag           = cli.StringFlag{Name: "ext", Value: ".tar", Usage: "extension for shards (either '.tar' or '.tgz')"}
 	fileSizeFlag      = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "single file size inside the shard"}
 	logFlag           = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
-	cleanupFlag       = cli.BoolFlag{Name: "cleanup", Usage: "when set, the old bucket will be deleted and created again"}
+	cleanupFlag       = cli.BoolFlag{Name: "cleanup", Usage: "remove old bucket and create it again. WARNING: it removes all objects that were present in the old bucket"}
 	concurrencyFlag   = cli.IntFlag{Name: "conc", Value: 10, Usage: "limits number of concurrent put requests and number of concurrent shards created"}
 	fileCountFlag     = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
 	specFileFlag      = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
 
 	// Object
-	deadlineFlag   = cli.StringFlag{Name: "deadline", Usage: "amount of time (Go Duration string) before the request expires", Value: "0s"}
-	lengthFlag     = cli.StringFlag{Name: "length", Usage: "object read length"}
+	deadlineFlag   = cli.DurationFlag{Name: "deadline", Usage: "amount of time before the request expires", Value: 0}
 	listFlag       = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
-	offsetFlag     = cli.StringFlag{Name: "offset", Usage: "object read offset"}
+	offsetFlag     = cli.StringFlag{Name: "offset", Usage: "object read offset, can contain prefix 'b', 'KiB', 'MB'"}
+	lengthFlag     = cli.StringFlag{Name: "length", Usage: "object read length, can contain prefix 'b', 'KiB', 'MB'"}
 	rangeFlag      = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>"}
 	isCachedFlag   = cli.BoolFlag{Name: "is-cached", Usage: "check if an object is cached"}
 	cachedFlag     = cli.BoolFlag{Name: "cached", Usage: "list only cached objects"}

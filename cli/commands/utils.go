@@ -31,16 +31,15 @@ import (
 )
 
 const (
-	Infinity             = -1
+	infinity             = -1
 	keyAndValueSeparator = "="
 	fileStdIO            = "-"
 
 	// Error messages
-	dockerErrMsgFmt       = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
-	durationParseErrorFmt = "error converting refresh flag value %q to time duration: %v"
-	invalidDaemonMsg      = "%s is not a valid DAEMON_ID"
-	invalidCmdMsg         = "invalid command name '%s'"
-	invalidFlagsMsgFmt    = "flags %s are invalid when arguments have been provided"
+	dockerErrMsgFmt    = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
+	invalidDaemonMsg   = "%s is not a valid DAEMON_ID"
+	invalidCmdMsg      = "invalid command name '%s'"
+	invalidFlagsMsgFmt = "flags %s are invalid when arguments have been provided"
 
 	// Scheme parsing
 	defaultScheme = "https"
@@ -108,22 +107,6 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 	return &usageError{
 		context:      c,
 		message:      fmt.Sprintf("missing arguments %q", strings.Join(missingArgs, ", ")),
-		helpData:     c.Command,
-		helpTemplate: cli.CommandHelpTemplate,
-	}
-}
-
-func missingFlagsError(c *cli.Context, missingFlags []string, message ...string) error {
-	cmn.Assert(len(missingFlags) > 0)
-
-	fullMessage := fmt.Sprintf("missing required flags %q", strings.Join(missingFlags, ", "))
-	if len(message) > 0 {
-		fullMessage += " - " + message[0]
-	}
-
-	return &usageError{
-		context:      c,
-		message:      fullMessage,
 		helpData:     c.Command,
 		helpTemplate: cli.CommandHelpTemplate,
 	}
@@ -320,7 +303,7 @@ func flagIsSet(c *cli.Context, flag cli.Flag) bool {
 }
 
 // Returns the value of a string flag (either parent or local scope)
-func parseStrFlag(c *cli.Context, flag cli.Flag) string {
+func parseStrFlag(c *cli.Context, flag cli.StringFlag) string {
 	flagName := cleanFlag(flag.GetName())
 	if c.GlobalIsSet(flagName) {
 		return c.GlobalString(flagName)
@@ -329,7 +312,7 @@ func parseStrFlag(c *cli.Context, flag cli.Flag) string {
 }
 
 // Returns the value of an int flag (either parent or local scope)
-func parseIntFlag(c *cli.Context, flag cli.Flag) int {
+func parseIntFlag(c *cli.Context, flag cli.IntFlag) int {
 	flagName := cleanFlag(flag.GetName())
 	if c.GlobalIsSet(flagName) {
 		return c.GlobalInt(flagName)
@@ -337,13 +320,21 @@ func parseIntFlag(c *cli.Context, flag cli.Flag) int {
 	return c.Int(flagName)
 }
 
+// Returns the value of an duration flag (either parent or local scope)
+func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
+	flagName := cleanFlag(flag.GetName())
+	if c.GlobalIsSet(flagName) {
+		return c.GlobalDuration(flagName)
+	}
+	return c.Duration(flagName)
+}
+
 func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
-	flagValue := parseStrFlag(c, flag)
+	flagValue := parseStrFlag(c, flag.(cli.StringFlag))
 	b, err := cmn.S2B(flagValue)
 	if err != nil {
 		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)", flag.GetName(), flagValue)
 	}
-
 	return b, nil
 }
 
@@ -360,43 +351,19 @@ func getByteFlagValue(c *cli.Context, flag cli.Flag) (string, error) {
 	return "", nil
 }
 
-func checkFlags(c *cli.Context, flag []cli.Flag, message ...string) error {
-	missingFlags := make([]string, 0)
-
-	for _, f := range flag {
-		if !flagIsSet(c, f) {
-			missingFlags = append(missingFlags, f.GetName())
-		}
-	}
-
-	if len(missingFlags) >= 1 {
-		return missingFlagsError(c, missingFlags, message...)
-	}
-
-	return nil
-}
-
-func calcRefreshRate(c *cli.Context) (time.Duration, error) {
+func calcRefreshRate(c *cli.Context) time.Duration {
 	const (
 		refreshRateMin = 500 * time.Millisecond
 	)
 
 	refreshRate := refreshRateDefault
-
 	if flagIsSet(c, refreshFlag) {
-		flagStr := parseStrFlag(c, refreshFlag)
-		flagDuration, err := time.ParseDuration(flagStr)
-		if err != nil {
-			return 0, fmt.Errorf(durationParseErrorFmt, flagStr, err)
-		}
-
-		refreshRate = flagDuration
+		refreshRate = parseDurationFlag(c, refreshFlag)
 		if refreshRate < refreshRateMin {
 			refreshRate = refreshRateMin
 		}
 	}
-
-	return refreshRate, nil
+	return refreshRate
 }
 
 //
@@ -416,21 +383,16 @@ func defaultLongRunParams() *longRunParams {
 }
 
 func (p *longRunParams) isInfiniteRun() bool {
-	return p.count == Infinity
+	return p.count == infinity
 }
 
 func updateLongRunParams(c *cli.Context) error {
 	params := c.App.Metadata[metadata].(*longRunParams)
 
 	if flagIsSet(c, refreshFlag) {
-		rateStr := parseStrFlag(c, refreshFlag)
-		rate, err := time.ParseDuration(rateStr)
-		if err != nil {
-			return fmt.Errorf(durationParseErrorFmt, rateStr, err)
-		}
-		params.refreshRate = rate
+		params.refreshRate = parseDurationFlag(c, refreshFlag)
 		// Run forever unless `count` is also specified
-		params.count = Infinity
+		params.count = infinity
 	}
 
 	if flagIsSet(c, countFlag) {
@@ -573,7 +535,7 @@ func bucketProvider(c *cli.Context, providers ...string) string {
 
 // determineClusterURL resolving order
 // 1. cfg.Cluster.URL; if empty:
-// 2. Proxy docker containter IP address; if not successful:
+// 2. Proxy docker container IP address; if not successful:
 // 3. Docker default; if not present:
 // 4. Default as cfg.Cluster.DefaultAISHost
 func determineClusterURL(cfg *config.Config) string {

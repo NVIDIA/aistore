@@ -206,11 +206,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 		}
 	}
 
-	refresh, err := calcPutRefresh(c)
-	if err != nil {
-		return
-	}
-
+	refresh := calcPutRefresh(c)
 	numWorkers := parseIntFlag(c, concurrencyFlag)
 	params := uploadParams{
 		bck:       bck,
@@ -468,20 +464,15 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	return nil
 }
 
-func calcPutRefresh(c *cli.Context) (time.Duration, error) {
+func calcPutRefresh(c *cli.Context) time.Duration {
 	refresh := 5 * time.Second
 	if flagIsSet(c, verboseFlag) && !flagIsSet(c, refreshFlag) {
-		return 0, nil
+		return 0
 	}
-
 	if flagIsSet(c, refreshFlag) {
-		r, err := calcRefreshRate(c)
-		if err != nil {
-			return 0, err
-		}
-		refresh = r
+		refresh = calcRefreshRate(c)
 	}
-	return refresh, nil
+	return refresh
 }
 
 func buildObjStatTemplate(props string, showHeaders bool) string {
@@ -567,13 +558,11 @@ func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 
 // List handler
 func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
-	fileList := makeList(parseStrFlag(c, listFlag), ",")
-	wait := flagIsSet(c, waitFlag)
-	deadline, err := time.ParseDuration(parseStrFlag(c, deadlineFlag))
-	if err != nil {
-		return
-	}
-
+	var (
+		fileList = makeList(parseStrFlag(c, listFlag), ",")
+		wait     = flagIsSet(c, waitFlag)
+		deadline = parseDurationFlag(c, deadlineFlag)
+	)
 	switch command {
 	case commandRemove:
 		err = api.DeleteList(defaultAPIParams, bck, fileList, wait, deadline)
@@ -603,12 +592,8 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		prefix   = parseStrFlag(c, prefixFlag)
 		regex    = parseStrFlag(c, regexFlag)
 		rangeStr = parseStrFlag(c, rangeFlag)
+		deadline = parseDurationFlag(c, deadlineFlag)
 	)
-
-	deadline, err := time.ParseDuration(parseStrFlag(c, deadlineFlag))
-	if err != nil {
-		return
-	}
 
 	switch command {
 	case commandRemove:

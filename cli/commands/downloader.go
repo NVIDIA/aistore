@@ -299,11 +299,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 
 	// with progress bar
 	if showProgressBar {
-		refreshRate, err := calcRefreshRate(c)
-		if err != nil {
-			return err
-		}
-
+		refreshRate := calcRefreshRate(c)
 		downloadingResult, err := newProgressBar(defaultAPIParams, id, refreshRate).run()
 		if err != nil {
 			return err

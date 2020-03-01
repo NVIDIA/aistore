@@ -200,18 +200,11 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	if flagIsSet(c, markerFlag) {
 		msg.PageMarker = parseStrFlag(c, markerFlag)
 	}
-	pagesize, err := strconv.Atoi(parseStrFlag(c, pageSizeFlag))
-	if err != nil {
-		return err
-	}
-	limit, err := strconv.Atoi(parseStrFlag(c, objLimitFlag))
-	if err != nil {
-		return err
-	}
-
+	pageSize := parseIntFlag(c, pageSizeFlag)
+	limit := parseIntFlag(c, objLimitFlag)
 	// set page size to limit if limit is less than page size
-	msg.PageSize = pagesize
-	if limit > 0 && (limit < pagesize || (limit < 1000 && pagesize == 0)) {
+	msg.PageSize = pageSize
+	if limit > 0 && (limit < pageSize || (limit < 1000 && pageSize == 0)) {
 		msg.PageSize = limit
 	}
 
@@ -447,9 +440,6 @@ func printBckHeadTable(c *cli.Context, props cmn.BucketProps) error {
 
 // Configure bucket as n-way mirror
 func configureNCopies(c *cli.Context, bck cmn.Bck) (err error) {
-	if err = checkFlags(c, []cli.Flag{copiesFlag}); err != nil {
-		return
-	}
 	if err = canReachBucket(bck); err != nil {
 		return
 	}

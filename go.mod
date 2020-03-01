@@ -27,7 +27,7 @@ require (
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
 	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
-	github.com/urfave/cli v1.20.0
+	github.com/urfave/cli v1.22.2
 	github.com/valyala/fasthttp v1.9.0
 	github.com/vbauerster/mpb/v4 v4.10.1
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
