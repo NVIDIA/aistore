@@ -20,7 +20,7 @@ import (
 
 type (
 	bucketEntry interface {
-		entry
+		baseEntry
 		// pre-renew: returns true iff the current active one exists and is either
 		// - ok to keep running as is, or
 		// - has been renew(ed) and is still ok
@@ -442,7 +442,6 @@ type (
 		xact       *FastRen
 		bckFrom    *cluster.Bck
 		bckTo      *cluster.Bck
-		action     string
 		phase      string
 	}
 	FastRen struct {
@@ -501,7 +500,7 @@ func (e *FastRenEntry) Start(id string, bck cmn.Bck) error {
 	}
 	return nil
 }
-func (e *FastRenEntry) Kind() string  { return e.action }
+func (e *FastRenEntry) Kind() string  { return cmn.ActRenameLB }
 func (e *FastRenEntry) Get() cmn.Xact { return e.xact }
 
 func (e *FastRenEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
@@ -532,7 +531,6 @@ func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.
 		rebManager: mgr,
 		bckFrom:    bckFrom,
 		bckTo:      bckTo,
-		action:     cmn.ActRenameLB, // kind
 		phase:      phase,
 	}
 	ee, err := b.renewBucketXaction(e)
@@ -546,9 +544,6 @@ func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.
 // baseBckEntry
 //
 type baseBckEntry struct{}
-
-func (*baseBckEntry) IsGlobal() bool { return false }
-func (*baseBckEntry) IsTask() bool   { return false }
 
 // nolint:unparam // `err` is set in different implementations
 func (b *baseBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {

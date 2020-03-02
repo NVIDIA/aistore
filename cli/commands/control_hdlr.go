@@ -22,8 +22,7 @@ import (
 )
 
 var (
-	bucketXactions = bucketXactionNames()
-	xactKindsMsg   = buildXactKindsMsg()
+	xactKindsMsg = buildXactKindsMsg()
 
 	startCmdsFlags = map[string][]cli.Flag{
 		subcmdStartXaction: {},
@@ -109,24 +108,25 @@ var (
 
 func startXactionHandler(c *cli.Context) (err error) {
 	var (
-		xaction = c.Args().First() // empty string if no args given
-		bck     cmn.Bck
-		objName string
+		bck      cmn.Bck
+		objName  string
+		xactKind = c.Args().First() // empty string if no args given
 	)
 
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "xaction name")
 	}
 
-	if _, ok := cmn.ValidXact(xaction); !ok {
-		return fmt.Errorf("%q is not a valid xaction", xaction)
+	if !cmn.IsValidXaction(xactKind) {
+		return fmt.Errorf("%q is not a valid xaction", xactKind)
 	}
 
-	if !bucketXactions.Contains(xaction) { // global xaction
+	switch cmn.XactType[xactKind] {
+	case cmn.XactTypeGlobal:
 		if c.NArg() > 1 {
-			fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name\n", xaction)
+			fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name\n", xactKind)
 		}
-	} else { // bucket related xaction
+	case cmn.XactTypeBck:
 		bck, objName = parseBckObjectURI(c.Args().Get(1))
 		if objName != "" {
 			return objectNameArgumentNotSupported(c, objName)
@@ -134,33 +134,40 @@ func startXactionHandler(c *cli.Context) (err error) {
 		if bck, err = validateBucket(c, bck, "", false); err != nil {
 			return
 		}
+	case cmn.XactTypeTask:
+		return errors.New(`cannot start "type=task" xaction`)
 	}
 
-	if err = api.ExecXaction(defaultAPIParams, bck, xaction, commandStart); err != nil {
+	if err = api.ExecXaction(defaultAPIParams, bck, xactKind, commandStart); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "started %q xaction\n", xaction)
+	fmt.Fprintf(c.App.Writer, "started %q xaction\n", xactKind)
 	return
 }
 
 func stopXactionHandler(c *cli.Context) (err error) {
 	var (
-		bck     cmn.Bck
-		objName string
-		xaction = c.Args().First() // empty string if no args given
+		bck      cmn.Bck
+		objName  string
+		xactKind = c.Args().First() // empty string if no args given
 	)
 
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, fmt.Sprintf("xaction name or '%s'", allArgument))
 	}
 
-	if xaction == allArgument {
-		xaction = ""
+	if xactKind == allArgument {
+		xactKind = ""
 		bck.Name = c.Args().Get(1)
-	} else if _, ok := cmn.ValidXact(xaction); !ok {
-		return fmt.Errorf("%q is not a valid xaction", xaction)
+	} else if !cmn.IsValidXaction(xactKind) {
+		return fmt.Errorf("%q is not a valid xaction", xactKind)
 	} else { // valid xaction
-		if bucketXactions.Contains(xaction) {
+		switch cmn.XactType[xactKind] {
+		case cmn.XactTypeGlobal:
+			if c.NArg() > 1 {
+				fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a task xaction, ignoring bucket name\n", xactKind)
+			}
+		case cmn.XactTypeBck:
 			bck, objName = parseBckObjectURI(c.Args().Get(1))
 			if objName != "" {
 				return objectNameArgumentNotSupported(c, objName)
@@ -168,19 +175,22 @@ func stopXactionHandler(c *cli.Context) (err error) {
 			if bck, err = validateBucket(c, bck, "", false); err != nil {
 				return
 			}
-		} else if c.NArg() > 1 {
-			fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name\n", xaction)
+		case cmn.XactTypeTask:
+			// TODO: we probably should not ignore bucket...
+			if c.NArg() > 1 {
+				fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a task xaction, ignoring bucket name\n", xactKind)
+			}
 		}
 	}
 
-	if err = api.ExecXaction(defaultAPIParams, bck, xaction, commandStop); err != nil {
+	if err = api.ExecXaction(defaultAPIParams, bck, xactKind, commandStop); err != nil {
 		return
 	}
 
-	if xaction == "" {
+	if xactKind == "" {
 		fmt.Fprintln(c.App.Writer, "stopped all xactions")
 	} else {
-		fmt.Fprintf(c.App.Writer, "stopped %q xaction\n", xaction)
+		fmt.Fprintf(c.App.Writer, "stopped %q xaction\n", xactKind)
 	}
 	return
 }
@@ -350,23 +360,9 @@ func stopDsortHandler(c *cli.Context) (err error) {
 }
 
 func buildXactKindsMsg() string {
-	xactKinds := make([]string, 0, len(cmn.XactKind))
-
-	for kind := range cmn.XactKind {
+	xactKinds := make([]string, 0, len(cmn.XactType))
+	for kind := range cmn.XactType {
 		xactKinds = append(xactKinds, kind)
 	}
-
 	return fmt.Sprintf("%s can be one of: %s", xactionArgument, strings.Join(xactKinds, ", "))
-}
-
-func bucketXactionNames() cmn.StringSet {
-	result := make(cmn.StringSet)
-
-	for name, meta := range cmn.XactKind {
-		if !meta.IsGlobal {
-			result[name] = struct{}{}
-		}
-	}
-
-	return result
 }

@@ -210,7 +210,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 	var (
 		bck        cmn.Bck
 		objName    string
-		xaction    = c.Args().Get(0) // empty string if no arg given
+		xactKind   = c.Args().Get(0) // empty string if no arg given
 		bucketName = c.Args().Get(1) // empty string if no arg given
 	)
 
@@ -224,22 +224,20 @@ func showXactionHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	if xaction != "" {
-		if _, ok := cmn.ValidXact(xaction); !ok {
-			return fmt.Errorf("%q is not a valid xaction", xaction)
+	if xactKind != "" {
+		if !cmn.IsValidXaction(xactKind) {
+			return fmt.Errorf("%q is not a valid xaction", xactKind)
 		}
 
 		// valid xaction
-		if bucketXactions.Contains(xaction) {
+		if cmn.XactType[xactKind] == cmn.XactTypeBck {
 			if bck.Name == "" {
-				return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction '%s'", xaction))
+				return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction '%s'", xactKind))
 			}
-		} else if c.NArg() > 1 {
-			fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name\n", xaction)
 		}
 	}
 
-	xactStatsMap, err := api.MakeXactGetRequest(defaultAPIParams, bck, xaction, commandStats, flagIsSet(c, allItemsFlag))
+	xactStatsMap, err := api.MakeXactGetRequest(defaultAPIParams, bck, xactKind, commandStats, flagIsSet(c, allItemsFlag))
 	if err != nil {
 		return
 	}

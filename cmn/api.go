@@ -30,33 +30,37 @@ type ActValPromote struct {
 	Verbose    bool   `json:"verbose"`
 }
 
-type XactKindMeta struct {
-	IsGlobal bool
-}
+const (
+	XactTypeGlobal = "global"
+	XactTypeBck    = "bucket"
+	XactTypeTask   = "task"
+)
 
-type XactKindType map[string]XactKindMeta
+type XactKindType map[string]string
 
-var XactKind = XactKindType{
+var XactType = XactKindType{
 	// global kinds
-	ActLRU:          {true},
-	ActElection:     {true},
-	ActLocalReb:     {true},
-	ActGlobalReb:    {true},
-	ActPrefetch:     {true},
-	ActDownload:     {true},
-	ActEvictObjects: {true},
-	ActDelete:       {true},
+	ActLRU:          XactTypeGlobal,
+	ActElection:     XactTypeGlobal,
+	ActLocalReb:     XactTypeGlobal,
+	ActGlobalReb:    XactTypeGlobal,
+	ActPrefetch:     XactTypeGlobal,
+	ActDownload:     XactTypeGlobal,
+	ActEvictObjects: XactTypeGlobal,
+	ActDelete:       XactTypeGlobal,
 
 	// bucket's kinds
-	ActECGet:       {},
-	ActECPut:       {},
-	ActECRespond:   {},
-	ActMakeNCopies: {},
-	ActPutCopies:   {},
-	ActAsyncTask:   {},
-	ActRenameLB:    {},
-	ActCopyBucket:  {},
-	ActECEncode:    {},
+	ActECGet:       XactTypeBck,
+	ActECPut:       XactTypeBck,
+	ActECRespond:   XactTypeBck,
+	ActMakeNCopies: XactTypeBck,
+	ActPutCopies:   XactTypeBck,
+	ActRenameLB:    XactTypeBck,
+	ActCopyBucket:  XactTypeBck,
+	ActECEncode:    XactTypeBck,
+
+	ActListObjects:   XactTypeTask,
+	ActSummaryBucket: XactTypeTask,
 }
 
 // SelectMsg represents properties and options for requests which fetch entities
@@ -485,18 +489,7 @@ func ReadXactionRequestMessage(actionMsg *ActionMsg) (*XactionExtMsg, error) {
 	if err := jsoniter.Unmarshal(xactMsgJSON, xactMsg); err != nil {
 		return nil, err
 	}
-
 	return xactMsg, nil
-}
-
-func (k XactKindType) IsGlobalKind(kind string) (bool, error) {
-	kindMeta, ok := k[kind]
-
-	if !ok {
-		return false, fmt.Errorf("xaction kind %s not recognized", kind)
-	}
-
-	return kindMeta.IsGlobal, nil
 }
 
 func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error) {

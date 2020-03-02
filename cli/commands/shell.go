@@ -272,14 +272,14 @@ func listCompletions(c *cli.Context) {
 
 func xactionCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		for key := range cmn.XactKind {
+		for key := range cmn.XactType {
 			fmt.Println(key)
 		}
 		return
 	}
 
 	xactName := c.Args().First()
-	if bucketXactions.Contains(xactName) {
+	if cmn.XactType[xactName] == cmn.XactTypeBck {
 		bucketCompletions([]cli.BashCompleteFunc{}, false, false)(c)
 		return
 	}

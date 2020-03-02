@@ -17,7 +17,7 @@ import (
 )
 
 type globalEntry interface {
-	entry
+	baseEntry
 	// pre-renew: returns true iff the current active one exists and is either
 	// - ok to keep running as is, or
 	// - has been renew(ed) and is still ok
@@ -209,14 +209,12 @@ func (e *downloaderEntry) Get() cmn.Xact { return e.xact }
 func (e *downloaderEntry) Kind() string  { return cmn.ActDownload }
 
 //
-// base*Entry
+// baseGlobalEntry
 //
+
 type (
 	baseGlobalEntry struct{}
 )
-
-func (*baseGlobalEntry) IsGlobal() bool { return true }
-func (*baseGlobalEntry) IsTask() bool   { return false }
 
 func (b *baseGlobalEntry) preRenewHook(previousEntry globalEntry) (done bool) {
 	e := previousEntry.Get()

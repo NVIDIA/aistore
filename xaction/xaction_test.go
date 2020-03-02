@@ -17,7 +17,7 @@ import (
 // Smoke tests for xactions
 
 func TestXactionRenewLRU(t *testing.T) {
-	xactions := newXactions()
+	xactions := newRegistry()
 	defer xactions.AbortAll()
 
 	ch := make(chan *lru.Xaction, 10)
@@ -44,7 +44,7 @@ func TestXactionRenewLRU(t *testing.T) {
 }
 
 func TestXactionRenewPrefetch(t *testing.T) {
-	xactions := newXactions()
+	xactions := newRegistry()
 	defer xactions.AbortAll()
 
 	ch := make(chan *prefetch, 10)
@@ -71,7 +71,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 }
 
 func TestXactionRenewEvictDelete(t *testing.T) {
-	xactions := newXactions()
+	xactions := newRegistry()
 	defer xactions.AbortAll()
 
 	ch := make(chan *evictDelete, 10)
@@ -98,7 +98,7 @@ func TestXactionRenewEvictDelete(t *testing.T) {
 }
 
 func TestXactionAbortAll(t *testing.T) {
-	xactions := newXactions()
+	xactions := newRegistry()
 	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 
@@ -116,7 +116,7 @@ func TestXactionAbortAll(t *testing.T) {
 }
 
 func TestXactionAbortAllGlobal(t *testing.T) {
-	xactions := newXactions()
+	xactions := newRegistry()
 	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 
@@ -125,7 +125,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	xactBck, err := xactions.RenewBckFastRename(nil, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
-	xactions.AbortAllGlobal()
+	xactions.AbortAll(cmn.XactTypeGlobal)
 
 	tassert.Errorf(t, xactGlob != nil && xactGlob.Aborted(),
 		"AbortAllGlobal: expected global xaction to be aborted")
@@ -135,7 +135,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 }
 
 func TestXactionAbortBuckets(t *testing.T) {
-	xactions := newXactions()
+	xactions := newRegistry()
 	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 

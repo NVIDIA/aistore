@@ -112,7 +112,7 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 }
 
 func (g *fsprungroup) newMountpathEvent(action, mpath string) {
-	xaction.Registry.StopMountpathXactions()
+	xaction.Registry.AbortAllMountpathsXactions()
 	g.RLock()
 	for _, r := range g.runners {
 		switch action {
@@ -133,7 +133,7 @@ func (g *fsprungroup) newMountpathEvent(action, mpath string) {
 }
 
 func (g *fsprungroup) lostMountpathEvent(action, mpath string) {
-	xaction.Registry.StopMountpathXactions()
+	xaction.Registry.AbortAllMountpathsXactions()
 	g.RLock()
 	for _, r := range g.runners {
 		switch action {

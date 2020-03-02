@@ -6,22 +6,17 @@ package xaction
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/housekeep/lru"
-	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -82,26 +77,34 @@ type (
 		msg *cmn.SelectMsg
 		res atomic.Pointer
 	}
-	entry interface {
+	baseEntry interface {
 		Start(id string, bck cmn.Bck) error // supposed to start an xaction, will be called when entry is stored to into registry
 		Kind() string
 		Get() cmn.Xact
 		Stats(xact cmn.Xact) stats.XactStats
-		IsGlobal() bool
-		IsTask() bool
 	}
 	registry struct {
 		sync.RWMutex
-		globalXacts   map[string]globalEntry
-		taskXacts     sync.Map // map[string]xactionEntry
-		bucketXacts   sync.Map // map[string]*bucketXactions; FIXME: bucket name (key) cannot be considered unique
-		byID          sync.Map // map[int64]xactionEntry
+
+		// Helper map for keeping bucket related xactions
+		// All xactions are stored in `byID`.
+		bucketXacts sync.Map // bckUname (string) => *bucketXactions
+
+		// Helper map for keeping latest entry for each kind.
+		// All xactions are stored in `byID`.
+		latest sync.Map // kind (string) => entry (baseEntry|bucketEntry|globalEntry)
+
+		byID          sync.Map // id (int64) => baseEntry
 		byIDSize      atomic.Int64
 		byIDTaskCount atomic.Int64
 	}
 )
 
 var Registry *registry
+
+func init() {
+	Registry = newRegistry()
+}
 
 //
 // global descriptions
@@ -168,29 +171,26 @@ func (xact *GlobalReb) AbortedAfter(d time.Duration) (aborted bool) {
 // registry
 //
 
-func newXactions() *registry {
-	xar := &registry{
-		globalXacts: make(map[string]globalEntry),
-	}
+func newRegistry() *registry {
+	xar := &registry{}
 	hk.Housekeeper.Register("xactions", xar.cleanUpFinished)
 	return xar
 }
 
-func (r *registry) GetTaskXact(id string) entry {
+func (r *registry) GetTaskXact(id string) (baseEntry, bool) {
 	cmn.Assert(id != "")
-	val, loaded := r.byID.Load(id)
-
-	if loaded {
-		return val.(entry)
+	if e, ok := r.byID.Load(id); ok {
+		return e.(baseEntry), true
 	}
-	return nil
+	return nil, false
 }
 
-func (r *registry) GetL(kind string) globalEntry {
-	r.RLock()
-	res := r.globalXacts[kind]
-	r.RUnlock()
-	return res
+func (r *registry) GetLatest(kind string) (baseEntry, bool) {
+	cmn.Assert(kind != "")
+	if e, ok := r.latest.Load(kind); ok {
+		return e.(baseEntry), true
+	}
+	return nil, false
 }
 
 // registry - private methods
@@ -214,39 +214,22 @@ func (r *registry) AbortAllBuckets(removeFromRegistry bool, bcks ...*cluster.Bck
 			}
 		}(bck)
 	}
-
 	wg.Wait()
-}
-
-// nolint:unused // implemented but currently no use case
-func (r *registry) AbortAllGlobal() bool {
-	sleep := false
-	wg := &sync.WaitGroup{}
-
-	for _, entry := range r.globalXacts {
-		if !entry.Get().Finished() {
-			wg.Add(1)
-			sleep = true
-			go func() {
-				entry.Get().Abort()
-				wg.Done()
-			}()
-		}
-	}
-
-	wg.Wait()
-	return sleep
 }
 
 // AbortAll waits until abort of all xactions is finished
 // Every abort is done asynchronously
-func (r *registry) AbortAll() bool {
+func (r *registry) AbortAll(ty ...string) bool {
 	sleep := false
 	wg := &sync.WaitGroup{}
 
-	r.byID.Range(func(_, val interface{}) bool {
-		entry := val.(entry)
+	r.byID.Range(func(_, e interface{}) bool {
+		entry := e.(baseEntry)
 		if !entry.Get().Finished() {
+			if len(ty) > 0 && ty[0] != cmn.XactType[entry.Kind()] {
+				return true
+			}
+
 			sleep = true
 			wg.Add(1)
 			go func() {
@@ -254,7 +237,6 @@ func (r *registry) AbortAll() bool {
 				wg.Done()
 			}()
 		}
-
 		return true
 	})
 
@@ -266,204 +248,169 @@ func (r *registry) uniqueID() string {
 	return cmn.GenUserID()
 }
 
-func (r *registry) StopMountpathXactions() {
-	r.byID.Range(func(_, value interface{}) bool {
-		entry := value.(entry)
-
-		if entry.Get().IsMountpathXact() {
-			if !entry.Get().Finished() {
+func (r *registry) AbortAllMountpathsXactions() {
+	r.byID.Range(func(_, e interface{}) bool {
+		entry := e.(baseEntry)
+		if !entry.Get().Finished() {
+			if entry.Get().IsMountpathXact() {
 				entry.Get().Abort()
 			}
 		}
-
 		return true
 	})
 }
 
-func (r *registry) abortBucketXact(kind string, bck *cluster.Bck) {
-	bckUname := bck.MakeUname("")
-	val, ok := r.bucketXacts.Load(bckUname)
-	if !ok {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Can't abort nonexistent xaction for bucket %s", bck)
-		}
-		return
-	}
-	bucketsXacts := val.(*bucketXactions)
-	entry := bucketsXacts.GetL(kind)
-	if entry == nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Can't abort nonexistent xaction for bucket %s", bck)
-		}
-		return
-	}
-	if !entry.Get().Finished() {
-		entry.Get().Abort()
-	}
-}
-
 func (r *registry) GlobalXactRunning(kind string) bool {
-	entry := r.GetL(kind)
-	if entry == nil {
+	e, ok := r.latest.Load(kind)
+	if !ok {
 		return false
 	}
-	return !entry.Get().Finished()
+	return !e.(baseEntry).Get().Finished()
 }
 
-func (r *registry) globalXactStats(kind string, onlyRecent bool) (map[string]stats.XactStats, error) {
-	if _, ok := cmn.ValidXact(kind); !ok {
-		return nil, errors.New("unknown xaction " + kind)
-	}
-
-	entry := r.GetL(kind)
-	if entry == nil {
-		return nil, cmn.NewXactionNotFoundError(kind)
-	}
-
-	if onlyRecent {
-		xact := entry.Get()
-		return map[string]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
-	}
-
-	return r.matchingXactsStats(func(xact cmn.Xact) bool {
-		return xact.Kind() == kind || xact.ID() == entry.Get().ID()
-	}), nil
-}
-
-func (r *registry) abortGlobalXact(kind string) (aborted bool) {
-	entry := r.GetL(kind)
-	if entry == nil {
-		return
-	}
-	if !entry.Get().Finished() {
-		entry.Get().Abort()
-		aborted = true
+func (r *registry) abortByKind(kind string, bck *cluster.Bck) (aborted bool) {
+	switch cmn.XactType[kind] {
+	case cmn.XactTypeGlobal, cmn.XactTypeTask:
+		e, ok := r.latest.Load(kind)
+		if !ok {
+			return false
+		}
+		entry := e.(baseEntry)
+		if !entry.Get().Finished() {
+			entry.Get().Abort()
+			aborted = true
+		}
+	case cmn.XactTypeBck:
+		cmn.Assert(bck != nil)
+		bucketsXacts, ok := r.getBucketsXacts(bck)
+		if !ok {
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("cannot abort nonexistent xaction for bucket %s", bck)
+			}
+			return
+		}
+		entry := bucketsXacts.GetL(kind)
+		if entry == nil {
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("cannot abort nonexistent xaction for bucket %s", bck)
+			}
+			return
+		}
+		if !entry.Get().Finished() {
+			entry.Get().Abort()
+			aborted = true
+		}
+	default:
+		cmn.Assert(false)
 	}
 	return
 }
 
-// Returns stats of xaction with given 'kind' on a given bucket
-func (r *registry) bucketSingleXactStats(kind string, bck *cluster.Bck,
-	onlyRecent bool) (map[string]stats.XactStats, error) {
-	if onlyRecent {
-		bucketXats, ok := r.getBucketsXacts(bck)
-		if !ok {
-			return nil, cmn.NewXactionNotFoundError("<any>, bucket=" + bck.Name)
-		}
-		entry := bucketXats.GetL(kind)
-		if entry == nil {
-			return nil, cmn.NewXactionNotFoundError(kind + ", bucket=" + bck.Name)
-		}
-		xact := entry.Get()
-		return map[string]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
-	}
-	return r.matchingXactsStats(func(xact cmn.Xact) bool {
-		return xact.Bck().Equal(bck.Bck) && xact.Kind() == kind
-	}), nil
-}
-
-// Returns stats of all present xactions
-func (r *registry) allXactsStats(onlyRecent bool) map[string]stats.XactStats {
-	if !onlyRecent {
-		return r.matchingXactsStats(func(_ cmn.Xact) bool { return true })
-	}
-
-	matching := make(map[string]stats.XactStats)
-
-	// add these xactions which are the most recent ones, even if they are finished
-	r.RLock()
-	for _, entry := range r.globalXacts {
-		xact := entry.Get()
-		matching[xact.ID()] = entry.Stats(xact)
-	}
-	r.RUnlock()
-
-	r.bucketXacts.Range(func(_, val interface{}) bool {
-		bckXactions := val.(*bucketXactions)
-
-		for _, stat := range bckXactions.Stats() {
-			matching[stat.ID()] = stat
-		}
-		return true
-	})
-
-	r.taskXacts.Range(func(_, val interface{}) bool {
-		xact := val.(entry)
-		taskXact := xact.Get()
-		matching[taskXact.ID()] = stats.NewXactStats(taskXact)
-		return true
-	})
-
-	return matching
-}
-
-func (r *registry) matchingXactsStats(xactMatches func(xact cmn.Xact) bool) map[string]stats.XactStats {
+func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) map[string]stats.XactStats {
 	sts := make(map[string]stats.XactStats, 20)
-
 	r.byID.Range(func(_, value interface{}) bool {
-		entry := value.(entry)
-		if !xactMatches(entry.Get()) {
+		entry := value.(baseEntry)
+		if !match(entry.Get()) {
 			return true
 		}
 		xact := entry.Get()
 		sts[xact.ID()] = entry.Stats(xact)
 		return true
 	})
-
 	return sts
 }
 
-func (r *registry) getNonBucketSpecificStats(kind string, onlyRecent bool) (map[string]stats.XactStats, error) {
-	// no bucket and no kind - request for all xactions
-	if kind == "" {
-		return r.allXactsStats(onlyRecent), nil
-	}
+func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map[string]stats.XactStats, error) {
+	if bck == nil && kind == "" {
+		if !onlyRecent {
+			return r.matchingXactsStats(func(_ cmn.Xact) bool { return true }), nil
+		}
 
-	global, err := cmn.XactKind.IsGlobalKind(kind)
+		// Add these xactions which are the most recent ones, even if they are finished
+		matching := make(map[string]stats.XactStats, 10)
+		r.latest.Range(func(_, e interface{}) bool {
+			entry := e.(baseEntry)
+			switch cmn.XactType[entry.Kind()] {
+			case cmn.XactTypeGlobal, cmn.XactTypeTask:
+				xact := entry.Get()
+				matching[xact.ID()] = entry.Stats(xact)
+			case cmn.XactTypeBck:
+				bckXactions := e.(*bucketXactions)
+				for _, stat := range bckXactions.Stats() {
+					matching[stat.ID()] = stat
+				}
+			default:
+				cmn.Assert(false)
+			}
+			return true
+		})
+		return matching, nil
+	} else if bck == nil && kind != "" {
+		if !cmn.IsValidXaction(kind) {
+			return nil, cmn.NewXactionNotFoundError(kind)
+		} else if cmn.XactType[kind] == cmn.XactTypeBck {
+			return nil, fmt.Errorf("bucket xaction %q requires bucket", kind)
+		}
 
-	if err != nil {
-		return nil, err
-	}
-
-	if global {
-		return r.globalXactStats(kind, onlyRecent)
-	}
-
-	return nil, fmt.Errorf("xaction %s is not global", kind)
-}
-
-// Returns stats of all xactions of a given bucket
-func (r *registry) bucketAllXactsStats(bck *cluster.Bck, onlyRecent bool) map[string]stats.XactStats {
-	bucketsXacts, ok := r.getBucketsXacts(bck)
-
-	// bucketsXacts is not present, bucket might have never existed
-	// or has been removed, return empty result
-	if !ok {
 		if onlyRecent {
-			return map[string]stats.XactStats{}
+			e, ok := r.latest.Load(kind)
+			if !ok {
+				return map[string]stats.XactStats{}, nil
+			}
+			entry := e.(baseEntry)
+			xact := entry.Get()
+			return map[string]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return xact.Bck().Equal(bck.Bck)
-		})
+			return xact.Kind() == kind
+		}), nil
+	} else if bck != nil && kind == "" {
+		if !bck.HasProvider() {
+			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", kind, bck.Name)
+		}
+		bucketsXacts, ok := r.getBucketsXacts(bck)
+		if !ok {
+			// bucketsXacts is not present, bucket might have never existed
+			// or has been removed, return empty result
+			if onlyRecent {
+				return map[string]stats.XactStats{}, nil
+			}
+			return r.matchingXactsStats(func(xact cmn.Xact) bool {
+				return xact.Bck().Equal(bck.Bck)
+			}), nil
+		}
+		return bucketsXacts.Stats(), nil
+	} else if bck != nil && kind != "" {
+		if !bck.HasProvider() {
+			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", kind, bck)
+		} else if !cmn.IsValidXaction(kind) {
+			return nil, cmn.NewXactionNotFoundError(kind)
+		}
+
+		switch cmn.XactType[kind] {
+		case cmn.XactTypeGlobal, cmn.XactTypeTask:
+			break
+		case cmn.XactTypeBck:
+			if onlyRecent {
+				bucketXacts, ok := r.getBucketsXacts(bck)
+				if !ok {
+					return nil, cmn.NewXactionNotFoundError(kind + ", bucket=" + bck.Bck.String())
+				}
+				entry := bucketXacts.GetL(kind)
+				if entry == nil {
+					return nil, cmn.NewXactionNotFoundError(kind + ", bucket=" + bck.Bck.String())
+				}
+				xact := entry.Get()
+				return map[string]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
+			}
+		}
+		return r.matchingXactsStats(func(xact cmn.Xact) bool {
+			return xact.Kind() == kind && xact.Bck().Equal(bck.Bck)
+		}), nil
 	}
 
-	return bucketsXacts.Stats()
-}
-
-func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map[string]stats.XactStats, error) {
-	if bck == nil {
-		// no bucket - either all xactions or a global xaction
-		return r.getNonBucketSpecificStats(kind, onlyRecent)
-	}
-	if !bck.HasProvider() {
-		return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", kind, bck.Name)
-	}
-	// both bucket and kind present - request for specific bucket's xaction
-	if kind != "" {
-		return r.bucketSingleXactStats(kind, bck, onlyRecent)
-	}
-	// bucket present and no kind - request for all available bucket's xactions
-	return r.bucketAllXactsStats(bck, onlyRecent), nil
+	cmn.Assert(false)
+	return nil, nil
 }
 
 func (r *registry) DoAbort(kind string, bck *cluster.Bck) (aborted bool) {
@@ -477,25 +424,17 @@ func (r *registry) DoAbort(kind string, bck *cluster.Bck) (aborted bool) {
 		}
 		aborted = true
 	} else {
-		if bck == nil {
-			// No bucket but kind present - request for specific global xaction.
-			aborted = r.abortGlobalXact(kind)
-		} else {
-			// Both bucket and kind present - request for specific bucket's xactions.
-			r.abortBucketXact(kind, bck)
-			aborted = true
-		}
+		r.abortByKind(kind, bck)
 	}
 	return
 }
 
 func (r *registry) getBucketsXacts(bck *cluster.Bck) (xactions *bucketXactions, ok bool) {
 	bckUname := bck.MakeUname("")
-	val, ok := r.bucketXacts.Load(bckUname)
-	if !ok {
-		return nil, false
+	if e, ok := r.bucketXacts.Load(bckUname); ok {
+		return e.(*bucketXactions), true
 	}
-	return val.(*bucketXactions), true
+	return nil, false
 }
 
 func (r *registry) BucketsXacts(bck *cluster.Bck) *bucketXactions {
@@ -505,12 +444,12 @@ func (r *registry) BucketsXacts(bck *cluster.Bck) *bucketXactions {
 	bckUname := bck.MakeUname("")
 
 	// try loading first to avoid creating newBucketXactions()
-	val, loaded := r.bucketXacts.Load(bckUname)
+	e, loaded := r.bucketXacts.Load(bckUname)
 	if loaded {
-		return val.(*bucketXactions)
+		return e.(*bucketXactions)
 	}
-	val, _ = r.bucketXacts.LoadOrStore(bckUname, newBucketXactions(r, bck.Bck))
-	return val.(*bucketXactions)
+	e, _ = r.bucketXacts.LoadOrStore(bckUname, newBucketXactions(r, bck.Bck))
+	return e.(*bucketXactions)
 }
 
 func (r *registry) removeFinishedByID(id string) error {
@@ -519,7 +458,7 @@ func (r *registry) removeFinishedByID(id string) error {
 		return nil
 	}
 
-	xact := item.(entry)
+	xact := item.(baseEntry)
 	if !xact.Get().Finished() {
 		return fmt.Errorf("xaction %s(%s, %T) is running - duplicate ID?", xact.Kind(), id, xact.Get())
 	}
@@ -531,12 +470,13 @@ func (r *registry) removeFinishedByID(id string) error {
 	return nil
 }
 
-func (r *registry) storeEntry(entry entry) {
+func (r *registry) storeEntry(entry baseEntry) {
+	r.latest.Store(entry.Kind(), entry)
 	r.byID.Store(entry.Get().ID(), entry)
 
 	// Increase after cleanup to not force trigger it. If it was just added, for
 	// sure it didn't yet finish.
-	if entry.IsTask() {
+	if cmn.XactType[entry.Kind()] == cmn.XactTypeTask {
 		r.byIDTaskCount.Inc()
 	}
 }
@@ -554,33 +494,34 @@ func (r *registry) cleanUpFinished() time.Duration {
 		}
 	}
 	anyTaskDeleted := false
-	r.byID.Range(func(k, v interface{}) bool {
+	r.byID.Range(func(k, e interface{}) bool {
 		var (
-			entry = v.(entry)
+			entry = e.(baseEntry)
 			xact  = entry.Get()
 			eID   = xact.ID()
-			eKind = xact.Kind()
 		)
+
 		if !xact.Finished() {
 			return true
 		}
 
-		// if IsTask == true the task must be cleaned up always - no extra
+		// if entry is type of task the task must be cleaned up always - no extra
 		// checks besides it is finished at least entryOldAge ago.
 		//
 		// We need to check if the entry is not the most recent entry for
 		// given kind. If it is we want to keep it anyway.
-		if entry.IsGlobal() {
-			currentEntry := r.GetL(eKind)
-			if currentEntry != nil && currentEntry.Get().ID() == eID {
+		switch cmn.XactType[entry.Kind()] {
+		case cmn.XactTypeGlobal:
+			e, ok := r.latest.Load(xact.Kind())
+			if ok && e.(baseEntry).Get().ID() == eID {
 				return true
 			}
-		} else if !entry.IsTask() {
+		case cmn.XactTypeBck:
 			bck := cluster.NewBckEmbed(xact.Bck())
 			cmn.Assert(bck.HasProvider())
 			bXact, _ := r.getBucketsXacts(bck)
 			if bXact != nil {
-				currentEntry := bXact.GetL(eKind)
+				currentEntry := bXact.GetL(xact.Kind())
 				if currentEntry != nil && currentEntry.Get().ID() == eID {
 					return true
 				}
@@ -591,7 +532,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 			// xaction has finished more than entryOldAge ago
 			r.byID.Delete(k)
 			r.byIDSize.Dec()
-			if entry.IsTask() {
+			if cmn.XactType[entry.Kind()] == cmn.XactTypeTask {
 				anyTaskDeleted = true
 			}
 			return true
@@ -612,39 +553,40 @@ func (r *registry) cleanUpFinished() time.Duration {
 // renew methods
 //
 
-func (r *registry) renewGlobalXaction(e globalEntry) (ee globalEntry, keep bool, err error) {
-	r.RLock()
-	previousEntry := r.globalXacts[e.Kind()]
-
-	if previousEntry != nil && !previousEntry.Get().Finished() {
-		if e.preRenewHook(previousEntry) {
-			r.RUnlock()
-			ee, keep = previousEntry, true
+func (r *registry) renewGlobalXaction(gEntry globalEntry) (newGEntry globalEntry, keep bool, err error) {
+	if e, ok := r.latest.Load(gEntry.Kind()); ok {
+		prevEntry := e.(globalEntry)
+		if !prevEntry.Get().Finished() {
+			gEntry.preRenewHook(prevEntry)
+			newGEntry, keep = prevEntry, true
 			return
 		}
 	}
-	r.RUnlock()
 
 	r.Lock()
 	defer r.Unlock()
-	previousEntry = r.globalXacts[e.Kind()]
-	running := previousEntry != nil && !previousEntry.Get().Finished()
-	if running {
-		if e.preRenewHook(previousEntry) {
-			ee, keep = previousEntry, true
-			return
+	var (
+		running   = false
+		prevEntry globalEntry
+	)
+	if e, ok := r.latest.Load(gEntry.Kind()); ok {
+		prevEntry = e.(globalEntry)
+		if !prevEntry.Get().Finished() {
+			running = true
+			if gEntry.preRenewHook(prevEntry) {
+				newGEntry, keep = prevEntry, true
+				return
+			}
 		}
 	}
-	if err = e.Start(r.uniqueID(), cmn.Bck{}); err != nil {
+	if err = gEntry.Start(r.uniqueID(), cmn.Bck{}); err != nil {
 		return
 	}
-	r.globalXacts[e.Kind()] = e
-	r.storeEntry(e)
-
+	r.storeEntry(gEntry)
 	if running {
-		e.postRenewHook(previousEntry)
+		gEntry.postRenewHook(prevEntry)
 	}
-	ee = e
+	newGEntry = gEntry
 	return
 }
 
@@ -731,7 +673,6 @@ func (r *registry) RenewBckListXact(ctx context.Context, t cluster.Target, bck *
 	if err := e.Start(id, bck.Bck); err != nil {
 		return nil, err
 	}
-	r.taskXacts.Store(e.Kind(), e)
 	r.storeEntry(e)
 	return e.xact, nil
 }
@@ -751,210 +692,6 @@ func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bc
 	if err := e.Start(id, bck.Bck); err != nil {
 		return nil, err
 	}
-	r.taskXacts.Store(e.Kind(), e)
 	r.storeEntry(e)
 	return e.xact, nil
-}
-
-//
-// bckListTask
-//
-
-func (r *bckListTask) IsMountpathXact() bool { return false }
-
-func (r *bckListTask) Run() {
-	walk := objwalk.NewWalk(r.ctx, r.t, r.Bck(), r.msg)
-	if r.Bck().IsAIS() || r.msg.Cached {
-		r.UpdateResult(walk.LocalObjPage())
-	} else {
-		r.UpdateResult(walk.CloudObjPage())
-	}
-}
-
-func (r *bckListTask) UpdateResult(result interface{}, err error) {
-	res := &taskState{Err: err}
-	if err == nil {
-		res.Result = result
-	}
-	r.res.Store(unsafe.Pointer(res))
-	r.EndTime(time.Now())
-}
-
-func (r *bckListTask) Result() (interface{}, error) {
-	ts := (*taskState)(r.res.Load())
-	if ts == nil {
-		return nil, errors.New("no result to load")
-	}
-	return ts.Result, ts.Err
-}
-
-//
-// bckSummaryTask
-//
-
-func (r *bckSummaryTask) IsMountpathXact() bool { return false }
-
-func (r *bckSummaryTask) Run() {
-	var (
-		buckets []*cluster.Bck
-		bmd     = r.t.GetBowner().Get()
-		cfg     = cmn.GCO.Get()
-	)
-	if r.Bck().Name != "" {
-		buckets = append(buckets, cluster.NewBckEmbed(r.Bck()))
-	} else {
-		if !r.Bck().HasProvider() || r.Bck().IsAIS() {
-			provider := cmn.ProviderAIS
-			bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
-				buckets = append(buckets, bck)
-				return false
-			})
-		}
-		if !r.Bck().HasProvider() || cmn.IsProviderCloud(r.Bck(), true /*acceptAnon*/) {
-			var (
-				provider  = cfg.Cloud.Provider
-				namespace = cfg.Cloud.Ns
-			)
-			bmd.Range(&provider, &namespace, func(bck *cluster.Bck) bool {
-				buckets = append(buckets, bck)
-				return false
-			})
-		}
-	}
-
-	var (
-		mtx               sync.Mutex
-		wg                = &sync.WaitGroup{}
-		availablePaths, _ = fs.Mountpaths.Get()
-		errCh             = make(chan error, len(buckets))
-		summaries         = make(cmn.BucketsSummaries, len(buckets))
-	)
-	wg.Add(len(buckets))
-
-	totalDisksSize, err := fs.GetTotalDisksSize()
-	if err != nil {
-		r.UpdateResult(nil, err)
-		return
-	}
-
-	si, err := cluster.HrwTargetTask(r.msg.TaskID, r.t.GetSowner().Get())
-	if err != nil {
-		r.UpdateResult(nil, err)
-		return
-	}
-
-	// When we are target which should not list CB we should only list cached objects.
-	shouldListCB := si.ID() == r.t.Snode().ID() && !r.msg.Cached
-	if !shouldListCB {
-		r.msg.Cached = true
-	}
-
-	for _, bck := range buckets {
-		go func(bck *cluster.Bck) {
-			defer wg.Done()
-
-			if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
-				errCh <- err
-				return
-			}
-
-			summary := cmn.BucketSummary{
-				Bck:            bck.Bck,
-				TotalDisksSize: totalDisksSize,
-			}
-
-			if r.msg.Fast && (bck.IsAIS() || r.msg.Cached) {
-				for _, mpathInfo := range availablePaths {
-					path := mpathInfo.MakePathCT(bck.Bck, fs.ObjectType)
-					size, err := ios.GetDirSize(path)
-					if err != nil {
-						errCh <- err
-						return
-					}
-					fileCount, err := ios.GetFileCount(path)
-					if err != nil {
-						errCh <- err
-						return
-					}
-
-					if bck.Props.Mirror.Enabled {
-						copies := int(bck.Props.Mirror.Copies)
-						size /= uint64(copies)
-						fileCount = fileCount/copies + fileCount%copies
-					}
-					summary.Size += size
-					summary.ObjCount += uint64(fileCount)
-				}
-			} else { // slow path
-				var (
-					list *cmn.BucketList
-					err  error
-				)
-
-				for {
-					walk := objwalk.NewWalk(context.Background(), r.t, bck.Bck, r.msg)
-					if bck.IsAIS() {
-						list, err = walk.LocalObjPage()
-					} else {
-						list, err = walk.CloudObjPage()
-					}
-					if err != nil {
-						errCh <- err
-						return
-					}
-
-					for _, v := range list.Entries {
-						summary.Size += uint64(v.Size)
-
-						// We should not include object count for cloud buckets
-						// as other target will do that for us. We just need to
-						// report the size on the disk.
-						if bck.IsAIS() || (!bck.IsAIS() && (shouldListCB || r.msg.Cached)) {
-							summary.ObjCount++
-						}
-					}
-
-					if list.PageMarker == "" {
-						break
-					}
-
-					list.Entries = nil
-					r.msg.PageMarker = list.PageMarker
-				}
-			}
-
-			mtx.Lock()
-			summaries[bck.Name] = summary
-			mtx.Unlock()
-		}(bck)
-	}
-
-	wg.Wait()
-	close(errCh)
-	for err := range errCh {
-		r.UpdateResult(nil, err)
-	}
-
-	r.UpdateResult(summaries, nil)
-}
-
-func (r *bckSummaryTask) UpdateResult(result interface{}, err error) {
-	res := &taskState{Err: err}
-	if err == nil {
-		res.Result = result
-	}
-	r.res.Store(unsafe.Pointer(res))
-	r.EndTime(time.Now())
-}
-
-func (r *bckSummaryTask) Result() (interface{}, error) {
-	ts := (*taskState)(r.res.Load())
-	if ts == nil {
-		return nil, errors.New("no result to load")
-	}
-	return ts.Result, ts.Err
-}
-
-func init() {
-	Registry = newXactions()
 }

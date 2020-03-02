@@ -281,15 +281,14 @@ func (reb *Manager) serialize(smap *cluster.Smap, config *cmn.Config, globRebID 
 		//
 		// vs current xaction
 		//
-		entry := xaction.Registry.GetL(cmn.ActGlobalReb)
-		if entry == nil {
+		entry, ok := xaction.Registry.GetLatest(cmn.ActGlobalReb)
+		if !ok {
 			if canRun {
 				return
 			}
 			glog.Warningf("%s: waiting for ???...", loghdr)
 		} else {
-			xact := entry.Get()
-			otherXreb := xact.(*xaction.GlobalReb) // running or previous
+			otherXreb := entry.Get().(*xaction.GlobalReb) // running or previous
 			if canRun {
 				cmn.Assert(otherXreb.Finished())
 				return
