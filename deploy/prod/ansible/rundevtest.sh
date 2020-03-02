@@ -7,7 +7,7 @@ source aws.env
 for pid in $(ps -C aisnode -o pid=); do echo "stopping aisnode: $pid"; sudo kill $pid; done
 sudo rm -rf /home/ubuntu/.ais*
 rm -rf /tmp/ais*
-cd $AISTORE_SRC || exit 1
+cd $AISSRC && cd ..
 
 if [[ -n $1 ]]; then
     echo "git checkout branch: $1"
