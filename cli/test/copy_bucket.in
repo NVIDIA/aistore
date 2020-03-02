@@ -1,7 +1,0 @@
-ais create bucket $BUCKET_1 $BUCKET_2
-ais cp bucket $BUCKET_1/ $BUCKET_2/
-
-sleep 2
-ais show xaction copybck $BUCKET_1/ // FAIL "Xaction '<any>, bucket=$BUCKET_1' not found"
-ais show xaction copybck $BUCKET_2/ // IGNORE
-ais show xaction copybck $BUCKET_3/ // FAIL "Bucket with name "$BUCKET_3" does not exist."

@@ -1,6 +1,0 @@
-$BUCKET_1 bucket created
-Bucket "$BUCKET_1" already exists
-$BUCKET_1 bucket destroyed
-$BUCKET_2 bucket created
-Bucket "$BUCKET_2" already exists
-$BUCKET_2 bucket destroyed

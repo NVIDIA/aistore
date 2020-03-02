@@ -1,3 +1,0 @@
-$BUCKET bucket created
-PUT object.txt into bucket $BUCKET
-object.txt deleted from $BUCKET bucket

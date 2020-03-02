@@ -1,6 +1,0 @@
-{{- define "statsd.config" -}}
-{
-	graphiteHost: "{{ .Values.ais_release }}-graphite",
-	graphitePort: 2003
-}
-{{- end -}}

@@ -1,7 +1,0 @@
-ais create bucket $BUCKET_1
-ais create bucket $BUCKET_1
-ais rm bucket $BUCKET_1
-
-ais create bucket $BUCKET_2/ # should ignore slash
-ais create bucket $BUCKET_2
-ais rm bucket $BUCKET_2/ # should ignore slash

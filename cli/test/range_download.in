@@ -1,3 +1,0 @@
-ais create bucket $BUCKET
-ais start download gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz ais://$BUCKET // FAIL "too many arguments"
-ais rm bucket $BUCKET
