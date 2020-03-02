@@ -103,7 +103,7 @@ func fileTreeByMask(path, base string, mask string) ([]fileToObj, error) {
 // criteria (file path, object name, size for every file)
 func generateFileList(path, base string, recursive bool) ([]fileToObj, error) {
 	if base != "" && !strings.HasPrefix(path, base) {
-		return nil, fmt.Errorf("Path %q must start with the base %q", path, base)
+		return nil, fmt.Errorf("incorrect --trim-prefix value, %q doesn't have %q prefix", path, base)
 	}
 
 	mask := ""

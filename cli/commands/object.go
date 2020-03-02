@@ -218,12 +218,6 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 	return uploadFiles(c, params)
 }
 
-// clears fileName from unnecessary elements like '.'
-func clearFileName(fileName string) string {
-	return cmn.ExpandPath(fileName)
-}
-
-// expects fileName to be already cleared
 // base + fileName = path
 // if fileName is already absolute path, base is empty
 func getPathAndBaseFromFileName(fileName string) (path, base string, err error) {
@@ -236,7 +230,6 @@ func getPathAndBaseFromFileName(fileName string) (path, base string, err error) 
 }
 
 func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error) {
-	fileName = clearFileName(fileName)
 	// By default trimPrefix is difference between fileName and its absolute path
 	path, trimPrefix, err := getPathAndBaseFromFileName(fileName)
 	if err != nil {
@@ -248,6 +241,9 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 		userTrimPrefix = cmn.ExpandPath(userTrimPrefix)
 		if trimPrefix, err = filepath.Abs(userTrimPrefix); err != nil {
 			return
+		}
+		if !strings.HasPrefix(path, trimPrefix) {
+			return fmt.Errorf("incorrect --trim-prefix value, %q doesn't have %q prefix", fileName, userTrimPrefix)
 		}
 	}
 
@@ -272,7 +268,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 		}
 		if objName == "" {
 			// objName was not provided, only bucket name, use full path
-			objName = strings.TrimPrefix(fileName, string(os.PathSeparator))
+			objName = strings.TrimPrefix(path, string(os.PathSeparator))
 		}
 
 		if flagIsSet(c, dryRunFlag) {

@@ -48,4 +48,9 @@ RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_5/rdir/$d1/$d
 cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r --trim-prefix "rdir" // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_5/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
+# --trim-prefix
+cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r --trim-prefix "dir" // FAIL "incorrect --trim-prefix value"
+cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r --dry-run --trim-prefix "/tmp/rdir" >> /dev/null // skip output, but no failure
+ais put "/tmp/rdir/{0..4}/{0..4}/test.txt" $BUCKET_2 -y --trim-prefix /tmp/rdir/0 // FAIL "incorrect --trim-prefix value"
+
 rm -rf /tmp/rdir // IGNORE
