@@ -19,7 +19,7 @@
 # in the templates via {{ site.myvariable }}.
 
 title: AIStore - distributed object storage
-name: AIStore site
+name: AIStore
 markdown: kramdown
 kramdown:
   input: GFM
@@ -28,17 +28,18 @@ kramdown:
   hard_wrap: false
   syntax_highlighter: rouge
   toc_levels: 2..3
-incremental: true
 permalink: pretty
 safe: false
 lsi: false
-description: >- # this means to ignore newlines until "baseurl:"
-  Write an awesome description for your new site here. You can edit this
-  line in _config.yml. It will appear in your document head meta (for
-  Google search results) and in your feed.xml site description.
-
-# Build settings
+description: >
+  AIStore is a lightweight object storage system with the capability to linearly
+  scale-out with each added storage node and a special focus on petascale deep learning.
+  See more at: github.com/NVIDIA/aistore
 theme: minima
+header_pages:
+  - _pages/cli.md
+include:
+  - _pages
 
 # Exclude from processing.
 # The following items will not be processed, by default.
