@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Daemon/Cluster commands
-permalink: /cli/daeclu/
+permalink: cli/daeclu/
 ---
 
 ## Daemon/Cluster

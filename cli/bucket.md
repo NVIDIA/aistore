@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Bucket commands
-permalink: /cli/bucket/
+permalink: cli/bucket/
 ---
 
 ### Create

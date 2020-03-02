@@ -50,19 +50,19 @@ To uninstall autocompletions run `bash autocomplete/uninstall.sh`.
 
 List of available CLI resources
 
-* [Bucket](/cli/bucket)
+* [Bucket](bucket)
 
-* [Object](/cli/object)
+* [Object](object)
 
-* [Daemon/Cluster](/cli/daeclu)
+* [Daemon/Cluster](daeclu)
 
-* [Xaction](/cli/xaction)
+* [Xaction](xaction)
 
-* [Downloader](/cli/download)
+* [Downloader](download)
 
-* [DSort](/cli/dsort)
+* [DSort](dsort)
 
-* [Auth](/cli/users)
+* [Auth](users)
 
 ## Default flag and argument values via environment variables
 

@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Object commands
-permalink: /cli/object/
+permalink: cli/object/
 ---
 
 ## Operations on objects
