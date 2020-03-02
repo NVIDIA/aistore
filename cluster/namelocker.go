@@ -120,6 +120,20 @@ func (nlc *nlc) DowngradeLock(uname string) {
 	nlc.mu.Unlock()
 }
 
+func (nlc *nlc) TryUpgradeLock(uname string) bool {
+	nlc.mu.Lock()
+	info, found := nlc.m[uname]
+	cmn.Assert(found && !info.exclusive && info.rc > 0)
+	if info.rc == 1 {
+		info.exclusive = true
+		info.rc = 0
+		nlc.mu.Unlock()
+		return true
+	}
+	nlc.mu.Unlock()
+	return false
+}
+
 func (nlc *nlc) Unlock(uname string, exclusive bool) {
 	nlc.mu.Lock()
 	info, found := nlc.m[uname]

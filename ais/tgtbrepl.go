@@ -36,13 +36,13 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 			return
 		}
 	}
-	lom.Lock(false)
-	defer lom.Unlock(false)
 
+	lom.Lock(false)
 	if err = lom.Load(false); err != nil {
 		if !cmn.IsObjNotExist(err) {
 			err = fmt.Errorf("%s: err: %v", lom, err)
 		}
+		lom.Unlock(false)
 		return
 	}
 	if ri.uncache {
@@ -50,8 +50,23 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	}
 
 	if si.ID() != ri.t.si.ID() {
-		return ri.putRemote(lom, objnameTo, si)
+		copied, err := ri.putRemote(lom, objnameTo, si)
+		lom.Unlock(false)
+		return copied, err
 	}
+
+	if !lom.TryUpgradeLock() {
+		// We haven't managed to upgrade the lock so we must do it slow way...
+		lom.Unlock(false)
+		lom.Lock(true)
+		if err = lom.Load(false); err != nil {
+			lom.Unlock(true)
+			return
+		}
+	}
+
+	// At this point we must have an exclusive lock for the object.
+	defer lom.Unlock(true)
 
 	// local op
 	dst := &cluster.LOM{T: ri.t, Objname: objnameTo}
@@ -60,7 +75,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		return
 	}
 
-	// lock for writing; check if already exists and is identical
+	// Lock destination for writing if the destination has a different uname.
 	if lom.Uname() != dst.Uname() {
 		dst.Lock(true)
 		defer dst.Unlock(true)
