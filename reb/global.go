@@ -90,7 +90,7 @@ func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...stri
 	reb.tcache.mu = &sync.Mutex{}
 	acks := reb.lomAcks()
 	for i := 0; i < len(acks); i++ { // init lom acks
-		acks[i] = &LomAcks{mu: &sync.Mutex{}, q: make(map[string]*cluster.LOM, 64)}
+		acks[i] = &lomAcks{mu: &sync.Mutex{}, q: make(map[string]*cluster.LOM, 64)}
 	}
 
 	// 4. create persistent mark
@@ -658,12 +658,12 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return err
 	}
 	if rj.sema == nil { // rebalance.multiplier == 1
-		err = rj.send(lom, tsi)
+		err = rj.send(lom, tsi, true /*addAck*/)
 	} else { // // rebalance.multiplier > 1
 		rj.sema.Acquire()
 		go func() {
 			defer rj.sema.Release()
-			if err := rj.send(lom, tsi); err != nil {
+			if err := rj.send(lom, tsi, true /*addAck*/); err != nil {
 				glog.Error(err)
 			}
 		}()
@@ -671,12 +671,12 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	return
 }
 
-func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
+func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck bool) (err error) {
 	var (
 		file                  *cmn.FileHandle
 		cksum                 *cmn.Cksum
 		cksumType, cksumValue string
-		lomack                *LomAcks
+		lomAck                *lomAcks
 		idx                   int
 	)
 	lom.Lock(false) // NOTE: unlock in objSentCallback() unless err
@@ -707,12 +707,14 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		return
 	}
-	// cache it as pending-acknowledgement (optimistically - see objSentCallback)
-	_, idx = lom.Hkey()
-	lomack = rj.m.lomAcks()[idx]
-	lomack.mu.Lock()
-	lomack.q[lom.Uname()] = lom
-	lomack.mu.Unlock()
+	if addAck {
+		// cache it as pending-acknowledgement (optimistically - see objSentCallback)
+		_, idx = lom.Hkey()
+		lomAck = rj.m.lomAcks()[idx]
+		lomAck.mu.Lock()
+		lomAck.q[lom.Uname()] = lom
+		lomAck.mu.Unlock()
+	}
 	// transmit
 	var (
 		ack    = regularAck{globRebID: rj.m.GlobRebID(), daemonID: rj.m.t.Snode().ID()}
@@ -736,9 +738,11 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	rj.m.inQueue.Inc()
 	if err = rj.m.streams.Send(o, file, tsi); err != nil {
 		rj.m.inQueue.Dec()
-		lomack.mu.Lock()
-		delete(lomack.q, lom.Uname())
-		lomack.mu.Unlock()
+		if addAck {
+			lomAck.mu.Lock()
+			delete(lomAck.q, lom.Uname())
+			lomAck.mu.Unlock()
+		}
 		mm.Free(opaque)
 		return
 	}

@@ -68,7 +68,7 @@ type (
 		streams    *transport.StreamBundle
 		acks       *transport.StreamBundle
 		pushes     *transport.StreamBundle
-		lomacks    [cmn.MultiSyncMapCount]*LomAcks
+		lomacks    [cmn.MultiSyncMapCount]*lomAcks
 		tcache     struct { // not to recompute very often
 			tmap cluster.NodeMap
 			ts   time.Time
@@ -101,7 +101,7 @@ type (
 		lastBatch atomic.Int64  // EC rebalance: ID of the last batch
 		stage     atomic.Uint32 // rebStage* enum: this target current stage
 	}
-	LomAcks struct {
+	lomAcks struct {
 		mu *sync.Mutex
 		q  map[string]*cluster.LOM // on the wire, waiting for ACK
 	}
@@ -234,7 +234,7 @@ func (reb *Manager) initStreams() {
 func (reb *Manager) GlobRebID() int64       { return reb.globRebID.Load() }
 func (reb *Manager) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 
-func (reb *Manager) lomAcks() *[cmn.MultiSyncMapCount]*LomAcks { return &reb.lomacks }
+func (reb *Manager) lomAcks() *[cmn.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
 
 func (reb *Manager) loghdr(globRebID int64, smap *cluster.Smap) string {
 	var stage = stages[reb.stages.stage.Load()]
@@ -660,16 +660,16 @@ func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt in
 		query = url.Values{}
 	)
 	query.Add(cmn.URLParamSilent, "true")
-	for _, lomack := range reb.lomAcks() {
-		lomack.mu.Lock()
-		for uname, lom := range lomack.q {
+	for _, lomAck := range reb.lomAcks() {
+		lomAck.mu.Lock()
+		for uname, lom := range lomAck.q {
 			if err := lom.Load(false); err != nil {
 				if cmn.IsObjNotExist(err) {
 					glog.Warningf("%s: %s %s", reb.loghdr(globRebID, smap), lom, cmn.DoesNotExist)
 				} else {
 					glog.Errorf("%s: failed loading %s, err: %s", reb.loghdr(globRebID, smap), lom, err)
 				}
-				delete(lomack.q, uname)
+				delete(lomAck.q, uname)
 				continue
 			}
 			tsi, _ := cluster.HrwTarget(lom.Uname(), smap)
@@ -677,22 +677,22 @@ func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt in
 				if glog.FastV(4, glog.SmoduleReb) {
 					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi)
 				}
-				delete(lomack.q, uname)
+				delete(lomAck.q, uname)
 				continue
 			}
 			// send obj
-			if err := rj.send(lom, tsi); err == nil {
+			if err := rj.send(lom, tsi, false /*addAck*/); err == nil {
 				glog.Warningf("%s: resending %s => %s", reb.loghdr(globRebID, smap), lom, tsi)
 				cnt++
 			} else {
 				glog.Errorf("%s: failed resending %s => %s, err: %v", reb.loghdr(globRebID, smap), lom, tsi, err)
 			}
 			if aborted() {
-				lomack.mu.Unlock()
+				lomAck.mu.Unlock()
 				return 0
 			}
 		}
-		lomack.mu.Unlock()
+		lomAck.mu.Unlock()
 		if aborted() {
 			return 0
 		}
