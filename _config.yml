@@ -38,10 +38,11 @@ description: >
 baseurl: "/aistore"
 theme: minima
 header_pages:
-  - _pages/cli.md
+  - _pages/
 include:
-  - _pages
-  - cli
+  - _pages/
+plugins:
+  - jekyll-redirect-from
 
 # Exclude from processing.
 # The following items will not be processed, by default.

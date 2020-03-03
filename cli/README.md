@@ -1,8 +1,11 @@
 ---
-layout: page
+layout: post
 title: CLI
-permalink: /cli/
+permalink: cli
+redirect_from:
+- cli/README.md/
 ---
+# AIS CLI
 
 AIS Command Line Interface is a tool used to interact with resources of AIStore. It gives users the ability to query information from specific daemons,
 create or delete resources or download files to buckets directly from the command line.
@@ -50,29 +53,47 @@ To uninstall autocompletions run `bash autocomplete/uninstall.sh`.
 
 List of available CLI resources
 
-* [Bucket](bucket)
+* [Bucket](resources/bucket.md)
 
-* [Object](object)
+* [Object](resources/object.md)
 
-* [Daemon/Cluster](daeclu)
+* [Daemon/Cluster](resources/daeclu.md)
 
-* [Xaction](xaction)
+* [Xaction](resources/xaction.md)
 
-* [Downloader](download)
+* [Downloader](resources/download.md)
 
-* [DSort](dsort)
+* [DSort](resources/dsort.md)
 
-* [Auth](users)
+* [Auth](resources/users.md)
+
+## Info For Developers
+
+The CLI uses [urfave/cli](https://github.com/urfave/cli) framework.
+
+### Adding New Commands
+
+Currently, the CLI has the format of '`ais <command> <resource>`'.
+
+To add a new resource to an existing command,
+
+1. Create a subcommand entry for the resource in the command object
+2. Create an entry in the command's flag map for the new resource
+3. Register flags in the subcommand object
+4. Register the handler function (named `XXXHandler`) in the subcommand object
+
+To add a new resource to a new command,
+
+1. Create a new Go file (named `xxx_hdlr.go`) with the name of the new command and follow the format of existing files
+2. Once the new command and subcommands are implemented, make sure to register the new command with the CLI (see `setupCommands()` in `app.go`)
 
 ## Default flag and argument values via environment variables
 
 #### Bucket Provider
-If `AIS_BUCKET_PROVIDER` environment variable is set, the `--provider` flag is set to the value of this variable.
-Setting `--provider` flag overwrites the default value.
+If `AIS_BUCKET_PROVIDER` environment variable is set, the default bucket provider is set to the value of this variable.
+If provider is given in `BUCKET_NAME` ie `aws://BUCKET_NAME`, `AIS_BUCKET_PROVIDER` is ignored.
+Provider syntax `[provider://]BUCKET_NAME` is valid CLI-wide, meaning that every command supporting `BUCKET_NAME` argument
+also supports provider syntax. For more details refer to each command's documentation.
 
-## Enums
-
-| Enum | Values | Description |
-| --- | --- | --- |
-| Provider | `ais`, `cloud`, `""` | Locality of the bucket. If empty, AIS automatically determines the locality. |
-
+Allowed values: `''` (autodetect provider), `ais` (local cluster), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform),
+`cloud` (anonymous - cloud provider determined automatically)

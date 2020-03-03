@@ -1,8 +1,11 @@
 ---
-layout: page
-title: Bucket commands
-permalink: cli/bucket/
+layout: post
+title: CLI
+permalink: "cli/bucket"
 ---
+## Bucket
+
+The CLI allows users to interact with [buckets](../../docs/bucket.md) in the AIS cluster.
 
 ### Create
 
@@ -10,12 +13,37 @@ permalink: cli/bucket/
 
 Create an ais bucket or buckets.
 
+####Examples
+1) Correct local buckets creation
+```shell script
+# Create buckets mybucketA and mybucketB, both with AIS provider (mybucketB provider is implicit) 
+$ ais create bucket ais://mybucketA mybucketB
+```
+
+2) Incorrect buckets creation
+```shell script
+$ ais create bucket cloud://mybucket
+Cloud buckets not allowed (cloud://mybucket).
+```
 
 ### Delete
 
 `ais rm bucket BUCKET [BUCKET...]`
 
 Delete an ais bucket or buckets.
+
+1) Correct local buckets removal
+```shell script
+# Removes local buckets mybucketA and mybucketB
+$ ais rm bucket ais://mybucketA mybucketB
+```
+
+2) Incorrect buckets removal
+```shell script
+$ ais rm bucket cloud://mybucket
+# Cloud buckets not allowed (cloud://mybucket).
+```
+
 
 ### List bucket names
 
@@ -75,23 +103,65 @@ List objects in the cloud bucket `BUCKET_NAME`.
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
 
+#### Examples
+```shell script
+# List local bucket mybucket 
+$ ais ls ais://mybucket # or ais ls ais mybucket
+```
+
+```shell script
+# List cloud bucket mybucket
+$ ais ls cloud mybucket # or ais ls cloud://mybucket
+```
+
 ### Evict
 
 `ais evict BUCKET_NAME`
 
 Evict a cloud bucket. It also resets the properties of the bucket (if changed).
 
+#### Examples
+```shell script
+# Evict cloud bucket mybucket
+$ ais evict mybucket
+```
+
+```shell script
+$ ais evict ais://mybucket # FAIL
+Evict command doesn't support local buckets.
+```
 ### Rename
 
 `ais rename bucket BUCKET_NAME NEW_NAME`
 
 Rename an ais bucket.
 
+#### Examples
+```shell script
+# Rename local bucket mybucket to local bucket mynewbucketname
+$ ais rename bucket ais://mybucket mynewbucketname
+```
+
+```shell script
+$ ais rename bucket cloud://mycloudbucket cloud://mynewcloudbucketname # FAIL
+Renaming of cloud buckets not supported
+```
+
 ### Copy
 
 `ais cp bucket BUCKET_NAME NEW_NAME`
 
 Copy an existing ais bucket to a new ais bucket.
+
+```shell script
+# Copy local bucket mybucket to local bucket mynewbucket
+$ ais cp bucket ais://mybucket mynewbucket
+```
+
+```shell script
+$ ais cp bucket cloud://mycloudbucket cloud://mynewcloudbucketname # FAIL
+Copying of cloud buckets not supported
+```
 
 ### Summary
 
@@ -114,17 +184,12 @@ Start an extended action to bring a given bucket to a certain redundancy level (
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--copies` | `int` | Number of copies | `1` |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 ### Make all objects erasure coded
 
 `ais ec-encode BUCKET_NAME`
 
 Start an extended action that enables data protection for all objects of a given bucket. Erasure coding must be set up for the bucket prior to running `ec-encode` extended action. Read more about this feature [here](../../docs/storage_svcs.md#erasure-coding).
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 ### List bucket props
 
@@ -134,7 +199,6 @@ List [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--json` | `bool` | Output in JSON format | `false` |
 
 ### Set bucket props
@@ -147,7 +211,6 @@ If `--jsonspec` option is used, **all** properties of the bucket are set based o
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider)|
 | `--jsonspec` | `string` | Bucket properties in a JSON format | `""` |
 | `--reset` | `bool` | Reset bucket properties to original state | `false` |
 
@@ -207,10 +270,9 @@ ais set props mybucket --jsonspec '{
     "aattrs": 255
 }'
 ```
-
-After which `ais ls props mybucket` results in:
+> After which `ais ls props mybucket` results in:
 ```
-$ ais bucket props list mybucket
+ais bucket props list mybucket
 Property	Value
 Provider	ais
 Access		GET,PUT,DELETE,HEAD,ColdGET
@@ -220,11 +282,12 @@ EC		2:2 (250KiB)
 LRU		Watermarks: 20/80, do not evict time: 20m
 Versioning	(validation: WarmGET=no)
 Tiering		Disabled
+
 ```
 
 If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
 ```bash
-$ ais set props mybucket --jsonspec '{
+ais set props mybucket --jsonspec '{
   "mirror": {
     "enabled": true
   },
@@ -234,8 +297,7 @@ $ ais set props mybucket --jsonspec '{
   }
 }'
 ```
-
-After which `ais ls props mybucket` results in:
+> After which `ais ls props mybucket` results in:
 ```
 Property        Value
 Provider        ais
@@ -248,7 +310,4 @@ Versioning      (validation: WarmGET=yes)
 Tiering         Disabled
 ```
 
-To see how setting zero values affect properties, run:
-```bash
-$ ais set props mybucket --jsonspec '{}'
-```
+To see how setting zero values affect properties, run:  `ais set props mybucket --jsonspec '{}'`

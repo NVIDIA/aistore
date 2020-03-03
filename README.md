@@ -1,8 +1,9 @@
 ---
-# Feel free to add content and custom Front Matter to this file.
-# To modify the layout, see https://jekyllrb.com/docs/themes/#overriding-theme-defaults
-
-layout: home
+layout: post
+title: AIStore
+permalink: /
+redirect_from:
+- README.md/
 ---
 
 **AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning.**
@@ -242,3 +243,38 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 > For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful-links.md).
 
 > And again, run `make help` to find out how to build, run, and test AIStore and tools.
+
+## Guides and References
+- [AIS Overview](docs/overview.md)
+- [CLI](cli/README.md)
+- [On-Disk Layout](docs/on-disk-layout.md)
+- [Command line parameters](docs/command_line.md)
+- [AIS Load Generator: integrated benchmark tool](bench/aisloader/README.md)
+- [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
+- [Object checksums: Brief Theory of Operations](docs/checksum.md)
+- [Configuration](docs/configuration.md)
+- [Datapath: Read and Write Sequence Diagrams](docs/datapath.md)
+- [Highly available control plane](docs/ha.md)
+- [How to benchmark](docs/howto_benchmark.md)
+- [RESTful API](docs/http_api.md)
+- [File access](fuse/README.md)
+- [Joining AIS cluster](docs/join_cluster.md)
+- [AIS Buckets: definition, operations, properties](docs/bucket.md#bucket)
+- [Statistics, Collected Metrics, Visualization](docs/metrics.md)
+- [Performance: Tuning and Testing](docs/performance.md)
+- [Cluster-wide Rebalancing](docs/rebalance.md)
+- [Storage Services](docs/storage_svcs.md)
+- [Extended Actions](docs/xaction.md)
+- [Integrated Internet Downloader](downloader/README.md)
+- [Docker for AIS developers](docs/docker_main.md)
+- [Troubleshooting Cluster Operation](docs/troubleshooting.md)
+
+## Selected Package READMEs
+- [Package `api`](api/README.md)
+- [Package `cli`](cli/README.md)
+- [Package `fuse`](fuse/README.md)
+- [Package `downloader`](downloader/README.md)
+- [Package `memsys`](memsys/README.md)
+- [Package `transport`](transport/README.md)
+- [Package `dSort`](dsort/README.md)
+- [Package `openapi`](openapi/README.md)

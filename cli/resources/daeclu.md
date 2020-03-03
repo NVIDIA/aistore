@@ -1,13 +1,12 @@
 ---
-layout: page
-title: Daemon/Cluster commands
-permalink: cli/daeclu/
+layout: post
+title: CLI
+permalink: "cli/daeclu"
 ---
-
 ## Daemon/Cluster
 
 The CLI allows users to interact with AIS daemons or cluster.
-A daemon is either proxy or target.
+A daemon is either proxy or target. 
 
 ### Cluster or daemon status
 
