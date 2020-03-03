@@ -55,10 +55,6 @@ type (
 		cmn.NonmountpathXact
 		r *stats.Trunner
 	}
-	evictDelete struct {
-		cmn.NonmountpathXact
-		cmn.XactBase
-	}
 	Election struct {
 		cmn.NonmountpathXact
 		cmn.XactBase
@@ -116,7 +112,6 @@ func (xact *RebBase) Description() string        { return "base for rebalance xa
 func (xact *GlobalReb) Description() string      { return "cluster-wide global rebalancing" }
 func (xact *bckListTask) Description() string    { return "asynchronous bucket list task" }
 func (xact *bckSummaryTask) Description() string { return "asynchronous bucket summary task" }
-func (xact *evictDelete) Description() string    { return "evict or delete objects" }
 func (xact *Election) Description() string       { return "elect new primary proxy/gateway" }
 func (xact *LocalReb) Description() string {
 	return "resilver local storage upon mountpath-change events"
@@ -639,13 +634,6 @@ func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*dow
 	}
 	entry := ee.(*downloaderEntry)
 	return entry.xact, nil
-}
-
-func (r *registry) RenewEvictDelete(evict bool) *evictDelete {
-	e := &evictDeleteEntry{evict: evict}
-	ee, _, _ := r.renewGlobalXaction(e)
-	entry := ee.(*evictDeleteEntry)
-	return entry.xact
 }
 
 func (r *registry) RenewBckListXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,

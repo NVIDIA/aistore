@@ -593,8 +593,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 // DELETE { action } /v1/buckets/bucket-name
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
-		msgInt  = &actionMsgInternal{}
-		started = time.Now()
+		msgInt = &actionMsgInternal{}
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -641,17 +640,47 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActDelete, cmn.ActEvictObjects:
-		if len(b) > 0 { // must be a List/Range request
-			err := t.listRangeOperation(r, bck, msgInt)
-			if err != nil {
-				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete/evict objects: %v", err))
-			} else if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("DELETE list|range: %s, %d µs", bucket, int64(time.Since(started)/time.Microsecond))
-			}
+		if len(b) == 0 { // must be a List/Range request
+			s := fmt.Sprintf("Invalid API request: no message body")
+			t.invalmsghdlr(w, r, s)
 			return
 		}
-		s := fmt.Sprintf("Invalid API request: no message body")
-		t.invalmsghdlr(w, r, s)
+		var (
+			rangeMsg = &cmn.RangeMsg{}
+			listMsg  = &cmn.ListMsg{}
+			err      error
+		)
+
+		args := &xaction.EvictDeleteArgs{
+			Ctx:   t.contextWithAuth(r.Header),
+			Evict: msgInt.Action == cmn.ActEvictObjects,
+		}
+		if err = cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
+			args.RangeMsg = rangeMsg
+			if args.RangeMsg.Range != "" && args.RangeMsg.Regex == "" {
+				t.invalmsghdlr(w, r, "Range operation requires 'regex' parameter")
+				return
+			}
+		} else if err = cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
+			args.ListMsg = listMsg
+		} else {
+			details := fmt.Sprintf("invalid %s action message: %s, %T", msgInt.Action, msgInt.Name, msgInt.Value)
+			t.invalmsghdlr(w, r, details)
+			return
+		}
+		if err != nil {
+			t.invalmsghdlr(w, r, "Failed to parse request")
+			return
+		}
+
+		var xact *xaction.EvictDelete
+		xact, err = xaction.Registry.RenewEvictDelete(t, bck, args)
+		if err != nil {
+			glog.Error(err) // must not happen at commit time
+			break
+		}
+
+		go xact.Run(args)
 	default:
 		t.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msgInt.Action))
 	}
@@ -1319,7 +1348,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	}
 
 	if delFromCloud {
-		if err, _ := t.cloud.deleteObj(ctx, lom); err != nil {
+		if err, _ := t.cloud.DeleteObj(ctx, lom); err != nil {
 			cloudErr = fmt.Errorf("%s: DELETE failed, err: %v", lom, err)
 			t.statsT.Add(stats.DeleteCount, 1)
 		}

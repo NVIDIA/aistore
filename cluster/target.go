@@ -32,6 +32,7 @@ const (
 
 type CloudProvider interface {
 	ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
+	DeleteObj(ctx context.Context, lom *LOM) (error, int)
 }
 
 // a callback called by EC PUT jogger after the object is processed and

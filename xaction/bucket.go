@@ -5,6 +5,7 @@
 package xaction
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -559,4 +560,76 @@ func (b *baseBckEntry) postRenewHook(_ bucketEntry) {}
 
 func (b *baseBckEntry) Stats(xact cmn.Xact) stats.XactStats {
 	return stats.NewXactStats(xact)
+}
+
+//
+// EvictDeleteEntry & EvictDelete
+//
+type (
+	EvictDeleteEntry struct {
+		baseBckEntry
+		t    cluster.Target
+		xact *EvictDelete
+		bck  *cluster.Bck
+		args *EvictDeleteArgs
+	}
+	EvictDelete struct {
+		cmn.XactBase
+		t   cluster.Target
+		bck *cluster.Bck
+	}
+	EvictDeleteArgs struct {
+		Ctx      context.Context
+		RangeMsg *cmn.RangeMsg
+		ListMsg  *cmn.ListMsg
+		Evict    bool
+	}
+)
+
+func (r *EvictDelete) Description() string {
+	return "delete or evict objects from a bucket"
+}
+func (r *EvictDelete) IsMountpathXact() bool { return false }
+
+func (r *EvictDelete) Run(args *EvictDeleteArgs) {
+	if args.RangeMsg != nil {
+		r.iterateBucketRange(args)
+	} else {
+		r.listOperation(args.Ctx, args.ListMsg, args.Evict)
+	}
+	r.EndTime(time.Now())
+}
+
+func (e *EvictDeleteEntry) Start(id string, bck cmn.Bck) error {
+	e.xact = &EvictDelete{
+		XactBase: *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
+		t:        e.t,
+		bck:      e.bck,
+	}
+	return nil
+}
+func (e *EvictDeleteEntry) Kind() string {
+	if e.args.Evict {
+		return cmn.ActEvictObjects
+	}
+	return cmn.ActDelete
+}
+func (e *EvictDeleteEntry) Get() cmn.Xact { return e.xact }
+
+func (e *EvictDeleteEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
+	return false, nil
+}
+
+func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *EvictDeleteArgs) (*EvictDelete, error) {
+	b := r.BucketsXacts(bck)
+	e := &EvictDeleteEntry{
+		t:    t,
+		bck:  bck,
+		args: args,
+	}
+	ee, err := b.renewBucketXaction(e)
+	if err == nil {
+		return ee.Get().(*EvictDelete), nil
+	}
+	return nil, err
 }

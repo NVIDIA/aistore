@@ -439,7 +439,7 @@ func (awsp *awsProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 // DELETE OBJECT //
 ///////////////////
 
-func (awsp *awsProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+func (awsp *awsProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	svc := s3.New(createSession(ctx))
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(lom.BckName()), Key: aws.String(lom.Objname)})
 	if err != nil {

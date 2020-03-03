@@ -54,7 +54,7 @@ func (m *emptyCloudProvider) putObj(ctx context.Context, r io.Reader, lom *clust
 	bck, node := lom.Bck().Bck, _emptyNode(lom)
 	return "", cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }
-func (m *emptyCloudProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+func (m *emptyCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	bck, node := lom.Bck().Bck, _emptyNode(lom)
 	return cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }

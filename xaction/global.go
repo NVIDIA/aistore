@@ -169,28 +169,8 @@ func (e *electionEntry) Kind() string  { return cmn.ActElection }
 func (e *electionEntry) preRenewHook(_ globalEntry) bool { return true }
 
 //
-// evictDeleteEntry
+// downloadEntry
 //
-type evictDeleteEntry struct {
-	baseGlobalEntry
-	xact  *evictDelete
-	evict bool
-}
-
-func (e *evictDeleteEntry) Start(id string, _ cmn.Bck) error {
-	xdel := &evictDelete{XactBase: *cmn.NewXactBase(id, e.Kind())}
-	e.xact = xdel
-	return nil
-}
-func (e *evictDeleteEntry) Get() cmn.Xact { return e.xact }
-func (e *evictDeleteEntry) Kind() string {
-	if e.evict {
-		return cmn.ActEvictObjects
-	}
-	return cmn.ActDelete
-}
-
-func (e *evictDeleteEntry) preRenewHook(_ globalEntry) bool { return true }
 
 type downloaderEntry struct {
 	baseGlobalEntry

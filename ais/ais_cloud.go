@@ -215,7 +215,7 @@ func (m *aisCloudProvider) putObj(ctx context.Context, r io.Reader, lom *cluster
 	return lom.Version(), err, errCode
 }
 
-func (m *aisCloudProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+func (m *aisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	bp := m.newBaseParams()
 	err = m.try(func() error {
 		bck := cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}

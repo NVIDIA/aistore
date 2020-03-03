@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
 )
 
 const (
@@ -40,10 +39,6 @@ func (t *targetrunner) getOpFromActionMsg(action string) listf {
 	switch action {
 	case cmn.ActPrefetch:
 		return t.addPrefetchList
-	case cmn.ActEvictObjects:
-		return t.doListEvict
-	case cmn.ActDelete:
-		return t.doListDelete
 	default:
 		return nil
 	}
@@ -72,66 +67,6 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 		return true
 	}
 	return false
-}
-
-//=============
-//
-// Delete/Evict
-//
-//=============
-
-func (t *targetrunner) doListEvictDelete(ctx context.Context, evict bool, objs []string,
-	bck *cluster.Bck, deadline time.Duration, done chan struct{}) error {
-	xdel := xaction.Registry.RenewEvictDelete(evict)
-	defer func() {
-		if done != nil {
-			done <- struct{}{}
-		}
-		xdel.EndTime(time.Now())
-	}()
-
-	var absdeadline time.Time
-	if deadline != 0 {
-		// 0 is no deadline - if deadline == 0, the absolute deadline is 0 time.
-		absdeadline = time.Now().Add(deadline)
-	}
-
-	for _, objname := range objs {
-		if xdel.Aborted() {
-			return nil
-		}
-		// skip if deadline has expired
-		if !absdeadline.IsZero() && time.Now().After(absdeadline) {
-			continue
-		}
-		lom := &cluster.LOM{T: t, Objname: objname}
-		err := lom.Init(bck.Bck)
-		if err != nil {
-			glog.Error(err)
-			continue
-		}
-		err = t.objDelete(ctx, lom, evict)
-		if err != nil {
-			if evict && cmn.IsObjNotExist(err) {
-				continue
-			}
-			return err
-		}
-		xdel.ObjectsInc()
-		xdel.BytesAdd(lom.Size())
-	}
-
-	return nil
-}
-
-func (t *targetrunner) doListDelete(ctx context.Context, objs []string, bck *cluster.Bck,
-	deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(ctx, false /* evict */, objs, bck, deadline, done)
-}
-
-func (t *targetrunner) doListEvict(ctx context.Context, objs []string, bck *cluster.Bck,
-	deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(ctx, true /* evict */, objs, bck, deadline, done)
 }
 
 //=========
@@ -238,7 +173,7 @@ func parseRange(rangestr string) (min, max int64, err error) {
 
 //=======================================================================
 //
-// Method called by target to execute 1) prefetch, 2) evict, or 3) delete
+// Method called by target to execute 1) prefetch
 //
 //=======================================================================
 

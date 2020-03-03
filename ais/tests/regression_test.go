@@ -880,6 +880,7 @@ func TestDeleteList(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
 
 	// 3. Check to see that all the files have been deleted
 	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
@@ -1022,6 +1023,7 @@ func TestDeleteRange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
 
 	// 3. Check to see that the correct files have been deleted
 	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
@@ -1049,6 +1051,7 @@ func TestDeleteRange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
 
 	// 5. Check to see that all the files have been deleted
 	bktlst, err = api.ListBucket(baseParams, bck, msg, 0)
@@ -1127,6 +1130,7 @@ func TestStressDeleteRange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
 
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
@@ -1157,6 +1161,7 @@ func TestStressDeleteRange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
 
 	// 5. Check to see that all files have been deleted
 	msg = &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}

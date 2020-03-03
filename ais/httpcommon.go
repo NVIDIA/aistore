@@ -122,7 +122,6 @@ type (
 		headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int)
 		getObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int)
 		putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int)
-		deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int)
 	}
 
 	glogWriter struct{}

@@ -282,6 +282,7 @@ func Test_putdeleteRange(t *testing.T) {
 			t.Error(err)
 			continue
 		}
+		tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
 
 		totalFiles -= test.delta
 		bktlst, err := api.ListBucket(baseParams, bck, msg, 0)
@@ -1222,6 +1223,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	}
 	err = api.EvictCloudBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
 
 	for _, fname := range filesList {
 		if b, _ := tutils.CheckExists(proxyURL, bck, fname); b {

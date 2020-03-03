@@ -411,7 +411,7 @@ func (gcpp *gcpProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 // DELETE OBJECT //
 ///////////////////
 
-func (gcpp *gcpProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+func (gcpp *gcpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
