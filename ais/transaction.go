@@ -179,7 +179,9 @@ func (txn *txnCtxBmdRecv) callback(args ...interface{}) {
 	if txn.initiator == caller && bmd.version() > txn.bmdVer {
 		if _, present := bmd.Get(&txn.bck); present {
 			txn.fire(err)
-			glog.Infof("%s: callback fired (BMD v%d, err %v)", txn, bmd.version(), err)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s: callback fired (BMD v%d, err %v)", txn, bmd.version(), err)
+			}
 		}
 	}
 }

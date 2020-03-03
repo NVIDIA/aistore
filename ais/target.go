@@ -766,12 +766,12 @@ func (t *targetrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			txn, err = t.transactions.find(uuid, false)
 		)
 		if err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("%s: %v", txn, err))
+			t.invalmsghdlr(w, r, fmt.Sprintf("%s %s: %v", t.si, txn, err))
 			return
 		}
 		// wait for newBMD w/timeout
-		if err = t.transactions.wait(txn, config.Timeout.CplaneOperation); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("%s: %v", txn, err))
+		if err = t.transactions.wait(txn, 2*config.Timeout.CplaneOperation); err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("%s %s: %v", t.si, txn, err))
 			return
 		}
 	default:
