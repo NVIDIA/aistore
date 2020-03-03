@@ -144,8 +144,8 @@ func (rj *localJogger) moveSlice(fqn string, ct *cluster.CT) {
 	if srcMetaFQN == "" {
 		return
 	}
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("Local rebalance moving %q -> %q", fqn, destFQN)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("local rebalance moving %q -> %q", fqn, destFQN)
 	}
 	if _, _, err = cmn.CopyFile(fqn, destFQN, rj.buf, false); err != nil {
 		glog.Errorf("Failed to copy %q -> %q: %v. Rolling back", fqn, destFQN, err)

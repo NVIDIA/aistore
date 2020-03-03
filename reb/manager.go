@@ -244,10 +244,10 @@ func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
 	return fmt.Sprintf("rebalance IDs mismatch: local %d, remote %d", reb.GlobRebID(), remoteID)
 }
 
-func (reb *Manager) serialize(smap *cluster.Smap, config *cmn.Config, globRebID int64) (newerSmap, alreadyRunning bool) {
+func (reb *Manager) serialize(md *globArgs) (newerSmap, alreadyRunning bool) {
 	var (
-		ver    = smap.Version
-		sleep  = config.Timeout.CplaneOperation
+		ver    = md.smap.Version
+		sleep  = md.config.Timeout.CplaneOperation
 		canRun bool
 	)
 	for {
@@ -261,7 +261,7 @@ func (reb *Manager) serialize(smap *cluster.Smap, config *cmn.Config, globRebID 
 		// vs newer Smap
 		//
 		nver := reb.t.GetSowner().Get().Version
-		loghdr := reb.loghdr(globRebID, smap)
+		loghdr := reb.loghdr(md.id, md.smap)
 		if nver > ver {
 			glog.Warningf("%s: seeing newer Smap v%d, not running", loghdr, nver)
 			newerSmap = true
@@ -270,11 +270,11 @@ func (reb *Manager) serialize(smap *cluster.Smap, config *cmn.Config, globRebID 
 			}
 			return
 		}
-		if reb.globRebID.Load() == globRebID {
+		if reb.globRebID.Load() == md.id {
 			if canRun {
 				reb.semaCh <- struct{}{}
 			}
-			glog.Warningf("%s: g%d is already running", loghdr, globRebID)
+			glog.Warningf("%s: g%d is already running", loghdr, md.id)
 			alreadyRunning = true
 			return
 		}
@@ -296,6 +296,8 @@ func (reb *Manager) serialize(smap *cluster.Smap, config *cmn.Config, globRebID 
 			if otherXreb.SmapVersion < ver && !otherXreb.Finished() {
 				otherXreb.Abort()
 				glog.Warningf("%s: aborting older Smap [%s]", loghdr, otherXreb)
+			} else {
+				glog.Warningf("%s: latest finished [%s] but cannot start ???", loghdr, otherXreb)
 			}
 		}
 		cmn.Assert(!canRun)
@@ -644,18 +646,17 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Re
 	reb.recvRegularAck(hdr, unpacker)
 }
 
-func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt int) {
-	smap := (*cluster.Smap)(reb.smap.Load())
+func (reb *Manager) retransmit(md *globArgs) (cnt int) {
 	aborted := func() (yes bool) {
-		yes = xreb.Aborted()
-		yes = yes || (smap.Version != reb.t.GetSowner().Get().Version)
+		yes = reb.xreb.Aborted()
+		yes = yes || (md.smap.Version != reb.t.GetSowner().Get().Version)
 		return
 	}
 	if aborted() {
 		return
 	}
 	var (
-		rj    = &globalJogger{joggerBase: joggerBase{m: reb, xreb: &xreb.RebBase, wg: &sync.WaitGroup{}}, smap: smap}
+		rj    = &globalJogger{joggerBase: joggerBase{m: reb, xreb: &reb.xreb.RebBase, wg: &sync.WaitGroup{}}, smap: md.smap}
 		query = url.Values{}
 	)
 	query.Add(cmn.URLParamSilent, "true")
@@ -664,27 +665,27 @@ func (reb *Manager) retransmit(xreb *xaction.GlobalReb, globRebID int64) (cnt in
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false); err != nil {
 				if cmn.IsObjNotExist(err) {
-					glog.Warningf("%s: %s %s", reb.loghdr(globRebID, smap), lom, cmn.DoesNotExist)
+					glog.Warningf("%s: %s %s", reb.loghdr(md.id, md.smap), lom, cmn.DoesNotExist)
 				} else {
-					glog.Errorf("%s: failed loading %s, err: %s", reb.loghdr(globRebID, smap), lom, err)
+					glog.Errorf("%s: failed loading %s, err: %s", reb.loghdr(md.id, md.smap), lom, err)
 				}
 				delete(lomAck.q, uname)
 				continue
 			}
-			tsi, _ := cluster.HrwTarget(lom.Uname(), smap)
+			tsi, _ := cluster.HrwTarget(lom.Uname(), md.smap)
 			if reb.t.LookupRemoteSingle(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleReb) {
-					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi)
+					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(md.id, md.smap), lom, tsi)
 				}
 				delete(lomAck.q, uname)
 				continue
 			}
 			// send obj
 			if err := rj.send(lom, tsi, false /*addAck*/); err == nil {
-				glog.Warningf("%s: resending %s => %s", reb.loghdr(globRebID, smap), lom, tsi)
+				glog.Warningf("%s: resending %s => %s", reb.loghdr(md.id, md.smap), lom, tsi)
 				cnt++
 			} else {
-				glog.Errorf("%s: failed resending %s => %s, err: %v", reb.loghdr(globRebID, smap), lom, tsi, err)
+				glog.Errorf("%s: failed resending %s => %s, err: %v", reb.loghdr(md.id, md.smap), lom, tsi, err)
 			}
 			if aborted() {
 				lomAck.mu.Unlock()
@@ -728,12 +729,14 @@ func (reb *Manager) abortGlobal() {
 }
 
 // Returns if the target is quiescent: transport queue is empty, or xaction
-// has already aborted or finished
+// has already aborted or finished.
 func (reb *Manager) isQuiescent() bool {
 	// Finished or aborted xaction = no traffic
+	// NOTE: caller is responsible for ensuring that `reb.xreb` is protected.
 	if reb.xreb == nil || reb.xreb.Aborted() || reb.xreb.Finished() {
 		return true
 	}
+
 	// Has not finished the stage that generates network traffic yet
 	if reb.stages.stage.Load() < rebStageECBatch {
 		return false

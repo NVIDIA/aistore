@@ -31,6 +31,7 @@ type (
 		ver  int64
 	}
 	globArgs struct {
+		id        int64
 		smap      *cluster.Smap
 		config    *cmn.Config
 		paths     fs.MPI
@@ -39,13 +40,16 @@ type (
 	}
 )
 
-func (reb *Manager) globalRebPrecheck(md *globArgs, globRebID int64) bool {
+func (reb *Manager) globalRebPrecheck(md *globArgs) bool {
+	glog.FastV(4, glog.SmoduleReb).Infof("global reb (v%d) started precheck", md.id)
 	// get EC rebalancer ready
 	if md.ecUsed {
 		reb.cleanupEC()
 		reb.ec.waiter.waitFor.Store(0)
 	}
+
 	// 1. check whether other targets are up and running
+	glog.FastV(4, glog.SmoduleReb).Infof("global reb broadcast (v%d)", md.id)
 	if errCnt := reb.bcast(md, reb.pingTarget); errCnt > 0 {
 		return false
 	}
@@ -55,7 +59,8 @@ func (reb *Manager) globalRebPrecheck(md *globArgs, globRebID int64) bool {
 
 	// 2. serialize (rebalancing operations - one at a time post this point)
 	//    start new xaction unless the one for the current version is already in progress
-	if newerSmap, alreadyRunning := reb.serialize(md.smap, md.config, globRebID); newerSmap || alreadyRunning {
+	glog.FastV(4, glog.SmoduleReb).Infof("global reb serialize (v%d)", md.id)
+	if newerSmap, alreadyRunning := reb.serialize(md); newerSmap || alreadyRunning {
 		return false
 	}
 	if md.smap.Version == 0 {
@@ -66,16 +71,19 @@ func (reb *Manager) globalRebPrecheck(md *globArgs, globRebID int64) bool {
 	return true
 }
 
-func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...string) bool {
+func (reb *Manager) globalRebInit(md *globArgs, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
 	reb.stages.stage.Store(rebStageInit)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("global reb (v%d) in %s state", md.id, stages[rebStageInit])
+	}
 	// It the only place that modifies `reb.xreb`. Since only single rebalance
 	// can be active at a time, we have to protect `xreb` from races just
 	// because `xreb` can be read by another goroutine: it is node health
 	// handler that reads GetGlobStatus. Using atomic pointer reads for only
 	// two places looked overhead, so a separate mutex is used.
 	reb.xrebMx.Lock()
-	reb.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, globRebID, reb.statRunner)
+	reb.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, md.id, reb.statRunner)
 	reb.xrebMx.Unlock()
 	defer reb.xreb.MarkDone()
 
@@ -101,9 +109,9 @@ func (reb *Manager) globalRebInit(md *globArgs, globRebID int64, buckets ...stri
 
 	// 5. ready - can receive objects
 	reb.smap.Store(unsafe.Pointer(md.smap))
-	reb.globRebID.Store(globRebID)
+	reb.globRebID.Store(md.id)
 	reb.stages.cleanup()
-	glog.Infof("%s: %s", reb.loghdr(globRebID, md.smap), reb.xreb.String())
+	glog.Infof("%s: %s", reb.loghdr(md.id, md.smap), reb.xreb.String())
 
 	return true
 }
@@ -254,6 +262,9 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 		err := fmt.Errorf("%s: aborted", reb.loghdr(globRebID, md.smap))
 		return err
 	}
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("finished global rebalance walk (v%d)", md.id)
+	}
 	return nil
 }
 
@@ -268,13 +279,13 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 
 	// No EC-enabled buckets - run only regular rebalance
 	if !md.ecUsed {
-		glog.Infof("Starting only regular rebalance")
+		glog.Infof("starting only regular rebalance (v%d)", md.id)
 		return reb.globalRebRun(md)
 	}
 	// Single bucket is rebalancing and it is a bucket with EC enabled.
 	// Run only EC rebalance.
 	if md.singleBck {
-		glog.Infof("Starting only EC rebalance for a bucket")
+		glog.Infof("starting only EC rebalance (v%d) for a bucket", md.id)
 		return reb.globalRebRunEC(md)
 	}
 
@@ -282,7 +293,7 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 	var rebErr, ecRebErr error
 	wg := &sync.WaitGroup{}
 	ecMD := *md
-	glog.Infof("Starting regular rebalance")
+	glog.Infof("starting regular rebalance (v%d)", md.id)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -291,7 +302,7 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 	}()
 
 	wg.Add(1)
-	glog.Infof("EC detected - starting EC rebalance")
+	glog.Infof("EC detected - starting EC rebalance (v%d)", md.id)
 	go func() {
 		defer wg.Done()
 		ecRebErr = reb.globalRebRunEC(&ecMD)
@@ -307,8 +318,7 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 
 func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 	reb.changeStage(rebStageWaitAck, 0)
-	globRebID := reb.globRebID.Load()
-	loghdr := reb.loghdr(globRebID, md.smap)
+	loghdr := reb.loghdr(md.id, md.smap)
 	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
 	maxwt := md.config.Rebalance.DestRetryTime
 	cnt := 0
@@ -375,7 +385,7 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 		}
 
 		// 9. retransmit if needed
-		cnt = reb.retransmit(reb.xreb, globRebID)
+		cnt = reb.retransmit(md)
 		if cnt == 0 || reb.xreb.Aborted() {
 			break
 		}
@@ -465,6 +475,17 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 		}
 	}
 	reb.stages.stage.Store(rebStageDone)
+
+	// clean up all collected data
+	if md.ecUsed {
+		reb.cleanupEC()
+	}
+
+	reb.stages.cleanup()
+
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("global reb (v%d) in state %s: finished", md.id, stages[rebStageDone])
+	}
 	reb.semaCh <- struct{}{}
 }
 
@@ -480,6 +501,7 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 //    `Traverse` and `WaitAck` regular rebalance does not notice stage changes.
 func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ...string) {
 	md := &globArgs{
+		id:        globRebID,
 		smap:      smap,
 		config:    cmn.GCO.Get(),
 		singleBck: len(buckets) == 1,
@@ -497,10 +519,10 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		md.ecUsed = props.EC.Enabled
 	}
 
-	if !reb.globalRebPrecheck(md, globRebID) {
+	if !reb.globalRebPrecheck(md) {
 		return
 	}
-	if !reb.globalRebInit(md, globRebID, buckets...) {
+	if !reb.globalRebInit(md, buckets...) {
 		return
 	}
 
@@ -516,16 +538,14 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		glog.Warning(err)
 	}
 	reb.changeStage(rebStageFin, 0)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("global reb (v%d) in %s state", md.id, stages[rebStageInit])
+	}
+
 	for errCnt != 0 && !reb.xreb.Aborted() {
 		errCnt = reb.bcast(md, reb.waitFinExtended)
 	}
 	reb.globalRebFini(md)
-	// clean up all collected data
-	if md.ecUsed {
-		reb.cleanupEC()
-	}
-
-	reb.stages.cleanup()
 }
 
 func (reb *Manager) GlobECDataStatus() (body []byte, status int) {
