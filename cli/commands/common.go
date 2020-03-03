@@ -36,6 +36,7 @@ const (
 	commandPromote   = "promote"
 	commandECEncode  = "ec-encode"
 	commandConcat    = "concat"
+	commandCat       = "cat"
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase

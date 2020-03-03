@@ -42,6 +42,25 @@ $ ais get --is-cached mybucket/myobj.txt
 $ ais get mybucket/myobj.txt ~/obj.txt --offset 1024 --length 1024
 ```
 
+### CAT
+
+`ais cat BUCKET_NAME/OBJECT_NAME`
+
+Get `OBJECT_NAME` from bucket `BUCKET_NAME` and print it to standard output. Alias for `ais get BUCKET_NAME/OBJECT_NAME -`
+
+#### Examples
+
+1) GET object `myobj.txt` from local bucket `mybucket` and print it to stdout
+
+```shell script
+$ ais cat mybucket/myobj.txt -
+```
+
+2) Read Range: get contents of object `myobj.txt` starting from offset `1024` length `1024` and print to standard output
+```shell script
+$ ais cat mybucket/myobj.txt --offset 1024 --length 1024
+```
+
 ### SHOW
 
 `ais show object BUCKET_NAME/OBJECT_NAME [PROP_LIST]`

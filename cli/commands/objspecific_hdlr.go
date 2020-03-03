@@ -53,6 +53,11 @@ var (
 			verboseFlag,
 			recursiveFlag,
 		},
+		commandCat: {
+			offsetFlag,
+			lengthFlag,
+			checksumFlag,
+		},
 	}
 
 	objectSpecificCmds = []cli.Command{
@@ -102,6 +107,14 @@ var (
 			ArgsUsage: concatObjectArgument,
 			Flags:     objectSpecificCmdsFlags[commandConcat],
 			Action:    concatHandler,
+		},
+		{
+			Name:         commandCat,
+			Usage:        "gets object from the specified bucket and prints it to STDOUT; alias for ais get BUCKET_NAME/OBJECT_NAME -",
+			ArgsUsage:    objectArgument,
+			Flags:        objectSpecificCmdsFlags[commandCat],
+			Action:       catHandler,
+			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */),
 		},
 	}
 )
@@ -249,4 +262,28 @@ func promoteHandler(c *cli.Context) (err error) {
 		return
 	}
 	return promoteFileOrDir(c, bck, objName, fqn)
+}
+
+func catHandler(c *cli.Context) (err error) {
+	var (
+		bucket      string
+		bck         cmn.Bck
+		objName     string
+		fullObjName = c.Args().Get(0) // empty string if arg not given
+	)
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
+	}
+	if c.NArg() > 1 {
+		return incorrectUsageError(c, fmt.Errorf("too many arguments"))
+	}
+
+	bucket, objName = splitBucketObject(fullObjName)
+	if bck, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
+		return
+	}
+	if objName == "" {
+		return incorrectUsageError(c, fmt.Errorf("'%s': missing object name", fullObjName))
+	}
+	return getObject(c, bck, objName, fileStdIO)
 }
