@@ -26,10 +26,9 @@ import (
 type (
 	globalJogger struct {
 		joggerBase
-		smap  *cluster.Smap
-		sema  chan struct{}
-		errCh chan error
-		ver   int64
+		smap *cluster.Smap
+		sema *cmn.DynSemaphore
+		ver  int64
 	}
 	globArgs struct {
 		smap      *cluster.Smap
@@ -220,11 +219,11 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	}
 	for _, mpathInfo := range md.paths {
 		var (
-			sema chan struct{}
+			sema *cmn.DynSemaphore
 			bck  = cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 		)
 		if multiplier > 1 {
-			sema = make(chan struct{}, multiplier)
+			sema = cmn.NewDynSemaphore(int(multiplier))
 		}
 		rl := &globalJogger{
 			joggerBase: joggerBase{m: reb, xreb: &reb.xreb.RebBase, wg: wg},
@@ -236,11 +235,11 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range md.paths {
 			var (
-				sema chan struct{}
+				sema *cmn.DynSemaphore
 				bck  = cmn.Bck{Provider: cfg.Cloud.Provider, Ns: cfg.Cloud.Ns}
 			)
 			if multiplier > 1 {
-				sema = make(chan struct{}, multiplier)
+				sema = cmn.NewDynSemaphore(int(multiplier))
 			}
 			rc := &globalJogger{
 				joggerBase: joggerBase{m: reb, xreb: &reb.xreb.RebBase, wg: wg},
@@ -557,9 +556,6 @@ func (rj *globalJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 	// the jogger is running in separate goroutine, so use defer to be
 	// sure that `Done` is called even if the jogger crashes to avoid hang up
 	defer rj.wg.Done()
-	if rj.sema != nil {
-		rj.errCh = make(chan error, cap(rj.sema)+1)
-	}
 	opts := &fs.Options{
 		Mpath:    mpathInfo,
 		Bck:      bck,
@@ -572,6 +568,16 @@ func (rj *globalJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 			glog.Infof("aborting traversal")
 		} else {
 			glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode(), err)
+		}
+	}
+
+	if rj.sema != nil {
+		// Make sure that all sends have finished by acquiring all semaphores.
+		for i := 0; i < rj.sema.Size(); i++ {
+			rj.sema.Acquire()
+		}
+		for i := 0; i < rj.sema.Size(); i++ {
+			rj.sema.Release()
 		}
 	}
 }
@@ -654,12 +660,11 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if rj.sema == nil { // rebalance.multiplier == 1
 		err = rj.send(lom, tsi)
 	} else { // // rebalance.multiplier > 1
-		rj.sema <- struct{}{}
+		rj.sema.Acquire()
 		go func() {
-			ers := rj.send(lom, tsi)
-			<-rj.sema
-			if ers != nil {
-				rj.errCh <- ers
+			defer rj.sema.Release()
+			if err := rj.send(lom, tsi); err != nil {
+				glog.Error(err)
 			}
 		}()
 	}
