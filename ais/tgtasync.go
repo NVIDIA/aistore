@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xaction"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // List bucket returns a list of objects in a bucket (with optional prefix)
@@ -27,8 +26,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bck *c
 	}
 
 	var msg cmn.SelectMsg
-	getMsgJSON := cmn.MustMarshal(actionMsg.Value)
-	if err := jsoniter.Unmarshal(getMsgJSON, &msg); err != nil {
+	if err := cmn.TryUnmarshal(actionMsg.Value, &msg); err != nil {
 		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -45,8 +43,7 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 	}
 
 	var msg cmn.SelectMsg
-	getMsgJSON := cmn.MustMarshal(actionMsg.Value)
-	if err := jsoniter.Unmarshal(getMsgJSON, &msg); err != nil {
+	if err := cmn.TryUnmarshal(actionMsg.Value, &msg); err != nil {
 		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, err.Error())
 		return

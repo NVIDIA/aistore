@@ -360,7 +360,7 @@ func TestListObjects(t *testing.T) {
 				wg.Wait()
 
 				// Confirm PUTs by listing objects.
-				msg := &cmn.SelectMsg{Fast: test.fast}
+				msg := &cmn.SelectMsg{Fast: test.fast, PageSize: test.pageSize}
 				msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion, cmn.GetPropsCopies)
 				if test.withSize {
 					msg.AddProps(cmn.GetPropsSize)

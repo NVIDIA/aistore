@@ -980,8 +980,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		smsg    = cmn.SelectMsg{}
 		query   = r.URL.Query()
 	)
-	listMsgJSON := cmn.MustMarshal(amsg.Value)
-	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
+	if err := cmn.TryUnmarshal(amsg.Value, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}

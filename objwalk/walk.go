@@ -153,6 +153,8 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 	maxSize := cmn.DefaultListPageSize
 	if w.msg.Fast && w.msg.PageSize == 0 {
 		maxSize = 0
+	} else if w.msg.PageSize > 0 {
+		maxSize = w.msg.PageSize
 	}
 	bucketList := ConcatObjLists(objLists, maxSize)
 
