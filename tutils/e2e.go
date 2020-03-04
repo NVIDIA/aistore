@@ -115,6 +115,12 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		scmd = strings.ReplaceAll(scmd, "$BUCKET", bucket)
 		scmd = strings.ReplaceAll(scmd, "$OBJECT", object)
 		scmd = strings.ReplaceAll(scmd, "$DIR", f.Dir)
+		if strings.Contains(scmd, "$PRINT_SIZE") {
+			// Expecting: $PRINT_SIZE FILE_NAME
+			fileName := strings.ReplaceAll(scmd, "$PRINT_SIZE ", "")
+			scmd = fmt.Sprintf("wc -c %s | awk '{print $1}'", fileName)
+		}
+
 		cmd := exec.Command("bash", "-c", scmd)
 		b, err := cmd.Output()
 		if expectFail {
