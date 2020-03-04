@@ -312,7 +312,7 @@ const (
 	// Buckets templates
 
 	bucketsSummariesBody = "{{range $k, $v := . }}" +
-		"{{$v.Name}}\t{{$v.ObjCount}}\t{{FormatBytesUnsigned $v.Size 2}}\t{{$v.UsedPct}}%\t{{$v.Provider}}\n" +
+		"{{$v.Name}}\t{{$v.ObjCount}}\t{{FormatBytesUnsigned $v.Size 2}}\t{{FormatFloat $v.UsedPct}}%\t{{$v.Provider}}\n" +
 		"{{end}}"
 	BucketsSummariesFastTmpl = "Name\tEst.Objects\tEst.Size\tEst.Used(%)\tProvider\n" + bucketsSummariesBody
 	BucketsSummariesTmpl     = "Name\tObjects\tSize\tUsed(%)\tProvider\n" + bucketsSummariesBody
@@ -367,6 +367,7 @@ var (
 		"FormatObjStatus":     fmtObjStatus,
 		"FormatObjIsCached":   fmtObjIsCached,
 		"FormatDaemonID":      fmtDaemonID,
+		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
 	}
 )
 
