@@ -330,18 +330,8 @@ func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map
 		matching := make(map[string]stats.XactStats, 10)
 		r.latest.Range(func(_, e interface{}) bool {
 			entry := e.(baseEntry)
-			switch cmn.XactType[entry.Kind()] {
-			case cmn.XactTypeGlobal, cmn.XactTypeTask:
-				xact := entry.Get()
-				matching[xact.ID()] = entry.Stats(xact)
-			case cmn.XactTypeBck:
-				bckXactions := e.(*bucketXactions)
-				for _, stat := range bckXactions.Stats() {
-					matching[stat.ID()] = stat
-				}
-			default:
-				cmn.Assert(false)
-			}
+			xact := entry.Get()
+			matching[xact.ID()] = entry.Stats(xact)
 			return true
 		})
 		return matching, nil
