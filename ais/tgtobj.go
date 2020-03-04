@@ -378,7 +378,7 @@ do:
 	if !coldGet && goi.lom.Bck().IsCloud() { // exists && cloud-bucket : check ver if requested
 		if goi.lom.Version() != "" && goi.lom.VerConf().ValidateWarmGet {
 			goi.lom.Unlock(false)
-			if coldGet, err, errCode = goi.t.checkCloudVersion(goi.ctx, goi.lom); err != nil {
+			if coldGet, err, errCode = goi.t.CheckCloudVersion(goi.ctx, goi.lom); err != nil {
 				goi.lom.Uncache()
 				return
 			}

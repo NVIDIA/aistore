@@ -443,19 +443,19 @@ func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.
 // EvictDeleteEntry & EvictDelete
 //
 type (
-	EvictDeleteEntry struct {
+	evictDeleteEntry struct {
 		baseBckEntry
 		t    cluster.Target
 		xact *EvictDelete
 		bck  *cluster.Bck
-		args *EvictDeleteArgs
+		args *DeletePrefetchArgs
 	}
 	EvictDelete struct {
 		cmn.XactBase
 		t   cluster.Target
 		bck *cluster.Bck
 	}
-	EvictDeleteArgs struct {
+	DeletePrefetchArgs struct {
 		Ctx      context.Context
 		RangeMsg *cmn.RangeMsg
 		ListMsg  *cmn.ListMsg
@@ -468,7 +468,7 @@ func (r *EvictDelete) Description() string {
 }
 func (r *EvictDelete) IsMountpathXact() bool { return false }
 
-func (r *EvictDelete) Run(args *EvictDeleteArgs) {
+func (r *EvictDelete) Run(args *DeletePrefetchArgs) {
 	if args.RangeMsg != nil {
 		r.iterateBucketRange(args)
 	} else {
@@ -477,7 +477,7 @@ func (r *EvictDelete) Run(args *EvictDeleteArgs) {
 	r.EndTime(time.Now())
 }
 
-func (e *EvictDeleteEntry) Start(id string, bck cmn.Bck) error {
+func (e *evictDeleteEntry) Start(id string, bck cmn.Bck) error {
 	e.xact = &EvictDelete{
 		XactBase: *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
 		t:        e.t,
@@ -485,20 +485,20 @@ func (e *EvictDeleteEntry) Start(id string, bck cmn.Bck) error {
 	}
 	return nil
 }
-func (e *EvictDeleteEntry) Kind() string {
+func (e *evictDeleteEntry) Kind() string {
 	if e.args.Evict {
 		return cmn.ActEvictObjects
 	}
 	return cmn.ActDelete
 }
-func (e *EvictDeleteEntry) Get() cmn.Xact { return e.xact }
+func (e *evictDeleteEntry) Get() cmn.Xact { return e.xact }
 
-func (e *EvictDeleteEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
+func (e *evictDeleteEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 	return false, nil
 }
 
-func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *EvictDeleteArgs) (*EvictDelete, error) {
-	e := &EvictDeleteEntry{
+func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (*EvictDelete, error) {
+	e := &evictDeleteEntry{
 		t:    t,
 		bck:  bck,
 		args: args,
@@ -506,6 +506,62 @@ func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *Ev
 	ee, err := r.renewBucketXaction(e, bck)
 	if err == nil {
 		return ee.Get().(*EvictDelete), nil
+	}
+	return nil, err
+}
+
+//
+// Prefetch
+//
+type (
+	prefetchEntry struct {
+		baseBckEntry
+		t    cluster.Target
+		xact *Prefetch
+		bck  *cluster.Bck
+		args *DeletePrefetchArgs
+	}
+	Prefetch struct {
+		cmn.XactBase
+		t   cluster.Target
+		bck *cluster.Bck
+	}
+)
+
+func (e *prefetchEntry) Kind() string  { return cmn.ActPrefetch }
+func (e *prefetchEntry) Get() cmn.Xact { return e.xact }
+func (e *prefetchEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
+	return false, nil
+}
+func (e *prefetchEntry) Start(id string, bck cmn.Bck) error {
+	e.xact = &Prefetch{
+		XactBase: *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
+		t:        e.t,
+		bck:      e.bck,
+	}
+	return nil
+}
+
+func (r *Prefetch) IsMountpathXact() bool { return false }
+func (r *Prefetch) Description() string   { return "prefetch cloud bucket objects" }
+func (r *Prefetch) Run(args *DeletePrefetchArgs) {
+	if args.RangeMsg != nil {
+		r.iterateBucketRange(args)
+	} else {
+		r.listOperation(args.Ctx, args.ListMsg)
+	}
+	r.EndTime(time.Now())
+}
+
+func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (*Prefetch, error) {
+	e := &prefetchEntry{
+		t:    t,
+		bck:  bck,
+		args: args,
+	}
+	ee, err := r.renewBucketXaction(e, bck)
+	if err == nil {
+		return ee.Get().(*Prefetch), nil
 	}
 	return nil, err
 }

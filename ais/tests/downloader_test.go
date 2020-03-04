@@ -445,8 +445,9 @@ func TestDownloadCloud(t *testing.T) {
 	}
 
 	// Test download
-	err := api.EvictList(baseParams, bck, expectedObjs, true, 0)
+	err := api.EvictList(baseParams, bck, expectedObjs)
 	tassert.CheckFatal(t, err)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
 
 	id, err := api.DownloadCloud(baseParams, generateDownloadDesc(), bck, prefix, suffix)
 	tassert.CheckFatal(t, err)
@@ -460,8 +461,9 @@ func TestDownloadCloud(t *testing.T) {
 	}
 
 	// Test cancellation
-	err = api.EvictList(baseParams, bck, expectedObjs, true, 0)
+	err = api.EvictList(baseParams, bck, expectedObjs)
 	tassert.CheckFatal(t, err)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
 
 	id, err = api.DownloadCloud(baseParams, generateDownloadDesc(), bck, prefix, suffix)
 	tassert.CheckFatal(t, err)

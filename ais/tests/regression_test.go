@@ -168,10 +168,11 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		for i := 0; i < numberOfFiles; i++ {
 			files[i] = path.Join(prefix, <-fileNameCh)
 		}
-		err := api.DeleteList(baseParams, bck, files, true, 0)
+		err := api.DeleteList(baseParams, bck, files)
 		if err != nil {
 			t.Errorf("Failed to delete objects from bucket %s, err: %v", bck, err)
 		}
+		tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
 	}()
 
 	listBucketMsg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize), Props: cmn.GetTargetURL}
@@ -791,18 +792,7 @@ func TestPrefetchList(t *testing.T) {
 		t.Skipf("Cannot prefetch from ais bucket %s", clibucket)
 	}
 
-	// 1. Get initial number of prefetches
-	smap := tutils.GetClusterMap(t, proxyURL)
-	for _, v := range smap.Tmap {
-		stats := tutils.GetDaemonStats(t, v.PublicNet.DirectURL)
-		npf, err := getPrefetchCnt(stats)
-		if err != nil {
-			t.Fatalf("Could not decode target stats: pre.n")
-		}
-		netprefetches -= npf
-	}
-
-	// 2. Get keys to prefetch
+	// 1. Get keys to prefetch
 	n := int64(getMatchingKeys(t, proxyURL, bck, match, []chan string{toprefetch}, nil))
 	close(toprefetch) // to exit for-range
 	files := make([]string, 0)
@@ -810,27 +800,31 @@ func TestPrefetchList(t *testing.T) {
 		files = append(files, i)
 	}
 
-	// 3. Evict those objects from the cache and prefetch them
+	// 2. Evict those objects from the cache and prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
-	err := api.EvictList(baseParams, bck, files, true, 0)
+	err := api.EvictList(baseParams, bck, files)
 	if err != nil {
 		t.Error(err)
 	}
-	err = api.PrefetchList(baseParams, bck, files, true, 0)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
+	// 3. Prefetch evicted objects
+	err = api.PrefetchList(baseParams, bck, files)
 	if err != nil {
 		t.Error(err)
+	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActPrefetch, rebalanceTimeout)
+
+	// 4. Ensure that all the prefetches occurred.
+	allDetails, err := api.MakeXactGetRequest(baseParams, bck, cmn.ActPrefetch, cmn.ActXactStats, false)
+	tassert.CheckFatal(t, err)
+	prefetched := int64(0)
+	for tid := range allDetails {
+		detail := allDetails[tid][0]
+		prefetched += detail.ObjCount()
+		tutils.Logf("%s - %d - %s - %v\n", tid, detail.ObjCount(), detail.Kind(), detail.EndTime())
 	}
 
-	// 5. Ensure that all the prefetches occurred.
-	for _, v := range smap.Tmap {
-		stats := tutils.GetDaemonStats(t, v.PublicNet.DirectURL)
-		npf, err := getPrefetchCnt(stats)
-		if err != nil {
-			t.Fatalf("Could not decode target stats: pre.n")
-		}
-		netprefetches += npf
-	}
-	if netprefetches != n {
+	if prefetched != n {
 		t.Errorf("Did not prefetch all files: Missing %d of %d\n", (n - netprefetches), n)
 	}
 }
@@ -876,7 +870,7 @@ func TestDeleteList(t *testing.T) {
 	tutils.Logf("PUT done.\n")
 
 	// 2. Delete the objects
-	err = api.DeleteList(baseParams, bck, files, true, 0)
+	err = api.DeleteList(baseParams, bck, files)
 	if err != nil {
 		t.Error(err)
 	}
@@ -961,14 +955,16 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 4. Evict those objects from the cache, and then prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
-	err = api.EvictRange(baseParams, bck, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	err = api.EvictRange(baseParams, bck, prefetchPrefix, prefetchRegex, prefetchRange)
 	if err != nil {
 		t.Error(err)
 	}
-	err = api.PrefetchRange(baseParams, bck, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
+	err = api.PrefetchRange(baseParams, bck, prefetchPrefix, prefetchRegex, prefetchRange)
 	if err != nil {
 		t.Error(err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActPrefetch, rebalanceTimeout)
 
 	// 5. Ensure that all the prefetches occurred
 	for _, v := range smap.Tmap {
@@ -1019,7 +1015,7 @@ func TestDeleteRange(t *testing.T) {
 	tutils.Logf("PUT done.\n")
 
 	// 2. Delete the small range of objects
-	err = api.DeleteRange(baseParams, bck, prefix, regex, smallrange, true, 0)
+	err = api.DeleteRange(baseParams, bck, prefix, regex, smallrange)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1047,7 +1043,7 @@ func TestDeleteRange(t *testing.T) {
 	}
 
 	// 4. Delete the big range of objects
-	err = api.DeleteRange(baseParams, bck, prefix, regex, bigrange, true, 0)
+	err = api.DeleteRange(baseParams, bck, prefix, regex, bigrange)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1126,7 +1122,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 2. Delete a range of objects
 	tutils.Logf("Deleting objects in range: %s\n", partialRange)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, prefix, regex, partialRange, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, prefix, regex, partialRange)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1157,7 +1153,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 4. Delete the entire range of objects
 	tutils.Logf("Deleting objects in range: %s\n", rnge)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, prefix, regex, rnge, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, prefix, regex, rnge)
 	if err != nil {
 		t.Error(err)
 	}

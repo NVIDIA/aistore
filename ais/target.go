@@ -70,14 +70,13 @@ type (
 	// main
 	targetrunner struct {
 		httprunner
-		cloud         cloudProvider // multi-cloud backend
-		prefetchQueue chan filesWithDeadline
-		authn         *authManager
-		fsprg         fsprungroup
-		rebManager    *reb.Manager
-		capUsed       capUsed
-		transactions  transactions
-		gfn           struct {
+		cloud        cloudProvider // multi-cloud backend
+		authn        *authManager
+		fsprg        fsprungroup
+		rebManager   *reb.Manager
+		capUsed      capUsed
+		transactions transactions
+		gfn          struct {
 			local  localGFN
 			global globalGFN
 		}
@@ -245,9 +244,6 @@ func (t *targetrunner) Run() error {
 	if err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-
-	// prefetch
-	t.prefetchQueue = make(chan filesWithDeadline, prefetchChanSize)
 
 	t.authn = &authManager{
 		tokens:        make(map[string]*authRec),
@@ -651,7 +647,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			err      error
 		)
 
-		args := &xaction.EvictDeleteArgs{
+		args := &xaction.DeletePrefetchArgs{
 			Ctx:   t.contextWithAuth(r.Header),
 			Evict: msgInt.Action == cmn.ActEvictObjects,
 		}
@@ -676,8 +672,8 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		var xact *xaction.EvictDelete
 		xact, err = xaction.Registry.RenewEvictDelete(t, bck, args)
 		if err != nil {
-			glog.Error(err) // must not happen at commit time
-			break
+			t.invalmsghdlr(w, r, err.Error())
+			return
 		}
 
 		go xact.Run(args)
@@ -795,10 +791,39 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msgInt.Action {
 	case cmn.ActPrefetch:
-		if err := t.listRangeOperation(r, bck, msgInt); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch, err: %v", err))
+		if !bck.IsCloud() {
+			t.invalmsghdlr(w, r, msgInt.Action+" requires a Cloud bucket")
 			return
 		}
+		var (
+			rangeMsg = &cmn.RangeMsg{}
+			listMsg  = &cmn.ListMsg{}
+			err      error
+		)
+
+		args := &xaction.DeletePrefetchArgs{Ctx: t.contextWithAuth(r.Header)}
+		if err = cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
+			args.RangeMsg = rangeMsg
+			if args.RangeMsg.Range != "" && args.RangeMsg.Regex == "" {
+				t.invalmsghdlr(w, r, "Range operation requires 'regex' parameter")
+				return
+			}
+		} else if err = cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
+			args.ListMsg = listMsg
+		} else {
+			details := fmt.Sprintf("invalid %s action message: %s, %T", msgInt.Action, msgInt.Name, msgInt.Value)
+			t.invalmsghdlr(w, r, details)
+			return
+		}
+
+		var xact *xaction.Prefetch
+		xact, err = xaction.Registry.RenewPrefetch(t, bck, args)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
+		go xact.Run(args)
 	case cmn.ActCopyBucket, cmn.ActRenameLB:
 		var (
 			phase = apiItems[1]
@@ -1111,7 +1136,7 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 
 // checkCloudVersion returns (vchanged=) true if object versions differ between Cloud and local cache;
 // should be called only if the local copy exists
-func (t *targetrunner) checkCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
+func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
 	var objMeta cmn.SimpleKVs
 	objMeta, err, errCode = t.cloud.headObj(ctx, lom)
 	if err != nil {

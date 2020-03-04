@@ -32,8 +32,6 @@ func NewTargetMock(bo Bowner) *TargetMock {
 
 func (*TargetMock) Snode() *Snode                                              { return nil }
 func (*TargetMock) RunLRU()                                                    {}
-func (*TargetMock) PrefetchQueueLen() int                                      { return 0 }
-func (*TargetMock) Prefetch()                                                  {}
 func (t *TargetMock) GetBowner() Bowner                                        { return t.BO }
 func (t *TargetMock) GetSowner() Sowner                                        { return nil }
 func (*TargetMock) FSHC(err error, path string)                                {}
@@ -63,3 +61,6 @@ func (*TargetMock) PutObject(_ string, _ io.ReadCloser, _ *LOM, _ RecvType, _ *c
 	return nil
 }
 func (*TargetMock) BMDVersionFixup(_ *http.Request, _ cmn.Bck, _ bool) {}
+func (*TargetMock) CheckCloudVersion(_ context.Context, _ *LOM) (bool, error, int) {
+	return false, nil, 0
+}

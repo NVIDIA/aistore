@@ -221,7 +221,6 @@ var (
 	specFileFlag      = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
 
 	// Object
-	deadlineFlag   = cli.DurationFlag{Name: "deadline", Usage: "amount of time before the request expires", Value: 0}
 	listFlag       = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
 	offsetFlag     = cli.StringFlag{Name: "offset", Usage: "object read offset, can contain prefix 'b', 'KiB', 'MB'"}
 	lengthFlag     = cli.StringFlag{Name: "length", Usage: "object read length, can contain prefix 'b', 'KiB', 'MB'"}
@@ -229,7 +228,6 @@ var (
 	isCachedFlag   = cli.BoolFlag{Name: "is-cached", Usage: "check if an object is cached"}
 	cachedFlag     = cli.BoolFlag{Name: "cached", Usage: "list only cached objects"}
 	checksumFlag   = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
-	waitFlag       = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 	recursiveFlag  = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 	overwriteFlag  = cli.BoolFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
 	trimPrefixFlag = cli.StringFlag{Name: "trim-prefix", Usage: "pathname prefix that is omitted i.e., not used to generate object names"}
@@ -243,7 +241,5 @@ var (
 		rangeFlag,
 		prefixFlag,
 		regexFlag,
-		waitFlag,
-		deadlineFlag,
 	}
 )

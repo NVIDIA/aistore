@@ -1026,6 +1026,33 @@ func cleanUp() {
 	fmt.Println(prettyTimeStamp() + " Done")
 }
 
+// TODO: implement API method to wait any xaction type with timeout
+func _waitForBckXactComplete(proxyURL string, bck cmn.Bck, kind string) {
+	var (
+		sleep      = 3 * time.Second
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+	for {
+		time.Sleep(sleep)
+		stats, err := tutils.GetXactionStats(baseParams, bck, kind)
+		if err != nil {
+			break
+		}
+		allCompleted := true
+		for _, targetStats := range stats {
+			for _, xaction := range targetStats {
+				if xaction.Running() {
+					allCompleted = false
+					break
+				}
+			}
+		}
+		if allCompleted {
+			break
+		}
+	}
+}
+
 func _cleanup(objs []string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -1037,18 +1064,20 @@ func _cleanup(objs []string, wg *sync.WaitGroup) {
 	n := t / b
 	for i := 0; i < n; i++ {
 		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bck,
-			objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
+			objs[i*b:(i+1)*b])
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
+		_waitForBckXactComplete(runParams.proxyURL, runParams.bck, cmn.ActDelete)
 	}
 
 	if t%b != 0 {
 		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bck,
-			objs[n*b:], true /* wait */, 0 /* wait forever */)
+			objs[n*b:])
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
+		_waitForBckXactComplete(runParams.proxyURL, runParams.bck, cmn.ActDelete)
 	}
 
 	if runParams.usingFile {

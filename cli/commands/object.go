@@ -555,20 +555,18 @@ func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
 		fileList = makeList(parseStrFlag(c, listFlag), ",")
-		wait     = flagIsSet(c, waitFlag)
-		deadline = parseDurationFlag(c, deadlineFlag)
 	)
 	switch command {
 	case commandRemove:
-		err = api.DeleteList(defaultAPIParams, bck, fileList, wait, deadline)
+		err = api.DeleteList(defaultAPIParams, bck, fileList)
 		command = "removed"
 	case commandPrefetch:
 		bck.Provider = cmn.Cloud
-		err = api.PrefetchList(defaultAPIParams, bck, fileList, wait, deadline)
+		err = api.PrefetchList(defaultAPIParams, bck, fileList)
 		command += "ed"
 	case commandEvict:
 		bck.Provider = cmn.Cloud
-		err = api.EvictList(defaultAPIParams, bck, fileList, wait, deadline)
+		err = api.EvictList(defaultAPIParams, bck, fileList)
 		command += "ed"
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
@@ -583,24 +581,22 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 // Range handler
 func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
-		wait     = flagIsSet(c, waitFlag)
 		prefix   = parseStrFlag(c, prefixFlag)
 		regex    = parseStrFlag(c, regexFlag)
 		rangeStr = parseStrFlag(c, rangeFlag)
-		deadline = parseDurationFlag(c, deadlineFlag)
 	)
 
 	switch command {
 	case commandRemove:
-		err = api.DeleteRange(defaultAPIParams, bck, prefix, regex, rangeStr, wait, deadline)
+		err = api.DeleteRange(defaultAPIParams, bck, prefix, regex, rangeStr)
 		command = "removed"
 	case commandPrefetch:
 		bck.Provider = cmn.Cloud
-		err = api.PrefetchRange(defaultAPIParams, bck, prefix, regex, rangeStr, wait, deadline)
+		err = api.PrefetchRange(defaultAPIParams, bck, prefix, regex, rangeStr)
 		command += "ed"
 	case commandEvict:
 		bck.Provider = cmn.Cloud
-		err = api.EvictRange(defaultAPIParams, bck, prefix, regex, rangeStr, wait, deadline)
+		err = api.EvictRange(defaultAPIParams, bck, prefix, regex, rangeStr)
 		command += "ed"
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)

@@ -47,8 +47,9 @@ var (
 )
 
 const (
-	httpMaxRetries = 5                     // maximum number of retries for an HTTP request
-	httpRetrySleep = 30 * time.Millisecond // a sleep between HTTP request retries
+	httpMaxRetries       = 5                     // maximum number of retries for an HTTP request
+	httpRetrySleep       = 30 * time.Millisecond // a sleep between HTTP request retries
+	evictPrefetchTimeout = 2 * time.Minute
 )
 
 type (
@@ -620,7 +621,7 @@ func CleanCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string)
 	toDelete, err := ListObjects(proxyURL, bck, prefix, 0)
 	tassert.CheckFatal(t, err)
 	baseParams := BaseAPIParams(proxyURL)
-	err = api.DeleteList(baseParams, bck, toDelete, true, 0)
+	err = api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
 }
 
@@ -918,7 +919,9 @@ func WaitForBucket(proxyURL string, bck cmn.Bck, exists bool) error {
 }
 
 func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, fileslist []string) {
-	err := api.EvictList(BaseAPIParams(proxyURL), bck, fileslist, true, 0)
+	baseParams := BaseAPIParams(proxyURL)
+	err := api.EvictList(baseParams, bck, fileslist)
+	WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActPrefetch, evictPrefetchTimeout)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}

@@ -1871,8 +1871,9 @@ func TestAtimePrefetch(t *testing.T) {
 
 	timeAfterPut := time.Now()
 
-	err := api.PrefetchList(baseParams, bck, []string{objectName}, true, 0)
+	err := api.PrefetchList(baseParams, bck, []string{objectName})
 	tassert.CheckFatal(t, err)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActPrefetch, rebalanceTimeout)
 
 	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 

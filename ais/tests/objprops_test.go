@@ -129,11 +129,13 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		}
 	}
 
-	err := api.EvictList(tutils.BaseAPIParams(proxyURL), bck, toEvictList, true, 0)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	err := api.EvictList(baseParams, bck, toEvictList)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 		t.Fail()
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
 
 	tutils.Logf("Reading object list...\n")
 

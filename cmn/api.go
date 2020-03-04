@@ -44,7 +44,6 @@ var XactType = XactKindType{
 	ActElection:  XactTypeGlobal,
 	ActLocalReb:  XactTypeGlobal,
 	ActGlobalReb: XactTypeGlobal,
-	ActPrefetch:  XactTypeGlobal,
 	ActDownload:  XactTypeGlobal,
 
 	// bucket's kinds
@@ -59,6 +58,7 @@ var XactType = XactKindType{
 	ActEvictObjects: XactTypeBck,
 	ActDelete:       XactTypeBck,
 	ActLoadLomCache: XactTypeBck,
+	ActPrefetch:     XactTypeBck,
 
 	ActListObjects:   XactTypeTask,
 	ActSummaryBucket: XactTypeTask,
@@ -79,21 +79,13 @@ type SelectMsg struct {
 	Cached     bool   `json:"cached"`      // for cloud buckets - list only cached objects
 }
 
-// ListRangeMsgBase contains fields common to Range and List operations
-type ListRangeMsgBase struct {
-	Deadline time.Duration `json:"deadline,omitempty"`
-	Wait     bool          `json:"wait,omitempty"`
-}
-
 // ListMsg contains a list of files and a duration within which to get them
 type ListMsg struct {
-	ListRangeMsgBase
 	Objnames []string `json:"objname"`
 }
 
 // RangeMsg contains a Prefix, Regex, and Range for a Range Operation
 type RangeMsg struct {
-	ListRangeMsgBase
 	Prefix string `json:"prefix"`
 	Regex  string `json:"regex"`
 	Range  string `json:"range"`

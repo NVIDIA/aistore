@@ -39,7 +39,6 @@ func (t *targetrunner) GetSmallMMSA() *memsys.MMSA   { return daemon.smm }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup    { return &t.fsprg }
 func (t *targetrunner) Snode() *cluster.Snode        { return t.si }
 func (t *targetrunner) Cloud() cluster.CloudProvider { return t.cloud }
-func (t *targetrunner) PrefetchQueueLen() int        { return len(t.prefetchQueue) }
 
 func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
 	switch gfnType {
@@ -108,39 +107,6 @@ func (t *targetrunner) RunLRU() {
 	lru.InitAndRun(&ini) // blocking
 
 	xlru.EndTime(time.Now())
-}
-
-func (t *targetrunner) Prefetch() {
-	xpre := xaction.Registry.RenewPrefetch(getstorstatsrunner())
-	if xpre == nil {
-		return
-	}
-loop:
-	for {
-		select {
-		case fwd := <-t.prefetchQueue:
-			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
-				continue
-			}
-			if err := fwd.bck.Init(t.owner.bmd, t.si); err != nil {
-				glog.Errorf("prefetch: %s, err: %v", fwd.bck, err)
-			} else if fwd.bck.IsAIS() {
-				glog.Errorf("prefetch: %s is ais bucket, nothing to do", fwd.bck)
-			} else {
-				for _, objname := range fwd.objnames {
-					t.prefetchMissing(fwd.ctx, objname, fwd.bck)
-				}
-			}
-			// Signal completion of prefetch
-			if fwd.done != nil {
-				fwd.done <- struct{}{}
-			}
-		default:
-			// When there is nothing left to fetch, the prefetch routine ends
-			break loop
-		}
-	}
-	xpre.EndTime(time.Now())
 }
 
 // slight variation vs t.httpobjget()

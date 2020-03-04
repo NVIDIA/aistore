@@ -189,11 +189,6 @@ func (r *Trunner) housekeep(runlru bool) {
 		go r.T.RunLRU()
 	}
 
-	// Run prefetch operation if there are items to be prefetched
-	if r.T.PrefetchQueueLen() > 0 {
-		go r.T.Prefetch()
-	}
-
 	r.statsRunner.housekeep(runlru)
 }
 

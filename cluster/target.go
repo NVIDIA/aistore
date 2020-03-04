@@ -54,11 +54,9 @@ type Target interface {
 	GetFSPRG() fs.PathRunGroup
 	Snode() *Snode
 	Cloud() CloudProvider
-	PrefetchQueueLen() int
 	RebalanceInfo() RebalanceInfo
 	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)
 	RunLRU()
-	Prefetch()
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum *cmn.Cksum, started time.Time) error
@@ -66,6 +64,7 @@ type Target interface {
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(srcFQN string, bck *Bck, objName string, overwrite, safe, verbose bool) (err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
+	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
 
 	GetGFN(gfnType GFNType) GFN
 	Health(si *Snode, includeReb bool, timeout time.Duration) ([]byte, error)

@@ -43,40 +43,13 @@ func TestXactionRenewLRU(t *testing.T) {
 	tassert.Errorf(t, notNilCount == 1, "expected just one LRU xaction to be created, got %d", notNilCount)
 }
 
-func TestXactionRenewPrefetch(t *testing.T) {
-	xactions := newRegistry()
-	defer xactions.AbortAll()
-
-	ch := make(chan *prefetch, 10)
-	wg := &sync.WaitGroup{}
-	wg.Add(10)
-	for i := 0; i < 10; i++ {
-		go func() {
-			defer wg.Done()
-			ch <- xactions.RenewPrefetch(nil)
-		}()
-	}
-
-	wg.Wait()
-	close(ch)
-
-	notNilCount := 0
-	for xact := range ch {
-		if xact != nil {
-			notNilCount++
-		}
-	}
-
-	tassert.Errorf(t, notNilCount == 1, "expected just one Prefetch xaction to be created, got %d", notNilCount)
-}
-
 func TestXactionRenewEvictDelete(t *testing.T) {
 	xactions := newRegistry()
 	bmd := cluster.NewBaseBownerMock()
 	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
 	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal, props)
 	bmd.Add(bckFrom)
-	evArgs := &EvictDeleteArgs{}
+	evArgs := &DeletePrefetchArgs{}
 	tMock := cluster.NewTargetMock(bmd)
 
 	defer xactions.AbortAll()

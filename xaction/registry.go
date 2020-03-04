@@ -50,11 +50,6 @@ type (
 		cmn.MountpathXact
 		RebBase
 	}
-	prefetch struct {
-		cmn.XactBase
-		cmn.NonmountpathXact
-		r *stats.Trunner
-	}
 	Election struct {
 		cmn.NonmountpathXact
 		cmn.XactBase
@@ -118,25 +113,10 @@ func (xact *Election) Description() string       { return "elect new primary pro
 func (xact *LocalReb) Description() string {
 	return "resilver local storage upon mountpath-change events"
 }
-func (xact *prefetch) Description() string {
-	return "prefetch a list or a range of objects from Cloud bucket"
-}
 
 //
 // misc methods
 //
-func (xact *prefetch) ObjectsCnt() int64 {
-	v := xact.r.Core.Tracker[stats.PrefetchCount]
-	v.RLock()
-	defer v.RUnlock()
-	return xact.r.Core.Tracker[stats.PrefetchCount].Value
-}
-func (xact *prefetch) BytesCnt() int64 {
-	v := xact.r.Core.Tracker[stats.PrefetchCount]
-	v.RLock()
-	defer v.RUnlock()
-	return xact.r.Core.Tracker[stats.PrefetchCount].Value
-}
 
 func (xact *RebBase) String() string {
 	s := xact.XactBase.String()
@@ -586,16 +566,6 @@ func (r *registry) renewGlobalXaction(entry globalEntry) (globalEntry, bool, err
 		entry.postRenewHook(prevEntry)
 	}
 	return entry, false, nil
-}
-
-func (r *registry) RenewPrefetch(tr *stats.Trunner) *prefetch {
-	e := &prefetchEntry{r: tr}
-	ee, keep, _ := r.renewGlobalXaction(e)
-	entry := ee.(*prefetchEntry)
-	if keep { // previous prefetch is still running
-		return nil
-	}
-	return entry.xact
 }
 
 func (r *registry) RenewLRU() *lru.Xaction {

@@ -44,24 +44,6 @@ func (e *lruEntry) Get() cmn.Xact { return e.xact }
 
 func (e *lruEntry) preRenewHook(_ globalEntry) bool { return true }
 
-type prefetchEntry struct {
-	baseGlobalEntry
-	xact *prefetch
-	r    *stats.Trunner
-}
-
-//
-// prefetchEntry
-//
-func (e *prefetchEntry) Start(id string, _ cmn.Bck) error {
-	e.xact = &prefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch), r: e.r}
-	return nil
-}
-func (e *prefetchEntry) Kind() string  { return cmn.ActPrefetch }
-func (e *prefetchEntry) Get() cmn.Xact { return e.xact }
-
-func (e *prefetchEntry) preRenewHook(_ globalEntry) bool { return true }
-
 //
 // globalRebEntry
 //

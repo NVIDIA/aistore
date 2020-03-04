@@ -277,7 +277,7 @@ func Test_putdeleteRange(t *testing.T) {
 		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n",
 			idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
 
-		err := api.DeleteRange(baseParams, bck, test.prefix, test.regexStr, test.rangeStr, true, 0)
+		err := api.DeleteRange(baseParams, bck, test.prefix, test.regexStr, test.rangeStr)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -512,25 +512,29 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	}
 
 	tutils.Logf("PrefetchList %d\n", len(files))
-	err = api.PrefetchList(baseParams, bckCloud, files, true, 0)
+	err = api.PrefetchList(baseParams, bckCloud, files)
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bckCloud, cmn.ActPrefetch, rebalanceTimeout)
 	tutils.Logf("PrefetchRange\n")
-	err = api.PrefetchRange(baseParams, bckCloud, "r", "", prefetchRange, true, 0)
+	err = api.PrefetchRange(baseParams, bckCloud, "r", "\\d{4}", prefetchRange)
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bckCloud, cmn.ActPrefetch, rebalanceTimeout)
 	tutils.Logf("EvictList\n")
-	err = api.EvictList(baseParams, bckCloud, files, true, 0)
+	err = api.EvictList(baseParams, bckCloud, files)
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bckCloud, cmn.ActEvictObjects, rebalanceTimeout)
 	tutils.Logf("EvictRange\n")
-	err = api.EvictRange(baseParams, bckCloud, "", "", prefetchRange, true, 0)
+	err = api.EvictRange(baseParams, bckCloud, "", "\\d{4}", prefetchRange)
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bckCloud, cmn.ActEvictObjects, rebalanceTimeout)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckLocal)
 	defer tutils.DestroyBucket(t, proxyURL, bckLocal)
@@ -557,18 +561,22 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Prefetch/Evict should work
-	err = api.PrefetchList(baseParams, bckCloud, files, true, 0)
+	err = api.PrefetchList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.EvictList(baseParams, bckCloud, files, true, 0)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bckCloud, cmn.ActPrefetch, rebalanceTimeout)
+	err = api.EvictList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bckCloud, cmn.ActEvictObjects, rebalanceTimeout)
 
 	// Deleting from cloud bucket
 	tutils.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
-	api.DeleteList(baseParams, bckCloud, files, true, 0)
+	api.DeleteList(baseParams, bckCloud, files)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bckCloud, cmn.ActDelete, rebalanceTimeout)
 
 	// Deleting from ais bucket
 	tutils.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
-	api.DeleteList(baseParams, bckLocal, files, true, 0)
+	api.DeleteList(baseParams, bckLocal, files)
+	tutils.WaitForBucketXactionToComplete(t, baseParams, bckLocal, cmn.ActDelete, rebalanceTimeout)
 
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {

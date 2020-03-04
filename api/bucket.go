@@ -246,54 +246,48 @@ func RenameBucket(baseParams BaseParams, oldBck, newBck cmn.Bck) error {
 // DeleteList API
 //
 // DeleteList sends a HTTP request to remove a list of objects from a bucket
-func DeleteList(baseParams BaseParams, bck cmn.Bck, fileslist []string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	deleteMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
+func DeleteList(baseParams BaseParams, bck cmn.Bck, fileslist []string) error {
+	deleteMsg := cmn.ListMsg{Objnames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 // DeleteRange API
 //
 // DeleteRange sends a HTTP request to remove a range of objects from a bucket
-func DeleteRange(baseParams BaseParams, bck cmn.Bck, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	deleteMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
+func DeleteRange(baseParams BaseParams, bck cmn.Bck, prefix, regex, rng string) error {
+	deleteMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 // PrefetchList API
 //
 // PrefetchList sends a HTTP request to prefetch a list of objects from a cloud bucket
-func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
+func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) error {
+	prefetchMsg := cmn.ListMsg{Objnames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
 // PrefetchRange API
 //
 // PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket
-func PrefetchRange(baseParams BaseParams, bck cmn.Bck, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	prefetchMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
+func PrefetchRange(baseParams BaseParams, bck cmn.Bck, prefix, regex, rng string) error {
+	prefetchMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
 // EvictList API
 //
 // EvictList sends a HTTP request to evict a list of objects from a cloud bucket
-func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	evictMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
+func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) error {
+	evictMsg := cmn.ListMsg{Objnames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 
 // EvictRange API
 //
 // EvictRange sends a HTTP request to evict a range of objects from a cloud bucket
-func EvictRange(baseParams BaseParams, bck cmn.Bck, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
+func EvictRange(baseParams BaseParams, bck cmn.Bck, prefix, regex, rng string) error {
+	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 

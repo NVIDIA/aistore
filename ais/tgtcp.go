@@ -227,7 +227,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				t.invalmsghdlr(w, r, "Invalid API request: expecting action="+cmn.ActGlobalReb)
 				return
 			}
-			if err := t.xactsStartRequest(kind, bck); err != nil {
+			if err := t.xactsStartRequest(r, kind, bck); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -422,7 +422,7 @@ func (t *targetrunner) xactStatsRequest(kind string, bck *cluster.Bck, onlyRecen
 	return jsoniter.Marshal(xactStats)
 }
 
-func (t *targetrunner) xactsStartRequest(kind string, bck *cluster.Bck) error {
+func (t *targetrunner) xactsStartRequest(r *http.Request, kind string, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 	switch kind {
@@ -437,12 +437,20 @@ func (t *targetrunner) xactsStartRequest(kind string, bck *cluster.Bck) error {
 			glog.Errorf(erfmb, kind, bck)
 		}
 		go t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
-	case cmn.ActPrefetch:
-		if bck != nil {
-			glog.Errorf(erfmb, kind, bck)
-		}
-		go t.Prefetch()
 	// 2. with bucket
+	case cmn.ActPrefetch:
+		if bck == nil {
+			return fmt.Errorf(erfmn, kind)
+		}
+		args := &xaction.DeletePrefetchArgs{
+			Ctx:      t.contextWithAuth(r.Header),
+			RangeMsg: &cmn.RangeMsg{},
+		}
+		xact, err := xaction.Registry.RenewPrefetch(t, bck, args)
+		if err != nil {
+			return err
+		}
+		go xact.Run(args)
 	case cmn.ActECPut:
 		if bck == nil {
 			return fmt.Errorf(erfmn, kind)

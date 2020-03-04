@@ -6,6 +6,7 @@ package xaction
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -153,7 +154,7 @@ func (r *EvictDelete) listOperation(ctx context.Context, listMsg *cmn.ListMsg, e
 	return r.doListEvictDelete(ctx, objs, evict)
 }
 
-func (r *EvictDelete) iterateBucketRange(args *EvictDeleteArgs) error {
+func (r *EvictDelete) iterateBucketRange(args *DeletePrefetchArgs) error {
 	cmn.Assert(args.RangeMsg != nil)
 	var (
 		bucketListPage *cmn.BucketList
@@ -205,13 +206,132 @@ func (r *EvictDelete) iterateBucketRange(args *EvictDeleteArgs) error {
 
 		if len(matchingEntries) != 0 {
 			// Create a ListMsg with a single page of BucketList containing BucketEntries
-			listMsg := &cmn.ListMsg{
-				ListRangeMsgBase: args.RangeMsg.ListRangeMsgBase,
-				Objnames:         matchingEntries,
-			}
+			listMsg := &cmn.ListMsg{Objnames: matchingEntries}
 
 			// Call listrange function with paged chunk of entries
 			if err := r.listOperation(args.Ctx, listMsg, args.Evict); err != nil {
+				return err
+			}
+		}
+		// Stop when the last page of BucketList is reached
+		if bucketListPage.PageMarker == "" {
+			break
+		}
+
+		// Update PageMarker for the next request
+		msg.PageMarker = bucketListPage.PageMarker
+	}
+
+	return nil
+}
+
+func (r *Prefetch) prefetchMissing(ctx context.Context, objName string) error {
+	var coldGet bool
+	lom := &cluster.LOM{T: r.t, Objname: objName}
+	err := lom.Init(r.bck.Bck)
+	if err != nil {
+		return err
+	}
+	if err = lom.Load(); err != nil {
+		coldGet = cmn.IsErrObjNought(err)
+		if !coldGet {
+			return err
+		}
+	}
+	if lom.Bck().IsAIS() { // must not come here
+		if coldGet {
+			glog.Errorf("prefetch: %s", lom)
+		}
+		return nil
+	}
+	if !coldGet && lom.Version() != "" && lom.VerConf().ValidateWarmGet {
+		if coldGet, err, _ = r.t.CheckCloudVersion(ctx, lom); err != nil {
+			return err
+		}
+	}
+	if !coldGet {
+		return nil
+	}
+	if err, _ = r.t.GetCold(ctx, lom, true); err != nil {
+		if !errors.Is(err, cmn.ErrSkip) {
+			return err
+		}
+		return nil
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("prefetch: %s", lom)
+	}
+	r.ObjectsInc()
+	r.BytesAdd(lom.Size())
+	// TODO: add counter for redownloaded objects with changed versions?
+	return nil
+}
+
+func (r *Prefetch) listOperation(ctx context.Context, listMsg *cmn.ListMsg) error {
+	smap := r.t.GetSowner()
+	for _, obj := range listMsg.Objnames {
+		if r.Aborted() {
+			break
+		}
+		si, err := cluster.HrwTarget(r.bck.MakeUname(obj), smap.Get())
+		if err != nil {
+			return err
+		}
+		if si.ID() != r.t.Snode().ID() {
+			continue
+		}
+		if err := r.prefetchMissing(ctx, obj); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Prefetch) iterateBucketRange(args *DeletePrefetchArgs) error {
+	cmn.Assert(args.RangeMsg != nil)
+	var (
+		bucketListPage *cmn.BucketList
+		prefix         = args.RangeMsg.Prefix
+		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
+	)
+
+	if err := r.bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+		return err
+	}
+
+	min, max, err := parseRange(args.RangeMsg.Range)
+	if err != nil {
+		return fmt.Errorf("error parsing range string (%s): %v", args.RangeMsg.Range, err)
+	}
+
+	re, err := regexp.Compile(args.RangeMsg.Regex)
+	if err != nil {
+		return fmt.Errorf("could not compile range regex: %v", err)
+	}
+
+	for !r.Aborted() {
+		bucketListPage, err, _ = r.t.Cloud().ListBucket(args.Ctx, r.bck.Name, msg)
+		if err != nil {
+			return err
+		}
+		if len(bucketListPage.Entries) == 0 {
+			break
+		}
+
+		matchingEntries := make([]string, 0, len(bucketListPage.Entries))
+		for _, be := range bucketListPage.Entries {
+			if !acceptRegexRange(be.Name, prefix, re, min, max) {
+				continue
+			}
+			matchingEntries = append(matchingEntries, be.Name)
+		}
+
+		if len(matchingEntries) != 0 {
+			// Create a ListMsg with a single page of BucketList containing BucketEntries
+			listMsg := &cmn.ListMsg{Objnames: matchingEntries}
+
+			// Call listrange function with paged chunk of entries
+			if err := r.listOperation(args.Ctx, listMsg); err != nil {
 				return err
 			}
 		}
