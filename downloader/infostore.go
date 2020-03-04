@@ -17,7 +17,8 @@ import (
 
 var (
 	// global downloader info store
-	dlStore *infoStore
+	dlStore     *infoStore
+	dlStoreOnce sync.Once
 )
 
 type (
@@ -31,12 +32,14 @@ type (
 	}
 )
 
-func init() {
-	var err error
-	dlStore, err = newInfoStore()
-	if err != nil {
-		cmn.ExitLogf("%v", err)
-	}
+func initInfoStore() {
+	dlStoreOnce.Do(func() {
+		var err error
+		dlStore, err = newInfoStore()
+		if err != nil {
+			cmn.ExitLogf("%v", err)
+		}
+	})
 }
 
 func newInfoStore() (*infoStore, error) {
