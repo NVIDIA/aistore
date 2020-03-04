@@ -275,7 +275,7 @@ Checksum	xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
 Mirror		Disabled
 EC		2:2 (250KiB)
 LRU		Watermarks: 20/80, do not evict time: 20m
-Versioning	(validation: WarmGET=no)
+Versioning	Enabled | Validate on WarmGET: no
 Tiering		Disabled
 
 ```
@@ -301,7 +301,7 @@ Checksum        xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no
 Mirror          2 Copies
 EC              Disabled
 LRU             Disabled
-Versioning      (validation: WarmGET=yes)
+Versioning      Enabled | Validate on WarmGET: yes
 Tiering         Disabled
 ```
 

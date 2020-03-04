@@ -293,11 +293,11 @@ func (c *VersionConf) String() string {
 		return "Disabled"
 	}
 
-	text := "(validation: WarmGET="
+	text := "Enabled | Validate on WarmGET: "
 	if c.ValidateWarmGet {
-		text += "yes)"
+		text += "yes"
 	} else {
-		text += "no)"
+		text += "no"
 	}
 
 	return text

@@ -175,9 +175,8 @@ const (
 		" Validate On Warm Get:\t{{$obj.ValidateWarmGet}}\n" +
 		" Validate On Object Migration:\t{{$obj.ValidateObjMove}}\n" +
 		" Enable For Read Range:\t{{$obj.EnableReadRange}}\n"
-	VerConfTmpl = "\n{{$obj := .Ver}}Version Config\n" +
+	VerConfTmpl = "\n{{$obj := .Versioning}}Version Config\n" +
 		" Enabled:\t{{$obj.Enabled}}\n" +
-		" Type:\t{{$obj.Type}}\n" +
 		" Validate Warm Get:\t{{$obj.ValidateWarmGet}}\n"
 	FSpathsConfTmpl = "\nFile System Paths Config\n" +
 		"{{$obj := .FSpaths.Paths}}" +
@@ -220,11 +219,6 @@ const (
 		" Interval: \t{{$obj.Proxy.IntervalStr}}\t \t{{$obj.Target.IntervalStr}}\n" +
 		" Name: \t{{$obj.Proxy.Name}}\t \t{{$obj.Target.Name}}\n" +
 		" Factor: \t{{$obj.Proxy.Factor}}\t \t{{$obj.Target.Factor}}\n"
-	ECConfTmpl = "\n{{$obj := .EC}}EC Config\t \t\n" +
-		" Object Size Limit:{{$obj.ObjSizeLimit}}\t  Data Slices:{{$obj.DataSlices}}\n" +
-		" Parity Slice:{{$obj.ParitySlices}}\t Enabled:{{$obj.Enabled}}\n"
-	BucketVerConfTmpl = "\n{{$obj := .Versioning}}Bucket Versioning\n" +
-		" Type:{{$obj.Type}}\n Validate Warm Get:{{$obj.ValidateWarmGet}}\n Enabled:{{$obj.Enabled}}\n"
 	DownloaderConfTmpl = "\n{{$obj := .Downloader}}Downloader Config\n" +
 		" Timeout: {{$obj.TimeoutStr}}\n"
 	DSortConfTmpl = "\n{{$obj := .DSort}}Distributed Sort Config\n" +
@@ -259,9 +253,6 @@ const (
 		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl +
 		DownloaderConfTmpl + DSortConfTmpl +
 		CompressionTmpl + ECTmpl
-
-	BucketPropsTmpl = "\nCloud Provider: {{.CloudProvider}}\n" +
-		BucketVerConfTmpl + CksumConfTmpl + LRUConfTmpl + MirrorConfTmpl + ECConfTmpl
 
 	BucketPropsSimpleTmpl = "Property\tValue\n========\t=====\n" +
 		"{{range $p := . }}" +
@@ -511,6 +502,7 @@ func fmtDaemonID(id string, smap cluster.Smap) string {
 }
 
 // Displays the output in either JSON or tabular form
+// if formatJSON == true, outputTemplate is omitted
 func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, formatJSON ...bool) error {
 	useJSON := false
 	if len(formatJSON) > 0 {

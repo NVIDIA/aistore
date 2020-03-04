@@ -1,0 +1,1 @@
+ais ls config $(ais status | grep -m 1 -oP "^\d{4,6}t\d{4,5}") // IGNORE

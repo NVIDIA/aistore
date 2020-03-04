@@ -9,7 +9,7 @@ Checksum	Type: xxhash | Validate: ColdGET
 Mirror		2 copies
 EC		Disabled
 LRU		Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
-Versioning	(validation: WarmGET=no)
+Versioning	Enabled | Validate on WarmGET: no
 Bucket props have been reset successfully.
 Bucket props have been successfully updated.
 Property	Value
@@ -20,4 +20,4 @@ Checksum	Type: xxhash | Validate: ColdGET
 Mirror		Disabled
 EC		Disabled
 LRU		Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
-Versioning	(validation: WarmGET=yes)
+Versioning	Enabled | Validate on WarmGET: yes
