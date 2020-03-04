@@ -210,6 +210,10 @@ func IsValidXaction(kind string) bool {
 	return ok
 }
 
+func IsXactTypeBck(kind string) bool {
+	return XactType[kind] == XactTypeBck
+}
+
 func (*MountpathXact) IsMountpathXact() bool    { return true }
 func (*NonmountpathXact) IsMountpathXact() bool { return false }
 

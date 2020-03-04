@@ -33,7 +33,12 @@ type (
 		t cluster.Target
 	}
 	joggerBckBase struct { // per mountpath
-		parent    XactBck
+		parent XactBck
+		// TODO: this duplicates `bck` from `parent.Bck()` but for now it is
+		//  required because CopyBucket uses different bucket (`bck=bckFrom`)
+		//  for jogging and different (`parent.Bck()=bckTo`) for checking
+		//  if xaction runs on given bucket or getting stats.
+		bck       cmn.Bck
 		mpathInfo *fs.MountpathInfo
 		config    *cmn.Config
 		num, size int64
@@ -98,11 +103,12 @@ func (r *xactBckBase) stop() {
 //
 
 func (j *joggerBckBase) jog() {
-	j.stopCh = cmn.NewStopCh()
+	cmn.Assert(j.bck.HasProvider())
 
+	j.stopCh = cmn.NewStopCh()
 	opts := &fs.Options{
 		Mpath:    j.mpathInfo,
-		Bck:      j.parent.Bck(),
+		Bck:      j.bck,
 		CTs:      []string{fs.ObjectType},
 		Callback: j.walk,
 		Sorted:   false,
@@ -122,7 +128,7 @@ func (j *joggerBckBase) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	lom := &cluster.LOM{T: j.parent.Target(), FQN: fqn}
-	err := lom.Init(j.parent.Bck(), j.config)
+	err := lom.Init(j.bck, j.config)
 	if err != nil {
 		return nil
 	}
@@ -142,7 +148,7 @@ func (j *joggerBckBase) yieldTerm() error {
 	diskConf := &j.config.Disk
 	select {
 	case <-j.stopCh.Listen():
-		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bck())
+		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.bck)
 	default:
 		curr := fs.Mountpaths.GetMpathUtil(j.mpathInfo.Path, time.Now())
 		if curr >= diskConf.DiskUtilHighWM {

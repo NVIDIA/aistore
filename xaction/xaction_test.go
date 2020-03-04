@@ -151,7 +151,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 	xactBck, err := xactions.RenewBckFastRename(nil, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
-	xactions.AbortAllBuckets(true, bckFrom)
+	xactions.AbortAllBuckets(bckFrom)
 
 	tassert.Errorf(t, xactGlob != nil && !xactGlob.Aborted(),
 		"AbortAllGlobal: expected global xaction to be running")

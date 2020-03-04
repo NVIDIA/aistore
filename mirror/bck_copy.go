@@ -17,8 +17,9 @@ import (
 type (
 	XactBckCopy struct {
 		xactBckBase
-		slab  *memsys.Slab
-		bckTo *cluster.Bck
+		slab    *memsys.Slab
+		bckFrom *cluster.Bck
+		bckTo   *cluster.Bck
 	}
 	bccJogger struct { // one per mountpath
 		joggerBckBase
@@ -31,17 +32,18 @@ type (
 // public methods
 //
 
-func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, action string, t cluster.Target, slab *memsys.Slab) *XactBckCopy {
+func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *memsys.Slab) *XactBckCopy {
 	return &XactBckCopy{
-		xactBckBase: *newXactBckBase(id, action, bckFrom.Bck, t),
+		xactBckBase: *newXactBckBase(id, cmn.ActCopyBucket, bckTo.Bck, t),
 		slab:        slab,
+		bckFrom:     bckFrom,
 		bckTo:       bckTo,
 	}
 }
 
 func (r *XactBckCopy) Run() (err error) {
 	mpathCount := r.init()
-	glog.Infoln(r.String(), r.Bck(), "=>", r.bckTo.Name)
+	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
 	return r.xactBckBase.run(mpathCount)
 }
 
@@ -64,7 +66,7 @@ func (r *XactBckCopy) init() (mpathCount int) {
 	for _, mpathInfo := range availablePaths {
 		bccJogger := newBCCJogger(r, mpathInfo, config)
 		// only objects; TODO contentType := range fs.CSM.RegisteredContentTypes
-		mpathLC := mpathInfo.MakePathCT(r.Bck(), fs.ObjectType)
+		mpathLC := mpathInfo.MakePathCT(r.bckFrom.Bck, fs.ObjectType)
 		r.mpathers[mpathLC] = bccJogger
 		go bccJogger.jog()
 	}
@@ -77,15 +79,21 @@ func (r *XactBckCopy) init() (mpathCount int) {
 
 func newBCCJogger(parent *XactBckCopy, mpathInfo *fs.MountpathInfo, config *cmn.Config) *bccJogger {
 	j := &bccJogger{
-		joggerBckBase: joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config, skipLoad: true},
-		parent:        parent,
+		joggerBckBase: joggerBckBase{
+			parent:    &parent.xactBckBase,
+			bck:       parent.bckFrom.Bck,
+			mpathInfo: mpathInfo,
+			config:    config,
+			skipLoad:  true,
+		},
+		parent: parent,
 	}
 	j.joggerBckBase.callback = j.copyObject
 	return j
 }
 
 func (j *bccJogger) jog() {
-	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bck())
+	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.bckFrom.Bck)
 	j.buf = j.parent.slab.Alloc()
 	j.joggerBckBase.jog()
 	j.parent.slab.Free(j.buf)

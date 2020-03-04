@@ -460,16 +460,14 @@ func (t *targetrunner) xactsStartRequest(kind string, bck *cluster.Bck) error {
 		ec.ECM.RestoreBckRespXact(bck)
 	// 3. cannot start
 	case cmn.ActPutCopies:
-		return fmt.Errorf("cannot start xaction %q (- is invoked automatically by PUTs into mirrored bucket)", kind)
-	case cmn.ActElection:
-		return fmt.Errorf("xaction %q: AIS targets are not permitted to start cluster-wide proxy election", kind)
+		return fmt.Errorf("cannot start xaction %q - it is invoked automatically by PUTs into mirrored bucket", kind)
 	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete, cmn.ActMakeNCopies, cmn.ActECEncode:
 		return fmt.Errorf("initiating xaction %q must be done via a separate documented API", kind)
 	// 4. unknown
 	case "":
-		return errors.New("empty or unspecified xaction kind")
+		return errors.New("unspecified (empty) xaction kind")
 	default:
-		return fmt.Errorf("unknown xaction %q", kind)
+		return fmt.Errorf("starting %q xaction is unsupported", kind)
 	}
 	return nil
 }
@@ -824,7 +822,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
 	//       disable mirroring (needed in part for cloud buckets)
 	if len(bcksToDelete) > 0 {
-		xaction.Registry.AbortAllBuckets(true, bcksToDelete...)
+		xaction.Registry.AbortAllBuckets(bcksToDelete...)
 		go func(bcks ...*cluster.Bck) {
 			for _, b := range bcks {
 				cluster.EvictLomCache(b)
@@ -1390,23 +1388,10 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 }
 
 func (t *targetrunner) abortCopyRenameLB(bckFrom, bckTo *cluster.Bck, action string) {
-	_, ok := t.owner.bmd.get().Get(bckTo)
-	if !ok {
+	if _, ok := t.owner.bmd.get().Get(bckTo); !ok {
 		return
 	}
-	b := xaction.Registry.BucketsXacts(bckFrom)
-	if b == nil {
-		return
-	}
-	e := b.GetL(action /* kind */)
-	if e == nil {
-		return
-	}
-	ee := e.(*xaction.FastRenEntry)
-	if !ee.Get().Bck().Equal(bckFrom.Bck) {
-		return
-	}
-	e.Get().Abort()
+	xaction.Registry.DoAbort(action, bckFrom)
 }
 
 func (t *targetrunner) commitCopyRenameLB(bckFrom, bckTo *cluster.Bck, msgInt *actionMsgInternal) (err error) {

@@ -263,7 +263,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 		}
 
 		// valid xaction
-		if cmn.XactType[xactKind] == cmn.XactTypeBck {
+		if cmn.IsXactTypeBck(xactKind) {
 			if bck.Name == "" {
 				return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction '%s'", xactKind))
 			}

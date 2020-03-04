@@ -58,6 +58,7 @@ var XactType = XactKindType{
 	ActECEncode:     XactTypeBck,
 	ActEvictObjects: XactTypeBck,
 	ActDelete:       XactTypeBck,
+	ActLoadLomCache: XactTypeBck,
 
 	ActListObjects:   XactTypeTask,
 	ActSummaryBucket: XactTypeTask,

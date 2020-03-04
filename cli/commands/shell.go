@@ -265,7 +265,7 @@ func xactionCompletions(c *cli.Context) {
 	}
 
 	xactName := c.Args().First()
-	if cmn.XactType[xactName] == cmn.XactTypeBck {
+	if cmn.IsXactTypeBck(xactName) {
 		bucketCompletions([]cli.BashCompleteFunc{}, false, false)(c)
 		return
 	}

@@ -121,8 +121,13 @@ func (r *XactBckMakeNCopies) Description() string {
 
 func newMNCJogger(parent *XactBckMakeNCopies, mpathInfo *fs.MountpathInfo, config *cmn.Config) *mncJogger {
 	j := &mncJogger{
-		joggerBckBase: joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config},
-		parent:        parent,
+		joggerBckBase: joggerBckBase{
+			parent:    &parent.xactBckBase,
+			bck:       parent.Bck(),
+			mpathInfo: mpathInfo,
+			config:    config,
+		},
+		parent: parent,
 	}
 	j.joggerBckBase.callback = j.delAddCopies
 	return j
