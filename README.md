@@ -3,7 +3,7 @@ layout: post
 title: AIStore
 permalink: /
 redirect_from:
-- README.md/
+- /README.md/
 ---
 
 **AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning.**

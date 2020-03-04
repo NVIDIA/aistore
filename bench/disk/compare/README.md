@@ -1,3 +1,11 @@
+---
+layout: post
+title: BENCH/DISK/COMPARE
+permalink: bench/disk/compare
+redirect_from:
+- bench/disk/compare/README.md/
+---
+
 # Benchmarking polling from diskstat against iostat 
 
 This script provides a way to benchmark polling diskstats from [/proc/diskstats](https://www.kernel.org/doc/Documentation/iostats.txt) against using linux application `iostat`.

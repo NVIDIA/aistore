@@ -1,10 +1,11 @@
 ---
 layout: post
-title: Xaction
+title: XACTION
 permalink: xaction
 redirect_from:
 - xaction/README.md/
 ---
+
 ## Table of Contents
 - [Extended Actions (xactions)](#extended-actions-xactions)
     - [Start & Stop](#start-stop)

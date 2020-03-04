@@ -1,3 +1,11 @@
+---
+layout: post
+title: STORAGE_SVCS
+permalink: docs/storage_svcs
+redirect_from:
+- docs/storage_svcs.md/
+---
+
 ## Table of Contents
 - [Storage Services](#storage-services)
   - [Notation](#notation)

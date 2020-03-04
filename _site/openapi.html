@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>OPENAPI | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="OPENAPI" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/openapi" />
+<meta property="og:url" content="http://localhost:4000/aistore/openapi" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"OPENAPI","@type":"WebPage","url":"http://localhost:4000/aistore/openapi","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">OPENAPI</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="python-client-package">Python Client Package</h2>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#how-to-generate-package">How to generate package</a></li>
+  <li><a href="#how-to-run-tests">How to run tests</a></li>
+  <li><a href="#how-to-install">How to install</a></li>
+  <li><a href="#how-to-use-package">How to use package</a>
+    <ul>
+      <li><a href="#overview-1">Overview</a></li>
+      <li><a href="#creating-api-clients">Creating Api Clients</a></li>
+      <li><a href="#performing-operations">Performing Operations</a>
+        <ul>
+          <li><a href="#bucket">Bucket</a></li>
+          <li><a href="#cluster">Cluster</a></li>
+          <li><a href="#daemon">Daemon</a></li>
+          <li><a href="#object">Object</a></li>
+          <li><a href="#sort">Sort</a></li>
+          <li><a href="#querying">Querying</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#future">Future</a></li>
+</ul>
+
+<h2 id="overview">Overview</h2>
+
+<p>OpenAPI Generator (formerly called Swagger) is used to generate a python client package for simplified integration with the RESTful API.</p>
+
+<p>Note that, as of v2.0, <a href="#future">python3 is currently not fully supported</a>.</p>
+
+<p>A description of the package and how to use it can be found <a href="#how-to-use">here</a>.</p>
+
+<p>The file <a href="openapi.yaml">openapi.yaml</a> specifies the API endpoints that the package provides and should remain up to date with any changes to them in AIS.</p>
+
+<p>The documentation for OpenAPI Generator itself can be found <a href="https://github.com/openapitools/openapi-generator">here</a>.</p>
+
+<h2 id="how-to-generate-package">How to generate package</h2>
+
+<p>The python client package is generated by <a href="https://github.com/openapitools/openapi-generator">openapitools/openapi-generator</a>, and will be placed in <code class="highlighter-rouge">&lt;path_to_repo&gt;/python-client</code>.</p>
+
+<p>As of v2.0, the repository does not store the generated package, and therefore you must follow the following steps to generate the package before running any <a href="#how-to-run-tests">tests</a> or <a href="#how-to-install-client-package">installing</a> it.</p>
+
+<p>Should you have any difficulty with these instructions, please open a ticket, and we will provide assistance.</p>
+
+<ol>
+  <li>Obtain the latest, as of v2.0, openapi-generator jar by running the following command:</li>
+</ol>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code>wget https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/4.2.3/openapi-generator-cli-4.2.3.jar <span class="nt">-O</span> openapi-generator-cli.jar
+</code></pre></div></div>
+
+<ol>
+  <li>Run the following commands:</li>
+</ol>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd</span> &lt;/path/to/aistore&gt;
+java <span class="nt">-jar</span> &lt;/path/to/openapi-generator-cli.jar&gt; generate <span class="nt">-i</span> openapi/openapi.yaml <span class="nt">-c</span> openapi/config.json <span class="nt">-g</span> python <span class="nt">-o</span> ./python-client/
+</code></pre></div></div>
+
+<ol>
+  <li>
+    <p>Install <code class="highlighter-rouge">pip</code> - a package management system used to install and manage software packages written in Python. Visit the <a href="https://pip.pypa.io/en/stable/installing/">installation page</a> for instructions on how to install <code class="highlighter-rouge">pip</code>.</p>
+  </li>
+  <li>
+    <p>Install required Python packages using <code class="highlighter-rouge">pip</code> and requirement files located in <code class="highlighter-rouge">python-client</code> directory:</p>
+
+    <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code> pip <span class="nb">install</span> <span class="nt">-r</span> python-client/requirements.txt
+ pip <span class="nb">install</span> <span class="nt">-r</span> python-client/test-requirements.txt
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<p>If you don’t wish to install these packages system wide for a particular user, consider using a <a href="https://pypi.org/project/virtualenv/">virtual environment</a>.</p>
+
+<p>Afterwards, if for any reason you want to remove the generated package, you can do the following:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># remember to commit any manually edited files first</span>
+<span class="nb">cd</span> &lt;path_to_repo&gt;
+git clean <span class="nt">-fd</span> <span class="nt">--</span> python-client
+git checkout HEAD <span class="nt">--</span> python-client
+find python-client <span class="nt">-name</span> <span class="s2">"*.pyc"</span> <span class="nt">-delete</span>
+</code></pre></div></div>
+
+<h2 id="how-to-run-tests">How to run tests</h2>
+
+<p>First, ensure that you have followed <a href="#how-to-generate-package">the instructions for generating the package</a>.</p>
+
+<p>Next, ensure that your machine has a <a href="/README.md#local-non-containerized">local testing deployment of AIS</a>.</p>
+
+<p>Note that you do not need to install the package to run tests.</p>
+
+<p>Run tests by running the following command:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd</span> &lt;path_to_repo&gt;
+<span class="nv">BUCKET</span><span class="o">=</span>&lt;bucket_name&gt; python <span class="nt">-m</span> unittest discover python-client/
+</code></pre></div></div>
+
+<h2 id="how-to-install">How to install</h2>
+
+<p>First, ensure that you have followed <a href="#how-to-generate-package">the instructions for generating the package</a>.</p>
+
+<p>Then install the package by doing:</p>
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd</span> &lt;path_to_repo&gt;/python-client
+pip uninstall ais_client <span class="c">#uninstalls any previous versions</span>
+pip <span class="nb">install</span> <span class="nb">.</span>
+</code></pre></div></div>
+
+<h2 id="how-to-use-package">How to use package</h2>
+
+<h3 id="overview-1">Overview</h3>
+
+<p>This package works by creating python objects (called ‘api client’ in this document) representing a target or proxy.</p>
+
+<p>It is designed to provide a python interface of the same functionality as the <a href="/docs/http_api.md">RESTful API</a></p>
+
+<p>Operations on the client instance can be performed by using it to create another python object (called ‘api instance’ in this document).</p>
+
+<h3 id="creating-api-clients">Creating Api Clients</h3>
+
+<p>First, ensure that you have followed <a href="#how-to-install">the instructions for installing the package</a></p>
+
+<ol>
+  <li>In your python script or interpreter, import the python client package.
+    <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code> import ais_client
+
+ <span class="c">#Some aliases for functions in the package, will use later in document as shorthand</span>
+ openapi_models <span class="o">=</span> ais_client.models
+ openapi_params <span class="o">=</span> openapi_models.InputParameters
+ openapi_actions <span class="o">=</span> openapi_models.Actions
+</code></pre></div>    </div>
+  </li>
+  <li>For each proxy or target url that you want to communcate with, create an api client.
+    <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="c">#Initialize the configuration object</span>
+ configuration <span class="o">=</span> ais_client.Configuration<span class="o">()</span>
+ configuration.debug <span class="o">=</span> False
+
+ <span class="c">#Example first api client</span>
+ proxy_url <span class="o">=</span> <span class="s1">'localhost:8080'</span> <span class="c">#Change this to your your proxy's ip, ex: 172.50.0.2:8080</span>
+ configuration.host <span class="o">=</span> <span class="s1">'http://%s/v1/'</span> % proxy_url
+ proxyClient <span class="o">=</span> ais_client.ApiClient<span class="o">(</span>configuration<span class="o">)</span>
+
+ <span class="c">#Example second api client</span>
+ target_url <span class="o">=</span> <span class="s1">'localhost:8089'</span> <span class="c">#Change this to your your target's ip, ex: 172.50.0.2:8083</span>
+ configuration.host <span class="o">=</span> <span class="s1">'http://%s/v1/'</span> % target_url
+ targetClient <span class="o">=</span> ais_client.ApiClient<span class="o">(</span>configuration<span class="o">)</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="performing-operations">Performing Operations</h3>
+
+<p>Create api instances for each api client that you want to perform operations on.</p>
+
+<p>Each different api instance can perform a particular group of operations.</p>
+
+<p>This means that, for each api client, you will have to create multiple api instances if you want to run operations from multiple groups.</p>
+
+<p>The following sections list instructions for creating api instance and how to use it to perform operations, partitioned by group.</p>
+
+<p>The return type for each operation is also listed. Some of them are objects specific to the package. Documentation for said objects are generated along with the package, and can be viewed to obtain a list of their properties.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Object Name</th>
+      <th>Document Location</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ObjectPropertyList</td>
+      <td><code class="highlighter-rouge">&lt;/path/to/package&gt;/docs/ObjectPropertyList.md</code></td>
+    </tr>
+    <tr>
+      <td>BucketNames</td>
+      <td><code class="highlighter-rouge">&lt;/path/to/package&gt;/docs/BucketNames.md</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Note that operations may raise <code class="highlighter-rouge">ais_client.rest.ApiException</code> as part of normal operations. The <code class="highlighter-rouge">status</code> property of the ApiException can hold some useful information.</p>
+
+<h4 id="bucket">Bucket</h4>
+
+<p>First, create an api instance <code class="highlighter-rouge">bucket_api = ais_client.api.bucket_api.BucketApi(proxyClient)</code>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Code Example</th>
+      <th>Return Type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Get bucket names</td>
+      <td><code class="highlighter-rouge">bucket_api.list_names()</code> <sup><a href="#ftb1">1</a></sup></td>
+      <td>BucketNames</td>
+    </tr>
+    <tr>
+      <td>List objects in bucket</td>
+      <td><code class="highlighter-rouge">bucket_api.perform_operation('myS3bucket', openapi_params(openapi_actions.LISTOBJECTS, value=openapi_models.ObjectPropertiesRequestParams(props="size")))</code> <sup><a href="#ftb2">2</a></sup></td>
+      <td>ObjectPropertyList</td>
+    </tr>
+    <tr>
+      <td>Create ais bucket (proxy)</td>
+      <td><code class="highlighter-rouge">bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.CREATELB))</code></td>
+      <td>ObjectPropertyList</td>
+    </tr>
+    <tr>
+      <td>Destroy ais bucket (proxy)</td>
+      <td><code class="highlighter-rouge">bucket_api.delete('mybucket', openapi_params(openapi_actions.DESTROYLB))</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Rename ais bucket (proxy)</td>
+      <td><code class="highlighter-rouge">bucket_api.perform_operation('oldname', openapi_params(openapi_actions.RENAMELB, name='newname'))</code></td>
+      <td>ObjectPropertyList</td>
+    </tr>
+    <tr>
+      <td><a href="/docs/bucket.md#evict-bucket">Evict</a> cloud bucket (proxy)</td>
+      <td><code class="highlighter-rouge">bucket_api.delete('myS3bucket', openapi_params(openapi_actions.EVICTCB))</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Set bucket props (proxy)</td>
+      <td><code class="highlighter-rouge">bucket_api.set_properties('mybucket', openapi_params(openapi_actions.SETPROPS, value=openapi_models.BucketProps(next_tier_url="http://localhost:8082", cloud_provider="ais", read_policy="next_tier", write_policy="next_tier", cksum=openapi_models.BucketPropsCksum(checksum="inherit"))))</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td><a href="/docs/bucket.md#prefetchevict-objects">Prefetch</a> a list of objects</td>
+      <td><code class="highlighter-rouge">bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.ListParameters(objnames=["o1","o2","o3"], deadline="10s", wait=True)))</code> <sup><a href="#ftb3">3</a></sup></td>
+      <td>ObjectPropertyList</td>
+    </tr>
+    <tr>
+      <td><a href="/docs/bucket.md#prefetchevict-objects">Prefetch</a> a range of objects</td>
+      <td><code class="highlighter-rouge">bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.RangeParameters(prefix="__tst/test-", regex='\\d22\\d', range="1000:2000", deadline="10s", wait=True)))</code> <sup><a href="#ftb3">3</a></sup></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Delete a list of objects</td>
+      <td><code class="highlighter-rouge">bucket_api.delete('mybucket', openapi_params(openapi_actions.DELETE, value=openapi_models.ListParameters(objnames=["o1","o2","o3"], deadline="10s", wait=True)))</code> <sup><a href="#ftb3">3</a></sup></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Delete a range of objects</td>
+      <td><code class="highlighter-rouge">bucket_api.delete('mybucket', openapi_params(openapi_actions.DELETE, value=openapi_models.RangeParameters(prefix="__tst/test-", regex='\\d22\\d', range="1000:2000", deadline="10s", wait=True)))</code> <sup><a href="#ftb3">3</a></sup></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td><a href="/docs/bucket.md#prefetchevict-objects">Evict</a> a list of objects</td>
+      <td><code class="highlighter-rouge">bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.ListParameters(objnames=["o1","o2","o3"], deadline="10s", wait=True)))</code> <sup><a href="#ftb3">3</a></sup></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td><a href="/docs/bucket.md#prefetchevict-objects">Evict</a> a range of objects</td>
+      <td><code class="highlighter-rouge">bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.RangeParameters(prefix="__tst/test-", regex='\\d22\\d', range="1000:2000", deadline="10s", wait=True)))</code> <sup><a href="#ftb3">3</a></sup></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Get bucket props (proxy)</td>
+      <td><code class="highlighter-rouge">bucket_api.get_properties_with_http_info('mybucket')[2]</code></td>
+      <td>dict</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><a name="ftb1">1</a>: Optional parameter <code class="highlighter-rouge">loc=true</code> can be used to retrieve just the ais buckets, this causes the <code class="highlighter-rouge">cloud</code> property to be the empty array</p>
+
+<p><a name="ftb2">2</a>: See the <a href="/docs/bucket.md#list-bucket">List Bucket section</a> for details.</p>
+
+<p><a name="ftb3">3</a>: See the <a href="/docs/batch.md#listrange-operations">List/Range Operations section</a> for details.</p>
+
+<h4 id="cluster">Cluster</h4>
+
+<p>First, create an api instance <code class="highlighter-rouge">cluster_api = ais_client.api.cluster_api.ClusterApi(proxyClient)</code>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Code Example</th>
+      <th>Return Type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Unregister storage target</td>
+      <td>cluster_api.unregister_target(“15205:8083”)</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Register storage target</td>
+      <td><code class="highlighter-rouge">mNetInfo = openapi_models.NetInfo(node_ip_addr="172.16.175.41", daemon_port="8083", direct_url="http://172.16.175.41:8083")</code><br /><code class="highlighter-rouge">cluster_api.register_target(openapi_models.Snode(daemon_id="43888:8083", public_net=mNetInfo, intra_control_net=mNetInfo, intra_data_net=mNetInfo))</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Set primary proxy forcefully(primary proxy)</td>
+      <td><code class="highlighter-rouge">cluster_api.set_primary_proxy("43888:8083")</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Set cluster-wide configuration (proxy)</td>
+      <td><code class="highlighter-rouge">cluster_api.perform_operation(openapi_params(openapi_actions.SETCONFIG, name="stats_time", value="1s"))</code> <br /> please see <a href="/docs/configuration.md#runtime-configuration">runtime configuration</a> for the option list</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Shutdown cluster (proxy)</td>
+      <td><code class="highlighter-rouge">cluster_api.perform_operation(openapi_params(openapi_actions.SHUTDOWN))</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Rebalance cluster (proxy)</td>
+      <td><code class="highlighter-rouge">cluster_api.perform_operation(openapi_params(openapi_actions.REBALANCE))</code></td>
+      <td>None</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="daemon">Daemon</h4>
+
+<p>First, create an api instance <code class="highlighter-rouge">daemon_api = ais_client.api.daemon_api.DaemonApi(targetClient)</code>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Code Example</th>
+      <th>Return Type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Update individual AIStore daemon (proxy or target) configuration</td>
+      <td><code class="highlighter-rouge">daemon_api.perform_operation(openapi_params(openapi_actions.SETCONFIG, name="stats_time", value="1s"))</code> <br /> please see <a href="/docs/configuration.md#runtime-configuration">runtime configuration</a> for the option list</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Shutdown cluster (proxy)</td>
+      <td><code class="highlighter-rouge">daemon_api.perform_operation(openapi_params(openapi_actions.SHUTDOWN))</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Disable mountpath in target</td>
+      <td><code class="highlighter-rouge">daemon_api.modify_mountpath(openapi_params(openapi_actions.DISABLE, value="/mount/path"))</code></td>
+      <td>None <sup><a href="#ftd1">1</a></sup></td>
+    </tr>
+    <tr>
+      <td>Enable mountpath in target</td>
+      <td><code class="highlighter-rouge">daemon_api.modify_mountpath(openapi_params(openapi_actions.ENABLE, value="/mount/path"))</code></td>
+      <td>None <sup><a href="#ftd1">1</a></sup></td>
+    </tr>
+    <tr>
+      <td>Remove mountpath from target</td>
+      <td><code class="highlighter-rouge">daemon_api.remove_mountpath(openapi_params(openapi_actions.REMOVE, value="/mount/path"))</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Add mountpath in target</td>
+      <td><code class="highlighter-rouge">daemon_api.create_mountpath(openapi_params(openapi_actions.ADD, value="/mount/path"))</code></td>
+      <td>None</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><a name="ftd1">1</a>: raises ApiException with <code class="highlighter-rouge">status</code> of <code class="highlighter-rouge">204</code> if the mountpath is already enabled/disabled or <code class="highlighter-rouge">404</code> if mountpath was not found.</p>
+
+<h4 id="object">Object</h4>
+
+<p>First, create an api instance <code class="highlighter-rouge">object_api = ais_client.api.object_api.ObjectApi(proxyClient)</code>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Code Example</th>
+      <th>Return Type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Get object (proxy)</td>
+      <td><code class="highlighter-rouge">object_api.get('myS3bucket', 'myobject')</code></td>
+      <td>str</td>
+    </tr>
+    <tr>
+      <td>Read range (proxy)</td>
+      <td><code class="highlighter-rouge">object_api.get('myS3bucket', 'myobject', offset=1024, length=512)</code></td>
+      <td>str</td>
+    </tr>
+    <tr>
+      <td>Put object (proxy)</td>
+      <td><code class="highlighter-rouge">object_api.put('myS3bucket', 'myobject', body='object content here')</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Rename/move object (ais buckets)</td>
+      <td><code class="highlighter-rouge">object_api.perform_operation('mylocalbucket', 'dir1/CCCCCCC', input_parameters=openapi_params(openapi_actions.RENAME, 'dir2/DDDDDDD'))</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Delete object</td>
+      <td><code class="highlighter-rouge">object_api.delete('mybucket', 'myobject')</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Evict object from cache</td>
+      <td><code class="highlighter-rouge">object_api.delete('mybucket', 'myobject', input_parameters=openapi_params(openapi_actions.EVICTOBJECTS))</code></td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>Get object props</td>
+      <td><code class="highlighter-rouge">object_api.get_properties_with_http_info('mybucket', 'myobject')[2]</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Check if an object is cached</td>
+      <td><code class="highlighter-rouge">object_api.get_properties_with_http_info('mybucket', 'myobject', check_cached=True)</code></td>
+      <td>tuple (raises ApiException if answer is no)</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Note that the <code class="highlighter-rouge">Copy object</code> operation (<code class="highlighter-rouge">object_api.put</code> with the kwargs <code class="highlighter-rouge">from_id</code>/<code class="highlighter-rouge">to_id</code> instead of <code class="highlighter-rouge">body</code>), as of v2.0, doesn’t work yet.</p>
+
+<h4 id="sort">Sort</h4>
+
+<p>First, create an api instance <code class="highlighter-rouge">sort_api = ais_client.api.sort_api.SortApi(proxyClient)</code>.</p>
+
+<p>See the files mentioned <a href="/dsort/playground/README.md#python">here</a> for examples of how to use <code class="highlighter-rouge">sort_api</code>.</p>
+
+<h4 id="querying">Querying</h4>
+
+<p>AIStore provides an extensive list of operations to retrieve cluster current state.</p>
+
+<p>Note that these are called on the api instances <a href="#cluster">cluster_api</a> and <a href="#daemon">daemon_api</a>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Code Example</th>
+      <th>Return Type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Get cluster map</td>
+      <td><code class="highlighter-rouge">daemon_api.get(openapi_models.GetWhat.SMAP)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get proxy or target configuration</td>
+      <td><code class="highlighter-rouge">daemon_api.get(openapi_models.GetWhat.CONFIG)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get proxy/target info</td>
+      <td><code class="highlighter-rouge">daemon_api.get(openapi_models.GetWhat.DAEMONINFO</code>)</td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get cluster statistics (proxy)</td>
+      <td><code class="highlighter-rouge">cluster_api.get(openapi_models.GetWhat.STATS)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get target statistics</td>
+      <td><code class="highlighter-rouge">daemon_api.get(openapi_models.GetWhat.STATS)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get process info for all nodes in cluster (proxy)</td>
+      <td><code class="highlighter-rouge">cluster_api.get(openapi_models.GetWhat.SYSINFO)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get proxy or target process info</td>
+      <td><code class="highlighter-rouge">daemon_api.get(openapi_models.GetWhat.SYSINFO)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get rebalance statistics (proxy)</td>
+      <td><code class="highlighter-rouge">cluster_api.get(openapi_models.GetWhat.XACTION, props=openapi_models.GetProps.REBALANCE)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get prefetch statistics (proxy)</td>
+      <td><code class="highlighter-rouge">cluster_api.get(openapi_models.GetWhat.XACTION, props=openapi_models.GetProps.PREFETCH)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get list of target’s filesystems (target)</td>
+      <td><code class="highlighter-rouge">daemon_api.get(openapi_models.GetWhat.MOUNTPATHS)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get list of all targets’ filesystems (proxy)</td>
+      <td><code class="highlighter-rouge">cluster_api.get(openapi_models.GetWhat.MOUNTPATHS)</code></td>
+      <td>dict</td>
+    </tr>
+    <tr>
+      <td>Get target bucket list</td>
+      <td><code class="highlighter-rouge">daemon_api.get(openapi_models.GetWhat.BUCKETMD)</code></td>
+      <td>dict</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="future">Future</h2>
+
+<p>The python client package, as of v2.0, is only fully supported in python 2.</p>
+
+<p>This is because openapi-generator has a problem in python3 with fetching binary data in the form of octet-stream.</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/OpenAPITools/openapi-generator/issues/1445
+https://github.com/OpenAPITools/openapi-generator/issues/206
+</code></pre></div></div>
+<p>For now, as of v2.0, it’s recommended to only use python 2 with the package.</p>
+
+  </div><a class="u-url" href="/aistore/openapi" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>DEPLOY/PROD/K8S/HELM/AIS/CHARTS/CHARTS/GRAPHITE | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="DEPLOY/PROD/K8S/HELM/AIS/CHARTS/CHARTS/GRAPHITE" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/deploy/prod/k8s/helm/ais/charts/charts/graphite" />
+<meta property="og:url" content="http://localhost:4000/aistore/deploy/prod/k8s/helm/ais/charts/charts/graphite" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"DEPLOY/PROD/K8S/HELM/AIS/CHARTS/CHARTS/GRAPHITE","@type":"WebPage","url":"http://localhost:4000/aistore/deploy/prod/k8s/helm/ais/charts/charts/graphite","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">DEPLOY/PROD/K8S/HELM/AIS/CHARTS/CHARTS/GRAPHITE</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h1 id="graphite">Graphite</h1>
+
+<p><a href="https://graphiteapp.org/">Graphite</a> is a monitoring tool.</p>
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This chart uses graphiteapp/graphite-statsd container to run Graphite inside Kubernetes.</p>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<ul>
+  <li>Has been tested on Kubernetes 1.9+</li>
+</ul>
+
+<h2 id="installing-the-chart">Installing the Chart</h2>
+
+<p>To install the chart with the release name <code class="highlighter-rouge">graphite</code>, run the following command:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>helm <span class="nb">install </span>kiwigrid/graphite <span class="nt">--name</span> graphite
+</code></pre></div></div>
+
+<h2 id="uninstalling-the-chart">Uninstalling the Chart</h2>
+
+<p>To uninstall/delete the <code class="highlighter-rouge">graphite</code> deployment:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>helm delete graphite
+</code></pre></div></div>
+
+<p>The command removes all the Kubernetes components associated with the chart and deletes the release.</p>
+
+<blockquote>
+  <p><strong>Tip</strong>: To completely remove the release, run <code class="highlighter-rouge">helm delete --purge graphite</code></p>
+</blockquote>
+
+<h2 id="configuration">Configuration</h2>
+
+<p>The following table lists the configurable parameters of the Graphite chart and their default values.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">image.repository</code></td>
+      <td>Docker image repo</td>
+      <td><code class="highlighter-rouge">graphiteapp/graphite-statsd</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">image.tag</code></td>
+      <td>Docker image</td>
+      <td><code class="highlighter-rouge">1.1.5-4</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">image.pullPolicy</code></td>
+      <td>Docker image pull policy</td>
+      <td><code class="highlighter-rouge">IfNotPresent</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">service.type</code></td>
+      <td>Service type</td>
+      <td><code class="highlighter-rouge">ClusterIP</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">service.port</code></td>
+      <td>Service port of Graphite UI</td>
+      <td><code class="highlighter-rouge">8080</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">service.annotations</code></td>
+      <td>Service annotations</td>
+      <td><code class="highlighter-rouge">{}</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">service.labels</code></td>
+      <td>Service labels</td>
+      <td><code class="highlighter-rouge">{}</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">persistence.enabled</code></td>
+      <td>Enable config persistence using PVC</td>
+      <td><code class="highlighter-rouge">true</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">persistence.storageClass</code></td>
+      <td>PVC Storage Class for config volume</td>
+      <td><code class="highlighter-rouge">nil</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">persistence.existingClaim</code></td>
+      <td>Name of an existing PVC to use for config</td>
+      <td><code class="highlighter-rouge">nil</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">persistence.accessMode</code></td>
+      <td>PVC Access Mode for config volume</td>
+      <td><code class="highlighter-rouge">ReadWriteOnce</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">persistence.size</code></td>
+      <td>PVC Storage Request for config volume</td>
+      <td><code class="highlighter-rouge">10Gi</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">resources</code></td>
+      <td>Resource limits for Graphite pod</td>
+      <td><code class="highlighter-rouge">{}</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ingress.enabled</code></td>
+      <td>Ingress enabled</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ingress.annotations</code></td>
+      <td>Ingress annotations</td>
+      <td><code class="highlighter-rouge">{}</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ingress.path</code></td>
+      <td>Ingress path</td>
+      <td><code class="highlighter-rouge">/</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ingress.hosts</code></td>
+      <td>Ingress hosts</td>
+      <td><code class="highlighter-rouge">[]</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ingress.tls</code></td>
+      <td>Ingress TLS</td>
+      <td><code class="highlighter-rouge">[]</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">resources</code></td>
+      <td>Resources</td>
+      <td><code class="highlighter-rouge">{}</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">nodeSelector</code></td>
+      <td>NodeSelector</td>
+      <td><code class="highlighter-rouge">{}</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">tolerations</code></td>
+      <td>Tolerations</td>
+      <td><code class="highlighter-rouge">[]</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">affinity</code></td>
+      <td>Affinity</td>
+      <td><code class="highlighter-rouge">{}</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">configMaps</code></td>
+      <td>Graphite Config files</td>
+      <td>see values.yaml</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">statsdConfigMaps</code></td>
+      <td>StatsD Config files</td>
+      <td>see values.yaml</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">statsd.interface</code></td>
+      <td>StatsD server interface, <code class="highlighter-rouge">TCP</code> or <code class="highlighter-rouge">UDP</code></td>
+      <td><code class="highlighter-rouge">UDP</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Specify each parameter using the <code class="highlighter-rouge">--set key=value[,key=value]</code> argument to <code class="highlighter-rouge">helm install</code>. For example:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>helm <span class="nb">install</span> <span class="nt">--name</span> graphite <span class="nt">--set</span> ingress.enabled<span class="o">=</span><span class="nb">false </span>kiwigrid/graphite
+</code></pre></div></div>
+
+<p>Alternatively, a YAML file that specifies the values for the parameters can be provided while installing the chart.</p>
+
+<h3 id="storage-persistence">Storage persistence</h3>
+
+<p>Graphite itself is a stateful application that stores all related data in its own database. Therefore it uses a PVC to store data.</p>
+
+<h3 id="help">Help</h3>
+
+<p>For more information about Graphite visit the official <a href="https://graphiteapp.org/">website</a> and the <a href="http://graphite.readthedocs.io/en/latest/">docs</a>.</p>
+
+<p>To find infos about the Docker container visit <a href="https://github.com/graphite-project/docker-graphite-statsd">Github</a> or <a href="https://hub.docker.com/r/graphiteapp/graphite-statsd/">Dockerhub</a>.</p>
+
+  </div><a class="u-url" href="/aistore/deploy/prod/k8s/helm/ais/charts/charts/graphite" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

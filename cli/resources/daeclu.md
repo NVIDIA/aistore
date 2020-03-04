@@ -1,8 +1,11 @@
 ---
 layout: post
-title: CLI
-permalink: "cli/daeclu"
+title: DAECLU
+permalink: cli/resources/daeclu
+redirect_from:
+- cli/resources/daeclu.md/
 ---
+
 ## Daemon/Cluster
 
 The CLI allows users to interact with AIS daemons or cluster.

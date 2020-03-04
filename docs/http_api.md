@@ -1,3 +1,11 @@
+---
+layout: post
+title: HTTP_API
+permalink: docs/http_api
+redirect_from:
+- docs/http_api.md/
+---
+
 ## RESTful API
 
 ## Table of Contents
@@ -66,10 +74,10 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Register storage proxy | POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"daemon_type": "proxy", "node_ip_addr": "172.16.175.41", "daemon_port": "8083", "daemon_id": "43888:8083", "direct_url": "http://172.16.175.41:8083"}' 'http://localhost:8083/v1/cluster/register'` |
 | Set primary proxy (primary proxy only)| PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT 'http://G-primary/v1/cluster/proxy/26869:8080'` |
 | Force-Set primary proxy (primary proxy)| PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"`  <sup id="a6">[6](#ft6)</sup>|
-| Set AIS node configuration **via JSON message** | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G-or-T/v1/daemon'`<br>• For the list of named options, see [runtime configuration](configuration.md#runtime-configuration) |
-| Set AIS node configuration **via URL query** | PUT /v1/daemon/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md#runtime-configuration) |
-| Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](configuration.md#runtime-configuration) |
-| Set cluster-wide configuration **via URL query** (proxy) | PUT /v1/cluster/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md#runtime-configuration) |
+| Set AIS node configuration **via JSON message** | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G-or-T/v1/daemon'`<br>• For the list of named options, see [runtime configuration](./configuration.md#runtime-configuration) |
+| Set AIS node configuration **via URL query** | PUT /v1/daemon/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](./configuration.md#runtime-configuration) |
+| Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](./configuration.md#runtime-configuration) |
+| Set cluster-wide configuration **via URL query** (proxy) | PUT /v1/cluster/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](./configuration.md#runtime-configuration) |
 | Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-or-T/v1/daemon'` |
 | Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-primary/v1/cluster'` |
 | Rebalance cluster (proxy) | PUT {"action": "rebalance", "value": "start"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance", "value": "start"}' 'http://G/v1/cluster'` |
@@ -129,7 +137,7 @@ ___
 
 Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in another AIS cluster, or - the 3rd option - be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an AIS bucket that happen to share the same name? To resolve all potential naming, and (arguably, more importantly) partition namespace with respect to both physical isolation and QoS, AIS introduces the concept of *provider*.
 
-* [Cloud Provider](providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+* [Cloud Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
 > Cloud provider (aka "bucket provider") is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. Supported providers, on the other hand, are enumerated and documented: `ais` - for AIS buckets, `aws`, or `gcp` - for S3 and Google Cloud buckets, respectively.
 
@@ -138,10 +146,10 @@ In all those cases users can add an optional `?provider=ais` or `?provider=aws` 
 Curl example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=ais'`
 
 For more information, CLI examples, and the most recent updates, please see:
-- [Cloud Providers](providers.md)
+- [Cloud Providers](./providers.md)
 - [CLI: operations on buckets](/cli/resources/bucket.md)
 - [CLI: operations on objects](/cli/resources/object.md)
-- [On-Disk Layout](on-disk-layout.md)
+- [On-Disk Layout](./on-disk-layout.md)
 
 #### Supported APIs
 

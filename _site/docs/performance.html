@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>PERFORMANCE | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="PERFORMANCE" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/docs/performance" />
+<meta property="og:url" content="http://localhost:4000/aistore/docs/performance" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"PERFORMANCE","@type":"WebPage","url":"http://localhost:4000/aistore/docs/performance","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">PERFORMANCE</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h1 id="performance">Performance</h1>
+
+<p>AIStore is all about the performance. Below you will find some tips and tricks to ensure that AIStore does deliver.</p>
+
+<ul>
+  <li><a href="#performance-tuning">Performance tuning</a>
+    <ul>
+      <li><a href="#general">General</a></li>
+      <li><a href="#cpu">CPU</a></li>
+      <li><a href="#network">Network</a>
+        <ul>
+          <li><a href="#smoke-test">Smoke test</a></li>
+          <li><a href="#maximum-open-files">Maximum open files</a></li>
+        </ul>
+      </li>
+      <li><a href="#storage">Storage</a>
+        <ul>
+          <li><a href="#block-settings">Block settings</a></li>
+          <li><a href="#benchmarking-disk">Benchmarking disk</a></li>
+          <li><a href="#underlying-filesystem">Underlying filesystem</a>
+            <ul>
+              <li><a href="#noatime">noatime</a></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li><a href="#virtualization">Virtualization</a></li>
+    </ul>
+  </li>
+  <li><a href="#performance-testing">Performance testing</a></li>
+</ul>
+
+<h2 id="performance-tuning">Performance tuning</h2>
+
+<h3 id="general">General</h3>
+
+<p>A couple of articles that we think you may find useful or helpful:</p>
+
+<ul>
+  <li>https://wiki.mikejung.biz/Ubuntu_Performance_Tuning &lt;- good guide about general optimizations (some of them are described below)</li>
+  <li>https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf &lt;- detailed view on how to tune the RHEL lot of the tips and tricks apply for other Linux distributions</li>
+</ul>
+
+<h3 id="cpu">CPU</h3>
+
+<p>Setting CPU governor (P-States) to <code class="highlighter-rouge">performance</code> may make a big difference and, in particular, result in much better network throughput:</p>
+
+<ul>
+  <li><a href="https://fasterdata.es.net/assets/Papers-and-Publications/100G-Tuning-TechEx2016.tierney.pdf">Recent Linux TCP Updates, and how to tune your 100G host</a> (slide 13)</li>
+</ul>
+
+<p>On <code class="highlighter-rouge">Debian</code> and <code class="highlighter-rouge">Ubuntu</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>apt-get <span class="nb">install</span> <span class="nt">-y</span> linux-tools-<span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span> <span class="c"># install `cpupower`</span>
+cpupower frequency-info <span class="c"># check current settings</span>
+cpupower frequency-set <span class="nt">-r</span> <span class="nt">-g</span> performance <span class="c"># set `performance` setting to all CPU's</span>
+cpupower frequency-info <span class="c"># check settings after the change</span>
+</code></pre></div></div>
+
+<p>Once the packages are installed (the step that will depend on your Linux distribution), you can then follow the <em>tuning instructions</em> from the referenced PDF (above).</p>
+
+<h3 id="network">Network</h3>
+
+<ul>
+  <li>MTU should be set to <code class="highlighter-rouge">9000</code> (Jumbo frames) - this is one of the most important configurations</li>
+  <li>Optimize TCP send buffer sizes on the target side (<code class="highlighter-rouge">net.core.rmem_max</code>, <code class="highlighter-rouge">net.ipv4.tcp_rmem</code>)</li>
+  <li>Optimize TCP receive buffer on the client (reading) side (<code class="highlighter-rouge">net.core.wmem_max</code>, <code class="highlighter-rouge">net.ipv4.tcp_wmem</code>)</li>
+  <li><code class="highlighter-rouge">net.ipv4.tcp_mtu_probing = 2</code> # especially important in communication between client &lt;-&gt; proxy or client &lt;-&gt; target and if client has <code class="highlighter-rouge">mtu</code> set &gt; 1500</li>
+  <li>Wait.. there is more: <a href="https://www.cyberciti.biz/files/linux-kernel/Documentation/networking/ip-sysctl.txt">all ip-sysctl configurations</a></li>
+</ul>
+
+<h4 id="smoke-test">Smoke test</h4>
+
+<p>To ensure client ⇔ proxy, client ⇔ target, proxy ⇔ target, and target ⇔ target connectivity you can use <code class="highlighter-rouge">iperf</code> (make sure to use Jumbo frames and disable fragmentation).
+Here is example use of <code class="highlighter-rouge">iperf</code>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>iperf <span class="nt">-P</span> 20 <span class="nt">-l</span> 128K <span class="nt">-i</span> 1 <span class="nt">-t</span> 30 <span class="nt">-w</span> 512K <span class="nt">-c</span> &lt;IP-address&gt;
+</code></pre></div></div>
+
+<p><strong>NOTE</strong>: <code class="highlighter-rouge">iperf</code> must show 95% of the bandwidth of a given phys interface. If it does not, try to find out why. It might have no sense to run any benchmark prior to finding out.</p>
+
+<h4 id="maximum-open-files">Maximum open files</h4>
+
+<p>To ensure that AIStore works properly you probably need to increase the default number of open files. To check the current settings, you can use <code class="highlighter-rouge">ulimit -n</code>.</p>
+
+<blockquote>
+  <p>It is strongly recommended to raise ulimit to at least <code class="highlighter-rouge">100,000</code>.</p>
+</blockquote>
+
+<p>Here’re the (example) settings that we use for development:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># tail /etc/security/limits.conf</span>
+<span class="c">#ftp             hard    nproc           0</span>
+<span class="c">#ftp             -       chroot          /ftp</span>
+<span class="c">#@student        -       maxlogins       4</span>
+
+root             hard    nofile          999999
+root             soft    nofile          999999
+ubuntu           hard    nofile          999999
+ubuntu           soft    nofile          999999
+
+<span class="c"># End of file</span>
+</code></pre></div></div>
+
+<blockquote>
+  <p>If the change in the ` /etc/security/limits.conf<code class="highlighter-rouge"> (above) does not cause </code>ulimit -n<code class="highlighter-rouge"> to show expected numbers, try then modifying </code>/etc/systemd/user.conf<code class="highlighter-rouge"> and </code>/etc/systemd/system.conf<code class="highlighter-rouge">. In both configurations files, look for the line </code>#DefaultLimitNOFILE=<code class="highlighter-rouge"> and uncomment it as </code>DefaultLimitNOFILE=999999`. A brief discussion of the topic can be found <a href="https://superuser.com/questions/1200539/cannot-increase-open-file-limit-past-4096-ubuntu">here</a>.</p>
+</blockquote>
+
+<h3 id="storage">Storage</h3>
+
+<p>Storage-wise, each local <code class="highlighter-rouge">ais.json</code> config must be looking as follows:</p>
+
+<p>((missing -- image))</p>
+
+<ul>
+  <li>Each local path from the <code class="highlighter-rouge">fspaths</code> section above must be (or contain as a prefix) a mountpoint of a local filesystem.</li>
+  <li>Each local filesystem (above) must utilize one or more data drives, whereby none of the data drives is shared between two or more local filesystems.</li>
+  <li>Each filesystem must be fine-tuned for reading large files/blocks/xfersizes.</li>
+</ul>
+
+<h4 id="block-settings">Block settings</h4>
+
+<p>When initializing the disk it is necessary to set proper block size: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/disk-performance.html</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">dd </span><span class="k">if</span><span class="o">=</span>/dev/zero <span class="nv">of</span><span class="o">=</span>/dev/&lt;disk_name&gt; <span class="nv">bs</span><span class="o">=</span>&lt;block_size&gt;
+</code></pre></div></div>
+
+<h4 id="benchmarking-disk">Benchmarking disk</h4>
+
+<p><strong>TIP:</strong> double check that rootfs/tmpfs of the AIStore target are <em>not</em> used when reading and writing data.</p>
+
+<p>When running a benchmark, make sure to run and collect the following in each and every target:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>iostat <span class="nt">-cdxtm</span> 10
+</code></pre></div></div>
+
+<p>Local hard drive read performance, the fastest block-level reading smoke test is:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hdparm <span class="nt">-Tt</span> /dev/&lt;drive-name&gt;
+</code></pre></div></div>
+
+<p>Reading the block from certain offset (in gigabytes), <code class="highlighter-rouge">--direct</code> argument ensure that we bypass the drive’s buffer cache and read directly from the disk:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hdparm <span class="nt">-t</span> <span class="nt">--direct</span> <span class="nt">--offset</span> 100 /dev/&lt;drive-name&gt;
+</code></pre></div></div>
+
+<p>More: <a href="http://www.linux-magazine.com/Online/Features/Tune-Your-Hard-Disk-with-hdparm">Tune hard disk with <code class="highlighter-rouge">hdparm</code></a>.</p>
+
+<h4 id="underlying-filesystem">Underlying filesystem</h4>
+
+<p>Another way to increase storage performance is to benchmark different filesystems: <code class="highlighter-rouge">ext</code>, <code class="highlighter-rouge">xfs</code>, <code class="highlighter-rouge">openzfs</code>.
+Tuning the IO scheduler can be a very important part of this process:</p>
+<ul>
+  <li>http://blackbird.si/tips-for-optimizing-disk-performance-on-linux/</li>
+  <li>https://cromwell-intl.com/open-source/performance-tuning/disks.html</li>
+</ul>
+
+<p>It seems like generally <code class="highlighter-rouge">deadline</code> scheduler is a good choice for AIStore, instead of default <code class="highlighter-rouge">cfq</code>.
+When you consider using <code class="highlighter-rouge">xfs</code> keep in mind that:</p>
+
+<blockquote>
+  <p>According to xfs.org, the CFQ scheduler defeats much of the parallelization in XFS.</p>
+</blockquote>
+
+<h5 id="noatime">noatime</h5>
+
+<p>One of the most important performance improvements can be achieved by turning off <code class="highlighter-rouge">atime</code> (access time) updates on the filesystem.
+This can be achieved by specifying <code class="highlighter-rouge">noatime</code> option when mounting the storage disk.</p>
+
+<p><code class="highlighter-rouge">atime</code> updates generate additional write traffic during file access (retrieving the object) which can significantly impact the overall throughput of the system.
+Therefore, we <strong>strongly</strong> advise to use the <code class="highlighter-rouge">noatime</code> option when mounting a disk.</p>
+
+<p>Important to note is that AIStore will still maintain access time updates but with using more optimized techniques as well as ensuring that it is consistent during object migration.</p>
+
+<p>External links:</p>
+<ul>
+  <li>http://en.tldp.org/LDP/solrhe/Securing-Optimizing-Linux-RH-Edition-v1.3/chap6sec73.html</li>
+  <li>https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/global_file_system_2/s2-manage-mountnoatime</li>
+  <li>https://lonesysadmin.net/2013/12/08/gain-30-linux-disk-performance-noatime-nodiratime-relatime/</li>
+</ul>
+
+<h3 id="virtualization">Virtualization</h3>
+
+<p>AIStore node (proxy and target) must be deployed as a single VM on a given bare-metal host.
+There must be no sharing of host resources between two or more VMs.
+Even if there is a single VM, the host may decide to swap it out when idle, or give it a single hyperthreaded vCPU instead of a full-blown physical core - this condition must be prevented.
+AIStore node needs to have a physical resource in its entirety: RAM, CPU, network, and storage. Hypervisor must resort to the remaining absolutely required minimum.
+Make sure to use PCI passthrough to assign a device (NIC, HDD) directly to the AIStore node VM.</p>
+
+<p>AIStore’s primary goal is to scale with clustered drives. Therefore, the choice of a drive (type and capabilities) is very important.</p>
+
+<h2 id="performance-testing">Performance testing</h2>
+
+<p><a href="/docs/howto_benchmark.md">AIStore load generator</a> is a built-in tool to test performance. One of the most common questions that arise when analyzing performance results is whether the bottleneck is imposed by the hardware - namely, HDDs.</p>
+
+<p>To that end, AIStore supports switching off disk IO to, effectively, perform dry-run type benchmarking. This can be done by passing command-line arguments or by setting environment variables (see below).</p>
+
+<blockquote>
+  <p>The environment variables have higher priority: if both environment and command-line are specified the former takes precedence.</p>
+</blockquote>
+
+<blockquote>
+  <p>Disabling disk IO must be done at startup; disabling/enabling disk IO at runtime is not supported.</p>
+</blockquote>
+
+<table>
+  <thead>
+    <tr>
+      <th>CLI argument</th>
+      <th>Environment variable</th>
+      <th>Default value</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>nodiskio</td>
+      <td>AIS_NODISKIO</td>
+      <td>false</td>
+      <td>true - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests it reads the request’s body to /dev/null.<br />Valid values are true or 1, and false or 0</td>
+    </tr>
+    <tr>
+      <td>dryobjsize</td>
+      <td>AIS_DRYOBJSIZE</td>
+      <td>8m</td>
+      <td>A size of an object when a source is a ‘fake’ one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: ‘g’ or ‘G’ - GiB, ‘m’ or ‘M’ - MiB, ‘k’ or ‘K’ - KiB. The default value is ‘8m’ - the size of an object is 8 megabytes</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Example of deploying a cluster with disk IO disabled and object size 256KB:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/opt/aistore/ais$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
+</code></pre></div></div>
+
+<blockquote>
+  <blockquote>
+    <p>The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case, the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of the previous test that had network IO enabled.</p>
+  </blockquote>
+</blockquote>
+
+  </div><a class="u-url" href="/aistore/docs/performance" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

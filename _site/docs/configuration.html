@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>CONFIGURATION | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="CONFIGURATION" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/docs/configuration" />
+<meta property="og:url" content="http://localhost:4000/aistore/docs/configuration" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"CONFIGURATION","@type":"WebPage","url":"http://localhost:4000/aistore/docs/configuration","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">CONFIGURATION</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+  <li><a href="#runtime-configuration">Runtime configuration</a></li>
+  <li><a href="#configuration-persistence">Configuration persistence</a></li>
+  <li><a href="#startup-override">Startup override</a></li>
+  <li><a href="#managing-filesystems">Managing filesystems</a></li>
+  <li><a href="#disabling-extended-attributes">Disabling extended attributes</a></li>
+  <li><a href="#enabling-https">Enabling HTTPS</a></li>
+  <li><a href="#filesystem-health-checker">Filesystem Health Checker</a></li>
+  <li><a href="#networking">Networking</a></li>
+  <li><a href="#reverse-proxy">Reverse proxy</a></li>
+  <li><a href="#curl-examples">Curl examples</a></li>
+  <li><a href="#cli-examples">CLI examples</a></li>
+</ul>
+
+<p>AIS configuration is consolidated in a single <a href="/ais/setup/config.sh">JSON template</a> where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The configuration template serves as a single source for all deployment-specific configurations, examples of which can be found under <a href="the folder that consolidates containerized-development and production deployment scripts">/deploy</a>.</p>
+
+<p>AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are: user (aka public), intra-cluster control, and intra-cluster data - the corresponding JSON names are, respectively: <code class="highlighter-rouge">ipv4</code>, <code class="highlighter-rouge">ipv4_intra_control</code>, and <code class="highlighter-rouge">ipv4_intra_data</code>.</p>
+
+<p>The following picture illustrates one section of the configuration template that, in part, includes listening port:</p>
+
+<p><img src="images/ais-config-1.png" alt="Configuration: TCP port and URL" width="600" /></p>
+
+<p>Further, <code class="highlighter-rouge">test_fspaths</code> section (see below) corresponds to a <strong>single local filesystem being partitioned</strong> between both <em>local</em> and <em>Cloud</em> buckets. In other words, the <code class="highlighter-rouge">test_fspaths</code> configuration option is intended strictly for development.</p>
+
+<p><img src="images/ais-config-2-commented.png" alt="Configuration: local filesystems" width="600" /></p>
+
+<p>In production we use an alternative configuration called <code class="highlighter-rouge">fspaths</code>: the section of the <a href="/ais/setup/config.sh">config</a> that includes a number of local directories, whereby each directory is based on a different local filesystem.</p>
+
+<blockquote>
+  <p>Terminology: <em>mountpath</em> is a triplet <strong>(local filesystem (LFS), disks that this LFS utilizes, LFS directory)</strong>. The following rules are enforced: 1) different mountpaths use different LFSes, and 2) different LFSes use different disks.</p>
+</blockquote>
+
+<blockquote>
+  <p>The terms <code class="highlighter-rouge">fspath</code> (aka <code class="highlighter-rouge">filesystem path</code>) and <code class="highlighter-rouge">mountpath</code> are used interchangeably throughout AIStore docs and sources. When <code class="highlighter-rouge">fspath</code> configuration is enabled, the 1-to-1 relationship between configured <code class="highlighter-rouge">mountpaths</code> and local filesystems is enforced and validated at all times.</p>
+</blockquote>
+
+<p>An example of 12 fspaths (and 12 local filesystems) follows below:</p>
+
+<p><img src="images/example-12-fspaths-config.png" alt="Example: 12 fspaths" width="160" /></p>
+
+<h2 id="runtime-configuration">Runtime configuration</h2>
+
+<p>First, some basic facts:</p>
+
+<ul>
+  <li>AIS cluster is a collection of nodes - members of the cluster.</li>
+  <li>A node can be an AIS proxy (aka gateway) or an AIS target.</li>
+  <li>In either case, HTTP request to read (get) or write (set) specific node’s configuration will have <code class="highlighter-rouge">/v1/daemon</code> in its URL path.</li>
+  <li>The capability to carry out cluster-wide configuration updates is also supported. The corresponding HTTP URL will have <code class="highlighter-rouge">/v1/cluster</code> in its path.</li>
+</ul>
+
+<blockquote>
+  <p>Both <code class="highlighter-rouge">daemon</code> and <code class="highlighter-rouge">cluster</code> are the two RESTful resource abstractions supported by the API. Please see <a href="http_api.md">AIS API</a> for naming conventions, RESTful resources, as well as API reference and details.</p>
+</blockquote>
+
+<ul>
+  <li>To get the node’s up-to-date configuration, execute:</li>
+</ul>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># curl -X GET 'http://G-or-T/v1/daemon?what=config'</span>
+</code></pre></div></div>
+<p>where <code class="highlighter-rouge">G-or-T</code> denotes a <strong>(hostname:port)</strong> pair of <strong>any AIS node</strong> member of the cluster.</p>
+
+<p>This will result in a JSON structure that’ll contain all configuration sections and all the named <em>knobs</em> - i.e., configuration variables and their current values.</p>
+
+<p>Most configuration options can be updated - on an individual (target or proxy) daemon or the entire cluster. For example:</p>
+
+<ul>
+  <li>Set <code class="highlighter-rouge">periodic.stats_time</code> = 1 minute, <code class="highlighter-rouge">periodic.iostat_time_long</code> = 4 seconds (scope of the operation: entire <strong>cluster</strong>)
+    <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># curl -i -X PUT 'http://G/v1/cluster/setconfig?periodic.stats_time=1m&amp;periodic.iostat_time_long=4s'</span>
+</code></pre></div>    </div>
+  </li>
+</ul>
+
+<blockquote>
+  <p>As of v2.1, AIS configuration includes a section called <code class="highlighter-rouge">disk</code>. The <code class="highlighter-rouge">disk</code> in turn contains several knobs - one of those knobs is <code class="highlighter-rouge">disk.iostat_time_long</code>, another - <code class="highlighter-rouge">disk.disk_util_low_wm</code>. To update one or both of those named variables on all or one of the clustered nodes, you could:</p>
+</blockquote>
+
+<ul>
+  <li>Set <code class="highlighter-rouge">disk.iostat_time_long</code> = 3 seconds, <code class="highlighter-rouge">disk.disk_util_low_wm</code> = 40 percent (scope of the operation: <strong>one AIS node</strong>)
+    <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?disk.iostat_time_long=3s&amp;disk.disk_util_low_wm=40'</span>
+</code></pre></div>    </div>
+  </li>
+</ul>
+
+<p>For more examples and for alternative ways to format configuration-updating requests, please see <a href="#examples">examples below</a>.</p>
+
+<p>Following is a table-summary that contains a <em>subset</em> of all <em>settable</em> knobs:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option name</th>
+      <th>Default value</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>log.level</td>
+      <td>3</td>
+      <td>Set global logging level. The greater number the more verbose log output</td>
+    </tr>
+    <tr>
+      <td>vmodule</td>
+      <td>””</td>
+      <td>Overrides logging level for a given modules.<br />{“name”: “vmodule”, “value”: “target*=2”} sets log level to 2 for target modules</td>
+    </tr>
+    <tr>
+      <td>periodic.stats_time</td>
+      <td>10s</td>
+      <td>A node periodically does ‘housekeeping’: updates internal statistics, remove old logs, and executes extended actions prefetch and LRU waiting in the line</td>
+    </tr>
+    <tr>
+      <td>lru.enabled</td>
+      <td>true</td>
+      <td>Enables and disabled the LRU</td>
+    </tr>
+    <tr>
+      <td>lru.lowwm</td>
+      <td>75</td>
+      <td>If filesystem usage exceeds <code class="highlighter-rouge">highwm</code> LRU tries to evict objects so the filesystem usage drops to <code class="highlighter-rouge">lowwm</code></td>
+    </tr>
+    <tr>
+      <td>lru.highwm</td>
+      <td>90</td>
+      <td>LRU starts immediately if a filesystem usage exceeds the value</td>
+    </tr>
+    <tr>
+      <td>lru.dont_evict_time</td>
+      <td>120m</td>
+      <td>LRU does not evict an object which was accessed less than dont_evict_time ago</td>
+    </tr>
+    <tr>
+      <td>lru.capacity_upd_time</td>
+      <td>10m</td>
+      <td>Determines how often AIStore updates filesystem usage</td>
+    </tr>
+    <tr>
+      <td>disk.disk_util_low_wm</td>
+      <td>60</td>
+      <td>Operations that implement self-throttling mechanism, e.g. LRU, do not throttle themselves if disk utilization is below <code class="highlighter-rouge">disk_util_low_wm</code></td>
+    </tr>
+    <tr>
+      <td>disk.disk_util_high_wm</td>
+      <td>80</td>
+      <td>Operations that implement self-throttling mechanism, e.g. LRU, turn on the maximum throttle if disk utilization is higher than <code class="highlighter-rouge">disk_util_high_wm</code></td>
+    </tr>
+    <tr>
+      <td>disk.iostat_time_long</td>
+      <td>2s</td>
+      <td>The interval that disk utilization is checked when disk utilization is below <code class="highlighter-rouge">disk_util_low_wm</code>.</td>
+    </tr>
+    <tr>
+      <td>disk.iostat_time_short</td>
+      <td>100ms</td>
+      <td>Used instead of <code class="highlighter-rouge">iostat_time_long</code> when disk utilization reaches <code class="highlighter-rouge">disk_util_high_wm</code>. If disk utilization is between <code class="highlighter-rouge">disk_util_high_wm</code> and <code class="highlighter-rouge">disk_util_low_wm</code>, a proportional value between <code class="highlighter-rouge">iostat_time_short</code> and <code class="highlighter-rouge">iostat_time_long</code> is used.</td>
+    </tr>
+    <tr>
+      <td>rebalance.enabled</td>
+      <td>true</td>
+      <td>Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(<code class="highlighter-rouge">PUT {"action": "rebalance" v1/cluster</code>) to initiate cluster-wide rebalancing operation</td>
+    </tr>
+    <tr>
+      <td>rebalance.dest_retry_time</td>
+      <td>2m</td>
+      <td>If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process</td>
+    </tr>
+    <tr>
+      <td>rebalance.multiplier</td>
+      <td>4</td>
+      <td>A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only)</td>
+    </tr>
+    <tr>
+      <td>rebalance.quiescent</td>
+      <td>20s</td>
+      <td>Rebalace moves to the next stage or starts the next batch of objects when no objects are received during this time interval</td>
+    </tr>
+    <tr>
+      <td>timeout.send_file_time</td>
+      <td>5m</td>
+      <td>Timeout for getting an object from a neighbor target or for sending an object to the correct target while rebalance is in progress</td>
+    </tr>
+    <tr>
+      <td>timeout.default_timeout</td>
+      <td>30s</td>
+      <td>Default timeout for quick intra-cluster requests, e.g. to get daemon stats</td>
+    </tr>
+    <tr>
+      <td>timeout.default_long_timeout</td>
+      <td>30m</td>
+      <td>Default timeout for long intra-cluster requests, e.g. reading an object from a neighbor target while rebalancing</td>
+    </tr>
+    <tr>
+      <td>cksum.type</td>
+      <td>xxhash</td>
+      <td>Hashing algorithm used to check if the local object is corrupted. Value ‘none’ disables hash sum checking. Possible values are ‘xxhash’ and ‘none’</td>
+    </tr>
+    <tr>
+      <td>cksum.validate_cold_get</td>
+      <td>true</td>
+      <td>Enables and disables checking the hash of received object after downloading it from the cloud</td>
+    </tr>
+    <tr>
+      <td>cksum.validate_warm_get</td>
+      <td>false</td>
+      <td>If the option is enabled, AIStore checks the object’s version (for a Cloud-based bucket), and an object’s checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version</td>
+    </tr>
+    <tr>
+      <td>cksum.enable_read_range</td>
+      <td>false</td>
+      <td>Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range</td>
+    </tr>
+    <tr>
+      <td>versioning.enabled</td>
+      <td>true</td>
+      <td>Enables and disables versioning. For Cloud-based buckets, versioning is on only when it is enabled in both places: in the Cloud for the bucket and in the AIS configuration</td>
+    </tr>
+    <tr>
+      <td>versioning.validate_warm_get</td>
+      <td>false</td>
+      <td>If false, a target returns a requested object immediately if it is cached. If true, a target fetches object’s version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client</td>
+    </tr>
+    <tr>
+      <td>fshc.enabled</td>
+      <td>true</td>
+      <td>Enables and disables filesystem health checker (FSHC)</td>
+    </tr>
+    <tr>
+      <td>mirror.enabled</td>
+      <td>false</td>
+      <td>If true, for every object PUT a target creates object replica on another mountpath. Later, on object GET request, loadbalancer chooses a mountpath with lowest disk utilization and reads the object from it</td>
+    </tr>
+    <tr>
+      <td>mirror.copies</td>
+      <td>1</td>
+      <td>the number of local copies of an object</td>
+    </tr>
+    <tr>
+      <td>mirror.burst_buffer</td>
+      <td>512</td>
+      <td>the maximum length of the queue of objects to be mirrored. When the queue length exceeds the value, a target may skip creating replicas for new objects</td>
+    </tr>
+    <tr>
+      <td>mirror.util_thresh</td>
+      <td>20</td>
+      <td>If mirroring is enabled, loadbalancer chooses an object replica to read but only if main object’s mountpath utilization exceeds the replica’ s mountpath utilization by this value. Main object’s mountpath is the mountpath used to store the object when mirroring is disabled</td>
+    </tr>
+    <tr>
+      <td>distributed_sort.duplicated_records</td>
+      <td>“ignore”</td>
+      <td>what to do when duplicated records are found: “ignore” - ignore and continue, “warn” - notify a user and continue, “abort” - abort dSort operation</td>
+    </tr>
+    <tr>
+      <td>distributed_sort.missing_shards</td>
+      <td>“ignore”</td>
+      <td>what to do when missing shards are detected: “ignore” - ignore and continue, “warn” - notify a user and continue, “abort” - abort dSort operation</td>
+    </tr>
+    <tr>
+      <td>distributed_sort.ekm_malformed_line</td>
+      <td>“abort”</td>
+      <td>what to do when extraction key map notices a malformed line: “ignore” - ignore and continue, “warn” - notify a user and continue, “abort” - abort dSort operation</td>
+    </tr>
+    <tr>
+      <td>distributed_sort.ekm_missing_key</td>
+      <td>“abort”</td>
+      <td>what to do when extraction key map have a missing key: “ignore” - ignore and continue, “warn” - notify a user and continue, “abort” - abort dSort operation</td>
+    </tr>
+    <tr>
+      <td>distributed_sort.call_timeout</td>
+      <td>“10m”</td>
+      <td>a maximum time a target waits for another target to respond</td>
+    </tr>
+    <tr>
+      <td>distributed_sort.default_max_mem_usage</td>
+      <td>“80%”</td>
+      <td>a maximum amount of memory used by running dSort. Can be set as a percent of total memory(e.g <code class="highlighter-rouge">80%</code>) or as the number of bytes(e.g, <code class="highlighter-rouge">12G</code>)</td>
+    </tr>
+    <tr>
+      <td>distributed_sort.dsorter_mem_threshold</td>
+      <td>“100GB”</td>
+      <td>minimum free memory threshold which will activate specialized dsorter type which uses memory in creation phase - benchmarks shows that this type of dsorter behaves better than general type</td>
+    </tr>
+    <tr>
+      <td>distributed_sort.compression</td>
+      <td>“never”</td>
+      <td>LZ4 compression parameters used when dSort sends its shards over network. Values: “never” - disables, “always” - compress all data, or a set of rules for LZ4, e.g “ratio=1.2” means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources</td>
+    </tr>
+    <tr>
+      <td>ec.enabled</td>
+      <td>false</td>
+      <td>Enables or disables data protection</td>
+    </tr>
+    <tr>
+      <td>ec.data_slices</td>
+      <td>2</td>
+      <td>Represents the number of fragments an object is broken into (in the range [2, 100])</td>
+    </tr>
+    <tr>
+      <td>ec.parity_slices</td>
+      <td>2</td>
+      <td>Represents the number of redundant fragments to provide protection from failures (in the range [2, 32])</td>
+    </tr>
+    <tr>
+      <td>ec.objsize_limit</td>
+      <td>262144</td>
+      <td>Indicated the minimum size of an object in bytes that is erasure encoded. Smaller objects are replicated</td>
+    </tr>
+    <tr>
+      <td>ec.compression</td>
+      <td>“never”</td>
+      <td>LZ4 compression parameters used when EC sends its fragments and replicas over network. Values: “never” - disables, “always” - compress all data, or a set of rules for LZ4, e.g “ratio=1.2” means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources</td>
+    </tr>
+    <tr>
+      <td>compression.block_size</td>
+      <td>262144</td>
+      <td>Maximum data block size used by LZ4, greater values may increase compression ration but requires more memory. Value is one of 64KB, 256KB(AIS default), 1MB, and 4MB</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="configuration-persistence">Configuration persistence</h2>
+
+<p>By default, configuration updates are transient. To persist the configuration across restarts, use a special knob named <code class="highlighter-rouge">persist</code>, for instance:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># curl -i -X PUT 'http://G/v1/cluster/setconfig?periodic.stats_time=1m&amp;persist=true'</span>
+</code></pre></div></div>
+
+<p>This (above) does two things: updates <code class="highlighter-rouge">periodic.stats_time</code> to 1 minute and stores the updated configuration into local respective locations of all AIS nodes. To <em>scope</em> the same request to one specific AIS node, run:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?periodic.stats_time=1m&amp;persist=true'</span>
+</code></pre></div></div>
+
+<h2 id="startup-override">Startup override</h2>
+
+<p>AIS command-line allows to override (and, optionally, persist) configuration at AIS node’s startup. For example:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># aisnode -config=/etc/ais.json -role=target -persist=true -confjson="{\"timeout.default_timeout\": \"13s\" }"</span>
+</code></pre></div></div>
+
+<p>As shown above, the CLI option in-question is: <code class="highlighter-rouge">confjson</code>. It’s value is a JSON-formatted map of string names and string values. You can <em>persist</em> the updated configuration either via <code class="highlighter-rouge">-persist</code> command-line option or via an additional JSON tuple:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># aisnode -config=/etc/ais.json -role=target -confjson="{\"timeout.default_timeout\": \"13s\", \"persist\": \"true\" }"</span>
+</code></pre></div></div>
+
+<p>Another example. To temporarily override locally-configured address of the primary proxy, run:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># aisnode -config=/etc/ais.json -role=target -proxyurl=http://G</span>
+
+where G denotes the designated primary<span class="s1">'s hostname and port.
+</span></code></pre></div></div>
+
+<p>To achieve the same on a more permanent basis, add <code class="highlighter-rouge">-persist=true</code> as follows:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># aisnode -config=/etc/ais.json -role=target -proxyurl=http://G -persist=true</span>
+</code></pre></div></div>
+
+<blockquote>
+  <p>Please see <a href="command_line.md">AIS command-line</a> for other command-line options and details.</p>
+</blockquote>
+
+<h2 id="managing-mountpaths">Managing mountpaths</h2>
+
+<p>Configuration option <code class="highlighter-rouge">fspaths</code> specifies the list of local directories where storage targets store objects. An <code class="highlighter-rouge">fspath</code> aka <code class="highlighter-rouge">mountpath</code> (both terms are used interchangeably) is a local directory serviced by a local filesystem.</p>
+
+<blockquote>
+  <p>There must be a 1-to-1 relationship between <code class="highlighter-rouge">fspath</code> and an underlying local filesystem. Note as well that this may be not the case for the development environments where multiple mountpaths are allowed to coexist within a single filesystem (e.g., tmpfs).</p>
+</blockquote>
+
+<blockquote>
+  <p>AIS <a href="./overview.md#terminology">mountpath</a> is a single disk <strong>or</strong> a volume (a RAID) formatted with a local filesystem of choice, <strong>and</strong> a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).</p>
+</blockquote>
+
+<p>AIStore <a href="/docs/http_api.md">HTTP API</a> makes it possible to list, add, remove, enable, and disable a <code class="highlighter-rouge">fspath</code> (and, therefore, the corresponding local filesystem) at runtime. Filesystem’s health checker (FSHC) monitors the health of all local filesystems: a filesystem that “accumulates” I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to <a href="/health/fshc.md">FSHC readme</a>.</p>
+
+<h2 id="disabling-extended-attributes">Disabling extended attributes</h2>
+
+<p>To make sure that AIStore does not utilize xattrs, configure <code class="highlighter-rouge">checksum</code>=<code class="highlighter-rouge">none</code> and <code class="highlighter-rouge">versioning</code>=<code class="highlighter-rouge">none</code> for all targets in a AIStore cluster. This can be done via the <a href="/ais/setup/config.sh">common configuration “part”</a> that’d be further used to deploy the cluster.</p>
+
+<h2 id="enabling-https">Enabling HTTPS</h2>
+
+<p>To switch from HTTP protocol to an encrypted HTTPS, configure <code class="highlighter-rouge">use_https</code>=<code class="highlighter-rouge">true</code> and modify <code class="highlighter-rouge">server_certificate</code> and <code class="highlighter-rouge">server_key</code> values so they point to your OpenSSL certificate and key files respectively (see <a href="/ais/setup/config.sh">AIStore configuration</a>).</p>
+
+<h2 id="filesystem-health-checker">Filesystem Health Checker</h2>
+
+<p>Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section “fshc” of the <a href="/ais/setup/config.sh">configuration</a>.</p>
+
+<p>When enabled, FSHC gets notified on every I/O error upon which it performs extensive checks on the corresponding local filesystem. One possible outcome of this health-checking process is that FSHC disables the faulty filesystems leaving the target with one filesystem less to distribute incoming data.</p>
+
+<p>Please see <a href="/health/fshc.md">FSHC readme</a> for further details.</p>
+
+<h2 id="networking">Networking</h2>
+
+<p>In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the <a href="/ais/setup/config.sh">net section of the configuration</a>, the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and <a href="/docs/ha.md#metasync">metasync</a>. The replication network is used, as the name implies, for a variety of replication workloads.</p>
+
+<p>All the 3 (three) networking options are enumerated <a href="/cmn/network.go">here</a>.</p>
+
+<h2 id="reverse-proxy">Reverse proxy</h2>
+
+<p>AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related <a href="/ais/setup/config.sh">configuration variable</a> is called <code class="highlighter-rouge">rproxy</code> - see sub-section <code class="highlighter-rouge">http</code> of the section <code class="highlighter-rouge">net</code>. For further details, please refer to <a href="/docs/rproxy.md">this readme</a>.</p>
+
+<h2 id="curl-examples">Curl examples</h2>
+
+<p>The following assumes that <code class="highlighter-rouge">G</code> and <code class="highlighter-rouge">T</code> are the (hostname:port) of one of the deployed gateways (in a given AIS cluster) and one of the targets, respectively.</p>
+
+<h4 id="cluster-wide-operation-all-nodes-set-the-stats-logging-interval-to-1-second">Cluster-wide operation (all nodes): set the stats logging interval to 1 second</h4>
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "periodic.stats_time", "value": "1s"}' 'http://G/v1/cluster'</span>
+
+or, same:
+
+<span class="c"># curl -i -X PUT 'http://G/v1/cluster/setconfig?periodic.stats_time=1s'</span>
+</code></pre></div></div>
+
+<blockquote>
+  <p>Notice the two alternative ways to form the requests.</p>
+</blockquote>
+
+<h4 id="cluster-wide-operation-all-nodes-set-the-stats-logging-interval-to-2-minutes">Cluster-wide operation (all nodes): set the stats logging interval to 2 minutes</h4>
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "periodic.stats_time", "value": "2m"}' 'http://G/v1/cluster'</span>
+</code></pre></div></div>
+
+<h4 id="cluster-wide-operation-all-nodes-elevate-log-verbosity-to-4-for-all-sources-matching-aistarg-regex">Cluster-wide operation (all nodes): elevate log verbosity to <code class="highlighter-rouge">4</code> for all sources matching <code class="highlighter-rouge">ais/targ*</code> regex</h4>
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=4"}' 'http://G/v1/cluster'</span>
+</code></pre></div></div>
+
+<h4 id="single-node-operation-target-at-port-tport-set-log-verbosity-to-1-for-all-source-files-that-match-the-aistarg-regex">Single-node operation (target at port <code class="highlighter-rouge">Tport</code>): set log verbosity to <code class="highlighter-rouge">1</code> for all source files that match the <code class="highlighter-rouge">ais/targ*</code> regex</h4>
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=1"}' 'http://T/v1/daemon'</span>
+
+or, same:
+
+<span class="c"># curl -i -X PUT 'http://G/v1/daemon/setconfig?vmodule=ais/targ*=1'</span>
+</code></pre></div></div>
+
+<h2 id="cli-examples">CLI examples</h2>
+
+<p><a href="../cli/README.md">AIS CLI</a> is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring “time” in their names, second - modifies <code class="highlighter-rouge">list_timeout</code> from 2 minutes to 5 minutes, and finally, displays the modified value:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais <span class="nb">ls </span>config 844974_8080 <span class="nt">--json</span> | jq <span class="s1">'.timeout.list_timeout'</span>
+<span class="s2">"2m"</span>
+<span class="nv">$ </span>ais <span class="nb">set </span>config timeout.list_timeout<span class="o">=</span>5m
+Config has been updated successfully.
+<span class="nv">$ </span>ais <span class="nb">ls </span>config 844974_8080 <span class="nt">--json</span> | jq <span class="s1">'.timeout.list_timeout'</span>
+<span class="s2">"5m"</span>
+</code></pre></div></div>
+
+<p>The example above demonstrates cluster-wide configuration update but note: single-node updates are also supported.</p>
+
+  </div><a class="u-url" href="/aistore/docs/configuration" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

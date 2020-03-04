@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>BUCKET | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="BUCKET" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/cli/resources/bucket" />
+<meta property="og:url" content="http://localhost:4000/aistore/cli/resources/bucket" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"BUCKET","@type":"WebPage","url":"http://localhost:4000/aistore/cli/resources/bucket","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">BUCKET</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="bucket">Bucket</h2>
+
+<p>The CLI allows users to interact with <a href="../../docs/bucket.md">buckets</a> in the AIS cluster.</p>
+
+<h3 id="create">Create</h3>
+
+<p><code class="highlighter-rouge">ais create bucket BUCKET_NAME [BUCKET_NAME...]</code></p>
+
+<p>Create an ais bucket or buckets.</p>
+
+<p>####Examples
+1) Correct local buckets creation
+```shell script</p>
+<h1 id="create-buckets-mybucketa-and-mybucketb-both-with-ais-provider-mybucketb-provider-is-implicit">Create buckets mybucketA and mybucketB, both with AIS provider (mybucketB provider is implicit)</h1>
+<p>$ ais create bucket ais://mybucketA mybucketB</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+2) Incorrect buckets creation
+```shell script
+$ ais create bucket cloud://mybucket
+Cloud buckets not allowed (cloud://mybucket).
+</code></pre></div></div>
+
+<h3 id="delete">Delete</h3>
+
+<p><code class="highlighter-rouge">ais rm bucket BUCKET [BUCKET...]</code></p>
+
+<p>Delete an ais bucket or buckets.</p>
+
+<p>1) Correct local buckets removal
+```shell script</p>
+<h1 id="removes-local-buckets-mybucketa-and-mybucketb">Removes local buckets mybucketA and mybucketB</h1>
+<p>$ ais rm bucket ais://mybucketA mybucketB</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+2) Incorrect buckets removal
+```shell script
+$ ais rm bucket cloud://mybucket
+# Cloud buckets not allowed (cloud://mybucket).
+</code></pre></div></div>
+
+<h3 id="list-bucket-names">List bucket names</h3>
+
+<p><code class="highlighter-rouge">ais ls</code></p>
+
+<p>List all bucket names.</p>
+
+<p><code class="highlighter-rouge">ais ls ais</code></p>
+
+<p>List AIS bucket names.</p>
+
+<p><code class="highlighter-rouge">ais ls cloud</code></p>
+
+<p>List cloud bucket names.</p>
+
+<h4 id="flags-for-listing-bucket-names">Flags for listing bucket names</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--regex</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Pattern for matching bucket names</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--no-headers</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>Display tables without headers</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="list-object-names">List object names</h4>
+
+<h4 id="with-provider-auto-detection">With provider auto-detection</h4>
+
+<p><code class="highlighter-rouge">ais ls BUCKET_NAME</code></p>
+
+<p>List object names in the bucket <code class="highlighter-rouge">BUCKET_NAME</code>. Cloud provider is auto-detected.</p>
+
+<h4 id="from-the-specific-provider">From the specific provider</h4>
+
+<p><code class="highlighter-rouge">ais ls ais BUCKET_NAME</code></p>
+
+<p>List objects in the AIS bucket <code class="highlighter-rouge">BUCKET_NAME</code>.</p>
+
+<p><code class="highlighter-rouge">ais ls cloud BUCKET_NAME</code></p>
+
+<p>List objects in the cloud bucket <code class="highlighter-rouge">BUCKET_NAME</code>.</p>
+
+<h4 id="flags-for-listing-object-names">Flags for listing object names</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--regex</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Pattern for matching object names</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--template</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Template for matching object names</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--prefix</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Prefix for matching object names</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--fast</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>Use fast API to list all object names</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--paged</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>Fetch and print objects page by page (ignored in fast mode)</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--max-pages</code></td>
+      <td><code class="highlighter-rouge">int</code></td>
+      <td>Max. number of pages to list</td>
+      <td><code class="highlighter-rouge">0</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--page-size</code></td>
+      <td><code class="highlighter-rouge">int</code></td>
+      <td>Max. number of object names per page</td>
+      <td><code class="highlighter-rouge">1000</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--props</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Comma-separated properties to return with object names (ignored in fast mode)</td>
+      <td><code class="highlighter-rouge">"size,version"</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--limit</code></td>
+      <td><code class="highlighter-rouge">int</code></td>
+      <td>Max. number of object names to list (ignored in fast mode)</td>
+      <td><code class="highlighter-rouge">0</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--show-unmatched</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>List objects unmatched by regex and template as well, after the matched ones</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--all-items</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>Show all items, including all, duplicated, etc. (ignored in fast mode)</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--marker</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Start listing objects starting from the object that follows the marker alphabetically (ignored in fast mode)</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--no-headers</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>Display tables without headers</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--cached</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets)</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="examples">Examples</h4>
+<p>```shell script</p>
+<h1 id="list-local-bucket-mybucket">List local bucket mybucket</h1>
+<p>$ ais ls ais://mybucket # or ais ls ais mybucket</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+```shell script
+# List cloud bucket mybucket
+$ ais ls cloud mybucket # or ais ls cloud://mybucket
+</code></pre></div></div>
+
+<h3 id="evict">Evict</h3>
+
+<p><code class="highlighter-rouge">ais evict BUCKET_NAME</code></p>
+
+<p>Evict a cloud bucket. It also resets the properties of the bucket (if changed).</p>
+
+<h4 id="examples-1">Examples</h4>
+<p>```shell script</p>
+<h1 id="evict-cloud-bucket-mybucket">Evict cloud bucket mybucket</h1>
+<p>$ ais evict mybucket</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+```shell script
+$ ais evict ais://mybucket # FAIL
+Evict command doesn't support local buckets.
+</code></pre></div></div>
+<h3 id="rename">Rename</h3>
+
+<p><code class="highlighter-rouge">ais rename bucket BUCKET_NAME NEW_NAME</code></p>
+
+<p>Rename an ais bucket.</p>
+
+<h4 id="examples-2">Examples</h4>
+<p>```shell script</p>
+<h1 id="rename-local-bucket-mybucket-to-local-bucket-mynewbucketname">Rename local bucket mybucket to local bucket mynewbucketname</h1>
+<p>$ ais rename bucket ais://mybucket mynewbucketname</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+```shell script
+$ ais rename bucket cloud://mycloudbucket cloud://mynewcloudbucketname # FAIL
+Renaming of cloud buckets not supported
+</code></pre></div></div>
+
+<h3 id="copy">Copy</h3>
+
+<p><code class="highlighter-rouge">ais cp bucket BUCKET_NAME NEW_NAME</code></p>
+
+<p>Copy an existing ais bucket to a new ais bucket.</p>
+
+<p>```shell script</p>
+<h1 id="copy-local-bucket-mybucket-to-local-bucket-mynewbucket">Copy local bucket mybucket to local bucket mynewbucket</h1>
+<p>$ ais cp bucket ais://mybucket mynewbucket</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+```shell script
+$ ais cp bucket cloud://mycloudbucket cloud://mynewcloudbucketname # FAIL
+Copying of cloud buckets not supported
+</code></pre></div></div>
+
+<h3 id="summary">Summary</h3>
+
+<p><code class="highlighter-rouge">ais show bucket [BUCKET_NAME]</code></p>
+
+<p>Show aggregated information about objects in the bucket <code class="highlighter-rouge">BUCKET_NAME</code>.
+If <code class="highlighter-rouge">BUCKET_NAME</code> is omitted, shows information about all buckets.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--provider</code></td>
+      <td><a href="../README.md#enums">Provider</a></td>
+      <td>Provider of the bucket</td>
+      <td><code class="highlighter-rouge">""</code> or <a href="../README.md#bucket-provider">default</a></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--fast</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>Enforce using faster methods to find out the buckets’ details. The output may not be accurate.</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="make-n-copies">Make N copies</h3>
+
+<p><code class="highlighter-rouge">ais set-copies BUCKET_NAME --copies &lt;value&gt;</code></p>
+
+<p>Start an extended action to bring a given bucket to a certain redundancy level (num copies). Read more about this feature <a href="../../docs/storage_svcs.md#n-way-mirror">here</a>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--copies</code></td>
+      <td><code class="highlighter-rouge">int</code></td>
+      <td>Number of copies</td>
+      <td><code class="highlighter-rouge">1</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="make-all-objects-erasure-coded">Make all objects erasure coded</h3>
+
+<p><code class="highlighter-rouge">ais ec-encode BUCKET_NAME</code></p>
+
+<p>Start an extended action that enables data protection for all objects of a given bucket. Erasure coding must be set up for the bucket prior to running <code class="highlighter-rouge">ec-encode</code> extended action. Read more about this feature <a href="../../docs/storage_svcs.md#erasure-coding">here</a>.</p>
+
+<h3 id="list-bucket-props">List bucket props</h3>
+
+<p><code class="highlighter-rouge">ais ls props BUCKET_NAME</code></p>
+
+<p>List <a href="../../docs/bucket.md#properties-and-options">properties</a> of the bucket.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--json</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>Output in JSON format</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="set-bucket-props">Set bucket props</h3>
+
+<p><code class="highlighter-rouge">ais set props BUCKET_NAME KEY=VALUE [KEY=VALUE...]</code></p>
+
+<p>Set bucket properties. For the available options, see <a href="../../docs/bucket.md#properties-and-options">bucket-properties</a>.
+If <code class="highlighter-rouge">--reset</code> flag is set, arguments are ignored and bucket properties are reset to original state.
+If <code class="highlighter-rouge">--jsonspec</code> option is used, <strong>all</strong> properties of the bucket are set based on the values in the JSON object.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--jsonspec</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Bucket properties in a JSON format</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--reset</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>Reset bucket properties to original state</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>When <code class="highlighter-rouge">--jsonspec</code> is not used, some properties support user-friendly aliases:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Property</th>
+      <th>Value alias</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>aattrs</td>
+      <td>ro</td>
+      <td>Disables bucket modifications: denies PUT, DELETE, and ColdGET requests</td>
+    </tr>
+    <tr>
+      <td>aattrs</td>
+      <td>rw</td>
+      <td>Enables bucket modifications: allows PUT, DELETE, and ColdGET requests</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="examples-3">Examples</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>Command</th>
+      <th>Explanation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">ais set props mybucket 'mirror.enabled=true' 'mirror.copies=2'</code></td>
+      <td>Sets the <code class="highlighter-rouge">mirror.enabled</code> and <code class="highlighter-rouge">mirror.copies</code> properties to <code class="highlighter-rouge">true</code> and <code class="highlighter-rouge">2</code> respectively, for the bucket <code class="highlighter-rouge">mybucket</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ais set props mybucket 'aattrs=ro'</code></td>
+      <td>Sets read-only access to the bucket <code class="highlighter-rouge">mybucket</code>. All PUT and DELETE requests will fail</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ais set props --reset mybucket</code></td>
+      <td>Resets properties for the bucket <code class="highlighter-rouge">mybucket</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Setting <strong>all</strong> bucket attributes based on the provided JSON specification</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ais <span class="nb">set </span>props mybucket <span class="nt">--jsonspec</span> <span class="s1">'{
+    "cloud_provider": "ais",
+    "versioning": {
+      "enabled": true,
+      "validate_warm_get": false
+    },
+    "tiering": {},
+    "cksum": {
+      "type": "xxhash",
+      "validate_cold_get": true,
+      "validate_warm_get": false,
+      "validate_obj_move": false,
+      "enable_read_range": false
+    },
+    "lru": {
+      "lowwm": 20,
+      "highwm": 80,
+      "out_of_space": 90,
+      "dont_evict_time": "20m",
+      "capacity_upd_time": "1m",
+      "enabled": true
+    },
+    "mirror": {
+      "copies": 0,
+      "burst_buffer": 0,
+      "util_thresh": 0,
+      "optimize_put": false,
+      "enabled": false
+    },
+    "ec": {
+        "objsize_limit": 256000,
+        "data_slices": 2,
+        "parity_slices": 2,
+        "enabled": true
+    },
+    "aattrs": 255
+}'</span>
+</code></pre></div></div>
+<blockquote>
+  <p>After which <code class="highlighter-rouge">ais ls props mybucket</code> results in:
+```
+ais bucket props list mybucket
+Property	Value
+Provider	ais
+Access		GET,PUT,DELETE,HEAD,ColdGET
+Checksum	xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
+Mirror		Disabled
+EC		2:2 (250KiB)
+LRU		Watermarks: 20/80, do not evict time: 20m
+Versioning	Enabled | Validate on WarmGET: no
+Tiering		Disabled</p>
+</blockquote>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
+```bash
+ais set props mybucket --jsonspec '{
+  "mirror": {
+    "enabled": true
+  },
+  "versioning": {
+    "enabled": true,
+    "validate_warm_get": true
+  }
+}'
+</code></pre></div></div>
+<blockquote>
+  <p>After which <code class="highlighter-rouge">ais ls props mybucket</code> results in:</p>
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Property        Value
+Provider        ais
+Access          No access
+Checksum        xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
+Mirror          2 Copies
+EC              Disabled
+LRU             Disabled
+Versioning      Enabled | Validate on WarmGET: yes
+Tiering         Disabled
+</code></pre></div>  </div>
+</blockquote>
+
+<p>To see how setting zero values affect properties, run:  <code class="highlighter-rouge">ais set props mybucket --jsonspec '{}'</code></p>
+
+  </div><a class="u-url" href="/aistore/cli/resources/bucket" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

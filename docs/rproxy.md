@@ -1,3 +1,11 @@
+---
+layout: post
+title: RPROXY
+permalink: docs/rproxy
+redirect_from:
+- docs/rproxy.md/
+---
+
 ## AIS as HTTP(S) proxy: modes of operation
 
 As HTTP(S) proxy, AIS currently supports two distinct (and very different) modes of operation:

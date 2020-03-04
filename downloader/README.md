@@ -1,10 +1,11 @@
 ---
 layout: post
-title: Downloader
+title: DOWNLOADER
 permalink: downloader
 redirect_from:
 - downloader/README.md/
 ---
+
 ## Why Downloader?
 
 It is a well-known fact that some of the most popular AI datasets are available on the Internet.

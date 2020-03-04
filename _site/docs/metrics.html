@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>METRICS | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="METRICS" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/docs/metrics" />
+<meta property="og:url" content="http://localhost:4000/aistore/docs/metrics" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"METRICS","@type":"WebPage","url":"http://localhost:4000/aistore/docs/metrics","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">METRICS</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+  <li><a href="#background">Background</a></li>
+  <li><a href="#conventions">Conventions</a>
+    <ul>
+      <li><a href="#proxy-metrics-io-counters">Proxy metrics: IO counters</a></li>
+      <li><a href="#proxy-metrics-error-counters">Proxy metrics: error counters</a></li>
+      <li><a href="#proxy-metrics-latencies">Proxy metrics: latencies</a></li>
+      <li><a href="#target-metrics">Target metrics</a></li>
+      <li><a href="#ais-loader-metrics">AIS loader metrics</a></li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="background">Background</h2>
+
+<p>AIStore generates a growing number of detailed performance metrics that can be viewed both via AIS logs and via StatsD/Grafana visualization.</p>
+
+<blockquote>
+  <p><a href="https://github.com/etsy/statsd">StatsD</a> publishes local statistics to a compliant backend service (e.g., <a href="https://graphite.readthedocs.io/en/latest/">Graphite</a>) for easy and powerful stats aggregation and visualization.</p>
+</blockquote>
+
+<p>The StatsD/Grafana option imposes a certain easy-to-meet requirement on the AIStore deployment. Namely, it requires that StatsD daemon (aka service) is <strong>deployed locally with each AIS target and with each AIS proxy</strong>.</p>
+
+<p>At startup AIStore daemons, both targets and gateways, try to UDP-ping their respective local <a href="https://github.com/etsy/statsd">StatsD</a> daemons on the UDP port <code class="highlighter-rouge">8125</code> (which is currently fixed).</p>
+
+<p>If StatsD daemon is <em>not</em> listening on the local 8125, the local AIS target (or proxy) will then run without StatsD, and the corresponding stats won’t be captured and won’t be visualized.</p>
+
+<blockquote>
+  <p>For details on all StatsD-supported backends, please refer to <a href="https://github.com/etsy/statsd/blob/master/docs/backend.md">this document</a>.</p>
+</blockquote>
+
+<h2 id="conventions">Conventions</h2>
+
+<p>All AIS metric names (or simply, metrics) are logged and reported to the StatsD/Grafana using the following naming pattern:</p>
+
+<p><code class="highlighter-rouge">prefix.bucket.metric_name.metric_value|metric_type</code>, where <code class="highlighter-rouge">prefix</code> is one of:</p>
+
+<ul>
+  <li><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;</code></li>
+  <li><code class="highlighter-rouge">aistarget.&lt;daemon_id&gt;</code>
+or</li>
+  <li><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;</code></li>
+</ul>
+
+<p>and <code class="highlighter-rouge">metric_type</code> is <code class="highlighter-rouge">ms</code> for time duration, <code class="highlighter-rouge">c</code> for a counter, and <code class="highlighter-rouge">g</code> for a gauge.</p>
+
+<p>More precisely, AIS metrics are named and grouped as follows:</p>
+
+<h3 id="proxy-metrics-io-counters">Proxy metrics: IO counters</h3>
+
+<p>All collected/tracked <em>counters</em> are 64-bit cumulative integers that continuously increment with each event that they (respectively) track.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.get</code></td>
+      <td>number of GET-object requests</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.put</code></td>
+      <td>number of PUT-object requests</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.del</code></td>
+      <td>number of DELETE-object requests</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.lst</code></td>
+      <td>number of LIST-bucket requests</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.ren</code></td>
+      <td>... RENAME ...</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.pst</code></td>
+      <td>... POST ...</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="proxy-metrics-error-counters">Proxy metrics: error counters</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.err</code></td>
+      <td>Total number of errors</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.err.get</code></td>
+      <td>Number of GET-object errors</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.err.put</code></td>
+      <td>Number of PUT-object errors</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.err.head</code></td>
+      <td>Number of HEAD-object errors</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.err.delete</code></td>
+      <td>Number of DELETE-object errors</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.err.list</code></td>
+      <td>Number of LIST-bucket errors</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.err.range</code></td>
+      <td>... RANGE ...</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.err.post</code></td>
+      <td>... POST ...</td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p>For the most recently updated list of counters, please refer to <a href="/stats/common_stats.go">the source</a></p>
+</blockquote>
+
+<h3 id="proxy-metrics-latencies">Proxy metrics: latencies</h3>
+
+<p>All request latencies are reported to <strong>StatsD/Grafana in milliseconds</strong>.</p>
+
+<blockquote>
+  <p>Note that the same values are periodically (default=10s) <strong>logged in microseconds</strong>.</p>
+</blockquote>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.get</code></td>
+      <td>GET-object latency</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.lst</code></td>
+      <td>LIST-bucket latency</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisproxy.&lt;daemon_id&gt;.kalive</code></td>
+      <td>Keep-Alive (roundtrip) latency</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="target-metrics">Target Metrics</h3>
+
+<p>AIS target metrics include <strong>all</strong> of the proxy metrics (see above), plus the following:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">aistarget.&lt;daemon_id&gt;.get.cold</code></td>
+      <td>number of cold-GET object requests</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aistarget.&lt;daemon_id&gt;.get.cold.size</code></td>
+      <td>cold GET cumulative size (in bytes)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aistarget.&lt;daemon_id&gt;.lru.evict</code></td>
+      <td>number of LRU-evicted objects</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aistarget.&lt;daemon_id&gt;.tx</code></td>
+      <td>number of objects sent by the target</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aistarget.&lt;daemon_id&gt;.tx.size</code></td>
+      <td>cumulative size (in bytes) of all transmitted objects</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aistarget.&lt;daemon_id&gt;.rx</code></td>
+      <td>number of objects received by the target</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aistarget.&lt;daemon_id&gt;.rx.size</code></td>
+      <td>cumulative size (in bytes) of all the received objects</td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p>For the most recently updated list of counters, please refer to <a href="/stats/target_stats.go">the source</a></p>
+</blockquote>
+
+<h3 id="ais-loader-metrics">AIS loader metrics</h3>
+
+<p>AIS loader generates metrics for 3 (three) types of requests:</p>
+
+<ul>
+  <li>GET (object) - metric names are prefixed with <code class="highlighter-rouge">aisloader.&lt;ip&gt;.&lt;loader_id&gt;.get.</code></li>
+  <li>PUT (object) - metric names start with <code class="highlighter-rouge">aisloader.&lt;ip&gt;.&lt;loader_id&gt;.put.</code></li>
+  <li>Read cluster configuration - the prefix includes <code class="highlighter-rouge">aisloader.&lt;ip&gt;.&lt;loader_id&gt;.getconfig.</code></li>
+</ul>
+
+<p>All latency metrics are in milliseconds, all sizes are always in bytes.</p>
+
+<h4 id="get-object">GET object</h4>
+
+<blockquote>
+  <p>Note: in the tables below, traced intervals of time are denoted as <strong>(from time, to time)</strong>, respectively.</p>
+</blockquote>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.pending.&lt;value&gt;</code></td>
+      <td>number of unfinished GET requests waiting in a queue (updated after every completed request)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.count.1</code></td>
+      <td>total number of requests</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.error.1</code></td>
+      <td>total number of failed requests</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.throughput.&lt;value&gt;</code></td>
+      <td>total size of received objects</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.&lt;value&gt;</code></td>
+      <td>request latency = (request initialized, data transfer successfully completes)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.proxyconn.&lt;value&gt;</code></td>
+      <td>(request started, connected to a proxy)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.proxy.&lt;value&gt;</code></td>
+      <td>(connected to proxy, proxy redirected)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.targetconn.&lt;value&gt;</code></td>
+      <td>(proxy redirected, connected to target)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.target.&lt;value&gt;</code></td>
+      <td>(connected to target, target responded)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.posthttp.&lt;value&gt;</code></td>
+      <td>(target responded, data transfer completed)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.proxyheader.&lt;value&gt;</code></td>
+      <td>(proxy makes a connection, proxy finishes writing headers to the connection)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.proxyrequest.&lt;value&gt;</code></td>
+      <td>(proxy finishes writing headers, proxy completes writing request to the connection)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.proxyresponse.&lt;value&gt;</code></td>
+      <td>(proxy finishes writing request to a connection, proxy gets the first bytes of the response)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.targetheader.&lt;value&gt;</code></td>
+      <td>(target makes a connection, target finishes writing headers to the connection)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.targetrequest.&lt;value&gt;</code></td>
+      <td>(target finishes writing headers, target completes writing request to the connection)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.get.latency.targetresponse.&lt;value&gt;</code></td>
+      <td>(target finishes writing request, proxy gets the first bytes of the response)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="put-object">PUT object</h4>
+
+<blockquote>
+  <p>Note: in the table, traced intervals of time are denoted as <strong>(from time, to time)</strong>:</p>
+</blockquote>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.pending.&lt;value&gt;</code></td>
+      <td>number of unfinished PUT requests waiting in a queue (updated after every completed request)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.count.1</code></td>
+      <td>total number of requests</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.error.1</code></td>
+      <td>total number of failed requests</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.throughput.&lt;value&gt;</code></td>
+      <td>total size of objects PUT into a bucket</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.&lt;value&gt;</code></td>
+      <td>request latency = (request initialized, data transfer successfully complete)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.proxyconn.&lt;value&gt;</code></td>
+      <td>(request started, connected to proxy)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.proxy.&lt;value&gt;</code></td>
+      <td>(connected to proxy, proxy redirected)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.targetconn.&lt;value&gt;</code></td>
+      <td>(proxy redirected, connected to target)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.target.&lt;value&gt;</code></td>
+      <td>(connected to target, target responded)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.posthttp.&lt;value&gt;</code></td>
+      <td>(target responded, data transfer completed)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.proxyheader.&lt;value&gt;</code></td>
+      <td>(proxy makes a connection, proxy finishes writing headers)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.proxyrequest.&lt;value&gt;</code></td>
+      <td>(proxy finishes writing headers, proxy completes writing request)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.proxyresponse.&lt;value&gt;</code></td>
+      <td>(proxy finishes writing request, proxy gets the first bytes of the response)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.targetheader.&lt;value&gt;</code></td>
+      <td>(target makes a connection, target finishes writing headers)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.targetrequest.&lt;value&gt;</code></td>
+      <td>(target finishes writing headers, target completes writing request)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.put.latency.targetresponse.&lt;value&gt;</code></td>
+      <td>(target finishes writing request, proxy gets the first bytes of the response)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="read-cluster-configuration">Read cluster configuration</h4>
+
+<blockquote>
+  <p>Note: traced intervals of time are denoted as <strong>(from time, to time)</strong>:</p>
+</blockquote>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.getconfig.count.1</code></td>
+      <td>total number of requests to read cluster settings</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.getconfig.latency.&lt;value&gt;</code></td>
+      <td>request latency = (read configuration request started, configuration received)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.getconfig.latency.proxyconn.&lt;value&gt;</code></td>
+      <td>(read configuration request started, connection to a proxy is made)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">aisloader.&lt;hostname&gt;-&lt;id&gt;.getconfig.latency.proxy.&lt;value&gt;</code></td>
+      <td>(connection to a proxy is made, proxy redirected the request)</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A somewhat outdated example of how these metrics show up in the Grafana dashboard follows:</p>
+
+<p><img src="images/aisloader-statsd-grafana.png" alt="AIS loader metrics" /></p>
+
+  </div><a class="u-url" href="/aistore/docs/metrics" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>DSORT | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="DSORT" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/cli/resources/dsort" />
+<meta property="og:url" content="http://localhost:4000/aistore/cli/resources/dsort" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"DSORT","@type":"WebPage","url":"http://localhost:4000/aistore/cli/resources/dsort","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">DSORT</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="distributed-sort">Distributed Sort</h2>
+
+<p>The CLI allows users to manage <a href="/dsort/README.md">AIS DSort</a> jobs.</p>
+
+<h3 id="randomly-generate-shards">Randomly generate shards</h3>
+
+<p><code class="highlighter-rouge">ais gen-shards --template &lt;value&gt; --fsize &lt;value&gt; --fcount &lt;value&gt;</code></p>
+
+<p>Put randomly generated shards that can be used for dSort testing.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--ext</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Extension for shards (either <code class="highlighter-rouge">.tar</code> or <code class="highlighter-rouge">.tgz</code>)</td>
+      <td><code class="highlighter-rouge">.tar</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--bucket</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Bucket which shards will be put into</td>
+      <td><code class="highlighter-rouge">dsort-testing</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--template</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Template of input shard name</td>
+      <td><code class="highlighter-rouge">shard-{0..9}</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--fsize</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Single file size inside the shard, can end with size suffix (k, MB, GiB, ...)</td>
+      <td><code class="highlighter-rouge">1024</code>  (<code class="highlighter-rouge">1KB</code>)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--fcount</code></td>
+      <td><code class="highlighter-rouge">int</code></td>
+      <td>Number of files inside single shard</td>
+      <td><code class="highlighter-rouge">5</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--cleanup</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>When set, the old bucket will be deleted and created again</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--conc</code></td>
+      <td><code class="highlighter-rouge">int</code></td>
+      <td>Limits number of concurrent <code class="highlighter-rouge">PUT</code> requests and number of concurrent shards created</td>
+      <td><code class="highlighter-rouge">10</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="examples">Examples</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>Command</th>
+      <th>Explanation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">ais gen-shards --fsize 262144 --fcount 100</code></td>
+      <td>Generates 10 shards each containing 100 files of size 256KB and puts them inside <code class="highlighter-rouge">dsort-testing</code> bucket. Shards will be named: <code class="highlighter-rouge">shard-0.tar</code>, <code class="highlighter-rouge">shard-1.tar</code>, ..., <code class="highlighter-rouge">shard-9.tar</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ais gen-shards --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup</code></td>
+      <td>Generates 100 shards each containing 5 files of size 256KB and puts them inside <code class="highlighter-rouge">dsort-testing</code> bucket. Shards will be compressed and named: <code class="highlighter-rouge">super_shard_000_last.tgz</code>, <code class="highlighter-rouge">super_shard_001_last.tgz</code>, ..., <code class="highlighter-rouge">super_shard_099_last.tgz</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="start">Start</h3>
+
+<p><code class="highlighter-rouge">ais start dsort JOB_SPEC</code> or <code class="highlighter-rouge">ais start dsort -f &lt;PATH_TO_JOB_SPEC&gt;</code></p>
+
+<p>Start new dSort job with the provided specification.
+Specification should be provided by either argument or <code class="highlighter-rouge">-f</code> flag - providing both argument and flag will result in error.
+Upon creation, <code class="highlighter-rouge">JOB_ID</code> of the job is returned - it can then be used to abort it or retrieve metrics.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--file, -f</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Path to file containing JSON or YAML job specification. Providing <code class="highlighter-rouge">-</code> will result in reading from STDIN</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The following table describes JSON/YAML keys which can be used in the specification.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Key</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Required</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">extension</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>extension of input and output shards (either <code class="highlighter-rouge">.tar</code>, <code class="highlighter-rouge">.tgz</code> or <code class="highlighter-rouge">.zip</code>)</td>
+      <td>yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">input_format</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>name template for input shard</td>
+      <td>yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">output_format</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>name template for output shard</td>
+      <td>yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">bucket</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>bucket where shards objects are stored</td>
+      <td>yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">provider</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>cloud provider (ais or cloud)</td>
+      <td>no</td>
+      <td><code class="highlighter-rouge">"ais"</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">output_bucket</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>bucket where new output shards will be saved</td>
+      <td>no</td>
+      <td>same as <code class="highlighter-rouge">bucket</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">output_provider</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>determines whether the output bucket is ais or cloud</td>
+      <td>no</td>
+      <td>same as <code class="highlighter-rouge">provider</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">description</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>description of dsort job</td>
+      <td>no</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">output_shard_size</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>size (in bytes) of the output shard, can be in form of raw numbers <code class="highlighter-rouge">10240</code> or suffixed <code class="highlighter-rouge">10KB</code></td>
+      <td>yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">algorithm.kind</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>determines which algorithm should be during dSort job, available are: <code class="highlighter-rouge">"alphanumeric"</code>, <code class="highlighter-rouge">"shuffle"</code>, <code class="highlighter-rouge">"content"</code></td>
+      <td>no</td>
+      <td><code class="highlighter-rouge">"alphanumeric"</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">algorithm.decreasing</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>determines if the algorithm should sort the records in decreasing or increasing order, used for <code class="highlighter-rouge">kind=alphanumeric</code> or <code class="highlighter-rouge">kind=content</code></td>
+      <td>no</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">algorithm.seed</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>seed provided to random generator, used when <code class="highlighter-rouge">kind=shuffle</code></td>
+      <td>no</td>
+      <td><code class="highlighter-rouge">""</code> - <code class="highlighter-rouge">time.Now()</code> is used</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">algorithm.extension</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>content of the file with provided extension will be used as sorting key, used when <code class="highlighter-rouge">kind=content</code></td>
+      <td>yes (only when <code class="highlighter-rouge">kind=content</code>)</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">algorithm.format_type</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>format type (<code class="highlighter-rouge">int</code>, <code class="highlighter-rouge">float</code> or <code class="highlighter-rouge">string</code>) describes how the content of the file should be interpreted, used when <code class="highlighter-rouge">kind=content</code></td>
+      <td>yes (only when <code class="highlighter-rouge">kind=content</code>)</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">order_file</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>URL to the file containing external key map (it should contain lines in format: <code class="highlighter-rouge">record_key[sep]shard-%d-fmt</code>)</td>
+      <td>yes (only when <code class="highlighter-rouge">output_format</code> not provided)</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">order_file_sep</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>separator used for splitting <code class="highlighter-rouge">record_key</code> and <code class="highlighter-rouge">shard-%d-fmt</code> in the lines in external key map</td>
+      <td>no</td>
+      <td><code class="highlighter-rouge">\t</code> (TAB)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">max_mem_usage</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>limits the amount of total system memory allocated by both dSort and other running processes. Once and if this threshold is crossed, dSort will continue extracting onto local drives. Can be in format 60% or 10GB</td>
+      <td>no</td>
+      <td>same as in <code class="highlighter-rouge">config.sh</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">extract_concurrency_limit</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>limits number of concurrent shards extracted per disk</td>
+      <td>no</td>
+      <td>same as in <code class="highlighter-rouge">config.sh</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">create_concurrency_limit</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>limits number of concurrent shards created per disk</td>
+      <td>no</td>
+      <td>same as in <code class="highlighter-rouge">config.sh</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">extended_metrics</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>determines if dsort should collect extended statistics</td>
+      <td>no</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>There’s also the possibility to override some of the values from global <code class="highlighter-rouge">distributed_sort</code> config via job specification.
+All values are optional - if empty, the value from global <code class="highlighter-rouge">distributed_sort</code> config will be used.
+For more information refer to <a href="/docs/configuration.md">configuration</a>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Key</th>
+      <th>Type</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">duplicated_records</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>what to do when duplicated records are found: “ignore” - ignore and continue, “warn” - notify a user and continue, “abort” - abort dSort operation</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">missing_shards</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>what to do when missing shards are detected: “ignore” - ignore and continue, “warn” - notify a user and continue, “abort” - abort dSort operation</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ekm_malformed_line</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>what to do when extraction key map notices a malformed line: “ignore” - ignore and continue, “warn” - notify a user and continue, “abort” - abort dSort operation</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ekm_missing_key</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>what to do when extraction key map have a missing key: “ignore” - ignore and continue, “warn” - notify a user and continue, “abort” - abort dSort operation</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">dsorter_mem_threshold</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>minimum free memory threshold which will activate specialized dsorter type which uses memory in creation phase - benchmarks shows that this type of dsorter behaves better than general type</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="examples-1">Examples:</h4>
+
+<h4 id="sort-records-inside-the-shards">Sort records inside the shards</h4>
+
+<p>Command defined below starts (alphanumeric) sorting job with extended metrics for <strong>input</strong> shards with names <code class="highlighter-rouge">shard-0.tar</code>, <code class="highlighter-rouge">shard-1.tar</code>, ..., <code class="highlighter-rouge">shard-9.tar</code>.
+Each of the <strong>output</strong> shards will have at least <code class="highlighter-rouge">10240</code> bytes (<code class="highlighter-rouge">10KB</code>) and will be named <code class="highlighter-rouge">new-shard-0000.tar</code>, <code class="highlighter-rouge">new-shard-0001.tar</code>, ...</p>
+
+<p>Assuming that <code class="highlighter-rouge">dsort_spec.json</code> contains:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>{
+    "extension": ".tar",
+    "bucket": "dsort-testing",
+    "input_format": "shard-{0..9}",
+    "output_format": "new-shard-{0000..1000}",
+    "output_shard_size": "10KB",
+    "description": "sort shards from 0 to 9",
+    "algorithm": {
+        "kind": "alphanumeric"
+    },
+    "extract_concurrency_limit": 3,
+    "create_concurrency_limit": 5,
+    "extended_metrics": true
+}
+</code></pre></div></div>
+
+<p>You can start dSort job with:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais start dsort <span class="nt">-f</span> dsort_spec.json
+JGHEoo89gg
+</code></pre></div></div>
+
+<h4 id="shuffle-records">Shuffle records</h4>
+
+<p>Command defined below starts basic shuffle job for <strong>input</strong> shards with names <code class="highlighter-rouge">shard-0.tar</code>, <code class="highlighter-rouge">shard-1.tar</code>, ..., <code class="highlighter-rouge">shard-9.tar</code>.
+Each of the <strong>output</strong> shards will have at least <code class="highlighter-rouge">10240</code> bytes (<code class="highlighter-rouge">10KB</code>) and will be named <code class="highlighter-rouge">new-shard-0000.tar</code>, <code class="highlighter-rouge">new-shard-0001.tar</code>, ...</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais start dsort <span class="nt">-f</span> - <span class="o">&lt;&lt;</span><span class="no">EOM</span><span class="sh">
+extension: .tar
+bucket: dsort-testing
+input_format: shard-{0..9}
+output_format: new-shard-{0000..1000}
+output_shard_size: 10KB
+description: shuffle shards from 0 to 9
+algorithm:
+    kind: shuffle
+</span><span class="no">EOM
+</span>JGHEoo89gg
+</code></pre></div></div>
+
+<h4 id="pack-records-into-shards-with-different-categories---ekm-external-key-map">Pack records into shards with different categories - EKM (External Key Map)</h4>
+
+<p>One of the key features of the dSort is that user can specify the exact mapping from the record key to the output shard.
+To use this feature <code class="highlighter-rouge">output_format</code> should be empty and <code class="highlighter-rouge">order_file</code>, as well as <code class="highlighter-rouge">order_file_sep</code>, must be set.
+The output shards will be created with provided format which must contain mandatory <code class="highlighter-rouge">%d</code> which is required to enumerate the shards.</p>
+
+<p>Assuming that <code class="highlighter-rouge">order_file</code> (URL: <code class="highlighter-rouge">http://website.web/static/order_file.txt</code>) has content:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cat_0.txt shard-cats-%d
+cat_1.txt shard-cats-%d
+...
+dog_0.txt shard-dogs-%d
+dog_1.txt shard-dogs-%d
+...
+car_0.txt shard-car-%d
+car_1.txt shard-car-%d
+...
+</code></pre></div></div>
+
+<p>And content of the <strong>input</strong> shards looks more or less like this:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>shard-0.tar:
+- cat_0.txt
+- dog_0.txt
+- car_0.txt
+...
+shard-1.tar:
+- cat_1.txt
+- dog_1.txt
+- car_1.txt
+...
+</code></pre></div></div>
+
+<p>You can run:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais start dsort <span class="s1">'{
+    "extension": ".tar",
+    "bucket": "dsort-testing",
+    "input_format": "shard-{0..9}",
+    "output_shard_size": "200KB",
+    "description": "pack records into categorized shards",
+    "order_file": "http://website.web/static/order_file.txt",
+    "order_file_sep": " ",
+    "extract_concurrency_limit": 3,
+    "create_concurrency_limit": 5
+}'</span>
+JGHEoo89gg
+</code></pre></div></div>
+
+<p>After the run, the <strong>output</strong> shards will look more or less like this (the number of records in given shard depends on provided <code class="highlighter-rouge">output_shard_size</code>):</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>shard-cats-0.tar:
+- cat_1.txt
+- cat_2.txt
+shard-cats-1.tar:
+- cat_3.txt
+- cat_4.txt
+...
+shard-dogs-0.tar:
+- dog_1.txt
+- dog_2.txt
+...
+</code></pre></div></div>
+
+<h3 id="show-jobs-and-job-status">Show jobs and job status</h3>
+
+<p><code class="highlighter-rouge">ais show dsort [JOB_ID]</code></p>
+
+<p>Retrieve the status of the dSort with provided <code class="highlighter-rouge">JOB_ID</code> which is returned upon creation.
+Lists all dSort jobs if the <code class="highlighter-rouge">JOB_ID</code> argument is omitted.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--regex</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Regex for the description of dSort jobs</td>
+      <td><code class="highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--refresh</code></td>
+      <td><code class="highlighter-rouge">int</code></td>
+      <td>Refreshing rate of the progress bar refresh or metrics refresh (in milliseconds)</td>
+      <td><code class="highlighter-rouge">1000</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--verbose, -v</code></td>
+      <td><code class="highlighter-rouge">bool</code></td>
+      <td>Show detailed metrics</td>
+      <td><code class="highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--log</code></td>
+      <td><code class="highlighter-rouge">string</code></td>
+      <td>Path to file where the metrics will be saved (does not work with progress bar)</td>
+      <td><code class="highlighter-rouge">/tmp/dsort_run.txt</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="examples-2">Examples</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>Command</th>
+      <th>Explanation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">ais show dsort</code></td>
+      <td>Shows all dSort jobs</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ais show dsort --regex "^dsort-(.*)"</code></td>
+      <td>Shows all dSort jobs with descriptions starting with <code class="highlighter-rouge">dsort-</code> prefix</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ais show dsort 5JjIuGemR</code></td>
+      <td>Shows short status description of the dSort job with ID <code class="highlighter-rouge">5JjIuGemR</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ais show dsort 5JjIuGemR -v</code></td>
+      <td>Shows detailed metrics of the dSort job with ID <code class="highlighter-rouge">5JjIuGemR</code></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ais show dsort 5JjIuGemR --refresh 500</code></td>
+      <td>Creates progress bar for the dSort job with ID <code class="highlighter-rouge">5JjIuGemR</code> and refreshes it every <code class="highlighter-rouge">500</code> milliseconds</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ais show dsort 5JjIuGemR --refresh 500 -v</code></td>
+      <td>Returns newly fetched metrics of the dSort job with ID <code class="highlighter-rouge">5JjIuGemR</code> every <code class="highlighter-rouge">500</code> milliseconds</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ais show dsort 5JjIuGemR --refresh 500 --log "/tmp/dsort_run.txt"</code></td>
+      <td>Saves newly fetched metrics of the dSort job with ID <code class="highlighter-rouge">5JjIuGemR</code> to <code class="highlighter-rouge">/tmp/dsort_run.txt</code> file every <code class="highlighter-rouge">500</code> milliseconds</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="stop">Stop</h3>
+
+<p><code class="highlighter-rouge">ais stop dsort JOB_ID</code></p>
+
+<p>Stop the dSort job with given <code class="highlighter-rouge">JOB_ID</code>.</p>
+
+<h4 id="examples-3">Examples</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>Command</th>
+      <th>Explanation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">ais stop dsort 5JjIuGemR</code></td>
+      <td>Stops the dSort job with ID <code class="highlighter-rouge">5JjIuGemR</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="rm">rm</h3>
+
+<p><code class="highlighter-rouge">ais rm dsort JOB_ID</code></p>
+
+<p>Remove the finished dSort job with given <code class="highlighter-rouge">JOB_ID</code> from the job list.</p>
+
+<h4 id="examples-4">Examples</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>Command</th>
+      <th>Explanation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">ais rm dsort 5JjIuGemR</code></td>
+      <td>Removes the dSort job with ID <code class="highlighter-rouge">5JjIuGemR</code> from the list of dSort jobs</td>
+    </tr>
+  </tbody>
+</table>
+
+  </div><a class="u-url" href="/aistore/cli/resources/dsort" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

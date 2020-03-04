@@ -1,9 +1,11 @@
 ---
 layout: post
-title: CLI
+title: OBJECT
+permalink: cli/resources/object
 redirect_from:
 - cli/resources/object.md/
 ---
+
 ## Operations on objects
 
 ### GET

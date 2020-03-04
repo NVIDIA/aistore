@@ -1,7 +1,11 @@
 ---
 layout: post
-title: CLI
+title: DSORT
+permalink: cli/resources/dsort
+redirect_from:
+- cli/resources/dsort.md/
 ---
+
 ## Distributed Sort
 
 The CLI allows users to manage [AIS DSort](/dsort/README.md) jobs.

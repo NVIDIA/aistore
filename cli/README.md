@@ -5,6 +5,7 @@ permalink: cli
 redirect_from:
 - cli/README.md/
 ---
+
 # AIS CLI
 
 AIS Command Line Interface is a tool used to interact with resources of AIStore. It gives users the ability to query information from specific daemons,
@@ -53,19 +54,19 @@ To uninstall autocompletions run `bash autocomplete/uninstall.sh`.
 
 List of available CLI resources
 
-* [Bucket](resources/bucket.md)
+* [Bucket](./resources/bucket.md)
 
-* [Object](resources/object.md)
+* [Object](./resources/object.md)
 
-* [Daemon/Cluster](resources/daeclu.md)
+* [Daemon/Cluster](./resources/daeclu.md)
 
-* [Xaction](resources/xaction.md)
+* [Xaction](./resources/xaction.md)
 
-* [Downloader](resources/download.md)
+* [Downloader](./resources/download.md)
 
-* [DSort](resources/dsort.md)
+* [DSort](./resources/dsort.md)
 
-* [Auth](resources/users.md)
+* [Auth](./resources/users.md)
 
 ## Info For Developers
 

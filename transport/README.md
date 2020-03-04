@@ -1,10 +1,11 @@
 ---
 layout: post
-title: Transport
+title: TRANSPORT
 permalink: transport
 redirect_from:
 - transport/README.md/
 ---
+
 **Package `transport` provides streaming object-based transport over HTTP for massive intra-AIS data transfers. AIStore utilizes this package for cluster-wide (aka "global") rebalancing, distributed merge-sort, and more.**
 
 - [Build](#build)

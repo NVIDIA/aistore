@@ -1,10 +1,11 @@
 ---
 layout: post
-title: DSort
+title: DSORT
 permalink: dsort
 redirect_from:
 - dsort/README.md/
 ---
+
 # DSort
 
 ## Introduction

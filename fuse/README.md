@@ -5,6 +5,7 @@ permalink: fuse
 redirect_from:
 - fuse/README.md/
 ---
+
 # AISFS: a FUSE client for AIStore
 
 ## Table of Contents
@@ -51,7 +52,7 @@ which in turn invokes the corresponding AISFS instance responsible for POSIX to
 REST API mapping of the request. A communication diagram is shown in the figure
 below.
 
-![aisfs-high-level-architecture](images/aisfs-high-level-architecture.png)
+![aisfs-high-level-architecture](./images/aisfs-high-level-architecture.png)
 
 > Clearly, there is a lot of data transfer involved between kernel space and user
 space. This "up-and-down" communication between the kernel and user processes

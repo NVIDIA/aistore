@@ -1,0 +1,127 @@
+{{- define "common.config" -}}
+{{ with .Values.ais_config_common }}
+"auth": {
+        "secret":       {{ .auth.secret | quote }},
+        "enabled":      {{ .auth.enabled }},
+        "creddir":      {{ .auth.creddir | quote }}
+},
+"cksum": {
+        "type":                 {{ .cksum.type | quote }},
+        "validate_cold_get":    {{ .cksum.validate_cold_get }},
+        "validate_warm_get":    {{ .cksum.validate_warm_get }},
+        "validate_obj_move":    {{ .cksum.validate_obj_move }},
+        "enable_read_range":    {{ .cksum.enable_read_range }}
+},
+"cloud": {
+        {{ .cloud_provider | quote }}: {}
+},
+"compression": {
+        "block_size":   {{ .compression.block_size }},
+        "checksum":     {{ .compression.checksum }}
+},
+"confdir": {{ .confdir | quote }},
+"disk": {
+        "disk_util_low_wm":     {{ .disk.disk_util_low_wm }},
+        "disk_util_high_wm":    {{ .disk.disk_util_high_wm }},
+        "disk_util_max_wm":     {{ .disk.disk_util_max_wm }},
+        "iostat_time_long":     {{ .disk.iostat_time_long | quote }},
+        "iostat_time_short":    {{ .disk.iostat_time_short | quote }}
+},
+"distributed_sort": {
+        "compression":                  {{ .distributed_sort.compression | quote }},
+        "duplicated_records":           {{ .distributed_sort.duplicated_records | quote }},
+        "missing_shards":               {{ .distributed_sort.missing_shards | quote }},
+        "ekm_malformed_line":           {{ .distributed_sort.ekm_malformed_line | quote }},
+        "ekm_missing_key":              {{ .distributed_sort.ekm_missing_key | quote }},
+        "default_max_mem_usage":        {{ .distributed_sort.default_max_mem_usage | quote }},
+        "dsorter_mem_threshold":        {{ .distributed_sort.dsorter_mem_threshold | quote }},
+        "call_timeout":                 {{ .distributed_sort.call_timeout | quote }}
+},
+"downloader": {
+        "timeout": {{ .downloader.timeout | quote }}
+},
+"ec": {
+        "compression":          {{ .ec.compression | quote }},
+        "objsize_limit":        {{ .ec.objsize_limit }},
+        "data_slices":          {{ .ec.data_slices }},
+        "parity_slices":        {{ .ec.parity_slices }},
+        "compression":          {{ .ec.compression | quote }},
+        "enabled":              {{ .ec.enabled }}
+},
+"fshc": {
+        "enabled":      {{ .fshc.enabled }},
+        "test_files":   {{ .fshc.test_files }},
+        "error_limit":  {{ .fshc.error_limit }}
+},
+"keepalivetracker": {
+        "proxy": {
+                "interval":     {{ .keepalivetracker.proxy.interval | quote }},
+                "name":         {{ .keepalivetracker.proxy.name | quote }},
+                "factor":       {{ .keepalivetracker.proxy.factor }}
+        },
+        "target": {
+                "interval":     {{ .keepalivetracker.target.interval | quote }},
+                "name":         {{ .keepalivetracker.target.name | quote }},
+                "factor":       {{ .keepalivetracker.target.factor }}
+        },
+        "retry_factor":         {{ .keepalivetracker.retry_factor }},
+        "timeout_factor":       {{ .keepalivetracker.timeout_factor }}
+},
+"log": {
+        "dir":          {{ .log.dir | quote }},
+        "level":        {{ .log.level | quote }},
+        "max_size":     4194304,
+        "max_total":    67108864
+},
+"lru": {
+        "lowwm":                {{ .lru.lowwm }},
+        "highwm":               {{ .lru.highwm }},
+        "out_of_space":         {{ .lru.out_of_space }},
+        "dont_evict_time":      {{ .lru.dont_evict_time | quote }},
+        "capacity_upd_time":    {{ .lru.capacity_upd_time | quote }},
+        "enabled":              {{ .lru.enabled }}
+},
+"mirror": {
+        "copies":       {{ .mirror.copies }},
+        "burst_buffer": {{ .mirror.burst_buffer }},
+        "util_thresh":  {{ .mirror.util_thresh }},
+        "optimize_put": {{ .mirror.optimize_put }},
+        "enabled":      {{ .mirror.enabled }}
+},
+"periodic": {
+        "stats_time":           {{ .periodic.stats_time | quote }},
+        "retry_sync_time":      {{ .periodic.retry_sync_time | quote }}
+},
+"rebalance": {
+        "enabled":         {{ .rebalance.enabled }},
+        "compression":     {{ .rebalance.compression | quote }},
+        "quiescent":       {{ .rebalance.quiescent | quote }},
+        "dest_retry_time": {{ .rebalance.dest_retry_time | quote}},
+        "multiplier":      {{ .rebalance.multiplier }}
+},
+"timeout": {
+        "default_timeout":      {{ .timeout.default_timeout | quote }},
+        "default_long_timeout": {{ .timeout.default_long_timeout | quote }},
+        "list_timeout":         {{ .timeout.list_timeout | quote }},
+        "max_keepalive":        {{ .timeout.max_keepalive | quote }},
+        "proxy_ping":           {{ .timeout.proxy_ping | quote }},
+        "cplane_operation":     {{ .timeout.cplane_operation | quote }},
+        "send_file_time":       {{ .timeout.send_file_time | quote }},
+        "startup_time":         {{ .timeout.startup_time | quote }}
+},
+"versioning": {
+        "enabled":              {{ .versioning.enabled }},
+        "validate_warm_get":    {{ .versioning.validate_warm_get }}
+},
+{{ end -}}
+"fspaths": {
+        {{- $last_mount := last .Values.target.mountPaths -}}
+        {{- range .Values.target.mountPaths -}}
+        {{- if eq . $last_mount }}
+        "{{ . }}":        ""
+        {{ else }}
+        "{{ . }}":        "",
+        {{- end -}}
+        {{- end -}}
+}
+{{- end -}}

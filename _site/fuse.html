@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>FUSE | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="FUSE" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/fuse" />
+<meta property="og:url" content="http://localhost:4000/aistore/fuse" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"FUSE","@type":"WebPage","url":"http://localhost:4000/aistore/fuse","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">FUSE</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h1 id="aisfs-a-fuse-client-for-aistore">AISFS: a FUSE client for AIStore</h1>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ul>
+  <li><a href="#background">Background</a></li>
+  <li><a href="#high-level-architecture">High-level architecture</a></li>
+  <li><a href="#prerequisites">Prerequisites</a></li>
+  <li><a href="#getting-started">Getting Started</a>
+    <ul>
+      <li><a href="#installation">Installation</a></li>
+      <li><a href="#quick-local-setup">Quick Local Setup</a></li>
+      <li><a href="#configuration">Configuration</a>
+        <ul>
+          <li><a href="#updating-configuration-at-runtime">Updating configuration at runtime</a></li>
+        </ul>
+      </li>
+      <li><a href="#mounting">Mounting</a></li>
+      <li><a href="#unmounting">Unmounting</a></li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="background">Background</h2>
+
+<p>FUSE (Filesystem in Userspace) is an interface in Linux and other Unix-like
+operating systems that enables user space programs to export a filesystem
+to the kernel. FUSE consists of a kernel module <code class="highlighter-rouge">fuse.ko</code>, a user space library
+and a mount utility <code class="highlighter-rouge">fusermount</code>. There are currently over 100 FUSE filesystems
+available on the Web - the fact that can likely be attributed to popularity
+of the file (aka POSIX) access to storage on the one hand, and ease of
+development and maintenance of the filesystem in userspace (as opposed to
+kernel), on the other.</p>
+
+<p>Generally, storage-backend-specific FUSE client provides a convenient
+(albeit not necessarily fast) way to access and interact with a storage service.
+Notable examples include
+<a href="https://github.com/s3fs-fuse/s3fs-fuse">s3fs</a> for Amazon S3 and
+<a href="https://github.com/GoogleCloudPlatform/gcsfuse">gcsfuse</a> for Google Cloud
+Storage. The original motivation behind FUSE client for AIStore was the same:
+provide a familiar filesystem interface for interactive work with AIStore buckets
+and objects as well as native integration with Linux tools, libraries
+and frameworks.</p>
+
+<h2 id="high-level-architecture">High-level architecture</h2>
+
+<p>AISFS enables a non-privileged user to mount a single AIStore bucket
+(one bucket per mount) in an empty directory on a local filesystem and access
+objects as if they were regular files. System calls (such as file open, read, write
+etc.) from applications are routed through the VFS layer to the Linux FUSE driver,
+which in turn invokes the corresponding AISFS instance responsible for POSIX to
+REST API mapping of the request. A communication diagram is shown in the figure
+below.</p>
+
+<p><img src="./images/aisfs-high-level-architecture.png" alt="aisfs-high-level-architecture" /></p>
+
+<blockquote>
+  <p>Clearly, there is a lot of data transfer involved between kernel space and user
+space. This “up-and-down” communication between the kernel and user processes
+is causing significant overhead, a performance weak spot for FUSE filesystems
+in general. One of the main goals of FUSE client for AIStore is to give as good
+performance as possible by reducing the effect of mentioned overhead.</p>
+</blockquote>
+
+<h4 id="namespace-caching">Namespace caching</h4>
+
+<p>To provide for faster access, <code class="highlighter-rouge">aisfs</code> periodically queries cluster via list-bucket API and then updates its local cache. By totally eliminating or greatly reducing POSIX lookups, <code class="highlighter-rouge">aisfs</code> cache may significantly improve I/O throughput, especially when the workload “concentrates” inside few selected POSIX directories. Caching, however, does not affect read/write performance on the level of individual objects (ie., files). To state the same differently, user data is currently <em>not</em> being cached on the file-client side.</p>
+
+<p>Performance of the cache depends in part on its configuration described in the <a href="#configuration">configuration section</a> below.</p>
+
+<p>Note that the current implementation may not be as efficient for buckets containing large numbers of objects (files) with no subdirectories.</p>
+
+<p>When the space required to cache the entire directory hiearchy and file names is larger than the configured memory limit the current implementations “falls” back to the regular mechanism that involves additional HTTP requests to AIS cluster.</p>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<ul>
+  <li>Linux</li>
+  <li><code class="highlighter-rouge">fuse.ko</code> FUSE kernel module</li>
+  <li><code class="highlighter-rouge">fusermount</code> mount CLI utility</li>
+  <li><a href="https://golang.org/dl/">Go 1.13</a> or later</li>
+  <li>Running <a href="../README.md">AIStore</a> cluster</li>
+</ul>
+
+<p>Depending on your Linux distribution, you may or may not already have <code class="highlighter-rouge">fuse.ko</code>
+and <code class="highlighter-rouge">fusermount</code> installed on your system. If you are using Ubuntu 18.04 LTS,
+you can verify this by running the following commands (expect similar output to
+the one shown below):</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">grep</span> <span class="nt">-i</span> fuse /lib/modules/<span class="si">$(</span><span class="nb">uname</span> <span class="nt">-r</span><span class="si">)</span>/modules.builtin
+kernel/fs/fuse/fuse.ko
+<span class="nv">$ </span>fusermount <span class="nt">-V</span>
+fusermount version: 2.9.7
+</code></pre></div></div>
+
+<h2 id="getting-started">Getting Started</h2>
+
+<h3 id="installation">Installation</h3>
+
+<p>To install <code class="highlighter-rouge">aisfs</code> on your system, execute the following commands:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cd</span> <span class="nv">$GOPATH</span>/src/github.com/NVIDIA/aistore
+<span class="nv">$ </span>make aisfs
+</code></pre></div></div>
+
+<p>Verify that <code class="highlighter-rouge">aisfs</code> has been successfully installed:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>aisfs <span class="nt">-v</span>
+aisfs version 0.2 <span class="o">(</span>build d9882586<span class="o">)</span>
+</code></pre></div></div>
+
+<p>View help and usage information by running:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>aisfs <span class="nt">--help</span>
+</code></pre></div></div>
+
+<h3 id="quick-local-setup">Quick Local Setup</h3>
+
+<p>To quickly set up and try <code class="highlighter-rouge">aisfs</code> on your local machine, first
+deploy an AIStore cluster (for more info see AIStore <a href="../README.md">README</a>):</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cd</span> <span class="nv">$GOPATH</span>/src/github.com/NVIDIA/aistore
+<span class="nv">$ </span>make deploy
+</code></pre></div></div>
+
+<p>Using <a href="../cli/README.md">AIS CLI</a> create an ais bucket, download several objects
+and place them into the bucket:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais create bucket mybucket
+<span class="nv">$ </span>ais start download <span class="s2">"gs://lpr-vision/imagenet/imagenet_train-{000000..000010}.tgz"</span> ais://mybucket/
+Ys78ND09g
+<span class="nv">$ </span>ais show download Ys78ND09g <span class="nt">--progress</span> <span class="c"># wait for download to finish</span>
+</code></pre></div></div>
+
+<p>Create an empty directory in your local filesystem:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cd</span> <span class="nv">$HOME</span>
+<span class="nv">$ </span><span class="nb">mkdir </span>localdir
+</code></pre></div></div>
+
+<p>Finally, mount a filesystem and run a filesystem server as a daemon using
+the following command:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>aisfs mybucket localdir/
+</code></pre></div></div>
+
+<p>List objects in the bucket:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">ls </span>localdir/
+</code></pre></div></div>
+
+<p>Unmount the file system and remove previously created local directory:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>fusermount <span class="nt">-u</span> localdir/
+<span class="nv">$ </span><span class="nb">rmdir </span>localdir
+</code></pre></div></div>
+
+<h3 id="configuration">Configuration</h3>
+
+<p>Some parameters of AISFS can be tuned through a JSON configuration file
+that is loaded at startup. Only one JSON configuration will be loaded,
+but multiple JSON files named <code class="highlighter-rouge">&lt;bucket&gt;_mount.json</code> can exist, allowing
+separate configuration of each bucket mount. If the corresponding
+JSON file is not found during startup, one will be generated with
+default parameter values. By default, configuration files will be
+placed in <code class="highlighter-rouge">$HOME/.config/aisfs</code>, but if <code class="highlighter-rouge">XDG_CONFIG_HOME</code> environment
+variable is set, the location of these files will instead be
+<code class="highlighter-rouge">$XDG_CONFIG_HOME/aisfs</code>.</p>
+
+<p>An example of one configuration file:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>{
+  "cluster": {
+    "url": "http://127.0.0.1:8080"
+  },
+  "timeout": {
+    "tcp_timeout": "60s",
+    "http_timeout": "300s"
+  },
+  "periodic": {
+    "sync_interval": "20m"
+  },
+  "log": {
+    "error_file": "/var/log/aisfs.log",
+    "debug_file": ""
+  },
+  "io": {
+    "write_buf_size": 1048576
+  },
+  "memory_limit": "1GB"
+}
+</code></pre></div></div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Config key</th>
+      <th>Description</th>
+      <th>Additional information</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">cluster.url</code></td>
+      <td>HTTP URL to AIS cluster.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">timeout.tcp_timeout</code></td>
+      <td>Determines how long AISFS will wait for TCP to establish connection to the cluster.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">timouet.http_timeout</code></td>
+      <td>Determines how long AISFS will wait for AIS to respond with initial data.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">periodic.sync_interval</code></td>
+      <td>Determines how often locally cached metadata is synced with AIS cluster.</td>
+      <td>Setting this value to <code class="highlighter-rouge">0</code> disables syncing with AIS. Disabling sync or setting it to high value can result in problems with consistency since AISFS can perceive the status of the objects differently.</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">log.error_file</code></td>
+      <td>Location where errors are written to. Must be an absolute path.</td>
+      <td>Empty value/string will result in writing errors to STDERR.</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">log.debug_file</code></td>
+      <td>Location where debug logs are written to. Must be an absolute path.</td>
+      <td>Empty value/string disables writing debug logs.</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">io.write_buf_size</code></td>
+      <td>Size of the buffer used to cache data during PUT/write operation.</td>
+      <td>High value can result in higher memory usage but also in better performance when writing large files.</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">memory_limit</code></td>
+      <td>Determines how much memory AISFS can use to cache metadata locally (like structure and filenames). Can be in format of raw numbers (<code class="highlighter-rouge">1024</code>) or with suffix <code class="highlighter-rouge">10MB</code>.</td>
+      <td>High value can result in much better performance for the most frequent operations. We recommend allowing as much memory to AISFS as it is possible.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="updating-configuration-at-runtime">Updating configuration at runtime</h3>
+
+<p>Even though loading <a href="#configuration">configuration</a> takes an effect at <a href="#mounting">mount</a> time it is still possible to reconfigure AISFS at runtime - without remounting.
+This can be achieved by sending <code class="highlighter-rouge">SIGHUP</code> signal to <code class="highlighter-rouge">aisfs</code> daemon, e.g.:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">kill</span> <span class="nt">-HUP</span> <span class="si">$(</span>pidof aisfs<span class="si">)</span>
+</code></pre></div></div>
+
+<p><code class="highlighter-rouge">SIGHUP</code> causes running <code class="highlighter-rouge">aisfs</code> daemon to reload its configuration and apply updates to the following config variables:</p>
+
+<ul>
+  <li><code class="highlighter-rouge">periodic.sync_interval</code></li>
+  <li><code class="highlighter-rouge">io.write_buf_size</code></li>
+  <li><code class="highlighter-rouge">memory_limit</code></li>
+</ul>
+
+<p>In other words, if you’d want to, for instance, update AISFS memory limit, you can simply write a new value into AISFS configuration and apply it via <code class="highlighter-rouge">SIGHUP</code>.
+Success or failure of the operation is reflected in the debug logs (if enabled).</p>
+
+<h3 id="mounting">Mounting</h3>
+
+<p>It is not necessary to use a separate utility to mount a filesystem,
+<code class="highlighter-rouge">aisfs</code> is both a filesystem server and a mount utility.</p>
+
+<p>Assuming <code class="highlighter-rouge">mybucket</code> is a bucket name, <code class="highlighter-rouge">localdir</code> is an empty directory
+in your local filesystem and an instance of AIStore cluster is running
+on the local machine, the following command will mount <code class="highlighter-rouge">mybucket</code>
+in <code class="highlighter-rouge">localdir</code>, making <code class="highlighter-rouge">localdir</code> the root directory of <code class="highlighter-rouge">aisfs</code>:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>aisfs mybucket localdir/
+</code></pre></div></div>
+
+<p>Filesystem is, by default, serviced by the user space background process (daemon),
+that will continue to run until the filesystem is unmounted.
+To run the filesystem server in the foreground, pass the <code class="highlighter-rouge">--wait </code> option to
+<code class="highlighter-rouge">aisfs</code>:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>aisfs <span class="nt">--wait</span> mybucket localdir/
+</code></pre></div></div>
+
+<p>A complete list of command-line options is given in the table below:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">--wait</code></td>
+      <td>Run a filesystem server in the foreground</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--uid</code></td>
+      <td>Mount owner’s UID</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--gid</code></td>
+      <td>Mount owner’s GID</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">-o</code></td>
+      <td>Additional mount options to be passed to <code class="highlighter-rouge">mount</code> (see <code class="highlighter-rouge">man 8 mount</code>)</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--help,-h</code></td>
+      <td>Print help and exit</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">--version,-v</code></td>
+      <td>Print version and exit</td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p>Note: Mount owner is the user who does the mounting, not necessarily
+the user who will perform filesystem operations.</p>
+</blockquote>
+
+<h4 id="fuse-control-filesystem">FUSE control filesystem</h4>
+
+<p>A control filesystem for FUSE should be mounted under
+<code class="highlighter-rouge">/sys/fs/fuse/connections</code>. Under this filesystem each FUSE connection
+has a directory named by a unique number, containing the following files:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Usage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">abort</code></td>
+      <td>Writing anything into this file will abort the filesystem connection. Note that the filesystem will not respond to requests but it will remain mounted.</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">waiting</code></td>
+      <td>Reading from this file shows the number of requests which are waiting to be transferred to userspace or being processed by the filesystem server.</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">max_background</code></td>
+      <td>Reading from this file shows the maximum number of asynchronous requests residing in the pending queue.</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">congestion_threshold</code></td>
+      <td>Reading from this file shows the number of asynchronous requests in the pending queue and processed by the filesystem server that, if reached, will cause FUSE to inform the Linux VFS that it is congested.</td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p>Note: The control filesystem is managed by the kernel, meaning that file
+reading/writing, maintaining directory tree etc, is done by the kernel.</p>
+</blockquote>
+
+<p>For more information about implementation details of FUSE, visit this
+<a href="https://www.kernel.org/doc/Documentation/filesystems/fuse.txt">page</a>, or
+read the paper <a href="https://www.usenix.org/system/files/conference/fast17/fast17-vangoor.pdf">“To FUSE or Not to FUSE: Performance of User-Space File Systems”</a>.</p>
+
+<h3 id="unmounting">Unmounting</h3>
+
+<p>There are three methods for unmounting the AISFS filesystem and stopping
+the AISFS user space daemon:</p>
+
+<ol>
+  <li>
+    <p>Use the <code class="highlighter-rouge">fusermount</code> utility. The <code class="highlighter-rouge">-u</code> option requests unmounting:</p>
+
+    <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>fusermount <span class="nt">-u</span> localdir/
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Use the <code class="highlighter-rouge">umount</code> command:</p>
+
+    <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>umount localdir/
+</code></pre></div>    </div>
+
+    <blockquote>
+      <p>You may need root privileges to execute this command.</p>
+    </blockquote>
+  </li>
+  <li>
+    <p>If <code class="highlighter-rouge">aisfs</code> is invoked in the foreground by passing the <code class="highlighter-rouge">--wait</code> option,
+terminate the process by pressing Ctrl-C. This will also unmount the filesystem.</p>
+  </li>
+</ol>
+
+  </div><a class="u-url" href="/aistore/fuse" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

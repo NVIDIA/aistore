@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>BENCH/HTTP2 | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="BENCH/HTTP2" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/bench/http2" />
+<meta property="og:url" content="http://localhost:4000/aistore/bench/http2" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"BENCH/HTTP2","@type":"WebPage","url":"http://localhost:4000/aistore/bench/http2","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">BENCH/HTTP2</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="http2-bench">http2-bench</h2>
+
+<h3 id="setup">Setup</h3>
+<ol>
+  <li>Install <a href="http://www.nghttp2.org">nghttp2</a>. If you have apt-get installed, <code class="highlighter-rouge">./setup_nghttp.sh</code> will do all the required setup.</li>
+  <li>Start AIStore with any number of proxies and one target. Since nghttp2 does not follow redirects, the benchmarking scripts must point directly at a target.</li>
+</ol>
+
+<h3 id="usage">Usage</h3>
+
+<p>Each benchmark has four arguments:</p>
+<ul>
+  <li>U: The URL of the target</li>
+  <li>B: The bucket to get files from</li>
+  <li>N: The number of files to get</li>
+  <li>
+    <p>C: The number of concurrent clients to use (unavailable for <code class="highlighter-rouge">server_push_http2_bench</code>)</p>
+  </li>
+  <li><code class="highlighter-rouge">./server_push_http2_bench U B N</code> uses http2 with server push to get N files.</li>
+  <li><code class="highlighter-rouge">./no_server_push_http2_bench U B N C</code> uses http2 to get N files, with C clients.</li>
+  <li><code class="highlighter-rouge">./http1_bench U B N C</code> uses http1.1 to get N files, with C clients.</li>
+</ul>
+
+<h4 id="examples">Examples</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./server_push_http2_bench localhost:8081 local_benchmark_bucket 100
+./no_server_push_http2_bench localhost:8081 local_benchmark_bucket 100 5
+./http1_bench localhost:8081 local_benchmark_bucket 100 5
+</code></pre></div></div>
+<h3 id="helpers">Helpers</h3>
+<ol>
+  <li><a href="./put_files.go">put_files.go</a> puts a given number of files with a given size into AIStore. It has five command-line parameters:</li>
+</ol>
+
+<ul>
+  <li><code class="highlighter-rouge">-url</code>: the URL of the AIStore proxy (default: http://localhost:8080)</li>
+  <li><code class="highlighter-rouge">-files</code>: the number of files to put (default: 10)</li>
+  <li><code class="highlighter-rouge">-filesize</code>: the size of files to put, in KB (default: 1)</li>
+  <li><code class="highlighter-rouge">-bucket</code>: the name of the bucket to put them in (default: local_benchmark_bucket)</li>
+  <li><code class="highlighter-rouge">-workers</code>: The number of workers to use to put files (default: 10)</li>
+</ul>
+
+<ol>
+  <li><a href="./create_local_bucket">create_local_bucket</a> creates an ais bucket in AIStore. It takes one parameter:</li>
+</ol>
+
+<ul>
+  <li>B: The ais bucket to create</li>
+</ul>
+
+<h4 id="examples-1">Examples</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./create_local_bucket local_benchmark_bucket
+go run put_files.go <span class="nt">-files</span> 80 <span class="nt">-filesize</span> 50 <span class="nt">-bucket</span> local_benchmark_bucket <span class="nt">-workers</span> 30
+</code></pre></div></div>
+
+<h4 id="limitations">Limitations</h4>
+<ul>
+  <li>Read chunk size cannot be modified</li>
+  <li>Redirects are not followed by nghttp2, so the benchmark must be pointed directly to one target</li>
+  <li><a href="./server_push_http2_bench">server_push_http2_bench</a> uses only one concurrent client</li>
+</ul>
+
+  </div><a class="u-url" href="/aistore/bench/http2" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

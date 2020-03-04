@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>BENCH/AISLOADER | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="BENCH/AISLOADER" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/bench/aisloader" />
+<meta property="og:url" content="http://localhost:4000/aistore/bench/aisloader" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"BENCH/AISLOADER","@type":"WebPage","url":"http://localhost:4000/aistore/bench/aisloader","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">BENCH/AISLOADER</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h1 id="ais-loader">AIS Loader</h1>
+
+<p><code class="highlighter-rouge">aisloader</code> is a command-line tool that is included with AIS and that can be immediately used to generate load and evaluate cluster performance.</p>
+
+<h2 id="setup">Setup</h2>
+
+<p>To build <code class="highlighter-rouge">aisloader</code>, run <code class="highlighter-rouge">make aisloader</code> from the root of the aistore repo:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cd</span> <span class="nv">$GOPATH</span>/src/github.com/NVIDIA/aistore
+<span class="nv">$ </span>make aisloader
+</code></pre></div></div>
+
+<h2 id="bytes-multiplicative-suffix">Bytes Multiplicative Suffix</h2>
+
+<p>Parameters in AISLoader that represent the number of bytes can be specified with a multiplicative suffix. For example: <code class="highlighter-rouge">8M</code> would specify 8 MiB. The following multiplicative suffixes are supported: ‘t’ or ‘T’ - TiB ‘g’ or ‘G’ - GiB, ‘m’ or ‘M’ - MiB, ‘k’ or ‘K’ - KiB. Note that this is entirely optional, and therefore an input such as <code class="highlighter-rouge">300</code> will be interpreted as 300 Bytes.</p>
+
+<h2 id="using-ais-loader">Using AIS Loader</h2>
+
+<p>AIS Loader allows for configurable PUT and GET tests directly from the command line</p>
+<ul>
+  <li><code class="highlighter-rouge">-ip</code> -  IP address for proxy server</li>
+  <li><code class="highlighter-rouge">-port</code> - Port number for proxy server</li>
+  <li><code class="highlighter-rouge">-statsinterval</code> - Interval to show stats / send statsd in seconds; 0 = disabled</li>
+  <li><code class="highlighter-rouge">-bucket</code> - Bucket name</li>
+  <li><code class="highlighter-rouge">-provider</code> - “ais” for AIS bucket, “cloud” for Cloud bucket; other supported values include “gcp” and “aws”, for Amazon and Google clouds, respectively</li>
+  <li><code class="highlighter-rouge">-duration</code> - How long to run the test; 0 = Unbounded</li>
+  <li><code class="highlighter-rouge">-numworkers</code> - Number of go routines sending requests in parallel</li>
+  <li><code class="highlighter-rouge">-pctput</code> - Percentage of put request (0% - 100%, remaining is allocated for GET)</li>
+  <li><code class="highlighter-rouge">-tmpdir</code> - Local temporary directory used to store temporary files</li>
+  <li><code class="highlighter-rouge">-totalputsize</code> - Stops after total put size exceeds this, may contain <a href="#bytes-multiplicative-suffix">multiplicative suffix</a>, 0 = no limit</li>
+  <li><code class="highlighter-rouge">-cleanup</code> - Determines if aisloader cleans up the files it creates when run is finished, true by default.</li>
+  <li><code class="highlighter-rouge">-verifyhash</code> - If set, the contents of the downloaded files are verified using the xxhash in response headers during GET requests.</li>
+  <li><code class="highlighter-rouge">-minsize</code> - Minimal object size, may contain <a href="#bytes-multiplicative-suffix">multiplicative suffix</a></li>
+  <li><code class="highlighter-rouge">-maxsize</code> - Maximal object size, may contain <a href="#bytes-multiplicative-suffix">multiplicative suffix</a></li>
+  <li><code class="highlighter-rouge">-maxputs</code> - Maximum number of objects to PUT</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td><code class="highlighter-rouge">-readertype</code> - Type of reader: sg (default)</td>
+          <td>file</td>
+          <td>inmem</td>
+          <td>rand</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><code class="highlighter-rouge">-loaderid</code> - ID to identify a loader when multiple instances of loader running on the same host</li>
+  <li><code class="highlighter-rouge">-check-statsd</code> - If set, checks if statsd is running before run</li>
+  <li><code class="highlighter-rouge">-statsdip</code> - IP for statsd server</li>
+  <li><code class="highlighter-rouge">-statsdport</code> - UDP port number for statsd server</li>
+  <li><code class="highlighter-rouge">-batchsize</code> - List and delete batch size</li>
+  <li><code class="highlighter-rouge">-getconfig</code> - If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests.</li>
+  <li><code class="highlighter-rouge">-seed</code> - Seed for random source, 0=use current time</li>
+  <li><code class="highlighter-rouge">-readoff</code> - Read range offset, may contain <a href="#bytes-multiplicative-suffix">multiplicative suffix</a></li>
+  <li><code class="highlighter-rouge">-readlen</code> - Read range length(0 - GET full object), may contain <a href="#bytes-multiplicative-suffix">multiplicative suffix</a></li>
+  <li><code class="highlighter-rouge">-loadernum</code> - Total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen</li>
+  <li><code class="highlighter-rouge">-getloaderid</code> - Print out stored/computed unique loaderID(aisloader identifier) and exit</li>
+  <li><code class="highlighter-rouge">-loaderidhashlen</code> - Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum</li>
+  <li><code class="highlighter-rouge">-randomname</code> - Generate objects names of 32 random characters. This option is ignored when loadernum is defined</li>
+  <li><code class="highlighter-rouge">-subdir</code> - Virtual destination directory for all aisloader-generated objects. If not set, all generated objects are PUT into bucket’s root</li>
+  <li><code class="highlighter-rouge">-putshards</code> - Spread generated objects over this many subdirectories (max 100k)</li>
+  <li><code class="highlighter-rouge">-uniquegets</code> - If set, GET objects randomly and equally(it makes sure <em>not</em> to GET some objects more frequently than the others). If not set, GET selects a random object every time, that may result, e.g, in reading the same object twice in a row</li>
+  <li><code class="highlighter-rouge">-no-detailed-stats</code> - If set, disable collecting detailed HTTP latencies for PUT and GET (to minimize amount of stats sent to statsD)</li>
+  <li><code class="highlighter-rouge">-dry-run</code> - Show the configuration and parameters that aisloader will use for benchmark and exit</li>
+</ul>
+
+<h3 id="examples">Examples</h3>
+
+<p>The following performs a 10-seconds performance test of 50% PUT and 50% GET requests:</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>aisloader <span class="nt">-bucket</span><span class="o">=</span>my_ais_bucket <span class="nt">-duration</span><span class="o">=</span>10s <span class="nt">-pctput</span><span class="o">=</span>50 <span class="nt">-provider</span><span class="o">=</span>ais <span class="nt">-cleanup</span><span class="o">=</span><span class="nb">true</span> <span class="nt">-readertype</span><span class="o">=</span>sg <span class="nt">-numworkers</span><span class="o">=</span>3
+</code></pre></div></div>
+
+<p>Example output follows below:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Found 0 existing objects
+Run configuration:
+{
+    "proxy": "http://172.50.0.2:8080",
+    "provider": "ais",
+    "bucket": "my_ais_bucket",
+    "duration": "10s",
+    "put upper bound": 0,
+    "put %": 50,
+    "minimal object size in Bytes": 1024,
+    "maximal object size in Bytes": 1048576,
+    "# workers": 3,
+    "stats interval": "10s",
+    "backed by": "sg",
+    "cleanup": true
+}
+
+Actual run duration: 10.313689487s
+
+Time      OP    Count                 	Total Bytes           	Latency(min, avg, max)              	Throughput            	Error
+01:52:52  Put   26                    	11.19GB               	296.39ms   5.70s      14.91s        	639.73MB              	0
+01:52:52  Get   16                    	3.86GB                	58.89ms    220.20ms   616.72ms      	220.56MB              	0
+01:52:52  CFG   0                     	0B                    	0.00ms     0.00ms     0.00ms        	0B                    	0
+01:52:52 Clean up ...
+01:52:54 Clean up done
+</code></pre></div></div>
+
+<p>Loader ID:</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>aisloader <span class="nt">-getloaderid</span>
+0x0
+<span class="nv">$ </span>aisloader <span class="nt">-getloaderid</span> <span class="nt">-loaderid</span><span class="o">=</span>loaderstring <span class="nt">-loaderidhashlen</span><span class="o">=</span>8
+0xdb
+</code></pre></div></div>
+
+<p>PUT 2000 objects with names that look like hex({0..2000}{loaderid}):</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>aisloader <span class="nt">-bucket</span><span class="o">=</span>nvais <span class="nt">-duration</span> 10s <span class="nt">-numworkers</span><span class="o">=</span>3 <span class="nt">-loaderid</span><span class="o">=</span>11 <span class="nt">-loadernum</span><span class="o">=</span>20 <span class="nt">-maxputs</span><span class="o">=</span>2000
+</code></pre></div></div>
+
+<p><strong>Warning:</strong> Performance tests generate a heavy load on your local system, please save your work.</p>
+
+<h2 id="dry-run-performance-tests">Dry-Run Performance Tests</h2>
+
+<p>AIStore supports a “dry” deployment: AIS_NODISKIO.</p>
+
+<p>Example of deploying a cluster with disk IO disabled and object size 256KB:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ AIS_NODISKIO</span><span class="o">=</span><span class="nb">true </span><span class="nv">AIS_DRYOBJSIZE</span><span class="o">=</span>256k make deploy
+</code></pre></div></div>
+
+<p><strong>Note:</strong> These are passed in either as environment variables or command line arguments when deploying the AIStore clusters.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>CLI Argument</th>
+      <th>Environment Variable</th>
+      <th>Default Value</th>
+      <th>Behavior</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>nodiskio</td>
+      <td>AIS_NODISKIO</td>
+      <td><code class="highlighter-rouge">false</code></td>
+      <td>If <code class="highlighter-rouge">true</code> - disables disk IO. For GET requests, a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests, it reads the request’s body to <code class="highlighter-rouge">/dev/null</code>. <br /> Valid values are <code class="highlighter-rouge">true</code> or <code class="highlighter-rouge">1</code>, and <code class="highlighter-rouge">false</code> or <code class="highlighter-rouge">0</code>.</td>
+    </tr>
+    <tr>
+      <td>dryobjsize</td>
+      <td>AIS_DRYOBJSIZE</td>
+      <td>8m</td>
+      <td>A size of an object when a source is a ‘fake’ one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: ‘g’ or ‘G’ - GiB, ‘m’ or ‘M’ - MiB, ‘k’ or ‘K’ - KiB. <br /> Default value is ‘8m’ - the size of an object is 8 megabytes</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Warning:</strong> The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case, the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of the previous test that had network IO enabled.</p>
+
+<h2 id="collecting-stats">Collecting stats</h2>
+
+<p>Aisloader allows you to collect statistics with Graphite using StatsD. Aisloader will try to connect
+to provided StatsD server (see: <code class="highlighter-rouge">statsdip</code> and <code class="highlighter-rouge">statsdport</code> options). Once the
+connection is established the statistics from aisloader are send in the following
+format:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;metric_type&gt;.aisloader.&lt;hostname&gt;-&lt;loaderid&gt;.&lt;metric&gt;
+</code></pre></div></div>
+
+<ul>
+  <li><code class="highlighter-rouge">metric_type</code> - can be: <code class="highlighter-rouge">gauge</code>, <code class="highlighter-rouge">timer</code>, <code class="highlighter-rouge">counter</code></li>
+  <li><code class="highlighter-rouge">hostname</code> - is the hostname of the machine on which the loader is ran</li>
+  <li><code class="highlighter-rouge">loaderid</code> - see: <code class="highlighter-rouge">-loaderid</code> option</li>
+  <li><code class="highlighter-rouge">metric</code> - can be: <code class="highlighter-rouge">latency.*</code>, <code class="highlighter-rouge">get.*</code>, <code class="highlighter-rouge">put.*</code> (see: <a href="/docs/metrics.md#ais-loader-metrics">aisloader metrics</a>)</li>
+</ul>
+
+<h3 id="grafana">Grafana</h3>
+
+<p>Grafana helps visualize the collected statistics. It is convenient to use and
+provides numerous tools to measure and calculate different metrics.</p>
+
+<p>We provide simple <a href="/ais/setup/deploy_grafana.sh">script</a> which allows you to set
+up the Graphite and Grafana servers which run inside separate dockers. To add
+new dashboards and panels, please follow: <a href="http://docs.grafana.org/guides/getting_started/">grafana tutorial</a>.</p>
+
+<p>When selecting a series in panel view, it should be in the format: <code class="highlighter-rouge">stats.aisloader.&lt;loader&gt;.*</code>.
+Remember that metrics will not be visible (and you will not be able to select
+them) until you start the loader.</p>
+
+  </div><a class="u-url" href="/aistore/bench/aisloader" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

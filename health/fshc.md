@@ -1,10 +1,11 @@
 ---
 layout: post
-title: Health
-permalink: health
+title: FSHC
+permalink: health/fshc
 redirect_from:
 - health/fshc.md/
 ---
+
 Filesystem Health Checker (FSHC)
 ---------------------------------
 

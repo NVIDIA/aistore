@@ -41,6 +41,8 @@ header_pages:
   - _pages/
 include:
   - _pages/
+exclude:
+  - generatefromproject.sh
 plugins:
   - jekyll-redirect-from
 

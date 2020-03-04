@@ -1,3 +1,11 @@
+---
+layout: post
+title: BUCKET
+permalink: docs/bucket
+redirect_from:
+- docs/bucket.md/
+---
+
 ## Table of Contents
 - [Bucket](#bucket)
   - [Cloud Provider](#cloud-provider)
@@ -35,7 +43,7 @@ Cloud-based and ais buckets support the same API with minor exceptions. Cloud bu
 
 ### Cloud Provider
 
-[Cloud Provider](providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. For complete definition and details, plase refer to the [Cloud Provider](providers.md) document.
+[Cloud Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. For complete definition and details, plase refer to the [Cloud Provider](./providers.md) document.
 
 > Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` for ais buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
 

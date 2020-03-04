@@ -1,3 +1,11 @@
+---
+layout: post
+title: AIS/TESTS
+permalink: ais/tests
+redirect_from:
+- ais/tests/README.md/
+---
+
 AIStore testing
 -----------------------------------------------------------------
 

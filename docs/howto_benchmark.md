@@ -1,3 +1,11 @@
+---
+layout: post
+title: HOWTO_BENCHMARK
+permalink: docs/howto_benchmark
+redirect_from:
+- docs/howto_benchmark.md/
+---
+
 ## Table of Contents
 - [AIS Loader](#ais-loader)
    - [Examples](#examples)

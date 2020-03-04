@@ -1,3 +1,11 @@
+---
+layout: post
+title: BENCH/HRW
+permalink: bench/hrw
+redirect_from:
+- bench/hrw/README.md/
+---
+
 # Benchmaking various HRW variants
 
 This module provides a way to benchmark different HRW variants. The following approaches were considered for comparison:

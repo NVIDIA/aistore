@@ -1,3 +1,11 @@
+---
+layout: post
+title: DATAPATH
+permalink: docs/datapath
+redirect_from:
+- docs/datapath.md/
+---
+
 ## Table of Contents
 - [Read and Write Data Paths](#read-and-write-data-paths)
     - [`GET`](#get)

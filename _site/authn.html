@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>AUTHN | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="AUTHN" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/authn" />
+<meta property="og:url" content="http://localhost:4000/aistore/authn" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"AUTHN","@type":"WebPage","url":"http://localhost:4000/aistore/authn","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">AUTHN</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="aistore-authentication-server-authn">AIStore Authentication Server (AuthN)</h2>
+
+<h2 id="overview">Overview</h2>
+
+<p>AIStore Authentication Server (AuthN) provides a token-based secure access to AIStore. It employs <a href="https://github.com/dgrijalva/jwt-go">JSON Web Tokens</a> framework to grant access to resources: buckets and objects. Please read a short <a href="https://jwt.io/introduction/">introduction to JWT</a> for details.</p>
+
+<p>AuthN is a standalone process that manages users and their tokens. It reports to the primary AIStore proxy all changes on the fly and immediately after each user login or logout. The result is that the AIStore primary proxy (aka AIStore gateway) always has an updated set of valid tokens that grant access to the AIStore and Cloud resources.</p>
+
+<p>For a client, a typical workflow looks as follows:</p>
+
+<p><img src="images/authn_flow.gif" alt="Authn workflow" /></p>
+
+<p>AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as HTTP server listening on port 8203. If you enable HTTPS access make sure that the configuration file options <code class="highlighter-rouge">server_cert</code> and <code class="highlighter-rouge">server_key</code> point to the correct SSL certificate and key.</p>
+
+<h2 id="getting-started">Getting started</h2>
+
+<p>Environment variables used by the deployment script to setup AuthN server:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Default value</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>PROXYURL</td>
+      <td>””</td>
+      <td>Primary proxy URL for AuthN to notify the cluster about events like a token is revoked</td>
+    </tr>
+    <tr>
+      <td>AUTHENABLED</td>
+      <td>false</td>
+      <td>Set it to <code class="highlighter-rouge">true</code> to enable authn server and token-based access in AIStore proxy</td>
+    </tr>
+    <tr>
+      <td>AUTHN_SU_NAME</td>
+      <td>admin</td>
+      <td>Super user name (see <code class="highlighter-rouge">A super user</code> section for details)</td>
+    </tr>
+    <tr>
+      <td>AUTHN_SU_PASS</td>
+      <td>admin</td>
+      <td>Super user password (see <code class="highlighter-rouge">A super user</code> section for details)</td>
+    </tr>
+    <tr>
+      <td>SECRETKEY</td>
+      <td>aBitLongSecretKey</td>
+      <td>A secret key to encrypt and decrypt tokens</td>
+    </tr>
+    <tr>
+      <td>CREDDIR</td>
+      <td>empty value</td>
+      <td>A path to directory to keep Google Storage user credentials</td>
+    </tr>
+    <tr>
+      <td>AUTHN_PORT</td>
+      <td>52001</td>
+      <td>Port on which AuthN listens to requests</td>
+    </tr>
+    <tr>
+      <td>AUTHN_TTL</td>
+      <td>24h</td>
+      <td>A token expiration time. Can be set to 0 that means “no expiration time”</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>All variables can be set at AIStore launch. Example of starting AuthN with the default configuration:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
+</code></pre></div></div>
+
+<p>Note: don’t forget to change the default secret key used to encrypt and decrypt tokens before starting the deployment process.</p>
+
+<p>To change AuthN settings after deployment, modify the server’s configuration file and restart the server. If you change the server’s secret key make sure to modify AIStore proxy configuration as well.</p>
+
+<h3 id="notation">Notation</h3>
+
+<p>In this README:</p>
+
+<blockquote>
+  <p><code class="highlighter-rouge">AUTHSRV</code> - denotes a (hostname:port) address of a deployed AuthN server</p>
+</blockquote>
+
+<blockquote>
+  <p><code class="highlighter-rouge">PROXY</code> - (hostname:port) of a <strong>gateway</strong>(any gateway in a given AIS cluster)</p>
+</blockquote>
+
+<h3 id="authn-configuration-and-log">AuthN configuration and log</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Location</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Server configuration</td>
+      <td>$CONFDIR/authn.json</td>
+    </tr>
+    <tr>
+      <td>User list</td>
+      <td>$CONFDIR/users.json</td>
+    </tr>
+    <tr>
+      <td>Log directory</td>
+      <td>$LOGDIR/authn/log/</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="how-to-enable-authn-server-after-deployment">How to enable AuthN server after deployment</h3>
+
+<p>By default, AIStore deployment currently won’t launch the AuthN server. To start AuthN, perform the following steps:</p>
+
+<ul>
+  <li>Change AIStore proxy configuration to enable token-based access: look for <code class="highlighter-rouge">{"auth": { "enabled": false } }</code> in proxy configuration file and replace <code class="highlighter-rouge">false</code> with <code class="highlighter-rouge">true</code>. Restart the proxy to apply changes</li>
+  <li>Start authn server:       <path_to_ais_binaries>/authn -config=<path_to_config_dir>/authn.json. Path to config directory is set at the time of cluster deployment and it is the same as the directory for AIStore proxies and targets</path_to_config_dir></path_to_ais_binaries>
+  </li>
+</ul>
+
+<h2 id="user-management">User management</h2>
+
+<h3 id="superuser">Superuser</h3>
+
+<p>After deploying the cluster, a superuser account is created automatically - a special account that cannot be deleted and only this account can manage users and their credentials.</p>
+
+<p>Superuser’s credentials can be set at cluster deployment time(please, see <a href="#getting-started">Getting started</a>), or changed later by modifying AuthN configuration file <code class="highlighter-rouge">authn.json</code>. It is located in $CONFDIR, default value is $HOME/.ais.</p>
+
+<p>Adding and deleting usernames requires superuser authentication. Super user credentials are sent in the request header via <code class="highlighter-rouge">Authorization</code> field (for curl it is <code class="highlighter-rouge">curl -u&lt;username&gt;:&lt;password ...</code>, for HTTP requests it is header option <code class="highlighter-rouge">Authorization: Basic &lt;base64-encoded-username:password&gt;</code>).</p>
+
+<h3 id="rest-operations">REST operations</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>HTTP Action</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Add a user</td>
+      <td>POST {“name”: “username”, “password”: “pass”} /v1/users</td>
+      <td>curl -X POST http://AUTHSRV/v1/users -d ‘{“name”: “username”,”password”:”pass”}’ -H ‘Content-Type: application/json’ -uadmin:admin</td>
+    </tr>
+    <tr>
+      <td>Delete a user</td>
+      <td>DELETE /v1/users/username</td>
+      <td>curl -X DELETE http://AUTHSRV/v1/users/username -uadmin:admin</td>
+    </tr>
+    <tr>
+      <td>Add a cloud credentials for a user</td>
+      <td>PUT /v1/users/username/cloud-provider {data}</td>
+      <td>curl -X PUT -L -H ‘Content-Type: application/json’ http://AUTHSRV/v1/users/username/aws -uadmin:admin -T ~/.aws/credentials</td>
+    </tr>
+    <tr>
+      <td>Remove user’s cloud credentials</td>
+      <td>DELETE /v1/users/username/cloud-provider</td>
+      <td>curl -X DELETE -L http://AUTHSRV/v1/users/username/aws -uadmin:admin</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="token-management">Token management</h2>
+
+<p>Generating a token for data access does not require superuser credentials. Users must provide correct their username and password to get their tokens. Token has expiration time that is 24 hours by default. After that, the token must be reissued. To change default expiration time, look for <code class="highlighter-rouge">expiration_time</code> in the configuration file.</p>
+
+<p>Call revoke token API to forcefully invalidate a token before it expires.</p>
+
+<h3 id="rest-operations-1">REST operations</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>HTTP Action</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Generate a token for a user (Log in)</td>
+      <td>POST {“password”: “pass”} /v1/users/username</td>
+      <td>curl -X POST http://AUTHSRV/v1/users/username -d ‘{“password”:”pass”}’ -H ‘Content-Type: application/json’</td>
+    </tr>
+    <tr>
+      <td>Revoke a token (Log out)</td>
+      <td>DEL { “token”: “issued_token” } /v1/tokens</td>
+      <td>curl -X DEL http://AUTHSRV/v1/tokens -d ‘{“token”:”issued_token”}’ -H ‘Content-Type: application/json’</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A generated token is returned as a JSON formatted message. Example: <code class="highlighter-rouge">{"token": "issued_token"}</code>.</p>
+
+<h2 id="interaction-with-aistore-proxygateway">Interaction with AIStore proxy/gateway</h2>
+
+<p>AIStore proxies and targets require a valid token in a request header - but only if AuthN is enabled. Every token includes all the information needed by the target:</p>
+
+<ul>
+  <li>UserID (username)</li>
+  <li>Time when the token was generated</li>
+  <li>Time when the token expires</li>
+  <li>User’s AWS/GCP credentials</li>
+</ul>
+
+<p>A token is validated by a target. The token must not be expired and it must not be in the blacklist. The blacklist is a list of revoked tokens: tokens that are revoked with REST API or belong to deleted users. The list of revoked tokens is broadcast over the cluster on change. Periodically the list is cleaned up by removing expired tokens.</p>
+
+<h3 id="calling-aistore-proxy-api">Calling AIStore proxy API</h3>
+
+<p>If authentication is enabled a REST API call to the AIStore proxy must include a valid token issued by the AuthN. The token is passed in the request header in the format: <code class="highlighter-rouge">Authorization: Bearer &lt;token&gt;</code>. Curl example: <code class="highlighter-rouge">curl -L  http://PROXY/v1/buckets/* -X GET -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIs'</code>.</p>
+
+<p>At this moment, only requests to buckets and objects API require a token.</p>
+
+<h3 id="authn-server-typical-workflow">AuthN server typical workflow</h3>
+
+<p>If the AuthN server is enabled then all requests to buckets and objects should contain a valid token issued by AuthN. Requests without a token are rejected unless the AIS cluster is deployed with guest support enabled. In this case GET, HEAD, and list bucket requests do not require authorization - anyone can read the data but modifications are allowed only for registered users.</p>
+
+<p>Steps to generate and use a token:</p>
+
+<ol>
+  <li>Superuser creates a user account</li>
+</ol>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ curl -X POST http://AUTHSRV/v1/users \
+  -d '{"name": "username", "password": "pass"}' \
+  -H 'Content-Type: application/json' -uadmin:admin
+</code></pre></div></div>
+<ol>
+  <li>If the user needs access to user’s private buckets on  AWS or GCP, the superuser may add user’s credentials (example of adding AWS credentials from file)</li>
+</ol>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ curl -X PUT -L -H 'Content-Type: application/json' \
+  http://AUTHSRV/v1/users/username/aws \
+  -uadmin:admin -T ~/.aws/credentials
+</code></pre></div></div>
+<ol>
+  <li>The user requests a token</li>
+</ol>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ curl -X POST http://AUTHSRV/v1/users/username \
+  -d '{"password": "pass"}' -H 'Content-Type: application/json'
+
+{"token": "eyJhbGciOiJI.eyJjcmVkcyI.T6r6790"}
+
+</code></pre></div></div>
+<ol>
+  <li>The user adds the token for every AIStore request(list bucket names example)</li>
+</ol>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ curl -L  http://PROXY/v1/buckets/* -X GET \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer eyJhbGciOiJI.eyJjcmVkcyI.T6r6790"
+
+{
+  "cloud": [ "image-net-set-1" ],
+  "ais": [ "train-set-001", "train-set-002" ]
+}
+</code></pre></div></div>
+
+<h2 id="known-limitations">Known limitations</h2>
+
+<ul>
+  <li><strong>Per-bucket authentication</strong>. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users log in, they have full access to all the data;</li>
+  <li><strong>Token refresh</strong>. There is no automatic token refreshing. By default, a token expires in 24 hours. So, if you are going to run something for a longer time you should either add manual token refresh on getting ‘No authorized’ error or increase expiration time in settings.</li>
+</ul>
+
+  </div><a class="u-url" href="/aistore/authn" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

@@ -1,8 +1,11 @@
 ---
 layout: post
-title: CLI
-permalink: "cli/users"
+title: USERS
+permalink: cli/resources/users
+redirect_from:
+- cli/resources/users.md/
 ---
+
 ## User management
 
 An AIS cluster can be deployed with [AuthN](/authn/README.md) - AIS authorization server. The CLI provides an easy way to manage users and to grant and revoke access permissions.

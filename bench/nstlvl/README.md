@@ -1,3 +1,11 @@
+---
+layout: post
+title: BENCH/NSTLVL
+permalink: bench/nstlvl
+redirect_from:
+- bench/nstlvl/README.md/
+---
+
 This is a micro-benchmark intended to help find out the impact (or lack of thereof) of POSIX directory nesting on the performance. Specifically, on the performance of random reading of files stored in very large directories.
 
 By way of background, in AIStore (where we currently use local filesystems to store objects) the depth of POSIX directory nesting can be optimized - in some cases, and to a certain degree. This benchmark is a small step to find out.

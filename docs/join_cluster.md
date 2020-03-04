@@ -1,3 +1,11 @@
+---
+layout: post
+title: JOIN_CLUSTER
+permalink: docs/join_cluster
+redirect_from:
+- docs/join_cluster.md/
+---
+
 ## Table of Contents
 - [Joining a Cluster](#joining-a-cluster)
 

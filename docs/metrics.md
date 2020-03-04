@@ -1,3 +1,11 @@
+---
+layout: post
+title: METRICS
+permalink: docs/metrics
+redirect_from:
+- docs/metrics.md/
+---
+
 ## Table of Contents
 - [Background](#background)
 - [Conventions](#conventions)

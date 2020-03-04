@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>ON-DISK-LAYOUT | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="ON-DISK-LAYOUT" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/docs/on-disk-layout" />
+<meta property="og:url" content="http://localhost:4000/aistore/docs/on-disk-layout" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"ON-DISK-LAYOUT","@type":"WebPage","url":"http://localhost:4000/aistore/docs/on-disk-layout","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">ON-DISK-LAYOUT</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="on-disk-layout">On-Disk Layout</h2>
+
+<p>AIStore 3.0 introduces new on-disk layout that addresses several motivations including (but not limited to) the motivation to support multiple cloud backends. One of those Clouds can be (and starting with v3.0 <strong>is</strong>) AIStore itself with the immediate availability of AIS-to-AIS caching and a gamut of future capabilities: continuous data protection, DR, and more.</p>
+
+<p>At a high level, with v3.0:</p>
+
+<ul>
+  <li>in addition to checksum, all metadata (including object metadata) is versioned to provide for <strong>backward compatibility</strong> when (and <em>if</em>) there are any future changes;</li>
+  <li>cluster-wide control structures -  in particular, cluster map and bucket metadata - are now uniformly GUID-protected and LZ4-compressed;</li>
+  <li>bucket metadata is replicated, with multiple protected and versioned copies stored on data drives of <strong>all</strong> storage targets in a cluster.</li>
+</ul>
+
+<p>In addition, release 3.0 adds configurable namespaces whereby users can choose to group selected buckets for the purposes of physical isolation from all other buckets and datasets, and/or applying common (for this group) storage management policies: erasure coding, n-way mirroring, etc. But more about it later.</p>
+
+<p>Here’s a simplified drawing depicting two <a href="./providers.md">providers</a>, AIS and AWS, and two buckets, <code class="highlighter-rouge">ABC</code> and <code class="highlighter-rouge">XYZ</code>, respectively. In the picture, <code class="highlighter-rouge">mpath</code> is a single <a href="./configuration.md">mountpath</a> - a single disk <strong>or</strong> a volume formatted with a local filesystem of choice, <strong>and</strong> a local directory (<code class="highlighter-rouge">mpath/</code>):</p>
+
+<p><img src="images/PBCT.png" alt="on-disk hierarchy" width="160" /></p>
+
+<p>Further, each bucket would have a unified structure with several system directories (e.g., <code class="highlighter-rouge">%ec</code> that stores erasure coded content) and, of course, user data under <code class="highlighter-rouge">%ob</code> (“object”) locations.</p>
+
+<p>Needless to say, the same exact structure reproduces itself across all AIS storage nodes, and all data drives of each clustered node.</p>
+
+<p>With namespaces, the picture becomes only slightly more complicated. The following shows two AIS buckets, <code class="highlighter-rouge">DEF</code> and <code class="highlighter-rouge">GHJ</code>, under their respective user-defined namespaces called <code class="highlighter-rouge">#namespace-local</code> and <code class="highlighter-rouge">#namespace-remote</code>.  Unlike a local namespace of <em>this</em> cluster, the remote one would have to be prefixed with UUID - to uniquely identify another AIStore cluster hosting <code class="highlighter-rouge">GHJ</code> (in this example) and from where this bucket’s content will be replicated or cached, on-demand or via Prefetch API and <a href="./overview.md#existing-datasets">similar</a>.</p>
+
+<p><img src="images/PBCT-with-namespaces.png" alt="with namespaces" width="240" /></p>
+
+<h3 id="references">References</h3>
+
+<p>For the purposes of full disclosure and/or in-depth review, following are initial references into AIS sources that also handle on-disk representation of object metadata:</p>
+
+<ul>
+  <li><a href="/cluster/lom_xattr.go">local object metadata (LOM)</a></li>
+</ul>
+
+<p>and AIS control structures:</p>
+
+<ul>
+  <li><a href="/ais/bucketmeta.go">bucket metadata (BMD)</a></li>
+  <li><a href="/ais/clustermap.go">cluster map (Smap)</a></li>
+</ul>
+
+  </div><a class="u-url" href="/aistore/docs/on-disk-layout" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

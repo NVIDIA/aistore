@@ -1,10 +1,11 @@
 ---
 layout: post
-title: OpenAPI
+title: OPENAPI
 permalink: openapi
 redirect_from:
 - openapi/README.md/
 ---
+
 ## Python Client Package
 
 ## Table of Contents

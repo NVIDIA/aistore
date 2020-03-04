@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>BUCKET | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="BUCKET" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/docs/bucket" />
+<meta property="og:url" content="http://localhost:4000/aistore/docs/bucket" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"BUCKET","@type":"WebPage","url":"http://localhost:4000/aistore/docs/bucket","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">BUCKET</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+  <li><a href="#bucket">Bucket</a>
+    <ul>
+      <li><a href="#cloud-provider">Cloud Provider</a></li>
+    </ul>
+  </li>
+  <li><a href="#ais-bucket">AIS Bucket</a>
+    <ul>
+      <li><a href="#curl-examples-create-rename-and-destroy-ais-bucket">Curl examples: create, rename and, destroy ais bucket</a></li>
+    </ul>
+  </li>
+  <li><a href="#cloud-bucket">Cloud Bucket</a>
+    <ul>
+      <li><a href="#prefetchevict-objects">Prefetch/Evict Objects</a></li>
+      <li><a href="#evict-cloud-bucket">Evict Cloud Bucket</a></li>
+    </ul>
+  </li>
+  <li><a href="#bucket-access-attributes">Bucket Access Attributes</a></li>
+  <li><a href="#list-bucket">List Bucket</a>
+    <ul>
+      <li><a href="#properties-and-options">Properties and Options</a></li>
+      <li><a href="#curl-example-listing-ais-and-cloud-buckets">Curl example: listing ais and Cloud buckets</a></li>
+      <li><a href="#cli-examples-listing-and-setting-bucket-properties">CLI examples: listing and setting bucket properties</a></li>
+    </ul>
+  </li>
+  <li><a href="#recover-buckets">Recover Buckets</a>
+    <ul>
+      <li><a href="#example-recovering-buckets">Example: recovering buckets</a></li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="bucket">Bucket</h2>
+
+<p>AIS uses the popular-and-well-known bucket abstraction. In a flat storage hierarchy, bucket is a named container of user dataset(s) (represented as objects) and, simultaneously, a point of applying storage management policies: erasure coding, mirroring, etc.</p>
+
+<p>Each object is assigned to and stored in a basic container called bucket. AIS buckets are similar to the buckets in <a href="https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html">Amazon S3</a> and <a href="https://cloud.google.com/storage/docs/key-terms#buckets">Google Cloud (GCP)</a>.</p>
+
+<p>AIS supports two kinds of buckets: <strong>ais buckets</strong> and <strong>3rd party Cloud-based buckets</strong> (or simply <strong>cloud buckets</strong>).</p>
+
+<p>All the <a href="storage_svcs.md">supported storage services</a> equally apply to both kinds of buckets, with only a few exceptions. The following table summarizes them.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Kind</th>
+      <th>Description</th>
+      <th>Supported Storage Services (as of v2.0)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ais buckets</td>
+      <td>buckets that are <strong>not</strong> 3rd party Cloud-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). Unlike cloud buckets, ais buckets can be created through the <a href="http_api.md">RESTful API</a>. Similar to cloud buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster.</td>
+      <td><a href="storage_svcs.md#checksumming">Checksumming</a>, <a href="storage_svcs.md#lru-for-local-buckets">LRU (advanced usage)</a>, <a href="storage_svcs.md#erasure-coding">Erasure Coding</a>, <a href="storage_svcs.md#local-mirroring-and-load-balancing">Local Mirroring and Load Balancing</a></td>
+    </tr>
+    <tr>
+      <td>cloud buckets</td>
+      <td>When AIS is deployed as <a href="/docs/overview.md#fast-tier">fast tier</a>, buckets in the cloud storage can be viewed and accessed through the <a href="http_api.md">RESTful API</a> in AIS, in the exact same way as ais buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as <strong>Cloud-based buckets</strong> (or <strong>cloud buckets</strong> for short).</td>
+      <td><a href="storage_svcs.md#checksumming">Checksumming</a>, <a href="storage_svcs.md#lru">LRU</a>, <a href="storage_svcs.md#erasure-coding">Erasure Coding</a>, <a href="storage_svcs.md#local-mirroring-and-load-balancing">Local mirroring and load balancing</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Cloud-based and ais buckets support the same API with minor exceptions. Cloud buckets can be <em>evicted</em> from AIS. AIS buckets are the only buckets that can be created, renamed, and deleted via the <a href="http_api.md">RESTful API</a>.</p>
+
+<blockquote>
+  <p>Most of the examples below are <code class="highlighter-rouge">curl</code> based; it is possible, however, and often even preferable, to execute the same operations using <a href="../cli/README.md">AIS CLI</a>. In particular, for the commands that operate on buckets, please refer to <a href="../cli/resources/bucket.md">this CLI resource</a>.</p>
+</blockquote>
+
+<h3 id="cloud-provider">Cloud Provider</h3>
+
+<p><a href="./providers.md">Cloud Provider</a> is an abstraction, and, simultaneously, an API-supported option that allows to delineate between “remote” and “local” buckets with respect to a given (any given) AIS cluster. For complete definition and details, plase refer to the <a href="./providers.md">Cloud Provider</a> document.</p>
+
+<blockquote>
+  <p>Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and <a href="batch.md">Range/List</a> operations with supported enumerated values: <code class="highlighter-rouge">ais</code> for ais buckets, and <code class="highlighter-rouge">cloud</code>, <code class="highlighter-rouge">aws</code>, <code class="highlighter-rouge">gcp</code> for cloud buckets.</p>
+</blockquote>
+
+<p>For API reference, please refer <a href="http_api.md">to the RESTful API and examples</a>. The rest of this document serves to further explain features and concepts specific to storage buckets.</p>
+
+<h2 id="ais-bucket">AIS Bucket</h2>
+<p>AIS buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.</p>
+
+<p>The <a href="docs/http_api.md">RESTful API</a> can be used to create, rename and, destroy ais buckets.</p>
+
+<p>New ais buckets must be given a unique name that does not duplicate any existing ais or cloud bucket.</p>
+
+<h3 id="curl-examples-create-rename-and-destroy-ais-bucket">Curl examples: create, rename and, destroy ais bucket</h3>
+
+<p>To create an ais bucket with the name ‘myBucket’, rename it to ‘myBucket2’ and delete it, run:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>curl <span class="nt">-X</span> POST <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "createlb"}'</span> http://localhost:8080/v1/buckets/myBucket
+<span class="nv">$ </span>curl <span class="nt">-X</span> POST <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "renamelb",  "name": "myBucket2"}'</span> http://localhost:8080/v1/buckets/myBucket
+<span class="nv">$ </span>curl <span class="nt">-X</span> DELETE <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "destroylb"}'</span> http://localhost:8080/v1/buckets/myBucket2
+</code></pre></div></div>
+
+<h2 id="cloud-bucket">Cloud Bucket</h2>
+
+<p>Cloud buckets are existing buckets in the cloud storage when AIS is deployed as <a href="/README.md#fast-tier">fast tier</a>.</p>
+
+<blockquote>
+  <p>By default, AIS does not keep track of the cloud buckets in its configuration map. However, if users modify the properties of the cloud bucket, AIS will then keep track.</p>
+</blockquote>
+
+<h3 id="prefetchevict-objects">Prefetch/Evict Objects</h3>
+
+<p>Objects within cloud buckets are automatically fetched into storage targets when accessed through AIS and are evicted based on the monitored capacity and configurable high/low watermarks when <a href="storage_svcs.md#lru">LRU</a> is enabled.</p>
+
+<p>The <a href="docs/http_api.md">RESTful API</a> can be used to manually fetch a group of objects from the cloud bucket (called prefetch) into storage targets or to remove them from AIS (called evict).</p>
+
+<p>Objects are prefetched or evicted using <a href="batch.md#listrange-operations">List/Range Operations</a>.</p>
+
+<p>For example, to use a <a href="batch.md#list">list operation</a> to prefetch ‘o1’, ‘o2’, and, ‘o3’ from the cloud bucket <code class="highlighter-rouge">abc</code>, run:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl <span class="nt">-i</span> <span class="nt">-X</span> POST <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}'</span> http://localhost:8080/v1/buckets/abc
+</code></pre></div></div>
+
+<p>See the <a href="batch.md#listrange-operations">List/Range Operation section</a> for the <code class="highlighter-rouge">"deadline": "10s"</code> and <code class="highlighter-rouge">"wait":true</code> parameters.</p>
+
+<p>To use a <a href="batch.md#range">range operation</a> to evict the 1000th to 2000th objects in the cloud bucket <code class="highlighter-rouge">abc</code> from AIS, which begin with the prefix <code class="highlighter-rouge">__tst/test-</code> and contain a 4 digit number with <code class="highlighter-rouge">22</code> in the middle, run:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl <span class="nt">-i</span> <span class="nt">-X</span> DELETE <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action":"evictobjects", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}'</span> http://localhost:8080/v1/buckets/abc
+</code></pre></div></div>
+
+<h3 id="evict-cloud-bucket">Evict Cloud Bucket</h3>
+
+<p>Before a cloud bucket is accessed through AIS, the cluster has no awareness of the bucket.</p>
+
+<p>Once there is a request to access the bucket, or a request to change the bucket’s properties (see <code class="highlighter-rouge">set bucket props</code> in <a href="http_api.md">REST API</a>), then the AIS cluster starts keeping track of the bucket.</p>
+
+<p>In an evict bucket operation, AIS will remove all traces of the cloud bucket within the AIS cluster. This effectively resets the AIS cluster to the point before any requests to the bucket have been made. This does not affect the objects stored within the cloud bucket.</p>
+
+<p>For example, to evict the <code class="highlighter-rouge">abc</code> cloud bucket from the AIS cluster, run:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl <span class="nt">-i</span> <span class="nt">-X</span> DELETE <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "evictcb"}'</span> http://localhost:8080/v1/buckets/myS3bucket
+</code></pre></div></div>
+
+<h2 id="bucket-access-attributes">Bucket Access Attributes</h2>
+
+<p>Bucket access is controlled by a single 64-bit <code class="highlighter-rouge">aattrs</code> value in the <a href="../cmn/api.go">Bucket Properties structure</a>, whereby its bits have the following mapping as far as allowed (or denied) operations:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Bit Mask</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>GET</td>
+      <td>0x1</td>
+    </tr>
+    <tr>
+      <td>HEAD</td>
+      <td>0x2</td>
+    </tr>
+    <tr>
+      <td>PUT, APPEND</td>
+      <td>0x4</td>
+    </tr>
+    <tr>
+      <td>Cold GET</td>
+      <td>0x8</td>
+    </tr>
+    <tr>
+      <td>DELETE</td>
+      <td>0x16</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>For instance, to make bucket <code class="highlighter-rouge">abc</code> read-only, execute the following <a href="../cli/README.md">AIS CLI</a> command:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ais <span class="nb">set </span>props abc <span class="s1">'aattrs=ro'</span>
+</code></pre></div></div>
+
+<p>The same expressed via <code class="highlighter-rouge">curl</code> will look as follows:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl <span class="nt">-i</span> <span class="nt">-X</span> PATCH  <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "setprops", "value": {"aattrs": 18446744073709551587}}'</span> http://localhost:8080/v1/buckets/abc
+</code></pre></div></div>
+
+<blockquote>
+  <table>
+    <tbody>
+      <tr>
+        <td>18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4</td>
+        <td>8</td>
+        <td>16)</td>
+      </tr>
+    </tbody>
+  </table>
+</blockquote>
+
+<h2 id="list-bucket">List Bucket</h2>
+
+<p>ListBucket API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor or a marker for the <em>next</em> page retrieval.</p>
+
+<h3 id="properties-and-options">Properties and options</h3>
+<p>The properties-and-options specifier must be a JSON-encoded structure, for instance ‘{“props”: “size”}’ (see examples). An empty structure ‘{}’ results in getting just the names of the objects (from the specified bucket) with no other metadata.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Property/Option</th>
+      <th>Description</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>props</td>
+      <td>The properties to return with object names</td>
+      <td>A comma-separated string containing any combination of: “checksum”,”size”,”atime”,”version”,”targetURL”,”copies”,”status”. <sup id="a6"><a href="#ft6">6</a></sup></td>
+    </tr>
+    <tr>
+      <td>time_format</td>
+      <td>The standard by which times should be formatted</td>
+      <td>Any of the following <a href="http://golang.org/pkg/time/#pkg-constants">golang time constants</a>: RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822.</td>
+    </tr>
+    <tr>
+      <td>prefix</td>
+      <td>The prefix which all returned objects must have</td>
+      <td>For example, “my/directory/structure/”</td>
+    </tr>
+    <tr>
+      <td>pagemarker</td>
+      <td>The token identifying the next page to retrieve</td>
+      <td>Returned in the “nextpage” field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string</td>
+    </tr>
+    <tr>
+      <td>pagesize</td>
+      <td>The maximum number of object names returned in response</td>
+      <td>Default value is 1000. GCP and ais bucket support greater page sizes. AWS is unable to return more than <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html">1000 objects in one page</a></td>
+    </tr>
+    <tr>
+      <td>fast</td>
+      <td>Perform fast traversal of bucket contents</td>
+      <td>If <code class="highlighter-rouge">true</code>, the list of objects is generated much faster but the result is less accurate and has a few limitations: the only name of object is returned(props is ignored) and paging is unsupported as it always returns the entire bucket list(unless prefix is defined)</td>
+    </tr>
+    <tr>
+      <td>cached</td>
+      <td>Return only objects that are cached on local drives</td>
+      <td>For ais buckets the option is ignored. For cloud buckets, if <code class="highlighter-rouge">cached</code> is <code class="highlighter-rouge">true</code>, the cluster does not retrieve any data from the cloud, it reads only information from local drives</td>
+    </tr>
+    <tr>
+      <td>taskid</td>
+      <td>ID of the list bucket operation (string)</td>
+      <td>Listing a bucket is an asynchronous operation. First, a client should start the operation by sending <code class="highlighter-rouge">"0"</code> as <code class="highlighter-rouge">taskid</code> - <code class="highlighter-rouge">"0"</code> means initialize a new list operation. In response, a proxy returns a <code class="highlighter-rouge">taskid</code> generated for the operation. Then the client should poll the operation status using the same JSON-encoded structure but with <code class="highlighter-rouge">taskid</code> set to the received value. If the operation is still in progress the proxy returns status code 202(Accepted) and an empty body. If the operation is completed, it returns 200(OK) and the list of objects. The proxy can return status 410(Gone) indicating that the operation restarted and got a new ID. In this case, the client should read new operation ID from the response body</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The full list of bucket properties are:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Bucket Property</th>
+      <th>JSON</th>
+      <th>Description</th>
+      <th>Fields</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CloudProvider</td>
+      <td>cloud_provider</td>
+      <td>CloudProvider can be “aws”, “gcp” (clouds) - or “ais” (local)</td>
+      <td><code class="highlighter-rouge">"cloud_provider": "aws" \| "gcp" \| "ais"</code></td>
+    </tr>
+    <tr>
+      <td>Cksum</td>
+      <td>cksum</td>
+      <td>Configuration for <a href="docs/checksum.md">Checksum</a>. <code class="highlighter-rouge">validate_cold_get</code> determines whether or not the checksum of received object is checked after downloading it from the cloud. <code class="highlighter-rouge">validate_warm_get</code>: determines if the object’s version (if in Cloud-based bucket) and checksum are checked. If either value fail to match, the object is removed from local storage. <code class="highlighter-rouge">validate_cluster_migration</code> determines if the migrated objects across single cluster should have their checksum validated. <code class="highlighter-rouge">enable_read_range</code> returns the read range checksum otherwise return the entire object checksum.</td>
+      <td><code class="highlighter-rouge">"cksum": { "type": "none" \| "xxhash" \| "md5" \| "inherit", "validate_cold_get": bool,  "validate_warm_get": bool,  "validate_cluster_migration": bool, "enable_read_range": bool }</code></td>
+    </tr>
+    <tr>
+      <td>LRU</td>
+      <td>lru</td>
+      <td>Configuration for <a href="docs/storage_svcs.md#lru">LRU</a>. <code class="highlighter-rouge">lowwm</code> and <code class="highlighter-rouge">highwm</code> is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. <code class="highlighter-rouge">out_of_space</code> if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below <code class="highlighter-rouge">highwm</code>. <code class="highlighter-rouge">atime_cache_max</code> represents the maximum number of entries. <code class="highlighter-rouge">dont_evict_time</code> denotes the period of time during which eviction of an object is forbidden [atime, atime + <code class="highlighter-rouge">dont_evict_time</code>]. <code class="highlighter-rouge">capacity_upd_time</code> denotes the frequency at which AIStore updates local capacity utilization. <code class="highlighter-rouge">enabled</code> LRU will only run when set to true.</td>
+      <td><code class="highlighter-rouge">"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }</code></td>
+    </tr>
+    <tr>
+      <td>Mirror</td>
+      <td>mirror</td>
+      <td>Configuration for <a href="docs/storage_svcs.md#local-mirroring-and-load-balancing">Mirroring</a>. <code class="highlighter-rouge">copies</code> represents the number of local copies. <code class="highlighter-rouge">burst_buffer</code> represents channel buffer size.  <code class="highlighter-rouge">util_thresh</code> represents the threshold when utilizations are considered equivalent. <code class="highlighter-rouge">optimize_put</code> represents the optimization objective. <code class="highlighter-rouge">enabled</code> will only generate local copies when set to true.</td>
+      <td><code class="highlighter-rouge">"mirror": { "copies": int64, "burst_buffer": int64, "util_thresh": int64, "optimize_put": bool, "enabled": bool }</code></td>
+    </tr>
+    <tr>
+      <td>EC</td>
+      <td>ec</td>
+      <td>Configuration for <a href="docs/storage_svcs.md#erasure-coding">erasure coding</a>. <code class="highlighter-rouge">objsize_limit</code> is the limit in which objects below this size are replicated instead of EC’ed. <code class="highlighter-rouge">data_slices</code> represents the number of data slices. <code class="highlighter-rouge">parity_slices</code> represents the number of parity slices/replicas. <code class="highlighter-rouge">enabled</code> represents if EC is enabled.</td>
+      <td><code class="highlighter-rouge">"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }</code></td>
+    </tr>
+    <tr>
+      <td>Versioning</td>
+      <td>versioning</td>
+      <td>Configuration for object versioning support. <code class="highlighter-rouge">enabled</code> represents if object versioning is enabled for a bucket. For Cloud-based bucket, its versioning must be enabled in the cloud prior to enabling on AIS side. <code class="highlighter-rouge">validate_warm_get</code>: determines if the object’s version is checked(if in Cloud-based bucket)</td>
+      <td><code class="highlighter-rouge">"versioning": { "enabled": true, "validate_warm_get": false }</code></td>
+    </tr>
+    <tr>
+      <td>AccessAttrs</td>
+      <td>aatrs</td>
+      <td>Bucket access <a href="#bucket-access-attributes">attributes</a>. Default value is 0 - full access</td>
+      <td><code class="highlighter-rouge">"aatrs": "0" </code></td>
+    </tr>
+    <tr>
+      <td>BID</td>
+      <td>bid</td>
+      <td>Readonly property: unique bucket ID</td>
+      <td><code class="highlighter-rouge">"bid": "10e45"</code></td>
+    </tr>
+    <tr>
+      <td>InProgress</td>
+      <td>in_progress</td>
+      <td>Readonly property: determines if the bucket has been binded to some action and currently cannot be updated or changed in anyway until the action finishes</td>
+      <td><code class="highlighter-rouge">"in_progress": true</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p><code class="highlighter-rouge">SetBucketProps</code> allows the following configurations to be changed:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Property</th>
+      <th>Type</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">ec.enabled</code></td>
+      <td>bool</td>
+      <td>enables EC on the bucket</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ec.data_slices</code></td>
+      <td>int</td>
+      <td>number of data slices for EC</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ec.parity_slices</code></td>
+      <td>int</td>
+      <td>number of parity slices for EC</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ec.objsize_limit</code></td>
+      <td>int</td>
+      <td>size limit in which objects below this size are replicated instead of EC’ed</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">ec.compression</code></td>
+      <td>string</td>
+      <td>LZ4 compression parameters used when EC sends its fragments and replicas over network</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">mirror.enabled</code></td>
+      <td>bool</td>
+      <td>enable local mirroring</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">mirror.copies</code></td>
+      <td>int</td>
+      <td>number of local copies</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">mirror.util_thresh</code></td>
+      <td>int</td>
+      <td>threshold when utilizations are considered equivalent</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (“”). The atime (access time) property is supported for the objects that are present in the AIStore cache. <a href="#a6">↩</a></p>
+
+<h3 id="curl-example-listing-ais-and-cloud-buckets">Curl example: listing ais and Cloud buckets</h3>
+
+<p>Example of listing objects in the smoke/ subdirectory of a given bucket called ‘myBucket’, the result must include object respective sizes and checksums.</p>
+
+<p>Bucket list API is asynchronous, so it cannot be executed as one cURL command. The first request starts the task that enumerates objects in a background and returns the task ID to watch it:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>curl <span class="nt">-X</span> POST <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}'</span> http://localhost:8080/v1/buckets/myBucket
+5315610902768416055
+</code></pre></div></div>
+
+<p>Watch the task status, until it returns the list of objects. The requests is the same, except a field <code class="highlighter-rouge">taskid</code> that now contains the value returned by previous request(if <code class="highlighter-rouge">taskid</code> is zero or omitted, API starts a new task). If the task is still running, the request keeps responding with <code class="highlighter-rouge">taskid</code>. When the task completes, it returns the page content:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>curl <span class="nt">-X</span> POST <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "taskid": "5315610902768416055"}}'</span> http://localhost:8080/v1/buckets/myBucket
+<span class="o">{</span>
+  <span class="s2">"entries"</span>: <span class="o">[</span>
+    <span class="o">{</span>
+      <span class="s2">"name"</span>: <span class="s2">"zbIvfYiZlweQRORFBGGjOENsPigguamh"</span>,
+      <span class="s2">"size"</span>: 8388608,
+      <span class="s2">"checksum"</span>: <span class="s2">"983bfada723b7fa1"</span>,
+      <span class="s2">"copies"</span>: 1,
+      <span class="s2">"flags"</span>: 64
+    <span class="o">}</span>,
+    <span class="o">{</span>
+      <span class="s2">"name"</span>: <span class="s2">"zqlvXFpMkEzZyezafixTXvHUHDHGzWGp"</span>,
+      <span class="s2">"size"</span>: 8388608,
+      <span class="s2">"checksum"</span>: <span class="s2">"cb9a3c208f0bab01"</span>,
+      <span class="s2">"copies"</span>: 1,
+      <span class="s2">"flags"</span>: 64
+    <span class="o">}</span>
+  <span class="o">]</span>,
+  <span class="s2">"pagemarker"</span>: <span class="s2">""</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>The listing can be truncated: API returns at most 1000 objects per request. If a bucket contains more objects, one has to requests the list page by page. Please, note the field <code class="highlighter-rouge">pagemarker</code>: empty <code class="highlighter-rouge">pagemarker</code> in response means that there are no more objects left, it is the last page. Non-empty <code class="highlighter-rouge">pagemarker</code> should be used to request the next page. Example of requesting two pages:</p>
+
+<p>Start listing bucket from the first object (<code class="highlighter-rouge">taskid</code> is 0, and <code class="highlighter-rouge">pagemarker</code> is empty):</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nv">$ </span>curl <span class="nt">-X</span> POST <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}'</span> http://localhost:8080/v1/buckets/myBigBucket
+7315610902768416055
+
+<span class="nv">$ </span>curl <span class="nt">-X</span> POST <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "taskid": "7315610902768416055"}}'</span> http://localhost:8080/v1/buckets/myBigBucket
+<span class="o">{</span>
+  <span class="s2">"entries"</span>: <span class="o">[</span>
+    <span class="o">{</span>
+      <span class="s2">"name"</span>: <span class="s2">"zbIvfYiZlweQRORFBGGjOENsPigguamh"</span>,
+      <span class="s2">"size"</span>: 8388608,
+	  <span class="c"># many lines skipped</span>
+      <span class="s2">"copies"</span>: 1,
+      <span class="s2">"flags"</span>: 64
+    <span class="o">}</span>
+  <span class="o">]</span>,
+  <span class="s2">"pagemarker"</span>: <span class="s2">"PLqOWWuiCXATlSkhTXbnXlFCNWVhCUGR"</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>Request the next page (<code class="highlighter-rouge">pagemarker</code> is copied from the previous response - it is the only difference from the first request; do not forget to set <code class="highlighter-rouge">taskid</code> to <code class="highlighter-rouge">0</code> or remove it):</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>curl <span class="nt">-X</span> POST <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "pagemarker": "PLqOWWuiCXATlSkhTXbnXlFCNWVhCUGR"}}'</span> http://localhost:8080/v1/buckets/myBigBucket
+4910019837373721
+</code></pre></div></div>
+
+<p>For many more examples, please refer to the <a href="/ais/tests/">test sources</a> in the repository.</p>
+
+<h3 id="cli-examples-listing-and-setting-bucket-properties">CLI examples: listing and setting bucket properties</h3>
+
+<ol>
+  <li>List bucket properties:</li>
+</ol>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais <span class="nb">ls </span>props mybucket
+</code></pre></div></div>
+
+<p>or, same via command argument (and without the environment variable):</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais <span class="nb">ls </span>props mybucket
+</code></pre></div></div>
+
+<p>or, the same to get output in a (raw) JSON form:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais <span class="nb">ls </span>props mybucket <span class="nt">--json</span>
+</code></pre></div></div>
+
+<ol>
+  <li>Enable erasure coding on a bucket:</li>
+</ol>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais <span class="nb">set </span>props mybucket ec.enabled<span class="o">=</span><span class="nb">true</span>
+</code></pre></div></div>
+
+<ol>
+  <li>Enable object versioning and then list updated bucket properties:</li>
+</ol>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ais <span class="nb">set </span>props mybucket ver.enabled<span class="o">=</span><span class="nb">true</span>
+<span class="nv">$ </span>ais <span class="nb">ls </span>props mybucket
+</code></pre></div></div>
+
+<h2 id="recover-buckets">Recover Buckets</h2>
+
+<p>After rebuilding a cluster and redeploying proxies, the primary proxy does not have information about buckets used in a previous session. But targets still contain the old data. The primary proxy can retrieve bucket metadata from all targets and then recreate the buckets.</p>
+
+<p>Bucket recovering comes in two flavors: safe and forced. In safe mode the primary proxy requests bucket metadata from all targets in the cluster. If all the targets have the same metadata version, the primary proxy applies received metadata and then synchronize the new information across the cluster. Otherwise, API returns an error. When force mode is enabled, the primary does not require all the targets to have the same version. The primary chooses the metadata with the highest version and proceeds with it.</p>
+
+<h3 id="example-recovering-buckets">Example: recovering buckets</h3>
+
+<p>To recover buckets <em>safely</em>, run:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>curl <span class="nt">-X</span> POST <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "recoverbck"}'</span> http://localhost:8080/v1/buckets
+</code></pre></div></div>
+
+<p>To force recovering buckets:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>curl <span class="nt">-X</span> POST <span class="nt">-L</span> <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="nt">-d</span> <span class="s1">'{"action": "recoverbck"}'</span> http://localhost:8080/v1/buckets?force<span class="o">=</span><span class="nb">true</span>
+</code></pre></div></div>
+
+  </div><a class="u-url" href="/aistore/docs/bucket" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

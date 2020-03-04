@@ -1,3 +1,11 @@
+---
+layout: post
+title: REBALANCE
+permalink: docs/rebalance
+redirect_from:
+- docs/rebalance.md/
+---
+
 ## Table of Contents
 
 - [Global Rebalancing](#global-rebalancing)
@@ -23,7 +31,7 @@ Further, cluster-wide rebalancing does not require any downtime. Incoming GET re
 
 While global rebalancing (previous section) takes care of the *cluster-grow* and *cluster-shrink* events, local rebalancing, as the name implies, is responsible for the *mountpath-added* and *mountpath-removed* events that are handled locally within (and by) each storage target.
 
-* A [mountpath](overview.md#terminology) is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
+* A [mountpath](./overview.md#terminology) is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
 
 As stated, mountpath removal can be done administratively (via API) or be triggered by a disk fault (see [filesystem health checking](/health/fshc.md). Irrespectively of the original cause, mountpath-level events activate local rebalancer that in many ways performs the same set of steps as the global one. The one salient difference is that all object migrations are local (and, therefore, relatively fast(er)).
 

@@ -1,3 +1,11 @@
+---
+layout: post
+title: BENCH/MAP
+permalink: bench/map
+redirect_from:
+- bench/map/README.md/
+---
+
 ## Map Benchmark
 
 This benchmark tests the performance of regular maps versus sync.Maps focusing on the primitive operations of get, put, and delete while under contention. For the use case of AIStore, we want the read times to be as fast as possible.

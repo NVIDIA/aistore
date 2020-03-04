@@ -1,1 +1,9 @@
+---
+layout: post
+title: BENCH/FRANDREAD
+permalink: bench/frandread
+redirect_from:
+- bench/frandread/README.md/
+---
+
 A basic file-reading benchmark tool that traverses a given list of files multiple times only to read (fully) and immediately discard each read file. The list can be specified as a bunch of comma-separated directories or explicitly. Usage (the -h option) will give a further idea.

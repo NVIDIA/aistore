@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>DEPLOY/PROD/ANSIBLE | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="DEPLOY/PROD/ANSIBLE" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/deploy/prod/ansible" />
+<meta property="og:url" content="http://localhost:4000/aistore/deploy/prod/ansible" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"DEPLOY/PROD/ANSIBLE","@type":"WebPage","url":"http://localhost:4000/aistore/deploy/prod/ansible","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">DEPLOY/PROD/ANSIBLE</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="getting-started-ansible">Getting Started: Ansible</h2>
+
+<p>AIS can be run in bare VM or bare metal cluster. Here you can find simple ansible scripts that are meant to help configure AIS and start/stop it on Ubuntu base image.</p>
+
+<p>Ansible is used mostly to install few modules and copy simple AIS helper bash scripts over to AIS cluster. Most of the AIS operations are done using parallel-ssh.</p>
+
+<p>This README documents the steps to install and run AIS</p>
+
+<h4 id="install-ansible-and-parallel-ssh-on-controller-node">Install Ansible and Parallel-ssh on controller node</h4>
+<p>https://community.spiceworks.com/how_to/110622-install-ansible-on-64-bit-ubuntu-14-04-lts
+https://www.server-world.info/en/note?os=Ubuntu_14.04&amp;p=ssh&amp;f=8</p>
+
+<h4 id="download">Download</h4>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone git://github.com/NVIDIA/aistore
+git checkout ais_ansible
+</code></pre></div></div>
+
+<h4 id="configure-ais-cluster">Configure AIS cluster</h4>
+<ol>
+  <li>Create inventory file, see example inventory in ais_ansible/inventory folder.</li>
+  <li>Setup nodes - setup AIS paths, install go, aws cli
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ansible-playbook -i inventory/cluster.ini setupnodes.yml
+</code></pre></div>    </div>
+  </li>
+  <li>Get AIS - download AIS and related libs, build package
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ansible-playbook -i inventory/cluster.ini getgais.yml
+</code></pre></div>    </div>
+  </li>
+  <li>Config AIS - runs $AISSRC/setup/config.sh to create ais.json on all nodes in $HOME dir
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ansible-playbook -i inventory/cluster.ini configais.yml
+</code></pre></div>    </div>
+  </li>
+  <li>Copy helper scripts to start proxy/targets
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ansible proxy -m copy -a "src=startproxy.sh dest=/home/ubuntu/startproxy.sh" -i inventory/cluster.ini --become
+ansible proxy -m file -a "dest=/home/ubuntu/startproxy.sh mode=777 owner=ubuntu group=ubuntu" -i inventory/cluster.ini --become
+ansible targets -m copy -a "src=starttarget.sh dest=/home/ubuntu/starttarget.sh" -i inventory/cluster.ini --become
+ansible targets -m file -a "dest=/home/ubuntu/starttarget.sh mode=777 owner=ubuntu group=ubuntu" -i inventory/cluster.ini --become
+</code></pre></div>    </div>
+  </li>
+  <li>Start AIS
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>parallel-ssh -h inventory/proxy.txt -i 'nohup /home/ubuntu/startproxy.sh &gt;/dev/null 2&gt;&amp;1'
+parallel-ssh -h inventory/targets.txt -i 'nohup /home/ubuntu/starttarget.sh &gt;/dev/null 2&gt;&amp;1'
+</code></pre></div>    </div>
+  </li>
+  <li>Stop AIS if needed
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>parallel-ssh -h inventory/targets.txt -i 'nohup /home/ubuntu/stopais.sh &gt;/dev/null 2&gt;&amp;1'
+parallel-ssh -h inventory/proxy.txt -i 'nohup /home/ubuntu/stopais.sh &gt;/dev/null 2&gt;&amp;1'
+</code></pre></div>    </div>
+  </li>
+  <li>Get logs from cluster when needed
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ansible-playbook -i inventory/cluster.ini getaislogs.yml
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+
+  </div><a class="u-url" href="/aistore/deploy/prod/ansible" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

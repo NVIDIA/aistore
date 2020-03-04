@@ -1,3 +1,11 @@
+---
+layout: post
+title: HA
+permalink: docs/ha
+redirect_from:
+- docs/ha.md/
+---
+
 ## Table of Contents
 - [Highly Available Control Plane](#highly-available-control-plane)
     - [Bootstrap](#bootstrap)

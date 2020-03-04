@@ -1,8 +1,11 @@
 ---
 layout: post
-title: CLI
-permalink: "cli/download"
+title: DOWNLOAD
+permalink: cli/resources/download
+redirect_from:
+- cli/resources/download.md/
 ---
+
 ## Downloader
 
 The CLI allows users to view and manage [AIS Downloader](/downloader/README.md) jobs.

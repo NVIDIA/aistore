@@ -1,3 +1,11 @@
+---
+layout: post
+title: TROUBLESHOOTING
+permalink: docs/troubleshooting
+redirect_from:
+- docs/troubleshooting.md/
+---
+
 ## Introduction
 
 This text is intended to help troubleshooting AIStore operation.

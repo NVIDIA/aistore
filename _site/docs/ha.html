@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>HA | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="HA" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/docs/ha" />
+<meta property="og:url" content="http://localhost:4000/aistore/docs/ha" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"HA","@type":"WebPage","url":"http://localhost:4000/aistore/docs/ha","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">HA</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+  <li><a href="#highly-available-control-plane">Highly Available Control Plane</a>
+    <ul>
+      <li><a href="#bootstrap">Bootstrap</a></li>
+      <li><a href="#election">Election</a></li>
+      <li><a href="#non-electable-gateways">Non-electable gateways</a></li>
+      <li><a href="#metasync">Metasync</a></li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="highly-available-control-plane">Highly Available Control Plane</h2>
+
+<p>AIStore cluster will survive a loss of any storage target and any gateway including the primary gateway (leader). New gateways and targets can join at any time – including the time of electing a new leader. Each new node joining a running cluster will get updated with the most current cluster-level metadata.
+Failover – that is, the election of a new leader – is carried out automatically on failure of the current/previous leader. Failback on the hand – that is, administrative selection of the leading (likely, an originally designated) gateway – is done manually via AIStore <a href="/docs/http_api.md">HTTP API</a>.</p>
+
+<p>It is, therefore, recommended that AIStore cluster is deployed with multiple proxies aka gateways (the terms that are interchangeably used throughout the source code and this README).</p>
+
+<p>When there are multiple proxies, only one of them acts as the primary while all the rest are, respectively, non-primaries. The primary proxy’s (primary) responsibility is serializing updates of the cluster-level metadata (which is also versioned and immutable).</p>
+
+<p>Further:</p>
+
+<ul>
+  <li>Each proxy/gateway stores a local copy of the cluster map (Smap)</li>
+  <li>Each Smap instance is immutable and versioned; the versioning is monotonic (increasing)</li>
+  <li>Only the current primary (leader) proxy distributes Smap updates to all other clustered nodes</li>
+</ul>
+
+<h3 id="bootstrap">Bootstrap</h3>
+
+<p>The proxy’s bootstrap sequence initiates by executing the following three main steps:</p>
+
+<ul>
+  <li>step 1: load a local copy of the cluster map and try to use it for the discovery of the current one;</li>
+  <li>step 2: use the local configuration and the local Smap to perform the discovery of the cluster-level metadata;</li>
+  <li>step 3: use all of the above <em>and</em> the environment setting “AIS_PRIMARYPROXY” to figure out whether this proxy must keep starting up as a primary (otherwise, join as a non-primary).</li>
+</ul>
+
+<p>Further, the (potentially) primary proxy executes more steps:</p>
+
+<ul>
+  <li>(i)    initialize empty Smap;</li>
+  <li>(ii)   wait a configured time for other nodes to join;</li>
+  <li>(iii)  merge the Smap containing newly joined nodes with the Smap that was previously discovered;</li>
+  <li>(iiii) and use the latter to rediscover cluster-wide metadata and resolve remaining conflicts, if any.</li>
+</ul>
+
+<p>If during any of these steps the proxy finds out that it must be joining as a non-primary then it simply does so.</p>
+
+<h3 id="election">Election</h3>
+
+<p>The primary proxy election process is as follows:</p>
+
+<ul>
+  <li>A candidate to replace the current (failed) primary is selected;</li>
+  <li>The candidate is notified that an election is commencing;</li>
+  <li>After the candidate (proxy) confirms that the current primary proxy is down, it broadcasts vote requests to all other nodes;</li>
+  <li>Each recipient node confirms whether the current primary is down and whether the candidate proxy has the HRW (Highest Random Weight) according to the local Smap;</li>
+  <li>If confirmed, the node responds with Yes, otherwise it’s a No;</li>
+  <li>If and when the candidate receives a majority of affirmative responses it performs the commit phase of this two-phase process by distributing an updated cluster map to all nodes.</li>
+</ul>
+
+<h3 id="non-electable-gateways">Non-electable gateways</h3>
+
+<p>AIStore cluster can be <em>stretched</em> to collocate its redundant gateways with the compute nodes. Those non-electable local gateways (<a href="/ais/setup/config.sh">AIStore configuration</a>) will only serve as access points but will never take on the responsibility of leading the cluster.</p>
+
+<h3 id="metasync">Metasync</h3>
+
+<p>By design, AIStore does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In AIStore, these objects are consistently replicated across the entire cluster – the component responsible for this is called <a href="/ais/metasync.go">metasync</a>. AIStore metasync makes sure to keep cluster-level metadata in-sync at all times.</p>
+
+
+  </div><a class="u-url" href="/aistore/docs/ha" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

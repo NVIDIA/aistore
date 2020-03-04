@@ -1,3 +1,11 @@
+---
+layout: post
+title: CHECKSUM
+permalink: docs/checksum
+redirect_from:
+- docs/checksum.md/
+---
+
 ## Table of Contents
 - [Object checksums: brief theory of operations](#object-checksums-brief-theory-of-operations)
 

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>AIStore | AIStore - distributed object storage</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="AIStore" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<meta property="og:description" content="AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore" />
+<link rel="canonical" href="http://localhost:4000/aistore/" />
+<meta property="og:url" content="http://localhost:4000/aistore/" />
+<meta property="og:site_name" content="AIStore - distributed object storage" />
+<script type="application/ld+json">
+{"headline":"AIStore","@type":"WebSite","url":"http://localhost:4000/aistore/","name":"AIStore - distributed object storage","description":"AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/aistore/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/aistore/feed.xml" title="AIStore - distributed object storage" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/aistore/">AIStore - distributed object storage</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">AIStore</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="" itemprop="datePublished">
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <p><strong>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning.</strong></p>
+
+<p><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
+<img src="https://goreportcard.com/badge/github.com/NVIDIA/aistore" alt="Go Report Card" /></p>
+
+<p>AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. At its version 2.x, AIS consistently shows balanced I/O distribution across arbitrary numbers of clustered servers and hard drives (consistently) producing performance charts that look as follows:</p>
+
+<p><img src="docs/images/ais-disk-throughput-flat.png" alt="I/O distribution" width="600" /></p>
+
+<blockquote>
+  <p>The picture above <em>comprises</em> 120 HDDs.</p>
+</blockquote>
+
+<blockquote>
+  <p>The capability to linearly scale-out for millions of stored objects (often also referred to as <em>shards</em>) was, and remains, one of the main incentives to build AIStore. But not the only one.</p>
+</blockquote>
+
+<h2 id="features">Features</h2>
+
+<ul>
+  <li>scale-out with no downtime and no limitation;</li>
+  <li>HTTP REST API to GET/PUT objects, create, destroy, list and configure buckets;</li>
+  <li>FUSE client (<code class="highlighter-rouge">aisfs</code>) to access AIS objects as files;</li>
+  <li>arbitrary number of (extremely lightweight) access points;</li>
+  <li>easy-to-use CLI supporting command-line (TAB) completions;</li>
+  <li>automated rebalancing upon changes in cluster membership, drive failures, bucket renames;</li>
+  <li>N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;</li>
+</ul>
+
+<p>Also, AIStore:</p>
+
+<ul>
+  <li>can be deployed on any commodity hardware;</li>
+  <li>supports Amazon S3 and Google Cloud Storage backends (and all GCS and S3-compliant object storages);</li>
+  <li>can be used as a fast tier or a cache for GCS and S3; can be populated on-demand and/or via separate <code class="highlighter-rouge">prefetch</code> and <code class="highlighter-rouge">download</code> APIs;</li>
+  <li>can be used as a standalone highly-available protected storage;</li>
+  <li>includes MapReduce extension for massively parallel resharding of very large datasets.</li>
+</ul>
+
+<p>Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux <code class="highlighter-rouge">tar(1)</code>, <code class="highlighter-rouge">scp(1)</code>, <code class="highlighter-rouge">rsync(1)</code> and similar.</p>
+
+<p>For AIStore <strong>white paper</strong> and design philosophy, please see the <a href="docs/overview.md">overview document</a> (where you can also find 5 alternative ways to populate AIStore with existing datasets).</p>
+
+<p><strong>Table of Contents</strong></p>
+<ul>
+  <li><a href="#prerequisites">Prerequisites</a></li>
+  <li><a href="#getting-started">Getting Started</a></li>
+  <li><a href="#build-make-and-development-tools">Build, Make, and Development Tools</a></li>
+  <li><a href="#deployment">Deployment</a></li>
+  <li><a href="#containerized-deployments-host-resource-sharing">Containerized Deployments: Host Resource Sharing</a></li>
+  <li><a href="#performance-monitoring">Performance Monitoring</a></li>
+  <li><a href="#configuration">Configuration</a></li>
+  <li><a href="#guides-and-references">Guides and References</a></li>
+  <li><a href="#assorted-tips">Assorted Tips</a></li>
+  <li><a href="#selected-package-readmes">Selected Package READMEs</a></li>
+</ul>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<ul>
+  <li><a href="#Linux">Linux</a> (with <code class="highlighter-rouge">gcc</code>, <code class="highlighter-rouge">sysstat</code> and <code class="highlighter-rouge">attr</code> packages, and kernel 4.15+) or <a href="#MacOS">MacOS</a></li>
+  <li><a href="https://golang.org/dl/">Go 1.13 or later</a></li>
+  <li>Extended attributes (<code class="highlighter-rouge">xattrs</code> - see below)</li>
+  <li>Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)</li>
+</ul>
+
+<h3 id="linux">Linux</h3>
+
+<p>Depending on your Linux distribution, you may or may not have <code class="highlighter-rouge">gcc</code>, <code class="highlighter-rouge">sysstat</code>, and/or <code class="highlighter-rouge">attr</code> packages.</p>
+
+<p>The capability called <a href="https://en.wikipedia.org/wiki/Extended_file_attributes">extended attributes</a>, or xattrs, is a long time POSIX legacy and is supported by all mainstream filesystems with no exceptions. Unfortunately, extended attributes (xattrs) may not always be enabled (by the Linux distribution you are using) in the Linux kernel configurations - the fact that can be easily found out by running <code class="highlighter-rouge">setfattr</code> command.</p>
+
+<blockquote>
+  <p>If disabled, please make sure to enable xattrs in your Linux kernel configuration.</p>
+</blockquote>
+
+<h3 id="macos">MacOS</h3>
+
+<p>MacOS/Darwin is also supported, albeit for development only. Certain capabilities related to querying the state-and-status of local hardware resources (memory, CPU, disks) may be missing, which is why we <strong>strongly</strong> recommend Linux for production deployments.</p>
+
+<h2 id="getting-started">Getting Started</h2>
+
+<p>AIStore runs on commodity Linux machines with no special hardware requirements whatsoever. Deployment <a href="deploy">options</a> are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.</p>
+
+<blockquote>
+  <p>It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.</p>
+</blockquote>
+
+<p>Assuming that <a href="https://golang.org/dl/">Go</a> is already installed, the remaining getting-started steps are:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cd</span> <span class="nv">$GOPATH</span>/src
+<span class="nv">$ </span>go get <span class="nt">-v</span> github.com/NVIDIA/aistore/ais
+<span class="nv">$ </span><span class="nb">cd </span>github.com/NVIDIA/aistore
+<span class="nv">$ </span>make deploy
+<span class="nv">$ </span>go <span class="nb">test</span> ./tests <span class="nt">-v</span> <span class="nt">-run</span><span class="o">=</span>Mirror
+</code></pre></div></div>
+<p>where:</p>
+
+<ul>
+  <li><code class="highlighter-rouge">go get</code> installs sources and dependencies under your <a href="https://golang.org/cmd/go/#hdr-GOPATH_environment_variable">$GOPATH</a>.</li>
+  <li><code class="highlighter-rouge">make deploy</code> deploys AIStore daemons locally and interactively, for example:</li>
+</ul>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>make deploy
+Enter number of storage targets:
+10
+Enter number of proxies <span class="o">(</span>gateways<span class="o">)</span>:
+3
+Number of <span class="nb">local </span>cache directories <span class="o">(</span>enter 0 to use preconfigured filesystems<span class="o">)</span>:
+2
+Select:
+ 0: No cloud provider
+ 1: Amazon Cloud
+ 2: Google Cloud
+ 3: AIS Cloud - remote cluster
+Enter your provider choice <span class="o">(</span>0, 1, 2 or 3<span class="o">)</span>:
+0
+</code></pre></div></div>
+
+<p>Or, you can run all of the above non-interactively:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>make <span class="nb">kill</span><span class="p">;</span> make deploy <span class="o">&lt;&lt;&lt;</span> <span class="s1">$'10</span><span class="se">\n</span><span class="s1">3</span><span class="se">\n</span><span class="s1">2</span><span class="se">\n</span><span class="s1">0'</span>
+</code></pre></div></div>
+
+<blockquote>
+  <p>The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the “Cloud Provider” prompt above and the fact that access to Cloud storage is specified at the deployment time.</p>
+</blockquote>
+
+<blockquote>
+  <p><code class="highlighter-rouge">make kill</code> will terminate local AIStore if it’s already running.</p>
+</blockquote>
+
+<p>Finally, the <code class="highlighter-rouge">go test</code> (above) will create an ais bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.</p>
+
+<p>Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running <code class="highlighter-rouge">go test</code> commands. For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ BUCKET</span><span class="o">=</span>myS3bucket go <span class="nb">test</span> ./tests <span class="nt">-v</span> <span class="nt">-run</span><span class="o">=</span>download
+</code></pre></div></div>
+
+<p>Here’s a minor variation of the above:</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ BUCKET</span><span class="o">=</span>myS3bucket go <span class="nb">test</span> ./tests <span class="nt">-v</span> <span class="nt">-run</span><span class="o">=</span>download <span class="nt">-args</span> <span class="nt">-numfiles</span><span class="o">=</span>100 <span class="nt">-match</span><span class="o">=</span><span class="s1">'a\d+'</span>
+</code></pre></div></div>
+
+<p>This command runs a test that matches the specified string (“download”). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match <code class="highlighter-rouge">a\d+</code> regex.</p>
+
+<h2 id="build-make-and-development-tools">Build, Make and Development Tools</h2>
+
+<p>As noted, the project utilizes GNU <code class="highlighter-rouge">make</code> to build and run things both locally and remotely (e.g., when deploying AIStore via <a href="dev/kubernetes/Dockerfile">Kubernetes</a>. As the very first step, run <code class="highlighter-rouge">make help</code> for help on:</p>
+
+<ul>
+  <li><strong>building</strong> AIS binary (called <code class="highlighter-rouge">aisnode</code>) deployable as both a storage target <em>or</em> a proxy/gateway;</li>
+  <li><strong>building</strong> <a href="cli/README.md">CLI</a>, FUSE <a href="fuse/README.md">aisfs</a>, and benchmark binaries;</li>
+</ul>
+
+<p>In particular, the <code class="highlighter-rouge">make</code> provides a growing number of developer-friendly commands to:</p>
+
+<ul>
+  <li><strong>deploy</strong> AIS cluster on your local development machine;</li>
+  <li><strong>run</strong> all or selected tests;</li>
+  <li><strong>instrument</strong> AIS binary with race detection, CPU and/or memory profiling, and more.</li>
+</ul>
+
+<h2 id="deployment">Deployment</h2>
+
+<p>As previously stated, AIStore can be deployed in a vast variety of <a href="deploy">ways</a>. This section focuses on a single Linux machine; as such, it is intended for developers and development, <em>or</em> for a quick trial.</p>
+
+<h3 id="local-docker-compose">Local Docker-Compose</h3>
+
+<p>The 2nd option to run AIS on your local machine requires <a href="https://docs.docker.com/">Docker</a> and <a href="https://docs.docker.com/compose/overview/">Docker-Compose</a>. It also allows for multi-clusters deployment with multiple separate networks. You can deploy a simple AIS cluster within seconds or deploy a multi-container cluster for development.</p>
+
+<p>To get started with AIStore and Docker, see: <a href="docs/docker_main.md">Getting started with Docker</a>.</p>
+
+<h3 id="local-kubernetes">Local Kubernetes</h3>
+
+<p>The 3rd and final local-deployment option makes use of <a href="https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/">Kubeadm</a> and is documented <a href="deploy/dev/kubernetes">here</a>.</p>
+
+<h2 id="containerized-deployments-host-resource-sharing">Containerized Deployments: Host Resource Sharing</h2>
+
+<p>The following <strong>applies to all containerized deployments</strong>:</p>
+
+<ol>
+  <li>AIS nodes always automatically detect <em>containerization</em>.</li>
+  <li>If deployed as a container, each AIS node independently discovers whether its own container’s memory and/or CPU resources are restricted.</li>
+  <li>Finally, the node then abides by those restrictions.</li>
+</ol>
+
+<p>To that end, each AIS node at startup loads and parses <a href="https://www.kernel.org/doc/Documentation/cgroup-v2.txt">cgroup</a> settings for the container and, if the number of CPUs is restricted, adjusts the number of allocated system threads for its goroutines.</p>
+
+<blockquote>
+  <p>This adjustment is accomplished via the Go runtime <a href="https://golang.org/pkg/runtime/">GOMAXPROCS variable</a>. For in-depth information on CPU bandwidth control and scheduling in a multi-container environment, please refer to the <a href="https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt">CFS Bandwidth Control</a> document.</p>
+</blockquote>
+
+<p>Further, given the container’s cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself.</p>
+
+<blockquote>
+  <p>Limits on memory may affect <a href="dsort/README.md">dSort</a> performance forcing it to “spill” the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.</p>
+</blockquote>
+
+<blockquote>
+  <p>For technical details on AIS memory management, please see <a href="memsys/README.md">this readme</a>.</p>
+</blockquote>
+
+<h2 id="performance-monitoring">Performance Monitoring</h2>
+
+<p>As is usually the case with storage clusters, there are multiple ways to monitor their performance.</p>
+
+<blockquote>
+  <p>AIStore includes <code class="highlighter-rouge">aisloader</code> - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see <a href="docs/howto_benchmark.md">AIS Load Generator</a>.</p>
+</blockquote>
+
+<p>For starters, AIS collects and logs a fairly large and constantly growing number of counters that describe all aspects of its operation, including (but not limited to) those that reflect cluster recovery/rebalancing, all <a href="docs/xaction.md">extended long-running operations</a>, and, of course, object storage transactions.</p>
+
+<p>In particular:</p>
+
+<blockquote>
+  <p>For dSort monitoring, please see <a href="dsort/README.md">dSort</a>
+For Downloader monitoring, please see <a href="downloader/README.md">Internet Downloader</a></p>
+</blockquote>
+
+<p>The logging interval is called <code class="highlighter-rouge">stats_time</code> (default <code class="highlighter-rouge">10s</code>) and is <a href="docs/configuration.md">configurable</a> on the level of both each specific node and the entire cluster.</p>
+
+<p>However. Speaking of ways to monitor AIS remotely, the two most obvious ones would be:</p>
+
+<ul>
+  <li><a href="cli/README.md">AIS CLI</a></li>
+  <li>Graphite/Grafana</li>
+</ul>
+
+<p>As far as Graphite/Grafana, AIS integrates with these popular backends via <a href="https://github.com/etsy/statsd">StatsD</a> - the <em>daemon for easy but powerful stats aggregation</em>. StatsD can be connected to Graphite, which then can be used as a data source for Grafana to get a visual overview of the statistics and metrics.</p>
+
+<blockquote>
+  <p>The scripts for easy deployment of both Graphite and Grafana are included (see below).</p>
+</blockquote>
+
+<blockquote>
+  <p>For <a href="#deployment-local-non-containerized">local non-containerized deployments</a>, use <code class="highlighter-rouge">./ais/setup/deploy_grafana.sh</code> to start Graphite and Grafana containers. Local deployment scripts will automatically “notice” the presence of the containers and will send statistics to the Graphite.</p>
+</blockquote>
+
+<blockquote>
+  <p>For <a href="#deployment-local-docker-compose">local docker-compose based deployments</a>, make sure to use <code class="highlighter-rouge">-grafana</code> command-line option. The <code class="highlighter-rouge">deploy_docker.sh</code> script will then spin-up Graphite and Grafana containers.</p>
+</blockquote>
+
+<p>In both of these cases, Grafana will be accessible at <a href="http://localhost:3000">localhost:3000</a>.</p>
+
+<blockquote>
+  <p>For information on AIS statistics, please see <a href="docs/metrics.md">Statistics, Collected Metrics, Visualization</a></p>
+</blockquote>
+
+<h2 id="configuration">Configuration</h2>
+
+<p>AIS configuration is consolidated in a single <a href="ais/setup/config.sh">JSON template</a> where the configuration sections and the knobs within those sections must be self-explanatory, whereby the majority of those (except maybe just a few) have pre-assigned default values. The configuration template serves as a <strong>single source for all deployment-specific configurations</strong>, examples of which can be found under the folder that consolidates both <a href="deploy">containerized-development and production deployment scripts</a>.</p>
+
+<p>AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:</p>
+
+<ul>
+  <li>user (aka public)</li>
+  <li>intra-cluster control</li>
+  <li>intra-cluster data</li>
+</ul>
+
+<p>with the corresponding <a href="ais/setup/config.sh">JSON names</a>, respectively:</p>
+
+<ul>
+  <li><code class="highlighter-rouge">ipv4</code></li>
+  <li><code class="highlighter-rouge">ipv4_intra_control</code></li>
+  <li><code class="highlighter-rouge">ipv4_intra_data</code></li>
+</ul>
+
+<h2 id="assorted-tips">Assorted Tips</h2>
+
+<blockquote>
+  <p>To enable an optional AIStore authentication server, execute <code class="highlighter-rouge">$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy</code>. For information on AuthN server, please see <a href="authn/README.md">AuthN documentation</a>.</p>
+</blockquote>
+
+<blockquote>
+  <p>In addition to AIStore - the storage cluster, you can also deploy <a href="fuse/README.md">aisfs</a> - to access AIS objects as files, and <a href="cli/README.md">AIS CLI</a> - to monitor, configure and manage AIS nodes and buckets.</p>
+</blockquote>
+
+<blockquote>
+  <p>AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be <code class="highlighter-rouge">ais status</code> - show the state and status of an AIS cluster). The CLI is documented in the <a href="cli/README.md">readme</a>; getting started with it boils down to running <code class="highlighter-rouge">make cli</code> and following the prompts.</p>
+</blockquote>
+
+<blockquote>
+  <p>For more testing commands and options, please refer to the <a href="ais/tests/README.md">testing README</a>.</p>
+</blockquote>
+
+<blockquote>
+  <p>For <code class="highlighter-rouge">aisnode</code> command-line options, see: <a href="docs/command_line.md">command-line options</a>.</p>
+</blockquote>
+
+<blockquote>
+  <p>For helpful links and/or background on Go, AWS, GCP, and Deep Learning: <a href="docs/helpful-links.md">helpful links</a>.</p>
+</blockquote>
+
+<blockquote>
+  <p>And again, run <code class="highlighter-rouge">make help</code> to find out how to build, run, and test AIStore and tools.</p>
+</blockquote>
+
+<h2 id="guides-and-references">Guides and References</h2>
+<ul>
+  <li><a href="docs/overview.md">AIS Overview</a></li>
+  <li><a href="cli/README.md">CLI</a></li>
+  <li><a href="docs/on-disk-layout.md">On-Disk Layout</a></li>
+  <li><a href="docs/command_line.md">Command line parameters</a></li>
+  <li><a href="bench/aisloader/README.md">AIS Load Generator: integrated benchmark tool</a></li>
+  <li><a href="docs/batch.md">Batch List and Range Operations: Prefetch, and more</a></li>
+  <li><a href="docs/checksum.md">Object checksums: Brief Theory of Operations</a></li>
+  <li><a href="docs/configuration.md">Configuration</a></li>
+  <li><a href="docs/datapath.md">Datapath: Read and Write Sequence Diagrams</a></li>
+  <li><a href="docs/ha.md">Highly available control plane</a></li>
+  <li><a href="docs/howto_benchmark.md">How to benchmark</a></li>
+  <li><a href="docs/http_api.md">RESTful API</a></li>
+  <li><a href="fuse/README.md">File access</a></li>
+  <li><a href="docs/join_cluster.md">Joining AIS cluster</a></li>
+  <li><a href="docs/bucket.md#bucket">AIS Buckets: definition, operations, properties</a></li>
+  <li><a href="docs/metrics.md">Statistics, Collected Metrics, Visualization</a></li>
+  <li><a href="docs/performance.md">Performance: Tuning and Testing</a></li>
+  <li><a href="docs/rebalance.md">Cluster-wide Rebalancing</a></li>
+  <li><a href="docs/storage_svcs.md">Storage Services</a></li>
+  <li><a href="docs/xaction.md">Extended Actions</a></li>
+  <li><a href="downloader/README.md">Integrated Internet Downloader</a></li>
+  <li><a href="docs/docker_main.md">Docker for AIS developers</a></li>
+  <li><a href="docs/troubleshooting.md">Troubleshooting Cluster Operation</a></li>
+</ul>
+
+<h2 id="selected-package-readmes">Selected Package READMEs</h2>
+<ul>
+  <li><a href="api/README.md">Package <code class="highlighter-rouge">api</code></a></li>
+  <li><a href="cli/README.md">Package <code class="highlighter-rouge">cli</code></a></li>
+  <li><a href="fuse/README.md">Package <code class="highlighter-rouge">fuse</code></a></li>
+  <li><a href="downloader/README.md">Package <code class="highlighter-rouge">downloader</code></a></li>
+  <li><a href="memsys/README.md">Package <code class="highlighter-rouge">memsys</code></a></li>
+  <li><a href="transport/README.md">Package <code class="highlighter-rouge">transport</code></a></li>
+  <li><a href="dsort/README.md">Package <code class="highlighter-rouge">dSort</code></a></li>
+  <li><a href="openapi/README.md">Package <code class="highlighter-rouge">openapi</code></a></li>
+</ul>
+
+  </div><a class="u-url" href="/aistore/" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/aistore/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">AIStore - distributed object storage</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">AIStore - distributed object storage</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning. See more at: github.com/NVIDIA/aistore
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

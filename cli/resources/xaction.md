@@ -1,8 +1,11 @@
 ---
 layout: post
-title: CLI
-permalink: "cli/xaction"
+title: XACTION
+permalink: cli/resources/xaction
+redirect_from:
+- cli/resources/xaction.md/
 ---
+
 ## Extended Actions (X-actions or xactions)
 
 The CLI allows users to interact with AIStore [Xactions](../../docs/xaction.md).
