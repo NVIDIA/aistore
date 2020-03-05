@@ -12,8 +12,8 @@ Next, run the `lsblk` command to get a list of all disks, the value under the `N
 
 Finally, run the script using the disks you want use in the benchmark.
 
-```sh
-./compare <disk1> ... <diskN> > /path/to/results.csv
+```console
+$ ./compare <disk1> ... <diskN> > /path/to/results.csv
 ```
 
 This continuously writes the benchmark data to `/path/to/results.csv`.

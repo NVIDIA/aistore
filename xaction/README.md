@@ -36,20 +36,24 @@ List of supported actions can be found in the [API](/cmn/api.go)
 Xaction requests are generic for all xactions, but responses from each xaction are different. See [below](#start-&-stop).
 The request looks as follows:
 1.Single target request:
-```shell
-curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://T/v1/daemon?what=xaction'
+
+```console
+$ curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://T/v1/daemon?what=xaction'
 ```
 To simplify the logic, result is always an array, even if there's only one element in the result
 
 2.Proxy request, which executes a request on all targets within the cluster, and responds with list of targets' responses:
-```shell
-curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://G/v1/cluster?what=xaction'
+
+```console
+$ curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://G/v1/cluster?what=xaction'
 ```
+
 Response of a query to proxy is a map of daemonID -> target's response. If any of targets responded with error status code, the proxy's response
 will result in the same error response.
 
 
 ### Start & Stop
+
 For a successful request, the response only contains the HTTP status code. If the request was sent to the proxy and all targets
 responded with a successful HTTP code, the proxy would respond with the successful HTTP code. The response body should be omitted.
 
@@ -84,9 +88,11 @@ Stats request results in list of requested xactions. Statistics of each xaction 
    }
 ]
 ```
+
 Any xaction can have additional fields, which are included in additional field called `"ext"`
 
 Example rebalance stats response:
+
 ```json
 [
     {

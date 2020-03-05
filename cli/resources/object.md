@@ -19,25 +19,25 @@ GET object from bucket.
 
 1) GET object `myobj.txt` from bucket `mybucket` and write it as file `~/obj.txt`
 
-```sh
+```console
 $ ais get mybucket/myobj.txt ~/obj.txt
 ```
 
 2) GET object `myobj.txt` from cloud bucket `mybucket` and write it to standard output
 
-```sh
+```console
 $ ais get cloud://mybucket/myobj.txt -
 ```
 
 3) Check if object `myobj.txt` from bucket `mybucket` is cached locally
 
-```sh
+```console
 $ ais get --is-cached mybucket/myobj.txt
 ```
 
 4) Read Range: GET contents of object `myobj.txt` starting from offset `1024` length `1024`
 
-```sh
+```console
 $ ais get mybucket/myobj.txt ~/obj.txt --offset 1024 --length 1024
 ```
 
@@ -51,12 +51,13 @@ Get `OBJECT_NAME` from bucket `BUCKET_NAME` and print it to standard output. Ali
 
 1) GET object `myobj.txt` from local bucket `mybucket` and print it to stdout
 
-```shell script
+```console
 $ ais cat mybucket/myobj.txt -
 ```
 
 2) Read Range: get contents of object `myobj.txt` starting from offset `1024` length `1024` and print to standard output
-```shell script
+
+```console
 $ ais cat mybucket/myobj.txt --offset 1024 --length 1024
 ```
 
@@ -85,7 +86,7 @@ Supported properties:
 
 Display all properties of object `myobj.txt` from bucket `mybucket`. Output example:
 
-```sh
+```console
 $ ais show object mybucket/myobj.txt
 Checksum                Size    Atime                   Iscached        Version Copies  Ec
 2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     true            1       1       2:2[encoded]
@@ -93,7 +94,7 @@ Checksum                Size    Atime                   Iscached        Version 
 
 Show only selected properties:
 
-```sh
+```console
 $ ais show object mybucket/myobj2.txt -props size,version,ec`
 Size    Version Ec
 7.63MiB 1       2:2[replicated]
@@ -151,21 +152,24 @@ All examples below put into an empty bucket and the source directory structure i
 The current user HOME directory is `/home/user`.
 
 1) PUT a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`
-```sh
+
+```console
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
 2) PUT a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name
-```sh
+
+```console
 $ ais put "~/bck/img1.tar" mybucket/
 
 # PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img-set-1.tar
 ```
 
 3) PUT two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into the root of bucket `mybucket`. Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default
-```sh
+
+```console
 $ ais put "/home/user/bck" mybucket
 
 # PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img1.tar
@@ -173,7 +177,8 @@ $ ais put "/home/user/bck" mybucket
 ```
 
 4) `--trim-prefix` is expanded with user's home directory into `/home/user/bck`, so the final bucket content is `img1.tar`, `img2.zip`, `extra/img1.tar` and `extra/img3.zip`
-```sh
+
+```console
 $ ais put "/home/user/bck" mybucket/ --trim-prefix=~/bck --recursive
 
 # PUT /home/user/bck/img1.tar => mybucket/img1.tar
@@ -182,8 +187,9 @@ $ ais put "/home/user/bck" mybucket/ --trim-prefix=~/bck --recursive
 # PUT /home/user/bck/extra/img3.zip => mybucket/extra/img3.zip
 ```
 
-5) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `img1.tar` and `extra/img1.tar
-```sh
+5) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `img1.tar` and `extra/img1.tar`
+
+```console
 $ ais put "~/bck/*.tar" mybucket/ --trim-prefix=~/bck --recursive
 
 # PUT /home/user/bck/img1.tar => mybucket/img1.tar
@@ -191,7 +197,8 @@ $ ais put "~/bck/*.tar" mybucket/ --trim-prefix=~/bck --recursive
 ```
 
 6) PUT 9 files to `mybucket` using range request. Object names formatted as `/home/user/dir/test${d1}${d2}.txt`
-```shell script
+
+```console
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
 9 objects put into "mybucket" bucket
@@ -200,7 +207,8 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
 ```
 
 7) Same as above, except object names are in format `test${d1}${d2}.txt`
-```shell script
+
+```console
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --trim-prefix=~/dir
 9 objects put into "mybucket" bucket
@@ -209,8 +217,9 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --trim-prefix=~/dir
 ```
 
 
-8) Preview the files that would be sent to the cluster, without really putting them.
-```shell script
+8) Preview the files that would be sent to the cluster, without really putting them
+
+```console
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --trim-prefix=~/dir --dry-run
 [DRY RUN] No modifications on the cluster
@@ -219,7 +228,8 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --trim-prefix=~/dir --dry-run
 ```
 
 9) Put multiple directories into the cluster with range syntax
-```shell script
+
+```console
 $ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/test${d2}.txt; done; done
 $ ais put "dir{0..10}" mybucket -y
 33 objects put into "mybucket" bucket
@@ -229,7 +239,7 @@ $ ais put "dir{0..10}" mybucket -y
 
 #### Example: invalid file
 
-```sh
+```console
 $ ais put "/home/user/bck/*.tar" mybucket/img1.tar --trim-prefix=~/bck --recursive
 ```
 
@@ -254,24 +264,28 @@ Colocation in the context means that the files in question are already located *
 #### Examples
 
 1) Make AIS objects out of `/tmp/examples` files (**one file = one object**). `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes. Created objects names have prefix `example`
-```shell script
+
+```console
 $ ais promote /tmp/examples mybucket/ -r
 ```
 
 2) Promote /tmp/examples files to AIS objects. Objects names won't have `/tmp/examples` prefix
-```shell script
+
+```console
 $ ais promote /tmp/examples mybucket/ -r --trim-prefix=/tmp
 ```
 
 3) Promote /tmp/examples/example1.txt as object with name `example1.txt`
-```shell script
+
+```console
 $ ais promote /tmp/examples/example1.txt mybucket/example1.txt
 
 # PROMOTE /tmp/examples/example1.txt => mybucket/example1.txt
 ```
 
 4) Promote /tmp/examples/example1.txt without specified object name
-```shell script
+
+```console
 $ ais promote /tmp/examples/example1.txt mybucket
 
 # PROMOTE /tmp/examples/example1.txt => mybucket/tmp/examples/example1.txt
@@ -279,7 +293,7 @@ $ ais promote /tmp/examples/example1.txt mybucket
 
 #### Example: no such file or directory
 
-```shell script
+```console
 $ ais create bucket testbucket
 testbucket bucket created
 
@@ -330,22 +344,26 @@ Delete an object or list/range of objects from the bucket.
 #### Examples
 
 1) Delete object `myobj` from bucket `mybucket`
-```sh
+
+```console
 $ ais rm object mybucket/myobj
 ```
 
 2) Delete objects (`obj1`, `obj2`) from buckets (`aisbck`, `cloudbck`) respectively
-```sh
+
+```console
 $ ais rm object aisbck/obj1 cloudbck/obj2
 ```
 
 3) Delete a list of objects (`obj1`, `obj2`, `obj3`) from bucket `mybucket`
-```sh
+
+```console
 $ ais rm object mybucket/ --list "obj1,obj2,obj3"
 ```
 
 4) Delete all objects in range `001-003`, with prefix `test-`, matching `[0-9][0-9][0-9]` regex, from bucket `mybucket`
-```sh
+
+```console
 $ ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"
 ```
 
@@ -370,7 +388,7 @@ $ ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"
 
 #### Examples
 
-```sh
+```console
 $ ais put file.txt cloudbucket/file.txt
 PUT file.txt into bucket cloudbucket
 $ ais show bucket cloudbucket --cached # show only cloudbucket objects present in the AIS cluster
@@ -413,7 +431,8 @@ Rename object from an ais bucket.
 #### Examples
 
 1) Rename object `obj1` as `obj2`
-```sh
+
+```console
 ais rename object mybucket/obj1 obj2
 ```
 

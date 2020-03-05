@@ -6,7 +6,7 @@ AIStore provides both unit tests and integration tests that can be run individua
 To run all tests, make sure to deploy a AIStore cluster with at least 3 proxies/gateways and at least 3 targets.
 Then, cd to $GOPATH/src/github.com/NVIDIA/aistore and execute:
 
-```
+```console
 $ BUCKET=<bucket name> go test -v -p 1 -count 1 -timeout 1h ./...
 ```
 
@@ -18,14 +18,15 @@ $ BUCKET=<bucket name> go test -v -p 1 -count 1 -timeout 1h ./...
 
 For a quick run, execute the following from the $GOPATH/src/github.com/NVIDIA/aistore:
 
-```
+```console
 $ BUCKET=<bucket name> go test -v -p 1 -count 1 -short ./...
 ```
 
 This will skip some of the long-running tests and run instead all unit tests, plus some of the basic PUT/GET/DELETE operations.
 
 To run individual tests:
-```
+
+```console
 $ BUCKET=<bucket name> go test ./ais/tests -v -p 1 -run=Regression
 $ BUCKET=<bucket name> go test ./ais/tests -v -p 1 -run=GetAndRe
 $ BUCKET=<bucket name> go test ./ais/tests -run=TestProxy/PrimaryCrash
@@ -35,6 +36,6 @@ $ BUCKET=<bucket name> go test ./ais/tests -v -run=smoke -numworkers=4
 Note that, when running individual tests, more command line optons are available, for example: matching criteria, number of workers, etc.
 For the full list of supported command line arguments:
 
-```
+```console
 $ BUCKET=<bucket name> go test ./tests -v -p 1 -run=Regression -foo=bar
 ```

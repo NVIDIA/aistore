@@ -19,7 +19,7 @@ For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
 
 To get started, cd to [aisloader home](/bench/aisloader/) and run:
 
-```shell
+```console
 $ ./install.sh
 $ $GOPATH/bin/aisloader
 ```
@@ -28,60 +28,71 @@ $ $GOPATH/bin/aisloader
 For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
 
 1. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
-```shell
-# aisloader -bucket=nvais -duration 0s -totalputsize=0
+
+```console
+$ aisloader -bucket=nvais -duration 0s -totalputsize=0
 ```
 
 2. Time-based 100% PUT into ais bucket. Upon exit the bucket is emptied (by default):
-```shell
-# aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
+
+```console
+$ aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
 ```
 
 3. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
-```shell
-aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=cloud -cleanup=false
+
+```console
+$ aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=cloud -cleanup=false
 ```
 
 4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size. Cleanup is not disabled, which means that upon completion all generated objects will be deleted:
-```shell
-# aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -provider=cloud -totalputsize=10G
+
+```console
+$ aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -provider=cloud -totalputsize=10G
 ```
 
 5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
-```shell
-# aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -provider=ais
+
+```console
+$ aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -provider=ais
 ```
 
 6. 100% GET from an ais bucket:
-```shell
-# aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais
+
+```console
+$ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais
 ```
 
-7. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid}):
-```shell
-# aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader"
+7. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid})`:
+
+```console
+$ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader"
 ```
 
 8. Use random object names and loaderID to report statistics:
-```shell
-# aisloader -loaderid=10
+
+```console
+$ aisloader -loaderid=10
 ```
 
 9. PUT objects with random name generation being based on the specified loaderID and the total number of concurrent aisloaders:
-```shell
-# aisloader -loaderid=10 -loadernum=20
+
+```console
+$ aisloader -loaderid=10 -loadernum=20
 ```
 
-10. Same as above except that loaderID is computed by the aisloader as hash(loaderstring) & 0xff:
-```shell
-# aisloader -loaderid=loaderstring -loaderidhashlen=8
+10. Same as above except that loaderID is computed by the aisloader as `hash(loaderstring) & 0xff`:
+
+```console
+$ aisloader -loaderid=loaderstring -loaderidhashlen=8
 ```
 
 11. Print loaderID and exit (all 3 examples below) with the resulting loaderID shown on the right:
-```shell
-# aisloader -getloaderid (0x0)
-# aisloader -loaderid=10 -getloaderid (0xa)
-# aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
+
+```console
+$ aisloader -getloaderid (0x0)
+$ aisloader -loaderid=10 -getloaderid (0xa)
+$ aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
 ```
 
 ### Command-line Options
@@ -131,16 +142,15 @@ For the most recently updated command-line options and examples, please run `ais
 
 By default, `aisloader` sends its requests to the localhost at http://127.0.0.1:8080. To specify the primary proxy URL, use the `ip` and `port` command line options, as follows:
 
-```shell
+```
 ip=<IPv4 or hostname of the current primary proxy>
 port=<TCP port>
 ```
 
 For example:
 
-```shell
+```console
 $ aisloader -ip=example.com -port=8080
-
 Starting GMem2, minfree 3.62GiB, low 7.24GiB, timer 1m0s
 GMem2: free memory 7.24GiB > 80% total
 Nothing to read, bucket is empty
@@ -157,7 +167,7 @@ Note that aisloader **will create an ais bucket if it does not exist**.
 Further, the name of the bucket is set via the option `-bucket=<bucket name>`.
 For instance:
 
-```
+```console
 $ aisloader -ip=example.com -port=8080 -bucket=abc -provider=ais
 ```
 
@@ -169,7 +179,7 @@ If both options are provided the test finishes on the whatever-comes-first basis
 
 Example 100% write into the bucket "abc" for 2 hours:
 
-```shell
+```console
 $ aisloader -bucket=abc -provider=ais -duration 2h -totalputsize=4000000 -pctput=100
 ```
 
@@ -181,13 +191,13 @@ You can choose a percentage of writing (versus reading) by setting the option `-
 
 Example with a mixed PUT=30% and GET=70% load:
 
-```shell
+```console
 $ aisloader -bucket=abc -duration 5m -pctput=30
 ```
 
 Example 100% PUT:
 
-```shell
+```console
 $ aisloader -bucket=abc -duration 5m -pctput=100
 ```
 
@@ -205,7 +215,7 @@ For convenience, both options support size suffixes: `k` - for KiB, `m` - for Mi
 
 Example that reads a 32MiB segment at 1KB offset from each object stored in the bucket "abc":
 
-```shell
+```console
 $ aisloader -bucket=abc -duration 5m -cleanup=false -readoff=1024 -readlen=32m
 ```
 
@@ -219,7 +229,7 @@ In this and similar cases, disable automatic cleanup by passing the option `clea
 
 Example:
 
-```shell
+```console
 $ aisloader -bucket=abc -pctput=100 -totalputsize=16348 -cleanup=false
 $ aisloader -bucket=abc -duration 1h -pctput=0 -cleanup=true
 ```
@@ -228,7 +238,7 @@ The first line in this example above fills the bucket "abc" with 16MiB of random
 
 If you just need to clean up old data prior to running a test, run the loader with 0 (zero) total put size and zero duration:
 
-```shell
+```console
 $ aisloader -bucket=<bucket to cleanup> -duration 0s -totalputsize=0
 ```
 
@@ -246,13 +256,13 @@ Before starting a test, it is possible to set `mirror` or `EC` properties on a b
 
 To achieve that, use the option `-bprops`. For example:
 
-```shell
+```console
 $ aisloader -bucket=abc -pctput=0 -cleanup=false -duration 10s -bprops='{"mirror": {"copies": 2, "enabled": false, "util_thresh": 5}, "ec": {"enabled": false, "data_slices": 2, "parity_slices": 2}}'
 ```
 
 The above example shows the values that are globally default as of the AIS version 2.0. You can omit the defaults and specify only those values that you'd want to change. For instance, to enable erasure coding on the bucket "abc":
 
-```shell
+```console
 $ aisloader -bucket=abc -duration 10s -bprops='{"ec": {"enabled": true}}'
 ```
 
@@ -262,7 +272,7 @@ This example sets the number of data and parity slices to 2 which, in turn, requ
 
 The following sequence populates a bucket configured for both local mirroring and erasure coding, and then reads from it for 1h:
 
-```shell
+```console
 # Fill bucket
 $ aisloader -bucket=abc -cleanup=false -pctput=100 -duration 100m -bprops='{"mirror": {"enabled": true}, "ec": {"enabled": true}}'
 

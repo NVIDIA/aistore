@@ -31,7 +31,7 @@ Environment variables used by the deployment script to setup AuthN server:
 
 All variables can be set at AIStore launch. Example of starting AuthN with the default configuration:
 
-```
+```console
 $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
 ```
 
@@ -121,30 +121,31 @@ Steps to generate and use a token:
 
 1. Superuser creates a user account
 
-```
+```console
 $ curl -X POST http://AUTHSRV/v1/users \
   -d '{"name": "username", "password": "pass"}' \
   -H 'Content-Type: application/json' -uadmin:admin
 ```
+
 2. If the user needs access to user's private buckets on  AWS or GCP, the superuser may add user's credentials (example of adding AWS credentials from file)
 
-```
+```console
 $ curl -X PUT -L -H 'Content-Type: application/json' \
   http://AUTHSRV/v1/users/username/aws \
   -uadmin:admin -T ~/.aws/credentials
 ```
+
 3. The user requests a token
 
-```
+```console
 $ curl -X POST http://AUTHSRV/v1/users/username \
   -d '{"password": "pass"}' -H 'Content-Type: application/json'
 
 {"token": "eyJhbGciOiJI.eyJjcmVkcyI.T6r6790"}
-
 ```
 4. The user adds the token for every AIStore request(list bucket names example)
 
-```
+```console
 $ curl -L  http://PROXY/v1/buckets/* -X GET \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer eyJhbGciOiJI.eyJjcmVkcyI.T6r6790"

@@ -72,7 +72,7 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 
 Assuming that [Go](https://golang.org/dl/) is already installed, the remaining getting-started steps are:
 
-```shell
+```console
 $ cd $GOPATH/src
 $ go get -v github.com/NVIDIA/aistore/ais
 $ cd github.com/NVIDIA/aistore
@@ -84,7 +84,7 @@ where:
 * `go get` installs sources and dependencies under your [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
 * `make deploy` deploys AIStore daemons locally and interactively, for example:
 
-```shell
+```console
 $ make deploy
 Enter number of storage targets:
 10
@@ -103,7 +103,7 @@ Enter your provider choice (0, 1, 2 or 3):
 
 Or, you can run all of the above non-interactively:
 
-```shell
+```console
 $ make kill; make deploy <<< $'10\n3\n2\n0'
 ```
 
@@ -115,13 +115,13 @@ Finally, the `go test` (above) will create an ais bucket, configure it as a two-
 
 Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running `go test` commands. For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
 
-```shell
+```console
 $ BUCKET=myS3bucket go test ./tests -v -run=download
 ```
 
 Here's a minor variation of the above:
 
-```shell
+```console
 $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
 ```
 

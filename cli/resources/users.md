@@ -14,7 +14,7 @@ Adding and removing a user requires superuser permissions. Superuser login and p
 
 or you can set environment variables globally with:
 
-```shell
+```console
 $ export AUTHN_SU_NAME=admin
 $ export AUTHN_SU_PASS=admin
 $ ais auth add ...
@@ -26,7 +26,7 @@ or just run:
 
 In the last case, the CLI detects that there is not enough information and prompts for missing data in interactive mode. E.g, you can keep superuser name in an environment variable and `ais` will prompt for superuser\'s password:
 
-```shell
+```console
 $ export AUTHN_SU_NAME=admin
 $ ais auth add ...
 Superuser login:
@@ -46,7 +46,7 @@ Everything is set in command line:
 
 AuthN URL and superuser\'s name are already exported. Short command:
 
-```shell
+```console
 $ ais auth add username
 Superuser password: admin
 User password: password

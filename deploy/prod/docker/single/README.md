@@ -9,7 +9,7 @@ The default exposed port from proxy is `51080`.
 
 It is possible to locally build an image and upload it to selected registry.
 
-```bash
+```console
 $ ./build_image.sh <TAG>
 $ ./upload_image.sh <REGISTRY_URL>
 ```
@@ -26,7 +26,7 @@ Currently supported cloud providers are: `""` (no provider), `"aws"` (Amazon), `
 
 #### Minimal setup
 
-```bash
+```console
 $ docker run \
     -p 51080:51080 \
     -v /disk0:/ais/disk0 \
@@ -52,7 +52,8 @@ When using `aws` cloud provider it is possible to explicitly pass the credential
 
 
 Start an AIS docker cluster with single disk, `aws` provider and credentials in envvars:
-```bash
+
+```console
 $ docker run \
     -p 51080:51080 \
     -e AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
@@ -64,7 +65,8 @@ $ docker run \
 
 
 Start an AIS docker cluster with single disk, `gcp` provider and credentials as a mounted volume:
-```bash
+
+```console
 $ docker run \
     -p 51080:51080 \
     -v /home/user/Downloads/[GCP_CREDENTIALS].json:/credentials/[GCP_CREDENTIALS].json \

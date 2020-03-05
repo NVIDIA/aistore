@@ -21,7 +21,7 @@ In this README:
 ### Overview
 AIStore supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
 
-```shell
+```console
 $ curl -X GET http://G-or-T/v1/daemon?what=config
 ```
 
@@ -174,7 +174,7 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 
 ### Example: querying runtime statistics
 
-```shell
+```console
 $ curl -X GET http://G/v1/cluster?what=stats
 ```
 

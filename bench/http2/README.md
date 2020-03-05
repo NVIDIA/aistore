@@ -17,11 +17,13 @@ Each benchmark has four arguments:
 - `./http1_bench U B N C` uses http1.1 to get N files, with C clients.
 
 #### Examples
-```bash
-./server_push_http2_bench localhost:8081 local_benchmark_bucket 100
-./no_server_push_http2_bench localhost:8081 local_benchmark_bucket 100 5
-./http1_bench localhost:8081 local_benchmark_bucket 100 5
+
+```console
+$ ./server_push_http2_bench localhost:8081 local_benchmark_bucket 100
+$ ./no_server_push_http2_bench localhost:8081 local_benchmark_bucket 100 5
+$ ./http1_bench localhost:8081 local_benchmark_bucket 100 5
 ```
+
 ### Helpers
 1. [put_files.go](./put_files.go) puts a given number of files with a given size into AIStore. It has five command-line parameters:
 
@@ -36,12 +38,14 @@ Each benchmark has four arguments:
 - B: The ais bucket to create
 
 #### Examples
-```bash
-./create_local_bucket local_benchmark_bucket
-go run put_files.go -files 80 -filesize 50 -bucket local_benchmark_bucket -workers 30
+
+```console
+$ ./create_local_bucket local_benchmark_bucket
+$ go run put_files.go -files 80 -filesize 50 -bucket local_benchmark_bucket -workers 30
 ```
 
 #### Limitations
+
 - Read chunk size cannot be modified
 - Redirects are not followed by nghttp2, so the benchmark must be pointed directly to one target
 - [server_push_http2_bench](./server_push_http2_bench) uses only one concurrent client

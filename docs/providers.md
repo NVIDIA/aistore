@@ -23,7 +23,7 @@ AIS can be deployed as a fast tier in front of several storage backends. Support
 Remote AIS cluster is specified in the `cloud` section of the [configuration](./configuration.md).
 
 Example:
-```
+```json
 "cloud": {
   "ais": {
     "cluster-uuid": [

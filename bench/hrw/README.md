@@ -9,6 +9,6 @@ For a detailed analysis of the experiment results, please refer to this [PDF](ex
 
 ## How to run tests and benchmarks?
 
-```bash
+```console
 $ go test -tags hrw -bench=. 
 ```

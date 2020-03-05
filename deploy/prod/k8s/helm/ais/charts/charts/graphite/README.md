@@ -14,7 +14,7 @@ This chart uses graphiteapp/graphite-statsd container to run Graphite inside Kub
 
 To install the chart with the release name `graphite`, run the following command:
 
-```bash
+```console
 $ helm install kiwigrid/graphite --name graphite
 ```
 
@@ -22,7 +22,7 @@ $ helm install kiwigrid/graphite --name graphite
 
 To uninstall/delete the `graphite` deployment:
 
-```bash
+```console
 $ helm delete graphite
 ```
 
@@ -65,7 +65,7 @@ The following table lists the configurable parameters of the Graphite chart and 
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`. For example:
 
-```bash
+```console
 $ helm install --name graphite --set ingress.enabled=false kiwigrid/graphite
 ```
 

@@ -2,7 +2,7 @@
 
 AIS proxy and AIS target (executables) both support the following command-line arguments where those that are *mandatory* are marked with `***`:
 
-```shell
+```
   -role string
         the role of this AIS daemon: proxy | target (***)
   -config string
@@ -43,6 +43,6 @@ AIS proxy and AIS target (executables) both support the following command-line a
 
 > Use `--help` for the most recently updated set of command-line options, for instance:
 
-```shell
-# $GOPATH/bin/aisnode --help
+```console
+$ $GOPATH/bin/aisnode --help
 ```

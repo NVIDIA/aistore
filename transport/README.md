@@ -27,14 +27,13 @@ The following is a quick summary:
 
 To test with net/http, run:
 
-```sh
+```console
 $ go test -v -tags=nethttp
 ```
 
 or, the same, with logs redirected to stdout:
 
-```sh
-
+```console
 $ go test -v -logtostderr=true -tags=nethttp
 ```
 
@@ -102,8 +101,8 @@ for  {
 	...
 }
 stream.Fin() // gracefully close the stream (call it in all cases except after canceling (aborting) the stream)
-
 ```
+
 ## Registering HTTP endpoint
 
 On the receiving side, each network contains multiple HTTP endpoints, whereby each HTTP endpoint, in turn, may have zero or more stream sessions.
@@ -131,6 +130,7 @@ Back to the registration. On the HTTP receiving side, the call to `Register` tra
 ```go
 mux.HandleFunc(path, mycallback)
 ```
+
 where mux is `mux.ServeMux` (fork of `net/http` package) that corresponds to the named network ("public", in this example), and path is a URL path ending with "/myapp".
 
 ## On the wire
@@ -156,11 +156,13 @@ The API that queries runtime statistics includes:
 ```go
 func (s *Stream) GetStats() (stats Stats)
 ```
+
 - on the send side, and
 
 ```go
 func GetNetworkStats(network string) (netstats map[string]EndpointStats, err error)
 ```
+
 - on receive.
 
 Statistics themselves include the following metrics:
@@ -174,7 +176,6 @@ Stats struct {
 	TotlDur int64   // total time since the previous GetStats
 	IdlePct float64 // idle time %
 }
-
 ```
 
 On the receive side, the `EndpointStats` map contains all the `transport.Stats` structures indexed by (unique) stream IDs for the currently active streams.
@@ -236,25 +237,27 @@ Finally, there are two important facts to remember:
 ## Testing
 
 * To run all tests while redirecting log to STDERR:
-```
-go test -v -logtostderr=true
+
+```console
+$ go test -v -logtostderr=true
 ```
 
 * To run a test with a name matching "Multi", verbose logging and enabled assertions:
-```
-AIS_DEBUG=transport=1 go test -v -run=Multi
+
+```console
+$ AIS_DEBUG=transport=1 go test -v -run=Multi
 ```
 
 
 Use `nethttp` build tag to run with net/http, e.g.:
 
-```sh
+```console
 $ go test -v -tags=nethttp
 ```
 
 The same with fasthttp (which is the current default):
 
-```sh
+```console
 $ go test -v
 ```
 

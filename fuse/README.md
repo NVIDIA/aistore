@@ -75,7 +75,7 @@ and `fusermount` installed on your system. If you are using Ubuntu 18.04 LTS,
 you can verify this by running the following commands (expect similar output to
 the one shown below):
 
-```shell
+```console
 $ grep -i fuse /lib/modules/$(uname -r)/modules.builtin
 kernel/fs/fuse/fuse.ko
 $ fusermount -V
@@ -88,21 +88,21 @@ fusermount version: 2.9.7
 
 To install `aisfs` on your system, execute the following commands:
 
-```shell
+```console
 $ cd $GOPATH/src/github.com/NVIDIA/aistore
 $ make aisfs
 ```
 
 Verify that `aisfs` has been successfully installed:
 
-```shell
+```console
 $ aisfs -v
 aisfs version 0.2 (build d9882586)
 ```
 
 View help and usage information by running:
 
-```shell
+```console
 $ aisfs --help
 ```
 
@@ -111,7 +111,7 @@ $ aisfs --help
 To quickly set up and try `aisfs` on your local machine, first
 deploy an AIStore cluster (for more info see AIStore [README](../README.md)):
 
-```shell
+```console
 $ cd $GOPATH/src/github.com/NVIDIA/aistore
 $ make deploy
 ```
@@ -119,7 +119,7 @@ $ make deploy
 Using [AIS CLI](../cli/README.md) create an ais bucket, download several objects
 and place them into the bucket:
 
-```shell
+```console
 $ ais create bucket mybucket
 $ ais start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000010}.tgz" ais://mybucket/
 Ys78ND09g
@@ -128,7 +128,7 @@ $ ais show download Ys78ND09g --progress # wait for download to finish
 
 Create an empty directory in your local filesystem:
 
-```shell
+```console
 $ cd $HOME
 $ mkdir localdir
 ```
@@ -136,19 +136,19 @@ $ mkdir localdir
 Finally, mount a filesystem and run a filesystem server as a daemon using
 the following command:
 
-```shell
+```console
 $ aisfs mybucket localdir/
 ```
 
 List objects in the bucket:
 
-```shell
+```console
 $ ls localdir/
 ```
 
 Unmount the file system and remove previously created local directory:
 
-```shell
+```console
 $ fusermount -u localdir/
 $ rmdir localdir
 ```
@@ -167,7 +167,7 @@ variable is set, the location of these files will instead be
 
 An example of one configuration file:
 
-```
+```json
 {
   "cluster": {
     "url": "http://127.0.0.1:8080"
@@ -207,7 +207,7 @@ An example of one configuration file:
 Even though loading [configuration](#configuration) takes an effect at [mount](#mounting) time it is still possible to reconfigure AISFS at runtime - without remounting.
 This can be achieved by sending `SIGHUP` signal to `aisfs` daemon, e.g.:
 
-```bash
+```console
 $ kill -HUP $(pidof aisfs)
 ```
 
@@ -230,16 +230,14 @@ in your local filesystem and an instance of AIStore cluster is running
 on the local machine, the following command will mount `mybucket`
 in `localdir`, making `localdir` the root directory of `aisfs`:
 
-```shell
+```console
 $ aisfs mybucket localdir/
 ```
 
-Filesystem is, by default, serviced by the user space background process (daemon),
-that will continue to run until the filesystem is unmounted.
-To run the filesystem server in the foreground, pass the `--wait ` option to
-`aisfs`:
+Filesystem is, by default, serviced by the user space background process (daemon), that will continue to run until the filesystem is unmounted.
+To run the filesystem server in the foreground, pass the `--wait ` option to `aisfs`:
 
-```shell
+```console
 $ aisfs --wait mybucket localdir/
 ```
 
@@ -284,17 +282,17 @@ the AISFS user space daemon:
 
 1. Use the `fusermount` utility. The `-u` option requests unmounting:
 
-   ```shell
-   $ fusermount -u localdir/
-   ```
+```console
+$ fusermount -u localdir/
+```
 
 2. Use the `umount` command:
 
-   ```shell
-   $ umount localdir/
-   ```
+```console
+$ umount localdir/
+```
 
-   >  You may need root privileges to execute this command.
+You may need root privileges to execute this command.
 
 3. If `aisfs` is invoked in the foreground by passing the `--wait` option,
-   terminate the process by pressing Ctrl-C. This will also unmount the filesystem.
+terminate the process by pressing Ctrl-C. This will also unmount the filesystem.

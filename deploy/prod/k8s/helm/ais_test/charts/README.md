@@ -9,8 +9,7 @@ It runs the following tests:
   3. Perform list objects operation against the bucket created in the earlier step and verify its existence
 
 
-```bash
-
+```
 TO INSTALL
 ==========
 Usage: helm install --name=ais-test --set test_params.proxy_endpoint=<proxy-svc-endpoint> .
@@ -19,6 +18,4 @@ Usage: helm install --name=ais-test --set test_params.proxy_endpoint=<proxy-svc-
 TO DESTROY
 ==========
 Usage: helm del --purge ais-test
-
-
 ```

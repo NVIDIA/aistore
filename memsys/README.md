@@ -18,6 +18,7 @@ deallocate idle Slabs. To that end, MMSA utilizes `housekeep` (project and runne
 
 A typical initialization sequence includes steps, e.g.:
 1) construct:
+
 ```go
 	mm := &memsys.MMSA{Name: ..., TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
 ```
@@ -25,26 +26,30 @@ A typical initialization sequence includes steps, e.g.:
 **Note** that with the only exception of `Name` all the rest member variables (above) have their system defaults and can be omitted.
 
 2) initialize:
+
 ```go
 	err := mm.Init(false /* don't panic on error */)
 	if err != nil {
 		...
 	}
 ```
+
 The example above shows initialization that ignores errors - in particular, insifficient minimum required memory (see the previous section).
 
 Alternatively, MMSA can be initialized *not* to panic on errors:
+
 ```go
 	 mm.Init(true /* panic on error */)
 ```
 
 In addition, there are several environment variables that can be used
 (to circumvent the need to change the code, for instance):
-```shell
-	AIS_MINMEM_FREE
-	AIS_MINMEM_PCT_TOTAL
-	AIS_MINMEM_PCT_FREE
-	AIS_DEBUG
+
+```
+AIS_MINMEM_FREE
+AIS_MINMEM_PCT_TOTAL
+AIS_MINMEM_PCT_FREE
+AIS_DEBUG
 ```
 
 ## Minimum Available Memory
@@ -68,6 +73,7 @@ Following are the rules to set this minimum:
 If the memory manager is no longer needed, terminating the MMSA instance is recommended.
 This will free up all the slabs allocated to the memory manager instance.
 Halt a running or initialized MMSA instance is done by:
+
 ```go
     mm.Terminate()
 ```
@@ -96,20 +102,21 @@ memory falls below watermark.
 ## Testing
 
 * To run all tests while redirecting errors to standard error:
-```
-go test -v -logtostderr=true
+
+```console
+$ go test -v -logtostderr=true
 ```
 
 * To run one of the named tests for 100 seconds:
 
-```
-go test -v -logtostderr=true -run=Test_Sleep -duration=100s
+```console
+$ go test -v -logtostderr=true -run=Test_Sleep -duration=100s
 ```
 
 * All tests for 2 minutes with verbose tracing and debug (i.e., assertions) enabled:
 
-```
-AIS_DEBUG=memsys=1 go test -v -logtostderr=true -duration=2m
+```console
+$ AIS_DEBUG=memsys=1 go test -v -logtostderr=true -duration=2m
 ```
 
 ## Global Memory Manager

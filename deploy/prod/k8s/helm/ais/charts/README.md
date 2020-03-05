@@ -7,56 +7,65 @@ This repo includes all the definition of launching a AIS proxy and target on a K
 ### PREREQUISITES
 One (and only one) of the nodes in the K8s cluster must have a label "nvidia.com/ais-initial-primary-proxy" with value <release-name<>>. This can be set by
 command:
-```bash
+
+```console
 kubectl label nodes <A-node-name> nvidia.com/ais-initial-primary-proxy=demo
 ```
+
 assuming you're using `helm install --name=demo ...`
 
 ### Installation
 
 1. Prepare chart dependencies (even if you intend not to install Grafana and Graphite):
 
-    helm repo add kiwigrid https://kiwigrid.github.io       # graphite lives here
-    helm dependency update                                  # pull in charts we depend upon
+```console
+$ helm repo add kiwigrid https://kiwigrid.github.io       # graphite lives here
+$ helm dependency update                                  # pull in charts we depend upon
+```
 
 2. The default is to install instances of Graphite and Grafana alongside AIS.
 
    * To install AIS with Graphite/Grafana metrics but with no persistence of Graphite/Grafana metrics and state:
-     ```bash
-     helm install --name=devops-ais \
-        --set image.dockerRepoToken=<token-to-pull-docker-image> \
-        --set graphite.persistence.enabled=false \
-        --set grafana.persistence.enabled=false \
-        .
-      ```
+
+```console
+helm install --name=devops-ais \
+   --set image.dockerRepoToken=<token-to-pull-docker-image> \
+   --set graphite.persistence.enabled=false \
+   --set grafana.persistence.enabled=false \
+   .
+```
+
    * To install AIS along with Graphite/Grafana, with persistence for Graphite/Grafana:
      Persistence is enabled by default, but you need to supply a path to a pre-created area in which to persist data. In the example below these areas are /data/{graphite,grafana} on node cpu01.
-     ```bash
-     helm install --name=devops-ais \
-        --set image.dockerRepoToken=<token-to-pull-docker-image> \
-        --set graphite.ais.pv.path=/data/graphite \
-        --set graphite.ais.pv.node=cpu01 \
-        --set graphite.ais.pv.capacity=250Gi \
-        --set grafana.ais.pv.path=/data/graphite \
-        --set grafana.ais.pv.node=cpu01 \
-        --set grafana.ais.pv.capacity=250Gi \
-        .
-    ```
+
+```console
+helm install --name=devops-ais \
+   --set image.dockerRepoToken=<token-to-pull-docker-image> \
+   --set graphite.ais.pv.path=/data/graphite \
+   --set graphite.ais.pv.node=cpu01 \
+   --set graphite.ais.pv.capacity=250Gi \
+   --set grafana.ais.pv.path=/data/graphite \
+   --set grafana.ais.pv.node=cpu01 \
+   --set grafana.ais.pv.capacity=250Gi \
+   .
+```
 
    * To install AIS using an external instance of Graphite:
-     ```bash
-     helm install --name=devops-ais \
-        --set image.dockerRepoToken=<token-to-pull-docker-image> \
-        --set tags.builtin_monitoring=false \
-        --set external_monitoring.graphite_host=... \
-        --set external_monitoring.graphite_port=... \
-        .
-    ```
+
+```console
+helm install --name=devops-ais \
+   --set image.dockerRepoToken=<token-to-pull-docker-image> \
+   --set tags.builtin_monitoring=false \
+   --set external_monitoring.graphite_host=... \
+   --set external_monitoring.graphite_port=... \
+   .
+```
 
 ### Deletion
 You can delete the release using:
-```bash
-    helm delete --purge devops-ais
+
+```console
+helm delete --purge devops-ais
 ```
 This will not delete buckets and objects stored in AIS filesystems, but it will forfeit AIS state.
 

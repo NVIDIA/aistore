@@ -1,37 +1,46 @@
 # Working with AIS on Docker
+
 There are two different ways, or modes, to deploy AIS in Docker containers. We refer to those ways as [quick-start mode](#quick-start-ais-cluster) and [development mode](#developer-mode).
 
 [Quick-start mode](#quick-start-ais-cluster) allows for a quick containerized deployment of AIS with minimal setup. [Development mode](#developer-mode) allows users to test and develop AIS in a more robust containerized environment.
 
 ## Quick-start AIS Cluster
+
 Create a containerized, one-proxy, one-target deployment of AIStore within seconds. The minimum requirements to get this working is to have Docker installed. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](/docs/docker_main.md)
 
 > For some tests, AWS config and credential files are needed
 
-1. To quick-start AIStore,
-```sh
+1. To quick-start AIStore, run: 
+
+```console
 $ ./deploy_docker -qs
 ```
 
 > The first build may take some time, but subsequent builds will be much faster.
 
-2. Once it finishes building, you should be inside the AIS container. Run,
-```sh
+2. Once it finishes building, you should be inside the AIS container. Run:
+
+```console
 $ cd $WORKDIR
 $ ./setup/deploy.sh
 ```
+
 Type `1` for all options to create a very basic AIStore cluster.
 
 ### Quick-start Example
-If everything went smoothly,
-```sh
+
+If everything went smoothly
+
+```console
 $ CGO_ENABLED=0 BUCKET=test go test ./tests -v -count=1 -run=smoke
 ```
+
 runs some smoke tests.
 
-```sh
+```console
 $ CGO_ENABLED=0 BUCKET=test go test ./tests -v -count=1 -run=bucketname
 ```
+
 Will return you a list of all local and AWS cloud buckets.
 
 > CGO_ENABLED is set to false to enable cross-compiling
@@ -39,27 +48,31 @@ Will return you a list of all local and AWS cloud buckets.
 ### Quick-start Configurations
 
 #### AWS
+
 Quick-start AIS also works with AWS by enabling users access to their S3 Buckets. To do so, users can specify the location of their AWS credentials by passing in the path. For example,
-```sh
+
+```console
 $ ./deploy_docker.sh -qs="~/.aws/"
 ```
 
 ## Developer Mode
+
 Use the `./deploy_docker.sh` script to deploy AIStore cluster(s) on a single machine. Each cluster can be deployed with one or three networks. The latter case is used to deploy a cluster with separated data and control planes. When deploying multiple clusters, only multiple networks are allowed.
 Use the `./stop_docker.sh` script to stop the AIStore cluster(s) that were deployed.
 
 ## Requirements
 
->Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](/docs/docker_main.md)
+> Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](/docs/docker_main.md)
 
 [`$GOPATH`](https://golang.org/doc/code.html#GOPATH) environment variable must be defined before starting cluster deployment. Docker uses the `$GOPATH/src` directory as a bind mount for the container. The container at start builds new binaries from the current sources.
 
 For the *i*th cluster, AIStore creates three networks: ais${i}\_public, ais${i}\_internal\_control, and ais${i}\_internal\_data. The latter two are used only if the cluster is deployed with multiple networks (`-m` argument must be passed to the deploy script). It is expected that only AIStore cluster *i* is attached to each these networks. In a multi-cluster configuration, proxy containers of one cluster are connected to the Docker public networks of other clusters to allow for multi-tiering and replication.  In multi-cluster configuration, target containers of one cluster are connected to the Docker public and replication networks of other clusters to allow for multi-tiering and replication.
 
 ## Deploying a Development Cluster
+
 Run `./deploy_docker.sh` without arguments if you want to deploy a cluster in interactive mode. The script will ask you for a number of configuration parameters and deploy AIS accordingly:
 
-```sh
+```console
 $ ./deploy_docker.sh
 ```
 
@@ -95,49 +108,61 @@ Note:
 Please see [main AIStore README](/docs/configuration.md) for more information about testing mode.
 
 Example Usage:
-```sh
+
+```console
 $ ./deploy_docker.sh -p=3 -t=4 -d=2 -c=1 -a=~/.aws/
 ```
 
-* The command deploys a single cluster with 3 proxies, 4 targets and 2 local cache directories using AWS in normal mode.
+The command deploys a single cluster with 3 proxies, 4 targets and 2 local cache directories using AWS in normal mode.
 
 ### Deploying Multiple Clusters
 
 When deploying multi-cluster configurations, each cluster will have the same number of proxies and targets. Each container name will be of this format: ais${i}\_${target,proxy}\_${j}. Where *i* denotes the cluster number and *j* denotes the *j*th daemon of type target or proxy.
 
 Example:
-```
+
+```console
 $ ./deploy_docker.sh -p=3 -t=3 -d=2 -c=3 -a=~/.aws/
 ```
-* The command deploys three clusters, each with 3 proxies, 3 targets and 2 local directories in normal mode.
+
+The command deploys three clusters, each with 3 proxies, 3 targets and 2 local directories in normal mode.
 
 ## Restarting a Cluster
 
 Running the same command that you used to deploy AIS using Docker stops the running cluster and deploys a new AIS configuration from scratch (including multi-cluster configurations). It results in a fresh cluster(s) with all containers and networks rebuilt. Either run the previous deployment command (supply the same command arguments) or use the following command to redeploy using the arguments from the last AIS Docker deployment:
-```
+
+```console
 $ ./deploy_docker.sh -l
 ```
-* Note: The deploy script saves configuration parameters to `/tmp/docker_ais/deploy.env` each time before deploying. If this file doesn't exist or gets deleted, the command won't work.
+
+NOTE: The deploy script saves configuration parameters to `/tmp/docker_ais/deploy.env` each time before deploying. If this file doesn't exist or gets deleted, the command won't work.
 
 ## Stopping a Cluster
+
 To stop the cluster, run one of the following scripts:
-```
+
+```console
 # To stop the last deployed Docker configuration
 $ ./stop_docker.sh -l
 ```
-* Note: This command uses the saved configuration parameters in `/tmp/docker_ais/deploy.env` to determine how to stop AIS. If this file doesn't exist or gets deleted, the command won't work.
-```
+
+NOTE: This command uses the saved configuration parameters in `/tmp/docker_ais/deploy.env` to determine how to stop AIS. If this file doesn't exist or gets deleted, the command won't work.
+
+```console
 # If a single network AIS configuration is currently deployed
 $ ./stop_docker.sh -s
 ```
-```
+
+```console
 # If a multi network AIS configuration is currently deployed
 $ ./stop_docker.sh -m
 ```
-```
+
+```console
 # To stop a multiple cluster configuration of AIS that is currently deployed, where NUM_CLUSTERS >= 1
 $ ./stop_docker.sh -c=NUM_CLUSTERS
 ```
+
 These commands stop all containers (even stopped and dead ones), and remove Docker networks used by AIS. Refer to the stop_docker.sh script for more details about its usage.
 
 ## Viewing the Local Filesystem of a Container
@@ -164,7 +189,7 @@ Useful script variables:
 
 Tests are started in the same way as it is done for regular cluster:
 
-```
+```console
 $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h
 ```
 
@@ -172,7 +197,7 @@ $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h
 
 Tests detect the Docker cluster and use primary URL "http://172.50.0.2:8080" (see `PUB_NET` variable). If `PUB_NET` or `PORT` variable is changed or original primary is stopped or deleted then tests require extra argument that points to an existing proxy, preferably the current primary one:
 
-```
+```console
 $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.0.7:8080
 ```
 
@@ -185,48 +210,62 @@ AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be
 ## Utility Scripts
 
 ### `logs.sh`
+
 To quickly view the logs of all running containers, use the following command:
-```
+
+```console
 $ ./logs.sh -d
 ```
+
 To view the logs of a specific container, use the following command:
-```
+
+```console
 $ ./logs.sh -c=container_name -t=a
 ```
+
 Refer to the `logs.sh` script for more details about its usage.
 
 ### `get_ip_addresses.sh`
+
 If you want to quickly get the ip addresses of each container of all clusters, use the following script:
-```
+
+```console
 $ ./get_ip_addresses.sh
 ```
+
 * Note: The port numbers for the ip addresses for each container will be 8080, 9080, 10080 by default for the public, intra control and intra data networks respectively.
 
 ### Prune docker
 
 To prune old docker containers, images and networks you can use:
 
-```bash
+```console
 $ docker kill $(docker ps -q) # in case you want to kill ALL containers
 $ docker system prune -f
 ```
 
 ### Accessing These Scripts From Anywhere
+
 Add the following to the end of your `~/.profile`:
-```
+
+```bash
 if [ -d "$GOPATH/src/github.com/NVIDIA/aistore/deploy/dev/docker" ] ; then
   PATH="$PATH:$GOPATH/src/github.com/NVIDIA/aistore/deploy/dev/docker"
 fi
 ```
+
 After that, execute the following to update your $PATH variable:
-```
+
+```console
 $ source ~/.profile
 ```
+
 Then, you can just execute the script name from any working directory. Example:
-```
+
+```console
 $ container_logs.sh CONTAINER_NAME
 ```
 
-
 ## Limitations
+
 Certain tests require the ability to modify files/directories or set extended attributes(xattrs) directly onto the filesystem of a container. These tests are currently skipped when using Docker because of Docker's write protection of container volumes.

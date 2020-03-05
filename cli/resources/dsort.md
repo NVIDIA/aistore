@@ -82,7 +82,8 @@ Command defined below starts (alphanumeric) sorting job with extended metrics fo
 Each of the **output** shards will have at least `10240` bytes (`10KB`) and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
 
 Assuming that `dsort_spec.json` contains:
-```
+
+```json
 {
     "extension": ".tar",
     "bucket": "dsort-testing",
@@ -100,7 +101,8 @@ Assuming that `dsort_spec.json` contains:
 ```
 
 You can start dSort job with:
-```bash
+
+```console
 $ ais start dsort -f dsort_spec.json
 JGHEoo89gg
 ```
@@ -110,7 +112,7 @@ JGHEoo89gg
 Command defined below starts basic shuffle job for **input** shards with names `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
 Each of the **output** shards will have at least `10240` bytes (`10KB`) and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
 
-```bash
+```console
 $ ais start dsort -f - <<EOM
 extension: .tar
 bucket: dsort-testing
@@ -131,6 +133,7 @@ To use this feature `output_format` should be empty and `order_file`, as well as
 The output shards will be created with provided format which must contain mandatory `%d` which is required to enumerate the shards.
 
 Assuming that `order_file` (URL: `http://website.web/static/order_file.txt`) has content:
+
 ```
 cat_0.txt shard-cats-%d
 cat_1.txt shard-cats-%d
@@ -144,6 +147,7 @@ car_1.txt shard-car-%d
 ```
 
 And content of the **input** shards looks more or less like this:
+
 ```
 shard-0.tar:
 - cat_0.txt
@@ -158,7 +162,8 @@ shard-1.tar:
 ```
 
 You can run:
-```bash
+
+```console
 $ ais start dsort '{
     "extension": ".tar",
     "bucket": "dsort-testing",
@@ -174,6 +179,7 @@ JGHEoo89gg
 ```
 
 After the run, the **output** shards will look more or less like this (the number of records in given shard depends on provided `output_shard_size`):
+
 ```
 shard-cats-0.tar:
 - cat_1.txt

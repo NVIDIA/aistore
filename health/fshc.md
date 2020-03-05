@@ -25,16 +25,16 @@ When AIStore is running, FSHC can be disabled and enabled on a given target via 
 
 Disable FSHC on a given target:
 
-```
-curl -i -X PUT -H 'Content-Type: application/json' \
+```console
+$ curl -i -X PUT -H 'Content-Type: application/json' \
 	-d '{"action": "setconfig","name": "fschecker_enabled", "value": "false"}' \
 	http://localhost:8084/v1/daemon
 ```
 
 Enable FSHC on a given target:
 
-```
-curl -i -X PUT -H 'Content-Type: application/json' \
+```console
+$ curl -i -X PUT -H 'Content-Type: application/json' \
 	-d '{"action": "setconfig","name": "fschecker_enabled", "value": "true"}' \
 	http://localhost:8084/v1/daemon
 ```
