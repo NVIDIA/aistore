@@ -555,9 +555,10 @@ func (r *registry) renewGlobalXaction(entry globalEntry) (globalEntry, bool, err
 	if e, exists := r.GetLatest(entry.Kind()); exists {
 		prevEntry := e.(globalEntry)
 		if !prevEntry.Get().Finished() {
-			entry.preRenewHook(prevEntry)
-			r.RUnlock()
-			return prevEntry, true, nil
+			if entry.preRenewHook(prevEntry) {
+				r.RUnlock()
+				return prevEntry, true, nil
+			}
 		}
 	}
 	r.RUnlock()
@@ -621,10 +622,7 @@ func (r *registry) RenewLocalReb() *LocalReb {
 	e := &localRebEntry{}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*localRebEntry)
-	if keep {
-		// previous local rebalance is still running
-		return nil
-	}
+	cmn.Assert(!keep) // local rebalance must be always preempted
 	return entry.xact
 }
 

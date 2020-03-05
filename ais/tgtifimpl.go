@@ -112,7 +112,6 @@ func (t *targetrunner) RunLRU() {
 
 func (t *targetrunner) Prefetch() {
 	xpre := xaction.Registry.RenewPrefetch(getstorstatsrunner())
-
 	if xpre == nil {
 		return
 	}

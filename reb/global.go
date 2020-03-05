@@ -83,7 +83,12 @@ func (reb *Manager) globalRebInit(md *globArgs, buckets ...string) bool {
 	// handler that reads GetGlobStatus. Using atomic pointer reads for only
 	// two places looked overhead, so a separate mutex is used.
 	reb.xrebMx.Lock()
-	reb.xreb = xaction.Registry.RenewGlobalReb(md.smap.Version, md.id, reb.statRunner)
+	xact := xaction.Registry.RenewGlobalReb(md.smap.Version, md.id, reb.statRunner)
+	if xact == nil {
+		reb.xrebMx.Unlock()
+		return false
+	}
+	reb.xreb = xact
 	reb.xrebMx.Unlock()
 	defer reb.xreb.MarkDone()
 
