@@ -829,16 +829,6 @@ func TestPrefetchList(t *testing.T) {
 	}
 }
 
-// FIXME: stop type-casting and use stats constants, here and elsewhere
-func getPrefetchCnt(stats map[string]interface{}) (npf int64, err error) {
-	corestats := stats["core"].(map[string]interface{})
-	if _, ok := corestats["pre.n"]; !ok {
-		return
-	}
-	npf, err = corestats["pre.n"].(json.Number).Int64()
-	return
-}
-
 func TestDeleteList(t *testing.T) {
 	var (
 		err        error
@@ -890,7 +880,6 @@ func TestPrefetchRange(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 	var (
-		netprefetches  = int64(0)
 		err            error
 		rmin, rmax     int64
 		re             *regexp.Regexp
@@ -908,18 +897,7 @@ func TestPrefetchRange(t *testing.T) {
 		t.Skipf("Cannot prefetch from ais bucket %s", clibucket)
 	}
 
-	// 1. Get initial number of prefetches
-	smap := tutils.GetClusterMap(t, proxyURL)
-	for _, v := range smap.Tmap {
-		stats := tutils.GetDaemonStats(t, v.PublicNet.DirectURL)
-		npf, err := getPrefetchCnt(stats)
-		if err != nil {
-			t.Fatalf("Could not decode target stats: pre.n")
-		}
-		netprefetches -= npf
-	}
-
-	// 2. Parse arguments
+	// 1. Parse arguments
 	if prefetchRange != "" {
 		ranges := strings.Split(prefetchRange, ":")
 		if rmin, err = strconv.ParseInt(ranges[0], 10, 64); err != nil {
@@ -930,7 +908,7 @@ func TestPrefetchRange(t *testing.T) {
 		}
 	}
 
-	// 3. Discover the number of items we expect to be prefetched
+	// 2. Discover the number of items we expect to be prefetched
 	if re, err = regexp.Compile(prefetchRegex); err != nil {
 		t.Errorf("Error compiling regex: %v", err)
 	}
@@ -953,7 +931,7 @@ func TestPrefetchRange(t *testing.T) {
 		}
 	}
 
-	// 4. Evict those objects from the cache, and then prefetch them
+	// 3. Evict those objects from the cache, and then prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
 	err = api.EvictRange(baseParams, bck, prefetchPrefix, prefetchRegex, prefetchRange)
 	if err != nil {
@@ -966,18 +944,18 @@ func TestPrefetchRange(t *testing.T) {
 	}
 	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActPrefetch, rebalanceTimeout)
 
-	// 5. Ensure that all the prefetches occurred
-	for _, v := range smap.Tmap {
-		stats := tutils.GetDaemonStats(t, v.PublicNet.DirectURL)
-		npf, err := getPrefetchCnt(stats)
-		if err != nil {
-			t.Fatalf("Could not decode target stats: pre.n")
-		}
-		netprefetches += npf
+	// 4. Ensure that all the prefetches occurred
+	allDetails, err := api.MakeXactGetRequest(baseParams, bck, cmn.ActPrefetch, cmn.ActXactStats, false)
+	tassert.CheckFatal(t, err)
+	prefetched := int64(0)
+	for tid := range allDetails {
+		detail := allDetails[tid][0]
+		prefetched += detail.ObjCount()
+		tutils.Logf("%s - %d - %s - %v\n", tid, detail.ObjCount(), detail.Kind(), detail.EndTime())
 	}
-	if netprefetches != int64(len(files)) {
+	if prefetched != int64(len(files)) {
 		t.Errorf("Did not prefetch all files: Missing %d of %d\n",
-			int64(len(files))-netprefetches, len(files))
+			int64(len(files))-prefetched, len(files))
 	}
 }
 

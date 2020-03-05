@@ -314,8 +314,6 @@ func (t *targetrunner) registerStats() {
 	t.statsT.Register(stats.TxRebSize, stats.KindCounter)
 	t.statsT.Register(stats.RxRebCount, stats.KindCounter)
 	t.statsT.Register(stats.RxRebSize, stats.KindCounter)
-	t.statsT.Register(stats.PrefetchCount, stats.KindCounter)
-	t.statsT.Register(stats.PrefetchSize, stats.KindCounter)
 	t.statsT.Register(stats.VerChangeCount, stats.KindCounter)
 	t.statsT.Register(stats.VerChangeSize, stats.KindCounter)
 	t.statsT.Register(stats.ErrCksumCount, stats.KindCounter)

@@ -32,8 +32,6 @@ const (
 	TxRebSize        = "tx.reb.size"
 	RxRebCount       = "rx.reb.n"
 	RxRebSize        = "rx.reb.size"
-	PrefetchCount    = "pre.n"
-	PrefetchSize     = "pre.size"
 	VerChangeCount   = "vchange.n"
 	VerChangeSize    = "vchange.size"
 	ErrCksumCount    = "err.cksum.n"

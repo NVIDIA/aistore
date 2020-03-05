@@ -1454,12 +1454,6 @@ components:
             rx.reb.size:
               type: integer
               format: int64
-            pre.n:
-              type: integer
-              format: int64
-            pre.size:
-              type: integer
-              format: int64
             vchange.n:
               type: integer
               format: int64
