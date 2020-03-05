@@ -476,15 +476,31 @@ func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 	return tmplLong
 }
 
+func validateBckProvider(provider string) (validaterProvider string, valid bool) {
+	if provider == gsScheme {
+		return cmn.ProviderGoogle, true
+	}
+	if provider == s3Scheme {
+		return cmn.ProviderAmazon, true
+	}
+
+	if cmn.IsValidProvider(provider) || provider == cmn.Cloud {
+		return provider, true
+	}
+	return "", false
+}
+
 func parseBckObjectURI(objName string) (bck cmn.Bck, object string) {
 	const (
 		bucketSepa = "/"
 	)
 
 	providerSplit := strings.SplitN(objName, cmn.BckProviderSeparator, 2)
-	if len(providerSplit) > 1 && (cmn.IsValidProvider(providerSplit[0]) || providerSplit[0] == cmn.Cloud) {
-		bck.Provider = providerSplit[0]
-		objName = providerSplit[1]
+	if len(providerSplit) > 1 {
+		if provider, valid := validateBckProvider(providerSplit[0]); valid {
+			bck.Provider = provider
+			objName = providerSplit[1]
+		}
 	}
 
 	s := strings.SplitN(objName, bucketSepa, 2)

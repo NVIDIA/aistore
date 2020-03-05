@@ -4,4 +4,6 @@ ais ls $BUCKET_1/
 ais ls $BUCKET_1
 ais ls ais $BUCKET_1/
 ais ls cloud $BUCKET_1/ // FAIL "bucket with name "$BUCKET_1" does not exists"
+ais ls gs:// // IGNORE
+ais ls s3:// // IGNORE
 ais rm bucket $BUCKET_1

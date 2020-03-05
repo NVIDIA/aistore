@@ -93,4 +93,5 @@ Provider syntax `[provider://]BUCKET_NAME` is valid CLI-wide, meaning that every
 also supports provider syntax. For more details refer to each command's documentation.
 
 Allowed values: `''` (autodetect provider), `ais` (local cluster), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform),
-`cloud` (anonymous - cloud provider determined automatically)
+`cloud` (anonymous - cloud provider determined automatically). 
+Additionally `provider://` syntax supports aliases `s3` (for `aws`) and `gs` (for `gcp`).
