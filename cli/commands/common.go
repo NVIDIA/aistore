@@ -44,8 +44,6 @@ const (
 	subcmdDisk      = cmn.GetWhatDiskStats
 	subcmdConfig    = cmn.GetWhatConfig
 	subcmdRebalance = cmn.ActGlobalReb
-	subcmdAIS       = "ais"
-	subcmdCloud     = "cloud"
 	subcmdBucket    = "bucket"
 	subcmdObject    = "object"
 	subcmdProps     = "props"
@@ -54,13 +52,6 @@ const (
 	subcmdNode      = "node"
 	subcmdProxy     = "proxy"
 	subcmdTarget    = "target"
-
-	// List subcommands
-	subcmdListAIS      = subcmdAIS
-	subcmdListCloud    = subcmdCloud
-	subcmdListBckProps = subcmdProps
-	subcmdListConfig   = subcmdConfig
-	subcmdListSmap     = subcmdSmap
 
 	// Show subcommands
 	subcmdShowBucket    = subcmdBucket
@@ -71,6 +62,9 @@ const (
 	subcmdShowNode      = subcmdNode
 	subcmdShowXaction   = subcmdXaction
 	subcmdShowRebalance = subcmdRebalance
+	subcmdShowBckProps  = subcmdProps
+	subcmdShowConfig    = subcmdConfig
+	subcmdShowSmap      = subcmdSmap
 
 	// Create subcommands
 	subcmdCreateBucket = subcmdBucket
@@ -148,7 +142,7 @@ const (
 	optionalTargetIDArgument   = "[TARGET_ID]"
 	optionalDaemonTypeArgument = "[DAEMON_TYPE]"
 	daemonStatusArgument       = optionalDaemonTypeArgument + "|" + optionalDaemonIDArgument
-	listConfigArgument         = "DAEMON_ID [CONFIG_SECTION]"
+	showConfigArgument         = "DAEMON_ID [CONFIG_SECTION]"
 	setConfigArgument          = optionalDaemonIDArgument + " " + keyValuePairsArgument
 	registerNodeArgument       = "IP:PORT " + optionalDaemonIDArgument
 	startDownloadArgument      = "SOURCE DESTINATION"
@@ -161,7 +155,7 @@ const (
 	stopCommandXactionArgument                = "XACTION_NAME|" + allArgument + " [BUCKET_NAME]"
 
 	// List command
-	listCommandArgument = "[COMMAND | BUCKET_NAME/]"
+	listCommandArgument = "[PROVIDER://][BUCKET_NAME]"
 
 	// Auth
 	addUserArgument    = "USER_NAME USER_PASSWORD"

@@ -51,13 +51,9 @@ Cloud buckets not allowed (cloud://mybucket).
 
 List all bucket names.
 
-`ais ls ais`
+`ais ls cloud://` or `ais ls ais://`
 
-List AIS bucket names.
-
-`ais ls cloud`
-
-List cloud bucket names.
+List all bucket names for the specific provider.
 
 #### Flags for listing bucket names
 
@@ -66,7 +62,7 @@ List cloud bucket names.
 | `--regex` | `string` | Pattern for matching bucket names | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
-#### List object names
+### List object names
 
 #### With provider auto-detection
 
@@ -76,11 +72,11 @@ List object names in the bucket `BUCKET_NAME`. Cloud provider is auto-detected.
 
 #### From the specific provider
 
-`ais ls ais BUCKET_NAME`
+`ais ls ais://BUCKET_NAME`
 
 List objects in the AIS bucket `BUCKET_NAME`.
 
-`ais ls cloud BUCKET_NAME`
+`ais ls cloud://BUCKET_NAME`
 
 List objects in the cloud bucket `BUCKET_NAME`.
 
@@ -106,13 +102,11 @@ List objects in the cloud bucket `BUCKET_NAME`.
 #### Examples
 
 ```console
-# List local bucket mybucket 
-$ ais ls ais://mybucket # or ais ls ais mybucket
+$ ais ls ais://mybucket # list local bucket mybucket
 ```
 
 ```console
-# List cloud bucket mybucket
-$ ais ls cloud mybucket # or ais ls cloud://mybucket
+$ ais ls cloud://mybucket # list cloud bucket mybucket
 ```
 
 ### Evict
@@ -124,8 +118,7 @@ Evict a cloud bucket. It also resets the properties of the bucket (if changed).
 #### Examples
 
 ```console
-# Evict cloud bucket mybucket
-$ ais evict mybucket
+$ ais evict mybucket # evict cloud bucket mybucket
 ```
 
 ```console
@@ -141,12 +134,11 @@ Rename an ais bucket.
 #### Examples
 
 ```console
-# Rename local bucket mybucket to local bucket mynewbucketname
-$ ais rename bucket ais://mybucket mynewbucketname
+$ ais rename bucket ais://mybucket mynewbucket # rename local bucket `mybucket` to local bucket `mynewbucket`
 ```
 
 ```console
-$ ais rename bucket cloud://mycloudbucket cloud://mynewcloudbucketname # FAIL
+$ ais rename bucket cloud://mycloudbucket cloud://mynewbucket # FAIL
 Renaming of cloud buckets not supported
 ```
 
@@ -159,12 +151,11 @@ Copy an existing ais bucket to a new ais bucket.
 #### Examples
 
 ```console
-# Copy local bucket mybucket to local bucket mynewbucket
-$ ais cp bucket ais://mybucket mynewbucket
+$ ais cp bucket ais://mybucket mynewbucket # copy local bucket `mybucket` to local bucket `mynewbucket`
 ```
 
 ```console
-$ ais cp bucket cloud://mycloudbucket cloud://mynewcloudbucketname # FAIL
+$ ais cp bucket cloud://mycloudbucket cloud://mynewbucket # FAIL
 Copying of cloud buckets not supported
 ```
 
@@ -196,9 +187,9 @@ Start an extended action to bring a given bucket to a certain redundancy level (
 
 Start an extended action that enables data protection for all objects of a given bucket. Erasure coding must be set up for the bucket prior to running `ec-encode` extended action. Read more about this feature [here](../../docs/storage_svcs.md#erasure-coding).
 
-### List bucket props
+### Show bucket props
 
-`ais ls props BUCKET_NAME`
+`ais show props BUCKET_NAME`
 
 List [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
@@ -277,10 +268,8 @@ $ ais set props mybucket --jsonspec '{
 }'
 ```
 
-After which `ais ls props mybucket` results in:
-
 ```console
-$ ais bucket props list mybucket
+$ ais show props mybucket
 Property	Value
 Provider	ais
 Access		GET,PUT,DELETE,HEAD,ColdGET
@@ -306,9 +295,8 @@ $ ais set props mybucket --jsonspec '{
 }'
 ```
 
-After which `ais ls props mybucket` results in:
-
-```
+```console
+$ ais show props mybucket
 Property        Value
 Provider        ais
 Access          No access

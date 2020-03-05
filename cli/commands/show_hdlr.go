@@ -10,9 +10,9 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
-
 	"github.com/urfave/cli"
 )
 
@@ -69,6 +69,15 @@ var (
 		},
 		subcmdShowRebalance: {
 			refreshFlag,
+		},
+		subcmdShowBckProps: {
+			jsonFlag,
+		},
+		subcmdShowConfig: {
+			jsonFlag,
+		},
+		subcmdShowSmap: {
+			jsonFlag,
 		},
 	}
 
@@ -141,6 +150,30 @@ var (
 					Flags:        showCmdsFlags[subcmdShowRebalance],
 					Action:       showRebalanceHandler,
 					BashComplete: flagCompletions,
+				},
+				{
+					Name:         subcmdShowBckProps,
+					Usage:        "show bucket properties",
+					ArgsUsage:    bucketArgument,
+					Flags:        showCmdsFlags[subcmdShowBckProps],
+					Action:       showBckPropsHandler,
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+				},
+				{
+					Name:         subcmdShowConfig,
+					Usage:        "show daemon configuration",
+					ArgsUsage:    showConfigArgument,
+					Flags:        showCmdsFlags[subcmdShowConfig],
+					Action:       showConfigHandler,
+					BashComplete: daemonConfigSectionCompletions(false /* daemon optional */, true /* config optional */),
+				},
+				{
+					Name:         subcmdShowSmap,
+					Usage:        "display an smap copy of a node",
+					ArgsUsage:    optionalDaemonIDArgument,
+					Flags:        showCmdsFlags[subcmdShowSmap],
+					Action:       showSmapHandler,
+					BashComplete: daemonCompletions(true /* optional */, false /* omit proxies */),
 				},
 			},
 		},
@@ -300,4 +333,28 @@ func showObjectHandler(c *cli.Context) (err error) {
 
 func showRebalanceHandler(c *cli.Context) (err error) {
 	return showGlobalRebalance(c, flagIsSet(c, refreshFlag), calcRefreshRate(c))
+}
+
+func showBckPropsHandler(c *cli.Context) (err error) {
+	return showBucketProps(c)
+}
+
+func showSmapHandler(c *cli.Context) (err error) {
+	var (
+		daemonID    = c.Args().First()
+		primarySmap *cluster.Smap
+	)
+
+	if primarySmap, err = fillMap(); err != nil {
+		return
+	}
+
+	return clusterSmap(c, primarySmap, daemonID, flagIsSet(c, jsonFlag))
+}
+
+func showConfigHandler(c *cli.Context) (err error) {
+	if _, err = fillMap(); err != nil {
+		return
+	}
+	return getDaemonConfig(c)
 }

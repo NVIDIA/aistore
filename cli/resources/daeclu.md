@@ -25,7 +25,7 @@ Return the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either `
 
 ### Cluster map
 
-`ais ls smap [DAEMON_ID]`
+`ais show smap [DAEMON_ID]`
 
 Show a copy of the cluster map (smap) present on `DAEMON_ID`. If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_URL` points at.
 
@@ -37,7 +37,7 @@ Show a copy of the cluster map (smap) present on `DAEMON_ID`. If `DAEMON_ID` isn
 
 | Command | Explanation |
 | --- | --- |
-| `ais ls smap 1048575_8084` | Shows smap copy of daemon with ID `1048575_8084` |
+| `ais show smap 1048575_8084` | Shows smap copy of daemon with ID `1048575_8084` |
 
 ### Node details
 
@@ -108,9 +108,9 @@ Remove an existing node from the cluster.
 | --- | --- |
 | `ais rm node 23kfa10f` | Removes node with ID `23kfa10f` from the cluster |
 
-### List config
+### Show config
 
-`ais ls config DAEMON_ID [CONFIG_SECTION]`
+`ais show config DAEMON_ID [CONFIG_SECTION]`
 
 Display the configuration of `DAEMON_ID`. If `CONFIG_SECTION` is given, only that specific section will be shown.
 
@@ -122,8 +122,8 @@ Display the configuration of `DAEMON_ID`. If `CONFIG_SECTION` is given, only tha
 
 | Command | Explanation |
 | --- | --- |
-| `ais ls config 844974_8080` | Displays config of the node with ID `844974_8080` |
-| `ais ls config 844974_8080 lru` | Displays only the LRU config section of the node with ID `844974_8080` |
+| `ais show config 844974_8080` | Displays config of the node with ID `844974_8080` |
+| `ais show config 844974_8080 lru` | Displays only the LRU config section of the node with ID `844974_8080` |
 
 ### Set config
 

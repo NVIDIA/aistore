@@ -111,7 +111,7 @@ $ ais set props mybucket ec.enabled=true
 check that EC properties are applied:
 
 ```console
-$ ais ls props mybucket
+$ ais show props mybucket
 Property        Value
 ========        =====
 Provider        ais

@@ -252,20 +252,6 @@ func putPromoteObjectCompletions(c *cli.Context) {
 	flagCompletions(c)
 }
 
-//////////
-// List //
-//////////
-
-func listCompletions(c *cli.Context) {
-	if c.NArg() == 0 {
-		for _, subcmd := range listSubcmds {
-			fmt.Println(subcmd)
-		}
-		bucketCompletions([]cli.BashCompleteFunc{}, false, true)(c)
-		return
-	}
-}
-
 /////////////
 // Xaction //
 /////////////

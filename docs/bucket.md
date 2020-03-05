@@ -249,19 +249,19 @@ For many more examples, please refer to the [test sources](/ais/tests/) in the r
 1. List bucket properties:
 
 ```console
-$ ais ls props mybucket
+$ ais show props mybucket
 ```
 
 or, same via command argument (and without the environment variable):
 
 ```console
-$ ais ls props mybucket
+$ ais show props mybucket
 ```
 
 or, the same to get output in a (raw) JSON form:
 
 ```console
-$ ais ls props mybucket --json
+$ ais show props mybucket --json
 ```
 
 2. Enable erasure coding on a bucket:
@@ -274,7 +274,7 @@ $ ais set props mybucket ec.enabled=true
 
 ```console
 $ ais set props mybucket ver.enabled=true
-$ ais ls props mybucket
+$ ais show props mybucket
 ```
 
 ## Recover Buckets

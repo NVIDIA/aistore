@@ -362,7 +362,7 @@ func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 }
 
 // Get bucket props
-func listBucketProps(c *cli.Context) (err error) {
+func showBucketProps(c *cli.Context) (err error) {
 	var (
 		bck cmn.Bck
 	)
