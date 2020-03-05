@@ -10,6 +10,7 @@ echo '{"extension": ".tar","bucket": "$BUCKET_1","input_format": "shard-{0..9}",
 ais start dsort -f /tmp/dsort.json // IGNORE
 rm -f /tmp/dsort.json
 ais start dsort '{"extension": ".tar","bucket": "$BUCKET_1","input_format": "shard-{0..9}","output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"},"extract_concurrency_limit": 3,"create_concurrency_limit": 5,"extended_metrics": true}' // IGNORE
+ais wait dsort $(ais show dsort | grep -m 1 -P 'Aborted|Finished' | awk '{print $1}')
 
 # YAML
 echo -e "extension: .tar\nbucket: $BUCKET_1\ninput_format: shard-{0..9}\noutput_format: new-shard-{0000..1000}\noutput_shard_size: 10KB\ndescription: sort shards from 0 to 9\nalgorithm:\n    kind: alphanumeric\nextract_concurrency_limit: 3\ncreate_concurrency_limit: 5\nextended_metrics: true\n" > /tmp/dsort.yaml

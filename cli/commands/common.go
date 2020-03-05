@@ -37,6 +37,7 @@ const (
 	commandECEncode  = "ec-encode"
 	commandConcat    = "concat"
 	commandCat       = "cat"
+	commandWait      = "wait"
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase
@@ -100,6 +101,11 @@ const (
 	// Register subcommands
 	subcmdRegisterProxy  = subcmdProxy
 	subcmdRegisterTarget = subcmdTarget
+
+	// Wait subcommands
+	subcmdWaitXaction  = subcmdXaction
+	subcmdWaitDownload = subcmdDownload
+	subcmdWaitDSort    = subcmdDsort
 
 	// Env. var. related constants
 	aisProviderEnvVar = "AIS_BUCKET_PROVIDER"

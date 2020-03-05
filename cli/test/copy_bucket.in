@@ -5,5 +5,8 @@ ais cp bucket ais://$BUCKET_1 cloud://$BUCKET_2 // FAIL "Copying of cloud bucket
 
 sleep 2
 ais show xaction copybck $BUCKET_1/
+ais show xaction copybck // FAIL "missing arguments "bucket name for xaction 'copybck'"
+ais wait xaction copybck $BUCKET_2/
+ais wait xaction copybck // FAIL "missing arguments "bucket name for xaction 'copybck'"
 ais show xaction copybck $BUCKET_2/ // IGNORE
 ais show xaction copybck $BUCKET_3/ // FAIL "Bucket with name "$BUCKET_3" does not exist."

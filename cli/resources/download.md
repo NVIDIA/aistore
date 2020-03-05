@@ -85,3 +85,19 @@ Show download jobs or status of a specific job.
 | `ais show download --regex "^downloads-(.*)"` | Shows all download jobs with descriptions starting with `download-` prefix |
 | `ais show download 5JjIuGemR` | Shows status of the download job with ID `5JjIuGemR` |
 | `ais show download 5JjIuGemR --progress --refresh 500` | Shows progress bars for each currently downloading file with refresh rate of `500` milliseconds |
+
+### Wait
+
+`ais wait download JOB_ID`
+
+Wait for the download job with given `JOB_ID` to finish.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--refresh` | `duration` | Refresh rate | `1s` |
+
+#### Examples
+
+| Command | Explanation |
+| --- | --- |
+| `ais wait download 5JjIuGemR` | Waits for the download job with ID `5JjIuGemR` to finish |

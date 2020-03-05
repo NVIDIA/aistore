@@ -204,7 +204,7 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--regex` | `string` | Regex for the description of dSort jobs | `""` |
-| `--refresh` | `int` | Refreshing rate of the progress bar refresh or metrics refresh (in milliseconds) | `1000` |
+| `--refresh` | `duration` | Refreshing rate of the progress bar refresh or metrics refresh | `1s` |
 | `--verbose, -v` | `bool` | Show detailed metrics | `false` |
 | `--log` | `string` | Path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
 
@@ -232,7 +232,7 @@ Stop the dSort job with given `JOB_ID`.
 | --- | --- |
 | `ais stop dsort 5JjIuGemR` | Stops the dSort job with ID `5JjIuGemR` |
 
-### rm
+### Remove
 
 `ais rm dsort JOB_ID`
 
@@ -243,3 +243,19 @@ Remove the finished dSort job with given `JOB_ID` from the job list.
 | Command | Explanation |
 | --- | --- |
 | `ais rm dsort 5JjIuGemR` | Removes the dSort job with ID `5JjIuGemR` from the list of dSort jobs |
+
+### Wait
+
+`ais wait dsort JOB_ID`
+
+Wait for the dSort job with given `JOB_ID` to finish.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--refresh` | `duration` | Refresh rate | `1s` |
+
+#### Examples
+
+| Command | Explanation |
+| --- | --- |
+| `ais wait dsort 5JjIuGemR` | Waits for the dSort job with ID `5JjIuGemR` to finish |
