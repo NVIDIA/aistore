@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -150,8 +149,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objnameTo string, si *cluster.
 	req.Header.Set(cmn.HeaderObjCksumType, cksumType)
 	req.Header.Set(cmn.HeaderObjCksumVal, cksumValue)
 	req.Header.Set(cmn.HeaderObjVersion, lom.Version())
-	timeInt := lom.AtimeUnix()
-	req.Header.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
+	req.Header.Set(cmn.HeaderObjAtime, cmn.UnixNano2S(lom.AtimeUnix()))
 
 	resp, err1 := ri.t.httpclientGetPut.Do(req)
 	if err1 != nil {

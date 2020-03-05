@@ -219,7 +219,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 
 		e.SetExists()
 		if needAtime {
-			e.Atime = cmn.FormatTime(lom.AtimeUnix(), w.msg.TimeFormat)
+			e.Atime = cmn.FormatUnixNano(lom.AtimeUnix(), w.msg.TimeFormat)
 		}
 		if needCksum && lom.Cksum() != nil {
 			_, storedCksum := lom.Cksum().Get()

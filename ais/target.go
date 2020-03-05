@@ -281,6 +281,8 @@ func (t *targetrunner) Run() error {
 		{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 		{r: cmn.Rebalance, h: t.rebalanceHandler, net: []string{cmn.NetworkIntraData}},
 
+		{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}}, // control plane transactions
+
 		{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 	}
 	t.registerNetworkHandlers(networkHandlers)
@@ -351,7 +353,7 @@ func (t *targetrunner) Stop(err error) {
 }
 
 //
-// http handlers: data and metadata
+// http handlers
 //
 
 // verb /v1/buckets
@@ -361,8 +363,6 @@ func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpbckget(w, r)
 	case http.MethodDelete:
 		t.httpbckdelete(w, r)
-	case http.MethodPut:
-		t.httpbckput(w, r)
 	case http.MethodPost:
 		t.httpbckpost(w, r)
 	case http.MethodHead:
@@ -742,72 +742,6 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PUT /v1/buckets/bucket-name
-func (t *targetrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
-	var (
-		msgInt = &actionMsgInternal{}
-		bck    *cluster.Bck
-	)
-	if cmn.ReadJSON(w, r, msgInt) != nil {
-		return
-	}
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
-	if err != nil {
-		return
-	}
-	if len(apiItems) < 3 {
-		t.invalmsghdlr(w, r, "url path is too short: expecting bucket, phase, uuid", http.StatusBadRequest)
-		return
-	}
-	var (
-		bucket, phase, uuid = apiItems[0], apiItems[1], apiItems[2]
-	)
-	bck, err = newBckFromQuery(bucket, r.URL.Query())
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-		return
-	}
-	switch phase {
-	case cmn.ActBegin:
-		// don't allow creating buckets when capInfo.High (let alone OOS)
-		config := cmn.GCO.Get()
-		if capInfo := t.AvgCapUsed(config); capInfo.Err != nil {
-			t.invalmsghdlr(w, r, capInfo.Err.Error())
-			return
-		}
-		txn := newTxnCtxBmdRecv(
-			uuid,
-			msgInt.Action,
-			t.owner.smap.get().version(),
-			t.owner.bmd.get().version(),
-			r.Header.Get(cmn.HeaderCallerName),
-			bck,
-		)
-		if err := t.transactions.begin(txn); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-	case cmn.ActAbort:
-		t.transactions.find(uuid, true /* remove */)
-	case cmn.ActCommit:
-		var (
-			config   = cmn.GCO.Get()
-			txn, err = t.transactions.find(uuid, false)
-		)
-		if err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("%s %s: %v", t.si, txn, err))
-			return
-		}
-		// wait for newBMD w/timeout
-		if err = t.transactions.wait(txn, 2*config.Timeout.CplaneOperation); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("%s %s: %v", t.si, txn, err))
-			return
-		}
-	default:
-		cmn.Assert(false)
-	}
-}
-
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -905,24 +839,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if ok := t.bucketSummary(w, r, bck, msgInt); !ok {
 			return
 		}
-	case cmn.ActMakeNCopies:
-		phase := apiItems[1]
-		switch phase {
-		case cmn.ActBegin:
-			err = t.beginMakeNCopies(bck, msgInt)
-			if err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-		case cmn.ActAbort:
-			break // nothing to do
-		case cmn.ActCommit:
-			copies, _ := t.parseValidateNCopies(msgInt.Value)
-			xaction.Registry.DoAbort(cmn.ActPutCopies, bck)
-			xaction.Registry.RenewBckMakeNCopies(bck, t, copies)
-		default:
-			cmn.Assert(false)
-		}
 	case cmn.ActECEncode:
 		phase := apiItems[1]
 		switch phase {
@@ -955,21 +871,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		s := fmt.Sprintf(fmtUnknownAct, msgInt)
 		t.invalmsghdlr(w, r, s)
 	}
-}
-
-func (t *targetrunner) beginMakeNCopies(bck *cluster.Bck, msgInt *actionMsgInternal) (err error) {
-	copies, err := t.parseValidateNCopies(msgInt.Value)
-	if err == nil {
-		err = mirror.ValidateNCopies(t.si.Name(), copies)
-	}
-	if err != nil {
-		return
-	}
-	if bck.Props.Mirror.Copies < int64(copies) {
-		capInfo := t.AvgCapUsed(nil)
-		err = capInfo.Err
-	}
-	return
 }
 
 // POST /v1/objects/bucket-name/object-name
@@ -1159,7 +1060,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(lom.Size(), 10))
 		hdr.Set(cmn.HeaderObjVersion, lom.Version())
 		if lom.AtimeUnix() != 0 {
-			hdr.Set(cmn.HeaderObjAtime, cmn.FormatTime(lom.AtimeUnix(), time.RFC822))
+			hdr.Set(cmn.HeaderObjAtime, cmn.FormatUnixNano(lom.AtimeUnix(), time.RFC822)) // formatted for API caller
 		}
 		hdr.Set(cmn.HeaderObjNumCopies, strconv.Itoa(lom.NumCopies()))
 		if cksum := lom.Cksum(); cksum != nil {
@@ -1520,7 +1421,7 @@ func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (red
 	if s == "" {
 		return
 	}
-	pts, err := strconv.ParseInt(s, 0, 64)
+	pts, err := cmn.S2UnixNano(s)
 	if err != nil {
 		glog.Errorf("unexpected: failed to convert %s to int, err: %v", s, err)
 		return

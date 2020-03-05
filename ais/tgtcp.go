@@ -896,12 +896,12 @@ func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal, r *http.Request
 	smap := t.owner.smap.Get()
 	smapVersion := msgInt.SmapVersion
 	if smap.Version < smapVersion {
-		glog.Errorf("own %s < v%d - fetching latest for %v", smap, smapVersion, msgInt.Action)
+		glog.Errorf("%s: own %s < v%d - fetching latest for %v", t.si, smap, smapVersion, msgInt.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 		t.smapVersionFixup(r)
 	} else if smap.Version > smapVersion {
 		// if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("own %s > v%d - encountered during %v", smap, smapVersion, msgInt.Action)
+		glog.Errorf("%s: own %s > v%d - encountered during %v", t.si, smap, smapVersion, msgInt.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 	}
 	// BMD
@@ -909,12 +909,12 @@ func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal, r *http.Request
 	bucketmd := t.owner.bmd.Get()
 	bmdVersion := msgInt.BMDVersion
 	if bucketmd.Version < bmdVersion {
-		glog.Errorf("own %s < v%d - fetching latest for %v", bucketmd, bmdVersion, msgInt.Action)
+		glog.Errorf("%s: own %s < v%d - fetching latest for %v", t.si, bucketmd, bmdVersion, msgInt.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 		t.BMDVersionFixup(r, cmn.Bck{}, false)
 	} else if bucketmd.Version > bmdVersion {
 		// if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("own %s > v%d - encountered during %v", bucketmd, bmdVersion, msgInt.Action)
+		glog.Errorf("%s: own %s > v%d - encountered during %v", t.si, bucketmd, bmdVersion, msgInt.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 	}
 }

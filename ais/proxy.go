@@ -17,7 +17,6 @@ import (
 	"os"
 	"path"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -25,7 +24,6 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -712,72 +710,6 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (p *proxyrunner) undoCreateBucket(msg *cmn.ActionMsg, bck *cluster.Bck) {
-	p.owner.bmd.Lock()
-	clone := p.owner.bmd.get().clone()
-	clone.del(bck)
-	p.owner.bmd.put(clone)
-	p.owner.bmd.Unlock()
-
-	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, revsPair{clone, msgInt})
-}
-
-func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHeader ...http.Header) error {
-	var (
-		q           = cmn.AddBckToQuery(nil, bck.Bck)
-		bucketProps = cmn.DefaultBucketProps()
-	)
-	if len(cloudHeader) != 0 {
-		bucketProps = cmn.CloudBucketProps(cloudHeader[0])
-	}
-
-	// try add
-	p.owner.bmd.Lock()
-	clone := p.owner.bmd.get().clone()
-	if !clone.add(bck, bucketProps) {
-		p.owner.bmd.Unlock()
-		return cmn.NewErrorBucketAlreadyExists(bck.Bck, p.si.String())
-	}
-	// begin
-	var (
-		smap   = p.owner.smap.get()
-		msgInt = p.newActionMsgInternal(msg, smap, nil)
-		body   = cmn.MustMarshal(msgInt)
-		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		uuid   = cmn.GenUUID()
-		req    = cmn.ReqArgs{Path: cmn.URLPath(path, cmn.ActBegin, uuid), Query: q, Body: body}
-	)
-	results := p.bcastPut(bcastArgs{req: req, smap: smap})
-	for result := range results {
-		if result.err != nil {
-			p.owner.bmd.Unlock()
-			// abort
-			req.Path = cmn.URLPath(path, cmn.ActAbort, uuid)
-			_ = p.bcastPut(bcastArgs{req: req, smap: smap})
-			return result.err
-		}
-	}
-	// add
-	p.owner.bmd.put(clone)
-	p.owner.bmd.Unlock()
-
-	// distribute
-	msgInt = p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(false /* don't wait */, revsPair{clone, msgInt})
-
-	// commit... or not
-	req.Path = cmn.URLPath(path, cmn.ActCommit, uuid)
-	results = p.bcastPut(bcastArgs{req: req, smap: smap})
-	for result := range results {
-		if result.err != nil {
-			p.undoCreateBucket(msg, bck)
-			return result.err
-		}
-	}
-	return nil
-}
-
 func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (*bucketMD, error, int) {
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
@@ -955,7 +887,10 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActSummaryBucket:
 		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
-		p.makeNCopies(w, r, bck, &msg, true /*updateBckProps*/)
+		err = p.makeNCopies(bck, &msg, true /*updateBckProps*/)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 	case cmn.ActECEncode:
 		if !bck.Props.EC.Enabled {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Could not start: bucket %q has EC disabled", bck.Name))
@@ -1295,8 +1230,8 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, propsToUpdate cmn.Buck
 	clone := p.owner.bmd.get().clone()
 	_, exists := clone.Get(bck)
 	// TODO: Bucket props could have changed between applying new props and this
-	// lock. We should check and merge the bucket props if such situation happens.
-	// Currently we just assume that the last wins.
+	// lock. We should check and *merge* the bucket props if such situation arises
+	// (currently the last update wins).
 	if !exists {
 		cmn.Assert(!bck.IsAIS())
 		var cloudProps http.Header
@@ -1452,7 +1387,10 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 			Action: cmn.ActMakeNCopies,
 			Value:  fmt.Sprintf("%d", nprops.Mirror.Copies),
 		}
-		p.makeNCopies(w, r, bck, msg, false /*updateBckProps*/)
+		err = p.makeNCopies(bck, msg, false /*updateBckProps*/)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 	}
 }
 
@@ -1676,46 +1614,6 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 	return
 }
 
-func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg, updateBckProps bool) {
-	copies, err := p.parseValidateNCopies(msg.Value)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	var (
-		smap   = p.owner.smap.get()
-		msgInt = p.newActionMsgInternal(msg, smap, nil)
-		body   = cmn.MustMarshal(msgInt)
-		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		errmsg = fmt.Sprintf("failed to execute '%s' on bucket %s", msg.Action, bck)
-	)
-	err = p.bcast2Phase(bcastArgs{req: cmn.ReqArgs{Path: path, Body: body}}, errmsg, true /*commit*/)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if updateBckProps {
-		if err := bck.Init(p.owner.bmd, p.si); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-
-		cmn.Assert(copies >= 1)
-		nprops := cmn.BucketPropsToUpdate{
-			Mirror: &cmn.MirrorConfToUpdate{
-				Enabled: api.Bool(true),
-				Copies:  api.Int64(int64(copies)),
-			},
-		}
-		// NOTE: cmn.ActMakeNCopies automatically does
-		// (copies > 1 ? enable : disable) on the bucket's MirrorConf
-		if _, err := p.updateBucketProps(bck, nprops); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-		}
-	}
-}
-
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
 		msgInt  = p.newActionMsgInternal(msg, nil, p.owner.bmd.get())
@@ -1798,7 +1696,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 
 	query.Add(cmn.URLParamProxyID, p.si.ID())
 	query.Add(cmn.URLParamBMDVersion, bmd.vstr)
-	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(ts.UnixNano(), 10))
+	query.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(ts.UnixNano()))
 	redirect += query.Encode()
 	return
 }

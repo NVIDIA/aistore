@@ -813,7 +813,8 @@ func (h *httprunner) newActionMsgInternal(actionMsg *cmn.ActionMsg, smap *smapX,
 //////////////////////////////////
 
 // remove validated fields and return the resulting slice
-func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, splitAfter bool, items ...string) ([]string, error) {
+func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
+	splitAfter bool, items ...string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items...)
 	if err != nil {
 		s := err.Error()
@@ -859,12 +860,12 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 	return
 }
 
-func (h *httprunner) parseValidateNCopies(value interface{}) (copies int, err error) {
+func (h *httprunner) parseNCopies(value interface{}) (copies int64, err error) {
 	switch v := value.(type) {
 	case string:
-		copies, err = strconv.Atoi(v)
+		copies, err = strconv.ParseInt(v, 10, 64)
 	case float64:
-		copies = int(v)
+		copies = int64(v)
 	default:
 		err = fmt.Errorf("failed to parse 'copies' (%v, %T) - unexpected type", value, value)
 	}

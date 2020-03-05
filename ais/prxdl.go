@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 	"sync"
 	"time"
 
@@ -33,7 +32,7 @@ func (p *proxyrunner) targetDownloadRequest(method string, path string, body []b
 		}
 	}
 	fullQuery.Add(cmn.URLParamProxyID, p.si.ID())
-	fullQuery.Add(cmn.URLParamUnixTime, strconv.FormatInt(time.Now().UnixNano(), 10))
+	fullQuery.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(time.Now().UnixNano()))
 
 	args := callArgs{
 		si: si,

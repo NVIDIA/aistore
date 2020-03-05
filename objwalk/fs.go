@@ -88,7 +88,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 		Copies: 1,
 	}
 	if ci.needAtime {
-		fileInfo.Atime = cmn.FormatTime(lom.AtimeUnix(), ci.msg.TimeFormat)
+		fileInfo.Atime = cmn.FormatUnixNano(lom.AtimeUnix(), ci.msg.TimeFormat)
 	}
 	if ci.needCksum && lom.Cksum() != nil {
 		_, storedCksum := lom.Cksum().Get()

@@ -1284,7 +1284,7 @@ func (pq ParsedQuantity) String() string {
 // time formatting //
 /////////////////////
 
-func FormatTime(unixnano int64, format string) string {
+func FormatUnixNano(unixnano int64, format string) string {
 	t := time.Unix(0, unixnano)
 	switch format {
 	case "", RFC822:
@@ -1296,7 +1296,11 @@ func FormatTime(unixnano int64, format string) string {
 
 func FormatTimestamp(tm time.Time) string { return tm.Format(timeStampFormat) }
 
-func S2TimeUnix(timeStr string) (tunix int64, err error) {
-	tunix, err = strconv.ParseInt(timeStr, 10, 64)
-	return
+func Duration2S(d time.Duration) string { return strconv.FormatInt(int64(d), 10) }
+func S2Duration(s string) (time.Duration, error) {
+	d, err := strconv.ParseInt(s, 0, 64)
+	return time.Duration(d), err
 }
+
+func UnixNano2S(unixnano int64) string   { return strconv.FormatInt(unixnano, 10) }
+func S2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }

@@ -550,22 +550,20 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		return
 	}
 	var (
+		atime      int64
 		cksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
 		cksumType  = resp.Header.Get(cmn.HeaderObjCksumType)
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
 		version    = resp.Header.Get(cmn.HeaderObjVersion)
 		workFQN    = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
-		atimeStr   = resp.Header.Get(cmn.HeaderObjAtime)
 	)
-	// The string in the header is an int represented as a string, NOT a formatted date string.
-	atime, err := cmn.S2TimeUnix(atimeStr)
-	if err != nil {
+	if atime, err = cmn.S2UnixNano(resp.Header.Get(cmn.HeaderObjAtime)); err != nil {
 		glog.Error(err)
 		return
 	}
+	lom.SetAtimeUnix(atime)
 	lom.SetCksum(cksum)
 	lom.SetVersion(version)
-	lom.SetAtimeUnix(atime)
 	poi := &putObjInfo{
 		t:        goi.t,
 		lom:      lom,
@@ -617,7 +615,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 			hdr.Set(cmn.HeaderObjVersion, goi.lom.Version())
 		}
 		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(goi.lom.Size(), 10))
-		hdr.Set(cmn.HeaderObjAtime, strconv.FormatInt(goi.lom.AtimeUnix(), 10))
+		hdr.Set(cmn.HeaderObjAtime, cmn.UnixNano2S(goi.lom.AtimeUnix()))
 	}
 
 	// loopback if disk IO is disabled

@@ -181,16 +181,20 @@ const (
 	URLParamTotalInputShardsExtracted = "tise"
 	URLParamTotalUncompressedSize     = "tunc"
 
-	// downloader
-	URLParamBucket      = "bucket"
-	URLParamID          = "id"
+	// downloader - FIXME: name collisions, consistency, usage beyond downloader
+	URLParamBucket      = "bucket" // FIXME
+	URLParamID          = "id"     // FIXME
 	URLParamLink        = "link"
-	URLParamObjName     = "objname"
+	URLParamObjName     = "objname" // FIXME
 	URLParamSuffix      = "suffix"
 	URLParamTemplate    = "template"
 	URLParamSubdir      = "subdir"
-	URLParamTimeout     = "timeout"
+	URLParamTimeout     = "timeout" // FIXME
 	URLParamDescription = "description"
+
+	// cp transactions
+	URLParamTxnID      = "tnd" // transaction ID
+	URLParamTxnTimeout = "tno" // transaction timeout
 )
 
 // enum: task action (cmn.URLParamTaskAction)
@@ -269,6 +273,7 @@ const (
 	Transport = "transport"
 	Reverse   = "reverse"
 	Rebalance = "rebalance"
+	Txn       = "txn" // control plane transactions
 	// l2 AuthN
 	Users = "users"
 
