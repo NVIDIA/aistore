@@ -87,9 +87,7 @@ type ListMsg struct {
 
 // RangeMsg contains a Prefix, Regex, and Range for a Range Operation
 type RangeMsg struct {
-	Prefix string `json:"prefix"`
-	Regex  string `json:"regex"`
-	Range  string `json:"range"`
+	Template string `json:"template"`
 }
 
 // MountpathList contains two lists:

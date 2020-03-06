@@ -538,14 +538,14 @@ func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	if err = canReachBucket(bck); err != nil {
 		return
 	}
-	if flagIsSet(c, listFlag) && flagIsSet(c, rangeFlag) {
-		return incorrectUsageMsg(c, "flags %s and %s cannot be both set", listFlag.Name, rangeFlag.Name)
+	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
+		return incorrectUsageMsg(c, "flags %s and %s cannot be both set", listFlag.Name, templateFlag.Name)
 	}
 
 	if flagIsSet(c, listFlag) {
 		return listOp(c, command, bck)
 	}
-	if flagIsSet(c, rangeFlag) {
+	if flagIsSet(c, templateFlag) {
 		return rangeOp(c, command, bck)
 	}
 	return
@@ -581,22 +581,20 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 // Range handler
 func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
-		prefix   = parseStrFlag(c, prefixFlag)
-		regex    = parseStrFlag(c, regexFlag)
-		rangeStr = parseStrFlag(c, rangeFlag)
+		rangeStr = parseStrFlag(c, templateFlag)
 	)
 
 	switch command {
 	case commandRemove:
-		err = api.DeleteRange(defaultAPIParams, bck, prefix, regex, rangeStr)
+		err = api.DeleteRange(defaultAPIParams, bck, rangeStr)
 		command = "removed"
 	case commandPrefetch:
 		bck.Provider = cmn.Cloud
-		err = api.PrefetchRange(defaultAPIParams, bck, prefix, regex, rangeStr)
+		err = api.PrefetchRange(defaultAPIParams, bck, rangeStr)
 		command += "ed"
 	case commandEvict:
 		bck.Provider = cmn.Cloud
-		err = api.EvictRange(defaultAPIParams, bck, prefix, regex, rangeStr)
+		err = api.EvictRange(defaultAPIParams, bck, rangeStr)
 		command += "ed"
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
@@ -604,8 +602,8 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%s files with prefix '%s' matching '%s' in the range '%s' from %s bucket\n",
-		command, prefix, regex, rangeStr, bck)
+	fmt.Fprintf(c.App.Writer, "%s files in the range '%s' from %s bucket\n",
+		command, rangeStr, bck)
 	return
 }
 

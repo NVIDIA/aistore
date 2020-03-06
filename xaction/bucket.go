@@ -447,13 +447,14 @@ type (
 		baseBckEntry
 		t    cluster.Target
 		xact *EvictDelete
-		bck  *cluster.Bck
 		args *DeletePrefetchArgs
 	}
-	EvictDelete struct {
+	listRangeBase struct {
 		cmn.XactBase
-		t   cluster.Target
-		bck *cluster.Bck
+		t cluster.Target
+	}
+	EvictDelete struct {
+		listRangeBase
 	}
 	DeletePrefetchArgs struct {
 		Ctx      context.Context
@@ -461,6 +462,7 @@ type (
 		ListMsg  *cmn.ListMsg
 		Evict    bool
 	}
+	objCallback = func(args *DeletePrefetchArgs, objName string) error
 )
 
 func (r *EvictDelete) Description() string {
@@ -472,16 +474,17 @@ func (r *EvictDelete) Run(args *DeletePrefetchArgs) {
 	if args.RangeMsg != nil {
 		r.iterateBucketRange(args)
 	} else {
-		r.listOperation(args.Ctx, args.ListMsg, args.Evict)
+		r.listOperation(args, args.ListMsg)
 	}
 	r.EndTime(time.Now())
 }
 
 func (e *evictDeleteEntry) Start(id string, bck cmn.Bck) error {
 	e.xact = &EvictDelete{
-		XactBase: *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
-		t:        e.t,
-		bck:      e.bck,
+		listRangeBase: listRangeBase{
+			XactBase: *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
+			t:        e.t,
+		},
 	}
 	return nil
 }
@@ -500,7 +503,6 @@ func (e *evictDeleteEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (*EvictDelete, error) {
 	e := &evictDeleteEntry{
 		t:    t,
-		bck:  bck,
 		args: args,
 	}
 	ee, err := r.renewBucketXaction(e, bck)
@@ -518,13 +520,10 @@ type (
 		baseBckEntry
 		t    cluster.Target
 		xact *Prefetch
-		bck  *cluster.Bck
 		args *DeletePrefetchArgs
 	}
 	Prefetch struct {
-		cmn.XactBase
-		t   cluster.Target
-		bck *cluster.Bck
+		listRangeBase
 	}
 )
 
@@ -535,9 +534,10 @@ func (e *prefetchEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 }
 func (e *prefetchEntry) Start(id string, bck cmn.Bck) error {
 	e.xact = &Prefetch{
-		XactBase: *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
-		t:        e.t,
-		bck:      e.bck,
+		listRangeBase: listRangeBase{
+			XactBase: *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
+			t:        e.t,
+		},
 	}
 	return nil
 }
@@ -548,7 +548,7 @@ func (r *Prefetch) Run(args *DeletePrefetchArgs) {
 	if args.RangeMsg != nil {
 		r.iterateBucketRange(args)
 	} else {
-		r.listOperation(args.Ctx, args.ListMsg)
+		r.listOperation(args, args.ListMsg)
 	}
 	r.EndTime(time.Now())
 }
@@ -556,7 +556,6 @@ func (r *Prefetch) Run(args *DeletePrefetchArgs) {
 func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (*Prefetch, error) {
 	e := &prefetchEntry{
 		t:    t,
-		bck:  bck,
 		args: args,
 	}
 	ee, err := r.renewBucketXaction(e, bck)

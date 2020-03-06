@@ -9,9 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
-	"strconv"
-	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -19,77 +16,59 @@ import (
 	"github.com/NVIDIA/aistore/objwalk"
 )
 
-func parseRange(rangestr string) (min, max int64, err error) {
-	if rangestr != "" {
-		ranges := strings.Split(rangestr, ":")
-		if ranges[0] == "" {
-			// Min was not set
-			min = 0
-		} else {
-			min, err = strconv.ParseInt(ranges[0], 10, 64)
-			if err != nil {
-				return
-			}
-		}
-
-		if ranges[1] == "" {
-			// Max was not set
-			max = 0
-		} else {
-			max, err = strconv.ParseInt(ranges[1], 10, 64)
-			if err != nil {
-				return
-			}
-		}
-	} else {
-		min = 0
-		max = 0
+func isLocalObject(smap *cluster.Smap, b cmn.Bck, objName string, sid string) (bool, error) {
+	bck := cluster.NewBckEmbed(b)
+	si, err := cluster.HrwTarget(bck.MakeUname(objName), smap)
+	if err != nil {
+		return false, err
 	}
-	return
+	return si.ID() == sid, nil
 }
 
-func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64) bool {
-	oname := strings.TrimPrefix(name, prefix)
-	s := regex.FindStringSubmatch(oname)
-	if s == nil {
-		return false
+// Try to parse string as template:
+// 1. As bash-style: `file-{0..100}`
+// 2. As at-style: `file-@100`
+// 3. Falls back to just a prefix without number ranges
+func parseTemplate(template string) (cmn.ParsedTemplate, error) {
+	if template == "" {
+		return cmn.ParsedTemplate{}, errors.New("Empty range template")
 	}
-	// If the regex matches:
-	if i, err := strconv.ParseInt(s[0], 10, 64); err != nil && s[0] != "" {
-		// If the regex matched a non-empty non-number
-		return false
-	} else if s[0] == "" || ((min == 0 || i >= min) && (max == 0 || i <= max)) {
-		// Either the match is empty, or the match is a number.
-		// If the match is a number, either min=0 (unset) or it must be above the minimum, and
-		// either max=0 (unset) or ir must be below the maximum
-		return true
+
+	if parsed, err := cmn.ParseBashTemplate(template); err == nil {
+		return parsed, nil
 	}
-	return false
+	if parsed, err := cmn.ParseAtTemplate(template); err == nil {
+		return parsed, nil
+	}
+	return cmn.ParsedTemplate{Prefix: template}, nil
 }
 
-func (r *EvictDelete) objDelete(ctx context.Context, lom *cluster.LOM, evict bool) error {
+//
+// Evict/Delete/Prefect
+//
+
+func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) error {
 	var (
 		cloudErr   error
-		errRet     error
 		delFromAIS bool
 	)
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromCloud := lom.Bck().IsCloud() && !evict
+	delFromCloud := lom.Bck().IsCloud() && !args.Evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
-	} else if !cmn.IsObjNotExist(err) || (!delFromCloud && cmn.IsObjNotExist(err)) {
+	} else if !cmn.IsErrObjNought(err) {
 		return err
 	}
 
 	if delFromCloud {
-		if err, _ := r.t.Cloud().DeleteObj(ctx, lom); err != nil {
+		if err, _ := r.t.Cloud().DeleteObj(args.Ctx, lom); err != nil {
 			cloudErr = fmt.Errorf("%s: DELETE failed, err: %v", lom, err)
 		}
 	}
 	if delFromAIS {
-		errRet = lom.Remove()
+		errRet := lom.Remove()
 		if errRet != nil {
 			if !os.IsNotExist(errRet) {
 				if cloudErr != nil {
@@ -98,137 +77,47 @@ func (r *EvictDelete) objDelete(ctx context.Context, lom *cluster.LOM, evict boo
 				return errRet
 			}
 		}
-		if evict {
+		if args.Evict {
 			cmn.Assert(lom.Bck().IsCloud())
 		}
 	}
 	if cloudErr != nil {
 		return fmt.Errorf("%s: failed to delete from cloud: %v", lom, cloudErr)
 	}
-	return errRet
-}
-
-func (r *EvictDelete) doListEvictDelete(ctx context.Context, objs []string, evict bool) error {
-	for _, objName := range objs {
-		if r.Aborted() {
-			return nil
-		}
-		lom := &cluster.LOM{T: r.t, Objname: objName}
-		err := lom.Init(r.bck.Bck)
-		if err != nil {
-			glog.Error(err)
-			continue
-		}
-		err = r.objDelete(ctx, lom, evict)
-		if err != nil {
-			if evict && cmn.IsObjNotExist(err) {
-				continue
-			}
-			return err
-		}
-		r.ObjectsInc()
-		r.BytesAdd(lom.Size())
-	}
 	return nil
 }
 
-func (r *EvictDelete) listOperation(ctx context.Context, listMsg *cmn.ListMsg, evict bool) error {
-	var (
-		objs = make([]string, 0, len(listMsg.Objnames))
-		smap = r.t.GetSowner()
-	)
-	for _, obj := range listMsg.Objnames {
-		si, err := cluster.HrwTarget(r.bck.MakeUname(obj), smap.Get())
-		if err != nil {
-			return err
-		}
-		if si.ID() == r.t.Snode().ID() {
-			objs = append(objs, obj)
-		}
-	}
-
-	if len(objs) == 0 {
+func (r *EvictDelete) doObjEvictDelete(args *DeletePrefetchArgs, objName string) error {
+	lom := &cluster.LOM{T: r.t, Objname: objName}
+	err := lom.Init(r.Bck())
+	if err != nil {
+		glog.Error(err)
 		return nil
 	}
+	err = r.objDelete(args, lom)
+	if err != nil {
+		if args.Evict && cmn.IsObjNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	r.ObjectsInc()
+	r.BytesAdd(lom.Size())
+	return nil
+}
 
-	return r.doListEvictDelete(ctx, objs, evict)
+func (r *EvictDelete) listOperation(args *DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
+	return r.iterateList(args, listMsg, r.doObjEvictDelete)
 }
 
 func (r *EvictDelete) iterateBucketRange(args *DeletePrefetchArgs) error {
-	cmn.Assert(args.RangeMsg != nil)
-	var (
-		bucketListPage *cmn.BucketList
-		prefix         = args.RangeMsg.Prefix
-		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
-	)
-
-	if err := r.bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
-		return err
-	}
-
-	min, max, err := parseRange(args.RangeMsg.Range)
-	if err != nil {
-		return fmt.Errorf("error parsing range string (%s): %v", args.RangeMsg.Range, err)
-	}
-
-	re, err := regexp.Compile(args.RangeMsg.Regex)
-	if err != nil {
-		return fmt.Errorf("could not compile range regex: %v", err)
-	}
-
-	for !r.Aborted() {
-		if r.bck.IsAIS() {
-			walk := objwalk.NewWalk(context.Background(), r.t, r.bck.Bck, msg)
-			bucketListPage, err = walk.LocalObjPage()
-		} else {
-			bucketListPage, err, _ = r.t.Cloud().ListBucket(args.Ctx, r.bck.Name, msg)
-		}
-		if err != nil {
-			return err
-		}
-		if len(bucketListPage.Entries) == 0 {
-			break
-		}
-
-		matchingEntries := make([]string, 0, len(bucketListPage.Entries))
-		for _, be := range bucketListPage.Entries {
-			if !be.IsStatusOK() {
-				continue
-			}
-			if !acceptRegexRange(be.Name, prefix, re, min, max) {
-				continue
-			}
-			if r.Aborted() {
-				return nil
-			}
-			matchingEntries = append(matchingEntries, be.Name)
-		}
-
-		if len(matchingEntries) != 0 {
-			// Create a ListMsg with a single page of BucketList containing BucketEntries
-			listMsg := &cmn.ListMsg{Objnames: matchingEntries}
-
-			// Call listrange function with paged chunk of entries
-			if err := r.listOperation(args.Ctx, listMsg, args.Evict); err != nil {
-				return err
-			}
-		}
-		// Stop when the last page of BucketList is reached
-		if bucketListPage.PageMarker == "" {
-			break
-		}
-
-		// Update PageMarker for the next request
-		msg.PageMarker = bucketListPage.PageMarker
-	}
-
-	return nil
+	return r.iterateRange(args, r.doObjEvictDelete)
 }
 
-func (r *Prefetch) prefetchMissing(ctx context.Context, objName string) error {
+func (r *Prefetch) prefetchMissing(args *DeletePrefetchArgs, objName string) error {
 	var coldGet bool
 	lom := &cluster.LOM{T: r.t, Objname: objName}
-	err := lom.Init(r.bck.Bck)
+	err := lom.Init(r.Bck())
 	if err != nil {
 		return err
 	}
@@ -245,14 +134,14 @@ func (r *Prefetch) prefetchMissing(ctx context.Context, objName string) error {
 		return nil
 	}
 	if !coldGet && lom.Version() != "" && lom.VerConf().ValidateWarmGet {
-		if coldGet, err, _ = r.t.CheckCloudVersion(ctx, lom); err != nil {
+		if coldGet, err, _ = r.t.CheckCloudVersion(args.Ctx, lom); err != nil {
 			return err
 		}
 	}
 	if !coldGet {
 		return nil
 	}
-	if err, _ = r.t.GetCold(ctx, lom, true); err != nil {
+	if err, _ = r.t.GetCold(args.Ctx, lom, true); err != nil {
 		if !errors.Is(err, cmn.ErrSkip) {
 			return err
 		}
@@ -263,75 +152,93 @@ func (r *Prefetch) prefetchMissing(ctx context.Context, objName string) error {
 	}
 	r.ObjectsInc()
 	r.BytesAdd(lom.Size())
-	// TODO: add counter for redownloaded objects with changed versions?
 	return nil
 }
 
-func (r *Prefetch) listOperation(ctx context.Context, listMsg *cmn.ListMsg) error {
-	smap := r.t.GetSowner()
-	for _, obj := range listMsg.Objnames {
-		if r.Aborted() {
-			break
-		}
-		si, err := cluster.HrwTarget(r.bck.MakeUname(obj), smap.Get())
-		if err != nil {
-			return err
-		}
-		if si.ID() != r.t.Snode().ID() {
-			continue
-		}
-		if err := r.prefetchMissing(ctx, obj); err != nil {
-			return err
-		}
-	}
-	return nil
+func (r *Prefetch) listOperation(args *DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
+	return r.iterateList(args, listMsg, r.prefetchMissing)
 }
 
 func (r *Prefetch) iterateBucketRange(args *DeletePrefetchArgs) error {
-	cmn.Assert(args.RangeMsg != nil)
-	var (
-		bucketListPage *cmn.BucketList
-		prefix         = args.RangeMsg.Prefix
-		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
-	)
+	return r.iterateRange(args, r.prefetchMissing)
+}
 
-	if err := r.bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+//
+// Common methods
+//
+
+func (r *listRangeBase) iterateRange(args *DeletePrefetchArgs, cb objCallback) error {
+	cmn.Assert(args.RangeMsg != nil)
+	pt, err := parseTemplate(args.RangeMsg.Template)
+	if err != nil {
 		return err
 	}
 
-	min, max, err := parseRange(args.RangeMsg.Range)
-	if err != nil {
-		return fmt.Errorf("error parsing range string (%s): %v", args.RangeMsg.Range, err)
+	smap := r.t.GetSowner().Get()
+	if len(pt.Ranges) != 0 {
+		return r.iterateTemplate(args, smap, &pt, cb)
 	}
+	return r.iteratePrefix(args, smap, pt.Prefix, cb)
+}
 
-	re, err := regexp.Compile(args.RangeMsg.Regex)
-	if err != nil {
-		return fmt.Errorf("could not compile range regex: %v", err)
-	}
-
-	for !r.Aborted() {
-		bucketListPage, err, _ = r.t.Cloud().ListBucket(args.Ctx, r.bck.Name, msg)
+func (r *listRangeBase) iterateTemplate(args *DeletePrefetchArgs, smap *cluster.Smap, pt *cmn.ParsedTemplate, cb objCallback) error {
+	var (
+		getNext = pt.Iter()
+		sid     = r.t.Snode().ID()
+	)
+	for objName, hasNext := getNext(); !r.Aborted() && hasNext; objName, hasNext = getNext() {
+		if r.Aborted() {
+			return nil
+		}
+		local, err := isLocalObject(smap, r.Bck(), objName, sid)
 		if err != nil {
 			return err
 		}
-		if len(bucketListPage.Entries) == 0 {
-			break
+		if !local {
+			continue
 		}
+		if err := cb(args, objName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-		matchingEntries := make([]string, 0, len(bucketListPage.Entries))
+func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Smap, prefix string, cb objCallback) error {
+	var (
+		bucketListPage *cmn.BucketList
+		sid            = r.t.Snode().ID()
+		err            error
+	)
+	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
+	for !r.Aborted() {
+		if r.Bck().IsAIS() {
+			walk := objwalk.NewWalk(context.Background(), r.t, r.Bck(), msg)
+			bucketListPage, err = walk.LocalObjPage()
+		} else {
+			bucketListPage, err, _ = r.t.Cloud().ListBucket(args.Ctx, r.Bck().Name, msg)
+		}
+		if err != nil {
+			return err
+		}
 		for _, be := range bucketListPage.Entries {
-			if !acceptRegexRange(be.Name, prefix, re, min, max) {
+			if !be.IsStatusOK() {
 				continue
 			}
-			matchingEntries = append(matchingEntries, be.Name)
-		}
+			if r.Aborted() {
+				return nil
+			}
+			if r.Bck().IsCloud() {
+				local, err := isLocalObject(smap, r.Bck(), be.Name, sid)
+				if err != nil {
+					return err
+				}
+				if !local {
+					continue
+				}
+			}
 
-		if len(matchingEntries) != 0 {
-			// Create a ListMsg with a single page of BucketList containing BucketEntries
-			listMsg := &cmn.ListMsg{Objnames: matchingEntries}
-
-			// Call listrange function with paged chunk of entries
-			if err := r.listOperation(args.Ctx, listMsg); err != nil {
+			if err := cb(args, be.Name); err != nil {
 				return err
 			}
 		}
@@ -343,6 +250,28 @@ func (r *Prefetch) iterateBucketRange(args *DeletePrefetchArgs) error {
 		// Update PageMarker for the next request
 		msg.PageMarker = bucketListPage.PageMarker
 	}
+	return nil
+}
 
+func (r *listRangeBase) iterateList(args *DeletePrefetchArgs, listMsg *cmn.ListMsg, cb objCallback) error {
+	var (
+		smap = r.t.GetSowner().Get()
+		sid  = r.t.Snode().ID()
+	)
+	for _, obj := range listMsg.Objnames {
+		if r.Aborted() {
+			break
+		}
+		local, err := isLocalObject(smap, r.Bck(), obj, sid)
+		if err != nil {
+			return err
+		}
+		if !local {
+			continue
+		}
+		if err := cb(args, obj); err != nil {
+			return err
+		}
+	}
 	return nil
 }

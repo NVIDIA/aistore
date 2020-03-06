@@ -12,7 +12,6 @@ import (
 	"math/rand"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -882,11 +881,9 @@ func TestPrefetchRange(t *testing.T) {
 	var (
 		err            error
 		rmin, rmax     int64
-		re             *regexp.Regexp
 		proxyURL       = tutils.GetPrimaryURL()
 		baseParams     = tutils.BaseAPIParams(proxyURL)
 		prefetchPrefix = "regressionList/obj"
-		prefetchRegex  = "\\d*"
 		bck            = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
@@ -899,7 +896,8 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 1. Parse arguments
 	if prefetchRange != "" {
-		ranges := strings.Split(prefetchRange, ":")
+		trimmed := strings.Trim(prefetchRange, "{}")
+		ranges := strings.Split(trimmed, "..")
 		if rmin, err = strconv.ParseInt(ranges[0], 10, 64); err != nil {
 			t.Errorf("Error parsing range min: %v", err)
 		}
@@ -909,36 +907,32 @@ func TestPrefetchRange(t *testing.T) {
 	}
 
 	// 2. Discover the number of items we expect to be prefetched
-	if re, err = regexp.Compile(prefetchRegex); err != nil {
-		t.Errorf("Error compiling regex: %v", err)
-	}
 	msg := &cmn.SelectMsg{Prefix: prefetchPrefix, PageSize: int(pagesize)}
 	objsToFilter := testListBucket(t, proxyURL, bck, msg, 0)
 	files := make([]string, 0)
 	if objsToFilter != nil {
 		for _, be := range objsToFilter.Entries {
-			if oname := strings.TrimPrefix(be.Name, prefetchPrefix); oname != be.Name {
-				s := re.FindStringSubmatch(oname)
-				if s == nil {
-					continue
-				}
-				if i, err := strconv.ParseInt(s[0], 10, 64); err != nil && s[0] != "" {
-					continue
-				} else if s[0] == "" || (rmin == 0 && rmax == 0) || (i >= rmin && i <= rmax) {
-					files = append(files, be.Name)
-				}
+			oname := strings.TrimPrefix(be.Name, prefetchPrefix)
+			if oname == "" {
+				continue
+			}
+			if i, err := strconv.ParseInt(oname, 10, 64); err != nil {
+				continue
+			} else if (rmin == 0 && rmax == 0) || (i >= rmin && i <= rmax) {
+				files = append(files, be.Name)
 			}
 		}
 	}
 
 	// 3. Evict those objects from the cache, and then prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
-	err = api.EvictRange(baseParams, bck, prefetchPrefix, prefetchRegex, prefetchRange)
+	rng := fmt.Sprintf("%s%s", prefetchPrefix, prefetchRange)
+	err = api.EvictRange(baseParams, bck, rng)
 	if err != nil {
 		t.Error(err)
 	}
 	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
-	err = api.PrefetchRange(baseParams, bck, prefetchPrefix, prefetchRegex, prefetchRange)
+	err = api.PrefetchRange(baseParams, bck, rng)
 	if err != nil {
 		t.Error(err)
 	}
@@ -962,13 +956,12 @@ func TestPrefetchRange(t *testing.T) {
 func TestDeleteRange(t *testing.T) {
 	var (
 		err            error
-		prefix         = ListRangeStr + "/tstf-"
 		quarter        = numfiles / 4
 		third          = numfiles / 3
 		smallrangesize = third - quarter + 1
-		smallrange     = fmt.Sprintf("%d:%d", quarter, third)
-		bigrange       = fmt.Sprintf("0:%d", numfiles)
-		regex          = "\\d?\\d"
+		prefix         = fmt.Sprintf("%s/tstf-", ListRangeStr)
+		smallrange     = fmt.Sprintf("%s{%04d..%04d}", prefix, quarter, third)
+		bigrange       = fmt.Sprintf("%s{0000..%04d}", prefix, numfiles)
 		wg             = &sync.WaitGroup{}
 		errCh          = make(chan error, numfiles)
 		proxyURL       = tutils.GetPrimaryURL()
@@ -986,14 +979,15 @@ func TestDeleteRange(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, bck, fmt.Sprintf("%s%d", prefix, i), r, errCh)
+		go tutils.PutAsync(wg, proxyURL, bck, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
 	}
 	wg.Wait()
 	tassert.SelectErr(t, errCh, "put", true)
 	tutils.Logf("PUT done.\n")
 
 	// 2. Delete the small range of objects
-	err = api.DeleteRange(baseParams, bck, prefix, regex, smallrange)
+	tutils.Logf("Delete in range %s\n", smallrange)
+	err = api.DeleteRange(baseParams, bck, smallrange)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1011,7 +1005,7 @@ func TestDeleteRange(t *testing.T) {
 		filemap[entry.Name] = entry
 	}
 	for i := 0; i < numfiles; i++ {
-		keyname := fmt.Sprintf("%s%d", prefix, i)
+		keyname := fmt.Sprintf("%s%04d", prefix, i)
 		_, ok := filemap[keyname]
 		if ok && i >= quarter && i <= third {
 			t.Errorf("File exists that should have been deleted: %s", keyname)
@@ -1020,8 +1014,9 @@ func TestDeleteRange(t *testing.T) {
 		}
 	}
 
+	tutils.Logf("Delete in range %s\n", bigrange)
 	// 4. Delete the big range of objects
-	err = api.DeleteRange(baseParams, bck, prefix, regex, bigrange)
+	err = api.DeleteRange(baseParams, bck, bigrange)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1046,14 +1041,12 @@ func TestStressDeleteRange(t *testing.T) {
 	)
 	var (
 		err          error
-		prefix       = ListRangeStr + "/tstf-"
 		wg           = &sync.WaitGroup{}
 		errCh        = make(chan error, numFiles)
 		proxyURL     = tutils.GetPrimaryURL()
-		regex        = "\\d*"
 		tenth        = numFiles / 10
-		partialRange = fmt.Sprintf("%d:%d", 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
-		rnge         = fmt.Sprintf("0:%d", numFiles)
+		partialRange = fmt.Sprintf("%s/tstf-{%d..%d}", ListRangeStr, 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
+		rnge         = fmt.Sprintf("%s/tstf-{0..%d}", ListRangeStr, numFiles)
 		readersList  [numReaders]tutils.Reader
 		baseParams   = tutils.DefaultBaseAPIParams(t)
 		bck          = cmn.Bck{
@@ -1100,7 +1093,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 2. Delete a range of objects
 	tutils.Logf("Deleting objects in range: %s\n", partialRange)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, prefix, regex, partialRange)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, partialRange)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1131,7 +1124,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 4. Delete the entire range of objects
 	tutils.Logf("Deleting objects in range: %s\n", rnge)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, prefix, regex, rnge)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, rnge)
 	if err != nil {
 		t.Error(err)
 	}

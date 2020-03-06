@@ -133,7 +133,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "object name not supported, use list flag or range flag")
 	}
 
-	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
+	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 		return listOrRangeOp(c, commandPrefetch, bck)
 	}
 
@@ -156,9 +156,9 @@ func evictHandler(c *cli.Context) (err error) {
 			return
 		}
 
-		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
+		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			if objName != "" {
-				return incorrectUsageMsg(c, "object name (%s) not supported when list or range flag provided", objName)
+				return incorrectUsageMsg(c, "object name (%s) not supported when list or template flag provided", objName)
 			}
 			// list or range operation on a given bucket
 			return listOrRangeOp(c, commandEvict, bck)
@@ -173,8 +173,8 @@ func evictHandler(c *cli.Context) (err error) {
 	}
 
 	// list and range flags are invalid with object argument(s)
-	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
-		return incorrectUsageMsg(c, "flags %s are invalid when object names have been provided", strings.Join([]string{listFlag.Name, rangeFlag.Name}, ","))
+	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
+		return incorrectUsageMsg(c, "flags %s are invalid when object names have been provided", strings.Join([]string{listFlag.Name, templateFlag.Name}, ","))
 	}
 
 	// object argument(s) given by the user; operation on given object(s)

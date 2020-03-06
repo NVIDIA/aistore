@@ -643,10 +643,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		if err = cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
-			if args.RangeMsg.Range != "" && args.RangeMsg.Regex == "" {
-				t.invalmsghdlr(w, r, "Range operation requires 'regex' parameter")
-				return
-			}
 		} else if err = cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
@@ -795,10 +791,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		args := &xaction.DeletePrefetchArgs{Ctx: t.contextWithAuth(r.Header)}
 		if err = cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
-			if args.RangeMsg.Range != "" && args.RangeMsg.Regex == "" {
-				t.invalmsghdlr(w, r, "Range operation requires 'regex' parameter")
-				return
-			}
 		} else if err = cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {

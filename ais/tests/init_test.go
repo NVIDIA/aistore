@@ -39,7 +39,7 @@ var (
 	fnlen                  int
 	prefix                 string
 	abortonerr             = false
-	prefetchRange          = "0:2000"
+	prefetchRange          = "{0..200}"
 	skipdel                bool
 	baseseed               = int64(1062984096)
 	multiProxyTestDuration time.Duration

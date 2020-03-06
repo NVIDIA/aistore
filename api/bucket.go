@@ -254,8 +254,8 @@ func DeleteList(baseParams BaseParams, bck cmn.Bck, fileslist []string) error {
 // DeleteRange API
 //
 // DeleteRange sends a HTTP request to remove a range of objects from a bucket
-func DeleteRange(baseParams BaseParams, bck cmn.Bck, prefix, regex, rng string) error {
-	deleteMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng}
+func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) error {
+	deleteMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
@@ -270,8 +270,8 @@ func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) error 
 // PrefetchRange API
 //
 // PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket
-func PrefetchRange(baseParams BaseParams, bck cmn.Bck, prefix, regex, rng string) error {
-	prefetchMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng}
+func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) error {
+	prefetchMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
@@ -286,8 +286,8 @@ func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) error {
 // EvictRange API
 //
 // EvictRange sends a HTTP request to evict a range of objects from a cloud bucket
-func EvictRange(baseParams BaseParams, bck cmn.Bck, prefix, regex, rng string) error {
-	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng}
+func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) error {
+	evictMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 

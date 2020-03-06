@@ -91,28 +91,28 @@ func removeObjectHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "missing bucket name")
 	}
 
-	// single fullObjName provided. Either remove one object or listFlag/rangeFlag provided
+	// single fullObjName provided. Either remove one object or listFlag/templateFlag provided
 	if c.NArg() == 1 {
 		bck, objName := parseBckObjectURI(c.Args().First())
 		if bck, err = validateBucket(c, bck, "", false); err != nil {
 			return
 		}
 
-		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
+		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			// list or range operation on a given bucket
 			return listOrRangeOp(c, commandRemove, bck)
 		}
 
 		if objName == "" {
-			return incorrectUsageMsg(c, "%s or %s flag not set with a single bucket argument", listFlag.Name, rangeFlag.Name)
+			return incorrectUsageMsg(c, "%s or %s flag not set with a single bucket argument", listFlag.Name, templateFlag.Name)
 		}
 
 		// ais rm BUCKET/OBJECT_NAME - pass, multiObjOp will handle it
 	}
 
 	// list and range flags are invalid with object argument(s)
-	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
-		return incorrectUsageMsg(c, "flags %s are invalid when object names have been provided", strings.Join([]string{listFlag.Name, rangeFlag.Name}, ","))
+	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
+		return incorrectUsageMsg(c, "flags %s are invalid when object names have been provided", strings.Join([]string{listFlag.Name, templateFlag.Name}, ","))
 	}
 
 	// object argument(s) given by the user; operation on given object(s)

@@ -233,10 +233,6 @@ func Test_putdeleteRange(t *testing.T) {
 	type testParams struct {
 		// title to print out while testing
 		name string
-		// prefix for object name
-		prefix string
-		// regular expression object name must match
-		regexStr string
 		// a range of file IDs
 		rangeStr string
 		// total number of files expected to delete
@@ -245,28 +241,28 @@ func Test_putdeleteRange(t *testing.T) {
 	tests := []testParams{
 		{
 			"Trying to delete files with invalid prefix",
-			"file/a-", "\\d+", "0:10",
+			"file/a-{0..10}",
 			0,
 		},
 		{
 			"Trying to delete files out of range",
-			commonPrefix + "/a-", "\\d+", fmt.Sprintf("%d:%d", numfiles+10, numfiles+110),
+			commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", numfiles+10, numfiles+110),
 			0,
 		},
 		{
 			fmt.Sprintf("Deleting %d files with prefix 'a-'", numfiles/10),
-			commonPrefix + "/a-", "\\d+", fmt.Sprintf("%d:%d", (numfiles-numfiles/5)/2, numfiles/2),
+			commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (numfiles-numfiles/5)/2, numfiles/2),
 			numfiles / 10,
 		},
 		{
 			fmt.Sprintf("Deleting %d files (short range)", numfiles/5),
-			commonPrefix + "/", "\\d+", fmt.Sprintf("%d:%d", 1, numfiles/10),
+			commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, numfiles/5),
 			numfiles / 5,
 		},
 		{
 			"Deleting files with empty range",
-			commonPrefix + "/b-", "", "",
-			(numfiles - numfiles/5) / 2,
+			commonPrefix + "/b-",
+			numfiles/2 - numfiles/5,
 		},
 	}
 
@@ -274,10 +270,10 @@ func Test_putdeleteRange(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for idx, test := range tests {
 		msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
-		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n",
-			idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
+		tutils.Logf("%d. %s\n  Range: [%s]\n",
+			idx+1, test.name, test.rangeStr)
 
-		err := api.DeleteRange(baseParams, bck, test.prefix, test.regexStr, test.rangeStr)
+		err := api.DeleteRange(baseParams, bck, test.rangeStr)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -518,7 +514,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	}
 	tutils.WaitForBucketXactionToComplete(t, baseParams, bckCloud, cmn.ActPrefetch, rebalanceTimeout)
 	tutils.Logf("PrefetchRange\n")
-	err = api.PrefetchRange(baseParams, bckCloud, "r", "\\d{4}", prefetchRange)
+	err = api.PrefetchRange(baseParams, bckCloud, "r"+prefetchRange)
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
@@ -530,7 +526,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	}
 	tutils.WaitForBucketXactionToComplete(t, baseParams, bckCloud, cmn.ActEvictObjects, rebalanceTimeout)
 	tutils.Logf("EvictRange\n")
-	err = api.EvictRange(baseParams, bckCloud, "", "\\d{4}", prefetchRange)
+	err = api.EvictRange(baseParams, bckCloud, prefetchRange)
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
