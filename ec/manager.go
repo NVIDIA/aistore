@@ -258,7 +258,7 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 	bck := cluster.NewBckEmbed(hdr.Bck)
 	if err = bck.Init(mgr.t.GetBowner(), mgr.t.Snode()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
-			glog.Errorf("Failed to init bucket %s: %v", bck, err)
+			glog.Error(err)
 			cmn.DrainReader(object)
 			return
 		}

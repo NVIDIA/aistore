@@ -545,54 +545,25 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
-			return
-		}
+		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		return
 	}
 	if err = bck.AllowDELETE(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	switch msg.Action {
-	case cmn.ActDestroyLB:
-		if p.forwardCP(w, r, &msg, bucket, nil) {
-			return
-		}
-		if _, err, errCode := p.destroyBucket(&msg, bck); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), errCode)
-			return
-		}
 	case cmn.ActEvictCB:
 		if bck.IsAIS() {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 			return
 		}
+		fallthrough
+	case cmn.ActDestroyLB:
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		bmd, err, errCode := p.destroyBucket(&msg, bck)
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error(), errCode)
-			return
-		}
-		msgInt := p.newActionMsgInternal(&msg, nil, bmd)
-
-		// Delete on all targets
-		query := cmn.AddBckToQuery(nil, bck.Bck)
-		results := p.bcastTo(bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodDelete,
-				Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-				Body:   cmn.MustMarshal(msgInt),
-				Query:  query,
-			},
-		})
-		for res := range results {
-			if res.err != nil {
-				p.invalmsghdlr(w, r, fmt.Sprintf("%s failed, err: %s", msg.Action, res.err))
-				return
-			}
-		}
+		p.destroyBucket(&msg, bck)
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if msg.Action == cmn.ActEvictObjects && bck.IsAIS() {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
@@ -710,34 +681,25 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (*bucketMD, error, int) {
+// destroy AIS bucket or evict Cloud bucket
+func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) {
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
-	_, present := bmd.Get(bck)
-	if bck.IsAIS() {
-		if !present {
-			p.owner.bmd.Unlock()
-			return bmd, cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String()), http.StatusNotFound
-		}
-	} else if !present {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bck, cmn.DoesNotExist)
+	if _, present := bmd.Get(bck); !present {
+		if bck.IsAIS() {
+			glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
 		}
 		p.owner.bmd.Unlock()
-		return bmd, nil, 0
+		return
 	}
 	clone := bmd.clone()
-	if !clone.del(bck) {
-		p.owner.bmd.Unlock()
-		return nil, cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String()), http.StatusNotFound
-	}
+	deled := clone.del(bck)
+	cmn.Assert(deled)
 	p.owner.bmd.put(clone)
-	p.owner.bmd.Unlock()
 
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revsPair{clone, msgInt})
-
-	return clone, nil, 0
+	p.owner.bmd.Unlock()
 }
 
 // POST { action } /v1/buckets/bucket-name

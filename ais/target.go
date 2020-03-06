@@ -37,8 +37,6 @@ const (
 	bucketMDFixup    = "fixup"
 	bucketMDReceive  = "receive"
 	bucketMDRegister = "register"
-
-	evictCBOp = "evict-cb"
 )
 
 type (
@@ -627,12 +625,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	t.ensureLatestMD(msgInt, r)
 
 	switch msgInt.Action {
-	case cmn.ActEvictCB:
-		cluster.EvictLomCache(bck)
-		if err := fs.Mountpaths.DestroyBuckets(evictCBOp, bck.Bck); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) == 0 { // must be a List/Range request
 			s := fmt.Sprintf("Invalid API request: no message body")
@@ -676,7 +668,8 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 		go xact.Run(args)
 	default:
-		t.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msgInt.Action))
+		s := fmt.Sprintf(fmtUnknownAct, msgInt)
+		t.invalmsghdlr(w, r, s)
 	}
 }
 

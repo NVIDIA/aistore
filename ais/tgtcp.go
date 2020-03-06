@@ -634,7 +634,8 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	case cmn.ActMountpathRemove:
 		t.handleRemoveMountpathReq(w, r, mountpath)
 	default:
-		t.invalmsghdlr(w, r, "Invalid action in request")
+		s := fmt.Sprintf(fmtUnknownAct, msg)
+		t.invalmsghdlr(w, r, s)
 	}
 }
 
@@ -735,7 +736,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 	}
 	glog.Infof("%s: %s cur=%s, new=%s%s%s", t.si, tag, bmd, newBMD, act, call)
 	//
-	// under lock =======================
+	// lock =======================
 	//
 	t.owner.bmd.Lock()
 	bmd = t.owner.bmd.get()
@@ -743,7 +744,6 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 	var (
 		na           = bmd.NumAIS(nil /*all namespaces*/)
 		bcksToDelete = make([]*cluster.Bck, 0, na)
-		provider     = cmn.ProviderAIS
 		_, psi       = t.getPrimaryURLAndSI()
 	)
 	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
@@ -765,7 +765,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 		if bmd.Exists(bck, bck.Props.BID) {
 			return false
 		}
-		errs := fs.Mountpaths.CreateBuckets("receive-bmd-create-bck", bck.Bck)
+		errs := fs.Mountpaths.CreateBuckets("recv-bmd-"+msgInt.Action, bck.Bck)
 		for _, err := range errs {
 			createErrs += "[" + err.Error() + "]"
 		}
@@ -783,52 +783,41 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 	// accept the new one
 	t.owner.bmd.put(newBMD)
 
-	// delete buckets dirs under lock - errors tolerated
-	bmd.Range(&provider, nil, func(obck *cluster.Bck) bool {
+	// delete buckets dirs under lock, ignore errors
+	bmd.Range(nil, nil, func(obck *cluster.Bck) bool {
 		var present bool
-		newBMD.Range(&provider, nil, func(nbck *cluster.Bck) bool {
-			if obck.Equal(nbck, false /*ignore BID*/) {
-				present = true
-				if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
-					xaction.Registry.DoAbort(cmn.ActPutCopies, nbck)
-					// TODO:
-					// Due to implementation flow:
-					//   First, it broadcasts command to start MakeNCopies xaction
-					//   Second, it updates BMD and sends it
-					// MakeNCopies will never work with this line uncommented:
-					//   the xaction is aborted right after start on receiving new BMD
-					// xaction.Registry.DoAbort(cmn.ActMakeNCopies, nbck)
-				}
-				if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
-					xaction.Registry.DoAbort(cmn.ActECEncode, nbck)
-				}
-				// TODO: in case Mirroring or EC is re-enabled we should
-				//  restart/start these xactions to handle case when we they
-				//  in the middle of the job. Revisit `ec.ECM.BucketsMDChanged`.
-				return true
+		newBMD.Range(nil, nil, func(nbck *cluster.Bck) bool {
+			if !obck.Equal(nbck, false /*ignore BID*/) {
+				return false
 			}
-			return false
+			present = true
+			if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
+				xaction.Registry.DoAbort(cmn.ActPutCopies, nbck)
+				// NOTE: cmn.ActMakeNCopies takes care of itself
+			}
+			if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
+				xaction.Registry.DoAbort(cmn.ActECEncode, nbck)
+			}
+			return true
 		})
 		if !present {
 			bcksToDelete = append(bcksToDelete, obck)
-			// TODO: errors from `DestroyBuckets` should be handled locally. If we
-			//  would like to propagate them, the code in metasyncer should be revisited.
-			if err := fs.Mountpaths.DestroyBuckets("receive-bmd-destroy-bck", obck.Bck); err != nil {
+			// TODO: revisit error handling
+			if err := fs.Mountpaths.DestroyBuckets("recv-bmd-"+msgInt.Action, obck.Bck); err != nil {
 				destroyErrs = err.Error()
 			}
 		}
 		return false
 	})
 
-	t.owner.bmd.Unlock() // unlocked ================
+	t.owner.bmd.Unlock() // unlock ================
 
 	if destroyErrs != "" {
+		// TODO: revisit error handling
 		glog.Errorf("%s: %s - destroy err: %s", t.si, failed, destroyErrs)
-		err = errors.New(createErrs)
 	}
 
-	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
-	//       disable mirroring (needed in part for cloud buckets)
+	// evict LOM cache
 	if len(bcksToDelete) > 0 {
 		xaction.Registry.AbortAllBuckets(bcksToDelete...)
 		go func(bcks ...*cluster.Bck) {
@@ -838,8 +827,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 		}(bcksToDelete...)
 	}
 	if tag != bucketMDRegister {
-		// Don't call ecmanager as it has not been initialized just yet
-		// ecmanager will pick up fresh bucketMD when initialized
+		// ecmanager will get updated BMD upon its init()
 		ec.ECM.BucketsMDChanged()
 	}
 
