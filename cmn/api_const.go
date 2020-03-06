@@ -273,6 +273,7 @@ const (
 	Reverse   = "reverse"
 	Rebalance = "rebalance"
 	Txn       = "txn" // control plane transactions
+	Tar2Tf    = "tar2tf"
 	// l2 AuthN
 	Users = "users"
 
@@ -303,6 +304,9 @@ const (
 
 	// CLI
 	Target = "target"
+
+	// tar2tf
+	GetTargetObjects = "objects"
 )
 
 // bucket and object access attrs and [TODO] some of their popular combinations
