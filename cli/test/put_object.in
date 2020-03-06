@@ -9,48 +9,48 @@ ais put $OBJECT_1.txt $BUCKET_1/object_2.txt
 ais ls $BUCKET_1
 
 echo "0" > $OBJECT_1.txt
+mkdir -p /tmp/dir1/dir2 && echo "0123456789" > /tmp/dir1/dir2/object_3.txt
+
 ais put $OBJECT_1.txt $BUCKET_1/object_1.txt // Bump the version of 'object_1.txt' object
+ais put /tmp/dir1/dir2/object_3.txt $BUCKET_1
 ais ls $BUCKET_1
 
+rm -rf /tmp/dir1
+
 # setup files structure for next commands
-for d1 in {0..4}; do for d2 in {0..4}; do mkdir -p /tmp/rdir/$d1/$d2 && echo -n "0" > /tmp/rdir/$d1/$d2/test.txt; done; done
+for d1 in {0..4}; do for d2 in {0..4}; do mkdir -p /tmp/rdir/test$d1/$d2 && echo -n "0" > /tmp/rdir/test$d1/$d2/test.txt; done; done
 
 # test range absolute paths
 
 ais create bucket $BUCKET_2
-ais put "/tmp/rdir/{0..4}/{0..4}/test.txt" $BUCKET_2 -y // IGNORE
-RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_2/tmp/rdir/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
+ais put "/tmp/rdir/test{0..4}/{0..4}/test.txt" $BUCKET_2 -y // IGNORE
+RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_2/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
-ais put "/tmp/rdir/{0..4}/{0..4}/test.txt" $BUCKET_2 -y --trim-prefix "/tmp/rdir" // IGNORE
-RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_2/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
+ais put "/tmp/rdir/test{0..4}/{0..4}/test.txt" $BUCKET_2/subdir/ -y // IGNORE
+RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_2/subdir/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
 # test range relative paths
 
 ais create bucket $BUCKET_3
-cd /tmp && ais put "rdir/{0..2}/{0..2}/test.txt" $BUCKET_3 -y // IGNORE
-RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais get $BUCKET_3/rdir/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
-cd /tmp && ais put "./rdir/{0..2}/{0..2}/test.txt" $BUCKET_3 -y --trim-prefix rdir // IGNORE
-RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais get $BUCKET_3/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
+cd /tmp && ais put "rdir/test{0..2}/{0..2}/test.txt" $BUCKET_3 -y // IGNORE
+RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais get $BUCKET_3/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
+cd /tmp && ais put "./rdir/test{0..2}/{0..2}/test.txt" $BUCKET_3/subdir -y // IGNORE
+RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais get $BUCKET_3/subdirtest$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
 # test put * absolute paths
 
 ais create bucket $BUCKET_4
 ais put "/tmp/rdir/*.txt" $BUCKET_4 -y -r // IGNORE
-RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_4/tmp/rdir/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
-ais put "/tmp/rdir/*.txt" $BUCKET_4 -y -r --trim-prefix "/tmp/rdir" // IGNORE
-RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_4/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
+RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_4/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
+ais put "/tmp/rdir/*.txt" $BUCKET_4/subdir/ -y -r // IGNORE
+RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_4/subdir/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
 # test put * relative paths
 
 ais create bucket $BUCKET_5
 cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r // IGNORE
-RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_5/rdir/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
-cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r --trim-prefix "rdir" // IGNORE
-RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_5/$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
-
-# --trim-prefix
-cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r --trim-prefix "dir" // FAIL "incorrect --trim-prefix value"
-cd /tmp && ais put "rdir/*.txt" $BUCKET_5 -y -r --dry-run --trim-prefix "/tmp/rdir" >> /dev/null // skip output, but no failure
-ais put "/tmp/rdir/{0..4}/{0..4}/test.txt" $BUCKET_2 -y --trim-prefix /tmp/rdir/0 // FAIL "incorrect --trim-prefix value"
+RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_5/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
+cd /tmp && ais put "rdir/*.txt" $BUCKET_5/subdir -y -r // IGNORE
+RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais get $BUCKET_5/subdirtest$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
 rm -rf /tmp/rdir // IGNORE

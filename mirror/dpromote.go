@@ -65,19 +65,17 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 			return nil
 		}
 	}
-	// NOTE: destination objname is the entire path including the directory (r.dir)
-	//       that's being promoted - use TrimPrefix (CLI trimPrefixFlag) to control
+	// NOTE: destination objname is:
+	// r.params.ObjName + filepath.Base(fqn) if promoting single file
+	// r.params.ObjName + strings.TrimPrefix(fileFqn, dirFqn) if promoting the whole directory
 	cmn.Assert(filepath.IsAbs(fqn))
-	objName := fqn[1:]
-	if r.params.TrimPrefix != "" {
-		fname, err := filepath.Rel(r.params.TrimPrefix, fqn)
-		cmn.AssertNoErr(err)
-		objName = fname
-	}
+
 	bck := cluster.NewBckEmbed(r.Bck())
 	if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
 		return err
 	}
+	objName := r.params.ObjName + strings.TrimPrefix(strings.TrimPrefix(fqn, r.dir), string(filepath.Separator))
+	objName = strings.Trim(objName, string(filepath.Separator))
 	err := r.Target().PromoteFile(fqn, bck, objName, r.params.Overwrite, true /*safe*/, r.params.Verbose)
 	if err != nil {
 		if finfo, ers := os.Stat(fqn); ers == nil {

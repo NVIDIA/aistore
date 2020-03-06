@@ -1892,12 +1892,8 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		started = time.Now()
 		smap    = p.owner.smap.get()
 		bucket  = apiItems[0]
-		srcFQN  = msg.Name
 	)
-	if err = cmn.ValidatePromoteTrimPrefix(srcFQN, params.TrimPrefix); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
+
 	// designated target ID
 	if params.Target != "" {
 		tsi := smap.GetTarget(params.Target)

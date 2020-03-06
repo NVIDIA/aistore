@@ -25,7 +25,6 @@ var (
 		},
 		commandPut: {
 			recursiveFlag,
-			trimPrefixFlag,
 			concurrencyFlag,
 			refreshFlag,
 			verboseFlag,
@@ -35,7 +34,6 @@ var (
 		commandPromote: {
 			recursiveFlag,
 			overwriteFlag,
-			trimPrefixFlag,
 			targetFlag,
 			verboseFlag,
 		},

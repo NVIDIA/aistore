@@ -615,6 +615,7 @@ func (lom *LOM) Hkey() (string, int) {
 	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName)
 	return lom.md.uname, int(lom.ParsedFQN.Digest & (cmn.MultiSyncMapCount - 1))
 }
+
 func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 	if lom.FQN != "" {
 		lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN)

@@ -52,7 +52,6 @@ type PromoteArgs struct {
 	Bck        cmn.Bck
 	Object     string
 	Target     string
-	TrimPrefix string
 	FQN        string
 	Recurs     bool
 	Overwrite  bool
@@ -460,12 +459,11 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 func PromoteFileOrDir(args *PromoteArgs) error {
 	msg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN}
 	msg.Value = &cmn.ActValPromote{
-		Target:     args.Target,
-		Objname:    args.Object,
-		TrimPrefix: args.TrimPrefix,
-		Recurs:     args.Recurs,
-		Overwrite:  args.Overwrite,
-		Verbose:    args.Verbose,
+		Target:    args.Target,
+		ObjName:   args.Object,
+		Recurs:    args.Recurs,
+		Overwrite: args.Overwrite,
+		Verbose:   args.Verbose,
 	}
 	msgbody, err := jsoniter.Marshal(&msg)
 	if err != nil {

@@ -175,7 +175,7 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		if len(expectedOut) > 2 && expectedOut[0] == '^' && expectedOut[len(expectedOut)-1] == '$' {
 			gomega.Expect(out).To(gomega.MatchRegexp(expectedOut))
 		} else {
-			gomega.Expect(out).To(gomega.Equal(expectedOut))
+			gomega.Expect(out).To(gomega.Equal(expectedOut), "%s: %d", outputFileName, idx+1)
 		}
 	}
 

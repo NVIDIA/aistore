@@ -35,13 +35,13 @@ func (a FileToObjSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // removes base part from the path making object name from it.
 // Extra step - removing leading '/' if base does not end with it
-func cutBasePath(path, base string) string {
+func cutPrefixFromPath(path, base string) string {
 	str := strings.TrimPrefix(path, base)
 	return strings.TrimPrefix(str, "/")
 }
 
 // returns only files inside the 'path' directory that matches mask. No recursion
-func filesInDirByMask(path, base string, mask string) ([]fileToObj, error) {
+func filesInDirByMask(path, trimPrefix, appendPrefix string, mask string) ([]fileToObj, error) {
 	files := make([]fileToObj, 0)
 	fList, err := ioutil.ReadDir(path)
 	if err != nil {
@@ -54,7 +54,7 @@ func filesInDirByMask(path, base string, mask string) ([]fileToObj, error) {
 		if matched, _ := filepath.Match(mask, filepath.Base(f.Name())); matched {
 			fullPath := filepath.Join(path, f.Name())
 			fo := fileToObj{
-				name: cutBasePath(fullPath, base),
+				name: appendPrefix + cutPrefixFromPath(fullPath, trimPrefix), // empty strings ignored
 				path: fullPath,
 				size: f.Size(),
 			}
@@ -66,7 +66,7 @@ func filesInDirByMask(path, base string, mask string) ([]fileToObj, error) {
 
 // traverses the directory 'path' recursively and collects all files
 // with names that match mask
-func fileTreeByMask(path, base string, mask string) ([]fileToObj, error) {
+func fileTreeByMask(path, trimPrefix, appendPrefix string, mask string) ([]fileToObj, error) {
 	files := make([]fileToObj, 0)
 	walkf := func(fqn string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -83,7 +83,7 @@ func fileTreeByMask(path, base string, mask string) ([]fileToObj, error) {
 		}
 
 		fo := fileToObj{
-			name: cutBasePath(fqn, base),
+			name: appendPrefix + cutPrefixFromPath(fqn, trimPrefix), // empty strings ignored
 			path: fqn,
 			size: info.Size(),
 		}
@@ -101,10 +101,8 @@ func fileTreeByMask(path, base string, mask string) ([]fileToObj, error) {
 // gets start path with optional wildcard at the end, base to generate
 // object names, and recursive flag, returns the list of files that matches
 // criteria (file path, object name, size for every file)
-func generateFileList(path, base string, recursive bool) ([]fileToObj, error) {
-	if base != "" && !strings.HasPrefix(path, base) {
-		return nil, fmt.Errorf("incorrect --trim-prefix value, %q doesn't have %q prefix", path, base)
-	}
+func generateFileList(path, trimPrefix, appendPrefix string, recursive bool) ([]fileToObj, error) {
+	cmn.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
 
 	mask := ""
 	info, err := os.Stat(path)
@@ -129,10 +127,14 @@ func generateFileList(path, base string, recursive bool) ([]fileToObj, error) {
 		mask = "*"
 	} else {
 		// one file without custom name.
-		objName := cutBasePath(path, base)
+		if trimPrefix == "" {
+			// if trim prefix not specified by a caller, default is to just cat everything but base
+			trimPrefix = filepath.Dir(path)
+		}
+		objName := cutPrefixFromPath(path, trimPrefix)
 
 		fo := fileToObj{
-			name: objName,
+			name: appendPrefix + objName,
 			path: path,
 			size: info.Size(),
 		}
@@ -141,11 +143,17 @@ func generateFileList(path, base string, recursive bool) ([]fileToObj, error) {
 		return files, nil
 	}
 
-	if !recursive {
-		return filesInDirByMask(path, base, mask)
+	// if trim prefix not specified by a called, cut the whole path from object name and use what's
+	// left in 'mask' part of a filename
+	if trimPrefix == "" {
+		trimPrefix = path
 	}
 
-	return fileTreeByMask(path, base, mask)
+	if !recursive {
+		return filesInDirByMask(path, trimPrefix, appendPrefix, mask)
+	}
+
+	return fileTreeByMask(path, trimPrefix, appendPrefix, mask)
 }
 
 func groupByExt(files []fileToObj) (int64, map[string]counter) {

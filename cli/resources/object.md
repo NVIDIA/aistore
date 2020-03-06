@@ -119,7 +119,6 @@ PUT an object or entire directory (of objects) into the specified bucket. If CLI
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--trim-prefix` | `string` | Prefix that is removed when constructing object name from file name. Used if `OBJECT_NAME` is not given set <sup>[2](#ft2)</sup> | `""` |
 | `--verbose` or `-v` | `bool` | Enable printing the result of every PUT | `false` |
 | `--yes` or `-y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
 | `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
@@ -131,23 +130,24 @@ PUT an object or entire directory (of objects) into the specified bucket. If CLI
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
  This makes shell wildcards like `**` redundant, and the following patterns won't work in `ais`: `/home/user/img-set-*/*.tar` or `/home/user/bck/**/*.tar.gz`
 
-<a name="ft2">2</a> Option `--trim-prefix` and argument `OBJECT_NAME` are mutually exclusive and `OBJECT_NAME` has higher priority. When `OBJECT_NAME` is given, options `--trim-prefix` and `--recursive` are ignored, and `FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
+`FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
 
 #### Object names
 
-PUT command handles two possible ways to specify resulting object names:
+PUT command handles two possible ways to specify resulting object name if source references single file:
 - Object name is not provided: `ais put path/to/(..)/file.go bucket/` creates object `file.go` in `bucket`
 - Explicit object name is provided: `ais put path/to/(..)/file.go bucket/path/to/object.go` creates object `path/to/object.go` in `bucket`
 
-PUT command uses implicit object names if its source references multiple files:
+PUT command handles object naming with range syntax as follows:
+- Object names are file paths without longest common prefix of all files from source.
+It means that leading part of file path until the last `/` before first `{` is excluded from object name.
+- `OBJECT_NAME` is prepended to each object name.
+- Abbreviations in source like `../` are not supported at the moment.
 
-- If source is specified as an absolute path, or is abbreviation like `~`, (for example `/tmp/*.go` or `~/dir`))
-resulting objects names will be the same as the absolute path (`~` will be resolved to for example `/home/user`).
-- If source is specified as relative path (for example `dir/*.go` or `dir/file{0..10}.txt`) resulting objects names
-will be the same as the relative path.
-- Abbreviations like `../` are not supported at the moment.
-
-Leading prefix can be removed with `--trim-prefix`.
+PUT command handles object naming if its source references directories:
+- For path `p` of source directory, resulting objects names are path to files with trimmed `p` prefix
+- `OBJECT_NAME` is prepended to each object name.
+- Abbreviations in source like `../` are not supported at the moment.
 
 #### Examples
 
@@ -175,7 +175,7 @@ $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 ```console
 $ ais put "~/bck/img1.tar" mybucket/
 
-# PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img-set-1.tar
+# PUT /home/user/bck/img1.tar => mybucket/img-set-1.tar
 ```
 
 3) PUT two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into the root of bucket `mybucket`. Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default
@@ -183,62 +183,73 @@ $ ais put "~/bck/img1.tar" mybucket/
 ```console
 $ ais put "/home/user/bck" mybucket
 
-# PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img1.tar
-# PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img2.zip
+# PUT /home/user/bck/img1.tar => img1.tar
+# PUT /home/user/bck/img2.tar => img2.zip
 ```
 
-4) `--trim-prefix` is expanded with user's home directory into `/home/user/bck`, so the final bucket content is `img1.tar`, `img2.zip`, `extra/img1.tar` and `extra/img3.zip`
+4) The same as above, but add `OBJECT_NAME` prefix to objects names
 
 ```console
-$ ais put "/home/user/bck" mybucket/ --trim-prefix=~/bck --recursive
+$ ais put "/home/user/bck" mybucket/subdir/
 
-# PUT /home/user/bck/img1.tar => mybucket/img1.tar
-# PUT /home/user/bck/img1.tar => mybucket/img2.zip
-# PUT /home/user/bck/extra/img1.tar => mybucket/extra/img1.tar
-# PUT /home/user/bck/extra/img3.zip => mybucket/extra/img3.zip
+# PUT /home/user/bck/img1.tar => mybucket/subdir/img1.tar
+# PUT /home/user/bck/img2.tar => mybucket/subdir/img2.zip
+# PUT /home/user/bck/extra/img1.tar => mybucket/subdir/extra/img1.tar
+# PUT /home/user/bck/extra/img3.zip => mybucket/subdir/extra/img3.zip
 ```
 
-5) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `img1.tar` and `extra/img1.tar`
+5) The same as above, but without trailing `/`
 
 ```console
-$ ais put "~/bck/*.tar" mybucket/ --trim-prefix=~/bck --recursive
+$ ais put "/home/user/bck" mybucket/subdir
 
-# PUT /home/user/bck/img1.tar => mybucket/img1.tar
-# PUT /home/user/bck/extra/img1.tar => mybucket/extra/img1.tar
+# PUT /home/user/bck/img1.tar => mybucket/subdirimg1.tar
+# PUT /home/user/bck/img2.tar => mybucket/subdirimg2.zip
+# PUT /home/user/bck/extra/img1.tar => mybucket/subdirextra/img1.tar
+# PUT /home/user/bck/extra/img3.zip => mybucket/subdirextra/img3.zip
 ```
 
-6) PUT 9 files to `mybucket` using range request. Object names formatted as `/home/user/dir/test${d1}${d2}.txt`
+6) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `tars/img1.tar` and `tars/extra/img1.tar`
 
+```console
+$ ais put "~/bck/*.tar" mybucket/tars/
+
+# PUT /home/user/bck/img1.tar => mybucket/tars/img1.tar
+# PUT /home/user/bck/extra/img1.tar => mybucket/tars/extra/img1.tar
+```
+
+7) PUT 9 files to `mybucket` using range request. Note the formatting of object names.
+They exclude the longest parent directory of path which doesn't contain a template (`{a..b}`).
 ```console
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
 9 objects put into "mybucket" bucket
 
-# PUT /home/user/dir/test00.txt => /home/user/dir/test00.txt and 8 more
+# PUT /home/user/dir/test00.txt => mybucket/test00.txt and 8 more
 ```
 
-7) Same as above, except object names are in format `test${d1}${d2}.txt`
+8) Same as above, except object names have additional prefix `test${d1}${d2}.txt`
 
 ```console
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
-$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --trim-prefix=~/dir
+$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket/dir -y 
 9 objects put into "mybucket" bucket
 
-# PUT /home/user/dir/test00.txt => test00.txt and 8 more
+# PUT /home/user/dir/test00.txt => mybucket/dir/test00.txt and 8 more
 ```
 
 
-8) Preview the files that would be sent to the cluster, without really putting them
+9) Preview the files that would be sent to the cluster, without really putting them
 
 ```console
-$ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
-$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --trim-prefix=~/dir --dry-run
+$ for d1 in {0..2}; do for d2 in {0..2}; mkdir -p ~/dir/test${d1}/dir && do echo "0" > ~/dir/test${d1}/dir/test${d2}.txt; done; done
+$ ais put "~/dir/test{0..2}/dir/test{0..2}.txt" mybucket --dry-run
 [DRY RUN] No modifications on the cluster
-/home/user/dir/test00.txt => mybucket/test00.txt
+/home/user/dir/test0/dir/test0.txt => mybucket/test0/dir/test0.txt
 (...)
 ```
 
-9) Put multiple directories into the cluster with range syntax
+10) Put multiple directories into the cluster with range syntax
 
 ```console
 $ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/test${d2}.txt; done; done
@@ -247,14 +258,6 @@ $ ais put "dir{0..10}" mybucket -y
 
 # PUT "/home/user/dir0/test0.txt" => b/dir0/test0.txt and 32 more
 ```
-
-#### Example: invalid file
-
-```console
-$ ais put "/home/user/bck/*.tar" mybucket/img1.tar --trim-prefix=~/bck --recursive
-```
-
-Note that `OBJECT_NAME` has a priority over flags (`--trim-prefix` and `--recursive`) and `/home/user/bck/*.tar` is not a valid because only single file is expected.
 
 ### PROMOTE
 
@@ -265,25 +268,35 @@ Colocation in the context means that the files in question are already located *
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--trim-prefix` | `string` | Pathname prefix that is omitted i.e., not used to generate object names | `""` |
 | `--verbose` or `-v` | `bool` | Verbose printout | `false` |
 | `--target` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
 | `--recursive` or `-r` | `bool` | Promote nested directories | `false` |
 | `--overwrite` or `-o` | `bool` | Overwrite destination (object) if exists | `false` |
 
 
+#### Object names
+
+PROMOTE command handles two possible ways to specify resulting object name if source references single file:
+- Object name is not provided: `ais promote /path/to/(..)/file.go bucket/` promotes to object `file.go` in `bucket`
+- Explicit object name is provided: `ais promote /path/to/(..)/file.go bucket/path/to/object.go` promotes object `path/to/object.go` in `bucket`
+
+PROMOTE command handles object naming if its source references directories:
+- For path `p` of source directory, resulting objects names are path to files with trimmed `p` prefix
+- `OBJECT_NAME` is prepended to each object name.
+- Abbreviations in source like `../` are not supported at the moment.
+
 #### Examples
 
-1) Make AIS objects out of `/tmp/examples` files (**one file = one object**). `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes. Created objects names have prefix `example`
+1) Make AIS objects out of `/tmp/examples` files (**one file = one object**). `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes.
 
 ```console
 $ ais promote /tmp/examples mybucket/ -r
 ```
 
-2) Promote /tmp/examples files to AIS objects. Objects names won't have `/tmp/examples` prefix
+2) Promote /tmp/examples files to AIS objects. Objects names will have `examples/` prefix
 
 ```console
-$ ais promote /tmp/examples mybucket/ -r --trim-prefix=/tmp
+$ ais promote /tmp/examples mybucket/examples/ -r 
 ```
 
 3) Promote /tmp/examples/example1.txt as object with name `example1.txt`
@@ -299,7 +312,7 @@ $ ais promote /tmp/examples/example1.txt mybucket/example1.txt
 ```console
 $ ais promote /tmp/examples/example1.txt mybucket
 
-# PROMOTE /tmp/examples/example1.txt => mybucket/tmp/examples/example1.txt
+# PROMOTE /tmp/examples/example1.txt => mybucket/example1.txt
 ```
 
 #### Example: no such file or directory
@@ -319,20 +332,6 @@ $ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t
 > The capability is intended to support existing toolchains that operate on files. Here's the rationale:
 
 > On the one hand, it is easy to transform files using `tar`, `gzip` and any number of other very familiar Unix tools. On the other hand, it is easy to **promote** files and directories that are locally present inside AIS servers. Once the original file-based content becomes distributed across AIStore cluster, running massive computations (or any other workloads that require scalable storage) also becomes easy and fast.
-
-#### Object names
-
-1. `PROMOTE` with directory as source
-- `OBJECT_NAME` parameter is not supported
-- If `--trim-prefix` is set, the object's name is the file path without leading `--trim-prefix`. A trailing `/` in `--trim-prefix` can be omitted.
-- If `--trim-prefix` is not defined, resulting object names will be the same as full paths to files
-
-Be careful when putting a directory recursively without setting `--trim-prefix`: it may result in overwriting objects with the same names.
-
-2. `PROMOTE` with single file as source
-- `--trim-prefix` flag is omitted
-- If `OBJECT_NAME` provided it will be used as object name
-- If `OBJECT_NAME` not provided, object name will be the same as the full path to the file, without leading `/`
 
 ### Delete
 

@@ -12,9 +12,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -1350,11 +1350,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		t.invalmsghdlr(w, r, loghdr+"missing source filename")
 		return
 	}
-	if err = cmn.ValidatePromoteTrimPrefix(srcFQN, params.TrimPrefix); err != nil {
-		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
-		t.invalmsghdlr(w, r, loghdr+err.Error())
-		return
-	}
+
 	finfo, err := os.Stat(srcFQN)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -1378,10 +1374,6 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 
 	// 3a. promote dir
 	if finfo.IsDir() {
-		if params.Objname != "" {
-			t.invalmsghdlr(w, r, "object name not supported for promoting directories")
-			return
-		}
 		if params.Verbose {
 			glog.Infof("%s: promote %+v", t.si, params)
 		}
@@ -1395,9 +1387,9 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	// 3b. promote file
-	objName := params.Objname
+	objName := params.ObjName
 	if objName == "" {
-		objName = strings.TrimPrefix(srcFQN, string(os.PathSeparator))
+		objName = filepath.Base(srcFQN)
 	}
 	if err = t.PromoteFile(srcFQN, bck, objName, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
 		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
