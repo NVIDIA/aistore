@@ -23,7 +23,7 @@ type (
 	}
 
 	xactionTemplateCtx struct {
-		S       *[]daemonTemplateStats
+		Stats   *[]daemonTemplateStats
 		Verbose bool
 	}
 )
@@ -281,18 +281,13 @@ func showXactionHandler(c *cli.Context) (err error) {
 			if len(daemonStats) == 0 {
 				continue
 			}
-			runningStats := make([]*stats.BaseXactStatsExt, 0, len(daemonStats))
+			runningStats := xactStats[daemonID][:0]
 			for _, xact := range daemonStats {
 				if xact.Running() {
 					runningStats = append(runningStats, xact)
 				}
 			}
 			xactStats[daemonID] = runningStats
-		}
-	}
-	for daemonID, daemonStats := range xactStats {
-		if len(daemonStats) == 0 {
-			delete(xactStats, daemonID)
 		}
 	}
 
@@ -307,7 +302,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 		i++
 	}
 	ctx := xactionTemplateCtx{
-		S:       &dts,
+		Stats:   &dts,
 		Verbose: flagIsSet(c, verboseFlag),
 	}
 

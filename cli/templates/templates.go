@@ -277,22 +277,17 @@ const (
 	// Xactions templates
 
 	XactionsBodyTmpl = XactionStatsHeader +
-		"{{range $daemon := $.S }}" +
-		XactionBody +
-		"{{end}}"
+		"{{range $daemon := $.Stats }}" + XactionBody + "{{end}}"
 	XactionStatsHeader = "DaemonID\tKind\tBucket\tObjects\tBytes\tStart\tEnd\tAborted" +
-		"{{if $.Verbose}}\tMore{{end}}\n" +
-		"\t\t\t\t\t\t\t{{if $.Verbose}}\t{{end}}\n" // hack - make tabwriter think that we are still in the same table
-	XactionBody = "{{range $key, $xact := $daemon.Stats}}" +
-		XactionStatsBody +
-		"{{end}}\n"
-
-	XactionStatsBody = XactionBaseBody + "{{if $.Verbose}}" + XactionExtBody + "{{end}}\n"
-	XactionBaseBody  = "{{ $daemon.DaemonID }}\t{{$xact.KindX}}\t" +
+		"{{if $.Verbose}}\tMore{{end}}\n"
+	XactionBody = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
+		"{{if $daemon.Stats}}\n{{end}}"
+	XactionStatsBody = "{{ $daemon.DaemonID }}\t{{$xact.KindX}}\t" +
 		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t" +
 		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t" +
 		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t{{FormatTime $xact.StartTimeX}}\t" +
-		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t{{$xact.AbortedX}}\t"
+		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t{{$xact.AbortedX}}\t" +
+		"{{if $.Verbose}}" + XactionExtBody + "{{end}}\n"
 	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
 		"{{$first := true}}" +
 		"{{range $name, $val := $xact.Ext}}" +
