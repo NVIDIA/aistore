@@ -1194,10 +1194,6 @@ components:
       enum: [evictobjects, rename, createlb, destroylb, renamelb, evictcb, setprops, prefetch, delete, setconfig, shutdown, rebalance, listobjects, enable, disable, remove, add]
     ListParameters:
       properties:
-        deadline:
-          type: string
-        wait:
-          type: boolean
         objnames:
           type: array
           items:
@@ -1206,20 +1202,10 @@ components:
           - objnames
     RangeParameters:
       properties:
-        deadline:
-          type: string
-        wait:
-          type: boolean
-        prefix:
-          type: string
-        regex:
-          type: string
-        range:
+        template:
           type: string
       required:
-        - regex
-        - prefix
-        - range
+        - template
     BucketProps:
       properties:
         cloud_provider:

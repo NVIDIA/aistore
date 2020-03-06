@@ -1,5 +1,16 @@
 ## Operations on objects
 
+- [GET](#get)
+- [CAT](#cat)
+- [SHOW](#show)
+- [PUT](#put)
+- [PROMOTE](#promote)
+- [Delete](#delete)
+- [Evict](#evict)
+- [Prefetch](#prefetch)
+- [Rename](#rename)
+- [Concat](#concat)
+
 ### GET
 
 `ais get BUCKET_NAME/OBJECT_NAME OUT_FILE`
@@ -102,13 +113,13 @@ Size    Version Ec
 
 ### PUT
 
-`ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>
+`ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
 PUT an object or entire directory (of objects) into the specified bucket. If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty, then shows all gathered info to the user and asks for confirmation to continue. Confirmation request can be disabled with the option `--yes` for use in scripts.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--trim-prefix` | `string` | Prefix that is removed when constructing object name from file name. Used if `OBJECT_NAME` is not given set <sup id="a2">[2](#ft2)</sup> | `""` |
+| `--trim-prefix` | `string` | Prefix that is removed when constructing object name from file name. Used if `OBJECT_NAME` is not given set <sup>[2](#ft2)</sup> | `""` |
 | `--verbose` or `-v` | `bool` | Enable printing the result of every PUT | `false` |
 | `--yes` or `-y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
 | `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
@@ -247,7 +258,7 @@ Note that `OBJECT_NAME` has a priority over flags (`--trim-prefix` and `--recurs
 
 ### PROMOTE
 
-`ais promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>
+`ais promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
 Promote **AIS-colocated** files and directories to AIS objects in a specified bucket.
 Colocation in the context means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
@@ -331,15 +342,14 @@ Delete an object or list/range of objects from the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion <sup id="a3">[3](#ft3) | `""` |
-| `--range` | `string` | Start and end interval (eg. 1:100) for range deletion <sup id="a4">[3](#ft3) | `""` |
-| `--prefix` | `string` | Prefix for range deletion | `""` |
-| `--regex` | `string` | Regex for range deletion | `""` |
-| `--deadline` | `string` | Time duration before the request expires [(Go's time.Duration string)](https://golang.org/pkg/time/#Duration.String) | `0s` (no deadline) |
-| `--wait` | `bool` | Wait for operation to finish before returning response | `true` |
+| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
+| `--template` | `string` | The object name template with optional range parts | `""` |
 
-<a name="ft3">3</a> Options `--list,--range` and argument(s) `OBJECT_NAME` are mutually exclusive. List and range deletions expect only a bucket name; if one or more
-`OBJECT_NAME`s are given, a separate `DELETE` request is sent for each object.
+- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive
+- List and template deletions expect only a bucket name
+- If OBJECT_NAMEs are given, CLI sends a separate request for each object
+
+See [List/Range Operations](../../docs/batch.md#listrange-operation) for more details.
 
 #### Examples
 
@@ -361,10 +371,10 @@ $ ais rm object aisbck/obj1 cloudbck/obj2
 $ ais rm object mybucket/ --list "obj1,obj2,obj3"
 ```
 
-4) Delete all objects in range `001-003`, with prefix `test-`, matching `[0-9][0-9][0-9]` regex, from bucket `mybucket`
+4) Delete all objects in range `001-003`, with prefix `test-`, from bucket `mybucket`
 
 ```console
-$ ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"
+$ ais rm object mybucket/ --template "test-{001..003}"
 ```
 
 ### Evict
@@ -375,16 +385,14 @@ $ ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion <sup id="a5">[4](#ft4) | `""` |
-| `--range` | `string` | Start and end interval (eg. 1:100) for range deletion <sup id="a6">[4](#ft4) | `""` |
-| `--prefix` | `string` | Prefix for range deletion | `""` |
-| `--regex` | `string` | Regex for range deletion | `""` |
-| `--deadline` | `string` | Time duration before the request expires [(Go's time.Duration string)](https://golang.org/pkg/time/#Duration.String) | `0s` (no deadline) |
-| `--wait` | `bool` | Wait for operation to finish before returning response | `true` |
+| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
+| `--template` | `string` | The object name template with optional range parts | `""` |
 
-<a name="ft4">4</a> Options `--list,--range` and argument(s) `OBJECT_NAME` are mutually exclusive. List and range evictions expect only a bucket name; if one or more
-`OBJECT_NAME`s are given, a separate eviction request is sent for each object.
+- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive
+- List and template evictions expect only a bucket name
+- If OBJECT_NAMEs are given, CLI sends a separate request for each object
 
+See [List/Range Operations](../../docs/batch.md#listrange-operation) for more details.
 
 #### Examples
 
@@ -404,19 +412,18 @@ cloudbucket	0	    0B	    0%	    aws
 
 ### Prefetch
 
-`ais prefetch BUCKET_NAME/ --list|--range <value>`
+`ais prefetch BUCKET_NAME/ --list|--template <value>`
 
 [Prefetch](../../docs/bucket.md#prefetchevict-objects) objects from the cloud bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion <sup id="a5">[4](#ft4) | `""` |
-| `--range` | `string` | Start and end interval (eg. 1:100) for range deletion <sup id="a6">[4](#ft4) | `""` |
-| `--prefix` | `string` | Prefix for range deletion | `""` |
-| `--regex` | `string` | Regex for range deletion | `""` |
-| `--deadline` | `string` | Time duration before the request expires [(Go's time.Duration string)](https://golang.org/pkg/time/#Duration.String) | `0s` (no deadline) |
-| `--wait` | `bool` | Wait for operation to finish before returning response | `true` |
+| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
+| `--template` | `string` | The object name template with optional range parts | `""` |
 
+Options `--list` and `--template` are mutually exclusive.
+
+See [List/Range Operations](../../docs/batch.md#listrange-operation) for more details.
 
 | Command | Description |
 | --- | --- |

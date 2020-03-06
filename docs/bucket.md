@@ -75,15 +75,13 @@ Objects are prefetched or evicted using [List/Range Operations](batch.md#listran
 For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from the cloud bucket `abc`, run:
 
 ```console
-$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc
+$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"]}}' http://localhost:8080/v1/buckets/abc
 ```
 
-See the [List/Range Operation section](batch.md#listrange-operations) for the `"deadline": "10s"` and `"wait":true` parameters.
-
-To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the cloud bucket `abc` from AIS, which begin with the prefix `__tst/test-` and contain a 4 digit number with `22` in the middle, run:
+To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the cloud bucket `abc` from AIS, which names begin with the prefix `__tst/test-`, run:
 
 ```console
-$ curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobjects", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc
+$ curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobjects", "value":{"template":"__tst/test-{1000..2000}"}}' http://localhost:8080/v1/buckets/abc
 ```
 
 ### Evict Cloud Bucket
