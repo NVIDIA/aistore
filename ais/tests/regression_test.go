@@ -171,7 +171,9 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to delete objects from bucket %s, err: %v", bck, err)
 		}
-		tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
+		xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck, Timeout: rebalanceTimeout}
+		err = api.WaitForXaction(baseParams, xactArgs)
+		tassert.CheckFatal(t, err)
 	}()
 
 	listBucketMsg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize), Props: cmn.GetTargetURL}
@@ -368,7 +370,9 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 
 func postRenameWaitAndCheck(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh []string) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	tutils.WaitForBucketXactionToComplete(t, baseParams, rtd.bck, cmn.ActRenameLB /*kind*/, rebalanceTimeout)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: rtd.bck, Timeout: rebalanceTimeout}
+	err := api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 	tutils.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
 
 	buckets, err := api.GetBucketNames(baseParams, rtd.bck)
@@ -750,10 +754,12 @@ func TestLRU(t *testing.T) {
 	})
 
 	tutils.Logln("starting LRU...")
-	err := api.ExecXaction(baseParams, cmn.Bck{}, cmn.ActLRU, cmn.ActXactStart)
+	err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActLRU})
 	tassert.CheckFatal(t, err)
-	tutils.WaitForBucketXactionToStart(t, baseParams, m.bck, cmn.ActLRU)
-	tutils.WaitForBucketXactionToComplete(t, baseParams, m.bck, cmn.ActLRU, rebalanceTimeout)
+
+	xactArgs := api.XactReqArgs{Kind: cmn.ActLRU, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	// Check results
 	tutils.Logln("checking the results...")
@@ -777,11 +783,10 @@ func TestPrefetchList(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 	var (
-		toprefetch    = make(chan string, numfiles)
-		netprefetches = int64(0)
-		proxyURL      = tutils.GetPrimaryURL()
-		baseParams    = tutils.BaseAPIParams(proxyURL)
-		bck           = cmn.Bck{
+		toprefetch = make(chan string, numfiles)
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.Cloud,
 		}
@@ -805,26 +810,30 @@ func TestPrefetchList(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
+
+	xactArgs := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+
 	// 3. Prefetch evicted objects
 	err = api.PrefetchList(baseParams, bck, files)
 	if err != nil {
 		t.Error(err)
 	}
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActPrefetch, rebalanceTimeout)
+
+	xactArgs = api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	// 4. Ensure that all the prefetches occurred.
-	allDetails, err := api.MakeXactGetRequest(baseParams, bck, cmn.ActPrefetch, cmn.ActXactStats, false)
+	xactArgs.Latest = true
+	xactStats, err := api.GetXactionStats(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	prefetched := int64(0)
-	for tid := range allDetails {
-		detail := allDetails[tid][0]
-		prefetched += detail.ObjCount()
-		tutils.Logf("%s - %d - %s - %v\n", tid, detail.ObjCount(), detail.Kind(), detail.EndTime())
-	}
-
-	if prefetched != n {
-		t.Errorf("Did not prefetch all files: Missing %d of %d\n", (n - netprefetches), n)
+	if xactStats.ObjCount() != n {
+		t.Errorf(
+			"did not prefetch all files: missing %d of %d (%v)",
+			n-xactStats.ObjCount(), n, xactStats,
+		)
 	}
 }
 
@@ -860,10 +869,11 @@ func TestDeleteList(t *testing.T) {
 
 	// 2. Delete the objects
 	err = api.DeleteList(baseParams, bck, files)
-	if err != nil {
-		t.Error(err)
-	}
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
+	tassert.CheckError(t, err)
+
+	xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	// 3. Check to see that all the files have been deleted
 	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
@@ -928,28 +938,26 @@ func TestPrefetchRange(t *testing.T) {
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
 	rng := fmt.Sprintf("%s%s", prefetchPrefix, prefetchRange)
 	err = api.EvictRange(baseParams, bck, rng)
-	if err != nil {
-		t.Error(err)
-	}
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
+	tassert.CheckError(t, err)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+
 	err = api.PrefetchRange(baseParams, bck, rng)
-	if err != nil {
-		t.Error(err)
-	}
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActPrefetch, rebalanceTimeout)
+	tassert.CheckError(t, err)
+	xactArgs = api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	// 4. Ensure that all the prefetches occurred
-	allDetails, err := api.MakeXactGetRequest(baseParams, bck, cmn.ActPrefetch, cmn.ActXactStats, false)
+	xactArgs.Latest = true
+	xactStats, err := api.GetXactionStats(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	prefetched := int64(0)
-	for tid := range allDetails {
-		detail := allDetails[tid][0]
-		prefetched += detail.ObjCount()
-		tutils.Logf("%s - %d - %s - %v\n", tid, detail.ObjCount(), detail.Kind(), detail.EndTime())
-	}
-	if prefetched != int64(len(files)) {
-		t.Errorf("Did not prefetch all files: Missing %d of %d\n",
-			int64(len(files))-prefetched, len(files))
+	if xactStats.ObjCount() != int64(len(files)) {
+		t.Errorf(
+			"did not prefetch all files: missing %d of %d (%v)",
+			int64(len(files))-xactStats.ObjCount(), len(files), xactStats,
+		)
 	}
 }
 
@@ -988,10 +996,10 @@ func TestDeleteRange(t *testing.T) {
 	// 2. Delete the small range of objects
 	tutils.Logf("Delete in range %s\n", smallrange)
 	err = api.DeleteRange(baseParams, bck, smallrange)
-	if err != nil {
-		t.Error(err)
-	}
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
+	tassert.CheckError(t, err)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	// 3. Check to see that the correct files have been deleted
 	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
@@ -1017,10 +1025,9 @@ func TestDeleteRange(t *testing.T) {
 	tutils.Logf("Delete in range %s\n", bigrange)
 	// 4. Delete the big range of objects
 	err = api.DeleteRange(baseParams, bck, bigrange)
-	if err != nil {
-		t.Error(err)
-	}
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
+	tassert.CheckError(t, err)
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	// 5. Check to see that all the files have been deleted
 	bktlst, err = api.ListBucket(baseParams, bck, msg, 0)
@@ -1096,7 +1103,9 @@ func TestStressDeleteRange(t *testing.T) {
 	tutils.Logf("Deleting objects in range: %s\n", partialRange)
 	err = api.DeleteRange(baseParams, bck, partialRange)
 	tassert.CheckError(t, err)
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
@@ -1125,7 +1134,8 @@ func TestStressDeleteRange(t *testing.T) {
 	tutils.Logf("Deleting objects in range: %s\n", fullRange)
 	err = api.DeleteRange(baseParams, bck, fullRange)
 	tassert.CheckError(t, err)
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	// 5. Check to see that all files have been deleted
 	msg = &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: int(pagesize)}

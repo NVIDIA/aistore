@@ -351,7 +351,9 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	)
 
 	time.Sleep(3 * time.Second)
-	tutils.WaitForBucketXactionToComplete(m.t, baseParams, m.bck, cmn.ActMakeNCopies /*kind*/, rebalanceTimeout)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
+	err := api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
 	query := make(url.Values)
@@ -1873,7 +1875,9 @@ func TestAtimePrefetch(t *testing.T) {
 
 	err := api.PrefetchList(baseParams, bck, []string{objectName})
 	tassert.CheckFatal(t, err)
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActPrefetch, rebalanceTimeout)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
@@ -2059,7 +2063,9 @@ func TestRenewRebalance(t *testing.T) {
 
 	// Step 4: Re-register target (triggers rebalance)
 	m.reregisterTarget(target)
-	tutils.WaitForBucketXactionToStart(t, baseParams, cmn.Bck{}, cmn.ActGlobalReb, rebalanceStartTimeout)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActGlobalReb, Timeout: rebalanceStartTimeout}
+	err = api.WaitForXactionToStart(baseParams, xactArgs)
+	tassert.CheckError(t, err)
 	tutils.Logf("automatic global rebalance started\n")
 
 	m.wg.Add(m.num*m.numGetsEachFile + 2)
@@ -2077,7 +2083,7 @@ func TestRenewRebalance(t *testing.T) {
 
 		<-m.controlCh // wait for half the GETs to complete
 
-		err := api.ExecXaction(baseParams, cmn.Bck{}, cmn.ActGlobalReb, cmn.ActXactStart)
+		err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActGlobalReb})
 		tassert.CheckFatal(t, err)
 		tutils.Logf("manually initiated global rebalance\n")
 	}()

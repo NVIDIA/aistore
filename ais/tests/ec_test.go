@@ -2429,12 +2429,16 @@ func TestECBucketEncode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Starting making EC\n")
-	api.ECEncodeBucket(baseParams, m.bck)
-	tutils.WaitForBucketXactionToComplete(t, baseParams, m.bck, cmn.ActECEncode, rebalanceTimeout)
+	err = api.ECEncodeBucket(baseParams, m.bck)
+	tassert.CheckFatal(t, err)
+
+	xactArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+
 	reslist, err = api.ListBucketFast(baseParams, m.bck, nil)
-	if err != nil {
-		t.Fatalf("List bucket %s failed, err = %v", m.bck, err)
-	}
+	tassert.CheckFatal(t, err)
+
 	tutils.Logf("Object count after EC finishes: %d\n", len(reslist.Entries))
 	expect := (parityCnt + 1) * m.num
 	if len(reslist.Entries) != expect {

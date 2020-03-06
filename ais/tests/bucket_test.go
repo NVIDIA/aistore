@@ -1007,28 +1007,9 @@ func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies i
 	if err := api.MakeNCopies(baseParams, bck, ncopies); err != nil {
 		t.Fatalf("Failed to start copies=%d xaction, err: %v", ncopies, err)
 	}
-	timedout := 60 // seconds
-	ok := false
-	for i := 0; i < timedout+1; i++ {
-		time.Sleep(time.Second)
-
-		allDetails, err := api.MakeXactGetRequest(baseParams, bck, cmn.ActMakeNCopies, cmn.ActXactStats, true)
-		tassert.CheckFatal(t, err)
-		ok = true
-		for tid := range allDetails {
-			detail := allDetails[tid][0] // TODO
-			if detail.Running() {
-				ok = false
-				break
-			}
-		}
-		if ok {
-			break
-		}
-	}
-	if !ok {
-		t.Fatalf("timed-out waiting for %s to finish", cmn.ActMakeNCopies)
-	}
+	xactArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: bck, Timeout: 60 * time.Second}
+	err := api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 }
 
 func TestCloudMirror(t *testing.T) {
@@ -1233,7 +1214,9 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	err = api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForBucketXactionToComplete(t, baseParams, srcBck, cmn.ActRenameLB /*kind*/, rebalanceTimeout)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: srcBck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	// Gets on renamed ais bucket
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1456,7 +1439,13 @@ func TestCopyBucket(t *testing.T) {
 			}
 
 			for _, dstm := range dstms {
-				tutils.WaitForBucketXactionToComplete(t, baseParams, dstm.bck, cmn.ActCopyBucket /*kind*/, rebalanceTimeout)
+				xactArgs := api.XactReqArgs{
+					Kind:    cmn.ActCopyBucket,
+					Bck:     dstm.bck,
+					Timeout: rebalanceTimeout,
+				}
+				err = api.WaitForXaction(baseParams, xactArgs)
+				tassert.CheckFatal(t, err)
 			}
 
 			tutils.Logln("checking and comparing bucket props")

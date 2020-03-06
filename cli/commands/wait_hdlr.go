@@ -85,23 +85,18 @@ func waitXactionHandler(c *cli.Context) (err error) {
 	}
 
 	var (
-		aborted bool
-		refresh = calcRefreshRate(c)
+		aborted  bool
+		refresh  = calcRefreshRate(c)
+		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck}
 	)
 	for {
-		stats, err := api.MakeXactGetRequest(defaultAPIParams, bck, xactKind, cmn.ActXactStats, true)
+		xactStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)
 		if err != nil {
 			return err
 		}
 
-		finished := true
-		for _, nodeStats := range stats {
-			for _, xactStats := range nodeStats {
-				finished = finished && xactStats.Finished()
-				aborted = aborted || xactStats.Aborted()
-			}
-		}
-		if aborted || finished {
+		aborted = xactStats.Aborted()
+		if aborted || xactStats.Finished() {
 			break
 		}
 		time.Sleep(refresh)
@@ -131,7 +126,7 @@ func waitDownloadHandler(c *cli.Context) (err error) {
 			return err
 		}
 
-		aborted = aborted || resp.Aborted
+		aborted = resp.Aborted
 		if aborted || resp.JobFinished() {
 			break
 		}

@@ -5,33 +5,115 @@
 package api
 
 import (
-	"io/ioutil"
+	"context"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
-// MakeXactGetRequest API
+const (
+	xactRetryInterval = time.Second
+)
+
+type (
+	NodesXactStats map[string][]*stats.BaseXactStatsExt
+
+	XactReqArgs struct {
+		Kind    string  // Xaction kind, see: cmn.XactType
+		Bck     cmn.Bck // Optional bucket
+		Latest  bool    // Determines if we should get latest or all xactions
+		Timeout time.Duration
+	}
+)
+
+func (xs NodesXactStats) Running() bool {
+	for _, targetStats := range xs {
+		for _, xaction := range targetStats {
+			if xaction.Running() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (xs NodesXactStats) Finished() bool { return !xs.Running() }
+
+func (xs NodesXactStats) Aborted() bool {
+	for _, targetStats := range xs {
+		for _, xaction := range targetStats {
+			if xaction.Aborted() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (xs NodesXactStats) ObjCount() (count int64) {
+	for _, targetStats := range xs {
+		for _, xaction := range targetStats {
+			count += xaction.ObjCount()
+		}
+	}
+	return
+}
+
+func execXactionAction(baseParams BaseParams, args XactReqArgs, action string) error {
+	var (
+		optParams []OptionalParams
+		actMsg    = &cmn.ActionMsg{
+			Action: action,
+			Name:   args.Kind,
+			Value:  args.Bck.Name,
+		}
+		path     = cmn.URLPath(cmn.Version, cmn.Cluster)
+		msg, err = jsoniter.Marshal(actMsg)
+		query    = cmn.AddBckToQuery(nil, args.Bck)
+	)
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPut
+	optParams = []OptionalParams{{Query: query}}
+	_, err = DoHTTPRequest(baseParams, path, msg, optParams...)
+	return err
+}
+
+// StartXaction API
 //
-// MakeXactGetRequest gets the response of the Xaction Query
-// Action can be one of: start, stop, stats
-// Kind will be one of the xactions
-func MakeXactGetRequest(baseParams BaseParams, bck cmn.Bck, kind, action string,
-	all bool) (map[string][]*stats.BaseXactStatsExt, error) {
+// StartXaction starts a given xaction.
+func StartXaction(baseParams BaseParams, args XactReqArgs) error {
+	return execXactionAction(baseParams, args, cmn.ActXactStart)
+}
+
+// AbortXaction API
+//
+// AbortXaction aborts a given xaction.
+func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
+	return execXactionAction(baseParams, args, cmn.ActXactStop)
+}
+
+// GetXactionStats API
+//
+// GetXactionStats gets all xaction stats for given kind and bucket (optional).
+func GetXactionStats(baseParams BaseParams, args XactReqArgs) (NodesXactStats, error) {
 	var (
 		resp      *http.Response
-		xactStats = make(map[string][]*stats.BaseXactStatsExt)
+		xactStats = make(NodesXactStats)
 	)
+
 	optParams := OptionalParams{}
 	actMsg := &cmn.ActionMsg{
-		Action: action,
-		Name:   kind,
+		Action: cmn.ActXactStats,
+		Name:   args.Kind,
 		Value: cmn.XactionExtMsg{
-			Bck: bck,
-			All: all,
+			Bck: args.Bck,
+			All: !args.Latest,
 		},
 	}
 	msg, err := jsoniter.Marshal(actMsg)
@@ -46,17 +128,76 @@ func MakeXactGetRequest(baseParams BaseParams, bck cmn.Bck, kind, action string,
 	}
 	defer resp.Body.Close()
 
-	if action == cmn.ActXactStats {
-		bod, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		if err := jsoniter.Unmarshal(bod, &xactStats); err != nil {
-			return nil, err
-		}
-		return xactStats, nil
+	decoder := jsoniter.NewDecoder(resp.Body)
+	if err := decoder.Decode(&xactStats); err != nil {
+		return nil, err
 	}
-	return nil, nil
+	return xactStats, nil
+}
+
+// WaitForXaction API
+//
+// WaitForXaction waits for a given xaction to complete.
+func WaitForXaction(baseParams BaseParams, args XactReqArgs) error {
+	ctx := context.Background()
+	if args.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
+		defer cancel()
+	}
+
+	for {
+		xactStats, err := GetXactionStats(baseParams, args)
+		if err != nil {
+			return err
+		}
+		if xactStats.Finished() {
+			break
+		}
+		time.Sleep(xactRetryInterval)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			break
+		}
+	}
+
+	return nil
+}
+
+// WaitForXaction API
+//
+// WaitForXactionToStart waits for a given xaction to start.
+func WaitForXactionToStart(baseParams BaseParams, args XactReqArgs) error {
+	ctx := context.Background()
+	if args.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
+		defer cancel()
+	}
+
+	for {
+		xactStats, err := GetXactionStats(baseParams, args)
+		if err != nil {
+			return err
+		}
+		if xactStats.Running() {
+			break
+		}
+		if len(xactStats) > 0 && xactStats.Finished() {
+			break
+		}
+
+		time.Sleep(xactRetryInterval)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			break
+		}
+	}
+	return nil
 }
 
 // MakeNCopies API

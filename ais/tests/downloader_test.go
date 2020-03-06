@@ -10,13 +10,11 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -95,20 +93,12 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 	}
 }
 
-// if targetID == "", checks if all targets have completed download xaction
-func downloaderCompleted(t *testing.T, targetID string, targetsStats map[string][]*stats.BaseXactStatsExt) bool {
-	exists := false
-
-	for target, downloaderStat := range targetsStats {
-		if targetID != "" && !strings.Contains(target, targetID) {
-			continue
-		}
-		exists = true
-		for _, xaction := range downloaderStat {
-			if xaction.Running() {
-				tutils.Logf("%s(%s) in progress for %s\n", xaction.Kind(), xaction.ID(), target)
-				return false
-			}
+func downloaderCompleted(t *testing.T, targetID string, targetsStats api.NodesXactStats) bool {
+	downloaderStat, exists := targetsStats[targetID]
+	for _, xaction := range downloaderStat {
+		if xaction.Running() {
+			tutils.Logf("%s(%s) in progress for %s\n", xaction.Kind(), xaction.ID(), targetID)
+			return false
 		}
 	}
 
@@ -116,8 +106,6 @@ func downloaderCompleted(t *testing.T, targetID string, targetsStats map[string]
 	return true
 }
 
-// if targetID == "", waits until all targets have completed the downloader xaction
-// NOTE: this NOT the same as completing the job, downloader xaction might be running much longer
 func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID string, timeouts ...time.Duration) {
 	start := time.Now()
 	timeout := time.Duration(0)
@@ -125,19 +113,14 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 		timeout = timeouts[0]
 	}
 
-	if targetID != "" {
-		tutils.Logf("waiting %s for downloader to finish on target %s\n", timeout, targetID)
-	} else {
-		tutils.Logf("waiting %s for downloader to finish\n", timeout)
-	}
-	// additional sleep before querying targets
+	tutils.Logf("waiting %s for downloader to finish\n", timeout)
 	time.Sleep(time.Second * 2)
 
-	sleep := time.Second * 1
+	xactArgs := api.XactReqArgs{Kind: cmn.ActDownload}
 	for {
-		time.Sleep(sleep)
-		downloaderStats, err := tutils.GetXactionStats(baseParams, cmn.Bck{}, cmn.ActDownload)
-		tutils.CheckXactAPIErr(t, err)
+		time.Sleep(time.Second)
+		downloaderStats, err := api.GetXactionStats(baseParams, xactArgs)
+		tassert.CheckFatal(t, err)
 
 		if downloaderCompleted(t, targetID, downloaderStats) {
 			tutils.Logf("downloader has finished\n")
@@ -447,7 +430,9 @@ func TestDownloadCloud(t *testing.T) {
 	// Test download
 	err := api.EvictList(baseParams, bck, expectedObjs)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: bck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	id, err := api.DownloadCloud(baseParams, generateDownloadDesc(), bck, prefix, suffix)
 	tassert.CheckFatal(t, err)
@@ -463,7 +448,8 @@ func TestDownloadCloud(t *testing.T) {
 	// Test cancellation
 	err = api.EvictList(baseParams, bck, expectedObjs)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActEvictObjects, rebalanceTimeout)
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
 
 	id, err = api.DownloadCloud(baseParams, generateDownloadDesc(), bck, prefix, suffix)
 	tassert.CheckFatal(t, err)

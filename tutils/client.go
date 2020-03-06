@@ -10,7 +10,6 @@ package tutils
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -918,112 +917,15 @@ func WaitForBucket(proxyURL string, bck cmn.Bck, exists bool) error {
 	return nil
 }
 
-func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, fileslist []string) {
+func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) {
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.EvictList(baseParams, bck, fileslist)
-	WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActPrefetch, evictPrefetchTimeout)
+	err := api.EvictList(baseParams, bck, objList)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}
-}
-
-func GetXactionStats(baseParams api.BaseParams, bck cmn.Bck, kind string) (map[string][]*stats.BaseXactStatsExt, error) {
-	return api.MakeXactGetRequest(baseParams, bck, kind, cmn.ActXactStats, true)
-}
-
-func allCompleted(targetsStats map[string][]*stats.BaseXactStatsExt) bool {
-	for target, targetStats := range targetsStats {
-		for _, xaction := range targetStats {
-			if xaction.Running() {
-				Logf("%s(%s) in progress for %s\n", xaction.Kind(), xaction.ID(), target)
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func CheckXactAPIErr(t *testing.T, err error) {
-	if err != nil {
-		if httpErr, ok := err.(*cmn.HTTPError); !ok {
-			t.Fatalf("Unrecognized error from xactions request: [%v]", err)
-		} else if httpErr.Status != http.StatusNotFound {
-			t.Fatalf("Unable to get global rebalance stats. Error: [%v]", err)
-		}
-	}
-}
-
-// nolint:unparam // for now timeout is always the same but it is better to keep it generalized
-func WaitForBucketXactionToComplete(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, kind string, timeout time.Duration) {
-	var (
-		wg    = &sync.WaitGroup{}
-		ch    = make(chan error, 1)
-		sleep = 3 * time.Second
-		i     time.Duration
-	)
-	wg.Add(1)
-	go func() {
-		for {
-			time.Sleep(sleep)
-			i++
-			stats, err := GetXactionStats(baseParams, bck, kind)
-			CheckXactAPIErr(t, err)
-			if allCompleted(stats) {
-				break
-			}
-			if i == 1 {
-				Logf("waiting for %s\n", kind)
-			}
-			if i*sleep > timeout {
-				ch <- errors.New(kind + ": timeout")
-				break
-			}
-		}
-		wg.Done()
-	}()
-	wg.Wait()
-	close(ch)
-	for err := range ch {
-		t.Fatal(err)
-	}
-}
-
-func WaitForBucketXactionToStart(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, kind string, timeouts ...time.Duration) {
-	var (
-		start   = time.Now()
-		timeout = time.Duration(0)
-		logged  = false
-	)
-
-	if len(timeouts) > 0 {
-		timeout = timeouts[0]
-	}
-
-	for {
-		stats, err := GetXactionStats(baseParams, bck, kind)
-		CheckXactAPIErr(t, err)
-		for _, targetStats := range stats {
-			for _, xaction := range targetStats {
-				if xaction.Running() {
-					return // xaction started
-				}
-			}
-		}
-		if len(stats) > 0 {
-			return // all xaction finished
-		}
-
-		if !logged {
-			Logf("waiting for %s to start\n", kind)
-			logged = true
-		}
-
-		if timeout != 0 && time.Since(start) > timeout {
-			t.Fatalf("%s has not started before %s", kind, timeout)
-			return
-		}
-
-		time.Sleep(1 * time.Second)
+	xactArgs := api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bck, Timeout: evictPrefetchTimeout}
+	if err := api.WaitForXaction(baseParams, xactArgs); err != nil {
+		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}
 }
 
@@ -1032,66 +934,38 @@ func WaitForBucketXactionToStart(t *testing.T, baseParams api.BaseParams, bck cm
 // and returns. If timeout set, if any of rebalances doesn't complete before timeout
 // the function ends with fatal
 func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeouts ...time.Duration) {
-	sleep := 10 * time.Second
-	start := time.Now()
-	wg := &sync.WaitGroup{}
-	wg.Add(2)
-	ch := make(chan error, 2)
+	var (
+		timeout time.Duration
+		wg      = &sync.WaitGroup{}
+		errCh   = make(chan error, 2)
+	)
 
-	timeout := time.Duration(0)
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
+	Logf("waiting for rebalance to complete (timeout: %v)...\n", timeout)
+	wg.Add(2)
 	go func() {
-		var logged bool
 		defer wg.Done()
-		for {
-			time.Sleep(sleep)
-			globalRebalanceStats, err := GetXactionStats(baseParams, cmn.Bck{}, cmn.ActGlobalReb)
-			CheckXactAPIErr(t, err)
-
-			if allCompleted(globalRebalanceStats) {
-				return
-			}
-			if !logged {
-				Logf("waiting for global rebalance\n")
-				logged = true
-			}
-
-			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
-				ch <- errors.New("global rebalance has not completed before " + timeout.String())
-				return
-			}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActGlobalReb, Timeout: timeout}
+		err := api.WaitForXaction(baseParams, xactArgs)
+		if err != nil {
+			errCh <- err
 		}
 	}()
 
 	go func() {
-		var logged bool
 		defer wg.Done()
-		for {
-			time.Sleep(sleep)
-			localRebalanceStats, err := GetXactionStats(baseParams, cmn.Bck{}, cmn.ActLocalReb)
-			CheckXactAPIErr(t, err)
-
-			if allCompleted(localRebalanceStats) {
-				return
-			}
-			if !logged {
-				Logf("waiting for local rebalance\n")
-				logged = true
-			}
-
-			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
-				ch <- errors.New("global rebalance has not completed before " + timeout.String())
-				return
-			}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActLocalReb, Timeout: timeout}
+		err := api.WaitForXaction(baseParams, xactArgs)
+		if err != nil {
+			errCh <- err
 		}
 	}()
 
 	wg.Wait()
-	close(ch)
-
-	for err := range ch {
+	close(errCh)
+	for err := range errCh {
 		t.Fatal(err)
 	}
 }

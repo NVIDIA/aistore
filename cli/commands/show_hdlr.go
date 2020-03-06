@@ -270,13 +270,14 @@ func showXactionHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	xactStatsMap, err := api.MakeXactGetRequest(defaultAPIParams, bck, xactKind, commandStats, flagIsSet(c, allItemsFlag))
+	xactArgs := api.XactReqArgs{Kind: xactKind, Bck: bck, Latest: !flagIsSet(c, allItemsFlag)}
+	xactStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)
 	if err != nil {
 		return
 	}
 
 	if flagIsSet(c, activeFlag) {
-		for daemonID, daemonStats := range xactStatsMap {
+		for daemonID, daemonStats := range xactStats {
 			if len(daemonStats) == 0 {
 				continue
 			}
@@ -286,18 +287,18 @@ func showXactionHandler(c *cli.Context) (err error) {
 					runningStats = append(runningStats, xact)
 				}
 			}
-			xactStatsMap[daemonID] = runningStats
+			xactStats[daemonID] = runningStats
 		}
 	}
-	for daemonID, daemonStats := range xactStatsMap {
+	for daemonID, daemonStats := range xactStats {
 		if len(daemonStats) == 0 {
-			delete(xactStatsMap, daemonID)
+			delete(xactStats, daemonID)
 		}
 	}
 
-	dts := make([]daemonTemplateStats, len(xactStatsMap))
+	dts := make([]daemonTemplateStats, len(xactStats))
 	i := 0
-	for daemonID, daemonStats := range xactStatsMap {
+	for daemonID, daemonStats := range xactStats {
 		s := daemonTemplateStats{
 			DaemonID: daemonID,
 			Stats:    daemonStats,

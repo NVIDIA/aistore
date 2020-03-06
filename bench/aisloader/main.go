@@ -622,7 +622,7 @@ func main() {
 	if runParams.duration.Val == 0 {
 		if runParams.putSizeUpperBound == 0 && !runParams.stoppable {
 			if runParams.cleanUp.Val {
-				cleanUp()
+				cleanup()
 			}
 
 			return
@@ -815,7 +815,7 @@ Done:
 	fmt.Printf("\nActual run duration: %v\n", time.Since(tsStart))
 	finalizeStats(statsWriter)
 	if runParams.cleanUp.Val {
-		cleanUp()
+		cleanup()
 	}
 }
 
@@ -1000,7 +1000,7 @@ func completeWorkOrder(wo *workOrder) {
 	}
 }
 
-func cleanUp() {
+func cleanup() {
 	var wg sync.WaitGroup
 	fmt.Println(prettyTimeStamp() + " Cleaning up ...")
 	if bucketObjsNames != nil {
@@ -1010,11 +1010,11 @@ func cleanUp() {
 		n := objsLen / w
 		for i := 0; i < w; i++ {
 			wg.Add(1)
-			go _cleanup(bucketObjsNames.Names()[i*n:(i+1)*n], &wg)
+			go cleanupObjs(bucketObjsNames.Names()[i*n:(i+1)*n], &wg)
 		}
 		if objsLen%w != 0 {
 			wg.Add(1)
-			go _cleanup(bucketObjsNames.Names()[n*w:], &wg)
+			go cleanupObjs(bucketObjsNames.Names()[n*w:], &wg)
 		}
 		wg.Wait()
 	}
@@ -1026,35 +1026,13 @@ func cleanUp() {
 	fmt.Println(prettyTimeStamp() + " Done")
 }
 
-// TODO: implement API method to wait any xaction type with timeout
-func _waitForBckXactComplete(proxyURL string, bck cmn.Bck, kind string) {
-	var (
-		sleep      = 3 * time.Second
-		baseParams = tutils.BaseAPIParams(proxyURL)
-	)
-	for {
-		time.Sleep(sleep)
-		stats, err := tutils.GetXactionStats(baseParams, bck, kind)
-		if err != nil {
-			break
-		}
-		allCompleted := true
-		for _, targetStats := range stats {
-			for _, xaction := range targetStats {
-				if xaction.Running() {
-					allCompleted = false
-					break
-				}
-			}
-		}
-		if allCompleted {
-			break
-		}
-	}
-}
-
-func _cleanup(objs []string, wg *sync.WaitGroup) {
+func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	defer wg.Done()
+
+	var (
+		baseParams = tutils.BaseAPIParams(runParams.proxyURL)
+		xactArgs   = api.XactReqArgs{Kind: cmn.ActDelete, Bck: runParams.bck}
+	)
 
 	t := len(objs)
 	if t == 0 {
@@ -1063,12 +1041,14 @@ func _cleanup(objs []string, wg *sync.WaitGroup) {
 	b := cmn.Min(t, runParams.batchSize)
 	n := t / b
 	for i := 0; i < n; i++ {
-		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bck,
-			objs[i*b:(i+1)*b])
+		err := api.DeleteList(baseParams, runParams.bck, objs[i*b:(i+1)*b])
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
-		_waitForBckXactComplete(runParams.proxyURL, runParams.bck, cmn.ActDelete)
+		err = api.WaitForXaction(baseParams, xactArgs)
+		if err != nil {
+			fmt.Println("wait for xaction err ", err)
+		}
 	}
 
 	if t%b != 0 {
@@ -1077,7 +1057,10 @@ func _cleanup(objs []string, wg *sync.WaitGroup) {
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
-		_waitForBckXactComplete(runParams.proxyURL, runParams.bck, cmn.ActDelete)
+		api.WaitForXaction(baseParams, xactArgs)
+		if err != nil {
+			fmt.Println("wait for xaction err ", err)
+		}
 	}
 
 	if runParams.usingFile {

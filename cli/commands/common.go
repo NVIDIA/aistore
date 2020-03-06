@@ -19,7 +19,6 @@ const (
 	commandStart     = cmn.ActXactStart
 	commandStop      = cmn.ActXactStop
 	commandStatus    = cmn.GetWhatDaemonStatus
-	commandStats     = cmn.GetWhatStats
 	commandShow      = "show"
 	commandGenShards = "gen-shards"
 	commandAuth      = "auth"

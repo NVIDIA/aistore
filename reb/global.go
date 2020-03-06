@@ -544,7 +544,7 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 	}
 	reb.changeStage(rebStageFin, 0)
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("global reb (v%d) in %s state", md.id, stages[rebStageInit])
+		glog.Infof("global reb (v%d) in %s state", md.id, stages[rebStageFin])
 	}
 
 	for errCnt != 0 && !reb.xreb.Aborted() {

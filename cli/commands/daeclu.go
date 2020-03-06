@@ -281,10 +281,9 @@ func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.D
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
 	// run until global rebalance is completed
+	xactArgs := api.XactReqArgs{Kind: cmn.ActGlobalReb, Latest: true}
 	for {
-		allFinished := true
-
-		rebStats, err := api.MakeXactGetRequest(defaultAPIParams, cmn.Bck{}, cmn.ActGlobalReb, cmn.GetWhatStats, false /* all */)
+		rebStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)
 		if err != nil {
 			switch err := err.(type) {
 			case *cmn.HTTPError:
@@ -295,15 +294,6 @@ func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.D
 				return err
 			default:
 				return err
-			}
-		}
-
-		for _, daemonStats := range rebStats {
-			for _, xactStats := range daemonStats {
-				if xactStats.Running() {
-					allFinished = false
-					break
-				}
 			}
 		}
 
@@ -344,7 +334,7 @@ func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.D
 		}
 		tw.Flush()
 
-		if allFinished {
+		if rebStats.Finished() {
 			fmt.Fprintln(c.App.Writer, "\nGlobal rebalance has been completed.")
 			break
 		}
