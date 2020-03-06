@@ -213,6 +213,9 @@ func (t *bckSummaryTask) Run() {
 					}
 					summary.Size += size
 					summary.ObjCount += uint64(fileCount)
+
+					t.ObjectsAdd(int64(fileCount))
+					t.BytesAdd(int64(size))
 				}
 			} else { // slow path
 				var (
@@ -241,6 +244,9 @@ func (t *bckSummaryTask) Run() {
 						if bck.IsAIS() || (!bck.IsAIS() && (shouldListCB || t.msg.Cached)) {
 							summary.ObjCount++
 						}
+
+						t.ObjectsInc()
+						t.BytesAdd(v.Size)
 					}
 
 					if list.PageMarker == "" {
