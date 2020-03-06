@@ -59,6 +59,7 @@ var XactType = XactKindType{
 	ActDelete:       XactTypeBck,
 	ActLoadLomCache: XactTypeBck,
 	ActPrefetch:     XactTypeBck,
+	ActPromote:      XactTypeBck,
 
 	ActListObjects:   XactTypeTask,
 	ActSummaryBucket: XactTypeTask,
