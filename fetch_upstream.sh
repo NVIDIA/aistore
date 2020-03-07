@@ -1,21 +1,16 @@
 #!/bin/bash
 
-PRJ_DIR=$1
-OUT_DIR=$2
+OUT_DIR=$(readlink "$(dirname "${BASH_SOURCE[0]}")")
 TMP_DIR=/tmp/gh-pages-aistore
 
 mkdir -p $TMP_DIR
-cp -r "$PRJ_DIR"/* $TMP_DIR
-rm -rf $TMP_DIR/3rdparty $TMP_DIR/python-client
-
-find $TMP_DIR -type f ! -regex ".*\(md\|png\|xml\|jpeg\|json\|jpg\|gif\)" -exec rm -f {} \;
-
+git clone https://github.com/NVIDIA/aistore.git $TMP_DIR
+rm -rf $TMP_DIR/3rdparty $TMP_DIR/python-client $TMP_DIR/cmn/tests $TMP_DIR/.git
+find $TMP_DIR -type f | grep -v "\.\(md\|png\|xml\|jpeg\|json\|jpg\|gif\)" | xargs rm
 find $TMP_DIR -type d -empty -delete
 
-for f in $(find $TMP_DIR -type f)
-do
-  if [[ $(echo "$f" | grep "\(.*\)README.md") != "" ]]
-  then
+for f in $(find $TMP_DIR -type f); do
+  if [[ $(echo "$f" | grep "\(.*\)README.md") != "" ]]; then
     dname=$(dirname $f)
     dname=${dname#"$TMP_DIR"}
     dname=${dname#/}
@@ -24,14 +19,12 @@ do
     echo $f $dname $dnamecap
 
     TEXT="---\nlayout: post\ntitle: $dnamecap\npermalink: $dname\nredirect_from:\n- $dname/README.md/\n---"
-    if [[ $dname == "" ]]
-    then
+    if [[ $dname == "" ]]; then
       TEXT="---\nlayout: post\ntitle: AIStore\npermalink: /\nredirect_from:\n- /README.md/\n---"
     fi
 
     sed -i "1i${TEXT}\n" $f
-  elif [[ $(echo "$f" | grep "\(.*\).md") != "" ]]
-  then
+  elif [[ $(echo "$f" | grep "\(.*\).md") != "" ]]; then
     dname=$(dirname $f)
     dname=${dname#"$TMP_DIR"}
     dname=${dname#/}
@@ -45,7 +38,6 @@ do
   fi
 done
 
-mkdir -p "$OUT_DIR"
 cp -r $TMP_DIR/* "$OUT_DIR"/
 rm -rf $TMP_DIR
 
