@@ -13,7 +13,8 @@ redirect_from:
 ## Setup
 
 To build `aisloader`, run `make aisloader` from the root of the aistore repo:
-```bash
+
+```console
 $ cd $GOPATH/src/github.com/NVIDIA/aistore
 $ make aisloader
 ```
@@ -64,13 +65,8 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
 
 The following performs a 10-seconds performance test of 50% PUT and 50% GET requests:
 
-```sh
+```console
 $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=50 -provider=ais -cleanup=true -readertype=sg -numworkers=3
-```
-
-Example output follows below:
-
-```
 Found 0 existing objects
 Run configuration:
 {
@@ -100,7 +96,7 @@ Time      OP    Count                 	Total Bytes           	Latency(min, avg, 
 
 Loader ID:
 
-```sh
+```console
 $ aisloader -getloaderid
 0x0
 $ aisloader -getloaderid -loaderid=loaderstring -loaderidhashlen=8
@@ -109,7 +105,7 @@ $ aisloader -getloaderid -loaderid=loaderstring -loaderidhashlen=8
 
 PUT 2000 objects with names that look like hex({0..2000}{loaderid}):
 
-```sh
+```console
 $ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
 ```
 
@@ -121,7 +117,7 @@ AIStore supports a "dry" deployment: AIS_NODISKIO.
 
 Example of deploying a cluster with disk IO disabled and object size 256KB:
 
-```bash
+```console
 $ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
 ```
 
@@ -140,6 +136,7 @@ Aisloader allows you to collect statistics with Graphite using StatsD. Aisloader
 to provided StatsD server (see: `statsdip` and `statsdport` options). Once the
 connection is established the statistics from aisloader are send in the following
 format:
+
 ```
 <metric_type>.aisloader.<hostname>-<loaderid>.<metric>
 ```

@@ -20,18 +20,21 @@ Most of this README describes the first mode of operation that can be further re
 AIS can be designated as HTTP(S) proxy vis-à-vis 3rd party object storages. As of the v2.0, this mode of operation is limited to Google Cloud Storage (GCS) and requires two settings:
 
 1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment:
-   ```shell
-   $ export http_proxy=<AIS PROXY URL>
-   ```
+
+```console
+$ export http_proxy=<AIS PROXY URL>
+```
+
 2. AIS configuration: set `rproxy=cloud` in the [configuration](/ais/setup/config.sh):
-   ```json
-      "http": {
-           "proto":                "http",
-           "rproxy":               "cloud",
-           "rproxy_cache":         true,
-           ...
-      }
-   ```
+
+```json
+    "http": {
+        "proto":                "http",
+        "rproxy":               "cloud",
+        "rproxy_cache":         true,
+        ...
+    }
+```
 
 ### First cold GET followed by multiple warm GETs
 
@@ -43,18 +46,17 @@ Note that the GET URLs are formatted as per the GCS guidelines and **unmodified*
 
 The first call to Google Cloud Storage(GCS):
 
-```shell
-curl -L -X GET http://storage.googleapis.com/gcp-public-data-landsat/LT08/PRE/040/021/LT80400212013126LGN01/LT80400212013126LGN01_B10.TIF
+```console
+$ curl -L -X GET http://storage.googleapis.com/gcp-public-data-landsat/LT08/PRE/040/021/LT80400212013126LGN01/LT80400212013126LGN01_B10.TIF
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                    Dload  Upload   Total   Spent    Left  Speed
  100 60.9M    0 60.9M    0     0  20.3M      0 --:--:--  0:00:02 --:--:-- 20.3M
-
 ```
 
 The second GET of the same object:
 
-```shell
-curl -L -X GET http://storage.googleapis.com/gcp-public-data-landsat/LT08/PRE/040/021/LT80400212013126LGN01/LT80400212013126LGN01_B10.TIF
+```console
+$ curl -L -X GET http://storage.googleapis.com/gcp-public-data-landsat/LT08/PRE/040/021/LT80400212013126LGN01/LT80400212013126LGN01_B10.TIF
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                    Dload  Upload   Total   Spent    Left  Speed
  100 60.9M    0 60.9M    0     0   402M      0 --:--:-- --:--:-- --:--:--  403M
@@ -73,14 +75,14 @@ Below are the examples of requesting the same object using these two schemas. AI
 
 Example XML API:
 
-```shell
-curl -L -X GET http://storage.googleapis.com/gcp-public/LT08/PRE/B10.TIF
+```console
+$ curl -L -X GET http://storage.googleapis.com/gcp-public/LT08/PRE/B10.TIF
 ```
 
 Example JSON API:
 
-```shell
-curl -L -X GET http://www.googleapis.com/storage/v1/b/gcp-public/o/LT08%2FPRE%2fB10.TIF
+```console
+$ curl -L -X GET http://www.googleapis.com/storage/v1/b/gcp-public/o/LT08%2FPRE%2fB10.TIF
 ```
 
 ### v2.0 caching limitations
@@ -94,12 +96,12 @@ AIS supports a second (and special) mode whereby an AIS gateway serves as a **re
 
 The corresponding use case entails [configuring `rproxy=target`](/ais/setup/config.sh) and is intended to support (kernel-based) clients with a preference for a single (or a few) persistent storage connection(s).
 ```json
-   "http": {
+    "http": {
         "proto":                "http",
         "rproxy":               "target",
         "rproxy_cache":         true,
         ...
-      }
+    }
 ```
 
 Needless to say, this mode of operation will clearly have performance implications.

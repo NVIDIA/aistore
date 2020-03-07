@@ -9,6 +9,7 @@ redirect_from:
 ## Python Client Package
 
 ## Table of Contents
+
 - [Overview](#overview)
 - [How to generate package](#how-to-generate-package)
 - [How to run tests](#how-to-run-tests)
@@ -47,36 +48,35 @@ Should you have any difficulty with these instructions, please open a ticket, an
 
 1. Obtain the latest, as of v2.0, openapi-generator jar by running the following command:
 
-```shell
-wget https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/4.2.3/openapi-generator-cli-4.2.3.jar -O openapi-generator-cli.jar
+```console
+$ wget https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/4.2.3/openapi-generator-cli-4.2.3.jar -O openapi-generator-cli.jar
 ```
 
 2. Run the following commands:
 
-```shell
-cd </path/to/aistore>
-java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -c openapi/config.json -g python -o ./python-client/
+```console
+$ cd </path/to/aistore>
+$ java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -c openapi/config.json -g python -o ./python-client/
 ```
 
 3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
 
 4. Install required Python packages using `pip` and requirement files located in `python-client` directory:
 
-    ```shell
-    pip install -r python-client/requirements.txt
-    pip install -r python-client/test-requirements.txt
-    ```
+```console
+$ pip install -r python-client/requirements.txt
+$ pip install -r python-client/test-requirements.txt
+```
 
 If you don't wish to install these packages system wide for a particular user, consider using a [virtual environment](https://pypi.org/project/virtualenv/).
 
 Afterwards, if for any reason you want to remove the generated package, you can do the following:
 
-```shell
+```console
 # remember to commit any manually edited files first
-cd <path_to_repo>
-git clean -fd -- python-client
-git checkout HEAD -- python-client
-find python-client -name "*.pyc" -delete
+$ cd <path_to_repo>
+$ git clean -fd -- python-client
+$ git checkout HEAD -- python-client
 ```
 
 ## How to run tests
@@ -89,9 +89,9 @@ Note that you do not need to install the package to run tests.
 
 Run tests by running the following command:
 
-```shell
-cd <path_to_repo>
-BUCKET=<bucket_name> python -m unittest discover python-client/
+```console
+$ cd <path_to_repo>
+$ BUCKET=<bucket_name> python -m unittest discover python-client/
 ```
 
 ## How to install
@@ -99,10 +99,11 @@ BUCKET=<bucket_name> python -m unittest discover python-client/
 First, ensure that you have followed [the instructions for generating the package](#how-to-generate-package).
 
 Then install the package by doing:
-```shell
-cd <path_to_repo>/python-client
-pip uninstall ais_client #uninstalls any previous versions
-pip install .
+
+```console
+$ cd <path_to_repo>/python-client
+$ pip uninstall ais_client #uninstalls any previous versions
+$ pip install .
 ```
 
 ## How to use package
@@ -120,31 +121,33 @@ Operations on the client instance can be performed by using it to create another
 First, ensure that you have followed [the instructions for installing the package](#how-to-install)
 
 1. In your python script or interpreter, import the python client package.
-    ```shell
-    import ais_client
 
-    #Some aliases for functions in the package, will use later in document as shorthand
-    openapi_models = ais_client.models
-    openapi_params = openapi_models.InputParameters
-    openapi_actions = openapi_models.Actions
-    ```
+```python
+import ais_client
 
-2. For each proxy or target url that you want to communcate with, create an api client.
-    ```shell
-    #Initialize the configuration object
-    configuration = ais_client.Configuration()
-    configuration.debug = False
+# Some aliases for functions in the package, will use later in document as shorthand
+openapi_models = ais_client.models
+openapi_params = openapi_models.InputParameters
+openapi_actions = openapi_models.Actions
+```
 
-    #Example first api client
-    proxy_url = 'localhost:8080' #Change this to your your proxy's ip, ex: 172.50.0.2:8080
-    configuration.host = 'http://%s/v1/' % proxy_url
-    proxyClient = ais_client.ApiClient(configuration)
+2. For each proxy or target url that you want to communicate with, create an api client.
 
-    #Example second api client
-    target_url = 'localhost:8089' #Change this to your your target's ip, ex: 172.50.0.2:8083
-    configuration.host = 'http://%s/v1/' % target_url
-    targetClient = ais_client.ApiClient(configuration)
-    ```
+```python
+# Initialize the configuration object
+configuration = ais_client.Configuration()
+configuration.debug = False
+
+# Example first api client
+proxy_url = 'localhost:8080' #Change this to your your proxy's ip, ex: 172.50.0.2:8080
+configuration.host = 'http://%s/v1/' % proxy_url
+proxyClient = ais_client.ApiClient(configuration)
+
+# Example second api client
+target_url = 'localhost:8089' #Change this to your your target's ip, ex: 172.50.0.2:8083
+configuration.host = 'http://%s/v1/' % target_url
+targetClient = ais_client.ApiClient(configuration)
+```
 
 ### Performing Operations
 
@@ -178,12 +181,12 @@ First, create an api instance `bucket_api = ais_client.api.bucket_api.BucketApi(
 | Rename ais bucket (proxy) | `bucket_api.perform_operation('oldname', openapi_params(openapi_actions.RENAMELB, name='newname'))` | ObjectPropertyList |
 | [Evict](/docs/bucket.md#evict-bucket) cloud bucket (proxy) | `bucket_api.delete('myS3bucket', openapi_params(openapi_actions.EVICTCB))` | None |
 | Set bucket props (proxy) | `bucket_api.set_properties('mybucket', openapi_params(openapi_actions.SETPROPS, value=openapi_models.BucketProps(next_tier_url="http://localhost:8082", cloud_provider="ais", read_policy="next_tier", write_policy="next_tier", cksum=openapi_models.BucketPropsCksum(checksum="inherit"))))` | None |
-| [Prefetch](/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.ListParameters(objnames=["o1","o2","o3"], deadline="10s", wait=True)))` <sup>[3](#ftb3)</sup> | ObjectPropertyList |
-| [Prefetch](/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.RangeParameters(prefix="__tst/test-", regex='\\d22\\d', range="1000:2000", deadline="10s", wait=True)))` <sup>[3](#ftb3)</sup> | None |
-| Delete a list of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DELETE, value=openapi_models.ListParameters(objnames=["o1","o2","o3"], deadline="10s", wait=True)))` <sup>[3](#ftb3)</sup> | None |
-| Delete a range of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DELETE, value=openapi_models.RangeParameters(prefix="__tst/test-", regex='\\d22\\d', range="1000:2000", deadline="10s", wait=True)))` <sup>[3](#ftb3)</sup> | None |
-| [Evict](/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.ListParameters(objnames=["o1","o2","o3"], deadline="10s", wait=True)))` <sup>[3](#ftb3)</sup> | None |
-| [Evict](/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.RangeParameters(prefix="__tst/test-", regex='\\d22\\d', range="1000:2000", deadline="10s", wait=True)))` <sup>[3](#ftb3)</sup> | None |
+| [Prefetch](/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | ObjectPropertyList |
+| [Prefetch](/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.RangeParameters(template="__tst/test-{1000..2000}")))` <sup>[3](#ftb3)</sup> | None |
+| Delete a list of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DELETE, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | None |
+| Delete a range of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DELETE, value=openapi_models.RangeParameters(prefix="__tst/test-{1000.2000}")))` <sup>[3](#ftb3)</sup> | None |
+| [Evict](/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | None |
+| [Evict](/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.RangeParameters(prefix="__tst/test-{1000..2000}")))` <sup>[3](#ftb3)</sup> | None |
 | Get bucket props (proxy) | `bucket_api.get_properties_with_http_info('mybucket')[2]` | dict |
 
 <a name="ftb1">1</a>: Optional parameter `loc=true` can be used to retrieve just the ais buckets, this causes the `cloud` property to be the empty array
@@ -269,8 +272,10 @@ Note that these are called on the api instances [cluster_api](#cluster) and [dae
 The python client package, as of v2.0, is only fully supported in python 2.
 
 This is because openapi-generator has a problem in python3 with fetching binary data in the form of octet-stream.
+
 ```
 https://github.com/OpenAPITools/openapi-generator/issues/1445
 https://github.com/OpenAPITools/openapi-generator/issues/206
 ```
+
 For now, as of v2.0, it's recommended to only use python 2 with the package.

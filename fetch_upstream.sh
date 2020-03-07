@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-OUT_DIR=$(readlink "$(dirname "${BASH_SOURCE[0]}")")
+OUT_DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)"
 TMP_DIR=/tmp/gh-pages-aistore
 
 mkdir -p $TMP_DIR
@@ -18,12 +18,12 @@ for f in $(find $TMP_DIR -type f); do
 
     echo $f $dname $dnamecap
 
-    TEXT="---\nlayout: post\ntitle: $dnamecap\npermalink: $dname\nredirect_from:\n- $dname/README.md/\n---"
+    TEXT="---\nlayout: post\ntitle: $dnamecap\npermalink: $dname\nredirect_from:\n- $dname/README.md/\n---\n"
     if [[ $dname == "" ]]; then
-      TEXT="---\nlayout: post\ntitle: AIStore\npermalink: /\nredirect_from:\n- /README.md/\n---"
+      TEXT="---\nlayout: post\ntitle: AIStore\npermalink: /\nredirect_from:\n- /README.md/\n---\n"
     fi
 
-    sed -i "1i${TEXT}\n" $f
+    echo "$(echo -e ${TEXT} | cat - $f)" > $f # insert ${TEXT} as first lines
   elif [[ $(echo "$f" | grep "\(.*\).md") != "" ]]; then
     dname=$(dirname $f)
     dname=${dname#"$TMP_DIR"}
@@ -33,8 +33,8 @@ for f in $(find $TMP_DIR -type f); do
 
     echo $f $dname/$bname $bnamecap
 
-    TEXT="---\nlayout: post\ntitle: $bnamecap\npermalink: $dname/$bname\nredirect_from:\n- $dname/$bname.md/\n---"
-    sed -i "1i${TEXT}\n" $f
+    TEXT="---\nlayout: post\ntitle: $bnamecap\npermalink: $dname/$bname\nredirect_from:\n- $dname/$bname.md/\n---\n"
+    echo "$(echo -e ${TEXT} | cat - $f)" > $f # insert ${TEXT} as first lines
   fi
 done
 

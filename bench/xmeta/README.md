@@ -9,8 +9,8 @@ redirect_from:
 xmeta is a low-level utility to format (or extract into plain text)
 assorted AIS control structures.
 
-```sh
-# go run bench/xmeta/xmeta.go
+```console
+$ go run bench/xmeta/xmeta.go
 Build:
         go install xmeta.go
 Examples:

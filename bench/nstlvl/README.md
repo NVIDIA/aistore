@@ -10,7 +10,7 @@ This is a micro-benchmark intended to help find out the impact (or lack of there
 
 By way of background, in AIStore (where we currently use local filesystems to store objects) the depth of POSIX directory nesting can be optimized - in some cases, and to a certain degree. This benchmark is a small step to find out.
 
-```sh
+```console
 # run with all defaults:
 $ go test -v -bench=. -benchmem
 

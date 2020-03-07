@@ -19,47 +19,57 @@ https://community.spiceworks.com/how_to/110622-install-ansible-on-64-bit-ubuntu-
 https://www.server-world.info/en/note?os=Ubuntu_14.04&p=ssh&f=8
 
 #### Download 
-```
-git clone git://github.com/NVIDIA/aistore
-git checkout ais_ansible
+
+```console
+$ git clone git://github.com/NVIDIA/aistore
+$ git checkout ais_ansible
 ```
 
 #### Configure AIS cluster
 1. Create inventory file, see example inventory in ais_ansible/inventory folder.
 2. Setup nodes - setup AIS paths, install go, aws cli
+
+```console
+$ ansible-playbook -i inventory/cluster.ini setupnodes.yml
 ```
-ansible-playbook -i inventory/cluster.ini setupnodes.yml
-```
+
 3. Get AIS - download AIS and related libs, build package
+
+```console
+$ ansible-playbook -i inventory/cluster.ini getgais.yml
 ```
-ansible-playbook -i inventory/cluster.ini getgais.yml
-```
+
 4. Config AIS - runs $AISSRC/setup/config.sh to create ais.json on all nodes in $HOME dir
+
+```console
+$ ansible-playbook -i inventory/cluster.ini configais.yml
 ```
-ansible-playbook -i inventory/cluster.ini configais.yml
-```
+
 5. Copy helper scripts to start proxy/targets
-```
-ansible proxy -m copy -a "src=startproxy.sh dest=/home/ubuntu/startproxy.sh" -i inventory/cluster.ini --become
-ansible proxy -m file -a "dest=/home/ubuntu/startproxy.sh mode=777 owner=ubuntu group=ubuntu" -i inventory/cluster.ini --become
-ansible targets -m copy -a "src=starttarget.sh dest=/home/ubuntu/starttarget.sh" -i inventory/cluster.ini --become
-ansible targets -m file -a "dest=/home/ubuntu/starttarget.sh mode=777 owner=ubuntu group=ubuntu" -i inventory/cluster.ini --become
+
+```console
+$ ansible proxy -m copy -a "src=startproxy.sh dest=/home/ubuntu/startproxy.sh" -i inventory/cluster.ini --become
+$ ansible proxy -m file -a "dest=/home/ubuntu/startproxy.sh mode=777 owner=ubuntu group=ubuntu" -i inventory/cluster.ini --become
+$ ansible targets -m copy -a "src=starttarget.sh dest=/home/ubuntu/starttarget.sh" -i inventory/cluster.ini --become
+$ ansible targets -m file -a "dest=/home/ubuntu/starttarget.sh mode=777 owner=ubuntu group=ubuntu" -i inventory/cluster.ini --become
 ```
 
 6. Start AIS
-```
-parallel-ssh -h inventory/proxy.txt -i 'nohup /home/ubuntu/startproxy.sh >/dev/null 2>&1'
-parallel-ssh -h inventory/targets.txt -i 'nohup /home/ubuntu/starttarget.sh >/dev/null 2>&1'
+
+```console
+$ parallel-ssh -h inventory/proxy.txt -i 'nohup /home/ubuntu/startproxy.sh >/dev/null 2>&1'
+$ parallel-ssh -h inventory/targets.txt -i 'nohup /home/ubuntu/starttarget.sh >/dev/null 2>&1'
 ```
 
 7. Stop AIS if needed
-```
-parallel-ssh -h inventory/targets.txt -i 'nohup /home/ubuntu/stopais.sh >/dev/null 2>&1'
-parallel-ssh -h inventory/proxy.txt -i 'nohup /home/ubuntu/stopais.sh >/dev/null 2>&1'
+
+```console
+$ parallel-ssh -h inventory/targets.txt -i 'nohup /home/ubuntu/stopais.sh >/dev/null 2>&1'
+$ parallel-ssh -h inventory/proxy.txt -i 'nohup /home/ubuntu/stopais.sh >/dev/null 2>&1'
 ```
 
 8. Get logs from cluster when needed
-```
-ansible-playbook -i inventory/cluster.ini getaislogs.yml
-```
 
+```console
+$ ansible-playbook -i inventory/cluster.ini getaislogs.yml
+```

@@ -19,7 +19,7 @@ The second argument is used to determine the bucket name if it is required.
 
 | Command | Description |
 | --- | --- |
-| `ais start xaction lru` | Starts clusterwide LRU xaction |
+| `ais start xaction lru` | Starts cluster-wide LRU xaction |
 
 ### Stop
 
@@ -56,3 +56,20 @@ Certain extended actions have additional CLI. In particular, global rebalance st
 | `--refresh [N]` | `string` | watch the global rebalance until it finishes or CTRL-C is pressed. Display the current stats every N seconds, where N ends with time suffix: s, m. If N is not defined it prints stats every 1 second | `1s` |
 
 Output of this command differs from the generic xaction output.
+
+### Wait
+
+`ais wait xaction XACTION_NAME [BUCKET_NAME]`
+
+Wait for the `XACTION_NAME` xaction to finish.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--refresh` | `duration` | Refresh rate | `1s` |
+
+#### Examples
+
+| Command | Explanation |
+| --- | --- |
+| `ais wait xaction lru` | Waits for the LRU to finish |
+| `ais wait xaction copybck bck_name` | Waits for the `copybck` xaction that runs on `bck_name` to finish |

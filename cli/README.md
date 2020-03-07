@@ -29,13 +29,16 @@ if not successful or local non-containerized deployment:
 4. Default `http://172.50.0.2:8080` and `http://127.0.0.1:8080` for local containerized and non-containerized deployments respectively
 
 This command returns the list of commands for the CLI.
- ```sh
- $ ais --help
- ```
+
+```console
+$ ais --help
+```
+
 This command returns the status of the cluster; if successful, the cluster address was resolved correctly.
- ```sh
- $ ais status
- ```
+
+```console
+$ ais status
+```
 
 ## AIS CLI Shell Auto-Complete
 
@@ -91,10 +94,12 @@ To add a new resource to a new command,
 ## Default flag and argument values via environment variables
 
 #### Bucket Provider
+
 If `AIS_BUCKET_PROVIDER` environment variable is set, the default bucket provider is set to the value of this variable.
 If provider is given in `BUCKET_NAME` ie `aws://BUCKET_NAME`, `AIS_BUCKET_PROVIDER` is ignored.
 Provider syntax `[provider://]BUCKET_NAME` is valid CLI-wide, meaning that every command supporting `BUCKET_NAME` argument
 also supports provider syntax. For more details refer to each command's documentation.
 
 Allowed values: `''` (autodetect provider), `ais` (local cluster), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform),
-`cloud` (anonymous - cloud provider determined automatically)
+`cloud` (anonymous - cloud provider determined automatically). 
+Additionally `provider://` syntax supports aliases `s3` (for `aws`) and `gs` (for `gcp`).

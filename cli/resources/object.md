@@ -8,6 +8,17 @@ redirect_from:
 
 ## Operations on objects
 
+- [GET](#get)
+- [CAT](#cat)
+- [SHOW](#show)
+- [PUT](#put)
+- [PROMOTE](#promote)
+- [Delete](#delete)
+- [Evict](#evict)
+- [Prefetch](#prefetch)
+- [Rename](#rename)
+- [Concat](#concat)
+
 ### GET
 
 `ais get BUCKET_NAME/OBJECT_NAME OUT_FILE`
@@ -27,25 +38,25 @@ GET object from bucket.
 
 1) GET object `myobj.txt` from bucket `mybucket` and write it as file `~/obj.txt`
 
-```sh
+```console
 $ ais get mybucket/myobj.txt ~/obj.txt
 ```
 
 2) GET object `myobj.txt` from cloud bucket `mybucket` and write it to standard output
 
-```sh
+```console
 $ ais get cloud://mybucket/myobj.txt -
 ```
 
 3) Check if object `myobj.txt` from bucket `mybucket` is cached locally
 
-```sh
+```console
 $ ais get --is-cached mybucket/myobj.txt
 ```
 
 4) Read Range: GET contents of object `myobj.txt` starting from offset `1024` length `1024`
 
-```sh
+```console
 $ ais get mybucket/myobj.txt ~/obj.txt --offset 1024 --length 1024
 ```
 
@@ -59,12 +70,13 @@ Get `OBJECT_NAME` from bucket `BUCKET_NAME` and print it to standard output. Ali
 
 1) GET object `myobj.txt` from local bucket `mybucket` and print it to stdout
 
-```shell script
+```console
 $ ais cat mybucket/myobj.txt -
 ```
 
 2) Read Range: get contents of object `myobj.txt` starting from offset `1024` length `1024` and print to standard output
-```shell script
+
+```console
 $ ais cat mybucket/myobj.txt --offset 1024 --length 1024
 ```
 
@@ -93,7 +105,7 @@ Supported properties:
 
 Display all properties of object `myobj.txt` from bucket `mybucket`. Output example:
 
-```sh
+```console
 $ ais show object mybucket/myobj.txt
 Checksum                Size    Atime                   Iscached        Version Copies  Ec
 2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     true            1       1       2:2[encoded]
@@ -101,7 +113,7 @@ Checksum                Size    Atime                   Iscached        Version 
 
 Show only selected properties:
 
-```sh
+```console
 $ ais show object mybucket/myobj2.txt -props size,version,ec`
 Size    Version Ec
 7.63MiB 1       2:2[replicated]
@@ -109,13 +121,13 @@ Size    Version Ec
 
 ### PUT
 
-`ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>
+`ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
 PUT an object or entire directory (of objects) into the specified bucket. If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty, then shows all gathered info to the user and asks for confirmation to continue. Confirmation request can be disabled with the option `--yes` for use in scripts.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--trim-prefix` | `string` | Prefix that is removed when constructing object name from file name. Used if `OBJECT_NAME` is not given set <sup id="a2">[2](#ft2)</sup> | `""` |
+| `--trim-prefix` | `string` | Prefix that is removed when constructing object name from file name. Used if `OBJECT_NAME` is not given set <sup>[2](#ft2)</sup> | `""` |
 | `--verbose` or `-v` | `bool` | Enable printing the result of every PUT | `false` |
 | `--yes` or `-y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
 | `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
@@ -159,21 +171,24 @@ All examples below put into an empty bucket and the source directory structure i
 The current user HOME directory is `/home/user`.
 
 1) PUT a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`
-```sh
+
+```console
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
 2) PUT a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name
-```sh
+
+```console
 $ ais put "~/bck/img1.tar" mybucket/
 
 # PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img-set-1.tar
 ```
 
 3) PUT two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into the root of bucket `mybucket`. Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default
-```sh
+
+```console
 $ ais put "/home/user/bck" mybucket
 
 # PUT /home/user/bck/img1.tar => mybucket/home/user/bck/img1.tar
@@ -181,7 +196,8 @@ $ ais put "/home/user/bck" mybucket
 ```
 
 4) `--trim-prefix` is expanded with user's home directory into `/home/user/bck`, so the final bucket content is `img1.tar`, `img2.zip`, `extra/img1.tar` and `extra/img3.zip`
-```sh
+
+```console
 $ ais put "/home/user/bck" mybucket/ --trim-prefix=~/bck --recursive
 
 # PUT /home/user/bck/img1.tar => mybucket/img1.tar
@@ -190,8 +206,9 @@ $ ais put "/home/user/bck" mybucket/ --trim-prefix=~/bck --recursive
 # PUT /home/user/bck/extra/img3.zip => mybucket/extra/img3.zip
 ```
 
-5) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `img1.tar` and `extra/img1.tar
-```sh
+5) Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `img1.tar` and `extra/img1.tar`
+
+```console
 $ ais put "~/bck/*.tar" mybucket/ --trim-prefix=~/bck --recursive
 
 # PUT /home/user/bck/img1.tar => mybucket/img1.tar
@@ -199,7 +216,8 @@ $ ais put "~/bck/*.tar" mybucket/ --trim-prefix=~/bck --recursive
 ```
 
 6) PUT 9 files to `mybucket` using range request. Object names formatted as `/home/user/dir/test${d1}${d2}.txt`
-```shell script
+
+```console
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
 9 objects put into "mybucket" bucket
@@ -208,7 +226,8 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
 ```
 
 7) Same as above, except object names are in format `test${d1}${d2}.txt`
-```shell script
+
+```console
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --trim-prefix=~/dir
 9 objects put into "mybucket" bucket
@@ -217,8 +236,9 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y --trim-prefix=~/dir
 ```
 
 
-8) Preview the files that would be sent to the cluster, without really putting them.
-```shell script
+8) Preview the files that would be sent to the cluster, without really putting them
+
+```console
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --trim-prefix=~/dir --dry-run
 [DRY RUN] No modifications on the cluster
@@ -227,7 +247,8 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" mybucket --trim-prefix=~/dir --dry-run
 ```
 
 9) Put multiple directories into the cluster with range syntax
-```shell script
+
+```console
 $ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/test${d2}.txt; done; done
 $ ais put "dir{0..10}" mybucket -y
 33 objects put into "mybucket" bucket
@@ -237,7 +258,7 @@ $ ais put "dir{0..10}" mybucket -y
 
 #### Example: invalid file
 
-```sh
+```console
 $ ais put "/home/user/bck/*.tar" mybucket/img1.tar --trim-prefix=~/bck --recursive
 ```
 
@@ -245,7 +266,7 @@ Note that `OBJECT_NAME` has a priority over flags (`--trim-prefix` and `--recurs
 
 ### PROMOTE
 
-`ais promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup id="a1">[1](#ft1)</sup>
+`ais promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
 Promote **AIS-colocated** files and directories to AIS objects in a specified bucket.
 Colocation in the context means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
@@ -262,24 +283,28 @@ Colocation in the context means that the files in question are already located *
 #### Examples
 
 1) Make AIS objects out of `/tmp/examples` files (**one file = one object**). `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes. Created objects names have prefix `example`
-```shell script
+
+```console
 $ ais promote /tmp/examples mybucket/ -r
 ```
 
 2) Promote /tmp/examples files to AIS objects. Objects names won't have `/tmp/examples` prefix
-```shell script
+
+```console
 $ ais promote /tmp/examples mybucket/ -r --trim-prefix=/tmp
 ```
 
 3) Promote /tmp/examples/example1.txt as object with name `example1.txt`
-```shell script
+
+```console
 $ ais promote /tmp/examples/example1.txt mybucket/example1.txt
 
 # PROMOTE /tmp/examples/example1.txt => mybucket/example1.txt
 ```
 
 4) Promote /tmp/examples/example1.txt without specified object name
-```shell script
+
+```console
 $ ais promote /tmp/examples/example1.txt mybucket
 
 # PROMOTE /tmp/examples/example1.txt => mybucket/tmp/examples/example1.txt
@@ -287,7 +312,7 @@ $ ais promote /tmp/examples/example1.txt mybucket
 
 #### Example: no such file or directory
 
-```shell script
+```console
 $ ais create bucket testbucket
 testbucket bucket created
 
@@ -325,36 +350,39 @@ Delete an object or list/range of objects from the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion <sup id="a3">[3](#ft3) | `""` |
-| `--range` | `string` | Start and end interval (eg. 1:100) for range deletion <sup id="a4">[3](#ft3) | `""` |
-| `--prefix` | `string` | Prefix for range deletion | `""` |
-| `--regex` | `string` | Regex for range deletion | `""` |
-| `--deadline` | `string` | Time duration before the request expires [(Go's time.Duration string)](https://golang.org/pkg/time/#Duration.String) | `0s` (no deadline) |
-| `--wait` | `bool` | Wait for operation to finish before returning response | `true` |
+| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
+| `--template` | `string` | The object name template with optional range parts | `""` |
 
-<a name="ft3">3</a> Options `--list,--range` and argument(s) `OBJECT_NAME` are mutually exclusive. List and range deletions expect only a bucket name; if one or more
-`OBJECT_NAME`s are given, a separate `DELETE` request is sent for each object.
+- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive
+- List and template deletions expect only a bucket name
+- If OBJECT_NAMEs are given, CLI sends a separate request for each object
+
+See [List/Range Operations](../../docs/batch.md#listrange-operation) for more details.
 
 #### Examples
 
 1) Delete object `myobj` from bucket `mybucket`
-```sh
+
+```console
 $ ais rm object mybucket/myobj
 ```
 
 2) Delete objects (`obj1`, `obj2`) from buckets (`aisbck`, `cloudbck`) respectively
-```sh
+
+```console
 $ ais rm object aisbck/obj1 cloudbck/obj2
 ```
 
 3) Delete a list of objects (`obj1`, `obj2`, `obj3`) from bucket `mybucket`
-```sh
+
+```console
 $ ais rm object mybucket/ --list "obj1,obj2,obj3"
 ```
 
-4) Delete all objects in range `001-003`, with prefix `test-`, matching `[0-9][0-9][0-9]` regex, from bucket `mybucket`
-```sh
-$ ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"
+4) Delete all objects in range `001-003`, with prefix `test-`, from bucket `mybucket`
+
+```console
+$ ais rm object mybucket/ --template "test-{001..003}"
 ```
 
 ### Evict
@@ -365,20 +393,18 @@ $ ais rm object mybucket/ --range "1:3" --prefix "test-" --regex "\\d\\d\\d"
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion <sup id="a5">[4](#ft4) | `""` |
-| `--range` | `string` | Start and end interval (eg. 1:100) for range deletion <sup id="a6">[4](#ft4) | `""` |
-| `--prefix` | `string` | Prefix for range deletion | `""` |
-| `--regex` | `string` | Regex for range deletion | `""` |
-| `--deadline` | `string` | Time duration before the request expires [(Go's time.Duration string)](https://golang.org/pkg/time/#Duration.String) | `0s` (no deadline) |
-| `--wait` | `bool` | Wait for operation to finish before returning response | `true` |
+| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
+| `--template` | `string` | The object name template with optional range parts | `""` |
 
-<a name="ft4">4</a> Options `--list,--range` and argument(s) `OBJECT_NAME` are mutually exclusive. List and range evictions expect only a bucket name; if one or more
-`OBJECT_NAME`s are given, a separate eviction request is sent for each object.
+- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive
+- List and template evictions expect only a bucket name
+- If OBJECT_NAMEs are given, CLI sends a separate request for each object
 
+See [List/Range Operations](../../docs/batch.md#listrange-operation) for more details.
 
 #### Examples
 
-```sh
+```console
 $ ais put file.txt cloudbucket/file.txt
 PUT file.txt into bucket cloudbucket
 $ ais show bucket cloudbucket --cached # show only cloudbucket objects present in the AIS cluster
@@ -394,19 +420,18 @@ cloudbucket	0	    0B	    0%	    aws
 
 ### Prefetch
 
-`ais prefetch BUCKET_NAME/ --list|--range <value>`
+`ais prefetch BUCKET_NAME/ --list|--template <value>`
 
 [Prefetch](../../docs/bucket.md#prefetchevict-objects) objects from the cloud bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion <sup id="a5">[4](#ft4) | `""` |
-| `--range` | `string` | Start and end interval (eg. 1:100) for range deletion <sup id="a6">[4](#ft4) | `""` |
-| `--prefix` | `string` | Prefix for range deletion | `""` |
-| `--regex` | `string` | Regex for range deletion | `""` |
-| `--deadline` | `string` | Time duration before the request expires [(Go's time.Duration string)](https://golang.org/pkg/time/#Duration.String) | `0s` (no deadline) |
-| `--wait` | `bool` | Wait for operation to finish before returning response | `true` |
+| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
+| `--template` | `string` | The object name template with optional range parts | `""` |
 
+Options `--list` and `--template` are mutually exclusive.
+
+See [List/Range Operations](../../docs/batch.md#listrange-operation) for more details.
 
 | Command | Description |
 | --- | --- |
@@ -421,7 +446,8 @@ Rename object from an ais bucket.
 #### Examples
 
 1) Rename object `obj1` as `obj2`
-```sh
+
+```console
 ais rename object mybucket/obj1 obj2
 ```
 

@@ -217,7 +217,7 @@ which can be monitored. Description of metrics returned for *single node*:
 * `description` - description of the job.
 
 Example output for single node:
-```
+```json
 {
   "local_extraction": {
     "started_time": "2019-06-17T12:27:25.102691781+02:00",

@@ -89,12 +89,12 @@ Note that running multiple SK in parallel is supported, the requirement is that 
 
 For example, the following script runs 5 separate instances of SK
 
-```
-./soaktest.sh --short --nocleanup --rec-primworkers=4 --reg-phasedisable
-./soaktest.sh --nocleanup --keeptargets
-./soaktest.sh --rec-disable --reg-workers=4 --nocleanup
-./soaktest.sh --short --nocleanup --keeptargets
-./soaktest.sh --short --reg-phasedisable --nocleanup --keeptargets
+```console
+$ ./soaktest.sh --short --nocleanup --rec-primworkers=4 --reg-phasedisable
+$ ./soaktest.sh --nocleanup --keeptargets
+$ ./soaktest.sh --rec-disable --reg-workers=4 --nocleanup
+$ ./soaktest.sh --short --nocleanup --keeptargets
+$ ./soaktest.sh --short --reg-phasedisable --nocleanup --keeptargets
 ```
 
  ## Output

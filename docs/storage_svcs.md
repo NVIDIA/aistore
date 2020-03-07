@@ -39,7 +39,8 @@ whether to perform checksum validation during warm GET.
 Value for the `type` field (see above) *must* be provided *every* time the bucket properties are updated, otherwise, the request will be rejected.
 
 Example of setting bucket properties:
-```shell
+
+```console
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum": {"type": "xxhash", "validate_cold_get": true, "validate_warm_get": false, "enable_read_range": false}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
@@ -57,12 +58,14 @@ Overriding the global configuration can be achieved by specifying the fields of 
 **NOTE**: In setting bucket properties for LRU, any field that is not explicitly specified defaults to the data type's zero value.
 
 Example of setting bucket properties:
-```shell
+
+```console
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"cksum":{"type":"none","validate_cold_get":true,"validate_warm_get":true,"enable_read_range":true},"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 To revert a bucket's entire configuration back to use global parameters, use `"action":"resetprops"` to the same PUT endpoint as above as such:
-```shell
+
+```console
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
@@ -93,13 +96,14 @@ Notes:
 - Increasing the number of parity slices improves data protection level, but it may hit performance: doubling the number of slices approximately increases the time to encode the object by a factor of two
 
 Example of setting bucket properties:
-```shell
+
+```console
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}, "ec": {"enabled": true, "data": 4, "parity": 2}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 To change only one EC property(e.g, enable or disable EC for a bucket) without touching other bucket properties, use the single set property API. Example of disabling EC:
 
-```shell
+```console
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "ec.enabled", "value": false}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
@@ -107,15 +111,15 @@ or using AIS CLI utility:
 
 enable EC for a bucket with custom number of data and parity slices. It should be done using 2 commands: the first one changes the numbers while EC is disabled, and the second one enables EC with new slice count:
 
-```shell
+```console
 $ ais set props mybucket ec.data_slices=3 ec.parity_slices=3
 $ ais set props mybucket ec.enabled=true
 ```
 
 check that EC properties are applied:
 
-```shell
-$ ais ls props mybucket
+```console
+$ ais show props mybucket
 Property        Value
 ========        =====
 Provider        ais
@@ -132,6 +136,7 @@ Versioning      Disabled
 In version 2.1, once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
 
 ## N-way mirror
+
 Yet another supported storage service is n-way mirroring providing for bucket-level data redundancy and data protection. The service makes sure that each object in a given distributed (local or Cloud) bucket has exactly **n** object replicas, where n is an arbitrary user-defined integer greater or equal 1.
 
 In other words, AIS n-way mirroring is intended to withstand loss of disks, not storage nodes (aka AIS targets).
@@ -146,10 +151,10 @@ The service ensures is that for any given object there will be *no two replicas*
 
 The following example configures buckets a, b, and c to store n = 1, 2, and 3 object replicas, respectively:
 
-```shell
-curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":1}' 'http://G/v1/buckets/a'
-curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":2}' 'http://G/v1/buckets/b'
-curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":3}' 'http://G/v1/buckets/c'
+```console
+$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":1}' 'http://G/v1/buckets/a'
+$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":2}' 'http://G/v1/buckets/b'
+$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":3}' 'http://G/v1/buckets/c'
 ```
 
 The operations (above) are in fact [extended actions](/xaction/README.md) that run asynchronously. Both Cloud and ais buckets are supported. You can monitor completion of those operations via generic [xaction API](/xaction/README.md).
@@ -166,7 +171,7 @@ Since object replicas are end-to-end protected by [checksums](#checksumming) all
 ### More examples
 The following sequence creates a bucket named `abc`, PUTs an object into it and then converts it into a 3-way mirror:
 
-```shell
+```console
 $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' 'http://G/v1/buckets/abc'
 $ curl -L -X PUT 'http://G/v1/objects/abc/obj1' -T /tmp/obj1
 $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":3}' 'http://G/v1/buckets/abc'
@@ -174,6 +179,6 @@ $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopie
 
 The next command will redefine the `abc` bucket created in the previous example as a 2-way mirror - all objects that were previously stored in three replicas will now have only two (replicas):
 
-```shell
+```console
 $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":2}' 'http://G/v1/buckets/abc'
 ```

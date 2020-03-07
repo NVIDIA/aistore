@@ -133,7 +133,7 @@ AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. T
 
 Note that `http_proxy` is supported by most UNIX systems and is recognized by most (but not all) HTTP clients:
 
-```shell
+```console
 $ export http_proxy=<AIS proxy IPv4 or hostname>
 ```
 
@@ -147,7 +147,7 @@ Finally, AIS can *promote* files and directories to objects. The only requiremen
 
 Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
 
-```sh
+```console
 $ ais promote /tmp/mydata mybucket/ -r
 ```
 
@@ -194,25 +194,25 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 
 AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](cli/README.md). Once [installed](cli/README.md#getting-started), to start using it, simply execute:
 
- ```sh
- $ export AIS_URL=http://G
- $ ais --help
- ```
+ ```console
+$ export AIS_URL=http://G
+$ ais --help
+```
 
 where `G` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
 
 One salient feature of AIS CLI is its Bash style **auto-completions** that allow users to easily navigate supported operations and options by simply pressing the TAB key. For instance, when you type:
 
- ```sh
- $ ais s[TAB-TAB]
- ```
+```console
+$ ais s[TAB-TAB]
+```
 
 the tool will suggest the following "expansion" from which you can further choose by typing one or more letters and pressing the TAB key, etc.
 
- ```sh
+```console
 $ ais s
 set          set-copies   show         start        status       stop
- ```
+```
 
 AIS CLI is still at its early stage and will keep quickly developing. For more information, please see the project's own [README](cli/README.md).
 
@@ -226,25 +226,25 @@ To get started with the python client package, you need to first generate the cl
 
 1. Obtain the latest openapi-generator jar by running the following command:
 
-    ```shell
-    wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.4/openapi-generator-cli-3.3.4.jar -O openapi-generator-cli.jar
-    ```
+```console
+$ wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.4/openapi-generator-cli-3.3.4.jar -O openapi-generator-cli.jar
+```
 
 2. Run the following commands:
 
-    ```shell
-    cd <path_to_repo>
-    java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -c openapi/config.json -g python -o ./python-client/
-    ```
+```console
+$ cd <path_to_repo>
+$ java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -c openapi/config.json -g python -o ./python-client/
+```
 
 3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
 
 4. Install required Python packages using `pip` and requirement files located in `python-client` directory:
 
-    ```shell
-    pip install -r python-client/requirements.txt
-    pip install -r python-client/test-requirements.txt
-    ```
+```console
+$ pip install -r python-client/requirements.txt
+$ pip install -r python-client/test-requirements.txt
+```
 
 These steps should produce the python client package, which will be located [here](python-client).
 
@@ -252,17 +252,17 @@ Should you have any difficulty generating the python client package with these i
 
 Once the package is generated, it can be installed as follows, these commands can also be found [here](openapi/README.md#how-to-install).
 
-```shell
-cd <path_to_repo>/python-client
-pip uninstall ais_client #uninstalls any previous versions
-pip install .
+```console
+$ cd <path_to_repo>/python-client
+$ pip uninstall ais_client #uninstalls any previous versions
+$ pip install .
 ```
 
 Now you're ready to import the package in python and use it to communicate with AIS.
 
 For example, this script will display a map of your AIS cluster.
 
-```shell
+```python
 import ais_client
 # Some aliases for functions in the package
 openapi_models = ais_client.models

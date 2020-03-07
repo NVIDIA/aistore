@@ -18,7 +18,7 @@ other branch/feature.
 
 To start testing Docker run:
 
-```sh
+```console
 $ ./docker/test.sh --name=your_container_name
 ```
 
@@ -35,7 +35,7 @@ easily distinguish and switch between different Dockers.
 
 You can also provide credentials to `AWS` or `GCP` and pass it to script:
 
-```sh
+```console
 $ ./docker/test.sh --name=your_container_name --aws=~/.aws
 ```
 
@@ -45,7 +45,7 @@ bucket will be created automatically).
 Because of Docker isolation you can safely run multiple instances of testing
 containers (remember to uniquely name the containers).
 
-```sh
+```console
 $ ./docker/test.sh --name=your_container_name_local & # run local
 $ ./docker/test.sh --name=your_container_name_cloud --aws=~/.aws & # run cloud (aws)
 ```

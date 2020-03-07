@@ -60,7 +60,7 @@ New ais buckets must be given a unique name that does not duplicate any existing
 
 To create an ais bucket with the name 'myBucket', rename it to 'myBucket2' and delete it, run:
 
-```shell
+```console
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://localhost:8080/v1/buckets/myBucket
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "renamelb",  "name": "myBucket2"}' http://localhost:8080/v1/buckets/myBucket
 $ curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://localhost:8080/v1/buckets/myBucket2
@@ -82,16 +82,14 @@ Objects are prefetched or evicted using [List/Range Operations](batch.md#listran
 
 For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from the cloud bucket `abc`, run:
 
-```shell
-curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc
+```console
+$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"]}}' http://localhost:8080/v1/buckets/abc
 ```
 
-See the [List/Range Operation section](batch.md#listrange-operations) for the `"deadline": "10s"` and `"wait":true` parameters.
+To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the cloud bucket `abc` from AIS, which names begin with the prefix `__tst/test-`, run:
 
-To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the cloud bucket `abc` from AIS, which begin with the prefix `__tst/test-` and contain a 4 digit number with `22` in the middle, run:
-
-```shell
-curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobjects", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc
+```console
+$ curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobjects", "value":{"template":"__tst/test-{1000..2000}"}}' http://localhost:8080/v1/buckets/abc
 ```
 
 ### Evict Cloud Bucket
@@ -104,8 +102,8 @@ In an evict bucket operation, AIS will remove all traces of the cloud bucket wit
 
 For example, to evict the `abc` cloud bucket from the AIS cluster, run:
 
-```shell
-curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evictcb"}' http://localhost:8080/v1/buckets/myS3bucket
+```console
+$ curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evictcb"}' http://localhost:8080/v1/buckets/myS3bucket
 ```
 
 ## Bucket Access Attributes
@@ -122,14 +120,14 @@ Bucket access is controlled by a single 64-bit `aattrs` value in the [Bucket Pro
 
 For instance, to make bucket `abc` read-only, execute the following [AIS CLI](../cli/README.md) command:
 
-```shell
-ais set props abc 'aattrs=ro'
+```console
+$ ais set props abc 'aattrs=ro'
 ```
 
 The same expressed via `curl` will look as follows:
 
-```shell
-curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setprops", "value": {"aattrs": 18446744073709551587}}' http://localhost:8080/v1/buckets/abc
+```console
+$ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setprops", "value": {"aattrs": 18446744073709551587}}' http://localhost:8080/v1/buckets/abc
 ```
 
 > 18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)
@@ -190,14 +188,14 @@ Example of listing objects in the smoke/ subdirectory of a given bucket called '
 
 Bucket list API is asynchronous, so it cannot be executed as one cURL command. The first request starts the task that enumerates objects in a background and returns the task ID to watch it:
 
-```shell
+```console
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBucket
 5315610902768416055
 ```
 
 Watch the task status, until it returns the list of objects. The requests is the same, except a field `taskid` that now contains the value returned by previous request(if `taskid` is zero or omitted, API starts a new task). If the task is still running, the request keeps responding with `taskid`. When the task completes, it returns the page content:
 
-```shell
+```console
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "taskid": "5315610902768416055"}}' http://localhost:8080/v1/buckets/myBucket
 {
   "entries": [
@@ -224,8 +222,7 @@ The listing can be truncated: API returns at most 1000 objects per request. If a
 
 Start listing bucket from the first object (`taskid` is 0, and `pagemarker` is empty):
 
-```shell
-
+```console
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBigBucket
 7315610902768416055
 
@@ -246,7 +243,7 @@ $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobject
 
 Request the next page (`pagemarker` is copied from the previous response - it is the only difference from the first request; do not forget to set `taskid` to `0` or remove it):
 
-```shell
+```console
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "pagemarker": "PLqOWWuiCXATlSkhTXbnXlFCNWVhCUGR"}}' http://localhost:8080/v1/buckets/myBigBucket
 4910019837373721
 ```
@@ -257,33 +254,33 @@ For many more examples, please refer to the [test sources](/ais/tests/) in the r
 
 1. List bucket properties:
 
-```shell
-$ ais ls props mybucket
+```console
+$ ais show props mybucket
 ```
 
 or, same via command argument (and without the environment variable):
 
-```shell
-$ ais ls props mybucket
+```console
+$ ais show props mybucket
 ```
 
 or, the same to get output in a (raw) JSON form:
 
-```shell
-$ ais ls props mybucket --json
+```console
+$ ais show props mybucket --json
 ```
 
 2. Enable erasure coding on a bucket:
 
-```shell
+```console
 $ ais set props mybucket ec.enabled=true
 ```
 
 3. Enable object versioning and then list updated bucket properties:
 
-```shell
+```console
 $ ais set props mybucket ver.enabled=true
-$ ais ls props mybucket
+$ ais show props mybucket
 ```
 
 ## Recover Buckets
@@ -296,12 +293,12 @@ Bucket recovering comes in two flavors: safe and forced. In safe mode the primar
 
 To recover buckets *safely*, run:
 
-```shell
+```console
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' http://localhost:8080/v1/buckets
 ```
 
 To force recovering buckets:
 
-```shell
+```console
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' http://localhost:8080/v1/buckets?force=true
 ```

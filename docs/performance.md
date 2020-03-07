@@ -41,11 +41,11 @@ Setting CPU governor (P-States) to `performance` may make a big difference and, 
 
 On `Debian` and `Ubuntu`:
 
-```bash
-apt-get install -y linux-tools-$(uname -r) # install `cpupower`
-cpupower frequency-info # check current settings
-cpupower frequency-set -r -g performance # set `performance` setting to all CPU's
-cpupower frequency-info # check settings after the change
+```console
+$ apt-get install -y linux-tools-$(uname -r) # install `cpupower`
+$ cpupower frequency-info # check current settings
+$ cpupower frequency-set -r -g performance # set `performance` setting to all CPU's
+$ cpupower frequency-info # check settings after the change
 ```
 
 Once the packages are installed (the step that will depend on your Linux distribution), you can then follow the *tuning instructions* from the referenced PDF (above).
@@ -62,8 +62,9 @@ Once the packages are installed (the step that will depend on your Linux distrib
 
 To ensure client ⇔ proxy, client ⇔ target, proxy ⇔ target, and target ⇔ target connectivity you can use `iperf` (make sure to use Jumbo frames and disable fragmentation).
 Here is example use of `iperf`:
-```bash
-iperf -P 20 -l 128K -i 1 -t 30 -w 512K -c <IP-address>
+
+```console
+$ iperf -P 20 -l 128K -i 1 -t 30 -w 512K -c <IP-address>
 ```
 
 **NOTE**: `iperf` must show 95% of the bandwidth of a given phys interface. If it does not, try to find out why. It might have no sense to run any benchmark prior to finding out.
@@ -76,7 +77,7 @@ To ensure that AIStore works properly you probably need to increase the default 
 
 Here're the (example) settings that we use for development:
 
-```shell
+```
 # tail /etc/security/limits.conf
 #ftp             hard    nproc           0
 #ftp             -       chroot          /ftp
@@ -105,8 +106,9 @@ Storage-wise, each local `ais.json` config must be looking as follows:
 #### Block settings
 
 When initializing the disk it is necessary to set proper block size: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/disk-performance.html
-```bash
-dd if=/dev/zero of=/dev/<disk_name> bs=<block_size>
+
+```console
+$ dd if=/dev/zero of=/dev/<disk_name> bs=<block_size>
 ```
 
 #### Benchmarking disk
@@ -115,18 +117,20 @@ dd if=/dev/zero of=/dev/<disk_name> bs=<block_size>
 
 When running a benchmark, make sure to run and collect the following in each and every target:
 
-```bash
-iostat -cdxtm 10
+```console
+$ iostat -cdxtm 10
 ```
 
 Local hard drive read performance, the fastest block-level reading smoke test is:
-```bash
-hdparm -Tt /dev/<drive-name>
+
+```console
+$ hdparm -Tt /dev/<drive-name>
 ```
 
 Reading the block from certain offset (in gigabytes), `--direct` argument ensure that we bypass the drive’s buffer cache and read directly from the disk:
-```bash
-hdparm -t --direct --offset 100 /dev/<drive-name>
+
+```console
+$ hdparm -t --direct --offset 100 /dev/<drive-name>
 ```
 
 More: [Tune hard disk with `hdparm`](http://www.linux-magazine.com/Online/Features/Tune-Your-Hard-Disk-with-hdparm).
@@ -185,8 +189,8 @@ To that end, AIStore supports switching off disk IO to, effectively, perform dry
 
 Example of deploying a cluster with disk IO disabled and object size 256KB:
 
-```
-/opt/aistore/ais$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
+```console
+$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
 ```
 
 >> The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case, the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of the previous test that had network IO enabled.
