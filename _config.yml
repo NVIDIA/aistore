@@ -38,11 +38,15 @@ description: >
 baseurl: "/aistore"
 theme: minima
 header_pages:
-  - _pages/
+  - cli/README.md
+  - fuse/README.md
+  - downloader/README.md
+  - dsort/README.md
 include:
   - _pages/
+  - assets/
 exclude:
-  - generatefromproject.sh
+  - fetch_upstream.sh
 plugins:
   - jekyll-redirect-from
 
