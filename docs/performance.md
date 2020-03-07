@@ -3,7 +3,7 @@ layout: post
 title: PERFORMANCE
 permalink: docs/performance
 redirect_from:
-- docs/performance.md/
+ - docs/performance.md/
 ---
 
 # Performance

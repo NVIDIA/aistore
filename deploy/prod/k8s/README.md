@@ -3,7 +3,7 @@ layout: post
 title: DEPLOY/PROD/K8S
 permalink: deploy/prod/k8s
 redirect_from:
-- deploy/prod/k8s/README.md/
+ - deploy/prod/k8s/README.md/
 ---
 
 # Deploying AIS on k8s

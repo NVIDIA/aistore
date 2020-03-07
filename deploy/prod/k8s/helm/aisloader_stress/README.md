@@ -3,7 +3,7 @@ layout: post
 title: DEPLOY/PROD/K8S/HELM/AISLOADER_STRESS
 permalink: deploy/prod/k8s/helm/aisloader_stress
 redirect_from:
-- deploy/prod/k8s/helm/aisloader_stress/README.md/
+ - deploy/prod/k8s/helm/aisloader_stress/README.md/
 ---
 
 ## Stress a k8s AIS cluster using aisloader

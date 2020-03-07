@@ -3,7 +3,7 @@ layout: post
 title: XACTION
 permalink: cli/resources/xaction
 redirect_from:
-- cli/resources/xaction.md/
+ - cli/resources/xaction.md/
 ---
 
 ## Extended Actions (X-actions or xactions)

@@ -3,7 +3,7 @@ layout: post
 title: BUCKET
 permalink: cli/resources/bucket
 redirect_from:
-- cli/resources/bucket.md/
+ - cli/resources/bucket.md/
 ---
 
 ## Bucket

@@ -3,7 +3,7 @@ layout: post
 title: DEPLOY/PROD/K8S/PLAYBOOKS
 permalink: deploy/prod/k8s/playbooks
 redirect_from:
-- deploy/prod/k8s/playbooks/README.md/
+ - deploy/prod/k8s/playbooks/README.md/
 ---
 
 ## AIS k8s Playbooks

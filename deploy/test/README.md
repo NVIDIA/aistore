@@ -3,7 +3,7 @@ layout: post
 title: DEPLOY/TEST
 permalink: deploy/test
 redirect_from:
-- deploy/test/README.md/
+ - deploy/test/README.md/
 ---
 
 # Testing

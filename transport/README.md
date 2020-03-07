@@ -3,7 +3,7 @@ layout: post
 title: TRANSPORT
 permalink: transport
 redirect_from:
-- transport/README.md/
+ - transport/README.md/
 ---
 
 **Package `transport` provides streaming object-based transport over HTTP for massive intra-AIS data transfers. AIStore utilizes this package for cluster-wide (aka "global") rebalancing, distributed merge-sort, and more.**
@@ -149,7 +149,7 @@ On the wire, each transmitted object will have the layout:
 
 The size must be known upfront, which is the current limitation.
 
-A stream (the [Stream type](/transport/send.go)) carries a sequence of objects of arbitrary sizes and contents, and overall looks as follows:
+A stream (the [Stream type](/aistore/transport/send.go)) carries a sequence of objects of arbitrary sizes and contents, and overall looks as follows:
 
 >> object1 = (**[header1]**, **[data1]**) object2 = (**[header2]**, **[data2]**), etc.
 

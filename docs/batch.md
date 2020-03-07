@@ -3,7 +3,7 @@ layout: post
 title: BATCH
 permalink: docs/batch
 redirect_from:
-- docs/batch.md/
+ - docs/batch.md/
 ---
 
 ## Table of Contents

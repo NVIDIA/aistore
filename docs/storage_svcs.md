@@ -3,7 +3,7 @@ layout: post
 title: STORAGE_SVCS
 permalink: docs/storage_svcs
 redirect_from:
-- docs/storage_svcs.md/
+ - docs/storage_svcs.md/
 ---
 
 ## Table of Contents
@@ -18,7 +18,7 @@ redirect_from:
 
 ## Storage Services
 
-By default, buckets inherit [global configuration](/ais/setup/config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
+By default, buckets inherit [global configuration](/aistore/ais/setup/config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
 
 ### Notation
 
@@ -145,7 +145,7 @@ In other words, AIS n-way mirroring is intended to withstand loss of disks, not 
 
 The service ensures is that for any given object there will be *no two replicas* sharing the same local disk.
 
-> Unlike [erasure coding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the name implies, local. When a bucket is [configured as a mirror](/ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
+> Unlike [erasure coding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the name implies, local. When a bucket is [configured as a mirror](/aistore/ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
 
 > As aside, note that AIS storage targets can be deployed to utilize Linux LVMs that provide a variety of RAID/mirror schemas.
 
@@ -157,7 +157,7 @@ $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopie
 $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":3}' 'http://G/v1/buckets/c'
 ```
 
-The operations (above) are in fact [extended actions](/xaction/README.md) that run asynchronously. Both Cloud and ais buckets are supported. You can monitor completion of those operations via generic [xaction API](/xaction/README.md).
+The operations (above) are in fact [extended actions](/aistore/xaction/README.md) that run asynchronously. Both Cloud and ais buckets are supported. You can monitor completion of those operations via generic [xaction API](/aistore/xaction/README.md).
 
 Subsequently, all PUTs into an n-way configured bucket also generate **n** copies for all newly created objects. Which also goes to say that the ("makencopies") operation, in addition to creating or destroying replicas of existing objects will also automatically re-enable(if n > 1) or disable (if n == 1) mirroring as far as subsequent PUTs are concerned.
 

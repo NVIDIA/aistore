@@ -3,7 +3,7 @@ layout: post
 title: AUTHN
 permalink: authn
 redirect_from:
-- authn/README.md/
+ - authn/README.md/
 ---
 
 AIStore Authentication Server (AuthN)

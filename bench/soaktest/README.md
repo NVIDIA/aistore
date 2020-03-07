@@ -3,7 +3,7 @@ layout: post
 title: BENCH/SOAKTEST
 permalink: bench/soaktest
 redirect_from:
-- bench/soaktest/README.md/
+ - bench/soaktest/README.md/
 ---
 
 # Soak Test

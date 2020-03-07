@@ -3,7 +3,7 @@ layout: post
 title: COMMAND_LINE
 permalink: docs/command_line
 redirect_from:
-- docs/command_line.md/
+ - docs/command_line.md/
 ---
 
 ### Command-Line arguments

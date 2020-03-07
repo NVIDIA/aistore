@@ -3,7 +3,7 @@ layout: post
 title: DEPLOY/PROD/K8S/KUBESPRAY
 permalink: deploy/prod/k8s/kubespray
 redirect_from:
-- deploy/prod/k8s/kubespray/README.md/
+ - deploy/prod/k8s/kubespray/README.md/
 ---
 
 ## LAUNCH NEW KUBERNETES CLUSTER FOR AIS USING KUBESPRAY

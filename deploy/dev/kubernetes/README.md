@@ -3,11 +3,11 @@ layout: post
 title: DEPLOY/DEV/KUBERNETES
 permalink: deploy/dev/kubernetes
 redirect_from:
-- deploy/dev/kubernetes/README.md/
+ - deploy/dev/kubernetes/README.md/
 ---
 
 ## Disclaimer
-> For a more robust version, the development team has switched over to Docker. If you would like to deploy AIS in a containerized environment, consider using Docker. The Docker folder can be found in [`deploy/dev/docker`](/deploy/dev/docker).
+> For a more robust version, the development team has switched over to Docker. If you would like to deploy AIS in a containerized environment, consider using Docker. The Docker folder can be found in [`deploy/dev/docker`](/aistore/deploy/dev/docker).
 
 ##  Kubeadm: Deploying an AIStore Cluster
 For development purposes, we are going to use [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) to create a simple two node cluster with any number of proxies and any number of targets. Users can also decide to deploy AIS with a single-node.

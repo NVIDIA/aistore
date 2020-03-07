@@ -3,7 +3,7 @@ layout: post
 title: OVERVIEW
 permalink: docs/overview
 redirect_from:
-- docs/overview.md/
+ - docs/overview.md/
 ---
 
 ## Introduction
@@ -145,7 +145,7 @@ Further details and examples are available [in this readme](rproxy.md).
 
 Finally, AIS can *promote* files and directories to objects. The only requirement is that the files and directories in question are colocated within AIS storage target machines.
 
-Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
+Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/aistore/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
 
 ```console
 $ ais promote /tmp/mydata mybucket/ -r

@@ -3,7 +3,7 @@ layout: post
 title: DATAPATH
 permalink: docs/datapath
 redirect_from:
-- docs/datapath.md/
+ - docs/datapath.md/
 ---
 
 ## Table of Contents

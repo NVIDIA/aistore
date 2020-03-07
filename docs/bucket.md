@@ -3,7 +3,7 @@ layout: post
 title: BUCKET
 permalink: docs/bucket
 redirect_from:
-- docs/bucket.md/
+ - docs/bucket.md/
 ---
 
 ## Table of Contents
@@ -68,7 +68,7 @@ $ curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "destroyl
 
 ## Cloud Bucket
 
-Cloud buckets are existing buckets in the cloud storage when AIS is deployed as [fast tier](/README.md#fast-tier).
+Cloud buckets are existing buckets in the cloud storage when AIS is deployed as [fast tier](/aistore/README.md#fast-tier).
 
 > By default, AIS does not keep track of the cloud buckets in its configuration map. However, if users modify the properties of the cloud bucket, AIS will then keep track.
 
@@ -248,7 +248,7 @@ $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobject
 4910019837373721
 ```
 
-For many more examples, please refer to the [test sources](/ais/tests/) in the repository.
+For many more examples, please refer to the [test sources](/aistore/ais/tests/) in the repository.
 
 ### CLI examples: listing and setting bucket properties
 

@@ -3,7 +3,7 @@ layout: post
 title: BENCH/HTTP2
 permalink: bench/http2
 redirect_from:
-- bench/http2/README.md/
+ - bench/http2/README.md/
 ---
 
 ## http2-bench

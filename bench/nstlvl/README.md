@@ -3,7 +3,7 @@ layout: post
 title: BENCH/NSTLVL
 permalink: bench/nstlvl
 redirect_from:
-- bench/nstlvl/README.md/
+ - bench/nstlvl/README.md/
 ---
 
 This is a micro-benchmark intended to help find out the impact (or lack of thereof) of POSIX directory nesting on the performance. Specifically, on the performance of random reading of files stored in very large directories.

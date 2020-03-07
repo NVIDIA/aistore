@@ -3,7 +3,7 @@ layout: post
 title: OPENAPI
 permalink: openapi
 redirect_from:
-- openapi/README.md/
+ - openapi/README.md/
 ---
 
 ## Python Client Package
@@ -83,7 +83,7 @@ $ git checkout HEAD -- python-client
 
 First, ensure that you have followed [the instructions for generating the package](#how-to-generate-package).
 
-Next, ensure that your machine has a [local testing deployment of AIS](/README.md#local-non-containerized).
+Next, ensure that your machine has a [local testing deployment of AIS](/aistore/README.md#local-non-containerized).
 
 Note that you do not need to install the package to run tests.
 
@@ -244,7 +244,7 @@ Note that the `Copy object` operation (`object_api.put` with the kwargs `from_id
 
 First, create an api instance `sort_api = ais_client.api.sort_api.SortApi(proxyClient)`.
 
-See the files mentioned [here](/dsort/playground/README.md#python) for examples of how to use `sort_api`.
+See the files mentioned [here](/aistore/dsort/playground/README.md#python) for examples of how to use `sort_api`.
 
 #### Querying
 

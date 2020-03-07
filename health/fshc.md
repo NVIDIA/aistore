@@ -3,7 +3,7 @@ layout: post
 title: FSHC
 permalink: health/fshc
 redirect_from:
-- health/fshc.md/
+ - health/fshc.md/
 ---
 
 Filesystem Health Checker (FSHC)

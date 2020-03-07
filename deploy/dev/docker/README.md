@@ -3,7 +3,7 @@ layout: post
 title: DEPLOY/DEV/DOCKER
 permalink: deploy/dev/docker
 redirect_from:
-- deploy/dev/docker/README.md/
+ - deploy/dev/docker/README.md/
 ---
 
 # Working with AIS on Docker
@@ -213,7 +213,7 @@ $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.
 
 ## Running benchmark tests in the Docker environment
 
-AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in either **one** of `-nodiskio` or `-nonetio`. See more about benchmark tests, see [AIS Loader](/bench/aisloader/README.md)
+AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in either **one** of `-nodiskio` or `-nonetio`. See more about benchmark tests, see [AIS Loader](/aistore/bench/aisloader/README.md)
 
 ## Utility Scripts
 

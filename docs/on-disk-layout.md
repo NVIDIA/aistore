@@ -3,7 +3,7 @@ layout: post
 title: ON-DISK-LAYOUT
 permalink: docs/on-disk-layout
 redirect_from:
-- docs/on-disk-layout.md/
+ - docs/on-disk-layout.md/
 ---
 
 ## On-Disk Layout
@@ -34,9 +34,9 @@ With namespaces, the picture becomes only slightly more complicated. The followi
 
 For the purposes of full disclosure and/or in-depth review, following are initial references into AIS sources that also handle on-disk representation of object metadata:
 
-* [local object metadata (LOM)](/cluster/lom_xattr.go)
+* [local object metadata (LOM)](/aistore/cluster/lom_xattr.go)
 
  and AIS control structures:
 
-* [bucket metadata (BMD)](/ais/bucketmeta.go)
-* [cluster map (Smap)](/ais/clustermap.go)
+* [bucket metadata (BMD)](/aistore/ais/bucketmeta.go)
+* [cluster map (Smap)](/aistore/ais/clustermap.go)

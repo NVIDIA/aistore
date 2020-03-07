@@ -3,7 +3,7 @@ layout: post
 title: METRICS
 permalink: docs/metrics
 redirect_from:
-- docs/metrics.md/
+ - docs/metrics.md/
 ---
 
 ## Table of Contents
@@ -70,7 +70,7 @@ All collected/tracked *counters* are 64-bit cumulative integers that continuousl
 | `aisproxy.<daemon_id>.err.range` | ... RANGE ... |
 | `aisproxy.<daemon_id>.err.post` | ... POST ... |
 
-> For the most recently updated list of counters, please refer to [the source](/stats/common_stats.go)
+> For the most recently updated list of counters, please refer to [the source](/aistore/stats/common_stats.go)
 
 ### Proxy metrics: latencies
 
@@ -98,7 +98,7 @@ AIS target metrics include **all** of the proxy metrics (see above), plus the fo
 | `aistarget.<daemon_id>.rx` |  number of objects received by the target |
 | `aistarget.<daemon_id>.rx.size` | cumulative size (in bytes) of all the received objects |
 
-> For the most recently updated list of counters, please refer to [the source](/stats/target_stats.go)
+> For the most recently updated list of counters, please refer to [the source](/aistore/stats/target_stats.go)
 
 ### AIS loader metrics
 

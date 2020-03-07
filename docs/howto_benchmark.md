@@ -3,7 +3,7 @@ layout: post
 title: HOWTO_BENCHMARK
 permalink: docs/howto_benchmark
 redirect_from:
-- docs/howto_benchmark.md/
+ - docs/howto_benchmark.md/
 ---
 
 ## Table of Contents
@@ -25,7 +25,7 @@ AIS Loader (`aisloader`) is a tool to measure storage performance. It's a load g
 
 For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
 
-To get started, cd to [aisloader home](/bench/aisloader/) and run:
+To get started, cd to [aisloader home](/aistore/bench/aisloader/) and run:
 
 ```console
 $ ./install.sh

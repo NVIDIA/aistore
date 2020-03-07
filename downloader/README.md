@@ -3,7 +3,7 @@ layout: post
 title: DOWNLOADER
 permalink: downloader
 redirect_from:
-- downloader/README.md/
+ - downloader/README.md/
 ---
 
 ## Why Downloader?
@@ -25,7 +25,7 @@ AIS *Downloader* supports 4 types of download requests:
 * *Range* - download multiple objects based on a given naming pattern
 * *Cloud* - given optional prefix and optional suffix, download matching objects from the specified cloud bucket
 
-> Prior to downloading, make sure that AIS (destination) bucket already exists. See [AIS API](/aistore/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/README.md#python-client). Error is returned when provided bucket does not exist.
+> Prior to downloading, make sure that AIS (destination) bucket already exists. See [AIS API](/aistore/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/aistore/README.md#python-client). Error is returned when provided bucket does not exist.
 
 The rest of this document is structured around all supported types of downloads:
 

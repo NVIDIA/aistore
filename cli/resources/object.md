@@ -3,7 +3,7 @@ layout: post
 title: OBJECT
 permalink: cli/resources/object
 redirect_from:
-- cli/resources/object.md/
+ - cli/resources/object.md/
 ---
 
 ## Operations on objects

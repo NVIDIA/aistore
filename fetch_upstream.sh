@@ -10,35 +10,34 @@ find $TMP_DIR -type f | grep -v "\.\(md\|png\|xml\|jpeg\|json\|jpg\|gif\)" | xar
 find $TMP_DIR -type d -empty -delete
 
 for f in $(find $TMP_DIR -type f); do
+  dname=$(dirname $f)
+  dname=${dname#"$TMP_DIR"}
+  dname=${dname#/}
+
+  text=""
   if [[ $(echo "$f" | grep "\(.*\)README.md") != "" ]]; then
-    dname=$(dirname $f)
-    dname=${dname#"$TMP_DIR"}
-    dname=${dname#/}
     dnamecap=${dname^^}
 
     echo $f $dname $dnamecap
 
-    TEXT="---\nlayout: post\ntitle: $dnamecap\npermalink: $dname\nredirect_from:\n- $dname/README.md/\n---\n"
+    text="---\nlayout: post\ntitle: $dnamecap\npermalink: $dname\nredirect_from:\n  - $dname/README.md/\n---\n"
     if [[ $dname == "" ]]; then
-      TEXT="---\nlayout: post\ntitle: AIStore\npermalink: /\nredirect_from:\n- /README.md/\n---\n"
+      text="---\nlayout: post\ntitle: AIStore\npermalink: /\nredirect_from:\n  - /README.md/\n  - README.md/\n---\n"
     fi
-
-    echo "$(echo -e ${TEXT} | cat - $f)" > $f # insert ${TEXT} as first lines
   elif [[ $(echo "$f" | grep "\(.*\).md") != "" ]]; then
-    dname=$(dirname $f)
-    dname=${dname#"$TMP_DIR"}
-    dname=${dname#/}
     bname=$(basename $f .md)
     bnamecap=${bname^^}
 
     echo $f $dname/$bname $bnamecap
 
-    TEXT="---\nlayout: post\ntitle: $bnamecap\npermalink: $dname/$bname\nredirect_from:\n- $dname/$bname.md/\n---\n"
-    echo "$(echo -e ${TEXT} | cat - $f)" > $f # insert ${TEXT} as first lines
+    text="---\nlayout: post\ntitle: $bnamecap\npermalink: $dname/$bname\nredirect_from:\n  - $dname/$bname.md/\n---\n"
+  else
+    continue
   fi
 
-  ex -sc '%s/"\/docs/"\/aistore\/docs/g' -cx $f # "/docs/..." => "/aistore/docs/..."
-  ex -sc '%s/(\/docs/(\/aistore\/docs/g' -cx $f # "(/docs/..." => "(/aistore/docs/..."
+  echo "$(echo -e ${text} | cat - $f)" > $f # insert ${text} as first lines
+  ex -sc '%s/"\/docs/"\/aistore\/docs/g' -cx $f # `"/docs/..."` => `"/aistore/docs/..."`
+  ex -sc '%s/](\//](\/aistore\//g' -cx $f # `(/...` => `(/aistore/...`
 done
 
 cp -r $TMP_DIR/* "$OUT_DIR"/

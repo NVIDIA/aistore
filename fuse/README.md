@@ -3,7 +3,7 @@ layout: post
 title: FUSE
 permalink: fuse
 redirect_from:
-- fuse/README.md/
+ - fuse/README.md/
 ---
 
 # AISFS: a FUSE client for AIStore

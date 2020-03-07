@@ -3,7 +3,7 @@ layout: post
 title: CLI
 permalink: cli
 redirect_from:
-- cli/README.md/
+ - cli/README.md/
 ---
 
 # AIS CLI

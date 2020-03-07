@@ -3,7 +3,7 @@ layout: post
 title: BENCH/DISK/COMPARE
 permalink: bench/disk/compare
 redirect_from:
-- bench/disk/compare/README.md/
+ - bench/disk/compare/README.md/
 ---
 
 # Benchmarking polling from diskstat against iostat 

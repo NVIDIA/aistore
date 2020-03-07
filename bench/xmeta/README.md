@@ -3,7 +3,7 @@ layout: post
 title: BENCH/XMETA
 permalink: bench/xmeta
 redirect_from:
-- bench/xmeta/README.md/
+ - bench/xmeta/README.md/
 ---
 
 xmeta is a low-level utility to format (or extract into plain text)

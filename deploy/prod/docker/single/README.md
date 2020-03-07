@@ -3,7 +3,7 @@ layout: post
 title: DEPLOY/PROD/DOCKER/SINGLE
 permalink: deploy/prod/docker/single
 redirect_from:
-- deploy/prod/docker/single/README.md/
+ - deploy/prod/docker/single/README.md/
 ---
 
 # Production single standalone Docker

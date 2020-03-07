@@ -3,7 +3,7 @@ layout: post
 title: TROUBLESHOOTING
 permalink: docs/troubleshooting
 redirect_from:
-- docs/troubleshooting.md/
+ - docs/troubleshooting.md/
 ---
 
 ## Introduction

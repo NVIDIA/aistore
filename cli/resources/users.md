@@ -3,12 +3,12 @@ layout: post
 title: USERS
 permalink: cli/resources/users
 redirect_from:
-- cli/resources/users.md/
+ - cli/resources/users.md/
 ---
 
 ## User management
 
-An AIS cluster can be deployed with [AuthN](/authn/README.md) - AIS authorization server. The CLI provides an easy way to manage users and to grant and revoke access permissions.
+An AIS cluster can be deployed with [AuthN](/aistore/authn/README.md) - AIS authorization server. The CLI provides an easy way to manage users and to grant and revoke access permissions.
 
 If the AIS cluster does not have guest access enabled, every user that needs access to the cluster data must be registered. Guest access allows unregistered users to use the AIS cluster in read-only mode.
 
@@ -70,7 +70,7 @@ Remove an existing user and revokes all tokens issued for the user.
 
 `ais auth login USER_NAME USER_PASS`
 
-Issue a token for a user. After successful login, user\'s token is saved to `~/.ais/token` and next CLI runs automatically load and use the token in every request to AIS cluster. The saved token can be used by other applications, like `curl`. Please see [AuthN documentation](/authn/README.md) to read how to use AuthN API directly.
+Issue a token for a user. After successful login, user\'s token is saved to `~/.ais/token` and next CLI runs automatically load and use the token in every request to AIS cluster. The saved token can be used by other applications, like `curl`. Please see [AuthN documentation](/aistore/authn/README.md) to read how to use AuthN API directly.
 
 ### Log out
 

@@ -3,7 +3,7 @@ layout: post
 title: CHECKSUM
 permalink: docs/checksum
 redirect_from:
-- docs/checksum.md/
+ - docs/checksum.md/
 ---
 
 ## Table of Contents

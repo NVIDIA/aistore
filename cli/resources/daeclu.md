@@ -3,7 +3,7 @@ layout: post
 title: DAECLU
 permalink: cli/resources/daeclu
 redirect_from:
-- cli/resources/daeclu.md/
+ - cli/resources/daeclu.md/
 ---
 
 ## Daemon/Cluster

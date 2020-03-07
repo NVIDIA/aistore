@@ -3,7 +3,7 @@ layout: post
 title: DEPLOY/PROD/K8S/HELM/AIS/CHARTS
 permalink: deploy/prod/k8s/helm/ais/charts
 redirect_from:
-- deploy/prod/k8s/helm/ais/charts/README.md/
+ - deploy/prod/k8s/helm/ais/charts/README.md/
 ---
 
 # AIS helm chart 

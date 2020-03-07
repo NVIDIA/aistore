@@ -3,7 +3,7 @@ layout: post
 title: DEPLOY/PROD/DOCKER/GTC2020
 permalink: deploy/prod/docker/gtc2020
 redirect_from:
-- deploy/prod/docker/gtc2020/README.md/
+ - deploy/prod/docker/gtc2020/README.md/
 ---
 
 # GTC2020 Infrastructure for AIS and WebDataset Demo

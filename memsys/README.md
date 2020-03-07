@@ -3,7 +3,7 @@ layout: post
 title: MEMSYS
 permalink: memsys
 redirect_from:
-- memsys/README.md/
+ - memsys/README.md/
 ---
 
 # Memory Manager and Slab/SGL Allocator (MMSA)

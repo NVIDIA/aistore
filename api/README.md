@@ -3,7 +3,7 @@ layout: post
 title: API
 permalink: api
 redirect_from:
-- api/README.md/
+ - api/README.md/
 ---
 
 AIStore Client API

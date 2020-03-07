@@ -3,7 +3,7 @@ layout: post
 title: BENCH/DISK/LOADGEN
 permalink: bench/disk/loadgen
 redirect_from:
-- bench/disk/loadgen/README.md/
+ - bench/disk/loadgen/README.md/
 ---
 
 `loadgen.sh` is a simple script for generating disk load for benchmark tests

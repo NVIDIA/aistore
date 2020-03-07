@@ -3,7 +3,7 @@ layout: post
 title: BENCH/HRW
 permalink: bench/hrw
 redirect_from:
-- bench/hrw/README.md/
+ - bench/hrw/README.md/
 ---
 
 # Benchmaking various HRW variants

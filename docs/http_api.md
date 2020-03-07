@@ -3,7 +3,7 @@ layout: post
 title: HTTP_API
 permalink: docs/http_api
 redirect_from:
-- docs/http_api.md/
+ - docs/http_api.md/
 ---
 
 ## RESTful API
@@ -147,8 +147,8 @@ Curl example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=
 
 For more information, CLI examples, and the most recent updates, please see:
 - [Cloud Providers](./providers.md)
-- [CLI: operations on buckets](/cli/resources/bucket.md)
-- [CLI: operations on objects](/cli/resources/object.md)
+- [CLI: operations on buckets](/aistore/cli/resources/bucket.md)
+- [CLI: operations on objects](/aistore/cli/resources/object.md)
 - [On-Disk Layout](./on-disk-layout.md)
 
 #### Supported APIs
@@ -175,7 +175,7 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 | Get target statistics | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=stats` |
 | Get process info for all nodes in cluster (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=sysinfo` |
 | Get proxy/target system info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=sysinfo` |
-| Get xactions' statistics (proxy) [More](/xaction/README.md)| GET /v1/cluster | `curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "stats", "name": "xactionname", "value":{"bucket":"bckname"}}' 'http://G/v1/cluster?what=xaction'` |
+| Get xactions' statistics (proxy) [More](/aistore/xaction/README.md)| GET /v1/cluster | `curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "stats", "name": "xactionname", "value":{"bucket":"bckname"}}' 'http://G/v1/cluster?what=xaction'` |
 | Get list of target's filesystems (target) | GET /v1/daemon?what=mountpaths | `curl -X GET http://T/v1/daemon?what=mountpaths` |
 | Get list of all targets' filesystems (proxy) | GET /v1/cluster?what=mountpaths | `curl -X GET http://G/v1/cluster?what=mountpaths` |
 | Get bucket list from a given target | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=bucketmd` |

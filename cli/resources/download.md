@@ -3,12 +3,12 @@ layout: post
 title: DOWNLOAD
 permalink: cli/resources/download
 redirect_from:
-- cli/resources/download.md/
+ - cli/resources/download.md/
 ---
 
 ## Downloader
 
-The CLI allows users to view and manage [AIS Downloader](/downloader/README.md) jobs.
+The CLI allows users to view and manage [AIS Downloader](/aistore/downloader/README.md) jobs.
 It is used for downloading files and datasets from internet to AIS cluster.
 
 ### Start
