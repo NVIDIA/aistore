@@ -144,7 +144,7 @@ format:
 * `metric_type` - can be: `gauge`, `timer`, `counter`
 * `hostname` - is the hostname of the machine on which the loader is ran
 * `loaderid` - see: `-loaderid` option
-* `metric` - can be: `latency.*`, `get.*`, `put.*` (see: [aisloader metrics](/docs/metrics.md#ais-loader-metrics))
+* `metric` - can be: `latency.*`, `get.*`, `put.*` (see: [aisloader metrics](/aistore/docs/metrics.md#ais-loader-metrics))
 
 ### Grafana
 

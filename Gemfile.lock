@@ -244,6 +244,7 @@ PLATFORMS
 DEPENDENCIES
   github-pages (~> 204)
   jekyll-redirect-from
+  jekyll-relative-links
   minima (~> 2.5.1)
 
 BUNDLED WITH

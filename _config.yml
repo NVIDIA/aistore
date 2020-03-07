@@ -49,6 +49,7 @@ exclude:
   - fetch_upstream.sh
 plugins:
   - jekyll-redirect-from
+  - jekyll-relative-links
 
 # Exclude from processing.
 # The following items will not be processed, by default.

@@ -72,7 +72,7 @@ The following table describes JSON/YAML keys which can be used in the specificat
 
 There's also the possibility to override some of the values from global `distributed_sort` config via job specification.
 All values are optional - if empty, the value from global `distributed_sort` config will be used.
-For more information refer to [configuration](/docs/configuration.md).
+For more information refer to [configuration](/aistore/docs/configuration.md).
 
 | Key | Type | Description |
 | --- | --- | --- |

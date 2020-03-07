@@ -14,7 +14,7 @@ There are two different ways, or modes, to deploy AIS in Docker containers. We r
 
 ## Quick-start AIS Cluster
 
-Create a containerized, one-proxy, one-target deployment of AIStore within seconds. The minimum requirements to get this working is to have Docker installed. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](/docs/docker_main.md)
+Create a containerized, one-proxy, one-target deployment of AIStore within seconds. The minimum requirements to get this working is to have Docker installed. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](/aistore/docs/docker_main.md)
 
 > For some tests, AWS config and credential files are needed
 
@@ -70,7 +70,7 @@ Use the `./stop_docker.sh` script to stop the AIStore cluster(s) that were deplo
 
 ## Requirements
 
-> Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](/docs/docker_main.md)
+> Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](/aistore/docs/docker_main.md)
 
 [`$GOPATH`](https://golang.org/doc/code.html#GOPATH) environment variable must be defined before starting cluster deployment. Docker uses the `$GOPATH/src` directory as a bind mount for the container. The container at start builds new binaries from the current sources.
 
@@ -113,7 +113,7 @@ Note:
 * If the `-s` or `--single` and `-m` or `--multi` flag are used, then multiple networks will take precedence
 * Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
 
-Please see [main AIStore README](/docs/configuration.md) for more information about testing mode.
+Please see [main AIStore README](/aistore/docs/configuration.md) for more information about testing mode.
 
 Example Usage:
 

@@ -168,7 +168,7 @@ Nothing to read, bucket is empty
 
 In the example above, the "nothing to read" indicates that `aistore` requires a bucket to operate upon. Use the switch '-ais' to select between ais bucket (`-ais=true`) or Cloud-based one (`-ais=false`).
 
-> Terminology: the term *ais bucket* simply means that the bucket in question does **not** cache (or tier) 3rd party Cloud and is not backed by the namesake Cloud bucket. AIS buckets are distributed across the entire AIS cluster. All the [supported storage services](/docs/storage_svcs.md) equally apply to both sorts of buckets.
+> Terminology: the term *ais bucket* simply means that the bucket in question does **not** cache (or tier) 3rd party Cloud and is not backed by the namesake Cloud bucket. AIS buckets are distributed across the entire AIS cluster. All the [supported storage services](/aistore/docs/storage_svcs.md) equally apply to both sorts of buckets.
 
 Note that aisloader **will create an ais bucket if it does not exist**.
 
@@ -258,9 +258,9 @@ By default, object sizes are randomly selected as well in the range between 1MiB
 
 ### Setting bucket properties
 
-Before starting a test, it is possible to set `mirror` or `EC` properties on a bucket (for background, please see [storage services](/docs/storage_svcs.md)).
+Before starting a test, it is possible to set `mirror` or `EC` properties on a bucket (for background, please see [storage services](/aistore/docs/storage_svcs.md)).
 
-> For background on local mirroring and erasure coding (EC), please see [storage services](/docs/storage_svcs.md).
+> For background on local mirroring and erasure coding (EC), please see [storage services](/aistore/docs/storage_svcs.md).
 
 To achieve that, use the option `-bprops`. For example:
 

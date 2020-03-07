@@ -36,6 +36,9 @@ for f in $(find $TMP_DIR -type f); do
     TEXT="---\nlayout: post\ntitle: $bnamecap\npermalink: $dname/$bname\nredirect_from:\n- $dname/$bname.md/\n---\n"
     echo "$(echo -e ${TEXT} | cat - $f)" > $f # insert ${TEXT} as first lines
   fi
+
+  ex -sc '%s/"\/docs/"\/aistore\/docs/g' -cx $f # "/docs/..." => "/aistore/docs/..."
+  ex -sc '%s/(\/docs/(\/aistore\/docs/g' -cx $f # "(/docs/..." => "(/aistore/docs/..."
 done
 
 cp -r $TMP_DIR/* "$OUT_DIR"/

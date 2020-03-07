@@ -120,20 +120,20 @@ Some csv files in the SK output folder have columns that report timestamps in `e
 
 First, right-click on the heading above the column and click `Format Cells ...`.
 
-<img src="/docs/images/soak-time-libreoffice-step1.png" width="50%" >
+<img src="/aistore/docs/images/soak-time-libreoffice-step1.png" width="50%" >
 
 Next, in the displayed dialog window, select the `Date` option in the `Category` box, and change the text in the `Format code` textbox to `MM/DD/YY HH:MM:SS.000`. Then, click the `ok` button.
 
-<img src="/docs/images/soak-time-libreoffice-step2.png" width="50%" >
+<img src="/aistore/docs/images/soak-time-libreoffice-step2.png" width="50%" >
 
 ### Excel
 
 First, right-click on the heading above the column and click `Format Cells ...`.
 
-<img src="/docs/images/soak-time-excel-step1.png" width="50%" >
+<img src="/aistore/docs/images/soak-time-excel-step1.png" width="50%" >
 
 Next, in the displayed dialog window, select the `Custom` option in the `Category` box, and change the text in the `Type` textbox to `MM/DD/YY HH:MM:SS.000`. Then, click the `ok` button.
 
 > If the column is used in a graph, `HH:MM:SS` should be used instead of `MM/DD/YY HH:MM:SS.000` to reduce clutter in the resulting graph.
 
-<img src="/docs/images/soak-time-excel-step2.png" width="50%" >
+<img src="/aistore/docs/images/soak-time-excel-step2.png" width="50%" >
