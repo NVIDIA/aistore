@@ -578,7 +578,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%s files in the range '%s' from %s bucket\n",
+	fmt.Fprintf(c.App.Writer, "%s files in the range %q from %s bucket\n",
 		command, rangeStr, bck)
 	return
 }

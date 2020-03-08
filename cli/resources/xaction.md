@@ -1,36 +1,49 @@
-## Extended Actions (X-actions or xactions)
+The CLI allows users to interact with AIStore [Xactions](../../xaction/README.md).
 
-The CLI allows users to interact with AIStore [Xactions](../../docs/xaction.md).
-
-### Start
+## Start xaction
 
 `ais start xaction XACTION_NAME [BUCKET_NAME]`
 
 Start xaction(s). Some xactions require a bucket name to execute.
 The second argument is used to determine the bucket name if it is required.
 
-| Command | Description |
-| --- | --- |
-| `ais start xaction lru` | Starts cluster-wide LRU xaction |
+### Examples
 
-### Stop
+#### Start cluster-wide LRU
+
+Starts LRU xaction on all nodes
+
+```console
+$ ais start xaction lru
+Started "lru" xaction.
+```
+
+## Stop xaction
 
 `ais stop xaction XACTION_NAME|all [BUCKET_NAME]`
 
 Stop xaction(s). If the first argument is `all`, all xactions are stopped.
 The second argument is used to determine the bucket name if it is required.
 
+### Examples
 
-| Command | Description |
-| --- | --- |
-| `ais stop xaction rebalance` | Stops cluster rebalance. No effect if rebalance is not running |
+#### Stop cluster-wide LRU
 
-### Show stats
+Stops currently running LRU xaction.
+
+```console
+$ ais stop xaction lru
+Stopped "lru" xaction.
+```
+
+## Show xaction stats
 
 `ais show xaction [XACTION_NAME] [BUCKET_NAME]`
 
 Display details about `XACTION_NAME` xaction. If no arguments are given, displays details about all xactions.
 The second argument is used to determine the bucket name if it is required.
+
+### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -49,19 +62,14 @@ Certain extended actions have additional CLI. In particular, global rebalance st
 
 Output of this command differs from the generic xaction output.
 
-### Wait
+## Wait for xaction
 
 `ais wait xaction XACTION_NAME [BUCKET_NAME]`
 
 Wait for the `XACTION_NAME` xaction to finish.
 
+### Options
+
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--refresh` | `duration` | Refresh rate | `1s` |
-
-#### Examples
-
-| Command | Explanation |
-| --- | --- |
-| `ais wait xaction lru` | Waits for the LRU to finish |
-| `ais wait xaction copybck bck_name` | Waits for the `copybck` xaction that runs on `bck_name` to finish |

@@ -146,7 +146,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 	if err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "started %q xaction\n", xactKind)
+	fmt.Fprintf(c.App.Writer, "Started %q xaction.\n", xactKind)
 	return
 }
 
@@ -197,9 +197,9 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	}
 
 	if xactKind == "" {
-		fmt.Fprintln(c.App.Writer, "stopped all xactions")
+		fmt.Fprintln(c.App.Writer, "Stopped all xactions.")
 	} else {
-		fmt.Fprintf(c.App.Writer, "stopped %q xaction\n", xactKind)
+		fmt.Fprintf(c.App.Writer, "Stopped %q xaction.\n", xactKind)
 	}
 	return
 }

@@ -1,51 +1,58 @@
-## Bucket
-
 The CLI allows users to interact with [buckets](../../docs/bucket.md) in the AIS cluster.
 
-### Create
+## Create bucket
 
 `ais create bucket BUCKET_NAME [BUCKET_NAME...]`
 
 Create an ais bucket or buckets.
 
-#### Examples
+### Examples
 
-1) Correct local buckets creation
+#### Create AIS bucket
 
-```console
-# Create buckets mybucketA and mybucketB, both with AIS provider (mybucketB provider is implicit) 
-$ ais create bucket ais://mybucketA mybucketB
-```
-
-2) Incorrect buckets creation
+Create buckets `bucket_name1` and `bucket_name2`, both with AIS provider (`bucket_name2` provider is implicit) 
 
 ```console
-$ ais create bucket cloud://mybucket
-Cloud buckets not allowed (cloud://mybucket).
+$ ais create bucket ais://bucket_name1 bucket_name2
+ais://bucket_name1 bucket created
+bucket_name2 bucket created
 ```
 
-### Delete
+#### Incorrect buckets creation
+
+```console
+$ ais create bucket cloud://bucket_name
+Cloud buckets not allowed (cloud://bucket_name).
+```
+
+## Delete bucket
 
 `ais rm bucket BUCKET [BUCKET...]`
 
 Delete an ais bucket or buckets.
 
-1) Correct local buckets removal
+### Examples
+
+#### Remove local buckets
+
+Remove local buckets `bucket_name1` and `bucket_name2`
 
 ```console
-# Removes local buckets mybucketA and mybucketB
-$ ais rm bucket ais://mybucketA mybucketB
+$ ais rm bucket ais://bucket_name1 bucket_name2
+ais://bucket_name1 bucket destroyed
+bucket_name2 bucket destroyed
 ```
 
-2) Incorrect buckets removal
+#### Incorrect buckets removal
+
+Removing cloud buckets is not supported.
 
 ```console
-$ ais rm bucket cloud://mybucket
-Cloud buckets not allowed (cloud://mybucket).
+$ ais rm bucket cloud://bucket_name
+Cloud buckets not allowed (cloud://bucket_name).
 ```
 
-
-### List bucket names
+## List bucket names
 
 `ais ls`
 
@@ -55,34 +62,22 @@ List all bucket names.
 
 List all bucket names for the specific provider.
 
-#### Flags for listing bucket names
+### Options
 
-| Flag | Type | Description | Default |
+| Name | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--regex` | `string` | Pattern for matching bucket names | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
-### List object names
-
-#### With provider auto-detection
+## List object names
 
 `ais ls BUCKET_NAME`
 
-List object names in the bucket `BUCKET_NAME`. Cloud provider is auto-detected.
+List all objects contained in `BUCKET_NAME` bucket.
 
-#### From the specific provider
+### Options
 
-`ais ls ais://BUCKET_NAME`
-
-List objects in the AIS bucket `BUCKET_NAME`.
-
-`ais ls cloud://BUCKET_NAME`
-
-List objects in the cloud bucket `BUCKET_NAME`.
-
-#### Flags for listing object names
-
-| Flag | Type | Description | Default |
+| Name | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--regex` | `string` | Pattern for matching object names | `""` |
 | `--template` | `string` | Template for matching object names | `""` |
@@ -99,108 +94,174 @@ List objects in the cloud bucket `BUCKET_NAME`.
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
 
-#### Examples
+### Examples
+
+#### With provider auto-detection
+
+List object names in the bucket `bucket_name`.
+Cloud provider is auto-detected.
 
 ```console
-$ ais ls ais://mybucket # list local bucket mybucket
+$ ais ls bucket_name
+Name		Size		Version
+shard-0.tar	16.00KiB	1
+shard-1.tar	16.00KiB	1
+shard-10.tar	16.00KiB	1
+shard-2.tar	16.00KiB	1
+shard-3.tar	16.00KiB	1
+shard-4.tar	16.00KiB	1
+shard-5.tar	16.00KiB	1
+shard-6.tar	16.00KiB	1
+shard-7.tar	16.00KiB	1
+shard-8.tar	16.00KiB	1
+shard-9.tar	16.00KiB	1
 ```
+
+#### From the specific provider
+
+List objects in the AIS bucket `bucket_name`.
 
 ```console
-$ ais ls cloud://mybucket # list cloud bucket mybucket
+$ ais ls ais://bucket_name
+Name		Size		Version
+shard-0.tar	16.00KiB	1
+shard-1.tar	16.00KiB	1
+...
 ```
 
-### Evict
+List objects in the cloud bucket `bucket_name`.
+
+```console
+ais ls cloud://bucket_name
+Name		Size		Version
+shard-0.tar	16.00KiB	1
+shard-1.tar	16.00KiB	1
+...
+```
+
+#### With prefix
+
+List objects which match given prefix.
+
+```console
+$ ais ls ais://bucket_name --prefix "shard-1"
+Name		Size		Version
+shard-1.tar	16.00KiB	1
+shard-10.tar	16.00KiB	1
+```
+
+## Evict cloud bucket
 
 `ais evict BUCKET_NAME`
 
 Evict a cloud bucket. It also resets the properties of the bucket (if changed).
 
-#### Examples
-
-```console
-$ ais evict mybucket # evict cloud bucket mybucket
-```
-
-```console
-$ ais evict ais://mybucket # FAIL
-Evict command doesn't support local buckets.
-```
-### Rename
+## Rename a bucket
 
 `ais rename bucket BUCKET_NAME NEW_NAME`
 
 Rename an ais bucket.
 
-#### Examples
+### Examples
+
+#### Rename local bucket
+
+Rename local bucket `bucket_name` to local bucket `new_bucket_name`.
 
 ```console
-$ ais rename bucket ais://mybucket mynewbucket # rename local bucket `mybucket` to local bucket `mynewbucket`
+$ ais rename bucket ais://bucket_name new_bucket_name
+Renaming bucket bucket_name to new_bucket_name in progress.
+To check the status, run: ais show xaction renamelb bucket_name
 ```
 
+#### Incorrect bucket rename
+
+Renaming cloud buckets is not supported.
+
 ```console
-$ ais rename bucket cloud://mycloudbucket cloud://mynewbucket # FAIL
+$ ais rename bucket cloud://bucket_name cloud://new_bucket_name
 Renaming of cloud buckets not supported
 ```
 
-### Copy
+## Copy bucket
 
 `ais cp bucket BUCKET_NAME NEW_NAME`
 
 Copy an existing ais bucket to a new ais bucket.
 
-#### Examples
+### Examples
+
+#### Copy local bucket
+
+Copy local bucket `bucket_name` to local bucket `new_bucket_name`.
 
 ```console
-$ ais cp bucket ais://mybucket mynewbucket # copy local bucket `mybucket` to local bucket `mynewbucket`
+$ ais cp bucket ais://bucket_name new_bucket_name
+Copying bucket bucket_name to new_bucket_name in progress.
+To check the status, run: ais show xaction copybck new_bucket_name
 ```
 
+#### Incorrect bucket rename
+
+Copying cloud buckets is not supported.
+
 ```console
-$ ais cp bucket cloud://mycloudbucket cloud://mynewbucket # FAIL
+$ ais cp bucket cloud://bucket_name cloud://new_bucket_name
 Copying of cloud buckets not supported
 ```
 
-### Summary
+## Show bucket summary
 
 `ais show bucket [BUCKET_NAME]`
 
 Show aggregated information about objects in the bucket `BUCKET_NAME`.
 If `BUCKET_NAME` is omitted, shows information about all buckets.
 
+### Options
+
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--fast` | `bool` | Enforce using faster methods to find out the buckets' details. The output may not be accurate. | `false`
 
-### Make N copies
+## Make N copies
 
 `ais set-copies BUCKET_NAME --copies <value>`
 
 Start an extended action to bring a given bucket to a certain redundancy level (num copies). Read more about this feature [here](../../docs/storage_svcs.md#n-way-mirror).
 
+### Options
+
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--copies` | `int` | Number of copies | `1` |
 
-### Make all objects erasure coded
+## Make all objects erasure coded
 
 `ais ec-encode BUCKET_NAME`
 
 Start an extended action that enables data protection for all objects of a given bucket. Erasure coding must be set up for the bucket prior to running `ec-encode` extended action. Read more about this feature [here](../../docs/storage_svcs.md#erasure-coding).
 
-### Show bucket props
+## Show bucket props
 
 `ais show props BUCKET_NAME`
 
 List [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
+### Options
+
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json` | `bool` | Output in JSON format | `false` |
 
-### Set bucket props
+## Set bucket props
 
 `ais set props BUCKET_NAME KEY=VALUE [KEY=VALUE...]`
 
-Set bucket properties. For the available options, see [bucket-properties](../../docs/bucket.md#properties-and-options).
+Set bucket properties.
+For the available options, see [bucket-properties](../../docs/bucket.md#properties-and-options).
+
+### Options
+
 If `--reset` flag is set, arguments are ignored and bucket properties are reset to original state.
 If `--jsonspec` option is used, **all** properties of the bucket are set based on the values in the JSON object.
 
@@ -216,19 +277,42 @@ When `--jsonspec` is not used, some properties support user-friendly aliases:
 | aattrs | ro | Disables bucket modifications: denies PUT, DELETE, and ColdGET requests |
 | aattrs | rw | Enables bucket modifications: allows PUT, DELETE, and ColdGET requests |
 
-#### Examples
+### Examples
 
-| Command | Explanation |
-| --- | --- |
-| `ais set props mybucket 'mirror.enabled=true' 'mirror.copies=2'` | Sets the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively, for the bucket `mybucket` |
-| `ais set props mybucket 'aattrs=ro'` | Sets read-only access to the bucket `mybucket`. All PUT and DELETE requests will fail |
-| `ais set props --reset mybucket` | Resets properties for the bucket `mybucket` |
+#### Enable mirroring for a bucket
 
-
-Setting **all** bucket attributes based on the provided JSON specification
+Set the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively, for the bucket `mybucket`
 
 ```console
-$ ais set props mybucket --jsonspec '{
+$ ais set props bucket_name 'mirror.enabled=true' 'mirror.copies=2'
+Bucket props have been successfully updated.
+```
+
+#### Make a bucket read-only
+
+Set read-only access to the bucket `bucket_name`.
+All PUT and DELETE requests will fail.
+
+```console
+$ ais set props bucket_name 'aattrs=ro'
+Bucket props have been successfully updated.
+```
+
+#### Reset properties for the bucket
+
+Reset properties for the bucket `bucket_name`.
+
+```console
+$ ais set props --reset bucket_name
+Bucket props have been reset successfully.
+```
+
+#### Set bucket properties with JSON
+
+Set **all** bucket properties for `bucket_name` bucket based on the provided JSON specification.
+
+```bash
+$ ais set props bucket_name --jsonspec '{
     "cloud_provider": "ais",
     "versioning": {
       "enabled": true,
@@ -263,48 +347,48 @@ $ ais set props mybucket --jsonspec '{
         "parity_slices": 2,
         "enabled": true
     },
-    "aattrs": 255
+    "aattrs": "255"
 }'
+Bucket props have been successfully updated.
 ```
 
 ```console
-$ ais show props mybucket
+$ ais show props bucket_name
 Property	Value
+========	=====
 Provider	ais
 Access		GET,PUT,DELETE,HEAD,ColdGET
-Checksum	xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
+Checksum	Type: xxhash | Validate: ColdGET
 Mirror		Disabled
 EC		2:2 (250KiB)
-LRU		Watermarks: 20/80, do not evict time: 20m
+LRU		Watermarks: 20%/80% | Do not evict time: 120m | OOS: 90%
 Versioning	Enabled | Validate on WarmGET: no
-Tiering		Disabled
 ```
 
 If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
 
-```console
-$ ais set props mybucket --jsonspec '{
+```bash
+$ ais set props --reset bucket_name
+Bucket props have been reset successfully.
+$ ais set props bucket_name --jsonspec '{
   "mirror": {
-    "enabled": true
+    "enabled": true,
+    "copies": 2
   },
   "versioning": {
     "enabled": true,
     "validate_warm_get": true
   }
 }'
+Bucket props have been successfully updated.
+$ ais show props bucket_name
+Property	Value
+========	=====
+Provider	ais
+Access		GET,PUT,DELETE,HEAD,ColdGET
+Checksum	Type: xxhash | Validate: ColdGET
+Mirror		2 copies
+EC		Disabled
+LRU		Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+Versioning	Enabled | Validate on WarmGET: yes
 ```
-
-```console
-$ ais show props mybucket
-Property        Value
-Provider        ais
-Access          No access
-Checksum        xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
-Mirror          2 Copies
-EC              Disabled
-LRU             Disabled
-Versioning      Enabled | Validate on WarmGET: yes
-Tiering         Disabled
-```
-
-To see how setting zero values affect properties, run:  `ais set props mybucket --jsonspec '{}'`

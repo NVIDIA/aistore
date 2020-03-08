@@ -356,7 +356,7 @@ func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Bucket props have been reset successfully.")
+	fmt.Fprintln(c.App.Writer, "Bucket props have been reset successfully.")
 	return
 }
 

@@ -101,7 +101,7 @@ func registerNodeHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Node with ID %q has been successfully added to the cluster\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "Node with ID %q has been successfully added to the cluster.\n", daemonID)
 	return
 }
 

@@ -101,7 +101,7 @@ func clusterRemoveNode(c *cli.Context, daemonID string) (err error) {
 	if err := api.UnregisterNode(defaultAPIParams, daemonID); err != nil {
 		return err
 	}
-	fmt.Fprintf(c.App.Writer, "Node with ID %s has been successfully removed from the cluster\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "Node with ID %q has been successfully removed from the cluster.\n", daemonID)
 	return nil
 }
 

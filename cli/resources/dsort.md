@@ -1,12 +1,12 @@
-## Distributed Sort
-
 The CLI allows users to manage [AIS DSort](/dsort/README.md) jobs.
 
-### Randomly generate shards
+## Generate shards
 
 `ais gen-shards --template <value> --fsize <value> --fcount <value>`
 
 Put randomly generated shards that can be used for dSort testing.
+
+### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -18,14 +18,52 @@ Put randomly generated shards that can be used for dSort testing.
 | `--cleanup` | `bool` | When set, the old bucket will be deleted and created again | `false` |
 | `--conc` | `int` | Limits number of concurrent `PUT` requests and number of concurrent shards created | `10` |
 
-#### Examples
+### Examples
 
-| Command | Explanation |
-| --- | --- |
-| `ais gen-shards --fsize 262144 --fcount 100` | Generates 10 shards each containing 100 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar` |
-| `ais gen-shards --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup` | Generates 100 shards each containing 5 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz` |
+#### Generate shards with custom number of files and sizes
 
-### Start
+Generate 10 shards each containing 100 files of size 256KB and put them inside `dsort-testing` bucket (creates it if it does not exist).
+Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
+
+```console
+$ ais gen-shards --fsize 262144 --fcount 100
+Shards created: 10/10 [==============================================================] 100 %
+$ ais ls ais://dsort-testing
+Name		Size		Version
+shard-0.tar	25.05MiB	1
+shard-1.tar	25.05MiB	1
+shard-2.tar	25.05MiB	1
+shard-3.tar	25.05MiB	1
+shard-4.tar	25.05MiB	1
+shard-5.tar	25.05MiB	1
+shard-6.tar	25.05MiB	1
+shard-7.tar	25.05MiB	1
+shard-8.tar	25.05MiB	1
+shard-9.tar	25.05MiB	1
+```
+
+#### Generate shards with custom naming template
+
+Generates 100 shards each containing 5 files of size 256KB and put them inside `dsort-testing` bucket.
+Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz`
+
+```console
+$ ais gen-shards --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup
+Shards created: 100/100 [==============================================================] 100 %
+$ ais ls ais://dsort-testing
+Name				Size	Version
+super_shard_000_last.tgz	1.25MiB	1
+super_shard_001_last.tgz	1.25MiB	1
+super_shard_002_last.tgz	1.25MiB	1
+super_shard_003_last.tgz	1.25MiB	1
+super_shard_004_last.tgz	1.25MiB	1
+super_shard_005_last.tgz	1.25MiB	1
+super_shard_006_last.tgz	1.25MiB	1
+super_shard_007_last.tgz	1.25MiB	1
+...
+```
+
+## Start dSort job
 
 `ais start dsort JOB_SPEC` or `ais start dsort -f <PATH_TO_JOB_SPEC>`
 
@@ -74,7 +112,7 @@ For more information refer to [configuration](/docs/configuration.md).
 | `ekm_missing_key` | `string` | what to do when extraction key map have a missing key: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
 | `dsorter_mem_threshold` | `string`| minimum free memory threshold which will activate specialized dsorter type which uses memory in creation phase - benchmarks shows that this type of dsorter behaves better than general type |
 
-#### Examples:
+### Examples
 
 #### Sort records inside the shards
 
@@ -194,12 +232,14 @@ shard-dogs-0.tar:
 ...
 ```
 
-### Show jobs and job status
+## Show dSort jobs and job status
 
 `ais show dsort [JOB_ID]`
 
 Retrieve the status of the dSort with provided `JOB_ID` which is returned upon creation.
 Lists all dSort jobs if the `JOB_ID` argument is omitted.
+
+### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -208,54 +248,52 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 | `--verbose, -v` | `bool` | Show detailed metrics | `false` |
 | `--log` | `string` | Path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
 
-#### Examples
+### Examples
 
-| Command | Explanation |
-| --- | --- |
-| `ais show dsort` | Shows all dSort jobs |
-| `ais show dsort --regex "^dsort-(.*)"` | Shows all dSort jobs with descriptions starting with `dsort-` prefix |
-| `ais show dsort 5JjIuGemR` | Shows short status description of the dSort job with ID `5JjIuGemR` |
-| `ais show dsort 5JjIuGemR -v` | Shows detailed metrics of the dSort job with ID `5JjIuGemR` |
-| `ais show dsort 5JjIuGemR --refresh 500` | Creates progress bar for the dSort job with ID `5JjIuGemR` and refreshes it every `500` milliseconds |
-| `ais show dsort 5JjIuGemR --refresh 500 -v` |  Returns newly fetched metrics of the dSort job with ID `5JjIuGemR` every `500` milliseconds |
-| `ais show dsort 5JjIuGemR --refresh 500 --log "/tmp/dsort_run.txt"` | Saves newly fetched metrics of the dSort job with ID `5JjIuGemR` to `/tmp/dsort_run.txt` file every `500` milliseconds |
+#### Show dSort jobs with description matching provided regex
 
-### Stop
+Shows all dSort jobs with descriptions starting with `sort ` prefix.
+
+```console
+$ ais show dsort --regex "^sort (.*)"
+JobID		 Status		 Start		 Finish			 Description
+nro_Y5h9n	 Finished	 03-16 11:39:07	 03-16 11:39:07 	 sort shards from 0 to 9
+Key_Y5h9n	 Finished	 03-16 11:39:23	 03-16 11:39:23 	 sort shards from 10 to 19
+enq9Y5Aqn	 Finished	 03-16 11:39:34	 03-16 11:39:34 	 sort shards from 20 to 29
+```
+
+#### Save metrics to log file
+
+Save newly fetched metrics of the dSort job with ID `5JjIuGemR` to `/tmp/dsort_run.txt` file every `500` milliseconds
+
+```console
+$ ais show dsort 5JjIuGemR --refresh 500ms --log "/tmp/dsort_run.txt"
+DSort job has finished successfully in 21.948806ms:
+  Longest extraction:	1.49907ms
+  Longest sorting:	8.288299ms
+  Longest creation:	4.553µs
+```
+
+## Stop dSort job
 
 `ais stop dsort JOB_ID`
 
 Stop the dSort job with given `JOB_ID`.
 
-#### Examples
-
-| Command | Explanation |
-| --- | --- |
-| `ais stop dsort 5JjIuGemR` | Stops the dSort job with ID `5JjIuGemR` |
-
-### Remove
+## Remove dSort job
 
 `ais rm dsort JOB_ID`
 
 Remove the finished dSort job with given `JOB_ID` from the job list.
 
-#### Examples
-
-| Command | Explanation |
-| --- | --- |
-| `ais rm dsort 5JjIuGemR` | Removes the dSort job with ID `5JjIuGemR` from the list of dSort jobs |
-
-### Wait
+## Wait for dSort job
 
 `ais wait dsort JOB_ID`
 
 Wait for the dSort job with given `JOB_ID` to finish.
 
+### Options
+
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--refresh` | `duration` | Refresh rate | `1s` |
-
-#### Examples
-
-| Command | Explanation |
-| --- | --- |
-| `ais wait dsort 5JjIuGemR` | Waits for the dSort job with ID `5JjIuGemR` to finish |
