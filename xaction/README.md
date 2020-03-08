@@ -66,7 +66,7 @@ responded with a successful HTTP code, the proxy would respond with the successf
 For an unsuccessful request, the target's response contains the error code and error message. If the request was sent to proxy and at least one
 of targets responded with an error code, the proxy will respond with the same error code and error message.
 
->> As always, `G` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address and `T` serves for placeholder for target's hostname/IP address. More information in [notation section](/docs/http_api.md#notation).
+> As always, `G` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address and `T` serves for placeholder for target's hostname/IP address. More information in [notation section](/docs/http_api.md#notation).
 
 The corresponding [RESTful API](/docs/http_api.md) includes support for querying all xactions including global-rebalancing and prefetch operations.
 

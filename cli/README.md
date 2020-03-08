@@ -1,5 +1,3 @@
-# AIS CLI
-
 AIS Command Line Interface is a tool used to interact with resources of AIStore. It gives users the ability to query information from specific daemons,
 create or delete resources or download files to buckets directly from the command line.
 
@@ -7,6 +5,7 @@ create or delete resources or download files to buckets directly from the comman
 
 Run the `install.sh` script to install AIS CLI binary in your `$GOPATH/bin` directory.
 The script also allows you to install [shell autocompletions](#ais-cli-shell-auto-complete) for AIS CLI.
+
 > The rest of the README assumes that user's `PATH` environment variable contains `$GOPATH/bin` directory.
 > Run `export PATH=$PATH:$GOPATH/bin` if this is not the case for you.
 > You can read more about GOPATH environment variable [here](https://golang.org/doc/code.html#GOPATH).

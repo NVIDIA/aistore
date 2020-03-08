@@ -6,8 +6,10 @@ This text is intended to help troubleshooting AIStore operation.
 
 The one category of errors that deserves special consideration is "cluster integrity". This category includes several numbered errors that may look as follows:
 
-> cluster integrity error `cie#50`:
-> Smaps have different origins: Smap v9[...111, t=9, p=3] vs p[232268p8080]: Smap v13[...281, t=4, p=4]
+```
+cluster integrity error `cie#50`:
+Smaps have different origins: Smap v9[...111, t=9, p=3] vs p[232268p8080]: Smap v13[...281, t=4, p=4]
+```
 
 Above is an example of an actual error - `cie#50` in this case. Generally though, a cluster integrity violation is detected when a node that previously was (and possibly currently remains) a member of a cluster `A` tries to join a different cluster `B`. "Mixing up" nodes (in particular, storage targets) between different AIStore clusters triggers automated rebalancing with further complications that may be very difficult to sort out.
 

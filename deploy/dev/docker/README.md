@@ -1,29 +1,31 @@
-# Working with AIS on Docker
+There are two different ways, or modes, to deploy AIS in Docker containers.
+We refer to those ways as [quick-start mode](#quick-start-ais-cluster) and [development mode](#developer-mode).
 
-There are two different ways, or modes, to deploy AIS in Docker containers. We refer to those ways as [quick-start mode](#quick-start-ais-cluster) and [development mode](#developer-mode).
-
-[Quick-start mode](#quick-start-ais-cluster) allows for a quick containerized deployment of AIS with minimal setup. [Development mode](#developer-mode) allows users to test and develop AIS in a more robust containerized environment.
+[Quick-start mode](#quick-start-ais-cluster) allows for a quick containerized deployment of AIS with minimal setup.
+[Development mode](#developer-mode) allows users to test and develop AIS in a more robust containerized environment.
 
 ## Quick-start AIS Cluster
 
-Create a containerized, one-proxy, one-target deployment of AIStore within seconds. The minimum requirements to get this working is to have Docker installed. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](/docs/docker_main.md)
+Create a containerized, one-proxy, one-target deployment of AIStore within seconds.
+The minimum requirements to get this working is to have Docker installed.
+If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](/docs/docker_main.md)
 
 > For some tests, AWS config and credential files are needed
 
 1. To quick-start AIStore, run: 
 
-```console
-$ ./deploy_docker -qs
-```
-
-> The first build may take some time, but subsequent builds will be much faster.
+    ```console
+    $ ./deploy_docker -qs
+    ```
+    
+    > The first build may take some time, but subsequent builds will be much faster.
 
 2. Once it finishes building, you should be inside the AIS container. Run:
 
-```console
-$ cd $WORKDIR
-$ ./setup/deploy.sh
-```
+    ```console
+    $ cd $WORKDIR
+    $ ./setup/deploy.sh
+    ```
 
 Type `1` for all options to create a very basic AIStore cluster.
 
@@ -70,13 +72,15 @@ For the *i*th cluster, AIStore creates three networks: ais${i}\_public, ais${i}\
 
 ## Deploying a Development Cluster
 
-Run `./deploy_docker.sh` without arguments if you want to deploy a cluster in interactive mode. The script will ask you for a number of configuration parameters and deploy AIS accordingly:
+Run `./deploy_docker.sh` without arguments if you want to deploy a cluster in interactive mode.
+The script will ask you for a number of configuration parameters and deploy AIS accordingly:
 
 ```console
 $ ./deploy_docker.sh
 ```
 
-Be sure that the AWS credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
+Be sure that the AWS credentials and configuration files are located outside of the script directory.
+The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
 
 To deploy a cluster in 'silent' mode use the following options (if any of them are not set, then the script switches to interactive mode and asks for the missing configuration parameters):
 
@@ -166,6 +170,7 @@ $ ./stop_docker.sh -c=NUM_CLUSTERS
 These commands stop all containers (even stopped and dead ones), and remove Docker networks used by AIS. Refer to the stop_docker.sh script for more details about its usage.
 
 ## Viewing the Local Filesystem of a Container
+
 The Docker-Compose file is currently set to mount the `/tmp/ais/${i}/${hostname}` directory, where *i* is the cluster number and *hostname* is hostname of container, to `/tmp/ais` inside the container.
 Thus, to see the `/tmp/ais` folder of container `ais${i}\_${target,proxy}\_${j}` obtain the hostname of given container and navigate to `/tmp/ais/${i}/${hostname}` directory on your local machine.
 

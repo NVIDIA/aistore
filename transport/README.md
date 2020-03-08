@@ -1,4 +1,4 @@
-**Package `transport` provides streaming object-based transport over HTTP for massive intra-AIS data transfers. AIStore utilizes this package for cluster-wide (aka "global") rebalancing, distributed merge-sort, and more.**
+Package `transport` provides streaming object-based transport over HTTP for massive intra-AIS data transfers. AIStore utilizes this package for cluster-wide (aka "global") rebalancing, distributed merge-sort, and more.
 
 - [Build](#build)
 - [Description](#description)
@@ -15,15 +15,15 @@
 
 The package includes build-time support for two alternative http clients:
 
-* standard net/http
-* 3rd party github.com/valyala/fasthttp aka "fasthttp"
+* standard [net/http](golang.org/pkg/net/http)
+* 3rd party [github.com/valyala/fasthttp](github.com/valyala/fasthttp) aka "fasthttp"
 
 The following is a quick summary:
 
 | Client | Reference | Build Tag | Default |
 |--- | --- | --- | ---|
-| net/http | golang.org/pkg/net/http | `nethttp` | no |
-| fasthttp | github.com/valyala/fasthttp | n/a  | yes |
+| `net/http` | [golang.org/pkg/net/http](golang.org/pkg/net/http) | `nethttp` | no |
+| `fasthttp` | [github.com/valyala/fasthttp](github.com/valyala/fasthttp) | n/a  | yes |
 
 To test with net/http, run:
 
@@ -137,17 +137,17 @@ where mux is `mux.ServeMux` (fork of `net/http` package) that corresponds to the
 
 On the wire, each transmitted object will have the layout:
 
->> [header length] [header fields including object name and size] [object bytes]
+> `[header length] [header fields including object name and size] [object bytes]`
 
 The size must be known upfront, which is the current limitation.
 
 A stream (the [Stream type](/transport/send.go)) carries a sequence of objects of arbitrary sizes and contents, and overall looks as follows:
 
->> object1 = (**[header1]**, **[data1]**) object2 = (**[header2]**, **[data2]**), etc.
+> `object1 = (**[header1]**, **[data1]**)` `object2 = (**[header2]**, **[data2]**)`, etc.
 
 Stream termination is denoted by a special marker in the data-size field of the header:
 
->> header = [object size=7fffffffffffffff]
+> `header = [object size=7fffffffffffffff]`
 
 ## Transport statistics
 
@@ -214,9 +214,8 @@ NewStreamBundle(
 
 ### A note on connection establishment and termination
 
->> For each of the individual transport streams in a bundle, constructing a stream (`transport.Stream`) does not necessarily entail establishing TCP connection. Actual connection establishment is delayed until arrival (via `Send` or `SendV`) of the very first object.
-
->> The underlying HTTP/TCP session will also terminate after a (configurable) period of inactivity, only to be re-established when (and if) the traffic picks up again.
+* For each of the individual transport streams in a bundle, constructing a stream (`transport.Stream`) does not necessarily entail establishing TCP connection. Actual connection establishment is delayed until arrival (via `Send` or `SendV`) of the very first object.
+* The underlying HTTP/TCP session will also terminate after a (configurable) period of inactivity, only to be re-established when (and if) the traffic picks up again.
 
 ### API
 
@@ -248,7 +247,6 @@ $ go test -v -logtostderr=true
 $ AIS_DEBUG=transport=1 go test -v -run=Multi
 ```
 
-
 Use `nethttp` build tag to run with net/http, e.g.:
 
 ```console
@@ -267,7 +265,7 @@ For more examples, please see tests in the package directory.
 
 | Environment Variable | Description |
 |--- | --- |
-| AIS_DEBUG | Enable inline assertions and verbose tracing (eg. `AIS_DEBUG=transport=1`) |
-| AIS_STREAM_BURST_NUM | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |
-| AIS_STREAM_DRY_RUN | If enabled, read and immediately discard all read data (can be used to evaluate client-side throughput) |
+| `AIS_DEBUG` | Enable inline assertions and verbose tracing (eg. `AIS_DEBUG=transport=1`) |
+| `AIS_STREAM_BURST_NUM` | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |
+| `AIS_STREAM_DRY_RUN` | If enabled, read and immediately discard all read data (can be used to evaluate client-side throughput) |
 

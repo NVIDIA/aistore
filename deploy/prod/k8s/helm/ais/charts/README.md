@@ -1,12 +1,11 @@
-# AIS helm chart 
-
 ## Overview
 
 This repo includes all the definition of launching a AIS proxy and target on a K8s cluster.
 
-### PREREQUISITES
-One (and only one) of the nodes in the K8s cluster must have a label "nvidia.com/ais-initial-primary-proxy" with value <release-name<>>. This can be set by
-command:
+### Prerequisites
+
+One (and only one) of the nodes in the K8s cluster must have a label `"nvidia.com/ais-initial-primary-proxy"` with value `<release-name>`.
+This can be set by command:
 
 ```console
 kubectl label nodes <A-node-name> nvidia.com/ais-initial-primary-proxy=demo
@@ -18,50 +17,51 @@ assuming you're using `helm install --name=demo ...`
 
 1. Prepare chart dependencies (even if you intend not to install Grafana and Graphite):
 
-```console
-$ helm repo add kiwigrid https://kiwigrid.github.io       # graphite lives here
-$ helm dependency update                                  # pull in charts we depend upon
-```
+    ```console
+    $ helm repo add kiwigrid https://kiwigrid.github.io       # graphite lives here
+    $ helm dependency update                                  # pull in charts we depend upon
+    ```
 
 2. The default is to install instances of Graphite and Grafana alongside AIS.
 
    * To install AIS with Graphite/Grafana metrics but with no persistence of Graphite/Grafana metrics and state:
 
-```console
-helm install --name=devops-ais \
-   --set image.dockerRepoToken=<token-to-pull-docker-image> \
-   --set graphite.persistence.enabled=false \
-   --set grafana.persistence.enabled=false \
-   .
-```
+        ```console
+        helm install --name=devops-ais \
+           --set image.dockerRepoToken=<token-to-pull-docker-image> \
+           --set graphite.persistence.enabled=false \
+           --set grafana.persistence.enabled=false \
+           .
+        ```
 
    * To install AIS along with Graphite/Grafana, with persistence for Graphite/Grafana:
      Persistence is enabled by default, but you need to supply a path to a pre-created area in which to persist data. In the example below these areas are /data/{graphite,grafana} on node cpu01.
 
-```console
-helm install --name=devops-ais \
-   --set image.dockerRepoToken=<token-to-pull-docker-image> \
-   --set graphite.ais.pv.path=/data/graphite \
-   --set graphite.ais.pv.node=cpu01 \
-   --set graphite.ais.pv.capacity=250Gi \
-   --set grafana.ais.pv.path=/data/graphite \
-   --set grafana.ais.pv.node=cpu01 \
-   --set grafana.ais.pv.capacity=250Gi \
-   .
-```
+        ```console
+        helm install --name=devops-ais \
+           --set image.dockerRepoToken=<token-to-pull-docker-image> \
+           --set graphite.ais.pv.path=/data/graphite \
+           --set graphite.ais.pv.node=cpu01 \
+           --set graphite.ais.pv.capacity=250Gi \
+           --set grafana.ais.pv.path=/data/graphite \
+           --set grafana.ais.pv.node=cpu01 \
+           --set grafana.ais.pv.capacity=250Gi \
+           .
+        ```
 
    * To install AIS using an external instance of Graphite:
 
-```console
-helm install --name=devops-ais \
-   --set image.dockerRepoToken=<token-to-pull-docker-image> \
-   --set tags.builtin_monitoring=false \
-   --set external_monitoring.graphite_host=... \
-   --set external_monitoring.graphite_port=... \
-   .
-```
+        ```console
+        helm install --name=devops-ais \
+           --set image.dockerRepoToken=<token-to-pull-docker-image> \
+           --set tags.builtin_monitoring=false \
+           --set external_monitoring.graphite_host=... \
+           --set external_monitoring.graphite_port=... \
+           .
+        ```
 
 ### Deletion
+
 You can delete the release using:
 
 ```console

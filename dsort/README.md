@@ -1,7 +1,3 @@
-# DSort
-
-## Introduction
-
 DSort is extension for AIStore. It was designed to perform map-reduce like
 operations on terabytes and petabytes of AI datasets. As a part of the whole
 system, DSort is capable of taking advantage of objects stored on AIStore without

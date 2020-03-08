@@ -1,7 +1,4 @@
-# Memory Manager and Slab/SGL Allocator (MMSA)
-
 ## Overview
-
 
 MMSA is, simultaneously, a) Slab and SGL allocator, and b) memory manager
 that is responsible to optimize memory usage between different (more vs less) utilized
@@ -17,29 +14,30 @@ deallocate idle Slabs. To that end, MMSA utilizes `housekeep` (project and runne
 ## Construction
 
 A typical initialization sequence includes steps, e.g.:
-1) construct:
 
-```go
-	mm := &memsys.MMSA{Name: ..., TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
-```
+1. Construct:
 
-**Note** that with the only exception of `Name` all the rest member variables (above) have their system defaults and can be omitted.
+    ```go
+    mm := &memsys.MMSA{Name: ..., TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
+    ```
+    
+    **Note** that with the only exception of `Name` all the rest member variables (above) have their system defaults and can be omitted.
 
-2) initialize:
+2. Initialize:
 
-```go
-	err := mm.Init(false /* don't panic on error */)
-	if err != nil {
-		...
-	}
-```
+    ```go
+    err := mm.Init(false /* don't panic on error */)
+    if err != nil {
+        ...
+    }
+    ```
 
 The example above shows initialization that ignores errors - in particular, insifficient minimum required memory (see the previous section).
 
 Alternatively, MMSA can be initialized *not* to panic on errors:
 
 ```go
-	 mm.Init(true /* panic on error */)
+ mm.Init(true /* panic on error */)
 ```
 
 In addition, there are several environment variables that can be used
@@ -57,16 +55,19 @@ AIS_DEBUG
 MMSA will try to make sure that there's a certain specified amount of memory that remains available at all times.
 Following are the rules to set this minimum:
 
-* 1) environment `AIS_MINMEM_FREE` takes precedence over everything else listed below;
-* 2) if `AIS_MINMEM_FREE` is not defined, variables `AIS_MINMEM_PCT_TOTAL` and/or
-     `AIS_MINMEM_PCT_FREE` define percentages to compute the minimum based on the total
-     or the currently available memory, respectively;
-* 3) with no environment, the minimum is computed based on the following MMSA member variables:
-     * MinFree     - memory that must be available at all times
-     * MinPctTotal - same, via percentage of total
-     * MinPctFree  - ditto, as % of free at init time
-     * example: memsys.MMSA{MinPctTotal: 4, MinFree: cmn.GiB * 2}
- * 4) finally, if none of the above is specified, the constant `minMemFree` in the source
+1. environment `AIS_MINMEM_FREE` takes precedence over everything else listed below;
+2. if `AIS_MINMEM_FREE` is not defined, variables `AIS_MINMEM_PCT_TOTAL` and/or
+ `AIS_MINMEM_PCT_FREE` define percentages to compute the minimum based on the total
+  or the currently available memory, respectively;
+3. with no environment, the minimum is computed based on the following MMSA member variables:
+    * `MinFree`     - memory that must be available at all times
+    * `MinPctTotal` - same, via percentage of total
+    * `MinPctFree`  - ditto, as % of free at init time
+    * Example:
+        ```go
+        memsys.MMSA{MinPctTotal: 4, MinFree: cmn.GiB * 2}
+        ```
+4. finally, if none of the above is specified, the constant `minMemFree` in the source
 
 ## Termination
 
@@ -75,7 +76,7 @@ This will free up all the slabs allocated to the memory manager instance.
 Halt a running or initialized MMSA instance is done by:
 
 ```go
-    mm.Terminate()
+mm.Terminate()
 ```
 
 ## Operation
