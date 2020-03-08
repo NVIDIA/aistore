@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/SOAKTEST
+title: SOAKTEST
 permalink: bench/soaktest
 redirect_from:
  - bench/soaktest/README.md/

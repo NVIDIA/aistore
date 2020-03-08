@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/PROD/K8S/HELM/AIS/CHARTS/CHARTS/GRAPHITE
+title: GRAPHITE
 permalink: deploy/prod/k8s/helm/ais/charts/charts/graphite
 redirect_from:
  - deploy/prod/k8s/helm/ais/charts/charts/graphite/README.md/

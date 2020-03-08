@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/PROD/K8S/KUBESPRAY
+title: KUBESPRAY
 permalink: deploy/prod/k8s/kubespray
 redirect_from:
  - deploy/prod/k8s/kubespray/README.md/

@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/DISK/COMPARE
+title: COMPARE
 permalink: bench/disk/compare
 redirect_from:
  - bench/disk/compare/README.md/

@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/PROD/DOCKER/SINGLE
+title: SINGLE
 permalink: deploy/prod/docker/single
 redirect_from:
  - deploy/prod/docker/single/README.md/

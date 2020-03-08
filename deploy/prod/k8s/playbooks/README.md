@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/PROD/K8S/PLAYBOOKS
+title: PLAYBOOKS
 permalink: deploy/prod/k8s/playbooks
 redirect_from:
  - deploy/prod/k8s/playbooks/README.md/

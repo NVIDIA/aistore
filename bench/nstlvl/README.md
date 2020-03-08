@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/NSTLVL
+title: NSTLVL
 permalink: bench/nstlvl
 redirect_from:
  - bench/nstlvl/README.md/

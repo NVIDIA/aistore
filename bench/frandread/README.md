@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/FRANDREAD
+title: FRANDREAD
 permalink: bench/frandread
 redirect_from:
  - bench/frandread/README.md/

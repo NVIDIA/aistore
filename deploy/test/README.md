@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/TEST
+title: TEST
 permalink: deploy/test
 redirect_from:
  - deploy/test/README.md/

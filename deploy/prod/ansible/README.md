@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/PROD/ANSIBLE
+title: ANSIBLE
 permalink: deploy/prod/ansible
 redirect_from:
  - deploy/prod/ansible/README.md/

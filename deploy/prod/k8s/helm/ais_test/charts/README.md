@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/PROD/K8S/HELM/AIS_TEST/CHARTS
+title: CHARTS
 permalink: deploy/prod/k8s/helm/ais_test/charts
 redirect_from:
  - deploy/prod/k8s/helm/ais_test/charts/README.md/

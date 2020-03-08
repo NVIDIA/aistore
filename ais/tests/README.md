@@ -1,6 +1,6 @@
 ---
 layout: post
-title: AIS/TESTS
+title: TESTS
 permalink: ais/tests
 redirect_from:
  - ais/tests/README.md/

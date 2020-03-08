@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/PROD/K8S/UTILS
+title: UTILS
 permalink: deploy/prod/k8s/utils
 redirect_from:
  - deploy/prod/k8s/utils/README.md/

@@ -18,8 +18,8 @@
 # You can create any custom variable you would like, and they will be accessible
 # in the templates via {{ site.myvariable }}.
 
-title: AIStore - distributed object storage
-name: AIStore
+title: AIStore
+name: AIStore - scalable storage for AI applications
 markdown: kramdown
 kramdown:
   input: GFM

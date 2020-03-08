@@ -1,6 +1,6 @@
 ---
 layout: post
-title: AIStore
+title: AIStore - scalable storage for AI applications
 permalink: /
 redirect_from:
  - /README.md/

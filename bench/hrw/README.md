@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/HRW
+title: HRW
 permalink: bench/hrw
 redirect_from:
  - bench/hrw/README.md/

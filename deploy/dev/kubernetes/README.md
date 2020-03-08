@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/DEV/KUBERNETES
+title: KUBERNETES
 permalink: deploy/dev/kubernetes
 redirect_from:
  - deploy/dev/kubernetes/README.md/

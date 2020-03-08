@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/DL
+title: DL
 permalink: bench/dl
 redirect_from:
  - bench/dl/README.md/

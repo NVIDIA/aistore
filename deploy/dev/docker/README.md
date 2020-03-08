@@ -1,6 +1,6 @@
 ---
 layout: post
-title: DEPLOY/DEV/DOCKER
+title: DOCKER
 permalink: deploy/dev/docker
 redirect_from:
  - deploy/dev/docker/README.md/

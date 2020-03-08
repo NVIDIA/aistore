@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/XMETA
+title: XMETA
 permalink: bench/xmeta
 redirect_from:
  - bench/xmeta/README.md/

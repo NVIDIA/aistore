@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/DISK/LOADGEN
+title: LOADGEN
 permalink: bench/disk/loadgen
 redirect_from:
  - bench/disk/loadgen/README.md/

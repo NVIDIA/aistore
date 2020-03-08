@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/MAP
+title: MAP
 permalink: bench/map
 redirect_from:
  - bench/map/README.md/

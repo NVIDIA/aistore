@@ -1,6 +1,6 @@
 ---
 layout: post
-title: BENCH/AISLOADER
+title: AISLOADER
 permalink: bench/aisloader
 redirect_from:
  - bench/aisloader/README.md/
