@@ -172,6 +172,10 @@ func (df *dsortFramework) init() {
 		df.fileInTarballSize = cmn.KiB
 	}
 
+	if df.maxMemUsage == "" {
+		df.maxMemUsage = "99%"
+	}
+
 	df.tarballSize = df.fileInTarballCnt * df.fileInTarballSize
 	outputShardSize := int64(10 * df.fileInTarballCnt * df.fileInTarballSize)
 	df.outputShardSize = cmn.B2S(outputShardSize, 0)
@@ -1101,7 +1105,7 @@ func TestDistributedSortZip(t *testing.T) {
 					tarballCnt:       1000,
 					fileInTarballCnt: 100,
 					extension:        ".zip",
-					maxMemUsage:      "60%",
+					maxMemUsage:      "99%",
 				}
 			)
 
@@ -1150,7 +1154,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 					tarballCnt:       1000,
 					fileInTarballCnt: 50,
 					extension:        dsort.ExtTarTgz,
-					maxMemUsage:      "60%",
+					maxMemUsage:      "99%",
 				}
 			)
 
@@ -1287,7 +1291,6 @@ func TestDistributedSortAbort(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       1000,
 					fileInTarballCnt: 10,
-					maxMemUsage:      "60%",
 				}
 			)
 
@@ -1337,7 +1340,6 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       1000,
 					fileInTarballCnt: 200,
-					maxMemUsage:      "40%",
 				}
 			)
 
@@ -1390,7 +1392,6 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					outputTempl:      "output-{0..100000}",
 					tarballCnt:       1000,
 					fileInTarballCnt: 200,
-					maxMemUsage:      "40%",
 				}
 			)
 
@@ -1469,7 +1470,6 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 							outputTempl:      "output-{0..100000}",
 							tarballCnt:       2000,
 							fileInTarballCnt: 200,
-							maxMemUsage:      "1%",
 						}
 
 						mountpaths = make(map[*cluster.Snode]string)
@@ -1567,7 +1567,6 @@ func TestDistributedSortAddTarget(t *testing.T) {
 					outputTempl:      "output-{0..100000}",
 					tarballCnt:       4000,
 					fileInTarballCnt: 200,
-					maxMemUsage:      "1KB",
 				}
 			)
 
@@ -1630,7 +1629,6 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 					outputTempl:      "output-{0..1000}",
 					tarballCnt:       50,
 					fileInTarballCnt: 10,
-					maxMemUsage:      "40%",
 				}
 			)
 
@@ -1679,7 +1677,6 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       1000,
 					fileInTarballCnt: 100,
-					maxMemUsage:      "99%",
 					missingShards:    cmn.AbortReaction,
 				}
 			)
@@ -1788,7 +1785,6 @@ func TestDistributedSortMissingShards(t *testing.T) {
 					tarballCntToSkip: 50,
 					fileInTarballCnt: 200,
 					extension:        ".tar",
-					maxMemUsage:      "40%",
 				}
 			)
 
@@ -1853,7 +1849,6 @@ func TestDistributedSortDuplications(t *testing.T) {
 					fileInTarballCnt:      200,
 					recordDuplicationsCnt: 50,
 					extension:             ".tar",
-					maxMemUsage:           "40%",
 				}
 			)
 
@@ -1912,7 +1907,6 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					},
 					tarballCnt:       100,
 					fileInTarballCnt: 10,
-					maxMemUsage:      "40%",
 				}
 
 				orderFileName = "orderFileName"
@@ -2013,7 +2007,6 @@ func TestDistributedSortDryRun(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       1000,
 					fileInTarballCnt: 100,
-					maxMemUsage:      "99%",
 					dryRun:           true,
 				}
 			)
@@ -2060,7 +2053,6 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       1000,
 					fileInTarballCnt: 100,
-					maxMemUsage:      "1KB",
 					dryRun:           true,
 				}
 			)
