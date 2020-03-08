@@ -1035,47 +1035,49 @@ func TestStressDeleteRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
+
 	const (
 		numFiles   = 20000 // FIXME: must divide by 10 and by the numReaders
 		numReaders = 200
 	)
+
 	var (
-		err          error
-		wg           = &sync.WaitGroup{}
-		errCh        = make(chan error, numFiles)
-		proxyURL     = tutils.GetPrimaryURL()
-		tenth        = numFiles / 10
-		partialRange = fmt.Sprintf("%s/tstf-{%d..%d}", ListRangeStr, 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
-		rnge         = fmt.Sprintf("%s/tstf-{0..%d}", ListRangeStr, numFiles)
-		readersList  [numReaders]tutils.Reader
-		baseParams   = tutils.DefaultBaseAPIParams(t)
-		bck          = cmn.Bck{
+		err           error
+		wg            = &sync.WaitGroup{}
+		errCh         = make(chan error, numFiles)
+		proxyURL      = tutils.GetPrimaryURL()
+		tenth         = numFiles / 10
+		objNamePrefix = fmt.Sprintf("%s/tstf-", ListRangeStr)
+		partialRange  = fmt.Sprintf("%s{%d..%d}", objNamePrefix, 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
+		fullRange     = fmt.Sprintf("%s{0..%d}", objNamePrefix, numFiles)
+		baseParams    = tutils.DefaultBaseAPIParams(t)
+		bck           = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	// 1. PUT
+	tutils.Logln("putting objects...")
 	for i := 0; i < numReaders; i++ {
-		random := rand.New(rand.NewSource(int64(i)))
-		size := random.Int63n(cmn.KiB*128) + cmn.KiB/3
+		size := rand.Int63n(cmn.KiB*128) + cmn.KiB/3
 		tassert.CheckFatal(t, err)
 		reader, err := tutils.NewRandReader(size, true /* withHash */)
 		tassert.CheckFatal(t, err)
-		readersList[i] = reader
 
 		wg.Add(1)
 		go func(i int, reader tutils.Reader) {
 			defer wg.Done()
 
 			for j := 0; j < numFiles/numReaders; j++ {
-				objname := fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j)
+				objName := fmt.Sprintf("%s%d", objNamePrefix, i*numFiles/numReaders+j)
 				putArgs := api.PutObjectArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
-					Object:     objname,
+					Object:     objName,
 					Hash:       reader.XXHash(),
 					Reader:     reader,
 				}
@@ -1085,7 +1087,6 @@ func TestStressDeleteRange(t *testing.T) {
 				}
 				reader.Seek(0, io.SeekStart)
 			}
-			tutils.Progress(i, 99)
 		}(i, reader)
 	}
 	wg.Wait()
@@ -1093,50 +1094,44 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 2. Delete a range of objects
 	tutils.Logf("Deleting objects in range: %s\n", partialRange)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, partialRange)
-	if err != nil {
-		t.Error(err)
-	}
+	err = api.DeleteRange(baseParams, bck, partialRange)
+	tassert.CheckError(t, err)
 	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
 
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
-	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
-	bktlst, err := api.ListBucket(baseParams, bck, msg, 0)
+	msg := &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: int(pagesize)}
+	bckList, err := api.ListBucket(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	if len(bktlst.Entries) != expectedRemaining {
-		t.Errorf("Incorrect number of remaining objects: %d, expected: %d", len(bktlst.Entries), expectedRemaining)
+	if len(bckList.Entries) != expectedRemaining {
+		t.Errorf("Incorrect number of remaining objects: %d, expected: %d", len(bckList.Entries), expectedRemaining)
 	}
 
-	filemap := make(map[string]*cmn.BucketEntry)
-	for _, entry := range bktlst.Entries {
-		filemap[entry.Name] = entry
+	objNames := make(map[string]*cmn.BucketEntry)
+	for _, entry := range bckList.Entries {
+		objNames[entry.Name] = entry
 	}
 	for i := 0; i < numFiles; i++ {
-		objname := fmt.Sprintf("%s%d", prefix, i)
-		_, ok := filemap[objname]
+		objName := fmt.Sprintf("%s%d", objNamePrefix, i)
+		_, ok := objNames[objName]
 		if ok && i < numFiles-tenth {
-			t.Errorf("%s exists (expected to be deleted)", objname)
+			t.Errorf("%s exists (expected to be deleted)", objName)
 		} else if !ok && i >= numFiles-tenth {
-			t.Errorf("%s does not exist", objname)
+			t.Errorf("%s does not exist", objName)
 		}
 	}
 
 	// 4. Delete the entire range of objects
-	tutils.Logf("Deleting objects in range: %s\n", rnge)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), bck, rnge)
-	if err != nil {
-		t.Error(err)
-	}
+	tutils.Logf("Deleting objects in range: %s\n", fullRange)
+	err = api.DeleteRange(baseParams, bck, fullRange)
+	tassert.CheckError(t, err)
 	tutils.WaitForBucketXactionToComplete(t, baseParams, bck, cmn.ActDelete, rebalanceTimeout)
 
 	// 5. Check to see that all files have been deleted
-	msg = &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
-	bktlst, err = api.ListBucket(baseParams, bck, msg, 0)
+	msg = &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: int(pagesize)}
+	bckList, err = api.ListBucket(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	if len(bktlst.Entries) != 0 {
-		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
+	if len(bckList.Entries) != 0 {
+		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bckList.Entries))
 	}
-
-	tutils.DestroyBucket(t, proxyURL, bck)
 }

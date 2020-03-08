@@ -45,7 +45,7 @@ func TestSGLStressN(t *testing.T) {
 		num = objects / 10
 	}
 	wg := &sync.WaitGroup{}
-	fn := func(id int) {
+	fn := func() {
 		defer wg.Done()
 		for i := 0; i < num; i++ {
 			sglR := mem.NewSGL(128)
@@ -81,11 +81,10 @@ func TestSGLStressN(t *testing.T) {
 			sglR.Free() // removing these two lines fixes the test
 			sglW.Free()
 		}
-		tutils.Progress(id, 100)
 	}
 	for n := 0; n < workers; n++ {
 		wg.Add(1)
-		go fn(n)
+		go fn()
 	}
 	wg.Wait()
 }

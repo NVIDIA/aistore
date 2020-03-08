@@ -41,12 +41,6 @@ func Logf(msg string, args ...interface{}) {
 	}
 }
 
-func Progress(id int, period int) {
-	if id > 0 && id%period == 0 {
-		Logf("%3d: done.\n", id)
-	}
-}
-
 // Generates strong random string or fallbacks to weak if error occurred
 // during generation.
 func GenRandomString(fnLen int) string {
