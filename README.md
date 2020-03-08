@@ -256,7 +256,7 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 - [Performance: Tuning and Testing](docs/performance.md)
 - [Cluster-wide Rebalancing](docs/rebalance.md)
 - [Storage Services](docs/storage_svcs.md)
-- [Extended Actions](docs/xaction.md)
+- [Extended Actions](xaction/README.md)
 - [Integrated Internet Downloader](downloader/README.md)
 - [Docker for AIS developers](docs/docker_main.md)
 - [Troubleshooting Cluster Operation](docs/troubleshooting.md)
