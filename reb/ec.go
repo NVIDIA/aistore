@@ -951,7 +951,7 @@ func (reb *Manager) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.Wai
 		Sorted:   false,
 	}
 	if err := fs.Walk(opts); err != nil {
-		if reb.xreb.Aborted() || reb.xreb.Finished() {
+		if reb.xact().Aborted() || reb.xact().Finished() {
 			glog.Infof("aborting traversal")
 		} else {
 			glog.Warningf("failed to traverse, err: %v", err)
@@ -965,7 +965,7 @@ func (reb *Manager) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.Wai
 // - calculates where "main" object for the CT is
 // - store all the info above to memory
 func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
-	if reb.xreb.Aborted() {
+	if reb.xact().Aborted() {
 		// notify `dir.Walk` to stop iterations
 		return errors.New("Interrupt walk")
 	}
@@ -1057,17 +1057,18 @@ func (reb *Manager) runEC() {
 		wg                = &sync.WaitGroup{}
 		availablePaths, _ = fs.Mountpaths.Get()
 		cfg               = cmn.GCO.Get()
+		bck               = reb.xact().Bck()
 	)
 
 	for _, mpathInfo := range availablePaths {
-		bck := cmn.Bck{Name: reb.xreb.Bck().Name, Provider: cmn.ProviderAIS, Ns: reb.xreb.Bck().Ns}
+		bck := cmn.Bck{Name: bck.Name, Provider: cmn.ProviderAIS, Ns: bck.Ns}
 		wg.Add(1)
 		go reb.jogEC(mpathInfo, bck, wg)
 	}
 
 	if cfg.Cloud.Supported {
 		for _, mpathInfo := range availablePaths {
-			bck := cmn.Bck{Name: reb.xreb.Bck().Name, Provider: cfg.Cloud.Provider, Ns: reb.xreb.Bck().Ns}
+			bck := cmn.Bck{Name: bck.Name, Provider: cfg.Cloud.Provider, Ns: bck.Ns}
 			wg.Add(1)
 			go reb.jogEC(mpathInfo, bck, wg)
 		}
@@ -1114,7 +1115,7 @@ func (reb *Manager) exchange(md *globArgs) error {
 	for i := 0; i < retries; i++ {
 		failed = failed[:0]
 		for _, node := range sendTo {
-			if reb.xreb.Aborted() {
+			if reb.xact().Aborted() {
 				return fmt.Errorf("%d: aborted", globRebID)
 			}
 			rd := cmn.NewByteHandle(body)
@@ -1454,7 +1455,7 @@ func (reb *Manager) firstEmptyTgt(obj *rebObject) *cluster.Snode {
 
 func (reb *Manager) allCTReceived(_ *globArgs) bool {
 	for {
-		if reb.xreb.Aborted() {
+		if reb.xact().Aborted() {
 			return false
 		}
 		uid, wObj := reb.ec.waiter.nextReadyObj()
@@ -1718,7 +1719,7 @@ func (reb *Manager) retransmitEC(md *globArgs) int {
 	// until this loop completes before removing ACK from the list.
 	reb.ec.ackCTs.mtx.Lock()
 	for _, dest := range reb.ec.ackCTs.ct {
-		if reb.xreb.Aborted() {
+		if reb.xact().Aborted() {
 			break
 		}
 		wg.Add(1)
@@ -1727,30 +1728,29 @@ func (reb *Manager) retransmitEC(md *globArgs) int {
 	reb.ec.ackCTs.mtx.Unlock()
 	wg.Wait()
 
-	if reb.xreb.Aborted() {
+	if reb.xact().Aborted() {
 		return 0
 	}
 	return int(counter.Load())
 }
 
 func (reb *Manager) allAckReceived(_ *globArgs) bool {
-	if reb.xreb.Aborted() {
+	if reb.xact().Aborted() {
 		return false
 	}
 	return reb.ec.ackCTs.waiting() == 0
 }
 
 func (reb *Manager) waitECAck(md *globArgs) {
-	globRebID := reb.globRebID.Load()
-	loghdr := reb.loghdr(globRebID, md.smap)
+	logHdr := reb.logHdr(md)
 	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
 
 	// loop without timeout - wait until all CTs put into transport
 	// queue are processed (either sent or failed)
 	for reb.ec.onAir.Load() > 0 {
-		if reb.xreb.AbortedAfter(sleep) {
+		if reb.xact().AbortedAfter(sleep) {
 			reb.ec.onAir.Store(0)
-			glog.Infof("%s: abrt", loghdr)
+			glog.Infof("%s: abort", logHdr)
 			return
 		}
 	}
@@ -1770,11 +1770,11 @@ func (reb *Manager) waitECAck(md *globArgs) {
 	curwt := time.Duration(0)
 	for curwt < maxwt {
 		cnt := reb.retransmitEC(md)
-		if cnt == 0 || reb.xreb.Aborted() {
+		if cnt == 0 || reb.xact().Aborted() {
 			return
 		}
-		if reb.xreb.AbortedAfter(sleep) {
-			glog.Infof("%s: abrt", loghdr)
+		if reb.xact().AbortedAfter(sleep) {
+			glog.Infof("%s: abort", logHdr)
 			return
 		}
 		curwt += sleep
@@ -1782,14 +1782,14 @@ func (reb *Manager) waitECAck(md *globArgs) {
 			// `retransmit` has resent some CTs, so we have to wait for
 			// transfer to finish, and then reset the time counter.
 			// Time counter does not increase while waiting.
-			if reb.xreb.AbortedAfter(sleep) {
+			if reb.xact().AbortedAfter(sleep) {
 				reb.ec.onAir.Store(0)
-				glog.Infof("%s: abrt", loghdr)
+				glog.Infof("%s: abort", logHdr)
 				return
 			}
 			curwt = 0
 		}
-		glog.Warningf("%s: retransmitted %d, more wack...", loghdr, cnt)
+		glog.Warningf("%s: retransmitted %d, more wack...", logHdr, cnt)
 	}
 	// short wait for cluster-wide quiescence after anything retransmitted
 	if aborted := reb.waitQuiesce(md, sleep, reb.nodesQuiescent); aborted {
@@ -1801,7 +1801,7 @@ func (reb *Manager) waitECAck(md *globArgs) {
 func (reb *Manager) rebalanceBatch(md *globArgs, batchCurr int64) error {
 	batchEnd := cmn.Min(int(batchCurr)+ecRebBatchSize, len(reb.ec.broken))
 	for objIdx := int(batchCurr); objIdx < batchEnd; objIdx++ {
-		if reb.xreb.Aborted() {
+		if reb.xact().Aborted() {
 			return ErrorAborted
 		}
 

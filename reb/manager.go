@@ -76,8 +76,7 @@ type (
 		}
 		semaCh     chan struct{}
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
-		xreb       *xaction.GlobalReb
-		xrebMx     sync.Mutex
+		xreb       atomic.Pointer // *xaction.GlobalReb
 		stages     *nodeStages
 		ec         *ecData
 		globRebID  atomic.Int64
@@ -234,11 +233,27 @@ func (reb *Manager) initStreams() {
 func (reb *Manager) GlobRebID() int64       { return reb.globRebID.Load() }
 func (reb *Manager) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 
+func (reb *Manager) xact() *xaction.GlobalReb                  { return (*xaction.GlobalReb)(reb.xreb.Load()) }
+func (reb *Manager) setXact(xact *xaction.GlobalReb)           { reb.xreb.Store(unsafe.Pointer(xact)) }
 func (reb *Manager) lomAcks() *[cmn.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
+func (reb *Manager) addLomAck(lom *cluster.LOM) {
+	_, idx := lom.Hkey()
+	lomAck := reb.lomAcks()[idx]
+	lomAck.mu.Lock()
+	lomAck.q[lom.Uname()] = lom
+	lomAck.mu.Unlock()
+}
+func (reb *Manager) delLomAck(lom *cluster.LOM) {
+	_, idx := lom.Hkey()
+	lomAck := reb.lomAcks()[idx]
+	lomAck.mu.Lock()
+	delete(lomAck.q, lom.Uname())
+	lomAck.mu.Unlock()
+}
 
-func (reb *Manager) loghdr(globRebID int64, smap *cluster.Smap) string {
+func (reb *Manager) logHdr(md *globArgs) string {
 	var stage = stages[reb.stages.stage.Load()]
-	return fmt.Sprintf("%s[g%d,v%d,%s]", reb.t.Snode(), globRebID, smap.Version, stage)
+	return fmt.Sprintf("%s[g%d,v%d,%s]", reb.t.Snode(), md.id, md.smap.Version, stage)
 }
 func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
 	return fmt.Sprintf("rebalance IDs mismatch: local %d, remote %d", reb.GlobRebID(), remoteID)
@@ -261,9 +276,9 @@ func (reb *Manager) serialize(md *globArgs) (newerSmap, alreadyRunning bool) {
 		// vs newer Smap
 		//
 		nver := reb.t.GetSowner().Get().Version
-		loghdr := reb.loghdr(md.id, md.smap)
+		logHdr := reb.logHdr(md)
 		if nver > ver {
-			glog.Warningf("%s: seeing newer Smap v%d, not running", loghdr, nver)
+			glog.Warningf("%s: seeing newer Smap v%d, not running", logHdr, nver)
 			newerSmap = true
 			if canRun {
 				reb.semaCh <- struct{}{}
@@ -274,7 +289,7 @@ func (reb *Manager) serialize(md *globArgs) (newerSmap, alreadyRunning bool) {
 			if canRun {
 				reb.semaCh <- struct{}{}
 			}
-			glog.Warningf("%s: g%d is already running", loghdr, md.id)
+			glog.Warningf("%s: g%d is already running", logHdr, md.id)
 			alreadyRunning = true
 			return
 		}
@@ -286,7 +301,7 @@ func (reb *Manager) serialize(md *globArgs) (newerSmap, alreadyRunning bool) {
 			if canRun {
 				return
 			}
-			glog.Warningf("%s: waiting for ???...", loghdr)
+			glog.Warningf("%s: waiting for ???...", logHdr)
 		} else {
 			otherXreb := entry.Get().(*xaction.GlobalReb) // running or previous
 			if canRun {
@@ -295,9 +310,9 @@ func (reb *Manager) serialize(md *globArgs) (newerSmap, alreadyRunning bool) {
 			}
 			if otherXreb.SmapVersion < ver && !otherXreb.Finished() {
 				otherXreb.Abort()
-				glog.Warningf("%s: aborting older Smap [%s]", loghdr, otherXreb)
+				glog.Warningf("%s: aborting older Smap [%s]", logHdr, otherXreb)
 			} else {
-				glog.Warningf("%s: latest finished [%s] but cannot start ???", loghdr, otherXreb)
+				glog.Warningf("%s: latest finished [%s] but cannot start ???", logHdr, otherXreb)
 			}
 		}
 		cmn.Assert(!canRun)
@@ -371,6 +386,8 @@ func (reb *Manager) endStreams() {
 }
 
 func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unpacker *cmn.ByteUnpack, objReader io.Reader) {
+	defer io.Copy(ioutil.Discard, objReader) // drain the reader
+
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse acknowledge: %v", err)
@@ -379,7 +396,6 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 
 	if ack.globRebID != reb.GlobRebID() {
 		glog.Warningf("Received object %s/%s: %s", hdr.Bck, hdr.ObjName, reb.rebIDMismatchMsg(ack.globRebID))
-		io.Copy(ioutil.Discard, objReader) // drain the reader
 		return
 	}
 	tsid := ack.daemonID // the sender
@@ -391,7 +407,6 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 	}
 	aborted, running := IsRebalancing(cmn.ActGlobalReb)
 	if aborted || !running {
-		io.Copy(ioutil.Discard, objReader) // drain the reader
 		return
 	}
 
@@ -555,8 +570,8 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 	if req.stage == rebStageAbort {
 		// a target aborted its xaction and sent the signal to others
 		glog.Warningf("Rebalance abort notification from %s", req.daemonID)
-		if reb.xreb != nil {
-			reb.xreb.Abort()
+		if reb.xact() != nil {
+			reb.xact().Abort()
 		}
 		return
 	}
@@ -606,13 +621,7 @@ func (reb *Manager) recvRegularAck(hdr transport.Header, unpacker *cmn.ByteUnpac
 	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof("%s: ack from %s on %s", reb.t.Snode(), string(hdr.Opaque), lom)
 	}
-	var (
-		_, idx = lom.Hkey()
-		lomack = reb.lomAcks()[idx]
-	)
-	lomack.mu.Lock()
-	delete(lomack.q, lom.Uname())
-	lomack.mu.Unlock()
+	reb.delLomAck(lom)
 
 	// TODO: configurable delay - postponed or manual object deletion
 	lom.Lock(true)
@@ -648,7 +657,7 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Re
 
 func (reb *Manager) retransmit(md *globArgs) (cnt int) {
 	aborted := func() (yes bool) {
-		yes = reb.xreb.Aborted()
+		yes = reb.xact().Aborted()
 		yes = yes || (md.smap.Version != reb.t.GetSowner().Get().Version)
 		return
 	}
@@ -656,7 +665,7 @@ func (reb *Manager) retransmit(md *globArgs) (cnt int) {
 		return
 	}
 	var (
-		rj    = &globalJogger{joggerBase: joggerBase{m: reb, xreb: &reb.xreb.RebBase, wg: &sync.WaitGroup{}}, smap: md.smap}
+		rj    = &globalJogger{joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase, wg: &sync.WaitGroup{}}, smap: md.smap}
 		query = url.Values{}
 	)
 	query.Add(cmn.URLParamSilent, "true")
@@ -665,9 +674,9 @@ func (reb *Manager) retransmit(md *globArgs) (cnt int) {
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false); err != nil {
 				if cmn.IsObjNotExist(err) {
-					glog.Warningf("%s: %s %s", reb.loghdr(md.id, md.smap), lom, cmn.DoesNotExist)
+					glog.Warningf("%s: %s %s", reb.logHdr(md), lom, cmn.DoesNotExist)
 				} else {
-					glog.Errorf("%s: failed loading %s, err: %s", reb.loghdr(md.id, md.smap), lom, err)
+					glog.Errorf("%s: failed loading %s, err: %s", reb.logHdr(md), lom, err)
 				}
 				delete(lomAck.q, uname)
 				continue
@@ -675,17 +684,17 @@ func (reb *Manager) retransmit(md *globArgs) (cnt int) {
 			tsi, _ := cluster.HrwTarget(lom.Uname(), md.smap)
 			if reb.t.LookupRemoteSingle(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleReb) {
-					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(md.id, md.smap), lom, tsi)
+					glog.Infof("%s: HEAD ok %s at %s", reb.logHdr(md), lom, tsi)
 				}
 				delete(lomAck.q, uname)
 				continue
 			}
 			// send obj
 			if err := rj.send(lom, tsi, false /*addAck*/); err == nil {
-				glog.Warningf("%s: resending %s => %s", reb.loghdr(md.id, md.smap), lom, tsi)
+				glog.Warningf("%s: resending %s => %s", reb.logHdr(md), lom, tsi)
 				cnt++
 			} else {
-				glog.Errorf("%s: failed resending %s => %s, err: %v", reb.loghdr(md.id, md.smap), lom, tsi, err)
+				glog.Errorf("%s: failed resending %s => %s, err: %v", reb.logHdr(md), lom, tsi, err)
 			}
 			if aborted() {
 				lomAck.mu.Unlock()
@@ -708,11 +717,12 @@ func (reb *Manager) retransmit(md *globArgs) (cnt int) {
 // and closes all its streams, others wouldn't notice that. That is why the
 // target should send notification.
 func (reb *Manager) abortGlobal() {
-	if reb.xreb == nil || reb.xreb.Aborted() || reb.xreb.Finished() {
+	xreb := reb.xact()
+	if xreb == nil || xreb.Aborted() || xreb.Finished() {
 		return
 	}
 	glog.Info("Aborting global rebalance...")
-	reb.xreb.Abort()
+	xreb.Abort()
 	var (
 		req = pushReq{
 			daemonID: reb.t.Snode().DaemonID,
@@ -732,8 +742,8 @@ func (reb *Manager) abortGlobal() {
 // has already aborted or finished.
 func (reb *Manager) isQuiescent() bool {
 	// Finished or aborted xaction = no traffic
-	// NOTE: caller is responsible for ensuring that `reb.xreb` is protected.
-	if reb.xreb == nil || reb.xreb.Aborted() || reb.xreb.Finished() {
+	xact := reb.xact()
+	if xact == nil || xact.Aborted() || xact.Finished() {
 		return true
 	}
 

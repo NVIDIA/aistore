@@ -82,18 +82,15 @@ func (reb *Manager) globalRebInit(md *globArgs, buckets ...string) bool {
 	// because `xreb` can be read by another goroutine: it is node health
 	// handler that reads GetGlobStatus. Using atomic pointer reads for only
 	// two places looked overhead, so a separate mutex is used.
-	reb.xrebMx.Lock()
 	xact := xaction.Registry.RenewGlobalReb(md.smap.Version, md.id, reb.statRunner)
 	if xact == nil {
-		reb.xrebMx.Unlock()
 		return false
 	}
-	reb.xreb = xact
-	reb.xrebMx.Unlock()
-	defer reb.xreb.MarkDone()
+	reb.setXact(xact)
+	defer reb.xact().MarkDone()
 
 	if len(buckets) > 0 {
-		reb.xreb.SetBucket(buckets[0]) // for better identity (limited usage)
+		reb.xact().SetBucket(buckets[0]) // for better identity (limited usage)
 	}
 
 	// 3. init streams and data structures
@@ -116,7 +113,7 @@ func (reb *Manager) globalRebInit(md *globArgs, buckets ...string) bool {
 	reb.smap.Store(unsafe.Pointer(md.smap))
 	reb.globRebID.Store(md.id)
 	reb.stages.cleanup()
-	glog.Infof("%s: %s", reb.loghdr(md.id, md.smap), reb.xreb.String())
+	glog.Infof("%s: %s", reb.logHdr(md), reb.xact().String())
 
 	return true
 }
@@ -176,7 +173,7 @@ func (reb *Manager) ecFixLocal(md *globArgs) error {
 
 func (reb *Manager) ecFixGlobal(md *globArgs) error {
 	if err := reb.rebalanceGlobal(md); err != nil {
-		if !reb.xreb.Aborted() {
+		if !reb.xact().Aborted() {
 			glog.Errorf("EC rebalance failed: %v", err)
 			reb.abortGlobal()
 		}
@@ -221,13 +218,12 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	var (
 		wg         = &sync.WaitGroup{}
 		ver        = md.smap.Version
-		globRebID  = reb.globRebID.Load()
 		multiplier = md.config.Rebalance.Multiplier
 		cfg        = cmn.GCO.Get()
 	)
 	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
-	if reb.xreb.Aborted() {
-		err := fmt.Errorf("%s: aborted", reb.loghdr(globRebID, md.smap))
+	if reb.xact().Aborted() {
+		err := fmt.Errorf("%s: aborted", reb.logHdr(md))
 		return err
 	}
 	for _, mpathInfo := range md.paths {
@@ -239,7 +235,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 			sema = cmn.NewDynSemaphore(int(multiplier))
 		}
 		rl := &globalJogger{
-			joggerBase: joggerBase{m: reb, xreb: &reb.xreb.RebBase, wg: wg},
+			joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase, wg: wg},
 			smap:       md.smap, sema: sema, ver: ver,
 		}
 		wg.Add(1)
@@ -255,7 +251,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 				sema = cmn.NewDynSemaphore(int(multiplier))
 			}
 			rc := &globalJogger{
-				joggerBase: joggerBase{m: reb, xreb: &reb.xreb.RebBase, wg: wg},
+				joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase, wg: wg},
 				smap:       md.smap, sema: sema, ver: ver,
 			}
 			wg.Add(1)
@@ -263,12 +259,12 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 		}
 	}
 	wg.Wait()
-	if reb.xreb.Aborted() {
-		err := fmt.Errorf("%s: aborted", reb.loghdr(globRebID, md.smap))
+	if reb.xact().Aborted() {
+		err := fmt.Errorf("%s: aborted", reb.logHdr(md))
 		return err
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("finished global rebalance walk (v%d)", md.id)
+		glog.Infof("finished global rebalance walk (g%d)", md.id)
 	}
 	return nil
 }
@@ -284,13 +280,13 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 
 	// No EC-enabled buckets - run only regular rebalance
 	if !md.ecUsed {
-		glog.Infof("starting only regular rebalance (v%d)", md.id)
+		glog.Infof("starting only regular rebalance (g%d)", md.id)
 		return reb.globalRebRun(md)
 	}
 	// Single bucket is rebalancing and it is a bucket with EC enabled.
 	// Run only EC rebalance.
 	if md.singleBck {
-		glog.Infof("starting only EC rebalance (v%d) for a bucket", md.id)
+		glog.Infof("starting only EC rebalance (g%d) for a bucket", md.id)
 		return reb.globalRebRunEC(md)
 	}
 
@@ -298,7 +294,7 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 	var rebErr, ecRebErr error
 	wg := &sync.WaitGroup{}
 	ecMD := *md
-	glog.Infof("starting regular rebalance (v%d)", md.id)
+	glog.Infof("starting regular rebalance (g%d)", md.id)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -307,7 +303,7 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 	}()
 
 	wg.Add(1)
-	glog.Infof("EC detected - starting EC rebalance (v%d)", md.id)
+	glog.Infof("EC detected - starting EC rebalance (g%d)", md.id)
 	go func() {
 		defer wg.Done()
 		ecRebErr = reb.globalRebRunEC(&ecMD)
@@ -323,7 +319,7 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 
 func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 	reb.changeStage(rebStageWaitAck, 0)
-	loghdr := reb.loghdr(md.id, md.smap)
+	logHdr := reb.logHdr(md)
 	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
 	maxwt := md.config.Rebalance.DestRetryTime
 	cnt := 0
@@ -353,48 +349,48 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 					}
 				}
 				lomack.mu.Unlock()
-				if reb.xreb.Aborted() {
-					glog.Infof("%s: abrt", loghdr)
+				if reb.xact().Aborted() {
+					glog.Infof("%s: abort", logHdr)
 					return
 				}
 			}
 			if cnt == 0 {
-				glog.Infof("%s: received all ACKs", loghdr)
+				glog.Infof("%s: received all ACKs", logHdr)
 				break
 			}
-			glog.Warningf("%s: waiting for %d ACKs", loghdr, cnt)
-			if reb.xreb.AbortedAfter(sleep) {
-				glog.Infof("%s: abrt", loghdr)
+			glog.Warningf("%s: waiting for %d ACKs", logHdr, cnt)
+			if reb.xact().AbortedAfter(sleep) {
+				glog.Infof("%s: abort", logHdr)
 				return
 			}
 			curwt += sleep
 		}
 		if cnt > 0 {
-			glog.Warningf("%s: timed-out waiting for %d ACK(s)", loghdr, cnt)
+			glog.Warningf("%s: timed-out waiting for %d ACK(s)", logHdr, cnt)
 		}
-		if reb.xreb.Aborted() {
+		if reb.xact().Aborted() {
 			return
 		}
 
 		// NOTE: requires locally migrated objects *not* to be removed at the src
 		aPaths, _ := fs.Mountpaths.Get()
 		if len(aPaths) > len(md.paths) {
-			glog.Warningf("%s: mountpath changes detected (%d, %d)", loghdr, len(aPaths), len(md.paths))
+			glog.Warningf("%s: mountpath changes detected (%d, %d)", logHdr, len(aPaths), len(md.paths))
 		}
 
 		// 8. synchronize
-		glog.Infof("%s: poll targets for: stage=(%s or %s***)", loghdr, stages[rebStageFin], stages[rebStageWaitAck])
+		glog.Infof("%s: poll targets for: stage=(%s or %s***)", logHdr, stages[rebStageFin], stages[rebStageWaitAck])
 		errCnt = reb.bcast(md, reb.waitFinExtended)
-		if reb.xreb.Aborted() {
+		if reb.xact().Aborted() {
 			return
 		}
 
 		// 9. retransmit if needed
 		cnt = reb.retransmit(md)
-		if cnt == 0 || reb.xreb.Aborted() {
+		if cnt == 0 || reb.xact().Aborted() {
 			break
 		}
-		glog.Warningf("%s: retransmitted %d, more wack...", loghdr, cnt)
+		glog.Warningf("%s: retransmitted %d, more wack...", logHdr, cnt)
 	}
 
 	return
@@ -412,7 +408,7 @@ func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func(md 
 	maxQuiet := int(maxWait/sleep) + 1
 	quiescent := 0
 
-	aborted = reb.xreb.Aborted()
+	aborted = reb.xact().Aborted()
 	for quiescent < maxQuiet && !aborted {
 		if !reb.laterx.CAS(true, false) {
 			quiescent++
@@ -422,7 +418,7 @@ func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func(md 
 		if cb != nil && cb(md) {
 			break
 		}
-		aborted = reb.xreb.AbortedAfter(sleep)
+		aborted = reb.xact().AbortedAfter(sleep)
 	}
 
 	return aborted
@@ -436,7 +432,7 @@ func (reb *Manager) waitEvent(md *globArgs, cb func(md *globArgs) bool, maxWait 
 		sleep   = md.config.Timeout.CplaneOperation
 		waited  = time.Duration(0)
 		toWait  = time.Duration(0)
-		aborted = reb.xreb.Aborted()
+		aborted = reb.xact().Aborted()
 	)
 	if len(maxWait) != 0 {
 		toWait = maxWait[0]
@@ -445,7 +441,7 @@ func (reb *Manager) waitEvent(md *globArgs, cb func(md *globArgs) bool, maxWait 
 		if cb(md) {
 			break
 		}
-		aborted = reb.xreb.AbortedAfter(sleep)
+		aborted = reb.xact().AbortedAfter(sleep)
 		waited += sleep
 		if toWait > 0 && waited > toWait {
 			break
@@ -460,16 +456,16 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
 		if err := removeMarker(cmn.ActGlobalReb); err != nil {
-			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.loghdr(reb.globRebID.Load(), md.smap), err)
+			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.logHdr(md), err)
 		}
 	}
 	reb.endStreams()
 	reb.filterGFN.Reset()
 
-	if !reb.xreb.Finished() {
-		reb.xreb.EndTime(time.Now())
+	if !reb.xact().Finished() {
+		reb.xact().EndTime(time.Now())
 	} else {
-		glog.Infoln(reb.xreb.String())
+		glog.Infoln(reb.xact().String())
 	}
 	{
 		status := &Status{}
@@ -489,7 +485,7 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 	reb.stages.cleanup()
 
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("global reb (v%d) in state %s: finished", md.id, stages[rebStageDone])
+		glog.Infof("global reb (g%d) in state %s: finished", md.id, stages[rebStageDone])
 	}
 	reb.semaCh <- struct{}{}
 }
@@ -547,7 +543,7 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		glog.Infof("global reb (v%d) in %s state", md.id, stages[rebStageFin])
 	}
 
-	for errCnt != 0 && !reb.xreb.Aborted() {
+	for errCnt != 0 && !reb.xact().Aborted() {
 		errCnt = reb.bcast(md, reb.waitFinExtended)
 	}
 	reb.globalRebFini(md)
@@ -701,8 +697,6 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck bool) 
 		file                  *cmn.FileHandle
 		cksum                 *cmn.Cksum
 		cksumType, cksumValue string
-		lomAck                *lomAcks
-		idx                   int
 	)
 	lom.Lock(false) // NOTE: unlock in objSentCallback() unless err
 	defer func() {
@@ -734,11 +728,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck bool) 
 	}
 	if addAck {
 		// cache it as pending-acknowledgement (optimistically - see objSentCallback)
-		_, idx = lom.Hkey()
-		lomAck = rj.m.lomAcks()[idx]
-		lomAck.mu.Lock()
-		lomAck.q[lom.Uname()] = lom
-		lomAck.mu.Unlock()
+		rj.m.addLomAck(lom)
 	}
 	// transmit
 	var (
@@ -764,9 +754,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck bool) 
 	if err = rj.m.streams.Send(o, file, tsi); err != nil {
 		rj.m.inQueue.Dec()
 		if addAck {
-			lomAck.mu.Lock()
-			delete(lomAck.q, lom.Uname())
-			lomAck.mu.Unlock()
+			rj.m.delLomAck(lom)
 		}
 		mm.Free(opaque)
 		return

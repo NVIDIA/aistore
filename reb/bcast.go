@@ -50,9 +50,7 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 	status.Aborted, status.Running = IsRebalancing(cmn.ActGlobalReb)
 	status.Stage = reb.stages.stage.Load()
 	status.GlobRebID = reb.globRebID.Load()
-	reb.xrebMx.Lock()
 	status.Quiescent = reb.isQuiescent()
-	reb.xrebMx.Unlock()
 	if status.Stage > rebStageECGlobRepair && status.Stage < rebStageECCleanup {
 		status.BatchCurr = int(reb.stages.currBatch.Load())
 		status.BatchLast = int(reb.stages.lastBatch.Load())
@@ -170,24 +168,24 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *globArgs) (ok bool) {
 	var (
 		ver    = md.smap.Version
 		sleep  = md.config.Timeout.CplaneOperation
-		loghdr = reb.loghdr(reb.globRebID.Load(), md.smap)
+		logHdr = reb.logHdr(md)
 	)
 	for i := 0; i < 3; i++ {
 		_, err := reb.t.Health(tsi, false, md.config.Timeout.MaxKeepalive)
 		if err == nil {
 			if i > 0 {
-				glog.Infof("%s: %s is online", loghdr, tsi)
+				glog.Infof("%s: %s is online", logHdr, tsi)
 			}
 			return true
 		}
-		glog.Warningf("%s: waiting for %s, err %v", loghdr, tsi, err)
+		glog.Warningf("%s: waiting for %s, err %v", logHdr, tsi, err)
 		time.Sleep(sleep)
 		nver := reb.t.GetSowner().Get().Version
 		if nver > ver {
 			return
 		}
 	}
-	glog.Errorf("%s: timed-out waiting for %s", loghdr, tsi)
+	glog.Errorf("%s: timed-out waiting for %s", logHdr, tsi)
 	return
 }
 
@@ -198,7 +196,7 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *globArgs) (ok bool) {
 		sleep  = md.config.Timeout.CplaneOperation * 2
 		maxwt  = md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
 		curwt  time.Duration
-		loghdr = reb.loghdr(reb.globRebID.Load(), md.smap)
+		logHdr = reb.logHdr(md)
 	)
 	for curwt < maxwt {
 		if reb.stages.isInStage(tsi, rebStageTraverse) {
@@ -208,13 +206,13 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *globArgs) (ok bool) {
 		if _, ok = reb.checkGlobStatus(tsi, ver, rebStageTraverse, md); ok {
 			return
 		}
-		if reb.xreb.Aborted() || reb.xreb.AbortedAfter(sleep) {
-			glog.Infof("%s: abrt rx-ready", loghdr)
+		if reb.xact().Aborted() || reb.xact().AbortedAfter(sleep) {
+			glog.Infof("%s: abort rx-ready", logHdr)
 			return
 		}
 		curwt += sleep
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s state", loghdr, tsi, stages[rebStageTraverse])
+	glog.Errorf("%s: timed out waiting for %s to reach %s state", logHdr, tsi, stages[rebStageTraverse])
 	return
 }
 
@@ -227,13 +225,13 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 		sleep      = md.config.Timeout.CplaneOperation
 		maxwt      = md.config.Rebalance.DestRetryTime
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
-		loghdr     = reb.loghdr(reb.globRebID.Load(), md.smap)
+		logHdr     = reb.logHdr(md)
 		curwt      time.Duration
 		status     *Status
 	)
 	for curwt < maxwt {
-		if reb.xreb.AbortedAfter(sleep) {
-			glog.Infof("%s: abrt wack", loghdr)
+		if reb.xact().AbortedAfter(sleep) {
+			glog.Infof("%s: abort wack", logHdr)
 			return
 		}
 		if reb.stages.isInStage(tsi, rebStageFin) {
@@ -244,12 +242,12 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 		if status, ok = reb.checkGlobStatus(tsi, ver, rebStageFin, md); ok {
 			return
 		}
-		if reb.xreb.Aborted() {
-			glog.Infof("%s: abrt wack", loghdr)
+		if reb.xact().Aborted() {
+			glog.Infof("%s: abort wack", logHdr)
 			return
 		}
 		if status.Stage <= rebStageECNamespace {
-			glog.Infof("%s: keep waiting for %s[%s]", loghdr, tsi, stages[status.Stage])
+			glog.Infof("%s: keep waiting for %s[%s]", logHdr, tsi, stages[status.Stage])
 			time.Sleep(sleepRetry)
 			curwt += sleepRetry
 			if status.Stage != rebStageInactive {
@@ -263,20 +261,20 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *globArgs) (ok bool) 
 		var w4me bool // true: this target is waiting for ACKs from me
 		for tid := range status.Tmap {
 			if tid == reb.t.Snode().ID() {
-				glog.Infof("%s: keep wack <= %s[%s]", loghdr, tsi, stages[status.Stage])
+				glog.Infof("%s: keep wack <= %s[%s]", logHdr, tsi, stages[status.Stage])
 				w4me = true
 				break
 			}
 		}
 		if !w4me {
-			glog.Infof("%s: %s[%s] ok (not waiting for me)", loghdr, tsi, stages[status.Stage])
+			glog.Infof("%s: %s[%s] ok (not waiting for me)", logHdr, tsi, stages[status.Stage])
 			ok = true
 			return
 		}
 		time.Sleep(sleepRetry)
 		curwt += sleepRetry
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s", loghdr, tsi, stages[rebStageFin])
+	glog.Errorf("%s: timed out waiting for %s to reach %s", logHdr, tsi, stages[rebStageFin])
 	return
 }
 
@@ -286,57 +284,57 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 	desiredStage uint32, md *globArgs) (status *Status, ok bool) {
 	var (
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
-		loghdr     = reb.loghdr(reb.globRebID.Load(), md.smap)
+		logHdr     = reb.logHdr(md)
 	)
 
-	outjson, err := reb.t.Health(tsi, true, cmn.DefaultTimeout)
+	body, err := reb.t.Health(tsi, true, cmn.DefaultTimeout)
 	if err != nil {
-		if reb.xreb.AbortedAfter(sleepRetry) {
-			glog.Infof("%s: abrt", loghdr)
+		if reb.xact().AbortedAfter(sleepRetry) {
+			glog.Infof("%s: abort", logHdr)
 			return
 		}
-		outjson, err = reb.t.Health(tsi, true, cmn.DefaultTimeout) // retry once
+		body, err = reb.t.Health(tsi, true, cmn.DefaultTimeout) // retry once
 	}
 	if err != nil {
-		glog.Errorf("%s: failed to call %s, err: %v", loghdr, tsi, err)
+		glog.Errorf("%s: failed to call %s, err: %v", logHdr, tsi, err)
 		reb.abortGlobal()
 		return
 	}
 	status = &Status{}
-	err = jsoniter.Unmarshal(outjson, status)
+	err = jsoniter.Unmarshal(body, status)
 	if err != nil {
-		glog.Errorf("%s: unexpected: failed to unmarshal %s response, err: %v", loghdr, tsi, err)
+		glog.Errorf("%s: unexpected: failed to unmarshal %s response, err: %v", logHdr, tsi, err)
 		reb.abortGlobal()
 		return
 	}
 	// enforce Smap consistency across this xreb
 	tver, rver := status.SmapVersion, status.RebVersion
 	if tver > ver || rver > ver {
-		glog.Errorf("%s: %s has newer Smap (v%d, v%d) - aborting...", loghdr, tsi, tver, rver)
+		glog.Errorf("%s: %s has newer Smap (v%d, v%d) - aborting...", logHdr, tsi, tver, rver)
 		reb.abortGlobal()
 		return
 	}
 	// enforce same global transaction ID
 	if status.GlobRebID > reb.globRebID.Load() {
-		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", loghdr, tsi, status.GlobRebID)
+		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", logHdr, tsi, status.GlobRebID)
 		reb.abortGlobal()
 		return
 	}
 	// let the target to catch-up
 	if tver < ver || rver < ver {
-		glog.Warningf("%s: %s has older Smap (v%d, v%d) - keep waiting...", loghdr, tsi, tver, rver)
+		glog.Warningf("%s: %s has older Smap (v%d, v%d) - keep waiting...", logHdr, tsi, tver, rver)
 		return
 	}
 	if status.GlobRebID < reb.GlobRebID() {
-		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", loghdr, tsi, status.GlobRebID)
+		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", logHdr, tsi, status.GlobRebID)
 		return
 	}
 	// Remote target has aborted its running rebalance with the same ID as local,
 	// but local rebalance is still running. Abort local xaction with `Abort`,
 	// do not use `abortGlobal` - no need to broadcast.
 	if status.GlobRebID == reb.GlobRebID() && status.Aborted {
-		glog.Warningf("%s has aborted rebalance %d - aborting...", tsi.ID(), status.GlobRebID)
-		reb.xreb.Abort()
+		glog.Warningf("%s has aborted rebalance (g%d) - aborting...", tsi.ID(), status.GlobRebID)
+		reb.xact().Abort()
 		return
 	}
 
@@ -344,7 +342,7 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 		ok = true
 		return
 	}
-	glog.Infof("%s: %s[%s] not yet at the right stage %s", loghdr, tsi, stages[status.Stage], stages[desiredStage])
+	glog.Infof("%s: %s[%s] not yet at the right stage %s", logHdr, tsi, stages[status.Stage], stages[desiredStage])
 	return
 }
 
@@ -363,8 +361,8 @@ func (reb *Manager) waitStage(si *cluster.Snode, md *globArgs, stage uint32) boo
 			return true
 		}
 
-		if reb.xreb.Aborted() || reb.xreb.AbortedAfter(sleep) {
-			glog.Infof("g%d: abrt %s", reb.globRebID.Load(), stages[stage])
+		if reb.xact().Aborted() || reb.xact().AbortedAfter(sleep) {
+			glog.Infof("%s: abort %s", reb.logHdr(md), stages[stage])
 			return false
 		}
 
@@ -400,7 +398,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *globArgs) bool {
 	curwt := time.Duration(0)
 
 	for curwt < maxwt {
-		if reb.xreb.Aborted() {
+		if reb.xact().Aborted() {
 			return true
 		}
 		_, exists := reb.ec.nodeData(si.ID())
@@ -454,7 +452,7 @@ func (reb *Manager) waitForPushReqs(md *globArgs, stage uint32, timeout ...time.
 		maxWait = timeout[0]
 	}
 	for curWait < maxWait {
-		if reb.xreb.Aborted() {
+		if reb.xact().Aborted() {
 			return true
 		}
 		cnt := reb.nodesNotInStage(md, stage)
