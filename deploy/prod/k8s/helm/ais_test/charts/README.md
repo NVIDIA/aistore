@@ -6,8 +6,6 @@ redirect_from:
  - deploy/prod/k8s/helm/ais_test/charts/README.md/
 ---
 
-# AIS TEST helm chart
-
 ## Overview
 
 This repo includes all the definitions of launching a test against an existing AIS cluster.

@@ -6,9 +6,8 @@ redirect_from:
  - docs/performance.md/
 ---
 
-# Performance
-
-AIStore is all about the performance. Below you will find some tips and tricks to ensure that AIStore does deliver.
+AIStore is all about the performance.
+Below you will find some tips and tricks to ensure that AIStore does deliver.
 
 - [Performance tuning](#performance-tuning)
     - [General](#general)
@@ -193,4 +192,4 @@ Example of deploying a cluster with disk IO disabled and object size 256KB:
 $ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
 ```
 
->> The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case, the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of the previous test that had network IO enabled.
+> The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case, the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of the previous test that had network IO enabled.

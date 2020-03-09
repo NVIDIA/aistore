@@ -7,13 +7,16 @@ redirect_from:
 ---
 
 ## Table of Contents
+
 - [Extended Actions (xactions)](#extended-actions-xactions)
     - [Start & Stop](#start-stop)
 	- [Stats](#stats)
 
 ## Extended Actions (xactions)
 
-Extended actions (xactions) are batch operations that may take seconds, sometimes minutes or even hours, to execute. Xactions run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics. Xactions start running based on a wide variety of runtime conditions that include:
+Extended actions (xactions) are batch operations that may take seconds, sometimes minutes or even hours, to execute.
+Xactions run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics.
+Xactions start running based on a wide variety of runtime conditions that include:
 
 * periodic (defined by a configured interval of time)
 * resource utilization (e.g., usable capacity falling below configured watermark)
@@ -21,7 +24,7 @@ Extended actions (xactions) are batch operations that may take seconds, sometime
 * user request (e.g., to reduce the number of local object copies in a given bucket)
 * adding or removing storage targets (the events that trigger cluster-wide rebalancing)
 * adding or removing local disks (the events that cause local rebalancer to start moving stored content between *mountpaths* - see [Managing filesystems](/aistore/docs/configuration.md#managing-filesystems))
-* and more.
+* and more...
 
 Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](/aistore/ais/setup/config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.
 
@@ -29,35 +32,38 @@ The amount of throttling that a given xaction imposes on itself is always define
 
 Supported extended actions are enumerated in the [user-facing API](/aistore/cmn/api.go) and include:
 
-* Cluster-wide rebalancing (denoted as `ActGlobalReb` in the [API](/aistore/cmn/api.go)) that gets triggered when storage targets join or leave the cluster;
-* LRU-based cache eviction (see [LRU](/aistore/docs/storage_svcs.md#lru)) that depends on the remaining free capacity and [configuration](/aistore/ais/setup/config.sh);
-* Prefetching batches of objects (or arbitrary size) from the Cloud (see [List/Range Operations](/aistore/docs/batch.md));
-* Consensus voting (when conducting new leader [election](/aistore/docs/ha.md#election));
-* Erasure-encoding objects in a EC-configured bucket (see [Erasure coding](/aistore/docs/storage_svcs.md#erasure-coding));
-* Creating additional local replicas, and
-* Reducing number of object replicas in a given locally-mirrored bucket (see [Storage Services](/aistore/docs/storage_svcs.md));
-* and more.
+* cluster-wide rebalancing (denoted as `ActGlobalReb` in the [API](/aistore/cmn/api.go)) that gets triggered when storage targets join or leave the cluster
+* LRU-based cache eviction (see [LRU](/aistore/docs/storage_svcs.md#lru)) that depends on the remaining free capacity and [configuration](/aistore/ais/setup/config.sh)
+* prefetching batches of objects (or arbitrary size) from the Cloud (see [List/Range Operations](/aistore/docs/batch.md))
+* consensus voting (when conducting new leader [election](/aistore/docs/ha.md#election))
+* erasure-encoding objects in a EC-configured bucket (see [Erasure coding](/aistore/docs/storage_svcs.md#erasure-coding))
+* creating additional local replicas, and reducing number of object replicas in a given locally-mirrored bucket (see [Storage Services](/aistore/docs/storage_svcs.md))
+* and more...
 
-There are different actions that may be taken upon xaction. Actions include stats, start and stop.
+There are different actions that may be taken upon xaction.
+Actions include stats, start and stop.
 List of supported actions can be found in the [API](/aistore/cmn/api.go)
 
-Xaction requests are generic for all xactions, but responses from each xaction are different. See [below](#start-&-stop).
+Xaction requests are generic for all xactions, but responses from each xaction are different.
+See [below](#start-&-stop).
 The request looks as follows:
-1.Single target request:
 
-```console
-$ curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://T/v1/daemon?what=xaction'
-```
-To simplify the logic, result is always an array, even if there's only one element in the result
+1. Single target request:
 
-2.Proxy request, which executes a request on all targets within the cluster, and responds with list of targets' responses:
+    ```console
+    $ curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://T/v1/daemon?what=xaction'
+    ```
 
-```console
-$ curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://G/v1/cluster?what=xaction'
-```
+    To simplify the logic, result is always an array, even if there's only one element in the result
 
-Response of a query to proxy is a map of daemonID -> target's response. If any of targets responded with error status code, the proxy's response
-will result in the same error response.
+2. Proxy request, which executes a request on all targets within the cluster, and responds with list of targets' responses:
+
+    ```console
+    $ curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://G/v1/cluster?what=xaction'
+    ```
+    
+    Response of a query to proxy is a map of daemonID -> target's response. If any of targets responded with error status code, the proxy's response
+    will result in the same error response.
 
 
 ### Start & Stop
@@ -68,7 +74,7 @@ responded with a successful HTTP code, the proxy would respond with the successf
 For an unsuccessful request, the target's response contains the error code and error message. If the request was sent to proxy and at least one
 of targets responded with an error code, the proxy will respond with the same error code and error message.
 
->> As always, `G` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address and `T` serves for placeholder for target's hostname/IP address. More information in [notation section](/aistore/docs/http_api.md#notation).
+> As always, `G` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address and `T` serves for placeholder for target's hostname/IP address. More information in [notation section](/aistore/docs/http_api.md#notation).
 
 The corresponding [RESTful API](/aistore/docs/http_api.md) includes support for querying all xactions including global-rebalancing and prefetch operations.
 

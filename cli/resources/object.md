@@ -326,7 +326,7 @@ $ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t
 
 > The capability is intended to support existing toolchains that operate on files. Here's the rationale:
 
->> On the one hand, it is easy to transform files using `tar`, `gzip` and any number of other very familiar Unix tools. On the other hand, it is easy to **promote** files and directories that are locally present inside AIS servers. Once the original file-based content becomes distributed across AIStore cluster, running massive computations (or any other workloads that require scalable storage) also becomes easy and fast.
+> On the one hand, it is easy to transform files using `tar`, `gzip` and any number of other very familiar Unix tools. On the other hand, it is easy to **promote** files and directories that are locally present inside AIS servers. Once the original file-based content becomes distributed across AIStore cluster, running massive computations (or any other workloads that require scalable storage) also becomes easy and fast.
 
 #### Object names
 

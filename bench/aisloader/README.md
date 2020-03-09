@@ -6,8 +6,6 @@ redirect_from:
  - bench/aisloader/README.md/
 ---
 
-# AIS Loader
-
 `aisloader` is a command-line tool that is included with AIS and that can be immediately used to generate load and evaluate cluster performance.
 
 ## Setup

@@ -6,8 +6,6 @@ redirect_from:
  - fuse/README.md/
 ---
 
-# AISFS: a FUSE client for AIStore
-
 ## Table of Contents
 
 - [Background](#background)
@@ -290,17 +288,16 @@ the AISFS user space daemon:
 
 1. Use the `fusermount` utility. The `-u` option requests unmounting:
 
-```console
-$ fusermount -u localdir/
-```
+    ```console
+    $ fusermount -u localdir/
+    ```
 
 2. Use the `umount` command:
 
-```console
-$ umount localdir/
-```
+    ```console
+    $ umount localdir/
+    ```
 
-You may need root privileges to execute this command.
+    You may need root privileges to execute this command.
 
-3. If `aisfs` is invoked in the foreground by passing the `--wait` option,
-terminate the process by pressing Ctrl-C. This will also unmount the filesystem.
+3. If `aisfs` is invoked in the foreground by passing the `--wait` option, terminate the process by pressing Ctrl-C. This will also unmount the filesystem.

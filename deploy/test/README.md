@@ -6,8 +6,6 @@ redirect_from:
  - deploy/test/README.md/
 ---
 
-# Testing
-
 ## Docker
 
 To allow fast development and painless testing we provide script which allow you

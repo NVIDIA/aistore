@@ -76,7 +76,9 @@ All collected/tracked *counters* are 64-bit cumulative integers that continuousl
 
 All request latencies are reported to **StatsD/Grafana in milliseconds**.
 
-> Note that the same values are periodically (default=10s) **logged in microseconds**.
+> **Note**: each `aisnode` (proxy and target) periodically logs the same latencies in microseconds with a (configurable) logging interval (default = 10s).
+
+> Generally, AIStore logs can be considered a redundant source of information on system performance - the information that can be used either in addition to Graphite/Grafana or when the latter is not deployed or configured.
 
 | Name | Comment |
 | --- | --- |
@@ -112,7 +114,7 @@ All latency metrics are in milliseconds, all sizes are always in bytes.
 
 #### GET object
 
-> Note: in the tables below, traced intervals of time are denoted as **(from time, to time)**, respectively.
+> **Note**: in the tables below, traced intervals of time are denoted as **(from time, to time)**, respectively.
 
 | Name | Comment |
 | --- | --- |
@@ -135,7 +137,7 @@ All latency metrics are in milliseconds, all sizes are always in bytes.
 
 #### PUT object
 
-> Note: in the table, traced intervals of time are denoted as **(from time, to time)**:
+> **Note**: in the table, traced intervals of time are denoted as **(from time, to time)**:
 
 | Name | Comment |
 | --- | --- |
@@ -158,7 +160,7 @@ All latency metrics are in milliseconds, all sizes are always in bytes.
 
 #### Read cluster configuration
 
-> Note: traced intervals of time are denoted as **(from time, to time)**:
+> **Note**: traced intervals of time are denoted as **(from time, to time)**:
 
 | Name | Comment |
 | --- | --- |
