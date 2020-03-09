@@ -413,7 +413,11 @@ func configureNCopies(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = api.MakeNCopies(defaultAPIParams, bck, copies); err != nil {
 		return
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "Configured %s to replicate %d copies of its objects\n", bck, copies)
+	if copies > 1 {
+		fmt.Fprintf(c.App.Writer, "Configured %s as %d-way mirror\n", bck, copies)
+	} else {
+		fmt.Fprintf(c.App.Writer, "Configured %s for single-replica (no redundancy)\n", bck)
+	}
 	return
 }
 
@@ -425,7 +429,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = api.ECEncodeBucket(defaultAPIParams, bck); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Encoding %s objects is running, use '%s %s %s %s %s' to see the progress\n",
+	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %s, use '%s %s %s %s %s' to monitor the progress\n",
 		bck, cliName, commandShow, subcmdXaction, cmn.ActECEncode, bck)
 	return
 }

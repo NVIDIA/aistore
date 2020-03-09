@@ -27,7 +27,7 @@ const (
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props cmn.BucketPropsToUpdate, query ...url.Values) error {
 	var (
-		b, err    = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Value: props})
+		b, err    = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
 		optParams = OptionalParams{}
 	)
 	if err != nil {

@@ -47,7 +47,7 @@ const (
 	ActEvictCB       = "evictcb"
 	ActResetProps    = "resetprops"
 	ActSetConfig     = "setconfig"
-	ActSetProps      = "setprops"
+	ActSetBprops     = "setbprops"
 	ActListObjects   = "listobjects"
 	ActSummaryBucket = "summarybck"
 	ActRename        = "rename"

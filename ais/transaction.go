@@ -57,6 +57,11 @@ type (
 		curCopies int64
 		newCopies int64
 	}
+	txnSetBucketProps struct {
+		txnBckBase
+		bprops *cmn.BucketProps
+		nprops *cmn.BucketProps
+	}
 )
 
 var (
@@ -249,6 +254,56 @@ func (txn *txnMakeNCopies) callback(args ...interface{}) {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("%s: callback fired (BMD v%d, err %v)", txn, bmd.version(), err)
 				}
+			}
+		}
+	}
+}
+
+///////////////////////
+// txnSetBucketProps //
+///////////////////////
+
+var _ txn = &txnSetBucketProps{}
+
+// c-tor
+func newTxnSetBucketProps(uuid, action string, smapVer, bmdVer int64, initiator string, bck *cluster.Bck,
+	nprops *cmn.BucketProps) *txnSetBucketProps {
+	cmn.Assert(bck.Props != nil)
+	bprops := bck.Props.Clone()
+	return &txnSetBucketProps{
+		txnBckBase{
+			txnBase{
+				uid:       uuid,
+				action:    action,
+				smapVer:   smapVer,
+				kind:      "mnc",
+				bmdVer:    bmdVer,
+				initiator: initiator,
+				err:       errNil,
+			},
+			*bck,
+		},
+		bprops,
+		nprops,
+	}
+}
+
+func (txn *txnSetBucketProps) callback(args ...interface{}) {
+	if len(args) < 3 {
+		return
+	}
+	bmd, ok := args[0].(*bucketMD)
+	if !ok {
+		return
+	}
+	err, _ := args[1].(error)
+	caller, _ := args[2].(string)
+	if txn.initiator == caller && bmd.version() > txn.bmdVer {
+		if nprops, present := bmd.Get(&txn.bck); present {
+			txn.nprops = nprops // TODO -- FIXME: check txn.nprops == nprops equivalence
+			txn.fire(err)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s: callback fired (BMD v%d, err %v)", txn, bmd.version(), err)
 			}
 		}
 	}

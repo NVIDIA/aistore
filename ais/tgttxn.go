@@ -11,8 +11,10 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/xaction"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // convenience structure to gather all (or most) of the relevant context in one place
@@ -62,10 +64,18 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = t.makeNCopies(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
+	case cmn.ActSetBprops:
+		if err = t.setBucketProps(c); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
 	default:
 		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownAct, msgInt))
 	}
 }
+
+//////////////////
+// createBucket //
+//////////////////
 
 func (t *targetrunner) createBucket(c *txnServerCtx) error {
 	switch c.phase {
@@ -103,6 +113,10 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 	return nil
 }
 
+/////////////////
+// makeNCopies //
+/////////////////
+
 func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
 		return err
@@ -113,9 +127,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		if err != nil {
 			return err
 		}
-		if isStatelessTxn(c) {
-			break
-		}
+		cmn.Assert(!isStatelessTxn(c))
 		txn := newTxnMakeNCopies(
 			c.uuid,
 			c.msgInt.Action,
@@ -134,18 +146,17 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		}
 	case cmn.ActCommit:
 		copies, _ := t.parseNCopies(c.msgInt.Value)
-		if !isStatelessTxn(c) {
-			txn, err := t.transactions.find(c.uuid, false)
-			if err != nil {
-				return fmt.Errorf("%s %s: %v", t.si, txn, err)
-			}
-			txnMnc := txn.(*txnMakeNCopies)
-			cmn.Assert(txnMnc.newCopies == copies)
-			// wait for newBMD w/timeout
-			if err = t.transactions.wait(txn, c.timeout); err != nil {
-				return fmt.Errorf("%s %s: %v", t.si, txn, err)
-			}
+		txn, err := t.transactions.find(c.uuid, false)
+		if err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
+		txnMnc := txn.(*txnMakeNCopies)
+		cmn.Assert(txnMnc.newCopies == copies)
+		// wait for newBMD w/timeout
+		if err = t.transactions.wait(txn, c.timeout); err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		// do the work in xaction
 		xaction.Registry.DoAbort(cmn.ActPutCopies, c.bck)
 		xaction.Registry.RenewBckMakeNCopies(c.bck, t, int(copies))
 	default:
@@ -171,9 +182,96 @@ func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msgInt *actionMsgIn
 	return
 }
 
-/////////////
-// helpers //
-/////////////
+////////////////////
+// setBucketProps //
+////////////////////
+
+func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
+	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+		return err
+	}
+	switch c.phase {
+	case cmn.ActBegin:
+		var (
+			nprops *cmn.BucketProps
+			err    error
+		)
+		if nprops, err = t.validateNprops(c.bck, c.msgInt); err != nil {
+			return err
+		}
+		txn := newTxnSetBucketProps(
+			c.uuid,
+			c.msgInt.Action,
+			t.owner.smap.get().version(),
+			t.owner.bmd.get().version(),
+			c.caller,
+			c.bck,
+			nprops,
+		)
+		if err := t.transactions.begin(txn); err != nil {
+			return err
+		}
+	case cmn.ActAbort:
+		t.transactions.find(c.uuid, true /* remove */)
+	case cmn.ActCommit:
+		txn, err := t.transactions.find(c.uuid, false)
+		if err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		txnSetBprops := txn.(*txnSetBucketProps)
+		// wait for newBMD w/timeout
+		if err = t.transactions.wait(txn, c.timeout); err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		if remirror(txnSetBprops.bprops, txnSetBprops.nprops) {
+			xaction.Registry.DoAbort(cmn.ActPutCopies, c.bck)
+			xaction.Registry.RenewBckMakeNCopies(c.bck, t, int(txnSetBprops.nprops.Mirror.Copies))
+		}
+	default:
+		cmn.Assert(false)
+	}
+	return nil
+}
+
+func (t *targetrunner) validateNprops(bck *cluster.Bck, msgInt *actionMsgInternal) (nprops *cmn.BucketProps, err error) {
+	var (
+		body    = cmn.MustMarshal(msgInt.Value)
+		capInfo = t.AvgCapUsed(cmn.GCO.Get())
+	)
+	nprops = &cmn.BucketProps{}
+	if err = jsoniter.Unmarshal(body, nprops); err != nil {
+		return
+	}
+	if nprops.Mirror.Enabled {
+		mpathCount := fs.Mountpaths.NumAvail()
+		if int(nprops.Mirror.Copies) > mpathCount {
+			err = fmt.Errorf("%s: number of mountpaths %d is insufficient to configure %s as a %d-way mirror",
+				t.si, mpathCount, bck, nprops.Mirror.Copies)
+			return
+		}
+		if nprops.Mirror.Copies > bck.Props.Mirror.Copies && capInfo.Err != nil {
+			return nprops, capInfo.Err
+		}
+	}
+	if nprops.EC.Enabled && !bck.Props.EC.Enabled {
+		err = capInfo.Err
+	}
+	return
+}
+
+func remirror(bprops, nprops *cmn.BucketProps) bool {
+	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
+		return true
+	}
+	if bprops.Mirror.Enabled && nprops.Mirror.Enabled {
+		return bprops.Mirror.Copies != nprops.Mirror.Copies
+	}
+	return false
+}
+
+//////////
+// misc //
+//////////
 
 func isStatelessTxn(c *txnServerCtx) bool { return c.uuid == "" }
 

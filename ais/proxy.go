@@ -16,7 +16,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"reflect"
 	"strings"
 	"sync"
 	"syscall"
@@ -849,8 +848,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActSummaryBucket:
 		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
-		err = p.makeNCopies(bck, &msg, true /*updateBckProps*/)
-		if err != nil {
+		if err = p.makeNCopies(&msg, bck); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActECEncode:
@@ -1073,8 +1071,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActRename:
 		if !bck.IsAIS() {
-			err := cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
-			p.invalmsghdlr(w, r, err.Error())
+			p.invalmsghdlr(w, r, fmt.Sprintf("%q is not supported for Cloud buckets: %s", msg.Action, bck))
 			return
 		}
 		p.objRename(w, r, bck)
@@ -1127,117 +1124,6 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
-func (p *proxyrunner) applyNewProps(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate) (nprops *cmn.BucketProps, err error) {
-	var (
-		cfg        = cmn.GCO.Get()
-		cloudProps http.Header
-	)
-
-	bprops, exists := p.owner.bmd.get().Get(bck)
-	if !exists {
-		cmn.Assert(!bck.IsAIS())
-		if cloudProps, err = p.cbExists(bck.Name); err != nil {
-			return nprops, err
-		}
-		bprops = cmn.CloudBucketProps(cloudProps)
-	}
-
-	nprops = bprops.Clone()
-	nprops.Apply(propsToUpdate)
-
-	if bprops.EC.Enabled && nprops.EC.Enabled {
-		if !reflect.DeepEqual(bprops.EC, nprops.EC) {
-			err = errors.New("cannot change EC configuration after it is enabled")
-			return
-		}
-	} else if nprops.EC.Enabled {
-		if nprops.EC.DataSlices == 0 {
-			nprops.EC.DataSlices = 1
-		}
-		if nprops.EC.ParitySlices == 0 {
-			nprops.EC.ParitySlices = 1
-		}
-	}
-
-	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
-		if nprops.Mirror.Copies == 1 {
-			nprops.Mirror.Copies = cmn.MaxI64(cfg.Mirror.Copies, 2)
-		}
-	} else if nprops.Mirror.Copies == 1 {
-		nprops.Mirror.Enabled = false
-	}
-
-	if nprops.Cksum.Type == cmn.PropInherit {
-		nprops.Cksum.Type = cfg.Cksum.Type
-	}
-
-	targetCnt := p.owner.smap.Get().CountTargets()
-	err = nprops.Validate(targetCnt, p.urlOutsideCluster)
-	return
-}
-
-func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate) (nprops *cmn.BucketProps, err error) {
-	nprops, err = p.applyNewProps(bck, propsToUpdate)
-	if err != nil {
-		return
-	}
-
-	// 1. Begin update
-	if err := p.beginUpdateBckProps(bck, nprops); err != nil {
-		return nprops, err
-	}
-
-	// 2. Commit update
-	p.owner.bmd.Lock()
-	clone := p.owner.bmd.get().clone()
-	_, exists := clone.Get(bck)
-	// TODO: Bucket props could have changed between applying new props and this
-	// lock. We should check and *merge* the bucket props if such situation arises
-	// (currently the last update wins).
-	if !exists {
-		cmn.Assert(!bck.IsAIS())
-		var cloudProps http.Header
-		if cloudProps, err = p.cbExists(bck.Name); err != nil {
-			p.owner.bmd.Unlock()
-			return nprops, err
-		}
-		bprops := cmn.CloudBucketProps(cloudProps)
-		clone.add(bck, bprops)
-	}
-
-	clone.set(bck, nprops)
-	p.owner.bmd.put(clone)
-	p.owner.bmd.Unlock()
-	msgInt := p.newActionMsgInternalStr(cmn.ActSetProps, nil, clone)
-	p.metasyncer.sync(true, revsPair{clone, msgInt})
-	return
-}
-
-func (p *proxyrunner) beginUpdateBckProps(bck *cluster.Bck, nprops *cmn.BucketProps) error {
-	var (
-		smap = p.owner.smap.get()
-		msg  = &cmn.ActionMsg{
-			Action: cmn.ActSetProps,
-			Value:  nprops,
-		}
-		msgInt = p.newActionMsgInternal(msg, smap, nil)
-		body   = cmn.MustMarshal(msgInt)
-	)
-	results := p.bcastPost(bcastArgs{
-		req: cmn.ReqArgs{
-			Path: cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name, cmn.ActBegin),
-			Body: body,
-		},
-		smap: smap,
-	})
-	for result := range results {
-		if result.err != nil {
-			return result.err
-		}
-	}
-	return nil
-}
-
 // PUT /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
@@ -1256,8 +1142,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	msg := cmn.ActionMsg{}
-	if err = cmn.ReadJSON(w, r, &msg); err != nil {
+	msg := &cmn.ActionMsg{}
+	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		s := fmt.Sprintf("Failed to unmarshal: %v", err)
 		p.invalmsghdlr(w, r, s)
 		return
@@ -1267,7 +1153,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p.forwardCP(w, r, &msg, "httpbckput", nil) {
+	if p.forwardCP(w, r, msg, "httpbckput", nil) {
 		return
 	}
 
@@ -1294,19 +1180,24 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	p.owner.bmd.put(clone)
 	p.owner.bmd.Unlock()
 
-	msgInt := p.newActionMsgInternal(&msg, nil, clone)
+	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revsPair{clone, msgInt})
 }
 
 // PATCH /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
+	var (
+		propsToUpdate cmn.BucketPropsToUpdate
+		bucket        string
+		bck           *cluster.Bck
+		msg           *cmn.ActionMsg
+		apitems, err  = p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
+	)
 	if err != nil {
 		return
 	}
-	bucket := apitems[0]
-	bck, err := newBckFromQuery(bucket, r.URL.Query())
-	if err != nil {
+	bucket = apitems[0]
+	if bck, err = newBckFromQuery(bucket, r.URL.Query()); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1315,44 +1206,19 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	var propsToUpdate cmn.BucketPropsToUpdate
-	msg := cmn.ActionMsg{Value: &propsToUpdate}
-	if err = cmn.ReadJSON(w, r, &msg); err != nil {
-		s := fmt.Sprintf("Failed to unmarshal: %v", err)
-		p.invalmsghdlr(w, r, s)
+	msg = &cmn.ActionMsg{Value: &propsToUpdate}
+	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
-
-	if err := p.checkAction(msg, cmn.ActSetProps); err != nil {
+	if err = p.checkAction(msg, cmn.ActSetBprops); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
-	if p.forwardCP(w, r, &msg, "httpbckpatch", nil) {
+	if p.forwardCP(w, r, msg, "httpbckpatch", nil) {
 		return
 	}
-
-	prevMirrorConf := bck.Props.Mirror
-	nprops, err := p.updateBucketProps(bck, propsToUpdate)
-	if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
-		return
-	}
-	if err != nil {
+	if err = p.setBucketProps(msg, bck, propsToUpdate); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if requiresRemirroring(prevMirrorConf, nprops.Mirror) {
-		msg := &cmn.ActionMsg{
-			Action: cmn.ActMakeNCopies,
-			Value:  fmt.Sprintf("%d", nprops.Mirror.Copies),
-		}
-		err = p.makeNCopies(bck, msg, false /*updateBckProps*/)
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-		}
 	}
 }
 
@@ -3526,16 +3392,6 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	bmd := maxor[uuid]
 	cmn.Assert(bmd.UUID != "")
 	return bmd, &errTgtBmdUUIDDiffer{s}
-}
-
-func requiresRemirroring(prevm, newm cmn.MirrorConf) bool {
-	if !prevm.Enabled && newm.Enabled {
-		return true
-	}
-	if prevm.Enabled && newm.Enabled {
-		return prevm.Copies != newm.Copies
-	}
-	return false
 }
 
 func ciError(num int) string {

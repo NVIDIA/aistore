@@ -5,9 +5,10 @@
 package ais
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"net/url"
+	"reflect"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -56,7 +57,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	}
 	// 2. gather all context & begin
 	var (
-		c       = p.prepTxnClient(msg, bck, true)
+		c       = p.prepTxnClient(msg, bck)
 		results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	)
 	for result := range results {
@@ -90,22 +91,16 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 }
 
 // make-n-copies transaction: { setprop bucket locally -- begin -- metasync -- commit } - 6 steps total
-func (p *proxyrunner) makeNCopies(bck *cluster.Bck, msg *cmn.ActionMsg, updateBckProps bool) error {
-	copies, err := p.parseNCopies(msg.Value)
+func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
+	var (
+		c           *txnClientCtx
+		copies, err = p.parseNCopies(msg.Value)
+	)
 	if err != nil {
 		return err
 	}
-	var (
-		// gather all context
-		c = p.prepTxnClient(msg, bck, updateBckProps /* make cmn.Req */)
-	)
-
-	// simplified 2-phase when there are no bprops to update
-	if !updateBckProps {
-		c.req = cmn.ReqArgs{Path: c.path, Body: c.body, Query: cmn.AddBckToQuery(nil, bck.Bck)}
-		errmsg := fmt.Sprintf("failed to execute '%s' on bucket %s", msg.Action, bck)
-		return p.bcast2Phase(bcastArgs{req: c.req, smap: c.smap}, errmsg, true /*commit*/)
-	}
+	// gather all context
+	c = p.prepTxnClient(msg, bck)
 
 	// 1. lock & setprop
 	p.owner.bmd.Lock()
@@ -152,12 +147,69 @@ func (p *proxyrunner) makeNCopies(bck *cluster.Bck, msg *cmn.ActionMsg, updateBc
 	return nil
 }
 
+// update-bucket-props transaction: { setprop bucket locally -- begin -- metasync -- commit }
+func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate) (err error) {
+	var (
+		c *txnClientCtx
+		// next complete version of bucket props containing propsToUpdate changes
+		nprops *cmn.BucketProps
+		nmsg   = &cmn.ActionMsg{}
+	)
+	// 1. lock & setprop
+	p.owner.bmd.Lock()
+	var (
+		clone           = p.owner.bmd.get().clone()
+		bprops, present = clone.Get(bck)
+	)
+	if !present {
+		p.owner.bmd.Unlock()
+		return cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
+	}
+	bck.Props = bprops
+	if nprops, err = p.makeNprops(bck, propsToUpdate); err != nil {
+		p.owner.bmd.Unlock()
+		return
+	}
+
+	clone.set(bck, nprops)
+
+	// msg{propsToUpdate} => nmsg{nprops}; prep context(nmsg)
+	*nmsg = *msg
+	nmsg.Value = nprops
+	c = p.prepTxnClient(nmsg, bck)
+
+	// 2. begin
+	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	for result := range results {
+		if result.err != nil {
+			p.owner.bmd.Unlock()
+			// 3. abort
+			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
+			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+			return result.err
+		}
+	}
+	// 4. update BMD locally
+	p.owner.bmd.put(clone)
+
+	// 5. metasync updated BMD & unlock
+	msgInt := p.newActionMsgInternal(msg, nil, clone)
+	p.metasyncer.sync(true, revsPair{clone, msgInt})
+	p.owner.bmd.Unlock()
+
+	// 6. commit
+	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+
+	return nil
+}
+
 /////////////////////////////
 // rollback & misc helpers //
 /////////////////////////////
 
 // all in one place
-func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, makeReq bool) *txnClientCtx {
+func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnClientCtx {
 	var (
 		c = &txnClientCtx{}
 	)
@@ -175,9 +227,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, makeRe
 	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive // TODO -- FIXME: reduce w/caution
 	c.query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 
-	if makeReq {
-		c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: c.query, Body: c.body}
-	}
+	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: c.query, Body: c.body}
 	return c
 }
 
@@ -214,4 +264,40 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, cop
 
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revsPair{clone, msgInt})
+}
+
+func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate) (nprops *cmn.BucketProps, err error) {
+	var (
+		cfg    = cmn.GCO.Get()
+		bprops = bck.Props
+	)
+	nprops = bprops.Clone()
+	nprops.Apply(propsToUpdate)
+	if bprops.EC.Enabled && nprops.EC.Enabled {
+		if !reflect.DeepEqual(bprops.EC, nprops.EC) {
+			err = errors.New("once enabled, EC configuration on a bucket can be only disabled but cannot be changed")
+			return
+		}
+	} else if nprops.EC.Enabled {
+		if nprops.EC.DataSlices == 0 {
+			nprops.EC.DataSlices = 1
+		}
+		if nprops.EC.ParitySlices == 0 {
+			nprops.EC.ParitySlices = 1
+		}
+	}
+	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
+		if nprops.Mirror.Copies == 1 {
+			nprops.Mirror.Copies = cmn.MaxI64(cfg.Mirror.Copies, 2)
+		}
+	} else if nprops.Mirror.Copies == 1 {
+		nprops.Mirror.Enabled = false
+	}
+
+	if nprops.Cksum.Type == cmn.PropInherit {
+		nprops.Cksum.Type = cfg.Cksum.Type
+	}
+	targetCnt := p.owner.smap.Get().CountTargets()
+	err = nprops.Validate(targetCnt, p.urlOutsideCluster)
+	return
 }

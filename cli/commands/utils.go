@@ -555,10 +555,10 @@ func canReachBucket(bck cmn.Bck) error {
 	if _, err := api.HeadBucket(defaultAPIParams, bck); err != nil {
 		if httpErr, ok := err.(*cmn.HTTPError); ok {
 			if httpErr.Status == http.StatusNotFound {
-				return fmt.Errorf("bucket with name %q does not exist", bck)
+				return fmt.Errorf("bucket %s does not exist", bck)
 			}
 		}
-		return fmt.Errorf("could not reach %q bucket: %v", bck, err)
+		return fmt.Errorf("failed to HEAD bucket %s: %v", bck, err)
 	}
 	return nil
 }

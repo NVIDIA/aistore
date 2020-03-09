@@ -379,7 +379,7 @@ func TestListObjects(t *testing.T) {
 				for _, entry := range bckList.Entries {
 					e, exists := objs.Load(entry.Name)
 					if !exists {
-						t.Errorf("object with name %s was listed but was not ever put", entry.Name)
+						t.Errorf("failed to locate object %s in bucket %s", entry.Name, bck)
 						continue
 					}
 
@@ -908,7 +908,7 @@ func TestBucketInvalidName(t *testing.T) {
 		}
 		if err := api.CreateBucket(baseParams, bck); err == nil {
 			tutils.DestroyBucket(t, proxyURL, bck)
-			t.Errorf("accepted bucket with name %s", name)
+			t.Errorf("created bucket with invalid name %q", name)
 		}
 	}
 }

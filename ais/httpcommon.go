@@ -872,7 +872,7 @@ func (h *httprunner) parseNCopies(value interface{}) (copies int64, err error) {
 	return
 }
 
-func (h *httprunner) checkAction(msg cmn.ActionMsg, expectedActions ...string) (err error) {
+func (h *httprunner) checkAction(msg *cmn.ActionMsg, expectedActions ...string) (err error) {
 	found := false
 	for _, action := range expectedActions {
 		found = found || msg.Action == action

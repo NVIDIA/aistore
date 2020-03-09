@@ -1458,40 +1458,6 @@ func (t *targetrunner) commitECEncode(bckFrom *cluster.Bck) (err error) {
 	return nil
 }
 
-func (t *targetrunner) validateBckProps(bck *cluster.Bck, msgInt *actionMsgInternal) error {
-	var (
-		nprops     cmn.BucketProps
-		capInfo    = t.AvgCapUsed(cmn.GCO.Get())
-		mpathCount = fs.Mountpaths.NumAvail()
-	)
-
-	body := cmn.MustMarshal(msgInt.Value)
-	if err := jsoniter.Unmarshal(body, &nprops); err != nil {
-		return fmt.Errorf("invalid internal value: %v", err)
-	}
-
-	if nprops.Mirror.Enabled {
-		if int(nprops.Mirror.Copies) > mpathCount {
-			return fmt.Errorf(
-				"number of mountpaths (%d) is not sufficient for requested number of copies (%d) on target %q",
-				mpathCount, nprops.Mirror.Copies, t.si.ID(),
-			)
-		}
-
-		if nprops.Mirror.Copies > bck.Props.Mirror.Copies {
-			if capInfo.Err != nil {
-				return capInfo.Err
-			}
-		}
-	}
-	if nprops.EC.Enabled {
-		if capInfo.Err != nil {
-			return capInfo.Err
-		}
-	}
-	return nil
-}
-
 // lookupRemoteSingle sends the message to the given target to see if it has the specific object.
 func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := make(url.Values)

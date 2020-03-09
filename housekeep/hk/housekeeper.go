@@ -105,12 +105,12 @@ func (hk *housekeeper) run() {
 				foundIdx := -1
 				for idx, tc := range hk.cleanups {
 					if tc.name == req.name {
-						cmn.AssertMsg(foundIdx == -1, fmt.Sprintf("multiple cleanup funcs with same name %s", req.name))
+						cmn.AssertMsg(foundIdx == -1,
+							fmt.Sprintf("multiple cleanup funcs with the same name %q", req.name))
 						foundIdx = idx
 					}
 				}
-				cmn.AssertMsg(foundIdx != -1, fmt.Sprintf("not found cleanup func with name: %s", req.name))
-
+				cmn.AssertMsg(foundIdx != -1, fmt.Sprintf("cleanup func %q does not exist", req.name))
 				hk.cleanups = append(hk.cleanups[:foundIdx], hk.cleanups[foundIdx+1:]...)
 			}
 

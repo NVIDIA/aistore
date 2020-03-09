@@ -816,7 +816,7 @@ func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object
 		}
 	}
 
-	tassert.Fatalf(t, false, "Object with name %s not present in bucket %s.", object, bck)
+	tassert.Fatalf(t, false, "Cannot find %s in bucket %s", object, bck)
 	return time.Time{}
 }
 

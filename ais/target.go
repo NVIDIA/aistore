@@ -864,17 +864,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		glog.Infof("%s %s bucket %s", phase, msgInt.Action, bck)
-	case cmn.ActSetProps:
-		phase := apiItems[1]
-		switch phase {
-		case cmn.ActBegin:
-			if err := t.validateBckProps(bck, msgInt); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-		case cmn.ActCommit, cmn.ActAbort:
-			// not required
-		}
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msgInt)
 		t.invalmsghdlr(w, r, s)
