@@ -166,6 +166,13 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs) error {
 	return nil
 }
 
+func IsErr404(err error) (yes bool) {
+	if errHTTP, ok := err.(*cmn.HTTPError); ok {
+		yes = errHTTP.Status == http.StatusNotFound
+	}
+	return
+}
+
 // WaitForXaction API
 //
 // WaitForXactionToStart waits for a given xaction to start.

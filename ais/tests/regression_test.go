@@ -372,7 +372,9 @@ func postRenameWaitAndCheck(t *testing.T, proxyURL string, rtd regressionTestDat
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: rtd.bck, Timeout: rebalanceTimeout}
 	err := api.WaitForXaction(baseParams, xactArgs)
-	tassert.CheckFatal(t, err)
+	if !api.IsErr404(err) {
+		tassert.CheckFatal(t, err)
+	}
 	tutils.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
 
 	buckets, err := api.GetBucketNames(baseParams, rtd.bck)

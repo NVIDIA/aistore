@@ -1216,8 +1216,9 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: srcBck, Timeout: rebalanceTimeout}
 	err = api.WaitForXaction(baseParams, xactArgs)
-	tassert.CheckFatal(t, err)
-
+	if !api.IsErr404(err) {
+		tassert.CheckFatal(t, err)
+	}
 	// Gets on renamed ais bucket
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
