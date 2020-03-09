@@ -64,7 +64,7 @@ PROXYURL="http://localhost:$PORT"
 if $USE_HTTPS; then
   PROXYURL="https://localhost:$PORT"
 fi
-LOGROOT="/tmp/ais$NEXT_TIER"
+LOGROOT="${LOGROOT:-/tmp/ais}${NEXT_TIER}"
 #### Authentication setup #########
 SECRETKEY="${SECRETKEY:-aBitLongSecretKey}"
 AUTHENABLED="${AUTHENABLED:-false}"
