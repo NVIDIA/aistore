@@ -387,7 +387,7 @@ func (r *FastRen) Run(waiter *sync.WaitGroup, globRebID int64) {
 	r.rebManager.RunGlobalReb(r.t.GetSowner().Get(), globRebID, gbucket)
 	wg.Wait()
 
-	r.t.BMDVersionFixup(nil, r.Bck(), false) // piggyback bucket renaming (last step) on getting updated BMD
+	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.EndTime(time.Now())
 }
 
@@ -432,7 +432,7 @@ func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.
 		bckTo:      bckTo,
 		phase:      phase,
 	}
-	ee, err := r.renewBucketXaction(e, bckFrom)
+	ee, err := r.renewBucketXaction(e, bckTo)
 	if err == nil {
 		return ee.Get().(*FastRen), nil
 	}

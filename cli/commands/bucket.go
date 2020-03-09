@@ -98,7 +98,7 @@ func renameBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	}
 
 	msgFmt := "Renaming bucket %s to %s in progress.\nTo check the status, run: ais show xaction %s %s\n"
-	fmt.Fprintf(c.App.Writer, msgFmt, fromBck.Name, toBck.Name, cmn.ActRenameLB, fromBck.Name)
+	fmt.Fprintf(c.App.Writer, msgFmt, fromBck.Name, toBck.Name, cmn.ActRenameLB, toBck.Name)
 	return
 }
 

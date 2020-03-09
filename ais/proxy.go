@@ -1352,10 +1352,18 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		p.owner.bmd.Unlock()
 		return
 	}
+	if bckFrom.Props.InProgress {
+		p.owner.bmd.Unlock()
+		return fmt.Errorf("source bucket (%s) is under construction, cannot proceed", bckTo.Bck)
+	}
 	if err := bckTo.Init(p.owner.bmd, p.si); err == nil {
 		if msg.Action == cmn.ActRenameLB {
 			p.owner.bmd.Unlock()
 			return cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
+		}
+		if bckTo.Props.InProgress {
+			p.owner.bmd.Unlock()
+			return fmt.Errorf("destination bucket (%s) is under construction, cannot proceed", bckTo.Bck)
 		}
 		// Allow to copy into existing bucket
 		glog.Warningf("destination bucket %s already exists, proceeding to %s %s => %s anyway",
@@ -1425,6 +1433,8 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 
 	p.owner.bmd.Lock()
 	clone = p.owner.bmd.get().clone()
+	// TODO: Buckets should be upgraded after we have **finished** the xaction
+	//  not when we committed it.
 	clone.upgrade(bckFrom)
 	clone.upgrade(bckTo)
 	if msg.Action == cmn.ActRenameLB {

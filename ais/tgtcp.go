@@ -325,12 +325,10 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		xactMsg, err := cmn.ReadXactionRequestMessage(&msg)
 		if err != nil {
-			t.invalmsghdlr(w, r,
-				fmt.Sprintf("Could not parse xaction action message: %s", err.Error()), http.StatusBadRequest)
+			msg := fmt.Sprintf("could not parse xaction action message: %v", err)
+			t.invalmsghdlr(w, r, msg, http.StatusBadRequest)
 			return
 		}
-
-		kind, onlyRecent := msg.Name, !xactMsg.All
 
 		switch msg.Action {
 		case cmn.ActXactStats:
@@ -342,6 +340,8 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
+
+			kind, onlyRecent := msg.Name, !xactMsg.All
 			body, err = t.xactStatsRequest(kind, bck, onlyRecent)
 			if err != nil {
 				if _, ok := err.(cmn.XactionNotFoundError); ok {

@@ -1241,11 +1241,6 @@ func Test_evictCloudBucket(t *testing.T) {
 	}
 	err = api.EvictCloudBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
-	xactArgs := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: bck, Timeout: rebalanceTimeout}
-	err = api.WaitForXaction(baseParams, xactArgs)
-	if !api.IsErr404(err) {
-		tassert.CheckFatal(t, err)
-	}
 
 	for _, fname := range filesList {
 		if b, _ := tutils.CheckExists(proxyURL, bck, fname); b {

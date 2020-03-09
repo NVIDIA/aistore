@@ -1214,11 +1214,10 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	err = api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
-	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: srcBck, Timeout: rebalanceTimeout}
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck, Timeout: rebalanceTimeout}
 	err = api.WaitForXaction(baseParams, xactArgs)
-	if !api.IsErr404(err) {
-		tassert.CheckFatal(t, err)
-	}
+	tassert.CheckFatal(t, err)
+
 	// Gets on renamed ais bucket
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
@@ -1284,6 +1283,80 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 
 	if srcProps.Equal(&dstProps) {
 		t.Fatalf("source and destination bucket props match, even though they should not: %v - %v", srcProps, dstProps)
+	}
+}
+
+// Tries to rename same source bucket to two destination buckets - the second should fail.
+func TestRenameBucketTwice(t *testing.T) {
+	var (
+		m = ioContext{
+			t:   t,
+			wg:  &sync.WaitGroup{},
+			num: 500,
+		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		dstBck1    = cmn.Bck{
+			Name:     TestBucketName + "_new1",
+			Provider: cmn.ProviderAIS,
+		}
+		dstBck2 = cmn.Bck{
+			Name:     TestBucketName + "_new2",
+			Provider: cmn.ProviderAIS,
+		}
+	)
+
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	srcBck := m.bck
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	defer func() {
+		tutils.DestroyBucket(t, m.proxyURL, srcBck)
+		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
+		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
+	}()
+
+	m.puts()
+
+	// Rename to first destination
+	tutils.Logf("rename %s => %s\n", srcBck, dstBck1)
+	err := api.RenameBucket(baseParams, srcBck, dstBck1)
+	tassert.CheckFatal(t, err)
+
+	// Try to rename to first destination again - already in progress
+	tutils.Logf("try rename %s => %s\n", srcBck, dstBck1)
+	err = api.RenameBucket(baseParams, srcBck, dstBck1)
+	if err == nil {
+		t.Error("renaming bucket that is under renaming did not fail")
+	}
+
+	// Try to rename to second destination - this should fail
+	tutils.Logf("try rename %s => %s\n", srcBck, dstBck2)
+	err = api.RenameBucket(baseParams, srcBck, dstBck2)
+	if err == nil {
+		t.Error("renaming bucket that is under renaming did not fail")
+	}
+
+	// Wait for rename to complete
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck1, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+
+	// Check if the new bucket appears in the list
+	names, err := api.GetBucketNames(baseParams, srcBck)
+	tassert.CheckFatal(t, err)
+
+	if cmn.StringInSlice(srcBck.Name, names.AIS) {
+		t.Error("source bucket found in buckets list")
+	}
+	if !cmn.StringInSlice(dstBck1.Name, names.AIS) {
+		t.Error("destination bucket not found in buckets list")
+	}
+	if cmn.StringInSlice(dstBck2.Name, names.AIS) {
+		t.Error("second (failed) destination bucket not found in buckets list")
 	}
 }
 
@@ -1502,5 +1575,174 @@ func TestCopyBucket(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Tries to rename and then copy bucket at the same time.
+// TODO: This test should be enabled (not skipped)
+func TestRenameAndCopyBucket(t *testing.T) {
+	t.Skip("fails - necessary checks are not yet implemented")
+
+	var (
+		m = ioContext{
+			t:   t,
+			wg:  &sync.WaitGroup{},
+			num: 500,
+		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		dstBck1    = cmn.Bck{
+			Name:     TestBucketName + "_new1",
+			Provider: cmn.ProviderAIS,
+		}
+		dstBck2 = cmn.Bck{
+			Name:     TestBucketName + "_new2",
+			Provider: cmn.ProviderAIS,
+		}
+	)
+
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	srcBck := m.bck
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	defer func() {
+		tutils.DestroyBucket(t, m.proxyURL, srcBck)
+		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
+		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
+	}()
+
+	m.puts()
+
+	// Rename to first destination
+	tutils.Logf("rename %s => %s\n", srcBck, dstBck1)
+	err := api.RenameBucket(baseParams, srcBck, dstBck1)
+	tassert.CheckFatal(t, err)
+
+	// Try to copy to first destination - rename in progress, both for srcBck and dstBck1
+	tutils.Logf("try copy %s => %s\n", srcBck, dstBck1)
+	err = api.CopyBucket(baseParams, srcBck, dstBck1)
+	if err == nil {
+		t.Error("coping bucket that is under renaming did not fail")
+	}
+
+	// Try to copy to second destination - rename in progress for srcBck
+	tutils.Logf("try copy %s => %s\n", srcBck, dstBck2)
+	err = api.CopyBucket(baseParams, srcBck, dstBck2)
+	if err == nil {
+		t.Error("coping bucket that is under renaming did not fail")
+	}
+
+	// Try to copy from dstBck1 to dstBck1 - rename in progress for dstBck1
+	tutils.Logf("try copy %s => %s\n", dstBck1, dstBck2)
+	err = api.CopyBucket(baseParams, srcBck, dstBck1)
+	if err == nil {
+		t.Error("coping bucket that is under renaming did not fail")
+	}
+
+	// Wait for rename to complete
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck1, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+
+	// Check if the new bucket appears in the list
+	names, err := api.GetBucketNames(baseParams, srcBck)
+	tassert.CheckFatal(t, err)
+
+	if cmn.StringInSlice(srcBck.Name, names.AIS) {
+		t.Error("source bucket found in buckets list")
+	}
+	if !cmn.StringInSlice(dstBck1.Name, names.AIS) {
+		t.Error("destination bucket not found in buckets list")
+	}
+	if cmn.StringInSlice(dstBck2.Name, names.AIS) {
+		t.Error("second (failed) destination bucket found in buckets list")
+	}
+}
+
+// Tries to copy and then rename bucket at the same time - similar to
+// `TestRenameAndCopyBucket` but in different order of operations.
+// TODO: This test should be enabled (not skipped)
+func TestCopyAndRenameBucket(t *testing.T) {
+	t.Skip("fails - necessary checks are not yet implemented")
+
+	var (
+		m = ioContext{
+			t:   t,
+			wg:  &sync.WaitGroup{},
+			num: 500,
+		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		dstBck1    = cmn.Bck{
+			Name:     TestBucketName + "_new1",
+			Provider: cmn.ProviderAIS,
+		}
+		dstBck2 = cmn.Bck{
+			Name:     TestBucketName + "_new2",
+			Provider: cmn.ProviderAIS,
+		}
+	)
+
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	srcBck := m.bck
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	defer func() {
+		tutils.DestroyBucket(t, m.proxyURL, srcBck)
+		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
+		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
+	}()
+
+	m.puts()
+
+	// Rename to first destination
+	tutils.Logf("copy %s => %s\n", srcBck, dstBck1)
+	err := api.CopyBucket(baseParams, srcBck, dstBck1)
+	tassert.CheckFatal(t, err)
+
+	// Try to rename to first destination - copy in progress, both for srcBck and dstBck1
+	tutils.Logf("try rename %s => %s\n", srcBck, dstBck1)
+	err = api.RenameBucket(baseParams, srcBck, dstBck1)
+	if err == nil {
+		t.Error("renaming bucket that is under coping did not fail")
+	}
+
+	// Try to rename to second destination - copy in progress for srcBck
+	tutils.Logf("try rename %s => %s\n", srcBck, dstBck2)
+	err = api.RenameBucket(baseParams, srcBck, dstBck2)
+	if err == nil {
+		t.Error("renaming bucket that is under coping did not fail")
+	}
+
+	// Try to rename from dstBck1 to dstBck1 - rename in progress for dstBck1
+	tutils.Logf("try rename %s => %s\n", dstBck1, dstBck2)
+	err = api.RenameBucket(baseParams, srcBck, dstBck1)
+	if err == nil {
+		t.Error("renaming bucket that is under coping did not fail")
+	}
+
+	// Wait for copy to complete
+	xactArgs := api.XactReqArgs{Kind: cmn.ActCopyBucket, Bck: dstBck1, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+
+	// Check if the new bucket appears in the list
+	names, err := api.GetBucketNames(baseParams, srcBck)
+	tassert.CheckFatal(t, err)
+
+	if !cmn.StringInSlice(srcBck.Name, names.AIS) {
+		t.Error("source bucket not found in buckets list")
+	}
+	if !cmn.StringInSlice(dstBck1.Name, names.AIS) {
+		t.Error("destination bucket not found in buckets list")
+	}
+	if cmn.StringInSlice(dstBck2.Name, names.AIS) {
+		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }
