@@ -2784,6 +2784,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+
 	switch apiItems[0] {
 	case cmn.UserRegister: // manual by user (API)
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {

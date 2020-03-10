@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
@@ -495,8 +496,8 @@ func ReplicateObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 // Downloader API
 
 func DownloadSingle(baseParams BaseParams, description string, bck cmn.Bck, objName, link string) (string, error) {
-	dlBody := cmn.DlSingleBody{
-		DlObj: cmn.DlObj{
+	dlBody := downloader.DlSingleBody{
+		DlObj: downloader.DlObj{
 			Objname: objName,
 			Link:    link,
 		},
@@ -506,7 +507,7 @@ func DownloadSingle(baseParams BaseParams, description string, bck cmn.Bck, objN
 	return DownloadSingleWithParam(baseParams, dlBody)
 }
 
-func DownloadSingleWithParam(baseParams BaseParams, dlBody cmn.DlSingleBody) (string, error) {
+func DownloadSingleWithParam(baseParams BaseParams, dlBody downloader.DlSingleBody) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
@@ -518,7 +519,7 @@ func DownloadSingleWithParam(baseParams BaseParams, dlBody cmn.DlSingleBody) (st
 }
 
 func DownloadRange(baseParams BaseParams, description string, bck cmn.Bck, template string) (string, error) {
-	dlBody := cmn.DlRangeBody{
+	dlBody := downloader.DlRangeBody{
 		Template: template,
 	}
 	dlBody.Bck = bck
@@ -526,7 +527,7 @@ func DownloadRange(baseParams BaseParams, description string, bck cmn.Bck, templ
 	return DownloadRangeWithParam(baseParams, dlBody)
 }
 
-func DownloadRangeWithParam(baseParams BaseParams, dlBody cmn.DlRangeBody) (string, error) {
+func DownloadRangeWithParam(baseParams BaseParams, dlBody downloader.DlRangeBody) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
@@ -538,7 +539,7 @@ func DownloadRangeWithParam(baseParams BaseParams, dlBody cmn.DlRangeBody) (stri
 }
 
 func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, m interface{}) (string, error) {
-	dlBody := cmn.DlMultiBody{}
+	dlBody := downloader.DlMultiBody{}
 	dlBody.Bck = bck
 	dlBody.Description = description
 	query := dlBody.AsQuery()
@@ -557,7 +558,7 @@ func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, m int
 }
 
 func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefix, suffix string) (string, error) {
-	dlBody := cmn.DlCloudBody{
+	dlBody := downloader.DlCloudBody{
 		Prefix: prefix,
 		Suffix: suffix,
 	}
@@ -566,7 +567,7 @@ func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefi
 	return DownloadCloudWithParam(baseParams, dlBody)
 }
 
-func DownloadCloudWithParam(baseParams BaseParams, dlBody cmn.DlCloudBody) (string, error) {
+func DownloadCloudWithParam(baseParams BaseParams, dlBody downloader.DlCloudBody) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
@@ -577,8 +578,8 @@ func DownloadCloudWithParam(baseParams BaseParams, dlBody cmn.DlCloudBody) (stri
 	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
-func DownloadStatus(baseParams BaseParams, id string) (cmn.DlStatusResp, error) {
-	dlBody := cmn.DlAdminBody{
+func DownloadStatus(baseParams BaseParams, id string) (downloader.DlStatusResp, error) {
+	dlBody := downloader.DlAdminBody{
 		ID: id,
 	}
 	query := dlBody.AsQuery()
@@ -591,8 +592,8 @@ func DownloadStatus(baseParams BaseParams, id string) (cmn.DlStatusResp, error) 
 	return doDlStatusRequest(baseParams, path, optParams)
 }
 
-func DownloadGetList(baseParams BaseParams, regex string) (map[string]cmn.DlJobInfo, error) {
-	dlBody := cmn.DlAdminBody{
+func DownloadGetList(baseParams BaseParams, regex string) (map[string]downloader.DlJobInfo, error) {
+	dlBody := downloader.DlAdminBody{
 		Regex: regex,
 	}
 	query := dlBody.AsQuery()
@@ -606,7 +607,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (map[string]cmn.DlJobI
 	if err != nil {
 		return nil, err
 	}
-	var parsedResp map[string]cmn.DlJobInfo
+	var parsedResp map[string]downloader.DlJobInfo
 	err = jsoniter.Unmarshal(resp, &parsedResp)
 	if err != nil {
 		return nil, err
@@ -615,7 +616,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (map[string]cmn.DlJobI
 }
 
 func DownloadAbort(baseParams BaseParams, id string) error {
-	dlBody := cmn.DlAdminBody{
+	dlBody := downloader.DlAdminBody{
 		ID: id,
 	}
 	query := dlBody.AsQuery()
@@ -630,7 +631,7 @@ func DownloadAbort(baseParams BaseParams, id string) error {
 }
 
 func DownloadRemove(baseParams BaseParams, id string) error {
-	dlBody := cmn.DlAdminBody{
+	dlBody := downloader.DlAdminBody{
 		ID: id,
 	}
 	query := dlBody.AsQuery()
@@ -650,7 +651,7 @@ func doDlDownloadRequest(baseParams BaseParams, path string, msg []byte, optPara
 		return "", err
 	}
 
-	var resp cmn.DlPostResp
+	var resp downloader.DlPostResp
 	err = jsoniter.Unmarshal(respBytes, &resp)
 	if err != nil {
 		return "", err
@@ -659,7 +660,7 @@ func doDlDownloadRequest(baseParams BaseParams, path string, msg []byte, optPara
 	return resp.ID, nil
 }
 
-func doDlStatusRequest(baseParams BaseParams, path string, optParams OptionalParams) (resp cmn.DlStatusResp, err error) {
+func doDlStatusRequest(baseParams BaseParams, path string, optParams OptionalParams) (resp downloader.DlStatusResp, err error) {
 	respBytes, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	if err != nil {
 		return resp, err

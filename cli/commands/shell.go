@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
 )
@@ -277,18 +278,18 @@ func xactionCompletions(c *cli.Context) {
 //////////////////////
 
 func downloadIDAllCompletions(c *cli.Context) {
-	suggestDownloadID(c, func(*cmn.DlJobInfo) bool { return true })
+	suggestDownloadID(c, func(*downloader.DlJobInfo) bool { return true })
 }
 
 func downloadIDRunningCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*cmn.DlJobInfo).IsRunning)
+	suggestDownloadID(c, (*downloader.DlJobInfo).IsRunning)
 }
 
 func downloadIDFinishedCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*cmn.DlJobInfo).IsFinished)
+	suggestDownloadID(c, (*downloader.DlJobInfo).IsFinished)
 }
 
-func suggestDownloadID(c *cli.Context, filter func(*cmn.DlJobInfo) bool) {
+func suggestDownloadID(c *cli.Context, filter func(*downloader.DlJobInfo) bool) {
 	if c.NArg() > 0 {
 		flagCompletions(c)
 		return

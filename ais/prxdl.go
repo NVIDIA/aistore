@@ -9,113 +9,69 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 	jsoniter "github.com/json-iterator/go"
 )
 
-type dlResponse struct {
-	body       []byte
-	statusCode int
-	err        error
-}
-
-func (p *proxyrunner) targetDownloadRequest(method string, path string, body []byte, query url.Values, si *cluster.Snode) dlResponse {
-	fullQuery := url.Values{}
-	for k, vs := range query {
-		for _, v := range vs {
-			fullQuery.Add(k, v)
-		}
-	}
-	fullQuery.Add(cmn.URLParamProxyID, p.si.ID())
-	fullQuery.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(time.Now().UnixNano()))
-
-	args := callArgs{
-		si: si,
+func (p *proxyrunner) broadcastDownloadRequest(method string, path string, body []byte, query url.Values) chan callResult {
+	query.Add(cmn.URLParamProxyID, p.si.ID())
+	query.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(time.Now().UnixNano()))
+	args := bcastArgs{
 		req: cmn.ReqArgs{
 			Method: method,
 			Path:   cmn.URLPath(cmn.Version, cmn.Download, path),
-			Query:  fullQuery,
+			Query:  query,
 			Body:   body,
 		},
 		timeout: cmn.DefaultTimeout,
+		to:      cluster.Targets,
+		smap:    p.owner.smap.get(),
 	}
-	res := p.call(args)
-	return dlResponse{
-		body:       res.outjson,
-		statusCode: res.status,
-		err:        res.err,
-	}
+	return p.bcastTo(args)
 }
 
-func (p *proxyrunner) broadcastDownloadRequest(method string, path string, body []byte, query url.Values) []dlResponse {
+func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
 	var (
-		smap        = p.owner.smap.get()
-		wg          = &sync.WaitGroup{}
-		targetCnt   = smap.CountTargets()
-		responsesCh = make(chan dlResponse, targetCnt)
+		notFoundCnt int
+		err         *callResult
 	)
-
-	for _, si := range smap.Tmap {
-		wg.Add(1)
-		go func(si *cluster.Snode) {
-			responsesCh <- p.targetDownloadRequest(method, path, body, query, si)
-			wg.Done()
-		}(si)
-	}
-
-	wg.Wait()
-	close(responsesCh)
-
-	// FIXME: consider adding new stats: downloader failures
-	responses := make([]dlResponse, 0, 10)
-	for resp := range responsesCh {
-		responses = append(responses, resp)
-	}
-
-	return responses
-}
-
-func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, msg *cmn.DlAdminBody) ([]byte, int, error) {
 	body := cmn.MustMarshal(msg)
 	responses := p.broadcastDownloadRequest(method, path, body, url.Values{})
-	if len(responses) == 0 {
+	respCnt := len(responses)
+	if respCnt == 0 {
 		return nil, http.StatusInternalServerError, cluster.ErrNoTargets
 	}
 
-	notFoundCnt := 0
-	errs := make([]dlResponse, 0, 10) // errors other than than 404 (not found)
-	validResponses := responses[:0]
-	for _, resp := range responses {
-		if resp.statusCode >= http.StatusBadRequest {
-			if resp.statusCode == http.StatusNotFound {
-				notFoundCnt++
-			} else {
-				errs = append(errs, resp)
-			}
-		} else {
+	validResponses := make([]callResult, 0, respCnt)
+	for resp := range responses {
+		if resp.status == http.StatusOK {
 			validResponses = append(validResponses, resp)
+			continue
 		}
+		if resp.status != http.StatusNotFound {
+			return nil, resp.status, resp.err
+		}
+		notFoundCnt++
+		err = &resp
 	}
 
-	if notFoundCnt == len(responses) { // all responded with 404
-		return nil, http.StatusNotFound, responses[0].err
-	} else if len(errs) > 0 {
-		return nil, errs[0].statusCode, errs[0].err
+	if notFoundCnt == respCnt { // all responded with 404
+		return nil, http.StatusNotFound, err.err
 	}
 
 	switch method {
 	case http.MethodGet:
 		if msg.ID == "" {
 			// If ID is empty, return the list of downloads
-			listDownloads := make(map[string]cmn.DlJobInfo)
+			listDownloads := make(map[string]downloader.DlJobInfo)
 			for _, resp := range validResponses {
-				var parsedResp map[string]cmn.DlJobInfo
-				err := jsoniter.Unmarshal(resp.body, &parsedResp)
+				var parsedResp map[string]downloader.DlJobInfo
+				err := jsoniter.Unmarshal(resp.outjson, &parsedResp)
 				cmn.AssertNoErr(err)
 				for k, v := range parsedResp {
 					if oldMetric, ok := listDownloads[k]; ok {
@@ -129,9 +85,9 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, 
 			return result, http.StatusOK, nil
 		}
 
-		stats := make([]cmn.DlStatusResp, len(validResponses))
+		stats := make([]downloader.DlStatusResp, len(validResponses))
 		for i, resp := range validResponses {
-			err := jsoniter.Unmarshal(resp.body, &stats[i])
+			err := jsoniter.Unmarshal(resp.outjson, &stats[i])
 			cmn.AssertNoErr(err)
 		}
 
@@ -139,9 +95,9 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, 
 		allDispatchedCnt := 0
 		aborted := false
 
-		currTasks := make([]cmn.TaskDlInfo, 0, len(stats))
-		finishedTasks := make([]cmn.TaskDlInfo, 0, len(stats))
-		downloadErrs := make([]cmn.TaskErrInfo, 0)
+		currTasks := make([]downloader.TaskDlInfo, 0, len(stats))
+		finishedTasks := make([]downloader.TaskDlInfo, 0, len(stats))
+		downloadErrs := make([]downloader.TaskErrInfo, 0)
 		for _, stat := range stats {
 			finished += stat.Finished
 			total += stat.Total
@@ -158,7 +114,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, 
 			downloadErrs = append(downloadErrs, stat.Errs...)
 		}
 
-		resp := cmn.DlStatusResp{
+		resp := downloader.DlStatusResp{
 			Finished:      finished,
 			Total:         total,
 			CurrentTasks:  currTasks,
@@ -173,8 +129,8 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, 
 		respJSON := cmn.MustMarshal(resp)
 		return respJSON, http.StatusOK, nil
 	case http.MethodDelete:
-		response := responses[0]
-		return response.body, response.statusCode, response.err
+		response := validResponses[0]
+		return response.outjson, response.status, response.err
 	default:
 		cmn.AssertMsg(false, method)
 		return nil, http.StatusInternalServerError, nil
@@ -190,9 +146,8 @@ func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string) 
 	query.Set(cmn.URLParamID, id)
 
 	responses := p.broadcastDownloadRequest(http.MethodPost, r.URL.Path, body, query)
-
-	failures := make([]error, 0, 10)
-	for _, resp := range responses {
+	failures := make([]error, 0, len(responses))
+	for resp := range responses {
 		if resp.err != nil {
 			failures = append(failures, resp.err)
 		}
@@ -224,7 +179,7 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 // DELETE /v1/download/{abort, remove}?id=...
 func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
 	var (
-		payload = &cmn.DlAdminBody{}
+		payload = &downloader.DlAdminBody{}
 	)
 
 	payload.InitWithQuery(r.URL.Query())
@@ -291,7 +246,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 	var (
 		bucket  string
 		query   = r.URL.Query()
-		payload = &cmn.DlBase{}
+		payload = &downloader.DlBase{}
 	)
 	payload.InitWithQuery(query)
 	bck := cluster.NewBckEmbed(payload.Bck)
@@ -308,7 +263,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 }
 
 func (p *proxyrunner) respondWithID(w http.ResponseWriter, id string) {
-	resp := cmn.DlPostResp{
+	resp := downloader.DlPostResp{
 		ID: id,
 	}
 

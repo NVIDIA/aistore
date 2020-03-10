@@ -32,7 +32,7 @@ type (
 
 		// GenNext is supposed to fulfill the following protocol:
 		// ok is set to true if there is batch to process, false otherwise
-		GenNext() (objs []cmn.DlObj, ok bool)
+		GenNext() (objs []DlObj, ok bool)
 
 		Description() string
 		// if total length (size) of download job is not known, -1 should be returned
@@ -48,7 +48,7 @@ type (
 
 	SliceDlJob struct {
 		BaseDlJob
-		objs    []cmn.DlObj
+		objs    []DlObj
 		timeout string
 		current int
 	}
@@ -58,11 +58,11 @@ type (
 		t   cluster.Target
 		ctx context.Context // context for the request, user etc...
 
-		objs       []cmn.DlObj // objects' metas which are ready to be downloaded
+		objs       []DlObj // objects' metas which are ready to be downloaded
 		pageMarker string
 		prefix     string
 		suffix     string
-		wg         *sync.WaitGroup
+		mtx        sync.Mutex
 		pagesCnt   int
 	}
 
@@ -82,7 +82,7 @@ type (
 	}
 
 	ListBucketPageCb func(bucket, pageMarker string) (*cmn.BucketList, error)
-	TargetObjsCb     func(objects cmn.SimpleKVs, bucket string, cloud bool) ([]cmn.DlObj, error)
+	TargetObjsCb     func(objects cmn.SimpleKVs, bucket string, cloud bool) ([]DlObj, error)
 )
 
 func (j *BaseDlJob) ID() string          { return j.id }
@@ -95,9 +95,9 @@ func NewBaseDlJob(id string, bck *cluster.Bck, timeout, desc string) *BaseDlJob 
 }
 
 func (j *SliceDlJob) Len() int { return len(j.objs) }
-func (j *SliceDlJob) GenNext() (objs []cmn.DlObj, ok bool) {
+func (j *SliceDlJob) GenNext() (objs []DlObj, ok bool) {
 	if j.current == len(j.objs) {
-		return []cmn.DlObj{}, false
+		return []DlObj{}, false
 	}
 
 	if j.current+sliceDownloadBatchSize >= len(j.objs) {
@@ -111,7 +111,7 @@ func (j *SliceDlJob) GenNext() (objs []cmn.DlObj, ok bool) {
 	return objs, true
 }
 
-func NewSliceDlJob(id string, objs []cmn.DlObj, bck *cluster.Bck, timeout, description string) *SliceDlJob {
+func NewSliceDlJob(id string, objs []DlObj, bck *cluster.Bck, timeout, description string) *SliceDlJob {
 	return &SliceDlJob{
 		BaseDlJob: BaseDlJob{id: id, bck: bck, timeout: timeout, description: description},
 		objs:      objs,
@@ -120,35 +120,41 @@ func NewSliceDlJob(id string, objs []cmn.DlObj, bck *cluster.Bck, timeout, descr
 }
 
 func (j *CloudBucketDlJob) Len() int { return -1 }
-func (j *CloudBucketDlJob) GenNext() (objs []cmn.DlObj, ok bool) {
-	j.wg.Wait()
+func (j *CloudBucketDlJob) GenNext() (objs []DlObj, ok bool) {
+	j.mtx.Lock()
+	defer j.mtx.Unlock()
 
 	if len(j.objs) == 0 {
 		return nil, false
 	}
 
 	readyToDownloadObjs := j.objs
-	j.wg.Add(1)
-	go func() {
-		if err := j.GetNextObjs(); err != nil {
-			glog.Error(err)
-			// this makes GenNext return ok = false in the next
-			// loop iteration
-			j.objs, j.pageMarker = []cmn.DlObj{}, ""
-		}
-		j.wg.Done()
-	}()
+	if err := j.GetNextObjs(); err != nil {
+		glog.Error(err)
+		// this makes GenNext return ok = false in the next
+		// loop iteration
+		j.objs, j.pageMarker = []DlObj{}, ""
+	}
 
 	return readyToDownloadObjs, true
 }
 
+// TODO: the function can generate empty list and stop iterating even if there
+// more objects in the bucket. Possible case:
+// 1. Bucket with 2000 objects ending with 'tar' and 2000 objects ending with 'tgz'
+// 2. Requesting objects with suffix 'tgz' loads the first page, filters out
+//    all objects from the result and returns empty array
+// 3. L150 does check and stops traversing
+// 4. Result -> no object downloaded
 func (j *CloudBucketDlJob) GetNextObjs() error {
 	if j.pagesCnt > 0 && j.pageMarker == "" {
 		// Cloud ListBucket returned empty pageMarker after at least one reqest
 		// this means there are no more objects in to list
-		j.objs = []cmn.DlObj{}
+		j.objs = []DlObj{}
 		return nil
 	}
+	smap := j.t.GetSowner().Get()
+	sid := j.t.Snode().ID()
 
 	j.pagesCnt++
 	msg := &cmn.SelectMsg{
@@ -164,25 +170,19 @@ func (j *CloudBucketDlJob) GetNextObjs() error {
 	}
 	j.pageMarker = msg.PageMarker
 
-	objects := make(cmn.SimpleKVs, cmn.DefaultListPageSize)
-	smap := j.t.GetSowner().Get()
 	for _, entry := range bckList.Entries {
-		si, err := cluster.HrwTarget(j.bck.MakeUname(entry.Name), smap)
-		if err != nil {
-			return err
-		}
-
-		if !strings.HasSuffix(entry.Name, j.suffix) || si.ID() != j.t.Snode().ID() {
+		if !strings.HasSuffix(entry.Name, j.suffix) {
 			continue
 		}
-		objects[entry.Name] = ""
+		dlJob, err := jobForObject(smap, sid, j.bck, entry.Name, "")
+		if err != nil {
+			if err == errInvalidTarget {
+				continue
+			}
+			return err
+		}
+		j.objs = append(j.objs, dlJob)
 	}
-
-	dl, err := GetTargetDlObjs(j.t, objects, j.bck)
-	if err != nil {
-		return err
-	}
-	j.objs = dl
 
 	return nil
 }
@@ -195,7 +195,6 @@ func NewCloudBucketDlJob(ctx context.Context, t cluster.Target, base *BaseDlJob,
 		ctx:        ctx,
 		prefix:     prefix,
 		suffix:     suffix,
-		wg:         &sync.WaitGroup{},
 	}
 
 	err := job.GetNextObjs()

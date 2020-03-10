@@ -5,18 +5,14 @@
 package ais
 
 import (
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"regexp"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/xaction"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // NOTE: This request is internal so we can have asserts there.
@@ -41,8 +37,8 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		id := r.URL.Query().Get(cmn.URLParamID)
 		cmn.Assert(id != "")
-
-		dlJob, err := t.parseStartDownloadRequest(r, id)
+		ctx := t.contextWithAuth(r.Header)
+		dlJob, err := downloader.ParseStartDownloadRequest(ctx, r, id, t)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -55,7 +51,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		response, respErr, statusCode = downloaderXact.Download(dlJob)
 
 	case http.MethodGet:
-		payload := &cmn.DlAdminBody{}
+		payload := &downloader.DlAdminBody{}
 		if err := cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
@@ -81,7 +77,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodDelete:
-		payload := &cmn.DlAdminBody{}
+		payload := &downloader.DlAdminBody{}
 		if err = cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
@@ -123,95 +119,4 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			glog.Errorf("Failed to write to http response: %s.", err.Error())
 		}
 	}
-}
-
-// parseStartDownloadRequest translates external http request into internal representation: DlJob interface
-// based on different type of request DlJob might of different type which implements the interface
-func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (downloader.DlJob, error) {
-	var (
-		// link -> objname
-		objects cmn.SimpleKVs
-		query   = r.URL.Query()
-
-		payload        = &cmn.DlBase{}
-		singlePayload  = &cmn.DlSingleBody{}
-		rangePayload   = &cmn.DlRangeBody{}
-		multiPayload   = &cmn.DlMultiBody{}
-		cloudPayload   = &cmn.DlCloudBody{}
-		objectsPayload interface{}
-
-		description string
-	)
-
-	payload.InitWithQuery(query)
-
-	singlePayload.InitWithQuery(query)
-	rangePayload.InitWithQuery(query)
-	multiPayload.InitWithQuery(query)
-	cloudPayload.InitWithQuery(query)
-
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := singlePayload.Validate(); err == nil {
-		if objects, err = singlePayload.ExtractPayload(); err != nil {
-			return nil, err
-		}
-		description = singlePayload.Describe()
-	} else if err := rangePayload.Validate(); err == nil {
-		// FIXME: rangePayload still evaluates all of the objects on this line
-		// it means that if range is 0-3mln, we will create 3mln objects right away
-		// this should not be the case and we should create them on the demand
-		// NOTE: size of objects to be downloaded by a target will be unknown
-		// So proxy won't be able to sum sizes from all targets when calculating total size
-		// This should be taken care of somehow, as total is easy to know from range template anyway
-		if objects, err = rangePayload.ExtractPayload(); err != nil {
-			return nil, err
-		}
-		description = rangePayload.Describe()
-	} else if err := multiPayload.Validate(b); err == nil {
-		if err := jsoniter.Unmarshal(b, &objectsPayload); err != nil {
-			return nil, err
-		}
-
-		if objects, err = multiPayload.ExtractPayload(objectsPayload); err != nil {
-			return nil, err
-		}
-		description = multiPayload.Describe()
-	} else if err := cloudPayload.Validate(); err == nil {
-		bck := cluster.NewBckEmbed(cloudPayload.Bck)
-		if err := bck.Init(t.owner.bmd, t.si); err != nil {
-			return nil, err
-		}
-		if !bck.IsCloud() {
-			return nil, fmt.Errorf("bucket download requires cloud bucket")
-		}
-
-		baseJob := downloader.NewBaseDlJob(id, bck, cloudPayload.Timeout, payload.Description)
-		return downloader.NewCloudBucketDlJob(t.contextWithAuth(r.Header), t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
-	} else {
-		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
-	}
-
-	if payload.Description == "" {
-		payload.Description = description
-	}
-
-	bck := cluster.NewBckEmbed(payload.Bck)
-	if err = bck.Init(t.owner.bmd, t.si); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
-			return nil, err
-		}
-	}
-	if !bck.IsAIS() {
-		return nil, fmt.Errorf("regular download requires ais bucket")
-	}
-	input, err := downloader.BuildDownloaderInput(t, id, bck, payload, objects)
-	if err != nil {
-		return nil, err
-	}
-
-	return downloader.NewSliceDlJob(input.ID, input.Objs, bck, payload.Timeout, payload.Description), nil
 }

@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package downloader
 
 import (
 	"errors"
@@ -10,9 +10,10 @@ import (
 	"net/url"
 	"path"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 // Download POST result returned to the user
@@ -32,55 +33,6 @@ type DlStatusResp struct {
 	CurrentTasks  []TaskDlInfo  `json:"current_tasks,omitempty"`
 	FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
 	Errs          []TaskErrInfo `json:"download_errors,omitempty"`
-}
-
-func (d *DlStatusResp) Print(verbose bool) string {
-	if d.Aborted {
-		return "Download was aborted."
-	}
-
-	var sb strings.Builder
-	errCount := len(d.Errs)
-	if d.JobFinished() {
-		sb.WriteString(fmt.Sprintf("Done: %d file%s downloaded, %d error%s\n",
-			d.Finished, NounEnding(d.Finished), errCount, NounEnding(errCount)))
-
-		if verbose {
-			for _, e := range d.Errs {
-				sb.WriteString(fmt.Sprintf("%s: %s\n", e.Name, e.Err))
-			}
-		}
-
-		return sb.String()
-	}
-
-	realFinished := d.Finished + errCount
-	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.2f%%)", realFinished, d.TotalCnt(), 100*float64(realFinished)/float64(d.TotalCnt())))
-	if !verbose {
-		sb.WriteString("\n")
-		return sb.String()
-	}
-
-	sb.WriteString("\n")
-	if len(d.CurrentTasks) != 0 {
-		sort.Slice(d.CurrentTasks, func(i, j int) bool {
-			return d.CurrentTasks[i].Name < d.CurrentTasks[j].Name
-		})
-
-		sb.WriteString("Progress of files that are currently being downloaded:\n")
-		for _, task := range d.CurrentTasks {
-			sb.WriteString(fmt.Sprintf("\t%s: ", task.Name))
-			if task.Total > 0 {
-				pctDownloaded := 100 * float64(task.Downloaded) / float64(task.Total)
-				sb.WriteString(fmt.Sprintf("%s/%s (%.2f%%)", B2S(task.Downloaded, 2), B2S(task.Total, 2), pctDownloaded))
-			} else {
-				sb.WriteString(B2S(task.Downloaded, 2))
-			}
-			sb.WriteString("\n")
-		}
-	}
-
-	return sb.String()
 }
 
 func (d *DlStatusResp) JobFinished() bool {
@@ -138,44 +90,44 @@ func (j *DlJobInfo) String() string {
 }
 
 type DlBase struct {
-	Description string `json:"description"`
-	Bck         Bck    `json:"bck"`
-	Timeout     string `json:"timeout"`
+	Description string  `json:"description"`
+	Bck         cmn.Bck `json:"bck"`
+	Timeout     string  `json:"timeout"`
 }
 
 func (b *DlBase) InitWithQuery(query url.Values) {
 	if b.Bck.Name == "" {
-		b.Bck.Name = query.Get(URLParamBucket)
+		b.Bck.Name = query.Get(cmn.URLParamBucket)
 	}
-	b.Bck.Provider = query.Get(URLParamProvider)
-	b.Bck.Ns = ParseNsUname(query.Get(URLParamNamespace))
-	b.Timeout = query.Get(URLParamTimeout)
-	b.Description = query.Get(URLParamDescription)
+	b.Bck.Provider = query.Get(cmn.URLParamProvider)
+	b.Bck.Ns = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
+	b.Timeout = query.Get(cmn.URLParamTimeout)
+	b.Description = query.Get(cmn.URLParamDescription)
 }
 
 func (b *DlBase) AsQuery() url.Values {
 	query := url.Values{}
 	if b.Bck.Name != "" {
-		query.Add(URLParamBucket, b.Bck.Name)
+		query.Add(cmn.URLParamBucket, b.Bck.Name)
 	}
 	if b.Bck.Provider != "" {
-		query.Add(URLParamProvider, b.Bck.Provider)
+		query.Add(cmn.URLParamProvider, b.Bck.Provider)
 	}
 	if !b.Bck.Ns.IsGlobal() {
-		query.Add(URLParamNamespace, b.Bck.Ns.Uname())
+		query.Add(cmn.URLParamNamespace, b.Bck.Ns.Uname())
 	}
 	if b.Timeout != "" {
-		query.Add(URLParamTimeout, b.Timeout)
+		query.Add(cmn.URLParamTimeout, b.Timeout)
 	}
 	if b.Description != "" {
-		query.Add(URLParamDescription, b.Description)
+		query.Add(cmn.URLParamDescription, b.Description)
 	}
 	return query
 }
 
 func (b *DlBase) Validate() error {
 	if b.Bck.Name == "" {
-		return fmt.Errorf("missing the %q which is required", URLParamBucket)
+		return fmt.Errorf("missing the %q", cmn.URLParamBucket)
 	}
 	if b.Timeout != "" {
 		if _, err := time.ParseDuration(b.Timeout); err != nil {
@@ -195,15 +147,15 @@ func (b *DlObj) Validate() error {
 	if b.Objname == "" {
 		objName := path.Base(b.Link)
 		if objName == "." || objName == "/" {
-			return fmt.Errorf("can not extract a valid %q from the provided download link", URLParamObjName)
+			return fmt.Errorf("can not extract a valid %q from the provided download link", cmn.URLParamObjName)
 		}
 		b.Objname = objName
 	}
 	if b.Link == "" && !b.FromCloud {
-		return fmt.Errorf("missing the %q from the request body", URLParamLink)
+		return fmt.Errorf("missing the %q from the request body", cmn.URLParamLink)
 	}
 	if b.Objname == "" {
-		return fmt.Errorf("missing the %q from the request body", URLParamObjName)
+		return fmt.Errorf("missing the %q from the request body", cmn.URLParamObjName)
 	}
 	return nil
 }
@@ -215,24 +167,24 @@ type DlAdminBody struct {
 }
 
 func (b *DlAdminBody) InitWithQuery(query url.Values) {
-	b.ID = query.Get(URLParamID)
-	b.Regex = query.Get(URLParamRegex)
+	b.ID = query.Get(cmn.URLParamID)
+	b.Regex = query.Get(cmn.URLParamRegex)
 }
 
 func (b *DlAdminBody) AsQuery() url.Values {
 	query := url.Values{}
 	if b.ID != "" {
-		query.Add(URLParamID, b.ID)
+		query.Add(cmn.URLParamID, b.ID)
 	}
 	if b.Regex != "" {
-		query.Add(URLParamRegex, b.Regex)
+		query.Add(cmn.URLParamRegex, b.Regex)
 	}
 	return query
 }
 
 func (b *DlAdminBody) Validate(requireID bool) error {
 	if b.ID != "" && b.Regex != "" {
-		return fmt.Errorf("regex %q defined at the same time as id %q", URLParamRegex, URLParamID)
+		return fmt.Errorf("regex %q defined at the same time as id %q", cmn.URLParamRegex, cmn.URLParamID)
 	} else if b.Regex != "" {
 		if _, err := regexp.CompilePOSIX(b.Regex); err != nil {
 			return err
@@ -257,7 +209,7 @@ func (b *DlBody) Validate() error {
 		return err
 	}
 	if b.ID == "" {
-		return fmt.Errorf("missing %q, something went wrong", URLParamID)
+		return fmt.Errorf("missing %q, something went wrong", cmn.URLParamID)
 	}
 	if b.Aborted {
 		// used to store abort status in db, should be unset
@@ -310,14 +262,14 @@ type DlSingleBody struct {
 
 func (b *DlSingleBody) InitWithQuery(query url.Values) {
 	b.DlBase.InitWithQuery(query)
-	b.Link = query.Get(URLParamLink)
-	b.Objname = query.Get(URLParamObjName)
+	b.Link = query.Get(cmn.URLParamLink)
+	b.Objname = query.Get(cmn.URLParamObjName)
 }
 
 func (b *DlSingleBody) AsQuery() url.Values {
 	query := b.DlBase.AsQuery()
-	query.Add(URLParamLink, b.Link)
-	query.Add(URLParamObjName, b.Objname)
+	query.Add(cmn.URLParamLink, b.Link)
+	query.Add(cmn.URLParamObjName, b.Objname)
 	return query
 }
 
@@ -331,8 +283,8 @@ func (b *DlSingleBody) Validate() error {
 	return nil
 }
 
-func (b *DlSingleBody) ExtractPayload() (SimpleKVs, error) {
-	objects := make(SimpleKVs, 1)
+func (b *DlSingleBody) ExtractPayload() (cmn.SimpleKVs, error) {
+	objects := make(cmn.SimpleKVs, 1)
 	objects[b.Objname] = b.Link
 	return objects, nil
 }
@@ -354,15 +306,15 @@ type DlRangeBody struct {
 
 func (b *DlRangeBody) InitWithQuery(query url.Values) {
 	b.DlBase.InitWithQuery(query)
-	b.Template = query.Get(URLParamTemplate)
-	b.Subdir = query.Get(URLParamSubdir)
+	b.Template = query.Get(cmn.URLParamTemplate)
+	b.Subdir = query.Get(cmn.URLParamSubdir)
 }
 
 func (b *DlRangeBody) AsQuery() url.Values {
 	query := b.DlBase.AsQuery()
-	query.Add(URLParamTemplate, b.Template)
+	query.Add(cmn.URLParamTemplate, b.Template)
 	if b.Subdir != "" {
-		query.Add(URLParamSubdir, b.Subdir)
+		query.Add(cmn.URLParamSubdir, b.Subdir)
 	}
 	return query
 }
@@ -372,18 +324,18 @@ func (b *DlRangeBody) Validate() error {
 		return err
 	}
 	if b.Template == "" {
-		return fmt.Errorf("no %q for range found, %q is required", URLParamTemplate, URLParamTemplate)
+		return fmt.Errorf("no %q for range found, %q is required", cmn.URLParamTemplate, cmn.URLParamTemplate)
 	}
 	return nil
 }
 
-func (b *DlRangeBody) ExtractPayload() (SimpleKVs, error) {
-	pt, err := ParseBashTemplate(b.Template)
+func (b *DlRangeBody) ExtractPayload() (cmn.SimpleKVs, error) {
+	pt, err := cmn.ParseBashTemplate(b.Template)
 	if err != nil {
 		return nil, err
 	}
 
-	objects := make(SimpleKVs, pt.Count())
+	objects := make(cmn.SimpleKVs, pt.Count())
 	linksIt := pt.Iter()
 	for link, hasNext := linksIt(); hasNext; link, hasNext = linksIt() {
 		objName := path.Join(b.Subdir, path.Base(link))
@@ -420,8 +372,8 @@ func (b *DlMultiBody) Validate(body []byte) error {
 	return nil
 }
 
-func (b *DlMultiBody) ExtractPayload(objectsPayload interface{}) (SimpleKVs, error) {
-	objects := make(SimpleKVs, 10)
+func (b *DlMultiBody) ExtractPayload(objectsPayload interface{}) (cmn.SimpleKVs, error) {
+	objects := make(cmn.SimpleKVs, 10)
 	switch ty := objectsPayload.(type) {
 	case map[string]interface{}:
 		for key, val := range ty {
@@ -470,8 +422,8 @@ type DlCloudBody struct {
 
 func (b *DlCloudBody) InitWithQuery(query url.Values) {
 	b.DlBase.InitWithQuery(query)
-	b.Prefix = query.Get(URLParamPrefix)
-	b.Suffix = query.Get(URLParamSuffix)
+	b.Prefix = query.Get(cmn.URLParamPrefix)
+	b.Suffix = query.Get(cmn.URLParamSuffix)
 }
 
 func (b *DlCloudBody) Validate() error {
@@ -483,26 +435,11 @@ func (b *DlCloudBody) Validate() error {
 
 func (b *DlCloudBody) AsQuery() url.Values {
 	query := b.DlBase.AsQuery()
-	query.Add(URLParamPrefix, b.Prefix)
-	query.Add(URLParamSuffix, b.Suffix)
+	query.Add(cmn.URLParamPrefix, b.Prefix)
+	query.Add(cmn.URLParamSuffix, b.Suffix)
 	return query
 }
 
 func (b *DlCloudBody) Describe() string {
 	return fmt.Sprintf("cloud prefetch -> %s", b.Bck)
-}
-
-// Removes everything that goes after '?', eg. "?query=key..." so it will not
-// be part of final object name.
-func NormalizeObjName(objName string) (string, error) {
-	u, err := url.Parse(objName)
-	if err != nil {
-		return "", nil
-	}
-
-	if u.Path == "" {
-		return objName, nil
-	}
-
-	return url.PathUnescape(u.Path)
 }

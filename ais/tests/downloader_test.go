@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -351,8 +352,8 @@ func TestDownloadTimeout(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	body := cmn.DlSingleBody{
-		DlObj: cmn.DlObj{
+	body := downloader.DlSingleBody{
+		DlObj: downloader.DlObj{
 			Objname: objname,
 			Link:    link,
 		},

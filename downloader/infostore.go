@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 )
@@ -96,7 +95,6 @@ func (is *infoStore) setJob(id string, job DlJob) {
 func (is *infoStore) incFinished(id string) error {
 	jInfo, err := is.getJob(id)
 	if err != nil {
-		glog.Error(err)
 		return err
 	}
 
@@ -107,7 +105,6 @@ func (is *infoStore) incFinished(id string) error {
 func (is *infoStore) incScheduled(id string) error {
 	jInfo, err := is.getJob(id)
 	if err != nil {
-		glog.Error(err)
 		return err
 	}
 
@@ -115,20 +112,19 @@ func (is *infoStore) incScheduled(id string) error {
 	return nil
 }
 
-func (is *infoStore) incErrorCnt(id string) {
+func (is *infoStore) incErrorCnt(id string) error {
 	jInfo, err := is.getJob(id)
 	if err != nil {
-		glog.Error(err)
-		return
+		return err
 	}
 
 	jInfo.ErrorCnt.Inc()
+	return nil
 }
 
 func (is *infoStore) setAllDispatched(id string, dispatched bool) error {
 	jInfo, err := is.getJob(id)
 	if err != nil {
-		glog.Error(err)
 		return err
 	}
 
@@ -139,7 +135,6 @@ func (is *infoStore) setAllDispatched(id string, dispatched bool) error {
 func (is *infoStore) markFinished(id string) error {
 	jInfo, err := is.getJob(id)
 	if err != nil {
-		glog.Error(err)
 		return err
 	}
 
@@ -150,7 +145,6 @@ func (is *infoStore) markFinished(id string) error {
 func (is *infoStore) setAborted(id string) error {
 	jInfo, err := is.getJob(id)
 	if err != nil {
-		glog.Error(err)
 		return err
 	}
 

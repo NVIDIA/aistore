@@ -6,7 +6,6 @@ package downloader
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -31,7 +30,7 @@ type (
 	// are dlTasks.
 	jogger struct {
 		mpath       string
-		terminateCh chan struct{} // synchronizes termination
+		terminateCh chan struct{} // synchronizes termination TODO: replace with std one?
 		parent      *dispatcher
 
 		q *queue
@@ -68,11 +67,7 @@ func (j *jogger) jog() {
 		j.task = t
 		j.Unlock()
 
-		// Start download
-		go t.download()
-
-		// Await abort or completion
-		<-t.waitForFinish()
+		t.download()
 
 		j.Lock()
 		j.task.persist()
@@ -95,7 +90,7 @@ func (j *jogger) stop() {
 	j.Lock()
 	j.stopAgent = true
 	if j.task != nil {
-		j.task.abort(internalErrorMessage(), errors.New("stopped jogger"))
+		j.task.markFailed(internalErrorMsg)
 	}
 	j.Unlock()
 
@@ -202,7 +197,7 @@ func (q *queue) exists(jobID, requestUID string) bool {
 // putToSet should be called under Lock()
 func (q *queue) putToSet(jobID, requestUID string) {
 	if _, ok := q.m[jobID]; !ok {
-		q.m[jobID] = make(map[string]struct{})
+		q.m[jobID] = make(queueEntry)
 	}
 
 	q.m[jobID][requestUID] = struct{}{}

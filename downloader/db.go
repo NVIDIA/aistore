@@ -37,8 +37,8 @@ type downloaderDB struct {
 	mtx    sync.RWMutex
 	driver *scribble.Driver
 
-	errCache      map[string][]cmn.TaskErrInfo // memory cache for errors, see: errCacheSize
-	taskInfoCache map[string][]cmn.TaskDlInfo  // memory cache for tasks, see: taskInfoCacheSize
+	errCache      map[string][]TaskErrInfo // memory cache for errors, see: errCacheSize
+	taskInfoCache map[string][]TaskDlInfo  // memory cache for tasks, see: taskInfoCacheSize
 }
 
 func newDownloadDB() (*downloaderDB, error) {
@@ -50,12 +50,12 @@ func newDownloadDB() (*downloaderDB, error) {
 
 	return &downloaderDB{
 		driver:        driver,
-		errCache:      make(map[string][]cmn.TaskErrInfo, 10),
-		taskInfoCache: make(map[string][]cmn.TaskDlInfo, 10),
+		errCache:      make(map[string][]TaskErrInfo, 10),
+		taskInfoCache: make(map[string][]TaskDlInfo, 10),
 	}, nil
 }
 
-func (db *downloaderDB) errors(id string) (errors []cmn.TaskErrInfo, err error) {
+func (db *downloaderDB) errors(id string) (errors []TaskErrInfo, err error) {
 	if err := db.driver.Read(downloaderErrors, id, &errors); err != nil {
 		if !os.IsNotExist(err) {
 			glog.Error(err)
@@ -69,7 +69,7 @@ func (db *downloaderDB) errors(id string) (errors []cmn.TaskErrInfo, err error) 
 	return
 }
 
-func (db *downloaderDB) getErrors(id string) (errors []cmn.TaskErrInfo, err error) {
+func (db *downloaderDB) getErrors(id string) (errors []TaskErrInfo, err error) {
 	db.mtx.RLock()
 	defer db.mtx.RUnlock()
 	return db.errors(id)
@@ -79,7 +79,7 @@ func (db *downloaderDB) persistError(id, objname string, errMsg string) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
-	errInfo := cmn.TaskErrInfo{Name: objname, Err: errMsg}
+	errInfo := TaskErrInfo{Name: objname, Err: errMsg}
 	if len(db.errCache[id]) < errCacheSize { // if possible store error in cache
 		db.errCache[id] = append(db.errCache[id], errInfo)
 		return
@@ -100,7 +100,7 @@ func (db *downloaderDB) persistError(id, objname string, errMsg string) {
 	db.errCache[id] = db.errCache[id][:0] // clear cache
 }
 
-func (db *downloaderDB) tasks(id string) (tasks []cmn.TaskDlInfo, err error) {
+func (db *downloaderDB) tasks(id string) (tasks []TaskDlInfo, err error) {
 	if err := db.driver.Read(downloaderTasks, id, &tasks); err != nil {
 		if !os.IsNotExist(err) {
 			glog.Error(err)
@@ -113,7 +113,7 @@ func (db *downloaderDB) tasks(id string) (tasks []cmn.TaskDlInfo, err error) {
 	return
 }
 
-func (db *downloaderDB) persistTaskInfo(id string, task cmn.TaskDlInfo) error {
+func (db *downloaderDB) persistTaskInfo(id string, task TaskDlInfo) error {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
@@ -137,7 +137,7 @@ func (db *downloaderDB) persistTaskInfo(id string, task cmn.TaskDlInfo) error {
 	return nil
 }
 
-func (db *downloaderDB) getTasks(id string) (tasks []cmn.TaskDlInfo, err error) {
+func (db *downloaderDB) getTasks(id string) (tasks []TaskDlInfo, err error) {
 	db.mtx.RLock()
 	defer db.mtx.RUnlock()
 	return db.tasks(id)

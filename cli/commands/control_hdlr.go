@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -229,7 +230,7 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	basePayload := cmn.DlBase{
+	basePayload := downloader.DlBase{
 		Bck: cmn.Bck{
 			Name:     bucket,
 			Provider: cmn.ProviderAIS, // NOTE: currently downloading only to ais buckets is supported
@@ -241,7 +242,7 @@ func startDownloadHandler(c *cli.Context) error {
 
 	if strings.Contains(source, "{") && strings.Contains(source, "}") {
 		// Range
-		payload := cmn.DlRangeBody{
+		payload := downloader.DlRangeBody{
 			DlBase:   basePayload,
 			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
 			Template: link,
@@ -252,9 +253,9 @@ func startDownloadHandler(c *cli.Context) error {
 		}
 	} else {
 		// Single
-		payload := cmn.DlSingleBody{
+		payload := downloader.DlSingleBody{
 			DlBase: basePayload,
-			DlObj: cmn.DlObj{
+			DlObj: downloader.DlObj{
 				Link:    link,
 				Objname: pathSuffix, // in this case pathSuffix is a full name of the object
 			},

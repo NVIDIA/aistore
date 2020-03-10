@@ -7,12 +7,15 @@ package commands
 
 import (
 	"fmt"
+	"io"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -161,7 +164,7 @@ func (b *progressBar) start() (bool, error) {
 	return false, nil
 }
 
-func (b *progressBar) updateBars(downloadStatus cmn.DlStatusResp) {
+func (b *progressBar) updateBars(downloadStatus downloader.DlStatusResp) {
 	fileStates := downloadStatus.CurrentTasks
 
 	b.updateFinishedFiles(fileStates)
@@ -180,7 +183,7 @@ func (b *progressBar) updateBars(downloadStatus cmn.DlStatusResp) {
 	b.updateTotalBar(downloadStatus.Finished+len(downloadStatus.Errs), downloadStatus.TotalCnt())
 }
 
-func (b *progressBar) updateFinishedFiles(fileStates []cmn.TaskDlInfo) {
+func (b *progressBar) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
 	// The finished files are those that are in b.states, but were not included in CurrentTasks of the status response
 	fileStatesMap := make(map[string]struct{})
 	for _, file := range fileStates {
@@ -201,7 +204,7 @@ func (b *progressBar) updateFinishedFiles(fileStates []cmn.TaskDlInfo) {
 	}
 }
 
-func (b *progressBar) trackNewFile(state cmn.TaskDlInfo) {
+func (b *progressBar) trackNewFile(state downloader.TaskDlInfo) {
 	bar := b.p.AddBar(
 		state.Total,
 		mpb.BarRemoveOnComplete(),
@@ -221,7 +224,7 @@ func (b *progressBar) trackNewFile(state cmn.TaskDlInfo) {
 	}
 }
 
-func (b *progressBar) updateFileBar(newState cmn.TaskDlInfo, state *fileDownloadingState) {
+func (b *progressBar) updateFileBar(newState downloader.TaskDlInfo, state *fileDownloadingState) {
 	if state.total == 0 && newState.Total != 0 {
 		state.total = newState.Total
 		state.bar.SetTotal(newState.Total, false)
@@ -250,7 +253,7 @@ func (b *progressBar) updateTotalBar(newFinished, total int) {
 	b.finishedFiles = newFinished
 }
 
-func (b *progressBar) updateDownloadingErrors(dlErrs []cmn.TaskErrInfo) {
+func (b *progressBar) updateDownloadingErrors(dlErrs []downloader.TaskErrInfo) {
 	for _, dlErr := range dlErrs {
 		b.errors[dlErr.Name] = dlErr.Err
 	}
@@ -316,6 +319,48 @@ func downloadJobStatus(c *cli.Context, id string) error {
 	}
 
 	verbose := flagIsSet(c, verboseFlag)
-	fmt.Fprintln(c.App.Writer, resp.Print(verbose))
+	printDownloadStatus(c.App.Writer, resp, verbose)
 	return nil
+}
+
+func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
+	if d.Aborted {
+		fmt.Fprintln(w, "Download was aborted.")
+		return
+	}
+
+	errCount := len(d.Errs)
+	if d.JobFinished() {
+		fmt.Fprintf(w, "Done: %d file%s downloaded, %d error%s\n",
+			d.Finished, cmn.NounEnding(d.Finished), errCount, cmn.NounEnding(errCount))
+
+		if verbose {
+			for _, e := range d.Errs {
+				fmt.Fprintf(w, "%s: %s\n", e.Name, e.Err)
+			}
+		}
+		return
+	}
+
+	realFinished := d.Finished + errCount
+	fmt.Fprintf(w, "Download progress: %d/%d (%.2f%%)\n",
+		realFinished, d.TotalCnt(), 100*float64(realFinished)/float64(d.TotalCnt()))
+	if !verbose || len(d.CurrentTasks) == 0 {
+		return
+	}
+
+	sort.Slice(d.CurrentTasks, func(i, j int) bool {
+		return d.CurrentTasks[i].Name < d.CurrentTasks[j].Name
+	})
+
+	fmt.Fprintln(w, "Progress of files that are currently being downloaded:")
+	for _, task := range d.CurrentTasks {
+		fmt.Fprintf(w, "\t%s: ", task.Name)
+		if task.Total == 0 {
+			fmt.Fprintln(w, cmn.B2S(task.Downloaded, 2))
+		} else {
+			pctDownloaded := 100 * float64(task.Downloaded) / float64(task.Total)
+			fmt.Fprintf(w, "%s/%s (%.2f%%)\n", cmn.B2S(task.Downloaded, 2), cmn.B2S(task.Total, 2), pctDownloaded)
+		}
+	}
 }

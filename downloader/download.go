@@ -110,11 +110,11 @@ import (
 // ================================ Summary ====================================
 
 const (
-	adminRemove  = "REMOVE"
-	adminAbort   = "ABORT"
-	adminStatus  = "STATUS"
-	adminList    = "LIST"
-	taskDownload = "DOWNLOAD"
+	actRemove   = "REMOVE"
+	actAbort    = "ABORT"
+	actStatus   = "STATUS"
+	actList     = "LIST"
+	actDownload = "DOWNLOAD"
 
 	jobsChSize = 1000
 )
@@ -166,7 +166,7 @@ type (
 		action     string         // one of: adminAbort, adminList, adminStatus, adminRemove, taskDownload
 		id         string         // id of the job task
 		regex      *regexp.Regexp // regex of descriptions to return if id is empty
-		obj        cmn.DlObj
+		obj        DlObj
 		bck        cmn.Bck
 		timeout    string
 		fqn        string         // fqn of the object after it has been committed
@@ -272,13 +272,13 @@ Loop:
 		select {
 		case req := <-d.adminCh:
 			switch req.action {
-			case adminStatus:
+			case actStatus:
 				d.dispatcher.dispatchStatus(req)
-			case adminAbort:
+			case actAbort:
 				d.dispatcher.dispatchAbort(req)
-			case adminRemove:
+			case actRemove:
 				d.dispatcher.dispatchRemove(req)
-			case adminList:
+			case actList:
 				d.dispatcher.dispatchList(req)
 			default:
 				cmn.AssertFmt(false, req, req.action)
@@ -333,7 +333,7 @@ func (d *Downloader) Download(dJob DlJob) (resp interface{}, err error, statusCo
 func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
-		action:     adminAbort,
+		action:     actAbort,
 		id:         id,
 		responseCh: make(chan *response, 1),
 	}
@@ -348,7 +348,7 @@ func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCod
 func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
-		action:     adminRemove,
+		action:     actRemove,
 		id:         id,
 		responseCh: make(chan *response, 1),
 	}
@@ -363,7 +363,7 @@ func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCo
 func (d *Downloader) JobStatus(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
-		action:     adminStatus,
+		action:     actStatus,
 		id:         id,
 		responseCh: make(chan *response, 1),
 	}
@@ -378,7 +378,7 @@ func (d *Downloader) JobStatus(id string) (resp interface{}, err error, statusCo
 func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
-		action:     adminList,
+		action:     actList,
 		regex:      regex,
 		responseCh: make(chan *response, 1),
 	}
@@ -403,15 +403,15 @@ func (d *Downloader) checkJob(req *request) (*DownloadJobInfo, error) {
 	return jInfo, nil
 }
 
-func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
+func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
 	d.dispatcher.RLock()
-	currentTasks := make([]cmn.TaskDlInfo, 0, len(d.dispatcher.joggers))
+	currentTasks := make([]TaskDlInfo, 0, len(d.dispatcher.joggers))
 	for _, j := range d.dispatcher.joggers {
 		j.Lock()
 
 		task := j.task
 		if task != nil && task.id == reqID {
-			info := cmn.TaskDlInfo{
+			info := TaskDlInfo{
 				Name:       task.obj.Objname,
 				Downloaded: task.currentSize.Load(),
 				Total:      task.totalSize,
@@ -428,7 +428,7 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 	}
 	d.dispatcher.RUnlock()
 
-	sort.Sort(cmn.TaskInfoByName(currentTasks))
+	sort.Sort(TaskInfoByName(currentTasks))
 	return currentTasks
 }
 
@@ -447,26 +447,14 @@ func (d *Downloader) getNumPending(jobID string) int {
 	return numPending
 }
 
-func internalErrorMessage() string {
-	return "Internal server error."
-}
-
-func httpClientErrorMessage(err *url.Error) string {
-	return fmt.Sprintf("Error performing request to object's location (%s): %v.", err.URL, err.Err)
-}
-
-func httpRequestErrorMessage(url string, resp *http.Response) string {
-	return fmt.Sprintf("Error downloading file from object's location (%s). Server returned status: %s", url, resp.Status)
-}
-
 //
 // Checksum validation helpers
 //
 
 const (
 	gsHashHeader                    = "X-Goog-Hash"
-	gsHashHeaderValueSeparator      = ","
 	gsHashHeaderChecksumValuePrefix = "crc32c="
+	gsHashHeaderValueSeparator      = ","
 
 	s3ChecksumHeader      = "ETag"
 	s3IllegalChecksumChar = "-"
@@ -477,13 +465,7 @@ func getCksum(link string, resp *http.Response) *cmn.Cksum {
 	u, err := url.Parse(link)
 	cmn.AssertNoErr(err)
 
-	if cmn.IsGoogleStorageURL(u) {
-		hs, ok := resp.Header[gsHashHeader]
-		if !ok {
-			return nil
-		}
-		return cmn.NewCksum(cmn.ChecksumCRC32C, getChecksumFromGoogleFormat(hs))
-	} else if cmn.IsGoogleAPIURL(u) {
+	if cmn.IsGoogleStorageURL(u) || cmn.IsGoogleAPIURL(u) {
 		hdr := resp.Header.Get(gsHashHeader)
 		if hdr == "" {
 			return nil

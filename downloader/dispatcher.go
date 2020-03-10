@@ -60,7 +60,6 @@ func (d *dispatcher) run() {
 		select {
 		case job := <-d.dispatchDownloadCh:
 			if !d.dispatchDownload(job) {
-				// stop dispatcher if aborted
 				d.stop()
 				return
 			}
@@ -118,7 +117,9 @@ func (d *dispatcher) ScheduleForDownload(job DlJob) {
 
 func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	defer func() {
-		dlStore.markFinished(job.ID())
+		if err := dlStore.markFinished(job.ID()); err != nil {
+			glog.Error(err)
+		}
 		dlStore.flush(job.ID())
 		d.cleanUpAborted(job.ID())
 	}()
@@ -130,7 +131,9 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	for {
 		objs, ok := job.GenNext()
 		if !ok {
-			_ = dlStore.setAllDispatched(job.ID(), true)
+			if err := dlStore.setAllDispatched(job.ID(), true); err != nil {
+				glog.Error(err)
+			}
 			return true
 		}
 
@@ -184,7 +187,7 @@ func (d *dispatcher) checkAborted() bool {
 	}
 }
 
-func (d *dispatcher) createTasksLom(job DlJob, obj cmn.DlObj) (*cluster.LOM, error) {
+func (d *dispatcher) createTasksLom(job DlJob, obj DlObj) (*cluster.LOM, error) {
 	lom := &cluster.LOM{T: d.parent.t, Objname: obj.Objname}
 	err := lom.Init(job.Bck())
 	if err == nil {
@@ -209,22 +212,21 @@ func (d *dispatcher) createTasksLom(job DlJob, obj cmn.DlObj) (*cluster.LOM, err
 	return lom, nil
 }
 
-func (d *dispatcher) prepareTask(job DlJob, obj cmn.DlObj) (*singleObjectTask, *jogger, error) {
+func (d *dispatcher) prepareTask(job DlJob, obj DlObj) (*singleObjectTask, *jogger, error) {
 	t := &singleObjectTask{
 		parent: d.parent,
 		request: &request{
-			action:  taskDownload,
+			action:  actDownload,
 			id:      job.ID(),
 			obj:     obj,
 			bck:     job.Bck(),
 			timeout: job.Timeout(),
 		},
-		finishedCh: make(chan error, 1),
 	}
 
 	lom, err := d.createTasksLom(job, obj)
 	if err != nil {
-		glog.Warningf("error in handling downloader request: %s", err.Error())
+		glog.Warningf("error in handling downloader request: %v", err)
 		d.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
 		dlStore.persistError(t.id, t.obj.Objname, err.Error())
@@ -238,13 +240,15 @@ func (d *dispatcher) prepareTask(job DlJob, obj cmn.DlObj) (*singleObjectTask, *
 
 	t.fqn = lom.FQN
 	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
-	cmn.AssertMsg(ok, fmt.Sprintf("no mpath exists for %v", t))
+	cmn.AssertMsg(ok, fmt.Sprintf("no jogger for mpath %s exists for %v", lom.ParsedFQN.MpathInfo.Path, t))
 	return t, j, nil
 }
 
 // returns false if dispatcher was aborted in the meantime, true otherwise
-func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj cmn.DlObj) (err error, ok bool) {
-	_ = dlStore.incScheduled(job.ID())
+func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj DlObj) (err error, ok bool) {
+	if err := dlStore.incScheduled(job.ID()); err != nil {
+		glog.Error(err)
+	}
 	task, jogger, err := d.prepareTask(job, obj)
 	if err != nil {
 		return err, true
@@ -331,9 +335,9 @@ func (d *dispatcher) dispatchStatus(req *request) {
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
 	}
-	sort.Sort(cmn.TaskErrByName(dlErrors))
+	sort.Sort(TaskErrByName(dlErrors))
 
-	req.writeResp(cmn.DlStatusResp{
+	req.writeResp(DlStatusResp{
 		Finished:      int(jInfo.FinishedCnt.Load()),
 		Total:         jInfo.Total,
 		CurrentTasks:  currentTasks,
@@ -349,9 +353,9 @@ func (d *dispatcher) dispatchStatus(req *request) {
 
 func (d *dispatcher) dispatchList(req *request) {
 	records := dlStore.getList(req.regex)
-	respMap := make(map[string]cmn.DlJobInfo)
+	respMap := make(map[string]DlJobInfo)
 	for _, r := range records {
-		respMap[r.ID] = cmn.DlJobInfo{
+		respMap[r.ID] = DlJobInfo{
 			ID:          r.ID,
 			Description: r.Description,
 			NumErrors:   int(r.ErrorCnt.Load()),

@@ -6,10 +6,8 @@ package downloader
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"time"
 
@@ -23,7 +21,8 @@ import (
 
 const (
 	// Number of retries when doing a request to external resource.
-	retryCnt = 3
+	retryCnt         = 3
+	internalErrorMsg = "internal server error"
 )
 
 type (
@@ -36,7 +35,6 @@ type (
 
 		currentSize atomic.Int64 // the current size of the file (updated as the download progresses)
 		totalSize   int64        // the total size of the file (nonzero only if Content-Length header was provided by the source of the file)
-		finishedCh  chan error   // when a jogger finishes downloading a dlTask
 
 		downloadCtx context.Context    // context with cancel function
 		cancelFunc  context.CancelFunc // used to cancel the download after the request commences
@@ -44,20 +42,17 @@ type (
 )
 
 func (t *singleObjectTask) download() {
-	var (
-		statusMsg string
-	)
 	lom := &cluster.LOM{T: t.parent.t, Objname: t.obj.Objname}
 	err := lom.Init(t.bck)
 	if err == nil {
 		err = lom.Load()
 	}
 	if err != nil && !os.IsNotExist(err) {
-		t.abort(internalErrorMessage(), err)
+		t.markFailed(internalErrorMsg)
 		return
 	}
 	if err == nil {
-		t.abort(internalErrorMessage(), errors.New(lom.String()+" already exists"))
+		t.markFailed(t.obj.Objname + " already exists")
 		return
 	}
 
@@ -67,40 +62,39 @@ func (t *singleObjectTask) download() {
 
 	t.started = time.Now()
 	lom.SetAtimeUnix(t.started.UnixNano())
-	if !t.obj.FromCloud {
-		statusMsg, err = t.downloadLocal(lom, t.started)
+	if t.obj.FromCloud {
+		err = t.downloadCloud(lom)
 	} else {
-		statusMsg, err = t.downloadCloud(lom)
+		err = t.downloadLocal(lom, t.started)
 	}
 	t.ended = time.Now()
 
 	if err != nil {
-		t.abort(statusMsg, err)
+		t.markFailed(err.Error())
 		return
 	}
 
 	if err := dlStore.incFinished(t.id); err != nil {
-		glog.Errorf(err.Error())
+		glog.Error(err)
 	}
 
 	t.parent.statsT.AddMany(
 		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
 		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(time.Since(t.started))},
 	)
-	t.parent.XactDemandBase.ObjectsInc()
-	t.parent.XactDemandBase.BytesAdd(t.currentSize.Load())
-	t.finishedCh <- nil
+	t.parent.ObjectsInc()
+	t.parent.BytesAdd(t.currentSize.Load())
 }
 
-func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (errMsg string, err error) {
+func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) error {
 	var (
 		postFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 		req     *http.Request
 		resp    *http.Response
+		err     error
 	)
 
 	for i := 0; i < retryCnt; i++ {
-		// Create request
 		req, err = http.NewRequest(http.MethodGet, t.obj.Link, nil)
 		if err != nil {
 			continue
@@ -114,25 +108,21 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (e
 
 		reqWithCtx := req.WithContext(t.downloadCtx)
 		resp, err = httpClient.Do(reqWithCtx)
-		if err != nil {
-			// Error returned by httpClient.Do() is a *url.Error
-			errMsg = httpClientErrorMessage(err.(*url.Error))
-			continue
+		if err == nil && resp.StatusCode <= http.StatusOK {
+			break
 		}
-		if resp.StatusCode >= http.StatusBadRequest {
-			errMsg = httpRequestErrorMessage(t.obj.Link, resp)
-			err = fmt.Errorf("status code: %d", resp.StatusCode)
-			continue
+		if err == nil {
+			err = fmt.Errorf("downloading %s failed with status %d", t.obj.Link, resp.StatusCode)
+			resp.Body.Close()
 		}
-
-		break // no error, we can proceed
 	}
 
 	if err != nil {
-		return
+		return err
 	}
 
 	// Create a custom reader to monitor progress every time we read from response body stream
+	defer resp.Body.Close()
 	progressReader := &progressReader{
 		r: resp.Body,
 		reporter: func(n int64) {
@@ -144,26 +134,25 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (e
 
 	cksum := getCksum(t.obj.Link, resp)
 	if err := t.parent.t.PutObject(postFQN, progressReader, lom, cluster.ColdGet, cksum, started); err != nil {
-		return internalErrorMessage(), err
+		return err
 	}
 	if err := lom.Load(); err != nil {
-		return internalErrorMessage(), err
+		return err
 	}
-	return "", nil
+	return nil
 }
 
 func (t *singleObjectTask) setTotalSize(resp *http.Response) {
-	totalSize := resp.ContentLength
-	if totalSize > 0 {
-		t.totalSize = totalSize
+	if resp.ContentLength > 0 {
+		t.totalSize = resp.ContentLength
 	}
 }
 
-func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) (string, error) {
+func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) error {
 	if err, _ := t.parent.t.GetCold(t.downloadCtx, lom, true /* prefetch */); err != nil {
-		return internalErrorMessage(), err
+		return err
 	}
-	return "", nil
+	return nil
 }
 
 func (t *singleObjectTask) cancel() {
@@ -173,16 +162,18 @@ func (t *singleObjectTask) cancel() {
 // TODO: this should also inform somehow downloader status about being Aborted/canceled
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
-func (t *singleObjectTask) abort(statusMsg string, err error) {
+func (t *singleObjectTask) markFailed(statusMsg string) {
+	t.cancel()
 	t.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
 	dlStore.persistError(t.id, t.obj.Objname, statusMsg)
-	dlStore.incErrorCnt(t.id)
-	t.finishedCh <- err
+	if err := dlStore.incErrorCnt(t.id); err != nil {
+		glog.Error(err)
+	}
 }
 
 func (t *singleObjectTask) persist() {
-	_ = dlStore.persistTaskInfo(t.id, cmn.TaskDlInfo{
+	_ = dlStore.persistTaskInfo(t.id, TaskDlInfo{
 		Name:       t.obj.Objname,
 		Downloaded: t.currentSize.Load(),
 		Total:      t.totalSize,
@@ -192,10 +183,6 @@ func (t *singleObjectTask) persist() {
 
 		Running: false,
 	})
-}
-
-func (t *singleObjectTask) waitForFinish() <-chan error {
-	return t.finishedCh
 }
 
 func (t *singleObjectTask) String() string {
