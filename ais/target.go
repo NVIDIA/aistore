@@ -634,29 +634,23 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		var (
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
-			err      error
 		)
 
 		args := &xaction.DeletePrefetchArgs{
 			Ctx:   t.contextWithAuth(r.Header),
 			Evict: msgInt.Action == cmn.ActEvictObjects,
 		}
-		if err = cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
+		if err := cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
-		} else if err = cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
+		} else if err := cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
 			details := fmt.Sprintf("invalid %s action message: %s, %T", msgInt.Action, msgInt.Name, msgInt.Value)
 			t.invalmsghdlr(w, r, details)
 			return
 		}
-		if err != nil {
-			t.invalmsghdlr(w, r, "Failed to parse request")
-			return
-		}
 
-		var xact *xaction.EvictDelete
-		xact, err = xaction.Registry.RenewEvictDelete(t, bck, args)
+		xact, err := xaction.Registry.RenewEvictDelete(t, bck, args)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
