@@ -96,8 +96,7 @@ func (reb *Manager) globalRebInit(md *globArgs, buckets ...string) bool {
 	// 3. init streams and data structures
 	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))
 	reb.beginStreams(md)
-	reb.tcache.tmap = make(cluster.NodeMap, md.smap.CountTargets()-1)
-	reb.tcache.mu = &sync.Mutex{}
+	reb.awaiting.targets = make(cluster.NodeMap, md.smap.CountTargets()-1)
 	acks := reb.lomAcks()
 	for i := 0; i < len(acks); i++ { // init lom acks
 		acks[i] = &lomAcks{mu: &sync.Mutex{}, q: make(map[string]*cluster.LOM, 64)}

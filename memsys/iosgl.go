@@ -276,3 +276,8 @@ func (r *SliceReader) Seek(from int64, whence int) (offset int64, err error) {
 	r.roff = offset
 	return
 }
+
+func (r *SliceReader) Reset() error {
+	_, err := r.Seek(0, io.SeekStart)
+	return err
+}

@@ -634,7 +634,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		if err == nil {
 			if lom.Cksum() != nil && cmn.EqCksum(lom.Cksum(), cksum) {
 				glog.Infof("shard (%s) already exists and checksums are equal, skipping", lom)
-				io.Copy(ioutil.Discard, object) // drain the reader
+				cmn.DrainReader(object)
 				return
 			}
 			glog.Warningf("shard (%s) already exists, overriding", lom)

@@ -69,10 +69,10 @@ type (
 		acks       *transport.StreamBundle
 		pushes     *transport.StreamBundle
 		lomacks    [cmn.MultiSyncMapCount]*lomAcks
-		tcache     struct { // not to recompute very often
-			tmap cluster.NodeMap
-			ts   time.Time
-			mu   *sync.Mutex
+		awaiting   struct {
+			mu      sync.Mutex
+			targets cluster.NodeMap // targets for which we are waiting for
+			ts      time.Time       // last time we have recomputed
 		}
 		semaCh     chan struct{}
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
@@ -386,7 +386,7 @@ func (reb *Manager) endStreams() {
 }
 
 func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unpacker *cmn.ByteUnpack, objReader io.Reader) {
-	defer io.Copy(ioutil.Discard, objReader) // drain the reader
+	defer cmn.DrainReader(objReader)
 
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {

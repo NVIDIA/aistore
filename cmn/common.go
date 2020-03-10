@@ -686,6 +686,12 @@ func (f *FileSectionHandle) Open() (io.ReadCloser, error) {
 	return f, err
 }
 
+func (f *FileSectionHandle) Reset() error {
+	_, err := f.s.Seek(0, io.SeekStart)
+	f.padOffset = 0
+	return err
+}
+
 // Reads a file slice. When the slice finishes but the buffer is not filled yet,
 // act as if it reads a few more bytes from somewhere
 func (f *FileSectionHandle) Read(buf []byte) (n int, err error) {

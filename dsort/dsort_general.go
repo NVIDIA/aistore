@@ -629,7 +629,7 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.Receive {
 			return
 		}
 
-		defer io.Copy(ioutil.Discard, object) // drain to prevent unnecessary stream errors
+		defer cmn.DrainReader(object) // drain to prevent unnecessary stream errors
 
 		writer := ds.pullStreamWriter(hdr.ObjName)
 		if writer == nil { // was removed after timing out

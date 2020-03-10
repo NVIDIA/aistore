@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -105,7 +104,7 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToCheck)
 			}
-			io.Copy(ioutil.Discard, poi.r) // drain the reader
+			cmn.DrainReader(poi.r)
 			return nil, 0
 		}
 	}

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sync"
 	"unsafe"
@@ -437,17 +436,15 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 // * reader - response body
 func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs,
 	reader io.Reader) (err error) {
-	buf, slab := mm.Alloc()
-
 	if !exists {
 		writer.wg.Done()
 		// drain the body, to avoid panic:
 		// http: panic serving: assertion failed: "expecting an error or EOF as the reason for failing to read
-		_, _ = io.CopyBuffer(ioutil.Discard, reader, buf)
-		slab.Free(buf)
+		cmn.DrainReader(reader)
 		return ErrorNotFound
 	}
 
+	buf, slab := mm.Alloc()
 	writer.n, err = io.CopyBuffer(writer.writer, reader, buf)
 	if file, ok := writer.writer.(*os.File); ok {
 		file.Close()

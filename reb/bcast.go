@@ -41,7 +41,7 @@ type (
 func (reb *Manager) GetGlobStatus(status *Status) {
 	var (
 		now        time.Time
-		tmap       cluster.NodeMap
+		targets    cluster.NodeMap
 		config     = cmn.GCO.Get()
 		sleepRetry = cmn.KeepaliveRetryDuration(config)
 		rsmap      = (*cluster.Smap)(reb.smap.Load())
@@ -83,35 +83,35 @@ func (reb *Manager) GetGlobStatus(status *Status) {
 		return
 	}
 
-	reb.tcache.mu.Lock()
-	status.Tmap, tmap = reb.tcache.tmap, reb.tcache.tmap
+	reb.awaiting.mu.Lock()
+	status.Tmap, targets = reb.awaiting.targets, reb.awaiting.targets
 	now = time.Now()
-	if now.Sub(reb.tcache.ts) < sleepRetry {
-		reb.tcache.mu.Unlock()
+	if now.Sub(reb.awaiting.ts) < sleepRetry {
+		reb.awaiting.mu.Unlock()
 		return
 	}
-	reb.tcache.ts = now
-	for tid := range reb.tcache.tmap {
-		delete(reb.tcache.tmap, tid)
+	reb.awaiting.ts = now
+	for tid := range reb.awaiting.targets {
+		delete(reb.awaiting.targets, tid)
 	}
 	max := rsmap.CountTargets() - 1
-	for _, lomack := range reb.lomAcks() {
-		lomack.mu.Lock()
-		for _, lom := range lomack.q {
+	for _, lomAck := range reb.lomAcks() {
+		lomAck.mu.Lock()
+		for _, lom := range lomAck.q {
 			tsi, err := cluster.HrwTarget(lom.Uname(), rsmap)
 			if err != nil {
 				continue
 			}
-			tmap[tsi.ID()] = tsi
-			if len(tmap) >= max {
-				lomack.mu.Unlock()
+			targets[tsi.ID()] = tsi
+			if len(targets) >= max {
+				lomAck.mu.Unlock()
 				goto ret
 			}
 		}
-		lomack.mu.Unlock()
+		lomAck.mu.Unlock()
 	}
 ret:
-	reb.tcache.mu.Unlock()
+	reb.awaiting.mu.Unlock()
 	status.Stage = reb.stages.stage.Load()
 }
 

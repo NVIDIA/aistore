@@ -575,7 +575,7 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.Receive {
 			return
 		}
 
-		defer io.Copy(ioutil.Discard, object) // drain to prevent unnecessary stream errors
+		defer cmn.DrainReader(object) // drain to prevent unnecessary stream errors
 
 		req := buildingShardInfo{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
@@ -599,7 +599,7 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.Receive {
 			return
 		}
 
-		defer io.Copy(ioutil.Discard, object) // drain to prevent unnecessary stream errors
+		defer cmn.DrainReader(object) // drain to prevent unnecessary stream errors
 
 		req := remoteResponse{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
