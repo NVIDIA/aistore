@@ -184,6 +184,7 @@ func (t *targetrunner) Run() error {
 	} else if !os.IsNotExist(err) {
 		glog.Errorf("%s: cannot load Smap (- corruption?), err: %v", t.si, err)
 	}
+	cluster.InitTarget()
 	//
 	// join cluster
 	//

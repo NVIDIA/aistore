@@ -115,6 +115,8 @@ func (p *proxyrunner) Run() error {
 	p.owner.bmd.init() // initialize owner and load BMD
 	p.metasyncer = getmetasyncer()
 
+	cluster.InitProxy()
+
 	// startup sequence - see earlystart.go for the steps and commentary
 	p.bootstrap()
 

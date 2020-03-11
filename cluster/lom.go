@@ -66,7 +66,7 @@ var (
 	maxLmeta  atomic.Int64
 )
 
-func init() {
+func InitTarget() {
 	lomLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	lomLocker.init()
 	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
@@ -974,7 +974,6 @@ func (lom *LOM) Lock(exclusive bool) {
 		_, idx = lom.Hkey()
 		nlc    = getLomLocker(idx)
 	)
-	cmn.Assert(lom.Uname() != "") // TODO: remove
 	nlc.Lock(lom.Uname(), exclusive)
 }
 func (lom *LOM) DowngradeLock() {

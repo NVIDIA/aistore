@@ -10,11 +10,27 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/OneOfOne/xxhash"
 )
 
-type Bck struct {
-	cmn.Bck
-	Props *cmn.BucketProps
+type (
+	Bck struct {
+		cmn.Bck
+		Props *cmn.BucketProps
+	}
+	NameLockPair struct {
+		uname string
+		nlc   *nlc
+	}
+)
+
+var (
+	bckLocker nameLocker
+)
+
+func InitProxy() {
+	bckLocker = make(nameLocker, cmn.MultiSyncMapCount)
+	bckLocker.init()
 }
 
 func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck {
@@ -164,3 +180,18 @@ func (b *Bck) allow(oper string, bits uint64) (err error) {
 	err = cmn.NewBucketAccessDenied(b.String(), oper, b.Props.AccessAttrs)
 	return
 }
+
+//
+// lock/unlock
+//
+
+func (bck *Bck) GetNameLockPair() (nlp NameLockPair) {
+	nlp.uname = bck.MakeUname("")
+	hash := xxhash.ChecksumString64S(nlp.uname, cmn.MLCG32)
+	idx := int(hash & (cmn.MultiSyncMapCount - 1))
+	nlp.nlc = &bckLocker[idx]
+	return
+}
+
+func (nlp *NameLockPair) Lock()   { nlp.nlc.Lock(nlp.uname, true) }
+func (nlp *NameLockPair) Unlock() { nlp.nlc.Unlock(nlp.uname, true) }

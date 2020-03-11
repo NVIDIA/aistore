@@ -50,19 +50,25 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	// 1. lock & try add
 	p.owner.bmd.Lock()
-	clone := p.owner.bmd.get().clone()
-	if !clone.add(bck, bucketProps) {
+	bmd := p.owner.bmd.get()
+	if _, present := bmd.Get(bck); present {
 		p.owner.bmd.Unlock()
 		return cmn.NewErrorBucketAlreadyExists(bck.Bck, p.si.String())
 	}
-	// 2. gather all context & begin
+
+	// 2. prep context, lock bucket and unlock BMD (in that order)
 	var (
-		c       = p.prepTxnClient(msg, bck)
-		results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+		nlp = bck.GetNameLockPair()
+		c   = p.prepTxnClient(msg, bck)
 	)
+	nlp.Lock()
+	p.owner.bmd.Unlock()
+
+	// 3. begin
+	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	for result := range results {
 		if result.err != nil {
-			p.owner.bmd.Unlock()
+			nlp.Unlock()
 			// 3. abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
@@ -70,10 +76,15 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		}
 	}
 
-	// 4. update BMD locally
+	// 4. lock & update BMD locally, unlock bucket
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
+	added := clone.add(bck, bucketProps)
+	cmn.Assert(added)
 	p.owner.bmd.put(clone)
+	nlp.Unlock()
 
-	// 5. metasync updated BMD & unlock
+	// 5. metasync updated BMD & unlock BMD
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revsPair{clone, msgInt})
 	p.owner.bmd.Unlock()
@@ -93,43 +104,50 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 // make-n-copies transaction: { setprop bucket locally -- begin -- metasync -- commit } - 6 steps total
 func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	var (
-		c           *txnClientCtx
+		c           = p.prepTxnClient(msg, bck)
+		nlp         = bck.GetNameLockPair()
 		copies, err = p.parseNCopies(msg.Value)
 	)
 	if err != nil {
 		return err
 	}
-	// gather all context
-	c = p.prepTxnClient(msg, bck)
 
-	// 1. lock & setprop
+	// 1. lock bucket within a crit. section
 	p.owner.bmd.Lock()
-	clone := p.owner.bmd.get().clone()
-	bprops, present := clone.Get(bck)
-	if !present {
+	bmd := p.owner.bmd.get()
+	if _, present := bmd.Get(bck); !present {
 		p.owner.bmd.Unlock()
 		return cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
 	}
-	nprops := bprops.Clone()
-	nprops.Mirror.Enabled = true
-	nprops.Mirror.Copies = copies
-	clone.set(bck, nprops)
+	nlp.Lock()
+	p.owner.bmd.Unlock()
 
 	// 2. begin
 	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	for result := range results {
 		if result.err != nil {
-			p.owner.bmd.Unlock()
+			nlp.Unlock()
 			// 3. abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 			return result.err
 		}
 	}
-	// 4. update BMD locally
-	p.owner.bmd.put(clone)
 
-	// 5. metasync updated BMD & unlock
+	// 4. lock & update BMD locally, unlock bucket
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
+	bprops, present := clone.Get(bck)
+	cmn.Assert(present)
+	nprops := bprops.Clone()
+	nprops.Mirror.Enabled = copies > 1
+	nprops.Mirror.Copies = copies
+
+	clone.set(bck, nprops)
+	p.owner.bmd.put(clone)
+	nlp.Unlock()
+
+	// 5. metasync updated BMD; unlock BMD
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revsPair{clone, msgInt})
 	p.owner.bmd.Unlock()
@@ -150,30 +168,29 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 // update-bucket-props transaction: { setprop bucket locally -- begin -- metasync -- commit }
 func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate) (err error) {
 	var (
-		c *txnClientCtx
-		// next complete version of bucket props containing propsToUpdate changes
-		nprops *cmn.BucketProps
-		nmsg   = &cmn.ActionMsg{}
+		c      *txnClientCtx
+		nlp    = bck.GetNameLockPair()
+		nprops *cmn.BucketProps   // complete version of bucket props containing propsToUpdate changes
+		nmsg   = &cmn.ActionMsg{} // with nprops
 	)
-	// 1. lock & setprop
+	// 1. lock bucket within a crit. section
 	p.owner.bmd.Lock()
-	var (
-		clone           = p.owner.bmd.get().clone()
-		bprops, present = clone.Get(bck)
-	)
+	bmd := p.owner.bmd.get()
+	bprops, present := bmd.Get(bck)
 	if !present {
 		p.owner.bmd.Unlock()
 		return cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
 	}
 	bck.Props = bprops
+	nlp.Lock()
+	p.owner.bmd.Unlock()
+
+	// 2. begin
 	if nprops, err = p.makeNprops(bck, propsToUpdate); err != nil {
-		p.owner.bmd.Unlock()
+		nlp.Unlock()
 		return
 	}
-
-	clone.set(bck, nprops)
-
-	// msg{propsToUpdate} => nmsg{nprops}; prep context(nmsg)
+	// msg{propsToUpdate} => nmsg{nprops} and prep context(nmsg)
 	*nmsg = *msg
 	nmsg.Value = nprops
 	c = p.prepTxnClient(nmsg, bck)
@@ -182,17 +199,28 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, props
 	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	for result := range results {
 		if result.err != nil {
-			p.owner.bmd.Unlock()
+			nlp.Unlock()
 			// 3. abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 			return result.err
 		}
 	}
-	// 4. update BMD locally
-	p.owner.bmd.put(clone)
 
-	// 5. metasync updated BMD & unlock
+	// 4. lock and update BMD locally; unlock bucket
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
+	bprops, present = clone.Get(bck)
+	cmn.Assert(present)
+	bck.Props = bprops
+	nprops, err = p.makeNprops(bck, propsToUpdate)
+	cmn.AssertNoErr(err)
+
+	clone.set(bck, nprops)
+	p.owner.bmd.put(clone)
+	nlp.Unlock()
+
+	// 5. metasync updated BMD; unlock BMD
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revsPair{clone, msgInt})
 	p.owner.bmd.Unlock()
@@ -275,7 +303,7 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 	nprops.Apply(propsToUpdate)
 	if bprops.EC.Enabled && nprops.EC.Enabled {
 		if !reflect.DeepEqual(bprops.EC, nprops.EC) {
-			err = errors.New("once enabled, EC configuration on a bucket can be only disabled but cannot be changed")
+			err = errors.New("once enabled, EC configuration can be only disabled but cannot be changed")
 			return
 		}
 	} else if nprops.EC.Enabled {

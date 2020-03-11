@@ -25,6 +25,7 @@ import (
 
 func TestLRUMain(t *testing.T) {
 	RegisterFailHandler(Fail)
+	cluster.InitTarget()
 	RunSpecs(t, "LRU Suite")
 }
 
