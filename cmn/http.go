@@ -248,26 +248,17 @@ func ReadBytes(r *http.Request) (b []byte, err error) {
 	return b, err
 }
 
-func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
-	getErrorLine := func() string {
-		if _, file, line, ok := runtime.Caller(2); ok {
-			f := filepath.Base(file)
-			return fmt.Sprintf("(%s, #%d)", f, line)
+func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional ...bool) error {
+	defer r.Body.Close()
+	if err := jsoniter.NewDecoder(r.Body).Decode(out); err != nil {
+		if len(optional) > 0 && optional[0] && err == io.EOF {
+			return nil
 		}
-		return ""
-	}
-
-	b, err := ReadBytes(r)
-	if err != nil {
-		InvalidHandlerDetailed(w, r, err.Error())
-		return err
-	}
-
-	err = jsoniter.Unmarshal(b, out)
-	if err != nil {
-		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
-		s += getErrorLine()
-
+		s := fmt.Sprintf("failed to json-unmarshal %s request, err: %v [%T]", r.Method, err, out)
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
 		InvalidHandlerDetailed(w, r, s)
 		return err
 	}

@@ -672,30 +672,22 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		started = time.Now()
 		query   = r.URL.Query()
 	)
-	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], apitems[1]
-	b, err := cmn.ReadBytes(r)
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+	bucket, objName := apiItems[0], apiItems[1]
+	if err := cmn.ReadJSON(w, r, &msg, true /*optional=allow empty body*/); err != nil {
 		return
 	}
-	if len(b) > 0 {
-		if err = jsoniter.Unmarshal(b, &msg); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		evict = msg.Action == cmn.ActEvictObjects
-	}
+	evict = msg.Action == cmn.ActEvictObjects
 
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, Objname: objname}
+	lom := &cluster.LOM{T: t, Objname: objName}
 	if err = lom.Init(bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
