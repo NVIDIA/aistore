@@ -119,16 +119,17 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		}
 		description = singlePayload.Describe()
 	} else if err := rangePayload.Validate(); err == nil {
-		// FIXME: rangePayload still evaluates all of the objects on this line
-		// it means that if range is 0-3mln, we will create 3mln objects right away
-		// this should not be the case and we should create them on the demand
 		// NOTE: size of objects to be downloaded by a target will be unknown
 		// So proxy won't be able to sum sizes from all targets when calculating total size
 		// This should be taken care of somehow, as total is easy to know from range template anyway
-		if objects, err = rangePayload.ExtractPayload(); err != nil {
+		pt, err := cmn.ParseBashTemplate(rangePayload.Template)
+		if err != nil {
 			return nil, err
 		}
 		description = rangePayload.Describe()
+		bck := cluster.NewBckEmbed(rangePayload.Bck)
+		baseJob := newBaseDlJob(id, bck, rangePayload.Timeout, description)
+		return newRangeDlJob(t, baseJob, pt, rangePayload.Subdir)
 	} else if err := multiPayload.Validate(b); err == nil {
 		if err := jsoniter.Unmarshal(b, &objectsPayload); err != nil {
 			return nil, err
@@ -147,8 +148,8 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 			return nil, errors.New("bucket download requires cloud bucket")
 		}
 
-		baseJob := NewBaseDlJob(id, bck, cloudPayload.Timeout, payload.Description)
-		return NewCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
+		baseJob := newBaseDlJob(id, bck, cloudPayload.Timeout, payload.Description)
+		return newCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
 	} else {
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
 	}
@@ -171,5 +172,5 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		return nil, err
 	}
 
-	return NewSliceDlJob(input.ID, input.Objs, bck, payload.Timeout, payload.Description), nil
+	return newSliceDlJob(input.ID, input.Objs, bck, payload.Timeout, payload.Description), nil
 }

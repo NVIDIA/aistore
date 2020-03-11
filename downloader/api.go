@@ -329,22 +329,10 @@ func (b *DlRangeBody) Validate() error {
 	return nil
 }
 
-func (b *DlRangeBody) ExtractPayload() (cmn.SimpleKVs, error) {
-	pt, err := cmn.ParseBashTemplate(b.Template)
-	if err != nil {
-		return nil, err
-	}
-
-	objects := make(cmn.SimpleKVs, pt.Count())
-	linksIt := pt.Iter()
-	for link, hasNext := linksIt(); hasNext; link, hasNext = linksIt() {
-		objName := path.Join(b.Subdir, path.Base(link))
-		objects[objName] = link
-	}
-	return objects, nil
-}
-
 func (b *DlRangeBody) Describe() string {
+	if b.Description != "" {
+		return b.Description
+	}
 	return fmt.Sprintf("%s -> %s", b.Template, b.Bck)
 }
 

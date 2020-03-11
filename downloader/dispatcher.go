@@ -129,7 +129,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	}
 
 	for {
-		objs, ok := job.GenNext()
+		objs, ok := job.genNext()
 		if !ok {
 			if err := dlStore.setAllDispatched(job.ID(), true); err != nil {
 				glog.Error(err)
