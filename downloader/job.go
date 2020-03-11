@@ -151,49 +151,49 @@ func (j *CloudBucketDlJob) genNext() (objs []DlObj, ok bool) {
 	return readyToDownloadObjs, true
 }
 
-// TODO: the function can generate empty list and stop iterating even if there
-// more objects in the bucket. Possible case:
-// 1. Bucket with 2000 objects ending with 'tar' and 2000 objects ending with 'tgz'
-// 2. Requesting objects with suffix 'tgz' loads the first page, filters out
-//    all objects from the result and returns empty array
-// 3. L150 does check and stops traversing
-// 4. Result -> no object downloaded
+// Reads the content of a cloud bucket page by page until any objects to
+// download found or the bucket list is over.
 func (j *CloudBucketDlJob) getNextObjs() error {
+	j.objs = []DlObj{}
 	if j.pagesCnt > 0 && j.pageMarker == "" {
 		// Cloud ListBucket returned empty pageMarker after at least one reqest
 		// this means there are no more objects in to list
-		j.objs = []DlObj{}
 		return nil
 	}
 	smap := j.t.GetSowner().Get()
 	sid := j.t.Snode().ID()
 
-	j.pagesCnt++
-	msg := &cmn.SelectMsg{
-		Prefix:     j.prefix,
-		PageMarker: j.pageMarker,
-		Fast:       true,
-		PageSize:   cmn.DefaultListPageSize,
-	}
-
-	bckList, err, _ := j.t.Cloud().ListBucket(j.ctx, j.bck.Name, msg)
-	if err != nil {
-		return err
-	}
-	j.pageMarker = msg.PageMarker
-
-	for _, entry := range bckList.Entries {
-		if !strings.HasSuffix(entry.Name, j.suffix) {
-			continue
+	for {
+		j.pagesCnt++
+		msg := &cmn.SelectMsg{
+			Prefix:     j.prefix,
+			PageMarker: j.pageMarker,
+			Fast:       true,
+			PageSize:   cmn.DefaultListPageSize,
 		}
-		dlJob, err := jobForObject(smap, sid, j.bck, entry.Name, "")
+
+		bckList, err, _ := j.t.Cloud().ListBucket(j.ctx, j.bck.Name, msg)
 		if err != nil {
-			if err == errInvalidTarget {
-				continue
-			}
 			return err
 		}
-		j.objs = append(j.objs, dlJob)
+		j.pageMarker = msg.PageMarker
+
+		for _, entry := range bckList.Entries {
+			if !strings.HasSuffix(entry.Name, j.suffix) {
+				continue
+			}
+			dlJob, err := jobForObject(smap, sid, j.bck, entry.Name, "")
+			if err != nil {
+				if err == errInvalidTarget {
+					continue
+				}
+				return err
+			}
+			j.objs = append(j.objs, dlJob)
+		}
+		if j.pageMarker == "" || len(j.objs) != 0 {
+			break
+		}
 	}
 
 	return nil
