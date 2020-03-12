@@ -5,6 +5,7 @@
 package tests
 
 import (
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -30,7 +31,7 @@ var _ = Describe("IterFields", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(got).To(Equal(expected))
 			},
-			Entry("list bucket props",
+			Entry("list BucketProps fields",
 				cmn.BucketProps{
 					CloudProvider: cmn.ProviderAIS,
 					EC: cmn.ECConf{
@@ -77,6 +78,48 @@ var _ = Describe("IterFields", func() {
 					"bid":    uint64(0),
 				},
 			),
+			Entry("list BucketPropsToUpdate fields",
+				&cmn.BucketPropsToUpdate{
+					EC: &cmn.ECConfToUpdate{
+						Enabled:      api.Bool(true),
+						ParitySlices: api.Int(1024),
+					},
+					LRU: &cmn.LRUConfToUpdate{},
+					Cksum: &cmn.CksumConfToUpdate{
+						Type: api.String(cmn.PropInherit),
+					},
+					AccessAttrs: api.Uint64(1024),
+				},
+				map[string]interface{}{
+					"mirror.enabled":      (*bool)(nil),
+					"mirror.copies":       (*int64)(nil),
+					"mirror.util_thresh":  (*int64)(nil),
+					"mirror.burst_buffer": (*int64)(nil),
+					"mirror.optimize_put": (*bool)(nil),
+
+					"ec.enabled":       api.Bool(true),
+					"ec.parity_slices": api.Int(1024),
+					"ec.data_slices":   (*int)(nil),
+					"ec.objsize_limit": (*int64)(nil),
+					"ec.compression":   (*string)(nil),
+
+					"versioning.enabled":           (*bool)(nil),
+					"versioning.validate_warm_get": (*bool)(nil),
+
+					"cksum.type":              api.String(cmn.PropInherit),
+					"cksum.validate_warm_get": (*bool)(nil),
+					"cksum.validate_cold_get": (*bool)(nil),
+					"cksum.validate_obj_move": (*bool)(nil),
+					"cksum.enable_read_range": (*bool)(nil),
+
+					"lru.enabled":      (*bool)(nil),
+					"lru.lowwm":        (*int64)(nil),
+					"lru.highwm":       (*int64)(nil),
+					"lru.out_of_space": (*int64)(nil),
+
+					"aattrs": api.Uint64(1024),
+				},
+			),
 			Entry("check for omit tag",
 				foo{Foo: 1, Bar: 2},
 				map[string]interface{}{
@@ -95,8 +138,12 @@ var _ = Describe("IterFields", func() {
 				}
 				Expect(v).To(Equal(expected))
 			},
-			Entry("update some bucket props",
-				&cmn.BucketProps{},
+			Entry("update some BucketProps",
+				&cmn.BucketProps{
+					Versioning: cmn.VersionConf{
+						ValidateWarmGet: true,
+					},
+				},
 				map[string]interface{}{
 					"mirror.enabled":      "true", // type == bool
 					"mirror.copies":       "120",  // type == int
@@ -129,7 +176,55 @@ var _ = Describe("IterFields", func() {
 					Cksum: cmn.CksumConf{
 						Type: cmn.PropInherit,
 					},
+					Versioning: cmn.VersionConf{
+						Enabled:         false,
+						ValidateWarmGet: true,
+					},
 					AccessAttrs: 12,
+				},
+			),
+			Entry("update some BucketPropsToUpdate",
+				&cmn.BucketPropsToUpdate{
+					Cksum: &cmn.CksumConfToUpdate{
+						ValidateWarmGet: api.Bool(true),
+					},
+				},
+				map[string]interface{}{
+					"mirror.enabled":      "true", // type == bool
+					"mirror.copies":       "120",  // type == int
+					"mirror.burst_buffer": "9560", // type == int64
+
+					"ec.enabled":       true,
+					"ec.parity_slices": 1024,
+					"ec.objsize_limit": int64(0),
+					"ec.compression":   "",
+
+					"versioning.enabled": false,
+
+					"cksum.type": cmn.PropInherit,
+
+					"aattrs": "12", // type == uint64
+				},
+				&cmn.BucketPropsToUpdate{
+					Versioning: &cmn.VersionConfToUpdate{
+						Enabled: api.Bool(false),
+					},
+					Mirror: &cmn.MirrorConfToUpdate{
+						Enabled: api.Bool(true),
+						Copies:  api.Int64(120),
+						Burst:   api.Int64(9560),
+					},
+					EC: &cmn.ECConfToUpdate{
+						Enabled:      api.Bool(true),
+						ParitySlices: api.Int(1024),
+						ObjSizeLimit: api.Int64(0),
+						Compression:  api.String(""),
+					},
+					Cksum: &cmn.CksumConfToUpdate{
+						Type:            api.String(cmn.PropInherit),
+						ValidateWarmGet: api.Bool(true),
+					},
+					AccessAttrs: api.Uint64(12),
 				},
 			),
 		)

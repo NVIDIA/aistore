@@ -15,12 +15,12 @@ import (
 var _ = Describe("API", func() {
 	Describe("Apply", func() {
 		DescribeTable("should successfully apply all the props",
-			func(props cmn.BucketPropsToUpdate, expect cmn.BucketProps) {
-				src := cmn.BucketProps{}
+			func(src cmn.BucketProps, props cmn.BucketPropsToUpdate, expect cmn.BucketProps) {
 				src.Apply(props)
 				Expect(src).To(Equal(expect))
 			},
 			Entry("non-nested field",
+				cmn.BucketProps{},
 				cmn.BucketPropsToUpdate{
 					AccessAttrs: api.Uint64(1024),
 				},
@@ -28,7 +28,20 @@ var _ = Describe("API", func() {
 					AccessAttrs: 1024,
 				},
 			),
+			Entry("non-nested field and non-empty initial struct",
+				cmn.BucketProps{
+					CloudProvider: cmn.ProviderAmazon,
+				},
+				cmn.BucketPropsToUpdate{
+					AccessAttrs: api.Uint64(1024),
+				},
+				cmn.BucketProps{
+					CloudProvider: cmn.ProviderAmazon,
+					AccessAttrs:   1024,
+				},
+			),
 			Entry("nested field",
+				cmn.BucketProps{},
 				cmn.BucketPropsToUpdate{
 					Cksum: &cmn.CksumConfToUpdate{
 						Type: api.String("value"),
@@ -40,7 +53,8 @@ var _ = Describe("API", func() {
 					},
 				},
 			),
-			Entry("multiple nested field",
+			Entry("multiple nested fields",
+				cmn.BucketProps{},
 				cmn.BucketPropsToUpdate{
 					Cksum: &cmn.CksumConfToUpdate{
 						Type:            api.String("value"),
@@ -65,7 +79,47 @@ var _ = Describe("API", func() {
 					},
 				},
 			),
+			Entry("multiple nested fields and non-empty initial struct",
+				cmn.BucketProps{
+					CloudProvider: cmn.ProviderAmazon,
+					Cksum: cmn.CksumConf{
+						ValidateColdGet: true,
+						ValidateWarmGet: false,
+					},
+					LRU: cmn.LRUConf{
+						LowWM:   90,
+						HighWM:  95,
+						OOS:     99,
+						Enabled: true,
+					},
+				},
+				cmn.BucketPropsToUpdate{
+					Cksum: &cmn.CksumConfToUpdate{
+						Type: api.String("value"),
+					},
+					LRU: &cmn.LRUConfToUpdate{
+						OOS: api.Int64(100),
+					},
+					AccessAttrs: api.Uint64(10),
+				},
+				cmn.BucketProps{
+					CloudProvider: cmn.ProviderAmazon,
+					Cksum: cmn.CksumConf{
+						Type:            "value",
+						ValidateColdGet: true,
+						ValidateWarmGet: false,
+					},
+					LRU: cmn.LRUConf{
+						LowWM:   90,
+						HighWM:  95,
+						OOS:     100,
+						Enabled: true,
+					},
+					AccessAttrs: 10,
+				},
+			),
 			Entry("all fields",
+				cmn.BucketProps{},
 				cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
 						Enabled:         api.Bool(true),

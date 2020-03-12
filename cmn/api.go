@@ -253,8 +253,6 @@ type BucketProps struct {
 	InProgress bool `json:"in_progress,omitempty" list:"omit"`
 }
 
-// NOTE: if you modify the struct, do not forget to update `NewBucketPropsToUpdate`,
-// it is used in CLI for TAB-TAB completion
 type BucketPropsToUpdate struct {
 	Versioning  *VersionConfToUpdate `json:"versioning"`
 	Cksum       *CksumConfToUpdate   `json:"cksum"`
@@ -486,14 +484,6 @@ func ReadXactionRequestMessage(actionMsg *ActionMsg) (*XactionExtMsg, error) {
 }
 
 func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error) {
-	props = BucketPropsToUpdate{
-		Versioning: &VersionConfToUpdate{},
-		Cksum:      &CksumConfToUpdate{},
-		LRU:        &LRUConfToUpdate{},
-		Mirror:     &MirrorConfToUpdate{},
-		EC:         &ECConfToUpdate{},
-	}
-
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val
 

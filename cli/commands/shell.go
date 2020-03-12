@@ -229,13 +229,13 @@ func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, se
 }
 
 func propCompletions(c *cli.Context) {
-	props, _ := cmn.NewBucketPropsToUpdate(nil)
-	cmn.IterFields(props, func(tag string, _ cmn.IterField) (error, bool) {
+	err := cmn.IterFields(&cmn.BucketPropsToUpdate{}, func(tag string, _ cmn.IterField) (error, bool) {
 		if !cmn.AnyHasPrefixInSlice(tag, c.Args()) {
 			fmt.Println(tag)
 		}
 		return nil, false
 	})
+	cmn.AssertNoErr(err)
 }
 
 ////////////

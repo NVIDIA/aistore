@@ -23,6 +23,7 @@ type IterField interface {
 type field struct {
 	v       reflect.Value
 	listTag string
+	dirty   bool // Determines if the value for the field was set by `SetValue`.
 }
 
 func (f *field) Value() interface{} {
@@ -79,13 +80,20 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 			AssertMsg(false, fmt.Sprintf("field.name: %s, field.type: %s", f.listTag, dst.Kind()))
 		}
 	default:
+		if dst.Kind() == reflect.Ptr {
+			if dst.IsNil() {
+				dst.Set(reflect.New(dst.Type().Elem()))
+			}
+			dst = dst.Elem()
+		}
 		dst.Set(srcVal)
 	}
 
+	f.dirty = true
 	return nil
 }
 
-func iterFields(prefix string, v interface{}, f func(uniqueTag string, field IterField) (error, bool)) (err error, stop bool) {
+func iterFields(prefix string, v interface{}, f func(uniqueTag string, field IterField) (error, bool)) (dirty bool, err error, stop bool) {
 	srcVal := reflect.ValueOf(v)
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
@@ -111,20 +119,28 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 			continue
 		}
 
+		var (
+			// Determines if the pointer to struct was allocated.
+			// In case it was  but no field in the struct was
+			// updated we must later set it to `nil`.
+			allocatedStruct bool
+		)
+
 		// If the field is a pointer to a struct we must dereference it.
-		if srcValField.Kind() == reflect.Ptr && srcValField.Elem().Kind() == reflect.Struct {
+		if srcValField.Kind() == reflect.Ptr && srcValField.Type().Elem().Kind() == reflect.Struct {
 			if srcValField.IsNil() {
+				allocatedStruct = true
 				srcValField.Set(reflect.New(srcValField.Type().Elem()))
 			}
 			srcValField = srcValField.Elem()
 		}
 
+		var dirtyField bool
 		if srcValField.Kind() != reflect.Struct {
 			// Set value for the field
-			err, stop = f(prefix+fieldName, &field{v: srcValField, listTag: listTag})
-			if stop {
-				return
-			}
+			field := &field{v: srcValField, listTag: listTag}
+			err, stop = f(prefix+fieldName, field)
+			dirtyField = field.dirty
 		} else {
 			// Recurse into struct
 
@@ -132,14 +148,25 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 			if srcValField.CanAddr() {
 				srcValField = srcValField.Addr()
 			}
-			err, stop = iterFields(prefix+fieldName+".", srcValField.Interface(), f)
-			if stop {
-				return
+
+			dirtyField, err, stop = iterFields(prefix+fieldName+".", srcValField.Interface(), f)
+			if allocatedStruct && !dirtyField {
+				// If we initialized new struct but no field inside
+				// it was set we must set the value of the field to
+				// `nil` (as it was before) otherwise we manipulated
+				// the field for no reason.
+				srcValField = srcVal.Field(i)
+				srcValField.Set(reflect.Zero(srcValField.Type()))
 			}
 		}
 
+		dirty = dirty || dirtyField
+		if stop {
+			return
+		}
+
 		if err != nil {
-			return err, true
+			return dirty, err, true
 		}
 	}
 	return
@@ -152,7 +179,7 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 // or tell that it is only `readonly` (`list:"readonly"`) (examples of these can
 // be seen in `BucketProps` or `Config` structs).
 func IterFields(v interface{}, f func(uniqueTag string, field IterField) (error, bool)) error {
-	err, _ := iterFields("", v, f)
+	_, err, _ := iterFields("", v, f)
 	return err
 }
 
