@@ -63,6 +63,11 @@ all: node cli aisfs authn ## Build all main binaries
 node: ## Build 'aisnode' binary
 	@echo "Building aisnode: version=$(VERSION) provider=$(CLDPROVIDER)"
 ifneq ($(strip $(GORACE)),)
+ifneq ($(findstring log_path,$(GORACE)),log_path)
+	@echo
+	@echo "Expecting GORACE='log_path=...', run 'make help' for usage examples"
+	@exit 1
+endif
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
 	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
