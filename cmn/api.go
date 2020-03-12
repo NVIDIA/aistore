@@ -253,6 +253,8 @@ type BucketProps struct {
 	InProgress bool `json:"in_progress,omitempty" list:"omit"`
 }
 
+// NOTE: if you modify the struct, do not forget to update `NewBucketPropsToUpdate`,
+// it is used in CLI for TAB-TAB completion
 type BucketPropsToUpdate struct {
 	Versioning  *VersionConfToUpdate `json:"versioning"`
 	Cksum       *CksumConfToUpdate   `json:"cksum"`
