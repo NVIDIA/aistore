@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 var (
@@ -54,14 +53,7 @@ func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader
 		f.Close()
 	}()
 
-	var slabSize int64 = memsys.MaxPageSlabSize
-	if r.Size() < cmn.MiB {
-		slabSize = 128 * cmn.KiB
-	}
-
-	slab, err := t.t.GetMMSA().GetSlab(slabSize)
-	cmn.AssertNoErr(err)
-	buf := slab.Alloc()
+	buf, slab := t.t.GetMMSA().Alloc(r.Size())
 	defer slab.Free(buf)
 
 	offset := int64(0)

@@ -150,14 +150,7 @@ func (t *tarExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 		header *tar.Header
 	)
 
-	var slabSize int64 = memsys.MaxPageSlabSize
-	if r.Size() < cmn.MiB {
-		slabSize = 128 * cmn.KiB
-	}
-
-	slab, err := t.t.GetMMSA().GetSlab(slabSize)
-	cmn.AssertNoErr(err)
-	buf := slab.Alloc()
+	buf, slab := t.t.GetMMSA().Alloc(r.Size())
 	defer slab.Free(buf)
 
 	offset := int64(0)

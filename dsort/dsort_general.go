@@ -298,13 +298,11 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			)
 
 			if storeType != extract.SGLStoreType { // SGL does not need buffer as it is buffer itself
-				slab, err = mm.GetSlab(memsys.MaxPageSlabSize)
-				cmn.AssertNoErr(err)
-				buf = slab.Alloc()
+				buf, slab = mm.Alloc(obj.Size)
 			}
 
 			defer func() {
-				if slab != nil {
+				if storeType != extract.SGLStoreType {
 					slab.Free(buf)
 				}
 				ds.m.decrementRef(1)
@@ -647,10 +645,7 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.Receive {
 			beforeSend = time.Now()
 		}
 
-		slab, err := mm.GetSlab(memsys.MaxPageSlabSize)
-		cmn.AssertNoErr(err)
-		buf := slab.Alloc()
-
+		buf, slab := mm.Alloc(hdr.ObjAttrs.Size)
 		writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
 		writer.wg.Done()
 		slab.Free(buf)

@@ -46,7 +46,11 @@ const (
 var (
 	ctx dsortContext
 	mm  *memsys.MMSA
-	_   cluster.Slistener = &Manager{}
+
+	// interface guard
+	_ cluster.Slistener = &Manager{}
+	_ cmn.Packer        = &buildingShardInfo{}
+	_ cmn.Unpacker      = &buildingShardInfo{}
 )
 
 type (
@@ -64,7 +68,7 @@ type (
 	}
 
 	buildingShardInfo struct {
-		ShardName string `json:"shard_name"`
+		shardName string
 	}
 
 	// progressState abstracts all information meta information about progress of
@@ -507,9 +511,9 @@ func (m *Manager) avgCompressionRatio() float64 {
 }
 
 // incrementRef increments reference counter. This prevents from premature cleanup.
-// Each increment should have coresponding decrement to prevent memory leaks.
+// Each increment should have corresponding decrement to prevent memory leaks.
 //
-// NOTE: Manager should increment ref everytime some data of it is used, otherwise
+// NOTE: Manager should increment ref every time some data of it is used, otherwise
 // unexpected things can happen.
 func (m *Manager) incrementRef(by int64) {
 	m.refCount.Add(by)
@@ -754,6 +758,23 @@ func (m *Manager) react(reaction, msg string) error {
 		cmn.AssertMsg(false, reaction)
 		return nil
 	}
+}
+
+func (bsi *buildingShardInfo) Unpack(unpacker *cmn.ByteUnpack) error {
+	var err error
+	bsi.shardName, err = unpacker.ReadString()
+	return err
+}
+func (bsi *buildingShardInfo) Pack(packer *cmn.BytePack) { packer.WriteString(bsi.shardName) }
+func (bsi *buildingShardInfo) PackedSize() int           { return cmn.SizeofLen + len(bsi.shardName) }
+func (bsi *buildingShardInfo) NewPack(mm *memsys.MMSA) []byte {
+	var (
+		size   = bsi.PackedSize()
+		buf, _ = mm.Alloc(int64(size))
+		packer = cmn.NewPacker(buf, size)
+	)
+	packer.WriteAny(bsi)
+	return packer.Bytes()
 }
 
 func calcMaxMemoryUsage(maxUsage cmn.ParsedQuantity, mem sys.MemStat) uint64 {

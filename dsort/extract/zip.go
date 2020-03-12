@@ -113,12 +113,7 @@ func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 		return extractedSize, extractedCount, err
 	}
 
-	// TODO -- FIXME: take into account r.Size()
-	var slabSize int64 = memsys.MaxPageSlabSize
-
-	slab, err := z.t.GetMMSA().GetSlab(slabSize)
-	cmn.AssertNoErr(err)
-	buf := slab.Alloc()
+	buf, slab := z.t.GetMMSA().Alloc(r.Size())
 	defer slab.Free(buf)
 
 	for _, f := range zr.File {

@@ -390,7 +390,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 
 	si, err := cluster.HrwTarget(lom.Uname(), m.smap)
-	cmn.AssertNoErr(err) // TODO -- FIXME: remove this assert, handle errors
+	if err != nil {
+		return err
+	}
 
 	// If the newly created shard belongs on a different target
 	// according to HRW, send it there. Since it doesn't really matter
@@ -773,7 +775,9 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 
 	for _, s := range shards {
 		si, err := cluster.HrwTarget(bck.MakeUname(s.Name), m.smap)
-		cmn.AssertNoErr(err)
+		if err != nil {
+			return err
+		}
 		shardsToTarget[si] = append(shardsToTarget[si], s)
 
 		singleSendOrder := make(map[string]*extract.Shard)

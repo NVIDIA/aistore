@@ -297,9 +297,10 @@ func (ds *dsorterMem) finalCleanup() error {
 func (ds *dsorterMem) postRecordDistribution() {}
 
 func (ds *dsorterMem) preShardCreation(shardName string, mpathInfo *fs.MountpathInfo) error {
-	opaque := cmn.MustMarshal(buildingShardInfo{
-		ShardName: shardName,
-	})
+	bsi := &buildingShardInfo{
+		shardName: shardName,
+	}
+	opaque := bsi.NewPack(ds.m.ctx.t.GetSmallMMSA())
 	if err := ds.streams.builder.Send(transport.Obj{Hdr: transport.Header{Opaque: opaque}}, nil); err != nil {
 		return err
 	}
@@ -577,8 +578,9 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.Receive {
 
 		defer cmn.DrainReader(object) // drain to prevent unnecessary stream errors
 
+		unpacker := cmn.NewUnpacker(hdr.Opaque)
 		req := buildingShardInfo{}
-		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
+		if err := unpacker.ReadAny(&req); err != nil {
 			ds.m.abort(err)
 			return
 		}
@@ -587,7 +589,7 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.Receive {
 			return
 		}
 
-		ds.creationPhase.requestedShards <- req.ShardName
+		ds.creationPhase.requestedShards <- req.shardName
 	}
 }
 
