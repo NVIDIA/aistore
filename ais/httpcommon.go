@@ -1093,23 +1093,21 @@ func (h *httprunner) join(query url.Values) (primaryURL string, res callResult) 
 	}
 	config := cmn.GCO.Get()
 	if config.Proxy.DiscoveryURL != "" && config.Proxy.DiscoveryURL != url {
-		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, config.Proxy.DiscoveryURL)
-		resAlt := h.registerToURL(config.Proxy.DiscoveryURL, psi, cmn.DefaultTimeout, query, false)
-		if resAlt.err == nil {
-			res = resAlt
+		primaryURL = config.Proxy.DiscoveryURL
+		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, primaryURL)
+		res = h.registerToURL(primaryURL, psi, cmn.DefaultTimeout, query, false)
+		if res.err == nil {
 			return
 		}
-		primaryURL = config.Proxy.DiscoveryURL
 	}
 	if config.Proxy.OriginalURL != "" && config.Proxy.OriginalURL != url &&
 		config.Proxy.OriginalURL != config.Proxy.DiscoveryURL {
-		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, config.Proxy.OriginalURL)
-		resAlt := h.registerToURL(config.Proxy.OriginalURL, psi, cmn.DefaultTimeout, query, false)
-		if resAlt.err == nil {
-			res = resAlt
+		primaryURL = config.Proxy.OriginalURL
+		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, primaryURL)
+		res = h.registerToURL(primaryURL, psi, cmn.DefaultTimeout, query, false)
+		if res.err == nil {
 			return
 		}
-		primaryURL = config.Proxy.OriginalURL
 	}
 	return
 }
