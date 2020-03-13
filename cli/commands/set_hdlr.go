@@ -54,7 +54,10 @@ func setConfigHandler(c *cli.Context) (err error) {
 }
 
 func setPropsHandler(c *cli.Context) (err error) {
-	bck, objName := parseBckObjectURI(c.Args().First())
+	bck, objName, err := parseBckObjectURI(c.Args().First())
+	if err != nil {
+		return
+	}
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}

@@ -38,10 +38,16 @@ var (
 func copyBucketHandler(c *cli.Context) (err error) {
 	bucketName, newBucketName, err := getOldNewBucketName(c)
 	if err != nil {
-		return
+		return err
 	}
-	fromBck, objName := parseBckObjectURI(bucketName)
-	toBck, newObjName := parseBckObjectURI(newBucketName)
+	fromBck, objName, err := parseBckObjectURI(bucketName)
+	if err != nil {
+		return err
+	}
+	toBck, newObjName, err := parseBckObjectURI(newBucketName)
+	if err != nil {
+		return err
+	}
 
 	if cmn.IsProviderCloud(fromBck, true) || cmn.IsProviderCloud(toBck, true) {
 		return fmt.Errorf("copying of cloud buckets not supported")

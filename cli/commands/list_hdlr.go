@@ -8,6 +8,7 @@ package commands
 import (
 	"strings"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -42,9 +43,19 @@ var (
 )
 
 func defaultListHandler(c *cli.Context) (err error) {
-	bck, objName := parseBckObjectURI(c.Args().First())
+	var (
+		bck     cmn.Bck
+		objName string
+	)
+	if bck, objName, err = parseBckObjectURI(c.Args().First()); err != nil {
+		return
+	}
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
+	}
+
+	if bck, err = validateBucket(c, bck, "ls", true); err != nil {
+		return
 	}
 
 	if bck.Name == "" {

@@ -86,16 +86,19 @@ func removeBucketHandler(c *cli.Context) (err error) {
 	return destroyBuckets(c, buckets)
 }
 
-func removeObjectHandler(c *cli.Context) (err error) {
+func removeObjectHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing bucket name")
 	}
 
 	// single fullObjName provided. Either remove one object or listFlag/templateFlag provided
 	if c.NArg() == 1 {
-		bck, objName := parseBckObjectURI(c.Args().First())
+		bck, objName, err := parseBckObjectURI(c.Args().First())
+		if err != nil {
+			return err
+		}
 		if bck, err = validateBucket(c, bck, "", false); err != nil {
-			return
+			return err
 		}
 
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {

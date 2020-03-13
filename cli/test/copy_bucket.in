@@ -1,4 +1,6 @@
 ais create bucket $BUCKET_1 $BUCKET_2
+ais cp bucket aiss://$BUCKET_1/ $BUCKET_2/ // FAIL "Invalid bucket provider "aiss"."
+ais cp bucket $BUCKET_1/ aiss://$BUCKET_2/ // FAIL "Invalid bucket provider "aiss"."
 ais cp bucket $BUCKET_1/ $BUCKET_2/
 
 ais cp bucket ais://$BUCKET_1 cloud://$BUCKET_2 // FAIL "Copying of cloud buckets not supported"

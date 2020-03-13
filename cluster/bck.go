@@ -136,7 +136,7 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
-	} else if b.Provider == cmn.Cloud {
+	} else if cmn.IsProviderCloud(b.Bck, true) {
 		cloudConf := cmn.GCO.Get().Cloud
 		b.Provider = cloudConf.Provider
 		b.Ns = cloudConf.Ns

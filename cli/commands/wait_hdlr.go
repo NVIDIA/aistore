@@ -61,7 +61,7 @@ var (
 	}
 )
 
-func waitXactionHandler(c *cli.Context) (err error) {
+func waitXactionHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "xaction name")
 	}
@@ -75,7 +75,10 @@ func waitXactionHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("%q is not a valid xaction", xactKind)
 	}
 
-	bck, _ := parseBckObjectURI(bucketName)
+	bck, _, err := parseBckObjectURI(bucketName)
+	if err != nil {
+		return err
+	}
 	if bck, err = validateBucket(c, bck, "", true); err != nil {
 		return err
 	}

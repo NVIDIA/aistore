@@ -31,7 +31,6 @@ const (
 
 func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn.Bck, error) {
 	var err error
-	bck.Provider = bucketProvider(bck.Provider)
 	bck.Name = cleanBucketName(bck.Name)
 	if bck.Name == "" {
 		if optional {
@@ -364,17 +363,20 @@ func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 // Get bucket props
 func showBucketProps(c *cli.Context) (err error) {
 	var (
-		bck cmn.Bck
+		bck      cmn.Bck
+		bckProps cmn.BucketProps
+		objName  string
 	)
-	bck, objName := parseBckObjectURI(c.Args().First())
+	if bck, objName, err = parseBckObjectURI(c.Args().First()); err != nil {
+		return
+	}
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}
 	if bck, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
-	bckProps, err := api.HeadBucket(defaultAPIParams, bck)
-	if err != nil {
+	if bckProps, err = api.HeadBucket(defaultAPIParams, bck); err != nil {
 		return
 	}
 

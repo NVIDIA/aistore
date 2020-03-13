@@ -180,7 +180,10 @@ var (
 )
 
 func showBucketHandler(c *cli.Context) (err error) {
-	bck, objName := parseBckObjectURI(c.Args().First())
+	bck, objName, err := parseBckObjectURI(c.Args().First())
+	if err != nil {
+		return
+	}
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}
@@ -247,7 +250,10 @@ func showXactionHandler(c *cli.Context) (err error) {
 	)
 
 	if bucketName != "" {
-		bck, objName = parseBckObjectURI(bucketName)
+		bck, objName, err = parseBckObjectURI(bucketName)
+		if err != nil {
+			return
+		}
 		if objName != "" {
 			return objectNameArgumentNotSupported(c, objName)
 		}
@@ -316,7 +322,10 @@ func showObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in format bucket/object")
 	}
-	bck, object := parseBckObjectURI(fullObjName)
+	bck, object, err := parseBckObjectURI(fullObjName)
+	if err != nil {
+		return
+	}
 	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}

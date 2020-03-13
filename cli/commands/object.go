@@ -584,14 +584,17 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 }
 
 // Multiple object arguments handler
-func multiObjOp(c *cli.Context, command string) (err error) {
+func multiObjOp(c *cli.Context, command string) error {
 	// stops iterating if it encounters an error
 	for _, fullObjName := range c.Args() {
 		var (
-			bck, objectName = parseBckObjectURI(fullObjName)
+			bck, objectName, err = parseBckObjectURI(fullObjName)
 		)
+		if err != nil {
+			return err
+		}
 		if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
-			return
+			return err
 		}
 		if objectName == "" {
 			return incorrectUsageMsg(c, "'%s: missing object name", fullObjName)
@@ -599,19 +602,19 @@ func multiObjOp(c *cli.Context, command string) (err error) {
 
 		switch command {
 		case commandRemove:
-			if err = api.DeleteObject(defaultAPIParams, bck, objectName); err != nil {
-				return
+			if err := api.DeleteObject(defaultAPIParams, bck, objectName); err != nil {
+				return err
 			}
 			fmt.Fprintf(c.App.Writer, "%s deleted from %s bucket\n", objectName, bck)
 		case commandEvict:
 			if cmn.IsProviderAIS(bck) {
 				return fmt.Errorf("evicting objects from AIS bucket is not allowed")
 			}
-			if err = api.EvictObject(defaultAPIParams, bck, objectName); err != nil {
-				return
+			if err := api.EvictObject(defaultAPIParams, bck, objectName); err != nil {
+				return err
 			}
 			fmt.Fprintf(c.App.Writer, "%s evicted from %s bucket\n", objectName, bck)
 		}
 	}
-	return
+	return nil
 }

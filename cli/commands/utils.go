@@ -476,31 +476,30 @@ func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 	return tmplLong
 }
 
-func validateBckProvider(provider string) (validaterProvider string, valid bool) {
+// Replace provider aliases with real provider names
+func parseBckProvider(provider string) string {
 	if provider == gsScheme {
-		return cmn.ProviderGoogle, true
+		return cmn.ProviderGoogle
 	}
 	if provider == s3Scheme {
-		return cmn.ProviderAmazon, true
+		return cmn.ProviderAmazon
 	}
-
-	if cmn.IsValidProvider(provider) || provider == cmn.Cloud {
-		return provider, true
-	}
-	return "", false
+	return provider
 }
 
-func parseBckObjectURI(objName string) (bck cmn.Bck, object string) {
+func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 	const (
 		bucketSepa = "/"
 	)
 
 	providerSplit := strings.SplitN(objName, cmn.BckProviderSeparator, 2)
 	if len(providerSplit) > 1 {
-		if provider, valid := validateBckProvider(providerSplit[0]); valid {
-			bck.Provider = provider
-			objName = providerSplit[1]
-		}
+		bck.Provider = parseBckProvider(providerSplit[0])
+		objName = providerSplit[1]
+	}
+	bck.Provider = parseBckProvider(bucketProvider(bck.Provider))
+	if !cmn.IsValidProvider(bck.Provider) && bck.Provider != cmn.Cloud && bck.Provider != "" {
+		return bck, "", fmt.Errorf("invalid bucket provider %q", bck.Provider)
 	}
 
 	s := strings.SplitN(objName, bucketSepa, 2)
@@ -527,7 +526,10 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	bcks := make([]cmn.Bck, 0, len(bucketNames))
 
 	for _, bucket := range bucketNames {
-		bck, objName := parseBckObjectURI(bucket)
+		bck, objName, err := parseBckObjectURI(bucket)
+		if err != nil {
+			return nil, err
+		}
 		if objName != "" {
 			return nil, objectNameArgumentNotSupported(c, objName)
 		}

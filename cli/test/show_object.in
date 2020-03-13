@@ -8,3 +8,5 @@ ais show object ais://$BUCKET_2/object_1.txt // FAIL "Bucket with name "ais/$BUC
 
 ais show object $BUCKET_1/object_1.txt
 ais show object $BUCKET_1/object_1.txt --props=size,version
+
+ais show object aiss://$BUCKET_1/object_1.txt // FAIL "Invalid bucket provider "aiss"."

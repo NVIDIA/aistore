@@ -6,4 +6,5 @@ ais ls ais://$BUCKET_1/
 ais ls cloud://$BUCKET_1/ // FAIL "bucket with name "$BUCKET_1" does not exists"
 ais ls gs:// // IGNORE
 ais ls s3:// // IGNORE
+ais ls aiss://$BUCKET_1 // FAIL "Invalid bucket provider "aiss"."
 ais rm bucket $BUCKET_1

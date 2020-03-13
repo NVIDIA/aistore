@@ -128,7 +128,10 @@ func startXactionHandler(c *cli.Context) (err error) {
 			fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name\n", xactKind)
 		}
 	case cmn.XactTypeBck:
-		bck, objName = parseBckObjectURI(c.Args().Get(1))
+		bck, objName, err = parseBckObjectURI(c.Args().Get(1))
+		if err != nil {
+			return
+		}
 		if objName != "" {
 			return objectNameArgumentNotSupported(c, objName)
 		}
@@ -170,7 +173,10 @@ func stopXactionHandler(c *cli.Context) (err error) {
 				fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a task xaction, ignoring bucket name\n", xactKind)
 			}
 		case cmn.XactTypeBck:
-			bck, objName = parseBckObjectURI(c.Args().Get(1))
+			bck, objName, err = parseBckObjectURI(c.Args().Get(1))
+			if err != nil {
+				return
+			}
 			if objName != "" {
 				return objectNameArgumentNotSupported(c, objName)
 			}

@@ -45,13 +45,19 @@ var (
 	}
 )
 
-func renameBucketHandler(c *cli.Context) (err error) {
+func renameBucketHandler(c *cli.Context) error {
 	bucketName, newBucketName, err := getOldNewBucketName(c)
 	if err != nil {
-		return
+		return err
 	}
-	bck, objName := parseBckObjectURI(bucketName)
-	newBck, newObjName := parseBckObjectURI(newBucketName)
+	bck, objName, err := parseBckObjectURI(bucketName)
+	if err != nil {
+		return err
+	}
+	newBck, newObjName, err := parseBckObjectURI(newBucketName)
+	if err != nil {
+		return err
+	}
 
 	if cmn.IsProviderCloud(bck, true) || cmn.IsProviderCloud(newBck, true) {
 		return fmt.Errorf("renaming of cloud buckets not supported")
@@ -80,7 +86,9 @@ func renameObjectHandler(c *cli.Context) (err error) {
 		bck    cmn.Bck
 	)
 
-	bck, oldObj = parseBckObjectURI(oldObjFull)
+	if bck, oldObj, err = parseBckObjectURI(oldObjFull); err != nil {
+		return
+	}
 	if oldObj == "" {
 		return incorrectUsageMsg(c, "no object specified in '%s'", oldObjFull)
 	}

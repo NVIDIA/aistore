@@ -40,9 +40,12 @@ var (
 
 func setCopiesHandler(c *cli.Context) (err error) {
 	var (
-		bck cmn.Bck
+		bck        cmn.Bck
+		objectName string
 	)
-	bck, objectName := parseBckObjectURI(c.Args().First())
+	if bck, objectName, err = parseBckObjectURI(c.Args().First()); err != nil {
+		return
+	}
 	if objectName != "" {
 		return objectNameArgumentNotSupported(c, objectName)
 	}
@@ -54,9 +57,12 @@ func setCopiesHandler(c *cli.Context) (err error) {
 
 func ecEncodeHandler(c *cli.Context) (err error) {
 	var (
-		bck cmn.Bck
+		bck        cmn.Bck
+		objectName string
 	)
-	bck, objectName := parseBckObjectURI(c.Args().First())
+	if bck, objectName, err = parseBckObjectURI(c.Args().First()); err != nil {
+		return
+	}
 	if objectName != "" {
 		return objectNameArgumentNotSupported(c, objectName)
 	}
