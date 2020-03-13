@@ -31,7 +31,7 @@ const (
 
 func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn.Bck, error) {
 	var err error
-	bck.Provider = bucketProvider(c, bck.Provider)
+	bck.Provider = bucketProvider(bck.Provider)
 	bck.Name = cleanBucketName(bck.Name)
 	if bck.Name == "" {
 		if optional {

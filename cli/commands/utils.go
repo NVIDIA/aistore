@@ -565,15 +565,11 @@ func canReachBucket(bck cmn.Bck) error {
 
 // Function returns the bucket provider either from:
 // 1) Function argument provider (highest priority)
-// 2) Command line flag --provider
-// 3) Environment variable (lowest priority)
-func bucketProvider(c *cli.Context, providers ...string) string {
+// 2) Environment variable (lowest priority)
+func bucketProvider(providers ...string) string {
 	provider := ""
 	if len(providers) > 0 {
 		provider = providers[0]
-	}
-	if provider == "" {
-		provider = parseStrFlag(c, providerFlag)
 	}
 	if provider == "" {
 		provider = os.Getenv(aisProviderEnvVar)

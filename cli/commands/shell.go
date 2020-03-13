@@ -156,7 +156,7 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bo
 		}
 
 		bck := cmn.Bck{
-			Provider: bucketProvider(c, provider...),
+			Provider: bucketProvider(provider...),
 		}
 
 		if bck.Provider == "" {

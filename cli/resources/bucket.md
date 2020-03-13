@@ -168,7 +168,6 @@ If `BUCKET_NAME` is omitted, shows information about all buckets.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--fast` | `bool` | Enforce using faster methods to find out the buckets' details. The output may not be accurate. | `false`
 
 ### Make N copies

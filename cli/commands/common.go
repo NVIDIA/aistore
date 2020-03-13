@@ -171,10 +171,6 @@ const (
 // Flags
 var (
 	// Common
-	providerFlag = cli.StringFlag{Name: "provider",
-		Usage:  "determine which type bucket ('ais' or 'cloud') should be used. Other supported values include '' (empty), 'gcp', and 'aws'. By default (i.e., when unspecified), provider of the bucket is determined automatically",
-		EnvVar: aisProviderEnvVar,
-	}
 	objPropsFlag    = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
 	prefixFlag      = cli.StringFlag{Name: "prefix", Usage: "prefix for string matching"}
 	refreshFlag     = cli.DurationFlag{Name: "refresh", Usage: "refresh period", Value: refreshRateDefault}
