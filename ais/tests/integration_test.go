@@ -2063,10 +2063,10 @@ func TestRenewRebalance(t *testing.T) {
 
 	// Step 4: Re-register target (triggers rebalance)
 	m.reregisterTarget(target)
-	xactArgs := api.XactReqArgs{Kind: cmn.ActGlobalReb, Timeout: rebalanceStartTimeout}
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceStartTimeout}
 	err = api.WaitForXactionToStart(baseParams, xactArgs)
 	tassert.CheckError(t, err)
-	tutils.Logf("automatic global rebalance started\n")
+	tutils.Logf("automatic rebalance started\n")
 
 	m.wg.Add(m.num*m.numGetsEachFile + 2)
 	// Step 5: GET objects from the buket
@@ -2083,9 +2083,9 @@ func TestRenewRebalance(t *testing.T) {
 
 		<-m.controlCh // wait for half the GETs to complete
 
-		err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActGlobalReb})
+		err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActRebalance})
 		tassert.CheckFatal(t, err)
-		tutils.Logf("manually initiated global rebalance\n")
+		tutils.Logf("manually initiated rebalance\n")
 	}()
 
 	m.wg.Wait()

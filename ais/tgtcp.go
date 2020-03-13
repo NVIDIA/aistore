@@ -223,9 +223,9 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if msg.Action == cmn.ActXactStart {
-			if kind == cmn.ActGlobalReb {
+			if kind == cmn.ActRebalance {
 				// see p.httpcluput()
-				t.invalmsghdlr(w, r, "Invalid API request: expecting action="+cmn.ActGlobalReb)
+				t.invalmsghdlr(w, r, "Invalid API request: expecting action="+cmn.ActRebalance)
 				return
 			}
 			if err := t.xactsStartRequest(r, kind, bck); err != nil {
@@ -379,11 +379,11 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatDaemonStatus:
 		tstats := getstorstatsrunner()
 
-		var globalRebStats *stats.RebalanceTargetStats
-		if entry, ok := xaction.Registry.GetLatest(cmn.ActGlobalReb); ok {
+		var rebStats *stats.RebalanceTargetStats
+		if entry, ok := xaction.Registry.GetLatest(cmn.ActRebalance); ok {
 			if xact := entry.Get(); xact != nil {
 				var ok bool
-				globalRebStats, ok = entry.Stats(xact).(*stats.RebalanceTargetStats)
+				rebStats, ok = entry.Stats(xact).(*stats.RebalanceTargetStats)
 				cmn.Assert(ok)
 			}
 		}
@@ -394,7 +394,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			SysInfo:     daemon.gmm.FetchSysInfo(),
 			Stats:       tstats.Core,
 			Capacity:    tstats.Capacity,
-			TStatus:     &stats.TargetStatus{GlobalRebalanceStats: globalRebStats},
+			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},
 		}
 
 		body := cmn.MustMarshal(msg)
@@ -433,11 +433,11 @@ func (t *targetrunner) xactsStartRequest(r *http.Request, kind string, bck *clus
 			glog.Errorf(erfmb, kind, bck)
 		}
 		go t.RunLRU()
-	case cmn.ActLocalReb:
+	case cmn.ActResilver:
 		if bck != nil {
 			glog.Errorf(erfmb, kind, bck)
 		}
-		go t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
+		go t.rebManager.RunResilver(false /*skipGlobMisplaced*/)
 	// 2. with bucket
 	case cmn.ActPrefetch:
 		if bck == nil {
@@ -659,7 +659,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 	// TODO: Currently we must abort on enabling mountpath. In some places we open
 	// files directly and put them directly on mountpaths. This can lead to
 	// problems where we get from new mountpath without asking other (old)
-	// mountpaths if they have it (local rebalance has not yet finished).
+	// mountpaths if they have it (resilver has not yet finished).
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been enabled during %s job - aborting due to possible errors", mountpath, cmn.DSortName))
 }
 
@@ -692,7 +692,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 	// TODO: Currently we must abort on adding mountpath. In some places we open
 	// files directly and put them directly on mountpaths. This can lead to
 	// problems where we get from new mountpath without asking other (old)
-	// mountpaths if they have it (local rebalance has not yet finished).
+	// mountpaths if they have it (resilver has not yet finished).
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been added during %s job - aborting due to possible errors",
 		mountpath, cmn.DSortName))
 }
@@ -870,8 +870,8 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 	if err = t.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
 		return
 	}
-	if msgInt.Action == cmn.ActGlobalReb { // manual
-		go t.rebManager.RunGlobalReb(t.owner.smap.Get(), msgInt.GlobRebID)
+	if msgInt.Action == cmn.ActRebalance { // manual
+		go t.rebManager.RunRebalance(t.owner.smap.Get(), msgInt.RebID)
 		return
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
@@ -882,7 +882,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		return
 	}
 	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si, newTargetID)
-	go t.rebManager.RunGlobalReb(t.owner.smap.Get(), msgInt.GlobRebID)
+	go t.rebManager.RunRebalance(t.owner.smap.Get(), msgInt.RebID)
 	return
 }
 
@@ -1190,7 +1190,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	getRebStatus, _ := cmn.ParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
-		t.rebManager.GetGlobStatus(status)
+		t.rebManager.RebStatus(status)
 		body := cmn.MustMarshal(status)
 		if ok := t.writeJSON(w, r, body, "rebalance-status"); !ok {
 			return
@@ -1333,7 +1333,7 @@ func (t *targetrunner) enable() error {
 func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action string) (err error) {
 	config := cmn.GCO.Get()
 	if action == cmn.ActRenameLB && !config.Rebalance.Enabled {
-		return fmt.Errorf("cannot %s %s bucket: global rebalancing disabled", action, bckFrom)
+		return fmt.Errorf("cannot %s %s bucket: rebalancing disabled", action, bckFrom)
 	}
 	capInfo := t.AvgCapUsed(config)
 	if capInfo.OOS {
@@ -1414,7 +1414,7 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom, bckTo *cluster.Bck, msgInt *a
 		t.gfn.global.activateTimed()
 		waiter := &sync.WaitGroup{}
 		waiter.Add(1)
-		go xact.Run(waiter, msgInt.GlobRebID)
+		go xact.Run(waiter, msgInt.RebID)
 		waiter.Wait()
 
 		time.Sleep(200 * time.Millisecond) // FIXME: !1727

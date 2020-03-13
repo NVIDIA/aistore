@@ -52,11 +52,11 @@ func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
 }
 
 func (t *targetrunner) RebalanceInfo() cluster.RebalanceInfo {
-	_, running := reb.IsRebalancing(cmn.ActGlobalReb)
-	_, runningLocal := reb.IsRebalancing(cmn.ActLocalReb)
+	_, running := reb.IsRebalancing(cmn.ActRebalance)
+	_, runningLocal := reb.IsRebalancing(cmn.ActResilver)
 	return cluster.RebalanceInfo{
 		IsRebalancing: running || runningLocal,
-		GlobalRebID:   t.rebManager.GlobRebID(),
+		RebID:         t.rebManager.RebID(),
 	}
 }
 

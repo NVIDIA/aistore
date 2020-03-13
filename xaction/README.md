@@ -15,7 +15,7 @@ Xactions start running based on a wide variety of runtime conditions that includ
 * certain type of workload (e.g., PUT into a mirrored or erasure-coded bucket)
 * user request (e.g., to reduce the number of local object copies in a given bucket)
 * adding or removing storage targets (the events that trigger cluster-wide rebalancing)
-* adding or removing local disks (the events that cause local rebalancer to start moving stored content between *mountpaths* - see [Managing mountpaths](/docs/configuration.md#managing-mountpaths))
+* adding or removing local disks (the events that cause resilver to start moving stored content between *mountpaths* - see [Managing mountpaths](/docs/configuration.md#managing-mountpaths))
 * and more...
 
 Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](/deploy/dev/local/aisnode_config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.

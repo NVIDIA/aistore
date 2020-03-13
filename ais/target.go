@@ -285,11 +285,11 @@ func (t *targetrunner) Run() error {
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
 	ec.Init(t, xaction.Registry)
 
-	aborted, _ := reb.IsRebalancing(cmn.ActLocalReb)
+	aborted, _ := reb.IsRebalancing(cmn.ActResilver)
 	if aborted {
 		go func() {
-			glog.Infoln("resuming local rebalance...")
-			t.rebManager.RunLocalReb(false /*skipGlobMisplaced*/)
+			glog.Infoln("resuming resilver...")
+			t.rebManager.RunResilver(false /*skipGlobMisplaced*/)
 		}()
 	}
 
@@ -1078,7 +1078,7 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	body, status := t.rebManager.GlobECDataStatus()
+	body, status := t.rebManager.RebECDataStatus()
 	if status != http.StatusOK {
 		w.WriteHeader(status)
 		return

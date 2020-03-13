@@ -52,7 +52,7 @@ func (*TargetMock) AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.Ca
 	return
 }
 func (*TargetMock) RebalanceInfo() RebalanceInfo {
-	return RebalanceInfo{IsRebalancing: false, GlobalRebID: 0}
+	return RebalanceInfo{IsRebalancing: false, RebID: 0}
 }
 func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int) {
 	return nil, http.StatusOK

@@ -101,7 +101,7 @@ type (
 	}
 
 	TargetStatus struct {
-		GlobalRebalanceStats *RebalanceTargetStats `json:"rebalance_stats,omitempty"`
+		RebalanceStats *RebalanceTargetStats `json:"rebalance_stats,omitempty"`
 	}
 
 	DaemonStatus struct {

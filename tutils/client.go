@@ -929,10 +929,10 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 	}
 }
 
-// Waits for both local and global rebalances to complete
+// Waits for both resilver and rebalance to complete.
 // If they were not started, this function treats them as completed
 // and returns. If timeout set, if any of rebalances doesn't complete before timeout
-// the function ends with fatal
+// the function ends with fatal.
 func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeouts ...time.Duration) {
 	var (
 		timeout time.Duration
@@ -948,11 +948,11 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	Logf("waiting for rebalance to complete (timeout: %v)...\n", timeout)
+	Logf("waiting for rebalance and resilver to complete (timeout: %v)...\n", timeout)
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActGlobalReb, Timeout: timeout}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: timeout}
 		err := api.WaitForXaction(baseParams, xactArgs)
 		if err != nil {
 			errCh <- err
@@ -961,7 +961,7 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActLocalReb, Timeout: timeout}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, Timeout: timeout}
 		err := api.WaitForXaction(baseParams, xactArgs)
 		if err != nil {
 			errCh <- err

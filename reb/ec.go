@@ -56,7 +56,7 @@ import (
 // 11. 'broken' list is sorted by Bck/Objname to have on all targets
 //     determined order.
 // 12. First, 'local repair' list is processed and all CTs are moved to correct mpath.
-// 13. Next the rebalance proceeds with the next stage (rebStageECGlobRepair)
+// 13. Next the rebalance proceeds with the next stage (rebStageECRepair)
 //     and wait for all other nodes.
 // 14. To minimize memory/GC load, the 'broken' list is processed in batches.
 //     At this moment a batch size is 8 objects.
@@ -381,7 +381,7 @@ func (ack *ackCT) clear(mm *memsys.MMSA) {
 // Merge given CT with already existing CTs of an object.
 // It checks if the CT is unique(in case of the object is erasure coded),
 // and the CT's info about object matches previously found CTs.
-func (rr *globalCTList) addCT(md *globArgs, ct *rebCT, tgt cluster.Target) error {
+func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error {
 	bckList := rr.ais
 	if cmn.IsProviderCloud(ct.Bck, false /*acceptAnon*/) {
 		bckList = rr.cloud
@@ -495,8 +495,8 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 	var (
 		req = pushReq{
 			daemonID: reb.t.Snode().ID(),
-			stage:    rebStageECGlobRepair,
-			rebID:    reb.globRebID.Load(),
+			stage:    rebStageECRepair,
+			rebID:    reb.rebID.Load(),
 			md:       ct.meta,
 		}
 		mm  = reb.t.GetSmallMMSA()
@@ -556,8 +556,8 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 		newMeta = *ct.meta // copy of meta (flat struct of primitive types)
 		req     = pushReq{
 			daemonID: reb.t.Snode().ID(),
-			stage:    rebStageECGlobRepair,
-			rebID:    reb.globRebID.Load(),
+			stage:    rebStageECRepair,
+			rebID:    reb.rebID.Load(),
 			md:       &newMeta,
 		}
 		size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
@@ -725,7 +725,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	if !waitRebuild || sliceID == 0 {
 		if err := reb.saveCTToDisk(waitFor.sgl, req, hdr); err != nil {
 			glog.Errorf("failed to save CT %d of %s: %v", sliceID, hdr.ObjName, err)
-			reb.abortGlobal()
+			reb.abortRebalance()
 		}
 	}
 
@@ -770,13 +770,13 @@ func (reb *Manager) recvECData(hdr transport.Header, unpacker *cmn.ByteUnpack, r
 		return
 	}
 
-	if req.rebID != reb.globRebID.Load() {
+	if req.rebID != reb.rebID.Load() {
 		glog.Warningf("local node has not started or already has finished rebalancing")
 		return
 	}
 
 	// a remote target sent CT
-	if req.stage == rebStageECGlobRepair {
+	if req.stage == rebStageECRepair {
 		if err := reb.receiveCT(req, hdr, reader); err != nil {
 			glog.Errorf("failed to receive CT for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 			return
@@ -810,7 +810,7 @@ func (reb *Manager) recvECData(hdr transport.Header, unpacker *cmn.ByteUnpack, r
 }
 
 // Build a list buckets with their objects from a flat list of all CTs
-func (reb *Manager) mergeCTs(md *globArgs) *globalCTList {
+func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 	res := &globalCTList{
 		ais:   make(map[string]*rebBck),
 		cloud: make(map[string]*rebBck),
@@ -828,7 +828,7 @@ func (reb *Manager) mergeCTs(md *globArgs) *globalCTList {
 			if ct.SliceID != 0 && local {
 				b := cluster.NewBckEmbed(ct.Bck)
 				if err := b.Init(reb.t.GetBowner(), reb.t.Snode()); err != nil {
-					reb.abortGlobal()
+					reb.abortRebalance()
 					return nil
 				}
 				t, err := cluster.HrwTarget(b.MakeUname(ct.Objname), md.smap)
@@ -856,7 +856,7 @@ func (reb *Manager) mergeCTs(md *globArgs) *globalCTList {
 // Find objects that have either missing or misplaced parts. If a part is a
 // slice or replica (not the "default" object) and mpath is correct the object
 // is not considered as broken one even if its target is not in HRW list
-func (reb *Manager) detectBroken(md *globArgs, res *globalCTList) {
+func (reb *Manager) detectBroken(md *rebArgs, res *globalCTList) {
 	reb.ec.broken = make([]*rebObject, 0)
 	bowner := reb.t.GetBowner()
 	bmd := bowner.Get()
@@ -929,7 +929,7 @@ func (reb *Manager) detectBroken(md *globArgs, res *globalCTList) {
 }
 
 // merge, sort, and detect what to fix and how
-func (reb *Manager) checkCTs(md *globArgs) {
+func (reb *Manager) checkCTs(md *rebArgs) {
 	cts := reb.mergeCTs(md)
 	if cts == nil {
 		return
@@ -1076,16 +1076,16 @@ func (reb *Manager) runEC() {
 }
 
 // send collected CTs to all targets with retry (to assemble the entire namespace)
-func (reb *Manager) exchange(md *globArgs) error {
+func (reb *Manager) exchange(md *rebArgs) error {
 	const (
 		retries = 3               // number of retries to send collected CT info
 		sleep   = 5 * time.Second // delay between retries
 	)
 	var (
-		globRebID = reb.globRebID.Load()
-		sendTo    = make(cluster.Nodes, 0, len(md.smap.Tmap))
-		failed    = make(cluster.Nodes, 0, len(md.smap.Tmap))
-		emptyCT   = make([]*rebCT, 0)
+		rebID   = reb.rebID.Load()
+		sendTo  = make(cluster.Nodes, 0, len(md.smap.Tmap))
+		failed  = make(cluster.Nodes, 0, len(md.smap.Tmap))
+		emptyCT = make([]*rebCT, 0)
 	)
 	for _, node := range md.smap.Tmap {
 		if node.ID() == reb.t.Snode().ID() {
@@ -1101,7 +1101,7 @@ func (reb *Manager) exchange(md *globArgs) error {
 		req = pushReq{
 			daemonID: reb.t.Snode().ID(),
 			stage:    rebStageECNamespace,
-			rebID:    globRebID,
+			rebID:    rebID,
 		}
 		body   = cmn.MustMarshal(cts)
 		opaque = req.NewPack(nil)
@@ -1114,7 +1114,7 @@ func (reb *Manager) exchange(md *globArgs) error {
 		failed = failed[:0]
 		for _, node := range sendTo {
 			if reb.xact().Aborted() {
-				return fmt.Errorf("%d: aborted", globRebID)
+				return cmn.NewAbortedError("exchange")
 			}
 			rd := cmn.NewByteHandle(body)
 			if err := reb.streams.Send(transport.Obj{Hdr: hdr}, rd, node); err != nil {
@@ -1136,7 +1136,7 @@ func (reb *Manager) exchange(md *globArgs) error {
 	return fmt.Errorf("could not send data to %d nodes", len(failed))
 }
 
-func (reb *Manager) rebalanceLocalSlice(fromFQN, toFQN string, buf []byte) error {
+func (reb *Manager) resilverSlice(fromFQN, toFQN string, buf []byte) error {
 	if _, _, err := cmn.CopyFile(fromFQN, toFQN, buf, false); err != nil {
 		reb.t.FSHC(err, fromFQN)
 		reb.t.FSHC(err, toFQN)
@@ -1148,7 +1148,7 @@ func (reb *Manager) rebalanceLocalSlice(fromFQN, toFQN string, buf []byte) error
 	return nil
 }
 
-func (reb *Manager) rebalanceLocalObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string, buf []byte) error {
+func (reb *Manager) resilverObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string, buf []byte) error {
 	lom := &cluster.LOM{T: reb.t, FQN: fromFQN}
 	err := lom.Init(fromMpath.Bck)
 	if err == nil {
@@ -1175,7 +1175,7 @@ func (reb *Manager) rebalanceLocalObject(fromMpath fs.ParsedFQN, fromFQN, toFQN 
 }
 
 // Moves local misplaced CT to correct mpath
-func (reb *Manager) rebalanceLocal() error {
+func (reb *Manager) resilverCT() error {
 	buf, slab := reb.t.GetMMSA().Alloc()
 	defer slab.Free(buf)
 	for _, act := range reb.ec.localActions {
@@ -1200,7 +1200,7 @@ func (reb *Manager) rebalanceLocal() error {
 
 		// slice case
 		if act.SliceID != 0 {
-			if err := reb.rebalanceLocalSlice(act.realFQN, act.hrwFQN, buf); err != nil {
+			if err := reb.resilverSlice(act.realFQN, act.hrwFQN, buf); err != nil {
 				if rmErr := os.Remove(metaDstFQN); rmErr != nil {
 					glog.Errorf("error cleaning up %q: %v", metaDstFQN, rmErr)
 				}
@@ -1210,7 +1210,7 @@ func (reb *Manager) rebalanceLocal() error {
 		}
 
 		// object/replica case
-		if err := reb.rebalanceLocalObject(mpathSrc, act.realFQN, act.hrwFQN, buf); err != nil {
+		if err := reb.resilverObject(mpathSrc, act.realFQN, act.hrwFQN, buf); err != nil {
 			if rmErr := os.Remove(metaDstFQN); rmErr != nil {
 				glog.Errorf("error cleaning up %q: %v", metaDstFQN, rmErr)
 			}
@@ -1222,7 +1222,7 @@ func (reb *Manager) rebalanceLocal() error {
 		}
 	}
 
-	reb.changeStage(rebStageECGlobRepair, 0)
+	reb.changeStage(rebStageECRepair, 0)
 	return nil
 }
 
@@ -1374,7 +1374,7 @@ func (reb *Manager) needsReplica(obj *rebObject) bool {
 
 // Read CT from local drive and send to another target.
 // If destination is not defined the target sends its data to "default by HRW" target
-func (reb *Manager) sendLocalData(md *globArgs, obj *rebObject, si ...*cluster.Snode) error {
+func (reb *Manager) sendLocalData(md *rebArgs, obj *rebObject, si ...*cluster.Snode) error {
 	reb.laterx.Store(true)
 	ct, ok := obj.locCT[reb.t.Snode().ID()]
 	cmn.Assert(ok)
@@ -1453,7 +1453,7 @@ func (reb *Manager) firstEmptyTgt(obj *rebObject) *cluster.Snode {
 	return nil
 }
 
-func (reb *Manager) allCTReceived(_ *globArgs) bool {
+func (reb *Manager) allCTReceived(_ *rebArgs) bool {
 	for {
 		if reb.xact().Aborted() {
 			return false
@@ -1490,7 +1490,7 @@ func (reb *Manager) allCTReceived(_ *globArgs) bool {
 	return reb.ec.waiter.waitFor.Load() == 0 && reb.ec.waiter.toRebuild.Load() == 0
 }
 
-func (reb *Manager) allNodesCompletedBatch(md *globArgs) bool {
+func (reb *Manager) allNodesCompletedBatch(md *rebArgs) bool {
 	cnt := 0
 	batchID := reb.stages.currBatch.Load()
 	reb.stages.mtx.Lock()
@@ -1509,7 +1509,7 @@ func (reb *Manager) allNodesCompletedBatch(md *globArgs) bool {
 	return cnt == len(smap)
 }
 
-func (reb *Manager) waitForFullObject(md *globArgs, obj *rebObject, moveLocalSlice bool) error {
+func (reb *Manager) waitForFullObject(md *rebArgs, obj *rebObject, moveLocalSlice bool) error {
 	if moveLocalSlice {
 		// Default target has a slice, so it must be sent to another target
 		// before receiving a full object from some other target
@@ -1566,10 +1566,10 @@ func (reb *Manager) restoreReplicas(obj *rebObject) (err error) {
 	return nil
 }
 
-func (reb *Manager) rebalanceObject(md *globArgs, obj *rebObject) (err error) {
+func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 	// Case #1: this target does not have to do anything
 	if reb.shouldSkipObj(obj) {
-		if bool(glog.FastV(4, glog.SmoduleReb)) {
+		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("SKIPPING %s", obj.uid)
 		}
 		return nil
@@ -1636,7 +1636,7 @@ func (reb *Manager) rebalanceObject(md *globArgs, obj *rebObject) (err error) {
 	cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
 		fmt.Sprintf("%s%s/%s: isMain %t - mainHasSome %t - mainID %d",
 			reb.t.Snode(), obj.bck, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID))
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("rebuilding slices of %s and send them", obj.objName)
 	}
 	return reb.rebuildFromDisk(obj)
@@ -1649,7 +1649,7 @@ func (reb *Manager) cleanupBatch() {
 }
 
 // Wait for all targets to finish the current batch and then free allocated resources
-func (reb *Manager) finalizeBatch(md *globArgs) error {
+func (reb *Manager) finalizeBatch(md *rebArgs) error {
 	// First, wait for all slices the local target wants to receive
 	maxWait := md.config.Rebalance.Quiesce
 	if aborted := reb.waitQuiesce(md, maxWait, reb.allCTReceived); aborted {
@@ -1677,8 +1677,7 @@ func (reb *Manager) finalizeBatch(md *globArgs) error {
 	return nil
 }
 
-func (reb *Manager) tryRetransmit(md *globArgs, ct *retransmitCT,
-	wg *sync.WaitGroup, cnt *atomic.Int32) {
+func (reb *Manager) tryRetransmit(md *rebArgs, ct *retransmitCT, wg *sync.WaitGroup, cnt *atomic.Int32) {
 	defer wg.Done()
 	si := md.smap.Tmap[ct.daemonID]
 	_, err := ec.RequestECMeta(ct.header.Bck, ct.header.ObjName, si)
@@ -1707,7 +1706,7 @@ func (reb *Manager) tryRetransmit(md *globArgs, ct *retransmitCT,
 // Check the list of sent CTs and resent ones that have not been responded.
 // All targets are checked in parallel for better performance
 // Returns the number of resent CTs
-func (reb *Manager) retransmitEC(md *globArgs) int {
+func (reb *Manager) retransmitEC(md *rebArgs) int {
 	var (
 		counter = atomic.NewInt32(0)
 		wg      = &sync.WaitGroup{}
@@ -1734,14 +1733,14 @@ func (reb *Manager) retransmitEC(md *globArgs) int {
 	return int(counter.Load())
 }
 
-func (reb *Manager) allAckReceived(_ *globArgs) bool {
+func (reb *Manager) allAckReceived(_ *rebArgs) bool {
 	if reb.xact().Aborted() {
 		return false
 	}
 	return reb.ec.ackCTs.waiting() == 0
 }
 
-func (reb *Manager) waitECAck(md *globArgs) {
+func (reb *Manager) waitECAck(md *rebArgs) {
 	logHdr := reb.logHdr(md)
 	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
 
@@ -1798,7 +1797,7 @@ func (reb *Manager) waitECAck(md *globArgs) {
 }
 
 // Rebalances the current batch of broken objects
-func (reb *Manager) rebalanceBatch(md *globArgs, batchCurr int64) error {
+func (reb *Manager) rebalanceBatch(md *rebArgs, batchCurr int64) error {
 	batchEnd := cmn.Min(int(batchCurr)+ecRebBatchSize, len(reb.ec.broken))
 	for objIdx := int(batchCurr); objIdx < batchEnd; objIdx++ {
 		if reb.xact().Aborted() {
@@ -1819,7 +1818,7 @@ func (reb *Manager) rebalanceBatch(md *globArgs, batchCurr int64) error {
 }
 
 // Does cluster-wide rebalance
-func (reb *Manager) rebalanceGlobal(md *globArgs) (err error) {
+func (reb *Manager) rebalance(md *rebArgs) (err error) {
 	batchCurr := int64(0)
 	batchLast := int64(len(reb.ec.broken) - 1)
 	reb.stages.currBatch.Store(batchCurr)
@@ -2274,7 +2273,7 @@ func (reb *Manager) rebuildAndSend(obj *rebObject, slices []*waitCT) error {
 
 // Resends any CTs that was sent to a target but the destination has not
 // received it (no ACK and the destination does not have the CT yet)
-func (reb *Manager) resendCT(md *globArgs, ct *retransmitCT) {
+func (reb *Manager) resendCT(md *rebArgs, ct *retransmitCT) {
 	var err error
 	si := md.smap.Tmap[ct.daemonID]
 	reb.ec.onAir.Inc()

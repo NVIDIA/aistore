@@ -251,7 +251,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [AIS Buckets: definition, operations, properties](docs/bucket.md#bucket)
 - [Statistics, Collected Metrics, Visualization](docs/metrics.md)
 - [Performance: Tuning and Testing](docs/performance.md)
-- [Cluster-wide Rebalancing](docs/rebalance.md)
+- [Rebalance](docs/rebalance.md)
 - [Storage Services](docs/storage_svcs.md)
 - [Extended Actions](xaction/README.md)
 - [Integrated Internet Downloader](downloader/README.md)

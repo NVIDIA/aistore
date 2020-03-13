@@ -87,8 +87,8 @@ import (
 //	  data and for restoring the object becomes damaged - is determined by
 //	  HrwTarget algorithm. A proxy delegates object GET request to it.
 // 2. If the main target has the original object, it sends the data back
-//    Otherwise it tries to look up it inside other mountpaths(if local rebalance
-//	  is running) or on remote targets(if global rebalance is running).
+//    Otherwise it tries to look up it inside other mountpaths (if resilver
+//	  is running) or on remote targets (if rebalance is running).
 // 3. If everything fails and EC is enabled for the bucket, the main target
 //	  initiates object restoration process:
 //    - First, the main target requests for object's metafile from all targets

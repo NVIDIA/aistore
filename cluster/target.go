@@ -74,10 +74,10 @@ type Target interface {
 
 type RebalanceInfo struct {
 	IsRebalancing bool
-	GlobalRebID   int64
+	RebID         int64
 }
 
 type RebManager interface {
-	RunLocalReb(skipMisplaced bool, bucket ...string)
-	RunGlobalReb(smap *Smap, rebID int64, bucket ...string)
+	RunResilver(skipMisplaced bool, bucket ...string)
+	RunRebalance(smap *Smap, rebID int64, bucket ...string)
 }

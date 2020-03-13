@@ -20,7 +20,7 @@ import (
 )
 
 type (
-	localJogger struct {
+	resilverJogger struct {
 		joggerBase
 		slab              *memsys.Slab
 		buf               []byte
@@ -29,19 +29,19 @@ type (
 )
 
 // TODO: support non-object content types
-func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
+func (reb *Manager) RunResilver(skipGlobMisplaced bool, buckets ...string) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()
 		cfg               = cmn.GCO.Get()
-		err               = putMarker(cmn.ActLocalReb)
+		err               = putMarker(cmn.ActResilver)
 		bucket            string
 		wg                = &sync.WaitGroup{}
 	)
 	if err != nil {
-		glog.Errorln("Failed to create local rebalance marker", err)
+		glog.Errorln("failed to create resilver marker", err)
 	}
 
-	xreb := xaction.Registry.RenewLocalReb()
+	xreb := xaction.Registry.RenewResilver()
 	defer xreb.MarkDone()
 
 	if len(buckets) > 0 {
@@ -55,7 +55,7 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	for _, mpathInfo := range availablePaths {
 		var (
 			bck    = cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-			jogger = &localJogger{
+			jogger = &resilverJogger{
 				joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
 				slab:              slab,
 				skipGlobMisplaced: skipGlobMisplaced,
@@ -72,7 +72,7 @@ func (reb *Manager) RunLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	for _, mpathInfo := range availablePaths {
 		var (
 			bck    = cmn.Bck{Name: bucket, Provider: cfg.Cloud.Provider, Ns: cfg.Cloud.Ns}
-			jogger = &localJogger{
+			jogger = &resilverJogger{
 				joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
 				slab:              slab,
 				skipGlobMisplaced: skipGlobMisplaced,
@@ -87,7 +87,7 @@ wait:
 	wg.Wait()
 
 	if !xreb.Aborted() {
-		if err := removeMarker(cmn.ActLocalReb); err != nil {
+		if err := removeMarker(cmn.ActResilver); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode(), err)
 		}
 	}
@@ -96,10 +96,10 @@ wait:
 }
 
 //
-// localJogger
+// resilverJogger
 //
 
-func (rj *localJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
+func (rj *resilverJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 	// the jogger is running in separate goroutine, so use defer to be
 	// sure that `Done` is called even if the jogger crashes to avoid hang up
 	defer rj.wg.Done()
@@ -121,10 +121,10 @@ func (rj *localJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 	rj.slab.Free(rj.buf)
 }
 
-// Copies a slice and its metafile(if exists) to the corrent mpath. At the
+// Copies a slice and its metafile (if exists) to the current mpath. At the
 // end does proper cleanup: removes ether source files(on success), or
 // destination files(on copy failure)
-func (rj *localJogger) moveSlice(fqn string, ct *cluster.CT) {
+func (rj *resilverJogger) moveSlice(fqn string, ct *cluster.CT) {
 	uname := ct.Bck().MakeUname(ct.ObjName())
 	destMpath, _, err := cluster.HrwMpath(uname)
 	if err != nil {
@@ -145,25 +145,25 @@ func (rj *localJogger) moveSlice(fqn string, ct *cluster.CT) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("local rebalance moving %q -> %q", fqn, destFQN)
+		glog.Infof("resilver moving %q -> %q", fqn, destFQN)
 	}
 	if _, _, err = cmn.CopyFile(fqn, destFQN, rj.buf, false); err != nil {
-		glog.Errorf("Failed to copy %q -> %q: %v. Rolling back", fqn, destFQN, err)
+		glog.Errorf("failed to copy %q -> %q: %v. Rolling back", fqn, destFQN, err)
 		if err = os.Remove(destMetaFQN); err != nil {
-			glog.Warningf("Failed to cleanup metafile copy %q: %v", destMetaFQN, err)
+			glog.Warningf("failed to cleanup metafile copy %q: %v", destMetaFQN, err)
 		}
 	}
 	errMeta := os.Remove(srcMetaFQN)
 	errSlice := os.Remove(fqn)
 	if errMeta != nil || errSlice != nil {
-		glog.Warningf("Failed to cleanup %q: %v, %v", fqn, errSlice, errMeta)
+		glog.Warningf("failed to cleanup %q: %v, %v", fqn, errSlice, errMeta)
 	}
 }
 
 // Copies EC metafile to correct mpath. It returns FQNs of the source and
 // destination for a caller to do proper cleanup. Empty values means: either
 // the source FQN does not exist(err==nil), or copying failed
-func (rj *localJogger) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo) (
+func (rj *resilverJogger) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo) (
 	string, string, error) {
 	src := srcMpath.MakePathFQN(ct.Bck().Bck, ec.MetaType, ct.ObjName())
 	// If metafile does not exist it may mean that EC has not processed the
@@ -183,10 +183,10 @@ func (rj *localJogger) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.Mountpa
 	return "", "", err
 }
 
-// Copies an object and its metafile(if exists) to the corrent mpath. At the
+// Copies an object and its metafile (if exists) to the resilver mpath. At the
 // end does proper cleanup: removes ether source files(on success), or
 // destination files(on copy failure)
-func (rj *localJogger) moveObject(fqn string, ct *cluster.CT) {
+func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
 	var (
 		t                        = rj.m.t
 		lom                      = &cluster.LOM{T: t, FQN: fqn}
@@ -247,7 +247,7 @@ func (rj *localJogger) moveObject(fqn string, ct *cluster.CT) {
 	lom.Unlock(true)
 }
 
-func (rj *localJogger) walk(fqn string, de fs.DirEntry) (err error) {
+func (rj *resilverJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	var t = rj.m.t
 	if rj.xreb.Aborted() {
 		return cmn.NewAbortedErrorDetails("traversal", rj.xreb.String())

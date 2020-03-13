@@ -359,21 +359,21 @@ func (r *FastRen) Description() string {
 }
 func (r *FastRen) IsMountpathXact() bool { return false }
 
-func (r *FastRen) Run(waiter *sync.WaitGroup, globRebID int64) {
+func (r *FastRen) Run(waiter *sync.WaitGroup, rebID int64) {
 	var (
-		wg               = &sync.WaitGroup{}
-		gbucket, lbucket = r.bckTo.Name, r.bckTo.Name // scoping
+		wg                              = &sync.WaitGroup{}
+		rebalanceBucket, resilverBucket = r.bckTo.Name, r.bckTo.Name // scoping
 	)
 
 	glog.Infoln(r.String(), r.bckFrom, "=>", r.bckTo)
 
-	if Registry.DoAbort(cmn.ActLocalReb, nil) {
-		glog.Infof("%s: restarting local rebalance upon rename...", r)
-		lbucket = ""
+	if Registry.DoAbort(cmn.ActResilver, nil) {
+		glog.Infof("%s: restarting resilver upon rename...", r)
+		resilverBucket = ""
 	}
-	if Registry.DoAbort(cmn.ActGlobalReb, nil) {
-		glog.Infof("%s: restarting global rebalance upon rename...", r)
-		gbucket = ""
+	if Registry.DoAbort(cmn.ActRebalance, nil) {
+		glog.Infof("%s: restarting rebalance upon rename...", r)
+		rebalanceBucket = ""
 	}
 
 	waiter.Done() // notify the waiter that we are ready to start
@@ -381,10 +381,10 @@ func (r *FastRen) Run(waiter *sync.WaitGroup, globRebID int64) {
 	// run in parallel
 	wg.Add(1)
 	go func() {
-		r.rebManager.RunLocalReb(true /*skipGlobMisplaced*/, lbucket)
+		r.rebManager.RunResilver(true /*skipGlobMisplaced*/, resilverBucket)
 		wg.Done()
 	}()
-	r.rebManager.RunGlobalReb(r.t.GetSowner().Get(), globRebID, gbucket)
+	r.rebManager.RunRebalance(r.t.GetSowner().Get(), rebID, rebalanceBucket)
 	wg.Wait()
 
 	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD

@@ -87,7 +87,7 @@ type (
 		BMDVersion  int64  `json:"bmdversion,string"`
 		SmapVersion int64  `json:"smapversion,string"`
 		NewDaemonID string `json:"newdaemonid"` // used when a node joins cluster
-		GlobRebID   int64  `json:"glob_reb_id,string"`
+		RebID       int64  `json:"reb_id,string"`
 	}
 
 	// http server and http runner (common for proxy and target)
@@ -953,7 +953,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		s           string
 		smap        = h.owner.smap.get()
 		curVer      = smap.version()
-		isManualReb = msgInt.Action == cmn.ActGlobalReb && msgInt.Value != nil
+		isManualReb = msgInt.Action == cmn.ActRebalance && msgInt.Value != nil
 	)
 	if newSmap.version() == curVer && !isManualReb {
 		newSmap = nil
@@ -1116,7 +1116,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	query url.Values, keepalive bool) (res callResult) {
 	req := targetRegMeta{SI: h.si}
 	if h.si.IsTarget() && !keepalive {
-		aborted, running := reb.IsRebalancing(cmn.ActGlobalReb)
+		aborted, running := reb.IsRebalancing(cmn.ActRebalance)
 		req.BMD = h.owner.bmd.get()
 		req.Smap = h.owner.smap.get()
 		req.RebAborted = !running && aborted

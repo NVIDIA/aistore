@@ -43,7 +43,7 @@ const (
 	subcmdSmap      = cmn.GetWhatSmap
 	subcmdDisk      = cmn.GetWhatDiskStats
 	subcmdConfig    = cmn.GetWhatConfig
-	subcmdRebalance = cmn.ActGlobalReb
+	subcmdRebalance = cmn.ActRebalance
 	subcmdBucket    = "bucket"
 	subcmdObject    = "object"
 	subcmdProps     = "props"

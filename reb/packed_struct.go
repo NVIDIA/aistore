@@ -22,18 +22,18 @@ const rebMsgKindSize = 1
 
 type (
 	regularAck struct {
-		globRebID int64
-		daemonID  string // sender's DaemonID
+		rebID    int64
+		daemonID string // sender's DaemonID
 	}
 	ecAck struct {
-		globRebID int64
-		daemonID  string // sender's DaemonID
-		sliceID   uint16
+		rebID    int64
+		daemonID string // sender's DaemonID
+		sliceID  uint16
 	}
 
 	// push notification struct - a target sends it when it enters `stage`
 	pushReq struct {
-		rebID    int64  // sender's global rebalance ID
+		rebID    int64  // sender's rebalance ID
 		daemonID string // sender's ID
 		batch    int    // batch when restoring
 		stage    uint32 // stage the sender has just reached
@@ -52,7 +52,7 @@ var (
 )
 
 func (rack *regularAck) Unpack(unpacker *cmn.ByteUnpack) (err error) {
-	if rack.globRebID, err = unpacker.ReadInt64(); err != nil {
+	if rack.rebID, err = unpacker.ReadInt64(); err != nil {
 		return
 	}
 	rack.daemonID, err = unpacker.ReadString()
@@ -60,7 +60,7 @@ func (rack *regularAck) Unpack(unpacker *cmn.ByteUnpack) (err error) {
 }
 
 func (rack *regularAck) Pack(packer *cmn.BytePack) {
-	packer.WriteInt64(rack.globRebID)
+	packer.WriteInt64(rack.rebID)
 	packer.WriteString(rack.daemonID)
 }
 
@@ -73,13 +73,13 @@ func (rack *regularAck) NewPack(mm *memsys.MMSA) []byte { // TODO: consider addi
 	return packer.Bytes()
 }
 
-// globRebID + length of DaemonID + Daemon
+// rebID + length of DaemonID + Daemon
 func (rack *regularAck) PackedSize() int {
 	return cmn.SizeofI64 + cmn.SizeofLen + len(rack.daemonID)
 }
 
 func (eack *ecAck) Unpack(unpacker *cmn.ByteUnpack) (err error) {
-	if eack.globRebID, err = unpacker.ReadInt64(); err != nil {
+	if eack.rebID, err = unpacker.ReadInt64(); err != nil {
 		return
 	}
 	if eack.sliceID, err = unpacker.ReadUint16(); err != nil {
@@ -90,7 +90,7 @@ func (eack *ecAck) Unpack(unpacker *cmn.ByteUnpack) (err error) {
 }
 
 func (eack *ecAck) Pack(packer *cmn.BytePack) {
-	packer.WriteInt64(eack.globRebID)
+	packer.WriteInt64(eack.rebID)
 	packer.WriteUint16(eack.sliceID)
 	packer.WriteString(eack.daemonID)
 }
@@ -104,7 +104,7 @@ func (eack *ecAck) NewPack(mm *memsys.MMSA) []byte {
 	return packer.Bytes()
 }
 
-// globRebID + sliceID + length of DaemonID + Daemon
+// rebID + sliceID + length of DaemonID + Daemon
 func (eack *ecAck) PackedSize() int {
 	return cmn.SizeofI64 + cmn.SizeofI16 + cmn.SizeofLen + len(eack.daemonID)
 }

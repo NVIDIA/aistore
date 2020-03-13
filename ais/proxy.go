@@ -70,7 +70,7 @@ type (
 		authn      *authManager
 		metasyncer *metasyncer
 		rproxy     reverseProxy
-		globRebID  int64
+		rebID      int64
 		startedUp  atomic.Bool
 		rebalance  atomic.Bool
 	}
@@ -182,14 +182,14 @@ func (p *proxyrunner) Run() error {
 }
 
 // NOTE: caller is responsible to take smapOwner lock
-func (p *proxyrunner) setGlobRebID(smap *smapX, msgInt *actionMsgInternal, inc bool) {
+func (p *proxyrunner) setRebID(smap *smapX, msgInt *actionMsgInternal, inc bool) {
 	ngid := smap.version() * 100
-	if inc && p.globRebID >= ngid {
-		p.globRebID++
+	if inc && p.rebID >= ngid {
+		p.rebID++
 	} else {
-		p.globRebID = ngid
+		p.rebID = ngid
 	}
-	msgInt.GlobRebID = p.globRebID
+	msgInt.RebID = p.rebID
 }
 
 func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (primaryURL string, status int, err error) {
@@ -1415,7 +1415,7 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 	// Commit
 	if msg.Action == cmn.ActRenameLB {
 		p.owner.smap.Lock()
-		p.setGlobRebID(smap, msgInt, true) // FIXME: race vs change in membership
+		p.setRebID(smap, msgInt, true) // FIXME: race vs change in membership
 		p.owner.smap.Unlock()
 		body = cmn.MustMarshal(msgInt)
 	}
@@ -2450,7 +2450,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 		},
 		func(clone *smapX) {
 			msgInt = p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
-			p.setGlobRebID(clone, msgInt, true)
+			p.setRebID(clone, msgInt, true)
 		},
 	)
 	cmn.AssertNoErr(err)
@@ -2827,7 +2827,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s := fmt.Sprintf("register %s, (keepalive, user, self, globReb)=(%t, %t, %t, %t)",
+	s := fmt.Sprintf("register %s, (keepalive, user, self, reb)=(%t, %t, %t, %t)",
 		nsi, keepalive, userRegister, selfRegister, regReq.RebAborted)
 	msg := &cmn.ActionMsg{Action: cmn.ActRegTarget}
 	if isProxy {
@@ -2908,7 +2908,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.owner.smap.put(clone)
 		p.owner.smap.Unlock()
 		if !isProxy && selfRegister {
-			glog.Infof("%s: joining %s (%s), globReb aborted %t", p.si, nsi, regReq.Smap, regReq.RebAborted)
+			glog.Infof("%s: joining %s (%s), reb aborted %t", p.si, nsi, regReq.Smap, regReq.RebAborted)
 			// CAS to avoid overwriting `true` with `false` by `Load+&&+Store`
 			p.rebalance.CAS(false, regReq.RebAborted)
 		}
@@ -2923,7 +2923,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	// Return current metadata to registering target
 	if !isProxy && selfRegister { // case: self-registering target
-		glog.Infof("%s: joining %s (%s), globReb aborted %t", p.si, nsi, regReq.Smap, regReq.RebAborted)
+		glog.Infof("%s: joining %s (%s), reb aborted %t", p.si, nsi, regReq.Smap, regReq.RebAborted)
 		bmd := p.owner.bmd.get()
 		meta := &targetRegMeta{smap, bmd, p.si, false}
 		body := cmn.MustMarshal(meta)
@@ -2950,7 +2950,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			},
 			func(clone *smapX) {
 				msgInt = p.newActionMsgInternal(msg, clone, nil)
-				p.setGlobRebID(clone, msgInt, true)
+				p.setRebID(clone, msgInt, true)
 			},
 		)
 		if err != nil {
@@ -3037,7 +3037,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	msgInt := p.newActionMsgInternal(msg, clone, nil)
-	p.setGlobRebID(clone, msgInt, true)
+	p.setRebID(clone, msgInt, true)
 	p.metasyncer.sync(true, revsPair{clone, msgInt})
 }
 
@@ -3100,7 +3100,7 @@ func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err 
 // '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
 // '{"action": cmn.ActXactStart}' /v1/cluster
 // '{"action": cmn.ActXactStop}' /v1/cluster
-// '{"action": cmn.ActGlobalReb}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
+// '{"action": cmn.ActRebalance}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -3146,8 +3146,8 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, "", nil) {
 		return
 	}
-	if msg.Action == cmn.ActXactStart && msg.Name /*kind*/ == cmn.ActGlobalReb {
-		msg.Action = cmn.ActGlobalReb
+	if msg.Action == cmn.ActXactStart && msg.Name /*kind*/ == cmn.ActRebalance {
+		msg.Action = cmn.ActRebalance
 	}
 	// handle the action
 	switch msg.Action {
@@ -3190,11 +3190,11 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		p.bcastTo(args)
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-	case cmn.ActGlobalReb:
+	case cmn.ActRebalance:
 		p.owner.smap.Lock()
 		smap := p.owner.smap.get()
 		msgInt := p.newActionMsgInternal(msg, smap, nil)
-		p.setGlobRebID(smap, msgInt, true)
+		p.setRebID(smap, msgInt, true)
 		p.owner.smap.Unlock()
 		p.metasyncer.sync(false, revsPair{smap, msgInt})
 	case cmn.ActXactStart, cmn.ActXactStop:

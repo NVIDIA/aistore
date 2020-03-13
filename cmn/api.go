@@ -41,8 +41,8 @@ var XactType = XactKindType{
 	// global kinds
 	ActLRU:       XactTypeGlobal,
 	ActElection:  XactTypeGlobal,
-	ActLocalReb:  XactTypeGlobal,
-	ActGlobalReb: XactTypeGlobal,
+	ActResilver:  XactTypeGlobal,
+	ActRebalance: XactTypeGlobal,
 	ActDownload:  XactTypeGlobal,
 
 	// bucket's kinds

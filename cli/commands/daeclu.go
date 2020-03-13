@@ -276,19 +276,19 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	return daemonID, nvs, nil
 }
 
-func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duration) error {
+func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duration) error {
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
-	// run until global rebalance is completed
-	xactArgs := api.XactReqArgs{Kind: cmn.ActGlobalReb, Latest: true}
+	// run until rebalance is completed
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Latest: true}
 	for {
 		rebStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)
 		if err != nil {
 			switch err := err.(type) {
 			case *cmn.HTTPError:
 				if err.Status == http.StatusNotFound {
-					fmt.Fprintln(c.App.Writer, "Global rebalance has not been started yet.")
+					fmt.Fprintln(c.App.Writer, "Rebalance has not been started yet.")
 					return nil
 				}
 				return err
@@ -309,7 +309,7 @@ func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.D
 		}
 		sort.Strings(sortedIDs)
 
-		fmt.Fprintln(tw, "DaemonID\tGlobalRebID\tObjRcv\tSizeRcv\tObjSent\tSizeSent\tStartTime\tEndTime\tAborted")
+		fmt.Fprintln(tw, "DaemonID\tRebID\tObjRcv\tSizeRcv\tObjSent\tSizeSent\tStartTime\tEndTime\tAborted")
 		fmt.Fprintln(tw, strings.Repeat("======\t", 9 /* num of columns */))
 		for _, daemonID := range sortedIDs {
 			st := rebStats[daemonID][0]
@@ -326,7 +326,7 @@ func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.D
 
 			fmt.Fprintf(tw,
 				"%s\t%d\t%d\t%s\t%d\t%s\t%s\t%s\t%t\n",
-				daemonID, extRebStats.GlobalRebID,
+				daemonID, extRebStats.RebID,
 				extRebStats.RxRebCount, cmn.B2S(extRebStats.RxRebSize, 2),
 				extRebStats.TxRebCount, cmn.B2S(extRebStats.TxRebSize, 2),
 				startTime, endTime, st.AbortedX,
@@ -335,7 +335,7 @@ func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.D
 		tw.Flush()
 
 		if rebStats.Finished() {
-			fmt.Fprintln(c.App.Writer, "\nGlobal rebalance has been completed.")
+			fmt.Fprintln(c.App.Writer, "\nRebalance has been completed.")
 			break
 		}
 

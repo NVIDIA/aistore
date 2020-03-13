@@ -52,13 +52,13 @@ The second argument is used to determine the bucket name if it is required.
 | `--active` | `bool` | If set, displays only running xactions | `false` |
 | `--verbose` `-v` | `bool` | If set, displays extended information about xactions where available | `false` |
 
-Certain extended actions have additional CLI. In particular, global rebalance stats can also be displayed using the following command:
+Certain extended actions have additional CLI. In particular, rebalance stats can also be displayed using the following command:
 
 `ais show rebalance`
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh [N]` | `string` | watch the global rebalance until it finishes or CTRL-C is pressed. Display the current stats every N seconds, where N ends with time suffix: s, m. If N is not defined it prints stats every 1 second | `1s` |
+| `--refresh [N]` | `string` | watch the rebalance until it finishes or CTRL-C is pressed. Display the current stats every N seconds, where N ends with time suffix: s, m. If N is not defined it prints stats every 1 second | `1s` |
 
 Output of this command differs from the generic xaction output.
 

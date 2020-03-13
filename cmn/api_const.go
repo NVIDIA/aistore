@@ -35,8 +35,8 @@ const (
 // ActionMsg.Action enum (includes xactions)
 const (
 	ActShutdown      = "shutdown"
-	ActGlobalReb     = "rebalance" // global cluster-wide rebalance
-	ActLocalReb      = "resilver"  // local rebalance aka resilver
+	ActRebalance     = "rebalance"
+	ActResilver      = "resilver"
 	ActLRU           = "lru"
 	ActSyncLB        = "synclb"
 	ActCreateLB      = "createlb"

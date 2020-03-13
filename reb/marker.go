@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	globRebMarker  = ".global_rebalancing"
-	localRebMarker = ".resilvering"
+	rebalanceMarker = ".rebalance_marker"
+	resilverMarker  = ".resilver_marker"
 )
 
 func MarkerExists(kind string) bool {
@@ -28,7 +28,7 @@ func MarkerExists(kind string) bool {
 }
 
 func IsRebalancing(kind string) (aborted, running bool) {
-	cmn.Assert(kind == cmn.ActGlobalReb || kind == cmn.ActLocalReb)
+	cmn.Assert(kind == cmn.ActRebalance || kind == cmn.ActResilver)
 	if MarkerExists(kind) {
 		aborted = true
 	}
@@ -46,10 +46,10 @@ func IsRebalancing(kind string) (aborted, running bool) {
 // persistent mark indicating rebalancing in progress
 func makeMarkerPath(path, kind string) (pm string) {
 	switch kind {
-	case cmn.ActLocalReb:
-		pm = filepath.Join(path, localRebMarker)
-	case cmn.ActGlobalReb:
-		pm = filepath.Join(path, globRebMarker)
+	case cmn.ActResilver:
+		pm = filepath.Join(path, resilverMarker)
+	case cmn.ActRebalance:
+		pm = filepath.Join(path, rebalanceMarker)
 	default:
 		cmn.Assert(false)
 	}
@@ -67,7 +67,7 @@ func putMarker(kind string) error {
 		break
 	}
 	if mpath == nil {
-		return errors.New("could not create rebalance marker: no mountpaths")
+		return errors.New("could not create resilver/rebalance marker: no mountpaths")
 	}
 
 	path := makeMarkerPath(mpath.Path, kind)

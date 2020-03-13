@@ -45,49 +45,49 @@ func (e *lruEntry) Get() cmn.Xact { return e.xact }
 func (e *lruEntry) preRenewHook(_ globalEntry) bool { return true }
 
 //
-// globalRebEntry
+// rebalanceEntry
 //
-type globalRebEntry struct {
+type rebalanceEntry struct {
 	baseGlobalEntry
-	xact        *GlobalReb
+	id          int64 // rebalance id
+	xact        *Rebalance
 	statRunner  *stats.Trunner
 	smapVersion int64
-	globRebID   int64
 }
 
-func (e *globalRebEntry) Start(id string, _ cmn.Bck) error {
-	xGlobalReb := &GlobalReb{
-		RebBase:     makeXactRebBase(id, cmn.ActGlobalReb),
+func (e *rebalanceEntry) Start(id string, _ cmn.Bck) error {
+	xreb := &Rebalance{
+		RebBase:     makeXactRebBase(id, cmn.ActRebalance),
 		SmapVersion: e.smapVersion,
 	}
-	xGlobalReb.XactBase.SetGID(e.globRebID)
-	e.xact = xGlobalReb
+	xreb.XactBase.SetGID(e.id)
+	e.xact = xreb
 	return nil
 }
-func (e *globalRebEntry) Kind() string  { return cmn.ActGlobalReb }
-func (e *globalRebEntry) Get() cmn.Xact { return e.xact }
+func (e *rebalanceEntry) Kind() string  { return cmn.ActRebalance }
+func (e *rebalanceEntry) Get() cmn.Xact { return e.xact }
 
-func (e *globalRebEntry) preRenewHook(previousEntry globalEntry) (keep bool) {
-	xGlobalReb := previousEntry.(*globalRebEntry).xact
-	if xGlobalReb.SmapVersion > e.smapVersion {
-		glog.Errorf("(reb: %s) Smap v%d is greater than v%d", xGlobalReb, xGlobalReb.SmapVersion, e.smapVersion)
+func (e *rebalanceEntry) preRenewHook(previousEntry globalEntry) (keep bool) {
+	xreb := previousEntry.(*rebalanceEntry).xact
+	if xreb.SmapVersion > e.smapVersion {
+		glog.Errorf("(reb: %s) Smap v%d is greater than v%d", xreb, xreb.SmapVersion, e.smapVersion)
 		keep = true
-	} else if xGlobalReb.SmapVersion == e.smapVersion {
+	} else if xreb.SmapVersion == e.smapVersion {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s already running, nothing to do", xGlobalReb)
+			glog.Infof("%s already running, nothing to do", xreb)
 		}
 		keep = true
 	}
 	return
 }
 
-func (e *globalRebEntry) postRenewHook(previousEntry globalEntry) {
-	xGlobalReb := previousEntry.(*globalRebEntry).xact
-	xGlobalReb.Abort()
-	xGlobalReb.WaitForFinish()
+func (e *rebalanceEntry) postRenewHook(previousEntry globalEntry) {
+	xreb := previousEntry.(*rebalanceEntry).xact
+	xreb.Abort()
+	xreb.WaitForFinish()
 }
 
-func (e *globalRebEntry) Stats(xact cmn.Xact) stats.XactStats {
+func (e *rebalanceEntry) Stats(xact cmn.Xact) stats.XactStats {
 	cmn.Assert(xact == e.xact)
 	rebStats := &stats.RebalanceTargetStats{BaseXactStats: *stats.NewXactStats(e.xact)}
 	rebStats.FillFromTrunner(e.statRunner)
@@ -95,7 +95,7 @@ func (e *globalRebEntry) Stats(xact cmn.Xact) stats.XactStats {
 }
 
 //
-// local|global reb helper
+// resilver|rebalance helper
 //
 func makeXactRebBase(id, kind string) RebBase {
 	wg := &sync.WaitGroup{}
@@ -107,27 +107,26 @@ func makeXactRebBase(id, kind string) RebBase {
 }
 
 //
-// localRebEntry
+// resilverEntry
 //
-type localRebEntry struct {
+type resilverEntry struct {
 	baseGlobalEntry
-	xact *LocalReb
+	xact *Resilver
 }
 
-func (e *localRebEntry) Start(id string, _ cmn.Bck) error {
-	xLocalReb := &LocalReb{
-		RebBase: makeXactRebBase(id, cmn.ActLocalReb),
+func (e *resilverEntry) Start(id string, _ cmn.Bck) error {
+	e.xact = &Resilver{
+		RebBase: makeXactRebBase(id, cmn.ActResilver),
 	}
-	e.xact = xLocalReb
 	return nil
 }
-func (e *localRebEntry) Get() cmn.Xact { return e.xact }
-func (e *localRebEntry) Kind() string  { return cmn.ActLocalReb }
+func (e *resilverEntry) Get() cmn.Xact { return e.xact }
+func (e *resilverEntry) Kind() string  { return cmn.ActResilver }
 
-func (e *localRebEntry) postRenewHook(previousEntry globalEntry) {
-	lRebXact := previousEntry.(*localRebEntry).xact
-	lRebXact.Abort()
-	lRebXact.WaitForFinish()
+func (e *resilverEntry) postRenewHook(previousEntry globalEntry) {
+	xresilver := previousEntry.(*resilverEntry).xact
+	xresilver.Abort()
+	xresilver.WaitForFinish()
 }
 
 //
@@ -139,10 +138,9 @@ type electionEntry struct {
 }
 
 func (e *electionEntry) Start(id string, _ cmn.Bck) error {
-	xele := &Election{
+	e.xact = &Election{
 		XactBase: *cmn.NewXactBase(id, cmn.ActElection),
 	}
-	e.xact = xele
 	return nil
 }
 func (e *electionEntry) Get() cmn.Xact { return e.xact }

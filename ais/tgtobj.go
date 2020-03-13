@@ -456,7 +456,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 		tsi, gfnNode     *cluster.Snode
 		smap             = goi.t.owner.smap.get()
 		tname            = goi.t.si.String()
-		aborted, running = reb.IsRebalancing(cmn.ActLocalReb)
+		aborted, running = reb.IsRebalancing(cmn.ActResilver)
 		gfnActive        = goi.t.gfn.local.active()
 		ecEnabled        = goi.lom.Bprops().EC.Enabled
 	)
@@ -481,7 +481,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= goi.t.owner.smap.Get().CountTargets()
 
 	// cluster-wide lookup ("get from neighbor")
-	aborted, running = reb.IsRebalancing(cmn.ActGlobalReb)
+	aborted, running = reb.IsRebalancing(cmn.ActRebalance)
 	if running {
 		doubleCheck = true
 	}
@@ -701,7 +701,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	}
 
 	// Update objects which were sent during GFN. Thanks to this we will not
-	// have to resend them in global rebalance. In case of race between rebalance
+	// have to resend them in rebalance. In case of race between rebalance
 	// and GFN, the former wins and it will result in double send.
 	if goi.isGFN {
 		goi.t.rebManager.FilterAdd([]byte(goi.lom.Uname()))

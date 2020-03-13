@@ -404,11 +404,11 @@ func calcCap(daemon *stats.DaemonStatus, option string) (total uint64) {
 }
 
 func fmtXactStatus(tStatus *stats.TargetStatus) string {
-	if tStatus == nil || tStatus.GlobalRebalanceStats == nil {
+	if tStatus == nil || tStatus.RebalanceStats == nil {
 		return "not started"
 	}
 
-	tStats := tStatus.GlobalRebalanceStats
+	tStats := tStatus.RebalanceStats
 	if tStats.Aborted() {
 		return fmt.Sprintf("aborted; %d objs moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
 	}

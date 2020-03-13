@@ -24,13 +24,13 @@ import (
 )
 
 type (
-	globalJogger struct {
+	rebalanceJogger struct {
 		joggerBase
 		smap *cluster.Smap
 		sema *cmn.DynSemaphore
 		ver  int64
 	}
-	globArgs struct {
+	rebArgs struct {
 		id        int64
 		smap      *cluster.Smap
 		config    *cmn.Config
@@ -40,7 +40,7 @@ type (
 	}
 )
 
-func (reb *Manager) globalRebPrecheck(md *globArgs) bool {
+func (reb *Manager) rebPrecheck(md *rebArgs) bool {
 	glog.FastV(4, glog.SmoduleReb).Infof("global reb (v%d) started precheck", md.id)
 	// get EC rebalancer ready
 	if md.ecUsed {
@@ -71,18 +71,18 @@ func (reb *Manager) globalRebPrecheck(md *globArgs) bool {
 	return true
 }
 
-func (reb *Manager) globalRebInit(md *globArgs, buckets ...string) bool {
+func (reb *Manager) rebInit(md *rebArgs, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
 	reb.stages.stage.Store(rebStageInit)
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("global reb (v%d) in %s state", md.id, stages[rebStageInit])
+		glog.Infof("rebalance (v%d) in %s state", md.id, stages[rebStageInit])
 	}
 	// It the only place that modifies `reb.xreb`. Since only single rebalance
 	// can be active at a time, we have to protect `xreb` from races just
 	// because `xreb` can be read by another goroutine: it is node health
-	// handler that reads GetGlobStatus. Using atomic pointer reads for only
+	// handler that reads `RebStatus`. Using atomic pointer reads for only
 	// two places looked overhead, so a separate mutex is used.
-	xact := xaction.Registry.RenewGlobalReb(md.smap.Version, md.id, reb.statRunner)
+	xact := xaction.Registry.RenewRebalance(md.smap.Version, md.id, reb.statRunner)
 	if xact == nil {
 		return false
 	}
@@ -103,14 +103,14 @@ func (reb *Manager) globalRebInit(md *globArgs, buckets ...string) bool {
 	}
 
 	// 4. create persistent mark
-	err := putMarker(cmn.ActGlobalReb)
+	err := putMarker(cmn.ActRebalance)
 	if err != nil {
 		glog.Errorf("Failed to create marker: %v", err)
 	}
 
 	// 5. ready - can receive objects
 	reb.smap.Store(unsafe.Pointer(md.smap))
-	reb.globRebID.Store(md.id)
+	reb.rebID.Store(md.id)
 	reb.stages.cleanup()
 	glog.Infof("%s: %s", reb.logHdr(md), reb.xact().String())
 
@@ -118,7 +118,7 @@ func (reb *Manager) globalRebInit(md *globArgs, buckets ...string) bool {
 }
 
 // look for local slices/replicas
-func (reb *Manager) buildECNamespace(md *globArgs) int {
+func (reb *Manager) buildECNamespace(md *rebArgs) int {
 	reb.runEC()
 	if reb.waitForPushReqs(md, rebStageECNamespace) {
 		return 0
@@ -137,7 +137,7 @@ func (reb *Manager) buildECNamespace(md *globArgs) int {
 //   3. In a perfect case, all push requests are successful and
 //		`rebStageECDetect` stage will be finished in no time without any
 //		data transfer
-func (reb *Manager) distributeECNamespace(md *globArgs) error {
+func (reb *Manager) distributeECNamespace(md *rebArgs) error {
 	const distributeTimeout = 5 * time.Minute
 	if err := reb.exchange(md); err != nil {
 		return err
@@ -153,40 +153,40 @@ func (reb *Manager) distributeECNamespace(md *globArgs) error {
 }
 
 // find out which objects are broken and how to fix them
-func (reb *Manager) generateECFixList(md *globArgs) {
+func (reb *Manager) generateECFixList(md *rebArgs) {
 	reb.checkCTs(md)
 	glog.Infof("number of objects misplaced locally: %d", len(reb.ec.localActions))
 	glog.Infof("number of objects to be reconstructed/resent: %d", len(reb.ec.broken))
 }
 
-func (reb *Manager) ecFixLocal(md *globArgs) error {
-	if err := reb.rebalanceLocal(); err != nil {
-		return fmt.Errorf("failed to rebalance local slices/objects: %v", err)
+func (reb *Manager) ecFixLocal(md *rebArgs) error {
+	if err := reb.resilverCT(); err != nil {
+		return fmt.Errorf("failed to resilver slices/objects: %v", err)
 	}
 
-	if cnt := reb.bcast(md, reb.waitECLocalReb); cnt != 0 {
-		return fmt.Errorf("%d targets failed to complete local rebalance", cnt)
+	if cnt := reb.bcast(md, reb.waitECResilver); cnt != 0 {
+		return fmt.Errorf("%d targets failed to complete resilver", cnt)
 	}
 	return nil
 }
 
-func (reb *Manager) ecFixGlobal(md *globArgs) error {
-	if err := reb.rebalanceGlobal(md); err != nil {
+func (reb *Manager) ecFixGlobal(md *rebArgs) error {
+	if err := reb.rebalance(md); err != nil {
 		if !reb.xact().Aborted() {
 			glog.Errorf("EC rebalance failed: %v", err)
-			reb.abortGlobal()
+			reb.abortRebalance()
 		}
 		return err
 	}
 
 	if cnt := reb.bcast(md, reb.waitECCleanup); cnt != 0 {
-		return fmt.Errorf("%d targets failed to complete local rebalance", cnt)
+		return fmt.Errorf("%d targets failed to complete resilver", cnt)
 	}
 	return nil
 }
 
 // when at least one bucket has EC enabled
-func (reb *Manager) globalRebRunEC(md *globArgs) error {
+func (reb *Manager) rebalanceRunEC(md *rebArgs) error {
 	// Collect all local slices
 	if cnt := reb.buildECNamespace(md); cnt != 0 {
 		return fmt.Errorf("%d targets failed to build namespace", cnt)
@@ -213,7 +213,7 @@ func (reb *Manager) globalRebRunEC(md *globArgs) error {
 }
 
 // when no bucket has EC enabled
-func (reb *Manager) globalRebRun(md *globArgs) error {
+func (reb *Manager) rebalanceRun(md *rebArgs) error {
 	var (
 		wg         = &sync.WaitGroup{}
 		ver        = md.smap.Version
@@ -222,8 +222,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	)
 	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
 	if reb.xact().Aborted() {
-		err := fmt.Errorf("%s: aborted", reb.logHdr(md))
-		return err
+		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
 	}
 	for _, mpathInfo := range md.paths {
 		var (
@@ -233,7 +232,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 		if multiplier > 1 {
 			sema = cmn.NewDynSemaphore(int(multiplier))
 		}
-		rl := &globalJogger{
+		rl := &rebalanceJogger{
 			joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase, wg: wg},
 			smap:       md.smap, sema: sema, ver: ver,
 		}
@@ -249,7 +248,7 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 			if multiplier > 1 {
 				sema = cmn.NewDynSemaphore(int(multiplier))
 			}
-			rc := &globalJogger{
+			rc := &rebalanceJogger{
 				joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase, wg: wg},
 				smap:       md.smap, sema: sema, ver: ver,
 			}
@@ -259,11 +258,10 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 	}
 	wg.Wait()
 	if reb.xact().Aborted() {
-		err := fmt.Errorf("%s: aborted", reb.logHdr(md))
-		return err
+		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("finished global rebalance walk (g%d)", md.id)
+		glog.Infof("finished rebalance walk (g%d)", md.id)
 	}
 	return nil
 }
@@ -273,20 +271,20 @@ func (reb *Manager) globalRebRun(md *globArgs) error {
 //    whether a bucket is erasure coded. No goroutine is used.
 // 2. Multi-bucket rebalance may start up to two rebalances in parallel and
 //    wait for all finishes.
-func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
+func (reb *Manager) rebSyncAndRun(md *rebArgs) error {
 	// 6. Capture stats, start mpath joggers TODO: currently supporting only fs.ObjectType (content-type)
 	reb.stages.stage.Store(rebStageTraverse)
 
 	// No EC-enabled buckets - run only regular rebalance
 	if !md.ecUsed {
 		glog.Infof("starting only regular rebalance (g%d)", md.id)
-		return reb.globalRebRun(md)
+		return reb.rebalanceRun(md)
 	}
 	// Single bucket is rebalancing and it is a bucket with EC enabled.
 	// Run only EC rebalance.
 	if md.singleBck {
 		glog.Infof("starting only EC rebalance (g%d) for a bucket", md.id)
-		return reb.globalRebRunEC(md)
+		return reb.rebalanceRunEC(md)
 	}
 
 	// In all other cases run both rebalances simultaneously
@@ -298,14 +296,14 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 	go func() {
 		defer wg.Done()
 		md.ecUsed = false
-		rebErr = reb.globalRebRun(md)
+		rebErr = reb.rebalanceRun(md)
 	}()
 
 	wg.Add(1)
 	glog.Infof("EC detected - starting EC rebalance (g%d)", md.id)
 	go func() {
 		defer wg.Done()
-		ecRebErr = reb.globalRebRunEC(&ecMD)
+		ecRebErr = reb.rebalanceRunEC(&ecMD)
 	}()
 	wg.Wait()
 
@@ -316,7 +314,7 @@ func (reb *Manager) globalRebSyncAndRun(md *globArgs) error {
 	return ecRebErr
 }
 
-func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
+func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 	reb.changeStage(rebStageWaitAck, 0)
 	logHdr := reb.logHdr(md)
 	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
@@ -400,7 +398,7 @@ func (reb *Manager) globalRebWaitAck(md *globArgs) (errCnt int) {
 // if `cb` returns true the wait loop interrupts immediately. It is used,
 // e.g., to wait for EC batch to finish: no need to wait until timeout if
 // all targets have sent push notification that they are done with the batch.
-func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func(md *globArgs) bool) (
+func (reb *Manager) waitQuiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) (
 	aborted bool) {
 	cmn.Assert(maxWait > 0)
 	sleep := md.config.Timeout.CplaneOperation
@@ -426,7 +424,7 @@ func (reb *Manager) waitQuiesce(md *globArgs, maxWait time.Duration, cb func(md 
 // Wait until cb returns `true` or times out. Waits forever if `maxWait` is
 // omitted. The latter case is useful when it is unclear how much to wait.
 // Return true is xaction was aborted during wait loop.
-func (reb *Manager) waitEvent(md *globArgs, cb func(md *globArgs) bool, maxWait ...time.Duration) bool {
+func (reb *Manager) waitEvent(md *rebArgs, cb func(md *rebArgs) bool, maxWait ...time.Duration) bool {
 	var (
 		sleep   = md.config.Timeout.CplaneOperation
 		waited  = time.Duration(0)
@@ -449,12 +447,12 @@ func (reb *Manager) waitEvent(md *globArgs, cb func(md *globArgs) bool, maxWait 
 	return aborted
 }
 
-func (reb *Manager) globalRebFini(md *globArgs) {
+func (reb *Manager) rebFini(md *rebArgs) {
 	// 10.5. keep at it... (can't close the streams as long as)
 	maxWait := md.config.Rebalance.Quiesce
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
-		if err := removeMarker(cmn.ActGlobalReb); err != nil {
+		if err := removeMarker(cmn.ActRebalance); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.logHdr(md), err)
 		}
 	}
@@ -468,7 +466,7 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 	}
 	{
 		status := &Status{}
-		reb.GetGlobStatus(status)
+		reb.RebStatus(status)
 		delta, err := jsoniter.MarshalIndent(&status.StatsDelta, "", " ")
 		if err == nil {
 			glog.Infoln(string(delta))
@@ -499,9 +497,9 @@ func (reb *Manager) globalRebFini(md *globArgs) {
 // 4. Regular rebalance do checks like `stage > rebStageTraverse` or
 //    `stage < rebStageWaitAck`. But since all EC stages are between
 //    `Traverse` and `WaitAck` regular rebalance does not notice stage changes.
-func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ...string) {
-	md := &globArgs{
-		id:        globRebID,
+func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, buckets ...string) {
+	md := &rebArgs{
+		id:        id,
 		smap:      smap,
 		config:    cmn.GCO.Get(),
 		singleBck: len(buckets) == 1,
@@ -519,10 +517,10 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 		md.ecUsed = props.EC.Enabled
 	}
 
-	if !reb.globalRebPrecheck(md) {
+	if !reb.rebPrecheck(md) {
 		return
 	}
-	if !reb.globalRebInit(md, buckets...) {
+	if !reb.rebInit(md, buckets...) {
 		return
 	}
 
@@ -532,8 +530,8 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 	defer gfn.Deactivate()
 
 	errCnt := 0
-	if err := reb.globalRebSyncAndRun(md); err == nil {
-		errCnt = reb.globalRebWaitAck(md)
+	if err := reb.rebSyncAndRun(md); err == nil {
+		errCnt = reb.rebWaitAck(md)
 	} else {
 		glog.Warning(err)
 	}
@@ -545,15 +543,15 @@ func (reb *Manager) RunGlobalReb(smap *cluster.Smap, globRebID int64, buckets ..
 	for errCnt != 0 && !reb.xact().Aborted() {
 		errCnt = reb.bcast(md, reb.waitFinExtended)
 	}
-	reb.globalRebFini(md)
+	reb.rebFini(md)
 }
 
-func (reb *Manager) GlobECDataStatus() (body []byte, status int) {
-	globStatus := &Status{}
-	reb.GetGlobStatus(globStatus)
+func (reb *Manager) RebECDataStatus() (body []byte, status int) {
+	rebStatus := &Status{}
+	reb.RebStatus(rebStatus)
 
 	// the target is still collecting the data, reply that the result is not ready
-	if globStatus.Stage < rebStageECDetect {
+	if rebStatus.Stage < rebStageECDetect {
 		return nil, http.StatusAccepted
 	}
 
@@ -569,10 +567,10 @@ func (reb *Manager) GlobECDataStatus() (body []byte, status int) {
 }
 
 //
-// globalJogger
+// rebalanceJogger
 //
 
-func (rj *globalJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
+func (rj *rebalanceJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 	// the jogger is running in separate goroutine, so use defer to be
 	// sure that `Done` is called even if the jogger crashes to avoid hang up
 	defer rj.wg.Done()
@@ -602,7 +600,7 @@ func (rj *globalJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
 	}
 }
 
-func (rj *globalJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
+func (rj *rebalanceJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
 	var (
 		lom = (*cluster.LOM)(lomptr)
 		t   = rj.m.t
@@ -623,7 +621,7 @@ func (rj *globalJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, l
 }
 
 // the walking callback is executed by the LRU xaction
-func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
+func (rj *rebalanceJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	var (
 		lom *cluster.LOM
 		tsi *cluster.Snode
@@ -662,7 +660,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	}
 	nver := t.GetSowner().Get().Version
 	if nver > rj.ver {
-		rj.m.abortGlobal()
+		rj.m.abortRebalance()
 		return fmt.Errorf("%s: Smap v%d < v%d", rj.xreb, rj.ver, nver)
 	}
 
@@ -691,7 +689,7 @@ func (rj *globalJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	return
 }
 
-func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck bool) (err error) {
+func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck bool) (err error) {
 	var (
 		file                  *cmn.FileHandle
 		cksum                 *cmn.Cksum
@@ -731,7 +729,7 @@ func (rj *globalJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck bool) 
 	}
 	// transmit
 	var (
-		ack    = regularAck{globRebID: rj.m.GlobRebID(), daemonID: rj.m.t.Snode().ID()}
+		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.Snode().ID()}
 		mm     = rj.m.t.GetSmallMMSA()
 		opaque = ack.NewPack(mm)
 		hdr    = transport.Header{

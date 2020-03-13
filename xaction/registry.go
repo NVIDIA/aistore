@@ -41,12 +41,12 @@ type (
 		cmn.XactBase
 		wg *sync.WaitGroup
 	}
-	GlobalReb struct {
+	Rebalance struct {
 		RebBase
 		cmn.NonmountpathXact
 		SmapVersion int64 // Smap version on which this rebalance has started
 	}
-	LocalReb struct {
+	Resilver struct {
 		cmn.MountpathXact
 		RebBase
 	}
@@ -106,11 +106,11 @@ func init() {
 func (xact *RebBase) MarkDone()                  { xact.wg.Done() }
 func (xact *RebBase) WaitForFinish()             { xact.wg.Wait() }
 func (xact *RebBase) Description() string        { return "base for rebalance xactions" }
-func (xact *GlobalReb) Description() string      { return "cluster-wide global rebalancing" }
+func (xact *Rebalance) Description() string      { return "cluster-wide rebalancing" }
 func (xact *bckListTask) Description() string    { return "asynchronous bucket list task" }
 func (xact *bckSummaryTask) Description() string { return "asynchronous bucket summary task" }
 func (xact *Election) Description() string       { return "elect new primary proxy/gateway" }
-func (xact *LocalReb) Description() string {
+func (xact *Resilver) Description() string {
 	return "resilver local storage upon mountpath-change events"
 }
 
@@ -125,14 +125,14 @@ func (xact *RebBase) String() string {
 	}
 	return s
 }
-func (xact *GlobalReb) String() string {
+func (xact *Rebalance) String() string {
 	return fmt.Sprintf("%s, Smap v%d", xact.RebBase.String(), xact.SmapVersion)
 }
-func (xact *LocalReb) String() string {
+func (xact *Resilver) String() string {
 	return xact.RebBase.String()
 }
 
-func (xact *GlobalReb) AbortedAfter(d time.Duration) (aborted bool) {
+func (xact *Rebalance) AbortedAfter(d time.Duration) (aborted bool) {
 	sleep := time.Second / 2
 	steps := (d + sleep/2) / sleep
 	for i := 0; i < int(steps); i++ {
@@ -578,21 +578,21 @@ func (r *registry) RenewLRU() *lru.Xaction {
 	return entry.xact
 }
 
-func (r *registry) RenewGlobalReb(smapVersion, globRebID int64, statRunner *stats.Trunner) *GlobalReb {
-	e := &globalRebEntry{smapVersion: smapVersion, globRebID: globRebID, statRunner: statRunner}
+func (r *registry) RenewRebalance(smapVersion, id int64, statRunner *stats.Trunner) *Rebalance {
+	e := &rebalanceEntry{smapVersion: smapVersion, id: id, statRunner: statRunner}
 	ee, keep, _ := r.renewGlobalXaction(e)
-	entry := ee.(*globalRebEntry)
+	entry := ee.(*rebalanceEntry)
 	if keep { // previous global rebalance is still running
 		return nil
 	}
 	return entry.xact
 }
 
-func (r *registry) RenewLocalReb() *LocalReb {
-	e := &localRebEntry{}
+func (r *registry) RenewResilver() *Resilver {
+	e := &resilverEntry{}
 	ee, keep, _ := r.renewGlobalXaction(e)
-	entry := ee.(*localRebEntry)
-	cmn.Assert(!keep) // local rebalance must be always preempted
+	entry := ee.(*resilverEntry)
+	cmn.Assert(!keep) // resilver must be always preempted
 	return entry.xact
 }
 

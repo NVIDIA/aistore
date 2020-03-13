@@ -2285,7 +2285,7 @@ func TestECRebalance(t *testing.T) {
 	res, err := api.ListBucket(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	oldBucketList := filterObjListOK(res.Entries)
-	tutils.Logf("%d objects created, starting global rebalance\n", len(oldBucketList))
+	tutils.Logf("%d objects created, starting rebalance\n", len(oldBucketList))
 
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
@@ -2585,7 +2585,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 	resRegOld, err := api.ListBucket(baseParams, bckReg, msg, 0)
 	tassert.CheckError(t, err)
 	oldRegList := filterObjListOK(resRegOld.Entries)
-	tutils.Logf("Created %d objects in %s, %d objects in %s. Starting global rebalance\n",
+	tutils.Logf("Created %d objects in %s, %d objects in %s. Starting rebalance\n",
 		len(oldECList), bckEC, len(oldRegList), bckReg)
 
 	tutils.Logf("Registering node %s\n", tgtLost)
@@ -2617,7 +2617,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 	}
 }
 
-// Simple local rebalance for EC bucket
+// Simple resilver for EC bucket
 // 1. Create a bucket
 // 2. Remove mpath from one target
 // 3. Creates enough objects to have at least one per mpath
@@ -2628,7 +2628,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 // 6. Check that all objects returns the non-zero number of Data and Parity
 //    slices in HEAD response
 // 7. Extra check: the number of objects after rebalance equals initial number
-func TestECLocalRebalance(t *testing.T) {
+func TestECResilver(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
@@ -2689,7 +2689,7 @@ func TestECLocalRebalance(t *testing.T) {
 		t.FailNow()
 	}
 
-	tutils.Logf("Wait for local rebalance to complete...\n")
+	tutils.Logf("Wait for resilver to complete...\n")
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size"}
@@ -2797,7 +2797,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 	resECOld, err := api.ListBucket(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
 	oldECList := filterObjListOK(resECOld.Entries)
-	tutils.Logf("Created %d objects in %s. Starting global rebalance\n", len(oldECList), bckEC)
+	tutils.Logf("Created %d objects in %s. Starting rebalance\n", len(oldECList), bckEC)
 
 	tutils.Logf("Registering node %s\n", tgtLost.Name())
 	err = tutils.RegisterNode(proxyURL, tgtLost, smap)

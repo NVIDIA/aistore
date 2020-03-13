@@ -336,7 +336,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 }
 
 func showRebalanceHandler(c *cli.Context) (err error) {
-	return showGlobalRebalance(c, flagIsSet(c, refreshFlag), calcRefreshRate(c))
+	return showRebalance(c, flagIsSet(c, refreshFlag), calcRefreshRate(c))
 }
 
 func showBckPropsHandler(c *cli.Context) (err error) {
