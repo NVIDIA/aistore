@@ -173,14 +173,12 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 
 	if flagIsSet(c, dryRunFlag) {
 		i := 0
-		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-		for ; i < len(files) && i < dryRunExamplesCnt; i++ {
-			fmt.Fprintf(c.App.Writer, "PUT %q => %s/%s\n", files[i].path, bck.Name, files[i].name)
+		for ; i < dryRunExamplesCnt; i++ {
+			fmt.Fprintf(c.App.Writer, "PUT %q => %s/%s\n", files[i].path, bck, files[i].name)
 		}
 		if i < len(files) {
 			fmt.Fprintf(c.App.Writer, "(and %d more)\n", len(files)-i)
 		}
-
 		return nil
 	}
 
@@ -232,6 +230,8 @@ func rangeTrimPrefix(pt cmn.ParsedTemplate) string {
 }
 
 func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error) {
+	printDryRunHeader(c)
+
 	path, err := getPathFromFileName(fileName)
 	if err != nil {
 		return err
@@ -251,7 +251,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 		}
 
 		if flagIsSet(c, dryRunFlag) {
-			fmt.Fprintf(c.App.Writer, dryRunHeader+" "+dryRunExplanation+"\nPUT %q => %s/%s.", path, bck.Name, objName)
+			fmt.Fprintf(c.App.Writer, "PUT %q => %s/%s\n", path, bck.Name, objName)
 			return nil
 		}
 		if err = putSingleObject(bck, objName, path); err == nil {
@@ -532,6 +532,12 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
 		fileList = makeList(parseStrFlag(c, listFlag), ",")
 	)
+
+	if flagIsSet(c, dryRunFlag) {
+		cmn.PrintMultipleLines(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.Name+"/%s\n", fileList)
+		return nil
+	}
+
 	switch command {
 	case commandRemove:
 		err = api.DeleteList(defaultAPIParams, bck, fileList)
@@ -558,7 +564,22 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
 		rangeStr = parseStrFlag(c, templateFlag)
+		pt       cmn.ParsedTemplate
 	)
+
+	if flagIsSet(c, dryRunFlag) {
+		pt, err = cmn.ParseBashTemplate(rangeStr)
+		if err != nil {
+			fmt.Fprintf(c.App.Writer, "couldn't parse template %q locally; %s", rangeStr, err.Error())
+			return nil
+		}
+		objs := pt.ToSlice(dryRunExamplesCnt)
+		cmn.PrintMultipleLines(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.String()+"/%s", objs)
+		if pt.Count() > dryRunExamplesCnt {
+			fmt.Fprintf(c.App.Writer, "(and %d more)", pt.Count()-dryRunExamplesCnt)
+		}
+		return
+	}
 
 	switch command {
 	case commandRemove:
@@ -609,6 +630,10 @@ func multiObjOp(c *cli.Context, command string) error {
 		case commandEvict:
 			if cmn.IsProviderAIS(bck) {
 				return fmt.Errorf("evicting objects from AIS bucket is not allowed")
+			}
+			if flagIsSet(c, dryRunFlag) {
+				fmt.Fprintf(c.App.Writer, "EVICT: %s/%s\n", bck, objectName)
+				continue
 			}
 			if err := api.EvictObject(defaultAPIParams, bck, objectName); err != nil {
 				return err

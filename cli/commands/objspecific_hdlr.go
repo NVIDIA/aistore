@@ -15,8 +15,14 @@ import (
 
 var (
 	objectSpecificCmdsFlags = map[string][]cli.Flag{
-		commandPrefetch: baseLstRngFlags,
-		commandEvict:    baseLstRngFlags,
+		commandPrefetch: append(
+			baseLstRngFlags,
+			dryRunFlag,
+		),
+		commandEvict: append(
+			baseLstRngFlags,
+			dryRunFlag,
+		),
 		commandGet: {
 			offsetFlag,
 			lengthFlag,
@@ -108,6 +114,8 @@ var (
 )
 
 func prefetchHandler(c *cli.Context) (err error) {
+	printDryRunHeader(c)
+
 	var (
 		bck        cmn.Bck
 		objectName string
@@ -142,6 +150,8 @@ func prefetchHandler(c *cli.Context) (err error) {
 }
 
 func evictHandler(c *cli.Context) error {
+	printDryRunHeader(c)
+
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing bucket name")
 	}

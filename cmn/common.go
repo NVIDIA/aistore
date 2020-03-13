@@ -12,6 +12,7 @@ import (
 	"hash"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/url"
 	"os"
@@ -483,6 +484,45 @@ func Either(lhs, rhs string) string {
 		return lhs
 	}
 	return rhs
+}
+
+// Prints multiple lines of fmtStr to writer w.
+// For line number i, fmtStr is formatted with values of args at index i
+// if maxLines >= 0 prints at most maxLines, otherwise prints everything until
+// it reaches the end of one of args
+func PrintMultipleLines(w io.Writer, maxLines int, fmtStr string, args ...[]string) {
+	objs := make([]interface{}, 0, len(args))
+	if fmtStr == "" || fmtStr[len(fmtStr)-1] != '\n' {
+		fmtStr += "\n"
+	}
+
+	if maxLines < 0 {
+		maxLines = math.MaxInt64
+	}
+	minLen := math.MaxInt64
+	for _, a := range args {
+		minLen = Min(minLen, len(a))
+	}
+
+	i := 0
+	for {
+		for _, a := range args {
+			objs = append(objs, a[i])
+		}
+		fmt.Fprintf(w, fmtStr, objs...)
+		i++
+
+		for _, a := range args {
+			if len(a) <= i {
+				return
+			}
+		}
+		if i >= maxLines {
+			fmt.Fprintf(w, "(and %d more)\n", minLen-i)
+			return
+		}
+		objs = objs[:0]
+	}
 }
 
 // NOTE: not to be used in the datapath - consider instead one of the 3 flavors below
@@ -1061,6 +1101,28 @@ func (pt *ParsedTemplate) Count() int64 {
 		count *= int64(step)
 	}
 	return count
+}
+
+// maxLen specifies maximum objects to be returned
+func (pt *ParsedTemplate) ToSlice(maxLen ...int) []string {
+	var ( // nolint:prealloc // objs is preallocated farther down
+		max  = math.MaxInt64
+		objs []string
+	)
+	if len(maxLen) > 0 && maxLen[0] >= 0 {
+		max = maxLen[0]
+		objs = make([]string, 0, max)
+	} else {
+		objs = make([]string, 0, pt.Count())
+	}
+
+	getNext := pt.Iter()
+	i := 0
+	for objName, hasNext := getNext(); hasNext && i < max; objName, hasNext = getNext() {
+		objs = append(objs, objName)
+		i++
+	}
+	return objs
 }
 
 func (pt *ParsedTemplate) Iter() func() (string, bool) {

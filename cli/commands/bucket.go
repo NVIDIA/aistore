@@ -114,6 +114,10 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 
 // Evict a cloud bucket
 func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
+	if flagIsSet(c, dryRunFlag) {
+		fmt.Fprintf(c.App.Writer, "EVICT: %s\n", bck)
+		return
+	}
 	if err = api.EvictCloudBucket(defaultAPIParams, bck); err != nil {
 		return
 	}

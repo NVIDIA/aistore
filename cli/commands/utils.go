@@ -618,3 +618,9 @@ func determineClusterURL(cfg *config.Config) string {
 	fmt.Fprintf(os.Stderr, "Warning! AIStore URL not configured, using default: %s\n", cfg.Cluster.DefaultAISHost)
 	return cfg.Cluster.DefaultAISHost
 }
+
+func printDryRunHeader(c *cli.Context) {
+	if flagIsSet(c, dryRunFlag) {
+		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
+	}
+}

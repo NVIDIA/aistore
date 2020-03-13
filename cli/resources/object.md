@@ -152,7 +152,7 @@ Put an object or entire directory (of objects) into the specified bucket. If CLI
 | `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
 | `--recursive` or `-r` | `bool` | Enable recursive directory upload | `false` |
 | `--refresh` | `string` | Frequency of the reporting the progress (in milliseconds), may contain multiplicative suffix `s`(second) or `m`(minute). Zero value disables periodical refresh | `0` if verbose mode is on, `5s` otherwise |
-| `--dry-run` | `bool` | Do not actually perform PUT. Shows a few files to be uploaded and corresponding object names for used arguments
+| `--dry-run` | `bool` | Do not actually perform PUT. Shows a few files to be uploaded and corresponding object names for used arguments |
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
@@ -448,6 +448,7 @@ removed files in the range 'test-{001..003}' from mybucket bucket
 | --- | --- | --- | --- |
 | `--list` | `string` | Comma separated list of objects for list deletion | `""` |
 | `--template` | `string` | The object name template with optional range parts | `""` |
+| `--dry-run` | `bool` | Do not actually perform EVICT. Shows a few objects to be evicted |
 
 - Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive
 - List and template evictions expect only a bucket name
@@ -486,6 +487,7 @@ cloudbucket	0	    0B	    0%	    aws
 | --- | --- | --- | --- |
 | `--list` | `string` | Comma separated list of objects for list deletion | `""` |
 | `--template` | `string` | The object name template with optional range parts | `""` |
+| `--dry-run` | `bool` | Do not actually perform PREFETCH. Shows a few objects to be prefetched |
 
 Options `--list` and `--template` are mutually exclusive.
 
