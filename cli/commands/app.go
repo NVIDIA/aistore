@@ -37,7 +37,7 @@ type AISCLI struct {
 }
 
 // New returns a new, initialized AISCLI instance
-func New(build string, version string) *AISCLI {
+func New(build, version string) *AISCLI {
 	aisCLI := AISCLI{
 		app:           cli.NewApp(),
 		outWriter:     os.Stdout,

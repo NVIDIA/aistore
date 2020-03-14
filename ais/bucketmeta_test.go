@@ -70,7 +70,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 				Expect(bowner.Get()).To(Equal(&bmd.BMD))
 			})
 
-			It(fmt.Sprintf("should save and load bmd using jsp methods"), func() {
+			It(fmt.Sprintf("should save and load bmd using jsp methods for %s", node), func() {
 				bowner.init()
 				bmd := bowner.get()
 				clone := bmd

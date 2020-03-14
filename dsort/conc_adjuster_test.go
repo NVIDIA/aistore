@@ -17,7 +17,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func calcSemaLimit(acquire func(), release func()) int {
+func calcSemaLimit(acquire, release func()) int {
 	var i atomic.Int32
 	wg := &sync.WaitGroup{}
 	ch := make(chan int32, 200)

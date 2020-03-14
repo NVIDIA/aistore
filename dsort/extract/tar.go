@@ -97,7 +97,7 @@ func newTarRecordDataReader(t cluster.Target) *tarRecordDataReader {
 	return rd
 }
 
-func (rd *tarRecordDataReader) reinit(tw *tar.Writer, size int64, metadataSize int64) {
+func (rd *tarRecordDataReader) reinit(tw *tar.Writer, size, metadataSize int64) {
 	rd.tarWriter = tw
 	rd.written = 0
 	rd.size = size

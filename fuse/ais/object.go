@@ -51,7 +51,7 @@ func (obj *Object) Put(r cmn.ReadOpenCloser) (err error) {
 	return
 }
 
-func (obj *Object) GetChunk(w io.Writer, offset int64, length int64) (n int64, err error) {
+func (obj *Object) GetChunk(w io.Writer, offset, length int64) (n int64, err error) {
 	query := url.Values{}
 	query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
 	query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))

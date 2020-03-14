@@ -55,7 +55,7 @@ func DockerRunning() bool {
 
 // ContainerCount is used by clusterHealthCheck to test if any container crashed after
 // a test completes
-func ContainerCount(clusterNumber ...int) (proxyCnt int, targetCnt int) {
+func ContainerCount(clusterNumber ...int) (proxyCnt, targetCnt int) {
 	cmd := exec.Command("docker", "ps")
 	bytes, err := cmd.Output()
 	if err != nil {

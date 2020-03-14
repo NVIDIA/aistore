@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/objwalk"
 )
 
-func isLocalObject(smap *cluster.Smap, b cmn.Bck, objName string, sid string) (bool, error) {
+func isLocalObject(smap *cluster.Smap, b cmn.Bck, objName, sid string) (bool, error) {
 	bck := cluster.NewBckEmbed(b)
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), smap)
 	if err != nil {
@@ -31,7 +31,7 @@ func isLocalObject(smap *cluster.Smap, b cmn.Bck, objName string, sid string) (b
 // 3. Falls back to just a prefix without number ranges
 func parseTemplate(template string) (cmn.ParsedTemplate, error) {
 	if template == "" {
-		return cmn.ParsedTemplate{}, errors.New("Empty range template")
+		return cmn.ParsedTemplate{}, errors.New("empty range template")
 	}
 
 	if parsed, err := cmn.ParseBashTemplate(template); err == nil {

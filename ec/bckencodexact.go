@@ -71,7 +71,7 @@ func (r *XactBckEncode) Run() (err error) {
 		return err
 	}
 	if !bck.Props.EC.Enabled {
-		return fmt.Errorf("Bucket %q does not have EC enabled", r.bck.Name)
+		return fmt.Errorf("bucket %q does not have EC enabled", r.bck.Name)
 	}
 	if numjs, err = r.init(); err != nil {
 		return
@@ -190,7 +190,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 
 	mdFQN, _, err := cluster.HrwFQN(lom.Bck(), MetaType, lom.Objname)
 	if err != nil {
-		glog.Warningf("Metadata FQN generation failed %q: %v", fqn, err)
+		glog.Warningf("metadata FQN generation failed %q: %v", fqn, err)
 		return nil
 	}
 	_, err = os.Stat(mdFQN)
@@ -199,7 +199,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	if !os.IsNotExist(err) {
-		glog.Warningf("Failed to stat %q: %v", mdFQN, err)
+		glog.Warningf("failed to stat %q: %v", mdFQN, err)
 		return nil
 	}
 
@@ -209,7 +209,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 	j.parent.beforeECObj()
 	if err = ECM.EncodeObject(lom, j.parent.afterECObj); err != nil {
 		// something wrong with EC, interrupt file walk - it is critical
-		return fmt.Errorf("Failed to EC object %q: %v", fqn, err)
+		return fmt.Errorf("failed to EC object %q: %v", fqn, err)
 	}
 
 	return nil

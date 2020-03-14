@@ -464,7 +464,7 @@ func CheckExists(proxyURL string, bck cmn.Bck, objName string) (bool, error) {
 			err = fmt.Errorf("failed to read response body, err: %v", ioErr)
 			return false, err
 		}
-		err = fmt.Errorf("CheckExists failed: bucket/object: %s/%s, HTTP status: %d, HTTP response: %s",
+		err = fmt.Errorf("CheckExists failed: bucket/object: %s/%s, HTTP status: %d, HTTP response: %s", // nolint:golint // name of the function
 			bck, objName, r.StatusCode, string(b))
 		return false, err
 	}
@@ -571,7 +571,7 @@ func GetConfig(server string) (HTTPLatencies, error) {
 	}
 	defer resp.Body.Close()
 
-	_, err = discardResponse(resp, fmt.Sprintf("Get config"))
+	_, err = discardResponse(resp, "GetConfig")
 	emitError(resp, err, nil)
 	l := HTTPLatencies{
 		ProxyConn: cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
@@ -624,7 +624,7 @@ func CleanCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string)
 	tassert.CheckFatal(t, err)
 }
 
-func GetWhatRawQuery(getWhat string, getProps string) string {
+func GetWhatRawQuery(getWhat, getProps string) string {
 	q := url.Values{}
 	q.Add(cmn.URLParamWhat, getWhat)
 	if getProps != "" {
@@ -803,7 +803,7 @@ func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, proxyURL string, 
 	EvictObjects(t, proxyURL, bck, []string{object})
 }
 
-func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object string, timeFormat string) time.Time {
+func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object, timeFormat string) time.Time {
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
 	bucketList, err := api.ListBucket(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -1043,12 +1043,6 @@ func GetDaemonConfig(t *testing.T, nodeID string) (config *cmn.Config) {
 	config, err = api.GetDaemonConfig(baseParams, nodeID)
 	tassert.CheckFatal(t, err)
 	return
-}
-
-func SetDaemonConfig(t *testing.T, proxyURL string, nodeID string, nvs cmn.SimpleKVs) {
-	baseParams := BaseAPIParams(proxyURL)
-	err := api.SetDaemonConfig(baseParams, nodeID, nvs)
-	tassert.CheckFatal(t, err)
 }
 
 func SetClusterConfig(t *testing.T, nvs cmn.SimpleKVs) {

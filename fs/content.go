@@ -50,7 +50,7 @@ type (
 		// prefix - user-defined marker
 		GenUniqueFQN(base, prefix string) (ufqn string)
 		// Parses generated unique fqn to the original one.
-		ParseUniqueFQN(base string) (orig string, old bool, ok bool)
+		ParseUniqueFQN(base string) (orig string, old, ok bool)
 	}
 
 	ContentInfo struct {
@@ -170,7 +170,7 @@ func (wf *ObjectContentResolver) GenUniqueFQN(base, _ string) string {
 	return base
 }
 
-func (wf *ObjectContentResolver) ParseUniqueFQN(base string) (orig string, old bool, ok bool) {
+func (wf *ObjectContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
 	return base, false, true
 }
 
@@ -188,7 +188,7 @@ func (wf *WorkfileContentResolver) GenUniqueFQN(base, prefix string) string {
 	return base + "." + tieBreaker + "." + spid
 }
 
-func (wf *WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old bool, ok bool) {
+func (wf *WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
 	// remove original content type
 	cntIndex := strings.Index(base, ".")
 	if cntIndex < 0 {

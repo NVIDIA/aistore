@@ -49,13 +49,13 @@ func _loadConfig(clivars *ConfigCLI) (config *cmn.Config, changed bool, err erro
 	// internal error.
 
 	if err != nil {
-		return nil, false, fmt.Errorf("Failed to load config %q, err: %s", clivars.ConfFile, err)
+		return nil, false, fmt.Errorf("failed to load config %q, err: %s", clivars.ConfFile, err)
 	}
 	if err = flag.Lookup("log_dir").Value.Set(config.Log.Dir); err != nil {
-		return nil, false, fmt.Errorf("Failed to flag-set glog dir %q, err: %s", config.Log.Dir, err)
+		return nil, false, fmt.Errorf("failed to flag-set log directory %q, err: %s", config.Log.Dir, err)
 	}
 	if err = cmn.CreateDir(config.Log.Dir); err != nil {
-		return nil, false, fmt.Errorf("Failed to create log dir %q, err: %s", config.Log.Dir, err)
+		return nil, false, fmt.Errorf("failed to create log dir %q, err: %s", config.Log.Dir, err)
 	}
 	if err := config.Validate(); err != nil {
 		return nil, false, err
@@ -64,7 +64,7 @@ func _loadConfig(clivars *ConfigCLI) (config *cmn.Config, changed bool, err erro
 	// glog rotate
 	glog.MaxSize = config.Log.MaxSize
 	if glog.MaxSize > cmn.GiB {
-		glog.Errorf("Log.MaxSize %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
+		glog.Errorf("log.max_size %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
 		glog.MaxSize = cmn.MiB
 	}
 
@@ -102,16 +102,16 @@ func _loadConfig(clivars *ConfigCLI) (config *cmn.Config, changed bool, err erro
 	}
 	if clivars.LogLevel != "" {
 		if err = cmn.SetLogLevel(config, clivars.LogLevel); err != nil {
-			return nil, false, fmt.Errorf("Failed to set log level = %s, err: %s", clivars.LogLevel, err)
+			return nil, false, fmt.Errorf("failed to set log level = %s, err: %s", clivars.LogLevel, err)
 		}
 		config.Log.Level = clivars.LogLevel
 		changed = true
 	} else if err = cmn.SetLogLevel(config, config.Log.Level); err != nil {
-		return nil, false, fmt.Errorf("Failed to set log level = %s, err: %s", config.Log.Level, err)
+		return nil, false, fmt.Errorf("failed to set log level = %s, err: %s", config.Log.Level, err)
 	}
-	glog.Infof("Logdir: %q Proto: %s Port: %d Verbosity: %s",
+	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
 		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)
-	glog.Infof("Config: %q StatsTime: %v", clivars.ConfFile, config.Periodic.StatsTime)
+	glog.Infof("config_file: %q periodic.stats_time: %v", clivars.ConfFile, config.Periodic.StatsTime)
 	return
 }
 

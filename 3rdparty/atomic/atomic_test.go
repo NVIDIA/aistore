@@ -187,7 +187,7 @@ var _ = Describe("Primitive atomics tests", func() {
 
 	It("should properly perform basic operations on Pointer", func() {
 		var v Pointer
-		Expect(v.Load()).To(Equal((unsafe.Pointer)(nil)))
+		Expect(v.Load()).To(Equal(unsafe.Pointer(nil)))
 
 		var x int = 42
 		v.Store(unsafe.Pointer(&x))

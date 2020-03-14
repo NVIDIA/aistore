@@ -428,7 +428,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	wg.Wait()
 
 	if failed := errCount.Load(); failed != 0 {
-		return fmt.Errorf("Failed to upload: %d object(s)", failed)
+		return fmt.Errorf("failed to upload: %d object(s)", failed)
 	}
 
 	_, _ = fmt.Fprintf(c.App.Writer, "%d objects put into %q bucket\n", len(p.files), p.bck)

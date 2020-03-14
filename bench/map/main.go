@@ -257,7 +257,7 @@ func readNWrite(m benchMap, threshold int, keys []int, dur chan time.Duration) {
 // 1. Fill map
 // 2. Concurrently run X go routines that reads and occasionally writes
 // 3. Shrink
-func bench(m benchMap, nodeList []node, readList [][]int, delList [][]int, iterations, threshold, workers int, doShrink bool) {
+func bench(m benchMap, nodeList []node, readList, delList [][]int, iterations, threshold, workers int, doShrink bool) {
 	var (
 		wg           = &sync.WaitGroup{}
 		fillDur      time.Duration

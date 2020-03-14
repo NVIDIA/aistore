@@ -164,7 +164,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := t.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
-				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", err))
+				t.invalmsghdlr(w, r, fmt.Sprintf("failed to sync Smap: %s", err))
 			}
 			glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
 			return
@@ -194,7 +194,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			ok    bool
 		)
 		if value, ok = msg.Value.(string); !ok {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse action '%s' value: (%v, %T) not a string",
+			t.invalmsghdlr(w, r, fmt.Sprintf("failed to parse action '%s' value: (%v, %T) not a string",
 				cmn.ActSetConfig, msg.Value, msg.Value))
 			return
 		}
@@ -1441,7 +1441,7 @@ func (t *targetrunner) beginECEncode(bck *cluster.Bck) (err error) {
 	// Do not start the xaction if any rebalance is running
 	rbInfo := t.RebalanceInfo()
 	if rbInfo.IsRebalancing {
-		return fmt.Errorf("Cannot start bucket %q encoding while rebalance is running", bck)
+		return fmt.Errorf("cannot start bucket %q encoding while rebalance is running", bck)
 	}
 
 	_, err = xaction.Registry.RenewECEncodeXact(t, bck, cmn.ActBegin)

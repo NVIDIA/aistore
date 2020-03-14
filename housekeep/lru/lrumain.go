@@ -48,7 +48,7 @@ type (
 		Xaction             *Xaction
 		StatsT              stats.Tracker
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
-		GetFSStats          func(path string) (blocks uint64, bavail uint64, bsize int64, err error)
+		GetFSStats          func(path string) (blocks, bavail uint64, bsize int64, err error)
 	}
 	fileInfoMinHeap []*cluster.LOM
 

@@ -345,7 +345,7 @@ func waitForAsyncReqComplete(baseParams BaseParams, action, path string,
 	}
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("Invalid response code: %d", resp.StatusCode)
+		return nil, fmt.Errorf("invalid response code: %d", resp.StatusCode)
 	}
 	if resp.StatusCode == http.StatusAccepted {
 		// receiver started async task and returned the task ID

@@ -666,7 +666,7 @@ func insString(off int, to []byte, str string) int {
 	return insByte(off, to, []byte(str))
 }
 
-func insByte(off int, to []byte, b []byte) int {
+func insByte(off int, to, b []byte) int {
 	var l = len(b)
 	binary.BigEndian.PutUint64(to[off:], uint64(l))
 	off += cmn.SizeofI64

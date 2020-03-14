@@ -566,7 +566,7 @@ func (o *objectListFilter) matchesAll(obj *cmn.BucketEntry) bool {
 	return true
 }
 
-func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching []cmn.BucketEntry, rest []cmn.BucketEntry) {
+func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching, rest []cmn.BucketEntry) {
 	for _, obj := range entries {
 		if o.matchesAll(obj) {
 			matching = append(matching, *obj)

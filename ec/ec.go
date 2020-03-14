@@ -325,14 +325,14 @@ func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode) (md *Metadata
 	resp, err := http.DefaultClient.Do(rq)
 	if err != nil {
 		if resp.StatusCode != http.StatusNotFound {
-			return nil, fmt.Errorf("Failed to read %s HEAD request: %v", objName, err)
+			return nil, fmt.Errorf("failed to read %s HEAD request: %v", objName, err)
 		}
 		return nil, fmt.Errorf("%s/%s not found on %s", bck, objName, si.ID())
 	}
 	resp.Body.Close()
 	mdStr := resp.Header.Get(cmn.HeaderObjECMeta)
 	if mdStr == "" {
-		return nil, fmt.Errorf("Empty metadata content for %s/%s from %s", bck, objName, si.ID())
+		return nil, fmt.Errorf("empty metadata content for %s/%s from %s", bck, objName, si.ID())
 	}
 	if md, err = StringToMeta(mdStr); err != nil {
 		return nil, err

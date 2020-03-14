@@ -2,29 +2,29 @@ linters:
   enable-all: false
   disable-all: true
   enable:
-    - golint
-    - govet
-    - staticcheck
-    - errcheck
-    - gosimple
-    - unused
-    - varcheck
-    - ineffassign
+    - bodyclose
     - deadcode
-    - typecheck
+    - errcheck
+    - gocritic
+    - gofmt
+    - goimports
+    - golint
+    - goprintffuncname
+    - gosimple
+    - govet
+    - ineffassign
     - interfacer
+    - maligned
     - misspell
     - prealloc
+    - staticcheck
+    - typecheck
     - unconvert
     - unparam
-    - gocritic
-    - goimports
-    - whitespace
     - unparam
-    - maligned
-    - gofmt
-    - bodyclose
-    - goprintffuncname
+    - unused
+    - varcheck
+    - whitespace
     # following linters produce a lot false positives, enable only when needed:
     # - gosec
     # - scopelint
@@ -32,22 +32,36 @@ linters:
 
 linters-settings:
   govet:
-    check-shadowing: false
+    disable:
+      - shadow # reports a lot of false-positives and conflicts with other linters
+    settings:
+      printf: # analyzer name, run `go tool vet help` to see all analyzers
+        funcs: # run `go tool vet help printf` to see available settings for `printf` analyzer
+          - (github.com/NVIDIA/aistore/3rdparty/glog).Infof
+          - (github.com/NVIDIA/aistore/3rdparty/glog).Warningf
+          - (github.com/NVIDIA/aistore/3rdparty/glog).Errorf
+          - (github.com/NVIDIA/aistore/3rdparty/glog).Fatalf
+          - (github.com/NVIDIA/tutils/tassert).Errorf
+          - (github.com/NVIDIA/tutils/tassert).Fatalf
   golint:
-    min-confidence: 0.8
+    min-confidence: 0
   errcheck:
-    check-blank: false
+    check-blank: true
     check-type-assertions: false
   gocritic:
     enabled-tags:
       - performance
-#      - style
+      - style
       - experimental
     disabled-checks:
       - ifElseChain
-      - hugeParam # produces a lot of false positives (TODO: see if some errors are possible improvements)
+      - hugeParam # produces a lot of false-positives (TODO: see if some errors are possible improvements)
       - commentFormatting
       - unnamedResult
+  prealloc:
+    simple: true # Report preallocation suggestions only on simple loops that have no returns/breaks/continues/gotos in them
+    range-loops: true # Report preallocation suggestions on range loops, true by default
+    for-loops: true # Report preallocation suggestions on for loops, false by default
   misspell:
     # Correct spellings using locale preferences for US or UK.
     # Default is to use a neutral variety of English.
@@ -60,29 +74,35 @@ issues:
 
   # additional exclude rules
   exclude-rules:
-    - linters:
-        - golint
+    - linters: golint
       text: "error should be the last type when returning multiple items" # ignores 'return body, err, errCode'
 
-    - linters:
-        - errcheck
+    - linters: errcheck
       text: "Error return value of" # ignores 'error return value of ... is unchecked'
 
-    - linters:
-        - golint
+    - linters: golint
       text: "should be consistent with previous receiver name"
 
-    - linters:
-        - golint
+    - linters: golint
       text: "and that stutters; consider calling this"
 
-    - linters:
-        - golint
+    - linters: golint
       text: "don't use an underscore in package name"
 
-    - linters:
-        - unused
+    - linters: unused
       text: "`noCopy` is unused"
+
+    - linters: gocritic
+      text: "importShadow: shadow of imported"
+
+    - linters: gocritic
+      text: "builtinShadow: shadowing of predeclared identifier: new"
+
+    - linters: staticcheck
+      text: "SA5011:" # produces a lot of false-positives; hopefully in the future we could enable it!
+
+    - linters: staticcheck
+      text: "SA4006: this value of `aborted` is never used" # commonly used as `if aborted := x(); aborted {`
 
   # Set to 0 to disable limit
   max-same-issues: 0

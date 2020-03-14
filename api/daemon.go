@@ -57,7 +57,7 @@ func AddMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) 
 }
 
 // RemoveMountpath API
-func RemoveMountpath(baseParams BaseParams, nodeID string, mountpath string) error {
+func RemoveMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths)
 	params := OptionalParams{
@@ -90,7 +90,7 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 }
 
 // DisableMountpath API
-func DisableMountpath(baseParams BaseParams, nodeID string, mountpath string) error {
+func DisableMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths)
 	params := OptionalParams{

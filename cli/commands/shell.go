@@ -55,7 +55,7 @@ func suggestFlags(c *cli.Context, flagsToSkip ...string) {
 // Cluster / Daemon //
 //////////////////////
 
-func daemonCompletions(optional bool, omitProxies bool) cli.BashCompleteFunc {
+func daemonCompletions(optional, omitProxies bool) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		// daemon already given as argument
 		if c.NArg() >= 1 {
@@ -71,7 +71,7 @@ func daemonCompletions(optional bool, omitProxies bool) cli.BashCompleteFunc {
 	}
 }
 
-func daemonConfigSectionCompletions(daemonOptional bool, configOptional bool) cli.BashCompleteFunc {
+func daemonConfigSectionCompletions(daemonOptional, configOptional bool) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		// daemon and config already given as arguments
 		if c.NArg() >= 2 {
@@ -140,7 +140,7 @@ func suggestUpdatableConfig(c *cli.Context) {
 // The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
 // Bucket names will also be listed after the first argument was given if true is passed to the 'multiple' param
 // Bucket names will contain a path separator '/' if true is passed to the 'separator' param
-func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bool, separator bool, provider ...string) cli.BashCompleteFunc {
+func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple, separator bool, provider ...string) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		var (
 			bucketNames []string

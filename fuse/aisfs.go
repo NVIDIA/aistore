@@ -87,7 +87,7 @@ func runDaemon(mountPath string, errorSink io.Writer) (err error) {
 
 	err = daemonize.Run(executablePath, executableArgs, executableEnv, errorSink)
 	if err != nil {
-		err = fmt.Errorf("Failed to invoke a daemon: %v", err)
+		err = fmt.Errorf("failed to invoke a daemon: %v", err)
 	}
 
 	return
@@ -109,16 +109,16 @@ func dispatchSignalHandlers(mountPath string, mntCfg *fuse.MountConfig, serverCf
 				if err == nil {
 					return
 				}
-				mntCfg.ErrorLogger.Printf("Failed to unmount upon SIGINT: %v", err)
+				mntCfg.ErrorLogger.Printf("failed to unmount upon SIGINT: %v", err)
 			case syscall.SIGHUP:
 				cfg, err := loadConfig(serverCfg.BucketName)
 				if err != nil {
-					mntCfg.ErrorLogger.Printf("Failed to reload config upon SIGHUP: %v", err)
+					mntCfg.ErrorLogger.Printf("failed to reload config upon SIGHUP: %v", err)
 					break
 				}
 				cfg.writeTo(serverCfg)
 				if mntCfg.DebugLogger != nil {
-					mntCfg.DebugLogger.Printf("Config successfully reloaded upon SIGHUP")
+					mntCfg.DebugLogger.Printf("config successfully reloaded upon SIGHUP")
 				}
 			default:
 				panic(s)

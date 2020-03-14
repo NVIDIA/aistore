@@ -17,7 +17,7 @@ import (
 )
 
 //nolint:unconvert // fsStats.Bsize is uint32 in Darwin, int64 in Linux
-func GetFSStats(path string) (blocks uint64, bavail uint64, bsize int64, err error) {
+func GetFSStats(path string) (blocks, bavail uint64, bsize int64, err error) {
 	fsStats := unix.Statfs_t{}
 	if err = unix.Statfs(path, &fsStats); err != nil {
 		glog.Errorf("Failed to statfs %q, err: %v", path, err)

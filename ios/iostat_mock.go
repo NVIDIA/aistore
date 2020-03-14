@@ -32,7 +32,7 @@ func (m *IOStaterMock) GetMpathUtil(mpath string, now time.Time) int64 { return 
 func (m *IOStaterMock) GetAllMpathUtils(now time.Time) (map[string]int64, map[string]*atomic.Int32) {
 	return m.Utils, nil
 }
-func (m *IOStaterMock) AddMpath(mpath string, fs string)                    {}
+func (m *IOStaterMock) AddMpath(mpath, fs string)                           {}
 func (m *IOStaterMock) RemoveMpath(mpath string)                            {}
 func (m *IOStaterMock) LogAppend(l []string) []string                       { return l }
 func (m *IOStaterMock) GetSelectedDiskStats() map[string]*SelectedDiskStats { return nil }

@@ -205,18 +205,18 @@ func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 	}
 	var (
 		failedCntAtomic = atomic.NewInt32(0)
-		revsReq         = revsReq{pairs: []revsPair{pair}}
+		req             = revsReq{pairs: []revsPair{pair}}
 	)
 	if wait {
-		revsReq.wg = &sync.WaitGroup{}
-		revsReq.wg.Add(1)
-		revsReq.failedCnt = failedCntAtomic
-		revsReq.reqType = revsReqNotify
+		req.wg = &sync.WaitGroup{}
+		req.wg.Add(1)
+		req.failedCnt = failedCntAtomic
+		req.reqType = revsReqNotify
 	}
-	y.workCh <- revsReq
+	y.workCh <- req
 
 	if wait {
-		revsReq.wg.Wait()
+		req.wg.Wait()
 		failedCnt = int(failedCntAtomic.Load())
 	}
 	return
@@ -227,16 +227,16 @@ func (y *metasyncer) sync(wait bool, pairs ...revsPair) {
 		return
 	}
 	cmn.Assert(len(pairs) > 0)
-	revsReq := revsReq{pairs: pairs}
+	req := revsReq{pairs: pairs}
 	if wait {
-		revsReq.wg = &sync.WaitGroup{}
-		revsReq.wg.Add(1)
-		revsReq.reqType = revsReqSync
+		req.wg = &sync.WaitGroup{}
+		req.wg.Add(1)
+		req.reqType = revsReqSync
 	}
-	y.workCh <- revsReq
+	y.workCh <- req
 
 	if wait {
-		revsReq.wg.Wait()
+		req.wg.Wait()
 	}
 }
 

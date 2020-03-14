@@ -291,7 +291,7 @@ func compareNetworkStats(t *testing.T, network string, netstats1 map[string]tran
 func Test_MultipleNetworks(t *testing.T) {
 	totalRecv, recvFunc := makeRecvFunc(t)
 
-	var streams []*transport.Stream
+	streams := make([]*transport.Stream, 0, 10)
 	for idx := 0; idx < 10; idx++ {
 		network := fmt.Sprintf("network-%d", idx)
 		mux := mux.NewServeMux()

@@ -374,7 +374,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	}()
 
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
-	var objList []string
+	objList := make([]string, 0, 5)
 	for n := 0; n < 5; n++ {
 		objName := fmt.Sprintf("obj-fshc-%d", n)
 		objList = append(objList, objName)

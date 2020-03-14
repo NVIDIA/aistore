@@ -29,7 +29,7 @@ func (e *IOError) Error() string {
 		e.Kind, e.Op, e.Object, e.Err)
 }
 
-func newIOError(err error, kind string, op string, object string) error {
+func newIOError(err error, kind, op, object string) error {
 	return &IOError{
 		Kind:   kind,
 		Op:     op,
@@ -45,6 +45,6 @@ func newBucketIOError(err error, op string, object ...string) error {
 	return newIOError(err, IOErrorKindBucket, op, "")
 }
 
-func newObjectIOError(err error, op string, object string) error {
+func newObjectIOError(err error, op, object string) error {
 	return newIOError(err, IOErrorKindObject, op, object)
 }

@@ -203,7 +203,7 @@ func (reb *Manager) decodePushReq(buf []byte) (*pushReq, error) {
 		return nil, err
 	}
 	if act != rebMsgPushStage {
-		return nil, fmt.Errorf("Expected %d(push notification), got %d", rebMsgPushStage, act)
+		return nil, fmt.Errorf("expected %d (push notification), got %d", rebMsgPushStage, act)
 	}
 	err = unpacker.ReadAny(req)
 	return req, err

@@ -84,7 +84,7 @@ func (tg *TimeoutGroup) WaitTimeout(timeout time.Duration) bool {
 // signal on stop channel. When channel is nil it is equivalent to WaitTimeout.
 //
 // NOTE: WaitTimeoutWithStop can be only invoked after all Adds!
-func (tg *TimeoutGroup) WaitTimeoutWithStop(timeout time.Duration, stop <-chan struct{}) (timed bool, stopped bool) {
+func (tg *TimeoutGroup) WaitTimeoutWithStop(timeout time.Duration, stop <-chan struct{}) (timed, stopped bool) {
 	t := time.NewTimer(timeout)
 	select {
 	case <-tg.fin:

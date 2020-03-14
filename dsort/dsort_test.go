@@ -41,7 +41,7 @@ var (
 // MISC FUNCTIONS
 //
 func getFreePorts(count int) ([]int, error) {
-	var ports []int
+	ports := make([]int, 0, count)
 	for i := 0; i < count; i++ {
 		addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 		if err != nil {

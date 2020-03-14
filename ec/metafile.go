@@ -36,27 +36,27 @@ var (
 func LoadMetadata(fqn string) (*Metadata, error) {
 	b, err := ioutil.ReadFile(fqn)
 	if err != nil {
-		err = fmt.Errorf("Failed to read metafile %q: %v", fqn, err)
+		err = fmt.Errorf("failed to read metafile %q: %v", fqn, err)
 		return nil, err
 	}
 	md := &Metadata{}
 	if err := jsoniter.Unmarshal(b, md); err != nil {
-		err := fmt.Errorf("Damaged metafile %q: %v", fqn, err)
+		err := fmt.Errorf("damaged metafile %q: %v", fqn, err)
 		return nil, err
 	}
 
 	return md, nil
 }
 
-func (m *Metadata) Marshal() []byte {
-	return cmn.MustMarshal(m)
+func (md *Metadata) Marshal() []byte {
+	return cmn.MustMarshal(md)
 }
 
-func MetaToString(m *Metadata) string {
-	if m == nil {
+func MetaToString(md *Metadata) string {
+	if md == nil {
 		return ""
 	}
-	return string(m.Marshal())
+	return string(md.Marshal())
 }
 
 func StringToMeta(s string) (*Metadata, error) {

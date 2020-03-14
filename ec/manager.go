@@ -75,10 +75,10 @@ func initManager(t cluster.Target, reg XactRegistry) error {
 
 	var err error
 	if _, err = transport.Register(ECM.netReq, ReqStreamName, ECM.recvRequest); err != nil {
-		return fmt.Errorf("Failed to register recvRequest: %v", err)
+		return fmt.Errorf("failed to register recvRequest: %v", err)
 	}
 	if _, err = transport.Register(ECM.netResp, RespStreamName, ECM.recvResponse); err != nil {
-		return fmt.Errorf("Failed to register respResponse: %v", err)
+		return fmt.Errorf("failed to register respResponse: %v", err)
 	}
 	return nil
 }
@@ -91,7 +91,7 @@ func (mgr *Manager) initECBundles() {
 
 	cbReq := func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
-			glog.Errorf("Failed to request %s/%s: %v", hdr.Bck, hdr.ObjName, err)
+			glog.Errorf("failed to request %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		}
 	}
 
@@ -201,19 +201,19 @@ func (mgr *Manager) getBckXactsUnlocked(bckName string) *BckXacts {
 // A function to process command requests from other targets
 func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 	if err != nil {
-		glog.Errorf("Request failed: %v", err)
+		glog.Errorf("request failed: %v", err)
 		return
 	}
 	// check if the header contains a valid request
 	if len(hdr.Opaque) == 0 {
-		glog.Error("Empty request")
+		glog.Error("empty request")
 		return
 	}
 
 	unpacker := cmn.NewUnpacker(hdr.Opaque)
 	iReq := intraReq{}
 	if err := unpacker.ReadAny(&iReq); err != nil {
-		glog.Errorf("Failed to unmarshal request: %v", err)
+		glog.Errorf("failed to unmarshal request: %v", err)
 		return
 	}
 
@@ -221,14 +221,14 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.Header, obj
 	// the body must be drained to avoid errors
 	if hdr.ObjAttrs.Size != 0 {
 		if _, err := ioutil.ReadAll(object); err != nil {
-			glog.Errorf("Failed to read request body: %v", err)
+			glog.Errorf("failed to read request body: %v", err)
 			return
 		}
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
 	if err = bck.Init(mgr.t.GetBowner(), mgr.t.Snode()); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
-			glog.Errorf("Failed to init bucket %s: %v", bck, err)
+			glog.Errorf("failed to init bucket %s: %v", bck, err)
 			return
 		}
 	}
@@ -238,12 +238,12 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.Header, obj
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
 func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 	if err != nil {
-		glog.Errorf("Receive failed: %v", err)
+		glog.Errorf("receive failed: %v", err)
 		return
 	}
 	// check if the request is valid
 	if len(hdr.Opaque) == 0 {
-		glog.Error("Empty request")
+		glog.Error("empty request")
 		cmn.DrainReader(object)
 		return
 	}
@@ -271,7 +271,7 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 		// so there is a chance to complete restore successfully
 		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.ObjName, hdr.ObjAttrs, object)
 	default:
-		glog.Errorf("Unknown EC response action %d", iReq.act)
+		glog.Errorf("unknown EC response action %d", iReq.act)
 		cmn.DrainReader(object)
 	}
 }
@@ -443,7 +443,7 @@ func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 				return false
 			}
 			if required := bckProps.EC.RequiredEncodeTargets(); targetCnt < required {
-				glog.Warningf("Not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
+				glog.Warningf("not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
 					bckName, targetCnt, required)
 				bckXacts.StopPut()
 			}
@@ -451,7 +451,7 @@ func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 			// if one target was killed, and a new one joined, this condition will be satisfied even though
 			// slices of the object are not present on the new target
 			if required := bckProps.EC.RequiredRestoreTargets(); targetCnt < required {
-				glog.Warningf("Not enough targets for EC restoring for bucket %s; actual: %v, expected: %v",
+				glog.Warningf("not enough targets for EC restoring for bucket %s; actual: %v, expected: %v",
 					bckName, targetCnt, required)
 				bckXacts.StopGet()
 			}

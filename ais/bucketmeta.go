@@ -86,7 +86,7 @@ func newBucketMD() *bucketMD {
 	return &bucketMD{BMD: cluster.BMD{Providers: providers, UUID: ""}}
 }
 
-func newClusterUUID() (uuid string, created string) {
+func newClusterUUID() (uuid, created string) {
 	return cmn.GenUUID(), time.Now().String()
 }
 
@@ -319,9 +319,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 			continue
 		}
 		cnt++
-		if _, ok := curr[mpath]; ok {
-			delete(curr, mpath)
-		}
+		delete(curr, mpath)
 		if cnt >= bmdCopies {
 			break
 		}
@@ -337,9 +335,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 		if err := os.Rename(from, to); err != nil {
 			glog.Errorf("failed to rename %s prev version, err: %v", bmdTermName, err)
 		}
-		if _, ok := prev[mpath]; ok {
-			delete(prev, mpath)
-		}
+		delete(prev, mpath)
 	}
 	// remove remaining older
 	for mpath := range prev {

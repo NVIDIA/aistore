@@ -50,7 +50,7 @@ func TestPrefix(t *testing.T) {
 	prefixCleanup(t, proxyURL)
 }
 
-func numberOfFilesWithPrefix(fileNames []string, namePrefix string, commonDir string) int {
+func numberOfFilesWithPrefix(fileNames []string, namePrefix, commonDir string) int {
 	numFiles := 0
 	for _, fileName := range fileNames {
 		if commonDir != "" {

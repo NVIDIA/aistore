@@ -41,13 +41,13 @@ func determineClusterURL(c *cli.Context, cfg *Config, bck cmn.Bck) (clusterURL s
 
 	// Check if URL is malformed
 	if _, err = url.Parse(clusterURL); err != nil {
-		err = fmt.Errorf("Malformed URL (%q): %v", clusterURL, err)
+		err = fmt.Errorf("malformed URL (%q): %v", clusterURL, err)
 		return "", err
 	}
 
 	// Try to access the bucket, possibly catching an early error
 	if ok := tryAccessBucket(clusterURL, bck); !ok {
-		err = fmt.Errorf("No response from proxy at %q (bucket %q)", clusterURL, bck)
+		err = fmt.Errorf("no response from proxy at %q (bucket %q)", clusterURL, bck)
 		return "", err
 	}
 
@@ -138,17 +138,17 @@ func buildFileNamePrefix(bucket string) string {
 	return fmt.Sprintf("%s.%s.%s.*.ERROR.log", appName, bucket, time.Now().Format(timeStrFormat))
 }
 
-func updateSymlink(symlink string, target string) (err error) {
+func updateSymlink(symlink, target string) (err error) {
 	if _, err = os.Lstat(symlink); err == nil { // symlink already exists
 		if err = os.Remove(symlink); err != nil {
-			return fmt.Errorf("Failed to unlink %q: %v", symlink, err)
+			return fmt.Errorf("failed to unlink %q: %v", symlink, err)
 		}
 	}
 
 	return os.Symlink(target, symlink)
 }
 
-func prepareLogFileTmpDir(prefix string, bucket string) (*log.Logger, error) {
+func prepareLogFileTmpDir(prefix, bucket string) (*log.Logger, error) {
 	var (
 		tmpDir      = os.TempDir()
 		symlinkName = fmt.Sprintf("aisfs.%s.ERROR.log", bucket)
@@ -158,25 +158,25 @@ func prepareLogFileTmpDir(prefix string, bucket string) (*log.Logger, error) {
 
 	file, err = ioutil.TempFile(tmpDir, buildFileNamePrefix(bucket))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create log file in temp directory: %v", err)
+		return nil, fmt.Errorf("failed to create log file in temp directory: %v", err)
 	}
 
 	if err = updateSymlink(filepath.Join(tmpDir, symlinkName), file.Name()); err != nil {
 		os.Remove(file.Name())
-		return nil, fmt.Errorf("Failed to update symlink to latest log: %v", err)
+		return nil, fmt.Errorf("failed to update symlink to latest log: %v", err)
 	}
 
 	return log.New(file, prefix, log.LstdFlags|log.Lmicroseconds|log.Lshortfile), nil
 }
 
-func prepareLogFile(fileName string, prefix string, bucket string) (*log.Logger, error) {
+func prepareLogFile(fileName, prefix, bucket string) (*log.Logger, error) {
 	if fileName == "" {
 		return prepareLogFileTmpDir(prefix, bucket)
 	}
 
 	file, err := os.Create(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to open log file: %v", err)
+		return nil, fmt.Errorf("failed to open log file: %v", err)
 	}
 
 	return log.New(file, prefix, log.LstdFlags|log.Lmicroseconds|log.Lshortfile), nil
@@ -195,7 +195,7 @@ func helpRequested(c *cli.Context) bool {
 	return globalFlagSet(c, cli.HelpFlag)
 }
 
-func splitOnFirst(str string, sep string) (string, string) {
+func splitOnFirst(str, sep string) (string, string) {
 	split := strings.Index(str, sep)
 	if split != -1 {
 		return str[:split], str[split+1:]

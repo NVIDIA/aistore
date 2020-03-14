@@ -100,19 +100,19 @@ func (rctx *RecipeContext) Put(bucketname string, maxDuration time.Duration, pct
 }
 
 // Get has parameters readoffpct and readlenpct as a 100 pct of min filesize
-func (rctx *RecipeContext) Get(bucketname string, duration time.Duration, checksum bool, readoffpct float64, readlenpct float64) {
+func (rctx *RecipeContext) Get(bucketName string, duration time.Duration, checksum bool, readOffPct, readLenPct float64) {
 	tag := rctx.startPrim("GET")
 	params := &AISLoaderExecParams{
 		pctput:     0,
 		duration:   duration,
 		verifyhash: checksum,
-		readoff:    int64(float64(soakcmn.Params.RecMinFilesize/100) * readoffpct),
-		readlen:    int64(float64(soakcmn.Params.RecMinFilesize/100) * readlenpct),
+		readoff:    int64(float64(soakcmn.Params.RecMinFilesize/100) * readOffPct),
+		readlen:    int64(float64(soakcmn.Params.RecMinFilesize/100) * readLenPct),
 	}
 	go func() {
 		ch := make(chan *stats.PrimitiveStat, 1)
 		defer rctx.finishPrim(tag)
-		AISExec(ch, soakcmn.OpTypeGet, bckNamePrefix(bucketname), soakcmn.Params.RecPrimWorkers, params)
+		AISExec(ch, soakcmn.OpTypeGet, bckNamePrefix(bucketName), soakcmn.Params.RecPrimWorkers, params)
 		stat := <-ch
 		stat.ID = tag.String()
 		rctx.repCtx.PutPrimitiveStats(stat)
@@ -139,20 +139,20 @@ func (rctx *RecipeContext) GetCfg(duration time.Duration) {
 
 //TODO: DELETE, AISLOADER
 
-func (rctx *RecipeContext) Rename(bucketname string, newname string) {
+func (rctx *RecipeContext) Rename(bucketName, newName string) {
 	tag := rctx.startPrim("Rename")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.RenameBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), bckNamePrefix(newname))
+		err := api.RenameBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketName), bckNamePrefix(newName))
 		cmn.AssertNoErr(err)
 	}()
 }
 
-func (rctx *RecipeContext) Destroy(bucketname string) {
+func (rctx *RecipeContext) Destroy(bucketName string) {
 	tag := rctx.startPrim("Destroy")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname))
+		err := api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketName))
 		cmn.AssertNoErr(err)
 	}()
 }

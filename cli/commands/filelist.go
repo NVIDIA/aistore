@@ -41,7 +41,7 @@ func cutPrefixFromPath(path, base string) string {
 }
 
 // returns only files inside the 'path' directory that matches mask. No recursion
-func filesInDirByMask(path, trimPrefix, appendPrefix string, mask string) ([]fileToObj, error) {
+func filesInDirByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj, error) {
 	files := make([]fileToObj, 0)
 	fList, err := ioutil.ReadDir(path)
 	if err != nil {
@@ -66,7 +66,7 @@ func filesInDirByMask(path, trimPrefix, appendPrefix string, mask string) ([]fil
 
 // traverses the directory 'path' recursively and collects all files
 // with names that match mask
-func fileTreeByMask(path, trimPrefix, appendPrefix string, mask string) ([]fileToObj, error) {
+func fileTreeByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj, error) {
 	files := make([]fileToObj, 0)
 	walkf := func(fqn string, info os.FileInfo, err error) error {
 		if err != nil {

@@ -613,11 +613,11 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		err = jsoniter.Unmarshal(b, msgInt)
 	}
 	if err != nil {
-		s := fmt.Sprintf("Failed to read %s body, err: %v", r.Method, err)
+		s := fmt.Sprintf("failed to read %s body, err: %v", r.Method, err)
 		if err == io.EOF {
 			trailer := r.Trailer.Get("Error")
 			if trailer != "" {
-				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+				s = fmt.Sprintf("failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
 			}
 		}
 		t.invalmsghdlr(w, r, s)
@@ -628,7 +628,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	switch msgInt.Action {
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) == 0 { // must be a List/Range request
-			s := fmt.Sprintf("Invalid API request: no message body")
+			s := "invalid API request: no message body"
 			t.invalmsghdlr(w, r, s)
 			return
 		}
@@ -738,7 +738,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if ok := t.bucketSummary(w, r, bck, msgInt); !ok {
+			if !t.bucketSummary(w, r, bck, msgInt) {
 				return
 			}
 		default:
@@ -831,7 +831,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("LIST: %s, %d µs", bucket, int64(delta/time.Microsecond))
 		}
 	case cmn.ActSummaryBucket:
-		if ok := t.bucketSummary(w, r, bck, msgInt); !ok {
+		if !t.bucketSummary(w, r, bck, msgInt) {
 			return
 		}
 	case cmn.ActECEncode:

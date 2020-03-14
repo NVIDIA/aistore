@@ -84,7 +84,7 @@ func addFileToZip(tw *zip.Writer, path string, fileSize int) error {
 
 // CreateTarWithRandomFiles creates tar with specified number of files. Tar
 // is also gzipped if necessary.
-func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt int, fileSize int, duplication bool) error {
+func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize int, duplication bool) error {
 	var (
 		gzw *gzip.Writer
 		tw  *tar.Writer
@@ -232,7 +232,7 @@ func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo
 		tr = tar.NewReader(&buffer)
 	}
 
-	var files []os.FileInfo
+	var files []os.FileInfo // nolint:prealloc // cannot determine the size
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -254,7 +254,7 @@ func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo
 func GetFilesFromTarBuffer(buffer bytes.Buffer, extension string) ([]FileContent, error) {
 	tr := tar.NewReader(&buffer)
 
-	var files []FileContent
+	var files []FileContent // nolint:prealloc // cannot determine the size
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {

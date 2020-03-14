@@ -100,9 +100,9 @@ type (
 // Trunner
 //
 
-func (r *Trunner) Register(name string, kind string) { r.Core.Tracker.register(name, kind) }
-func (r *Trunner) Run() error                        { return r.runcommon(r) }
-func (r *Trunner) Get(name string) (val int64)       { return r.Core.get(name) }
+func (r *Trunner) Register(name, kind string)  { r.Core.Tracker.register(name, kind) }
+func (r *Trunner) Run() error                  { return r.runcommon(r) }
+func (r *Trunner) Get(name string) (val int64) { return r.Core.get(name) }
 
 func (r *Trunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *atomic.Bool {
 	r.Core = &CoreStats{}

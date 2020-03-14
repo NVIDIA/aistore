@@ -116,7 +116,7 @@ func (m *userManager) saveUsers() (err error) {
 	}
 
 	if err = jsp.Save(m.Path, &filtered, jsp.Plain()); err != nil {
-		err = fmt.Errorf("UserManager: Failed to save user list: %v", err)
+		err = fmt.Errorf("failed to save user list: %v", err)
 	}
 	return err
 }
@@ -131,7 +131,7 @@ func (m *userManager) addUser(userID, userPass string) error {
 	defer m.mtx.Unlock()
 
 	if _, ok := m.Users[userID]; ok {
-		return fmt.Errorf("user '%s' already registered", userID)
+		return fmt.Errorf("user %q already registered", userID)
 	}
 	m.Users[userID] = &userInfo{
 		UserID:          userID,
@@ -146,7 +146,7 @@ func (m *userManager) addUser(userID, userPass string) error {
 // Deletes an existing user
 func (m *userManager) delUser(userID string) error {
 	if userID == conf.Auth.Username {
-		return errors.New("Super user cannot be deleted")
+		return errors.New("superuser cannot be deleted")
 	}
 	m.mtx.Lock()
 	if _, ok := m.Users[userID]; !ok {
@@ -256,14 +256,14 @@ func (m *userManager) sendRevokedTokensToProxy(tokens ...string) {
 		return
 	}
 	if m.proxy.URL == "" {
-		glog.Warning("Primary proxy is not defined")
+		glog.Warning("primary proxy is not defined")
 		return
 	}
 
 	tokenList := ais.TokenList{Tokens: tokens}
 	body := cmn.MustMarshal(tokenList)
 	if err := m.proxyRequest(http.MethodDelete, cmn.Tokens, body); err != nil {
-		glog.Errorf("Failed to send token list: %v", err)
+		glog.Errorf("failed to send token list: %v", err)
 	}
 }
 
@@ -315,7 +315,7 @@ func (m *userManager) proxyRequest(method, path string, injson []byte) error {
 			return nil
 		}
 
-		glog.Errorf("Failed to http-call %s %s: error %v", method, url, err)
+		glog.Errorf("failed to http-call %s %s: error %v", method, url, err)
 
 		err = m.proxy.detectPrimary()
 		if err != nil {

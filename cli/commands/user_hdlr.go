@@ -126,7 +126,7 @@ func cliAuthnUserPassword(c *cli.Context) string {
 func addUserHandler(c *cli.Context) (err error) {
 	authnURL := cliAuthnURL()
 	if authnURL == "" {
-		return fmt.Errorf("AuthN URL is not set")
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
 	baseParams := cliAPIParams(authnURL)
 	baseParams.Token = "" // the request requires superuser credentials, not user's ones
@@ -142,7 +142,7 @@ func addUserHandler(c *cli.Context) (err error) {
 func deleteUserHandler(c *cli.Context) (err error) {
 	authnURL := cliAuthnURL()
 	if authnURL == "" {
-		return fmt.Errorf("AuthN URL is not set")
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
 	baseParams := cliAPIParams(authnURL)
 	baseParams.Token = "" // the request requires superuser credentials, not user's ones
@@ -155,10 +155,10 @@ func deleteUserHandler(c *cli.Context) (err error) {
 }
 
 func loginUserHandler(c *cli.Context) (err error) {
-	const tokenSaveFailFmt = "Logged in successfully, but failed to save token: %v"
+	const tokenSaveFailFmt = "logged in successfully, but failed to save token: %v"
 	authnURL := cliAuthnURL()
 	if authnURL == "" {
-		return fmt.Errorf("AuthN URL is not set")
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
 	baseParams := cliAPIParams(authnURL)
 	spec := api.AuthnSpec{

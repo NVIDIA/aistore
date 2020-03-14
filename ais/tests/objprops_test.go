@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged int64) {
+func propsStats(t *testing.T, proxyURL string) (objChanged, bytesChanged int64) {
 	cstats := tutils.GetClusterStats(t, proxyURL)
 	objChanged = 0
 	bytesChanged = 0
@@ -30,7 +30,7 @@ func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged i
 }
 
 func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions map[string]string, msg *cmn.SelectMsg,
-	versionEnabled bool, bckIsAIS bool) (newVersions map[string]string) {
+	versionEnabled, bckIsAIS bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
 	r, err := tutils.NewRandReader(int64(fileSize), true /* withHash */)
@@ -191,8 +191,7 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 	tutils.Logf("Checking objects properties after refetching...\n")
 	reslist := testListBucket(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
-		t.Errorf("Unexpected error: no object in the bucket %s", bck)
-		t.Fail()
+		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
 	}
 	var (
 		version string
@@ -224,7 +223,7 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 	}
 }
 
-func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsAIS bool) {
+func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *cmn.SelectMsg, versionEnabled, bckIsAIS bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bck, objects)
 
@@ -269,8 +268,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	tutils.Logf("Reading file versions...\n")
 	reslist := testListBucket(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
-		t.Errorf("Unexpected error: no object in the bucket %s", bck)
-		t.Fail()
+		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
 	}
 	var (
 		version  string
@@ -322,7 +320,7 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 	close(errCh)
 }
 
-func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
+func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
 	const (
 		objCountToTest = 15
 		filesize       = cmn.MiB
@@ -356,8 +354,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 	msg.AddProps(cmn.GetPropsVersion, cmn.GetPropsIsCached, cmn.GetPropsAtime, cmn.GetPropsStatus)
 	reslist := testListBucket(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
-		t.Errorf("Unexpected error: no object in the bucket %s", bck)
-		t.Fail()
+		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
 		return
 	}
 

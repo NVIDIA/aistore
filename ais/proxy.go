@@ -1651,7 +1651,7 @@ func (p *proxyrunner) checkBckTaskResp(taskID string, results chan callResult) (
 		}
 	}
 	if allNotFound {
-		err = fmt.Errorf("Task %s %s", taskID, cmn.DoesNotExist)
+		err = fmt.Errorf("task %s %s", taskID, cmn.DoesNotExist)
 	}
 	return
 }
@@ -2268,7 +2268,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			ok    bool
 		)
 		if value, ok = msg.Value.(string); !ok {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: not a string"))
+			p.invalmsghdlr(w, r, "failed to parse ActionMsg value: not a string")
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
@@ -2395,7 +2395,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	if p.owner.smap.get().isPrimary(p.si) {
-		s := fmt.Sprint("Expecting 'cluster' (RESTful) resource when designating primary proxy via API")
+		s := "expecting 'cluster' (RESTful) resource when designating primary proxy via API"
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2974,7 +2974,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}(nsi)
 }
 
-func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, keepalive bool) bool {
+func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) bool {
 	if keepalive {
 		if osi == nil {
 			glog.Warningf("register/keepalive %s: adding back to the cluster map", nsi)
@@ -3269,7 +3269,7 @@ func (p *proxyrunner) urlOutsideCluster(url string) bool {
 
 // detectDaemonDuplicate queries osi for its daemon info in order to determine if info has changed
 // and is equal to nsi
-func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Snode) bool {
+func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
 	query := url.Values{}
 	query.Add(cmn.URLParamWhat, cmn.GetWhatSnode)
 	args := callArgs{

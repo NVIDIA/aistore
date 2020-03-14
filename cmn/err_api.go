@@ -127,7 +127,7 @@ func (e *ErrorCapacityExceeded) Error() string {
 func (e InvalidCksumError) Error() string {
 	return fmt.Sprintf("checksum: expected [%s], actual [%s]", e.expectedHash, e.actualHash)
 }
-func NewInvalidCksumError(eHash string, aHash string) InvalidCksumError {
+func NewInvalidCksumError(eHash, aHash string) InvalidCksumError {
 	return InvalidCksumError{actualHash: aHash, expectedHash: eHash}
 }
 func (e InvalidCksumError) Expected() string { return e.expectedHash }

@@ -67,7 +67,7 @@ func LoginUser(baseParams BaseParams, spec AuthnSpec) (*AuthCreds, error) {
 	}
 	token := &AuthCreds{}
 	if len(b) == 0 {
-		return nil, errors.New("Login failed: empty response from AuthN server")
+		return nil, errors.New("login failed: empty response from AuthN server")
 	}
 
 	err = jsoniter.Unmarshal(b, token)
@@ -75,7 +75,7 @@ func LoginUser(baseParams BaseParams, spec AuthnSpec) (*AuthCreds, error) {
 		return nil, err
 	}
 	if token.Token == "" {
-		return nil, errors.New("Login failed: empty response from AuthN server")
+		return nil, errors.New("login failed: empty response from AuthN server")
 	}
 	return token, nil
 }

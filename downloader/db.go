@@ -75,11 +75,11 @@ func (db *downloaderDB) getErrors(id string) (errors []TaskErrInfo, err error) {
 	return db.errors(id)
 }
 
-func (db *downloaderDB) persistError(id, objname string, errMsg string) {
+func (db *downloaderDB) persistError(id, objName, errMsg string) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
-	errInfo := TaskErrInfo{Name: objname, Err: errMsg}
+	errInfo := TaskErrInfo{Name: objName, Err: errMsg}
 	if len(db.errCache[id]) < errCacheSize { // if possible store error in cache
 		db.errCache[id] = append(db.errCache[id], errInfo)
 		return

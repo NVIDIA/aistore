@@ -51,7 +51,7 @@ func newZipRecordDataReader(t cluster.Target) *zipRecordDataReader {
 	return rd
 }
 
-func (rd *zipRecordDataReader) reinit(zw *zip.Writer, size int64, metadataSize int64) {
+func (rd *zipRecordDataReader) reinit(zw *zip.Writer, size, metadataSize int64) {
 	rd.zipWriter = zw
 	rd.written = 0
 	rd.size = size

@@ -579,7 +579,7 @@ func AnyHasPrefixInSlice(prefix string, arr []string) bool {
 	return false
 }
 
-func CopyStruct(dst interface{}, src interface{}) {
+func CopyStruct(dst, src interface{}) {
 	x := reflect.ValueOf(src)
 	Assert(x.Kind() == reflect.Ptr)
 	starX := x.Elem()

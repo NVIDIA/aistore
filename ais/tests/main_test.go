@@ -1254,7 +1254,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	}
 }
 
-func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, fileName string, fqn string,
+func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, fileName, fqn string,
 	oldFileInfo os.FileInfo) {
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
 	var (
@@ -1520,7 +1520,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, fileName stri
 	}
 }
 
-func verifyInvalidParams(t *testing.T, proxyURL string, bck cmn.Bck, fileName string, offset string, length string) {
+func verifyInvalidParams(t *testing.T, proxyURL string, bck cmn.Bck, fileName, offset, length string) {
 	q := url.Values{}
 	q.Add(cmn.URLParamOffset, offset)
 	q.Add(cmn.URLParamLength, length)

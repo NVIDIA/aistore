@@ -18,7 +18,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func (p *proxyrunner) broadcastDownloadRequest(method string, path string, body []byte, query url.Values) chan callResult {
+func (p *proxyrunner) broadcastDownloadRequest(method, path string, body []byte, query url.Values) chan callResult {
 	query.Add(cmn.URLParamProxyID, p.si.ID())
 	query.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(time.Now().UnixNano()))
 	args := bcastArgs{
@@ -35,7 +35,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, body 
 	return p.bcastTo(args)
 }
 
-func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
+func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
 	var (
 		notFoundCnt int
 		err         *callResult

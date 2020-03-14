@@ -155,13 +155,13 @@ func (reb *Manager) distributeECNamespace(md *globArgs) error {
 // find out which objects are broken and how to fix them
 func (reb *Manager) generateECFixList(md *globArgs) {
 	reb.checkCTs(md)
-	glog.Infof("Number of objects misplaced locally: %d", len(reb.ec.localActions))
-	glog.Infof("Number of objects to be reconstructed/resent: %d", len(reb.ec.broken))
+	glog.Infof("number of objects misplaced locally: %d", len(reb.ec.localActions))
+	glog.Infof("number of objects to be reconstructed/resent: %d", len(reb.ec.broken))
 }
 
 func (reb *Manager) ecFixLocal(md *globArgs) error {
 	if err := reb.rebalanceLocal(); err != nil {
-		return fmt.Errorf("Failed to rebalance local slices/objects: %v", err)
+		return fmt.Errorf("failed to rebalance local slices/objects: %v", err)
 	}
 
 	if cnt := reb.bcast(md, reb.waitECLocalReb); cnt != 0 {

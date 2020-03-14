@@ -59,7 +59,7 @@ func mockGetFSUsedPercentage(path string) (usedPrecentage int64, ok bool) {
 
 func getMockGetFSStats(currentFilesNum int) func(string) (uint64, uint64, int64, error) {
 	currDiskUsage := initialDiskUsagePct
-	return func(string) (blocks uint64, bavail uint64, bsize int64, err error) {
+	return func(string) (blocks, bavail uint64, bsize int64, err error) {
 		bsize = blockSize
 		btaken := uint64(currentFilesNum * fileSize / blockSize)
 		blocks = uint64(float64(btaken) / currDiskUsage) // gives around currDiskUsage of virtual disk usage
@@ -210,7 +210,7 @@ var _ = Describe("LRU tests", func() {
 			It("should evict files of different sizes", func() {
 				const totalSize = 32 * cmn.MiB
 
-				ini.GetFSStats = func(string) (blocks uint64, bavail uint64, bsize int64, err error) {
+				ini.GetFSStats = func(string) (blocks, bavail uint64, bsize int64, err error) {
 					bsize = blockSize
 					btaken := uint64(totalSize / blockSize)
 					blocks = uint64(float64(btaken) / initialDiskUsagePct)

@@ -25,7 +25,6 @@ var (
 func buildDownloaderInput(t cluster.Target, id string, bck *cluster.Bck,
 	payload *DlBase, objects cmn.SimpleKVs) (*DlBody, error) {
 	var (
-		err    error
 		dlBody = &DlBody{ID: id}
 		smap   = t.GetSowner().Get()
 		sid    = t.Snode().ID()
@@ -44,7 +43,7 @@ func buildDownloaderInput(t cluster.Target, id string, bck *cluster.Bck,
 		}
 		dlBody.Objs = append(dlBody.Objs, dlJob)
 	}
-	return dlBody, err
+	return dlBody, nil
 }
 
 func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, link string) (DlObj, error) {
@@ -113,16 +112,17 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		return nil, err
 	}
 
-	if err := singlePayload.Validate(); err == nil {
+	if err = singlePayload.Validate(); err == nil {
 		if objects, err = singlePayload.ExtractPayload(); err != nil {
 			return nil, err
 		}
 		description = singlePayload.Describe()
-	} else if err := rangePayload.Validate(); err == nil {
+	} else if err = rangePayload.Validate(); err == nil {
 		// NOTE: size of objects to be downloaded by a target will be unknown
 		// So proxy won't be able to sum sizes from all targets when calculating total size
 		// This should be taken care of somehow, as total is easy to know from range template anyway
-		pt, err := cmn.ParseBashTemplate(rangePayload.Template)
+		var pt cmn.ParsedTemplate
+		pt, err = cmn.ParseBashTemplate(rangePayload.Template)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +130,7 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		bck := cluster.NewBckEmbed(rangePayload.Bck)
 		baseJob := newBaseDlJob(id, bck, rangePayload.Timeout, description)
 		return newRangeDlJob(t, baseJob, pt, rangePayload.Subdir)
-	} else if err := multiPayload.Validate(b); err == nil {
+	} else if err = multiPayload.Validate(b); err == nil {
 		if err := jsoniter.Unmarshal(b, &objectsPayload); err != nil {
 			return nil, err
 		}
@@ -139,7 +139,7 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 			return nil, err
 		}
 		description = multiPayload.Describe()
-	} else if err := cloudPayload.Validate(); err == nil {
+	} else if err = cloudPayload.Validate(); err == nil {
 		bck := cluster.NewBckEmbed(cloudPayload.Bck)
 		if err := bck.Init(t.GetBowner(), t.Snode()); err != nil {
 			return nil, err

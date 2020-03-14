@@ -304,7 +304,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 // implements health.fspathDispatcher interface
 //
 
-func (t *targetrunner) DisableMountpath(mountpath string, reason string) (disabled bool, err error) {
+func (t *targetrunner) DisableMountpath(mountpath, reason string) (disabled bool, err error) {
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, reason)
 	return t.fsprg.disableMountpath(mountpath)
 }

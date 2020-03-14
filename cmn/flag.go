@@ -36,7 +36,7 @@ func (b *BoolExt) Set(s string) (err error) {
 func (b *BoolExt) Get() interface{} { return b.Val }
 func (b *BoolExt) String() string   { return strconv.FormatBool(b.Val) }
 func (b *BoolExt) IsBoolFlag() bool { return true }
-func BoolExtVar(f *flag.FlagSet, p *BoolExt, name string, usage string) {
+func BoolExtVar(f *flag.FlagSet, p *BoolExt, name, usage string) {
 	f.Var(p, name, usage)
 }
 

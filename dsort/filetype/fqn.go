@@ -28,6 +28,6 @@ func (df *DSortFile) PermToEvict() bool                  { return false }
 func (df *DSortFile) PermToMove() bool                   { return false }
 func (df *DSortFile) PermToProcess() bool                { return false }
 func (df *DSortFile) GenUniqueFQN(base, _ string) string { return base }
-func (df *DSortFile) ParseUniqueFQN(base string) (orig string, old bool, ok bool) {
+func (df *DSortFile) ParseUniqueFQN(base string) (orig string, old, ok bool) {
 	return base, false, true
 }

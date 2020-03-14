@@ -180,22 +180,22 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		storeType = DiskStoreType
 		contentPath, fullContentPath = rm.encodeRecordName(storeType, args.shardName, args.recordName)
 
-		newF, err := cmn.CreateFile(fullContentPath)
-		if err != nil {
+		var f *os.File
+		if f, err = cmn.CreateFile(fullContentPath); err != nil {
 			return size, errors.WithStack(err)
 		}
-		if size, err = copyMetadataAndData(newF, r, args.metadata, args.buf); err != nil {
-			newF.Close()
+		if size, err = copyMetadataAndData(f, r, args.metadata, args.buf); err != nil {
+			f.Close()
 			return size, errors.WithStack(err)
 		}
-		newF.Close()
+		f.Close()
 		rm.extractionPaths.Store(fullContentPath, struct{}{})
 	} else {
 		cmn.AssertMsg(false, fmt.Sprintf("%d %d", args.extractMethod, args.extractMethod&ExtractToDisk))
 	}
 
-	key, err := rm.keyExtractor.ExtractKey(ske)
-	if err != nil {
+	var key interface{}
+	if key, err = rm.keyExtractor.ExtractKey(ske); err != nil {
 		return size, errors.WithStack(err)
 	}
 
@@ -252,7 +252,7 @@ func (rm *RecordManager) parseRecordUniqueName(recordUniqueName string) (shardNa
 	return splits[0] + rm.extension, splits[1]
 }
 
-func (rm *RecordManager) encodeRecordName(storeType string, shardName, recordName string) (contentPath, fullContentPath string) {
+func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName string) (contentPath, fullContentPath string) {
 	switch storeType {
 	case OffsetStoreType:
 		// For offset:
@@ -396,7 +396,7 @@ func (rm *RecordManager) Cleanup() {
 	})
 }
 
-func copyMetadataAndData(dst io.Writer, src io.Reader, metadata []byte, buf []byte) (int64, error) {
+func copyMetadataAndData(dst io.Writer, src io.Reader, metadata, buf []byte) (int64, error) {
 	// Save metadata to dst
 	if _, err := io.CopyBuffer(dst, bytes.NewReader(metadata), buf); err != nil {
 		return 0, err

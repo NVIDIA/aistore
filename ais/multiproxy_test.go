@@ -54,7 +54,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 }
 
 // discoverServerDefaultHandler returns the Smap and BMD with the given version
-func discoverServerDefaultHandler(sv int64, lv int64) *httptest.Server {
+func discoverServerDefaultHandler(sv, lv int64) *httptest.Server {
 	smapVersion := sv
 	bmdVersion := lv
 	return httptest.NewServer(http.HandlerFunc(
@@ -72,7 +72,7 @@ func discoverServerDefaultHandler(sv int64, lv int64) *httptest.Server {
 
 // discoverServerVoteOnceHandler returns vote in progress on the first time it is call, returns
 // Smap and BMD on subsequent calls
-func discoverServerVoteOnceHandler(sv int64, lv int64) *httptest.Server {
+func discoverServerVoteOnceHandler(sv, lv int64) *httptest.Server {
 	cnt := 0
 	smapVersion := sv
 	bmdVersion := lv
@@ -92,7 +92,7 @@ func discoverServerVoteOnceHandler(sv int64, lv int64) *httptest.Server {
 
 // discoverServerFailTwiceHandler fails the first two calls and returns
 // Smap abd BMD on subsequent calls
-func discoverServerFailTwiceHandler(sv int64, lv int64) *httptest.Server {
+func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 	cnt := 0
 	smapVersion := sv
 	bmdVersion := lv
@@ -115,7 +115,7 @@ func discoverServerFailTwiceHandler(sv int64, lv int64) *httptest.Server {
 }
 
 // discoverServerAlwaysFailHandler always responds with error
-func discoverServerAlwaysFailHandler(sv int64, lv int64) *httptest.Server {
+func discoverServerAlwaysFailHandler(sv, lv int64) *httptest.Server {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "retry", http.StatusUnavailableForLegalReasons)
 	}
@@ -124,7 +124,7 @@ func discoverServerAlwaysFailHandler(sv int64, lv int64) *httptest.Server {
 }
 
 // discoverServerVoteInProgressHandler always responds with vote in progress
-func discoverServerVoteInProgressHandler(sv int64, lv int64) *httptest.Server {
+func discoverServerVoteInProgressHandler(sv, lv int64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := SmapVoteMsg{

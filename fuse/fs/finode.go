@@ -102,7 +102,7 @@ func (file *FileInode) UpdateBackingObject(obj *ais.Object) {
 /////////////
 
 // REQUIRES_READ_LOCK(file)
-func (file *FileInode) Load(w io.Writer, offset int64, length int64) (n int64, err error) {
+func (file *FileInode) Load(w io.Writer, offset, length int64) (n int64, err error) {
 	n, err = file.object.GetChunk(w, offset, length)
 	if err != nil {
 		return 0, err
