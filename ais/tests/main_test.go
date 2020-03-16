@@ -136,7 +136,7 @@ func Test_matchdelete(t *testing.T) {
 		proxyURL = tutils.GetPrimaryURL()
 	)
 
-	if created := createBucketIfNotExists(t, proxyURL, bck); created {
+	if created := createBucketIfNotCloud(t, proxyURL, &bck); created {
 		defer tutils.DestroyBucket(t, proxyURL, bck)
 	}
 
@@ -213,7 +213,7 @@ func Test_putdeleteRange(t *testing.T) {
 		objSize      = 16 * 1024
 	)
 
-	if created := createBucketIfNotExists(t, proxyURL, bck); created {
+	if createBucketIfNotCloud(t, proxyURL, &bck) {
 		defer tutils.DestroyBucket(t, proxyURL, bck)
 	}
 
@@ -352,7 +352,7 @@ func Test_putdelete(t *testing.T) {
 		filesPutCh = make(chan string, numfiles)
 	)
 
-	if created := createBucketIfNotExists(t, proxyURL, bck); created {
+	if createBucketIfNotCloud(t, proxyURL, &bck) {
 		defer tutils.DestroyBucket(t, proxyURL, bck)
 	}
 
@@ -1388,7 +1388,7 @@ func TestRangeRead(t *testing.T) {
 		proxyURL = tutils.GetPrimaryURL()
 	)
 
-	created := createBucketIfNotExists(t, proxyURL, bck)
+	created := createBucketIfNotCloud(t, proxyURL, &bck)
 	tutils.PutRandObjs(proxyURL, bck, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, true)
 	tassert.SelectErr(t, errCh, "put", false)
 
@@ -1677,18 +1677,14 @@ func getFromObjList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []
 	getsGroup.Wait()
 }
 
-func createBucketIfNotExists(t *testing.T, proxyURL string, bck cmn.Bck) (created bool) {
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	buckets, err := api.GetBucketNames(baseParams, cmn.Bck{})
-	if err != nil {
-		t.Fatalf("Failed to read bucket list: %v", err)
-	}
-
-	if cmn.StringInSlice(bck.Name, buckets.AIS) || cmn.StringInSlice(bck.Name, buckets.Cloud) {
+func createBucketIfNotCloud(t *testing.T, proxyURL string, bck *cmn.Bck) (created bool) {
+	if isCloudBucket(t, proxyURL, *bck) {
+		bck.Provider = cmn.Cloud
 		return false
 	}
-
-	err = api.CreateBucket(baseParams, bck)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	bck.Provider = cmn.ProviderAIS
+	err := api.CreateBucket(baseParams, *bck)
 	if err != nil {
 		t.Fatalf("Failed to create ais bucket %s: %v", bck, err)
 	}

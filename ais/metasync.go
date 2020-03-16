@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 const (
@@ -340,7 +341,7 @@ outer:
 	// step 3: b-cast
 	var (
 		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)
-		body    = cmn.MustMarshal(payload)
+		body    = jsp.EncodeBuf(payload, jsp.CCSign())
 	)
 	res := y.p.bcastTo(bcastArgs{
 		req: cmn.ReqArgs{

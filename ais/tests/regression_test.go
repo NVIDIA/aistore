@@ -463,7 +463,7 @@ func TestObjectPrefix(t *testing.T) {
 		proxyURL = tutils.GetPrimaryURL()
 		bck      = cmn.Bck{Name: clibucket}
 	)
-	if created := createBucketIfNotExists(t, proxyURL, bck); created {
+	if createBucketIfNotCloud(t, proxyURL, &bck) {
 		defer tutils.DestroyBucket(t, proxyURL, bck)
 	}
 
@@ -848,7 +848,7 @@ func TestDeleteList(t *testing.T) {
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
-	if created := createBucketIfNotExists(t, proxyURL, bck); created {
+	if created := createBucketIfNotCloud(t, proxyURL, &bck); created {
 		defer tutils.DestroyBucket(t, proxyURL, bck)
 	}
 
@@ -977,7 +977,7 @@ func TestDeleteRange(t *testing.T) {
 		bck            = cmn.Bck{Name: clibucket}
 	)
 
-	if created := createBucketIfNotExists(t, proxyURL, bck); created {
+	if createBucketIfNotCloud(t, proxyURL, &bck) {
 		defer tutils.DestroyBucket(t, proxyURL, bck)
 	}
 

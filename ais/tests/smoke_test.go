@@ -31,7 +31,7 @@ func TestSmoke(t *testing.T) {
 		proxyURL = tutils.GetPrimaryURL()
 	)
 
-	created := createBucketIfNotExists(t, proxyURL, bck)
+	created := createBucketIfNotCloud(t, proxyURL, &bck)
 	fp := make(chan string, len(objSizes)*len(ratios)*numops*numworkers)
 	for _, fs := range objSizes {
 		for _, r := range ratios {

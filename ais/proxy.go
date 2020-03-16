@@ -608,7 +608,8 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var payload = make(msPayload)
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
+	if err := jsp.Decode(r.Body, &payload, jsp.CCSign(), "metasync put"); err != nil {
+		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return
 	}
 
@@ -671,8 +672,8 @@ ExtractBMD:
 // POST /v1/metasync
 func (p *proxyrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
 	var payload = make(msPayload)
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err := jsp.Decode(r.Body, &payload, jsp.CCSign(), "metasync post"); err != nil {
+		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return
 	}
 	glog.Infof("metasync NIY: %+v", payload)

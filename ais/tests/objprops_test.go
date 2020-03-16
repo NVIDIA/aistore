@@ -434,7 +434,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 	if len(newConfig) != 0 {
 		tutils.SetClusterConfig(t, newConfig)
 	}
-	created := createBucketIfNotExists(t, proxyURL, bck)
+	created := createBucketIfNotCloud(t, proxyURL, &bck)
 
 	defer func() {
 		// restore configuration

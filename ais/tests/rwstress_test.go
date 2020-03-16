@@ -337,7 +337,7 @@ func rwstress(t *testing.T) {
 	var (
 		proxyURL = tutils.GetPrimaryURL()
 		bck      = cmn.Bck{Name: clibucket}
-		created  = createBucketIfNotExists(t, proxyURL, bck)
+		created  = createBucketIfNotCloud(t, proxyURL, &bck)
 	)
 	filelock.files = make([]fileLock, numFiles)
 

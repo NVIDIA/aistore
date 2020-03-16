@@ -548,7 +548,7 @@ func concurrentPutGetDel(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 
 	bck := cmn.Bck{Name: clibucket}
-	createBucketIfNotExists(t, proxyURL, bck)
+	createBucketIfNotCloud(t, proxyURL, &bck)
 
 	var (
 		errCh = make(chan error, smap.CountProxies())
@@ -745,7 +745,7 @@ func proxyStress(t *testing.T) {
 		proxyURL = tutils.GetPrimaryURL()
 	)
 
-	createBucketIfNotExists(t, proxyURL, bck)
+	createBucketIfNotCloud(t, proxyURL, &bck)
 
 	// start all workers
 	for i := 0; i < numworkers; i++ {
