@@ -88,6 +88,7 @@ type (
 		SmapVersion int64  `json:"smapversion,string"`
 		NewDaemonID string `json:"newdaemonid"` // used when a node joins cluster
 		RebID       int64  `json:"reb_id,string"`
+		TxnID       string `json:"txn_id"`
 	}
 
 	// http server and http runner (common for proxy and target)
@@ -927,6 +928,30 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 
 func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
 	cmn.InvalidHandlerDetailedNoLog(w, r, msg, errCode...)
+}
+
+////////////
+// health //
+////////////
+
+func (h *httprunner) Health(si *cluster.Snode, includeReb bool, timeout time.Duration) ([]byte, error) {
+	var query url.Values
+	if includeReb {
+		query = make(url.Values)
+		query.Add(cmn.URLParamRebStatus, "true")
+	}
+	args := callArgs{
+		si: si,
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Base:   si.URL(cmn.NetworkIntraControl),
+			Path:   cmn.URLPath(cmn.Version, cmn.Health),
+			Query:  query,
+		},
+		timeout: timeout,
+	}
+	res := h.call(args)
+	return res.outjson, res.err
 }
 
 //////////////////////////

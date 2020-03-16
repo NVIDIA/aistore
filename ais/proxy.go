@@ -560,12 +560,18 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 			return
 		}
-		fallthrough
+		fallthrough // fallthrough
 	case cmn.ActDestroyLB:
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		p.destroyBucket(&msg, bck)
+		if err := p.destroyBucket(&msg, bck); err != nil {
+			if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok { // race
+				glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
+			} else {
+				p.invalmsghdlr(w, r, err.Error())
+			}
+		}
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if msg.Action == cmn.ActEvictObjects && bck.IsAIS() {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
@@ -683,27 +689,6 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// destroy AIS bucket or evict Cloud bucket
-func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) {
-	p.owner.bmd.Lock()
-	bmd := p.owner.bmd.get()
-	if _, present := bmd.Get(bck); !present {
-		if bck.IsAIS() {
-			glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
-		}
-		p.owner.bmd.Unlock()
-		return
-	}
-	clone := bmd.clone()
-	deled := clone.del(bck)
-	cmn.Assert(deled)
-	p.owner.bmd.put(clone)
-
-	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, revsPair{clone, msgInt})
-	p.owner.bmd.Unlock()
-}
-
 // POST { action } /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	const fmtErr = "cannot %s: invalid provider %q"
@@ -800,25 +785,55 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	// 4. {action} on bucket
 	switch msg.Action {
-	case cmn.ActCopyBucket, cmn.ActRenameLB:
+	case cmn.ActRenameLB:
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		if msg.Action == cmn.ActRenameLB && !bck.IsAIS() {
+		if !bck.IsAIS() {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtErr, msg.Action, bck.Provider))
 			return
 		}
 		bckFrom, bucketTo := bck, msg.Name
 		if bucket == bucketTo {
-			s := fmt.Sprintf("cannot %q: duplicate bucket name %q", msg.Action, bucket)
-			p.invalmsghdlr(w, r, s)
+			p.invalmsghdlr(w, r, fmt.Sprintf("cannot rename bucket %q as %q", bucket, bucket))
 			return
 		}
 		if err := cmn.ValidateBckName(bucketTo); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if err := p.copyRenameLB(bckFrom, bucketTo, &msg, config); err != nil {
+		bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
+		if _, present := p.owner.bmd.get().Get(bckTo); present {
+			err := cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		s := fmt.Sprintf("%s bucket %s => %s", msg.Action, bckFrom, bucketTo)
+		if !config.Rebalance.Enabled {
+			p.invalmsghdlr(w, r, fmt.Sprintf("cannot %s - global rebalancing disabled", s))
+			return
+		}
+		glog.Infoln(s)
+		if err := p.renameBucket(bckFrom, bckTo, &msg); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+	case cmn.ActCopyBucket:
+		if p.forwardCP(w, r, &msg, bucket, nil) {
+			return
+		}
+		bckFrom, bucketTo := bck, msg.Name
+		if bucket == bucketTo {
+			p.invalmsghdlr(w, r, fmt.Sprintf("cannot copy bucket %q onto itself", bucket))
+			return
+		}
+		if err := cmn.ValidateBckName(bucketTo); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bucketTo)
+		bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
+		if err := p.copyBucket(bckFrom, bckTo, &msg, config); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -1072,7 +1087,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActRename:
+	case cmn.ActRenameObject:
 		if !bck.IsAIS() {
 			p.invalmsghdlr(w, r, fmt.Sprintf("%q is not supported for Cloud buckets: %s", msg.Action, bck))
 			return
@@ -1181,10 +1196,11 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		clone.set(bck, bprops)
 	}
 	p.owner.bmd.put(clone)
-	p.owner.bmd.Unlock()
 
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, revsPair{clone, msgInt})
+	p.metasyncer.sync(false, revsPair{clone, msgInt})
+
+	p.owner.bmd.Unlock()
 }
 
 // PATCH /v1/buckets/bucket-name
@@ -1337,122 +1353,6 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 	}
 
 	rproxy.ServeHTTP(w, r)
-}
-
-func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *cmn.ActionMsg,
-	config *cmn.Config) (err error) {
-	var (
-		smap  = p.owner.smap.get()
-		tout  = config.Timeout.Default
-		bckTo = cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
-	)
-
-	p.owner.bmd.Lock()
-	clone := p.owner.bmd.get().clone()
-
-	// Re-init under a lock
-	if err = bckFrom.Init(p.owner.bmd, p.si); err != nil {
-		p.owner.bmd.Unlock()
-		return
-	}
-	if bckFrom.Props.InProgress {
-		p.owner.bmd.Unlock()
-		return fmt.Errorf("source bucket (%s) is under construction, cannot proceed", bckTo.Bck)
-	}
-	if err := bckTo.Init(p.owner.bmd, p.si); err == nil {
-		if msg.Action == cmn.ActRenameLB {
-			p.owner.bmd.Unlock()
-			return cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
-		}
-		if bckTo.Props.InProgress {
-			p.owner.bmd.Unlock()
-			return fmt.Errorf("destination bucket (%s) is under construction, cannot proceed", bckTo.Bck)
-		}
-		// Allow to copy into existing bucket
-		glog.Warningf("destination bucket %s already exists, proceeding to %s %s => %s anyway",
-			bckFrom, msg.Action, bckFrom, bckTo)
-	} else {
-		bckToProps := bckFrom.Props.Clone()
-		clone.add(bckTo, bckToProps)
-	}
-	clone.downgrade(bckFrom)
-	clone.downgrade(bckTo)
-	p.owner.bmd.put(clone)
-	p.owner.bmd.Unlock()
-
-	// Distribute temporary bucket
-	msgInt := p.newActionMsgInternal(msg, smap, clone)
-	p.metasyncer.sync(true, revsPair{clone, msgInt})
-	glog.Infof("%s ais bucket %s => %s %s", msg.Action, bckFrom, bckTo, clone)
-
-	errHandler := func() {
-		p.owner.bmd.Lock()
-		clone := p.owner.bmd.get().clone()
-		clone.upgrade(bckFrom)
-		clone.upgrade(bckTo)
-		clone.del(bckTo)
-		p.owner.bmd.put(clone)
-		p.owner.bmd.Unlock()
-
-		msgInt := p.newActionMsgInternal(msg, smap, clone)
-		p.metasyncer.sync(true, revsPair{clone, msgInt})
-	}
-
-	// Begin
-	var (
-		body   = cmn.MustMarshal(msgInt)
-		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name)
-		errmsg = fmt.Sprintf("cannot %s bucket %s", msg.Action, bckFrom)
-	)
-	args := bcastArgs{req: cmn.ReqArgs{Path: path, Body: body}, smap: smap, timeout: tout}
-	err = p.bcast2Phase(args, errmsg, false /*commit*/)
-	if err != nil {
-		// Abort
-		errHandler()
-		return
-	}
-
-	// Commit
-	if msg.Action == cmn.ActRenameLB {
-		p.owner.smap.Lock()
-		p.setRebID(smap, msgInt, true) // FIXME: race vs change in membership
-		p.owner.smap.Unlock()
-		body = cmn.MustMarshal(msgInt)
-	}
-	args.req.Body = body
-	args.req.Path = cmn.URLPath(path, cmn.ActCommit)
-	results := p.bcastPost(args)
-	for res := range results {
-		if res.err != nil {
-			err = fmt.Errorf("%s: failed to %s bucket %s: %v(%d)", res.si, msg.Action, bckFrom, res.err, res.status)
-			glog.Error(err)
-			break
-		}
-	}
-	if err != nil {
-		errHandler()
-		return
-	}
-
-	p.owner.bmd.Lock()
-	clone = p.owner.bmd.get().clone()
-	// TODO: Buckets should be upgraded after we have **finished** the xaction
-	//  not when we committed it.
-	clone.upgrade(bckFrom)
-	clone.upgrade(bckTo)
-	if msg.Action == cmn.ActRenameLB {
-		bckFromProps := bckFrom.Props.Clone()
-		bckFromProps.Renamed = cmn.ActRenameLB
-		clone.set(bckFrom, bckFromProps)
-	}
-	p.owner.bmd.put(clone)
-	p.owner.bmd.Unlock()
-
-	// Finalize
-	msgInt = p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, revsPair{clone, msgInt})
-	glog.Infof("%s ais bucket %s => %s, %s", msg.Action, bckFrom, bckTo, clone)
-	return
 }
 
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error) {
@@ -2174,7 +2074,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		if renamedBucket := q.Get(whatRenamedLB); renamedBucket != "" {
 			p.handlePendingRenamedLB(renamedBucket)
 		}
-		fallthrough
+		fallthrough // fallthrough
 	case cmn.GetWhatConfig, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
@@ -2424,7 +2324,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	_, err = p.owner.smap.modify(func(clone *smapX) error {
+	_, err = p.owner.smap.modify(true /*lock*/, func(clone *smapX) error {
 		clone.ProxySI = psi
 		return nil
 	})
@@ -2433,7 +2333,8 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 	var msgInt *actionMsgInternal
-	clone, err := p.owner.smap.modify(
+	p.owner.smap.Lock()
+	clone, err := p.owner.smap.modify(false, // lock==false
 		func(clone *smapX) error {
 			if !clone.isPresent(p.si) {
 				cmn.AssertMsg(false, "This proxy '"+p.si.ID()+"' must always be present in the "+clone.pp())
@@ -2460,7 +2361,9 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 		glog.Infof("%s: distributing %s with newly elected primary (self)", p.si, clone)
 		glog.Infof("%s: distributing %s as well", p.si, bmd)
 	}
-	p.metasyncer.sync(true, revsPair{clone, msgInt}, revsPair{bmd, msgInt})
+
+	p.metasyncer.sync(false, revsPair{clone, msgInt}, revsPair{bmd, msgInt})
+	p.owner.smap.Unlock()
 	return
 }
 
@@ -2511,7 +2414,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	// (I.5) commit locally
-	_, err = p.owner.smap.modify(func(clone *smapX) error {
+	_, err = p.owner.smap.modify(true /*lock*/, func(clone *smapX) error {
 		clone.ProxySI = psi
 		p.metasyncer.becomeNonPrimary()
 		return nil
@@ -2933,7 +2836,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	// update and distribute Smap
 	go func(nsi *cluster.Snode) {
 		var msgInt *actionMsgInternal
-		clone, err := p.owner.smap.modify(
+		p.owner.smap.Lock()
+		clone, err := p.owner.smap.modify(false, // lock = false (already taken)
 			func(clone *smapX) error {
 				clone.putNode(nsi, nonElectable)
 
@@ -2954,6 +2858,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			},
 		)
 		if err != nil {
+			p.owner.smap.Unlock()
 			glog.Errorf("FATAL: %v", err)
 			return
 		}
@@ -2971,6 +2876,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			pairs = append(pairs, revsPair{tokens, msgInt})
 		}
 		p.metasyncer.sync(false, pairs...)
+
+		p.owner.smap.Unlock()
 	}(nsi)
 }
 
@@ -3031,14 +2938,19 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, sid, nil) {
 		return
 	}
+
+	p.owner.smap.Lock()
 	clone, status, err := p.unregisterNode(sid)
 	if err != nil {
+		p.owner.smap.Unlock()
 		p.invalmsghdlr(w, r, err.Error(), status)
 		return
 	}
 	msgInt := p.newActionMsgInternal(msg, clone, nil)
 	p.setRebID(clone, msgInt, true)
-	p.metasyncer.sync(true, revsPair{clone, msgInt})
+	p.metasyncer.sync(false, revsPair{clone, msgInt})
+
+	p.owner.smap.Unlock()
 }
 
 func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err error) {
@@ -3070,7 +2982,8 @@ func (p *proxyrunner) unregisterNode(sid string) (clone *smapX, status int, err 
 		}
 	}
 	// NOTE: "failure to respond back" may have legitimate reasons - proceeeding even when all retries fail
-	clone, err = p.owner.smap.modify(func(clone *smapX) error {
+	// TODO -- FIXME: must be under the same lock as the
+	clone, err = p.owner.smap.modify(false, func(clone *smapX) error {
 		node = clone.GetNode(sid)
 		if node == nil {
 			return fmt.Errorf("unknown node %s", sid)
@@ -3195,8 +3108,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		smap := p.owner.smap.get()
 		msgInt := p.newActionMsgInternal(msg, smap, nil)
 		p.setRebID(smap, msgInt, true)
-		p.owner.smap.Unlock()
+
 		p.metasyncer.sync(false, revsPair{smap, msgInt})
+		p.owner.smap.Unlock()
 	case cmn.ActXactStart, cmn.ActXactStop:
 		body := cmn.MustMarshal(msg)
 		results := p.bcastTo(bcastArgs{
@@ -3353,10 +3267,11 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	rbmd.Version += 100
 	p.owner.bmd.Lock()
 	p.owner.bmd.put(rbmd)
-	p.owner.bmd.Unlock()
 
 	msgInt := p.newActionMsgInternal(msg, nil, rbmd)
-	p.metasyncer.sync(true, revsPair{rbmd, msgInt})
+	p.metasyncer.sync(false, revsPair{rbmd, msgInt})
+
+	p.owner.bmd.Unlock()
 }
 
 ////////////////

@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that rename entities in the cluster.
+// This file provides commands to rename buckets and objects.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -22,11 +22,11 @@ var (
 	renameCmds = []cli.Command{
 		{
 			Name:  commandRename,
-			Usage: "rename entities in the cluster",
+			Usage: "rename buckets and objects",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdRenameBucket,
-					Usage:        "rename an ais bucket",
+					Usage:        "rename ais bucket",
 					ArgsUsage:    bucketOldNewArgument,
 					Flags:        renameCmdsFlags[subcmdRenameBucket],
 					Action:       renameBucketHandler,
@@ -34,7 +34,7 @@ var (
 				},
 				{
 					Name:         subcmdRenameObject,
-					Usage:        "rename an object of the ais bucket",
+					Usage:        "rename object in ais bucket",
 					ArgsUsage:    objectOldNewArgument,
 					Flags:        renameCmdsFlags[subcmdRenameObject],
 					Action:       renameObjectHandler,

@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that update properties/configuration of entities in the cluster.
+// This file provides commands that show and update bucket properties and configuration.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */

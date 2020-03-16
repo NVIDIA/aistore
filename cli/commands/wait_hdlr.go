@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that wait for specific task.
+// This file handles commands that wait for specific task.
 /*
  * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
  */

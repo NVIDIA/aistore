@@ -1287,7 +1287,7 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 }
 
 // Tries to rename same source bucket to two destination buckets - the second should fail.
-func TestRenameBucketTwice(t *testing.T) {
+func TestRenameBckTwice(t *testing.T) {
 	var (
 		m = ioContext{
 			t:   t,

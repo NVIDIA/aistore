@@ -217,7 +217,6 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 }
 
 func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string, overwrite, safe, verbose bool) (err error) {
-	cmn.Assert(bck.IsInitialized())
 	if err = bck.AllowPUT(); err != nil {
 		return
 	}
@@ -307,25 +306,6 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 func (t *targetrunner) DisableMountpath(mountpath, reason string) (disabled bool, err error) {
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, reason)
 	return t.fsprg.disableMountpath(mountpath)
-}
-
-func (t *targetrunner) Health(si *cluster.Snode, includeReb bool, timeout time.Duration) ([]byte, error) {
-	query := url.Values{}
-	if includeReb {
-		query.Add(cmn.URLParamRebStatus, "true")
-	}
-	args := callArgs{
-		si: si,
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Base:   si.URL(cmn.NetworkIntraControl),
-			Path:   cmn.URLPath(cmn.Version, cmn.Health),
-			Query:  query,
-		},
-		timeout: timeout,
-	}
-	res := t.call(args)
-	return res.outjson, res.err
 }
 
 func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) ([]byte, int, error) {

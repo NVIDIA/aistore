@@ -22,8 +22,8 @@ type (
 		started(tm time.Time)
 		String() string
 		fired() (err error)
-		fire(err error)               // only once
-		callback(args ...interface{}) // is overloaded to match an "event" with a specific (concrete) transaction
+		fire(err error) // fires only once
+		callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{})
 	}
 	transactions struct {
 		sync.Mutex
@@ -61,6 +61,11 @@ type (
 		txnBckBase
 		bprops *cmn.BucketProps
 		nprops *cmn.BucketProps
+	}
+	txnRenameBucket struct {
+		txnBckBase
+		bckFrom *cluster.Bck
+		bckTo   *cluster.Bck
 	}
 )
 
@@ -101,13 +106,13 @@ func (txns *transactions) find(uuid string, remove bool) (txn txn, err error) {
 	return
 }
 
-func (txns *transactions) callback(args ...interface{}) {
+func (txns *transactions) callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) {
 	txns.Lock()
 	for _, txn := range txns.m {
 		if err := txn.fired(); err != errNil {
 			continue // only once
 		}
-		txn.callback(args...)
+		txn.callback(caller, msgInt, err, args...)
 	}
 	txns.Unlock()
 }
@@ -162,6 +167,18 @@ func (txn *txnBckBase) String() string {
 		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.initiator, tm, txn.bck.Name)
 }
 
+func (txn *txnBckBase) callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) {
+	if txn.initiator != caller || msgInt.TxnID != txn.uuid() {
+		return
+	}
+	bmd, _ := args[0].(*bucketMD)
+	cmn.Assert(bmd.version() > txn.bmdVer)
+	txn.fire(err)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s: callback fired (BMD v%d, err %v)", txn, bmd.version(), err)
+	}
+}
+
 /////////////////////
 // txnCreateBucket //
 /////////////////////
@@ -183,26 +200,6 @@ func newTxnCreateBucket(uuid, action string, smapVer, bmdVer int64, initiator st
 			},
 			*bck,
 		},
-	}
-}
-
-func (txn *txnCreateBucket) callback(args ...interface{}) {
-	if len(args) < 3 {
-		return
-	}
-	bmd, ok := args[0].(*bucketMD)
-	if !ok {
-		return
-	}
-	err, _ := args[1].(error)
-	caller, _ := args[2].(string)
-	if txn.initiator == caller && bmd.version() > txn.bmdVer {
-		if _, present := bmd.Get(&txn.bck); present {
-			txn.fire(err)
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s: callback fired (BMD v%d, err %v)", txn, bmd.version(), err)
-			}
-		}
 	}
 }
 
@@ -237,28 +234,6 @@ func (txn *txnMakeNCopies) String() string {
 	return fmt.Sprintf("%s, copies %d => %d", s, txn.curCopies, txn.newCopies)
 }
 
-func (txn *txnMakeNCopies) callback(args ...interface{}) {
-	if len(args) < 3 {
-		return
-	}
-	bmd, ok := args[0].(*bucketMD)
-	if !ok {
-		return
-	}
-	err, _ := args[1].(error)
-	caller, _ := args[2].(string)
-	if txn.initiator == caller && bmd.version() > txn.bmdVer {
-		if nprops, present := bmd.Get(&txn.bck); present {
-			if nprops.Mirror.Copies == txn.newCopies {
-				txn.fire(err)
-				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Infof("%s: callback fired (BMD v%d, err %v)", txn, bmd.version(), err)
-				}
-			}
-		}
-	}
-}
-
 ///////////////////////
 // txnSetBucketProps //
 ///////////////////////
@@ -288,23 +263,33 @@ func newTxnSetBucketProps(uuid, action string, smapVer, bmdVer int64, initiator 
 	}
 }
 
-func (txn *txnSetBucketProps) callback(args ...interface{}) {
-	if len(args) < 3 {
-		return
-	}
-	bmd, ok := args[0].(*bucketMD)
-	if !ok {
-		return
-	}
-	err, _ := args[1].(error)
-	caller, _ := args[2].(string)
-	if txn.initiator == caller && bmd.version() > txn.bmdVer {
-		if nprops, present := bmd.Get(&txn.bck); present {
-			txn.nprops = nprops // TODO -- FIXME: check txn.nprops == nprops equivalence
-			txn.fire(err)
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s: callback fired (BMD v%d, err %v)", txn, bmd.version(), err)
-			}
-		}
+/////////////////////
+// txnRenameBucket //
+/////////////////////
+
+var _ txn = &txnRenameBucket{}
+
+// c-tor
+func newTxnRenameBucket(uuid, action string, smapVer, bmdVer int64, initiator string,
+	bckFrom, bckTo *cluster.Bck) *txnRenameBucket {
+	return &txnRenameBucket{
+		txnBckBase{
+			txnBase{
+				uid:       uuid,
+				action:    action,
+				smapVer:   smapVer,
+				kind:      "rnb",
+				bmdVer:    bmdVer,
+				initiator: initiator,
+				err:       errNil,
+			},
+			*bckFrom,
+		},
+		bckFrom,
+		bckTo,
 	}
 }
+
+///////////////////
+// txnCopyBucket //
+///////////////////

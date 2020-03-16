@@ -614,7 +614,6 @@ func (rj *rebalanceJogger) objSentCallback(hdr transport.Header, r io.ReadCloser
 		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode(), hdr.Bck, hdr.ObjName, err)
 		return
 	}
-	cmn.AssertMsg(hdr.ObjAttrs.Size == lom.Size(), lom.String()) // TODO: remove
 	rj.m.statRunner.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.TxRebSize, Value: hdr.ObjAttrs.Size})

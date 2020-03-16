@@ -350,9 +350,11 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 	return nil
 }
 
-func (r *smapOwner) modify(pre func(clone *smapX) error, post ...func(clone *smapX)) (*smapX, error) {
-	r.Lock()
-	defer r.Unlock()
+func (r *smapOwner) modify(lock bool, pre func(clone *smapX) error, post ...func(clone *smapX)) (*smapX, error) {
+	if lock {
+		r.Lock()
+		defer r.Unlock()
+	}
 	clone := r.get().clone()
 	if err := pre(clone); err != nil {
 		return nil, err

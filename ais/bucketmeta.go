@@ -42,7 +42,6 @@ const (
 	bmdFext     = ".prev"    // suffix: previous version
 	bmdTermName = "BMD"      // display name
 	bmdCopies   = 2          // local copies
-	aisBckIDbit = uint64(1 << 63)
 )
 
 type (
@@ -94,13 +93,6 @@ func newClusterUUID() (uuid, created string) {
 // bucketMD //
 //////////////
 
-func (m *bucketMD) genBucketID(isais bool) uint64 {
-	if !isais {
-		return uint64(m.Version)
-	}
-	return uint64(m.Version) | aisBckIDbit
-}
-
 func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 	if !cmn.IsValidProvider(bck.Provider) {
 		cmn.AssertMsg(false, bck.String()+": invalid provider")
@@ -109,7 +101,7 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 		return false
 	}
 	m.Version++
-	p.BID = m.genBucketID(bck.IsAIS())
+	p.BID = bck.MaskBID(m.Version)
 	p.CloudProvider = bck.Provider
 	bck.Props = p
 
@@ -126,7 +118,6 @@ func (m *bucketMD) del(bck *cluster.Bck) (deleted bool) {
 }
 
 func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
-	cmn.Assert(!p.InProgress)
 	if !cmn.IsValidProvider(bck.Provider) {
 		cmn.AssertMsg(false, bck.String()+": invalid provider")
 	}
@@ -140,25 +131,6 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 	p.BID = prevProps.BID
 	m.Set(bck, p)
 	m.Version++
-}
-
-func (m *bucketMD) toggleInProgress(bck *cluster.Bck, toggle bool) {
-	p, present := m.Get(bck)
-	cmn.Assert(present)
-	if !toggle {
-		cmn.Assert(p.InProgress)
-	}
-	p.InProgress = toggle
-	m.Set(bck, p)
-	m.Version++
-}
-
-func (m *bucketMD) downgrade(bck *cluster.Bck) {
-	m.toggleInProgress(bck, true)
-}
-
-func (m *bucketMD) upgrade(bck *cluster.Bck) {
-	m.toggleInProgress(bck, false)
 }
 
 func (m *bucketMD) clone() *bucketMD {

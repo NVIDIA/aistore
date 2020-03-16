@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file contains common constants and variables used in other files.
+// This file contains common constants and variables used in other files.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -14,7 +14,7 @@ import (
 
 const (
 	// Commands (top-level) - preferably verbs
-	commandRename    = cmn.ActRename
+	commandRename    = cmn.ActRenameObject
 	commandPrefetch  = cmn.ActPrefetch
 	commandStart     = cmn.ActXactStart
 	commandStop      = cmn.ActXactStop

@@ -13,6 +13,10 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+const (
+	aisBIDmask = uint64(1 << 63)
+)
+
 type (
 	Bck struct {
 		cmn.Bck
@@ -90,19 +94,33 @@ func ParseUname(uname string) (b Bck, objName string) {
 	return
 }
 
-func (b *Bck) String() string {
-	var (
-		bid        uint64
-		inProgress bool
-	)
-	if b.Props != nil {
-		bid = b.Props.BID
-		inProgress = b.Props.InProgress
+func (b *Bck) MaskBID(i int64) uint64 {
+	if b.IsAIS() {
+		return uint64(i) | aisBIDmask
 	}
-	return fmt.Sprintf("%s(%x, %s, %s, %v)", b.Name, bid, b.Provider, b.Ns, inProgress)
+	return uint64(i)
 }
 
-func (b *Bck) IsInitialized() bool { return b.Props != nil }
+func (b *Bck) unmaskBID() uint64 {
+	if b.Props == nil || b.Props.BID == 0 {
+		return 0
+	}
+	if b.IsAIS() {
+		return b.Props.BID ^ aisBIDmask
+	}
+	return b.Props.BID
+}
+
+func (b *Bck) String() string {
+	var (
+		bid = b.unmaskBID()
+		ns  = b.Ns.String()
+	)
+	if ns != "" {
+		ns = ", " + ns
+	}
+	return fmt.Sprintf("%s(%#x, %s%s)", b.Name, bid, b.Provider, ns)
+}
 
 func (b *Bck) Equal(other *Bck, sameID bool) bool {
 	if b.Name != other.Name {
@@ -114,9 +132,6 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 	if sameID {
 		if b.Props != nil && other.Props != nil {
 			if b.Props.BID != other.Props.BID {
-				return false
-			}
-			if b.Props.InProgress != other.Props.InProgress {
 				return false
 			}
 		}
@@ -193,5 +208,6 @@ func (bck *Bck) GetNameLockPair() (nlp NameLockPair) {
 	return
 }
 
-func (nlp *NameLockPair) Lock()   { nlp.nlc.Lock(nlp.uname, true) }
-func (nlp *NameLockPair) Unlock() { nlp.nlc.Unlock(nlp.uname, true) }
+func (nlp *NameLockPair) Lock()         { nlp.nlc.Lock(nlp.uname, true) }
+func (nlp *NameLockPair) Unlock()       { nlp.nlc.Unlock(nlp.uname, true) }
+func (nlp *NameLockPair) TryLock() bool { return nlp.nlc.TryLock(nlp.uname, true) }

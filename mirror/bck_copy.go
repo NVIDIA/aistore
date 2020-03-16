@@ -5,6 +5,8 @@
 package mirror
 
 import (
+	"fmt"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -47,9 +49,8 @@ func (r *XactBckCopy) Run() (err error) {
 	return r.xactBckBase.run(mpathCount)
 }
 
-func (r *XactBckCopy) Description() string {
-	return "copy bucket"
-}
+func (r *XactBckCopy) Description() string { return "copy <bucket A> => <bucket B>" }
+func (r *XactBckCopy) String() string      { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
 //
 // private methods

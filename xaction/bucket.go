@@ -44,7 +44,7 @@ type ecGetEntry struct {
 }
 
 func (e *ecGetEntry) Start(id string, bck cmn.Bck) error {
-	xec := ec.ECM.NewGetXact(bck.Name) // TODO: we should pass whole `cmn.Bck`
+	xec := ec.ECM.NewGetXact(bck.Name) // TODO -- FIXME: we should pass whole `cmn.Bck`
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, bck)
 	e.xact = xec
 	go xec.Run()
@@ -54,7 +54,7 @@ func (e *ecGetEntry) Start(id string, bck cmn.Bck) error {
 func (*ecGetEntry) Kind() string    { return cmn.ActECGet }
 func (e *ecGetEntry) Get() cmn.Xact { return e.xact }
 func (r *registry) RenewGetEC(bck *cluster.Bck) *ec.XactGet {
-	ee, _ := r.renewBucketXaction(&ecGetEntry{}, bck) // TODO: handle error
+	ee, _ := r.renewBucketXaction(&ecGetEntry{}, bck) // TODO -- FIXME: handle error
 	return ee.Get().(*ec.XactGet)
 }
 
@@ -314,7 +314,8 @@ func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error
 		keep = true
 		return
 	}
-	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(%s=>%s)", prev.xact, prev.bckFrom, prev.bckTo, prev.phase, e.phase, e.bckFrom, e.bckTo)
+	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(%s=>%s)",
+		prev.xact, prev.bckFrom, prev.bckTo, prev.phase, e.phase, e.bckFrom, e.bckTo)
 	return
 }
 
@@ -354,10 +355,9 @@ type (
 	}
 )
 
-func (r *FastRen) Description() string {
-	return "rename bucket via 2-phase local-rename followed by global-rebalance"
-}
-func (r *FastRen) IsMountpathXact() bool { return false }
+func (r *FastRen) Description() string   { return "rename bucket via (local rename + global rebalance)" }
+func (r *FastRen) IsMountpathXact() bool { return true }
+func (r *FastRen) String() string        { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
 func (r *FastRen) Run(waiter *sync.WaitGroup, rebID int64) {
 	var (
@@ -365,7 +365,7 @@ func (r *FastRen) Run(waiter *sync.WaitGroup, rebID int64) {
 		rebalanceBucket, resilverBucket = r.bckTo.Name, r.bckTo.Name // scoping
 	)
 
-	glog.Infoln(r.String(), r.bckFrom, "=>", r.bckTo)
+	glog.Infoln(r.String())
 
 	if Registry.DoAbort(cmn.ActResilver, nil) {
 		glog.Infof("%s: restarting resilver upon rename...", r)
@@ -465,9 +465,7 @@ type (
 	objCallback = func(args *DeletePrefetchArgs, objName string) error
 )
 
-func (r *EvictDelete) Description() string {
-	return "delete or evict objects from a bucket"
-}
+func (r *EvictDelete) Description() string   { return "delete or evict objects from a bucket" }
 func (r *EvictDelete) IsMountpathXact() bool { return false }
 
 func (r *EvictDelete) Run(args *DeletePrefetchArgs) {
@@ -544,6 +542,7 @@ func (e *prefetchEntry) Start(id string, bck cmn.Bck) error {
 
 func (r *Prefetch) IsMountpathXact() bool { return false }
 func (r *Prefetch) Description() string   { return "prefetch cloud bucket objects" }
+
 func (r *Prefetch) Run(args *DeletePrefetchArgs) {
 	if args.RangeMsg != nil {
 		r.iterateBucketRange(args)

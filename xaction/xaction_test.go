@@ -80,12 +80,17 @@ func TestXactionRenewEvictDelete(t *testing.T) {
 
 func TestXactionAbortAll(t *testing.T) {
 	xactions := newRegistry()
+
+	bmd := cluster.NewBaseBownerMock()
 	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+	bmd.Add(bckFrom)
+	bmd.Add(bckTo)
+	tMock := cluster.NewTargetMock(bmd)
 
 	xactGlob := xactions.RenewLRU()
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(nil, bckFrom, bckTo, "phase", nil)
+	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAll()
@@ -98,11 +103,16 @@ func TestXactionAbortAll(t *testing.T) {
 
 func TestXactionAbortAllGlobal(t *testing.T) {
 	xactions := newRegistry()
+	bmd := cluster.NewBaseBownerMock()
 	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+	bmd.Add(bckFrom)
+	bmd.Add(bckTo)
+	tMock := cluster.NewTargetMock(bmd)
+
 	xactGlob := xactions.RenewLRU()
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(nil, bckFrom, bckTo, "phase", nil)
+	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAll(cmn.XactTypeGlobal)
@@ -116,12 +126,16 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 func TestXactionAbortBuckets(t *testing.T) {
 	xactions := newRegistry()
+	bmd := cluster.NewBaseBownerMock()
 	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+	bmd.Add(bckFrom)
+	bmd.Add(bckTo)
+	tMock := cluster.NewTargetMock(bmd)
 
 	xactGlob := xactions.RenewLRU()
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(nil, bckFrom, bckTo, "phase", nil)
+	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAllBuckets(bckFrom)

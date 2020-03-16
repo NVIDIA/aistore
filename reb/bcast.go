@@ -303,7 +303,7 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 	status = &Status{}
 	err = jsoniter.Unmarshal(body, status)
 	if err != nil {
-		glog.Errorf("%s: unexpected: failed to unmarshal %s response, err: %v", logHdr, tsi, err)
+		glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", logHdr, tsi, err)
 		reb.abortRebalance()
 		return
 	}

@@ -7,6 +7,8 @@ package ais
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -68,6 +70,10 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = t.setBucketProps(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
+	case cmn.ActRenameLB:
+		if err = t.renameBucket(c); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
 	default:
 		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownAct, msgInt))
 	}
@@ -80,11 +86,6 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) createBucket(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
-		// don't allow creating buckets when capInfo.High (let alone OOS)
-		config := cmn.GCO.Get()
-		if capInfo := t.AvgCapUsed(config); capInfo.Err != nil {
-			return capInfo.Err
-		}
 		txn := newTxnCreateBucket(
 			c.uuid,
 			c.msgInt.Action,
@@ -127,7 +128,6 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		if err != nil {
 			return err
 		}
-		cmn.Assert(!isStatelessTxn(c))
 		txn := newTxnMakeNCopies(
 			c.uuid,
 			c.msgInt.Action,
@@ -141,9 +141,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 			return err
 		}
 	case cmn.ActAbort:
-		if !isStatelessTxn(c) {
-			t.transactions.find(c.uuid, true /* remove */)
-		}
+		t.transactions.find(c.uuid, true /* remove */)
 	case cmn.ActCommit:
 		copies, _ := t.parseNCopies(c.msgInt.Value)
 		txn, err := t.transactions.find(c.uuid, false)
@@ -269,11 +267,113 @@ func remirror(bprops, nprops *cmn.BucketProps) bool {
 	return false
 }
 
+//////////////////
+// renameBucket //
+//////////////////
+
+func (t *targetrunner) renameBucket(c *txnServerCtx) error {
+	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+		return err
+	}
+	switch c.phase {
+	case cmn.ActBegin:
+		var (
+			bckTo   *cluster.Bck
+			bckFrom = c.bck
+			err     error
+		)
+		if bckTo, err = t.validateBckRenTxn(bckFrom, c.msgInt); err != nil {
+			return err
+		}
+		txn := newTxnRenameBucket(
+			c.uuid,
+			c.msgInt.Action,
+			t.owner.smap.get().version(),
+			t.owner.bmd.get().version(),
+			c.caller,
+			bckFrom,
+			bckTo,
+		)
+		if err := t.transactions.begin(txn); err != nil {
+			return err
+		}
+	case cmn.ActAbort:
+		t.transactions.find(c.uuid, true /* remove */)
+	case cmn.ActCommit:
+		var xact *xaction.FastRen
+		txn, err := t.transactions.find(c.uuid, false)
+		if err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		txnRenB := txn.(*txnRenameBucket)
+		// wait for newBMD w/timeout
+		if err = t.transactions.wait(txn, c.timeout); err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		xact, err = xaction.Registry.RenewBckFastRename(t, txnRenB.bckFrom, txnRenB.bckTo, cmn.ActCommit, t.rebManager)
+		if err != nil {
+			return err // must not happen at commit time
+		}
+
+		err = fs.Mountpaths.RenameBucketDirs(txnRenB.bckFrom.Bck, txnRenB.bckTo.Bck)
+		if err != nil {
+			return err // ditto
+		}
+		t.gfn.local.Activate()
+		t.gfn.global.activateTimed()
+		waiter := &sync.WaitGroup{}
+		waiter.Add(1)
+		go xact.Run(waiter, c.msgInt.RebID)
+		waiter.Wait()
+
+		time.Sleep(200 * time.Millisecond) // FIXME: !1727
+	default:
+		cmn.Assert(false)
+	}
+	return nil
+}
+
+func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msgInt *actionMsgInternal) (bckTo *cluster.Bck, err error) {
+	var (
+		bTo               = &cmn.Bck{}
+		body              = cmn.MustMarshal(msgInt.Value)
+		config            = cmn.GCO.Get()
+		availablePaths, _ = fs.Mountpaths.Get()
+	)
+	if err = jsoniter.Unmarshal(body, bTo); err != nil {
+		return
+	}
+	if capInfo := t.AvgCapUsed(config); capInfo.Err != nil {
+		return nil, capInfo.Err
+	}
+	bckTo = cluster.NewBck(bTo.Name, bTo.Provider, bTo.Ns)
+	bmd := t.owner.bmd.get()
+	if _, present := bmd.Get(bckFrom); !present {
+		return bckTo, cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
+	}
+	if _, present := bmd.Get(bckTo); present {
+		return bckTo, cmn.NewErrorBucketAlreadyExists(bckTo.Bck, t.si.String())
+	}
+	for _, mpathInfo := range availablePaths {
+		path := mpathInfo.MakePathCT(bckTo.Bck, fs.ObjectType)
+		if err := fs.Access(path); err != nil {
+			if !os.IsNotExist(err) {
+				return bckTo, err
+			}
+			continue
+		}
+		if names, empty, err := fs.IsDirEmpty(path); err != nil {
+			return bckTo, err
+		} else if !empty {
+			return bckTo, fmt.Errorf("directory %q already exists and is not empty (%v...)", path, names)
+		}
+	}
+	return
+}
+
 //////////
 // misc //
 //////////
-
-func isStatelessTxn(c *txnServerCtx) bool { return c.uuid == "" }
 
 func prepTxnServer(r *http.Request, msgInt *actionMsgInternal, apiItems []string) (*txnServerCtx, error) {
 	var (

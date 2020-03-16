@@ -23,6 +23,7 @@ type (
 	ErrorCloudBucketDoesNotExist nodeBckPair
 	ErrorCloudBucketOffline      nodeBckPair
 	ErrorBucketDoesNotExist      nodeBckPair
+	ErrorBucketIsBusy            nodeBckPair
 
 	ErrorCapacityExceeded struct {
 		prefix string
@@ -100,7 +101,14 @@ func NewErrorBucketDoesNotExist(bck Bck, node string) *ErrorBucketDoesNotExist {
 	return &ErrorBucketDoesNotExist{node: node, bck: bck}
 }
 func (e *ErrorBucketDoesNotExist) Error() string {
-	return _errBucket(fmt.Sprintf("bucket %s does not appear to be an ais bucket or it does not exist", e.bck), e.node)
+	return _errBucket(fmt.Sprintf("bucket %s does not exist", e.bck), e.node)
+}
+
+func NewErrorBucketIsBusy(bck Bck, node string) *ErrorBucketIsBusy {
+	return &ErrorBucketIsBusy{node: node, bck: bck}
+}
+func (e *ErrorBucketIsBusy) Error() string {
+	return _errBucket(fmt.Sprintf("bucket %s is currently busy, please retry later", e.bck), e.node)
 }
 
 func (e *errAccessDenied) String() string {

@@ -344,7 +344,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	}
 	sema := make(chan struct{}, 16)
 	del := func() {
-		tutils.Logf("Deleting %d objects\n", len(filesPut))
+		tutils.Logf("Deleting %d objects from %s\n", len(filesPut), bck)
 		wg := &sync.WaitGroup{}
 		for _, fname := range filesPut {
 			wg.Add(1)

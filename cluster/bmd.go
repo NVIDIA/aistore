@@ -192,7 +192,6 @@ func (m *BMD) DeepCopy(dst *BMD) {
 /////////////////////
 
 func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
-	cmn.Assert(bck.HasProvider()) // TODO -- FIXME: remove
 	if namespaces, ok := m.Providers[bck.Provider]; ok {
 		buckets = namespaces[bck.Ns.Uname()]
 	}

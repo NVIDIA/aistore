@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that create entities in the cluster.
+// This file handles CLI commands that create AIS buckets.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -17,7 +17,7 @@ var (
 	createCmds = []cli.Command{
 		{
 			Name:  commandCreate,
-			Usage: "create entities in the cluster",
+			Usage: "create ais buckets",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdCreateBucket,

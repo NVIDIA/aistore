@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that remove entities from the cluster.
+// This file provides commands that remove various entities from the cluster.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -26,7 +26,7 @@ var (
 	removeCmds = []cli.Command{
 		{
 			Name:  commandRemove,
-			Usage: "remove entities from the cluster",
+			Usage: "remove buckets, objects, and other entities",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdRemoveBucket,
@@ -38,7 +38,7 @@ var (
 				},
 				{
 					Name:         subcmdRemoveObject,
-					Usage:        "remove an object from the bucket",
+					Usage:        "remove object from bucket",
 					ArgsUsage:    optionalObjectsArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveObject],
 					Action:       removeObjectHandler,
@@ -46,7 +46,7 @@ var (
 				},
 				{
 					Name:         subcmdRemoveNode,
-					Usage:        "remove node from the cluster",
+					Usage:        "remove node from cluster",
 					ArgsUsage:    daemonIDArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveNode],
 					Action:       removeNodeHandler,

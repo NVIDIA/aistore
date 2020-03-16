@@ -794,7 +794,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		go xact.Run(args)
-	case cmn.ActCopyBucket, cmn.ActRenameLB:
+	case cmn.ActCopyBucket:
 		var (
 			phase = apiItems[1]
 		)
@@ -803,11 +803,11 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		bckTo := cluster.NewBck(msgInt.Name, cmn.ProviderAIS, cmn.NsGlobal)
 		switch phase {
 		case cmn.ActBegin:
-			err = t.beginCopyRenameLB(bckFrom, bckTo, msgInt.Action)
+			err = t.beginCopyLB(bckFrom, bckTo, msgInt.Action)
 		case cmn.ActAbort:
-			t.abortCopyRenameLB(bckFrom, bckTo, msgInt.Action)
+			t.abortCopyLB(bckFrom, bckTo, msgInt.Action)
 		case cmn.ActCommit:
-			err = t.commitCopyRenameLB(bckFrom, bckTo, msgInt)
+			err = t.commitCopyLB(bckFrom, bckTo)
 		default:
 			err = fmt.Errorf("invalid phase %s: %s %s => %s", phase, msgInt.Action, bckFrom, bckTo)
 		}
@@ -864,7 +864,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActRename:
+	case cmn.ActRenameObject:
 		t.renameObject(w, r, &msg)
 	case cmn.ActPromote:
 		t.promoteFQN(w, r, &msg)

@@ -17,7 +17,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -293,7 +292,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, err = t.owner.smap.modify(func(clone *smapX) error {
+	_, err = t.owner.smap.modify(true /*lock*/, func(clone *smapX) error {
 		if clone.ProxySI.ID() != psi.ID() {
 			clone.ProxySI = psi
 		}
@@ -708,7 +707,7 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 
 func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
 	err = t._recvBMD(newBMD, msgInt, tag, caller)
-	t.transactions.callback(newBMD, err, caller)
+	t.transactions.callback(caller, msgInt, err, newBMD)
 	return
 }
 func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
@@ -1328,21 +1327,13 @@ func (t *targetrunner) enable() error {
 }
 
 //
-// copy-rename bucket: 2-phase commit
+// copy bucket: 2-phase commit
 //
-func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action string) (err error) {
-	config := cmn.GCO.Get()
-	if action == cmn.ActRenameLB && !config.Rebalance.Enabled {
-		return fmt.Errorf("cannot %s %s bucket: rebalancing disabled", action, bckFrom)
-	}
-	capInfo := t.AvgCapUsed(config)
-	if capInfo.OOS {
+func (t *targetrunner) beginCopyLB(bckFrom, bckTo *cluster.Bck, action string) (err error) {
+	capInfo := t.AvgCapUsed(cmn.GCO.Get())
+	if capInfo.Err != nil {
 		return capInfo.Err
 	}
-	if action == cmn.ActCopyBucket && capInfo.Err != nil {
-		return capInfo.Err
-	}
-
 	if err = bckFrom.Init(t.owner.bmd, t.si); err != nil {
 		return
 	}
@@ -1350,32 +1341,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 		return
 	}
 
-	if !bckFrom.Props.InProgress || !bckTo.Props.InProgress {
-		err = fmt.Errorf("either source or destination bucket has not been updated correctly")
-		return
-	}
-
 	switch action {
-	case cmn.ActRenameLB:
-		_, err = xaction.Registry.RenewBckFastRename(t, bckFrom, bckTo, cmn.ActBegin, t.rebManager)
-		if err == nil {
-			availablePaths, _ := fs.Mountpaths.Get()
-			for _, mpathInfo := range availablePaths {
-				path := mpathInfo.MakePathCT(bckTo.Bck, fs.ObjectType)
-				if err := fs.Access(path); err != nil {
-					if !os.IsNotExist(err) {
-						return err
-					}
-					continue
-				}
-				if names, empty, err := fs.IsDirEmpty(path); err != nil {
-					return err
-				} else if !empty {
-					return fmt.Errorf("directory %q already exists and is not empty (%v...)",
-						path, names)
-				}
-			}
-		}
 	case cmn.ActCopyBucket:
 		_, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActBegin)
 	default:
@@ -1384,50 +1350,24 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom, bckTo *cluster.Bck, action str
 	return
 }
 
-func (t *targetrunner) abortCopyRenameLB(bckFrom, bckTo *cluster.Bck, action string) {
+func (t *targetrunner) abortCopyLB(bckFrom, bckTo *cluster.Bck, action string) {
 	if _, ok := t.owner.bmd.get().Get(bckTo); !ok {
 		return
 	}
 	xaction.Registry.DoAbort(action, bckFrom)
 }
 
-func (t *targetrunner) commitCopyRenameLB(bckFrom, bckTo *cluster.Bck, msgInt *actionMsgInternal) (err error) {
+func (t *targetrunner) commitCopyLB(bckFrom, bckTo *cluster.Bck) (err error) {
+	var xact *mirror.XactBckCopy
 	if err := bckTo.Init(t.owner.bmd, t.si); err != nil {
 		return err
 	}
-
-	switch msgInt.Action {
-	case cmn.ActRenameLB:
-		var xact *xaction.FastRen
-		xact, err = xaction.Registry.RenewBckFastRename(t, bckFrom, bckTo, cmn.ActCommit, t.rebManager)
-		if err != nil {
-			glog.Error(err) // must not happen at commit time
-			break
-		}
-		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Bck, bckTo.Bck)
-		if err != nil {
-			glog.Error(err) // ditto
-			break
-		}
-
-		t.gfn.local.Activate()
-		t.gfn.global.activateTimed()
-		waiter := &sync.WaitGroup{}
-		waiter.Add(1)
-		go xact.Run(waiter, msgInt.RebID)
-		waiter.Wait()
-
-		time.Sleep(200 * time.Millisecond) // FIXME: !1727
-
-	case cmn.ActCopyBucket:
-		var xact *mirror.XactBckCopy
-		xact, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)
-		if err != nil {
-			glog.Error(err) // unexpected at commit time
-			break
-		}
-		go xact.Run()
+	xact, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)
+	if err != nil {
+		glog.Error(err) // unexpected at commit time
+		return
 	}
+	go xact.Run()
 	return
 }
 

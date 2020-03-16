@@ -444,7 +444,7 @@ func FlushObject(args AppendArgs) (err error) {
 //
 // FIXME: handle cloud provider - here and elsewhere
 func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) error {
-	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newName})
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName})
 	if err != nil {
 		return err
 	}
