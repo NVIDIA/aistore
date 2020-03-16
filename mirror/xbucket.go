@@ -58,7 +58,6 @@ func newXactBckBase(id, kind string, bck cmn.Bck, t cluster.Target) *xactBckBase
 func (r *xactBckBase) DoneCh() chan struct{}        { return r.doneCh }
 func (r *xactBckBase) Target() cluster.Target       { return r.t }
 func (r *xactBckBase) Mpathers() map[string]mpather { return r.mpathers }
-func (r *xactBckBase) Description() string          { return "base bucket xaction implementation" }
 
 // init and stop
 func (r *xactBckBase) Stop(error) { r.Abort() } // call base method

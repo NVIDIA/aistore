@@ -49,7 +49,6 @@ func NewXactBckEncode(id string, bck cmn.Bck, t cluster.Target) *XactBckEncode {
 
 func (r *XactBckEncode) done()                  { r.doneCh <- struct{}{} }
 func (r *XactBckEncode) target() cluster.Target { return r.t }
-func (r *XactBckEncode) Description() string    { return "erasure code all objects in a bucket" }
 
 func (r *XactBckEncode) beforeECObj() { r.wg.Add(1) }
 func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {

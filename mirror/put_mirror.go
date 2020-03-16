@@ -170,10 +170,6 @@ func (r *XactPutLRepl) stop() {
 	}
 }
 
-func (r *XactPutLRepl) Description() string {
-	return "create local object replicas upon PUT into a mirrored bucket"
-}
-
 //
 // xputJogger - main
 //

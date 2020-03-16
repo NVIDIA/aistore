@@ -50,10 +50,6 @@ func (r *XactDirPromote) Run() (err error) {
 	return
 }
 
-func (r *XactDirPromote) Description() string {
-	return "promote file|directory"
-}
-
 func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil

@@ -274,10 +274,6 @@ func (r *XactGet) dispatchRequest(req *Request) {
 	}
 }
 
-func (r *XactGet) Description() string {
-	return "restore (recover) erasure coded objects"
-}
-
 //
 // fsprunner methods
 //

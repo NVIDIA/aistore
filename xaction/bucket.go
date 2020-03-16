@@ -355,7 +355,6 @@ type (
 	}
 )
 
-func (r *FastRen) Description() string   { return "rename bucket via (local rename + global rebalance)" }
 func (r *FastRen) IsMountpathXact() bool { return true }
 func (r *FastRen) String() string        { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
@@ -465,7 +464,6 @@ type (
 	objCallback = func(args *DeletePrefetchArgs, objName string) error
 )
 
-func (r *EvictDelete) Description() string   { return "delete or evict objects from a bucket" }
 func (r *EvictDelete) IsMountpathXact() bool { return false }
 
 func (r *EvictDelete) Run(args *DeletePrefetchArgs) {
@@ -541,7 +539,6 @@ func (e *prefetchEntry) Start(id string, bck cmn.Bck) error {
 }
 
 func (r *Prefetch) IsMountpathXact() bool { return false }
-func (r *Prefetch) Description() string   { return "prefetch cloud bucket objects" }
 
 func (r *Prefetch) Run(args *DeletePrefetchArgs) {
 	if args.RangeMsg != nil {

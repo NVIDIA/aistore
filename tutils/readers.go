@@ -34,12 +34,6 @@ type Reader interface {
 	io.Seeker
 	Open() (io.ReadCloser, error)
 	XXHash() string
-	Description() string
-}
-
-// description returns a string constructed from a name and a xxhash
-func description(name, hash string) string {
-	return name + " xxhash " + hash[:8] + "..."
 }
 
 // randReader implements Reader.
@@ -131,11 +125,6 @@ func (r *randReader) XXHash() string {
 	return r.xxHash
 }
 
-// Description implements the Reader interface.
-func (r *randReader) Description() string {
-	return description("RandReader", r.xxHash)
-}
-
 // NewRandReader returns a new randReader
 func NewRandReader(size int64, withHash bool) (Reader, error) {
 	var (
@@ -200,11 +189,6 @@ func (r *fileReader) XXHash() string {
 	return r.xxHash
 }
 
-// Description implements the Reader interface.
-func (r *fileReader) Description() string {
-	return description("FileReader "+r.name, r.xxHash)
-}
-
 // NewFileReader creates/opens the file, populates it with random data, and returns a new fileReader
 // Caller is responsible for closing
 func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, error) {
@@ -258,11 +242,6 @@ type sgReader struct {
 
 var _ Reader = &sgReader{}
 
-// Description implements the Reader interface.
-func (r *sgReader) Description() string {
-	return description("SGReader", r.xxHash)
-}
-
 // XXHash implements the Reader interface.
 func (r *sgReader) XXHash() string {
 	return r.xxHash
@@ -298,11 +277,6 @@ func (r *bytesReader) Open() (io.ReadCloser, error) {
 // Close implements the Reader interface.
 func (r *bytesReader) Close() error {
 	return nil
-}
-
-// Description implements the Reader interface.
-func (r *bytesReader) Description() string {
-	return "not implemented"
 }
 
 // XXHash implements the Reader interface.

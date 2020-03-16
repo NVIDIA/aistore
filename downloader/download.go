@@ -238,9 +238,6 @@ func (d *Downloader) ReqAddMountpath(mpath string)    { d.mpathReqCh <- fs.Mount
 func (d *Downloader) ReqRemoveMountpath(mpath string) { d.mpathReqCh <- fs.MountpathRem(mpath) }
 func (d *Downloader) ReqEnableMountpath(_ string)     {}
 func (d *Downloader) ReqDisableMountpath(_ string)    {}
-func (d *Downloader) Description() string {
-	return "download objects into a bucket"
-}
 
 func NewDownloader(t cluster.Target, statsT stats.Tracker, f *fs.MountedFS, id, kind string) (d *Downloader) {
 	downloader := &Downloader{

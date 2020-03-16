@@ -111,10 +111,6 @@ func (r *XactBckMakeNCopies) init() (mpathCount int, err error) {
 	return
 }
 
-func (r *XactBckMakeNCopies) Description() string {
-	return "delete or add local object copies (replicas)"
-}
-
 //
 // mpath mncJogger - main
 //

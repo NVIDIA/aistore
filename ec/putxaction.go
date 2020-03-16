@@ -221,7 +221,3 @@ func (r *XactPut) dispatchRequest(req *Request) {
 		jogger.workCh <- req
 	}
 }
-
-func (r *XactPut) Description() string {
-	return "encode objects upon PUT into an EC-enabled bucket"
-}

@@ -99,20 +99,8 @@ func init() {
 	Registry = newRegistry()
 }
 
-//
-// global descriptions
-//
-
-func (xact *RebBase) MarkDone()                  { xact.wg.Done() }
-func (xact *RebBase) WaitForFinish()             { xact.wg.Wait() }
-func (xact *RebBase) Description() string        { return "base for rebalance xactions" }
-func (xact *Rebalance) Description() string      { return "cluster-wide rebalancing" }
-func (xact *bckListTask) Description() string    { return "asynchronous bucket list task" }
-func (xact *bckSummaryTask) Description() string { return "asynchronous bucket summary task" }
-func (xact *Election) Description() string       { return "elect new primary proxy/gateway" }
-func (xact *Resilver) Description() string {
-	return "resilver local storage upon mountpath-change events"
-}
+func (xact *RebBase) MarkDone()      { xact.wg.Done() }
+func (xact *RebBase) WaitForFinish() { xact.wg.Wait() }
 
 //
 // misc methods

@@ -32,7 +32,6 @@ type (
 		Finished() bool
 		Aborted() bool
 		IsMountpathXact() bool
-		Description() string
 		Result() (interface{}, error)
 	}
 	XactBase struct {

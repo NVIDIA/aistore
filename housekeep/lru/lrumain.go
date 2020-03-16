@@ -149,7 +149,3 @@ func stopAll(joggers map[string]*lruCtx, exceptMpath string) {
 		j.stopCh <- struct{}{}
 	}
 }
-
-func (xact *Xaction) Description() string {
-	return "LRU-based cache eviction and free capacity management"
-}

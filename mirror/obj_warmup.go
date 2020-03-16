@@ -59,10 +59,6 @@ func (r *XactBckLoadLomCache) init() (mpathCount int, err error) {
 	return
 }
 
-func (r *XactBckLoadLomCache) Description() string {
-	return "load object metadata into in-memory cache"
-}
-
 //
 // mpath xwarmJogger - main
 //

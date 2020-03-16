@@ -248,10 +248,6 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 	}
 }
 
-func (r *XactRespond) Description() string {
-	return "return locally stored EC objects upon requests from other targets"
-}
-
 func (r *XactRespond) Stop(error) { r.Abort() }
 
 func (r *XactRespond) stop() {
