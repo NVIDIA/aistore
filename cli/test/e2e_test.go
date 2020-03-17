@@ -4,9 +4,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/tutils"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
@@ -17,6 +19,7 @@ func TestE2E(t *testing.T) {
 		t.Skip("'ais' binary not found")
 	}
 
+	config.DefaultReporterConfig.SlowSpecThreshold = 15 * time.Second.Seconds()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "E2E")
 }

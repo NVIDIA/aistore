@@ -103,7 +103,7 @@ Cloud provider is auto-detected.
 
 ```console
 $ ais ls bucket_name
-Name		Size		Version
+NAME		SIZE		VERSION
 shard-0.tar	16.00KiB	1
 shard-1.tar	16.00KiB	1
 shard-10.tar	16.00KiB	1
@@ -123,7 +123,7 @@ List objects in the AIS bucket `bucket_name`.
 
 ```console
 $ ais ls ais://bucket_name
-Name		Size		Version
+NAME		SIZE		VERSION
 shard-0.tar	16.00KiB	1
 shard-1.tar	16.00KiB	1
 ...
@@ -133,7 +133,7 @@ List objects in the cloud bucket `bucket_name`.
 
 ```console
 ais ls cloud://bucket_name
-Name		Size		Version
+NAME		SIZE		VERSION
 shard-0.tar	16.00KiB	1
 shard-1.tar	16.00KiB	1
 ...
@@ -145,7 +145,7 @@ List objects which match given prefix.
 
 ```console
 $ ais ls ais://bucket_name --prefix "shard-1"
-Name		Size		Version
+NAME		SIZE		VERSION
 shard-1.tar	16.00KiB	1
 shard-10.tar	16.00KiB	1
 ```
@@ -318,7 +318,6 @@ $ ais set props bucket_name --jsonspec '{
       "enabled": true,
       "validate_warm_get": false
     },
-    "tiering": {},
     "cksum": {
       "type": "xxhash",
       "validate_cold_get": true,
@@ -354,15 +353,14 @@ Bucket props have been successfully updated.
 
 ```console
 $ ais show props bucket_name
-Property	Value
-========	=====
-Provider	ais
-Access		GET,PUT,DELETE,HEAD,ColdGET
-Checksum	Type: xxhash | Validate: ColdGET
-Mirror		Disabled
-EC		2:2 (250KiB)
-LRU		Watermarks: 20%/80% | Do not evict time: 120m | OOS: 90%
-Versioning	Enabled | Validate on WarmGET: no
+PROPERTY	 VALUE
+provider	 ais
+access		 GET,PUT,DELETE,HEAD,ColdGET
+checksum	 Type: xxhash | Validate: ColdGET
+mirror		 Disabled
+ec		 2:2 (250KiB)
+lru		 Watermarks: 20%/80% | Do not evict time: 120m | OOS: 90%
+versioning	 Enabled | Validate on WarmGET: no
 ```
 
 If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
@@ -382,13 +380,12 @@ $ ais set props bucket_name --jsonspec '{
 }'
 Bucket props have been successfully updated.
 $ ais show props bucket_name
-Property	Value
-========	=====
-Provider	ais
-Access		GET,PUT,DELETE,HEAD,ColdGET
-Checksum	Type: xxhash | Validate: ColdGET
-Mirror		2 copies
-EC		Disabled
-LRU		Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
-Versioning	Enabled | Validate on WarmGET: yes
+PROPERTY	 VALUE
+provider	 ais
+access		 GET,PUT,DELETE,HEAD,ColdGET
+checksum	 Type: xxhash | Validate: ColdGET
+mirror		 2 copies
+ec		 Disabled
+lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+versioning	 Enabled | Validate on WarmGET: yes
 ```

@@ -149,7 +149,7 @@ Show all download jobs with descriptions starting with `download ` prefix.
 
 ```console
 $ ais show download --regex "^downloads (.*)"
-JobID		 Status		 Errors	 Description
+JOB ID		 STATUS		 ERRORS	 DESCRIPTION
 cudIYMAqg	 Finished	 0	 downloads whole imagenet bucket
 fjwiIEMfa	 Finished	 0	 downloads range lpr-bucket from gcp://lpr-bucket
 ```

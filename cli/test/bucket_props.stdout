@@ -1,23 +1,21 @@
 "$BUCKET_1" bucket created
 Bucket props successfully updated
 Bucket props successfully updated
-Property	Value
-========	=====
-Provider	ais
-Access		GET,HEAD
-Checksum	Type: xxhash | Validate: ColdGET
-Mirror		2 copies
-EC		Disabled
-LRU		Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
-Versioning	Enabled | Validate on WarmGET: no
+PROPERTY	 VALUE
+provider	 ais
+access		 GET,HEAD
+checksum	 Type: xxhash | Validate: ColdGET
+mirror		 2 copies
+ec		 Disabled
+lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+versioning	 Enabled | Validate on WarmGET: no
 Bucket props successfully reset
 Bucket props successfully updated
-Property	Value
-========	=====
-Provider	ais
-Access		GET,PUT,DELETE,HEAD,ColdGET
-Checksum	Type: xxhash | Validate: ColdGET
-Mirror		Disabled
-EC		Disabled
-LRU		Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
-Versioning	Enabled | Validate on WarmGET: yes
+PROPERTY	 VALUE
+provider	 ais
+access		 GET,PUT,DELETE,HEAD,ColdGET
+checksum	 Type: xxhash | Validate: ColdGET
+mirror		 Disabled
+ec		 Disabled
+lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+versioning	 Enabled | Validate on WarmGET: yes

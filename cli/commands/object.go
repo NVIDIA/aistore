@@ -460,7 +460,7 @@ func buildObjStatTemplate(props string, showHeaders bool) string {
 			// request have different set of properties
 			continue
 		}
-		headSb.WriteString(strings.Title(field) + "\t")
+		headSb.WriteString(strings.ToUpper(field) + "\t ")
 		bodySb.WriteString(templates.ObjStatMap[field])
 	}
 	headSb.WriteString("\n")

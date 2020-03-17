@@ -25,8 +25,8 @@ const (
 	nonElectableSuffix = "[-]"
 
 	// Smap
-	SmapHeader = "DaemonID\t Type\t PublicURL" +
-		"{{ if (eq $.ExtendedURLs true) }}\t IntraControlURL\t IntraDataURL{{end}}" +
+	SmapHeader = "DAEMON ID\t TYPE\t PUBLIC URL" +
+		"{{ if (eq $.ExtendedURLs true) }}\t INTRA CONTROL URL\t INTRA DATA URL{{end}}" +
 		"\n"
 	SmapBody = "{{FormatDaemonID $value.ID $.Smap}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}" +
 		"{{ if (eq $.ExtendedURLs true) }}\t {{$value.IntraControlNet.DirectURL}}\t {{$value.IntraDataNet.DirectURL}}{{end}}" +
@@ -41,7 +41,7 @@ const (
 		"PrimaryProxy: {{.Smap.ProxySI.ID}}\t Proxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
 
 	// Proxy Info
-	ProxyInfoHeader = "Proxy\t %MemUsed\t MemAvail\t %CpuUsed\t Uptime\n"
+	ProxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t CPU USED %\t UPTIME\n"
 	ProxyInfoBody   = "{{$value.Snode.ID}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
@@ -58,7 +58,7 @@ const (
 	AllProxyInfoTmpl     = ProxyInfoHeader + AllProxyInfoBodyTmpl
 
 	// Target Info
-	TargetInfoHeader = "Target\t %MemUsed\t MemAvail\t %CapUsed\t CapAvail\t %CpuUsed\t Rebalance\n"
+	TargetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\n"
 	TargetInfoBody   = "{{$value.Snode.ID}}\t " +
 		"{{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
 		"{{CalcCap $value `percent` | printf `%d`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
@@ -106,18 +106,14 @@ const (
 		"{{end}}"
 
 	// Disk Stats
-	DiskStatsHeader = "Target\t" +
-		"Disk\t" +
-		"Read\t" +
-		"Write\t" +
-		"%Util\n"
+	DiskStatsHeader = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
 
-	DiskStatsBody = "{{ $value.TargetID }}\t" +
-		"{{ $value.DiskName }}\t" +
+	DiskStatsBody = "{{ $value.TargetID }}\t " +
+		"{{ $value.DiskName }}\t " +
 		"{{ $stat := $value.Stat }}" +
-		"{{ FormatBytesSigned $stat.RBps 2 }}/s\t" +
-		"{{ FormatBytesSigned $stat.WBps 2 }}/s\t" +
-		"{{ $stat.Util }}\n"
+		"{{ FormatBytesSigned $stat.RBps 2 }}/s\t " +
+		"{{ FormatBytesSigned $stat.WBps 2 }}/s\t " +
+		"{{ $stat.Util }}\n "
 
 	DiskStatBodyTmpl  = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
 	DiskStatsFullTmpl = DiskStatsHeader + DiskStatBodyTmpl
@@ -254,19 +250,19 @@ const (
 		DownloaderConfTmpl + DSortConfTmpl +
 		CompressionTmpl + ECTmpl
 
-	BucketPropsSimpleTmpl = "Property\tValue\n========\t=====\n" +
+	BucketPropsSimpleTmpl = "PROPERTY\t VALUE\n" +
 		"{{range $p := . }}" +
-		"{{$p.Name}}\t{{$p.Val}}\n" +
+		"{{$p.Name}}\t {{$p.Val}}\n" +
 		"{{end}}"
 
-	DownloadListHeader = "JobID\t Status\t Errors\t Description\n"
+	DownloadListHeader = "JOB ID\t STATUS\t ERRORS\t DESCRIPTION\n"
 	DownloadListBody   = "{{$value.ID}}\t " +
 		"{{if (eq $value.Aborted true) }}Aborted" +
 		"{{else}}{{if (eq $value.NumPending 0) }}Finished{{else}}{{$value.NumPending}} pending{{end}}" +
 		"{{end}}\t {{$value.NumErrors}}\t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
 
-	DSortListHeader = "JobID\t Status\t Start\t Finish\t Description\n"
+	DSortListHeader = "JOB ID\t STATUS\t START\t FINISH\t DESCRIPTION\n"
 	DSortListBody   = "{{$value.ID}}\t " +
 		"{{if (eq $value.Aborted true) }}Aborted" +
 		"{{else if (eq $value.Archived true) }}Finished" +
@@ -278,16 +274,18 @@ const (
 
 	XactionsBodyTmpl = XactionStatsHeader +
 		"{{range $daemon := $.Stats }}" + XactionBody + "{{end}}"
-	XactionStatsHeader = "DaemonID\tKind\tBucket\tObjects\tBytes\tStart\tEnd\tAborted" +
-		"{{if $.Verbose}}\tMore{{end}}\n"
+	XactionStatsHeader = "DAEMON ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t ABORTED" +
+		"{{if $.Verbose}}\t MORE{{end}}\n"
 	XactionBody = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
 		"{{if $daemon.Stats}}\n{{end}}"
-	XactionStatsBody = "{{ $daemon.DaemonID }}\t{{$xact.KindX}}\t" +
-		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t" +
-		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t" +
-		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t{{FormatTime $xact.StartTimeX}}\t" +
-		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t{{$xact.AbortedX}}\t" +
-		"{{if $.Verbose}}" + XactionExtBody + "{{end}}\n"
+	XactionStatsBody = "{{ $daemon.DaemonID }}\t {{$xact.KindX}}\t " +
+		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t " +
+		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t " +
+		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +
+		"{{FormatTime $xact.StartTimeX}}\t " +
+		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t " +
+		"{{$xact.AbortedX}}" +
+		"{{if $.Verbose}}\t " + XactionExtBody + "{{end}}\n"
 	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
 		"{{$first := true}}" +
 		"{{range $name, $val := $xact.Ext}}" +
@@ -296,18 +294,17 @@ const (
 		"{{else}}-{{end}}"
 
 	// Buckets templates
-
-	bucketsSummariesBody = "{{range $k, $v := . }}" +
-		"{{$v.Name}}\t{{$v.ObjCount}}\t{{FormatBytesUnsigned $v.Size 2}}\t{{FormatFloat $v.UsedPct}}%\t{{$v.Provider}}\n" +
+	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. SIZE\t EST. USED %\t PROVIDER\n" + bucketsSummariesBody
+	BucketsSummariesTmpl     = "NAME\t OBJECTS\t SIZE \t USED %\t PROVIDER\n" + bucketsSummariesBody
+	bucketsSummariesBody     = "{{range $k, $v := . }}" +
+		"{{$v.Name}}\t {{$v.ObjCount}}\t {{FormatBytesUnsigned $v.Size 2}}\t {{FormatFloat $v.UsedPct}}%\t {{$v.Provider}}\n" +
 		"{{end}}"
-	BucketsSummariesFastTmpl = "Name\tEst.Objects\tEst.Size\tEst.Used(%)\tProvider\n" + bucketsSummariesBody
-	BucketsSummariesTmpl     = "Name\tObjects\tSize\tUsed(%)\tProvider\n" + bucketsSummariesBody
 
 	// For `object put` mass uploader. A caller adds to the template
 	// total count and size. That is why the template ends with \t
-	ExtensionTmpl = "Files to upload:\nExtension\tCount\tSize\n" +
+	ExtensionTmpl = "Files to upload:\nEXTENSION\t COUNT\t SIZE\n" +
 		"{{range $k, $v := . }}" +
-		"{{$k}}\t{{$v.Cnt}}\t{{FormatBytesSigned $v.Size 2}}\n" +
+		"{{$k}}\t {{$v.Cnt}}\t {{FormatBytesSigned $v.Size 2}}\n" +
 		"{{end}}" +
 		"TOTAL\t"
 )

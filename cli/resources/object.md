@@ -123,7 +123,7 @@ Display all properties of object `list.txt` from bucket `texts`.
 
 ```console
 $ ais show object texts/list.txt
-Checksum                Size    Atime                   Iscached        Version Copies  Ec
+CHECKSUM                SIZE    ATIME                   ISCACHED        VERSION COPIES  EC
 2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     true            1       1       2:2[encoded]
 ```
 
@@ -133,7 +133,7 @@ Show only selected (`size,version,ec`) properties.
 
 ```console
 $ ais show object --props size,version,ec texts/listx.txt`
-Size    Version Ec
+SIZE    VERSION EC
 7.63MiB 1       2:2[replicated]
 ```
 
@@ -371,8 +371,8 @@ Try to promote a file that does not exist.
 $ ais create bucket testbucket
 testbucket bucket created
 $ ais status
-Target		 %MemUsed	 MemAvail	 %CapUsed	 CapAvail	 %CpuUsed	 Rebalance
-1014646t8081	   0.00		 4.00GiB	 50		 100.000GiB	   0.00		 finished; 0 objs moved (0B)
+TARGET		 MEM USED %	 MEM AVAIL	 CAP USED %	 CAP AVAIL	 CPU USED %	 REBALANCE
+1014646t8081	   0.00		 4.00GiB	 59		 375.026GiB	   0.00		 finished; 1 objs moved (2.5KiB)
 ...
 $ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t8081
 (...) Bad Request: stat /target/1014646t8081/nonexistent/dir: no such file or directory
@@ -466,13 +466,13 @@ Put `file.txt` object to `cloudbucket` bucket and evict it locally.
 $ ais put file.txt cloudbucket/file.txt
 PUT file.txt into bucket cloudbucket
 $ ais show bucket cloudbucket --cached # show only cloudbucket objects present in the AIS cluster
-Name	    Objects	Size	Used(%)	Provider
-cloudbucket	1	    702B	0%	    aws
+NAME	     OBJECTS	 SIZE    USED %  PROVIDER
+cloudbucket  1           702B    0%      aws
 $ ais evict cloudbucket/file.txt
 file.txt evicted from cloudbucket bucket
 $ ais show bucket cloudbucket --cached
-Name	    Objects	Size	Used(%)	Provider
-cloudbucket	0	    0B	    0%	    aws
+NAME	     OBJECTS	 SIZE    USED %  PROVIDER
+cloudbucket  0           0B      0%      aws
 ```
 
 ## Prefetch objects

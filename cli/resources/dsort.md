@@ -29,7 +29,7 @@ Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
 $ ais gen-shards --fsize 262144 --fcount 100
 Shards created: 10/10 [==============================================================] 100 %
 $ ais ls ais://dsort-testing
-Name		Size		Version
+NAME		SIZE		VERSION
 shard-0.tar	25.05MiB	1
 shard-1.tar	25.05MiB	1
 shard-2.tar	25.05MiB	1
@@ -51,7 +51,7 @@ Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_00
 $ ais gen-shards --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup
 Shards created: 100/100 [==============================================================] 100 %
 $ ais ls ais://dsort-testing
-Name				Size	Version
+NAME				SIZE	VERSION
 super_shard_000_last.tgz	1.25MiB	1
 super_shard_001_last.tgz	1.25MiB	1
 super_shard_002_last.tgz	1.25MiB	1
@@ -256,7 +256,7 @@ Shows all dSort jobs with descriptions starting with `sort ` prefix.
 
 ```console
 $ ais show dsort --regex "^sort (.*)"
-JobID		 Status		 Start		 Finish			 Description
+JOB ID		 STATUS		 START		 FINISH			 DESCRIPTION
 nro_Y5h9n	 Finished	 03-16 11:39:07	 03-16 11:39:07 	 sort shards from 0 to 9
 Key_Y5h9n	 Finished	 03-16 11:39:23	 03-16 11:39:23 	 sort shards from 10 to 19
 enq9Y5Aqn	 Finished	 03-16 11:39:34	 03-16 11:39:34 	 sort shards from 20 to 29

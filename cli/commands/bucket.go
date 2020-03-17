@@ -398,13 +398,13 @@ func printBckHeadTable(c *cli.Context, props cmn.BucketProps) error {
 		Name string
 		Val  string
 	}{
-		{"Provider", props.CloudProvider},
-		{"Access", props.AccessToStr()},
-		{"Checksum", props.Cksum.String()},
-		{"Mirror", props.Mirror.String()},
-		{"EC", props.EC.String()},
-		{"LRU", props.LRU.String()},
-		{"Versioning", props.Versioning.String()},
+		{"provider", props.CloudProvider},
+		{"access", props.AccessToStr()},
+		{"checksum", props.Cksum.String()},
+		{"mirror", props.Mirror.String()},
+		{"ec", props.EC.String()},
+		{"lru", props.LRU.String()},
+		{"versioning", props.Versioning.String()},
 	}
 
 	return templates.DisplayOutput(propList, c.App.Writer, templates.BucketPropsSimpleTmpl)
@@ -494,7 +494,7 @@ func buildOutputTemplate(props string, showHeaders bool) (string, error) {
 		if _, ok := templates.ObjectPropsMap[field]; !ok {
 			return "", fmt.Errorf("%q is not a valid property", field)
 		}
-		headSb.WriteString(strings.Title(field) + "\t")
+		headSb.WriteString(strings.ToUpper(field) + "\t ")
 		bodySb.WriteString(templates.ObjectPropsMap[field])
 	}
 	headSb.WriteString("\n")
