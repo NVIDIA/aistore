@@ -36,14 +36,14 @@ type (
 //
 
 func NewGetXact(t cluster.Target, smap cluster.Sowner,
-	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactGet {
+	si *cluster.Snode, bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) *XactGet {
 	XactCount.Inc()
 	availablePaths, disabledPaths := fs.Mountpaths.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 
 	runner := &XactGet{
 		getJoggers:  make(map[string]*getJogger, totalPaths),
-		xactECBase:  newXactECBase(t, smap, si, bucket, reqBundle, respBundle),
+		xactECBase:  newXactECBase(t, smap, si, bck, reqBundle, respBundle),
 		xactReqBase: newXactReqECBase(),
 	}
 
@@ -183,7 +183,7 @@ func (r *XactGet) Run() (err error) {
 
 func (r *XactGet) abortECRequestWhenDisabled(req *Request) {
 	if req.ErrCh != nil {
-		req.ErrCh <- fmt.Errorf("EC disabled, can't procced with the request on bucket %s", r.bckName)
+		req.ErrCh <- fmt.Errorf("EC disabled, can't procced with the request on bucket %s", r.bck)
 		close(req.ErrCh)
 	}
 }
@@ -259,7 +259,7 @@ func (r *XactGet) dispatchEncodingRequest(req *Request) {
 func (r *XactGet) dispatchRequest(req *Request) {
 	if !r.ecRequestsEnabled() {
 		if req.ErrCh != nil {
-			req.ErrCh <- fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bckName)
+			req.ErrCh <- fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
 			close(req.ErrCh)
 		}
 		return

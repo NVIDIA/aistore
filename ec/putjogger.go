@@ -38,7 +38,7 @@ type putJogger struct {
 }
 
 func (c *putJogger) run() {
-	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
+	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
 	c.buffer, c.slab = mm.Alloc()
 
 	for {
@@ -65,7 +65,7 @@ func (c *putJogger) run() {
 }
 
 func (c *putJogger) stop() {
-	glog.Infof("Stopping EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
+	glog.Infof("Stopping EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
 	c.stopCh <- struct{}{}
 	close(c.stopCh)
 }

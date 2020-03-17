@@ -31,13 +31,13 @@ type (
 //
 
 func NewPutXact(t cluster.Target, smap cluster.Sowner,
-	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactPut {
+	si *cluster.Snode, bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) *XactPut {
 	XactCount.Inc()
 	availablePaths, disabledPaths := fs.Mountpaths.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 	runner := &XactPut{
 		putJoggers:  make(map[string]*putJogger, totalPaths),
-		xactECBase:  newXactECBase(t, smap, si, bucket, reqBundle, respBundle),
+		xactECBase:  newXactECBase(t, smap, si, bck, reqBundle, respBundle),
 		xactReqBase: newXactReqECBase(),
 	}
 
@@ -148,7 +148,7 @@ func (r *XactPut) Run() (err error) {
 
 func (r *XactPut) abortECRequestWhenDisabled(req *Request) {
 	if req.ErrCh != nil {
-		req.ErrCh <- fmt.Errorf("EC disabled, can't procced with the request on bucket %s", r.bckName)
+		req.ErrCh <- fmt.Errorf("EC disabled, can't procced with the request on bucket %s", r.bck)
 		close(req.ErrCh)
 	}
 }
@@ -178,7 +178,7 @@ func (r *XactPut) Encode(req *Request) {
 	req.tm = time.Now()
 	if glog.V(4) {
 		glog.Infof("ECXAction for bucket %s (queue = %d): encode object %s",
-			r.bckName, len(r.ecCh), req.LOM.Uname())
+			r.bck, len(r.ecCh), req.LOM.Uname())
 	}
 
 	r.dispatchDecodingRequest(req)
@@ -204,7 +204,7 @@ func (r *XactPut) dispatchDecodingRequest(req *Request) {
 func (r *XactPut) dispatchRequest(req *Request) {
 	if !r.ecRequestsEnabled() {
 		if req.ErrCh != nil {
-			req.ErrCh <- fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bckName)
+			req.ErrCh <- fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
 			close(req.ErrCh)
 		}
 		return

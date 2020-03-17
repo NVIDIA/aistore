@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 // internal EC stats in raw format: only counters
 type stats struct {
-	bckName    string
+	bck        cmn.Bck
 	queueLen   atomic.Int64
 	queueCnt   atomic.Int64
 	waitTime   atomic.Int64
@@ -64,7 +65,7 @@ type ECStats struct {
 	// total number of encode requests
 	PutReq int64
 	// name of the bucket
-	BckName string
+	Bck cmn.Bck
 }
 
 func (s *stats) updateQueue(l int) {
@@ -117,7 +118,7 @@ func (s *stats) updateObjTime(d time.Duration) {
 }
 
 func (s *stats) stats() *ECStats {
-	st := &ECStats{BckName: s.bckName}
+	st := &ECStats{Bck: s.bck}
 
 	val := s.queueLen.Swap(0)
 	cnt := s.queueCnt.Swap(0)
@@ -174,7 +175,7 @@ func (s *ECStats) String() string {
 
 	lines := make([]string, 0, 8)
 	lines = append(lines,
-		fmt.Sprintf("EC stats for bucket %s", s.BckName),
+		fmt.Sprintf("EC stats for bucket %s", s.Bck),
 		fmt.Sprintf("Queue avg len: %.4f, avg wait time: %v", s.QueueLen, s.WaitTime),
 		fmt.Sprintf("Avg object processing time: %v", s.ObjTime),
 	)

@@ -26,10 +26,11 @@ type (
 	}
 )
 
-func NewRespondXact(t cluster.Target, smap cluster.Sowner, si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactRespond {
+func NewRespondXact(t cluster.Target, smap cluster.Sowner, si *cluster.Snode,
+	bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) *XactRespond {
 	XactCount.Inc()
 	runner := &XactRespond{
-		xactECBase: newXactECBase(t, smap, si, bucket, reqBundle, respBundle),
+		xactECBase: newXactECBase(t, smap, si, bck, reqBundle, respBundle),
 	}
 
 	return runner

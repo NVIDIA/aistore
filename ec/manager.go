@@ -138,19 +138,19 @@ func (mgr *Manager) closeECBundles() {
 	mgr.respBundle = nil
 }
 
-func (mgr *Manager) NewGetXact(bucket string) *XactGet {
+func (mgr *Manager) NewGetXact(bck cmn.Bck) *XactGet {
 	return NewGetXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
-		bucket, mgr.reqBundle, mgr.respBundle)
+		bck, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *Manager) NewPutXact(bucket string) *XactPut {
+func (mgr *Manager) NewPutXact(bck cmn.Bck) *XactPut {
 	return NewPutXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
-		bucket, mgr.reqBundle, mgr.respBundle)
+		bck, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *Manager) NewRespondXact(bucket string) *XactRespond {
+func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
 	return NewRespondXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
-		bucket, mgr.reqBundle, mgr.respBundle)
+		bck, mgr.reqBundle, mgr.respBundle)
 }
 
 func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {

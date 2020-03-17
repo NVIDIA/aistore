@@ -32,10 +32,10 @@ type (
 		cmn.MountpathXact
 		t cluster.Target
 
-		smap    cluster.Sowner // cluster map
-		si      *cluster.Snode // target daemonInfo
-		stats   stats          // EC statistics
-		bckName string         // which bucket xact belongs to
+		smap  cluster.Sowner // cluster map
+		si    *cluster.Snode // target daemonInfo
+		stats stats          // EC statistics
+		bck   cmn.Bck        // which bucket xact belongs to
 
 		dOwner *dataOwner // data slice manager
 
@@ -73,13 +73,13 @@ func newXactReqECBase() xactReqBase {
 }
 
 func newXactECBase(t cluster.Target, smap cluster.Sowner,
-	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) xactECBase {
+	si *cluster.Snode, bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) xactECBase {
 	return xactECBase{
-		t:       t,
-		smap:    smap,
-		si:      si,
-		stats:   stats{bckName: bucket},
-		bckName: bucket,
+		t:     t,
+		smap:  smap,
+		si:    si,
+		stats: stats{bck: bck},
+		bck:   bck,
 
 		dOwner: &dataOwner{
 			mtx:    sync.Mutex{},

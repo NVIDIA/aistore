@@ -44,7 +44,7 @@ type ecGetEntry struct {
 }
 
 func (e *ecGetEntry) Start(id string, bck cmn.Bck) error {
-	xec := ec.ECM.NewGetXact(bck.Name) // TODO -- FIXME: we should pass whole `cmn.Bck`
+	xec := ec.ECM.NewGetXact(bck)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, bck)
 	e.xact = xec
 	go xec.Run()
@@ -67,7 +67,7 @@ type ecPutEntry struct {
 }
 
 func (e *ecPutEntry) Start(id string, bck cmn.Bck) error {
-	xec := ec.ECM.NewPutXact(bck.Name) // TODO: we should pass whole `cmn.Bck`
+	xec := ec.ECM.NewPutXact(bck)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, bck)
 	go xec.Run()
 	e.xact = xec
@@ -90,7 +90,7 @@ type ecRespondEntry struct {
 }
 
 func (e *ecRespondEntry) Start(id string, bck cmn.Bck) error {
-	xec := ec.ECM.NewRespondXact(bck.Name) // TODO: we should pass whole `cmn.Bck`
+	xec := ec.ECM.NewRespondXact(bck)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, bck)
 	go xec.Run()
 	e.xact = xec

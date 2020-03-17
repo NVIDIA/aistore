@@ -40,7 +40,7 @@ type getJogger struct {
 }
 
 func (c *getJogger) run() {
-	glog.Infof("started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
+	glog.Infof("started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
 
 	for {
 		select {
@@ -56,7 +56,7 @@ func (c *getJogger) run() {
 }
 
 func (c *getJogger) stop() {
-	glog.Infof("stopping EC for mountpath: %s, bucket: %s", c.mpath, c.parent.bckName)
+	glog.Infof("stopping EC for mountpath: %s, bucket: %s", c.mpath, c.parent.bck)
 	c.stopCh <- struct{}{}
 	close(c.stopCh)
 }
