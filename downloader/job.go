@@ -57,12 +57,12 @@ type (
 
 	RangeDlJob struct {
 		BaseDlJob
-		t    cluster.Target
-		objs []DlObj               // objects' metas which are ready to be downloaded
-		pt   cmn.ParsedTemplate    // object links template
-		iter func() (string, bool) // links iterator
-		done bool                  // true = the iterator is exhausted, nothing left to read
-		dir  string                // objects directory(prefix) from request
+		t     cluster.Target
+		objs  []DlObj               // objects' metas which are ready to be downloaded
+		iter  func() (string, bool) // links iterator
+		count int                   // total number object to download by a target
+		dir   string                // objects directory(prefix) from request
+		done  bool                  // true = the iterator is exhausted, nothing left to read
 	}
 
 	CloudBucketDlJob struct {
@@ -199,7 +199,7 @@ func (j *CloudBucketDlJob) getNextObjs() error {
 	return nil
 }
 
-func (j *RangeDlJob) Len() int { return int(j.pt.Count()) }
+func (j *RangeDlJob) Len() int { return j.count }
 
 func (j *RangeDlJob) genNext() ([]DlObj, bool) {
 	readyToDownloadObjs := j.objs
@@ -255,15 +255,44 @@ func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *BaseDlJob,
 	return job, err
 }
 
+func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
+	var (
+		smap = t.GetSowner().Get()
+		sid  = t.Snode().ID()
+		iter = pt.Iter()
+		si   *cluster.Snode
+	)
+
+	for link, ok := iter(); ok; link, ok = iter() {
+		name := path.Join(dir, path.Base(link))
+		name, err = NormalizeObjName(name)
+		if err != nil {
+			return
+		}
+		si, err = cluster.HrwTarget(bck.MakeUname(name), smap)
+		if err != nil {
+			return
+		}
+		if si.ID() == sid {
+			cnt++
+		}
+	}
+	return cnt, nil
+}
+
 func newRangeDlJob(t cluster.Target, base *BaseDlJob, pt cmn.ParsedTemplate, subdir string) (*RangeDlJob, error) {
+	cnt, err := countObjects(t, pt, subdir, base.bck)
+	if err != nil {
+		return nil, err
+	}
 	job := &RangeDlJob{
 		BaseDlJob: *base,
 		t:         t,
-		pt:        pt,
 		iter:      pt.Iter(),
 		dir:       subdir,
+		count:     cnt,
 	}
 
-	err := job.getNextObjs()
+	err = job.getNextObjs()
 	return job, err
 }
