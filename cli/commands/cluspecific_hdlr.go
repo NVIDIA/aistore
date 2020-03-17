@@ -72,7 +72,7 @@ func registerNodeHandler(c *cli.Context) (err error) {
 
 	socketAddrParts = strings.Split(socketAddr, ":")
 	if len(socketAddrParts) != 2 {
-		return fmt.Errorf("invalid socket address, expected format: 'IP:PORT'")
+		return fmt.Errorf("invalid socket address, format 'IP:PORT' expected")
 	}
 
 	daemonID = c.Args().Get(1) // user-given ID
@@ -101,7 +101,7 @@ func registerNodeHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Node with ID %q has been successfully added to the cluster.\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "Node with ID %q successfully added to the cluster\n", daemonID)
 	return
 }
 

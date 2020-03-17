@@ -1,5 +1,5 @@
-$BUCKET_1 bucket created
-PUT object_1.txt into bucket $BUCKET_1
+"$BUCKET_1" bucket created
+PUT "object_1.txt" into bucket "$BUCKET_1"
 Checksum		Size	Atime			Iscached	Version	Copies	Ec
 ^05967d5390ac53b0 11B (.*) true 1 1 -$
 Size	Version

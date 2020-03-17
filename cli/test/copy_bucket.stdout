@@ -1,5 +1,5 @@
-$BUCKET_1 bucket created
-$BUCKET_2 bucket created
-Copying bucket $BUCKET_1 to $BUCKET_2 in progress.
+"$BUCKET_1" bucket created
+"$BUCKET_2" bucket created
+Copying bucket "$BUCKET_1" to "$BUCKET_2" in progress.
 To check the status, run: ais show xaction copybck $BUCKET_2
 DaemonID	Kind	Bucket	Objects	Bytes	Start	End	Aborted

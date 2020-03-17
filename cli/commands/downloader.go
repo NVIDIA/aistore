@@ -325,7 +325,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 
 func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 	if d.Aborted {
-		fmt.Fprintln(w, "Download was aborted.")
+		fmt.Fprintln(w, "Download aborted")
 		return
 	}
 

@@ -270,7 +270,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 		// valid xaction
 		if cmn.IsXactTypeBck(xactKind) {
 			if bck.Name == "" {
-				return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction '%s'", xactKind))
+				return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction %q", xactKind))
 			}
 		}
 	}
@@ -330,7 +330,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 		return
 	}
 	if object == "" {
-		return incorrectUsageMsg(c, "no object specified in '%s'", fullObjName)
+		return incorrectUsageMsg(c, "no object specified in %q", fullObjName)
 	}
 	return objectStats(c, bck, object)
 }

@@ -155,7 +155,7 @@ func deleteUserHandler(c *cli.Context) (err error) {
 }
 
 func loginUserHandler(c *cli.Context) (err error) {
-	const tokenSaveFailFmt = "logged in successfully, but failed to save token: %v"
+	const tokenSaveFailFmt = "successfully logged in, but failed to save token: %v"
 	authnURL := cliAuthnURL()
 	if authnURL == "" {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
@@ -190,7 +190,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 }
 
 func logoutUserHandler(c *cli.Context) (err error) {
-	const logoutFailFmt = "Logging out failed: %v"
+	const logoutFailFmt = "logging out failed: %v"
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf(logoutFailFmt, err)

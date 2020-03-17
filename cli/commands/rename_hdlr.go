@@ -90,13 +90,13 @@ func renameObjectHandler(c *cli.Context) (err error) {
 		return
 	}
 	if oldObj == "" {
-		return incorrectUsageMsg(c, "no object specified in '%s'", oldObjFull)
+		return incorrectUsageMsg(c, "no object specified in %q", oldObjFull)
 	}
 	if bck.Name == "" {
-		return incorrectUsageMsg(c, "no bucket specified for object '%s'", oldObj)
+		return incorrectUsageMsg(c, "no bucket specified for object %q", oldObj)
 	}
 	if bck.Provider != "" && !bck.IsAIS() {
-		return incorrectUsageMsg(c, "provider '%s' not supported", bck.Provider)
+		return incorrectUsageMsg(c, "provider %q not supported", bck.Provider)
 	}
 
 	bck.Provider = cmn.ProviderAIS
@@ -104,6 +104,6 @@ func renameObjectHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s renamed to %s\n", oldObj, newObj)
+	fmt.Fprintf(c.App.Writer, "%q renamed to %q\n", oldObj, newObj)
 	return
 }

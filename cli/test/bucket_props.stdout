@@ -1,6 +1,6 @@
-$BUCKET_1 bucket created
-Bucket props have been successfully updated.
-Bucket props have been successfully updated.
+"$BUCKET_1" bucket created
+Bucket props successfully updated
+Bucket props successfully updated
 Property	Value
 ========	=====
 Provider	ais
@@ -10,8 +10,8 @@ Mirror		2 copies
 EC		Disabled
 LRU		Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 Versioning	Enabled | Validate on WarmGET: no
-Bucket props have been reset successfully.
-Bucket props have been successfully updated.
+Bucket props successfully reset
+Bucket props successfully updated
 Property	Value
 ========	=====
 Provider	ais

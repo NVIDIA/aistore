@@ -56,7 +56,7 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 	)
 
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
-		return incorrectUsageMsg(c, "%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
+		return incorrectUsageMsg(c, "%q and %q flags both need to be set", lengthFlag.Name, offsetFlag.Name)
 	}
 	if offset, err = getByteFlagValue(c, offsetFlag); err != nil {
 		return
@@ -88,7 +88,7 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 	if err != nil {
 		if httpErr, ok := err.(*cmn.HTTPError); ok {
 			if httpErr.Status == http.StatusNotFound {
-				return fmt.Errorf("object %s/%s does not exist", bck, object)
+				return fmt.Errorf("object \"%s/%s\" does not exist", bck, object)
 			}
 		}
 		return
@@ -99,7 +99,7 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 		return
 	}
 
-	fmt.Fprintf(c.App.ErrWriter, "%s has the size %s (%d B)\n", object, cmn.B2S(objLen, 2), objLen)
+	fmt.Fprintf(c.App.ErrWriter, "%q has the size %s (%d B)\n", object, cmn.B2S(objLen, 2), objLen)
 	return
 }
 
@@ -122,7 +122,7 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 	if err = api.PromoteFileOrDir(promoteArgs); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "promoted %s => bucket %s\n", fqn, bck)
+	fmt.Fprintf(c.App.Writer, "promoted %q => bucket %q\n", fqn, bck)
 	return
 }
 
@@ -174,7 +174,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 	if flagIsSet(c, dryRunFlag) {
 		i := 0
 		for ; i < dryRunExamplesCnt; i++ {
-			fmt.Fprintf(c.App.Writer, "PUT %q => %s/%s\n", files[i].path, bck, files[i].name)
+			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s\"\n", files[i].path, bck, files[i].name)
 		}
 		if i < len(files) {
 			fmt.Fprintf(c.App.Writer, "(and %d more)\n", len(files)-i)
@@ -251,11 +251,11 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 		}
 
 		if flagIsSet(c, dryRunFlag) {
-			fmt.Fprintf(c.App.Writer, "PUT %q => %s/%s\n", path, bck.Name, objName)
+			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s\"\n", path, bck.Name, objName)
 			return nil
 		}
 		if err = putSingleObject(bck, objName, path); err == nil {
-			fmt.Fprintf(c.App.Writer, "PUT %s into bucket %s\n", objName, bck)
+			fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
 		}
 		return err
 	}
@@ -275,7 +275,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) (err error) {
 	var (
 		bar        *mpb.Bar
-		barText    = fmt.Sprintf("Composing %d files into object %s/%s", len(fileNames), bck.Name, objName)
+		barText    = fmt.Sprintf("Composing %d files into object \"%s/%s\"", len(fileNames), bck.Name, objName)
 		filesToObj = make([]FileToObjSlice, len(fileNames))
 		p          *mpb.Progress
 		sizes      = make(map[string]int64, len(fileNames))
@@ -347,7 +347,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		return fmt.Errorf("%v. Object not created", err)
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %s of size %d into bucket %s\n", objName, totalSize, bck.Name)
+	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %q of size %d into bucket %q\n", objName, totalSize, bck)
 
 	return nil
 }
@@ -393,7 +393,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		// uploading even if we are stuck on mutex for a while
 		mx.Lock()
 		if time.Since(lastReport) > reportEvery {
-			fmt.Fprintf(c.App.Writer, "Uploaded %d(%d%%) objects, %s (%d%%)\n",
+			fmt.Fprintf(c.App.Writer, "Uploaded %d(%d%%) objects, %s (%d%%).\n",
 				total, 100*total/len(p.files),
 				cmn.B2S(size, 1), 100*size/p.totalSize)
 			lastReport = time.Now()
@@ -406,14 +406,14 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 
 		reader, err := cmn.NewFileHandle(f.path)
 		if err != nil {
-			_, _ = fmt.Fprintf(c.App.Writer, "Failed to open file %s: %v\n", f.path, err)
+			_, _ = fmt.Fprintf(c.App.Writer, "Failed to open file %q: %v\n", f.path, err)
 			errCount.Inc()
 			return
 		}
 
 		putArgs := api.PutObjectArgs{BaseParams: defaultAPIParams, Bck: p.bck, Object: f.name, Reader: reader}
 		if err := api.PutObject(putArgs); err != nil {
-			_, _ = fmt.Fprintf(c.App.Writer, "Failed to put object %s: %v\n", f.name, err)
+			_, _ = fmt.Fprintf(c.App.Writer, "Failed to put object %q: %v\n", f.name, err)
 			errCount.Inc()
 		} else if verbose {
 			_, _ = fmt.Fprintf(c.App.Writer, "%s -> %s\n", f.path, f.name)
@@ -515,7 +515,7 @@ func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		return
 	}
 	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %s and %s cannot be both set", listFlag.Name, templateFlag.Name)
+		return incorrectUsageMsg(c, "flags %q and %q cannot be both set", listFlag.Name, templateFlag.Name)
 	}
 
 	if flagIsSet(c, listFlag) {
@@ -534,7 +534,7 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	)
 
 	if flagIsSet(c, dryRunFlag) {
-		cmn.PrintMultipleLines(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.Name+"/%s\n", fileList)
+		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.Name+"/%s\n", fileList)
 		return nil
 	}
 
@@ -556,7 +556,7 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%s %s from %s bucket\n", fileList, command, bck)
+	fmt.Fprintf(c.App.Writer, "%s %s from %q bucket\n", fileList, command, bck)
 	return
 }
 
@@ -574,7 +574,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 			return nil
 		}
 		objs := pt.ToSlice(dryRunExamplesCnt)
-		cmn.PrintMultipleLines(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.String()+"/%s", objs)
+		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.String()+"/%s", objs)
 		if pt.Count() > dryRunExamplesCnt {
 			fmt.Fprintf(c.App.Writer, "(and %d more)", pt.Count()-dryRunExamplesCnt)
 		}
@@ -599,7 +599,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%s files in the range %q from %s bucket\n",
+	fmt.Fprintf(c.App.Writer, "%s files in the range %q from %q bucket\n",
 		command, rangeStr, bck)
 	return
 }
@@ -618,7 +618,7 @@ func multiObjOp(c *cli.Context, command string) error {
 			return err
 		}
 		if objectName == "" {
-			return incorrectUsageMsg(c, "'%s: missing object name", fullObjName)
+			return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
 		}
 
 		switch command {
@@ -626,7 +626,7 @@ func multiObjOp(c *cli.Context, command string) error {
 			if err := api.DeleteObject(defaultAPIParams, bck, objectName); err != nil {
 				return err
 			}
-			fmt.Fprintf(c.App.Writer, "%s deleted from %s bucket\n", objectName, bck)
+			fmt.Fprintf(c.App.Writer, "%q deleted from %q bucket\n", objectName, bck)
 		case commandEvict:
 			if cmn.IsProviderAIS(bck) {
 				return fmt.Errorf("evicting objects from AIS bucket is not allowed")
@@ -638,7 +638,7 @@ func multiObjOp(c *cli.Context, command string) error {
 			if err := api.EvictObject(defaultAPIParams, bck, objectName); err != nil {
 				return err
 			}
-			fmt.Fprintf(c.App.Writer, "%s evicted from %s bucket\n", objectName, bck)
+			fmt.Fprintf(c.App.Writer, "%q evicted from %q bucket\n", objectName, bck)
 		}
 	}
 	return nil

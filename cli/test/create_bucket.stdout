@@ -1,7 +1,7 @@
-$BUCKET_1 bucket created
+"$BUCKET_1" bucket created
 Bucket "$BUCKET_1" already exists
-$BUCKET_1 bucket destroyed
-$BUCKET_2 bucket created
+"$BUCKET_1" bucket destroyed
+"$BUCKET_2" bucket created
 Bucket "$BUCKET_2" already exists
-$BUCKET_2 bucket destroyed
-ais://$BUCKET_3 bucket created
+"$BUCKET_2" bucket destroyed
+"ais://$BUCKET_3" bucket created

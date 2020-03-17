@@ -172,7 +172,7 @@ func evictHandler(c *cli.Context) error {
 
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			if objName != "" {
-				return incorrectUsageMsg(c, "object name (%s) not supported when list or template flag provided", objName)
+				return incorrectUsageMsg(c, "object name (%q) not supported when list or template flag provided", objName)
 			}
 			// list or range operation on a given bucket
 			return listOrRangeOp(c, commandEvict, bck)
@@ -188,7 +188,7 @@ func evictHandler(c *cli.Context) error {
 
 	// list and range flags are invalid with object argument(s)
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %s are invalid when object names have been provided", strings.Join([]string{listFlag.Name, templateFlag.Name}, ","))
+		return incorrectUsageMsg(c, "flags %q are invalid when object names provided", strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
 	}
 
 	// object argument(s) given by the user; operation on given object(s)
@@ -216,7 +216,7 @@ func getHandler(c *cli.Context) (err error) {
 		return
 	}
 	if objName == "" {
-		return incorrectUsageMsg(c, "'%s': missing object name", fullObjName)
+		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
 	}
 	return getObject(c, bck, objName, outFile)
 }

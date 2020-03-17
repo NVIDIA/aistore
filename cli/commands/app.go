@@ -101,14 +101,14 @@ func (aisCLI *AISCLI) runNTimes(input []string) error {
 func (aisCLI *AISCLI) handleCLIError(err error) error {
 	switch err := err.(type) {
 	case *cmn.HTTPError:
-		return errors.New(cmn.StrToSentence(err.Message))
+		return errors.New(cmn.CapitalizeString(err.Message))
 	case *usageError:
 		return err
 	case *additionalInfoError:
 		err.baseErr = aisCLI.handleCLIError(err.baseErr)
 		return err
 	default:
-		return errors.New(cmn.StrToSentence(err.Error()))
+		return errors.New(cmn.CapitalizeString(err.Error()))
 	}
 }
 

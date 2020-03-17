@@ -37,7 +37,7 @@ func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn
 			return bck, nil
 		}
 		if tag != "" {
-			err = incorrectUsageMsg(c, "'%s': missing bucket name", tag)
+			err = incorrectUsageMsg(c, "%q: missing bucket name", tag)
 		} else {
 			err = incorrectUsageMsg(c, "missing bucket name")
 		}
@@ -60,9 +60,9 @@ func createBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 					continue
 				}
 			}
-			return fmt.Errorf("(%s) %s", bck, err.Error())
+			return fmt.Errorf("create bucket %q failed: %s", bck, err.Error())
 		}
-		fmt.Fprintf(c.App.Writer, "%s bucket created\n", bck)
+		fmt.Fprintf(c.App.Writer, "%q bucket created\n", bck)
 	}
 	return nil
 }
@@ -82,7 +82,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 			}
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "%s bucket destroyed\n", bck)
+		fmt.Fprintf(c.App.Writer, "%q bucket destroyed\n", bck)
 	}
 	return nil
 }
@@ -96,7 +96,7 @@ func renameBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 		return
 	}
 
-	msgFmt := "Renaming bucket %s to %s in progress.\nTo check the status, run: ais show xaction %s %s\n"
+	msgFmt := "Renaming bucket %q to %q in progress.\nTo check the status, run: ais show xaction %s %s\n"
 	fmt.Fprintf(c.App.Writer, msgFmt, fromBck.Name, toBck.Name, cmn.ActRenameLB, toBck.Name)
 	return
 }
@@ -107,7 +107,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 		return
 	}
 
-	msgFmt := "Copying bucket %s to %s in progress.\nTo check the status, run: ais show xaction %s %s\n"
+	msgFmt := "Copying bucket %q to %q in progress.\nTo check the status, run: ais show xaction %s %s\n"
 	fmt.Fprintf(c.App.Writer, msgFmt, fromBck.Name, toBck.Name, cmn.ActCopyBucket, toBck.Name)
 	return
 }
@@ -115,13 +115,13 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 // Evict a cloud bucket
 func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	if flagIsSet(c, dryRunFlag) {
-		fmt.Fprintf(c.App.Writer, "EVICT: %s\n", bck)
+		fmt.Fprintf(c.App.Writer, "EVICT: %q\n", bck)
 		return
 	}
 	if err = api.EvictCloudBucket(defaultAPIParams, bck); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%s bucket evicted\n", bck)
+	fmt.Fprintf(c.App.Writer, "%q bucket evicted\n", bck)
 	return
 }
 
@@ -166,7 +166,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	query = cmn.AddBckToQuery(query, bck)
 	query.Add(cmn.URLParamPrefix, prefix)
 	if flagIsSet(c, cachedFlag) && cmn.IsProviderAIS(bck) {
-		fmt.Fprintf(c.App.ErrWriter, "warning: ignoring %s flag: irrelevant for ais buckets\n", cachedFlag.Name)
+		fmt.Fprintf(c.App.ErrWriter, "warning: ignoring %q flag: irrelevant for ais buckets\n", cachedFlag.Name)
 		msg.Cached = false
 	}
 
@@ -330,7 +330,7 @@ func setBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = api.SetBucketProps(defaultAPIParams, bck, props); err != nil {
 		return
 	}
-	fmt.Fprintln(c.App.Writer, "Bucket props have been successfully updated.")
+	fmt.Fprintln(c.App.Writer, "Bucket props successfully updated")
 	return
 }
 
@@ -346,7 +346,7 @@ func setBucketPropsJSON(c *cli.Context, bck cmn.Bck) (err error) {
 		return err
 	}
 
-	fmt.Fprintln(c.App.Writer, "Bucket props have been successfully updated.")
+	fmt.Fprintln(c.App.Writer, "Bucket props successfully updated")
 	return nil
 }
 
@@ -360,7 +360,7 @@ func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 		return
 	}
 
-	fmt.Fprintln(c.App.Writer, "Bucket props have been reset successfully.")
+	fmt.Fprintln(c.App.Writer, "Bucket props successfully reset")
 	return
 }
 
@@ -420,9 +420,9 @@ func configureNCopies(c *cli.Context, bck cmn.Bck) (err error) {
 		return
 	}
 	if copies > 1 {
-		fmt.Fprintf(c.App.Writer, "Configured %s as %d-way mirror\n", bck, copies)
+		fmt.Fprintf(c.App.Writer, "Configured %q as %d-way mirror\n", bck, copies)
 	} else {
-		fmt.Fprintf(c.App.Writer, "Configured %s for single-replica (no redundancy)\n", bck)
+		fmt.Fprintf(c.App.Writer, "Configured %q for single-replica (no redundancy)\n", bck)
 	}
 	return
 }
@@ -435,7 +435,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = api.ECEncodeBucket(defaultAPIParams, bck); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %s, use '%s %s %s %s %s' to monitor the progress\n",
+	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %q, use '%s %s %s %s %s' to monitor the progress\n",
 		bck, cliName, commandShow, subcmdXaction, cmn.ActECEncode, bck)
 	return
 }

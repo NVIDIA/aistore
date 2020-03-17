@@ -154,7 +154,7 @@ func genShardsHandler(c *cli.Context) error {
 
 	supportedExts := []string{".tar", ".tgz"}
 	if !cmn.StringInSlice(ext, supportedExts) {
-		return fmt.Errorf("extension is invalid: %s, should be one of: %s", ext, supportedExts)
+		return fmt.Errorf("extension %q is invalid, should be one of %q", ext, strings.Join(supportedExts, ", "))
 	}
 
 	mem := &memsys.MMSA{Name: "dsort-cli"}
@@ -245,7 +245,7 @@ type dsortResult struct {
 
 func (d dsortResult) String() string {
 	if d.aborted {
-		return fmt.Sprintf("%s job was aborted.", cmn.DSortName)
+		return fmt.Sprintf("%s job was aborted", cmn.DSortName)
 	}
 
 	var sb strings.Builder
@@ -505,7 +505,7 @@ func printCondensedStats(w io.Writer, id string) error {
 	if finished {
 		_, _ = fmt.Fprintf(
 			w,
-			"DSort job has finished successfully in %v:\n  Longest extraction:\t%v\n  Longest sorting:\t%v\n  Longest creation:\t%v\n",
+			"DSort job has successfully finished in %v:\n  Longest extraction:\t%v\n  Longest sorting:\t%v\n  Longest creation:\t%v\n",
 			elapsedTime, extractionTime, sortingTime, creationTime,
 		)
 		return nil

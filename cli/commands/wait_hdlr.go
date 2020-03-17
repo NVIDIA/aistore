@@ -84,7 +84,7 @@ func waitXactionHandler(c *cli.Context) error {
 	}
 
 	if bck.IsEmpty() && cmn.XactType[xactKind] == cmn.XactTypeBck {
-		return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction '%s'", xactKind))
+		return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction %q", xactKind))
 	}
 
 	var (
@@ -108,7 +108,7 @@ func waitXactionHandler(c *cli.Context) error {
 		if bck.IsEmpty() {
 			return fmt.Errorf("xaction %q was aborted", xactKind)
 		}
-		return fmt.Errorf("xaction %q (bck: %s) was aborted", xactKind, bck)
+		return fmt.Errorf("xaction %q (bucket %q) was aborted", xactKind, bck)
 	}
 	return nil
 }
@@ -137,7 +137,7 @@ func waitDownloadHandler(c *cli.Context) (err error) {
 	}
 
 	if aborted {
-		return fmt.Errorf("download job with %s id was aborted", id)
+		return fmt.Errorf("download job with id %q was aborted", id)
 	}
 	return nil
 }
@@ -170,7 +170,7 @@ func waitDSortHandler(c *cli.Context) (err error) {
 	}
 
 	if aborted {
-		return fmt.Errorf("dsort job with %s id was aborted", id)
+		return fmt.Errorf("dsort job with id %q was aborted", id)
 	}
 	return nil
 }

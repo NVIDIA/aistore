@@ -101,7 +101,7 @@ func clusterRemoveNode(c *cli.Context, daemonID string) (err error) {
 	if err := api.UnregisterNode(defaultAPIParams, daemonID); err != nil {
 		return err
 	}
-	fmt.Fprintf(c.App.Writer, "Node with ID %q has been successfully removed from the cluster.\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "Node with ID %q successfully removed from the cluster\n", daemonID)
 	return nil
 }
 
@@ -124,10 +124,10 @@ func daemonStats(c *cli.Context, daemonID string, useJSON bool) error {
 // Displays the disk stats of a target
 func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {
-		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s %s works only for targets", daemonID, commandShow, subcmdShowDisk)
+		return fmt.Errorf("daemon with ID %q is a proxy, but \"%s %s %s\" works only for targets", daemonID, cliName, commandShow, subcmdShowDisk)
 	}
 	if _, ok := target[daemonID]; daemonID != "" && !ok {
-		return fmt.Errorf("invalid target ID (%s) - no such target", daemonID)
+		return fmt.Errorf("target ID %q invalid - no such target", daemonID)
 	}
 
 	targets := map[string]*stats.DaemonStatus{daemonID: {}}
@@ -227,7 +227,7 @@ func setConfig(c *cli.Context) error {
 			return err
 		}
 
-		fmt.Fprintf(c.App.Writer, "Config has been updated successfully.\n")
+		fmt.Fprintf(c.App.Writer, "config successfully updated\n")
 		return nil
 	}
 
@@ -235,7 +235,7 @@ func setConfig(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Fprintf(c.App.Writer, "Config for node %q has been updated successfully.\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "config for node %q successfully updated\n", daemonID)
 	return nil
 }
 

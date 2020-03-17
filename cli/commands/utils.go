@@ -9,6 +9,8 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -111,7 +113,7 @@ func incorrectUsageMsg(c *cli.Context, fmtString string, args ...interface{}) er
 }
 
 func objectNameArgumentNotSupported(c *cli.Context, objectName string) error {
-	return incorrectUsageMsg(c, "object name (%s) argument not supported", objectName)
+	return incorrectUsageMsg(c, "object name %q argument not supported", objectName)
 }
 
 func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
@@ -557,10 +559,10 @@ func canReachBucket(bck cmn.Bck) error {
 	if _, err := api.HeadBucket(defaultAPIParams, bck); err != nil {
 		if httpErr, ok := err.(*cmn.HTTPError); ok {
 			if httpErr.Status == http.StatusNotFound {
-				return fmt.Errorf("bucket %s does not exist", bck)
+				return fmt.Errorf("bucket %q does not exist", bck)
 			}
 		}
-		return fmt.Errorf("failed to HEAD bucket %s: %v", bck, err)
+		return fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)
 	}
 	return nil
 }
@@ -600,7 +602,7 @@ func determineClusterURL(cfg *config.Config) string {
 			return cfg.Cluster.DefaultDockerHost
 		}
 
-		cmn.AssertMsg(len(clustersIDs) > 0, "there should be at least one cluster running, when docker running detected")
+		cmn.AssertMsg(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
 
 		proxyGateway, err := containers.ClusterProxyURL(clustersIDs[0])
 		if err != nil {
@@ -622,5 +624,44 @@ func determineClusterURL(cfg *config.Config) string {
 func printDryRunHeader(c *cli.Context) {
 	if flagIsSet(c, dryRunFlag) {
 		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
+	}
+}
+
+// Prints multiple lines of fmtStr to writer w.
+// For line number i, fmtStr is formatted with values of args at index i
+// if maxLines >= 0 prints at most maxLines, otherwise prints everything until
+// it reaches the end of one of args
+func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]string) {
+	objs := make([]interface{}, 0, len(args))
+	if fmtStr == "" || fmtStr[len(fmtStr)-1] != '\n' {
+		fmtStr += "\n"
+	}
+
+	if maxLines < 0 {
+		maxLines = math.MaxInt64
+	}
+	minLen := math.MaxInt64
+	for _, a := range args {
+		minLen = cmn.Min(minLen, len(a))
+	}
+
+	i := 0
+	for {
+		for _, a := range args {
+			objs = append(objs, a[i])
+		}
+		fmt.Fprintf(w, fmtStr, objs...)
+		i++
+
+		for _, a := range args {
+			if len(a) <= i {
+				return
+			}
+		}
+		if i >= maxLines {
+			fmt.Fprintf(w, "(and %d more)\n", minLen-i)
+			return
+		}
+		objs = objs[:0]
 	}
 }

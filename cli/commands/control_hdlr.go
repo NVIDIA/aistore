@@ -125,7 +125,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 	switch cmn.XactType[xactKind] {
 	case cmn.XactTypeGlobal:
 		if c.NArg() > 1 {
-			fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name\n", xactKind)
+			fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a global xaction, ignoring bucket name\n", xactKind)
 		}
 	case cmn.XactTypeBck:
 		bck, objName, err = parseBckObjectURI(c.Args().Get(1))
@@ -158,7 +158,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	)
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, fmt.Sprintf("xaction name or '%s'", allArgument))
+		return missingArgumentsError(c, fmt.Sprintf("xaction name or %q", allArgument))
 	}
 
 	if xactKind == allArgument {
@@ -170,7 +170,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 		switch cmn.XactType[xactKind] {
 		case cmn.XactTypeGlobal:
 			if c.NArg() > 1 {
-				fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a task xaction, ignoring bucket name\n", xactKind)
+				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a task xaction, ignoring bucket name\n", xactKind)
 			}
 		case cmn.XactTypeBck:
 			bck, objName, err = parseBckObjectURI(c.Args().Get(1))
@@ -186,7 +186,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 		case cmn.XactTypeTask:
 			// TODO: we probably should not ignore bucket...
 			if c.NArg() > 1 {
-				fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a task xaction, ignoring bucket name\n", xactKind)
+				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a task xaction, ignoring bucket name\n", xactKind)
 			}
 		}
 	}
@@ -220,7 +220,7 @@ func startDownloadHandler(c *cli.Context) error {
 	if c.NArg() > 2 {
 		return &usageError{
 			context:      c,
-			message:      fmt.Sprintf("too many arguments. Got %d, expected 2. For range download please put source link in quotation marks", len(c.Args())),
+			message:      fmt.Sprintf("too many arguments, got %d, expected 2\n\nFor range download put source link in quotation marks", len(c.Args())),
 			helpData:     c.Command,
 			helpTemplate: cli.CommandHelpTemplate,
 		}
@@ -287,7 +287,7 @@ func stopDownloadHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "download job %s has been stopped successfully.\n", id)
+	fmt.Fprintf(c.App.Writer, "download job %q successfully stopped\n", id)
 	return
 }
 
@@ -364,7 +364,7 @@ func stopDsortHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s job %s has been stopped successfully.\n", cmn.DSortName, id)
+	fmt.Fprintf(c.App.Writer, "%s job %q successfully stopped\n", cmn.DSortName, id)
 	return
 }
 
@@ -373,5 +373,5 @@ func buildXactKindsMsg() string {
 	for kind := range cmn.XactType {
 		xactKinds = append(xactKinds, kind)
 	}
-	return fmt.Sprintf("%s can be one of: %s", xactionArgument, strings.Join(xactKinds, ", "))
+	return fmt.Sprintf("%s can be one of: %q", xactionArgument, strings.Join(xactKinds, ", "))
 }

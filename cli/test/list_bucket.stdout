@@ -22,4 +22,4 @@ tmp/shard-1.tar		2.50KiB	1
 tmp/shard-2.tar		2.50KiB	1
 tmp/shard-3.tar		2.50KiB	1
 tmp/shard-4.tar		2.50KiB	1
-$BUCKET_1 bucket destroyed
+"$BUCKET_1" bucket destroyed

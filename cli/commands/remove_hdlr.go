@@ -107,7 +107,7 @@ func removeObjectHandler(c *cli.Context) error {
 		}
 
 		if objName == "" {
-			return incorrectUsageMsg(c, "%s or %s flag not set with a single bucket argument", listFlag.Name, templateFlag.Name)
+			return incorrectUsageMsg(c, "%q or %q flag not set with a single bucket argument", listFlag.Name, templateFlag.Name)
 		}
 
 		// ais rm BUCKET/OBJECT_NAME - pass, multiObjOp will handle it
@@ -115,7 +115,7 @@ func removeObjectHandler(c *cli.Context) error {
 
 	// list and range flags are invalid with object argument(s)
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %s are invalid when object names have been provided", strings.Join([]string{listFlag.Name, templateFlag.Name}, ","))
+		return incorrectUsageMsg(c, "flags %q are invalid when object names have been provided", strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
 	}
 
 	// object argument(s) given by the user; operation on given object(s)
@@ -138,7 +138,7 @@ func removeDownloadHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "download job with id %s successfully removed\n", id)
+	fmt.Fprintf(c.App.Writer, "download job with id %q successfully removed.\n", id)
 	return
 }
 
@@ -153,6 +153,6 @@ func removeDsortHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s job with id %s successfully removed\n", cmn.DSortName, id)
+	fmt.Fprintf(c.App.Writer, "%s job with id %q successfully removed\n", cmn.DSortName, id)
 	return
 }
