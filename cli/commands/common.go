@@ -14,7 +14,7 @@ import (
 
 const (
 	// Commands (top-level) - preferably verbs
-	commandRename    = cmn.ActRenameObject
+	commandRename    = "rename"
 	commandPrefetch  = cmn.ActPrefetch
 	commandStart     = cmn.ActXactStart
 	commandStop      = cmn.ActXactStop
