@@ -585,6 +585,6 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 		nprops.Cksum.Type = cfg.Cksum.Type
 	}
 	targetCnt := p.owner.smap.Get().CountTargets()
-	err = nprops.Validate(targetCnt, p.urlOutsideCluster)
+	err = nprops.Validate(targetCnt)
 	return
 }

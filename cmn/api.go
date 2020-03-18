@@ -445,7 +445,7 @@ func (p1 *BucketProps) Equal(p2 *BucketProps) bool {
 	return string(s1) == string(s2)
 }
 
-func (bp *BucketProps) Validate(targetCnt int, urlOutsideCluster func(string) bool) error {
+func (bp *BucketProps) Validate(targetCnt int) error {
 	if !IsValidProvider(bp.CloudProvider) {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.CloudProvider, ListProviders())
 	}

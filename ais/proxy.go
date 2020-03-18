@@ -3165,23 +3165,6 @@ func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInterna
 	return
 }
 
-func (p *proxyrunner) urlOutsideCluster(url string) bool {
-	smap := p.owner.smap.get()
-	for _, proxyInfo := range smap.Pmap {
-		if proxyInfo.PublicNet.DirectURL == url || proxyInfo.IntraControlNet.DirectURL == url ||
-			proxyInfo.IntraDataNet.DirectURL == url {
-			return false
-		}
-	}
-	for _, targetInfo := range smap.Tmap {
-		if targetInfo.PublicNet.DirectURL == url || targetInfo.IntraControlNet.DirectURL == url ||
-			targetInfo.IntraDataNet.DirectURL == url {
-			return false
-		}
-	}
-	return true
-}
-
 // detectDaemonDuplicate queries osi for its daemon info in order to determine if info has changed
 // and is equal to nsi
 func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
