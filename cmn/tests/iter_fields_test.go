@@ -61,11 +61,11 @@ var _ = Describe("IterFields", func() {
 					"versioning.enabled":           false,
 					"versioning.validate_warm_get": false,
 
-					"cksum.type":              cmn.PropInherit,
-					"cksum.validate_warm_get": false,
-					"cksum.validate_cold_get": false,
-					"cksum.validate_obj_move": false,
-					"cksum.enable_read_range": false,
+					"checksum.type":              cmn.PropInherit,
+					"checksum.validate_warm_get": false,
+					"checksum.validate_cold_get": false,
+					"checksum.validate_obj_move": false,
+					"checksum.enable_read_range": false,
 
 					"lru.enabled":           false,
 					"lru.lowwm":             int64(0),
@@ -105,11 +105,11 @@ var _ = Describe("IterFields", func() {
 					"versioning.enabled":           (*bool)(nil),
 					"versioning.validate_warm_get": (*bool)(nil),
 
-					"cksum.type":              api.String(cmn.PropInherit),
-					"cksum.validate_warm_get": (*bool)(nil),
-					"cksum.validate_cold_get": (*bool)(nil),
-					"cksum.validate_obj_move": (*bool)(nil),
-					"cksum.enable_read_range": (*bool)(nil),
+					"checksum.type":              api.String(cmn.PropInherit),
+					"checksum.validate_warm_get": (*bool)(nil),
+					"checksum.validate_cold_get": (*bool)(nil),
+					"checksum.validate_obj_move": (*bool)(nil),
+					"checksum.enable_read_range": (*bool)(nil),
 
 					"lru.enabled":      (*bool)(nil),
 					"lru.lowwm":        (*int64)(nil),
@@ -157,7 +157,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"cksum.type": cmn.PropInherit,
+					"checksum.type": cmn.PropInherit,
 
 					"access": "12", // type == uint64
 				},
@@ -200,7 +200,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"cksum.type": cmn.PropInherit,
+					"checksum.type": cmn.PropInherit,
 
 					"access": "12", // type == uint64
 				},

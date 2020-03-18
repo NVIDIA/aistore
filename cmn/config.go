@@ -258,7 +258,7 @@ type Config struct {
 	Disk             DiskConf        `json:"disk"`
 	Rebalance        RebalanceConf   `json:"rebalance"`
 	Replication      ReplicationConf `json:"replication"`
-	Cksum            CksumConf       `json:"cksum"`
+	Cksum            CksumConf       `json:"checksum"`
 	Versioning       VersionConf     `json:"versioning"`
 	FSpaths          FSPathsConf     `json:"fspaths"`
 	TestFSP          TestfspathConf  `json:"test_fspaths"`

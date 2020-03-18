@@ -249,7 +249,7 @@ List [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 By default condensed form of bucket props sections is presented.
 
 When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
-Useful `PROP_PREFIX` are: `access, cksum, ec, lru, mirror, provider, versioning`.
+Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioning`.
 
 ### Options
 
@@ -268,7 +268,7 @@ Show only `lru` section of bucket props for `bucket_name` bucket.
 $ ais show props bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
-cksum	 Type: xxhash | Validate: ColdGET
+checksum	 Type: xxhash | Validate: ColdGET
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 Disabled
@@ -352,7 +352,7 @@ $ ais set props bucket_name --jsonspec '{
       "enabled": true,
       "validate_warm_get": false
     },
-    "cksum": {
+    "checksum": {
       "type": "xxhash",
       "validate_cold_get": true,
       "validate_warm_get": false,
@@ -389,7 +389,7 @@ Bucket props have been successfully updated.
 $ ais show props bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
-cksum	 Type: xxhash | Validate: ColdGET
+checksum	 Type: xxhash | Validate: ColdGET
 ec		 2:2 (250KiB)
 lru		 Watermarks: 20%/80% | Do not evict time: 120m | OOS: 90%
 mirror		 Disabled
@@ -416,7 +416,7 @@ Bucket props have been successfully updated.
 $ ais show props bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
-cksum	 Type: xxhash | Validate: ColdGET
+checksum	 Type: xxhash | Validate: ColdGET
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 2 copies

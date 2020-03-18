@@ -788,7 +788,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tutils.EvictObjects(t, proxyURL, bck, filesList)
 	// Disable Cold Get Validation
 	if bcoldget {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.validate_cold_get": "false"})
+		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": "false"})
 	}
 	start := time.Now()
 	getFromObjList(proxyURL, bck, errCh, filesList, false)
@@ -801,7 +801,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tassert.SelectErr(t, errCh, "get", false)
 	tutils.EvictObjects(t, proxyURL, bck, filesList)
 	// Enable Cold Get Validation
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.validate_cold_get": "true"})
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": "true"})
 	if t.Failed() {
 		goto cleanup
 	}
@@ -812,7 +812,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tutils.Logf("GET %s with MD5 validation:    %v\n", cmn.B2S(totalSize, 0), duration)
 	tassert.SelectErr(t, errCh, "get", false)
 cleanup:
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.validate_cold_get": fmt.Sprintf("%v", bcoldget)})
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": fmt.Sprintf("%v", bcoldget)})
 	for _, fn := range filesList {
 		wg.Add(1)
 		go tutils.Del(proxyURL, bck, fn, wg, errCh, !testing.Verbose())
@@ -1126,7 +1126,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	oldWarmGet := config.Cksum.ValidateWarmGet
 	oldChecksum := config.Cksum.Type
 	if !oldWarmGet {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.validate_warm_get": "true"})
+		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_warm_get": "true"})
 	}
 
 	objName := filepath.Join(ChecksumWarmValidateStr, fileName)
@@ -1156,7 +1156,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	fqn = findObjOnDisk(bck, objName)
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.type": cmn.ChecksumNone})
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
@@ -1166,8 +1166,8 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 	// Restore old config
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{
-		"cksum.type":              oldChecksum,
-		"cksum.validate_warm_get": fmt.Sprintf("%v", oldWarmGet),
+		"checksum.type":              oldChecksum,
+		"checksum.validate_warm_get": fmt.Sprintf("%v", oldWarmGet),
 	})
 
 	wg := &sync.WaitGroup{}
@@ -1316,7 +1316,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	oldChecksum := config.Cksum.Type
 
 	if !oldWarmGet {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.validate_warm_get": "true"})
+		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_warm_get": "true"})
 	}
 
 	// Test changing the file content
@@ -1338,7 +1338,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	// Test for none checksum algo
 	objName = filepath.Join(ChecksumWarmValidateStr, <-fileNameCh)
 	fqn = findObjOnDisk(bck, objName)
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.type": cmn.ChecksumNone})
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
@@ -1350,8 +1350,8 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	// Restore old config
 	tutils.DestroyBucket(t, proxyURL, bck)
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{
-		"cksum.type":              oldChecksum,
-		"cksum.validate_warm_get": fmt.Sprintf("%v", oldWarmGet),
+		"checksum.type":              oldChecksum,
+		"checksum.validate_warm_get": fmt.Sprintf("%v", oldWarmGet),
 	})
 	close(errCh)
 	close(fileNameCh)
@@ -1400,7 +1400,7 @@ func TestRangeRead(t *testing.T) {
 	tutils.Logln("Testing valid cases.")
 	// Validate entire object checksum is being returned
 	if oldEnableReadRangeChecksum {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.enable_read_range": "false"})
+		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": "false"})
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1409,7 +1409,7 @@ func TestRangeRead(t *testing.T) {
 
 	// Validate only range checksum is being returned
 	if !oldEnableReadRangeChecksum {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.enable_read_range": "true"})
+		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": "true"})
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1431,7 +1431,7 @@ cleanup:
 	go tutils.Del(proxyURL, bck, filepath.Join(RangeGetStr, fileName), wg, errCh, !testing.Verbose())
 	wg.Wait()
 	tassert.SelectErr(t, errCh, "delete", false)
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.enable_read_range": fmt.Sprintf("%v", oldEnableReadRangeChecksum)})
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": fmt.Sprintf("%v", oldEnableReadRangeChecksum)})
 	close(errCh)
 	close(fileNameCh)
 
@@ -1575,14 +1575,14 @@ func Test_checksum(t *testing.T) {
 	tutils.EvictObjects(t, proxyURL, bck, filesList)
 	// Disable checkum
 	if ochksum != cmn.ChecksumNone {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
+		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.type": cmn.ChecksumNone})
 	}
 	if t.Failed() {
 		goto cleanup
 	}
 	// Disable Cold Get Validation
 	if ocoldget {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.validate_cold_get": "false"})
+		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": "false"})
 	}
 	if t.Failed() {
 		goto cleanup
@@ -1600,19 +1600,19 @@ func Test_checksum(t *testing.T) {
 	switch clichecksum {
 	case "all":
 		tutils.SetClusterConfig(t, cmn.SimpleKVs{
-			"cksum.type":              cmn.ChecksumXXHash,
-			"cksum.validate_cold_get": "true",
+			"checksum.type":              cmn.ChecksumXXHash,
+			"checksum.validate_cold_get": "true",
 		})
 		if t.Failed() {
 			goto cleanup
 		}
 	case cmn.ChecksumXXHash:
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.type": cmn.ChecksumXXHash})
+		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.type": cmn.ChecksumXXHash})
 		if t.Failed() {
 			goto cleanup
 		}
 	case ColdMD5str:
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"cksum.validate_cold_get": "true"})
+		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": "true"})
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1636,8 +1636,8 @@ cleanup:
 	close(errCh)
 	// restore old config
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{
-		"cksum.type":              ochksum,
-		"cksum.validate_cold_get": fmt.Sprintf("%v", ocoldget),
+		"checksum.type":              ochksum,
+		"checksum.validate_cold_get": fmt.Sprintf("%v", ocoldget),
 	})
 }
 

@@ -425,7 +425,7 @@ func printBckHeadTable(c *cli.Context, props cmn.BucketProps, section string) er
 		propList = []prop{
 			{"provider", props.CloudProvider},
 			{"access", props.AccessToStr()},
-			{"cksum", props.Cksum.String()},
+			{"checksum", props.Cksum.String()},
 			{"mirror", props.Mirror.String()},
 			{"ec", props.EC.String()},
 			{"lru", props.LRU.String()},

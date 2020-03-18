@@ -1208,9 +1208,9 @@ components:
         - template
     BucketProps:
       properties:
-        cloud_provider:
+        provider:
           type: string
-        cksum:
+        checksum:
           $ref: '#/components/schemas/BucketPropsCksum'
     BucketPropsCksum:
       type: object
@@ -1722,7 +1722,7 @@ components:
               type: integer
             enabled:
               type: boolean
-        cksum:
+        checksum:
           type: object
           properties:
             type:

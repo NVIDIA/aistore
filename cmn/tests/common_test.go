@@ -192,7 +192,7 @@ var _ = Describe("Common file", func() {
 			Expect(srcData).To(Equal(dstData))
 		})
 
-		It("should copy a file, preserver the content and compute the cksum", func() {
+		It("should copy a object and compute its checksum", func() {
 			expectedCksum, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), true, 1000)
 			Expect(err).NotTo(HaveOccurred())
 

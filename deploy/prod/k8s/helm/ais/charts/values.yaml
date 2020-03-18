@@ -25,7 +25,7 @@ ais_config_common:
     secret:  aBitLongSecretKey
     enabled: false
     creddir: ""
-  cksum:
+  checksum:
     type: xxhash
     validate_cold_get: true
     validate_warm_get: false

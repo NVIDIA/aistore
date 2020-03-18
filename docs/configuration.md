@@ -94,10 +94,10 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `timeout.send_file_time` | `5m` | Timeout for getting an object from a neighbor target or for sending an object to the correct target while rebalance is in progress |
 | `timeout.default_timeout` | `30s` | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
 | `timeout.default_long_timeout` | `30m` | Default timeout for long intra-cluster requests, e.g. reading an object from a neighbor target while rebalancing |
-| `cksum.type` | `xxhash` | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
-| `cksum.validate_cold_get` | `true` | Enables and disables checking the hash of received object after downloading it from the cloud |
-| `cksum.validate_warm_get` | `false` | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |
-| `cksum.enable_read_range` | `false` | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
+| `checksum.type` | `xxhash` | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
+| `checksum.validate_cold_get` | `true` | Enables and disables checking the hash of received object after downloading it from the cloud |
+| `checksum.validate_warm_get` | `false` | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |
+| `checksum.enable_read_range` | `false` | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
 | `versioning.enabled` | `true` | Enables and disables versioning. For Cloud-based buckets, versioning is on only when it is enabled in both places: in the Cloud for the bucket and in the AIS configuration |
 | `versioning.validate_warm_get` | `false` | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |
 | `fshc.enabled` | `true` | Enables and disables filesystem health checker (FSHC) |

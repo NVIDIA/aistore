@@ -66,7 +66,7 @@ cat > $CONFFILE <<EOL
 		"multiplier":		${REBALANCE_MULTIPLIER:-4},
 		"enabled":		true
 	},
-	"cksum": {
+	"checksum": {
 		"type":			"xxhash",
 		"validate_cold_get":	true,
 		"validate_warm_get":	false,

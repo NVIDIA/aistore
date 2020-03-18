@@ -433,7 +433,7 @@ var (
 		"lru":                  LRUConfTmpl,
 		"disk":                 DiskConfTmpl,
 		"rebalance":            RebalanceConfTmpl,
-		"cksum":                CksumConfTmpl,
+		"checksum":             CksumConfTmpl,
 		"versioning":           VerConfTmpl,
 		"fspath":               FSpathsConfTmpl,
 		"testfs":               TestFSPConfTmpl,

@@ -3,7 +3,7 @@ Bucket props successfully updated
 Bucket props successfully updated
 PROPERTY	 VALUE
 access		 GET,HEAD
-cksum	 Type: xxhash | Validate: ColdGET
+checksum	 Type: xxhash | Validate: ColdGET
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 2 copies
@@ -13,7 +13,7 @@ Bucket props successfully reset
 Bucket props successfully updated
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
-cksum	 Type: xxhash | Validate: ColdGET
+checksum	 Type: xxhash | Validate: ColdGET
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 Disabled

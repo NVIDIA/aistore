@@ -228,7 +228,7 @@ type BucketProps struct {
 	Versioning VersionConf `json:"versioning"`
 
 	// Cksum is the embedded struct of the same name
-	Cksum CksumConf `json:"cksum"`
+	Cksum CksumConf `json:"checksum"`
 
 	// LRU is the embedded struct of the same name
 	LRU LRUConf `json:"lru"`
@@ -251,7 +251,7 @@ type BucketProps struct {
 
 type BucketPropsToUpdate struct {
 	Versioning  *VersionConfToUpdate `json:"versioning"`
-	Cksum       *CksumConfToUpdate   `json:"cksum"`
+	Cksum       *CksumConfToUpdate   `json:"checksum"`
 	LRU         *LRUConfToUpdate     `json:"lru"`
 	Mirror      *MirrorConfToUpdate  `json:"mirror"`
 	EC          *ECConfToUpdate      `json:"ec"`
