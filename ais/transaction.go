@@ -13,13 +13,20 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/housekeep/hk"
+)
+
+const (
+	txnsTimeoutGC = time.Hour
+	txnsNumKeep   = 16
 )
 
 type (
 	txn interface {
 		// accessors
 		uuid() string
-		started(tm time.Time)
+		started(tm ...time.Time) time.Time
+		timeout() time.Duration
 		String() string
 		fired() (err error)
 		fire(err error) // fires only once
@@ -34,11 +41,12 @@ type (
 		txn
 		sync.RWMutex
 		uid       string
+		tout      time.Duration
 		start     time.Time
 		action    string
 		smapVer   int64
-		kind      string
 		bmdVer    int64
+		kind      string
 		initiator string
 		err       error
 	}
@@ -81,6 +89,7 @@ var (
 func (txns *transactions) init(t *targetrunner) {
 	txns.t = t
 	txns.m = make(map[string]txn, 4)
+	hk.Housekeeper.Register("cp.transactions.gc", txns.garbageCollect, txnsTimeoutGC)
 }
 
 func (txns *transactions) begin(txn txn) error {
@@ -135,14 +144,48 @@ func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
 	return errTxnTimeout
 }
 
-// TODO -- FIXME: register with hk to cleanup orphaned transactions
+// GC orphaned transactions //
+func (txns *transactions) garbageCollect() (d time.Duration) {
+	var errs []string
+	d = txnsTimeoutGC
+	txns.Lock()
+	l := len(txns.m)
+	if l > txnsNumKeep*10 && l > 16 {
+		d = txnsTimeoutGC / 10
+	}
+	now := time.Now()
+	for uuid, txn := range txns.m {
+		var (
+			elapsed = now.Sub(txn.started())
+			tout    = txn.timeout()
+		)
+		if elapsed > 2*tout+time.Minute {
+			errs = append(errs, fmt.Sprintf("GC %s: timeout", txn))
+			delete(txns.m, uuid)
+		} else if elapsed >= tout {
+			errs = append(errs,
+				fmt.Sprintf("GC %s: is taking longer than the specified timeout %v", txn, tout))
+		}
+	}
+	txns.Unlock()
+	for _, s := range errs {
+		glog.Errorln(s)
+	}
+	return
+}
 
 /////////////
 // txnBase //
 /////////////
 
-func (txn *txnBase) uuid() string         { return txn.uid }
-func (txn *txnBase) started(tm time.Time) { txn.start = tm }
+func (txn *txnBase) uuid() string           { return txn.uid }
+func (txn *txnBase) timeout() time.Duration { return txn.tout }
+func (txn *txnBase) started(tm ...time.Time) time.Time {
+	if len(tm) > 0 {
+		txn.start = tm[0]
+	}
+	return txn.start
+}
 
 func (txn *txnBase) fired() (err error) {
 	txn.RLock()
@@ -157,14 +200,29 @@ func (txn *txnBase) fire(err error) {
 	txn.Unlock()
 }
 
+func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
+	txn.uid = c.uuid
+	txn.action = c.msgInt.Action
+	txn.tout = c.timeout
+	txn.smapVer = c.smapVer
+	txn.bmdVer = c.bmdVer
+	txn.initiator = c.caller
+}
+
 ////////////////
 // txnBckBase //
 ////////////////
 
 func (txn *txnBckBase) String() string {
-	tm := cmn.FormatTimestamp(txn.start)
-	return fmt.Sprintf("txn-%s[%s-(v%d, v%d)-%s-%s-%s], bucket %s",
-		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.initiator, tm, txn.bck.Name)
+	var (
+		fired string
+		tm    = cmn.FormatTimestamp(txn.start)
+	)
+	if err := txn.fired(); err != errNil {
+		fired = "-fired"
+	}
+	return fmt.Sprintf("txn-%s[%s-(v%d, v%d)-%s-%s-%s%s], bucket %s",
+		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.initiator, tm, fired, txn.bck.Name)
 }
 
 func (txn *txnBckBase) callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) {
@@ -186,21 +244,11 @@ func (txn *txnBckBase) callback(caller string, msgInt *actionMsgInternal, err er
 var _ txn = &txnCreateBucket{}
 
 // c-tor
-func newTxnCreateBucket(uuid, action string, smapVer, bmdVer int64, initiator string, bck *cluster.Bck) *txnCreateBucket {
-	return &txnCreateBucket{
-		txnBckBase{
-			txnBase{
-				uid:       uuid,
-				action:    action,
-				smapVer:   smapVer,
-				kind:      "crb",
-				bmdVer:    bmdVer,
-				initiator: initiator,
-				err:       errNil, // NOTE: another kind of nil (here and elsewhere)
-			},
-			*bck,
-		},
-	}
+// NOTE: errNill another kind of nil - here and elsewhere
+func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
+	txn = &txnCreateBucket{txnBckBase{txnBase{kind: "crb", err: errNil}, *c.bck}}
+	txn.fillFromCtx(c)
+	return
 }
 
 ////////////////////
@@ -210,23 +258,14 @@ func newTxnCreateBucket(uuid, action string, smapVer, bmdVer int64, initiator st
 var _ txn = &txnMakeNCopies{}
 
 // c-tor
-func newTxnMakeNCopies(uuid, action string, smapVer, bmdVer int64, initiator string, bck *cluster.Bck, c, n int64) *txnMakeNCopies {
-	return &txnMakeNCopies{
-		txnBckBase{
-			txnBase{
-				uid:       uuid,
-				action:    action,
-				smapVer:   smapVer,
-				kind:      "mnc",
-				bmdVer:    bmdVer,
-				initiator: initiator,
-				err:       errNil,
-			},
-			*bck,
-		},
-		c,
-		n,
+func newTxnMakeNCopies(c *txnServerCtx, curCopies, newCopies int64) (txn *txnMakeNCopies) {
+	txn = &txnMakeNCopies{
+		txnBckBase{txnBase{kind: "mnc", err: errNil}, *c.bck},
+		curCopies,
+		newCopies,
 	}
+	txn.fillFromCtx(c)
+	return
 }
 
 func (txn *txnMakeNCopies) String() string {
@@ -241,26 +280,16 @@ func (txn *txnMakeNCopies) String() string {
 var _ txn = &txnSetBucketProps{}
 
 // c-tor
-func newTxnSetBucketProps(uuid, action string, smapVer, bmdVer int64, initiator string, bck *cluster.Bck,
-	nprops *cmn.BucketProps) *txnSetBucketProps {
-	cmn.Assert(bck.Props != nil)
-	bprops := bck.Props.Clone()
-	return &txnSetBucketProps{
-		txnBckBase{
-			txnBase{
-				uid:       uuid,
-				action:    action,
-				smapVer:   smapVer,
-				kind:      "mnc",
-				bmdVer:    bmdVer,
-				initiator: initiator,
-				err:       errNil,
-			},
-			*bck,
-		},
+func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSetBucketProps) {
+	cmn.Assert(c.bck.Props != nil)
+	bprops := c.bck.Props.Clone()
+	txn = &txnSetBucketProps{
+		txnBckBase{txnBase{kind: "mnc", err: errNil}, *c.bck},
 		bprops,
 		nprops,
 	}
+	txn.fillFromCtx(c)
+	return
 }
 
 /////////////////////
@@ -270,24 +299,14 @@ func newTxnSetBucketProps(uuid, action string, smapVer, bmdVer int64, initiator 
 var _ txn = &txnRenameBucket{}
 
 // c-tor
-func newTxnRenameBucket(uuid, action string, smapVer, bmdVer int64, initiator string,
-	bckFrom, bckTo *cluster.Bck) *txnRenameBucket {
-	return &txnRenameBucket{
-		txnBckBase{
-			txnBase{
-				uid:       uuid,
-				action:    action,
-				smapVer:   smapVer,
-				kind:      "rnb",
-				bmdVer:    bmdVer,
-				initiator: initiator,
-				err:       errNil,
-			},
-			*bckFrom,
-		},
+func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnRenameBucket) {
+	txn = &txnRenameBucket{
+		txnBckBase{txnBase{kind: "rnb", err: errNil}, *bckFrom},
 		bckFrom,
 		bckTo,
 	}
+	txn.fillFromCtx(c)
+	return
 }
 
 ///////////////////

@@ -509,7 +509,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 		_ = cmn.AddBckToQuery(c.query, bck.Bck)
 	}
 	c.query.Set(cmn.URLParamTxnID, c.uuid)
-	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive // TODO -- FIXME: reduce w/caution
+	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive // TODO: reduce with caution
 	c.query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 
 	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: c.query, Body: c.body}

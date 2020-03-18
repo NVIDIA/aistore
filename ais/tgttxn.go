@@ -25,6 +25,8 @@ type txnServerCtx struct {
 	uuid    string
 	timeout time.Duration
 	phase   string
+	smapVer int64
+	bmdVer  int64
 	msgInt  *actionMsgInternal
 	caller  string
 	bck     *cluster.Bck
@@ -49,8 +51,8 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, "url too short: expecting bucket and txn phase", http.StatusBadRequest)
 		return
 	}
-	// 2. gather context
-	c, err := prepTxnServer(r, msgInt, apiItems)
+	// 2. gather all context
+	c, err := t.prepTxnServer(r, msgInt, apiItems)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
@@ -86,14 +88,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) createBucket(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
-		txn := newTxnCreateBucket(
-			c.uuid,
-			c.msgInt.Action,
-			t.owner.smap.get().version(),
-			t.owner.bmd.get().version(),
-			c.caller,
-			c.bck,
-		)
+		txn := newTxnCreateBucket(c)
 		if err := t.transactions.begin(txn); err != nil {
 			return err
 		}
@@ -128,15 +123,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		if err != nil {
 			return err
 		}
-		txn := newTxnMakeNCopies(
-			c.uuid,
-			c.msgInt.Action,
-			t.owner.smap.get().version(),
-			t.owner.bmd.get().version(),
-			c.caller,
-			c.bck,
-			curCopies, newCopies,
-		)
+		txn := newTxnMakeNCopies(c, curCopies, newCopies)
 		if err := t.transactions.begin(txn); err != nil {
 			return err
 		}
@@ -197,15 +184,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		if nprops, err = t.validateNprops(c.bck, c.msgInt); err != nil {
 			return err
 		}
-		txn := newTxnSetBucketProps(
-			c.uuid,
-			c.msgInt.Action,
-			t.owner.smap.get().version(),
-			t.owner.bmd.get().version(),
-			c.caller,
-			c.bck,
-			nprops,
-		)
+		txn := newTxnSetBucketProps(c, nprops)
 		if err := t.transactions.begin(txn); err != nil {
 			return err
 		}
@@ -285,15 +264,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if bckTo, err = t.validateBckRenTxn(bckFrom, c.msgInt); err != nil {
 			return err
 		}
-		txn := newTxnRenameBucket(
-			c.uuid,
-			c.msgInt.Action,
-			t.owner.smap.get().version(),
-			t.owner.bmd.get().version(),
-			c.caller,
-			bckFrom,
-			bckTo,
-		)
+		txn := newTxnRenameBucket(c, bckFrom, bckTo)
 		if err := t.transactions.begin(txn); err != nil {
 			return err
 		}
@@ -375,7 +346,7 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msgInt *actionMsg
 // misc //
 //////////
 
-func prepTxnServer(r *http.Request, msgInt *actionMsgInternal, apiItems []string) (*txnServerCtx, error) {
+func (t *targetrunner) prepTxnServer(r *http.Request, msgInt *actionMsgInternal, apiItems []string) (*txnServerCtx, error) {
 	var (
 		bucket string
 		err    error
@@ -393,5 +364,9 @@ func prepTxnServer(r *http.Request, msgInt *actionMsgInternal, apiItems []string
 		return c, nil
 	}
 	c.timeout, err = cmn.S2Duration(query.Get(cmn.URLParamTxnTimeout))
+
+	c.smapVer = t.owner.smap.get().version()
+	c.bmdVer = t.owner.bmd.get().version()
+
 	return c, err
 }
