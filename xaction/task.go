@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
+	"golang.org/x/sync/errgroup"
 )
 
 //
@@ -152,11 +154,10 @@ func (t *bckSummaryTask) Run() {
 	}
 
 	var (
-		mtx               sync.Mutex
-		wg                = &sync.WaitGroup{}
-		availablePaths, _ = fs.Mountpaths.Get()
-		errCh             = make(chan error, len(buckets))
-		summaries         = make(cmn.BucketsSummaries, len(buckets))
+		mtx       sync.Mutex
+		wg        = &sync.WaitGroup{}
+		errCh     = make(chan error, len(buckets))
+		summaries = make(cmn.BucketsSummaries, len(buckets))
 	)
 	wg.Add(len(buckets))
 
@@ -193,30 +194,13 @@ func (t *bckSummaryTask) Run() {
 			}
 
 			if t.msg.Fast && (bck.IsAIS() || t.msg.Cached) {
-				for _, mpathInfo := range availablePaths {
-					path := mpathInfo.MakePathCT(bck.Bck, fs.ObjectType)
-					size, err := ios.GetDirSize(path)
-					if err != nil {
-						errCh <- err
-						return
-					}
-					fileCount, err := ios.GetFileCount(path)
-					if err != nil {
-						errCh <- err
-						return
-					}
-
-					if bck.Props.Mirror.Enabled {
-						copies := int(bck.Props.Mirror.Copies)
-						size /= uint64(copies)
-						fileCount = fileCount/copies + fileCount%copies
-					}
-					summary.Size += size
-					summary.ObjCount += uint64(fileCount)
-
-					t.ObjectsAdd(int64(fileCount))
-					t.BytesAdd(int64(size))
+				objCount, size, err := t.doBckSummaryFast(bck)
+				if err != nil {
+					errCh <- err
+					return
 				}
+				summary.ObjCount = objCount
+				summary.Size = size
 			} else { // slow path
 				var (
 					list *cmn.BucketList
@@ -271,6 +255,43 @@ func (t *bckSummaryTask) Run() {
 	}
 
 	t.UpdateResult(summaries, nil)
+}
+
+func (t *bckSummaryTask) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {
+	var (
+		availablePaths, _ = fs.Mountpaths.Get()
+		group, _          = errgroup.WithContext(context.Background())
+	)
+
+	for _, mpathInfo := range availablePaths {
+		group.Go(func(mpathInfo *fs.MountpathInfo) func() error {
+			return func() error {
+				path := mpathInfo.MakePathCT(bck.Bck, fs.ObjectType)
+				dirSize, err := ios.GetDirSize(path)
+				if err != nil {
+					return err
+				}
+				fileCount, err := ios.GetFileCount(path)
+				if err != nil {
+					return err
+				}
+
+				if bck.Props.Mirror.Enabled {
+					copies := int(bck.Props.Mirror.Copies)
+					dirSize /= uint64(copies)
+					fileCount = fileCount/copies + fileCount%copies
+				}
+
+				atomic.AddUint64(&objCount, uint64(fileCount))
+				atomic.AddUint64(&size, dirSize)
+
+				t.ObjectsAdd(int64(fileCount))
+				t.BytesAdd(int64(dirSize))
+				return nil
+			}
+		}(mpathInfo))
+	}
+	return objCount, size, group.Wait()
 }
 
 func (t *bckSummaryTask) UpdateResult(result interface{}, err error) {
