@@ -71,6 +71,7 @@ var (
 		},
 		subcmdShowBckProps: {
 			jsonFlag,
+			verboseFlag,
 		},
 		subcmdShowConfig: {
 			jsonFlag,
@@ -153,10 +154,10 @@ var (
 				{
 					Name:         subcmdShowBckProps,
 					Usage:        "show bucket properties",
-					ArgsUsage:    bucketArgument,
+					ArgsUsage:    bucketAndPropsArgument,
 					Flags:        showCmdsFlags[subcmdShowBckProps],
 					Action:       showBckPropsHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+					BashComplete: bucketAndPropsCompletions,
 				},
 				{
 					Name:         subcmdShowConfig,

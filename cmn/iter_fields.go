@@ -198,7 +198,7 @@ func UpdateFieldValue(s interface{}, name string, value interface{}) error {
 		return err
 	}
 	if !found {
-		return fmt.Errorf("failed to find %q field in struct %T", name, s)
+		return fmt.Errorf("unknown field %q", name)
 	}
 	return nil
 }

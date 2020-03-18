@@ -2,20 +2,27 @@
 Bucket props successfully updated
 Bucket props successfully updated
 PROPERTY	 VALUE
-provider	 ais
 access		 GET,HEAD
-checksum	 Type: xxhash | Validate: ColdGET
-mirror		 2 copies
+cksum	 Type: xxhash | Validate: ColdGET
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+mirror		 2 copies
+provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
 Bucket props successfully reset
 Bucket props successfully updated
 PROPERTY	 VALUE
-provider	 ais
 access		 GET,PUT,DELETE,HEAD,ColdGET
-checksum	 Type: xxhash | Validate: ColdGET
-mirror		 Disabled
+cksum	 Type: xxhash | Validate: ColdGET
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+mirror		 Disabled
+provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
+PROPERTY		 VALUE
+lru.capacity_upd_time	 10m
+lru.dont_evict_time	 120m
+lru.enabled		 true
+lru.highwm		 90
+lru.lowwm		 75
+lru.out_of_space	 95

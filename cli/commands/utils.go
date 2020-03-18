@@ -136,7 +136,7 @@ func commandNotFoundError(c *cli.Context, cmd string) error {
 }
 
 func (e *additionalInfoError) Error() string {
-	return fmt.Sprintf("%s %s", e.baseErr.Error(), cmn.StrToSentence(e.additionalInfo))
+	return fmt.Sprintf("%s. %s", e.baseErr.Error(), cmn.StrToSentence(e.additionalInfo))
 }
 
 func newAdditionalInfoError(err error, info string) error {

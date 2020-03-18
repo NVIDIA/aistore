@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -272,7 +273,7 @@ func bucketDetailsSync(c *cli.Context, bck cmn.Bck) error {
 }
 
 // replace user-friendly properties like `access=ro` with real values
-// like `aattrs = GET | HEAD`. All numbers are passed to API as is
+// like `access = GET | HEAD`. All numbers are passed to API as is
 func reformatBucketProps(bck cmn.Bck, nvs cmn.SimpleKVs) error {
 	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {
 		props, err := api.HeadBucket(defaultAPIParams, bck)
@@ -371,6 +372,12 @@ func showBucketProps(c *cli.Context) (err error) {
 		bckProps cmn.BucketProps
 		objName  string
 	)
+
+	if c.NArg() > 2 {
+		return incorrectUsageMsg(c, "too many arguments")
+	}
+
+	section := c.Args().Get(1)
 	if bck, objName, err = parseBckObjectURI(c.Args().First()); err != nil {
 		return
 	}
@@ -388,25 +395,57 @@ func showBucketProps(c *cli.Context) (err error) {
 		return templates.DisplayOutput(bckProps, c.App.Writer, "", true)
 	}
 
-	return printBckHeadTable(c, bckProps)
+	return printBckHeadTable(c, bckProps, section)
 }
 
-func printBckHeadTable(c *cli.Context, props cmn.BucketProps) error {
-	// List instead of map to keep properties in the same order always.
-	// All names are one word ones - for easier parsing
-	propList := []struct {
-		Name string
-		Val  string
-	}{
-		{"provider", props.CloudProvider},
-		{"access", props.AccessToStr()},
-		{"checksum", props.Cksum.String()},
-		{"mirror", props.Mirror.String()},
-		{"ec", props.EC.String()},
-		{"lru", props.LRU.String()},
-		{"versioning", props.Versioning.String()},
+func printBckHeadTable(c *cli.Context, props cmn.BucketProps, section string) error {
+	type prop struct {
+		Name  string
+		Value string
 	}
 
+	// List instead of map to keep properties in the same order always.
+	// All names are one word ones - for easier parsing.
+	var propList []prop
+
+	if flagIsSet(c, verboseFlag) {
+		err := cmn.IterFields(&props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
+			value := fmt.Sprintf("%v", field.Value())
+			if uniqueTag == cmn.HeaderBucketAccessAttrs {
+				value = props.AccessToStr()
+			}
+			propList = append(propList, prop{
+				Name:  uniqueTag,
+				Value: value,
+			})
+			return nil, false
+		})
+		cmn.AssertNoErr(err)
+	} else {
+		propList = []prop{
+			{"provider", props.CloudProvider},
+			{"access", props.AccessToStr()},
+			{"cksum", props.Cksum.String()},
+			{"mirror", props.Mirror.String()},
+			{"ec", props.EC.String()},
+			{"lru", props.LRU.String()},
+			{"versioning", props.Versioning.String()},
+		}
+	}
+
+	sort.Slice(propList, func(i, j int) bool {
+		return propList[i].Name < propList[j].Name
+	})
+
+	if section != "" {
+		tmpPropList := propList[:0]
+		for _, v := range propList {
+			if strings.HasPrefix(v.Name, section) {
+				tmpPropList = append(tmpPropList, v)
+			}
+		}
+		propList = tmpPropList
+	}
 	return templates.DisplayOutput(propList, c.App.Writer, templates.BucketPropsSimpleTmpl)
 }
 

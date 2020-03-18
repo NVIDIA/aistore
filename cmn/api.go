@@ -222,7 +222,7 @@ type BucketProps struct {
 	// CloudProvider can be "aws", "gcp" (clouds) - or "ais".
 	// If a bucket is local, CloudProvider must be "ais".
 	// Otherwise, it must be "aws" or "gcp".
-	CloudProvider string `json:"cloud_provider" list:"readonly"`
+	CloudProvider string `json:"provider" list:"readonly"`
 
 	// Versioning can be enabled or disabled on a per-bucket basis
 	Versioning VersionConf `json:"versioning"`
@@ -240,10 +240,10 @@ type BucketProps struct {
 	EC ECConf `json:"ec"`
 
 	// Bucket access attributes - see Allow* above
-	AccessAttrs uint64 `json:"aattrs,string"`
+	AccessAttrs uint64 `json:"access,string"`
 
 	// unique bucket ID
-	BID uint64 `json:"bid,string" list:"readonly"`
+	BID uint64 `json:"bid,string" list:"omit"`
 
 	// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
 	Renamed string `list:"omit"`
@@ -255,7 +255,7 @@ type BucketPropsToUpdate struct {
 	LRU         *LRUConfToUpdate     `json:"lru"`
 	Mirror      *MirrorConfToUpdate  `json:"mirror"`
 	EC          *ECConfToUpdate      `json:"ec"`
-	AccessAttrs *uint64              `json:"aattrs,string"`
+	AccessAttrs *uint64              `json:"access,string"`
 }
 
 // ECConfig - per-bucket erasure coding configuration
@@ -484,7 +484,7 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 		name, value := strings.ToLower(key), val
 
 		if err := UpdateFieldValue(&props, name, value); err != nil {
-			return props, fmt.Errorf("unknown property %q", name)
+			return props, err
 		}
 	}
 	return

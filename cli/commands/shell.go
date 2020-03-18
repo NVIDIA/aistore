@@ -7,6 +7,8 @@ package commands
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -236,6 +238,28 @@ func propCompletions(c *cli.Context) {
 		return nil, false
 	})
 	cmn.AssertNoErr(err)
+}
+
+func bucketAndPropsCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */)
+		return
+	} else if c.NArg() == 1 {
+		var props []string
+		err := cmn.IterFields(cmn.BucketProps{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
+			section := strings.Split(uniqueTag, ".")[0]
+			props = append(props, section)
+			if flagIsSet(c, verboseFlag) {
+				props = append(props, uniqueTag)
+			}
+			return nil, false
+		})
+		cmn.AssertNoErr(err)
+		sort.Strings(props)
+		for _, prop := range props {
+			fmt.Println(prop)
+		}
+	}
 }
 
 ////////////

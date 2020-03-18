@@ -44,7 +44,7 @@ var _ = Describe("IterFields", func() {
 					},
 				},
 				map[string]interface{}{
-					"cloud_provider": cmn.ProviderAIS,
+					"provider": cmn.ProviderAIS,
 
 					"mirror.enabled":      false,
 					"mirror.copies":       int64(0),
@@ -74,8 +74,7 @@ var _ = Describe("IterFields", func() {
 					"lru.dont_evict_time":   "",
 					"lru.capacity_upd_time": "",
 
-					"aattrs": uint64(0),
-					"bid":    uint64(0),
+					"access": uint64(0),
 				},
 			),
 			Entry("list BucketPropsToUpdate fields",
@@ -117,7 +116,7 @@ var _ = Describe("IterFields", func() {
 					"lru.highwm":       (*int64)(nil),
 					"lru.out_of_space": (*int64)(nil),
 
-					"aattrs": api.Uint64(1024),
+					"access": api.Uint64(1024),
 				},
 			),
 			Entry("check for omit tag",
@@ -160,7 +159,7 @@ var _ = Describe("IterFields", func() {
 
 					"cksum.type": cmn.PropInherit,
 
-					"aattrs": "12", // type == uint64
+					"access": "12", // type == uint64
 				},
 				&cmn.BucketProps{
 					Mirror: cmn.MirrorConf{
@@ -203,7 +202,7 @@ var _ = Describe("IterFields", func() {
 
 					"cksum.type": cmn.PropInherit,
 
-					"aattrs": "12", // type == uint64
+					"access": "12", // type == uint64
 				},
 				&cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
@@ -240,7 +239,7 @@ var _ = Describe("IterFields", func() {
 				"mirror.enabled": true,
 			}),
 			Entry("readonly field", &cmn.BucketProps{}, map[string]interface{}{
-				"cloud_provider": cmn.ProviderAIS,
+				"provider": cmn.ProviderAIS,
 			}),
 			Entry("field not found", &foo{}, map[string]interface{}{
 				"foo.bar": 2,

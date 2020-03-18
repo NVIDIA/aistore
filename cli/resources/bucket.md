@@ -243,15 +243,49 @@ Start an extended action that enables data protection for all objects of a given
 
 ## Show bucket props
 
-`ais show props BUCKET_NAME`
+`ais show props BUCKET_NAME [PROP_PREFIX]`
 
 List [properties](../../docs/bucket.md#properties-and-options) of the bucket.
+By default condensed form of bucket props sections is presented.
+
+When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
+Useful `PROP_PREFIX` are: `access, cksum, ec, lru, mirror, provider, versioning`.
 
 ### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json` | `bool` | Output in JSON format | `false` |
+| `-v` | `bool` | Show list of properties with full names | `false` |
+
+### Examples
+
+#### Show bucket props with provided section
+
+Show only `lru` section of bucket props for `bucket_name` bucket. 
+
+```console
+$ ais show props bucket_name
+PROPERTY	 VALUE
+access		 GET,PUT,DELETE,HEAD,ColdGET
+cksum	 Type: xxhash | Validate: ColdGET
+ec		 Disabled
+lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+mirror		 Disabled
+provider	 ais
+versioning	 Enabled | Validate on WarmGET: no
+$ ais show props bucket_name lru
+PROPERTY	 VALUE
+lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+$ ais show props bucket_name lru -v
+PROPERTY		 VALUE
+lru.capacity_upd_time	 10m
+lru.dont_evict_time	 120m
+lru.enabled		 true
+lru.highwm		 90
+lru.lowwm		 75
+lru.out_of_space	 95
+```
 
 ## Set bucket props
 
@@ -274,8 +308,8 @@ When `--jsonspec` is not used, some properties support user-friendly aliases:
 
 | Property | Value alias | Description |
 | --- | --- | --- |
-| aattrs | ro | Disables bucket modifications: denies PUT, DELETE, and ColdGET requests |
-| aattrs | rw | Enables bucket modifications: allows PUT, DELETE, and ColdGET requests |
+| access | ro | Disables bucket modifications: denies PUT, DELETE, and ColdGET requests |
+| access | rw | Enables bucket modifications: allows PUT, DELETE, and ColdGET requests |
 
 ### Examples
 
@@ -294,7 +328,7 @@ Set read-only access to the bucket `bucket_name`.
 All PUT and DELETE requests will fail.
 
 ```console
-$ ais set props bucket_name 'aattrs=ro'
+$ ais set props bucket_name 'access=ro'
 Bucket props have been successfully updated.
 ```
 
@@ -313,7 +347,7 @@ Set **all** bucket properties for `bucket_name` bucket based on the provided JSO
 
 ```bash
 $ ais set props bucket_name --jsonspec '{
-    "cloud_provider": "ais",
+    "provider": "ais",
     "versioning": {
       "enabled": true,
       "validate_warm_get": false
@@ -346,7 +380,7 @@ $ ais set props bucket_name --jsonspec '{
         "parity_slices": 2,
         "enabled": true
     },
-    "aattrs": "255"
+    "access": "255"
 }'
 Bucket props have been successfully updated.
 ```
@@ -354,12 +388,12 @@ Bucket props have been successfully updated.
 ```console
 $ ais show props bucket_name
 PROPERTY	 VALUE
-provider	 ais
 access		 GET,PUT,DELETE,HEAD,ColdGET
-checksum	 Type: xxhash | Validate: ColdGET
-mirror		 Disabled
+cksum	 Type: xxhash | Validate: ColdGET
 ec		 2:2 (250KiB)
 lru		 Watermarks: 20%/80% | Do not evict time: 120m | OOS: 90%
+mirror		 Disabled
+provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
 ```
 
@@ -381,11 +415,11 @@ $ ais set props bucket_name --jsonspec '{
 Bucket props have been successfully updated.
 $ ais show props bucket_name
 PROPERTY	 VALUE
-provider	 ais
 access		 GET,PUT,DELETE,HEAD,ColdGET
-checksum	 Type: xxhash | Validate: ColdGET
-mirror		 2 copies
+cksum	 Type: xxhash | Validate: ColdGET
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+mirror		 2 copies
+provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
 ```

@@ -100,7 +100,7 @@ $ curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evictcb"
 
 ## Bucket Access Attributes
 
-Bucket access is controlled by a single 64-bit `aattrs` value in the [Bucket Properties structure](../cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
+Bucket access is controlled by a single 64-bit `access` value in the [Bucket Properties structure](../cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
 
 | Operation | Bit Mask |
 | --- | --- |
@@ -113,13 +113,13 @@ Bucket access is controlled by a single 64-bit `aattrs` value in the [Bucket Pro
 For instance, to make bucket `abc` read-only, execute the following [AIS CLI](../cli/README.md) command:
 
 ```console
-$ ais set props abc 'aattrs=ro'
+$ ais set props abc 'access=ro'
 ```
 
 The same expressed via `curl` will look as follows:
 
 ```console
-$ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setprops", "value": {"aattrs": 18446744073709551587}}' http://localhost:8080/v1/buckets/abc
+$ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setprops", "value": {"access": 18446744073709551587}}' http://localhost:8080/v1/buckets/abc
 ```
 
 > 18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)
@@ -146,16 +146,14 @@ The full list of bucket properties are:
 
 | Bucket Property | JSON | Description | Fields |
 | --- | --- | --- | --- |
-| CloudProvider | cloud_provider | CloudProvider can be "aws", "gcp" (clouds) - or "ais" (local) | `"cloud_provider": "aws" \| "gcp" \| "ais"` |
-| Cksum | cksum | Configuration for [Checksum](docs/checksum.md). `validate_cold_get` determines whether or not the checksum of received object is checked after downloading it from the cloud. `validate_warm_get`: determines if the object's version (if in Cloud-based bucket) and checksum are checked. If either value fail to match, the object is removed from local storage. `validate_cluster_migration` determines if the migrated objects across single cluster should have their checksum validated. `enable_read_range` returns the read range checksum otherwise return the entire object checksum.  | `"cksum": { "type": "none" \| "xxhash" \| "md5" \| "inherit", "validate_cold_get": bool,  "validate_warm_get": bool,  "validate_cluster_migration": bool, "enable_read_range": bool }` |
-| LRU | lru | Configuration for [LRU](docs/storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }` |
-| Mirror | mirror | Configuration for [Mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size.  `util_thresh` represents the threshold when utilizations are considered equivalent. `optimize_put` represents the optimization objective. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "util_thresh": int64, "optimize_put": bool, "enabled": bool }` |
-| EC | ec | Configuration for [erasure coding](docs/storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
-| Versioning | versioning | Configuration for object versioning support. `enabled` represents if object versioning is enabled for a bucket. For Cloud-based bucket, its versioning must be enabled in the cloud prior to enabling on AIS side. `validate_warm_get`: determines if the object's version is checked(if in Cloud-based bucket) | `"versioning": { "enabled": true, "validate_warm_get": false }`|
-| AccessAttrs | aatrs | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"aatrs": "0" ` |
-| BID | bid | Readonly property: unique bucket ID  | `"bid": "10e45"` |
-| InProgress | in_progress | Readonly property: determines if the bucket has been binded to some action and currently cannot be updated or changed in anyway until the action finishes | `"in_progress": true` |
-
+| CloudProvider | `provider` | CloudProvider can be "aws", "gcp" (clouds) - or "ais" (local) | `"provider": "aws"/"gcp"/"ais"` |
+| Cksum | `cksum` | Configuration for [Checksum](docs/checksum.md). `validate_cold_get` determines whether or not the checksum of received object is checked after downloading it from the cloud. `validate_warm_get`: determines if the object's version (if in Cloud-based bucket) and checksum are checked. If either value fail to match, the object is removed from local storage. `validate_cluster_migration` determines if the migrated objects across single cluster should have their checksum validated. `enable_read_range` returns the read range checksum otherwise return the entire object checksum.  | `"cksum": { "type": "none"/"xxhash"/"md5"/"inherit", "validate_cold_get": bool,  "validate_warm_get": bool,  "validate_cluster_migration": bool, "enable_read_range": bool }` |
+| LRU | `lru` | Configuration for [LRU](docs/storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }` |
+| Mirror | `mirror` | Configuration for [Mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size.  `util_thresh` represents the threshold when utilizations are considered equivalent. `optimize_put` represents the optimization objective. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "util_thresh": int64, "optimize_put": bool, "enabled": bool }` |
+| EC | `ec` | Configuration for [erasure coding](docs/storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
+| Versioning | `versioning` | Configuration for object versioning support. `enabled` represents if object versioning is enabled for a bucket. For Cloud-based bucket, its versioning must be enabled in the cloud prior to enabling on AIS side. `validate_warm_get`: determines if the object's version is checked(if in Cloud-based bucket) | `"versioning": { "enabled": true, "validate_warm_get": false }`|
+| AccessAttrs | `access` | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"access": "0" ` |
+| BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
 
 `SetBucketProps` allows the following configurations to be changed:
 
@@ -181,14 +179,14 @@ Example of listing objects in the smoke/ subdirectory of a given bucket called '
 Bucket list API is asynchronous, so it cannot be executed as one cURL command. The first request starts the task that enumerates objects in a background and returns the task ID to watch it:
 
 ```console
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBucket
+$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size,checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBucket
 5315610902768416055
 ```
 
 Watch the task status, until it returns the list of objects. The requests is the same, except a field `taskid` that now contains the value returned by previous request(if `taskid` is zero or omitted, API starts a new task). If the task is still running, the request keeps responding with `taskid`. When the task completes, it returns the page content:
 
 ```console
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "taskid": "5315610902768416055"}}' http://localhost:8080/v1/buckets/myBucket
+$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size,checksum", "prefix": "smoke/", "taskid": "5315610902768416055"}}' http://localhost:8080/v1/buckets/myBucket
 {
   "entries": [
     {

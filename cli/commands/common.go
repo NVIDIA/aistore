@@ -132,6 +132,7 @@ const (
 	bucketsArgument        = "BUCKET_NAME [BUCKET_NAME...]"
 	bucketOldNewArgument   = bucketArgument + " NEW_NAME"
 	bucketPropsArgument    = bucketArgument + " " + keyValuePairsArgument
+	bucketAndPropsArgument = "BUCKET_NAME [PROP_PREFIX]"
 
 	// Objects
 	getObjectArgument        = "BUCKET_NAME/OBJECT_NAME OUT_FILE"

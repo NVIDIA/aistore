@@ -252,7 +252,7 @@ const (
 
 	BucketPropsSimpleTmpl = "PROPERTY\t VALUE\n" +
 		"{{range $p := . }}" +
-		"{{$p.Name}}\t {{$p.Val}}\n" +
+		"{{$p.Name}}\t {{$p.Value}}\n" +
 		"{{end}}"
 
 	DownloadListHeader = "JOB ID\t STATUS\t ERRORS\t DESCRIPTION\n"
@@ -433,7 +433,7 @@ var (
 		"lru":                  LRUConfTmpl,
 		"disk":                 DiskConfTmpl,
 		"rebalance":            RebalanceConfTmpl,
-		"checksum":             CksumConfTmpl,
+		"cksum":                CksumConfTmpl,
 		"versioning":           VerConfTmpl,
 		"fspath":               FSpathsConfTmpl,
 		"testfs":               TestFSPConfTmpl,

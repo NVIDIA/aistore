@@ -69,7 +69,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 		return resetBucketProps(c, bck)
 	}
 	if err = setBucketProps(c, bck); err != nil {
-		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET_NAME\"", cliName, commandShow, subcmdShowBckProps)
+		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET_NAME -v\"", cliName, commandShow, subcmdShowBckProps)
 		return newAdditionalInfoError(err, helpMsg)
 	}
 	return

@@ -1,12 +1,13 @@
 ais create bucket $BUCKET_1
 ais set props $BUCKET_1 'mirror.enabled=true' 'mirror.copies=2'
-ais set props $BUCKET_1 'aattrs=ro'
+ais set props $BUCKET_1 'access=ro'
 
 ais set props $BUCKET_1 'unknown.field' // FAIL "no value for"
-ais set props $BUCKET_1 'unknown.field=true' // FAIL "unknown property"
+ais set props $BUCKET_1 'unknown.field=true' // FAIL "unknown field "unknown.field""
 
 ais show props $BUCKET_1
 ais set props --reset $BUCKET_1
 
 ais set props $BUCKET_1 --jsonspec '{"versioning": {"enabled": true, "validate_warm_get": true}}'
 ais show props $BUCKET_1
+ais show props $BUCKET_1 lru -v
