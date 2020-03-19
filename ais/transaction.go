@@ -25,10 +25,11 @@ type (
 	txn interface {
 		// accessors
 		uuid() string
-		started(tm ...time.Time) time.Time
+		started(phase string, tm ...time.Time) time.Time
 		timeout() time.Duration
 		String() string
 		fired() (err error)
+		// triggers
 		fire(err error) error
 		callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) (bool, error)
 	}
@@ -40,9 +41,12 @@ type (
 	txnBase struct { // generic base
 		txn
 		sync.RWMutex
-		uid       string
-		tout      time.Duration
-		start     time.Time
+		uid   string
+		tout  time.Duration
+		phase struct {
+			begin  time.Time
+			commit time.Time
+		}
 		action    string
 		smapVer   int64
 		bmdVer    int64
@@ -96,9 +100,9 @@ func (txns *transactions) begin(txn txn) error {
 	txns.Lock()
 	defer txns.Unlock()
 	if x, ok := txns.m[txn.uuid()]; ok {
-		return fmt.Errorf("%s: %s already started (duplicate uuid?)", txns.t.si, x)
+		return fmt.Errorf("%s: %s already exists (duplicate uuid?)", txns.t.si, x)
 	}
-	txn.started(time.Now())
+	txn.started(cmn.ActBegin, time.Now())
 	txns.m[txn.uuid()] = txn
 	return nil
 }
@@ -129,6 +133,9 @@ func (txns *transactions) callback(caller string, msgInt *actionMsgInternal, err
 
 // given txn, wait for its completion, handle timeout, and ultimately remove
 func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
+	// commit phase officially starts now
+	txn.started(cmn.ActCommit, time.Now())
+
 	sleep := cmn.MinDuration(100*time.Millisecond, timeout/10)
 	for i := sleep; i < timeout; i += sleep {
 		if err = txn.fired(); err != errNil {
@@ -157,9 +164,12 @@ func (txns *transactions) garbageCollect() (d time.Duration) {
 	now := time.Now()
 	for uuid, txn := range txns.m {
 		var (
-			elapsed = now.Sub(txn.started())
+			elapsed = now.Sub(txn.started(cmn.ActBegin))
 			tout    = txn.timeout()
 		)
+		if commitTimestamp := txn.started(cmn.ActCommit); !commitTimestamp.IsZero() {
+			elapsed = now.Sub(commitTimestamp)
+		}
 		if elapsed > 2*tout+time.Minute {
 			errs = append(errs, fmt.Sprintf("GC %s: timeout", txn))
 			delete(txns.m, uuid)
@@ -181,11 +191,22 @@ func (txns *transactions) garbageCollect() (d time.Duration) {
 
 func (txn *txnBase) uuid() string           { return txn.uid }
 func (txn *txnBase) timeout() time.Duration { return txn.tout }
-func (txn *txnBase) started(tm ...time.Time) time.Time {
-	if len(tm) > 0 {
-		txn.start = tm[0]
+func (txn *txnBase) started(phase string, tm ...time.Time) (ts time.Time) {
+	switch phase {
+	case cmn.ActBegin:
+		if len(tm) > 0 {
+			txn.phase.begin = tm[0]
+		}
+		ts = txn.phase.begin
+	case cmn.ActCommit:
+		if len(tm) > 0 {
+			txn.phase.commit = tm[0]
+		}
+		ts = txn.phase.commit
+	default:
+		cmn.Assert(false)
 	}
-	return txn.start
+	return
 }
 
 func (txn *txnBase) fired() (err error) {
@@ -221,8 +242,11 @@ func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 func (txn *txnBckBase) String() string {
 	var (
 		fired string
-		tm    = cmn.FormatTimestamp(txn.start)
+		tm    = cmn.FormatTimestamp(txn.phase.begin)
 	)
+	if !txn.phase.commit.IsZero() {
+		tm += "-" + cmn.FormatTimestamp(txn.phase.commit)
+	}
 	if err := txn.fired(); err != errNil {
 		fired = "-fired"
 	}
