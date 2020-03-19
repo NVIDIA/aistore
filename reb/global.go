@@ -60,7 +60,7 @@ func (reb *Manager) rebPrecheck(md *rebArgs) bool {
 	// 2. serialize (rebalancing operations - one at a time post this point)
 	//    start new xaction unless the one for the current version is already in progress
 	glog.FastV(4, glog.SmoduleReb).Infof("global reb serialize (v%d)", md.id)
-	if newerSmap, alreadyRunning := reb.serialize(md); newerSmap || alreadyRunning {
+	if newerRMD, alreadyRunning := reb.serialize(md); newerRMD || alreadyRunning {
 		return false
 	}
 	if md.smap.Version == 0 {
@@ -398,10 +398,13 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 // if `cb` returns true the wait loop interrupts immediately. It is used,
 // e.g., to wait for EC batch to finish: no need to wait until timeout if
 // all targets have sent push notification that they are done with the batch.
-func (reb *Manager) waitQuiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) (
+func (reb *Manager) waitQuiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool, sleepOpt ...time.Duration) (
 	aborted bool) {
 	cmn.Assert(maxWait > 0)
 	sleep := md.config.Timeout.CplaneOperation
+	if len(sleepOpt) > 0 {
+		sleep = sleepOpt[0]
+	}
 	maxQuiet := int(maxWait/sleep) + 1
 	quiescent := 0
 

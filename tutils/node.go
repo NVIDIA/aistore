@@ -227,7 +227,7 @@ func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64
 			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, url, smap.Version)
 		}
 
-		fmt.Printf("waiting for Smap > v%d: %s\n", prevVersion, url)
+		Logf("waiting for Smap > v%d: %s\n", prevVersion, url)
 		time.Sleep(time.Second)
 	}
 	return nil

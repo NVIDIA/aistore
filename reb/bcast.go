@@ -192,7 +192,6 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 // wait for target to get ready to receive objects (type syncCallback)
 func (reb *Manager) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
-		ver    = md.smap.Version
 		sleep  = md.config.Timeout.CplaneOperation * 2
 		maxwt  = md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
 		curwt  time.Duration
@@ -203,7 +202,7 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 			// do not request the node stage if it has sent push notification
 			return true
 		}
-		if _, ok = reb.checkGlobStatus(tsi, ver, rebStageTraverse, md); ok {
+		if _, ok = reb.checkGlobStatus(tsi, rebStageTraverse, md); ok {
 			return
 		}
 		if reb.xact().Aborted() || reb.xact().AbortedAfter(sleep) {
@@ -221,7 +220,6 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 // separately check whether it is waiting for my ACKs
 func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
-		ver        = md.smap.Version
 		sleep      = md.config.Timeout.CplaneOperation
 		maxwt      = md.config.Rebalance.DestRetryTime
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
@@ -239,7 +237,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 			return true
 		}
 		curwt += sleep
-		if status, ok = reb.checkGlobStatus(tsi, ver, rebStageFin, md); ok {
+		if status, ok = reb.checkGlobStatus(tsi, rebStageFin, md); ok {
 			return
 		}
 		if reb.xact().Aborted() {
@@ -280,8 +278,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 
 // calls tsi.reb.RebStatus() and handles conditions; may abort the current xreb
 // returns OK if the desiredStage has been reached
-func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
-	desiredStage uint32, md *rebArgs) (status *Status, ok bool) {
+func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *rebArgs) (status *Status, ok bool) {
 	var (
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
 		logHdr     = reb.logHdr(md)
@@ -307,13 +304,6 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 		reb.abortRebalance()
 		return
 	}
-	// enforce Smap consistency across this xreb
-	tver, rver := status.SmapVersion, status.RebVersion
-	if tver > ver || rver > ver {
-		glog.Errorf("%s: %s has newer Smap (v%d, v%d) - aborting...", logHdr, tsi, tver, rver)
-		reb.abortRebalance()
-		return
-	}
 	// enforce same global transaction ID
 	if status.RebID > reb.rebID.Load() {
 		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", logHdr, tsi, status.RebID)
@@ -321,10 +311,6 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, ver int64,
 		return
 	}
 	// let the target to catch-up
-	if tver < ver || rver < ver {
-		glog.Warningf("%s: %s has older Smap (v%d, v%d) - keep waiting...", logHdr, tsi, tver, rver)
-		return
-	}
 	if status.RebID < reb.RebID() {
 		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", logHdr, tsi, status.RebID)
 		return
@@ -356,7 +342,7 @@ func (reb *Manager) waitStage(si *cluster.Snode, md *rebArgs, stage uint32) bool
 			return true
 		}
 
-		status, ok := reb.checkGlobStatus(si, md.smap.Version, stage, md)
+		status, ok := reb.checkGlobStatus(si, stage, md)
 		if ok && status.Stage >= stage {
 			return true
 		}
@@ -475,7 +461,7 @@ func (reb *Manager) nodesQuiescent(md *rebArgs) bool {
 			quiescent = false
 			break
 		}
-		status, ok := reb.checkGlobStatus(si, md.smap.Version, locStage, md)
+		status, ok := reb.checkGlobStatus(si, locStage, md)
 		if !ok || !status.Quiescent {
 			quiescent = false
 			break

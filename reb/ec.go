@@ -703,7 +703,9 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	waitFor := reb.ec.waiter.lookupCreate(uid, int16(sliceID), waitForSingleSlice)
 	cmn.Assert(waitFor != nil)
 	cmn.Assert(waitFor.sgl != nil)
-	cmn.Assert(!waitFor.recv.Load())
+	if waitFor.recv.Load() {
+		return nil
+	}
 
 	waitFor.meta = req.md
 	n, err := io.Copy(waitFor.sgl, reader)
@@ -1386,7 +1388,7 @@ func (reb *Manager) sendLocalData(md *rebArgs, obj *rebObject, si ...*cluster.Sn
 		cmn.Assert(ok)
 		target = mainSI
 	}
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s sending a slice/replica #%d of %s to main %s", reb.t.Snode(), ct.SliceID, ct.Objname, target)
 	}
 	return reb.sendFromDisk(ct, target)
@@ -1397,7 +1399,7 @@ func (reb *Manager) sendLocalData(md *rebArgs, obj *rebObject, si ...*cluster.Sn
 // target by HRW that has one of replicas
 func (reb *Manager) bcastLocalReplica(obj *rebObject) error {
 	cmn.Assert(obj.sender != nil) // mustn't happen
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s object %s sender %s", reb.t.Snode(), obj.uid, obj.sender)
 	}
 	// Another node should send replicas, do noting
@@ -1559,7 +1561,7 @@ func (reb *Manager) restoreReplicas(obj *rebObject) (err error) {
 	if !reb.needsReplica(obj) {
 		return reb.bcastLocalReplica(obj)
 	}
-	if bool(glog.FastV(4, glog.SmoduleReb)) {
+	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("#4 Waiting for replica %s", obj.uid)
 	}
 	reb.ec.waiter.lookupCreate(obj.uid, 0, waitForSingleSlice)
@@ -1600,7 +1602,7 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 
 	// Case #5.1: it is not main target and has slice or does not need any
 	if !obj.isMain && (obj.hasCT || !obj.inHrwList) {
-		if bool(glog.FastV(4, glog.SmoduleReb)) {
+		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("#5.1 Object %s skipped", obj.uid)
 		}
 		return nil
@@ -1609,7 +1611,7 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 	// Case #5.2: it is not main target, has no slice, needs according to HRW
 	// but won't receive since there are few slices outside HRW
 	if !obj.isMain && !obj.hasCT && obj.inHrwList {
-		if bool(glog.FastV(4, glog.SmoduleReb)) {
+		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("#5.2 Waiting for object %s", obj.uid)
 		}
 		reb.ec.waiter.lookupCreate(obj.uid, anySliceID, waitForSingleSlice)
@@ -1652,7 +1654,7 @@ func (reb *Manager) cleanupBatch() {
 func (reb *Manager) finalizeBatch(md *rebArgs) error {
 	// First, wait for all slices the local target wants to receive
 	maxWait := md.config.Rebalance.Quiesce
-	if aborted := reb.waitQuiesce(md, maxWait, reb.allCTReceived); aborted {
+	if aborted := reb.waitQuiesce(md, maxWait, reb.allCTReceived, 100*time.Millisecond); aborted {
 		reb.ec.waiter.waitFor.Store(0)
 		return cmn.NewAbortedError("finalize batch - all ct received")
 	}

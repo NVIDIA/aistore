@@ -674,7 +674,6 @@ func (p *proxyrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request
 		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return
 	}
-	glog.Infof("metasync NIY: %+v", payload)
 }
 
 // GET /v1/health
@@ -2937,13 +2936,10 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			msgInt := p.newActionMsgInternal(msg, clone, nil)
 			pairs := []revsPair{{clone, msgInt}}
 			if p.requiresRebalance(smap, clone) {
-				// FIXME (#654): for now `TestECAndRegularUnregisterWhileRebalancing` seems
-				//  to be stuck with this code (it starts rebalance on unregistering).
-				//  clone := p.owner.rmd.modify(func(clone *rebMD) {
-				// 	 clone.inc()
-				//  })
-				//  pairs = append(pairs, revsPair{clone, msgInt})
-				glog.Warningf("requires rebalance but it was not started - NYI")
+				clone := p.owner.rmd.modify(func(clone *rebMD) {
+					clone.inc()
+				})
+				pairs = append(pairs, revsPair{clone, msgInt})
 			}
 			_ = p.metasyncer.sync(pairs...)
 		},

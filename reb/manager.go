@@ -259,7 +259,7 @@ func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
 	return fmt.Sprintf("rebalance IDs mismatch: local %d, remote %d", reb.RebID(), remoteID)
 }
 
-func (reb *Manager) serialize(md *rebArgs) (newerSmap, alreadyRunning bool) {
+func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 	var (
 		ver    = md.smap.Version
 		sleep  = md.config.Timeout.CplaneOperation
@@ -272,14 +272,12 @@ func (reb *Manager) serialize(md *rebArgs) (newerSmap, alreadyRunning bool) {
 		default:
 			runtime.Gosched()
 		}
-		//
-		// vs newer Smap
-		//
-		nver := reb.t.GetSowner().Get().Version
+
+		// Compare rebIDs
 		logHdr := reb.logHdr(md)
-		if nver > ver {
-			glog.Warningf("%s: seeing newer Smap v%d, not running", logHdr, nver)
-			newerSmap = true
+		if reb.rebID.Load() > md.id {
+			glog.Warningf("%s: seeing newer rebID g%d, not running", logHdr, reb.rebID.Load())
+			newerRMD = true
 			if canRun {
 				reb.semaCh <- struct{}{}
 			}
@@ -293,9 +291,8 @@ func (reb *Manager) serialize(md *rebArgs) (newerSmap, alreadyRunning bool) {
 			alreadyRunning = true
 			return
 		}
-		//
-		// vs current xaction
-		//
+
+		// Check current xaction
 		entry, ok := xaction.Registry.GetLatest(cmn.ActRebalance)
 		if !ok {
 			if canRun {
