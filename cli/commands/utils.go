@@ -21,14 +21,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cli/config"
-	"github.com/NVIDIA/aistore/containers"
-
 	"github.com/urfave/cli"
+	"github.com/vbauerster/mpb/v4"
+	"github.com/vbauerster/mpb/v4/decor"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cli/config"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -49,6 +50,9 @@ const (
 	aisScheme     = "ais"
 	gsHost        = "storage.googleapis.com"
 	s3Host        = "s3.amazonaws.com"
+
+	sizeArg  = "SIZE"
+	unitsArg = "UNITS"
 )
 
 var (
@@ -72,6 +76,12 @@ type usageError struct {
 type additionalInfoError struct {
 	baseErr        error
 	additionalInfo string
+}
+
+type progressBarArgs struct {
+	barType string
+	barText string
+	total   int64
 }
 
 func (e *usageError) Error() string {
@@ -664,4 +674,30 @@ func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]strin
 		}
 		objs = objs[:0]
 	}
+}
+
+func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
+	var (
+		progress = mpb.New(mpb.WithWidth(progressBarWidth))
+		bars     = make([]*mpb.Bar, 0, len(args))
+	)
+
+	for _, a := range args {
+		var argDecorators []decor.Decorator
+		switch a.barType {
+		case unitsArg:
+			argDecorators = []decor.Decorator{decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}), decor.CountersNoUnit("%d/%d", decor.WCSyncWidth)}
+		case sizeArg:
+			argDecorators = []decor.Decorator{decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}), decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidth)}
+		default:
+			cmn.AssertMsg(false, a.barType+" argument is invalid")
+		}
+
+		bars = append(bars, progress.AddBar(
+			a.total,
+			mpb.PrependDecorators(argDecorators...),
+			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth))))
+	}
+
+	return progress, bars
 }

@@ -153,12 +153,15 @@ Put an object or entire directory (of objects) into the specified bucket. If CLI
 | `--recursive` or `-r` | `bool` | Enable recursive directory upload | `false` |
 | `--refresh` | `string` | Frequency of the reporting the progress (in milliseconds), may contain multiplicative suffix `s`(second) or `m`(minute). Zero value disables periodical refresh | `0` if verbose mode is on, `5s` otherwise |
 | `--dry-run` | `bool` | Do not actually perform PUT. Shows a few files to be uploaded and corresponding object names for used arguments |
+| `--progress` | `bool` | Displays progress bar | `false` |
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
  This makes shell wildcards like `**` redundant, and the following patterns won't work in `ais`: `/home/user/img-set-*/*.tar` or `/home/user/bck/**/*.tar.gz`
 
 `FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
+
+`--progress` and `--verbose` flags are mutually exclusive
 
 ### Object names
 
@@ -518,6 +521,13 @@ If directory provided, files within the directory are sorted by filename.
 For each file sends a separate request to the cluster.
 Supports recursive iteration through directories and wildcards in the same way as PUT operation does.
 
+### Options
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--recursive` or `-r` | `bool` | Enable recursive directory upload |
+| `--progress` | `bool` | Displays progress bar | `false` |
+
 ### Examples
 
 #### Concat two files
@@ -533,7 +543,7 @@ $ ais concat file1.txt dir/file2.txt mybucket/obj
 Same as above, but additionally shows progress bar of sending the files to the cluster.
 
 ```console
-$ ais concat file1.txt dir/file2.txt mybucket/obj --verbose
+$ ais concat file1.txt dir/file2.txt mybucket/obj --progress
 ```
 
 #### Concat files from directories

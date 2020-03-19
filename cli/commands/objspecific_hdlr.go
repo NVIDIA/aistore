@@ -36,6 +36,7 @@ var (
 			verboseFlag,
 			yesFlag,
 			dryRunFlag,
+			progressBarFlag,
 		},
 		commandPromote: {
 			recursiveFlag,
@@ -44,8 +45,8 @@ var (
 			verboseFlag,
 		},
 		commandConcat: {
-			verboseFlag,
 			recursiveFlag,
+			progressBarFlag,
 		},
 		commandCat: {
 			offsetFlag,

@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
-	"github.com/vbauerster/mpb/v4/decor"
 )
 
 type uploadParams struct {
@@ -145,10 +144,6 @@ func putSingleObject(bck cmn.Bck, objName, path string) (err error) {
 }
 
 func putRangeObjects(c *cli.Context, pt cmn.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
-	if flagIsSet(c, verboseFlag) {
-		fmt.Fprintln(c.App.Writer, "Enumerating files")
-	}
-
 	getNext := pt.Iter()
 	allFiles := make([]fileToObj, 0, pt.Count())
 	for file, hasNext := getNext(); hasNext; file, hasNext = getNext() {
@@ -190,7 +185,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 	// ask a user for confirmation
 	if !flagIsSet(c, yesFlag) {
 		var input string
-		fmt.Fprintf(c.App.Writer, "Proceed? [y/n]: ")
+		fmt.Fprintf(c.App.Writer, "Proceed uploading to bucket %q? [y/n]: ", bck)
 		fmt.Scanln(&input)
 		if ok, _ := cmn.ParseBool(input); !ok {
 			return errors.New("operation canceled")
@@ -260,8 +255,8 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 		return err
 	}
 
-	if flagIsSet(c, verboseFlag) {
-		fmt.Fprintf(c.App.Writer, "Enumerating files\n")
+	if flagIsSet(c, verboseFlag) && flagIsSet(c, progressBarFlag) {
+		return fmt.Errorf("flags %q and %q can't be set at the same time", verboseFlag.Name, progressBarFlag.Name)
 	}
 
 	files, err := generateFileList(path, "", objName, flagIsSet(c, recursiveFlag))
@@ -275,12 +270,11 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) (err error) {
 	var (
 		bar        *mpb.Bar
+		p          *mpb.Progress
 		barText    = fmt.Sprintf("Composing %d files into object \"%s/%s\"", len(fileNames), bck.Name, objName)
 		filesToObj = make([]FileToObjSlice, len(fileNames))
-		p          *mpb.Progress
 		sizes      = make(map[string]int64, len(fileNames))
 		totalSize  = int64(0)
-		verbose    = flagIsSet(c, verboseFlag)
 	)
 
 	for i, fileName := range fileNames {
@@ -295,15 +289,10 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		}
 	}
 
-	if verbose {
-		p = mpb.New(mpb.WithWidth(progressBarWidth))
-		bar = p.AddBar(
-			totalSize,
-			mpb.PrependDecorators(
-				decor.Name(barText, decor.WC{W: len(barText) + 1, C: decor.DidentRight}),
-				decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidth),
-			),
-			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)))
+	if flagIsSet(c, progressBarFlag) {
+		var bars []*mpb.Bar
+		p, bars = simpleProgressBar(progressBarArgs{barType: sizeArg, barText: barText, total: totalSize})
+		bar = bars[0]
 	}
 
 	var handle string
@@ -372,6 +361,9 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		processedCnt  atomic.Int32 // files processed so far
 		processedSize atomic.Int64 // size of already processed files
 		mx            sync.Mutex
+
+		bars     []*mpb.Bar
+		progress *mpb.Progress
 	)
 
 	wg := &sync.WaitGroup{}
@@ -379,11 +371,24 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	reportEvery := p.refresh
 	sema := cmn.NewDynSemaphore(p.workerCnt)
 	verbose := flagIsSet(c, verboseFlag)
+	showProgress := flagIsSet(c, progressBarFlag)
+
+	if showProgress {
+		sizeBarArg := progressBarArgs{total: p.totalSize, barText: "Uploaded sizes progress", barType: sizeArg}
+		filesBarArg := progressBarArgs{total: int64(len(p.files)), barText: "Uploaded files progress", barType: unitsArg}
+		progress, bars = simpleProgressBar(filesBarArg, sizeBarArg)
+	}
 
 	finalizePut := func(f fileToObj) {
 		wg.Done()
 		total := int(processedCnt.Inc())
 		size := processedSize.Add(f.size)
+
+		if showProgress {
+			bars[0].Increment()
+			bars[1].IncrInt64(f.size)
+		}
+
 		sema.Release()
 		if reportEvery == 0 {
 			return
@@ -426,6 +431,10 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		putOneFile(f)
 	}
 	wg.Wait()
+
+	if showProgress {
+		progress.Wait()
+	}
 
 	if failed := errCount.Load(); failed != 0 {
 		return fmt.Errorf("failed to upload: %d object(s)", failed)
