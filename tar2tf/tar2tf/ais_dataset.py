@@ -21,6 +21,7 @@ def __int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
+# pylint: disable=unused-variable
 def default_record_parser(record):
     keys_to_features = __default_image_desc()
     parsed = tf.io.parse_single_example(record, keys_to_features)
@@ -109,7 +110,8 @@ def default_record_to_example(record):
     return tf.train.Example(features=features)
 
 
-class AisDataset(object):
+# pylint: disable=unused-variable
+class AisDataset:
     def __init__(self, bucket, proxy_url="localhost:8080"):
         self.proxy_url = proxy_url
         self.proxy_client = AisClient(self.proxy_url, bucket)
@@ -130,20 +132,21 @@ class AisDataset(object):
     # path - place to save TFRecord file. If None, everything done on the fly
     def load_from_tar(self, template, **kwargs):
         accepted_args = ["record_to_pair", "output_types", "output_shapes", "path"]
-        
+
         for key in kwargs:
             if key not in accepted_args:
                 raise Exception("invalid argument name {}".format(key))
-            
+
         record_to_pair = kwargs.get("record_to_pair", default_record_to_pair)
         output_types = kwargs.get("output_types", (tf.float32, tf.int32))
-        output_shapes = kwargs.get("output_shapes", (tf.TensorShape([224,224,3]), tf.TensorShape([])))
+        output_shapes = kwargs.get("output_shapes", (tf.TensorShape([224, 224, 3]), tf.TensorShape([])))
 
         if "path" in kwargs and kwargs["path"] is not None:
             return self.__record_dataset_from_tar(template, kwargs["path"], record_to_example=default_record_to_example)
 
-        return tf.data.Dataset.from_generator(lambda: self.__generator_from_template(template, record_to_pair), output_types, outputshapes=output_shapes)
-
+        return tf.data.Dataset.from_generator(
+            lambda: self.__generator_from_template(template, record_to_pair), output_types, outputshapes=output_shapes
+        )
 
     def __generator_from_template(self, template, record_to_pair=None):
         if record_to_pair is None:

@@ -15,6 +15,7 @@ def raise_timeout_exception(signum, frame):
     raise TimeoutException("timeout")
 
 
+# pylint: disable=unused-variable
 def timeout(timeout_in_seconds=300):
     """
     A timeout decorator for conveniently adding a fail-safe timeout to any function definition.
@@ -23,7 +24,6 @@ def timeout(timeout_in_seconds=300):
     :param timeout_in_seconds: Time after which a TimeoutException is raised (defaults to 300)
     :return: The decorated function
     """
-
     def decorator(fn):
         def f(*args, **kwargs):
             prev_sig_handler = signal.signal(signal.SIGALRM, raise_timeout_exception)
@@ -40,6 +40,7 @@ def timeout(timeout_in_seconds=300):
     return decorator
 
 
+# pylint: disable=unused-variable
 def object_variable_timeout(timeout_variable):
     """
     A version of the timeout decorator for objects, which define their timeouts as object variables and therefore cannot
@@ -64,4 +65,3 @@ def object_variable_timeout(timeout_variable):
         return f
 
     return decorator
-

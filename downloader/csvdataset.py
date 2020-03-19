@@ -1,8 +1,9 @@
+# pylint: disable=undefined-variable # for raw_input
+
+# pylint: disable=unused-variable
 from __future__ import print_function
-import csv, os, sys, itertools, time
-from pprint import pprint
+import csv, os, sys, itertools
 import ais_client
-from ais_client.rest import ApiException
 
 bucket_name = raw_input("Which local bucket would you like to save these files to: ")
 if not bucket_name:
@@ -16,7 +17,6 @@ if bucket_name not in ais_buckets:
     input_params = ais_client.InputParameters(ais_client.Actions.CREATELB)
     bucket_api.perform_operation(bucket_name, input_params)
 
-
 file_name = raw_input("Please enter the path to the CSV file containing the dataset to download: ")
 if not os.path.isfile(file_name):
     print("A valid file was not provided")
@@ -24,7 +24,7 @@ if not os.path.isfile(file_name):
 
 skip = False
 response = raw_input("Is the first row of the csv file just column names? (yes/y or no/n) ").lower()
-if response == "yes" or response == "y":
+if response in ["yes", "y"]:
     skip = True
 
 delim = raw_input("Please enter the delimiter used in the provided CSV file (default: \\t): ")
@@ -52,10 +52,8 @@ download_multi = ais_client.DownloadMulti(bucket_name)
 objects = []
 with open(file_name) as csv_file:
     csv_reader = csv.reader(itertools.islice(csv_file, start, end), delimiter=delim, skipinitialspace=True)
-    line_count = start
     for row in csv_reader:
         objects.append(row[col])
 
 download_multi.object_list = objects
-resp = api_instance.download_multiple_objects(download_multi)
-
+api_instance.download_multiple_objects(download_multi)

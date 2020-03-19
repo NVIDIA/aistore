@@ -4,7 +4,8 @@ TAR2TF = "tar2tf"
 OBJECTS = "objects"
 
 
-class AisClient(object):
+# pylint: disable=unused-variable
+class AisClient:
     def __init__(self, url, bucket):
         self.url = url
         self.bucket = bucket

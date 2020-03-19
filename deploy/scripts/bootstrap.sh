@@ -1,6 +1,8 @@
 #!/bin/bash
 
-AISTORE_DIR=$(cd "$(dirname "$0")/../../"; pwd -P)
+AISTORE_DIR="$(cd "$(dirname "$0")/../../"; pwd -P)"
+YAPF_STYLE="$(dirname ${0})/config/.style.yapf"
+PYLINT_STYLE="$(dirname ${0})/config/.pylintrc"
 
 function list_all_go_dirs {
   go list -f '{{.Dir}}' "${AISTORE_DIR}/..."
@@ -21,13 +23,38 @@ fmt)
   case $2 in
   --fix)
     gofmt -w ${AISTORE_DIR}
+    find . -type f -name "*.py" ! -regex ".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*" -exec yapf -i --style=$YAPF_STYLE {} ";"
     ;;
   *)
     out=$(gofmt -l -e ${AISTORE_DIR})
+
     if [[ -n ${out} ]]; then
       echo ${out} >&2
       exit 1
     fi
+
+    i=0
+    for f in $(find . -type f -name "*.py" ! -regex ".*__init__.py" ! -regex ".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"); do
+      pylint --rcfile=$PYLINT_STYLE $f --msg-template="{path} ({C}):{line:3d},{column:2d}: {msg} ({msg_id}:{symbol})" 2>/dev/null
+      if [[ $? -gt 0 ]]; then i=$((i+1)); fi
+    done
+
+    if [[ $i -ne 0 ]]; then
+      printf "\npylint failed, fix before continuing\n"
+      exit 1
+    fi
+
+    i=0
+    for f in $(find . -type f -name "*.py" ! -regex ".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"); do
+       yapf -d --style=$YAPF_STYLE $f
+       if [[ $? -gt 0 ]]; then i=$((i+1)); fi
+    done
+
+    if [[ $i -ne 0 ]]; then
+      printf "\nIncorrect python formatting. Run make fmt-fix to fix it.\n\n" >&2
+      exit 1
+    fi
+
     ;;
   esac
   ;;

@@ -37,6 +37,8 @@ build:linux:
 lint:linux:
   stage: build
   script:
+    - apt-get install -y python3-pip
+    - pip3 install setuptools yapf pylint
     - make lint
     - make fmt-check
     - make spell-check

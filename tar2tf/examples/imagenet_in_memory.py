@@ -1,8 +1,7 @@
-import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-from tar2tf import AisDataset, default_record_parser
+from tar2tf import AisDataset
 
 EPOCHS = 5
 BATCH_SIZE = 20

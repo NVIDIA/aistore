@@ -14,27 +14,21 @@
 # This script uses the ~/.kube/config mechanism for authentication.
 #
 
+# pylint: disable=unused-variable
 from __future__ import print_function
-import datetime
-import kubernetes.client
 import ais_client
-import os
+import datetime, os, sys, threading
 import ptvsd
 import pytz
-import sys
-import threading
-import time
 
 from kubernetes import client, config
-from kubernetes.client.rest import ApiException
-from pprint import pprint
-from operator import itemgetter, attrgetter
-from pprint import pprint
+from operator import attrgetter
 from urllib3.exceptions import MaxRetryError, NewConnectionError
 
 if os.getenv('REMOTE_DEBUG_LOCAL_IP'):
     ptvsd.enable_attach(address=(os.getenv('REMOTE_DEBUG_LOCAL_IP'), os.getenv('REMOTE_DEBUG_LOCAL_PORT')), redirect_output=True)
     ptvsd.wait_for_attach()
+
 
 class Ais:
     """Kitchen sink class for AIS validation on k8s
@@ -60,17 +54,14 @@ class Ais:
         self.nodeProxyLabel = 'nvidia.com/ais-proxy=%s-%s-electable' % (relname, self.appname)
         self.nodeNeProxyLabel = 'nvidia.com/ais-proxy=%s-%s-nonelectable' % (relname, self.appname)
         self.nodeTargetLabel = 'nvidia.com/ais-target=%s-%s' % (relname, self.appname)
-    
+
         #
         # Pod label selectors
         #
         self.podProxyLabel = "release=%s,app=ais,component=proxy" % relname
         self.podNeProxyLabel = "release=%s,app=ais,component=ne_proxy" % relname
         self.podTargetLabel = "release=%s,app=ais,component=target" % relname
-    
-        openapi_models = ais_client.models
-        openapi_params = openapi_models.InputParameters
-        openapi_actions = openapi_models.Actions
+
         self.refreshAisK8sState()
         self.refreshAisDaemonState()
 
@@ -101,9 +92,18 @@ class Ais:
         #
         if not quiet:
             print("Querying AIS k8s pods ...")
-        proxy_pods = sorted(self.v1api.list_pod_for_all_namespaces(label_selector=self.podProxyLabel, include_uninitialized=True).items, key=attrgetter('spec.node_name'))
-        ne_proxy_pods = sorted(self.v1api.list_pod_for_all_namespaces(label_selector=self.podNeProxyLabel, include_uninitialized=True).items, key=attrgetter('spec.node_name'))
-        target_pods = sorted(self.v1api.list_pod_for_all_namespaces (label_selector=self.podTargetLabel, include_uninitialized=True).items, key=attrgetter('spec.node_name'))
+        proxy_pods = sorted(
+            self.v1api.list_pod_for_all_namespaces(label_selector=self.podProxyLabel, include_uninitialized=True).items,
+            key=attrgetter('spec.node_name')
+        )
+        ne_proxy_pods = sorted(
+            self.v1api.list_pod_for_all_namespaces(label_selector=self.podNeProxyLabel, include_uninitialized=True).items,
+            key=attrgetter('spec.node_name')
+        )
+        target_pods = sorted(
+            self.v1api.list_pod_for_all_namespaces(label_selector=self.podTargetLabel, include_uninitialized=True).items,
+            key=attrgetter('spec.node_name')
+        )
 
         #
         # Each AIS Daemon will have a dict in one of the three lists:
@@ -117,9 +117,15 @@ class Ais:
         # }
         #
         self.daemons = {
-            'proxy':    [ { 'pod': pod  } for pod in proxy_pods ],
-            'ne_proxy': [ { 'pod': pod  } for pod in ne_proxy_pods ],
-            'target':   [ { 'pod': pod  } for pod in target_pods ]
+            'proxy': [{
+                'pod': pod
+            } for pod in proxy_pods],
+            'ne_proxy': [{
+                'pod': pod
+            } for pod in ne_proxy_pods],
+            'target': [{
+                'pod': pod
+            } for pod in target_pods]
         }
 
         #
@@ -140,7 +146,6 @@ class Ais:
 
     def refreshAisDaemonState(self, quiet=False):
         """Query AIS daemons for their state."""
-
         def createAisApiClients(daemonlist):
             """ Create openapi client API handles for a list of daemons (does not initiate connection yet). """
 
@@ -149,18 +154,17 @@ class Ais:
                     d['aisClientApi'] = None
                     continue
 
-                config = ais_client.Configuration()
-                config.debug = False
-                config.host = "http://%s:%s/v1" % (d['pod'].status.pod_ip, d['pod'].spec.containers[0].ports[0].container_port)
-                d['aisClientApi'] = ais_client.ApiClient(config)
+                ais_config = ais_client.Configuration()
+                ais_config.debug = False
+                ais_config.host = "http://%s:%s/v1" % (d['pod'].status.pod_ip, d['pod'].spec.containers[0].ports[0].container_port)
+                d['aisClientApi'] = ais_client.ApiClient(ais_config)
 
         createAisApiClients(self.daemons['proxy'])
         createAisApiClients(self.daemons['ne_proxy'])
         createAisApiClients(self.daemons['target'])
 
-        def aisDaemonQuery(daemonList, quiet=False):
+        def aisDaemonQuery(daemonList):
             """Query the daemon api instance for smap, config, stats and snode info."""
-
             def query(d, key, what):
                 """Thread function to grab daemon info."""
                 d[key] = {}
@@ -169,12 +173,15 @@ class Ais:
                 except (MaxRetryError, NewConnectionError):
                     pass
 
-            daemonQueries = (
-                { 'key': 'smap',    'what': Ais.openapi_models.GetWhat.SMAP },
-                { 'key': 'config',  'what': Ais.openapi_models.GetWhat.CONFIG },
-                { 'key': 'stats',   'what': Ais.openapi_models.GetWhat.STATS },
-                { 'key': 'snode',   'what': Ais.openapi_models.GetWhat.SNODE }
-            )
+            daemonQueries = ({
+                'key': 'smap', 'what': ais_client.openapi_models.GetWhat.SMAP
+            }, {
+                'key': 'config', 'what': ais_client.openapi_models.GetWhat.CONFIG
+            }, {
+                'key': 'stats', 'what': ais_client.openapi_models.GetWhat.STATS
+            }, {
+                'key': 'snode', 'what': ais_client.openapi_models.GetWhat.SNODE
+            })
 
             #
             # Make queries to all daemons in distinct threads per query - we don't want one
@@ -187,10 +194,13 @@ class Ais:
                     d['config'] = {}
                     d['stats'] = {}
                     d['snode'] = {}
-                    d['_threadlist'] = [ ]
+                    d['_threadlist'] = []
                     continue
 
-                d['_threadlist'] = [ threading.Thread(target=query, name='%s:%s' % (d['pod'].metadata.name, q['key']), args = (d, q['key'], q['what'])) for q in daemonQueries ]
+                d['_threadlist'] = [
+                    threading.Thread(target=query, name='%s:%s' % (d['pod'].metadata.name, q['key']), args=(d, q['key'], q['what']))
+                    for q in daemonQueries
+                ]
                 for t in d['_threadlist']:
                     t.setDaemon(True)
                     t.start()
@@ -204,7 +214,6 @@ class Ais:
             while joined < started:
                 for d in daemonList:
                     for t in d['_threadlist']:
-                        rv = t.join(0.05)
                         if not t.isAlive():
                             joined += 1
 
@@ -220,7 +229,6 @@ class Ais:
                     if len(stuck) > 0:
                         print("  No response: %s" % ', '.join(stuck))
 
-
         if not quiet:
             print("Retrieving Smap/Config/Snode/Stats from each AIS daemon ...")
 
@@ -232,7 +240,7 @@ class Ais:
         """ Iterate over proxy, ne-proxy or target nodes with given callback."""
 
         for node in nodelist:
-            if (cbfunc(node) != 0):
+            if cbfunc(node) != 0:
                 break
 
     def aisProxyNodes(self):
@@ -268,15 +276,15 @@ class Ais:
 
     def aisProxyPods(self):
         """Return list of electable proxy pods."""
-        return [ d.pod for d in self.daemons['proxy'] ]
+        return [d.pod for d in self.daemons['proxy']]
 
     def aisNeProxyPods(self):
         """Return list of non electable proxy pods."""
-        return [ d.pod for d in self.daemons['ne_proxy'] ]
+        return [d.pod for d in self.daemons['ne_proxy']]
 
     def aisTargetPods(self):
         """Return list of target pods."""
-        return [ d.pod for d in self.daemons['target'] ]
+        return [d.pod for d in self.daemons['target']]
 
     def walkProxyPods(self, cbfunc):
         """Walk proxy pods with callback."""
@@ -294,8 +302,7 @@ class Ais:
         """Return node name labeled initial primary, or '-' if none."""
         if self.initialPrimaryNodeName is not None:
             return self.initialPrimaryNodeName
-        else:
-            return '-'
+        return '-'
 
     def getProxyClusterSvc(self):
         """Return IP and port of clusterIP svc for proxies."""
@@ -303,50 +310,55 @@ class Ais:
         port = self.service["proxyClusterIP"].get('port', '-')
         return ip, port
 
+
 if len(sys.argv) != 2:
     raise Exception("require ais Helm release name as first argument")
 
 aisk8s = Ais(sys.argv[1])
 
+
 def print_ais_topo(aishdl):
     nodename_ipp = aishdl.getInitialPrimaryNodeName()
 
-    smap_info = {
-        'latest_version': 0,
-        'latest': None
-    }
+    smap_info = {'latest_version': 0, 'latest': None}
 
-    ready_counts = {
-        'proxy':    0,
-        'ne_proxy': 0,
-        'target':   0
-    }
+    ready_counts = {'proxy': 0, 'ne_proxy': 0, 'target': 0}
 
-    print("Node labeling:\n\tProxy node(s): %d\n\tNon-electable proxy node(s): %d\n\tTarget node(s): %d" %
-        (len(aishdl.aisProxyNodes()), len(aishdl.aisNeProxyNodes()), len(aishdl.aisTargetNodes()) ))
+    print(
+        "Node labeling:\n\tProxy node(s): %d\n\tNon-electable proxy node(s): %d\n\tTarget node(s): %d" %
+        (len(aishdl.aisProxyNodes()), len(aishdl.aisNeProxyNodes()), len(aishdl.aisTargetNodes()))
+    )
     print("\tNode labeled as initial primary proxy: %s\n" % nodename_ipp)
 
     ip, port = aishdl.getProxyClusterSvc()
     print("\tProxy ClusterIP service: %s:%s\n" % (ip, port))
 
-    cols = (
-        { 'head': 'POD NAME',           'fmt': '%-25s' },
-        { 'head': 'NODE',               'fmt': '%-11s' },
-        { 'head': 'POD IP',             'fmt': '%-16s' },
-        { 'head': 'RESTARTS',           'fmt': '%-9s' },
-        { 'head': 'PODSTATE',           'fmt': '%-9s' },
-        { 'head': 'LAST STATE CHANGE',  'fmt': '%-18s' },
-        { 'head': 'READY',              'fmt': '%-5s' },
-        { 'head': 'DAEMONID',           'fmt': '%-10s' },
-        { 'head': 'SMAP',               'fmt': '%-4s' }
-    )
-    podlinefmt = '  ' + ' '.join([ col['fmt'] for col in cols ])
-    podhdrline = podlinefmt % tuple([ col['head'] for col in cols ])
+    cols = ({
+        'head': 'POD NAME', 'fmt': '%-25s'
+    }, {
+        'head': 'NODE', 'fmt': '%-11s'
+    }, {
+        'head': 'POD IP', 'fmt': '%-16s'
+    }, {
+        'head': 'RESTARTS', 'fmt': '%-9s'
+    }, {
+        'head': 'PODSTATE', 'fmt': '%-9s'
+    }, {
+        'head': 'LAST STATE CHANGE', 'fmt': '%-18s'
+    }, {
+        'head': 'READY', 'fmt': '%-5s'
+    }, {
+        'head': 'DAEMONID', 'fmt': '%-10s'
+    }, {
+        'head': 'SMAP', 'fmt': '%-4s'
+    })
+    podlinefmt = '  ' + ' '.join([col['fmt'] for col in cols])
+    podhdrline = podlinefmt % tuple([col['head'] for col in cols])
 
     def print_pod_info(pod, **kwargs):
         smap = kwargs['smap']
-        config = kwargs['config']
-        stats = kwargs['stats']
+        # args_config = kwargs['config']
+        # stats = kwargs['stats']
         snode = kwargs['snode']
 
         nodename = pod.spec.node_name
@@ -366,7 +378,7 @@ def print_ais_topo(aishdl):
         now = datetime.datetime.now(pytz.utc)
 
         podstate = '-'
-        since ='-'
+        since = '-'
         try:
             statemap = pod.status.container_statuses[0].state
             for attr, attrname in statemap.attribute_map.items():
@@ -382,7 +394,7 @@ def print_ais_topo(aishdl):
                     else:
                         since = '?'
                     break
-        except TypeError:   # if statemap is not yet filled (early startup)
+        except TypeError:  # if statemap is not yet filled (early startup)
             pass
 
         if pod.status.container_statuses is not None:
@@ -408,6 +420,7 @@ def print_ais_topo(aishdl):
     aishdl.walkTargetPods(print_pod_info)
 
     print("\nLatest observed smap version summary:")
+    # pylint: disable=unsubscriptable-object
     latest = smap_info['latest']
     if latest is not None:
         print("  %-25s: %d" % ("Version", smap_info['latest_version']))
@@ -415,6 +428,7 @@ def print_ais_topo(aishdl):
         print("  %-25s: %d (%d ready)" % ("Electable proxies: ", len(latest[u'pmap']) - len(latest[u'non_electable']), ready_counts['proxy']))
         print("  %-25s: %d (%d ready)" % ("Non-electable proxies: ", len(latest[u'non_electable']), ready_counts['ne_proxy']))
         print("  %-25s: %d (%d ready)" % ("Targets: ", len(latest[u'tmap']), ready_counts['target']))
+
 
 print_ais_topo(aisk8s)
 

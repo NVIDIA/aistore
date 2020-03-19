@@ -1,0 +1,11 @@
+[style]
+
+based_on_style = google
+column_limit = 150
+blank_line_before_nested_class_or_def = False
+
+COALESCE_BRACKETS= True
+DEDENT_CLOSING_BRACKETS = True
+EACH_DICT_ENTRY_ON_SEPARATE_LINE = True
+NO_SPACES_AROUND_SELECTED_BINARY_OPERATORS = True
+SPLIT_ALL_TOP_LEVEL_COMMA_SEPARATED_VALUES = True
