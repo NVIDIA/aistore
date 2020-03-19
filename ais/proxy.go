@@ -721,7 +721,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			}
 			bmd := p.owner.bmd.get()
 			msgInt := p.newActionMsgInternal(&msg, nil, bmd)
-			p.metasyncer.sync(false, revsPair{bmd, msgInt})
+			_ = p.metasyncer.sync(revsPair{bmd, msgInt})
 		case cmn.ActSummaryBucket:
 			bck, err := newBckFromQuery("", r.URL.Query())
 			if err != nil {
@@ -1199,7 +1199,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	p.owner.bmd.put(clone)
 
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(false, revsPair{clone, msgInt})
+	_ = p.metasyncer.sync(revsPair{clone, msgInt})
 
 	p.owner.bmd.Unlock()
 }
@@ -1915,7 +1915,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 
 	if p.owner.smap.get().isPrimary(p.si) {
 		msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, nil, nil)
-		p.metasyncer.sync(false, revsPair{p.authn.revokedTokenList(), msgInt})
+		_ = p.metasyncer.sync(revsPair{p.authn.revokedTokenList(), msgInt})
 	}
 }
 
@@ -2363,7 +2363,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 		glog.Infof("%s: distributing %s as well", p.si, bmd)
 	}
 
-	p.metasyncer.sync(false, revsPair{clone, msgInt}, revsPair{bmd, msgInt})
+	_ = p.metasyncer.sync(revsPair{clone, msgInt}, revsPair{bmd, msgInt})
 	p.owner.smap.Unlock()
 	return
 }
@@ -2876,7 +2876,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if len(tokens.Tokens) > 0 {
 			pairs = append(pairs, revsPair{tokens, msgInt})
 		}
-		p.metasyncer.sync(false, pairs...)
+		_ = p.metasyncer.sync(pairs...)
 
 		p.owner.smap.Unlock()
 	}(nsi)
@@ -2949,7 +2949,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 	msgInt := p.newActionMsgInternal(msg, clone, nil)
 	p.setRebID(clone, msgInt, true)
-	p.metasyncer.sync(false, revsPair{clone, msgInt})
+	_ = p.metasyncer.sync(revsPair{clone, msgInt})
 
 	p.owner.smap.Unlock()
 }
@@ -3110,7 +3110,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		msgInt := p.newActionMsgInternal(msg, smap, nil)
 		p.setRebID(smap, msgInt, true)
 
-		p.metasyncer.sync(false, revsPair{smap, msgInt})
+		_ = p.metasyncer.sync(revsPair{smap, msgInt})
 		p.owner.smap.Unlock()
 	case cmn.ActXactStart, cmn.ActXactStop:
 		body := cmn.MustMarshal(msg)
@@ -3253,7 +3253,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	p.owner.bmd.put(rbmd)
 
 	msgInt := p.newActionMsgInternal(msg, nil, rbmd)
-	p.metasyncer.sync(false, revsPair{rbmd, msgInt})
+	_ = p.metasyncer.sync(revsPair{rbmd, msgInt})
 
 	p.owner.bmd.Unlock()
 }

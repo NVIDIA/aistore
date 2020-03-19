@@ -74,11 +74,12 @@ const (
 // number of parameters. Example sync-ing Smap and BMD
 // asynchronously:
 //
-// metasyncer.sync(false, smapOwner.get(), action1, owner.bmd.get(), action2)
+// metasyncer.sync(smapOwner.get(), action1, owner.bmd.get(), action2)
 //
 // To block until all the replicas get delivered:
 //
-// metasyncer.sync(true, ...)
+// wg = metasyncer.sync(...)
+// wg.Wait()
 //
 // On the receiving side, the payload (see above) gets extracted, validated,
 // version-compared, and the corresponding Rx handler gets invoked
@@ -197,13 +198,11 @@ func (y *metasyncer) Stop(err error) {
 }
 
 //
-// methods (notify, sync, becomeNonPrimary) consistute internal API
+// methods (notify, sync, becomeNonPrimary) constistute internal API
 //
 
 func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
-	if !y.checkPrimary() {
-		return
-	}
+	cmn.Assert(y.isPrimary()) // caller must check before
 	var (
 		failedCntAtomic = atomic.NewInt32(0)
 		req             = revsReq{pairs: []revsPair{pair}}
@@ -223,22 +222,17 @@ func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 	return
 }
 
-func (y *metasyncer) sync(wait bool, pairs ...revsPair) {
-	if !y.checkPrimary() {
-		return
-	}
+func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
+	cmn.Assert(y.isPrimary()) // caller must ensure
 	cmn.Assert(len(pairs) > 0)
-	req := revsReq{pairs: pairs}
-	if wait {
-		req.wg = &sync.WaitGroup{}
-		req.wg.Add(1)
-		req.reqType = revsReqSync
-	}
+	var (
+		req = revsReq{pairs: pairs}
+	)
+	req.wg = &sync.WaitGroup{}
+	req.wg.Add(1)
+	req.reqType = revsReqSync
 	y.workCh <- req
-
-	if wait {
-		req.wg.Wait()
-	}
+	return req.wg
 }
 
 // become non-primary (to serialize cleanup of the internal state and stop the timer)
@@ -517,7 +511,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 	return
 }
 
-func (y *metasyncer) checkPrimary() bool {
+func (y *metasyncer) isPrimary() bool {
 	smap := y.p.owner.smap.get()
 	cmn.Assert(smap != nil)
 	if smap.isPrimary(y.p.si) {
@@ -531,7 +525,7 @@ func (y *metasyncer) checkPrimary() bool {
 	if smap.ProxySI != nil {
 		lead = smap.ProxySI.ID()
 	}
-	glog.Errorf("%s self is not %s (primary=%s, %s) - failing the 'sync' request", y.p.si, reason, lead, smap)
+	glog.Errorf("%s is not %s (primary=%s, %s)", y.p.si, reason, lead, smap)
 	return false
 }
 

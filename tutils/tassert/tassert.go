@@ -47,7 +47,7 @@ func SelectErr(t *testing.T, errCh chan error, verb string, errIsFatal bool) {
 		if num > 1 {
 			f("Failed to %s %d objects, e.g. error:\n%v", verb, num, err)
 		} else {
-			f("Failed to %d object: %v", verb, err)
+			f("Failed to %s object: %v", verb, err)
 		}
 	}
 }

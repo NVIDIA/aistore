@@ -88,8 +88,10 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	// 5. metasync updated BMD & unlock BMD
 	c.msgInt.BMDVersion = clone.version()
-	p.metasyncer.sync(false, revsPair{clone, c.msgInt})
+	wg := p.metasyncer.sync(revsPair{clone, c.msgInt})
 	p.owner.bmd.Unlock()
+
+	wg.Wait() // to synchronize prior to committing
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -101,7 +103,6 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 			return res.err
 		}
 	}
-	time.Sleep(time.Second) // TODO: remove, sync vs "does not appear"
 	return nil
 }
 
@@ -126,8 +127,10 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	p.owner.bmd.put(clone)
 
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(false, revsPair{clone, msgInt})
+	wg := p.metasyncer.sync(revsPair{clone, msgInt})
 	p.owner.bmd.Unlock()
+
+	wg.Wait()
 	return nil
 }
 
@@ -179,8 +182,10 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 
 	// 5. metasync updated BMD; unlock BMD
 	c.msgInt.BMDVersion = clone.version()
-	p.metasyncer.sync(false, revsPair{clone, c.msgInt})
+	wg := p.metasyncer.sync(revsPair{clone, c.msgInt})
 	p.owner.bmd.Unlock()
+
+	wg.Wait()
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -253,8 +258,10 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, props
 
 	// 5. metasync updated BMD; unlock BMD
 	c.msgInt.BMDVersion = clone.version()
-	p.metasyncer.sync(false, revsPair{clone, c.msgInt})
+	wg := p.metasyncer.sync(revsPair{clone, c.msgInt})
 	p.owner.bmd.Unlock()
+
+	wg.Wait()
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -338,8 +345,10 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	// 5. metasync updated BMD; unlock BMD
 
 	c.msgInt.BMDVersion = clone.version()
-	p.metasyncer.sync(false, revsPair{clone, c.msgInt})
+	wg := p.metasyncer.sync(revsPair{clone, c.msgInt})
 	p.owner.bmd.Unlock()
+
+	wg.Wait()
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -413,9 +422,10 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 
 	// Distribute temporary bucket
 	msgInt := p.newActionMsgInternal(msg, smap, clone)
-	p.metasyncer.sync(false, revsPair{clone, msgInt})
-
+	wg := p.metasyncer.sync(revsPair{clone, msgInt})
 	p.owner.bmd.Unlock()
+
+	wg.Wait()
 
 	errHandler := func() {
 		p.owner.bmd.Lock()
@@ -425,7 +435,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		p.owner.bmd.put(clone)
 
 		msgInt := p.newActionMsgInternal(msg, smap, clone)
-		p.metasyncer.sync(false, revsPair{clone, msgInt})
+		_ = p.metasyncer.sync(revsPair{clone, msgInt})
 		p.owner.bmd.Unlock()
 	}
 
@@ -479,8 +489,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 
 	// Finalize
 	msgInt = p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(false, revsPair{clone, msgInt})
-
+	_ = p.metasyncer.sync(revsPair{clone, msgInt})
 	p.owner.bmd.Unlock()
 	return
 }
@@ -525,7 +534,7 @@ func (p *proxyrunner) undoCreateBucket(msg *cmn.ActionMsg, bck *cluster.Bck) {
 	p.owner.bmd.put(clone)
 
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(false, revsPair{clone, msgInt})
+	_ = p.metasyncer.sync(revsPair{clone, msgInt})
 
 	p.owner.bmd.Unlock()
 }
@@ -546,7 +555,7 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, cop
 	p.owner.bmd.put(clone)
 
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(false, revsPair{clone, msgInt})
+	_ = p.metasyncer.sync(revsPair{clone, msgInt})
 
 	p.owner.bmd.Unlock()
 }

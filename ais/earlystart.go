@@ -208,7 +208,8 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		glog.Infof("%s: initial %s, curr %s, added=%d", p.si, loadedSmap, smap.StringEx(), added)
 		bmd := p.owner.bmd.get()
 		msgInt := p.newActionMsgInternalStr(metaction1, smap, bmd)
-		p.metasyncer.sync(true, revsPair{smap, msgInt}, revsPair{bmd, msgInt})
+		wg := p.metasyncer.sync(revsPair{smap, msgInt}, revsPair{bmd, msgInt})
+		wg.Wait()
 	} else {
 		glog.Infof("%s: no registrations yet", p.si)
 		if loadedSmap != nil {
@@ -265,7 +266,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		glog.Infof("rebalance did not finish, restarting...")
 		msgInt.Action = cmn.ActRebalance
 	}
-	p.metasyncer.sync(false, revsPair{smap, msgInt}, revsPair{bmd, msgInt})
+	_ = p.metasyncer.sync(revsPair{smap, msgInt}, revsPair{bmd, msgInt})
 
 	// 6: started up as primary
 	glog.Infof("%s: primary/cluster startup complete, %s", p.si, smap.StringEx())
