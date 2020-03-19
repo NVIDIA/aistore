@@ -21,6 +21,7 @@ type IterField interface {
 }
 
 type field struct {
+	name    string
 	v       reflect.Value
 	listTag string
 	dirty   bool // Determines if the value for the field was set by `SetValue`.
@@ -33,7 +34,7 @@ func (f *field) Value() interface{} {
 func (f *field) SetValue(src interface{}, force ...bool) error {
 	dst := f.v
 	if f.listTag == "readonly" && (len(force) == 0 || !force[0]) {
-		return fmt.Errorf("cannot set value which is readonly: %v", dst)
+		return fmt.Errorf("property %q is readonly", f.name)
 	}
 
 	if !dst.CanSet() {
@@ -138,8 +139,9 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 		var dirtyField bool
 		if srcValField.Kind() != reflect.Struct {
 			// Set value for the field
-			field := &field{v: srcValField, listTag: listTag}
-			err, stop = f(prefix+fieldName, field)
+			name := prefix + fieldName
+			field := &field{name: name, v: srcValField, listTag: listTag}
+			err, stop = f(name, field)
 			dirtyField = field.dirty
 		} else {
 			// Recurse into struct
@@ -198,7 +200,7 @@ func UpdateFieldValue(s interface{}, name string, value interface{}) error {
 		return err
 	}
 	if !found {
-		return fmt.Errorf("unknown field %q", name)
+		return fmt.Errorf("unknown property %q", name)
 	}
 	return nil
 }

@@ -3,7 +3,8 @@ ais set props $BUCKET_1 'mirror.enabled=true' 'mirror.copies=2'
 ais set props $BUCKET_1 'access=ro'
 
 ais set props $BUCKET_1 'unknown.field' // FAIL "no value for"
-ais set props $BUCKET_1 'unknown.field=true' // FAIL "unknown field "unknown.field""
+ais set props $BUCKET_1 'unknown.field=true' // FAIL "unknown property "unknown.field""
+ais set props $BUCKET_1 'provider=ais' // FAIL "property "provider" is readonly"
 
 ais show props $BUCKET_1
 ais set props --reset $BUCKET_1

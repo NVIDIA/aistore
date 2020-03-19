@@ -483,6 +483,14 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val
 
+		// HACK: Some of the fields are present in `BucketProps` and not in
+		// `BucketPropsToUpdate`. Therefore if a user would like to change such field,
+		// `unknown field` would be returned in response. To make UX more pleasant we try
+		// to set the value first in `BucketProps` which should report `readonly` in such case.
+		if err := UpdateFieldValue(&BucketProps{}, name, value); err != nil {
+			return props, err
+		}
+
 		if err := UpdateFieldValue(&props, name, value); err != nil {
 			return props, err
 		}
