@@ -131,14 +131,14 @@ class TestBucketApi(unittest.TestCase):
             enable_read_range=False,
         )
         input_params.value = self.models.BucketProps(
-            self.models.CloudProvider.AIS,
+            self.models.Provider.AIS,
             cksum_conf,
         )
         self.bucket.set_properties(bucket_name, input_params)
 
         headers = self.bucket.get_properties_with_http_info(bucket_name)[2]
-        cloud_provider = headers[self.models.Headers.CLOUD_PROVIDER]
-        self.assertEqual(cloud_provider, self.models.CloudProvider.AIS, "Incorrect CloudProvider in HEADER returned")
+        provider = headers[self.models.Headers.PROVIDER]
+        self.assertEqual(provider, self.models.Provider.AIS, "Incorrect Provider in HEADER returned")
         versioning = headers[self.models.Headers.VERSIONING]
         self.assertEqual(versioning, self.models.Version.LOCAL, "Incorrect Versioning in HEADER returned")
 

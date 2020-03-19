@@ -38,14 +38,18 @@ func InitProxy() {
 }
 
 func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck {
-	var props *cmn.BucketProps
+	var (
+		props *cmn.BucketProps
+		bck   = cmn.Bck{Name: name, Provider: provider, Ns: ns}
+	)
+
 	if len(optProps) > 0 {
 		props = optProps[0]
 	}
 	if !cmn.IsValidProvider(provider) {
 		cmn.Assert(provider == "" || provider == cmn.Cloud)
 	}
-	b := &Bck{Bck: cmn.Bck{Name: name, Provider: provider, Ns: ns}, Props: props}
+	b := &Bck{Bck: bck, Props: props}
 	return b
 }
 

@@ -459,7 +459,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}
 	versionEnabled := props.Versioning.Enabled
-	bckIsAIS := props.CloudProvider == cmn.ProviderAIS
+	bckIsAIS := props.Provider == cmn.ProviderAIS
 	propsTestCore(t, versionEnabled, bckIsAIS)
 }
 

@@ -102,7 +102,7 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 	}
 	m.Version++
 	p.BID = bck.MaskBID(m.Version)
-	p.CloudProvider = bck.Provider
+	p.Provider = bck.Provider
 	bck.Props = p
 
 	m.Add(bck)
@@ -127,8 +127,8 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 	}
 	cmn.Assert(prevProps.BID != 0)
 
-	p.CloudProvider = bck.Provider
 	p.BID = prevProps.BID
+	p.Provider = bck.Provider
 	m.Set(bck, p)
 	m.Version++
 }

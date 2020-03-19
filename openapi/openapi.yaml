@@ -184,7 +184,7 @@ paths:
         '200':
           description: Properties of the object at the location bucket-name/object-name
           headers:
-            CloudProvider:
+            Provider:
               schema:
                 type: string
             Size:
@@ -329,7 +329,7 @@ paths:
         '200':
           description: Properties of bucket-name
           headers:
-            CloudProvider:
+            Provider:
               schema:
                 type: string
             Versioning:
@@ -1289,12 +1289,12 @@ components:
     TimeFormat:
       type: string
       enum: [ANSIC, UnixDate, RubyDate, RFC822, RFC822Z, RFC850, RFC1123, RFC1123Z, RFC3339, RFC3339Nano, Kitchen, Stamp, StampMilli, StampMicro, StampNano]
-    CloudProvider:
+    Provider:
       type: string
       enum: [ais, aws, gcp]
     Headers:
       type: string
-      enum: [cloud_provider, Versioning, ObjVersion, ObjSize, ObjCksumType, ObjCksumVal]
+      enum: [Provider, Versioning, ObjVersion, ObjSize, ObjCksumType, ObjCksumVal]
     RWPolicy:
       type: string
       enum: [cloud]

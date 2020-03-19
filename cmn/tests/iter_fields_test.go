@@ -33,7 +33,7 @@ var _ = Describe("IterFields", func() {
 			},
 			Entry("list BucketProps fields",
 				cmn.BucketProps{
-					CloudProvider: cmn.ProviderAIS,
+					Provider: cmn.ProviderAIS,
 					EC: cmn.ECConf{
 						Enabled:      true,
 						ParitySlices: 1024,

@@ -153,7 +153,7 @@ class TestObjectApi(unittest.TestCase):
         object_name, _ = self.__put_random_object(self.BUCKET_NAME)
         log.info("HEAD cloud object [%s/%s]", self.BUCKET_NAME, object_name)
         headers = self.object.get_properties_with_http_info(self.BUCKET_NAME, object_name)[2]
-        self.assertTrue(self.models.Headers.CLOUD_PROVIDER in headers, "CLOUD_PROVIDER not in header for [%s/%s]" % (self.BUCKET_NAME, object_name))
+        self.assertTrue(self.models.Headers.PROVIDER in headers, "PROVIDER not in header for [%s/%s]" % (self.BUCKET_NAME, object_name))
 
     def test_get_local_object_properties(self):
         """

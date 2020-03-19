@@ -175,7 +175,6 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bmd := newBucketMD()
 	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
-		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
@@ -186,7 +185,6 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 		},
 	})
 	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
-		CloudProvider: cmn.ProviderAmazon,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
@@ -608,13 +606,11 @@ func TestMetaSyncData(t *testing.T) {
 
 	// sync bucketmd, fail target and retry
 	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
-		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
 	bmd.add(cluster.NewBck("bucket2", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
-		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},

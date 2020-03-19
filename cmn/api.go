@@ -219,10 +219,9 @@ func MakeAccess(aattr uint64, action string, bits uint64) uint64 {
 //
 // nolint:maligned // no performance critical code
 type BucketProps struct {
-	// CloudProvider can be "aws", "gcp" (clouds) - or "ais".
-	// If a bucket is local, CloudProvider must be "ais".
-	// Otherwise, it must be "aws" or "gcp".
-	CloudProvider string `json:"provider" list:"readonly"`
+	// Provider of the bucket. The value contains explicit provider
+	// meaning that `` or `cloud` values are forbidden.
+	Provider string `json:"provider" list:"readonly"`
 
 	// Versioning can be enabled or disabled on a per-bucket basis
 	Versioning VersionConf `json:"versioning"`
@@ -446,8 +445,8 @@ func (p1 *BucketProps) Equal(p2 *BucketProps) bool {
 }
 
 func (bp *BucketProps) Validate(targetCnt int) error {
-	if !IsValidProvider(bp.CloudProvider) {
-		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.CloudProvider, ListProviders())
+	if !IsValidProvider(bp.Provider) {
+		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.Provider, ListProviders())
 	}
 	validationArgs := &ValidationArgs{TargetCnt: targetCnt}
 	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC}

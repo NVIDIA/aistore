@@ -30,14 +30,14 @@ var _ = Describe("API", func() {
 			),
 			Entry("non-nested field and non-empty initial struct",
 				cmn.BucketProps{
-					CloudProvider: cmn.ProviderAmazon,
+					Provider: cmn.ProviderAmazon,
 				},
 				cmn.BucketPropsToUpdate{
 					AccessAttrs: api.Uint64(1024),
 				},
 				cmn.BucketProps{
-					CloudProvider: cmn.ProviderAmazon,
-					AccessAttrs:   1024,
+					Provider:    cmn.ProviderAmazon,
+					AccessAttrs: 1024,
 				},
 			),
 			Entry("nested field",
@@ -81,7 +81,7 @@ var _ = Describe("API", func() {
 			),
 			Entry("multiple nested fields and non-empty initial struct",
 				cmn.BucketProps{
-					CloudProvider: cmn.ProviderAmazon,
+					Provider: cmn.ProviderAmazon,
 					Cksum: cmn.CksumConf{
 						ValidateColdGet: true,
 						ValidateWarmGet: false,
@@ -103,7 +103,7 @@ var _ = Describe("API", func() {
 					AccessAttrs: api.Uint64(10),
 				},
 				cmn.BucketProps{
-					CloudProvider: cmn.ProviderAmazon,
+					Provider: cmn.ProviderAmazon,
 					Cksum: cmn.CksumConf{
 						Type:            "value",
 						ValidateColdGet: true,

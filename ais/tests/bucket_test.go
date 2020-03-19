@@ -1527,12 +1527,12 @@ func TestCopyBucket(t *testing.T) {
 				dstProps, err := api.HeadBucket(baseParams, dstm.bck)
 				tassert.CheckFatal(t, err)
 
-				if dstProps.CloudProvider != cmn.ProviderAIS {
-					t.Fatalf("destination bucket does not seem to be 'ais': %s", dstProps.CloudProvider)
+				if dstProps.Provider != cmn.ProviderAIS {
+					t.Fatalf("destination bucket does not seem to be 'ais': %s", dstProps.Provider)
 				}
 				// Clear providers to make sure that they will fail on different providers.
-				srcProps.CloudProvider = ""
-				dstProps.CloudProvider = ""
+				srcProps.Provider = ""
+				dstProps.Provider = ""
 
 				// If bucket existed before, we need to ensure that the bucket
 				// props were **not** copied over.

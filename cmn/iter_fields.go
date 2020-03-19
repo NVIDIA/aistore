@@ -112,9 +112,7 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 			continue
 		}
 
-		jsonTag, ok := srcTyField.Tag.Lookup("json")
-		// We require that not-omitted fields have json tag.
-		Assert(ok)
+		jsonTag, jsonTagPresent := srcTyField.Tag.Lookup("json")
 		fieldName := strings.Split(jsonTag, ",")[0]
 		if fieldName == "-" {
 			continue
@@ -138,6 +136,9 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 
 		var dirtyField bool
 		if srcValField.Kind() != reflect.Struct {
+			// We require that not-omitted fields have JSON tag.
+			Assert(jsonTagPresent)
+
 			// Set value for the field
 			name := prefix + fieldName
 			field := &field{name: name, v: srcValField, listTag: listTag}
@@ -151,7 +152,13 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 				srcValField = srcValField.Addr()
 			}
 
-			dirtyField, err, stop = iterFields(prefix+fieldName+".", srcValField.Interface(), f)
+			p := prefix
+			if fieldName != "" {
+				// If struct has JSON tag, we want to include it.
+				p += fieldName + "."
+			}
+
+			dirtyField, err, stop = iterFields(p, srcValField.Interface(), f)
 			if allocatedStruct && !dirtyField {
 				// If we initialized new struct but no field inside
 				// it was set we must set the value of the field to
