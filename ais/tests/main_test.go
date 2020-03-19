@@ -625,7 +625,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		dataLocal  = []byte("im local")
 		dataCloud  = []byte("I'm from the cloud!")
-		msg        = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
+		msg        = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status", Prefix: "my"}
 		found      = false
 	)
 
@@ -657,7 +657,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	resLocal, err := api.ListBucket(baseParams, bckLocal, msg, 0)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckLocal)
+	tutils.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckCloud)
 	putArgs = api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        bckCloud,

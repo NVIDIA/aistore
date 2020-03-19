@@ -7,7 +7,7 @@ package xaction
 import (
 	"context"
 	"errors"
-	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -64,7 +64,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 
 	if delFromCloud {
 		if err, _ := r.t.Cloud().DeleteObj(args.Ctx, lom); err != nil {
-			cloudErr = fmt.Errorf("%s: DELETE failed, err: %v", lom, err)
+			cloudErr = err
 		}
 	}
 	if delFromAIS {
@@ -81,10 +81,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 			cmn.Assert(lom.Bck().IsCloud())
 		}
 	}
-	if cloudErr != nil {
-		return fmt.Errorf("%s: failed to delete from cloud: %v", lom, cloudErr)
-	}
-	return nil
+	return cloudErr
 }
 
 func (r *EvictDelete) doObjEvictDelete(args *DeletePrefetchArgs, objName string) error {
@@ -96,7 +93,11 @@ func (r *EvictDelete) doObjEvictDelete(args *DeletePrefetchArgs, objName string)
 	}
 	err = r.objDelete(args, lom)
 	if err != nil {
-		if args.Evict && cmn.IsObjNotExist(err) {
+		if cmn.IsObjNotExist(err) {
+			return nil
+		}
+		httpErr, ok := err.(*cmn.HTTPError)
+		if ok && httpErr.Status == http.StatusNotFound {
 			return nil
 		}
 		return err

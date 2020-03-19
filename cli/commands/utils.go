@@ -47,6 +47,7 @@ const (
 	defaultScheme = "https"
 	gsScheme      = "gs"
 	s3Scheme      = "s3"
+	azScheme      = "az"
 	aisScheme     = "ais"
 	gsHost        = "storage.googleapis.com"
 	s3Host        = "s3.amazonaws.com"
@@ -496,6 +497,9 @@ func parseBckProvider(provider string) string {
 	}
 	if provider == s3Scheme {
 		return cmn.ProviderAmazon
+	}
+	if provider == azScheme {
+		return cmn.ProviderAzure
 	}
 	return provider
 }

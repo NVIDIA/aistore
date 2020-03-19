@@ -671,7 +671,7 @@ func (c *CloudConf) Validate(_ *Config) (err error) {
 			c.Supported = true
 
 			conf = aisConf
-		case ProviderAmazon, ProviderGoogle:
+		case ProviderAmazon, ProviderGoogle, ProviderAzure:
 			c.Supported = true
 			c.Ns = NsGlobal
 		default:

@@ -95,7 +95,7 @@ func TestCloudBucketObject(t *testing.T) {
 				} else if errAsHTTPError, ok := err.(*cmn.HTTPError); !ok {
 					t.Errorf("invalid error returned")
 				} else if errAsHTTPError.Status != http.StatusNotFound {
-					t.Errorf("returned status is incorrect")
+					t.Errorf("returned status %d is incorrect", errAsHTTPError.Status)
 				}
 			} else {
 				if err != nil {

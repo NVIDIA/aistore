@@ -171,8 +171,8 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		workFQN         = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
 	)
 	if err, errCode = t.cloud.getObj(ct, workFQN, lom); err != nil {
-		err = fmt.Errorf("%s: GET failed, err: %v", lom, err)
 		lom.Unlock(true)
+		err = fmt.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
 		return
 	}
 	defer func() {

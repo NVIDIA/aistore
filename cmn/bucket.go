@@ -16,6 +16,7 @@ const (
 	ProviderAmazon = "aws"
 	ProviderGoogle = "gcp"
 	ProviderAIS    = "ais"
+	ProviderAzure  = "azure"
 
 	nsSeparator = '#'
 
@@ -53,6 +54,7 @@ var (
 		ProviderAIS:    {},
 		ProviderGoogle: {},
 		ProviderAmazon: {},
+		ProviderAzure:  {},
 	}
 )
 

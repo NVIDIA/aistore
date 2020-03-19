@@ -234,6 +234,8 @@ func (t *targetrunner) Run() error {
 			t.cloud, err = newAWSProvider(t)
 		case cmn.ProviderGoogle:
 			t.cloud, err = newGCPProvider(t)
+		case cmn.ProviderAzure:
+			t.cloud, err = newAzureProvider(t)
 		default:
 			cmn.AssertMsg(false, fmt.Sprintf("unsupported cloud provider: %s", config.Cloud.Provider))
 		}
