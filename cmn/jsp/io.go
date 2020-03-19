@@ -109,7 +109,7 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 		}
 		l := len(signature)
 		if signature != string(prefix[:l]) {
-			return fmt.Errorf("bad signature %q: %v", tag, prefix[:l])
+			return fmt.Errorf("bad signature %q: %v", tag, string(prefix[:l]))
 		}
 		if version != prefix[l] {
 			return fmt.Errorf("unsupported version %q: %v", tag, prefix[l])

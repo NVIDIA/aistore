@@ -325,7 +325,7 @@ outer:
 		y.lastClone[tag] = revsBody
 		msgJSON := cmn.MustMarshal(msgInt)
 
-		if revs.tag() == revsRMDTag {
+		if tag == revsRMDTag {
 			md := revs.(*rebMD)
 			newTargetIDs = md.TargetIDs
 		}
@@ -340,11 +340,7 @@ outer:
 		body    = jsp.EncodeBuf(payload, jsp.CCSign())
 	)
 	res := y.p.bcastTo(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: method,
-			Path:   urlPath,
-			Body:   body,
-		},
+		req:     cmn.ReqArgs{Method: method, Path: urlPath, Body: body},
 		smap:    smap,
 		timeout: config.Timeout.CplaneOperation * 2, // making exception for this critical op
 		to:      cluster.AllNodes,
@@ -407,18 +403,14 @@ func (y *metasyncer) syncDone(sid string, pairs []revsPair) {
 	}
 }
 
-func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused cluster.NodeMap, pairs []revsPair, config *cmn.Config) {
+func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused cluster.NodeMap, pairs []revsPair,
+	config *cmn.Config) {
 	res := y.p.bcast(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: method,
-			Path:   urlPath,
-			Body:   body,
-		},
+		req:     cmn.ReqArgs{Method: method, Path: urlPath, Body: body},
 		network: cmn.NetworkIntraControl,
-		timeout: config.Timeout.MaxKeepalive, // JSON config "max_keepalive"
+		timeout: config.Timeout.MaxKeepalive, // config "max_keepalive"
 		nodes:   []cluster.NodeMap{refused},
 	})
-
 	for r := range res {
 		if r.err == nil {
 			delete(refused, r.si.ID())
@@ -473,30 +465,30 @@ func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap, 
 }
 
 // gets invoked when retryTimer fires; returns updated number of still pending
+// using MethodPut since revsReqType here is always revsReqSync
 func (y *metasyncer) handlePending() (cnt int) {
 	count, pending, smap := y.pending(true)
 	if count == 0 {
 		glog.Infof("no pending revs - all good")
 		return
 	}
-
-	payload := make(msPayload, 2*len(y.lastSynced))
-	pairs := make([]revsPair, 0, len(y.lastSynced))
-	msgInt := y.p.newActionMsgInternalStr("metasync: handle-pending", smap, nil) // the same action msg for all
-	msgBody := cmn.MustMarshal(msgInt)
+	var (
+		payload = make(msPayload, 2*len(y.lastSynced))
+		pairs   = make([]revsPair, 0, len(y.lastSynced))
+		msgInt  = y.p.newActionMsgInternalStr("metasync: handle-pending", smap, nil) // NOTE: same msg for all revs
+		msgBody = cmn.MustMarshal(msgInt)
+	)
 	for tag, revs := range y.lastSynced {
 		payload[tag] = revs.marshal()
 		payload[tag+revsActionTag] = msgBody
 		pairs = append(pairs, revsPair{revs, msgInt})
 	}
-
-	body := cmn.MustMarshal(payload)
+	var (
+		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)
+		body    = jsp.EncodeBuf(payload, jsp.CCSign())
+	)
 	res := y.p.bcast(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodPut,
-			Path:   cmn.URLPath(cmn.Version, cmn.Metasync),
-			Body:   body,
-		},
+		req:     cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Body: body},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 		nodes:   []cluster.NodeMap{pending},
