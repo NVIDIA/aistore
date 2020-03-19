@@ -29,8 +29,8 @@ type (
 		timeout() time.Duration
 		String() string
 		fired() (err error)
-		fire(err error) // fires only once
-		callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{})
+		fire(err error) error
+		callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) (bool, error)
 	}
 	transactions struct {
 		sync.Mutex
@@ -115,15 +115,16 @@ func (txns *transactions) find(uuid string, remove bool) (txn txn, err error) {
 	return
 }
 
-func (txns *transactions) callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) {
+func (txns *transactions) callback(caller string, msgInt *actionMsgInternal, err error,
+	args ...interface{}) (found bool, errFired error) {
 	txns.Lock()
 	for _, txn := range txns.m {
-		if err := txn.fired(); err != errNil {
-			continue // only once
+		if found, errFired = txn.callback(caller, msgInt, err, args...); found {
+			break // only one
 		}
-		txn.callback(caller, msgInt, err, args...)
 	}
 	txns.Unlock()
+	return
 }
 
 // given txn, wait for its completion, handle timeout, and ultimately remove
@@ -194,10 +195,14 @@ func (txn *txnBase) fired() (err error) {
 	return
 }
 
-func (txn *txnBase) fire(err error) {
+func (txn *txnBase) fire(err error) error {
 	txn.Lock()
+	defer txn.Unlock()
+	if txn.err != errNil {
+		return fmt.Errorf("%s: misfired", txn)
+	}
 	txn.err = err
-	txn.Unlock()
+	return nil
 }
 
 func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
@@ -225,16 +230,17 @@ func (txn *txnBckBase) String() string {
 		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.initiator, tm, fired, txn.bck.Name)
 }
 
-func (txn *txnBckBase) callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) {
+func (txn *txnBckBase) callback(caller string, msgInt *actionMsgInternal, err error,
+	args ...interface{}) (found bool, errFired error) {
 	if txn.initiator != caller || msgInt.TxnID != txn.uuid() {
 		return
 	}
 	bmd, _ := args[0].(*bucketMD)
 	cmn.Assert(bmd.version() > txn.bmdVer)
-	txn.fire(err)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: callback fired (BMD v%d, err %v)", txn, bmd.version(), err)
-	}
+
+	errFired = txn.fire(err)
+	found = true
+	return
 }
 
 /////////////////////

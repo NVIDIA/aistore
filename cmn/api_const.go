@@ -193,7 +193,6 @@ const (
 	URLParamDescription = "description"
 
 	// cp transactions
-	URLParamTxnID      = "tnd" // transaction ID
 	URLParamTxnTimeout = "tno" // transaction timeout
 )
 

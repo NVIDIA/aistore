@@ -59,8 +59,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// 3. do
 	switch msgInt.Action {
-	case cmn.ActCreateLB:
-	case cmn.ActRegisterCB:
+	case cmn.ActCreateLB, cmn.ActRegisterCB:
 		if err = t.createBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
@@ -359,7 +358,7 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msgInt *actionMsgInternal,
 	if c.bck, err = newBckFromQuery(bucket, query); err != nil {
 		return c, err
 	}
-	c.uuid = query.Get(cmn.URLParamTxnID)
+	c.uuid = c.msgInt.TxnID
 	if c.uuid == "" {
 		return c, nil
 	}

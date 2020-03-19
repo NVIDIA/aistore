@@ -707,7 +707,23 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 
 func (t *targetrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
 	err = t._recvBMD(newBMD, msgInt, tag, caller)
-	t.transactions.callback(caller, msgInt, err, newBMD)
+	if msgInt.TxnID == "" {
+		return
+	}
+	found, errFired := t.transactions.callback(caller, msgInt, err, newBMD)
+	if !found {
+		timeout := cmn.GCO.Get().Timeout.CplaneOperation * 2
+		sleep := timeout / 10
+		for i := sleep; i < timeout && !found; i += sleep {
+			time.Sleep(sleep)
+			found, err = t.transactions.callback(caller, msgInt, err, newBMD)
+		}
+	}
+	if !found {
+		glog.Errorf("%s: timed-out waiting to fire Txn[%s]", t.si, msgInt.TxnID)
+	} else if errFired != nil {
+		glog.Errorf("%s: err %v", t.si, errFired)
+	}
 	return
 }
 func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {

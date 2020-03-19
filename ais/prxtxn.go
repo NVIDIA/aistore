@@ -63,14 +63,12 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		p.owner.bmd.Unlock()
 		return cmn.NewErrorBucketAlreadyExists(bck.Bck, p.si.String())
 	}
-
-	// 2. prep context, lock bucket and unlock BMD (in that order)
-	var (
-		c = p.prepTxnClient(msg, bck)
-	)
 	p.owner.bmd.Unlock()
 
 	// 3. begin
+	var (
+		c = p.prepTxnClient(msg, bck)
+	)
 	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
 		if res.err != nil {
@@ -504,12 +502,12 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 	c.body = cmn.MustMarshal(c.msgInt)
 
 	c.path = cmn.URLPath(cmn.Version, cmn.Txn, bck.Name)
-	c.query = make(url.Values)
 	if bck != nil {
-		_ = cmn.AddBckToQuery(c.query, bck.Bck)
+		c.query = cmn.AddBckToQuery(nil, bck.Bck)
+	} else {
+		c.query = make(url.Values)
 	}
-	c.query.Set(cmn.URLParamTxnID, c.uuid)
-	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive // TODO: reduce with caution
+	c.timeout = cmn.GCO.Get().Timeout.CplaneOperation
 	c.query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 
 	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: c.query, Body: c.body}
