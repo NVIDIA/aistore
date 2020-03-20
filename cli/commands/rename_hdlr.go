@@ -59,8 +59,8 @@ func renameBucketHandler(c *cli.Context) error {
 		return err
 	}
 
-	if cmn.IsProviderCloud(bck, true) || cmn.IsProviderCloud(newBck, true) {
-		return fmt.Errorf("renaming of cloud buckets not supported")
+	if err := validateLocalBuckets([]cmn.Bck{bck, newBck}, "renaming"); err != nil {
+		return err
 	}
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)

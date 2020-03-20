@@ -6,4 +6,4 @@ ais create bucket $BUCKET_2/ # should ignore slash
 ais create bucket $BUCKET_2
 ais rm bucket $BUCKET_2/ # should ignore slash
 ais create bucket ais://$BUCKET_3
-ais create bucket cloud://$BUCKET_3 // FAIL "Cloud buckets not allowed"
+ais create bucket cloud://$BUCKET_3 // FAIL "Creating cloud buckets (cloud://$BUCKET_3) is not supported"

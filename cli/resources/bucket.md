@@ -22,7 +22,7 @@ bucket_name2 bucket created
 
 ```console
 $ ais create bucket cloud://bucket_name
-Cloud buckets not allowed (cloud://bucket_name).
+Creating cloud buckets (cloud://bucket_name) is not supported
 ```
 
 ## Delete bucket
@@ -49,7 +49,7 @@ Removing cloud buckets is not supported.
 
 ```console
 $ ais rm bucket cloud://bucket_name
-Cloud buckets not allowed (cloud://bucket_name).
+Removing cloud buckets (cloud://bucket_name) is not supported
 ```
 
 ## List bucket names
@@ -170,7 +170,7 @@ Rename local bucket `bucket_name` to local bucket `new_bucket_name`.
 
 ```console
 $ ais rename bucket ais://bucket_name new_bucket_name
-Renaming bucket bucket_name to new_bucket_name in progress.
+Renaming bucket "bucket_name" to "new_bucket_name" in progress.
 To check the status, run: ais show xaction renamelb bucket_name
 ```
 
@@ -179,8 +179,10 @@ To check the status, run: ais show xaction renamelb bucket_name
 Renaming cloud buckets is not supported.
 
 ```console
-$ ais rename bucket cloud://bucket_name cloud://new_bucket_name
-Renaming of cloud buckets not supported
+$ ais rename bucket cloud://bucket_name new_bucket_name
+Renaming cloud buckets (cloud://bucket_name) not supported
+$ ais rename bucket bucket_name cloud://new_bucket_name
+Renaming cloud buckets (cloud://new_bucket_name) not supported
 ```
 
 ## Copy bucket

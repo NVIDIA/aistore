@@ -37,7 +37,7 @@ func createBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if err := validateOnlyLocalBuckets(buckets); err != nil {
+	if err := validateLocalBuckets(buckets, "creating"); err != nil {
 		return err
 	}
 	return createBuckets(c, buckets)

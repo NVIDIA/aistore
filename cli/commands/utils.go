@@ -510,7 +510,7 @@ func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 		objName = providerSplit[1]
 	}
 	bck.Provider = parseBckProvider(bucketProvider(bck.Provider))
-	if !cmn.IsValidProvider(bck.Provider) && bck.Provider != cmn.Cloud && bck.Provider != "" {
+	if bck.Provider != "" && !cmn.IsValidProvider(bck.Provider) && bck.Provider != cmn.Cloud {
 		return bck, "", fmt.Errorf("invalid bucket provider %q", bck.Provider)
 	}
 
@@ -523,10 +523,10 @@ func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 	return
 }
 
-func validateOnlyLocalBuckets(buckets []cmn.Bck) error {
+func validateLocalBuckets(buckets []cmn.Bck, operation string) error {
 	for _, bck := range buckets {
 		if cmn.IsProviderCloud(bck, true) {
-			return fmt.Errorf("cloud buckets not allowed (%s)", bck)
+			return fmt.Errorf("%s cloud buckets (%s) is not supported", operation, bck)
 		}
 		bck.Provider = cmn.ProviderAIS
 	}

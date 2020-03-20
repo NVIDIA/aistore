@@ -75,11 +75,10 @@ var (
 
 func removeBucketHandler(c *cli.Context) (err error) {
 	var buckets []cmn.Bck
-
 	if buckets, err = bucketsFromArgsOrEnv(c); err != nil {
 		return
 	}
-	if err := validateOnlyLocalBuckets(buckets); err != nil {
+	if err := validateLocalBuckets(buckets, "removing"); err != nil {
 		return err
 	}
 
