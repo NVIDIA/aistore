@@ -132,6 +132,16 @@ type (
 		Size() int64
 	}
 
+	CallbackROC struct {
+		ReadOpenCloser
+		readCallback func(int, error)
+	}
+
+	CallbackRC struct {
+		io.ReadCloser
+		readCallback func(int, error)
+	}
+
 	FileHandle struct {
 		*os.File
 		fqn string
@@ -674,6 +684,41 @@ func NewSizedReader(r io.Reader, size int64) *SizedReader {
 
 func (f *SizedReader) Size() int64 {
 	return f.size
+}
+
+func NewCallbackReadOpenCloser(r ReadOpenCloser, readCb func(int, error)) *CallbackROC {
+	return &CallbackROC{
+		ReadOpenCloser: r,
+		readCallback:   readCb,
+	}
+}
+
+func (r *CallbackROC) Read(p []byte) (n int, err error) {
+	n, err = r.ReadOpenCloser.Read(p)
+	r.readCallback(n, err)
+	return n, err
+}
+
+func (r *CallbackROC) Open() (io.ReadCloser, error) {
+	rc, err := r.ReadOpenCloser.Open()
+	if err != nil {
+		return rc, err
+	}
+
+	return NewCallbackReadCloser(rc, r.readCallback), nil
+}
+
+func NewCallbackReadCloser(r io.ReadCloser, readCb func(int, error)) *CallbackRC {
+	return &CallbackRC{
+		ReadCloser:   r,
+		readCallback: readCb,
+	}
+}
+
+func (r *CallbackRC) Read(p []byte) (n int, err error) {
+	n, err = r.ReadCloser.Read(p)
+	r.readCallback(n, err)
+	return n, err
 }
 
 func NewFileSectionHandle(r io.ReaderAt, offset, size, padding int64) (*FileSectionHandle, error) {

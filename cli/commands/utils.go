@@ -82,6 +82,7 @@ type progressBarArgs struct {
 	barType string
 	barText string
 	total   int64
+	options []mpb.BarOption
 }
 
 func (e *usageError) Error() string {
@@ -693,10 +694,14 @@ func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
 			cmn.AssertMsg(false, a.barType+" argument is invalid")
 		}
 
+		options := append(
+			a.options,
+			mpb.PrependDecorators(argDecorators...),
+			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)))
+
 		bars = append(bars, progress.AddBar(
 			a.total,
-			mpb.PrependDecorators(argDecorators...),
-			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth))))
+			options...))
 	}
 
 	return progress, bars

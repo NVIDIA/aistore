@@ -153,7 +153,7 @@ Put an object or entire directory (of objects) into the specified bucket. If CLI
 | `--recursive` or `-r` | `bool` | Enable recursive directory upload | `false` |
 | `--refresh` | `string` | Frequency of the reporting the progress (in milliseconds), may contain multiplicative suffix `s`(second) or `m`(minute). Zero value disables periodical refresh | `0` if verbose mode is on, `5s` otherwise |
 | `--dry-run` | `bool` | Do not actually perform PUT. Shows a few files to be uploaded and corresponding object names for used arguments |
-| `--progress` | `bool` | Displays progress bar | `false` |
+| `--progress` | `bool` | Displays progress bar. Together with `--verbose` shows upload progress for every single file | `false` |
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
@@ -161,7 +161,6 @@ Put an object or entire directory (of objects) into the specified bucket. If CLI
 
 `FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
 
-`--progress` and `--verbose` flags are mutually exclusive
 
 ### Object names
 

@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
+	"github.com/vbauerster/mpb/v4/decor"
 )
 
 type uploadParams struct {
@@ -127,20 +128,44 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 
 // PUT methods
 
-func putSingleObject(bck cmn.Bck, objName, path string) (err error) {
+func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err error) {
+	var (
+		reader   cmn.ReadOpenCloser
+		progress *mpb.Progress
+		bars     []*mpb.Bar
+	)
+
 	fh, err := cmn.NewFileHandle(path)
 	if err != nil {
 		return err
+	}
+
+	reader = fh
+	if flagIsSet(c, progressBarFlag) {
+		fi, err := fh.Stat()
+		if err != nil {
+			return err
+		}
+
+		progress, bars = simpleProgressBar(progressBarArgs{barType: sizeArg, barText: objName, total: fi.Size()})
+		readCallback := func(n int, _ error) { bars[0].IncrBy(n) }
+		reader = cmn.NewCallbackReadOpenCloser(fh, readCallback)
 	}
 
 	putArgs := api.PutObjectArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
 		Object:     objName,
-		Reader:     fh,
+		Reader:     reader,
 	}
 
-	return api.PutObject(putArgs)
+	err = api.PutObject(putArgs)
+
+	if flagIsSet(c, progressBarFlag) {
+		progress.Wait()
+	}
+
+	return err
 }
 
 func putRangeObjects(c *cli.Context, pt cmn.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
@@ -249,14 +274,10 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s\"\n", path, bck.Name, objName)
 			return nil
 		}
-		if err = putSingleObject(bck, objName, path); err == nil {
+		if err = putSingleObject(c, bck, objName, path); err == nil {
 			fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
 		}
 		return err
-	}
-
-	if flagIsSet(c, verboseFlag) && flagIsSet(c, progressBarFlag) {
-		return fmt.Errorf("flags %q and %q can't be set at the same time", verboseFlag.Name, progressBarFlag.Name)
 	}
 
 	files, err := generateFileList(path, "", objName, flagIsSet(c, recursiveFlag))
@@ -362,21 +383,24 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		processedSize atomic.Int64 // size of already processed files
 		mx            sync.Mutex
 
-		bars     []*mpb.Bar
-		progress *mpb.Progress
+		totalBars []*mpb.Bar
+		progress  *mpb.Progress
+
+		verbose      = flagIsSet(c, verboseFlag)
+		showProgress = flagIsSet(c, progressBarFlag)
+
+		errSb strings.Builder
 	)
 
 	wg := &sync.WaitGroup{}
 	lastReport := time.Now()
 	reportEvery := p.refresh
 	sema := cmn.NewDynSemaphore(p.workerCnt)
-	verbose := flagIsSet(c, verboseFlag)
-	showProgress := flagIsSet(c, progressBarFlag)
 
 	if showProgress {
 		sizeBarArg := progressBarArgs{total: p.totalSize, barText: "Uploaded sizes progress", barType: sizeArg}
 		filesBarArg := progressBarArgs{total: int64(len(p.files)), barText: "Uploaded files progress", barType: unitsArg}
-		progress, bars = simpleProgressBar(filesBarArg, sizeBarArg)
+		progress, totalBars = simpleProgressBar(filesBarArg, sizeBarArg)
 	}
 
 	finalizePut := func(f fileToObj) {
@@ -385,8 +409,8 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		size := processedSize.Add(f.size)
 
 		if showProgress {
-			bars[0].Increment()
-			bars[1].IncrInt64(f.size)
+			totalBars[0].Increment()
+			// size bar sie updated in putOneFile
 		}
 
 		sema.Release()
@@ -407,20 +431,55 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	}
 
 	putOneFile := func(f fileToObj) {
+		var bar *mpb.Bar
+
 		defer finalizePut(f)
 
 		reader, err := cmn.NewFileHandle(f.path)
 		if err != nil {
-			_, _ = fmt.Fprintf(c.App.Writer, "Failed to open file %q: %v\n", f.path, err)
+			str := fmt.Sprintf("Failed to open file %q: %v\n", f.path, err)
+			if showProgress {
+				errSb.WriteString(str)
+			} else {
+				_, _ = fmt.Fprint(c.App.Writer, str)
+			}
 			errCount.Inc()
 			return
 		}
 
-		putArgs := api.PutObjectArgs{BaseParams: defaultAPIParams, Bck: p.bck, Object: f.name, Reader: reader}
+		if showProgress && verbose {
+			bar = progress.AddBar(
+				f.size,
+				mpb.BarRemoveOnComplete(),
+				mpb.PrependDecorators(
+					decor.Name(f.name+" ", decor.WC{W: len(f.name) + 1, C: decor.DSyncWidthR}),
+					decor.Counters(decor.UnitKiB, "%.1f/%.1f", decor.WCSyncWidth),
+				),
+				mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
+			)
+		}
+
+		// keep track of single file upload bar, by tracking Read() call on file
+		updateBar := func(n int, err error) {
+			if showProgress {
+				totalBars[1].IncrBy(n)
+				if verbose {
+					bar.IncrBy(n)
+				}
+			}
+		}
+		countReader := cmn.NewCallbackReadOpenCloser(reader, updateBar)
+
+		putArgs := api.PutObjectArgs{BaseParams: defaultAPIParams, Bck: p.bck, Object: f.name, Reader: countReader}
 		if err := api.PutObject(putArgs); err != nil {
-			_, _ = fmt.Fprintf(c.App.Writer, "Failed to put object %q: %v\n", f.name, err)
+			str := fmt.Sprintf("Failed to put object %q: %v\n", f.name, err)
+			if showProgress {
+				errSb.WriteString(str)
+			} else {
+				_, _ = fmt.Fprint(c.App.Writer, str)
+			}
 			errCount.Inc()
-		} else if verbose {
+		} else if verbose && !showProgress {
 			_, _ = fmt.Fprintf(c.App.Writer, "%s -> %s\n", f.path, f.name)
 		}
 	}
@@ -428,12 +487,13 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	for _, f := range p.files {
 		sema.Acquire()
 		wg.Add(1)
-		putOneFile(f)
+		go putOneFile(f)
 	}
 	wg.Wait()
 
 	if showProgress {
 		progress.Wait()
+		_, _ = fmt.Fprint(c.App.Writer, errSb.String())
 	}
 
 	if failed := errCount.Load(); failed != 0 {
