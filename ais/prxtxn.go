@@ -321,13 +321,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		}
 	}
 
-	// 3.5. RebID
-	cloneRMD := p.owner.rmd.modify(func(clone *rebMD) {
-		clone.inc()
-	})
-	c.msg.RMDVersion = cloneRMD.Version
-
-	// 4. lock and update BMD locally; unlock bucket
+	// 3. lock and update BMD locally; unlock bucket
 	p.owner.bmd.Lock()
 	cloneBMD := p.owner.bmd.get().clone()
 	bprops, present := cloneBMD.Get(bckFrom)
@@ -343,20 +337,35 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	p.owner.bmd.put(cloneBMD)
 
-	// 5. metasync updated BMD; unlock BMD
+	// 4. metasync updated BMD; unlock BMD
 	c.msg.BMDVersion = cloneBMD.version()
 	wg := p.metasyncer.sync(revsPair{cloneBMD, c.msg})
 	p.owner.bmd.Unlock()
 
 	wg.Wait()
 
-	// 6. commit
-	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-	c.body = cmn.MustMarshal(c.msg)
-	c.req.Body = c.body
+	p.owner.rmd.modify(
+		func(clone *rebMD) {
+			clone.inc()
+			clone.Resilver = true
+		},
+		func(clone *rebMD) {
+			c.msg.RMDVersion = clone.version()
 
-	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+			// 5. commit
+			c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+			c.body = cmn.MustMarshal(c.msg)
+			c.req.Body = c.body
 
+			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+
+			// 6. start rebalance and resilver
+			wg = p.metasyncer.sync(revsPair{clone, c.msg})
+		},
+	)
+	wg.Wait()
+
+	// 7. wait for rebalance to finish and unlock buckets
 	go p.waitRebalance(&nlpFrom, &nlpTo)
 	return
 }

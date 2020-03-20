@@ -657,11 +657,6 @@ func (rj *rebalanceJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if tsi.ID() == t.Snode().ID() {
 		return nil
 	}
-	nver := t.GetSowner().Get().Version
-	if nver > rj.ver {
-		rj.m.abortRebalance()
-		return fmt.Errorf("%s: Smap v%d < v%d", rj.xreb, rj.ver, nver)
-	}
 
 	// skip objects that were already sent via GFN (due to probabilistic filtering
 	// false-positives, albeit rare, are still possible)

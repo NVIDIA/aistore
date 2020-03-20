@@ -7,7 +7,6 @@ package xaction
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -358,33 +357,47 @@ type (
 func (r *FastRen) IsMountpathXact() bool { return true }
 func (r *FastRen) String() string        { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
-func (r *FastRen) Run(waiter *sync.WaitGroup, rebID int64) {
+func (r *FastRen) Run(rmdVersion int64) {
 	var (
-		wg                              = &sync.WaitGroup{}
-		rebalanceBucket, resilverBucket = r.bckTo.Name, r.bckTo.Name // scoping
+		allFinished bool
+
+		deadline  = time.Now().Add(cmn.GCO.Get().Timeout.MaxHostBusy) // wait at most `MaxHostBusy` for rebalance/resilver to start
+		xactState = map[string]*struct{ finished bool }{
+			cmn.ActResilver:  {},
+			cmn.ActRebalance: {},
+		}
 	)
 
 	glog.Infoln(r.String())
 
-	if Registry.DoAbort(cmn.ActResilver, nil) {
-		glog.Infof("%s: restarting resilver upon rename...", r)
-		resilverBucket = ""
-	}
-	if Registry.DoAbort(cmn.ActRebalance, nil) {
-		glog.Infof("%s: restarting rebalance upon rename...", r)
-		rebalanceBucket = ""
+	// Wait for particular rebalance to start.
+	var running bool
+	for !running && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Second)
+		rebStats, err := Registry.GetStats(cmn.ActRebalance, nil, false /*onlyRecent*/)
+		cmn.AssertNoErr(err)
+		for _, stat := range rebStats {
+			rebStats := stat.(*stats.RebalanceTargetStats)
+			running = running || (stat.Running() && rebStats.Ext.RebID >= rmdVersion)
+		}
 	}
 
-	waiter.Done() // notify the waiter that we are ready to start
-
-	// run in parallel
-	wg.Add(1)
-	go func() {
-		r.rebManager.RunResilver(true /*skipGlobMisplaced*/, resilverBucket)
-		wg.Done()
-	}()
-	r.rebManager.RunRebalance(r.t.GetSowner().Get(), rebID, rebalanceBucket)
-	wg.Wait()
+	// Wait for rebalance or resilver to finish.
+	for running && !allFinished {
+		time.Sleep(5 * time.Second)
+		allFinished = true
+		for kind, state := range xactState {
+			if !state.finished {
+				state.finished = true
+				rebStats, err := Registry.GetStats(kind, nil, false /*onlyRecent*/)
+				cmn.AssertNoErr(err)
+				for _, stat := range rebStats {
+					state.finished = state.finished && stat.Finished()
+				}
+			}
+			allFinished = allFinished && state.finished
+		}
+	}
 
 	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.EndTime(time.Now())

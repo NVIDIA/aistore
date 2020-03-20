@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -290,17 +289,9 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 			return err // ditto
 		}
 
-		globalRebID := c.msg.RMDVersion
-		cmn.Assert(globalRebID > 0)
-
 		t.gfn.local.Activate()
 		t.gfn.global.activateTimed()
-		waiter := &sync.WaitGroup{}
-		waiter.Add(1)
-		go xact.Run(waiter, globalRebID) // FIXME: #654
-		waiter.Wait()
-
-		time.Sleep(200 * time.Millisecond) // FIXME: !1727, #654
+		go xact.Run(c.msg.RMDVersion)
 	default:
 		cmn.Assert(false)
 	}

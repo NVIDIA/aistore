@@ -83,9 +83,9 @@ type (
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
 	aisMsg struct {
 		cmn.ActionMsg
-		RMDVersion  int64  `json:"rmdversion,string"`
 		BMDVersion  int64  `json:"bmdversion,string"`
 		SmapVersion int64  `json:"smapversion,string"`
+		RMDVersion  int64  `json:"rmdversion,string"`
 		TxnID       string `json:"txn_id"`
 	}
 

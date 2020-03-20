@@ -8,7 +8,8 @@ type (
 	// RMD aka "rebalance metadata" is used to distribute information
 	// for the next rebalance.
 	RMD struct {
-		TargetIDs []string `json:"target_ids"`
+		TargetIDs []string `json:"target_ids,omitempty"`
+		Resilver  bool     `json:"resilver,omitempty"`
 		Version   int64    `json:"version"`
 	}
 )
