@@ -28,7 +28,7 @@ import (
 // - when requested by the user - `ais start xaction rebalance` or via HTTP API
 
 const (
-	rmdFname = ".ais.smap" // rmd persistent file basename
+	rmdFname = ".ais.rmd" // rmd persistent file basename
 )
 
 type (
