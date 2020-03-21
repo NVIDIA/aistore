@@ -705,23 +705,33 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 func (t *targetrunner) receiveBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
-	err = t._recvBMD(newBMD, msgInt, tag, caller)
 	if msgInt.TxnID == "" {
+		err = t._recvBMD(newBMD, msgInt, tag, caller)
 		return
 	}
-	found, errFired := t.transactions.callback(caller, msgInt, err, newBMD)
+	// before -- do -- after
+	errFired := t.transactions.commitBefore(caller, msgInt)
+	if errFired != nil {
+		err = fmt.Errorf("%s: unexpected commit-before, %s, err: %v", t.si, newBMD, errFired)
+		glog.Error(err)
+		return
+	}
+	err = t._recvBMD(newBMD, msgInt, tag, caller)
+	found, errFired := t.transactions.commitAfter(caller, msgInt, err, newBMD)
+	// handle results w/retries
 	if !found {
 		timeout := cmn.GCO.Get().Timeout.CplaneOperation * 2
 		sleep := timeout / 10
 		for i := sleep; i < timeout && !found; i += sleep {
 			time.Sleep(sleep)
-			found, err = t.transactions.callback(caller, msgInt, err, newBMD)
+			found, err = t.transactions.commitAfter(caller, msgInt, err, newBMD)
 		}
 	}
 	if !found {
-		glog.Errorf("%s: timed-out waiting to fire Txn[%s]", t.si, msgInt.TxnID)
+		glog.Errorf("%s: %s, timed-out waiting to commit Txn[%s]", t.si, newBMD, msgInt.TxnID)
 	} else if errFired != nil {
-		glog.Errorf("%s: err %v", t.si, errFired)
+		err = fmt.Errorf("%s: unexpected commit-after, %s, err: %v", t.si, newBMD, errFired)
+		glog.Error(err)
 	}
 	return
 }

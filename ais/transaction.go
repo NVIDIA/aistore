@@ -28,18 +28,21 @@ type (
 		started(phase string, tm ...time.Time) time.Time
 		timeout() time.Duration
 		String() string
-		fired() (err error)
+		isDone() (done bool, err error)
 		// triggers
-		fire(err error) error
-		callback(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) (bool, error)
+		commitAfter(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) (bool, error)
+	}
+	rndzvs struct { // rendezvous records
+		initiator string
+		timestamp time.Time
 	}
 	transactions struct {
-		sync.Mutex
-		t *targetrunner
-		m map[string]txn // by txn.uuid
+		sync.RWMutex
+		t          *targetrunner
+		m          map[string]txn    // by txn.uuid
+		rendezvous map[string]rndzvs // ditto
 	}
 	txnBase struct { // generic base
-		txn
 		sync.RWMutex
 		uid   string
 		tout  time.Duration
@@ -52,11 +55,14 @@ type (
 		bmdVer    int64
 		kind      string
 		initiator string
-		err       error
+		err       *txnError
 	}
 	txnBckBase struct {
 		txnBase
 		bck cluster.Bck
+	}
+	txnError struct {
+		err error
 	}
 	//
 	// concrete transaction types
@@ -81,18 +87,14 @@ type (
 	}
 )
 
-var (
-	errTxnTimeout = errors.New("timeout")
-	errNil        = errors.New("nil")
-)
-
 //////////////////
 // transactions //
 //////////////////
 
 func (txns *transactions) init(t *targetrunner) {
 	txns.t = t
-	txns.m = make(map[string]txn, 4)
+	txns.m = make(map[string]txn, 8)
+	txns.rendezvous = make(map[string]rndzvs, 8)
 	hk.Housekeeper.Register("cp.transactions.gc", txns.garbageCollect, txnsTimeoutGC)
 }
 
@@ -114,18 +116,34 @@ func (txns *transactions) find(uuid string, remove bool) (txn txn, err error) {
 		err = fmt.Errorf("%s: Txn[%s] doesn't exist (aborted?)", txns.t.si, uuid)
 	} else if remove {
 		delete(txns.m, uuid)
+		delete(txns.rendezvous, uuid)
 	}
 	txns.Unlock()
 	return
 }
 
-func (txns *transactions) callback(caller string, msgInt *actionMsgInternal, err error,
-	args ...interface{}) (found bool, errFired error) {
+func (txns *transactions) commitBefore(caller string, msgInt *actionMsgInternal) error {
+	var (
+		rndzvs rndzvs
+		ok     bool
+	)
 	txns.Lock()
-	for _, txn := range txns.m {
-		if found, errFired = txn.callback(caller, msgInt, err, args...); found {
-			break // only one
-		}
+	if rndzvs, ok = txns.rendezvous[msgInt.TxnID]; !ok {
+		rndzvs.initiator, rndzvs.timestamp = caller, time.Now()
+		txns.rendezvous[msgInt.TxnID] = rndzvs
+		txns.Unlock()
+		return nil
+	}
+	txns.Unlock()
+	return fmt.Errorf("rendezvous record %s:%s already exists",
+		msgInt.TxnID, cmn.FormatTimestamp(rndzvs.timestamp))
+}
+
+func (txns *transactions) commitAfter(caller string, msgInt *actionMsgInternal, err error,
+	args ...interface{}) (found bool, errDone error) {
+	txns.Lock()
+	if txn, ok := txns.m[msgInt.TxnID]; ok {
+		found, errDone = txn.commitAfter(caller, msgInt, err, args...)
 	}
 	txns.Unlock()
 	return
@@ -133,12 +151,15 @@ func (txns *transactions) callback(caller string, msgInt *actionMsgInternal, err
 
 // given txn, wait for its completion, handle timeout, and ultimately remove
 func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
-	// commit phase officially starts now
+	var (
+		sleep       = cmn.MinDuration(100*time.Millisecond, timeout/10)
+		done, found bool
+	)
+	// timestamp
 	txn.started(cmn.ActCommit, time.Now())
-
-	sleep := cmn.MinDuration(100*time.Millisecond, timeout/10)
-	for i := sleep; i < timeout; i += sleep {
-		if err = txn.fired(); err != errNil {
+	// poll & check
+	for total := sleep; ; total += sleep {
+		if done, err = txn.isDone(); done {
 			txns.find(txn.uuid(), true /* remove */)
 			return
 		}
@@ -146,22 +167,42 @@ func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
 		if _, err = txns.find(txn.uuid(), false); err != nil {
 			return
 		}
+
 		time.Sleep(sleep)
+		// must be ready for rendezvous
+		if !found {
+			txns.RLock()
+			_, found = txns.rendezvous[txn.uuid()]
+			txns.RUnlock()
+		}
+		// two timeouts
+		if found {
+			if total > 2*timeout+time.Minute { // NOTE: must be more than enough
+				err = errors.New("local timeout")
+				break
+			}
+		} else {
+			if total > timeout {
+				err = errors.New("network timeout")
+				break
+			}
+		}
 	}
 	txns.find(txn.uuid(), true /* remove */)
-	return errTxnTimeout
+	return
 }
 
 // GC orphaned transactions //
 func (txns *transactions) garbageCollect() (d time.Duration) {
-	var errs []string
+	var errs, uids []string
+	now := time.Now()
 	d = txnsTimeoutGC
-	txns.Lock()
+
+	txns.RLock()
 	l := len(txns.m)
 	if l > txnsNumKeep*10 && l > 16 {
 		d = txnsTimeoutGC / 10
 	}
-	now := time.Now()
 	for uuid, txn := range txns.m {
 		var (
 			elapsed = now.Sub(txn.started(cmn.ActBegin))
@@ -170,15 +211,24 @@ func (txns *transactions) garbageCollect() (d time.Duration) {
 		if commitTimestamp := txn.started(cmn.ActCommit); !commitTimestamp.IsZero() {
 			elapsed = now.Sub(commitTimestamp)
 		}
-		if elapsed > 2*tout+time.Minute {
+		if elapsed > 2*tout+10*time.Minute {
 			errs = append(errs, fmt.Sprintf("GC %s: timeout", txn))
-			delete(txns.m, uuid)
+			uids = append(uids, uuid)
 		} else if elapsed >= tout {
 			errs = append(errs,
 				fmt.Sprintf("GC %s: is taking longer than the specified timeout %v", txn, tout))
 		}
 	}
-	txns.Unlock()
+	txns.RUnlock()
+
+	if len(uids) > 0 {
+		txns.Lock()
+		for _, uid := range uids {
+			delete(txns.m, uid)
+			delete(txns.rendezvous, uid)
+		}
+		txns.Unlock()
+	}
 	for _, s := range errs {
 		glog.Errorln(s)
 	}
@@ -209,21 +259,14 @@ func (txn *txnBase) started(phase string, tm ...time.Time) (ts time.Time) {
 	return
 }
 
-func (txn *txnBase) fired() (err error) {
+func (txn *txnBase) isDone() (done bool, err error) {
 	txn.RLock()
-	err = txn.err
+	if txn.err != nil {
+		err = txn.err.err
+		done = true
+	}
 	txn.RUnlock()
 	return
-}
-
-func (txn *txnBase) fire(err error) error {
-	txn.Lock()
-	defer txn.Unlock()
-	if txn.err != errNil {
-		return fmt.Errorf("%s: misfired", txn)
-	}
-	txn.err = err
-	return nil
 }
 
 func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
@@ -241,29 +284,39 @@ func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 
 func (txn *txnBckBase) String() string {
 	var (
-		fired string
-		tm    = cmn.FormatTimestamp(txn.phase.begin)
+		res string
+		tm  = cmn.FormatTimestamp(txn.phase.begin)
 	)
 	if !txn.phase.commit.IsZero() {
 		tm += "-" + cmn.FormatTimestamp(txn.phase.commit)
 	}
-	if err := txn.fired(); err != errNil {
-		fired = "-fired"
+	if done, err := txn.isDone(); done {
+		if err == nil {
+			res = "-done"
+		} else {
+			res = fmt.Sprintf("-fail(%v)", err)
+		}
 	}
 	return fmt.Sprintf("txn-%s[%s-(v%d, v%d)-%s-%s-%s%s], bucket %s",
-		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.initiator, tm, fired, txn.bck.Name)
+		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.initiator, tm, res, txn.bck.Name)
 }
 
-func (txn *txnBckBase) callback(caller string, msgInt *actionMsgInternal, err error,
-	args ...interface{}) (found bool, errFired error) {
+func (txn *txnBckBase) commitAfter(caller string, msgInt *actionMsgInternal, err error,
+	args ...interface{}) (found bool, errDone error) {
 	if txn.initiator != caller || msgInt.TxnID != txn.uuid() {
 		return
 	}
 	bmd, _ := args[0].(*bucketMD)
 	cmn.Assert(bmd.version() > txn.bmdVer)
 
-	errFired = txn.fire(err)
 	found = true
+	txn.Lock()
+	defer txn.Unlock()
+	if txn.err != nil {
+		errDone = fmt.Errorf("%s: already done with err=%v", txn, txn.err.err)
+		return
+	}
+	txn.err = &txnError{err: err}
 	return
 }
 
@@ -276,7 +329,7 @@ var _ txn = &txnCreateBucket{}
 // c-tor
 // NOTE: errNill another kind of nil - here and elsewhere
 func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
-	txn = &txnCreateBucket{txnBckBase{txnBase{kind: "crb", err: errNil}, *c.bck}}
+	txn = &txnCreateBucket{txnBckBase{txnBase{kind: "crb"}, *c.bck}}
 	txn.fillFromCtx(c)
 	return
 }
@@ -290,7 +343,7 @@ var _ txn = &txnMakeNCopies{}
 // c-tor
 func newTxnMakeNCopies(c *txnServerCtx, curCopies, newCopies int64) (txn *txnMakeNCopies) {
 	txn = &txnMakeNCopies{
-		txnBckBase{txnBase{kind: "mnc", err: errNil}, *c.bck},
+		txnBckBase{txnBase{kind: "mnc"}, *c.bck},
 		curCopies,
 		newCopies,
 	}
@@ -314,7 +367,7 @@ func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSet
 	cmn.Assert(c.bck.Props != nil)
 	bprops := c.bck.Props.Clone()
 	txn = &txnSetBucketProps{
-		txnBckBase{txnBase{kind: "mnc", err: errNil}, *c.bck},
+		txnBckBase{txnBase{kind: "mnc"}, *c.bck},
 		bprops,
 		nprops,
 	}
@@ -331,7 +384,7 @@ var _ txn = &txnRenameBucket{}
 // c-tor
 func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnRenameBucket) {
 	txn = &txnRenameBucket{
-		txnBckBase{txnBase{kind: "rnb", err: errNil}, *bckFrom},
+		txnBckBase{txnBase{kind: "rnb"}, *bckFrom},
 		bckFrom,
 		bckTo,
 	}
