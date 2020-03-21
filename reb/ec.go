@@ -44,7 +44,7 @@ import (
 // 04. When the list is complete, a target sends the list to other targets
 // 05. Each target waits for all other targets to receive the data and then
 //     rebalance moves to next stage (rebStageECDetect)
-// 06. Each target processes the list of CTs and groups by Bck/Objname/ObjHash
+// 06. Each target processes the list of CTs and groups by Bck/ObjName/ObjHash
 // 07. All other steps use the newest CT list of an object. Though it has
 //     and issue. TODO: rare corner case: current object is EC'ed, after putting a
 //     new version, the object gets replicated. Replicated object requires less
@@ -53,7 +53,7 @@ import (
 // 09. If one or few object parts are missing, and it is possible to restore
 //     them from existing ones, the object is added to 'broken' object list
 // 10. If 'broken' and 'local repair' lists are empty, the rebalance finishes.
-// 11. 'broken' list is sorted by Bck/Objname to have on all targets
+// 11. 'broken' list is sorted by Bck/ObjName to have on all targets
 //     determined order.
 // 12. First, 'local repair' list is processed and all CTs are moved to correct mpath.
 // 13. Next the rebalance proceeds with the next stage (rebStageECRepair)
@@ -122,7 +122,7 @@ type (
 		meta    *ec.Metadata // metadata loaded from a local file
 
 		cmn.Bck
-		Objname      string `json:"obj"`
+		ObjName      string `json:"obj"`
 		DaemonID     string `json:"sid"` // a target that has the CT
 		ObjHash      string `json:"cksum"`
 		ObjSize      int64  `json:"size"`
@@ -392,14 +392,14 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 		bckList[ct.Name] = bck
 	}
 
-	obj, ok := bck.objs[ct.Objname]
+	obj, ok := bck.objs[ct.ObjName]
 	if !ok {
 		// first CT of the object
 		b := cluster.NewBckEmbed(ct.Bck)
 		if err := b.Init(tgt.GetBowner(), tgt.Snode()); err != nil {
 			return err
 		}
-		si, err := cluster.HrwTarget(b.MakeUname(ct.Objname), md.smap)
+		si, err := cluster.HrwTarget(b.MakeUname(ct.ObjName), md.smap)
 		if err != nil {
 			return err
 		}
@@ -409,7 +409,7 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 			bck:        ct.Bck,
 		}
 		obj.cts[ct.ObjHash] = []*rebCT{ct}
-		bck.objs[ct.Objname] = obj
+		bck.objs[ct.ObjName] = obj
 		return nil
 	}
 
@@ -419,7 +419,7 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 		for _, found := range list {
 			if found.SliceID == ct.SliceID {
 				err := fmt.Errorf("duplicated %s/%s SliceID %d from %s (discarded)",
-					ct.Name, ct.Objname, ct.SliceID, ct.DaemonID)
+					ct.Name, ct.ObjName, ct.SliceID, ct.DaemonID)
 				return err
 			}
 		}
@@ -502,7 +502,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 		mm  = reb.t.GetSmallMMSA()
 		hdr = transport.Header{
 			Bck:      ct.Bck,
-			ObjName:  ct.Objname,
+			ObjName:  ct.ObjName,
 			ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
 		}
 	)
@@ -527,7 +527,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 		reb.ec.onAir.Dec()
 		mm.Free(hdr.Opaque)
 		fh.Close()
-		reb.ec.ackCTs.removeObject(ct.Bck, ct.Objname)
+		reb.ec.ackCTs.removeObject(ct.Bck, ct.ObjName)
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", targets[0].ID(), err)
 	}
 	reb.statRunner.AddMany(
@@ -549,8 +549,8 @@ func (reb *Manager) transportECCB(hdr transport.Header, reader io.ReadCloser, _ 
 // Use the function to send only slices (not for replicas/full object)
 func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	ct *rebCT, sliceID int, xxhash string, target *cluster.Snode, rt *retransmitCT) error {
-	cmn.AssertMsg(ct.meta != nil, ct.Objname)
-	cmn.AssertMsg(ct.ObjSize != 0, ct.Objname)
+	cmn.AssertMsg(ct.meta != nil, ct.ObjName)
+	cmn.AssertMsg(ct.ObjSize != 0, ct.ObjName)
 	cmn.Assert(rt != nil)
 	var (
 		newMeta = *ct.meta // copy of meta (flat struct of primitive types)
@@ -563,7 +563,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 		size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
 		hdr  = transport.Header{
 			Bck:      ct.Bck,
-			ObjName:  ct.Objname,
+			ObjName:  ct.ObjName,
 			ObjAttrs: transport.ObjectAttrs{Size: size},
 		}
 		mm = reb.t.GetSmallMMSA()
@@ -580,7 +580,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	reb.ec.ackCTs.add(rt)
 
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("sending slice %d[%s] of %s/%s to %s", sliceID, xxhash, ct.Bck.Name, ct.Objname, target)
+		glog.Infof("sending slice %d[%s] of %s/%s to %s", sliceID, xxhash, ct.Bck.Name, ct.ObjName, target)
 	}
 	reb.ec.onAir.Inc()
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
@@ -631,7 +631,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, hdr transport.H
 	if req.md.SliceID != 0 {
 		ctFQN = mpath.MakePathFQN(hdr.Bck, ec.SliceType, hdr.ObjName)
 	} else {
-		lom = &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
+		lom = &cluster.LOM{T: reb.t, ObjName: hdr.ObjName}
 		if err := lom.Init(hdr.Bck); err != nil {
 			return err
 		}
@@ -833,10 +833,10 @@ func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 					reb.abortRebalance()
 					return nil
 				}
-				t, err := cluster.HrwTarget(b.MakeUname(ct.Objname), md.smap)
+				t, err := cluster.HrwTarget(b.MakeUname(ct.ObjName), md.smap)
 				cmn.Assert(err == nil)
 				if t.ID() == localDaemon {
-					glog.Infof("skipping CT %d of %s (it must have main object)", ct.SliceID, ct.Objname)
+					glog.Infof("skipping CT %d of %s (it must have main object)", ct.SliceID, ct.ObjName)
 					continue
 				}
 			}
@@ -1023,7 +1023,7 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 	id := reb.t.Snode().ID()
 	rec := &rebCT{
 		Bck:          ct.Bck().Bck,
-		Objname:      ct.ObjName(),
+		ObjName:      ct.ObjName(),
 		DaemonID:     id,
 		ObjHash:      md.ObjCksum,
 		ObjSize:      md.Size,
@@ -1236,7 +1236,7 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	mainSlice := cts[0]
 
 	obj.bck = mainSlice.Bck
-	obj.objName = mainSlice.Objname
+	obj.objName = mainSlice.ObjName
 	obj.objSize = mainSlice.ObjSize
 	obj.isECCopy = ec.IsECCopy(obj.objSize, ecConfig)
 	obj.dataSlices = mainSlice.DataSlices
@@ -1248,7 +1248,7 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	obj.ctExist = make([]bool, ctReq)
 	obj.locCT = make(map[string]*rebCT, ctFound)
 
-	obj.uid = uniqueWaitID(obj.bck, mainSlice.Objname)
+	obj.uid = uniqueWaitID(obj.bck, mainSlice.ObjName)
 	obj.isMain = obj.mainDaemon == localDaemon
 
 	// TODO: must check only slices of the newest object version
@@ -1389,7 +1389,7 @@ func (reb *Manager) sendLocalData(md *rebArgs, obj *rebObject, si ...*cluster.Sn
 		target = mainSI
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s sending a slice/replica #%d of %s to main %s", reb.t.Snode(), ct.SliceID, ct.Objname, target)
+		glog.Infof("%s sending a slice/replica #%d of %s to main %s", reb.t.Snode(), ct.SliceID, ct.ObjName, target)
 	}
 	return reb.sendFromDisk(ct, target)
 }
@@ -1423,7 +1423,7 @@ func (reb *Manager) bcastLocalReplica(obj *rebObject) error {
 		}
 		sendTo = append(sendTo, si)
 		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Infof("%s #4.4 - sending %s a replica of %s to %s", reb.t.Snode(), ct.hrwFQN, ct.Objname, si)
+			glog.Infof("%s #4.4 - sending %s a replica of %s to %s", reb.t.Snode(), ct.hrwFQN, ct.ObjName, si)
 		}
 		ctDiff--
 		if ctDiff == 0 {
@@ -1432,7 +1432,7 @@ func (reb *Manager) bcastLocalReplica(obj *rebObject) error {
 	}
 	cmn.Assert(len(sendTo) != 0)
 	if err := reb.sendFromDisk(ct, sendTo...); err != nil {
-		return fmt.Errorf("failed to send %s: %v", ct.Objname, err)
+		return fmt.Errorf("failed to send %s: %v", ct.ObjName, err)
 	}
 	return nil
 }
@@ -2160,7 +2160,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 	objMD := ecMD // copy
 	objMD.SliceID = 0
 
-	lom := &cluster.LOM{T: reb.t, Objname: obj.objName}
+	lom := &cluster.LOM{T: reb.t, ObjName: obj.objName}
 	err = lom.Init(obj.bck)
 	if err != nil {
 		return err
@@ -2231,7 +2231,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		sliceMD.SliceID = sliceID
 		sl := &rebCT{
 			Bck:          obj.bck,
-			Objname:      obj.objName,
+			ObjName:      obj.objName,
 			ObjSize:      sliceMD.Size,
 			DaemonID:     reb.t.Snode().ID(),
 			SliceID:      int16(sliceID),

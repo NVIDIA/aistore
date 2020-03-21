@@ -397,7 +397,7 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 	}
 	tsid := ack.daemonID // the sender
 	// Rx
-	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
+	lom := &cluster.LOM{T: reb.t, ObjName: hdr.ObjName}
 	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
 		return
@@ -610,7 +610,7 @@ func (reb *Manager) recvRegularAck(hdr transport.Header, unpacker *cmn.ByteUnpac
 		return
 	}
 
-	lom := &cluster.LOM{T: reb.t, Objname: hdr.ObjName}
+	lom := &cluster.LOM{T: reb.t, ObjName: hdr.ObjName}
 	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
 		return

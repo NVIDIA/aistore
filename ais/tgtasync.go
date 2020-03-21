@@ -133,7 +133,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 						return
 					}
 					for i := 0; i < l; i += m {
-						lom := &cluster.LOM{T: t, Objname: bckEntries[i].Name}
+						lom := &cluster.LOM{T: t, ObjName: bckEntries[i].Name}
 						err := lom.Init(bck.Bck)
 						if err == nil && lom.IsLoaded() { // loaded?
 							loaded++

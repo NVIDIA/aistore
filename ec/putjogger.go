@@ -91,7 +91,7 @@ func (c *putJogger) ec(req *Request) error {
 
 	if err != nil {
 		glog.Errorf("Error %s object [%s/%s], fqn: %q, err: %v",
-			act, req.LOM.Bck(), req.LOM.Objname, req.LOM.FQN, err)
+			act, req.LOM.Bck(), req.LOM.ObjName, req.LOM.FQN, err)
 	}
 
 	if req.ErrCh != nil {
@@ -143,11 +143,11 @@ func (c *putJogger) encode(req *Request) error {
 	targetCnt := len(c.parent.smap.Get().Tmap)
 	if targetCnt < reqTargets {
 		return fmt.Errorf("object %s/%s requires %d targets to encode, only %d found",
-			req.LOM.Bck(), req.LOM.Objname, reqTargets, targetCnt)
+			req.LOM.Bck(), req.LOM.ObjName, reqTargets, targetCnt)
 	}
 
 	// Save metadata before encoding the object
-	metaFQN, _, err := cluster.HrwFQN(req.LOM.Bck(), MetaType, req.LOM.Objname)
+	metaFQN, _, err := cluster.HrwFQN(req.LOM.Bck(), MetaType, req.LOM.ObjName)
 	if err != nil {
 		return err
 	}
@@ -186,9 +186,9 @@ func (c *putJogger) ctSendCallback(hdr transport.Header, _ io.ReadCloser, _ unsa
 // replicas and slices
 // Just remove local metafile if it exists and broadcast the request to all
 func (c *putJogger) cleanup(req *Request) error {
-	fqnMeta, _, err := cluster.HrwFQN(req.LOM.Bck(), MetaType, req.LOM.Objname)
+	fqnMeta, _, err := cluster.HrwFQN(req.LOM.Bck(), MetaType, req.LOM.ObjName)
 	if err != nil {
-		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bck(), req.LOM.Objname, err)
+		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bck(), req.LOM.ObjName, err)
 		return nil
 	}
 
@@ -201,7 +201,7 @@ func (c *putJogger) cleanup(req *Request) error {
 	request := c.parent.newIntraReq(reqDel, nil).NewPack(mm)
 	hdr := transport.Header{
 		Bck:     req.LOM.Bck().Bck,
-		ObjName: req.LOM.Objname,
+		ObjName: req.LOM.ObjName,
 		Opaque:  request,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: 0,

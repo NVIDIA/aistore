@@ -42,7 +42,7 @@ type (
 )
 
 func (t *singleObjectTask) download() {
-	lom := &cluster.LOM{T: t.parent.t, Objname: t.obj.Objname}
+	lom := &cluster.LOM{T: t.parent.t, ObjName: t.obj.ObjName}
 	err := lom.Init(t.bck)
 	if err == nil {
 		err = lom.Load()
@@ -52,7 +52,7 @@ func (t *singleObjectTask) download() {
 		return
 	}
 	if err == nil {
-		t.markFailed(t.obj.Objname + " already exists")
+		t.markFailed(t.obj.ObjName + " already exists")
 		return
 	}
 
@@ -166,7 +166,7 @@ func (t *singleObjectTask) markFailed(statusMsg string) {
 	t.cancel()
 	t.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
-	dlStore.persistError(t.id, t.obj.Objname, statusMsg)
+	dlStore.persistError(t.id, t.obj.ObjName, statusMsg)
 	if err := dlStore.incErrorCnt(t.id); err != nil {
 		glog.Error(err)
 	}
@@ -174,7 +174,7 @@ func (t *singleObjectTask) markFailed(statusMsg string) {
 
 func (t *singleObjectTask) persist() {
 	_ = dlStore.persistTaskInfo(t.id, TaskDlInfo{
-		Name:       t.obj.Objname,
+		Name:       t.obj.ObjName,
 		Downloaded: t.currentSize.Load(),
 		Total:      t.totalSize,
 

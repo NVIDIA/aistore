@@ -627,7 +627,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 			return
 		}
 		cksum := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
-		lom := &cluster.LOM{T: m.ctx.t, Objname: hdr.ObjName}
+		lom := &cluster.LOM{T: m.ctx.t, ObjName: hdr.ObjName}
 		if err = lom.Init(hdr.Bck); err == nil {
 			err = lom.Load()
 		}

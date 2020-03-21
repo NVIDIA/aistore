@@ -88,7 +88,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 }
 
 func (r *EvictDelete) doObjEvictDelete(args *DeletePrefetchArgs, objName string) error {
-	lom := &cluster.LOM{T: r.t, Objname: objName}
+	lom := &cluster.LOM{T: r.t, ObjName: objName}
 	err := lom.Init(r.Bck())
 	if err != nil {
 		glog.Error(err)
@@ -116,7 +116,7 @@ func (r *EvictDelete) iterateBucketRange(args *DeletePrefetchArgs) error {
 
 func (r *Prefetch) prefetchMissing(args *DeletePrefetchArgs, objName string) error {
 	var coldGet bool
-	lom := &cluster.LOM{T: r.t, Objname: objName}
+	lom := &cluster.LOM{T: r.t, ObjName: objName}
 	err := lom.Init(r.Bck())
 	if err != nil {
 		return err
@@ -258,7 +258,7 @@ func (r *listRangeBase) iterateList(args *DeletePrefetchArgs, listMsg *cmn.ListM
 		smap = r.t.GetSowner().Get()
 		sid  = r.t.Snode().ID()
 	)
-	for _, obj := range listMsg.Objnames {
+	for _, obj := range listMsg.ObjNames {
 		if r.Aborted() {
 			break
 		}

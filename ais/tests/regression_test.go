@@ -437,7 +437,7 @@ func TestRenameObjects(t *testing.T) {
 	close(objsPutCh)
 	i := 0
 	for objName := range objsPutCh {
-		newObjName := path.Join(renameStr, objName) + ".renamed" // objname fqn
+		newObjName := path.Join(renameStr, objName) + ".renamed" // objName fqn
 		newBaseNames = append(newBaseNames, newObjName)
 		if err := api.RenameObject(baseParams, bck, objName, newObjName); err != nil {
 			t.Fatalf("Failed to rename object from %s => %s, err: %v", objName, newObjName, err)

@@ -274,7 +274,7 @@ func parseDest(rawURL string) (bucket, pathSuffix string, err error) {
 		return
 	}
 	if destScheme != aisScheme {
-		err = fmt.Errorf("destination must look as %q, for instance: %s://bucket/objname (got %s)",
+		err = fmt.Errorf("destination must look as %q, for instance: %s://bucket/objName (got %s)",
 			aisScheme, aisScheme, destScheme)
 		return
 	}

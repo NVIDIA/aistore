@@ -1461,7 +1461,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
 			Base:   tsi.URL(cmn.NetworkIntraControl),
-			Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.Objname),
+			Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
 		timeout: lom.Config().Timeout.CplaneOperation,
@@ -1480,7 +1480,7 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 	res := t.bcastTo(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
-			Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.Objname),
+			Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
 		smap: smap,

@@ -736,7 +736,7 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 		opaque = ack.NewPack(mm)
 		hdr    = transport.Header{
 			Bck:     lom.Bck().Bck,
-			ObjName: lom.Objname,
+			ObjName: lom.ObjName,
 			Opaque:  opaque,
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       lom.Size(),

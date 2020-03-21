@@ -358,7 +358,7 @@ do:
 		goi.lom.Unlock(false)
 		doubleCheck, err, errCode = goi.tryRestoreObject()
 		if doubleCheck && err != nil {
-			lom2 := &cluster.LOM{T: goi.t, Objname: goi.lom.Objname}
+			lom2 := &cluster.LOM{T: goi.t, ObjName: goi.lom.ObjName}
 			er2 := lom2.Init(goi.lom.Bck().Bck)
 			if er2 == nil {
 				er2 = lom2.Load()
@@ -533,7 +533,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.Objname),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 		Query:  query,
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
@@ -769,7 +769,7 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 			return "", err, http.StatusBadRequest
 		}
 
-		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.Objname, true /*overwrite*/, false /*safe*/, false /*verbose*/); err != nil {
+		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName, true /*overwrite*/, false /*safe*/, false /*verbose*/); err != nil {
 			return "", err, 0
 		}
 	default:

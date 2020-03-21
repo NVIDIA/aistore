@@ -19,18 +19,18 @@ import (
 const objNamesSize = 200000
 const smallSampleSize = 1000
 
-var objnames []string
+var objNames []string
 
 func init() {
-	objnames = make([]string, objNamesSize)
+	objNames = make([]string, objNamesSize)
 	for i := 0; i < objNamesSize; i++ {
-		objnames[i] = fmt.Sprintf("test-%d", i)
+		objNames[i] = fmt.Sprintf("test-%d", i)
 	}
 }
 
 func BenchmarkRandomUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.RandomUniqueNameGetter{}
-	ng.Init(objnames, cmn.NowRand())
+	ng.Init(objNames, cmn.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -39,7 +39,7 @@ func BenchmarkRandomUniqueNameGetter(b *testing.B) {
 
 func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
 	ng := &namegetter.RandomUniqueIterNameGetter{}
-	ng.Init(objnames, cmn.NowRand())
+	ng.Init(objNames, cmn.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -48,7 +48,7 @@ func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
 
 func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.PermutationUniqueNameGetter{}
-	ng.Init(objnames, cmn.NowRand())
+	ng.Init(objNames, cmn.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -57,7 +57,7 @@ func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
 
 func BenchmarkPermutationImprovedUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.PermutationUniqueImprovedNameGetter{}
-	ng.Init(objnames, cmn.NowRand())
+	ng.Init(objNames, cmn.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -93,7 +93,7 @@ func TestPermutationUniqueImprovedNameGetter(t *testing.T) {
 }
 
 func checkGetsAllObjNames(t *testing.T, getter namegetter.ObjectNameGetter, name string) {
-	getter.Init(objnames, cmn.NowRand())
+	getter.Init(objNames, cmn.NowRand())
 	m := make(map[string]struct{})
 
 	// Should visit every objectName once
@@ -117,11 +117,11 @@ func checkSmallSampleRandomness(t *testing.T, getter namegetter.ObjectNameGetter
 
 	rnd := cmn.NowRand()
 
-	getter.Init(objnames, rnd)
+	getter.Init(objNames, rnd)
 	for i := 0; i < smallSampleSize; i++ {
 		s1[i] = getter.ObjName()
 	}
-	getter.Init(objnames, rnd)
+	getter.Init(objNames, rnd)
 	for i := 0; i < smallSampleSize; i++ {
 		s2[i] = getter.ObjName()
 	}

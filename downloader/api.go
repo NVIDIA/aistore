@@ -138,23 +138,23 @@ func (b *DlBase) Validate() error {
 }
 
 type DlObj struct {
-	Objname   string `json:"objname"`
+	ObjName   string `json:"objname"`
 	Link      string `json:"link"`
 	FromCloud bool   `json:"from_cloud"`
 }
 
 func (b *DlObj) Validate() error {
-	if b.Objname == "" {
+	if b.ObjName == "" {
 		objName := path.Base(b.Link)
 		if objName == "." || objName == "/" {
 			return fmt.Errorf("can not extract a valid %q from the provided download link", cmn.URLParamObjName)
 		}
-		b.Objname = objName
+		b.ObjName = objName
 	}
 	if b.Link == "" && !b.FromCloud {
 		return fmt.Errorf("missing the %q from the request body", cmn.URLParamLink)
 	}
-	if b.Objname == "" {
+	if b.ObjName == "" {
 		return fmt.Errorf("missing the %q from the request body", cmn.URLParamObjName)
 	}
 	return nil
@@ -263,13 +263,13 @@ type DlSingleBody struct {
 func (b *DlSingleBody) InitWithQuery(query url.Values) {
 	b.DlBase.InitWithQuery(query)
 	b.Link = query.Get(cmn.URLParamLink)
-	b.Objname = query.Get(cmn.URLParamObjName)
+	b.ObjName = query.Get(cmn.URLParamObjName)
 }
 
 func (b *DlSingleBody) AsQuery() url.Values {
 	query := b.DlBase.AsQuery()
 	query.Add(cmn.URLParamLink, b.Link)
-	query.Add(cmn.URLParamObjName, b.Objname)
+	query.Add(cmn.URLParamObjName, b.ObjName)
 	return query
 }
 
@@ -285,16 +285,16 @@ func (b *DlSingleBody) Validate() error {
 
 func (b *DlSingleBody) ExtractPayload() (cmn.SimpleKVs, error) {
 	objects := make(cmn.SimpleKVs, 1)
-	objects[b.Objname] = b.Link
+	objects[b.ObjName] = b.Link
 	return objects, nil
 }
 
 func (b *DlSingleBody) Describe() string {
-	return fmt.Sprintf("%s -> %s/%s", b.Link, b.Bck, b.Objname)
+	return fmt.Sprintf("%s -> %s/%s", b.Link, b.Bck, b.ObjName)
 }
 
 func (b *DlSingleBody) String() string {
-	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bck, b.Objname)
+	return fmt.Sprintf("Link: %q, Bucket: %q, ObjName: %q.", b.Link, b.Bck, b.ObjName)
 }
 
 // Range request

@@ -56,7 +56,7 @@ func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 		r.ObjectsInc()
 		r.BytesAdd(lom.Size())
 	} else {
-		glog.Errorf("Failed to EC object %s/%s: %v", lom.BckName(), lom.Objname, err)
+		glog.Errorf("Failed to EC object %s/%s: %v", lom.BckName(), lom.ObjName, err)
 	}
 
 	r.wg.Done()
@@ -187,7 +187,7 @@ func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	mdFQN, _, err := cluster.HrwFQN(lom.Bck(), MetaType, lom.Objname)
+	mdFQN, _, err := cluster.HrwFQN(lom.Bck(), MetaType, lom.ObjName)
 	if err != nil {
 		glog.Warningf("metadata FQN generation failed %q: %v", fqn, err)
 		return nil

@@ -430,7 +430,7 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 	return true
 }
 
-// GET /v1/objects/bucket[+"/"+objname]
+// GET /v1/objects/bucket[+"/"+objName]
 // Checks if the object exists locally (if not, downloads it) and sends it back
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
@@ -460,7 +460,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, Objname: objName}
+	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
@@ -526,7 +526,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], apitems[1]
+	bucket, objName := apitems[0], apitems[1]
 	started := time.Now()
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
 		t.statsT.Add(stats.PutRedirLatency, redelta)
@@ -545,7 +545,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, Objname: objname}
+	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
@@ -687,7 +687,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, Objname: objName}
+	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -699,7 +699,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	err = t.objDelete(t.contextWithAuth(r.Header), lom, evict)
 	if err != nil {
 		if cmn.IsObjNotExist(err) {
-			t.invalmsghdlrsilent(w, r, fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.Objname), http.StatusNotFound)
+			t.invalmsghdlrsilent(w, r, fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.ObjName), http.StatusNotFound)
 		} else {
 			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err))
 		}
@@ -986,7 +986,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, Objname: objName}
+	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck); err != nil {
 		invalidHandler(w, r, err.Error())
 		return
@@ -1271,13 +1271,13 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	if err != nil {
 		return
 	}
-	bucket, objnameFrom := apitems[0], apitems[1]
+	bucket, objNameFrom := apitems[0], apitems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, Objname: objnameFrom}
+	lom := &cluster.LOM{T: t, ObjName: objNameFrom}
 	if err = lom.Init(bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -1294,7 +1294,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 
 	buf, slab := daemon.gmm.Alloc()
 	ri := &replicInfo{smap: t.owner.smap.get(), t: t, bckTo: lom.Bck(), buf: buf, localOnly: false, finalize: true}
-	copied, err := ri.copyObject(lom, msg.Name /* new objname */)
+	copied, err := ri.copyObject(lom, msg.Name /* new object name */)
 	slab.Free(buf)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())

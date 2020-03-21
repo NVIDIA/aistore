@@ -213,7 +213,7 @@ func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
 		metaOldPath, metaNewPath, err = rj.moveECMeta(ct, lom.ParsedFQN.MpathInfo, newMpath.MpathInfo)
 		if err != nil {
 			glog.Warningf("Failed to move metafile of %s(%q -> %q): %v",
-				lom.Objname, lom.ParsedFQN.MpathInfo.Path, newMpath.MpathInfo.Path, err)
+				lom.ObjName, lom.ParsedFQN.MpathInfo.Path, newMpath.MpathInfo.Path, err)
 			return
 		}
 	}

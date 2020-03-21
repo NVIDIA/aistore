@@ -81,7 +81,7 @@ type (
 		wg        sync.WaitGroup
 		sendoff   sendoff
 		maxheader []byte // max header buffer
-		header    []byte // object header - slice of the maxheader with bucket/objname, etc. fields
+		header    []byte // object header - slice of the maxheader with bucket/objName, etc. fields
 		term      struct {
 			mu         sync.Mutex
 			terminated bool

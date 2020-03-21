@@ -206,7 +206,7 @@ func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, fqn string
 // encoding or to send requested "object" to a client. In the latter case
 // if the local object does not exist, it sends an empty body and sets
 // exists=false in response header
-func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck, objname, id string, md *Metadata) (err error) {
+func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck, objName, id string, md *Metadata) (err error) {
 	var (
 		reader   cmn.ReadOpenCloser
 		objAttrs transport.ObjectAttrs
@@ -228,7 +228,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 
 	rHdr := transport.Header{
 		Bck:      bck.Bck,
-		ObjName:  objname,
+		ObjName:  objName,
 		ObjAttrs: objAttrs,
 	}
 	rHdr.Opaque = ireq.NewPack(r.t.GetSmallMMSA())
@@ -284,7 +284,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 
 // send request to a target, wait for its response, read the data into writer.
 // * daemonID - target to send a request
-// * bucket/objname - what to request
+// * bucket/objName - what to request
 // * uname - unique name for the operation: the name is built from daemonID,
 //		bucket and object names. HTTP data receiving handler generates a name
 //		when receiving data and if it finds a writer registered with the same
@@ -294,7 +294,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
 	hdr := transport.Header{
 		Bck:     lom.Bck().Bck,
-		ObjName: lom.Objname,
+		ObjName: lom.ObjName,
 		Opaque:  request,
 	}
 	var reader cmn.ReadOpenCloser
@@ -310,7 +310,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.regWriter(uname, sw)
 
 	if glog.V(4) {
-		glog.Infof("Requesting object %s/%s from %s", lom.Bck(), lom.Objname, daemonID)
+		glog.Infof("Requesting object %s/%s from %s", lom.Bck(), lom.ObjName, daemonID)
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, hdr, reader, nil, true); err != nil {
 		r.unregWriter(uname)
@@ -324,7 +324,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.unregWriter(uname)
 	lom.Uncache()
 	if glog.V(4) {
-		glog.Infof("Received object %s/%s from %s", lom.Bck(), lom.Objname, daemonID)
+		glog.Infof("Received object %s/%s from %s", lom.Bck(), lom.ObjName, daemonID)
 	}
 	return sw.n, nil
 }
@@ -358,7 +358,7 @@ func (r *xactECBase) unregWriter(uname string) (writer *slice, ok bool) {
 // Used to copy replicas/slices after the object is encoded after PUT/restored
 // after GET, or to respond to meta/slice/replica request.
 // * daemonIDs - receivers of the data
-// * bucket/objname - object path
+// * bucket/objName - object path
 // * reader - object/slice/meta data
 // * src - extra information about the data to send
 // * cb - a caller may set its own callback to execute when the transfer is done.
@@ -399,7 +399,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	}
 	hdr := transport.Header{
 		Bck:      lom.Bck().Bck,
-		ObjName:  lom.Objname,
+		ObjName:  lom.ObjName,
 		ObjAttrs: objAttrs,
 		Opaque:   putData,
 	}
@@ -411,7 +411,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 				obj.release()
 			}
 			if err != nil {
-				glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bck(), lom.Objname, daemonIDs, err)
+				glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bck(), lom.ObjName, daemonIDs, err)
 			}
 		}
 	} else {

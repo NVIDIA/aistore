@@ -63,7 +63,7 @@ func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, lin
 	}
 
 	return DlObj{
-		Objname:   objName,
+		ObjName:   objName,
 		Link:      link,
 		FromCloud: cmn.IsProviderCloud(bck.Bck, true /*acceptAnon*/),
 	}, nil
@@ -86,7 +86,7 @@ func NormalizeObjName(objName string) (string, error) {
 
 func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, t cluster.Target) (DlJob, error) {
 	var (
-		// link -> objname
+		// link -> objName
 		objects cmn.SimpleKVs
 		query   = r.URL.Query()
 

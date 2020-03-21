@@ -314,7 +314,7 @@ func (gcpp *gcpProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	if err != nil {
 		return
 	}
-	attrs, err := gcpClient.Bucket(lom.BckName()).Object(lom.Objname).Attrs(gctx)
+	attrs, err := gcpClient.Bucket(lom.BckName()).Object(lom.ObjName).Attrs(gctx)
 	if err != nil {
 		err, errCode = handleObjectError(err, lom, gcpClient.Bucket(lom.BckName()), gctx)
 		return
@@ -336,7 +336,7 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	if err != nil {
 		return
 	}
-	o := gcpClient.Bucket(lom.BckName()).Object(lom.Objname)
+	o := gcpClient.Bucket(lom.BckName()).Object(lom.ObjName)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
 		err, errCode = handleObjectError(err, lom, gcpClient.Bucket(lom.BckName()), gctx)
@@ -382,7 +382,7 @@ func (gcpp *gcpProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 	md := make(cmn.SimpleKVs)
 	md[gcpChecksumType], md[gcpChecksumVal] = lom.Cksum().Get()
 
-	gcpObj := gcpClient.Bucket(lom.BckName()).Object(lom.Objname)
+	gcpObj := gcpClient.Bucket(lom.BckName()).Object(lom.ObjName)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
 	buf, slab := daemon.gmm.Alloc()
@@ -416,7 +416,7 @@ func (gcpp *gcpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err e
 	if err != nil {
 		return
 	}
-	o := gcpClient.Bucket(lom.BckName()).Object(lom.Objname)
+	o := gcpClient.Bucket(lom.BckName()).Object(lom.ObjName)
 	err = o.Delete(gctx)
 	if err != nil {
 		err, errCode = handleObjectError(err, lom, gcpClient.Bucket(lom.BckName()), gctx)

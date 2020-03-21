@@ -327,7 +327,7 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], apitems[1]
+	bucket, objName := apitems[0], apitems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -339,7 +339,7 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -375,7 +375,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], apitems[1]
+	bucket, objName := apitems[0], apitems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -391,7 +391,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -399,14 +399,14 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	config := cmn.GCO.Get()
 	if config.Net.HTTP.RevProxy == cmn.RevProxyTarget {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bucket, objname, si)
+			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bucket, objName, si)
 		}
 		p.reverseNodeRequest(w, r, si)
 		delta := time.Since(started)
 		p.statsT.Add(stats.GetLatency, int64(delta))
 	} else {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
+			glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
 		}
 		redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
@@ -486,7 +486,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], apitems[1]
+	bucket, objName := apitems[0], apitems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -502,13 +502,13 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1248,7 +1248,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], apitems[1]
+	bucket, objName := apitems[0], apitems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -1264,13 +1264,13 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	if checkExists {
@@ -1767,15 +1767,15 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 	if err != nil {
 		return
 	}
-	objname := apitems[1]
+	objName := apitems[1]
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objname), &smap.Smap)
+	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("RENAME %s %s/%s => %s", r.Method, bck.Name, objname, si)
+		glog.Infof("RENAME %s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
 
 	// NOTE:

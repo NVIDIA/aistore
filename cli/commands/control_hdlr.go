@@ -263,7 +263,7 @@ func startDownloadHandler(c *cli.Context) error {
 			DlBase: basePayload,
 			DlObj: downloader.DlObj{
 				Link:    link,
-				Objname: pathSuffix, // in this case pathSuffix is a full name of the object
+				ObjName: pathSuffix, // in this case pathSuffix is a full name of the object
 			},
 		}
 		id, err = api.DownloadSingleWithParam(defaultAPIParams, payload)

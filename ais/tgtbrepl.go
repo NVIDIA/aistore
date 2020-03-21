@@ -27,11 +27,11 @@ type replicInfo struct {
 // replicInfo
 //
 
-func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied bool, err error) {
+func (ri *replicInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied bool, err error) {
 	si := ri.t.si
 	if !ri.localOnly {
 		cmn.Assert(ri.smap != nil)
-		if si, err = cluster.HrwTarget(ri.bckTo.MakeUname(objnameTo), &ri.smap.Smap); err != nil {
+		if si, err = cluster.HrwTarget(ri.bckTo.MakeUname(objNameTo), &ri.smap.Smap); err != nil {
 			return
 		}
 	}
@@ -49,7 +49,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	}
 
 	if si.ID() != ri.t.si.ID() {
-		copied, err := ri.putRemote(lom, objnameTo, si)
+		copied, err := ri.putRemote(lom, objNameTo, si)
 		lom.Unlock(false)
 		return copied, err
 	}
@@ -68,7 +68,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	defer lom.Unlock(true)
 
 	// local op
-	dst := &cluster.LOM{T: ri.t, Objname: objnameTo}
+	dst := &cluster.LOM{T: ri.t, ObjName: objNameTo}
 	err = dst.Init(ri.bckTo.Bck)
 	if err != nil {
 		return
@@ -115,7 +115,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 //
 // TODO: introduce namespace refs and then reuse rebalancing logic and streams instead of PUT
 //
-func (ri *replicInfo) putRemote(lom *cluster.LOM, objnameTo string, si *cluster.Snode) (copied bool, err error) {
+func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.Snode) (copied bool, err error) {
 	var (
 		file                  *cmn.FileHandle
 		cksumType, cksumValue string
@@ -136,7 +136,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objnameTo string, si *cluster.
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   si.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, ri.bckTo.Name, objnameTo),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, ri.bckTo.Name, objNameTo),
 		Query:  query,
 		BodyR:  file,
 	}

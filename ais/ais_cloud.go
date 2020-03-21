@@ -145,7 +145,7 @@ func (m *aisCloudProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMe
 				Ns:       cmn.NsGlobal,
 			}
 		)
-		p, err := api.HeadObject(bp, bck, lom.Objname)
+		p, err := api.HeadObject(bp, bck, lom.ObjName)
 		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 			objMeta[uniqueTag] = fmt.Sprintf("%v", field.Value())
 			return nil, false
@@ -173,7 +173,7 @@ func (m *aisCloudProvider) getObj(ctx context.Context, workFQN string, lom *clus
 			goi := api.GetObjectInput{
 				Writer: w,
 			}
-			_, err = api.GetObject(bp, bck, lom.Objname, goi)
+			_, err = api.GetObject(bp, bck, lom.ObjName, goi)
 			w.CloseWithError(err)
 			errCh <- err
 		}()
@@ -204,7 +204,7 @@ func (m *aisCloudProvider) putObj(ctx context.Context, r io.Reader, lom *cluster
 		args := api.PutObjectArgs{
 			BaseParams: m.newBaseParams(),
 			Bck:        cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
-			Object:     lom.Objname,
+			Object:     lom.ObjName,
 			Hash:       cksumValue,
 			Reader:     cmn.NopOpener(ioutil.NopCloser(r)),
 			Size:       uint64(lom.Size()),
@@ -219,7 +219,7 @@ func (m *aisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err
 	bp := m.newBaseParams()
 	err = m.try(func() error {
 		bck := cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-		return api.DeleteObject(bp, bck, lom.Objname)
+		return api.DeleteObject(bp, bck, lom.ObjName)
 	})
 	return extractErrCode(err)
 }

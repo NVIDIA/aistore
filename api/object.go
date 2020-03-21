@@ -498,7 +498,7 @@ func ReplicateObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 func DownloadSingle(baseParams BaseParams, description string, bck cmn.Bck, objName, link string) (string, error) {
 	dlBody := downloader.DlSingleBody{
 		DlObj: downloader.DlObj{
-			Objname: objName,
+			ObjName: objName,
 			Link:    link,
 		},
 	}

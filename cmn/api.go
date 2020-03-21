@@ -81,7 +81,7 @@ type SelectMsg struct {
 
 // ListMsg contains a list of files and a duration within which to get them
 type ListMsg struct {
-	Objnames []string `json:"objname"`
+	ObjNames []string `json:"objnames"`
 }
 
 // RangeMsg contains a Prefix, Regex, and Range for a Range Operation

@@ -51,7 +51,7 @@ type (
 		md      lmeta  // local meta
 		bck     *Bck   // bucket
 		FQN     string // fqn
-		Objname string // object name in the bucket
+		ObjName string // object name in the bucket
 		HrwFQN  string // (misplaced?)
 		// runtime
 		T         Target
@@ -278,7 +278,7 @@ func (lom *LOM) DelExtraCopies() (err error) {
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
-		copyFQN := fs.CSM.FQN(mpathInfo, lom.bck.Bck, lom.ParsedFQN.ContentType, lom.Objname)
+		copyFQN := fs.CSM.FQN(mpathInfo, lom.bck.Bck, lom.ParsedFQN.ContentType, lom.ObjName)
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
@@ -326,7 +326,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
 		}
-		fqn := fs.CSM.FQN(mpathInfo, lom.bck.Bck, lom.ParsedFQN.ContentType, lom.Objname)
+		fqn := fs.CSM.FQN(mpathInfo, lom.bck.Bck, lom.ParsedFQN.ContentType, lom.ObjName)
 		if _, err := os.Stat(fqn); err != nil {
 			continue
 		}
@@ -406,7 +406,7 @@ func (lom *LOM) String() string { return lom._string(lom.bck.String()) }
 func (lom *LOM) _string(b string) string {
 	var (
 		a string
-		s = fmt.Sprintf("o[%s/%s fs=%s", b, lom.Objname, lom.ParsedFQN.MpathInfo.FileSystem)
+		s = fmt.Sprintf("o[%s/%s fs=%s", b, lom.ObjName, lom.ParsedFQN.MpathInfo.FileSystem)
 	)
 	if glog.FastV(4, glog.SmoduleCluster) {
 		s += fmt.Sprintf("(%s)", lom.FQN)
@@ -627,7 +627,7 @@ func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 		} else if bck.Name != lom.ParsedFQN.Bck.Name {
 			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, bck, lom.ParsedFQN.Bck)
 		}
-		lom.Objname = lom.ParsedFQN.ObjName
+		lom.ObjName = lom.ParsedFQN.ObjName
 		prov := lom.ParsedFQN.Bck.Provider
 		if bck.Provider == "" {
 			bck.Provider = prov
@@ -640,17 +640,17 @@ func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 	if err = lom.bck.Init(bowner, lom.T.Snode()); err != nil {
 		return
 	}
-	lom.md.uname = lom.bck.MakeUname(lom.Objname)
+	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
 	if lom.FQN == "" {
 		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = HrwMpath(lom.md.uname)
 		if err != nil {
 			return
 		}
 		lom.ParsedFQN.ContentType = fs.ObjectType
-		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, lom.bck.Bck, fs.ObjectType, lom.Objname)
+		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, lom.bck.Bck, fs.ObjectType, lom.ObjName)
 		lom.HrwFQN = lom.FQN
 		lom.ParsedFQN.Bck = lom.bck.Bck
-		lom.ParsedFQN.ObjName = lom.Objname
+		lom.ParsedFQN.ObjName = lom.ObjName
 	}
 	if len(config) > 0 {
 		lom.config = config[0]
@@ -765,7 +765,7 @@ beg:
 				goto beg
 			}
 		}
-		err = cmn.NewObjMetaErr(lom.Objname, err)
+		err = cmn.NewObjMetaErr(lom.ObjName, err)
 		lom.T.FSHC(err, lom.FQN)
 		return
 	}
@@ -928,10 +928,10 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
 		bck, objName = ParseUname(md.uname)
 		err          error
 	)
-	lom = &LOM{Objname: objName, bck: &bck}
+	lom = &LOM{ObjName: objName, bck: &bck}
 	bucketExists = bmd.Exists(&bck, md.bckID)
 	if bucketExists {
-		lom.FQN, _, err = HrwFQN(lom.Bck(), fs.ObjectType, lom.Objname)
+		lom.FQN, _, err = HrwFQN(lom.Bck(), fs.ObjectType, lom.ObjName)
 		if err != nil {
 			glog.Errorf("%s: hrw err: %v", lom, err)
 			bucketExists = false

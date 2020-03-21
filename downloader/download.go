@@ -182,7 +182,7 @@ type (
 //==================================== Requests ===========================================
 
 func (req *request) String() (str string) {
-	str += fmt.Sprintf("id: %q, objname: %q, link: %q, from_cloud: %v, ", req.id, req.obj.Objname, req.obj.Link, req.obj.FromCloud)
+	str += fmt.Sprintf("id: %q, objname: %q, link: %q, from_cloud: %v, ", req.id, req.obj.ObjName, req.obj.Link, req.obj.FromCloud)
 	if req.bck.Name != "" {
 		str += fmt.Sprintf("bucket: %q, ", req.bck)
 	}
@@ -191,7 +191,7 @@ func (req *request) String() (str string) {
 }
 
 func (req *request) uid() string {
-	return fmt.Sprintf("%s|%s|%s|%v", req.obj.Link, req.bck, req.obj.Objname, req.obj.FromCloud)
+	return fmt.Sprintf("%s|%s|%s|%v", req.obj.Link, req.bck, req.obj.ObjName, req.obj.FromCloud)
 }
 
 func (req *request) write(resp interface{}, err error, statusCode int) {
@@ -409,7 +409,7 @@ func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
 		task := j.task
 		if task != nil && task.id == reqID {
 			info := TaskDlInfo{
-				Name:       task.obj.Objname,
+				Name:       task.obj.ObjName,
 				Downloaded: task.currentSize.Load(),
 				Total:      task.totalSize,
 

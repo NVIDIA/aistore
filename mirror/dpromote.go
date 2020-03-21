@@ -61,7 +61,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 			return nil
 		}
 	}
-	// NOTE: destination objname is:
+	// NOTE: destination objName is:
 	// r.params.ObjName + filepath.Base(fqn) if promoting single file
 	// r.params.ObjName + strings.TrimPrefix(fileFqn, dirFqn) if promoting the whole directory
 	cmn.Assert(filepath.IsAbs(fqn))

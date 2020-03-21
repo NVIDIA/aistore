@@ -188,7 +188,7 @@ func (d *dispatcher) checkAborted() bool {
 }
 
 func (d *dispatcher) createTasksLom(job DlJob, obj DlObj) (*cluster.LOM, error) {
-	lom := &cluster.LOM{T: d.parent.t, Objname: obj.Objname}
+	lom := &cluster.LOM{T: d.parent.t, ObjName: obj.ObjName}
 	err := lom.Init(job.Bck())
 	if err == nil {
 		err = lom.Load()
@@ -198,7 +198,7 @@ func (d *dispatcher) createTasksLom(job DlJob, obj DlObj) (*cluster.LOM, error) 
 	}
 	if err == nil { // TODO -- FIXME: check version
 		if glog.V(4) {
-			glog.Infof("object %q already exists - skipping", obj.Objname)
+			glog.Infof("object %q already exists - skipping", obj.ObjName)
 		}
 		return nil, nil
 	}
@@ -229,7 +229,7 @@ func (d *dispatcher) prepareTask(job DlJob, obj DlObj) (*singleObjectTask, *jogg
 		glog.Warningf("error in handling downloader request: %v", err)
 		d.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
-		dlStore.persistError(t.id, t.obj.Objname, err.Error())
+		dlStore.persistError(t.id, t.obj.ObjName, err.Error())
 		return nil, nil, err
 	}
 

@@ -311,9 +311,9 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions map[string]string) {
 	errCh := make(chan error, 100)
 	wg := &sync.WaitGroup{}
-	for objname := range newVersions {
+	for objName := range newVersions {
 		wg.Add(1)
-		go tutils.Del(proxyURL, bck, objname, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, bck, objName, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	tassert.SelectErr(t, errCh, "delete", abortonerr)

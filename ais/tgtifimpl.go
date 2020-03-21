@@ -152,7 +152,7 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, bckTo *cluster.Bck, buf []by
 		uncache:   false,
 		finalize:  false,
 	}
-	copied, err = ri.copyObject(lom, lom.Objname)
+	copied, err = ri.copyObject(lom, lom.ObjName)
 	return
 }
 
@@ -220,7 +220,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 	if err = bck.AllowPUT(); err != nil {
 		return
 	}
-	lom := &cluster.LOM{T: t, Objname: objName}
+	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck); err != nil {
 		return
 	}
@@ -242,7 +242,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		ri := &replicInfo{smap: smap, t: t, bckTo: lom.Bck(), buf: buf, localOnly: false}
 
 		// TODO -- FIXME: handle overwrite (lookup first)
-		_, err = ri.putRemote(lom, lom.Objname, si)
+		_, err = ri.putRemote(lom, lom.ObjName, si)
 		slab.Free(buf)
 		return
 	}

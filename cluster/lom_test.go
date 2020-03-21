@@ -111,11 +111,11 @@ var _ = Describe("LOM", func() {
 		desiredLocalFQN := mis[0].MakePathFQN(localBckA, fs.ObjectType, testObject)
 
 		When("run for an ais bucket", func() {
-			It("Should populate fields from Bucket and Objname", func() {
+			It("Should populate fields from Bucket and ObjName", func() {
 				fs.Mountpaths.Disable(mpaths[1]) // Ensure that it matches desiredLocalFQN
 				fs.Mountpaths.Disable(mpaths[2]) // Ensure that it matches desiredLocalFQN
 
-				lom := &cluster.LOM{T: tMock, Objname: testObject}
+				lom := &cluster.LOM{T: tMock, ObjName: testObject}
 				err := lom.Init(cmn.Bck{Name: bucketLocalA, Provider: cmn.ProviderAIS})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.FQN).To(BeEquivalentTo(desiredLocalFQN))
@@ -139,7 +139,7 @@ var _ = Describe("LOM", func() {
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.BckName()).To(BeEquivalentTo(bucketLocalA))
-				Expect(lom.Objname).To(BeEquivalentTo(testObject))
+				Expect(lom.ObjName).To(BeEquivalentTo(testObject))
 
 				Expect(lom.Uname()).To(BeEquivalentTo(lom.Bck().MakeUname(testObject)))
 				Expect(lom.Bck().Provider).To(Equal(cmn.ProviderAIS))
@@ -168,12 +168,12 @@ var _ = Describe("LOM", func() {
 			testObject := "foldr/test-obj.ext"
 			desiredCloudFQN := mis[0].MakePathFQN(cloudBckA, fs.ObjectType, testObject)
 
-			It("Should populate fields from Bucket and Objname", func() {
+			It("Should populate fields from Bucket and ObjName", func() {
 				// Ensure that it matches desiredCloudFQN
 				fs.Mountpaths.Disable(mpaths[1])
 				fs.Mountpaths.Disable(mpaths[2])
 
-				lom := &cluster.LOM{T: tMock, Objname: testObject}
+				lom := &cluster.LOM{T: tMock, ObjName: testObject}
 				err := lom.Init(cmn.Bck{Name: bucketCloudA, Provider: cmn.Cloud, Ns: cmn.NsGlobal})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.FQN).To(BeEquivalentTo(desiredCloudFQN))
@@ -196,7 +196,7 @@ var _ = Describe("LOM", func() {
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.BckName()).To(BeEquivalentTo(bucketCloudA))
-				Expect(lom.Objname).To(BeEquivalentTo(testObject))
+				Expect(lom.ObjName).To(BeEquivalentTo(testObject))
 
 				Expect(lom.Uname()).To(BeEquivalentTo(lom.Bck().MakeUname(testObject)))
 				Expect(lom.Bck().Provider).To(Equal(cmn.ProviderAmazon))
@@ -880,7 +880,7 @@ var _ = Describe("LOM", func() {
 			fs.Mountpaths.Disable(mpaths[1]) // Ensure that it matches desiredCloudFQN
 			fs.Mountpaths.Disable(mpaths[2]) // ditto
 
-			lomEmpty := &cluster.LOM{T: tMock, Objname: testObject}
+			lomEmpty := &cluster.LOM{T: tMock, ObjName: testObject}
 			err := lomEmpty.Init(cmn.Bck{Name: sameBucketName})
 			Expect(err).NotTo(HaveOccurred())
 			err = lomEmpty.Load(false)
@@ -893,7 +893,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomEmpty.ParsedFQN.ObjName).To(Equal(testObject))
 			Expect(lomEmpty.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
-			lomLocal := &cluster.LOM{T: tMock, Objname: testObject}
+			lomLocal := &cluster.LOM{T: tMock, ObjName: testObject}
 			err = lomLocal.Init(cmn.Bck{Name: sameBucketName, Provider: cmn.ProviderAIS})
 			Expect(err).NotTo(HaveOccurred())
 			err = lomLocal.Load(false)
@@ -906,7 +906,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomLocal.ParsedFQN.ObjName).To(Equal(testObject))
 			Expect(lomLocal.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
-			lomCloud := &cluster.LOM{T: tMock, Objname: testObject}
+			lomCloud := &cluster.LOM{T: tMock, ObjName: testObject}
 			err = lomCloud.Init(cmn.Bck{Name: sameBucketName, Provider: cmn.Cloud})
 			Expect(err).NotTo(HaveOccurred())
 			err = lomCloud.Load(false)

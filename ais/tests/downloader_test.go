@@ -142,8 +142,8 @@ func TestDownloadSingle(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL      = tutils.GetPrimaryURL()
-		objname       = "object"
-		objnameSecond = "object-second"
+		objName       = "object"
+		objNameSecond = "object-second"
 
 		// links below don't contain protocols to test that no error occurs
 		// in case they are missing.
@@ -157,13 +157,13 @@ func TestDownloadSingle(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	id, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bck, objname, link)
+	id, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bck, objName, link)
 	tassert.CheckError(t, err)
 
 	time.Sleep(time.Second)
 
 	// Schedule second object
-	idSecond, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bck, objnameSecond, link)
+	idSecond, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bck, objNameSecond, link)
 	tassert.CheckError(t, err)
 
 	// Cancel second object
@@ -196,15 +196,15 @@ func TestDownloadSingle(t *testing.T) {
 		t.Errorf("expected error when removing non-existent task")
 	}
 
-	id, err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bck, objname, linkSmall)
+	id, err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bck, objName, linkSmall)
 	tassert.CheckError(t, err)
 
 	waitForDownload(t, id, 30*time.Second)
 
 	objs, err := tutils.ListObjects(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
-	if len(objs) != 1 || objs[0] != objname {
-		t.Errorf("expected single object (%s), got: %s", objname, objs)
+	if len(objs) != 1 || objs[0] != objName {
+		t.Errorf("expected single object (%s), got: %s", objName, objs)
 	}
 
 	// If the file was successfully downloaded, it means that its checksum was correct
@@ -341,7 +341,7 @@ func TestDownloadTimeout(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		objname  = "object"
+		objName  = "object"
 		link     = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
 		proxyURL = tutils.GetPrimaryURL()
 	)
@@ -354,7 +354,7 @@ func TestDownloadTimeout(t *testing.T) {
 
 	body := downloader.DlSingleBody{
 		DlObj: downloader.DlObj{
-			Objname: objname,
+			ObjName: objName,
 			Link:    link,
 		},
 	}
@@ -593,13 +593,13 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		objnameFirst  = "object-first"
-		objnameSecond = "object-second"
+		objNameFirst  = "object-first"
+		objNameSecond = "object-second"
 
 		linkFirst  = "https://storage.googleapis.com/lpr-vision/cifar10_test.tgz"
 		linkSecond = "github.com/NVIDIA/aistore"
 
-		expectedObjects = []string{objnameFirst, objnameSecond}
+		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -610,9 +610,9 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	})
 	tassert.CheckFatal(t, err)
 
-	id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objnameFirst, linkFirst)
+	id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objNameFirst, linkFirst)
 	tassert.CheckError(t, err)
-	id2, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objnameSecond, linkSecond)
+	id2, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objNameSecond, linkSecond)
 	tassert.CheckError(t, err)
 
 	waitForDownload(t, id, 20*time.Second)
@@ -637,15 +637,15 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		objnameFirst  = "linkFirst"
-		objnameSecond = "linkSecond"
+		objNameFirst  = "linkFirst"
+		objNameSecond = "linkSecond"
 
 		m = map[string]string{
 			"linkFirst":  "https://storage.googleapis.com/lpr-vision/cifar10_test.tgz",
 			"linkSecond": "github.com/NVIDIA/aistore",
 		}
 
-		expectedObjects = []string{objnameFirst, objnameSecond}
+		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
