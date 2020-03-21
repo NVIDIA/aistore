@@ -7,6 +7,7 @@ package commands
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -300,6 +301,22 @@ func showXactionHandler(c *cli.Context) (err error) {
 	dts := make([]daemonTemplateStats, len(xactStats))
 	i := 0
 	for daemonID, daemonStats := range xactStats {
+		sort.Slice(daemonStats, func(i, j int) bool {
+			di, dj := daemonStats[i], daemonStats[j]
+			if di.Kind() == dj.Kind() {
+				// ascending by running
+				if di.Running() && dj.Running() {
+					return di.StartTime().After(dj.StartTime()) // descending by start time (if both running)
+				} else if di.Running() && !dj.Running() {
+					return true
+				} else if !di.Running() && dj.Running() {
+					return false
+				}
+				return di.EndTime().After(dj.EndTime()) // descending by end time
+			}
+			return di.Kind() < dj.Kind() // ascending by kind
+		})
+
 		s := daemonTemplateStats{
 			DaemonID: daemonID,
 			Stats:    daemonStats,
@@ -307,6 +324,9 @@ func showXactionHandler(c *cli.Context) (err error) {
 		dts[i] = s
 		i++
 	}
+	sort.Slice(dts, func(i, j int) bool {
+		return dts[i].DaemonID < dts[j].DaemonID // ascending by node id/name
+	})
 	ctx := xactionTemplateCtx{
 		Stats:   &dts,
 		Verbose: flagIsSet(c, verboseFlag),
