@@ -787,7 +787,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 
 	// create buckets dirs under lock
 	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {
-		if bmd.Exists(bck, bck.Props.BID) {
+		if _, present := bmd.Get(bck); present {
 			return false
 		}
 		errs := fs.Mountpaths.CreateBuckets("recv-bmd-"+msgInt.Action, bck.Bck)
