@@ -96,9 +96,14 @@ func newPrimary() *proxyrunner {
 	config.Periodic.RetrySyncTime = time.Millisecond * 100
 	config.KeepaliveTracker.Proxy.Name = "heartbeat"
 	config.KeepaliveTracker.Proxy.IntervalStr = "as"
+	config.Timeout.CplaneOperation = 2 * time.Second
+	config.Timeout.MaxKeepalive = 4 * time.Second
+	config.Timeout.Default = 10 * time.Second
+	config.Timeout.DefaultLong = 10 * time.Second
 	cmn.GCO.CommitUpdate(config)
 
 	p.httpclientGetPut = &http.Client{}
+	p.httpclient = &http.Client{}
 	p.keepalive = newProxyKeepaliveRunner(p, tracker, &p.startedUp)
 
 	o := newBMDOwnerPrx(config)
@@ -112,6 +117,17 @@ func newSecondary(name string) *proxyrunner {
 	p.si = newSnode(name, httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.owner.smap = newSmapOwner()
 	p.owner.smap.put(newSmap())
+	p.httpclientGetPut = &http.Client{}
+	p.httpclient = &http.Client{}
+
+	config := cmn.GCO.BeginUpdate()
+	config.Periodic.RetrySyncTime = time.Millisecond * 100
+	config.KeepaliveTracker.Proxy.Name = "heartbeat"
+	config.KeepaliveTracker.Proxy.IntervalStr = "as"
+	config.Timeout.CplaneOperation = 2 * time.Second
+	config.Timeout.MaxKeepalive = 4 * time.Second
+	cmn.GCO.CommitUpdate(config)
+
 	o := newBMDOwnerPrx(cmn.GCO.Get())
 	o._put(newBucketMD())
 	p.owner.bmd = o

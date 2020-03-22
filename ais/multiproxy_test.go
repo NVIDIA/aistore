@@ -38,10 +38,15 @@ func newDiscoverServerPrimary() *proxyrunner {
 	)
 	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.httpclientGetPut = &http.Client{}
+	p.httpclient = &http.Client{}
 
 	config := cmn.GCO.BeginUpdate()
 	config.KeepaliveTracker.Proxy.Name = "heartbeat"
-	config.Timeout.Startup = time.Second
+	config.Timeout.Startup = 4 * time.Second
+	config.Timeout.CplaneOperation = 2 * time.Second
+	config.Timeout.MaxKeepalive = 4 * time.Second
+	config.Timeout.Default = 10 * time.Second
+	config.Timeout.DefaultLong = 10 * time.Second
 	cmn.GCO.CommitUpdate(config)
 
 	p.owner.smap = newSmapOwner()
@@ -272,25 +277,25 @@ func TestDiscoverServers(t *testing.T) {
 		smap, bucketmd := primary.uncoverMeta(discoverSmap)
 		if tc.smapVersion == 0 {
 			if smap != nil && smap.version() > 0 {
-				t.Errorf("test case %s: expecting nil Smap", tc.name)
+				t.Errorf("test case %q: expecting nil Smap", tc.name)
 			}
 		} else {
 			if smap == nil || smap.version() == 0 {
-				t.Errorf("test case %s: expecting non-empty Smap", tc.name)
+				t.Errorf("test case %q: expecting non-empty Smap", tc.name)
 			} else if tc.smapVersion != smap.Version {
-				t.Errorf("test case %s: expecting %d, got %d", tc.name, tc.smapVersion, smap.Version)
+				t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.smapVersion, smap.Version)
 			}
 		}
 
 		if tc.bmdVersion == 0 {
 			if bucketmd != nil && bucketmd.version() > 0 {
-				t.Errorf("test case %s: expecting nil BMD", tc.name)
+				t.Errorf("test case %q: expecting nil BMD", tc.name)
 			}
 		} else {
 			if bucketmd == nil || bucketmd.version() == 0 {
-				t.Errorf("test case %s: expecting non-empty BMD", tc.name)
+				t.Errorf("test case %q: expecting non-empty BMD", tc.name)
 			} else if tc.bmdVersion != bucketmd.Version {
-				t.Errorf("test case %s: expecting %d, got %d", tc.name, tc.bmdVersion, bucketmd.Version)
+				t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.bmdVersion, bucketmd.Version)
 			}
 		}
 	}

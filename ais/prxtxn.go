@@ -95,7 +95,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru
@@ -189,7 +189,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru
@@ -265,7 +265,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, props
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
 	return nil
 }
@@ -355,7 +355,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	c.body = cmn.MustMarshal(c.msgInt)
 	c.req.Body = c.body
 
-	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
 	go p.waitRebalance(&nlpFrom, &nlpTo)
 	return

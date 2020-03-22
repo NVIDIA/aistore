@@ -689,6 +689,7 @@ func (h *httprunner) bcastTo(args bcastArgs) chan callResult {
 	}
 	if args.timeout == 0 {
 		args.timeout = cmn.GCO.Get().Timeout.CplaneOperation
+		cmn.Assert(args.timeout != 0)
 	}
 
 	switch args.to {

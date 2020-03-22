@@ -339,5 +339,5 @@ const (
 // timeouts for intra-cluster requests
 const (
 	DefaultTimeout = time.Duration(-1)
-	LongTimeout    = time.Duration(0)
+	LongTimeout    = time.Duration(-2)
 )
