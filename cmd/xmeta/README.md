@@ -2,7 +2,7 @@ xmeta is a low-level utility to format (or extract into plain text)
 assorted AIS control structures.
 
 ```console
-$ go run bench/xmeta/xmeta.go
+$ go run cmd/xmeta/xmeta.go
 Build:
         go install xmeta.go
 Examples:
