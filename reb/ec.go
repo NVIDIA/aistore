@@ -1541,13 +1541,13 @@ func (reb *Manager) waitForExistingSlices(obj *rebObject) (err error) {
 		// wait slices only from `dataSliceCount` first HRW targets
 		tgtIndex := reb.targetIndex(sl.DaemonID, obj)
 		if tgtIndex < 0 || tgtIndex >= int(obj.dataSlices) {
-			if bool(glog.FastV(4, glog.SmoduleReb)) {
+			if glog.FastV(4, glog.SmoduleReb) {
 				glog.Infof("#5.5 Waiting for slice %d %s - [SKIPPED %d]", sl.SliceID, obj.uid, tgtIndex)
 			}
 			continue
 		}
 
-		if bool(glog.FastV(4, glog.SmoduleReb)) {
+		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("#5.5 Waiting for slice %d %s", sl.SliceID, obj.uid)
 		}
 		reb.ec.waiter.lookupCreate(obj.uid, sl.SliceID, waitForAllSlices)
@@ -1638,9 +1638,6 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 	cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
 		fmt.Sprintf("%s%s/%s: isMain %t - mainHasSome %t - mainID %d",
 			reb.t.Snode(), obj.bck, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID))
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("rebuilding slices of %s and send them", obj.objName)
-	}
 	return reb.rebuildFromDisk(obj)
 }
 
@@ -1654,7 +1651,7 @@ func (reb *Manager) cleanupBatch() {
 func (reb *Manager) finalizeBatch(md *rebArgs) error {
 	// First, wait for all slices the local target wants to receive
 	maxWait := md.config.Rebalance.Quiesce
-	if aborted := reb.waitQuiesce(md, maxWait, reb.allCTReceived, 100*time.Millisecond); aborted {
+	if aborted := reb.waitQuiesce(md, maxWait, reb.allCTReceived); aborted {
 		reb.ec.waiter.waitFor.Store(0)
 		return cmn.NewAbortedError("finalize batch - all ct received")
 	}
@@ -1871,7 +1868,7 @@ func (reb *Manager) releaseSGLs(objList []*rebObject) {
 // code. See what can be done to deduplicate it. Some code may go to EC package
 func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s rebuilding slices of %s and send them", reb.t.Snode(), obj.objName)
+		glog.Infof("%s rebuilding slices (disk) of %s and send them", reb.t.Snode(), obj.objName)
 	}
 	slice, ok := obj.locCT[reb.t.Snode().ID()]
 	cmn.Assert(ok && slice.SliceID == 0)
@@ -2000,7 +1997,7 @@ func (reb *Manager) metadataForSlice(slices []*waitCT, sliceID int) *ec.Metadata
 // receives the object into SGL, rebuilds missing slices, and sends them
 func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error) {
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s rebuilding slices of %s and send them", reb.t.Snode(), obj.objName)
+		glog.Infof("%s rebuilding slices (mem - replica) of %s and send them", reb.t.Snode(), obj.objName)
 	}
 	cmn.Assert(len(slices) != 0)
 	slice := slices[0]
@@ -2089,12 +2086,12 @@ func (reb *Manager) rebuildFromMem(obj *rebObject, slices []*waitCT) (err error)
 	return nil
 }
 
-// Object is missing(and maybe a few slices as well). Default target receives all
+// Object is missing (and maybe a few slices as well). Default target receives all
 // existing slices into SGLs, restores the object, rebuilds slices, and finally
 // send missing slices to other targets
 func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err error) {
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s rebuilding slices of %s and send them(mem)", reb.t.Snode(), obj.objName)
+		glog.Infof("%s rebuilding slices (mem) of %s and send them", reb.t.Snode(), obj.objName)
 	}
 
 	sliceCnt := obj.dataSlices + obj.paritySlices
@@ -2249,7 +2246,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 	return nil
 }
 
-// Default target does not have object(but it can be on another target) and
+// Default target does not have object (but it can be on another target) and
 // few slices may be missing. The function detects whether it needs to reconstruct
 // the object and then rebuild and send missing slices
 func (reb *Manager) rebuildAndSend(obj *rebObject, slices []*waitCT) error {
@@ -2480,7 +2477,7 @@ func (wt *ctWaiter) updateRebuildInfo(uid string) bool {
 // Returns UID and data for the next object that has all slices/replicas
 // received and can be rebuild.
 // The number of object in `wt.objs` map is less than the number of object
-// in a batch (ecRebBatchSize). So, linear algorihtm is fast enough.
+// in a batch (ecRebBatchSize). So, linear algorithm is fast enough.
 func (wt *ctWaiter) nextReadyObj() (uid string, wObj *waitObject) {
 	wt.mx.Lock()
 	defer wt.mx.Unlock()

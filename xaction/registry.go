@@ -120,10 +120,9 @@ func (xact *Resilver) String() string {
 	return xact.RebBase.String()
 }
 
-func (xact *Rebalance) AbortedAfter(d time.Duration) (aborted bool) {
-	sleep := time.Second / 2
-	steps := (d + sleep/2) / sleep
-	for i := 0; i < int(steps); i++ {
+func (xact *Rebalance) AbortedAfter(dur time.Duration) (aborted bool) {
+	sleep := cmn.MinDuration(dur, 500*time.Millisecond)
+	for elapsed := time.Duration(0); elapsed < dur; elapsed += sleep {
 		time.Sleep(sleep)
 		if xact.Aborted() {
 			return true
