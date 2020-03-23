@@ -55,12 +55,12 @@ func TestFastLog2Ceil(t *testing.T) {
 	tassert.Fatalf(t, log10252 == 11, "wrong ceil(log2) result; got %d, expected %d", log10252, 11)
 }
 
-func TestMinDur(t *testing.T) {
+func TestMinDuration(t *testing.T) {
 	baseTime := time.Minute
 
-	tassert.Fatalf(t, cmn.MinDur(baseTime, baseTime+time.Second) == baseTime, "expected %s to be smaller than %s", baseTime, baseTime+time.Second)
-	tassert.Fatalf(t, cmn.MinDur(baseTime, baseTime-time.Second) == baseTime-time.Second, "expected %s to be smaller than %s", baseTime-time.Second, baseTime)
-	tassert.Fatalf(t, cmn.MinDur(baseTime, baseTime) == baseTime, "expected %s to be the same as %s", baseTime, baseTime)
+	tassert.Fatalf(t, cmn.MinDuration(baseTime, baseTime+time.Second) == baseTime, "expected %s to be smaller than %s", baseTime, baseTime+time.Second)
+	tassert.Fatalf(t, cmn.MinDuration(baseTime, baseTime-time.Second) == baseTime-time.Second, "expected %s to be smaller than %s", baseTime-time.Second, baseTime)
+	tassert.Fatalf(t, cmn.MinDuration(baseTime, baseTime) == baseTime, "expected %s to be the same as %s", baseTime, baseTime)
 }
 
 func TestCeilAlign(t *testing.T) {

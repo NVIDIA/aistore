@@ -472,7 +472,7 @@ func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
 			maxwt  = config.Rebalance.DestRetryTime
 			curwt  time.Duration
 		)
-		maxwt = cmn.MinDur(maxwt, config.Timeout.SendFile/3)
+		maxwt = cmn.MinDuration(maxwt, config.Timeout.SendFile/3)
 		glog.Warningf("%s: waiting to start...", reb.t.Snode())
 		time.Sleep(sleep)
 		for curwt < maxwt {

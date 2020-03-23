@@ -794,20 +794,6 @@ func ExpandPath(path string) string {
 	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
 }
 
-func ValidatePromoteTrimPrefix(fqn, trimPrefix string) (err error) {
-	const a = "does not represent an absolute path"
-	if trimPrefix != "" && !filepath.IsAbs(trimPrefix) {
-		return fmt.Errorf("pathname prefix '%s' %s", trimPrefix, a)
-	}
-	if !filepath.IsAbs(fqn) {
-		return fmt.Errorf("pathname '%s' %s", fqn, a)
-	}
-	if trimPrefix != "" && !strings.HasPrefix(fqn, trimPrefix) {
-		return fmt.Errorf("pathname '%s' does not begin with '%s'", fqn, trimPrefix)
-	}
-	return
-}
-
 func ValidateBckName(bucket string) (err error) {
 	const nameErr = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
 	if bucket == "" {

@@ -75,7 +75,6 @@ func MinDuration(a, b time.Duration) time.Duration {
 	if a < b {
 		return a
 	}
-
 	return b
 }
 
@@ -84,7 +83,6 @@ func MaxDuration(a, b time.Duration) time.Duration {
 	if a >= b {
 		return a
 	}
-
 	return b
 }
 
@@ -105,34 +103,6 @@ func Max(a, b int) int {
 }
 
 func MinF64(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func MaxF64(a, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func MinF32(a, b float32) float32 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func MaxF32(a, b float32) float32 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func MinDur(a, b time.Duration) time.Duration {
 	if a < b {
 		return a
 	}

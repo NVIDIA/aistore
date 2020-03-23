@@ -321,7 +321,7 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 	maxwt := md.config.Rebalance.DestRetryTime
 	cnt := 0
 	maxwt += time.Duration(int64(time.Minute) * int64(md.smap.CountTargets()/10))
-	maxwt = cmn.MinDur(maxwt, md.config.Rebalance.DestRetryTime*2)
+	maxwt = cmn.MinDuration(maxwt, md.config.Rebalance.DestRetryTime*2)
 
 	for {
 		curwt := time.Duration(0)

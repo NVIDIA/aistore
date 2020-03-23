@@ -1767,7 +1767,7 @@ func (reb *Manager) waitECAck(md *rebArgs) {
 	}
 	maxwt := md.config.Rebalance.DestRetryTime
 	maxwt += time.Duration(int64(time.Minute) * int64(md.smap.CountTargets()/10))
-	maxwt = cmn.MinDur(maxwt, md.config.Rebalance.DestRetryTime*2)
+	maxwt = cmn.MinDuration(maxwt, md.config.Rebalance.DestRetryTime*2)
 	curwt := time.Duration(0)
 	for curwt < maxwt {
 		cnt := reb.retransmitEC(md)
