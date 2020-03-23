@@ -1,7 +1,9 @@
+import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
 from tar2tf import AisDataset
+from tar2tf.ops import Select, Decode, Convert, Resize
 
 EPOCHS = 5
 BATCH_SIZE = 20
@@ -11,7 +13,11 @@ BATCH_SIZE = 20
 BUCKET_NAME = "lb"
 PROXY_URL = "http://localhost:8080"
 
-ais = AisDataset(BUCKET_NAME, PROXY_URL)
+# Create AisDataset.
+# Values will be extracted from tar-records according to Resize(Convert(Decode("jpg"), tf.float32), (224, 224)) operation,
+# meaning that bytes under "jpg" in tar-record will be decoded as an image, converted to tf.float32 type and then Resized to (224, 224)
+# Labels will be extracted from tar-records according to Select("cls") operation, meaning that bytes under "cls" will be treated as label.
+ais = AisDataset(BUCKET_NAME, PROXY_URL, Resize(Convert(Decode("jpg"), tf.float32), (224, 224)), Select("cls"))
 
 # prepare your bucket first with Gavin's tars (gsutil ls gs://lpr-gtc2020)
 train_dataset = ais.load_from_tar("train-{0..3}.tar.xz").shuffle(buffer_size=1024).batch(BATCH_SIZE)
