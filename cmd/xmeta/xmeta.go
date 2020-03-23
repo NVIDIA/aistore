@@ -10,8 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/user"
-	"path/filepath"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -21,8 +19,29 @@ import (
 )
 
 var (
-	in, out        string
-	extract, usage bool
+	flags struct {
+		in, out string
+		extract bool
+		help    bool
+	}
+)
+
+const (
+	helpMsg = `Build:
+	go install xmeta.go
+
+Examples:
+	xmeta -h                                          - show usage
+	xmeta -x -in=~/.ais0/.ais.smap                    - extract Smap to STDOUT
+	xmeta -x -in=~/.ais0/.ais.smap -out=/tmp/smap.txt - extract Smap to /tmp/smap.txt
+	xmeta -in=/tmp/smap.txt -out=/tmp/.ais.smap       - format plain-text /tmp/smap.txt
+	xmeta -x -in=~/.ais0/.ais.bmd                     - extract BMD to STDOUT
+	xmeta -x -in=~/.ais0/.ais.bmd -out=/tmp/bmd.txt   - extract BMD to /tmp/bmd.txt
+	xmeta -in=/tmp/bmd.txt -out=/tmp/.ais.bmd         - format plain-text /tmp/bmd.txt
+	xmeta -x -in=~/.ais0/.ais.rmd                     - extract RMD to STDOUT
+	xmeta -x -in=~/.ais0/.ais.rmd -out=/tmp/rmd.txt   - extract RMD to /tmp/rmd.txt
+	xmeta -in=/tmp/rmd.txt -out=/tmp/.ais.rmd         - format plain-text /tmp/rmd.txt
+`
 )
 
 func main() {
@@ -33,34 +52,30 @@ func main() {
 
 	newFlag := flag.NewFlagSet(os.Args[0], flag.ExitOnError) // discard flags of imported packages
 
-	newFlag.BoolVar(&extract, "x", false,
+	newFlag.BoolVar(&flags.extract, "x", false,
 		"true: extract AIS-formatted BMD or Smap, false: format plain-text BMD or Smap for AIS")
-	newFlag.StringVar(&in, "in", "", "fully-qualified input filename")
-	newFlag.StringVar(&out, "out", "", "output filename (optional when extracting)")
-	newFlag.BoolVar(&usage, "h", false, "print usage and exit")
+	newFlag.StringVar(&flags.in, "in", "", "fully-qualified input filename")
+	newFlag.StringVar(&flags.out, "out", "", "output filename (optional when extracting)")
+	newFlag.BoolVar(&flags.help, "h", false, "print usage and exit")
 	newFlag.Parse(os.Args[1:])
 
-	if usage || len(os.Args[1:]) == 0 {
-		fmt.Println("Build:")
-		fmt.Println("\tgo install xmeta.go")
-		fmt.Println("Examples:")
-		fmt.Printf("\txmeta -h\t\t\t\t\t\t- show usage\n")
-		fmt.Printf("\txmeta -x -in=~/.ais0/.ais.smap\t\t\t\t- extract Smap to STDOUT\n")
-		fmt.Printf("\txmeta -x -in=~/.ais0/.ais.smap -out=/tmp/smap.txt\t- extract Smap to /tmp/smap.txt\n")
-		fmt.Printf("\txmeta -in=/tmp/smap.txt -out=/tmp/.ais.smap\t\t- format plain-text /tmp/smap.txt\n")
-		fmt.Printf("\txmeta -x -in=~/.ais0/.ais.bmd\t\t\t\t- extract BMD to STDOUT\n")
-		fmt.Printf("\txmeta -x -in=~/.ais0/.ais.bmd -out=/tmp/bmd.txt\t\t- extract BMD to /tmp/bmd.txt\n")
-		fmt.Printf("\txmeta -in=/tmp/bmd.txt -out=/tmp/.ais.bmd\t\t- format plain-text /tmp/bmd.txt\n")
-		fmt.Println()
+	if flags.help || len(os.Args[1:]) == 0 {
+		fmt.Print(helpMsg)
 		os.Exit(0)
 	}
 
-	if extract {
+	flags.in = cmn.ExpandPath(flags.in)
+	flags.out = cmn.ExpandPath(flags.out)
+
+	in := strings.ToLower(flags.in)
+	if flags.extract {
 		verb = "extract"
-		if strings.Contains(strings.ToLower(in), "smap") {
+		if strings.Contains(in, "smap") {
 			f, what = dumpSmap, "Smap"
-		} else if strings.Contains(strings.ToLower(in), "bmd") {
+		} else if strings.Contains(in, "bmd") {
 			f, what = dumpBMD, "BMD"
+		} else if strings.Contains(in, "rmd") {
+			f, what = dumpRMD, "RMD"
 		} else if err := dumpSmap(); err == nil {
 			return
 		} else {
@@ -68,10 +83,12 @@ func main() {
 		}
 	} else {
 		verb = "format"
-		if strings.Contains(strings.ToLower(in), "smap") {
+		if strings.Contains(in, "smap") {
 			f, what = compressSmap, "Smap"
-		} else if strings.Contains(strings.ToLower(in), "bmd") {
+		} else if strings.Contains(in, "bmd") {
 			f, what = compressBMD, "BMD"
+		} else if strings.Contains(in, "rmd") {
+			f, what = compressRMD, "RMD"
 		} else if err := compressSmap(); err == nil {
 			return
 		} else {
@@ -79,7 +96,7 @@ func main() {
 		}
 	}
 	if err := f(); err != nil {
-		if extract {
+		if flags.extract {
 			fmt.Printf("Failed to %s %s from %s: %v\n", verb, what, in, err)
 		} else {
 			fmt.Printf("Cannot %s %s: plain-text input %s, error=\"%v\"\n", verb, what, in, err)
@@ -87,70 +104,63 @@ func main() {
 	}
 }
 
-// "*Dump" routines expect AIS-formatted (bmd, smap)
+// "*Dump" routines expect AIS-formatted (smap, bmd, rmd)
 
 func dumpSmap() error {
 	smap := &cluster.Smap{}
-	return dumpMeta(in, smap, jsp.Options{Signature: true})
+	return dumpMeta(smap, jsp.Options{Signature: true})
 }
 
 func dumpBMD() error {
 	bmd := &cluster.BMD{}
-	return dumpMeta(in, bmd, jsp.Options{Signature: true})
+	return dumpMeta(bmd, jsp.Options{Signature: true})
 }
 
-func dumpMeta(fn string, v interface{}, opts jsp.Options) (err error) {
+func dumpRMD() error {
+	rmd := &cluster.RMD{}
+	return dumpMeta(rmd, jsp.Options{Signature: true})
+}
+
+func dumpMeta(v interface{}, opts jsp.Options) (err error) {
 	var f = os.Stdout
-	if out != "" {
-		f, err = cmn.CreateFile(_fclean(out))
+	if flags.out != "" {
+		f, err = cmn.CreateFile(flags.out)
 		if err != nil {
 			return
 		}
 	}
-	err = jsp.Load(_fclean(fn), v, opts)
+	err = jsp.Load(flags.in, v, opts)
 	if err != nil {
 		return
 	}
 	s, _ := jsoniter.MarshalIndent(v, "", " ")
-	fmt.Fprintln(f, string(s))
-	return nil
+	_, err = fmt.Fprintln(f, string(s))
+	return err
 }
 
 // "*Compress" routines require output filename
 
 func compressSmap() error {
 	smap := &cluster.Smap{}
-	return compressMeta(in, smap, jsp.CCSign())
+	return compressMeta(smap, jsp.CCSign())
 }
 
 func compressBMD() error {
 	bmd := &cluster.BMD{}
-	return compressMeta(in, bmd, jsp.CCSign())
+	return compressMeta(bmd, jsp.CCSign())
 }
 
-func compressMeta(fn string, v interface{}, opts jsp.Options) error {
-	if out == "" {
+func compressRMD() error {
+	rmd := &cluster.RMD{}
+	return compressMeta(rmd, jsp.CCSign())
+}
+
+func compressMeta(v interface{}, opts jsp.Options) error {
+	if flags.out == "" {
 		return errors.New("output filename (the -out option) must be defined")
 	}
-	if err := jsp.Load(_fclean(fn), v, jsp.Plain()); err != nil {
+	if err := jsp.Load(flags.in, v, jsp.Plain()); err != nil {
 		return err
 	}
-	return jsp.Save(_fclean(out), v, opts)
-}
-
-// misc helpers
-
-func _fclean(fn string) string {
-	if strings.HasPrefix(fn, "~/") {
-		fn = strings.Replace(fn, "~", _homeDir(), 1)
-	}
-	return filepath.Clean(fn)
-}
-
-func _homeDir() string {
-	currentUser, err := user.Current()
-	if err != nil {
-		return os.Getenv("HOME")
-	}
-	return currentUser.HomeDir
+	return jsp.Save(flags.out, v, opts)
 }
