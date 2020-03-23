@@ -37,7 +37,7 @@ func NewRespondXact(t cluster.Target, smap cluster.Sowner, si *cluster.Snode,
 }
 
 func (r *XactRespond) Run() (err error) {
-	glog.Infof("Starting %s", r.GetRunName())
+	glog.Infoln(r.String())
 
 	var (
 		cfg         = cmn.GCO.Get()

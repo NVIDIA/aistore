@@ -87,10 +87,15 @@ func defaultECBckProps(o *ecOptions) cmn.BucketPropsToUpdate {
 }
 
 func ecSliceNumInit(t *testing.T, smap *cluster.Smap, o *ecOptions) error {
-	tCnt := smap.CountTargets()
+	var (
+		tCnt = smap.CountTargets()
+	)
 	if tCnt < 4 {
 		return fmt.Errorf("%s requires at least 4 targets", t.Name())
 	}
+	defer func() {
+		tutils.Logf("Running EC %d:%d based on the number of ais targets %d\n", o.dataCnt, o.parityCnt, tCnt)
+	}()
 
 	if tCnt == 4 {
 		o.dataCnt = 1
@@ -2155,6 +2160,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	}
 }
 
+// NOTE: wipes out all content including ais system files and user data
 func deleteAllFiles(t *testing.T, path string) {
 	if len(path) < 5 {
 		t.Fatalf("Invalid path %q", path)
@@ -2230,12 +2236,12 @@ func TestECRebalance(t *testing.T) {
 		parityCnt:   2,
 		silent:      true,
 	}.init()
-
 	smap := tutils.GetClusterMap(t, proxyURL)
+
 	err := ecSliceNumInit(t, smap, o)
 	tassert.CheckFatal(t, err)
 	if len(smap.Tmap) < 4 {
-		t.Skip(fmt.Sprintf("%q requires at least 4 targets to have parity>=2, found %d", t.Name(), len(smap.Tmap)))
+		t.Skip(fmt.Sprintf("%q: have %d target(s), need at least 4", t.Name(), len(smap.Tmap)))
 	}
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -2271,12 +2277,12 @@ func TestECRebalance(t *testing.T) {
 	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
 	tassert.CheckFatal(t, err)
 	if len(lostFSList.Available) < 2 {
-		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtLost.ID(), len(lostFSList.Available))
+		t.Fatalf("%s has only %d mountpaths, need at least 2", tgtLost.ID(), len(lostFSList.Available))
 	}
 	swapFSList, err := api.GetMountpaths(baseParams, tgtSwap)
 	tassert.CheckFatal(t, err)
 	if len(swapFSList.Available) < 2 {
-		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtSwap.ID(), len(swapFSList.Available))
+		t.Fatalf("%s has only %d mountpaths, need at least 2", tgtSwap.ID(), len(swapFSList.Available))
 	}
 
 	// make troubles in mpaths
@@ -2285,7 +2291,7 @@ func TestECRebalance(t *testing.T) {
 	//    case of the object is replicated)
 	if o.parityCnt > 1 {
 		lostPath := lostFSList.Available[0]
-		tutils.Logf("Removing mpath %q of target %s\n", lostPath, tgtLost.ID())
+		tutils.Logf("Removing mountpath %q on target %s\n", lostPath, tgtLost.ID())
 		tutils.CheckPathExists(t, lostPath, true /*dir*/)
 		deleteAllFiles(t, lostPath)
 	}
@@ -2293,12 +2299,12 @@ func TestECRebalance(t *testing.T) {
 	// 2. Delete one, and rename the second: simulate mpath dead + new mpath attached
 	// delete obj1 & delete meta1; rename obj2 -> ob1, and meta2 -> meta1
 	swapPathObj1 := swapFSList.Available[0]
-	tutils.Logf("Removing mpath %q of target %s\n", swapPathObj1, tgtSwap.ID())
+	tutils.Logf("Removing mountpath %q on target %s\n", swapPathObj1, tgtSwap.ID())
 	tutils.CheckPathExists(t, swapPathObj1, true /*dir*/)
 	deleteAllFiles(t, swapPathObj1)
 
 	swapPathObj2 := swapFSList.Available[1]
-	tutils.Logf("Renaming mpath %q -> %q of target %s\n", swapPathObj2, swapPathObj1, tgtSwap.ID())
+	tutils.Logf("Renaming mountpath %q -> %q on target %s\n", swapPathObj2, swapPathObj1, tgtSwap.ID())
 	tutils.CheckPathExists(t, swapPathObj2, true /*dir*/)
 	moveAllFiles(t, swapPathObj2, swapPathObj1)
 

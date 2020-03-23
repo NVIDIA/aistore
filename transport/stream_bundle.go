@@ -100,15 +100,15 @@ func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl Client, sb
 	// update streams when Smap changes
 	sb.Resync()
 
-	// register this stream-bundle as Smap listener
-	if !sb.manualResync {
-		listeners.Reg(sb)
-	}
 	if !sb.extra.compressed() {
 		sb.lid = fmt.Sprintf("sb[%s=>%s/%s]", sb.lsnode.ID(), sb.network, sb.trname)
 	} else {
 		sb.lid = fmt.Sprintf("sb[%s=>%s/%s[%s]]", sb.lsnode.ID(), sb.network, sb.trname,
 			cmn.B2S(int64(sb.extra.Config.Compression.BlockMaxSize), 0))
+	}
+	// register this stream-bundle as Smap listener
+	if !sb.manualResync {
+		listeners.Reg(sb)
 	}
 	return
 }

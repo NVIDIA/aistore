@@ -428,6 +428,7 @@ func newSmapListeners() *smaplisteners {
 }
 
 func (sls *smaplisteners) Reg(sl cluster.Slistener) {
+	cmn.Assert(sl.String() != "")
 	sls.Lock()
 
 	smapVersionCh := make(chan int64, 8)

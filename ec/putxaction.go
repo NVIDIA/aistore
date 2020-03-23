@@ -64,7 +64,7 @@ func (r *XactPut) newPutJogger(mpath string) *putJogger {
 }
 
 func (r *XactPut) Run() (err error) {
-	glog.Infof("Starting %s", r.GetRunName())
+	glog.Infoln(r.String())
 
 	for _, jog := range r.putJoggers {
 		go jog.run()

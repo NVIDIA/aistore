@@ -28,7 +28,6 @@ const (
 type (
 	xactECBase struct {
 		cmn.XactDemandBase
-		cmn.Named
 		cmn.MountpathXact
 		t cluster.Target
 

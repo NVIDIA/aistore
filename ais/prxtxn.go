@@ -26,7 +26,6 @@ type txnClientCtx struct {
 	smap    *smapX
 	msg     *aisMsg
 	body    []byte
-	query   url.Values
 	path    string
 	timeout time.Duration
 	req     cmn.ReqArgs
@@ -95,6 +94,8 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive // making exception for this critical op
+	c.req.Query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
 		if res.err != nil {
@@ -476,7 +477,8 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 // txn client context
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnClientCtx {
 	var (
-		c = &txnClientCtx{}
+		query url.Values
+		c     = &txnClientCtx{}
 	)
 	c.uuid = cmn.GenUUID()
 	c.smap = p.owner.smap.get()
@@ -487,14 +489,14 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 
 	c.path = cmn.URLPath(cmn.Version, cmn.Txn, bck.Name)
 	if bck != nil {
-		c.query = cmn.AddBckToQuery(nil, bck.Bck)
+		query = cmn.AddBckToQuery(nil, bck.Bck)
 	} else {
-		c.query = make(url.Values)
+		query = make(url.Values)
 	}
 	c.timeout = cmn.GCO.Get().Timeout.CplaneOperation
-	c.query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
+	query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 
-	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: c.query, Body: c.body}
+	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: query, Body: c.body}
 	return c
 }
 

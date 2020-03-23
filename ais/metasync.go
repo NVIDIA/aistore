@@ -342,7 +342,7 @@ outer:
 	res := y.p.bcastTo(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: urlPath, Body: body},
 		smap:    smap,
-		timeout: config.Timeout.CplaneOperation * 2, // making exception for this critical op
+		timeout: config.Timeout.MaxKeepalive, // making exception for this critical op
 		to:      cluster.AllNodes,
 	})
 
@@ -490,7 +490,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 	res := y.p.bcast(bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Body: body},
 		network: cmn.NetworkIntraControl,
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 		nodes:   []cluster.NodeMap{pending},
 	})
 	for r := range res {

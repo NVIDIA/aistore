@@ -105,7 +105,7 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 }
 
 func (r *XactGet) Run() (err error) {
-	glog.Infof("Starting %s", r.GetRunName())
+	glog.Infoln(r.String())
 
 	for _, jog := range r.getJoggers {
 		go jog.run()
