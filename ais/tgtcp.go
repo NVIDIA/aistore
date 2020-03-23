@@ -99,8 +99,8 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	t.gfn.global.activateTimed()
 
 	// BMD
-	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
-	if err = t.receiveBMD(meta.BMD, msgInt, bucketMDRegister, caller); err != nil {
+	msg := t.newAisMsgStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
+	if err = t.receiveBMD(meta.BMD, msg, bucketMDRegister, caller); err != nil {
 		glog.Infof("%s: %s", t.si, t.owner.bmd.get())
 	}
 	// Smap
@@ -704,38 +704,38 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed and is unusable", mountpath))
 }
 
-func (t *targetrunner) receiveBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
-	if msgInt.TxnID == "" {
-		err = t._recvBMD(newBMD, msgInt, tag, caller)
+func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller string) (err error) {
+	if msg.TxnID == "" {
+		err = t._recvBMD(newBMD, msg, tag, caller)
 		return
 	}
 	// before -- do -- after
-	errFired := t.transactions.commitBefore(caller, msgInt)
+	errFired := t.transactions.commitBefore(caller, msg)
 	if errFired != nil {
 		err = fmt.Errorf("%s: unexpected commit-before, %s, err: %v", t.si, newBMD, errFired)
 		glog.Error(err)
 		return
 	}
-	err = t._recvBMD(newBMD, msgInt, tag, caller)
-	found, errFired := t.transactions.commitAfter(caller, msgInt, err, newBMD)
+	err = t._recvBMD(newBMD, msg, tag, caller)
+	found, errFired := t.transactions.commitAfter(caller, msg, err, newBMD)
 	// handle results w/retries
 	if !found {
 		timeout := cmn.GCO.Get().Timeout.CplaneOperation * 2
 		sleep := timeout / 10
 		for i := sleep; i < timeout && !found; i += sleep {
 			time.Sleep(sleep)
-			found, err = t.transactions.commitAfter(caller, msgInt, err, newBMD)
+			found, err = t.transactions.commitAfter(caller, msg, err, newBMD)
 		}
 	}
 	if !found {
-		glog.Errorf("%s: %s, timed-out waiting to commit Txn[%s]", t.si, newBMD, msgInt.TxnID)
+		glog.Errorf("%s: %s, timed-out waiting to commit Txn[%s]", t.si, newBMD, msg.TxnID)
 	} else if errFired != nil {
 		err = fmt.Errorf("%s: unexpected commit-after, %s, err: %v", t.si, newBMD, errFired)
 		glog.Error(err)
 	}
 	return
 }
-func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
+func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller string) (err error) {
 	const (
 		downgrade = "attempt to downgrade"
 		failed    = "failed to receive BMD"
@@ -756,8 +756,8 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 	if caller != "" {
 		call = ", caller " + caller
 	}
-	if msgInt.Action != "" {
-		act = ", action " + msgInt.Action
+	if msg.Action != "" {
+		act = ", action " + msg.Action
 	}
 	glog.Infof("%s: %s cur=%s, new=%s%s%s", t.si, tag, bmd, newBMD, act, call)
 	//
@@ -790,7 +790,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 		if _, present := bmd.Get(bck); present {
 			return false
 		}
-		errs := fs.Mountpaths.CreateBuckets("recv-bmd-"+msgInt.Action, bck.Bck)
+		errs := fs.Mountpaths.CreateBuckets("recv-bmd-"+msg.Action, bck.Bck)
 		for _, err := range errs {
 			createErrs += "[" + err.Error() + "]"
 		}
@@ -828,7 +828,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 		if !present {
 			bcksToDelete = append(bcksToDelete, obck)
 			// TODO: revisit error handling
-			if err := fs.Mountpaths.DestroyBuckets("recv-bmd-"+msgInt.Action, obck.Bck); err != nil {
+			if err := fs.Mountpaths.DestroyBuckets("recv-bmd-"+msg.Action, obck.Bck); err != nil {
 				destroyErrs = err.Error()
 			}
 		}
@@ -859,7 +859,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msgInt *actionMsgInternal, tag
 	return
 }
 
-func (t *targetrunner) receiveSmap(newSmap *smapX, msgInt *actionMsgInternal, caller string) (err error) {
+func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (err error) {
 	var (
 		s, from string
 	)
@@ -867,8 +867,8 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msgInt *actionMsgInternal, ca
 		from = " from " + caller
 	}
 	// proxy => target control protocol (see p.httpclupost)
-	if msgInt.Action != "" {
-		s = ", action " + msgInt.Action
+	if msg.Action != "" {
+		s = ", action " + msg.Action
 	}
 	glog.Infof("%s: receive %s%s, primary %s%s", t.si, newSmap.StringEx(), from, newSmap.ProxySI, s)
 	if !newSmap.isPresent(t.si) {
@@ -882,7 +882,7 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msgInt *actionMsgInternal, ca
 	return
 }
 
-func (t *targetrunner) receiveRMD(newRMD *rebMD, msgInt *actionMsgInternal, caller string) (err error) {
+func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
 	var (
 		s, from string
 	)
@@ -890,8 +890,8 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msgInt *actionMsgInternal, call
 		from = " from " + caller
 	}
 	// proxy => target control protocol (see p.httpclupost)
-	if msgInt.Action != "" {
-		s = ", action " + msgInt.Action
+	if msg.Action != "" {
+		s = ", action " + msg.Action
 	}
 	glog.Infof("%s: receive %s%s%s", t.si, newRMD.String(), from, s)
 
@@ -906,7 +906,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msgInt *actionMsgInternal, call
 	}
 
 	smap := t.owner.smap.Get()
-	if msgInt.Action == cmn.ActRebalance { // manual
+	if msg.Action == cmn.ActRebalance { // manual
 		go t.rebManager.RunRebalance(smap, newRMD.Version)
 		return
 	}
@@ -921,30 +921,30 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msgInt *actionMsgInternal, call
 	return
 }
 
-func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal, r *http.Request) {
+func (t *targetrunner) ensureLatestMD(msg *aisMsg, r *http.Request) {
 	// Smap
 	smap := t.owner.smap.Get()
-	smapVersion := msgInt.SmapVersion
+	smapVersion := msg.SmapVersion
 	if smap.Version < smapVersion {
-		glog.Errorf("%s: own %s < v%d - fetching latest for %v", t.si, smap, smapVersion, msgInt.Action)
+		glog.Errorf("%s: own %s < v%d - fetching latest for %v", t.si, smap, smapVersion, msg.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 		t.smapVersionFixup(r)
 	} else if smap.Version > smapVersion {
 		// if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("%s: own %s > v%d - encountered during %v", t.si, smap, smapVersion, msgInt.Action)
+		glog.Errorf("%s: own %s > v%d - encountered during %v", t.si, smap, smapVersion, msg.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 	}
 	// BMD
 
 	bucketmd := t.owner.bmd.Get()
-	bmdVersion := msgInt.BMDVersion
+	bmdVersion := msg.BMDVersion
 	if bucketmd.Version < bmdVersion {
-		glog.Errorf("%s: own %s < v%d - fetching latest for %v", t.si, bucketmd, bmdVersion, msgInt.Action)
+		glog.Errorf("%s: own %s < v%d - fetching latest for %v", t.si, bucketmd, bmdVersion, msg.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 		t.BMDVersionFixup(r, cmn.Bck{}, false)
 	} else if bucketmd.Version > bmdVersion {
 		// if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("%s: own %s > v%d - encountered during %v", t.si, bucketmd, bmdVersion, msgInt.Action)
+		glog.Errorf("%s: own %s > v%d - encountered during %v", t.si, bucketmd, bmdVersion, msg.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 	}
 }
@@ -1070,11 +1070,11 @@ func (t *targetrunner) smapVersionFixup(r *http.Request) {
 		glog.Error(err)
 		return
 	}
-	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatSmap, newSmap, nil)
+	var msg = t.newAisMsgStr("get-what="+cmn.GetWhatSmap, newSmap, nil)
 	if r != nil {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	}
-	if err := t.receiveSmap(newSmap, msgInt, caller); err != nil {
+	if err := t.receiveSmap(newSmap, msg, caller); err != nil {
 		glog.Error(err)
 	}
 }
@@ -1089,11 +1089,11 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 		glog.Error(err)
 		return
 	}
-	msgInt := t.newActionMsgInternalStr("get-what="+cmn.GetWhatBMD, nil, newBucketMD)
+	msg := t.newAisMsgStr("get-what="+cmn.GetWhatBMD, nil, newBucketMD)
 	if r != nil {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	}
-	if err := t.receiveBMD(newBucketMD, msgInt, bucketMDFixup, caller); err != nil {
+	if err := t.receiveBMD(newBucketMD, msg, bucketMDFixup, caller); err != nil {
 		glog.Error(err)
 	}
 }
@@ -1191,13 +1191,13 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	caller := r.Header.Get(cmn.HeaderCallerName)
-	newSmap, msgInt, err := t.extractSmap(payload, caller)
+	newSmap, msg, err := t.extractSmap(payload, caller)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
-	if newSmap != nil && msgInt.Action == cmn.ActStartGFN {
+	if newSmap != nil && msg.Action == cmn.ActStartGFN {
 		t.gfn.global.activateTimed()
 	}
 }

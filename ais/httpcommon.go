@@ -80,8 +80,8 @@ type (
 		BucketMD       *bucketMD `json:"bucketmd"`
 	}
 
-	// actionMsgInternal is an extended ActionMsg with extra information for node <=> node control plane communications
-	actionMsgInternal struct {
+	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
+	aisMsg struct {
 		cmn.ActionMsg
 		RMDVersion  int64  `json:"rmdversion,string"`
 		BMDVersion  int64  `json:"bmdversion,string"`
@@ -791,25 +791,6 @@ func (h *httprunner) bcast(bargs bcastArgs) chan callResult {
 	return ch
 }
 
-func (h *httprunner) newActionMsgInternalStr(msgStr string, smap *smapX, bmd *bucketMD) *actionMsgInternal {
-	return h.newActionMsgInternal(&cmn.ActionMsg{Value: msgStr}, smap, bmd)
-}
-
-func (h *httprunner) newActionMsgInternal(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucketMD) *actionMsgInternal {
-	msgInt := &actionMsgInternal{ActionMsg: *actionMsg}
-	if smap != nil {
-		msgInt.SmapVersion = smap.Version
-	} else {
-		msgInt.SmapVersion = h.owner.smap.Get().Version
-	}
-	if bmd != nil {
-		msgInt.BMDVersion = bmd.Version
-	} else {
-		msgInt.BMDVersion = h.owner.bmd.Get().Version
-	}
-	return msgInt
-}
-
 //////////////////////////////////
 // HTTP request parsing helpers //
 //////////////////////////////////
@@ -959,18 +940,18 @@ func (h *httprunner) Health(si *cluster.Snode, includeReb bool, timeout time.Dur
 // metasync Rx handlers //
 //////////////////////////
 
-func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *smapX, msgInt *actionMsgInternal, err error) {
+func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *smapX, msg *aisMsg, err error) {
 	if _, ok := payload[revsSmapTag]; !ok {
 		return
 	}
-	newSmap, msgInt = &smapX{}, &actionMsgInternal{}
+	newSmap, msg = &smapX{}, &aisMsg{}
 	smapValue := payload[revsSmapTag]
 	if err1 := jsoniter.Unmarshal(smapValue, newSmap); err1 != nil {
 		err = fmt.Errorf("failed to unmarshal new Smap, value (%+v, %T), err: %v", smapValue, smapValue, err1)
 		return
 	}
 	if msgValue, ok := payload[revsSmapTag+revsActionTag]; ok {
-		if err1 := jsoniter.Unmarshal(msgValue, msgInt); err1 != nil {
+		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf("failed to unmarshal action message, value (%+v, %T), err: %v", msgValue, msgValue, err1)
 			return
 		}
@@ -979,7 +960,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		s           string
 		smap        = h.owner.smap.get()
 		curVer      = smap.version()
-		isManualReb = msgInt.Action == cmn.ActRebalance && msgInt.Value != nil
+		isManualReb = msg.Action == cmn.ActRebalance && msg.Value != nil
 	)
 	if newSmap.version() == curVer && !isManualReb {
 		newSmap = nil
@@ -993,8 +974,8 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		err = fmt.Errorf("%s: invalid %s - not finding ourselves in smap", h.si, newSmap)
 		return
 	}
-	if msgInt.Action != "" {
-		s = ", action " + msgInt.Action
+	if msg.Action != "" {
+		s = ", action " + msg.Action
 	}
 	if err = smap.validateUUID(newSmap, h.si, nil, caller); err != nil {
 		if h.si.IsProxy() {
@@ -1020,11 +1001,11 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	return
 }
 
-func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msgInt *actionMsgInternal, err error) {
+func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msg *aisMsg, err error) {
 	if _, ok := payload[revsRMDTag]; !ok {
 		return
 	}
-	newRMD, msgInt = &rebMD{}, &actionMsgInternal{}
+	newRMD, msg = &rebMD{}, &aisMsg{}
 	rmdValue := payload[revsRMDTag]
 	if err1 := jsoniter.Unmarshal(rmdValue, newRMD); err1 != nil {
 		err = fmt.Errorf("%s: failed to unmarshal new RMD, value (%+v, %T), err: %v",
@@ -1032,7 +1013,7 @@ func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msgInt *actio
 		return
 	}
 	if msgValue, ok := payload[revsRMDTag+revsActionTag]; ok {
-		if err1 := jsoniter.Unmarshal(msgValue, msgInt); err1 != nil {
+		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf("%s: failed to unmarshal action message, value (%+v, %T), err: %v",
 				h.si, msgValue, msgValue, err1)
 			return
@@ -1048,11 +1029,11 @@ func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msgInt *actio
 	return
 }
 
-func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msgInt *actionMsgInternal, err error) {
+func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msg *aisMsg, err error) {
 	if _, ok := payload[revsBMDTag]; !ok {
 		return
 	}
-	newBMD, msgInt = &bucketMD{}, &actionMsgInternal{}
+	newBMD, msg = &bucketMD{}, &aisMsg{}
 	bmdValue := payload[revsBMDTag]
 	if err1 := jsoniter.Unmarshal(bmdValue, newBMD); err1 != nil {
 		err = fmt.Errorf("%s: failed to unmarshal new %s, value (%+v, %T), err: %v",
@@ -1060,7 +1041,7 @@ func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msgInt *ac
 		return
 	}
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
-		if err1 := jsoniter.Unmarshal(msgValue, msgInt); err1 != nil {
+		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf("%s: failed to unmarshal action message, value (%+v, %T), err: %v",
 				h.si, msgValue, msgValue, err1)
 			return
@@ -1077,14 +1058,15 @@ func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msgInt *ac
 }
 
 func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, error) {
-	bytes, ok := payload[revsTokenTag]
+	var (
+		msg       aisMsg
+		bytes, ok = payload[revsTokenTag]
+	)
 	if !ok {
 		return nil, nil
 	}
-
-	msgInt := actionMsgInternal{}
 	if msgValue, ok := payload[revsTokenTag+revsActionTag]; ok {
-		if err := jsoniter.Unmarshal(msgValue, &msgInt); err != nil {
+		if err := jsoniter.Unmarshal(msgValue, &msg); err != nil {
 			err := fmt.Errorf(
 				"failed to unmarshal action message, value (%+v, %T), err: %v",
 				msgValue, msgValue, err)
@@ -1100,8 +1082,8 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, err
 	}
 
 	s := ""
-	if msgInt.Action != "" {
-		s = ", action " + msgInt.Action
+	if msg.Action != "" {
+		s = ", action " + msg.Action
 	}
 	glog.Infof("received TokenList ntokens %d%s", len(tokenList.Tokens), s)
 
@@ -1276,4 +1258,27 @@ func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
 	}
 	namespace := cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
 	return cluster.NewBck(bckName, provider, namespace), nil
+}
+
+////////////////////
+// aisMsg helpers //
+////////////////////
+
+func (h *httprunner) newAisMsgStr(msgStr string, smap *smapX, bmd *bucketMD) *aisMsg {
+	return h.newAisMsg(&cmn.ActionMsg{Value: msgStr}, smap, bmd)
+}
+
+func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucketMD) *aisMsg {
+	msg := &aisMsg{ActionMsg: *actionMsg}
+	if smap != nil {
+		msg.SmapVersion = smap.Version
+	} else {
+		msg.SmapVersion = h.owner.smap.Get().Version
+	}
+	if bmd != nil {
+		msg.BMDVersion = bmd.Version
+	} else {
+		msg.BMDVersion = h.owner.bmd.Get().Version
+	}
+	return msg
 }

@@ -30,7 +30,7 @@ type (
 		String() string
 		isDone() (done bool, err error)
 		// triggers
-		commitAfter(caller string, msgInt *actionMsgInternal, err error, args ...interface{}) (bool, error)
+		commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (bool, error)
 	}
 	rndzvs struct { // rendezvous records
 		initiator string
@@ -122,30 +122,30 @@ func (txns *transactions) find(uuid string, remove bool) (txn txn, err error) {
 	return
 }
 
-func (txns *transactions) commitBefore(caller string, msgInt *actionMsgInternal) error {
+func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 	var (
 		rndzvs rndzvs
 		ok     bool
 	)
 	txns.Lock()
-	if rndzvs, ok = txns.rendezvous[msgInt.TxnID]; !ok {
+	if rndzvs, ok = txns.rendezvous[msg.TxnID]; !ok {
 		rndzvs.initiator, rndzvs.timestamp = caller, time.Now()
-		txns.rendezvous[msgInt.TxnID] = rndzvs
+		txns.rendezvous[msg.TxnID] = rndzvs
 		txns.Unlock()
 		return nil
 	}
 	txns.Unlock()
 	return fmt.Errorf("rendezvous record %s:%s already exists",
-		msgInt.TxnID, cmn.FormatTimestamp(rndzvs.timestamp))
+		msg.TxnID, cmn.FormatTimestamp(rndzvs.timestamp))
 }
 
-func (txns *transactions) commitAfter(caller string, msgInt *actionMsgInternal, err error,
+func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error,
 	args ...interface{}) (found bool, errDone error) {
-	txns.Lock()
-	if txn, ok := txns.m[msgInt.TxnID]; ok {
-		found, errDone = txn.commitAfter(caller, msgInt, err, args...)
+	txns.RLock()
+	if txn, ok := txns.m[msg.TxnID]; ok {
+		found, errDone = txn.commitAfter(caller, msg, err, args...)
 	}
-	txns.Unlock()
+	txns.RUnlock()
 	return
 }
 
@@ -271,7 +271,7 @@ func (txn *txnBase) isDone() (done bool, err error) {
 
 func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 	txn.uid = c.uuid
-	txn.action = c.msgInt.Action
+	txn.action = c.msg.Action
 	txn.tout = c.timeout
 	txn.smapVer = c.smapVer
 	txn.bmdVer = c.bmdVer
@@ -301,9 +301,9 @@ func (txn *txnBckBase) String() string {
 		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.initiator, tm, res, txn.bck.Name)
 }
 
-func (txn *txnBckBase) commitAfter(caller string, msgInt *actionMsgInternal, err error,
+func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error,
 	args ...interface{}) (found bool, errDone error) {
-	if txn.initiator != caller || msgInt.TxnID != txn.uuid() {
+	if txn.initiator != caller || msg.TxnID != txn.uuid() {
 		return
 	}
 	bmd, _ := args[0].(*bucketMD)

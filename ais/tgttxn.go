@@ -27,7 +27,7 @@ type txnServerCtx struct {
 	phase   string
 	smapVer int64
 	bmdVer  int64
-	msgInt  *actionMsgInternal
+	msg     *aisMsg
 	caller  string
 	bck     *cluster.Bck
 }
@@ -39,8 +39,8 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /txn path")
 		return
 	}
-	msgInt := &actionMsgInternal{}
-	if cmn.ReadJSON(w, r, msgInt) != nil {
+	msg := &aisMsg{}
+	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Txn)
@@ -52,13 +52,13 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 2. gather all context
-	c, err := t.prepTxnServer(r, msgInt, apiItems)
+	c, err := t.prepTxnServer(r, msg, apiItems)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// 3. do
-	switch msgInt.Action {
+	switch msg.Action {
 	case cmn.ActCreateLB, cmn.ActRegisterCB:
 		if err = t.createBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -76,7 +76,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	default:
-		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownAct, msgInt))
+		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownAct, msg))
 	}
 }
 
@@ -118,7 +118,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 	}
 	switch c.phase {
 	case cmn.ActBegin:
-		curCopies, newCopies, err := t.validateMakeNCopies(c.bck, c.msgInt)
+		curCopies, newCopies, err := t.validateMakeNCopies(c.bck, c.msg)
 		if err != nil {
 			return err
 		}
@@ -129,7 +129,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, true /* remove */)
 	case cmn.ActCommit:
-		copies, _ := t.parseNCopies(c.msgInt.Value)
+		copies, _ := t.parseNCopies(c.msg.Value)
 		txn, err := t.transactions.find(c.uuid, false)
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
@@ -149,9 +149,9 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msgInt *actionMsgInternal) (curCopies, newCopies int64, err error) {
+func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, newCopies int64, err error) {
 	curCopies = bck.Props.Mirror.Copies
-	newCopies, err = t.parseNCopies(msgInt.Value)
+	newCopies, err = t.parseNCopies(msg.Value)
 	if err == nil {
 		err = mirror.ValidateNCopies(t.si.Name(), int(newCopies))
 	}
@@ -180,7 +180,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			nprops *cmn.BucketProps
 			err    error
 		)
-		if nprops, err = t.validateNprops(c.bck, c.msgInt); err != nil {
+		if nprops, err = t.validateNprops(c.bck, c.msg); err != nil {
 			return err
 		}
 		txn := newTxnSetBucketProps(c, nprops)
@@ -209,9 +209,9 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *targetrunner) validateNprops(bck *cluster.Bck, msgInt *actionMsgInternal) (nprops *cmn.BucketProps, err error) {
+func (t *targetrunner) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.BucketProps, err error) {
 	var (
-		body    = cmn.MustMarshal(msgInt.Value)
+		body    = cmn.MustMarshal(msg.Value)
 		capInfo = t.AvgCapUsed(cmn.GCO.Get())
 	)
 	nprops = &cmn.BucketProps{}
@@ -260,7 +260,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 			bckFrom = c.bck
 			err     error
 		)
-		if bckTo, err = t.validateBckRenTxn(bckFrom, c.msgInt); err != nil {
+		if bckTo, err = t.validateBckRenTxn(bckFrom, c.msg); err != nil {
 			return err
 		}
 		txn := newTxnRenameBucket(c, bckFrom, bckTo)
@@ -290,7 +290,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 			return err // ditto
 		}
 
-		globalRebID := c.msgInt.RMDVersion
+		globalRebID := c.msg.RMDVersion
 		cmn.Assert(globalRebID > 0)
 
 		t.gfn.local.Activate()
@@ -307,10 +307,10 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msgInt *actionMsgInternal) (bckTo *cluster.Bck, err error) {
+func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckTo *cluster.Bck, err error) {
 	var (
 		bTo               = &cmn.Bck{}
-		body              = cmn.MustMarshal(msgInt.Value)
+		body              = cmn.MustMarshal(msg.Value)
 		config            = cmn.GCO.Get()
 		availablePaths, _ = fs.Mountpaths.Get()
 	)
@@ -349,20 +349,20 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msgInt *actionMsg
 // misc //
 //////////
 
-func (t *targetrunner) prepTxnServer(r *http.Request, msgInt *actionMsgInternal, apiItems []string) (*txnServerCtx, error) {
+func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, apiItems []string) (*txnServerCtx, error) {
 	var (
 		bucket string
 		err    error
 		query  = r.URL.Query()
 		c      = &txnServerCtx{}
 	)
-	c.msgInt = msgInt
+	c.msg = msg
 	c.caller = r.Header.Get(cmn.HeaderCallerName)
 	bucket, c.phase = apiItems[0], apiItems[1]
 	if c.bck, err = newBckFromQuery(bucket, query); err != nil {
 		return c, err
 	}
-	c.uuid = c.msgInt.TxnID
+	c.uuid = c.msg.TxnID
 	if c.uuid == "" {
 		return c, nil
 	}

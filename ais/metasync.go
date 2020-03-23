@@ -53,7 +53,7 @@ const (
 //
 //         (shared-replicated-object, associated action-message)
 //
-// Action message (above, see actionMsgInternal) provides receivers with a context as
+// Action message (above, see aisMsg) provides receivers with a context as
 // to what exactly to do with the newly received versioned replica.
 //
 // Further, the metasyncer:
@@ -97,8 +97,8 @@ type revs interface {
 // private types - used internally by the metasync
 type (
 	revsPair struct {
-		revs   revs
-		msgInt *actionMsgInternal
+		revs revs
+		msg  *aisMsg
 	}
 	revsReq struct {
 		pairs     []revsPair
@@ -282,8 +282,8 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (cnt int) {
 outer:
 	for _, pair := range pairs {
 		var (
-			revs, msgInt, tag = pair.revs, pair.msgInt, pair.revs.tag()
-			s                 = fmt.Sprintf("[%s, action=%s, version=%d]", tag, msgInt.Action, revs.version())
+			revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
+			s              = fmt.Sprintf("[%s, action=%s, version=%d]", tag, msg.Action, revs.version())
 		)
 		// vs current Smap
 		if tag == revsSmapTag {
@@ -314,16 +314,16 @@ outer:
 	// step 2: build payload and update last sync-ed
 	payload := make(msPayload, 2*len(pairsToSend))
 	for _, pair := range pairsToSend {
-		var revs, msgInt, tag, s = pair.revs, pair.msgInt, pair.revs.tag(), ""
-		if msgInt.Action != "" {
-			s = ", action " + msgInt.Action
+		var revs, msg, tag, s = pair.revs, pair.msg, pair.revs.tag(), ""
+		if msg.Action != "" {
+			s = ", action " + msg.Action
 		}
 		glog.Infof("%s: sync %s v%d%s", y.p.si, tag[:2], revs.version(), s)
 
 		y.lastSynced[tag] = revs
 		revsBody := revs.marshal()
 		y.lastClone[tag] = revsBody
-		msgJSON := cmn.MustMarshal(msgInt)
+		msgJSON := cmn.MustMarshal(msg)
 
 		if tag == revsRMDTag {
 			md := revs.(*rebMD)
@@ -390,7 +390,7 @@ outer:
 	return
 }
 
-// keeping track of per-daemon versioning - FIXME TODO: extend to take care of msgInt where pairs may be empty
+// keeping track of per-daemon versioning - FIXME TODO: extend to take care of aisMsg where pairs may be empty
 func (y *metasyncer) syncDone(sid string, pairs []revsPair) {
 	rvd, ok := y.nodesRevs[sid]
 	if !ok {
@@ -475,13 +475,13 @@ func (y *metasyncer) handlePending() (cnt int) {
 	var (
 		payload = make(msPayload, 2*len(y.lastSynced))
 		pairs   = make([]revsPair, 0, len(y.lastSynced))
-		msgInt  = y.p.newActionMsgInternalStr("metasync: handle-pending", smap, nil) // NOTE: same msg for all revs
-		msgBody = cmn.MustMarshal(msgInt)
+		msg     = y.p.newAisMsgStr("metasync: handle-pending", smap, nil) // NOTE: same msg for all revs
+		msgBody = cmn.MustMarshal(msg)
 	)
 	for tag, revs := range y.lastSynced {
 		payload[tag] = revs.marshal()
 		payload[tag+revsActionTag] = msgBody
-		pairs = append(pairs, revsPair{revs, msgInt})
+		pairs = append(pairs, revsPair{revs, msg})
 	}
 	var (
 		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)

@@ -717,8 +717,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			bmd := p.owner.bmd.get()
-			msgInt := p.newActionMsgInternal(&msg, nil, bmd)
-			_ = p.metasyncer.sync(revsPair{bmd, msgInt})
+			msg := p.newAisMsg(&msg, nil, bmd)
+			_ = p.metasyncer.sync(revsPair{bmd, msg})
 		case cmn.ActSummaryBucket:
 			bck, err := newBckFromQuery("", r.URL.Query())
 			if err != nil {
@@ -999,18 +999,17 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 	p.writeJSON(w, r, b, "bucket_summary")
 }
 
-func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg) (
+func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 	summaries cmn.BucketsSummaries, taskID string, err error) {
 	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
 	// it is a request to start a new async task
-	isNew, q := p.initAsyncQuery(&msg)
+	isNew, q := p.initAsyncQuery(&selMsg)
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap   = p.owner.smap.get()
-		msgInt = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &msg}, smap, nil)
-		body   = cmn.MustMarshal(msgInt)
-
-		args = bcastArgs{
+		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &selMsg}, smap, nil)
+		body   = cmn.MustMarshal(aisMsg)
+		args   = bcastArgs{
 			req: cmn.ReqArgs{
 				Path:  cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
 				Query: q,
@@ -1021,7 +1020,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg) (
 		}
 	)
 	results := p.bcastPost(args)
-	allOK, _, err := p.checkBckTaskResp(msg.TaskID, results)
+	allOK, _, err := p.checkBckTaskResp(selMsg.TaskID, results)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1029,7 +1028,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg) (
 	// some targets are still executing their tasks or it is request to start
 	// an async task. The proxy returns only taskID to a caller
 	if !allOK || isNew {
-		return nil, msg.TaskID, nil
+		return nil, selMsg.TaskID, nil
 	}
 
 	// all targets are ready, prepare the final result
@@ -1195,8 +1194,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	p.owner.bmd.put(clone)
 
-	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	_ = p.metasyncer.sync(revsPair{clone, msgInt})
+	_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, clone)})
 
 	p.owner.bmd.Unlock()
 }
@@ -1355,8 +1353,7 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
-		msgInt  = p.newActionMsgInternal(msg, nil, p.owner.bmd.get())
-		body    = cmn.MustMarshal(msgInt)
+		body    = cmn.MustMarshal(p.newAisMsg(msg, nil, p.owner.bmd.get()))
 		urlPath = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 		errmsg  = fmt.Sprintf("cannot %s bucket %s", msg.Action, bck)
 	)
@@ -1559,13 +1556,13 @@ func (p *proxyrunner) checkBckTaskResp(taskID string, results chan callResult) (
 //      * the list of objects if the aync task finished (taskID is 0 in this case)
 //      * non-zero taskID if the task is still running
 //      * error
-func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
+func (p *proxyrunner) listAISBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 	allEntries *cmn.BucketList, taskID string, err error) {
 	// Start new async task if client did not provide taskID (neither in headers nor in SelectMsg).
-	isNew, q := p.initAsyncQuery(&msg)
+	isNew, q := p.initAsyncQuery(&selMsg)
 	var (
-		msgInt = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, nil, nil)
-		body   = cmn.MustMarshal(msgInt)
+		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &selMsg}, nil, nil)
+		body   = cmn.MustMarshal(aisMsg)
 
 		args = bcastArgs{
 			req: cmn.ReqArgs{
@@ -1578,7 +1575,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
 	)
 
 	results := p.bcastPost(args)
-	allOK, _, err := p.checkBckTaskResp(msg.TaskID, results)
+	allOK, _, err := p.checkBckTaskResp(selMsg.TaskID, results)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1586,7 +1583,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
 	// Some targets are still executing their tasks or it is request to start
 	// an async task. The proxy returns only taskID to a caller.
 	if !allOK || isNew {
-		return nil, msg.TaskID, nil
+		return nil, selMsg.TaskID, nil
 	}
 
 	// All targets are ready, prepare the final result.
@@ -1597,8 +1594,8 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
 	results = p.bcastPost(args)
 
 	preallocSize := cmn.DefaultListPageSize
-	if msg.PageSize != 0 {
-		preallocSize = msg.PageSize
+	if selMsg.PageSize != 0 {
+		preallocSize = selMsg.PageSize
 	}
 
 	// Combine the results.
@@ -1624,14 +1621,14 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
 	}
 
 	var pageSize int
-	if msg.PageSize != 0 {
+	if selMsg.PageSize != 0 {
 		// When `PageSize` is set, then regardless of the listing type (slow/fast)
 		// we need respect it.
-		pageSize = msg.PageSize
-	} else if !msg.Fast {
+		pageSize = selMsg.PageSize
+	} else if !selMsg.Fast {
 		// When listing slow, we need to return a single page of default size.
 		pageSize = cmn.DefaultListPageSize
-	} else if msg.Fast {
+	} else if selMsg.Fast {
 		// When listing fast, we need to return all entries (without paging).
 		pageSize = 0
 	}
@@ -1649,26 +1646,26 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
 //      * non-zero taskID if the task is still running
 //      * error
 //
-func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
+func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 	allEntries *cmn.BucketList, taskID string, status int, err error) {
-	if msg.PageSize > cmn.DefaultListPageSize {
+	if selMsg.PageSize > cmn.DefaultListPageSize {
 		glog.Warningf("list-bucket page size %d for bucket %s exceeds the default maximum %d ",
-			msg.PageSize, bck, cmn.DefaultListPageSize)
+			selMsg.PageSize, bck, cmn.DefaultListPageSize)
 	}
-	pageSize := msg.PageSize
+	pageSize := selMsg.PageSize
 	if pageSize == 0 {
 		pageSize = cmn.DefaultListPageSize
 	}
 
 	// start new async task if client did not provide taskID (neither in headers nor in SelectMsg)
-	isNew, q := p.initAsyncQuery(&msg)
+	isNew, q := p.initAsyncQuery(&selMsg)
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap          = p.owner.smap.get()
 		reqTimeout    = cmn.GCO.Get().Timeout.ListBucket
-		msgInt        = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, smap, nil)
-		body          = cmn.MustMarshal(msgInt)
-		needLocalData = msg.NeedLocalData()
+		aisMsg        = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &selMsg}, smap, nil)
+		body          = cmn.MustMarshal(aisMsg)
+		needLocalData = selMsg.NeedLocalData()
 	)
 
 	args := bcastArgs{
@@ -1698,7 +1695,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
 		}
 	}
 
-	allOK, status, err := p.checkBckTaskResp(msg.TaskID, results)
+	allOK, status, err := p.checkBckTaskResp(selMsg.TaskID, results)
 	if err != nil {
 		return nil, "", status, err
 	}
@@ -1706,7 +1703,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
 	// some targets are still executing their tasks or it is request to start
 	// an async task. The proxy returns only taskID to a caller
 	if !allOK || isNew {
-		return nil, msg.TaskID, 0, nil
+		return nil, selMsg.TaskID, 0, nil
 	}
 
 	// all targets are ready, prepare the final result
@@ -1742,13 +1739,13 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, msg cmn.SelectMsg) (
 		bckLists = append(bckLists, bucketList)
 	}
 
-	if msg.Cached {
+	if selMsg.Cached {
 		allEntries = objwalk.ConcatObjLists(bckLists, pageSize)
 	} else {
 		allEntries = objwalk.MergeObjLists(bckLists, pageSize)
 	}
 
-	if msg.WantProp(cmn.GetTargetURL) {
+	if selMsg.WantProp(cmn.GetTargetURL) {
 		for _, e := range allEntries.Entries {
 			si, err := cluster.HrwTarget(bck.MakeUname(e.Name), &smap.Smap)
 			if err == nil {
@@ -1862,8 +1859,7 @@ func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query
 	// Send json message to all
 	smap := p.owner.smap.get()
 	bmd := p.owner.bmd.get()
-	msgInt := p.newActionMsgInternal(msg, smap, bmd)
-	body := cmn.MustMarshal(msgInt)
+	body := cmn.MustMarshal(p.newAisMsg(msg, smap, bmd))
 	if wait {
 		timeout = cmn.GCO.Get().Timeout.ListBucket
 	} else {
@@ -1898,21 +1894,16 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Tokens); err != nil {
 		return
 	}
-
-	msg := &cmn.ActionMsg{Action: cmn.ActRevokeToken}
-	if p.forwardCP(w, r, msg, "revoke token", nil) {
+	if p.forwardCP(w, r, &cmn.ActionMsg{Action: cmn.ActRevokeToken}, "revoke token", nil) {
 		return
 	}
-
 	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
 		return
 	}
-
 	p.authn.updateRevokedList(tokenList)
-
 	if p.owner.smap.get().isPrimary(p.si) {
-		msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, nil, nil)
-		_ = p.metasyncer.sync(revsPair{p.authn.revokedTokenList(), msgInt})
+		msg := p.newAisMsgStr(cmn.ActNewPrimary, nil, nil)
+		_ = p.metasyncer.sync(revsPair{p.authn.revokedTokenList(), msg})
 	}
 }
 
@@ -2350,8 +2341,8 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 				glog.Infof("%s: distributing %s as well", p.si, bmd)
 			}
 
-			msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
-			_ = p.metasyncer.sync(revsPair{clone, msgInt}, revsPair{bmd, msgInt})
+			msg := p.newAisMsgStr(cmn.ActNewPrimary, clone, nil)
+			_ = p.metasyncer.sync(revsPair{clone, msg}, revsPair{bmd, msg})
 		},
 	)
 	cmn.AssertNoErr(err)
@@ -2828,8 +2819,8 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 			clone.putNode(nsi, nonElectable)
 
 			// Notify all nodes about a new one (targets probably need to set up GFN)
-			notifyMsgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
-			notifyPairs := revsPair{clone, notifyMsgInt}
+			aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
+			notifyPairs := revsPair{clone, aisMsg}
 			failCnt := p.metasyncer.notify(true, notifyPairs)
 			if failCnt > 1 {
 				return fmt.Errorf("cannot join %s - unable to reach %d nodes", nsi, failCnt)
@@ -2841,11 +2832,11 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 		func(clone *smapX) {
 			tokens := p.authn.revokedTokenList()
 			// metasync
-			msgInt := p.newActionMsgInternal(msg, clone, nil)
-			pairs := []revsPair{{clone, msgInt}}
+			aisMsg := p.newAisMsg(msg, clone, nil)
+			pairs := []revsPair{{clone, aisMsg}}
 			if nsi.IsTarget() {
 				bmd := p.owner.bmd.get()
-				pairs = append(pairs, revsPair{bmd, msgInt})
+				pairs = append(pairs, revsPair{bmd, aisMsg})
 
 				// Trigger rebalance
 				cmn.Assert(p.requiresRebalance(smap, clone))
@@ -2853,10 +2844,10 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 					clone.TargetIDs = []string{nsi.ID()}
 					clone.inc()
 				})
-				pairs = append(pairs, revsPair{clone, msgInt})
+				pairs = append(pairs, revsPair{clone, aisMsg})
 			}
 			if len(tokens.Tokens) > 0 {
-				pairs = append(pairs, revsPair{tokens, msgInt})
+				pairs = append(pairs, revsPair{tokens, aisMsg})
 			}
 			_ = p.metasyncer.sync(pairs...)
 		},
@@ -2933,13 +2924,13 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			return err
 		},
 		func(clone *smapX) {
-			msgInt := p.newActionMsgInternal(msg, clone, nil)
-			pairs := []revsPair{{clone, msgInt}}
+			aisMsg := p.newAisMsg(msg, clone, nil)
+			pairs := []revsPair{{clone, aisMsg}}
 			if p.requiresRebalance(smap, clone) {
 				clone := p.owner.rmd.modify(func(clone *rebMD) {
 					clone.inc()
 				})
-				pairs = append(pairs, revsPair{clone, msgInt})
+				pairs = append(pairs, revsPair{clone, aisMsg})
 			}
 			_ = p.metasyncer.sync(pairs...)
 		},
@@ -3098,8 +3089,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		clone := p.owner.rmd.modify(func(clone *rebMD) {
 			clone.inc()
 		})
-		msgInt := p.newActionMsgInternal(msg, nil, nil)
-		_ = p.metasyncer.sync(revsPair{clone, msgInt})
+		_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, nil)})
 	case cmn.ActXactStart, cmn.ActXactStop:
 		body := cmn.MustMarshal(msg)
 		results := p.bcastTo(bcastArgs{
@@ -3126,13 +3116,13 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 // broadcasts: Rx and Tx
 //
 //========================
-func (p *proxyrunner) receiveRMD(newRMD *rebMD, msgInt *actionMsgInternal) (err error) {
+func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	if glog.V(3) {
 		s := fmt.Sprintf("receive %s", newRMD.String())
-		if msgInt.Action == "" {
+		if msg.Action == "" {
 			glog.Infoln(s)
 		} else {
-			glog.Infof("%s, action %s", s, msgInt.Action)
+			glog.Infof("%s, action %s", s, msg.Action)
 		}
 	}
 	p.owner.rmd.Lock()
@@ -3149,13 +3139,13 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msgInt *actionMsgInternal) (err 
 	return
 }
 
-func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msgInt *actionMsgInternal, caller string) (err error) {
+func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (err error) {
 	if glog.V(3) {
 		s := fmt.Sprintf("receive %s", newBMD.StringEx())
-		if msgInt.Action == "" {
+		if msg.Action == "" {
 			glog.Infoln(s)
 		} else {
-			glog.Infof("%s, action %s", s, msgInt.Action)
+			glog.Infof("%s, action %s", s, msg.Action)
 		}
 	}
 	p.owner.bmd.Lock()
@@ -3263,8 +3253,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	p.owner.bmd.Lock()
 	p.owner.bmd.put(rbmd)
 
-	msgInt := p.newActionMsgInternal(msg, nil, rbmd)
-	_ = p.metasyncer.sync(revsPair{rbmd, msgInt})
+	_ = p.metasyncer.sync(revsPair{rbmd, p.newAisMsg(msg, nil, rbmd)})
 
 	p.owner.bmd.Unlock()
 }

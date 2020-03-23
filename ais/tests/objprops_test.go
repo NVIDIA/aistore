@@ -111,7 +111,7 @@ func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[st
 }
 
 func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
-	// generate a object list to evict (evict 1/3 of total objects - random selection)
+	// generate object list to evict 1/3rd of all objects - random selection
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
 		toEvict = 1

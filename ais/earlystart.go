@@ -207,8 +207,8 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		}
 		glog.Infof("%s: initial %s, curr %s, added=%d", p.si, loadedSmap, smap.StringEx(), added)
 		bmd := p.owner.bmd.get()
-		msgInt := p.newActionMsgInternalStr(metaction1, smap, bmd)
-		wg := p.metasyncer.sync(revsPair{smap, msgInt}, revsPair{bmd, msgInt})
+		msg := p.newAisMsgStr(metaction1, smap, bmd)
+		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
 		wg.Wait()
 	} else {
 		glog.Infof("%s: no registrations yet", p.si)
@@ -260,8 +260,8 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	}
 	p.owner.bmd.Unlock()
 
-	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmd)
-	_ = p.metasyncer.sync(revsPair{smap, msgInt}, revsPair{bmd, msgInt})
+	msg := p.newAisMsgStr(metaction2, smap, bmd)
+	_ = p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
 
 	// 6: started up as primary
 	glog.Infof("%s: primary/cluster startup complete, %s", p.si, smap.StringEx())

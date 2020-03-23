@@ -18,7 +18,7 @@ import (
 // Special case:
 // If URL contains cachedonly=true then the function returns the list of
 // locally cached objects. Paging is used to return a long list of objects
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *actionMsgInternal) (ok bool) {
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
@@ -35,7 +35,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bck *c
 	return
 }
 
-func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *actionMsgInternal) (ok bool) {
+func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)

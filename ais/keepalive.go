@@ -265,8 +265,8 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 		glog.Error(err)
 	}
 
-	msgInt := pkr.p.newActionMsgInternalStr(metaction, clone, nil)
-	_ = pkr.p.metasyncer.sync(revsPair{clone, msgInt})
+	msg := pkr.p.newAisMsgStr(metaction, clone, nil)
+	_ = pkr.p.metasyncer.sync(revsPair{clone, msg})
 
 	pkr.p.owner.smap.Unlock()
 	return

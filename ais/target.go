@@ -682,9 +682,9 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 // DELETE { action } /v1/buckets/bucket-name
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
-		msgInt = &actionMsgInternal{}
+		msg          = &aisMsg{}
+		apitems, err = t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	)
-	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
@@ -706,7 +706,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	b, err := ioutil.ReadAll(r.Body)
 	if err == nil && len(b) > 0 {
-		err = jsoniter.Unmarshal(b, msgInt)
+		err = jsoniter.Unmarshal(b, msg)
 	}
 	if err != nil {
 		s := fmt.Sprintf("failed to read %s body, err: %v", r.Method, err)
@@ -719,9 +719,9 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, s)
 		return
 	}
-	t.ensureLatestMD(msgInt, r)
+	t.ensureLatestMD(msg, r)
 
-	switch msgInt.Action {
+	switch msg.Action {
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) == 0 { // must be a List/Range request
 			s := "invalid API request: no message body"
@@ -735,14 +735,14 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 		args := &xaction.DeletePrefetchArgs{
 			Ctx:   t.contextWithAuth(r.Header),
-			Evict: msgInt.Action == cmn.ActEvictObjects,
+			Evict: msg.Action == cmn.ActEvictObjects,
 		}
-		if err := cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
+		if err := cmn.TryUnmarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
-		} else if err := cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
+		} else if err := cmn.TryUnmarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			details := fmt.Sprintf("invalid %s action message: %s, %T", msgInt.Action, msgInt.Name, msgInt.Value)
+			details := fmt.Sprintf("invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
 			t.invalmsghdlr(w, r, details)
 			return
 		}
@@ -755,7 +755,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 		go xact.Run(args)
 	default:
-		s := fmt.Sprintf(fmtUnknownAct, msgInt)
+		s := fmt.Sprintf(fmtUnknownAct, msg)
 		t.invalmsghdlr(w, r, s)
 	}
 }
@@ -811,12 +811,11 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucket string
-
-		msgInt  = &actionMsgInternal{}
+		bucket  string
+		msg     = &aisMsg{}
 		started = time.Now()
 	)
-	if cmn.ReadJSON(w, r, msgInt) != nil {
+	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
@@ -824,17 +823,17 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.ensureLatestMD(msgInt, r)
+	t.ensureLatestMD(msg, r)
 
 	if len(apiItems) == 0 {
-		switch msgInt.Action {
+		switch msg.Action {
 		case cmn.ActSummaryBucket:
 			bck, err := newBckFromQuery("", r.URL.Query())
 			if err != nil {
 				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if !t.bucketSummary(w, r, bck, msgInt) {
+			if !t.bucketSummary(w, r, bck, msg) {
 				return
 			}
 		default:
@@ -859,10 +858,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	switch msgInt.Action {
+	switch msg.Action {
 	case cmn.ActPrefetch:
 		if !bck.IsCloud() {
-			t.invalmsghdlr(w, r, msgInt.Action+" requires a Cloud bucket")
+			t.invalmsghdlr(w, r, msg.Action+" requires a Cloud bucket")
 			return
 		}
 		var (
@@ -872,12 +871,12 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		)
 
 		args := &xaction.DeletePrefetchArgs{Ctx: t.contextWithAuth(r.Header)}
-		if err = cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
+		if err = cmn.TryUnmarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
-		} else if err = cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
+		} else if err = cmn.TryUnmarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			details := fmt.Sprintf("invalid %s action message: %s, %T", msgInt.Action, msgInt.Name, msgInt.Value)
+			details := fmt.Sprintf("invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
 			t.invalmsghdlr(w, r, details)
 			return
 		}
@@ -896,25 +895,25 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		)
 		bckFrom := bck
 		// TODO: Currently `copybck` is only supported if the destination is AIS bucket.
-		bckTo := cluster.NewBck(msgInt.Name, cmn.ProviderAIS, cmn.NsGlobal)
+		bckTo := cluster.NewBck(msg.Name, cmn.ProviderAIS, cmn.NsGlobal)
 		switch phase {
 		case cmn.ActBegin:
-			err = t.beginCopyLB(bckFrom, bckTo, msgInt.Action)
+			err = t.beginCopyLB(bckFrom, bckTo, msg.Action)
 		case cmn.ActAbort:
-			t.abortCopyLB(bckFrom, bckTo, msgInt.Action)
+			t.abortCopyLB(bckFrom, bckTo, msg.Action)
 		case cmn.ActCommit:
 			err = t.commitCopyLB(bckFrom, bckTo)
 		default:
-			err = fmt.Errorf("invalid phase %s: %s %s => %s", phase, msgInt.Action, bckFrom, bckTo)
+			err = fmt.Errorf("invalid phase %s: %s %s => %s", phase, msg.Action, bckFrom, bckTo)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		glog.Infof("%s %s bucket %s => %s", phase, msgInt.Action, bckFrom, bckTo)
+		glog.Infof("%s %s bucket %s => %s", phase, msg.Action, bckFrom, bckTo)
 	case cmn.ActListObjects:
 		// list the bucket and return
-		if ok := t.listbucket(w, r, bck, msgInt); !ok {
+		if ok := t.listbucket(w, r, bck, msg); !ok {
 			return
 		}
 
@@ -927,7 +926,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("LIST: %s, %d µs", bucket, int64(delta/time.Microsecond))
 		}
 	case cmn.ActSummaryBucket:
-		if !t.bucketSummary(w, r, bck, msgInt) {
+		if !t.bucketSummary(w, r, bck, msg) {
 			return
 		}
 	case cmn.ActECEncode:
@@ -946,9 +945,9 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		glog.Infof("%s %s bucket %s", phase, msgInt.Action, bck)
+		glog.Infof("%s %s bucket %s", phase, msg.Action, bck)
 	default:
-		s := fmt.Sprintf(fmtUnknownAct, msgInt)
+		s := fmt.Sprintf(fmtUnknownAct, msg)
 		t.invalmsghdlr(w, r, s)
 	}
 }
