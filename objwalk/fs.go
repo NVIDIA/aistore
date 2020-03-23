@@ -19,6 +19,7 @@ type (
 	allfinfos struct {
 		t            cluster.Target
 		smap         *cluster.Smap
+		postCallback PostCallbackFunc
 		objs         []*cmn.BucketEntry
 		prefix       string
 		marker       string
@@ -103,6 +104,9 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 	fileInfo.Size = lom.Size()
 	ci.objs = append(ci.objs, fileInfo)
 	ci.lastFilePath = lom.FQN
+	if ci.postCallback != nil {
+		ci.postCallback(lom)
+	}
 	return nil
 }
 

@@ -16,6 +16,12 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
+type ctxKey int
+
+const (
+	CtxPostCallbackKey ctxKey = iota
+)
+
 type (
 	Walk struct {
 		ctx context.Context
@@ -27,9 +33,11 @@ type (
 		infos *allfinfos
 		err   error
 	}
+
+	PostCallbackFunc func(lom *cluster.LOM)
 )
 
-func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
+func (w *Walk) newFileWalk(ctx context.Context, bucket string, msg *cmn.SelectMsg) *allfinfos {
 	// Marker is always a file name, so we need to strip filename from path
 	markerDir := ""
 	if msg.PageMarker != "" {
@@ -41,9 +49,11 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 
 	// A small optimization: set boolean variables need* to avoid
 	// doing string search(strings.Contains) for every entry.
+	postCallback, _ := ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
 	ci := &allfinfos{
 		t:            w.t, // targetrunner
 		smap:         w.t.GetSowner().Get(),
+		postCallback: postCallback,
 		objs:         make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize),
 		prefix:       msg.Prefix,
 		marker:       msg.PageMarker,
@@ -79,44 +89,40 @@ func NewWalk(ctx context.Context, t cluster.Target, bck cmn.Bck, msg *cmn.Select
 }
 
 // LocalObjPage walks local filesystems and collects all object for a given
-// bucket. NOTE: the bucket can be local or cloud one. In latter case the
+// bucket. The bucket can be local or cloud one. In latter case the
 // function returns the list of cloud objects cached locally
 func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
-	availablePaths, _ := fs.Mountpaths.Get()
-	ch := make(chan *mresp, len(fs.CSM.RegisteredContentTypes)*len(availablePaths))
-	wg := &sync.WaitGroup{}
+	var (
+		availablePaths, _ = fs.Mountpaths.Get()
+		ch                = make(chan *mresp, len(fs.CSM.RegisteredContentTypes)*len(availablePaths))
+		wg                = &sync.WaitGroup{}
+	)
 
-	// function to traverse one mountpoint
+	// Function to traverse single mountpath.
 	walkMpath := func(mpathInfo *fs.MountpathInfo, bck cmn.Bck, cts []string) {
-		r := &mresp{w.newFileWalk(w.bck.Name, w.msg), nil}
+		defer wg.Done()
+
+		r := &mresp{w.newFileWalk(w.ctx, w.bck.Name, w.msg), nil}
 		if w.msg.Fast {
 			r.infos.limit = math.MaxInt64 // return all objects in one response
 		}
+		opts := &fs.Options{
+			Mpath: mpathInfo,
+			Bck:   bck,
+			CTs:   cts,
+		}
 		if w.msg.Fast {
-			err := fs.Walk(&fs.Options{
-				Mpath:    mpathInfo,
-				Bck:      bck,
-				CTs:      cts,
-				Callback: r.infos.listwalkfFast,
-				Sorted:   r.infos.marker != "",
-			})
-			if err != nil {
-				r.err = err
-			}
+			opts.Callback = r.infos.listwalkfFast
+			opts.Sorted = r.infos.marker != ""
 		} else {
-			err := fs.Walk(&fs.Options{
-				Mpath:    mpathInfo,
-				Bck:      bck,
-				CTs:      cts,
-				Callback: r.infos.listwalkf,
-				Sorted:   true,
-			})
-			if err != nil {
-				r.err = err
-			}
+			opts.Callback = r.infos.listwalkf
+			opts.Sorted = true
+		}
+		err := fs.Walk(opts)
+		if err != nil {
+			r.err = err
 		}
 		ch <- r
-		wg.Done()
 	}
 
 	// Traverse all mountpoints in parallel.
@@ -182,10 +188,11 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	}
 
 	var (
-		config   = cmn.GCO.Get()
-		localURL = w.t.Snode().URL(cmn.NetworkPublic)
-		localID  = w.t.Snode().ID()
-		smap     = w.t.GetSowner().Get()
+		config          = cmn.GCO.Get()
+		localURL        = w.t.Snode().URL(cmn.NetworkPublic)
+		localID         = w.t.Snode().ID()
+		smap            = w.t.GetSowner().Get()
+		postCallback, _ = w.ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
 
 		needURL     = w.msg.WantProp(cmn.GetTargetURL)
 		needAtime   = w.msg.WantProp(cmn.GetPropsAtime)
@@ -230,6 +237,10 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 		}
 		if needCopies {
 			e.Copies = int16(lom.NumCopies())
+		}
+
+		if postCallback != nil {
+			postCallback(lom)
 		}
 	}
 

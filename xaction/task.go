@@ -94,7 +94,15 @@ func (e *bckSummaryTaskEntry) Get() cmn.Xact { return e.xact }
 func (t *bckListTask) IsMountpathXact() bool { return false }
 
 func (t *bckListTask) Run() {
-	walk := objwalk.NewWalk(t.ctx, t.t, t.Bck(), t.msg)
+	ctx := context.WithValue(
+		t.ctx,
+		objwalk.CtxPostCallbackKey,
+		objwalk.PostCallbackFunc(func(lom *cluster.LOM) {
+			t.ObjectsInc()
+			t.BytesAdd(lom.Size())
+		}),
+	)
+	walk := objwalk.NewWalk(ctx, t.t, t.Bck(), t.msg)
 	if t.Bck().IsAIS() || t.msg.Cached {
 		t.UpdateResult(walk.LocalObjPage())
 	} else {
