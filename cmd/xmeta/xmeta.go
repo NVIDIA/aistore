@@ -65,8 +65,9 @@ func main() {
 	}
 
 	flags.in = cmn.ExpandPath(flags.in)
-	flags.out = cmn.ExpandPath(flags.out)
-
+	if flags.out != "" {
+		flags.out = cmn.ExpandPath(flags.out)
+	}
 	in := strings.ToLower(flags.in)
 	if flags.extract {
 		verb = "extract"
