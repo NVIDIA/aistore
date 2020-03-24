@@ -86,27 +86,27 @@ func defaultECBckProps(o *ecOptions) cmn.BucketPropsToUpdate {
 	}
 }
 
-func ecSliceNumInit(t *testing.T, smap *cluster.Smap, o *ecOptions) error {
-	var (
-		tCnt = smap.CountTargets()
-	)
+func ecSliceNumInit(t *testing.T, smap *cluster.Smap, o *ecOptions, silent ...bool) error {
+	var tCnt = smap.CountTargets()
 	if tCnt < 4 {
 		return fmt.Errorf("%s requires at least 4 targets", t.Name())
 	}
 	defer func() {
-		tutils.Logf("Running EC %d:%d based on the number of ais targets %d\n", o.dataCnt, o.parityCnt, tCnt)
+		if len(silent) == 0 || !silent[0] {
+			tutils.Logf("Running EC %d:%d based on the number of ais targets %d\n", o.dataCnt, o.parityCnt, tCnt)
+		}
 	}()
 
 	if tCnt == 4 {
 		o.dataCnt = 1
 		o.parityCnt = 1
 		return nil
-	} else if tCnt == 5 {
+	}
+	if tCnt == 5 {
 		o.dataCnt = 1
 		o.parityCnt = 2
 		return nil
 	}
-
 	o.dataCnt = 2
 	o.parityCnt = 2
 	return nil
@@ -2702,13 +2702,9 @@ func TestECResilver(t *testing.T) {
 // 8. Stop reading loop and read all objects once more (nothing should fail)
 // 9. Get the number of objects in the bucket (must be the same as at start)
 func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
 	}
-
 	var (
 		bckEC = cmn.Bck{
 			Name:     TestBucketName + "-EC",
@@ -2716,26 +2712,63 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 		}
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		origOpts   = ecOptions{
+			objCount:    300,
+			concurrency: 8,
+			pattern:     "obj-reb-chk-%04d",
+			dataCnt:     1,
+			parityCnt:   2,
+			silent:      true,
+		}
 	)
-	o := ecOptions{
-		objCount:    100,
-		concurrency: 8,
-		pattern:     "obj-reb-chk-%04d",
-		dataCnt:     1,
-		parityCnt:   2,
-		silent:      true,
-	}.init()
-
-	smap := tutils.GetClusterMap(t, proxyURL)
-	err := ecSliceNumInit(t, smap, o)
-	tassert.CheckFatal(t, err)
-	if len(smap.Tmap) < 4 {
-		t.Skip(fmt.Sprintf("%q requires at least 4 targets to have parity>=2, found %d", t.Name(), len(smap.Tmap)))
+	if testing.Short() {
+		// TODO: run origOpts.objCount = 30 once #659 gets cleared
+		t.Skip(tutils.SkipMsg)
 	}
 
-	newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bckEC)
+	// run tests
+	var (
+		tests = []struct {
+			name      string
+			parityCnt int
+		}{
+			{
+				name:      "parity=2",
+				parityCnt: 2,
+			},
+			{
+				name:      "parity=1",
+				parityCnt: 1,
+			},
+		}
+	)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			o := origOpts.init()
+			err := ecSliceNumInit(t, smap, o, true /*silent*/)
+			tassert.CheckFatal(t, err)
 
+			if test.parityCnt == 1 && o.parityCnt > 1 {
+				o.parityCnt = 1
+			} else if test.parityCnt == 2 && o.parityCnt == 1 {
+				tutils.Logf("%q requires at least 5 targets (have %d)\n", t.Name(), smap.CountTargets())
+				t.Skip(tutils.SkipMsg)
+			}
+			tutils.Logf("Running EC %d:%d\n", o.dataCnt, o.parityCnt)
+
+			newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
+			_ECAndRegularUnregisterWhileRebalancing(t, o, smap, bckEC)
+			tutils.DestroyBucket(t, proxyURL, bckEC)
+		})
+	}
+}
+
+func _ECAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cluster.Smap, bckEC cmn.Bck) {
+	var (
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
 	tgtList := tutils.ExtractTargetNodes(smap)
@@ -2743,7 +2776,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 	tgtGone := tgtList[1]
 
 	tutils.Logf("Unregistering %s...\n", tgtLost.ID())
-	err = tutils.UnregisterNode(proxyURL, tgtLost.ID())
+	err := tutils.UnregisterNode(proxyURL, tgtLost.ID())
 	tassert.CheckFatal(t, err)
 	registered := false
 	smap = tutils.GetClusterMap(t, proxyURL)

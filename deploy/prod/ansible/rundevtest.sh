@@ -19,7 +19,7 @@ git reset --hard origin/master
 git status
 git log | head -5
 
-make deploy <<< $'4\n4\n4\n1'
+make deploy <<< $'5\n4\n4\n1'
 
 echo "sleep 10 seconds before checking AIStore processes"
 sleep 10
