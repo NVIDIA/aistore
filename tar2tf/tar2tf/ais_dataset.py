@@ -111,7 +111,7 @@ def default_record_to_example(record):
     return tf.train.Example(features=features)
 
 
-def __validate_op(op):
+def validate_op(op):
     unknown_type_ex = Exception("unknown operation type. Expected one of {}".format(OPS))
     if type(op) == list:
         for o in op:
@@ -130,8 +130,8 @@ class AisDataset:
         self.proxy_client = AisClient(self.proxy_url, bucket)
         self.bucket = bucket
 
-        __validate_op(val_op)
-        __validate_op(label_op)
+        validate_op(val_op)
+        validate_op(label_op)
 
         # how to translate record to value / label
         self.val_op = val_op

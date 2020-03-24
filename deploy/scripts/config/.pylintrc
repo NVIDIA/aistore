@@ -54,7 +54,6 @@ disable=C, # just for now, everything should be checked
         missing-docstring,
         logging-format-interpolation,
         fixme,
-        invalid-name, # just for now, remove later
         print-statement,
         parameter-unpacking,
         unpacking-in-except,
