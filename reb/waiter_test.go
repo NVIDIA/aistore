@@ -20,9 +20,8 @@ type testObject struct {
 var _ = Describe("ECWaiter", func() {
 	It("Checking EC slice waiter", func() {
 		const (
-			sliceCnt     = 3
-			sliceDone    = 2
-			toCleanLastN = 2
+			sliceCnt  = 3
+			sliceDone = 2
 		)
 		wt := newWaiter(memsys.DefaultPageMM())
 		// must have more than ecRebBatchSize items
@@ -100,10 +99,6 @@ var _ = Describe("ECWaiter", func() {
 		wt.cleanupBatch(rebObjs, len(rebObjs)+10)
 		Expect(len(wt.objs)).To(Equal(len(rebObjs)))
 
-		By("cleanup in the middle")
-		Expect(len(objs)).Should(BeNumerically(">", ecRebBatchSize+4))
-		wt.cleanupBatch(rebObjs, len(rebObjs)-ecRebBatchSize-3)
-		Expect(len(wt.objs)).To(Equal(len(rebObjs) - ecRebBatchSize))
 		// after that first and last item should still exist, so "creating"
 		// waitSlice for them once more should return existing ones and
 		// must not change the size of waitSlice length
@@ -111,10 +106,6 @@ var _ = Describe("ECWaiter", func() {
 		_ = wt.lookupCreate(rebObjs[0].uid, 1, waitForSingleSlice)
 		_ = wt.lookupCreate(rebObjs[len(rebObjs)-1].uid, 1, waitForSingleSlice)
 		Expect(len(wt.objs)).To(Equal(currLen))
-
-		By("cleanup last incomplete batch (a few last items)")
-		wt.cleanupBatch(rebObjs, len(rebObjs)-toCleanLastN)
-		Expect(len(wt.objs)).To(Equal(len(rebObjs) - ecRebBatchSize - toCleanLastN))
 
 		By("cleanup everything")
 		wt.cleanup()

@@ -559,17 +559,17 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 		return
 	}
 
-	if reb.RebID() != req.rebID {
-		glog.Warningf("Stage %v push notification: %s", stages[req.stage], reb.rebIDMismatchMsg(req.rebID))
-		return
-	}
-
-	if req.stage == rebStageAbort {
+	if req.stage == rebStageAbort && reb.RebID() <= req.rebID {
 		// a target aborted its xaction and sent the signal to others
 		glog.Warningf("Rebalance abort notification from %s", req.daemonID)
 		if reb.xact() != nil {
 			reb.xact().Abort()
 		}
+		return
+	}
+
+	if reb.RebID() != req.rebID {
+		glog.Warningf("Stage %v push notification: %s", stages[req.stage], reb.rebIDMismatchMsg(req.rebID))
 		return
 	}
 

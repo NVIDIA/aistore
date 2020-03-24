@@ -87,7 +87,7 @@ import (
 
 const (
 	// the number of objects processed a time
-	ecRebBatchSize = 8
+	ecRebBatchSize = 64
 	// a target wait for the first slice(not a full replica) to come
 	anySliceID = math.MaxInt16
 )
@@ -1258,10 +1258,9 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	obj.paritySlices = mainSlice.ParitySlices
 	obj.sliceSize = ec.SliceSize(obj.objSize, int(obj.dataSlices))
 
-	ctFound := obj.foundCT()
 	ctReq := obj.requiredCT()
 	obj.ctExist = make([]bool, ctReq)
-	obj.locCT = make(map[string]*rebCT, ctFound)
+	obj.locCT = make(map[string]*rebCT)
 
 	obj.uid = uniqueWaitID(obj.bck, mainSlice.ObjName)
 	obj.isMain = obj.mainDaemon == localDaemon
@@ -1286,6 +1285,7 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 			ctCnt++
 		}
 	}
+	ctFound := obj.foundCT()
 	obj.hasAllSlices = ctCnt >= obj.dataSlices+obj.paritySlices
 
 	genCount := cmn.Max(ctReq, len(smap.Tmap))
@@ -1320,8 +1320,8 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d]",
 			reb.t.Snode(), obj.uid, obj.hasCT, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID)
-		glog.Infof("slice found %d vs required %d[all slices: %v], is in HRW %v [sender %s]",
-			ctFound, ctReq, obj.hasAllSlices, obj.inHrwList, obj.sender)
+		glog.Infof("%s: slice found %d vs required %d[all slices: %v], is in HRW %v [sender %s]",
+			obj.uid, ctFound, ctReq, obj.hasAllSlices, obj.inHrwList, obj.sender)
 	}
 	return nil
 }
@@ -1500,6 +1500,9 @@ func (reb *Manager) allCTReceived(_ *rebArgs) bool {
 		}
 		wObj.status = objDone
 		reb.ec.waiter.toRebuild.Dec()
+	}
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("CT waitFor: %d, toRebuild: %d", reb.ec.waiter.waitFor.Load(), reb.ec.waiter.toRebuild.Load())
 	}
 
 	// must be the last check, because even if a target has all slices
