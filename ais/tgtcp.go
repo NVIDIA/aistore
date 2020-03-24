@@ -710,27 +710,16 @@ func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller str
 		return
 	}
 	// before -- do -- after
-	errFired := t.transactions.commitBefore(caller, msg)
-	if errFired != nil {
-		err = fmt.Errorf("%s: unexpected commit-before, %s, err: %v", t.si, newBMD, errFired)
+	if errDone := t.transactions.commitBefore(caller, msg); errDone != nil {
+		err = fmt.Errorf("%s: unexpected commit-before, %s, err: %v", t.si, newBMD, errDone)
 		glog.Error(err)
 		return
 	}
+
 	err = t._recvBMD(newBMD, msg, tag, caller)
-	found, errFired := t.transactions.commitAfter(caller, msg, err, newBMD)
-	// handle results w/retries
-	if !found {
-		timeout := cmn.GCO.Get().Timeout.CplaneOperation * 2
-		sleep := timeout / 10
-		for i := sleep; i < timeout && !found; i += sleep {
-			time.Sleep(sleep)
-			found, err = t.transactions.commitAfter(caller, msg, err, newBMD)
-		}
-	}
-	if !found {
-		glog.Errorf("%s: %s, timed-out waiting to commit Txn[%s]", t.si, newBMD, msg.TxnID)
-	} else if errFired != nil {
-		err = fmt.Errorf("%s: unexpected commit-after, %s, err: %v", t.si, newBMD, errFired)
+
+	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
+		err = fmt.Errorf("%s: unexpected commit-after, %s, err: %v", t.si, newBMD, errDone)
 		glog.Error(err)
 	}
 	return
@@ -741,18 +730,11 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		failed    = "failed to receive BMD"
 	)
 	var (
+		curVer                  int64
 		call, act               string
 		createErrs, destroyErrs string
 		bmd                     = t.owner.bmd.get()
-		curVer                  = bmd.version()
 	)
-	if newBMD.version() <= curVer {
-		if newBMD.version() < curVer {
-			err = fmt.Errorf("%s: %s %s to %s", t.si, downgrade, bmd.StringEx(), newBMD.StringEx())
-			glog.Error(err)
-		}
-		return
-	}
 	if caller != "" {
 		call = ", caller " + caller
 	}

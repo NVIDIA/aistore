@@ -31,9 +31,11 @@ type (
 		isDone() (done bool, err error)
 		// triggers
 		commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (bool, error)
+		rsvp(err error)
 	}
 	rndzvs struct { // rendezvous records
 		initiator string
+		err       *txnError
 		timestamp time.Time
 	}
 	transactions struct {
@@ -139,24 +141,45 @@ func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 		msg.TxnID, cmn.FormatTimestamp(rndzvs.timestamp))
 }
 
-func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error,
-	args ...interface{}) (found bool, errDone error) {
-	txns.RLock()
+func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (errDone error) {
+	var running bool
+	txns.Lock()
 	if txn, ok := txns.m[msg.TxnID]; ok {
-		found, errDone = txn.commitAfter(caller, msg, err, args...)
+		running, errDone = txn.commitAfter(caller, msg, err, args...)
 	}
-	txns.RUnlock()
+	if !running {
+		if rndzvs, ok := txns.rendezvous[msg.TxnID]; ok {
+			rndzvs.err = &txnError{err: err}
+		} else {
+			errDone = fmt.Errorf("rendezvous record %s does not exist", msg.TxnID) // can't happen
+		}
+	}
+	txns.Unlock()
 	return
 }
 
 // given txn, wait for its completion, handle timeout, and ultimately remove
 func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
 	var (
-		sleep       = cmn.MinDuration(100*time.Millisecond, timeout/10)
-		done, found bool
+		sleep             = cmn.MinDuration(100*time.Millisecond, timeout/10)
+		rsvpErr           error
+		done, found, rsvp bool
 	)
 	// timestamp
 	txn.started(cmn.ActCommit, time.Now())
+
+	// RSVP
+	txns.RLock()
+	if rndzvs, ok := txns.rendezvous[txn.uuid()]; ok {
+		if rndzvs.err != nil {
+			rsvp, rsvpErr = true, rndzvs.err.err
+		}
+	}
+	txns.RUnlock()
+	if rsvp {
+		txn.rsvp(rsvpErr)
+	}
+
 	// poll & check
 	for total := sleep; ; total += sleep {
 		if done, err = txn.isDone(); done {
@@ -269,6 +292,12 @@ func (txn *txnBase) isDone() (done bool, err error) {
 	return
 }
 
+func (txn *txnBase) rsvp(err error) {
+	txn.Lock()
+	txn.err = &txnError{err: err}
+	txn.RUnlock()
+}
+
 func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 	txn.uid = c.uuid
 	txn.action = c.msg.Action
@@ -301,8 +330,7 @@ func (txn *txnBckBase) String() string {
 		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.initiator, tm, res, txn.bck.Name)
 }
 
-func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error,
-	args ...interface{}) (found bool, errDone error) {
+func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (found bool, errDone error) {
 	if txn.initiator != caller || msg.TxnID != txn.uuid() {
 		return
 	}
