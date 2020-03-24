@@ -2718,7 +2718,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	o := ecOptions{
-		objCount:    300,
+		objCount:    100,
 		concurrency: 8,
 		pattern:     "obj-reb-chk-%04d",
 		dataCnt:     1,
