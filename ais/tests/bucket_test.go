@@ -5,6 +5,7 @@
 package ais_test
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestDefaultBucketProps(t *testing.T) {
@@ -52,6 +54,63 @@ func TestDefaultBucketProps(t *testing.T) {
 	if p.EC.DataSlices != dataSlices {
 		t.Errorf("Invalid number of EC data slices: expected %d, got %d", dataSlices, p.EC.DataSlices)
 	}
+}
+
+func TestStressCreateDestroyBucket(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	const (
+		bckCount  = 10
+		iterCount = 20
+	)
+
+	var (
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		group, _   = errgroup.WithContext(context.Background())
+	)
+
+	for i := 0; i < bckCount; i++ {
+		group.Go(func() error {
+			var (
+				m = &ioContext{
+					t:      t,
+					num:    100,
+					silent: true,
+				}
+			)
+
+			m.init()
+
+			for i := 0; i < iterCount; i++ {
+				if err := api.CreateBucket(baseParams, m.bck); err != nil {
+					return err
+				}
+				if rand.Intn(iterCount) == 0 { // just test couple times, no need to flood
+					if err := api.CreateBucket(baseParams, m.bck); err == nil {
+						return fmt.Errorf("expected error to occur on bucket %q - create second time", m.bck)
+					}
+				}
+				m.puts()
+				if _, err := api.ListBucketFast(baseParams, m.bck, nil); err != nil {
+					return err
+				}
+				m.gets()
+				if err := api.DestroyBucket(baseParams, m.bck); err != nil {
+					return err
+				}
+				if rand.Intn(iterCount) == 0 { // just test couple times, no need to flood
+					if err := api.DestroyBucket(baseParams, m.bck); err == nil {
+						return fmt.Errorf("expected error to occur on bucket %q - destroy second time", m.bck)
+					}
+				}
+			}
+			return nil
+		})
+	}
+	err := group.Wait()
+	tassert.CheckFatal(t, err)
 }
 
 func TestResetBucketProps(t *testing.T) {

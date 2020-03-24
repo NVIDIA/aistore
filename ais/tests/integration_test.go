@@ -47,6 +47,7 @@ type ioContext struct {
 	num                 int
 	numGetsEachFile     int
 	getErrIsFatal       bool
+	silent              bool
 }
 
 func (m *ioContext) saveClusterState() {
@@ -127,7 +128,9 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	filenameCh := make(chan string, m.num)
 	errCh := make(chan error, m.num)
 
-	tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
+	if !m.silent {
+		tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
+	}
 	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeStr, m.fileSize, m.num, errCh, filenameCh)
 	if len(dontFail) == 0 {
 		tassert.SelectErr(m.t, errCh, "put", false)
@@ -146,7 +149,9 @@ func (m *ioContext) cloudPuts() {
 		msg        = &cmn.SelectMsg{}
 	)
 
-	tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bck)
+	if !m.silent {
+		tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bck)
+	}
 
 	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
@@ -249,10 +254,12 @@ func (m *ioContext) gets() {
 	for i := 0; i < 10; i++ {
 		semaphore <- struct{}{}
 	}
-	if m.numGetsEachFile == 1 {
-		tutils.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bck)
-	} else {
-		tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bck)
+	if !m.silent {
+		if m.numGetsEachFile == 1 {
+			tutils.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bck)
+		} else {
+			tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bck)
+		}
 	}
 
 	m.getsCompleted.Store(0)
@@ -277,7 +284,7 @@ func (m *ioContext) gets() {
 				}
 				g := m.getsCompleted.Inc()
 
-				if g%5000 == 0 {
+				if g%5000 == 0 && !m.silent {
 					tutils.Logf(" %d/%d GET requests completed...\n", g, totalGets)
 				}
 
