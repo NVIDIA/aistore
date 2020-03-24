@@ -63,6 +63,6 @@ func GetFileCount(dirPath string) (int, error) {
 	if err != nil || out == "" {
 		return 0, fmt.Errorf("failed to get the number of files in the directory %q, err: %v", dirPath, err)
 	}
-	out = strings.TrimRight(out, "\n")
+	out = strings.TrimSpace(out)
 	return strconv.Atoi(out)
 }
