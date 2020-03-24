@@ -2336,13 +2336,19 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 		},
 		func(clone *smapX) {
 			bmd := p.owner.bmd.get()
+			rmd := p.owner.rmd.get()
 			if glog.V(3) {
 				glog.Infof("%s: distributing %s with newly elected primary (self)", p.si, clone)
 				glog.Infof("%s: distributing %s as well", p.si, bmd)
+				glog.Infof("%s: distributing %s as well", p.si, rmd)
 			}
 
 			msg := p.newAisMsgStr(cmn.ActNewPrimary, clone, nil)
-			_ = p.metasyncer.sync(revsPair{clone, msg}, revsPair{bmd, msg})
+			_ = p.metasyncer.sync(
+				revsPair{clone, msg},
+				revsPair{bmd, msg},
+				revsPair{rmd, msg},
+			)
 		},
 	)
 	cmn.AssertNoErr(err)
@@ -2830,14 +2836,14 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 			return nil
 		},
 		func(clone *smapX) {
-			tokens := p.authn.revokedTokenList()
+			var (
+				tokens = p.authn.revokedTokenList()
+				bmd    = p.owner.bmd.get()
+			)
 			// metasync
 			aisMsg := p.newAisMsg(msg, clone, nil)
-			pairs := []revsPair{{clone, aisMsg}}
+			pairs := []revsPair{{clone, aisMsg}, {bmd, aisMsg}}
 			if nsi.IsTarget() {
-				bmd := p.owner.bmd.get()
-				pairs = append(pairs, revsPair{bmd, aisMsg})
-
 				// Trigger rebalance
 				cmn.Assert(p.requiresRebalance(smap, clone))
 				clone := p.owner.rmd.modify(func(clone *rebMD) {
@@ -2845,6 +2851,11 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 					clone.inc()
 				})
 				pairs = append(pairs, revsPair{clone, aisMsg})
+			} else {
+				// Send RMD to proxies to make sure that they have
+				// the latest one - newly joined can become primary in a second.
+				rmd := p.owner.rmd.get()
+				pairs = append(pairs, revsPair{rmd, aisMsg})
 			}
 			if len(tokens.Tokens) > 0 {
 				pairs = append(pairs, revsPair{tokens, aisMsg})

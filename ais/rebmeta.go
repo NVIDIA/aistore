@@ -6,6 +6,7 @@ package ais
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"unsafe"
@@ -73,16 +74,22 @@ func newRMDOwner() *rmdOwner {
 	rmdo.put(&rebMD{})
 	return rmdo
 }
+
 func (r *rmdOwner) persist(rmd *rebMD) {
 	rmdPathName := filepath.Join(cmn.GCO.Get().Confdir, rmdFname)
 	if err := jsp.Save(rmdPathName, rmd, jsp.CCSign()); err != nil {
 		glog.Errorf("error writing rmd to %s: %v", rmdPathName, err)
 	}
 }
-func (r *rmdOwner) put(rmd *rebMD) {
-	r.rmd.Store(unsafe.Pointer(rmd))
+func (r *rmdOwner) load() {
+	err := jsp.Load(filepath.Join(cmn.GCO.Get().Confdir, rmdFname), &r.rmd, jsp.CCSign())
+	if err != nil && !os.IsNotExist(err) {
+		glog.Errorf("failed to load rmd: %v", err)
+	}
 }
-func (r *rmdOwner) get() *rebMD { return (*rebMD)(r.rmd.Load()) }
+
+func (r *rmdOwner) put(rmd *rebMD) { r.rmd.Store(unsafe.Pointer(rmd)) }
+func (r *rmdOwner) get() *rebMD    { return (*rebMD)(r.rmd.Load()) }
 func (r *rmdOwner) modify(pre func(clone *rebMD)) *rebMD {
 	r.Lock()
 	defer r.Unlock()

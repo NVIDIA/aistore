@@ -379,6 +379,7 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 
 	h.owner.smap = newSmapOwner()
 	h.owner.rmd = newRMDOwner()
+	h.owner.rmd.load()
 }
 
 // initSI initializes this cluster.Snode
