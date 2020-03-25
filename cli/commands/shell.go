@@ -40,6 +40,10 @@ func flagCompletions(c *cli.Context) {
 
 func suggestFlags(c *cli.Context, flagsToSkip ...string) {
 	for _, flag := range c.Command.Flags {
+		if flag == cli.HelpFlag {
+			continue
+		}
+
 		flagName := cleanFlag(flag.GetName())
 
 		if c.IsSet(flagName) {
