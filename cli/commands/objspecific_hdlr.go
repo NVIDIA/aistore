@@ -62,7 +62,7 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        objectSpecificCmdsFlags[commandPrefetch],
 			Action:       prefetchHandler,
-			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, true /* multiple */, false /* separator */, cmn.Cloud),
+			BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.Cloud}),
 		},
 		{
 			Name:         commandEvict,
@@ -70,7 +70,7 @@ var (
 			ArgsUsage:    optionalObjectsArgument,
 			Flags:        objectSpecificCmdsFlags[commandEvict],
 			Action:       evictHandler,
-			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, true /* multiple */, true /* separator */, cmn.Cloud),
+			BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.Cloud}),
 		},
 		{
 			Name:         commandGet,
@@ -78,7 +78,7 @@ var (
 			ArgsUsage:    getObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandGet],
 			Action:       getHandler,
-			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */),
+			BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
 		},
 		{
 			Name:         commandPut,
@@ -109,7 +109,7 @@ var (
 			ArgsUsage:    objectArgument,
 			Flags:        objectSpecificCmdsFlags[commandCat],
 			Action:       catHandler,
-			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */),
+			BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
 		},
 	}
 )

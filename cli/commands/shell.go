@@ -139,15 +139,33 @@ func suggestUpdatableConfig(c *cli.Context) {
 // Bucket //
 ////////////
 
+type bckCompletionsOpts struct {
+	additionalCompletions []cli.BashCompleteFunc
+	withProviders         bool
+	multiple              bool
+	separator             bool
+	provider              string
+}
+
 // The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
 // Bucket names will also be listed after the first argument was given if true is passed to the 'multiple' param
 // Bucket names will contain a path separator '/' if true is passed to the 'separator' param
-func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple, separator bool, provider ...string) cli.BashCompleteFunc {
+func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		var (
+			multiple, separator, withProviders bool
+			argsProvider                       string
+			additionalCompletions              []cli.BashCompleteFunc
+
 			bucketNames []string
 			providers   []string
 		)
+
+		if len(args) > 0 {
+			multiple, separator, withProviders = args[0].multiple, args[0].separator, args[0].withProviders
+			argsProvider = args[0].provider
+			additionalCompletions = args[0].additionalCompletions
+		}
 
 		if c.NArg() >= 1 && !multiple {
 			for _, f := range additionalCompletions {
@@ -158,13 +176,19 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple, s
 		}
 
 		bck := cmn.Bck{
-			Provider: bucketProvider(provider...),
+			Provider: bucketProvider(argsProvider),
 		}
 
 		if bck.Provider == "" {
 			providers = []string{cmn.ProviderAIS, cmn.Cloud}
 		} else {
 			providers = []string{bck.Provider}
+		}
+
+		if withProviders {
+			for _, p := range providers {
+				bucketNames = append(bucketNames, fmt.Sprintf("%s\\://", p))
+			}
 		}
 
 		for _, provider := range providers {
@@ -226,7 +250,11 @@ func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, se
 			return
 		}
 
-		bucketCompletions([]cli.BashCompleteFunc{}, false, separator, provider...)(c)
+		p := ""
+		if len(provider) > 0 {
+			p = provider[0]
+		}
+		bucketCompletions(bckCompletionsOpts{separator: separator, provider: p})(c)
 	}
 }
 
@@ -242,7 +270,7 @@ func propCompletions(c *cli.Context) {
 
 func bucketAndPropsCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */)
+		bucketCompletions()
 		return
 	} else if c.NArg() == 1 {
 		var props []string
@@ -272,7 +300,7 @@ func putPromoteObjectCompletions(c *cli.Context) {
 		return
 	}
 	if c.NArg() == 1 {
-		bucketCompletions([]cli.BashCompleteFunc{}, false, true)(c)
+		bucketCompletions(bckCompletionsOpts{separator: true})(c)
 		return
 	}
 	flagCompletions(c)
@@ -292,7 +320,7 @@ func xactionCompletions(c *cli.Context) {
 
 	xactName := c.Args().First()
 	if cmn.IsXactTypeBck(xactName) {
-		bucketCompletions([]cli.BashCompleteFunc{}, false, false)(c)
+		bucketCompletions()(c)
 		return
 	}
 	flagCompletions(c)

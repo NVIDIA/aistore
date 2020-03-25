@@ -39,7 +39,7 @@ var (
 					ArgsUsage:    bucketPropsArgument,
 					Flags:        setCmdsFlags[subcmdSetProps],
 					Action:       setPropsHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{propCompletions}, false /* multiple */, false /* separator */),
+					BashComplete: bucketCompletions(bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}}),
 				},
 			},
 		},

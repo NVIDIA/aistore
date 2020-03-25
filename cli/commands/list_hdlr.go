@@ -37,7 +37,7 @@ var (
 			Action:       defaultListHandler,
 			ArgsUsage:    listCommandArgument,
 			Flags:        listCmdFlags,
-			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /*multiple*/, false /*separator*/),
+			BashComplete: bucketCompletions(bckCompletionsOpts{withProviders: true}),
 		},
 	}
 )

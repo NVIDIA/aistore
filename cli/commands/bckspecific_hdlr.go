@@ -25,7 +25,7 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        bucketSpecificCmdsFlags[commandSetCopies],
 			Action:       setCopiesHandler,
-			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+			BashComplete: bucketCompletions(),
 		},
 		{
 			Name:         commandECEncode,
@@ -33,7 +33,7 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        bucketSpecificCmdsFlags[commandECEncode],
 			Action:       ecEncodeHandler,
-			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+			BashComplete: bucketCompletions(),
 		},
 	}
 )

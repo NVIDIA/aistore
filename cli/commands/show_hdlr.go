@@ -93,7 +93,7 @@ var (
 					ArgsUsage:    optionalBucketArgument,
 					Flags:        showCmdsFlags[subcmdShowBucket],
 					Action:       showBucketHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+					BashComplete: bucketCompletions(),
 				},
 				{
 					Name:         subcmdShowDisk,
@@ -125,7 +125,7 @@ var (
 					ArgsUsage:    objectArgument,
 					Flags:        showCmdsFlags[subcmdShowObject],
 					Action:       showObjectHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */),
+					BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
 				},
 				{
 					Name:         subcmdShowNode,

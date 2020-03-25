@@ -34,7 +34,7 @@ var (
 					ArgsUsage:    bucketsArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveBucket],
 					Action:       removeBucketHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, true /* multiple */, false /* separator */, cmn.ProviderAIS),
+					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.ProviderAIS}),
 				},
 				{
 					Name:         subcmdRemoveObject,
@@ -42,7 +42,7 @@ var (
 					ArgsUsage:    optionalObjectsArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveObject],
 					Action:       removeObjectHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, true /* multiple */, true /* separator */),
+					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, separator: true}),
 				},
 				{
 					Name:         subcmdRemoveNode,
