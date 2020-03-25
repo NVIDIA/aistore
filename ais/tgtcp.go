@@ -903,30 +903,14 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 	return
 }
 
-func (t *targetrunner) ensureLatestMD(msg *aisMsg, r *http.Request) {
-	// Smap
-	smap := t.owner.smap.Get()
-	smapVersion := msg.SmapVersion
+func (t *targetrunner) ensureLatestSmap(msg *aisMsg, r *http.Request) {
+	smap, smapVersion := t.owner.smap.Get(), msg.SmapVersion
 	if smap.Version < smapVersion {
 		glog.Errorf("%s: own %s < v%d - fetching latest for %v", t.si, smap, smapVersion, msg.Action)
-		t.statsT.Add(stats.ErrMetadataCount, 1)
 		t.smapVersionFixup(r)
 	} else if smap.Version > smapVersion {
 		// if metasync outraces the request, we end up here, just log it and continue
 		glog.Errorf("%s: own %s > v%d - encountered during %v", t.si, smap, smapVersion, msg.Action)
-		t.statsT.Add(stats.ErrMetadataCount, 1)
-	}
-	// BMD
-
-	bucketmd := t.owner.bmd.Get()
-	bmdVersion := msg.BMDVersion
-	if bucketmd.Version < bmdVersion {
-		glog.Errorf("%s: own %s < v%d - fetching latest for %v", t.si, bucketmd, bmdVersion, msg.Action)
-		t.statsT.Add(stats.ErrMetadataCount, 1)
-		t.BMDVersionFixup(r, cmn.Bck{}, false)
-	} else if bucketmd.Version > bmdVersion {
-		// if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("%s: own %s > v%d - encountered during %v", t.si, bucketmd, bmdVersion, msg.Action)
 		t.statsT.Add(stats.ErrMetadataCount, 1)
 	}
 }

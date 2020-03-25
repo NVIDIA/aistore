@@ -682,6 +682,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE { action } /v1/buckets/bucket-name
+// (evict | delete) (list | range)
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg          = &aisMsg{}
@@ -697,7 +698,11 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			err = bck.Init(t.owner.bmd, t.si)
+		}
+		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -721,7 +726,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, s)
 		return
 	}
-	t.ensureLatestMD(msg, r)
 
 	switch msg.Action {
 	case cmn.ActDelete, cmn.ActEvictObjects:
@@ -797,7 +801,8 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	err = t.objDelete(t.contextWithAuth(r.Header), lom, evict)
 	if err != nil {
 		if cmn.IsObjNotExist(err) {
-			t.invalmsghdlrsilent(w, r, fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.ObjName), http.StatusNotFound)
+			t.invalmsghdlrsilent(w, r,
+				fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.ObjName), http.StatusNotFound)
 		} else {
 			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err))
 		}
@@ -825,7 +830,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.ensureLatestMD(msg, r)
+	t.ensureLatestSmap(msg, r)
 
 	if len(apiItems) == 0 {
 		switch msg.Action {
