@@ -35,7 +35,6 @@ model = keras.Model(inputs=inputs, outputs=outputs)
 model.compile(optimizer=keras.optimizers.Adam(1e-4), loss=keras.losses.mean_squared_error, metrics=["acc"])
 model.summary()
 
-# the results are probably useless
 model.fit(train_dataset, epochs=EPOCHS)
 result = model.evaluate(test_dataset)
 print(dict(zip(model.metrics_names, result)))
