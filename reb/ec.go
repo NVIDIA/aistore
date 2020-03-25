@@ -2094,19 +2094,19 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		glog.Infof("%s rebuilding slices (mem) of %s and send them", reb.t.Snode(), obj.objName)
 	}
 
-	sliceCnt := obj.dataSlices + obj.paritySlices
+	var (
+		meta *ec.Metadata
+
+		slicesFound = int16(0)
+		sliceCnt    = obj.dataSlices + obj.paritySlices
+		readers     = make([]io.Reader, sliceCnt)
+		// since io.Reader cannot be reopened, we need to have a copy for saving object
+		rereaders = make([]io.Reader, sliceCnt)
+		writers   = make([]io.Writer, sliceCnt)
+	)
 	obj.rebuildSGLs = make([]*memsys.SGL, sliceCnt)
-	readers := make([]io.Reader, sliceCnt)
-	// since io.Reader cannot be reopened, we need to have a copy for saving object
-	rereaders := make([]io.Reader, sliceCnt)
-	writers := make([]io.Writer, sliceCnt)
 
 	// put existing slices to readers list, and create SGL as writers for missing ones
-	slicesFound := int16(0)
-	var (
-		meta  *ec.Metadata
-		cksum *cmn.Cksum
-	)
 	for _, sl := range slices {
 		if !sl.recv.Load() {
 			continue
@@ -2157,45 +2157,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 	objMD := ecMD // copy
 	objMD.SliceID = 0
 
-	lom := &cluster.LOM{T: reb.t, ObjName: obj.objName}
-	err = lom.Init(obj.bck)
-	if err != nil {
-		return err
-	}
-	lom.Uncache()
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("saving restored full object %s to %q", obj.objName, lom.FQN)
-	}
-	tmpFQN := fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec")
-	buffer, slab := reb.t.GetMMSA().Alloc()
-	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize); err != nil {
-		glog.Error(err)
-		slab.Free(buffer)
-		reb.t.FSHC(err, lom.FQN)
-		return err
-	}
-
-	lom.SetSize(obj.objSize)
-	lom.SetCksum(cksum)
-	metaFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(obj.bck, ec.MetaType, obj.objName)
-	metaBuf := cmn.MustMarshal(&objMD)
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
-		glog.Error(err)
-		slab.Free(buffer)
-		if rmErr := os.Remove(lom.FQN); rmErr != nil {
-			glog.Errorf("Nested error while cleaning up: %v", rmErr)
-		}
-		reb.t.FSHC(err, metaFQN)
-		return err
-	}
-	slab.Free(buffer)
-	if err := lom.Persist(); err != nil {
-		if rmErr := os.Remove(metaFQN); rmErr != nil && !os.IsNotExist(rmErr) {
-			glog.Errorf("nested error: save LOM -> remove metadata file: %v", rmErr)
-		}
-		if rmErr := os.Remove(lom.FQN); rmErr != nil && !os.IsNotExist(rmErr) {
-			glog.Errorf("nested error: save LOM -> remove replica: %v", rmErr)
-		}
+	if err := reb.restoreObject(obj, objMD, src); err != nil {
 		return err
 	}
 
@@ -2243,6 +2205,56 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		}
 	}
 
+	return nil
+}
+
+func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Reader) (err error) {
+	var (
+		cksum *cmn.Cksum
+		lom   = &cluster.LOM{T: reb.t, ObjName: obj.objName}
+	)
+
+	if err := lom.Init(obj.bck); err != nil {
+		return err
+	}
+	lom.Lock(true)
+	defer lom.Unlock(true)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("saving restored full object %s to %q", obj.objName, lom.FQN)
+	}
+	tmpFQN := fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec")
+	buffer, slab := reb.t.GetMMSA().Alloc()
+	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize); err != nil {
+		glog.Error(err)
+		slab.Free(buffer)
+		reb.t.FSHC(err, lom.FQN)
+		return err
+	}
+
+	lom.SetSize(obj.objSize)
+	lom.SetCksum(cksum)
+	metaFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(obj.bck, ec.MetaType, obj.objName)
+	metaBuf := cmn.MustMarshal(&objMD)
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
+		glog.Error(err)
+		slab.Free(buffer)
+		if rmErr := os.Remove(lom.FQN); rmErr != nil {
+			glog.Errorf("Nested error while cleaning up: %v", rmErr)
+		}
+		reb.t.FSHC(err, metaFQN)
+		return err
+	}
+	slab.Free(buffer)
+	if err := lom.Persist(); err != nil {
+		if rmErr := os.Remove(metaFQN); rmErr != nil && !os.IsNotExist(rmErr) {
+			glog.Errorf("nested error: save LOM -> remove metadata file: %v", rmErr)
+		}
+		if rmErr := os.Remove(lom.FQN); rmErr != nil && !os.IsNotExist(rmErr) {
+			glog.Errorf("nested error: save LOM -> remove replica: %v", rmErr)
+		}
+		return err
+	}
+	lom.Uncache()
 	return nil
 }
 
