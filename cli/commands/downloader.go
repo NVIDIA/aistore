@@ -35,7 +35,7 @@ type (
 		bar        *mpb.Bar
 	}
 
-	progressBar struct {
+	downloaderPB struct {
 		id          string
 		params      api.BaseParams
 		refreshTime time.Duration
@@ -82,8 +82,8 @@ func (d downloadingResult) String() string {
 	return sb.String()
 }
 
-func newProgressBar(baseParams api.BaseParams, id string, refreshTime time.Duration) *progressBar {
-	return &progressBar{
+func newDownloaderPB(baseParams api.BaseParams, id string, refreshTime time.Duration) *downloaderPB {
+	return &downloaderPB{
 		id:          id,
 		params:      baseParams,
 		refreshTime: refreshTime,
@@ -93,7 +93,7 @@ func newProgressBar(baseParams api.BaseParams, id string, refreshTime time.Durat
 	}
 }
 
-func (b *progressBar) run() (downloadingResult, error) {
+func (b *downloaderPB) run() (downloadingResult, error) {
 	finished, err := b.start()
 	if err != nil {
 		return downloadingResult{}, err
@@ -124,7 +124,7 @@ func (b *progressBar) run() (downloadingResult, error) {
 	return b.result(), nil
 }
 
-func (b *progressBar) start() (bool, error) {
+func (b *downloaderPB) start() (bool, error) {
 	resp, err := api.DownloadStatus(b.params, b.id)
 	if err != nil {
 		return false, err
@@ -164,7 +164,7 @@ func (b *progressBar) start() (bool, error) {
 	return false, nil
 }
 
-func (b *progressBar) updateBars(downloadStatus downloader.DlStatusResp) {
+func (b *downloaderPB) updateBars(downloadStatus downloader.DlStatusResp) {
 	fileStates := downloadStatus.CurrentTasks
 
 	b.updateFinishedFiles(fileStates)
@@ -183,7 +183,7 @@ func (b *progressBar) updateBars(downloadStatus downloader.DlStatusResp) {
 	b.updateTotalBar(downloadStatus.Finished+len(downloadStatus.Errs), downloadStatus.TotalCnt())
 }
 
-func (b *progressBar) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
+func (b *downloaderPB) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
 	// The finished files are those that are in b.states, but were not included in CurrentTasks of the status response
 	fileStatesMap := make(map[string]struct{})
 	for _, file := range fileStates {
@@ -204,7 +204,7 @@ func (b *progressBar) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
 	}
 }
 
-func (b *progressBar) trackNewFile(state downloader.TaskDlInfo) {
+func (b *downloaderPB) trackNewFile(state downloader.TaskDlInfo) {
 	bar := b.p.AddBar(
 		state.Total,
 		mpb.BarRemoveOnComplete(),
@@ -224,7 +224,7 @@ func (b *progressBar) trackNewFile(state downloader.TaskDlInfo) {
 	}
 }
 
-func (b *progressBar) updateFileBar(newState downloader.TaskDlInfo, state *fileDownloadingState) {
+func (b *downloaderPB) updateFileBar(newState downloader.TaskDlInfo, state *fileDownloadingState) {
 	if state.total == 0 && newState.Total != 0 {
 		state.total = newState.Total
 		state.bar.SetTotal(newState.Total, false)
@@ -242,7 +242,7 @@ func (b *progressBar) updateFileBar(newState downloader.TaskDlInfo, state *fileD
 	}
 }
 
-func (b *progressBar) updateTotalBar(newFinished, total int) {
+func (b *downloaderPB) updateTotalBar(newFinished, total int) {
 	progress := newFinished - b.finishedFiles
 
 	if progress > 0 {
@@ -253,13 +253,13 @@ func (b *progressBar) updateTotalBar(newFinished, total int) {
 	b.finishedFiles = newFinished
 }
 
-func (b *progressBar) updateDownloadingErrors(dlErrs []downloader.TaskErrInfo) {
+func (b *downloaderPB) updateDownloadingErrors(dlErrs []downloader.TaskErrInfo) {
 	for _, dlErr := range dlErrs {
 		b.errors[dlErr.Name] = dlErr.Err
 	}
 }
 
-func (b *progressBar) cleanBars() {
+func (b *downloaderPB) cleanBars() {
 	for _, state := range b.states {
 		// Complete the bars
 		state.bar.SetTotal(state.total, true)
@@ -270,15 +270,15 @@ func (b *progressBar) cleanBars() {
 	b.p.Wait()
 }
 
-func (b *progressBar) result() downloadingResult {
+func (b *downloaderPB) result() downloadingResult {
 	return downloadingResult{totalFiles: b.totalFiles, finishedFiles: b.finishedFiles, downloadingErrors: b.errors, aborted: b.aborted}
 }
 
-func (b *progressBar) jobFinished() bool {
+func (b *downloaderPB) jobFinished() bool {
 	return b.aborted || (b.allDispatched && b.scheduledFiles == b.finishedFiles+len(b.errors))
 }
 
-func (b *progressBar) totalFilesCnt() int {
+func (b *downloaderPB) totalFilesCnt() int {
 	if b.totalFiles <= 0 {
 		// totalFiles <= 0 - we don't know exact number of files to be downloaded
 		// we show as total number of files, number of files which were scheduled to be downloaded
@@ -298,12 +298,10 @@ func downloadJobsList(c *cli.Context, regex string) error {
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {
-	showProgressBar := flagIsSet(c, progressBarFlag)
-
 	// with progress bar
-	if showProgressBar {
+	if flagIsSet(c, progressBarFlag) {
 		refreshRate := calcRefreshRate(c)
-		downloadingResult, err := newProgressBar(defaultAPIParams, id, refreshRate).run()
+		downloadingResult, err := newDownloaderPB(defaultAPIParams, id, refreshRate).run()
 		if err != nil {
 			return err
 		}

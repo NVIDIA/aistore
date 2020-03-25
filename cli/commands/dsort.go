@@ -269,7 +269,7 @@ type dsortPhaseState struct {
 	bar      *mpb.Bar
 }
 
-type dsortProgressBar struct {
+type dsortPB struct {
 	id          string
 	params      api.BaseParams
 	refreshTime time.Duration
@@ -292,8 +292,8 @@ func newPhases() map[string]*dsortPhaseState {
 	return phases
 }
 
-func newDSortProgressBar(baseParams api.BaseParams, id string, refreshTime time.Duration) *dsortProgressBar {
-	return &dsortProgressBar{
+func newDSortPB(baseParams api.BaseParams, id string, refreshTime time.Duration) *dsortPB {
+	return &dsortPB{
 		id:          id,
 		params:      baseParams,
 		refreshTime: refreshTime,
@@ -304,7 +304,7 @@ func newDSortProgressBar(baseParams api.BaseParams, id string, refreshTime time.
 	}
 }
 
-func (b *dsortProgressBar) run() (dsortResult, error) {
+func (b *dsortPB) run() (dsortResult, error) {
 	finished, err := b.start()
 	if err != nil {
 		return dsortResult{}, err
@@ -344,7 +344,7 @@ func (b *dsortProgressBar) run() (dsortResult, error) {
 	return b.result(), nil
 }
 
-func (b *dsortProgressBar) start() (bool, error) {
+func (b *dsortPB) start() (bool, error) {
 	metrics, err := api.MetricsDSort(b.params, b.id)
 	if err != nil {
 		return false, err
@@ -354,7 +354,7 @@ func (b *dsortProgressBar) start() (bool, error) {
 	return finished, nil
 }
 
-func (b *dsortProgressBar) updateBars(metrics map[string]*dsort.Metrics) bool {
+func (b *dsortPB) updateBars(metrics map[string]*dsort.Metrics) bool {
 	var (
 		targetMetrics *dsort.Metrics
 		finished      = true
@@ -412,7 +412,7 @@ func (b *dsortProgressBar) updateBars(metrics map[string]*dsort.Metrics) bool {
 	return finished
 }
 
-func (b *dsortProgressBar) cleanBars() {
+func (b *dsortPB) cleanBars() {
 	for _, phase := range b.phases {
 		if phase.bar != nil {
 			phase.bar.SetTotal(phase.total, true) // complete the bar
@@ -421,7 +421,7 @@ func (b *dsortProgressBar) cleanBars() {
 	b.p.Wait()
 }
 
-func (b *dsortProgressBar) result() dsortResult {
+func (b *dsortPB) result() dsortResult {
 	var created int64
 	if phase, ok := b.phases[dsort.CreationPhase]; ok {
 		created = phase.total
@@ -558,7 +558,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 	// Show progress bar.
 	if !verbose && refresh && !logging {
 		refreshRate := calcRefreshRate(c)
-		dsortResult, err := newDSortProgressBar(defaultAPIParams, id, refreshRate).run()
+		dsortResult, err := newDSortPB(defaultAPIParams, id, refreshRate).run()
 		if err != nil {
 			return err
 		}

@@ -165,3 +165,5 @@ Wait for the download job with given `JOB_ID` to finish.
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--refresh` | `duration` | Refresh rate | `1s` |
+| `--progress` | `bool` | Displays progress bar | `false` |
+

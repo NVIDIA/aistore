@@ -21,9 +21,11 @@ var (
 		},
 		subcmdWaitDownload: {
 			refreshFlag,
+			progressBarFlag,
 		},
 		subcmdWaitDSort: {
 			refreshFlag,
+			progressBarFlag,
 		},
 	}
 
@@ -41,20 +43,26 @@ var (
 					BashComplete: xactionCompletions,
 				},
 				{
-					Name:         subcmdWaitDownload,
-					Usage:        "wait for download to finish",
-					ArgsUsage:    jobIDArgument,
-					Flags:        waitCmdsFlags[subcmdWaitDownload],
-					Action:       waitDownloadHandler,
-					BashComplete: downloadIDAllCompletions,
+					Name:      subcmdWaitDownload,
+					Usage:     "wait for download to finish",
+					ArgsUsage: jobIDArgument,
+					Flags:     waitCmdsFlags[subcmdWaitDownload],
+					Action:    waitDownloadHandler,
+					BashComplete: func(c *cli.Context) {
+						downloadIDAllCompletions(c)
+						flagCompletions(c)
+					},
 				},
 				{
-					Name:         subcmdWaitDSort,
-					Usage:        fmt.Sprintf("wait for %s to finish", cmn.DSortName),
-					ArgsUsage:    jobIDArgument,
-					Flags:        waitCmdsFlags[subcmdWaitDSort],
-					Action:       waitDSortHandler,
-					BashComplete: dsortIDAllCompletions,
+					Name:      subcmdWaitDSort,
+					Usage:     fmt.Sprintf("wait for %s to finish", cmn.DSortName),
+					ArgsUsage: jobIDArgument,
+					Flags:     waitCmdsFlags[subcmdWaitDSort],
+					Action:    waitDSortHandler,
+					BashComplete: func(c *cli.Context) {
+						dsortIDAllCompletions(c)
+						flagCompletions(c)
+					},
 				},
 			},
 		},
@@ -88,9 +96,9 @@ func waitXactionHandler(c *cli.Context) error {
 	}
 
 	var (
-		aborted  bool
-		refresh  = calcRefreshRate(c)
-		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck}
+		aborted     bool
+		refreshRate = calcRefreshRate(c)
+		xactArgs    = api.XactReqArgs{Kind: xactKind, Bck: bck}
 	)
 	for {
 		xactStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)
@@ -102,7 +110,7 @@ func waitXactionHandler(c *cli.Context) error {
 		if aborted || xactStats.Finished() {
 			break
 		}
-		time.Sleep(refresh)
+		time.Sleep(refreshRate)
 	}
 	if aborted {
 		if bck.IsEmpty() {
@@ -119,10 +127,21 @@ func waitDownloadHandler(c *cli.Context) (err error) {
 	}
 
 	var (
-		aborted bool
-		refresh = calcRefreshRate(c)
-		id      = c.Args()[0]
+		aborted     bool
+		refreshRate = calcRefreshRate(c)
+		id          = c.Args()[0]
 	)
+
+	if flagIsSet(c, progressBarFlag) {
+		downloadingResult, err := newDownloaderPB(defaultAPIParams, id, refreshRate).run()
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintln(c.App.Writer, downloadingResult)
+		return nil
+	}
+
 	for {
 		resp, err := api.DownloadStatus(defaultAPIParams, id)
 		if err != nil {
@@ -133,7 +152,7 @@ func waitDownloadHandler(c *cli.Context) (err error) {
 		if aborted || resp.JobFinished() {
 			break
 		}
-		time.Sleep(refresh)
+		time.Sleep(refreshRate)
 	}
 
 	if aborted {
@@ -148,10 +167,20 @@ func waitDSortHandler(c *cli.Context) (err error) {
 	}
 
 	var (
-		aborted bool
-		refresh = calcRefreshRate(c)
-		id      = c.Args()[0]
+		aborted     bool
+		refreshRate = calcRefreshRate(c)
+		id          = c.Args()[0]
 	)
+
+	if flagIsSet(c, progressBarFlag) {
+		dsortResult, err := newDSortPB(defaultAPIParams, id, refreshRate).run()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(c.App.Writer, dsortResult)
+		return nil
+	}
+
 	for {
 		resp, err := api.MetricsDSort(defaultAPIParams, id)
 		if err != nil {
@@ -166,7 +195,7 @@ func waitDSortHandler(c *cli.Context) (err error) {
 		if aborted || finished {
 			break
 		}
-		time.Sleep(refresh)
+		time.Sleep(refreshRate)
 	}
 
 	if aborted {
