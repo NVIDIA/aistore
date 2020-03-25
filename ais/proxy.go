@@ -1181,7 +1181,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			err        error
 			cloudProps http.Header
 		)
-		if cloudProps, err = p.cbExists(bucket); err != nil {
+		if cloudProps, err = p.cbExists(bck.Name); err != nil {
 			p.owner.bmd.Unlock()
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -1456,7 +1456,7 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 	var cloudProps http.Header
 	if cloudProps, err = p.cbExists(bucket); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+			p.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 		} else {
 			p.invalmsghdlr(w, r, err.Error())
 		}
