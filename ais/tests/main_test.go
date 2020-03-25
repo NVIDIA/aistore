@@ -429,11 +429,11 @@ func Test_BucketNames(t *testing.T) {
 	tutils.Logf("cloud bucket names:\n")
 	printBucketNames(t, buckets.Cloud)
 
-	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle} {
+	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure} {
 		cloudBuckets, err := api.GetBucketNames(baseParams, cmn.Bck{Provider: provider})
 		tassert.CheckError(t, err)
 		if len(cloudBuckets.Cloud) != len(buckets.Cloud) {
-			t.Fatalf("cloud buckets: %d != %d\n", len(cloudBuckets.Cloud), len(buckets.Cloud))
+			t.Fatalf("%s: cloud buckets: %d != %d\n", provider, len(cloudBuckets.Cloud), len(buckets.Cloud))
 		}
 		if len(cloudBuckets.AIS) != 0 {
 			t.Fatalf("cloud buckets contain ais: %+v\n", cloudBuckets.AIS)

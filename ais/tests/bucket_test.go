@@ -536,6 +536,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				bck        cmn.Bck
 				errCh      = make(chan error, numFiles*5)
 				filesPutCh = make(chan string, numfiles)
+				customPage = true
 			)
 
 			if cmn.IsProviderCloud(cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}, true /*acceptAnon*/) {
@@ -547,6 +548,9 @@ func TestListObjectsPrefix(t *testing.T) {
 				if !isCloudBucket(t, proxyURL, bck) {
 					t.Skipf("test requires a cloud bucket")
 				}
+				bckProp, err := api.HeadBucket(baseParams, bck)
+				tassert.CheckFatal(t, err)
+				customPage = bckProp.Provider != cmn.ProviderAzure
 
 				tutils.Logf("Cleaning up the cloud bucket %s\n", bck)
 				msg := &cmn.SelectMsg{Prefix: prefix}
@@ -626,6 +630,10 @@ func TestListObjectsPrefix(t *testing.T) {
 			}
 
 			for _, test := range tests {
+				if test.pageSize != 0 && !customPage {
+					tutils.Logf("Bucket %s does not support custom paging. Skipping\n", bck.Name)
+					continue
+				}
 				for _, fast := range []bool{false /*slow*/, true /*fast*/} {
 					name := test.name
 					if !fast {

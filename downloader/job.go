@@ -169,7 +169,6 @@ func (j *CloudBucketDlJob) getNextObjs() error {
 			Prefix:     j.prefix,
 			PageMarker: j.pageMarker,
 			Fast:       true,
-			PageSize:   cmn.DefaultListPageSize,
 		}
 
 		bckList, err, _ := j.t.Cloud().ListBucket(j.ctx, j.bck.Name, msg)

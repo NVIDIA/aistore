@@ -38,7 +38,8 @@ const (
 	// Azure simulator(Azurite) consts
 	azureDevAccName = "devstoreaccount1"
 	azureDevAccKey  = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
-	azureDevHost    = azureDefaultProto + "127.0.0.1:10000/" + azureDevAccName
+	// Azurite is always HTTP
+	azureDevHost = "http://127.0.0.1:10000/" + azureDevAccName
 
 	// real Azure server constants
 	azureHost = ".blob.core.windows.net"
@@ -276,11 +277,12 @@ func (ap *azureProvider) ListBucket(ctx context.Context, bucket string, msg *cmn
 
 		bckList.Entries = append(bckList.Entries, entry)
 	}
-	if resp.Marker != nil {
-		msg.PageMarker = *resp.Marker
+	if resp.NextMarker.Val != nil {
+		msg.PageMarker = *resp.NextMarker.Val
+		bckList.PageMarker = msg.PageMarker
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[list_bucket] count %d", len(bckList.Entries))
+		glog.Infof("[list_bucket] count %d(marker: %s)", len(bckList.Entries), bckList.PageMarker)
 	}
 
 	return

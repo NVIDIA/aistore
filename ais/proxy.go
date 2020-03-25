@@ -1739,10 +1739,20 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 		bckLists = append(bckLists, bucketList)
 	}
 
+	// Maximum objects in the final result page. Take all objects in
+	// case of Cloud and no limit is set by a user. We cannot use
+	// the single cmn.DefaultPageSize because Azure limit differs.
+	maxSize := selMsg.PageSize
+	if bck.IsAIS() || selMsg.Cached {
+		maxSize = pageSize
+	}
 	if selMsg.Cached {
-		allEntries = objwalk.ConcatObjLists(bckLists, pageSize)
+		allEntries = objwalk.ConcatObjLists(bckLists, maxSize)
 	} else {
-		allEntries = objwalk.MergeObjLists(bckLists, pageSize)
+		allEntries = objwalk.MergeObjLists(bckLists, maxSize)
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Errorf("Objects after merge %d, marker %s", len(allEntries.Entries), allEntries.PageMarker)
 	}
 
 	if selMsg.WantProp(cmn.GetTargetURL) {
