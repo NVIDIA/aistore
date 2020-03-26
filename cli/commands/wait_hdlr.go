@@ -43,26 +43,20 @@ var (
 					BashComplete: xactionCompletions,
 				},
 				{
-					Name:      subcmdWaitDownload,
-					Usage:     "wait for download to finish",
-					ArgsUsage: jobIDArgument,
-					Flags:     waitCmdsFlags[subcmdWaitDownload],
-					Action:    waitDownloadHandler,
-					BashComplete: func(c *cli.Context) {
-						downloadIDAllCompletions(c)
-						flagCompletions(c)
-					},
+					Name:         subcmdWaitDownload,
+					Usage:        "wait for download to finish",
+					ArgsUsage:    jobIDArgument,
+					Flags:        waitCmdsFlags[subcmdWaitDownload],
+					Action:       waitDownloadHandler,
+					BashComplete: downloadIDRunningCompletions,
 				},
 				{
-					Name:      subcmdWaitDSort,
-					Usage:     fmt.Sprintf("wait for %s to finish", cmn.DSortName),
-					ArgsUsage: jobIDArgument,
-					Flags:     waitCmdsFlags[subcmdWaitDSort],
-					Action:    waitDSortHandler,
-					BashComplete: func(c *cli.Context) {
-						dsortIDAllCompletions(c)
-						flagCompletions(c)
-					},
+					Name:         subcmdWaitDSort,
+					Usage:        fmt.Sprintf("wait for %s to finish", cmn.DSortName),
+					ArgsUsage:    jobIDArgument,
+					Flags:        waitCmdsFlags[subcmdWaitDSort],
+					Action:       waitDSortHandler,
+					BashComplete: dsortIDRunningCompletions,
 				},
 			},
 		},
