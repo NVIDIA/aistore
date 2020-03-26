@@ -2815,8 +2815,13 @@ func _ECAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *c
 	registered = true
 
 	stopCh := cmn.NewStopCh()
-	defer stopCh.Close()
+	wg.Add(1)
+	defer func() {
+		stopCh.Close()
+		wg.Wait()
+	}()
 	go func() {
+		defer wg.Done()
 		for {
 			for _, obj := range oldECList {
 				_, err := api.GetObject(baseParams, bckEC, obj.Name)

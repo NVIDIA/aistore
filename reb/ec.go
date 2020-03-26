@@ -217,6 +217,7 @@ type (
 	}
 	// a description of a CT that local target awaits from another target
 	waitCT struct {
+		mtx     sync.Mutex
 		sgl     *memsys.SGL  // SGL to save the received CT
 		meta    *ec.Metadata // CT's EC metadata
 		sliceID int16        // slice ID to wait (special value `anySliceID` - wait for the first slice for the object)
@@ -689,6 +690,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, hdr transport.H
 
 // Receives a CT from another target, saves to local drive because it is a missing one
 func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Reader) error {
+	const fmtErrCleanedUp = "%s/%s slice %d has been already cleaned up"
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s GOT CT for %s/%s from %s", reb.t.Snode(), hdr.Bck, hdr.ObjName, req.daemonID)
 	}
@@ -701,8 +703,16 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	}
 	uid := uniqueWaitID(hdr.Bck, hdr.ObjName)
 	waitFor := reb.ec.waiter.lookupCreate(uid, int16(sliceID), waitForSingleSlice)
-	cmn.Assert(waitFor != nil)
-	cmn.Assert(waitFor.sgl != nil)
+	if waitFor == nil {
+		cmn.DrainReader(reader)
+		return fmt.Errorf(fmtErrCleanedUp, hdr.Bck, hdr.ObjName, sliceID)
+	}
+	waitFor.mtx.Lock()
+	defer waitFor.mtx.Unlock()
+	// Double check - sgl could be freed while awaiting Lock
+	if waitFor.sgl == nil {
+		return fmt.Errorf(fmtErrCleanedUp, hdr.Bck, hdr.ObjName, sliceID)
+	}
 	if waitFor.recv.Load() {
 		return nil
 	}
@@ -716,10 +726,15 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.RxRebSize, Value: n},
 	)
-	ckval, _ := cksumForSlice(memsys.NewReader(waitFor.sgl), waitFor.sgl.Size(), reb.t.GetMMSA())
-	if hdr.ObjAttrs.CksumValue != "" && hdr.ObjAttrs.CksumValue != ckval {
-		return fmt.Errorf("received checksum mismatches checksum in header %s vs %s",
-			hdr.ObjAttrs.CksumValue, ckval)
+	if hdr.ObjAttrs.CksumValue != "" {
+		ckval, _ := cksumForSlice(memsys.NewReader(waitFor.sgl), waitFor.sgl.Size(), reb.t.GetMMSA())
+		if hdr.ObjAttrs.CksumValue != ckval {
+			reb.statRunner.AddMany(stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1})
+			return cmn.NewBadDataCksumError(
+				cmn.NewCksum(cmn.ChecksumXXHash, ckval),
+				cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+				"rebalance")
+		}
 	}
 	waitFor.recv.Store(true)
 	waitRebuild := reb.ec.waiter.updateRebuildInfo(uid)
@@ -1918,8 +1933,12 @@ func (reb *Manager) rebuildFromDisk(obj *rebObject) (err error) {
 		if exists {
 			continue
 		}
-		cmn.Assert(idx != 0)              // because the full object must exist on local drive
-		cmn.Assert(len(freeTargets) != 0) // 0 - means we have issue in broken objects detection
+		cmn.Assert(idx != 0) // because the full object must exist on local drive
+		if len(freeTargets) == 0 {
+			// we have issue in broken objects detection
+			return fmt.Errorf("%s/%s - no free target for rebuilt %d slice: %#v",
+				obj.bck, obj.objName, idx, obj.locCT)
+		}
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
 		if idx <= int(obj.dataSlices) {
@@ -2367,9 +2386,11 @@ func (wt *ctWaiter) removeObjUnlocked(uid string) {
 	wo, ok := wt.objs[uid]
 	if ok {
 		for _, slice := range wo.cts {
+			slice.mtx.Lock()
 			if slice.sgl != nil {
 				slice.sgl.Free()
 			}
+			slice.mtx.Unlock()
 		}
 		delete(wt.objs, uid)
 	}

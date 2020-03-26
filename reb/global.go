@@ -42,12 +42,6 @@ type (
 
 func (reb *Manager) rebPrecheck(md *rebArgs) bool {
 	glog.FastV(4, glog.SmoduleReb).Infof("global reb (v%d) started precheck", md.id)
-	// get EC rebalancer ready
-	if md.ecUsed {
-		reb.cleanupEC()
-		reb.ec.waiter.waitFor.Store(0)
-	}
-
 	// 1. check whether other targets are up and running
 	glog.FastV(4, glog.SmoduleReb).Infof("global reb broadcast (v%d)", md.id)
 	if errCnt := reb.bcast(md, reb.pingTarget); errCnt > 0 {
@@ -86,6 +80,12 @@ func (reb *Manager) rebInit(md *rebArgs, buckets ...string) bool {
 	if xact == nil {
 		return false
 	}
+	// get EC rebalancer ready
+	if md.ecUsed {
+		reb.cleanupEC()
+		reb.ec.waiter.waitFor.Store(0)
+	}
+
 	reb.setXact(xact)
 	defer reb.xact().MarkDone()
 
