@@ -17,7 +17,7 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 * HTTP REST API to GET/PUT objects, create, destroy, list and configure buckets;
 * FUSE client (`aisfs`) to access AIS objects as files;
 * arbitrary number of (extremely lightweight) access points;
-* easy-to-use CLI supporting command-line (TAB) completions;
+* easy-to-use CLI that supports [TAB auto-completions](cli/README.md);
 * automated rebalancing upon changes in cluster membership, drive failures, bucket renames;
 * N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
 

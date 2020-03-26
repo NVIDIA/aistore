@@ -193,20 +193,11 @@ $ ais --help
 
 where `G` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
 
-One salient feature of AIS CLI is its Bash style **auto-completions** that allow users to easily navigate supported operations and options by simply pressing the TAB key. For instance, when you type:
+One salient feature of AIS CLI is its Bash style [auto-completions](../cli/README.md) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
 
-```console
-$ ais s[TAB-TAB]
-```
+<img src="images/ais3.1.gif" alt="CLI-tab" width="900" height="130">
 
-the tool will suggest the following "expansion" from which you can further choose by typing one or more letters and pressing the TAB key, etc.
-
-```console
-$ ais s
-set          set-copies   show         start        status       stop
-```
-
-AIS CLI is still at its early stage and will keep quickly developing. For more information, please see the project's own [README](cli/README.md).
+AIS CLI is currently quickly developing. For more information, please see the project's own [README](cli/README.md).
 
 ## Python Client
 
