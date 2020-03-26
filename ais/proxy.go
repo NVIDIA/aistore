@@ -2828,11 +2828,14 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, nonElectable bool) {
-	var smap *smapX
+	var (
+		smap   *smapX
+		exists bool
+	)
 	err := p.owner.smap.modify(
 		func(clone *smapX) error {
 			smap = p.owner.smap.get()
-			clone.putNode(nsi, nonElectable)
+			exists = clone.putNode(nsi, nonElectable)
 
 			// Notify all nodes about a new one (targets probably need to set up GFN)
 			aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
@@ -2854,8 +2857,10 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 			aisMsg := p.newAisMsg(msg, clone, nil)
 			pairs := []revsPair{{clone, aisMsg}, {bmd, aisMsg}}
 			if nsi.IsTarget() {
-				// Trigger rebalance
-				cmn.Assert(p.requiresRebalance(smap, clone))
+				// Trigger rebalance (in case target with given ID already exists
+				// we must trigger the rebalance and assume it is a new target
+				// with the same ID).
+				cmn.Assert(exists || p.requiresRebalance(smap, clone))
 				clone := p.owner.rmd.modify(func(clone *rebMD) {
 					clone.TargetIDs = []string{nsi.ID()}
 					clone.inc()

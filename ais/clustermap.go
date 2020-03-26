@@ -140,11 +140,12 @@ func (m *smapX) delProxy(pid string) {
 	m.Version++
 }
 
-func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) {
+func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) (exists bool) {
 	id := nsi.ID()
 	if nsi.IsProxy() {
 		if m.GetProxy(id) != nil {
 			m.delProxy(id)
+			exists = true
 		}
 		m.addProxy(nsi)
 		if nonElectable {
@@ -158,12 +159,14 @@ func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) {
 		cmn.Assert(nsi.IsTarget())
 		if m.GetTarget(id) != nil { // ditto
 			m.delTarget(id)
+			exists = true
 		}
 		m.addTarget(nsi)
 		if glog.V(3) {
 			glog.Infof("joined %s (num targets %d)", nsi, m.CountTargets())
 		}
 	}
+	return
 }
 
 func (m *smapX) clone() *smapX {
