@@ -5,8 +5,6 @@
 package api
 
 import (
-	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -14,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // GetClusterMap API
@@ -22,27 +19,12 @@ import (
 // GetClusterMap retrieves AIStore cluster map
 func GetClusterMap(baseParams BaseParams) (smap *cluster.Smap, err error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Daemon)
-	params := OptionalParams{Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}}}
-
-	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("failed to get Smap, HTTP status %d", resp.StatusCode)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	err = jsoniter.Unmarshal(body, &smap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
-	}
-	return smap, nil
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Daemon),
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
+	}, &smap)
+	return smap, err
 }
 
 // GetNodeClusterMap API
@@ -50,57 +32,26 @@ func GetClusterMap(baseParams BaseParams) (smap *cluster.Smap, err error) {
 // GetNodeClusterMap retrieves AIStore cluster map from specific node
 func GetNodeClusterMap(baseParams BaseParams, nodeID string) (smap *cluster.Smap, err error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon)
-	params := OptionalParams{
-		Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
-		Header: http.Header{cmn.HeaderNodeID: []string{nodeID}},
-	}
-
-	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("failed to get Smap, HTTP status %d", resp.StatusCode)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	err = jsoniter.Unmarshal(body, &smap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
-	}
-	return smap, nil
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon),
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
+		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
+	}, &smap)
+	return smap, err
 }
 
 // GetClusterSysInfo API
 //
 // GetClusterSysInfo retrieves AIStore system info
-func GetClusterSysInfo(baseParams BaseParams) (sysinfo cmn.ClusterSysInfo, err error) {
+func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err error) {
 	baseParams.Method = http.MethodGet
-	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSysInfo}}
-	path := cmn.URLPath(cmn.Version, cmn.Cluster)
-	params := OptionalParams{Query: query}
-
-	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
-	if err != nil {
-		return cmn.ClusterSysInfo{}, err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return cmn.ClusterSysInfo{}, err
-	}
-	err = jsoniter.Unmarshal(body, &sysinfo)
-	if err != nil {
-		return cmn.ClusterSysInfo{}, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
-	}
-
-	return sysinfo, nil
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSysInfo}},
+	}, &sysInfo)
+	return sysInfo, err
 }
 
 // GetClusterStats API
@@ -108,66 +59,35 @@ func GetClusterSysInfo(baseParams BaseParams) (sysinfo cmn.ClusterSysInfo, err e
 // GetClusterStats retrieves AIStore cluster stats (all targets and current proxy)
 func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStats, err error) {
 	baseParams.Method = http.MethodGet
-	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}}
-	path := cmn.URLPath(cmn.Version, cmn.Cluster)
-	params := OptionalParams{Query: query}
-
-	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
-	if err != nil {
-		return stats.ClusterStats{}, err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return stats.ClusterStats{}, err
-	}
-	err = jsoniter.Unmarshal(body, &clusterStats)
-	if err != nil {
-		return stats.ClusterStats{}, fmt.Errorf("failed to unmarshal cluster stats, err: %v", err)
-	}
-	return clusterStats, nil
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}},
+	}, &clusterStats)
+	return clusterStats, err
 }
 
-func GetTargetDiskStats(baseParams BaseParams, targetID string) (map[string]*ios.SelectedDiskStats, error) {
+func GetTargetDiskStats(baseParams BaseParams, targetID string) (diskStats map[string]*ios.SelectedDiskStats, err error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon)
-	params := OptionalParams{
-		Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDiskStats}},
-		Header: http.Header{cmn.HeaderNodeID: []string{targetID}},
-	}
-
-	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var diskStats map[string]*ios.SelectedDiskStats
-	err = jsoniter.Unmarshal(body, &diskStats)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal target disk stats, err: %v", err)
-	}
-	return diskStats, nil
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon),
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDiskStats}},
+		Header:     http.Header{cmn.HeaderNodeID: []string{targetID}},
+	}, &diskStats)
+	return diskStats, err
 }
 
 // RegisterNode API
 //
 // Registers an existing node to the clustermap.
 func RegisterNode(baseParams BaseParams, nodeInfo *cluster.Snode) error {
-	nodeJSON, err := jsoniter.Marshal(nodeInfo)
-	if err != nil {
-		return err
-	}
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.UserRegister)
-	_, err = DoHTTPRequest(baseParams, path, nodeJSON)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster, cmn.UserRegister),
+		Body:       cmn.MustMarshal(nodeInfo),
+	})
 }
 
 // UnregisterNode API
@@ -175,9 +95,10 @@ func RegisterNode(baseParams BaseParams, nodeInfo *cluster.Snode) error {
 // Unregisters an existing node from the clustermap.
 func UnregisterNode(baseParams BaseParams, unregisterSID string) error {
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, unregisterSID)
-	_, err := DoHTTPRequest(baseParams, path, nil)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, unregisterSID),
+	})
 }
 
 // SetPrimaryProxy API
@@ -185,9 +106,10 @@ func UnregisterNode(baseParams BaseParams, unregisterSID string) error {
 // Given a daemonID, it sets that corresponding proxy as the primary proxy of the cluster
 func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
 	baseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Proxy, newPrimaryID)
-	_, err := DoHTTPRequest(baseParams, path, nil)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Proxy, newPrimaryID),
+	})
 }
 
 // SetClusterConfig API
@@ -196,14 +118,14 @@ func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
 // this operation sets the cluster-wide configuration accordingly.
 // Setting cluster-wide configuration requires sending the request to a proxy
 func SetClusterConfig(baseParams BaseParams, nvs cmn.SimpleKVs) error {
-	optParams := OptionalParams{}
 	q := url.Values{}
 	for key, val := range nvs {
 		q.Add(key, val)
 	}
 	baseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.ActSetConfig)
-	optParams.Query = q
-	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster, cmn.ActSetConfig),
+		Query:      q,
+	})
 }

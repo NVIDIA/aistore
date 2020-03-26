@@ -512,8 +512,11 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 
 		baseParams := tutils.BaseAPIParams(v.URL(cmn.NetworkPublic))
 		baseParams.Method = http.MethodPut
-		path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.SyncSmap)
-		_, err = api.DoHTTPRequest(baseParams, path, jsonMap)
+		err = api.DoHTTPRequest(api.ReqParams{
+			BaseParams: baseParams,
+			Path:       cmn.URLPath(cmn.Version, cmn.Daemon, cmn.SyncSmap),
+			Body:       jsonMap,
+		})
 		tassert.CheckFatal(t, err)
 		n--
 	}
@@ -1192,7 +1195,7 @@ func networkFailurePrimary(t *testing.T) {
 	baseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Proxy, newPrimaryID) +
 		fmt.Sprintf("?%s=true&%s=%s", cmn.URLParamForce, cmn.URLParamPrimaryCandidate, url.QueryEscape(newPrimaryURL))
-	_, err = api.DoHTTPRequest(baseParams, path, nil)
+	err = api.DoHTTPRequest(api.ReqParams{BaseParams: baseParams, Path: path})
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForPrimaryProxy(

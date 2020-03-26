@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
+	jsoniter "github.com/json-iterator/go"
 )
 
 var (
@@ -28,85 +29,147 @@ type BaseParams struct {
 	Token  string
 }
 
-// OptionalParams is used in constructing client-side API requests to the AIStore.
+// ReqParams is used in constructing client-side API requests to the AIStore.
 // Stores Query and Headers for providing arguments that are not used commonly in API requests
-type OptionalParams struct {
-	Query    url.Values
-	Header   http.Header
+type ReqParams struct {
+	BaseParams BaseParams
+	Path       string
+	Body       []byte
+	Query      url.Values
+	Header     http.Header
+
+	// Authentication
 	User     string
 	Password string
+
+	// Determines if the response should be validated with the checksum
+	Validate bool
 }
 
-// DoHTTPRequest sends one HTTP request and returns only the body of the response
-func DoHTTPRequest(baseParams BaseParams, path string, b []byte, optParams ...OptionalParams) ([]byte, error) {
-	resp, err := doHTTPRequestGetResp(baseParams, path, b, optParams...)
-	if err != nil {
-		return nil, err
+type wrappedResp struct {
+	*http.Response
+	n          int64  // number bytes read from `resp.Body`
+	cksumValue string // checksum value of the response
+}
+
+// DoHTTPRequest sends one HTTP request and decodes the `v` structure
+// (if provided) from `resp.Body`.
+func DoHTTPRequest(reqParams ReqParams, vs ...interface{}) error {
+	var v interface{}
+	if len(vs) > 0 {
+		v = vs[0]
 	}
-	defer resp.Body.Close()
-	return ioutil.ReadAll(resp.Body)
+	_, err := doHTTPRequestGetResp(reqParams, v)
+	return err
 }
 
-// doHTTPRequestGetResp sends one HTTP request and returns the whole response
-func doHTTPRequestGetResp(baseParams BaseParams, path string, b []byte,
-	optParams ...OptionalParams) (*http.Response, error) {
+// doHTTPRequestGetResp sends one HTTP request, decodes the `v` structure
+// (if provided) from `resp.Body` and returns the whole response.
+func doHTTPRequestGetResp(reqParams ReqParams, v interface{}) (*wrappedResp, error) {
 	var (
 		reqBody io.Reader
 	)
-	if b != nil {
-		reqBody = bytes.NewBuffer(b)
+	if reqParams.Body != nil {
+		reqBody = bytes.NewBuffer(reqParams.Body)
 	}
 
-	url := baseParams.URL + path
-	req, err := http.NewRequest(baseParams.Method, url, reqBody)
+	urlPath := reqParams.BaseParams.URL + reqParams.Path
+	req, err := http.NewRequest(reqParams.BaseParams.Method, urlPath, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request, err: %v", err)
 	}
-	if len(optParams) > 0 {
-		setRequestOptParams(req, optParams[0])
-	}
-	setAuthToken(req, baseParams)
+	setRequestOptParams(req, reqParams)
+	setAuthToken(req, reqParams.BaseParams)
 
-	resp, err := baseParams.Client.Do(req) // nolint:bodyclose // it should be closed by the caller
+	resp, err := reqParams.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
 	if err != nil {
 		sleep := httpRetrySleep
 		if cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(sleep)
-				resp, err = baseParams.Client.Do(req) // nolint:bodyclose // it should be closed by the caller
+				resp, err = reqParams.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
 				sleep += sleep / 2
 			}
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to %s, err: %v", baseParams.Method, err)
+		return nil, fmt.Errorf("failed to %s, err: %v", reqParams.BaseParams.Method, err)
 	}
-	return checkBadStatus(req, resp)
+	defer resp.Body.Close()
+	return readResp(reqParams, resp, v)
 }
 
-func checkBadStatus(req *http.Request, resp *http.Response) (*http.Response, error) {
+func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrappedResp, error) {
+	defer cmn.DrainReader(resp.Body)
+
 	if resp.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(resp.Body)
+		var httpErr *cmn.HTTPError
+		if reqParams.BaseParams.Method != http.MethodHead {
+			if err := jsoniter.NewDecoder(resp.Body).Decode(&httpErr); err != nil {
+				return nil, fmt.Errorf("failed to read response (status: %d), err: %v", resp.StatusCode, err)
+			}
+		} else {
+			// HEAD request does not return the body, so we must
+			// create the error manually.
+			httpErr = &cmn.HTTPError{
+				Status:  resp.StatusCode,
+				Method:  reqParams.BaseParams.Method,
+				URLPath: reqParams.Path,
+			}
+		}
+		return nil, httpErr
+	}
+	wresp := &wrappedResp{Response: resp}
+	if v == nil {
+		return wresp, nil
+	}
+	if w, ok := v.(io.Writer); ok {
+		if !reqParams.Validate {
+			n, err := io.Copy(w, resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			wresp.n = n
+		} else {
+			hdrCksumType := resp.Header.Get(cmn.HeaderObjCksumType)
+			n, cksumValue, err := cmn.WriteWithHash(w, resp.Body, nil, hdrCksumType)
+			if err != nil {
+				return nil, err
+			}
+			wresp.n = n
+			wresp.cksumValue = cksumValue
+		}
+	} else {
+		var err error
+		switch t := v.(type) {
+		case *string:
+			// In some places like dSort or task, the response is just a string (id).
+			var b []byte
+			b, err = ioutil.ReadAll(resp.Body)
+			*t = string(b)
+		default:
+			if resp.StatusCode == http.StatusOK {
+				err = jsoniter.NewDecoder(resp.Body).Decode(v)
+			}
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response, err: %v", err)
 		}
-		err, _ = cmn.NewHTTPError(req, string(b), resp.StatusCode)
-		return nil, err
 	}
-	return resp, nil
+	return wresp, nil
 }
 
 // Given an existing HTTP Request and optional API parameters, setRequestOptParams
 // sets the optional fields of the request if provided
-func setRequestOptParams(req *http.Request, optParams OptionalParams) {
-	if len(optParams.Query) != 0 {
-		req.URL.RawQuery = optParams.Query.Encode()
+func setRequestOptParams(req *http.Request, reqParams ReqParams) {
+	if len(reqParams.Query) != 0 {
+		req.URL.RawQuery = reqParams.Query.Encode()
 	}
-	if optParams.Header != nil {
-		req.Header = optParams.Header
+	if reqParams.Header != nil {
+		req.Header = reqParams.Header
 	}
-	if optParams.User != "" && optParams.Password != "" {
-		req.SetBasicAuth(optParams.User, optParams.Password)
+	if reqParams.User != "" && reqParams.Password != "" {
+		req.SetBasicAuth(reqParams.User, reqParams.Password)
 	}
 }
 

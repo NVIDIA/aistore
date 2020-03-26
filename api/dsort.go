@@ -10,73 +10,54 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
-	jsoniter "github.com/json-iterator/go"
 )
 
 func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
-	msg, err := jsoniter.Marshal(rs)
-	if err != nil {
-		return "", err
-	}
-
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Sort)
-	body, err := DoHTTPRequest(baseParams, path, msg)
-	if err != nil {
-		return "", err
-	}
-
-	return string(body), err
+	var id string
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
+		Body:       cmn.MustMarshal(rs),
+	}, &id)
+	return id, err
 }
 
 func AbortDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort)
-	query := url.Values{cmn.URLParamID: []string{managerUUID}}
-	optParams := OptionalParams{Query: query}
-	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort),
+		Query:      url.Values{cmn.URLParamID: []string{managerUUID}},
+	})
 }
 
-func MetricsDSort(baseParams BaseParams, managerUUID string) (map[string]*dsort.Metrics, error) {
+func MetricsDSort(baseParams BaseParams, managerUUID string) (metrics map[string]*dsort.Metrics, err error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Sort)
-	query := url.Values{cmn.URLParamID: []string{managerUUID}}
-	optParams := OptionalParams{Query: query}
-	body, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	if err != nil {
-		return nil, err
-	}
-
-	var metrics map[string]*dsort.Metrics
-	err = jsoniter.Unmarshal(body, &metrics)
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
+		Query:      url.Values{cmn.URLParamID: []string{managerUUID}},
+	}, &metrics)
 	return metrics, err
 }
 
 func RemoveDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Sort)
-	query := url.Values{cmn.URLParamID: []string{managerUUID}}
-	optParams := OptionalParams{Query: query}
-	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
+		Query:      url.Values{cmn.URLParamID: []string{managerUUID}},
+	})
 }
 
-func ListDSort(baseParams BaseParams, regex string) ([]*dsort.JobInfo, error) {
+func ListDSort(baseParams BaseParams, regex string) (jobsInfos []*dsort.JobInfo, err error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Sort)
-	query := url.Values{}
-	query.Add(cmn.URLParamRegex, regex)
-	optParams := OptionalParams{
-		Query: query,
-	}
 
-	body, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	if err != nil {
-		return nil, err
-	}
-
-	var jobsInfos []*dsort.JobInfo
-	err = jsoniter.Unmarshal(body, &jobsInfos)
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
+		Query:      url.Values{cmn.URLParamRegex: []string{regex}},
+	}, &jobsInfos)
 	return jobsInfos, err
 }

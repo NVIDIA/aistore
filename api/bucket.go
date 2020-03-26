@@ -6,13 +6,11 @@ package api
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -27,21 +25,17 @@ const (
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props cmn.BucketPropsToUpdate, query ...url.Values) error {
 	var (
-		b, err    = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
-		optParams = OptionalParams{}
+		b = cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
+		q url.Values
 	)
-	if err != nil {
-		return err
-	}
 	if len(query) > 0 {
-		optParams.Query = query[0]
+		q = query[0]
 	}
-	optParams.Query = cmn.AddBckToQuery(optParams.Query, bck)
+	q = cmn.AddBckToQuery(q, bck)
 
 	baseParams.Method = http.MethodPatch
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	_, err = DoHTTPRequest(baseParams, path, b, optParams)
-	return err
+	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: b, Query: q})
 }
 
 // ResetBucketProps API
@@ -49,21 +43,17 @@ func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props cmn.BucketPropsToU
 // Reset the properties of a bucket, identified by its name, to the global configuration.
 func ResetBucketProps(baseParams BaseParams, bck cmn.Bck, query ...url.Values) error {
 	var (
-		b, err    = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActResetProps})
-		optParams = OptionalParams{}
+		b = cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetProps})
+		q url.Values
 	)
-	if err != nil {
-		return err
-	}
 	if len(query) > 0 {
-		optParams.Query = query[0]
+		q = query[0]
 	}
-	optParams.Query = cmn.AddBckToQuery(optParams.Query, bck)
+	q = cmn.AddBckToQuery(q, bck)
 
 	baseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	_, err = DoHTTPRequest(baseParams, path, b, optParams)
-	return err
+	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: b, Query: q})
 }
 
 // HeadBucket API
@@ -73,23 +63,22 @@ func ResetBucketProps(baseParams BaseParams, bck cmn.Bck, query ...url.Values) e
 // corresponding counterparts in the BucketProps struct
 func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p cmn.BucketProps, err error) {
 	var (
-		path      = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		optParams = OptionalParams{}
-		r         *http.Response
+		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		q    url.Values
 	)
 	baseParams.Method = http.MethodHead
 	if len(query) > 0 {
-		optParams.Query = query[0]
+		q = query[0]
 	}
-	optParams.Query = cmn.AddBckToQuery(optParams.Query, bck)
+	q = cmn.AddBckToQuery(q, bck)
 
-	if r, err = doHTTPRequestGetResp(baseParams, path, nil, optParams); err != nil {
+	resp, err := doHTTPRequestGetResp(ReqParams{BaseParams: baseParams, Path: path, Query: q}, nil)
+	if err != nil {
 		return
 	}
-	defer r.Body.Close()
 
 	err = cmn.IterFields(&p, func(tag string, field cmn.IterField) (error, bool) {
-		return field.SetValue(r.Header.Get(tag), true /*force*/), false
+		return field.SetValue(resp.Header.Get(tag), true /*force*/), false
 	})
 	if err != nil {
 		return p, err
@@ -106,20 +95,12 @@ func GetBucketNames(baseParams BaseParams, bck cmn.Bck) (*cmn.BucketNames, error
 		bucketNames = &cmn.BucketNames{}
 		path        = cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)
 		query       = cmn.AddBckToQuery(nil, bck)
-		optParams   = OptionalParams{Query: query}
 	)
 
 	baseParams.Method = http.MethodGet
-	b, err := DoHTTPRequest(baseParams, path, nil, optParams)
+	err := DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Query: query}, &bucketNames)
 	if err != nil {
 		return nil, err
-	}
-	if len(b) != 0 {
-		if err = jsoniter.Unmarshal(b, &bucketNames); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal bucket names, err: %v - [%s]", err, string(b))
-		}
-	} else {
-		return nil, fmt.Errorf("empty response instead of empty bucket list from %s", baseParams.URL)
 	}
 	return bucketNames, nil
 }
@@ -128,40 +109,21 @@ func GetBucketNames(baseParams BaseParams, bck cmn.Bck) (*cmn.BucketNames, error
 //
 // Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
 func GetBucketsSummaries(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg) (cmn.BucketsSummaries, error) {
-	var (
-		q    = cmn.AddBckToQuery(nil, bck)
-		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	)
-
 	if msg == nil {
 		msg = &cmn.SelectMsg{}
 	}
 
 	baseParams.Method = http.MethodPost
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg})
-	if err != nil {
-		return nil, err
-	}
 
-	optParams := OptionalParams{
-		Header: http.Header{"Content-Type": []string{"application/json"}},
-		Query:  q,
+	reqParams := ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Query:      cmn.AddBckToQuery(nil, bck),
 	}
-
-	resp, err := waitForAsyncReqComplete(baseParams, cmn.ActSummaryBucket, path, msg, optParams)
-	if err != nil {
-		return nil, err
-	}
-
-	respBody, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-
 	var summaries cmn.BucketsSummaries
-	if err = jsoniter.Unmarshal(respBody, &summaries); err != nil {
-		return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(b))
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBucket, msg, &summaries); err != nil {
+		return nil, err
 	}
 	return summaries, nil
 }
@@ -170,34 +132,26 @@ func GetBucketsSummaries(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg)
 //
 // CreateBucket sends a HTTP request to a proxy to create an ais bucket with the given name
 func CreateBucket(baseParams BaseParams, bck cmn.Bck) error {
-	var (
-		msg, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCreateLB})
-		path     = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		query    = cmn.AddBckToQuery(nil, bck)
-	)
-	if err != nil {
-		return err
-	}
 	baseParams.Method = http.MethodPost
-	_, err = DoHTTPRequest(baseParams, path, msg, OptionalParams{Query: query})
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateLB}),
+		Query:      cmn.AddBckToQuery(nil, bck),
+	})
 }
 
 // DestroyBucket API
 //
 // DestroyBucket sends a HTTP request to a proxy to remove an ais bucket with the given name
 func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
-	var (
-		msg, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActDestroyLB})
-		path     = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		query    = cmn.AddBckToQuery(nil, bck)
-	)
-	if err != nil {
-		return err
-	}
 	baseParams.Method = http.MethodDelete
-	_, err = DoHTTPRequest(baseParams, path, msg, OptionalParams{Query: query})
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActDestroyLB}),
+		Query:      cmn.AddBckToQuery(nil, bck),
+	})
 }
 
 // DoesBucketExist API
@@ -219,28 +173,24 @@ func DoesBucketExist(baseParams BaseParams, bck cmn.Bck) (bool, error) {
 // CopyBucket creates a new ais bucket newName and
 // copies into it contents of the existing oldName bucket
 func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Name: toBck.Name})
-	if err != nil {
-		return err
-	}
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, fromBck.Name)
-	_, err = DoHTTPRequest(baseParams, path, b)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, fromBck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Name: toBck.Name}),
+	})
 }
 
 // RenameBucket API
 //
 // RenameBucket changes the name of a bucket from oldName to newBucketName
 func RenameBucket(baseParams BaseParams, oldBck, newBck cmn.Bck) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBck.Name})
-	if err != nil {
-		return err
-	}
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, oldBck.Name)
-	_, err = DoHTTPRequest(baseParams, path, b)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, oldBck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBck.Name}),
+	})
 }
 
 // DeleteList API
@@ -296,24 +246,20 @@ func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) error {
 // EvictCloudBucket sends a HTTP request to a proxy to evict an entire cloud bucket from the AIStore
 // - the operation results in eliminating all traces of the specified cloud bucket in the AIStore
 func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) error {
-	var (
-		b, err    = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictCB})
-		optParams = OptionalParams{}
-	)
-	if err != nil {
-		return err
-	}
+	var q url.Values
 	if len(query) > 0 {
-		optParams.Query = query[0]
+		q = query[0]
 	}
 	if bck.Provider == "" {
 		bck.Provider = cmn.Cloud
 	}
-	optParams.Query = cmn.AddBckToQuery(optParams.Query, bck)
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	_, err = DoHTTPRequest(baseParams, path, b, optParams)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActEvictCB}),
+		Query:      cmn.AddBckToQuery(q, bck),
+	})
 }
 
 // Polling:
@@ -326,82 +272,63 @@ func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) e
 // 3. Breaks loop on error
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
-func waitForAsyncReqComplete(baseParams BaseParams, action, path string,
-	origMsg *cmn.SelectMsg, optParams OptionalParams) (*http.Response, error) {
+func waitForAsyncReqComplete(reqParams ReqParams, action string, origMsg *cmn.SelectMsg, v interface{}) error {
 	var (
-		resp         *http.Response
-		sleep        = initialPollInterval
-		b, err       = jsoniter.Marshal(cmn.ActionMsg{Action: action, Value: origMsg})
 		changeOfTask bool
+		id           string
+
+		sleep  = initialPollInterval
+		actMsg = cmn.ActionMsg{Action: action, Value: origMsg}
 	)
+	if reqParams.Query == nil {
+		reqParams.Query = url.Values{}
+	}
+	reqParams.Body = cmn.MustMarshal(actMsg)
+	resp, err := doHTTPRequestGetResp(reqParams, &id)
 	if err != nil {
-		return nil, err
-	}
-	if optParams.Query == nil {
-		optParams.Query = url.Values{}
-	}
-	if resp, err = doHTTPRequestGetResp(baseParams, path, b, optParams); err != nil {
-		return nil, err
+		return err
 	}
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("invalid response code: %d", resp.StatusCode)
+		return fmt.Errorf("invalid response code: %d", resp.StatusCode)
 	}
 	if resp.StatusCode == http.StatusAccepted {
 		// receiver started async task and returned the task ID
-		if b, err = handleAsyncReqAccepted(resp, action, origMsg, optParams); err != nil {
-			return nil, err
-		}
+		actMsg = handleAsyncReqAccepted(id, action, origMsg, reqParams)
 	}
 
-	defer optParams.Query.Del(cmn.URLParamTaskID)
+	defer reqParams.Query.Del(cmn.URLParamTaskID)
 
 	// poll async task for http.StatusOK completion
 	for {
-		resp, err = doHTTPRequestGetResp(baseParams, path, b, optParams)
+		reqParams.Body = cmn.MustMarshal(actMsg)
+		resp, err = doHTTPRequestGetResp(reqParams, v)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !changeOfTask && resp.StatusCode == http.StatusAccepted {
 			// NOTE: async task changed on the fly
-			if b, err = handleAsyncReqAccepted(resp, action, origMsg, optParams); err != nil {
-				return nil, err
-			}
+			actMsg = handleAsyncReqAccepted(id, action, origMsg, reqParams)
 			changeOfTask = true
 		}
 		if resp.StatusCode == http.StatusOK {
 			break
 		}
-		resp.Body.Close()
 		time.Sleep(sleep)
 		if sleep < maxPollInterval {
 			sleep += sleep / 2
 		}
 	}
-	return resp, err
+	return err
 }
 
-func handleAsyncReqAccepted(resp *http.Response, action string, origMsg *cmn.SelectMsg,
-	optParams OptionalParams) (b []byte, err error) {
-	var (
-		id       string
-		respBody []byte
-	)
-	respBody, err = ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return
-	}
-	id = string(respBody)
+func handleAsyncReqAccepted(id, action string, origMsg *cmn.SelectMsg, reqParams ReqParams) (actMsg cmn.ActionMsg) {
 	if origMsg != nil {
 		msg := cmn.SelectMsg{}
 		msg = *origMsg
 		msg.TaskID = id
-		if b, err = jsoniter.Marshal(cmn.ActionMsg{Action: action, Value: &msg}); err != nil {
-			return
-		}
+		actMsg = cmn.ActionMsg{Action: action, Value: &msg}
 	}
-	optParams.Query.Set(cmn.URLParamTaskID, id)
+	reqParams.Query.Set(cmn.URLParamTaskID, id)
 	return
 }
 
@@ -449,14 +376,11 @@ func ListBucket(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjec
 			msg.PageSize = toRead
 		}
 
-		optParams := OptionalParams{
-			Header: http.Header{"Content-Type": []string{"application/json"}},
-			Query:  q,
-		}
-
-		resp, err := waitForAsyncReqComplete(baseParams, cmn.ActListObjects, path, msg, optParams)
-		if err != nil {
-			return nil, err
+		reqParams := ReqParams{
+			BaseParams: baseParams,
+			Path:       path,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Query:      q,
 		}
 
 		page := tmpPage
@@ -473,11 +397,9 @@ func ListBucket(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjec
 			page.Entries = make([]*cmn.BucketEntry, 0, pageSize)
 		}
 
-		if err = jsoniter.NewDecoder(resp.Body).Decode(&page); err != nil {
-			resp.Body.Close()
-			return nil, fmt.Errorf("failed to json-unmarshal, err: %v", err)
+		if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, msg, &page); err != nil {
+			return nil, err
 		}
-		resp.Body.Close()
 
 		// First iteration uses `bckList` directly so there is no need to append.
 		if iter > 1 {
@@ -508,8 +430,6 @@ func ListBucket(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjec
 // the message to fetch the next page
 func ListBucketPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-
 	if msg == nil {
 		msg = &cmn.SelectMsg{}
 	}
@@ -519,26 +439,20 @@ func ListBucketPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, quer
 		q = query[0]
 	}
 
-	q = cmn.AddBckToQuery(q, bck)
-	optParams := OptionalParams{
+	reqParams := ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
 		Header: http.Header{
 			"Content-Type": []string{"application/json"},
 		},
-		Query: q,
+		Query: cmn.AddBckToQuery(q, bck),
 	}
-
-	resp, err := waitForAsyncReqComplete(baseParams, cmn.ActListObjects, path, msg, optParams)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
 
 	page := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
-	if err = jsoniter.NewDecoder(resp.Body).Decode(&page); err != nil {
-		return nil, fmt.Errorf("failed to json-unmarshal, err: %v", err)
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, msg, &page); err != nil {
+		return nil, err
 	}
 	msg.PageMarker = page.PageMarker
-
 	return page, nil
 }
 
@@ -547,10 +461,6 @@ func ListBucketPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, quer
 // All SelectMsg fields except prefix do not work and are skipped.
 // Function always returns the whole list of objects without paging
 func ListBucketFast(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
-	var (
-		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		q    url.Values
-	)
 	if msg == nil {
 		msg = &cmn.SelectMsg{}
 	}
@@ -563,62 +473,44 @@ func ListBucketFast(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, quer
 	msg.Fast = true
 	msg.Cached = true
 
+	var q url.Values
 	if len(query) > 0 {
 		q = query[0]
 	}
-	q = cmn.AddBckToQuery(q, bck)
-
-	optParams := OptionalParams{
-		Header: http.Header{"Content-Type": []string{"application/json"}},
-		Query:  q,
-	}
 	baseParams.Method = http.MethodPost
-	resp, err := waitForAsyncReqComplete(baseParams, cmn.ActListObjects, path, msg, optParams)
-	if err != nil {
+	reqParams := ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Query:      cmn.AddBckToQuery(q, bck),
+	}
+	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, msg, &bckList); err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
-	if err = jsoniter.NewDecoder(resp.Body).Decode(&bckList); err != nil {
-		return nil, fmt.Errorf("failed to json-unmarshal, err: %v", err)
-	}
-
 	return bckList, nil
 }
 
 // Handles the List/Range operations (delete, prefetch)
-func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action, method string, listrangemsg interface{}) error {
-	var (
-		actionMsg = cmn.ActionMsg{Action: action, Value: listrangemsg}
-		b, err    = jsoniter.Marshal(actionMsg)
-		path      = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		query     = cmn.AddBckToQuery(nil, bck)
-	)
-	if err != nil {
-		return fmt.Errorf("failed to marshal cmn.ActionMsg, err: %v", err)
-	}
-	optParams := OptionalParams{
+func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action, method string, listRangeMsg interface{}) error {
+	baseParams.Method = method
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: action, Value: listRangeMsg}),
 		Header: http.Header{
 			"Content-Type": []string{"application/json"},
 		},
-		Query: query,
-	}
-	baseParams.Method = method
-	_, err = DoHTTPRequest(baseParams, path, b, optParams)
-	return err
+		Query: cmn.AddBckToQuery(nil, bck),
+	})
 }
 
 func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck) error {
-	var (
-		b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActECEncode})
-		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		query  = cmn.AddBckToQuery(nil, bck)
-	)
-	if err != nil {
-		return err
-	}
 	baseParams.Method = http.MethodPost
-	_, err = DoHTTPRequest(baseParams, path, b, OptionalParams{Query: query})
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActECEncode}),
+		Query:      cmn.AddBckToQuery(nil, bck),
+	})
 }

@@ -12,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -64,24 +63,18 @@ func (xs NodesXactStats) ObjCount() (count int64) {
 }
 
 func execXactionAction(baseParams BaseParams, args XactReqArgs, action string) error {
-	var (
-		optParams []OptionalParams
-		actMsg    = &cmn.ActionMsg{
-			Action: action,
-			Name:   args.Kind,
-			Value:  args.Bck.Name,
-		}
-		path     = cmn.URLPath(cmn.Version, cmn.Cluster)
-		msg, err = jsoniter.Marshal(actMsg)
-		query    = cmn.AddBckToQuery(nil, args.Bck)
-	)
-	if err != nil {
-		return err
+	actMsg := cmn.ActionMsg{
+		Action: action,
+		Name:   args.Kind,
+		Value:  args.Bck.Name,
 	}
 	baseParams.Method = http.MethodPut
-	optParams = []OptionalParams{{Query: query}}
-	_, err = DoHTTPRequest(baseParams, path, msg, optParams...)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Body:       cmn.MustMarshal(actMsg),
+		Query:      cmn.AddBckToQuery(nil, args.Bck),
+	})
 }
 
 // StartXaction API
@@ -101,14 +94,8 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 // GetXactionStats API
 //
 // GetXactionStats gets all xaction stats for given kind and bucket (optional).
-func GetXactionStats(baseParams BaseParams, args XactReqArgs) (NodesXactStats, error) {
-	var (
-		resp      *http.Response
-		xactStats = make(NodesXactStats)
-	)
-
-	optParams := OptionalParams{}
-	actMsg := &cmn.ActionMsg{
+func GetXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactStats, err error) {
+	actMsg := cmn.ActionMsg{
 		Action: cmn.ActXactStats,
 		Name:   args.Kind,
 		Value: cmn.XactionExtMsg{
@@ -116,23 +103,14 @@ func GetXactionStats(baseParams BaseParams, args XactReqArgs) (NodesXactStats, e
 			All: !args.Latest,
 		},
 	}
-	msg, err := jsoniter.Marshal(actMsg)
-	if err != nil {
-		return nil, err
-	}
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Cluster)
-	optParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXaction}}
-	if resp, err = doHTTPRequestGetResp(baseParams, path, msg, optParams); err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	decoder := jsoniter.NewDecoder(resp.Body)
-	if err := decoder.Decode(&xactStats); err != nil {
-		return nil, err
-	}
-	return xactStats, nil
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Body:       cmn.MustMarshal(actMsg),
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXaction}},
+	}, &xactStats)
+	return xactStats, err
 }
 
 // WaitForXaction API
@@ -204,12 +182,10 @@ func WaitForXactionToStart(baseParams BaseParams, args XactReqArgs) error {
 //
 // MakeNCopies starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies)
 func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies})
-	if err != nil {
-		return err
-	}
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	_, err = DoHTTPRequest(baseParams, path, b)
-	return err
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
+	})
 }

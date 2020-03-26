@@ -70,11 +70,13 @@ func (e *HTTPError) Error() string {
 	return buf.String()
 }
 
-// newHTTPError returns a HTTPError struct.
-// There are cases where the message is already formatted as a HTTPError (from target)
-// in which case, returns true otherwise false
-// NOTE: The format of the error message is being used in the CLI
-// If there are any changes, please make sure to update `errorHandler` in the CLI
+// NewHTTPError returns a HTTPError struct. There are cases
+// where the message is already formatted as a HTTPError (from target)
+// in which case returns `true`, otherwise `false`.
+//
+// NOTE: The format of the error message is being used in the CLI.
+//  If there are any changes, please make sure to update `errorHandler`
+//  in the CLI.
 func NewHTTPError(r *http.Request, msg string, status int) (*HTTPError, bool) {
 	var httpErr HTTPError
 	if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
