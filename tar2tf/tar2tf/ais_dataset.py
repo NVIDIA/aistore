@@ -1,8 +1,10 @@
 import os, io, tarfile
 
 import tensorflow as tf
+from humanfriendly import parse_size
 
 from queue import Queue
+from inspect import isgeneratorfunction
 
 from .aisapi import AisClient
 from .downloadworker import DownloadWorker
@@ -12,6 +14,11 @@ from .ops import Select, SelectJSON, Decode, Func, Resize, Convert
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 OPS = [Select, SelectJSON, Decode, Func, Resize, Convert]
+
+OUTPUT_SHAPES = "output_shapes"
+OUTPUT_TYPES = "output_types"
+MAX_SHARD_SIZE = "max_shard_size"
+PATH = "path"
 
 
 def __bytes_feature(value):
@@ -115,21 +122,53 @@ class AisDataset:
             for o in self.proxy_client.get_objects_names(smap["tmap"][k]["intra_data_net"]["direct_url"], template).json():
                 yield o
 
+    def __default_path_generator(self, path):
+        path_template = current_path = ""
+        if "{}" in path:
+            path_template = path
+            yield path_template.format(0)
+        else:
+            path_template = "{}" + path
+            yield path
+
+        i = 1
+        while True:
+            yield path_template.format(i)
+            i += 1
+
     # args:
     # record_to_pair - specify how to translate tar record to pair
     # path - place to save TFRecord file. If None, everything done on the fly
     def load_from_tar(self, template, **kwargs):
-        accepted_args = ["output_types", "output_shapes", "path"]
+        accepted_args = [OUTPUT_TYPES, OUTPUT_SHAPES, PATH, MAX_SHARD_SIZE]
 
         for key in kwargs:
             if key not in accepted_args:
                 raise Exception("invalid argument name {}".format(key))
 
-        output_types = kwargs.get("output_types", (tf.float32, tf.int32))
-        output_shapes = kwargs.get("output_shapes", (tf.TensorShape([224, 224, 3]), tf.TensorShape([])))
+        output_types = kwargs.get(OUTPUT_TYPES, (tf.float32, tf.int32))
+        output_shapes = kwargs.get(OUTPUT_SHAPES, (tf.TensorShape([224, 224, 3]), tf.TensorShape([])))
 
-        if "path" in kwargs and kwargs["path"] is not None:
-            return self.__record_dataset_from_tar(template, kwargs["path"], record_to_example=default_record_to_example)
+        max_shard_size = kwargs.get(MAX_SHARD_SIZE, 0)
+        if type(max_shard_size) == str:
+            max_shard_size = parse_size(max_shard_size)
+        elif type(max_shard_size) != int:
+            raise Exception("{} can be either string or int".format(MAX_SHARD_SIZE))
+
+        if PATH in kwargs and kwargs[PATH] is not None:
+            path = kwargs[PATH]
+            path_gen = path
+            # allow path generators so user can put some more logic to path selection
+            if not isgeneratorfunction(path) and type(path) != str:
+                raise Exception("path argument has to be either string or generator")
+            if type(path) == str:
+                path_gen = lambda: self.__default_path_generator(path)
+
+            # return list of paths to created TFRecords
+            return self.__record_dataset_from_tar(template, path_gen, default_record_to_example, max_shard_size)
+
+        if max_shard_size != 0:
+            raise Exception("{} not supported without {} argument".format(MAX_SHARD_SIZE, PATH))
 
         return tf.data.Dataset.from_generator(lambda: self.__generator_from_template(template), output_types, output_shapes=output_shapes)
 
@@ -175,19 +214,34 @@ class AisDataset:
             tar.close()
 
     # path - path where to save record dataset
-    def __record_dataset_from_tar(self, template, path, record_to_example):
-        with tf.io.TFRecordWriter(path) as writer:
-            for tar_obj in self.__objects_generator(template):
-                tar_bytes = io.BytesIO(tar_obj)
-                tar = tarfile.open(mode="r", fileobj=tar_bytes)
-                records = tar_records(tar)
+    def __record_dataset_from_tar(self, template, get_path_gen, record_to_example, max_shard_size):
+        path_gen = get_path_gen()
+        paths = [next(path_gen)]
+        writer = tf.io.TFRecordWriter(paths[0])
+        total_size = 0
 
-                for k in records:
-                    record = records[k]
-                    tf_example = record_to_example(record)
+        for tar_obj in self.__objects_generator(template):
+            tar_bytes = io.BytesIO(tar_obj)
+            tar = tarfile.open(mode="r", fileobj=tar_bytes)
+            records = tar_records(tar)
 
-                    writer.write(tf_example.SerializeToString())
-                tar.close()
+            for k in records:
+                record = records[k]
+                tf_example = record_to_example(record)
+
+                serialized = tf_example.SerializeToString()
+                writer.write(serialized)
+                total_size += len(serialized)
+                if total_size > max_shard_size > 0:
+                    writer.close()
+                    total_size = 0
+                    paths.append(next(path_gen))
+                    writer = tf.io.TFRecordWriter(paths[-1])
+
+            tar.close()
+
+        writer.close()
+        return paths
 
     def operation_to_value(self, op, record, ext_required=False):
         if type(op) == list:

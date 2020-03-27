@@ -43,7 +43,15 @@ Transform tars of images from AIS into TensorFlow compatible format.
 
 `template` - object names of tars. Bash range syntax like `{0..10}` is supported.  
 
-`path` - destination path to file where TFRecord file should be saved to. If empty or None, all operations are made in memory.
+`path` - destination where TFRecord file or multiple files should be saved to. 
+Accepted: string, string with "{}" format template or generator. 
+If `max_shard_size` is specified multiple files destinations might be needed.
+If `path` is string default path indexing will be applied.
+If `path` is string with "{}" consecutive numbers starting with 1 will be put into `path`.
+If `path` is generator consecutive yielded values will be used.  
+Generated TFRecord files paths are returned from `load_from_tar`
+
+If empty or None, all operations are made in memory and `tf.data.Dataset` is returned.
 
 `record_to_example` (optional) - should specify how to translate tar record.
 Argument of this function is representation of single tar record: python `dict`. 
@@ -116,7 +124,7 @@ Resizes `what` object into new size `dst_size`.
 
 ### Examples
 
-1) Create in-memory dataset from tars with names `"train-{0..7}.tar.gz"` in bucket `BUCKET_NAME`.
+#### Create in-memory dataset from tars with names `"train-{0..7}.tar.gz"` in bucket `BUCKET_NAME`.
 ```python
 # Create in-memory TensorFlow dataset
 ais = AisDataset(BUCKET_NAME, PROXY_URL)
@@ -126,7 +134,17 @@ test_dataset = ais.load_from_tar("train-{4..7}.tar.gz").batch(BATCH_SIZE)
 model.fit(train_dataset, epochs=EPOCHS)
 ```
 
-2) Create TensorFlow dataset with intermediate storing `TFRecord` in filesystem.
+#### The same as above, but with 4 workers fetching dataset from the cluster.
+```python
+# Create in-memory TensorFlow dataset
+ais = AisDataset(BUCKET_NAME, PROXY_URL, num_workers=4)
+train_dataset = ais.load_from_tar("train-{0..3}.tar.gz").shuffle().batch(BATCH_SIZE)
+test_dataset = ais.load_from_tar("train-{4..7}.tar.gz").batch(BATCH_SIZE)
+# ...
+model.fit(train_dataset, epochs=EPOCHS)
+```
+
+#### Create TensorFlow dataset with intermediate storing `TFRecord` in filesystem.
 ```python
 ais = AisDataset(BUCKET_NAME, PROXY_URL)
 
@@ -139,7 +157,20 @@ train_dataset = tf.data.TFRecordDataset(filenames=["train.record"])
 model.fit(train_dataset, epochs=EPOCHS)
 ```
 
-3) Create TensorFlow dataset in memory with custom tar-record to datapoint translation.
+#### Create TensorFlow dataset with intermediate storing `TFRecord` in filesystem with limited TFRecord size.
+```python
+ais = AisDataset(BUCKET_NAME, PROXY_URL)
+
+filenames = ais.load_from_tar("train-{0..3}.tar.gz", path="train-{}.record", max_shard_size="100MB")
+train_dataset = tf.data.TFRecordDataset(filenames=filenames)
+                       .map(default_record_parser)
+                       .shuffle(buffer_size=1024)
+                       .batch(BATCH_SIZE)
+# ...
+model.fit(train_dataset, epochs=EPOCHS)
+```
+
+#### Create TensorFlow dataset in memory with custom tar-record to datapoint translation.
 ```python
 
 # Create in-memory TensorFlow dataset
@@ -151,10 +182,9 @@ test_dataset = ais.load_from_tar("train-{4..7}.tar.gz").batch(BATCH_SIZE)
 test_dataset = ais.load_from_tar("train-{4..7}.tar.gz").batch(BATCH_SIZE)
 # ...
 model.fit(train_dataset, epochs=EPOCHS)
-
 ```
 
-4) Create TensorFlow dataset in memory with custom tar-record to datapoint translation.
+#### Create TensorFlow dataset in memory with custom tar-record to datapoint translation.
 ```python
 
 # Create in-memory TensorFlow dataset
