@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -278,39 +277,42 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 }
 
 func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact *xaction.Election) {
-	// First, ping current proxy with a short timeout: (Primary? State)
-	primaryURL := curPrimary.IntraControlNet.DirectURL
-	proxyup, err := p.pingWithTimeout(curPrimary, cmn.GCO.Get().Timeout.ProxyPing)
-	if proxyup {
-		// Move back to Idle state
-		glog.Infof("current primary %s is up: moving back to idle", primaryURL)
+	var (
+		err    = context.DeadlineExceeded
+		config = cmn.GCO.Get()
+	)
+	// 1. ping current primary
+	for i := time.Duration(2); i >= 1 && err != nil; i-- {
+		timeout := config.Timeout.CplaneOperation / i
+		_, err = p.Health(curPrimary, false, timeout)
+	}
+	if err == nil {
+		// move back to idle
+		glog.Infof("%s: the current primary %s is up, moving back to idle", p.si, curPrimary)
 		return
 	}
-	if err != nil {
-		glog.Warningf("Error when pinging primary %s: %v", primaryURL, err)
-	}
-	glog.Infof("%s: primary proxy %v is confirmed down\n", p.si, primaryURL)
+	glog.Infof("%s: primary %s is confirmed down(%v)", p.si, curPrimary, err)
 
+	// 2. election phase 1
 	glog.Info("Moving to election state phase 1 (prepare)")
 	elected, votingErrors := p.electAmongProxies(vr, xact)
 	if !elected {
-		glog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle", primaryURL)
+		glog.Errorf("%s: election phase 1 (prepare) failed: primary remains %s, moving back to idle", p.si, curPrimary)
 		return
 	}
 
+	// 3. election phase 2
 	glog.Info("Moving to election state phase 2 (commit)")
 	confirmationErrors := p.confirmElectionVictory(vr)
-
-	// Check for errors that did not occur in the voting stage:
 	for sid := range confirmationErrors {
 		if _, ok := votingErrors[sid]; !ok {
-			// A node errored while confirming that did not error while voting:
-			glog.Errorf("An error occurred confirming the election with a node %s that was healthy when voting", sid)
+			// NOTE: p of no return
+			glog.Errorf("%s: error confirming the election with %s that was healthy when voting", p.si, sid)
 		}
 	}
 
-	glog.Infof("Moving %s(self) to primary state", p.si)
-	// Begin Primary State
+	// 4. become!
+	glog.Infof("%s: moving (self) to primary state", p.si)
 	p.becomeNewPrimary(vr.Primary /* proxyIDToRemove */)
 }
 
@@ -578,30 +580,6 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 			daemonID, nextPrimaryProxy.ID() == daemonID, daemonID)
 	}
 	return nextPrimaryProxy.ID() == daemonID, nil
-}
-
-// pingWithTimeout sends a http get to the server, returns true if the call returns in time;
-// otherwise return false to indicate the server is not reachable.
-func (p *proxyrunner) pingWithTimeout(si *cluster.Snode, timeout time.Duration) (bool, error) {
-	args := callArgs{
-		si: si,
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Base:   si.IntraControlNet.DirectURL,
-			Path:   cmn.URLPath(cmn.Version, cmn.Health),
-		},
-		timeout: timeout,
-	}
-	res := p.call(args)
-	if res.err == nil {
-		return true, nil
-	}
-
-	if errors.Is(res.err, context.DeadlineExceeded) || cmn.IsErrConnectionRefused(res.err) {
-		return false, nil
-	}
-
-	return false, res.err
 }
 
 //=========================

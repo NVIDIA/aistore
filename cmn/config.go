@@ -321,8 +321,6 @@ type TimeoutConf struct {
 	DefaultLong        time.Duration `json:"-"`
 	MaxKeepaliveStr    string        `json:"max_keepalive"`
 	MaxKeepalive       time.Duration `json:"-"`
-	ProxyPingStr       string        `json:"proxy_ping"`
-	ProxyPing          time.Duration `json:"-"`
 	CplaneOperationStr string        `json:"cplane_operation"`
 	CplaneOperation    time.Duration `json:"-"`
 	SendFileStr        string        `json:"send_file_time"`
@@ -822,9 +820,6 @@ func (c *TimeoutConf) Validate(_ *Config) (err error) {
 	}
 	if c.MaxKeepalive, err = time.ParseDuration(c.MaxKeepaliveStr); err != nil {
 		return fmt.Errorf("invalid timeout.max_keepalive format %s, err %v", c.MaxKeepaliveStr, err)
-	}
-	if c.ProxyPing, err = time.ParseDuration(c.ProxyPingStr); err != nil {
-		return fmt.Errorf("invalid timeout.proxy_ping format %s, err %v", c.ProxyPingStr, err)
 	}
 	if c.CplaneOperation, err = time.ParseDuration(c.CplaneOperationStr); err != nil {
 		return fmt.Errorf("invalid timeout.vote_request format %s, err %v", c.CplaneOperationStr, err)

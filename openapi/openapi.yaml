@@ -1656,8 +1656,6 @@ components:
               type: string
             max_keepalive:
               type: string
-            proxy_ping:
-              type: string
             cplane_operation:
               type: string
             send_file_time:

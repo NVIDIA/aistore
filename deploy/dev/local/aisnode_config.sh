@@ -33,7 +33,6 @@ cat > $CONFFILE <<EOL
 		"default_long_timeout": "30m",
 		"list_timeout":         "2m",
 		"max_keepalive":        "4s",
-		"proxy_ping":           "100ms",
 		"cplane_operation":     "2s",
 		"send_file_time":       "5m",
 		"startup_time":         "1m",

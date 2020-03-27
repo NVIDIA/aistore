@@ -934,6 +934,11 @@ func (h *httprunner) Health(si *cluster.Snode, includeReb bool, timeout time.Dur
 		timeout: timeout,
 	}
 	res := h.call(args)
+	if res.err != nil {
+		if errors.Is(res.err, context.DeadlineExceeded) || cmn.IsErrConnectionRefused(res.err) {
+			glog.Warningf("%s: %s is unreachable(%v)", h.si, si, res.err)
+		}
+	}
 	return res.outjson, res.err
 }
 

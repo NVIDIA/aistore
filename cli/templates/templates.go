@@ -137,7 +137,6 @@ const (
 		" Default Timeout:\t{{$obj.DefaultStr}}\n" +
 		" Default Long Timeout:\t{{$obj.DefaultLongStr}}\n" +
 		" Max Keep Alive:\t{{$obj.MaxKeepaliveStr}}\n" +
-		" Proxy Ping:\t{{$obj.ProxyPingStr}}\n" +
 		" Control Plane Operation:\t{{$obj.CplaneOperationStr}}\n" +
 		" List Time:\t{{$obj.ListBucketStr}}\n" +
 		" Send File Time:\t{{$obj.SendFileStr}}\n" +

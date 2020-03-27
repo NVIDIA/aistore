@@ -177,8 +177,8 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 	return
 }
 
-// pingAllOthers is called by the primary proxy to ping all other daemons in the smap concurrently.
-// All non-responding daemons are removed from the smap and the resulting smap is synced to all other daemons.
+// pingAllOthers pings in parallel all other nodes in the cluster.
+// All non-responding nodes get removed from the Smap and the resulting map is then metasync-ed.
 func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	t := time.Now().Unix()
 	if !pkr.primaryKeepaliveInProgress.CAS(0, t) {
