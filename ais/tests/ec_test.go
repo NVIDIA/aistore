@@ -2758,13 +2758,13 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 			tutils.Logf("Running EC %d:%d\n", o.dataCnt, o.parityCnt)
 
 			newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
-			_ECAndRegularUnregisterWhileRebalancing(t, o, smap, bckEC)
-			tutils.DestroyBucket(t, proxyURL, bckEC)
+			defer tutils.DestroyBucket(t, proxyURL, bckEC)
+			ecAndRegularUnregisterWhileRebalancing(t, o, smap, bckEC)
 		})
 	}
 }
 
-func _ECAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cluster.Smap, bckEC cmn.Bck) {
+func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cluster.Smap, bckEC cmn.Bck) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
