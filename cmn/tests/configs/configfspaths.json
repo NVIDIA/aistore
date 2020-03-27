@@ -34,14 +34,16 @@
     "retry_sync_time":   "2s"
   },
   "timeout": {
-    "default_timeout":      "10s",
-    "default_long_timeout": "30m",
-    "list_timeout":         "2m",
     "max_keepalive":        "4s",
     "cplane_operation":     "2s",
     "send_file_time":       "5m",
     "startup_time":         "1m",
     "max_host_busy":        "1m"
+  },
+  "client": {
+    "client_timeout":      "10s",
+    "client_long_timeout": "30m",
+    "list_timeout":        "2m"
   },
   "proxy": {
     "non_electable": false,

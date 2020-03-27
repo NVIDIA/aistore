@@ -93,7 +93,7 @@ func _loadConfig(clivars *ConfigCLI) (config *cmn.Config, changed bool, err erro
 		changed = true
 	}
 	if clivars.ListBucketTime != 0 {
-		config.Timeout.ListBucket = clivars.ListBucketTime
+		config.Client.ListBucket = clivars.ListBucketTime
 		changed = true
 	}
 	if clivars.ProxyURL != "" {

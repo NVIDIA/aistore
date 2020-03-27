@@ -100,14 +100,16 @@
         "multiplier":      {{ .rebalance.multiplier }}
 },
 "timeout": {
-        "default_timeout":      {{ .timeout.default_timeout | quote }},
-        "default_long_timeout": {{ .timeout.default_long_timeout | quote }},
-        "list_timeout":         {{ .timeout.list_timeout | quote }},
         "max_keepalive":        {{ .timeout.max_keepalive | quote }},
         "cplane_operation":     {{ .timeout.cplane_operation | quote }},
         "send_file_time":       {{ .timeout.send_file_time | quote }},
         "startup_time":         {{ .timeout.startup_time | quote }},
         "max_host_busy":        {{ .timeout.max_host_busy | quote }}
+},
+"client": {
+        "client_timeout":       {{ .timeout.default_timeout | quote }},
+        "client_long_timeout":  {{ .timeout.default_long_timeout | quote }},
+        "list_timeout":         {{ .timeout.list_timeout | quote }}
 },
 "versioning": {
         "enabled":              {{ .versioning.enabled }},

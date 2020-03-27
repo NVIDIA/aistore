@@ -1001,9 +1001,11 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 
 func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 	summaries cmn.BucketsSummaries, taskID string, err error) {
-	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
-	// it is a request to start a new async task
-	isNew, q := p.initAsyncQuery(&selMsg)
+	var (
+		// start new async task if client did not provide taskID(neither in Headers nor in SelectMsg),
+		isNew, q = p.initAsyncQuery(&selMsg)
+		config   = cmn.GCO.Get()
+	)
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap   = p.owner.smap.get()
@@ -1016,7 +1018,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, selMsg cmn.SelectMsg
 				Body:  body,
 			},
 			smap:    smap,
-			timeout: cmn.GCO.Get().Timeout.ListBucket,
+			timeout: config.Timeout.MaxHostBusy + config.Timeout.CplaneOperation,
 		}
 	)
 	results := p.bcastPost(args)
@@ -1556,11 +1558,10 @@ func (p *proxyrunner) checkBckTaskResp(taskID string, results chan callResult) (
 //      * the list of objects if the aync task finished (taskID is 0 in this case)
 //      * non-zero taskID if the task is still running
 //      * error
-func (p *proxyrunner) listAISBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (
-	allEntries *cmn.BucketList, taskID string, err error) {
-	// Start new async task if client did not provide taskID (neither in headers nor in SelectMsg).
-	isNew, q := p.initAsyncQuery(&selMsg)
+func (p *proxyrunner) listAISBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (allEntries *cmn.BucketList, taskID string, err error) {
+	isNew, q := p.initAsyncQuery(&selMsg) // new async task if taskID is not present in headers and SelectMsg
 	var (
+		config = cmn.GCO.Get()
 		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &selMsg}, nil, nil)
 		body   = cmn.MustMarshal(aisMsg)
 
@@ -1570,7 +1571,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 				Query: q,
 				Body:  body,
 			},
-			timeout: cmn.GCO.Get().Timeout.ListBucket,
+			timeout: config.Timeout.MaxHostBusy + config.Timeout.CplaneOperation,
 		}
 	)
 
@@ -1662,7 +1663,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap          = p.owner.smap.get()
-		reqTimeout    = cmn.GCO.Get().Timeout.ListBucket
+		reqTimeout    = cmn.GCO.Get().Client.ListBucket
 		aisMsg        = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &selMsg}, smap, nil)
 		body          = cmn.MustMarshal(aisMsg)
 		needLocalData = selMsg.NeedLocalData()
@@ -1856,9 +1857,8 @@ func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query
 	var (
 		timeout time.Duration
 		results chan callResult
+		wait    bool
 	)
-
-	wait := false
 	if jsmap, ok := msg.Value.(map[string]interface{}); !ok {
 		return fmt.Errorf("failed to unmarshal JSMAP: Not a map[string]interface")
 	} else if waitstr, ok := jsmap["wait"]; ok {
@@ -1871,7 +1871,7 @@ func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query
 	bmd := p.owner.bmd.get()
 	body := cmn.MustMarshal(p.newAisMsg(msg, smap, bmd))
 	if wait {
-		timeout = cmn.GCO.Get().Timeout.ListBucket
+		timeout = cmn.GCO.Get().Client.ListBucket
 	} else {
 		timeout = cmn.DefaultTimeout
 	}
@@ -2577,7 +2577,7 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 			Query:  r.URL.Query(),
 			Body:   body,
 		},
-		timeout: cmn.GCO.Get().Timeout.Default,
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	})
 	targetResults := make(cmn.JSONRawMsgs, len(results))
 	for res := range results {
@@ -2602,7 +2602,7 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 				Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
 				Query:  r.URL.Query(),
 			},
-			timeout: cmn.GCO.Get().Timeout.Default,
+			timeout: cmn.GCO.Get().Client.Timeout,
 			to:      broadcastType,
 		})
 		sysInfoMap := make(cmn.JSONRawMsgs, len(results))
@@ -3237,7 +3237,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	}
 	results := p.bcastGet(bcastArgs{
 		req:     cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)},
-		timeout: cmn.GCO.Get().Timeout.Default,
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	})
 	bmds = make(map[*cluster.Snode]*bucketMD, len(results))
 	for res := range results {

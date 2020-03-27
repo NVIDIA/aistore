@@ -92,9 +92,10 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `rebalance.multiplier` | `4` | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
 | `rebalance.quiescent` | `20s` | Rebalace moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
 | `timeout.send_file_time` | `5m` | Timeout for getting an object from a neighbor target or for sending an object to the correct target while rebalance is in progress |
-| `timeout.default_timeout` | `30s` | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
-| `timeout.default_long_timeout` | `30m` | Default timeout for long intra-cluster requests, e.g. reading an object from a neighbor target while rebalancing |
-| `timeout.max_host_bust` | `1m` | Determines how long should we wait for particular action to happen due to possible node/network overload |
+| `timeout.max_host_busy` | `1m` | Determines how long should we wait for particular action to happen due to possible node/network overload |
+| `client.client_timeout` | `10s` | Default client timeout |
+| `client.client_long_timeout` | `30m` | Default _long_ client timeout |
+| `client.list_timeout` | `2m` | Client list-bucket timeout |
 | `checksum.type` | `xxhash` | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
 | `checksum.validate_cold_get` | `true` | Enables and disables checking the hash of received object after downloading it from the cloud |
 | `checksum.validate_warm_get` | `false` | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |
@@ -140,13 +141,13 @@ $ curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?periodic.stats_time=1m&persi
 AIS command-line allows to override (and, optionally, persist) configuration at AIS node's startup. For example:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -persist=true -confjson="{\"timeout.default_timeout\": \"13s\" }"
+$ aisnode -config=/etc/ais.json -role=target -persist=true -confjson="{\"timeout.client_timeout\": \"13s\" }"
 ```
 
 As shown above, the CLI option in-question is: `confjson`. It's value is a JSON-formatted map of string names and string values. You can *persist* the updated configuration either via `-persist` command-line option or via an additional JSON tuple:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -confjson="{\"timeout.default_timeout\": \"13s\", \"persist\": \"true\" }"
+$ aisnode -config=/etc/ais.json -role=target -confjson="{\"timeout.client_timeout\": \"13s\", \"persist\": \"true\" }"
 ```
 
 Another example. To temporarily override locally-configured address of the primary proxy, run:

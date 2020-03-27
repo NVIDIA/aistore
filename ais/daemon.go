@@ -282,7 +282,7 @@ func initDaemon(version, build string) {
 	daemon.rg.add(&sigrunner{}, xsignal)
 
 	// even more config changes, e.g:
-	// -config=/etc/ais.json -role=target -persist=true -confjson="{\"default_timeout\": \"13s\" }"
+	// -config=/etc/ais.json -role=target -persist=true -confjson="{\"client_timeout\": \"13s\" }"
 	if daemon.cli.confjson != "" {
 		var nvmap cmn.SimpleKVs
 		if err = jsoniter.Unmarshal([]byte(daemon.cli.confjson), &nvmap); err != nil {

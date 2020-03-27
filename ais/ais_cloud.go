@@ -55,7 +55,7 @@ func newAISCloudProvider(t *targetrunner, clusterConf cmn.CloudConfAIS) (cloudPr
 	for _, url = range urls {
 		smap, err := api.GetClusterMap(api.BaseParams{
 			Client: cmn.NewClient(cmn.TransportArgs{
-				Timeout: cfg.Timeout.DefaultLong,
+				Timeout: cfg.Client.TimeoutLong,
 			}),
 			URL: url,
 		})
@@ -89,7 +89,7 @@ func (m *aisCloudProvider) newBaseParams() api.BaseParams {
 	cfg := cmn.GCO.Get()
 	return api.BaseParams{
 		Client: cmn.NewClient(cmn.TransportArgs{
-			Timeout: cfg.Timeout.DefaultLong,
+			Timeout: cfg.Client.TimeoutLong,
 		}),
 		URL: m.contactURL,
 	}
@@ -255,7 +255,7 @@ func (m *aisCloudProvider) try(f func() error) error {
 
 		smap, err := api.GetClusterMap(api.BaseParams{
 			Client: cmn.NewClient(cmn.TransportArgs{
-				Timeout: cfg.Timeout.DefaultLong,
+				Timeout: cfg.Client.TimeoutLong,
 			}),
 			URL: url,
 		})

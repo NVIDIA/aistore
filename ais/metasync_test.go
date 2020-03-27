@@ -98,8 +98,8 @@ func newPrimary() *proxyrunner {
 	config.KeepaliveTracker.Proxy.IntervalStr = "as"
 	config.Timeout.CplaneOperation = 2 * time.Second
 	config.Timeout.MaxKeepalive = 4 * time.Second
-	config.Timeout.Default = 10 * time.Second
-	config.Timeout.DefaultLong = 10 * time.Second
+	config.Client.Timeout = 10 * time.Second
+	config.Client.TimeoutLong = 10 * time.Second
 	cmn.GCO.CommitUpdate(config)
 
 	p.httpclientGetPut = &http.Client{}

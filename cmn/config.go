@@ -218,6 +218,7 @@ var (
 	_ Validator = &KeepaliveConf{}
 	_ Validator = &PeriodConf{}
 	_ Validator = &TimeoutConf{}
+	_ Validator = &ClientConf{}
 	_ Validator = &RebalanceConf{}
 	_ Validator = &NetConf{}
 	_ Validator = &DownloaderConf{}
@@ -253,6 +254,7 @@ type Config struct {
 	Log              LogConf         `json:"log"`
 	Periodic         PeriodConf      `json:"periodic"`
 	Timeout          TimeoutConf     `json:"timeout"`
+	Client           ClientConf      `json:"client"`
 	Proxy            ProxyConf       `json:"proxy"`
 	LRU              LRUConf         `json:"lru"`
 	Disk             DiskConf        `json:"disk"`
@@ -315,10 +317,6 @@ type PeriodConf struct {
 
 // timeoutconfig contains timeouts used for intra-cluster communication
 type TimeoutConf struct {
-	DefaultStr         string        `json:"default_timeout"`
-	Default            time.Duration `json:"-"`
-	DefaultLongStr     string        `json:"default_long_timeout"`
-	DefaultLong        time.Duration `json:"-"`
 	MaxKeepaliveStr    string        `json:"max_keepalive"`
 	MaxKeepalive       time.Duration `json:"-"`
 	CplaneOperationStr string        `json:"cplane_operation"`
@@ -327,10 +325,17 @@ type TimeoutConf struct {
 	SendFile           time.Duration `json:"-"`
 	StartupStr         string        `json:"startup_time"`
 	Startup            time.Duration `json:"-"`
-	ListBucketStr      string        `json:"list_timeout"`
-	ListBucket         time.Duration `json:"-"`
 	MaxHostBusyStr     string        `json:"max_host_busy"`
 	MaxHostBusy        time.Duration `json:"-"`
+}
+
+type ClientConf struct {
+	TimeoutStr     string        `json:"client_timeout"`
+	Timeout        time.Duration `json:"-"`
+	TimeoutLongStr string        `json:"client_long_timeout"`
+	TimeoutLong    time.Duration `json:"-"`
+	ListBucketStr  string        `json:"list_timeout"`
+	ListBucket     time.Duration `json:"-"`
 }
 
 type ProxyConf struct {
@@ -809,15 +814,6 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 }
 
 func (c *TimeoutConf) Validate(_ *Config) (err error) {
-	if c.Default, err = time.ParseDuration(c.DefaultStr); err != nil {
-		return fmt.Errorf("invalid timeout.default format %s, err %v", c.DefaultStr, err)
-	}
-	if c.DefaultLong, err = time.ParseDuration(c.DefaultLongStr); err != nil {
-		return fmt.Errorf("invalid timeout.default_long format %s, err %v", c.DefaultLongStr, err)
-	}
-	if c.ListBucket, err = time.ParseDuration(c.ListBucketStr); err != nil {
-		return fmt.Errorf("invalid timeout.list_timeout format %s, err %v", c.ListBucketStr, err)
-	}
 	if c.MaxKeepalive, err = time.ParseDuration(c.MaxKeepaliveStr); err != nil {
 		return fmt.Errorf("invalid timeout.max_keepalive format %s, err %v", c.MaxKeepaliveStr, err)
 	}
@@ -832,6 +828,19 @@ func (c *TimeoutConf) Validate(_ *Config) (err error) {
 	}
 	if c.MaxHostBusy, err = time.ParseDuration(c.MaxHostBusyStr); err != nil {
 		return fmt.Errorf("invalid timeout.max_host_busy format %s, err %v", c.MaxHostBusyStr, err)
+	}
+	return nil
+}
+
+func (c *ClientConf) Validate(_ *Config) (err error) {
+	if c.Timeout, err = time.ParseDuration(c.TimeoutStr); err != nil {
+		return fmt.Errorf("invalid client.default format %s, err %v", c.TimeoutStr, err)
+	}
+	if c.TimeoutLong, err = time.ParseDuration(c.TimeoutLongStr); err != nil {
+		return fmt.Errorf("invalid client.default_long format %s, err %v", c.TimeoutLongStr, err)
+	}
+	if c.ListBucket, err = time.ParseDuration(c.ListBucketStr); err != nil {
+		return fmt.Errorf("invalid client.list_timeout format %s, err %v", c.ListBucketStr, err)
 	}
 	return nil
 }

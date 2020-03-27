@@ -134,13 +134,15 @@ const (
 		" Stats Time:\t{{$obj.StatsTimeStr}}\n" +
 		" Retry Sync Time:\t{{$obj.RetrySyncTimeStr}}\n"
 	TimeoutConfTmpl = "\n{{$obj := .Timeout}}Timeout Config\n" +
-		" Default Timeout:\t{{$obj.DefaultStr}}\n" +
-		" Default Long Timeout:\t{{$obj.DefaultLongStr}}\n" +
 		" Max Keep Alive:\t{{$obj.MaxKeepaliveStr}}\n" +
 		" Control Plane Operation:\t{{$obj.CplaneOperationStr}}\n" +
-		" List Time:\t{{$obj.ListBucketStr}}\n" +
+		" Max Host Busy:\t{{$obj.MaxHostBusyStr}}\n" +
 		" Send File Time:\t{{$obj.SendFileStr}}\n" +
 		" Startup Time:\t{{$obj.StartupStr}}\n"
+	ClientConfTmpl = "\n{{$obj := .Client}}Client Config\n" +
+		" Timeout:\t{{$obj.TimeoutStr}}\n" +
+		" Long Timeout:\t{{$obj.TimeoutLongStr}}\n" +
+		" List Time:\t{{$obj.ListBucketStr}}\n"
 	ProxyConfTmpl = "\n{{$obj := .Proxy}}Proxy Config\n" +
 		" Non Electable:\t{{$obj.NonElectable}}\n" +
 		" Primary URL:\t{{$obj.PrimaryURL}}\n" +

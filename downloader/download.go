@@ -121,7 +121,7 @@ const (
 
 var (
 	httpClient = &http.Client{
-		Timeout: cmn.GCO.Get().Timeout.DefaultLong,
+		Timeout: cmn.GCO.Get().Client.TimeoutLong,
 	}
 )
 

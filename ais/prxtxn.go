@@ -400,7 +400,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	var (
 		nlpFrom = bckFrom.GetNameLockPair()
 		smap    = p.owner.smap.get()
-		tout    = config.Timeout.Default
+		tout    = config.Timeout.MaxKeepalive
 	)
 	nlpFrom.Lock()
 	defer nlpFrom.Unlock()

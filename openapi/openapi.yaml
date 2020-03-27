@@ -1650,10 +1650,6 @@ components:
         timeout:
           type: object
           properties:
-            default_timeout:
-              type: string
-            default_long_timeout:
-              type: string
             max_keepalive:
               type: string
             cplane_operation:
@@ -1662,9 +1658,16 @@ components:
               type: string
             startup_time:
               type: string
-            list_timeout:
-              type: string
             max_host_busy:
+              type: string
+        client:
+          type: object
+          properties:
+            client_timeout:
+              type: string
+            client_long_timeout:
+              type: string
+            list_timeout:
               type: string
         proxy:
           type: object

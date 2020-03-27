@@ -271,7 +271,7 @@ func (server *netServer) shutdown() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.Default)
+	ctx, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.MaxHostBusy/2)
 	if err := server.s.Shutdown(ctx); err != nil {
 		glog.Infof("Stopped server, err: %v", err)
 	}
@@ -344,11 +344,11 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	h.statsT = s
 	h.httpclient = cmn.NewClient(cmn.TransportArgs{
-		Timeout:  config.Timeout.Default,
+		Timeout:  config.Client.Timeout,
 		UseHTTPS: config.Net.HTTP.UseHTTPS,
 	})
 	h.httpclientGetPut = cmn.NewClient(cmn.TransportArgs{
-		Timeout:         config.Timeout.DefaultLong,
+		Timeout:         config.Client.TimeoutLong,
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
 		UseHTTPS:        false, // always plain intra-cluster http for data
