@@ -227,10 +227,10 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 // Returns InvalidCksumError when the expected and actual checksum values are different.
 func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
-		cksumVal  string
-		w         = ioutil.Discard
-		q         url.Values
-		optParams OptionalParams
+		cksumValue string
+		w          = ioutil.Discard
+		q          url.Values
+		optParams  OptionalParams
 	)
 	if len(options) != 0 {
 		w, q = getObjectOptParams(options[0])
@@ -245,26 +245,20 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 		return 0, err
 	}
 	defer resp.Body.Close()
-	hdrHash := resp.Header.Get(cmn.HeaderObjCksumVal)
-	hdrHashType := resp.Header.Get(cmn.HeaderObjCksumType)
+	hdrCksumValue := resp.Header.Get(cmn.HeaderObjCksumVal)
+	hdrCksumType := resp.Header.Get(cmn.HeaderObjCksumType)
 
-	if hdrHashType == cmn.ChecksumXXHash {
-		if MMSA == nil { // on demand
-			MMSA = memsys.DefaultPageMM()
-		}
-		buf, slab := MMSA.Alloc()
-		n, cksumVal, err = cmn.WriteWithHash(w, resp.Body, buf)
-		slab.Free(buf)
-
-		if err != nil {
-			return 0, fmt.Errorf("failed to calculate xxHash from HTTP response body, err: %v", err)
-		}
-		if cksumVal != hdrHash {
-			return 0, cmn.NewInvalidCksumError(hdrHash, cksumVal)
-		}
-	} else {
-		return 0, fmt.Errorf("can't validate hash types other than %s, object's hash type: %s",
-			cmn.ChecksumXXHash, hdrHashType)
+	if MMSA == nil { // on demand
+		MMSA = memsys.DefaultPageMM()
+	}
+	buf, slab := MMSA.Alloc()
+	n, cksumValue, err = cmn.WriteWithHash(w, resp.Body, buf, hdrCksumType)
+	slab.Free(buf)
+	if err != nil {
+		return 0, fmt.Errorf("failed read with hash HTTP response body, err: %v", err)
+	}
+	if hdrCksumValue != cksumValue {
+		return 0, cmn.NewInvalidCksumError(hdrCksumValue, cksumValue)
 	}
 	return n, nil
 }

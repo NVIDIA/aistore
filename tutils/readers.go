@@ -141,7 +141,8 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 	rand1 := rand.New(rand.NewSource(seed))
 	rr := &rrLimited{rand1, size, 0}
 	if withHash {
-		if _, hash, err = cmn.WriteWithHash(ioutil.Discard, rr, buf); err != nil {
+		_, hash, err = cmn.WriteWithHash(ioutil.Discard, rr, buf, cmn.ChecksumXXHash)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -226,7 +227,8 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 	var hash string
 	if withHash {
 		buf, slab := MMSA.Alloc()
-		if _, hash, err = cmn.WriteWithHash(ioutil.Discard, f, buf); err != nil {
+		_, hash, err = cmn.WriteWithHash(ioutil.Discard, f, buf, cmn.ChecksumXXHash)
+		if err != nil {
 			return nil, err
 		}
 		slab.Free(buf)

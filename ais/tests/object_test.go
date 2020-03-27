@@ -84,7 +84,7 @@ func TestCloudBucketObject(t *testing.T) {
 					tassert.CheckFatal(t, err)
 				}
 
-				_, err = api.GetObject(baseParams, bck, object)
+				_, err = api.GetObjectWithValidation(baseParams, bck, object)
 			default:
 				t.Fail()
 			}

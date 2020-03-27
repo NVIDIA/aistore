@@ -175,7 +175,7 @@ func PingURL(url string) (err error) {
 	return
 }
 
-func readResponse(r *http.Response, w io.Writer, src string, validate bool) (int64, string, error) {
+func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, string, error) {
 	var (
 		n        int64
 		cksumVal string
@@ -193,8 +193,8 @@ func readResponse(r *http.Response, w io.Writer, src string, validate bool) (int
 	buf, slab := MMSA.Alloc()
 	defer slab.Free(buf)
 
-	if validate {
-		n, cksumVal, err = cmn.WriteWithHash(w, r.Body, buf)
+	if cksumType != "" {
+		n, cksumVal, err = cmn.WriteWithHash(w, r.Body, buf, cksumType)
 		if err != nil {
 			return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 		}
@@ -206,7 +206,7 @@ func readResponse(r *http.Response, w io.Writer, src string, validate bool) (int
 }
 
 func discardResponse(r *http.Response, src string) (int64, error) {
-	n, _, err := readResponse(r, ioutil.Discard, src, false /* validate */)
+	n, _, err := readResponse(r, ioutil.Discard, src, "")
 	return n, err
 }
 
@@ -228,9 +228,9 @@ func emitError(r *http.Response, err error, errCh chan error) {
 //
 func GetDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, error) {
 	var (
-		hash, hdhash, hdhashtype string
+		hdrCksumValue, hdrCksumType string
+		query                       url.Values
 	)
-	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
 	if length > 0 {
 		query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
@@ -253,19 +253,16 @@ func GetDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 	defer resp.Body.Close()
 
 	if validate {
-		hdhash = resp.Header.Get(cmn.HeaderObjCksumVal)
-		hdhashtype = resp.Header.Get(cmn.HeaderObjCksumType)
+		hdrCksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
+		hdrCksumType = resp.Header.Get(cmn.HeaderObjCksumType)
 	}
-	v := hdhashtype == cmn.ChecksumXXHash
-	n, hash, err := readResponse(resp, ioutil.Discard,
-		fmt.Sprintf("GET (object %s from bucket %s)", objName, bck), v)
+	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
+	n, cksumValue, err := readResponse(resp, ioutil.Discard, src, hdrCksumType)
 	if err != nil {
 		return 0, err
 	}
-	if v {
-		if hdhash != hash {
-			err = cmn.NewInvalidCksumError(hdhash, hash)
-		}
+	if validate && hdrCksumValue != cksumValue {
+		return 0, cmn.NewInvalidCksumError(hdrCksumValue, cksumValue)
 	}
 	return n, err
 }
@@ -274,7 +271,7 @@ func GetDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 func GetTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool,
 	offset, length int64) (int64, HTTPLatencies, error) {
 	var (
-		hash, hdhash, hdhashtype string
+		hdrCksumValue, hdrCksumType string
 	)
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
@@ -304,20 +301,17 @@ func GetTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 
 	tctx.tr.tsHTTPEnd = time.Now()
 	if validate {
-		hdhash = resp.Header.Get(cmn.HeaderObjCksumVal)
-		hdhashtype = resp.Header.Get(cmn.HeaderObjCksumType)
+		hdrCksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
+		hdrCksumType = resp.Header.Get(cmn.HeaderObjCksumType)
 	}
 
-	v := hdhashtype == cmn.ChecksumXXHash
-	n, hash, err := readResponse(resp, ioutil.Discard,
-		fmt.Sprintf("GET (object %s from bucket %s)", objName, bck), v)
+	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
+	n, cksumValue, err := readResponse(resp, ioutil.Discard, src, hdrCksumType)
 	if err != nil {
 		return 0, HTTPLatencies{}, err
 	}
-	if v {
-		if hdhash != hash {
-			err = cmn.NewInvalidCksumError(hdhash, hash)
-		}
+	if validate && hdrCksumValue != cksumValue {
+		err = cmn.NewInvalidCksumError(hdrCksumValue, cksumValue)
 	}
 
 	latencies := HTTPLatencies{

@@ -16,7 +16,6 @@ import (
 
 const (
 	baseDir                 = "/tmp/ais"
-	LocalDestDir            = "/tmp/ais/dest" // client-side download destination
 	ColdValidStr            = "coldmd5"
 	ChksumValidStr          = "chksum"
 	ColdMD5str              = "coldmd5"

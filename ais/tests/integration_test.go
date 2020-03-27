@@ -207,7 +207,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 
 		wg.Add(1)
 		go func(obj *cmn.BucketEntry) {
-			_, err := tutils.GetDiscard(m.proxyURL, m.bck, obj.Name, false /*validate*/, 0, 0)
+			_, err := tutils.GetDiscard(m.proxyURL, m.bck, obj.Name, true /*validate*/, 0, 0)
 			tassert.CheckError(m.t, err)
 			wg.Done()
 		}(obj)

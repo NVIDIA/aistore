@@ -673,7 +673,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		if cksumRange {
 			var cksumValue string
 			sgl = slab.MMSA().NewSGL(goi.length, slab.Size())
-			if _, cksumValue, err = cmn.WriteWithHash(sgl, reader, buf); err != nil {
+			if _, cksumValue, err = cmn.WriteWithHash(sgl, reader, buf, cksumConf.Type); err != nil {
 				return
 			}
 			hdr.Set(cmn.HeaderObjCksumVal, cksumValue)

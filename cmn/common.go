@@ -7,6 +7,7 @@ package cmn
 import (
 	"bufio"
 	"bytes"
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"hash"
@@ -1004,10 +1005,21 @@ func ReadLines(filename string, cb func(string) error) error {
 	return nil
 }
 
-// WriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes
-// xxHash on the data.
-func WriteWithHash(w io.Writer, r io.Reader, buf []byte) (int64, string, error) {
-	h := xxhash.New64()
+// WriteWithHash reads data from an io.Reader, writes data to an io.Writer
+// and computes requested hash on the data.
+func WriteWithHash(w io.Writer, r io.Reader, buf []byte, hashType string) (int64, string, error) {
+	var h hash.Hash
+	switch hashType {
+	case ChecksumXXHash:
+		h = xxhash.New64()
+	case ChecksumMD5:
+		h = md5.New()
+	case ChecksumNone:
+		n, err := io.CopyBuffer(w, r, buf)
+		return n, "", err
+	default:
+		return 0, "", fmt.Errorf("unsupported hash type used: %q", hashType)
+	}
 	mw := io.MultiWriter(h, w)
 	total, err := io.CopyBuffer(mw, r, buf)
 	return total, HashToStr(h), err
@@ -1041,14 +1053,6 @@ func ComputeXXHash(reader io.Reader, buf []byte) (cksumValue string, err error) 
 	return HashToStr(xx), nil
 }
 
-func ParseI64Range(str string, base, bits int, low, high int64) (int64, error) {
-	Assert(low <= high)
-	v, err := strconv.ParseInt(str, base, bits)
-	if err != nil {
-		return low, err
-	}
-	return CheckI64Range(v, low, high)
-}
 func CheckI64Range(v, low, high int64) (int64, error) {
 	if v < low || v > high {
 		if low == high {
