@@ -107,7 +107,8 @@
         "proxy_ping":           {{ .timeout.proxy_ping | quote }},
         "cplane_operation":     {{ .timeout.cplane_operation | quote }},
         "send_file_time":       {{ .timeout.send_file_time | quote }},
-        "startup_time":         {{ .timeout.startup_time | quote }}
+        "startup_time":         {{ .timeout.startup_time | quote }},
+        "max_host_busy":        {{ .timeout.max_host_busy | quote }}
 },
 "versioning": {
         "enabled":              {{ .versioning.enabled }},

@@ -316,21 +316,23 @@ type PeriodConf struct {
 // timeoutconfig contains timeouts used for intra-cluster communication
 type TimeoutConf struct {
 	DefaultStr         string        `json:"default_timeout"`
-	Default            time.Duration `json:"-"` // omitempty
+	Default            time.Duration `json:"-"`
 	DefaultLongStr     string        `json:"default_long_timeout"`
-	DefaultLong        time.Duration `json:"-"` //
+	DefaultLong        time.Duration `json:"-"`
 	MaxKeepaliveStr    string        `json:"max_keepalive"`
-	MaxKeepalive       time.Duration `json:"-"` //
+	MaxKeepalive       time.Duration `json:"-"`
 	ProxyPingStr       string        `json:"proxy_ping"`
-	ProxyPing          time.Duration `json:"-"` //
+	ProxyPing          time.Duration `json:"-"`
 	CplaneOperationStr string        `json:"cplane_operation"`
-	CplaneOperation    time.Duration `json:"-"` //
+	CplaneOperation    time.Duration `json:"-"`
 	SendFileStr        string        `json:"send_file_time"`
-	SendFile           time.Duration `json:"-"` //
+	SendFile           time.Duration `json:"-"`
 	StartupStr         string        `json:"startup_time"`
-	Startup            time.Duration `json:"-"` //
+	Startup            time.Duration `json:"-"`
 	ListBucketStr      string        `json:"list_timeout"`
-	ListBucket         time.Duration `json:"-"` //
+	ListBucket         time.Duration `json:"-"`
+	MaxHostBusyStr     string        `json:"max_host_busy"`
+	MaxHostBusy        time.Duration `json:"-"`
 }
 
 type ProxyConf struct {
@@ -832,6 +834,9 @@ func (c *TimeoutConf) Validate(_ *Config) (err error) {
 	}
 	if c.Startup, err = time.ParseDuration(c.StartupStr); err != nil {
 		return fmt.Errorf("invalid timeout.startup_time format %s, err %v", c.StartupStr, err)
+	}
+	if c.MaxHostBusy, err = time.ParseDuration(c.MaxHostBusyStr); err != nil {
+		return fmt.Errorf("invalid timeout.max_host_busy format %s, err %v", c.MaxHostBusyStr, err)
 	}
 	return nil
 }

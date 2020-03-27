@@ -110,6 +110,7 @@ ais_config_common:
     cplane_operation:     2s
     send_file_time:       5m
     startup_time:         1m
+    max_host_busy:        1m
   versioning:
     enabled:           true
     validate_warm_get: false

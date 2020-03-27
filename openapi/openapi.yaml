@@ -1666,6 +1666,8 @@ components:
               type: string
             list_timeout:
               type: string
+            max_host_busy:
+              type: string
         proxy:
           type: object
           properties:

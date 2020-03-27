@@ -162,6 +162,7 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
 	var (
 		sleep             = cmn.MinDuration(100*time.Millisecond, timeout/10)
+		timeoutCfg        = cmn.GCO.Get().Timeout
 		rsvpErr           error
 		done, found, rsvp bool
 	)
@@ -200,7 +201,7 @@ func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
 		}
 		// two timeouts
 		if found {
-			if total > 2*timeout+time.Minute { // NOTE: must be more than enough
+			if total > 2*timeout+timeoutCfg.MaxHostBusy {
 				err = errors.New("local timeout")
 				break
 			}

@@ -94,6 +94,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `timeout.send_file_time` | `5m` | Timeout for getting an object from a neighbor target or for sending an object to the correct target while rebalance is in progress |
 | `timeout.default_timeout` | `30s` | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
 | `timeout.default_long_timeout` | `30m` | Default timeout for long intra-cluster requests, e.g. reading an object from a neighbor target while rebalancing |
+| `timeout.max_host_bust` | `1m` | Determines how long should we wait for particular action to happen due to possible node/network overload |
 | `checksum.type` | `xxhash` | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
 | `checksum.validate_cold_get` | `true` | Enables and disables checking the hash of received object after downloading it from the cloud |
 | `checksum.validate_warm_get` | `false` | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |
