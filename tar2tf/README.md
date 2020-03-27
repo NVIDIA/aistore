@@ -32,6 +32,8 @@ Create AisDataset object
 
 `label_op` - one of `tar2tf.ops`. Describes how to transform tar-record into datapoint label. See tar2tf.ops section for more.
 
+`num_workers` - number of workers which are downloading tars from AIS cluster
+
 
 ```python
 def load_from_tar(template, [path])

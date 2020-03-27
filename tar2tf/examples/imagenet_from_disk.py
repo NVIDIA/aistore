@@ -17,7 +17,7 @@ PROXY_URL = "http://localhost:8080"
 # Values will be extracted from tar-records according to Resize(Convert(Decode("jpg"), tf.float32), (224, 224)) operation,
 # meaning that bytes under "jpg" in tar-record will be decoded as an image, converted to tf.float32 type and then Resized to (224, 224)
 # Labels will be extracted from tar-records according to Select("cls") operation, meaning that bytes under "cls" will be treated as label.
-ais = AisDataset(BUCKET_NAME, PROXY_URL, Resize(Convert(Decode("jpg"), tf.float32), (224, 224)), Select("cls"))
+ais = AisDataset(BUCKET_NAME, PROXY_URL, Resize(Convert(Decode("jpg"), tf.float32), (224, 224)), Select("cls"), num_workers=4)
 
 # prepare your bucket, for example from `gsutil ls gs://lpr-gtc2020`
 # save TFRecord file to train.record and test.record

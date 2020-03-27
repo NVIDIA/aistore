@@ -47,6 +47,7 @@ confidence=
 # no Warning level messages displayed, use "--disable=all --enable=classes
 # --disable=W".
 disable=C, # just for now, everything should be checked
+        broad-except,
         no-name-in-module,
         global-statement,
         no-self-use,
