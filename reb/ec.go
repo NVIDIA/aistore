@@ -393,13 +393,13 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 		bckList[ct.Name] = bck
 	}
 
+	b := cluster.NewBckEmbed(ct.Bck)
+	if err := b.Init(tgt.GetBowner(), tgt.Snode()); err != nil {
+		return err
+	}
 	obj, ok := bck.objs[ct.ObjName]
 	if !ok {
 		// first CT of the object
-		b := cluster.NewBckEmbed(ct.Bck)
-		if err := b.Init(tgt.GetBowner(), tgt.Snode()); err != nil {
-			return err
-		}
 		si, err := cluster.HrwTarget(b.MakeUname(ct.ObjName), md.smap)
 		if err != nil {
 			return err
@@ -414,15 +414,36 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 		return nil
 	}
 
-	// sanity check: sliceID must be unique (unless it is 0)
+	// When the duplicated slice is detected, the algorithm must choose
+	// only one to proceed. To make all targets to choose the same one,
+	// targets select slice by HRW
 	if ct.SliceID != 0 {
 		list := obj.cts[ct.ObjHash]
 		for _, found := range list {
-			if found.SliceID == ct.SliceID {
-				err := fmt.Errorf("duplicated %s/%s SliceID %d from %s (discarded)",
-					ct.Name, ct.ObjName, ct.SliceID, ct.DaemonID)
-				return err
+			if found.SliceID != ct.SliceID {
+				continue
 			}
+			tgtList, errHrw := cluster.HrwTargetList(b.MakeUname(obj.objName), md.smap, len(md.smap.Tmap))
+			if errHrw != nil {
+				return errHrw
+			}
+			err := fmt.Errorf("duplicated %s/%s SliceID %d from %s (discarded)",
+				ct.Name, ct.ObjName, ct.SliceID, ct.DaemonID)
+			for _, tgt := range tgtList {
+				if tgt.ID() == found.DaemonID {
+					return err
+				}
+				if tgt.ID() == ct.DaemonID {
+					found.DaemonID = ct.DaemonID
+					if found.meta == nil {
+						found.meta = ct.meta
+					}
+					err = fmt.Errorf("duplicated %s/%s SliceID %d replaced daemonID %s with %s",
+						ct.Name, ct.ObjName, ct.SliceID, found.DaemonID, ct.DaemonID)
+					return err
+				}
+			}
+			return err
 		}
 	}
 	obj.cts[ct.ObjHash] = append(obj.cts[ct.ObjHash], ct)
@@ -699,12 +720,11 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	reb.laterx.Store(true)
 	sliceID := req.md.SliceID
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof(">>> %s got CT %d for %s/%s", reb.t.Snode(), sliceID, hdr.Bck, hdr.ObjName)
+		glog.Infof(">>> %s got CT %d for %s/%s %d", reb.t.Snode(), sliceID, hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Size)
 	}
 	uid := uniqueWaitID(hdr.Bck, hdr.ObjName)
 	waitFor := reb.ec.waiter.lookupCreate(uid, int16(sliceID), waitForSingleSlice)
 	if waitFor == nil {
-		cmn.DrainReader(reader)
 		return fmt.Errorf(fmtErrCleanedUp, hdr.Bck, hdr.ObjName, sliceID)
 	}
 	waitFor.mtx.Lock()
@@ -730,6 +750,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 		ckval, _ := cksumForSlice(memsys.NewReader(waitFor.sgl), waitFor.sgl.Size(), reb.t.GetMMSA())
 		if hdr.ObjAttrs.CksumValue != ckval {
 			reb.statRunner.AddMany(stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1})
+			glog.Errorf("%s HDR: %d, sgl: %d", hdr.ObjName, hdr.ObjAttrs.Size, waitFor.sgl.Size())
 			return cmn.NewBadDataCksumError(
 				cmn.NewCksum(cmn.ChecksumXXHash, ckval),
 				cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
@@ -842,7 +863,10 @@ func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 			continue
 		}
 		for _, ct := range ctList {
-			if ct.SliceID != 0 && local {
+			// For erasure encoded buckets do the extra check:
+			// skip all slices on the "default" target because the
+			// default must contain only "full" object
+			if ct.SliceID != 0 {
 				b := cluster.NewBckEmbed(ct.Bck)
 				if err := b.Init(reb.t.GetBowner(), reb.t.Snode()); err != nil {
 					reb.abortRebalance()
@@ -850,12 +874,21 @@ func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 				}
 				t, err := cluster.HrwTarget(b.MakeUname(ct.ObjName), md.smap)
 				cmn.Assert(err == nil)
-				if t.ID() == localDaemon {
+				if local && t.ID() == localDaemon {
 					glog.Infof("skipping CT %d of %s (it must have main object)", ct.SliceID, ct.ObjName)
 					continue
 				}
+				if !local && sid == t.ID() {
+					glog.Infof("skipping CT %d of %s on default target", ct.SliceID, ct.ObjName)
+					continue
+				}
 			}
+
 			if err := res.addCT(md, ct, reb.t); err != nil {
+				if cmn.IsErrBucketNought(err) {
+					reb.abortRebalance()
+					return nil
+				}
 				glog.Warning(err)
 				continue
 			}
