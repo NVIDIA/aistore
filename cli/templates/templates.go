@@ -317,7 +317,7 @@ var (
 		"size":      "{{FormatBytesSigned $obj.Size 2}}\t",
 		"checksum":  "{{$obj.Checksum}}\t",
 		"type":      "{{$obj.Type}}\t",
-		"atime":     "{{$obj.Atime}}\t",
+		"atime":     "{{FormatUnixNano $obj.Atime}}\t",
 		"bucket":    "{{$obj.Bucket}}\t",
 		"version":   "{{$obj.Version}}\t",
 		"targetURL": "{{$obj.TargetURL}}\t",
@@ -331,9 +331,9 @@ var (
 		"iscached": "{{ .Present }}\t",
 		"size":     "{{ FormatBytesSigned .Size 2 }}\t",
 		"version":  "{{ .Version }}\t",
-		"atime":    "{{ if IsUnsetTime .Atime }}-{{else}}{{ FormatObjTime .Atime }}{{end}}\t",
+		"atime":    "{{ if (eq .Atime 0) }}-{{else}}{{ FormatUnixNano .Atime }}{{end}}\t",
 		"copies":   "{{ if .NumCopies }}{{ .NumCopies }}{{else}}-{{end}}\t",
-		"checksum": "{{ if .Checksum }}{{ .Checksum }}{{else}}-{{end}}\t",
+		"checksum": "{{ if .Checksum.Value }}{{ .Checksum.Value }}{{else}}-{{end}}\t",
 		"ec":       "{{ if (eq .DataSlices 0) }}-{{else}}{{ FormatEC .DataSlices .ParitySlices .IsECCopy}}{{end}}\t",
 	}
 
@@ -344,7 +344,7 @@ var (
 		"CalcCap":             calcCap,
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
-		"FormatObjTime":       fmtObjTime,
+		"FormatUnixNano":      func(t int64) string { return cmn.FormatUnixNano(t, "") },
 		"FormatEC":            fmtEC,
 		"FormatDur":           fmtDuration,
 		"FormatXactStatus":    fmtXactStatus,
@@ -463,10 +463,6 @@ func isUnsetTime(t time.Time) bool {
 
 func fmtTime(t time.Time) string {
 	return t.Format("01-02 15:04:05")
-}
-
-func fmtObjTime(t time.Time) string {
-	return t.Format(time.RFC822)
 }
 
 func fmtEC(data, parity int, isCopy bool) string {

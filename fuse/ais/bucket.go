@@ -7,6 +7,7 @@ package ais
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
@@ -54,7 +55,7 @@ func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err 
 		bck:       bck.Bck(),
 		Name:      objName,
 		Size:      objProps.Size,
-		Atime:     objProps.Atime,
+		Atime:     time.Unix(0, objProps.Atime),
 	}, true, nil
 }
 

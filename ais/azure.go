@@ -302,7 +302,7 @@ func (ap *azureProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	}
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength(), 10)
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAzure
-	// Simulate object versining:
+	// Simulate object versioning:
 	// Azure provider does not have real versioning, but it has ETag.
 	objMeta[cmn.HeaderObjVersion] = strings.Trim(string(resp.ETag()), "\"")
 	if glog.FastV(4, glog.SmoduleAIS) {

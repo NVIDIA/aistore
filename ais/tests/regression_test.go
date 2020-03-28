@@ -698,7 +698,7 @@ func TestLRU(t *testing.T) {
 	}
 
 	m.saveClusterState()
-	m.cloudPuts()
+	m.cloudPuts(false /*evict*/)
 	defer m.cloudDelete()
 
 	// Remember targets' watermarks

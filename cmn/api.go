@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -380,16 +379,21 @@ func (c *ECConf) RequiredRestoreTargets() int {
 
 // ObjectProps
 type ObjectProps struct {
-	Size         int64
-	Version      string
-	Atime        time.Time
-	Checksum     string
-	Provider     string
-	NumCopies    int
-	DataSlices   int
-	ParitySlices int
-	IsECCopy     bool
-	Present      bool
+	Size         int64            `json:"size"`
+	Version      string           `json:"version"`
+	Atime        int64            `json:"atime"`
+	Checksum     ObjectCksumProps `json:"checksum"`
+	Provider     string           `json:"provider"`
+	NumCopies    int              `json:"copies"`
+	DataSlices   int              `list:"omit"`
+	ParitySlices int              `list:"omit"`
+	IsECCopy     bool             `list:"omit"`
+	Present      bool             `json:"present"`
+}
+
+type ObjectCksumProps struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
 }
 
 func DefaultBucketProps() *BucketProps {

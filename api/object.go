@@ -91,53 +91,21 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 		return nil, err
 	}
 
-	// TODO: refactor this to `cmn.IterFields` which will parse `resp.Header.Get(fieldName)`.
-	//  See `HeadBucket` for inspiration.
-	var (
-		size      int64
-		atime     time.Time
-		numCopies int
-		present   bool
-	)
-	size, err = strconv.ParseInt(resp.Header.Get(cmn.HeaderObjSize), 10, 64)
+	objProps := &cmn.ObjectProps{}
+	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (error, bool) {
+		if ecStr := resp.Header.Get(cmn.HeaderObjECMeta); ecStr != "" {
+			if md, err := ec.StringToMeta(ecStr); err == nil {
+				objProps.DataSlices = md.Data
+				objProps.ParitySlices = md.Parity
+				objProps.IsECCopy = md.IsCopy
+			}
+			return nil, false
+		}
+		err := field.SetValue(resp.Header.Get(tag), true /*force*/)
+		return err, false
+	})
 	if err != nil {
 		return nil, err
-	}
-	numCopiesStr := resp.Header.Get(cmn.HeaderObjNumCopies)
-	if numCopiesStr != "" {
-		numCopies, err = strconv.Atoi(numCopiesStr)
-		if err != nil {
-			return nil, err
-		}
-	}
-	atimeStr := resp.Header.Get(cmn.HeaderObjAtime)
-	if atimeStr != "" {
-		atime, err = time.Parse(time.RFC822, atimeStr)
-		if err != nil {
-			return nil, err
-		}
-	}
-	present, err = cmn.ParseBool(resp.Header.Get(cmn.HeaderObjPresent))
-	if err != nil {
-		return nil, err
-	}
-
-	objProps := &cmn.ObjectProps{
-		Size:      size,
-		Version:   resp.Header.Get(cmn.HeaderObjVersion),
-		Atime:     atime,
-		Provider:  resp.Header.Get(cmn.HeaderObjProvider),
-		NumCopies: numCopies,
-		Checksum:  resp.Header.Get(cmn.HeaderObjCksumVal),
-		Present:   present,
-	}
-
-	if ecStr := resp.Header.Get(cmn.HeaderObjECMeta); ecStr != "" {
-		if md, err := ec.StringToMeta(ecStr); err == nil {
-			objProps.DataSlices = md.Data
-			objProps.ParitySlices = md.Parity
-			objProps.IsECCopy = md.IsCopy
-		}
 	}
 	return objProps, nil
 }

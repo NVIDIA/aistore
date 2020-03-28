@@ -5,6 +5,7 @@
 package ais_test
 
 import (
+	"fmt"
 	"path"
 	"strconv"
 	"sync"
@@ -477,4 +478,109 @@ func TestObjPropsVersionDisabled(t *testing.T) {
 	}
 
 	propsMainTest(t, false)
+}
+
+func TestObjProps(t *testing.T) {
+	var (
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
+
+	for _, checkExists := range []bool{false, true} {
+		for _, cloud := range []bool{false, true} {
+			t.Run(fmt.Sprintf("checkExists=%t/cloud=%t", checkExists, cloud), func(t *testing.T) {
+				var (
+					m = ioContext{
+						t:               t,
+						num:             10,
+						numGetsEachFile: 1,
+						fileSize:        512,
+						fixedSize:       true,
+					}
+				)
+
+				m.saveClusterState()
+
+				if cloud {
+					m.bck = cmn.Bck{
+						Name:     clibucket,
+						Provider: cmn.Cloud,
+					}
+					if !isCloudBucket(t, proxyURL, m.bck) {
+						t.Skip("test requires a cloud bucket")
+					}
+				} else {
+					tutils.CreateFreshBucket(t, proxyURL, m.bck)
+					defer tutils.DestroyBucket(t, proxyURL, m.bck)
+				}
+
+				if cloud {
+					m.cloudPuts(true /*evict*/)
+					defer m.cloudDelete()
+				} else {
+					m.puts()
+					m.wg.Add(m.num * m.numGetsEachFile)
+					m.gets() // set the access time
+					m.wg.Wait()
+				}
+
+				bckProp, err := api.HeadBucket(baseParams, m.bck)
+				tassert.CheckFatal(t, err)
+
+				tutils.Logln("checking object props...")
+				for _, objName := range m.objNames {
+					var props *cmn.ObjectProps
+					if cloud {
+						props, err = api.HeadObject(baseParams, m.bck, objName, checkExists)
+					} else {
+						props, err = api.HeadObject(baseParams, m.bck, path.Join(SmokeStr, objName), checkExists)
+					}
+					if checkExists {
+						if cloud {
+							tassert.Fatalf(t, err != nil, "object should be marked as 'not exists' (it is not cached)")
+						} else {
+							tassert.CheckFatal(t, err)
+						}
+						tassert.Errorf(t, props == nil, "props should be empty")
+						continue
+					}
+					tassert.CheckFatal(t, err)
+
+					tassert.Errorf(
+						t, props.Provider == bckProp.Provider,
+						"expected provider (%s) to be %s", props.Provider, bckProp.Provider,
+					)
+					tassert.Errorf(
+						t, uint64(props.Size) == m.fileSize,
+						"object size (%d) is different than expected (%d)", props.Size, m.fileSize,
+					)
+					if cloud {
+						tassert.Errorf(t, !props.Present, "object should not be presented (it is not cached)")
+						tassert.Errorf(t, props.Version != "", "cloud object version should not be empty")
+						tassert.Errorf(t, props.Atime == 0, "expected access time to be empty")
+					} else {
+						tassert.Errorf(t, props.Present, "object seems to be not present")
+						tassert.Errorf(
+							t, props.NumCopies == 1,
+							"number of copies (%d) is different than 1", props.NumCopies,
+						)
+						tassert.Errorf(
+							t, props.Version == "1",
+							"object version (%s) different than expected (1)", props.Version,
+						)
+						tassert.Errorf(t, props.Atime != 0, "expected access time to be set")
+					}
+					tassert.Errorf(t, !props.IsECCopy, "expected object not to be ec copy")
+					tassert.Errorf(
+						t, props.DataSlices == 0,
+						"expected data slices (%d) to be 0", props.DataSlices,
+					)
+					tassert.Errorf(
+						t, props.ParitySlices == 0,
+						"expected parity slices (%d) to be 0", props.ParitySlices,
+					)
+				}
+			})
+		}
+	}
 }

@@ -112,16 +112,13 @@ const (
 	HeaderBucketAccessAttrs     = "access"                       // Bucket access attributes
 
 	// object meta
-	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)
-	HeaderObjCksumVal  = "ObjCksumVal"  // Checksum Value
-	HeaderObjAtime     = "ObjAtime"     // Object access time
-	HeaderObjReplicSrc = "ObjReplicSrc" // In replication PUT request specifies the source target
-	HeaderObjSize      = "ObjSize"      // Object size (bytes)
-	HeaderObjVersion   = "ObjVersion"   // Object version/generation - ais or Cloud
-	HeaderObjPresent   = "ObjPresent"   // Is object present in the cluster
-	HeaderObjNumCopies = "ObjNumCopies" // Number of copies of the object
-	HeaderObjProvider  = "ObjProvider"  // Cloud provider of the object
-	HeaderObjECMeta    = "ObjECMeta"    // Info about EC object/slice/replica
+	HeaderObjCksumType = "checksum.type"  // Checksum Type (xxhash, md5, none)
+	HeaderObjCksumVal  = "checksum.value" // Checksum Value
+	HeaderObjAtime     = "atime"          // Object access time
+	HeaderObjReplicSrc = "replica_src"    // In replication PUT request specifies the source target
+	HeaderObjSize      = "size"           // Object size (bytes)
+	HeaderObjVersion   = "version"        // Object version/generation - ais or Cloud
+	HeaderObjECMeta    = "ec_meta"        // Info about EC object/slice/replica
 
 	// intra-cluster: control
 	HeaderCallerID          = "caller.id"

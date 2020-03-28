@@ -1143,24 +1143,32 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	objProps := cmn.ObjectProps{
+		Provider: lom.Bck().Provider,
+		Present:  exists,
+	}
 	if exists {
-		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(lom.Size(), 10))
-		hdr.Set(cmn.HeaderObjVersion, lom.Version())
-		if lom.AtimeUnix() != 0 {
-			hdr.Set(cmn.HeaderObjAtime, cmn.FormatUnixNano(lom.AtimeUnix(), time.RFC822)) // formatted for API caller
-		}
-		hdr.Set(cmn.HeaderObjNumCopies, strconv.Itoa(lom.NumCopies()))
+		objProps.Size = lom.Size()
+		objProps.Version = lom.Version()
+		objProps.Atime = lom.AtimeUnix()
 		if cksum := lom.Cksum(); cksum != nil {
-			hdr.Set(cmn.HeaderObjCksumVal, cksum.Value())
+			objProps.Checksum.Type = cksum.Type()
+			objProps.Checksum.Value = cksum.Value()
 		}
+		objProps.NumCopies = lom.NumCopies()
 		if lom.Bck().Props.EC.Enabled {
 			if md, err := ec.ObjectMetadata(lom.Bck(), objName); err == nil {
 				hdr.Set(cmn.HeaderObjECMeta, ec.MetaToString(md))
 			}
 		}
 	}
-	hdr.Set(cmn.HeaderObjProvider, lom.Bck().Provider)
-	hdr.Set(cmn.HeaderObjPresent, strconv.FormatBool(exists))
+	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (err error, b bool) {
+		if hdr.Get(tag) == "" {
+			hdr.Set(tag, fmt.Sprintf("%v", field.Value()))
+		}
+		return nil, false
+	})
+	cmn.AssertNoErr(err)
 }
 
 // GET /v1/rebalance (cmn.Rebalance)

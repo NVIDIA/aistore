@@ -29,6 +29,7 @@ import (
 
 const rebalanceObjectDistributionTestCoef = 0.3
 
+// nolint:maligned // no performance critical code
 type ioContext struct {
 	t                   *testing.T
 	smap                *cluster.Smap
@@ -38,6 +39,7 @@ type ioContext struct {
 	wg                  *sync.WaitGroup
 	bck                 cmn.Bck
 	fileSize            uint64
+	fixedSize           bool
 	numGetErrs          atomic.Uint64
 	getsCompleted       atomic.Uint64
 	proxyURL            string
@@ -131,7 +133,7 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	if !m.silent {
 		tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
 	}
-	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeStr, m.fileSize, m.num, errCh, filenameCh)
+	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeStr, m.fileSize, m.num, errCh, filenameCh, m.fixedSize)
 	if len(dontFail) == 0 {
 		tassert.SelectErr(m.t, errCh, "put", false)
 	}
@@ -143,7 +145,7 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	return len(errCh)
 }
 
-func (m *ioContext) cloudPuts() {
+func (m *ioContext) cloudPuts(evict bool) {
 	var (
 		baseParams = tutils.DefaultBaseAPIParams(m.t)
 		msg        = &cmn.SelectMsg{}
@@ -169,11 +171,12 @@ func (m *ioContext) cloudPuts() {
 		wg    = &sync.WaitGroup{}
 	)
 	for i := 0; i < leftToFill; i++ {
-		r, err := tutils.NewRandReader(512 /*size*/, true /*withHash*/)
+		r, err := tutils.NewRandReader(int64(m.fileSize), true /*withHash*/)
 		tassert.CheckFatal(m.t, err)
 		objName := fmt.Sprintf("%s%s%d", "copy/cloud_", cmn.RandString(4), i)
 		wg.Add(1)
 		go tutils.PutAsync(wg, m.proxyURL, m.bck, objName, r, errCh)
+		m.objNames = append(m.objNames, objName)
 	}
 	wg.Wait()
 	tassert.SelectErr(m.t, errCh, "put", true)
@@ -186,6 +189,12 @@ func (m *ioContext) cloudPuts() {
 	}
 
 	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
+
+	if evict {
+		tutils.Logln("evicting cloud bucket...")
+		err := api.EvictCloudBucket(baseParams, m.bck)
+		tassert.CheckFatal(m.t, err)
+	}
 }
 
 func (m *ioContext) cloudPrefetch(prefetchCnt int) {

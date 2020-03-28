@@ -75,9 +75,10 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 		group.Go(func() error {
 			var (
 				m = &ioContext{
-					t:      t,
-					num:    100,
-					silent: true,
+					t:               t,
+					num:             100,
+					numGetsEachFile: 1,
+					silent:          true,
 				}
 			)
 
@@ -96,6 +97,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 				if _, err := api.ListBucketFast(baseParams, m.bck, nil); err != nil {
 					return err
 				}
+				m.wg.Add(m.num * m.numGetsEachFile)
 				m.gets()
 				if err := api.DestroyBucket(baseParams, m.bck); err != nil {
 					return err
@@ -741,12 +743,8 @@ func TestBucketListAndSummary(t *testing.T) {
 					t.Skip("test requires a cloud bucket")
 				}
 
-				m.cloudPuts()
+				m.cloudPuts(true /*evict*/)
 				defer m.cloudDelete()
-
-				tutils.Logln("evicting cloud bucket...")
-				err := api.EvictCloudBucket(baseParams, m.bck)
-				tassert.CheckFatal(t, err)
 
 				if test.cached {
 					m.cloudPrefetch(cacheSize)
@@ -1097,15 +1095,11 @@ func TestCloudMirror(t *testing.T) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
-	m.cloudPuts()
+	m.cloudPuts(true /*evict*/)
 	defer m.cloudDelete()
 
-	tutils.Logln("evicting cloud bucket...")
-	err := api.EvictCloudBucket(baseParams, m.bck)
-	tassert.CheckFatal(t, err)
-
 	// enable mirror
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
@@ -1564,7 +1558,7 @@ func TestCopyBucket(t *testing.T) {
 				srcBckList, err = api.ListBucket(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
 			} else if cmn.IsProviderCloud(cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}, true /*acceptAnon*/) {
-				srcm.cloudPuts()
+				srcm.cloudPuts(false /*evict*/)
 				defer srcm.cloudDelete()
 
 				srcBckList, err = api.ListBucket(baseParams, srcm.bck, nil, 0)
