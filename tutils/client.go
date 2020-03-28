@@ -34,14 +34,14 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-var (
+const (
 	// This value is holds the input of 'proxyURLFlag' from init_tests.go.
 	// It is used in DefaultBaseAPIParams to determine if the cluster is running
 	// on a
 	// 	1. local instance (no docker) 	- works
 	//	2. local docker instance		- works
 	// 	3. AWS-deployed cluster 		- not tested (but runs mainly with Ansible)
-	mockDaemonID       = "MOCK"
+	MockDaemonID       = "MOCK"
 	proxyChangeLatency = time.Minute * 2
 )
 

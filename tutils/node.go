@@ -165,7 +165,7 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 					proxyID = p.ID()
 				}
 			}
-			err = WaitMapVersionSync(timeUntil, smap, origVersion, []string{mockDaemonID, proxyID})
+			err = WaitMapVersionSync(timeUntil, smap, origVersion, []string{MockDaemonID, proxyID})
 			return smap, err
 		}
 

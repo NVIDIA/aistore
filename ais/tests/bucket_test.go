@@ -1,8 +1,8 @@
-// Package ais_test contains AIS integration tests.
+// Package integration contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package ais_test
+package integration
 
 import (
 	"context"
@@ -75,10 +75,9 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 		group.Go(func() error {
 			var (
 				m = &ioContext{
-					t:               t,
-					num:             100,
-					numGetsEachFile: 1,
-					silent:          true,
+					t:      t,
+					num:    100,
+					silent: true,
 				}
 			)
 
@@ -97,7 +96,6 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 				if _, err := api.ListBucketFast(baseParams, m.bck, nil); err != nil {
 					return err
 				}
-				m.wg.Add(m.num * m.numGetsEachFile)
 				m.gets()
 				if err := api.DestroyBucket(baseParams, m.bck); err != nil {
 					return err
@@ -1050,8 +1048,13 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	}
 
 	m.puts()
-	m.wg.Add(m.num * m.numGetsEachFile)
-	m.gets()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		m.gets()
+	}()
 
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 
@@ -1062,7 +1065,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		}
 	}
 
-	m.wg.Wait()
+	wg.Wait()
 
 	m.ensureNumCopies(numCopies[len(numCopies)-1])
 }
@@ -1148,9 +1151,7 @@ func TestBucketReadOnly(t *testing.T) {
 	baseParams := tutils.DefaultBaseAPIParams(t)
 
 	m.puts()
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
@@ -1181,8 +1182,7 @@ func TestBucketReadOnly(t *testing.T) {
 func TestRenameEmptyBucket(t *testing.T) {
 	var (
 		m = ioContext{
-			t:  t,
-			wg: &sync.WaitGroup{},
+			t: t,
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		dstBck     = cmn.Bck{
@@ -1280,9 +1280,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Gets on renamed ais bucket
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 	m.ensureNoErrors()
 
 	tutils.Logln("checking bucket props...")
@@ -1296,8 +1294,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 func TestRenameAlreadyExistingBucket(t *testing.T) {
 	var (
 		m = ioContext{
-			t:  t,
-			wg: &sync.WaitGroup{},
+			t: t,
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		tmpBck     = cmn.Bck{
@@ -1352,7 +1349,6 @@ func TestRenameBucketTwice(t *testing.T) {
 	var (
 		m = ioContext{
 			t:   t,
-			wg:  &sync.WaitGroup{},
 			num: 500,
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
@@ -1474,7 +1470,6 @@ func TestCopyBucket(t *testing.T) {
 						Name:     "src_copy_bck",
 						Provider: cmn.ProviderAIS,
 					},
-					numGetsEachFile: 1,
 				}
 				dstms = []*ioContext{
 					{
@@ -1484,7 +1479,6 @@ func TestCopyBucket(t *testing.T) {
 							Name:     "dst_copy_bck_1",
 							Provider: cmn.ProviderAIS,
 						},
-						numGetsEachFile: 1,
 					},
 				}
 				baseParams = tutils.DefaultBaseAPIParams(t)
@@ -1499,7 +1493,6 @@ func TestCopyBucket(t *testing.T) {
 						Name:     "dst_copy_bck_2",
 						Provider: cmn.ProviderAIS,
 					},
-					numGetsEachFile: 1,
 				})
 			}
 
@@ -1647,7 +1640,6 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	var (
 		m = ioContext{
 			t:   t,
-			wg:  &sync.WaitGroup{},
 			num: 500,
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
@@ -1732,7 +1724,6 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	var (
 		m = ioContext{
 			t:   t,
-			wg:  &sync.WaitGroup{},
 			num: 500,
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)

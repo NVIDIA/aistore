@@ -1,8 +1,8 @@
-// Package ais_test contains AIS integration tests.
+// Package integration contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package ais_test
+package integration
 
 import (
 	"fmt"
@@ -491,11 +491,10 @@ func TestObjProps(t *testing.T) {
 			t.Run(fmt.Sprintf("checkExists=%t/cloud=%t", checkExists, cloud), func(t *testing.T) {
 				var (
 					m = ioContext{
-						t:               t,
-						num:             10,
-						numGetsEachFile: 1,
-						fileSize:        512,
-						fixedSize:       true,
+						t:         t,
+						num:       10,
+						fileSize:  512,
+						fixedSize: true,
 					}
 				)
 
@@ -519,9 +518,7 @@ func TestObjProps(t *testing.T) {
 					defer m.cloudDelete()
 				} else {
 					m.puts()
-					m.wg.Add(m.num * m.numGetsEachFile)
 					m.gets() // set the access time
-					m.wg.Wait()
 				}
 
 				bckProp, err := api.HeadBucket(baseParams, m.bck)
@@ -529,12 +526,7 @@ func TestObjProps(t *testing.T) {
 
 				tutils.Logln("checking object props...")
 				for _, objName := range m.objNames {
-					var props *cmn.ObjectProps
-					if cloud {
-						props, err = api.HeadObject(baseParams, m.bck, objName, checkExists)
-					} else {
-						props, err = api.HeadObject(baseParams, m.bck, path.Join(SmokeStr, objName), checkExists)
-					}
+					props, err := api.HeadObject(baseParams, m.bck, objName, checkExists)
 					if checkExists {
 						if cloud {
 							tassert.Fatalf(t, err != nil, "object should be marked as 'not exists' (it is not cached)")

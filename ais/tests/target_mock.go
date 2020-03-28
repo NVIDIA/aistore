@@ -1,8 +1,8 @@
-// Package ais_test contains AIS integration tests.
+// Package integration contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package ais_test
+package integration
 
 import (
 	"context"
@@ -59,7 +59,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	}
 
 	<-stopch
-	err = tutils.UnregisterNode(proxyURL, mockDaemonID)
+	err = tutils.UnregisterNode(proxyURL, tutils.MockDaemonID)
 	tassert.CheckFatal(t, err)
 	s.Shutdown(context.Background())
 }
@@ -72,7 +72,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 
 	// borrow a random target's ip but using a different port to register the mock target
 	for _, v := range smap.Tmap {
-		v.DaemonID = mockDaemonID
+		v.DaemonID = tutils.MockDaemonID
 		v.PublicNet = cluster.NetInfo{
 			NodeIPAddr: v.PublicNet.NodeIPAddr,
 			DaemonPort: mockTargetPort,

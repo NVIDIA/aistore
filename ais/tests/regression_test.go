@@ -1,8 +1,8 @@
-// Package ais_test contains AIS integration tests.
+// Package integration contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package ais_test
+package integration
 
 import (
 	"encoding/json"
@@ -538,11 +538,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	m.puts()
 
 	// Step 3: Start performing GET requests
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-		m.getsUntilStop()
-	}()
+	go m.getsUntilStop()
 
 	// Step 4: Simultaneously reregister each
 	wg := &sync.WaitGroup{}
@@ -557,8 +553,6 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	wg.Wait()
 	tutils.Logf("Stopping GETs...\n")
 	m.stopGets()
-
-	m.wg.Wait()
 
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)

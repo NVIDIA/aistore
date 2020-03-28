@@ -1,8 +1,8 @@
-// Package ais_test contains AIS integration tests.
+// Package integration contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package ais_test
+package integration
 
 import (
 	"sync"

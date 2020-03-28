@@ -1,15 +1,13 @@
-// Package ais_test contains AIS integration tests.
+// Package integration contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package ais_test
+package integration
 
 import (
 	"fmt"
 	"math/rand"
-	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,452 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
-	jsoniter "github.com/json-iterator/go"
 )
-
-const rebalanceObjectDistributionTestCoef = 0.3
-
-// nolint:maligned // no performance critical code
-type ioContext struct {
-	t                   *testing.T
-	smap                *cluster.Smap
-	controlCh           chan struct{}
-	stopCh              chan struct{}
-	objNames            []string
-	wg                  *sync.WaitGroup
-	bck                 cmn.Bck
-	fileSize            uint64
-	fixedSize           bool
-	numGetErrs          atomic.Uint64
-	getsCompleted       atomic.Uint64
-	proxyURL            string
-	otherTasksToTrigger int
-	originalTargetCount int
-	originalProxyCount  int
-	num                 int
-	numGetsEachFile     int
-	getErrIsFatal       bool
-	silent              bool
-}
-
-func (m *ioContext) saveClusterState() {
-	m.init()
-	m.smap = tutils.GetClusterMap(m.t, m.proxyURL)
-	m.originalTargetCount = len(m.smap.Tmap)
-	m.originalProxyCount = len(m.smap.Pmap)
-	tutils.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
-}
-
-func (m *ioContext) init() {
-	m.proxyURL = tutils.GetPrimaryURL()
-	if m.fileSize == 0 {
-		m.fileSize = cmn.KiB
-	}
-	if m.num > 0 {
-		m.objNames = make([]string, 0, m.num)
-	}
-	if m.otherTasksToTrigger > 0 {
-		m.controlCh = make(chan struct{}, m.otherTasksToTrigger)
-	}
-	m.wg = &sync.WaitGroup{}
-	if m.bck.Name == "" {
-		m.bck.Name = tutils.GenRandomString(15)
-	}
-	if m.bck.Provider == "" {
-		m.bck.Provider = cmn.ProviderAIS
-	}
-	m.stopCh = make(chan struct{})
-}
-
-func (m *ioContext) assertClusterState() {
-	smap, err := tutils.WaitForPrimaryProxy(
-		m.proxyURL,
-		"to check cluster state",
-		m.smap.Version, testing.Verbose(),
-		m.originalProxyCount,
-		m.originalTargetCount,
-	)
-	tassert.CheckFatal(m.t, err)
-
-	proxyCount := smap.CountProxies()
-	targetCount := smap.CountTargets()
-	if targetCount != m.originalTargetCount ||
-		proxyCount != m.originalProxyCount {
-		m.t.Errorf(
-			"cluster state is not preserved. targets (before: %d, now: %d); proxies: (before: %d, now: %d)",
-			targetCount, m.originalTargetCount,
-			proxyCount, m.originalProxyCount,
-		)
-	}
-}
-
-func (m *ioContext) checkObjectDistribution(t *testing.T) {
-	var (
-		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
-		targetObjectCount = make(map[string]int64)
-	)
-	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListBucket(baseParams, m.bck, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
-	tassert.CheckFatal(t, err)
-	for _, obj := range bucketList.Entries {
-		targetObjectCount[obj.TargetURL]++
-	}
-	if len(targetObjectCount) != m.originalTargetCount {
-		t.Fatalf("Rebalance error, %d/%d targets received no objects from bucket %s\n",
-			m.originalTargetCount-len(targetObjectCount), m.originalTargetCount, m.bck)
-	}
-	for targetURL, objCount := range targetObjectCount {
-		if objCount < requiredCount {
-			t.Fatalf("Rebalance error, target %s didn't receive required number of objects\n", targetURL)
-		}
-	}
-}
-
-func (m *ioContext) puts(dontFail ...bool) int {
-	filenameCh := make(chan string, m.num)
-	errCh := make(chan error, m.num)
-
-	if !m.silent {
-		tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
-	}
-	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeStr, m.fileSize, m.num, errCh, filenameCh, m.fixedSize)
-	if len(dontFail) == 0 {
-		tassert.SelectErr(m.t, errCh, "put", false)
-	}
-	close(filenameCh)
-	close(errCh)
-	for f := range filenameCh {
-		m.objNames = append(m.objNames, f)
-	}
-	return len(errCh)
-}
-
-func (m *ioContext) cloudPuts(evict bool) {
-	var (
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
-		msg        = &cmn.SelectMsg{}
-	)
-
-	if !m.silent {
-		tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bck)
-	}
-
-	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
-	tassert.CheckFatal(m.t, err)
-
-	leftToFill := m.num - len(objList.Entries)
-	if leftToFill <= 0 {
-		tutils.Logf("cloud PUT %d (%d) objects already in bucket %s...\n", m.num, len(objList.Entries), m.bck)
-		m.num = len(objList.Entries)
-		return
-	}
-
-	// Not enough objects in cloud bucket, need to create more.
-	var (
-		errCh = make(chan error, leftToFill)
-		wg    = &sync.WaitGroup{}
-	)
-	for i := 0; i < leftToFill; i++ {
-		r, err := tutils.NewRandReader(int64(m.fileSize), true /*withHash*/)
-		tassert.CheckFatal(m.t, err)
-		objName := fmt.Sprintf("%s%s%d", "copy/cloud_", cmn.RandString(4), i)
-		wg.Add(1)
-		go tutils.PutAsync(wg, m.proxyURL, m.bck, objName, r, errCh)
-		m.objNames = append(m.objNames, objName)
-	}
-	wg.Wait()
-	tassert.SelectErr(m.t, errCh, "put", true)
-	tutils.Logln("cloud PUT done")
-
-	objList, err = api.ListBucket(baseParams, m.bck, msg, 0)
-	tassert.CheckFatal(m.t, err)
-	if len(objList.Entries) != m.num {
-		m.t.Fatalf("list-bucket err: %d != %d", len(objList.Entries), m.num)
-	}
-
-	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
-
-	if evict {
-		tutils.Logln("evicting cloud bucket...")
-		err := api.EvictCloudBucket(baseParams, m.bck)
-		tassert.CheckFatal(m.t, err)
-	}
-}
-
-func (m *ioContext) cloudPrefetch(prefetchCnt int) {
-	var (
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
-		msg        = &cmn.SelectMsg{}
-	)
-
-	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
-	tassert.CheckFatal(m.t, err)
-
-	tutils.Logf("cloud PREFETCH %d objects...\n", prefetchCnt)
-
-	wg := &sync.WaitGroup{}
-	for idx, obj := range objList.Entries {
-		if idx >= prefetchCnt {
-			break
-		}
-
-		wg.Add(1)
-		go func(obj *cmn.BucketEntry) {
-			_, err := tutils.GetDiscard(m.proxyURL, m.bck, obj.Name, true /*validate*/, 0, 0)
-			tassert.CheckError(m.t, err)
-			wg.Done()
-		}(obj)
-	}
-	wg.Wait()
-}
-
-func (m *ioContext) cloudDelete() {
-	var (
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
-		msg        = &cmn.SelectMsg{}
-		sema       = make(chan struct{}, 40)
-	)
-
-	cmn.Assert(m.bck.Provider == cmn.Cloud)
-	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
-	tassert.CheckFatal(m.t, err)
-
-	tutils.Logln("deleting cloud objects...")
-
-	wg := &sync.WaitGroup{}
-	for _, obj := range objList.Entries {
-		wg.Add(1)
-		go func(obj *cmn.BucketEntry) {
-			sema <- struct{}{}
-			defer func() {
-				<-sema
-			}()
-			err := api.DeleteObject(baseParams, m.bck, obj.Name)
-			tassert.CheckError(m.t, err)
-			wg.Done()
-		}(obj)
-	}
-	wg.Wait()
-}
-
-func (m *ioContext) gets() {
-	var (
-		semaphore  = make(chan struct{}, 10)
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
-		totalGets  = m.num * m.numGetsEachFile
-	)
-
-	for i := 0; i < 10; i++ {
-		semaphore <- struct{}{}
-	}
-	if !m.silent {
-		if m.numGetsEachFile == 1 {
-			tutils.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bck)
-		} else {
-			tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bck)
-		}
-	}
-
-	m.getsCompleted.Store(0)
-	for i := 0; i < m.num; i++ {
-		for j := 0; j < m.numGetsEachFile; j++ {
-			go func(idx int) {
-				<-semaphore
-				defer func() {
-					semaphore <- struct{}{}
-					m.wg.Done()
-				}()
-				objName := m.objNames[idx]
-				_, err := api.GetObject(baseParams, m.bck, path.Join(SmokeStr, objName))
-				if err != nil {
-					if m.getErrIsFatal {
-						m.t.Error(err)
-					}
-					m.numGetErrs.Inc()
-				}
-				if m.getErrIsFatal && m.numGetErrs.Load() > 0 {
-					return
-				}
-				g := m.getsCompleted.Inc()
-
-				if g%5000 == 0 && !m.silent {
-					tutils.Logf(" %d/%d GET requests completed...\n", g, totalGets)
-				}
-
-				// Tell other tasks they can begin to do work in parallel
-				if int(g) == m.num*m.numGetsEachFile/2 {
-					for i := 0; i < m.otherTasksToTrigger; i++ {
-						m.controlCh <- struct{}{}
-					}
-				}
-			}(i)
-		}
-	}
-}
-
-func (m *ioContext) getsUntilStop() {
-	var (
-		semaphore  = make(chan struct{}, 10)
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
-	)
-
-	for i := 0; i < 10; i++ {
-		semaphore <- struct{}{}
-	}
-	i := 0
-	for {
-		select {
-		case <-m.stopCh:
-			return
-		default:
-			m.wg.Add(1)
-			go func() {
-				<-semaphore
-				defer func() {
-					semaphore <- struct{}{}
-					m.wg.Done()
-				}()
-
-				objName := m.objNames[i%len(m.objNames)]
-				_, err := api.GetObject(baseParams, m.bck, path.Join(SmokeStr, objName))
-				if err != nil {
-					if m.getErrIsFatal {
-						m.t.Error(err)
-					}
-					m.numGetErrs.Inc()
-				}
-				if m.getErrIsFatal && m.numGetErrs.Load() > 0 {
-					return
-				}
-				g := m.getsCompleted.Inc()
-				if g%5000 == 0 {
-					tutils.Logf(" %d GET requests completed...\n", g)
-				}
-			}()
-
-			i++
-			if i%5000 == 0 {
-				time.Sleep(500 * time.Millisecond) // prevents generating too many GET requests
-			}
-		}
-	}
-}
-
-func (m *ioContext) stopGets() {
-	m.stopCh <- struct{}{}
-}
-
-func (m *ioContext) ensureNumCopies(expectedCopies int) {
-	var (
-		total      int
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
-	)
-
-	time.Sleep(3 * time.Second)
-	xactArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
-	err := api.WaitForXaction(baseParams, xactArgs)
-	tassert.CheckFatal(m.t, err)
-
-	// List Bucket - primarily for the copies
-	query := make(url.Values)
-	msg := &cmn.SelectMsg{Cached: true}
-	msg.AddProps(cmn.GetPropsCopies, cmn.GetPropsAtime, cmn.GetPropsStatus)
-	objectList, err := api.ListBucket(baseParams, m.bck, msg, 0, query)
-	tassert.CheckFatal(m.t, err)
-
-	copiesToNumObjects := make(map[int]int)
-	for _, entry := range objectList.Entries {
-		if entry.Atime == "" {
-			m.t.Errorf("%s/%s: access time is empty", m.bck, entry.Name)
-		}
-		total++
-		copiesToNumObjects[int(entry.Copies)]++
-	}
-	tutils.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
-	if total != m.num {
-		m.t.Fatalf("listbucket: expecting %d objects, got %d", m.num, total)
-	}
-
-	if len(copiesToNumObjects) != 1 {
-		s, _ := jsoniter.MarshalIndent(copiesToNumObjects, "", " ")
-		m.t.Fatalf("some objects do not have expected number of copies: %s", s)
-	}
-
-	for copies := range copiesToNumObjects {
-		if copies != expectedCopies {
-			m.t.Fatalf("Expecting %d objects all to have %d replicas, got: %d", total, expectedCopies, copies)
-		}
-	}
-}
-
-func (m *ioContext) ensureNoErrors() {
-	if m.numGetErrs.Load() > 0 {
-		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs.Load())
-	}
-}
-
-func (m *ioContext) reregisterTarget(target *cluster.Snode) {
-	const (
-		timeout    = time.Second * 10
-		interval   = time.Millisecond * 10
-		iterations = int(timeout / interval)
-	)
-
-	// T1
-	tutils.Logf("Registering target %s...\n", target.ID())
-	smap := tutils.GetClusterMap(m.t, m.proxyURL)
-	err := tutils.RegisterNode(m.proxyURL, target, smap)
-	tassert.CheckFatal(m.t, err)
-	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-	for i := 0; i < iterations; i++ {
-		time.Sleep(interval)
-		if _, ok := smap.Tmap[target.ID()]; !ok {
-			// T2
-			smap = tutils.GetClusterMap(m.t, m.proxyURL)
-			if _, ok := smap.Tmap[target.ID()]; ok {
-				tutils.Logf("T2: registered target %s\n", target.ID())
-			}
-		} else {
-			baseParams.URL = m.proxyURL
-			proxyLBNames, err := api.GetBucketNames(baseParams, m.bck)
-			tassert.CheckFatal(m.t, err)
-
-			baseParams.URL = target.URL(cmn.NetworkPublic)
-			targetLBNames, err := api.GetBucketNames(baseParams, m.bck)
-			tassert.CheckFatal(m.t, err)
-			// T3
-			if cmn.StrSlicesEqual(proxyLBNames.AIS, targetLBNames.AIS) {
-				tutils.Logf("T3: registered target %s got updated with the new BMD\n", target.ID())
-				return
-			}
-		}
-	}
-
-	m.t.Fatalf("failed to register target %s: not in the Smap or did not receive BMD", target.ID())
-}
-
-func (m *ioContext) setRandBucketProps() {
-	baseParams := tutils.DefaultBaseAPIParams(m.t)
-
-	// Set some weird bucket props to see if they were changed or not.
-	props := cmn.BucketPropsToUpdate{
-		LRU: &cmn.LRUConfToUpdate{
-			LowWM:  api.Int64(int64(rand.Intn(35) + 1)),
-			HighWM: api.Int64(int64(rand.Intn(15) + 40)),
-			OOS:    api.Int64(int64(rand.Intn(30) + 60)),
-		},
-	}
-	err := api.SetBucketProps(baseParams, m.bck, props)
-	tassert.CheckFatal(m.t, err)
-}
 
 // Intended for a deployment with multiple targets
 // 1. Unregister target T
@@ -507,21 +66,21 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	m.puts()
 
 	// Step 4.
-	m.wg.Add(m.num*m.numGetsEachFile + 2)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
 	go func() {
 		// without defer, if gets crashes Done is not called resulting in test hangs
-		defer m.wg.Done()
+		defer wg.Done()
 		m.gets()
 	}()
 
 	time.Sleep(time.Second * 3) // give gets some room to breathe
 	go func() {
 		// without defer, if reregister crashes Done is not called resulting in test hangs
-		defer m.wg.Done()
+		defer wg.Done()
 		m.reregisterTarget(target)
 	}()
-
-	m.wg.Wait()
+	wg.Wait()
 
 	m.ensureNoErrors()
 	m.assertClusterState()
@@ -543,7 +102,6 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 			t:                   t,
 			otherTasksToTrigger: 1,
 			num:                 150000,
-			numGetsEachFile:     1,
 		}
 	)
 
@@ -577,40 +135,37 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	m.proxyURL = newPrimaryURL
 	tassert.CheckFatal(t, err)
 
-	m.wg.Add(1)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
-		defer m.wg.Done()
-
+		defer wg.Done()
 		primaryCrashElectRestart(t)
 	}()
 
 	// PUT phase is timed to ensure it doesn't finish before primaryCrashElectRestart() begins
 	time.Sleep(5 * time.Second)
 	m.puts()
-	m.wg.Wait()
+	wg.Wait()
 
 	// Step 4.
-
-	// m.num*m.numGetsEachFile is for `gets` and +2 is for goroutines
-	// below (one for reregisterTarget and second for primarySetToOriginal)
-	m.wg.Add(m.num*m.numGetsEachFile + 2)
-
+	wg.Add(3)
 	go func() {
-		defer m.wg.Done()
-
+		defer wg.Done()
 		m.reregisterTarget(target)
 	}()
 
 	go func() {
-		defer m.wg.Done()
-
+		defer wg.Done()
 		<-m.controlCh
 		primarySetToOriginal(t)
 	}()
 
-	m.gets()
+	go func() {
+		defer wg.Done()
+		m.gets()
+	}()
+	wg.Wait()
 
-	m.wg.Wait()
 	m.ensureNoErrors()
 	m.assertClusterState()
 }
@@ -667,17 +222,19 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	m.puts()
 
 	// Step 4
-	m.wg.Add(m.num*m.numGetsEachFile + 1)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
 	go func() {
-		defer m.wg.Done()
-
+		defer wg.Done()
 		time.Sleep(4 * time.Second)
 		restore(tcmd, targs, false, "target")
 	}()
+	go func() {
+		defer wg.Done()
+		m.gets()
+	}()
+	wg.Wait()
 
-	m.gets()
-
-	m.wg.Wait()
 	m.ensureNoErrors()
 	m.assertClusterState()
 }
@@ -754,35 +311,31 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	}
 
 	// Do puts in parallel
-	m.wg.Add(1)
+	wg := &sync.WaitGroup{}
+	wg.Add(3)
 	go func() {
-		defer m.wg.Done()
-
+		defer wg.Done()
 		m.puts()
 	}()
 
 	// Register target 0 in parallel
-	m.wg.Add(1)
 	go func() {
-		defer m.wg.Done()
-
+		defer wg.Done()
 		tutils.Logf("Register target %s\n", targets[0].URL(cmn.NetworkPublic))
 		err = tutils.RegisterNode(m.proxyURL, targets[0], m.smap)
 		tassert.CheckFatal(t, err)
 	}()
 
 	// Unregister target 1 in parallel
-	m.wg.Add(1)
 	go func() {
-		defer m.wg.Done()
-
+		defer wg.Done()
 		tutils.Logf("Unregister target %s\n", targets[1].URL(cmn.NetworkPublic))
 		err = tutils.UnregisterNode(m.proxyURL, targets[1].ID())
 		tassert.CheckFatal(t, err)
 	}()
 
 	// Wait for everything to end
-	m.wg.Wait()
+	wg.Wait()
 
 	// Register target 1 to bring cluster to original state
 	m.reregisterTarget(targets[1])
@@ -801,10 +354,9 @@ func TestAckRebalance(t *testing.T) {
 
 	var (
 		md = ioContext{
-			t:               t,
-			num:             30000,
-			numGetsEachFile: 1,
-			getErrIsFatal:   true,
+			t:             t,
+			num:           30000,
+			getErrIsFatal: true,
 		}
 	)
 
@@ -838,9 +390,7 @@ func TestAckRebalance(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(md.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	md.wg.Add(md.num * md.numGetsEachFile)
 	md.gets()
-	md.wg.Wait()
 
 	md.ensureNoErrors()
 	md.assertClusterState()
@@ -875,11 +425,10 @@ func TestStressRebalance(t *testing.T) {
 func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	var (
 		md = &ioContext{
-			t:               t,
-			bck:             bck,
-			num:             50000,
-			numGetsEachFile: 1,
-			getErrIsFatal:   true,
+			t:             t,
+			bck:           bck,
+			num:           50000,
+			getErrIsFatal: true,
 		}
 	)
 
@@ -906,8 +455,12 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	md.puts()
 
 	// Get objects and register targets in parallel
-	md.wg.Add(md.num * md.numGetsEachFile)
-	md.gets()
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		md.gets()
+	}()
 
 	// and join 2 targets in parallel
 	time.Sleep(time.Second)
@@ -927,7 +480,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	// wait for the reads to run out
-	md.wg.Wait()
+	wg.Wait()
 
 	md.ensureNoErrors()
 	md.assertClusterState()
@@ -940,9 +493,8 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	var (
 		m = ioContext{
-			t:               t,
-			num:             10000,
-			numGetsEachFile: 1,
+			t:   t,
+			num: 10000,
 		}
 	)
 
@@ -972,25 +524,25 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	m.puts()
 
 	// Register target 0 in parallel
-	m.wg.Add(1)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
 	go func() {
-		defer m.wg.Done()
+		defer wg.Done()
 		tutils.Logf("Register target %s\n", target0.URL(cmn.NetworkPublic))
 		err = tutils.RegisterNode(m.proxyURL, target0, m.smap)
 		tassert.CheckFatal(t, err)
 	}()
 
 	// Unregister target 1 in parallel
-	m.wg.Add(1)
 	go func() {
-		defer m.wg.Done()
+		defer wg.Done()
 		tutils.Logf("Unregister target %s\n", target1.URL(cmn.NetworkPublic))
 		err = tutils.UnregisterNode(m.proxyURL, target1.ID())
 		tassert.CheckFatal(t, err)
 	}()
 
 	// Wait for everything to end
-	m.wg.Wait()
+	wg.Wait()
 
 	// Register target 1 to bring cluster to original state
 	sleep := time.Duration(rand.Intn(5))*time.Second + time.Millisecond
@@ -1003,9 +555,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 
 	m.ensureNoErrors()
 	m.assertClusterState()
@@ -1018,9 +568,8 @@ func TestPutDuringRebalance(t *testing.T) {
 
 	var (
 		m = ioContext{
-			t:               t,
-			num:             10000,
-			numGetsEachFile: 1,
+			t:   t,
+			num: 10000,
 		}
 	)
 
@@ -1045,28 +594,26 @@ func TestPutDuringRebalance(t *testing.T) {
 	}
 
 	// Start putting files and register target in parallel
-	m.wg.Add(1)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
-		defer m.wg.Done()
-
-		// sleep some time to wait for PUT operations to begin
-		time.Sleep(3 * time.Second)
-		tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
-		err = tutils.RegisterNode(m.proxyURL, target, m.smap)
-		tassert.CheckFatal(t, err)
+		defer wg.Done()
+		m.puts()
 	}()
 
-	m.puts()
+	// sleep some time to wait for PUT operations to begin
+	time.Sleep(3 * time.Second)
+	tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
+	err = tutils.RegisterNode(m.proxyURL, target, m.smap)
+	tassert.CheckFatal(t, err)
 
 	// Wait for everything to finish
-	m.wg.Wait()
+	wg.Wait()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	// main check - try to read all objects
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 
 	m.checkObjectDistribution(t)
 	m.assertClusterState()
@@ -1137,8 +684,10 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	m.puts()
 
 	// Start getting objects
-	m.wg.Add(m.num * m.numGetsEachFile)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		m.gets()
 	}()
 
@@ -1154,7 +703,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// wait until GETs are done while 2 rebalance are running
-	m.wg.Wait()
+	wg.Wait()
 
 	// make sure that the cluster has all targets enabled
 	_, err = tutils.WaitForPrimaryProxy(
@@ -1188,9 +737,8 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 
 	var (
 		m = ioContext{
-			t:               t,
-			num:             20000,
-			numGetsEachFile: 1,
+			t:   t,
+			num: 20000,
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
@@ -1228,8 +776,12 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	m.puts()
 
 	// Start getting objects and enable mountpaths in parallel
-	m.wg.Add(m.num * m.numGetsEachFile)
-	m.gets()
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		m.gets()
+	}()
 
 	for _, mp := range mpaths {
 		// sleep for a while before enabling another mountpath
@@ -1238,7 +790,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	m.wg.Wait()
+	wg.Wait()
 
 	mpListAfter, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
@@ -1257,9 +809,8 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	var (
 		md = ioContext{
-			t:               t,
-			num:             30000,
-			numGetsEachFile: 1,
+			t:   t,
+			num: 30000,
 		}
 	)
 
@@ -1286,8 +837,12 @@ func TestGetDuringRebalance(t *testing.T) {
 	md.puts()
 
 	// Start getting objects and register target in parallel
-	md.wg.Add(md.num * md.numGetsEachFile)
-	md.gets()
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		md.gets()
+	}()
 
 	tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
 	err = tutils.RegisterNode(md.proxyURL, target, md.smap)
@@ -1296,12 +851,10 @@ func TestGetDuringRebalance(t *testing.T) {
 	// wait for everything to finish
 	baseParams := tutils.BaseAPIParams(md.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
-	md.wg.Wait()
+	wg.Wait()
 
 	// Get objects once again to check if they are still accessible after rebalance
-	md.wg.Add(md.num * md.numGetsEachFile)
 	md.gets()
-	md.wg.Wait()
 
 	md.ensureNoErrors()
 	md.assertClusterState()
@@ -1319,8 +872,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 	var (
 		m = ioContext{
-			t:  t,
-			wg: &sync.WaitGroup{},
+			t: t,
 		}
 	)
 
@@ -1345,29 +897,30 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 			targets[i].URL(cmn.NetworkPublic), n)
 	}
 
-	m.wg.Add(unregisterTargetCount)
+	wg := &sync.WaitGroup{}
+	wg.Add(unregisterTargetCount)
 	for i := 0; i < unregisterTargetCount; i++ {
 		go func(number int) {
-			defer m.wg.Done()
+			defer wg.Done()
 
 			err := tutils.RegisterNode(m.proxyURL, targets[number], m.smap)
 			tassert.CheckError(t, err)
 		}(i)
 	}
 
-	m.wg.Add(newBucketCount)
+	wg.Add(newBucketCount)
 	for i := 0; i < newBucketCount; i++ {
 		bck := m.bck
 		bck.Name += strconv.Itoa(i)
 
 		go func() {
-			defer m.wg.Done()
+			defer wg.Done()
 			tutils.CreateFreshBucket(t, m.proxyURL, bck)
 		}()
 
 		defer tutils.DestroyBucket(t, m.proxyURL, bck)
 	}
-	m.wg.Wait()
+	wg.Wait()
 	m.assertClusterState()
 }
 
@@ -1428,10 +981,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 
 	// Put and read random files
 	m.puts()
-
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 	m.ensureNoErrors()
 }
 
@@ -1486,9 +1036,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
 
 	// GET
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 
 	// Remove new mountpath from target
 	if containers.DockerRunning() {
@@ -1561,9 +1109,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
 
 	// Read after rebalance
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 
 	// Remove new mountpath from all targets
 	if containers.DockerRunning() {
@@ -1652,10 +1198,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 	// Put and read random files
 	m.puts()
-
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 	m.ensureNoErrors()
 }
 
@@ -1688,17 +1231,20 @@ func TestForwardCP(t *testing.T) {
 	m.puts()
 
 	// Step 4. in parallel: run GETs and designate a new primary=nextProxyID
-	m.wg.Add(m.num*m.numGetsEachFile + 1)
-	m.gets()
-
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
 	go func() {
-		defer m.wg.Done()
+		defer wg.Done()
+		m.gets()
+	}()
+	go func() {
+		defer wg.Done()
 
 		setPrimaryTo(t, m.proxyURL, m.smap, nextProxyURL, nextProxyID)
 		m.proxyURL = nextProxyURL
 	}()
+	wg.Wait()
 
-	m.wg.Wait()
 	m.ensureNoErrors()
 
 	// Step 5. destroy ais bucket via original primary which is not primary at this point
@@ -1970,13 +1516,8 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	// Reregister target 0
 	m.reregisterTarget(targets[0])
 
-	// Do puts
 	m.puts()
-
-	// Do gets
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 
 	m.ensureNoErrors()
 	m.assertClusterState()
@@ -2030,9 +1571,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams)
 
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 
 	m.ensureNoErrors()
 	m.assertClusterState()
@@ -2084,10 +1623,11 @@ func TestRenewRebalance(t *testing.T) {
 	tassert.CheckError(t, err)
 	tutils.Logf("automatic rebalance started\n")
 
-	m.wg.Add(m.num*m.numGetsEachFile + 2)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
 	// Step 5: GET objects from the buket
 	go func() {
-		defer m.wg.Done()
+		defer wg.Done()
 		m.gets()
 	}()
 
@@ -2095,7 +1635,7 @@ func TestRenewRebalance(t *testing.T) {
 	//   - Start new rebalance manually after some time
 	//   - TODO: Verify that new rebalance xaction has started
 	go func() {
-		defer m.wg.Done()
+		defer wg.Done()
 
 		<-m.controlCh // wait for half the GETs to complete
 
@@ -2104,7 +1644,7 @@ func TestRenewRebalance(t *testing.T) {
 		tutils.Logf("manually initiated rebalance\n")
 	}()
 
-	m.wg.Wait()
+	wg.Wait()
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	m.ensureNoErrors()
 	m.assertClusterState()
@@ -2159,9 +1699,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Step 5: GET objects from the bucket
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 
 	m.ensureNumCopies(copies)
 
@@ -2225,9 +1763,7 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 	}
 
 	// Step 5: GET objects from the bucket
-	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
-	m.wg.Wait()
 
 	// Step 6: Add previously removed mountpath
 	tutils.Logf("Add mountpaths on target %s\n", target.ID())
