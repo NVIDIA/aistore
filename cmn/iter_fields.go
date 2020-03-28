@@ -12,20 +12,26 @@ import (
 )
 
 // Represents single field in struct that was found during walking.
-type IterField interface {
-	// Value returns value of given field.
-	Value() interface{}
-	// SetValue sets given value. `force` ignores `list:"readonly"` tag and sets
-	// the value anyway - should be used with caution.
-	SetValue(v interface{}, force ...bool) error
-}
+type (
+	IterField interface {
+		// Value returns value of given field.
+		Value() interface{}
+		// SetValue sets given value. `force` ignores `list:"readonly"` tag and sets
+		// the value anyway - should be used with caution.
+		SetValue(v interface{}, force ...bool) error
+	}
 
-type field struct {
-	name    string
-	v       reflect.Value
-	listTag string
-	dirty   bool // Determines if the value for the field was set by `SetValue`.
-}
+	field struct {
+		name    string
+		v       reflect.Value
+		listTag string
+		dirty   bool // Determines if the value for the field was set by `SetValue`.
+	}
+
+	IterOpts struct {
+		VisitAll bool // visits all the fields, not only the leafs
+	}
+)
 
 func (f *field) Value() interface{} {
 	return f.v.Interface()
@@ -94,7 +100,7 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 	return nil
 }
 
-func iterFields(prefix string, v interface{}, f func(uniqueTag string, field IterField) (error, bool)) (dirty bool, err error, stop bool) {
+func iterFields(prefix string, v interface{}, f func(uniqueTag string, field IterField) (error, bool), opts IterOpts) (dirty bool, err error, stop bool) {
 	srcVal := reflect.ValueOf(v)
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
@@ -155,17 +161,29 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 			p := prefix
 			if fieldName != "" {
 				// If struct has JSON tag, we want to include it.
-				p += fieldName + "."
+				p += fieldName
 			}
 
-			dirtyField, err, stop = iterFields(p, srcValField.Interface(), f)
-			if allocatedStruct && !dirtyField {
-				// If we initialized new struct but no field inside
-				// it was set we must set the value of the field to
-				// `nil` (as it was before) otherwise we manipulated
-				// the field for no reason.
-				srcValField = srcVal.Field(i)
-				srcValField.Set(reflect.Zero(srcValField.Type()))
+			if opts.VisitAll {
+				field := &field{name: p, v: srcValField, listTag: listTag}
+				err, stop = f(p, field)
+				dirtyField = field.dirty
+			}
+
+			if !strings.HasSuffix(p, ".") {
+				p += "."
+			}
+
+			if err == nil && !stop {
+				dirtyField, err, stop = iterFields(p, srcValField.Interface(), f, opts)
+				if allocatedStruct && !dirtyField {
+					// If we initialized new struct but no field inside
+					// it was set we must set the value of the field to
+					// `nil` (as it was before) otherwise we manipulated
+					// the field for no reason.
+					srcValField = srcVal.Field(i)
+					srcValField.Set(reflect.Zero(srcValField.Type()))
+				}
 			}
 		}
 
@@ -181,14 +199,21 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 	return
 }
 
-// IterFields walks the struct and calls `f` callback at every field that it
+// IterFields walks the struct and calls `f` callback at every leaf field that it
 // encounters. The (nested) names are created by joining the json tag with dot.
 // Iteration supports reading another, custom tag `list`. Thanks to this tag
 // it is possible to tell that we need to `omit` (`list:"omit"`) a given field
 // or tell that it is only `readonly` (`list:"readonly"`) (examples of these can
 // be seen in `BucketProps` or `Config` structs).
-func IterFields(v interface{}, f func(uniqueTag string, field IterField) (error, bool)) error {
-	_, err, _ := iterFields("", v, f)
+//
+// Passing additional options with `IterOpts` can for example call callback
+// also at the non-leaf structures.
+func IterFields(v interface{}, f func(uniqueTag string, field IterField) (error, bool), opts ...IterOpts) error {
+	var o IterOpts
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	_, err, _ := iterFields("", v, f, o)
 	return err
 }
 

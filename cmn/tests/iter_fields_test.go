@@ -14,9 +14,13 @@ import (
 
 var _ = Describe("IterFields", func() {
 	type (
-		foo struct {
-			Foo int `list:"omit"`
-			Bar int `json:"bar"`
+		Foo struct {
+			A int `list:"omit"`
+			B int `json:"b"`
+		}
+		bar struct {
+			Foo Foo    `json:"foo"`
+			C   string `json:"c"`
 		}
 	)
 
@@ -120,12 +124,29 @@ var _ = Describe("IterFields", func() {
 				},
 			),
 			Entry("check for omit tag",
-				foo{Foo: 1, Bar: 2},
+				Foo{A: 1, B: 2},
 				map[string]interface{}{
-					"bar": 2,
+					"b": 2,
 				},
 			),
 		)
+
+		It("list all the fields (not only leafs)", func() {
+			v := bar{Foo: Foo{A: 3, B: 10}, C: "string"}
+			expected := map[string]interface{}{
+				"foo.b": 10,
+				"foo":   Foo{A: 3, B: 10},
+				"c":     "string",
+			}
+
+			got := make(map[string]interface{})
+			err := cmn.IterFields(v, func(tag string, field cmn.IterField) (error, bool) {
+				got[tag] = field.Value()
+				return nil, false
+			}, cmn.IterOpts{VisitAll: true})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(got).To(Equal(expected))
+		})
 	})
 
 	Describe("UpdateFieldValue", func() {
@@ -241,7 +262,7 @@ var _ = Describe("IterFields", func() {
 			Entry("readonly field", &cmn.BucketProps{}, map[string]interface{}{
 				"provider": cmn.ProviderAIS,
 			}),
-			Entry("field not found", &foo{}, map[string]interface{}{
+			Entry("field not found", &Foo{}, map[string]interface{}{
 				"foo.bar": 2,
 			}),
 		)

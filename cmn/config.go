@@ -575,18 +575,15 @@ func (c *Config) TestingEnv() bool {
 }
 
 func (c *Config) Validate() error {
-	validators := []Validator{
-		&c.Cloud,
-		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum, &c.Versioning,
-		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net,
-		&c.Downloader, &c.DSort, &c.TestFSP, &c.FSpaths, &c.Compression,
-	}
-	for _, validator := range validators {
-		if err := validator.Validate(c); err != nil {
-			return err
+	opts := IterOpts{VisitAll: true}
+	return IterFields(c, func(tag string, field IterField) (err error, b bool) {
+		if v, ok := field.Value().(Validator); ok {
+			if err := v.Validate(c); err != nil {
+				return err, false
+			}
 		}
-	}
-	return nil
+		return nil, false
+	}, opts)
 }
 
 // ipv4ListsOverlap checks if two comma-separated ipv4 address lists
