@@ -31,7 +31,7 @@ All the [supported storage services](storage_svcs.md) equally apply to both kind
 
 Cloud-based and ais buckets support the same API with minor exceptions. Cloud buckets can be *evicted* from AIS. AIS buckets are the only buckets that can be created, renamed, and deleted via the [RESTful API](http_api.md).
 
-> Most of the examples below are `curl` based; it is possible, however, and often even preferable, to execute the same operations using [AIS CLI](../cli/README.md). In particular, for the commands that operate on buckets, please refer to [this CLI resource](../cli/resources/bucket.md).
+> Most of the examples below are `curl` based; it is possible, however, and often even preferable, to execute the same operations using [AIS CLI](../cmd/cli/README.md). In particular, for the commands that operate on buckets, please refer to [this CLI resource](../cmd/cli/resources/bucket.md).
 
 ### Cloud Provider
 
@@ -110,7 +110,7 @@ Bucket access is controlled by a single 64-bit `access` value in the [Bucket Pro
 | Cold GET | 0x8 |
 | DELETE | 0x16 |
 
-For instance, to make bucket `abc` read-only, execute the following [AIS CLI](../cli/README.md) command:
+For instance, to make bucket `abc` read-only, execute the following [AIS CLI](../cmd/cli/README.md) command:
 
 ```console
 $ ais set props abc 'access=ro'

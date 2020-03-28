@@ -1,7 +1,8 @@
 SHELL := /bin/bash
 DEPLOY_DIR = ./deploy/dev/local
 SCRIPTS_DIR = ./deploy/scripts
-BUILD_SRC = ./cmd/aisnode/main.go
+BUILD_DIR = ./cmd
+BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
 
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
@@ -25,11 +26,11 @@ endif
 # Note that MEMPROFILE (memprofile) option requires graceful shutdown (see `kill:`)
 ifdef MEMPROFILE
 	export PROFILE = -memprofile=$(MEMPROFILE)
-	BUILD_SRC = ./cmd/aisnodeprofile/main.go
+	BUILD_SRC = $(BUILD_DIR)/aisnodeprofile/main.go
 endif
 ifdef CPUPROFILE
 	export PROFILE += -cpuprofile=$(CPUPROFILE)
-	BUILD_SRC = ./cmd/aisnodeprofile/main.go
+	BUILD_SRC = $(BUILD_DIR)/aisnodeprofile/main.go
 endif
 
 # Intra-cluster networking: two alternative ways to build AIS `transport` package:
@@ -74,26 +75,26 @@ endif
 		go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags=$(BUILD_TAGS) $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
 	@echo "done."
 
-aisfs: ## Build 'aisfs' binary
-	@echo "Building aisfs..."
-	@cd fuse && ./install.sh
+aisfs-pre:
+	@./$(BUILD_DIR)/aisfs/install.sh
+aisfs: aisfs-pre build-aisfs ## Build 'aisfs' binary
 
 cli: ## Build CLI ('ais' binary)
-	@echo "Building ais CLI..."
-	@cd cli && ./install.sh --ignore-autocomplete
+	@echo "Building ais (CLI)..."
+	@./$(BUILD_DIR)/cli/install.sh --ignore-autocomplete
+	@go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/cli/*.go
+	@echo "done."
 
 cli-autocomplete: ## Add CLI autocompletions
 	@echo "Adding CLI autocomplete..."
-	@cd cli/autocomplete && ./install.sh
+	@./$(BUILD_DIR)/cli/autocomplete/install.sh
 
-authn: ## Build 'authn' binary
-	@echo -n "Building authn... "
-	@go install $(BUILD_FLAGS) $(LDFLAGS) ./authn
-	@echo "done."
+authn: build-authn ## Build 'authn' binary
+aisloader: build-aisloader ## Build 'aisloader' binary
 
-aisloader: ## Build 'aisloader' binary
-	@echo -n "Building aisloader... "
-	@go install $(LDFLAGS) ./bench/aisloader
+build-%:
+	@echo -n "Building $*... "
+	@go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 	@echo "done."
 
 #
@@ -126,7 +127,8 @@ clean: ## Remove all AIS related files and binaries
 	@echo -n "Cleaning... "
 	@rm -rf ~/.ais* && \
 		rm -rf /tmp/ais* && \
-		rm -f $(GOPATH)/bin/ais* # cleans 'ais' (CLI), 'aisnode' (TARGET/PROXY), 'aisfs' (FUSE), 'aisloader' && \
+		rm -f $(BUILD_DEST)/ais* # cleans 'ais' (CLI), 'aisnode' (TARGET/PROXY), 'aisfs' (FUSE), 'aisloader' && \
+		rm -f $(BUILD_DEST)/authn && \
 		rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/aistore/aisnode.a
 	@echo "done."
 

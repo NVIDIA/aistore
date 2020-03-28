@@ -16,7 +16,7 @@ AIS can be deployed as a fast tier in front of several storage backends. Support
 
 * For additional information on working with buckets, please refer to [bucket readme](./bucket.md)
 * For API reference, see [the RESTful API reference and examples](./http_api.md)
-* For AIS command-line management, see [CLI](/cli/README.md)
+* For AIS command-line management, see [CLI](/cmd/cli/README.md)
 
 ### AIS <=> AIS
 

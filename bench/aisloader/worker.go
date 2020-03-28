@@ -4,7 +4,7 @@
 
 // worker routines
 
-package main
+package aisloader
 
 import (
 	"os"

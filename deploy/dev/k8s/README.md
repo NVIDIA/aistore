@@ -204,7 +204,7 @@ Setting the number of replicas to `6` will create six targets.
 To interact with the cluster, install the `AIS` CLI tool
 
 ```console
-$ cd ../../../cli
+$ cd ../../../cmd/cli
 $ ./install.sh
 ```
 
@@ -216,7 +216,7 @@ Example:
 $ export AIS_URL=http://10.244.0.4:8080
 ```
 
-For the list of available commands, see [here](../../../cli/README.md).
+For the list of available commands, see [here](../../../cmd/cli/README.md).
 
  * To run tests, SSH into the primary proxy
  

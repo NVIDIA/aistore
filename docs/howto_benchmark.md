@@ -1,4 +1,5 @@
 ## Table of Contents
+
 - [AIS Loader](#ais-loader)
    - [Examples](#examples)
    - [Command-line options](#command-line-options)
@@ -17,12 +18,13 @@ AIS Loader (`aisloader`) is a tool to measure storage performance. It's a load g
 
 For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
 
-To get started, cd to [aisloader home](/bench/aisloader/) and run:
+To get started, go to root directory and run:
 
 ```console
-$ ./install.sh
+$ make aisloader
 $ $GOPATH/bin/aisloader
 ```
+
 ### Examples
 
 For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
