@@ -987,7 +987,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, bck, pid)
 	}
 	if bck.IsAIS() {
-		t.bucketPropsToHdr(bck, hdr, config, "")
+		t.bucketPropsToHdr(bck, hdr, config)
 		return
 	}
 	// + cloud
@@ -1011,7 +1011,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	for k, v := range bucketProps {
 		hdr.Set(k, v)
 	}
-	t.bucketPropsToHdr(bck, hdr, config, bucketProps[cmn.HeaderBucketVerEnabled])
+	t.bucketPropsToHdr(bck, hdr, config)
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1119,6 +1119,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		}
 		for k, v := range objMeta {
 			hdr.Set(k, v)
+		}
+		if !lom.VerConf().Enabled {
+			hdr.Del(cmn.HeaderObjVersion)
 		}
 	}
 

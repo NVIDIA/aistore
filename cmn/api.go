@@ -411,14 +411,14 @@ func DefaultBucketProps() *BucketProps {
 
 func CloudBucketProps(header http.Header) (props *BucketProps) {
 	props = DefaultBucketProps()
-	if props == nil || len(header) == 0 {
-		return
-	}
+	Assert(len(header) > 0)
 
+	props.Provider = header.Get(HeaderCloudProvider)
+	Assert(IsValidProvider(props.Provider))
 	if verStr := header.Get(HeaderBucketVerEnabled); verStr != "" {
-		if versioning, err := ParseBool(verStr); err == nil {
-			props.Versioning.Enabled = versioning
-		}
+		versioning, err := ParseBool(verStr)
+		AssertNoErr(err)
+		props.Versioning.Enabled = versioning
 	}
 	return props
 }

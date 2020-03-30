@@ -1220,7 +1220,10 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 	return
 }
 
-func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config *cmn.Config, cloudVerEnabled string) {
+func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config *cmn.Config) {
+	if bck.Props == nil {
+		bck.Props = cmn.CloudBucketProps(hdr)
+	}
 	finalProps := bck.Props.Clone()
 	cksumConf := config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
 	if finalProps.Cksum.Type == cmn.PropInherit {
@@ -1229,12 +1232,10 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config 
 	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
 		if fieldName == cmn.HeaderBucketVerEnabled {
 			// For Cloud buckets, `versioning.enabled` is a combination of local
-			// and cloud settings and is true iff versioning is enabled on both sides
+			// and cloud settings and is true iff versioning is enabled on both sides.
 			verEnabled := field.Value().(bool)
 			if bck.IsAIS() || !verEnabled {
 				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verEnabled))
-			} else if enabled, err := cmn.ParseBool(cloudVerEnabled); !enabled && err == nil {
-				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(false))
 			}
 			return nil, false
 		}

@@ -174,7 +174,9 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 			err = fmt.Errorf("%s: PUT failed, err: %v", lom, err)
 			return
 		}
-		lom.SetVersion(ver)
+		if lom.VerConf().Enabled {
+			lom.SetVersion(ver)
+		}
 	}
 
 	// check if bucket was destroyed while PUT was in the progress.
