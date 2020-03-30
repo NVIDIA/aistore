@@ -18,15 +18,6 @@ import (
 )
 
 const (
-	// ExtTar is tar files extension
-	ExtTar = ".tar"
-	// ExtTgz is short tar tgz files extension
-	ExtTgz = ".tgz"
-	// ExtTarTgz is tar tgz files extension
-	ExtTarTgz = ".tar.gz"
-	// ExtZip is zip files extension
-	ExtZip = ".zip"
-
 	templBash = "bash"
 	templAt   = "@"
 )
@@ -49,7 +40,7 @@ var (
 
 var (
 	// supportedExtensions is a list of supported extensions by dSort
-	supportedExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip}
+	supportedExtensions = []string{cmn.ExtTar, cmn.ExtTgz, cmn.ExtTarTgz, cmn.ExtZip}
 )
 
 // TODO: maybe this struct should be composed of `type` and `template` where

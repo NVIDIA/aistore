@@ -161,7 +161,7 @@ func (df *dsortFramework) init() {
 		df.outputTempl = "output-{00000..10000}"
 	}
 	if df.extension == "" {
-		df.extension = dsort.ExtTar
+		df.extension = cmn.ExtTar
 	}
 
 	// Assumption is that all prefixes end with dash: "-"
@@ -240,11 +240,11 @@ func (df *dsortFramework) createInputShards() {
 			path := fmt.Sprintf("%s/%s/%s%d", tmpDir, df.m.bck.Name, df.inputPrefix, i)
 			if df.algorithm.Kind == dsort.SortKindContent {
 				err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
-			} else if df.extension == dsort.ExtTar {
+			} else if df.extension == cmn.ExtTar {
 				err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication)
-			} else if df.extension == dsort.ExtTarTgz {
+			} else if df.extension == cmn.ExtTarTgz {
 				err = tutils.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication)
-			} else if df.extension == dsort.ExtZip {
+			} else if df.extension == cmn.ExtZip {
 				err = tutils.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
 			} else {
 				df.m.t.Fail()
@@ -275,7 +275,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	var lastValue interface{}
 
 	gzipped := false
-	if df.extension != dsort.ExtTar {
+	if df.extension != cmn.ExtTar {
 		gzipped = true
 	}
 
@@ -347,9 +347,9 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 				files []os.FileInfo
 			)
 
-			if df.extension == dsort.ExtTar || df.extension == dsort.ExtTarTgz {
+			if df.extension == cmn.ExtTar || df.extension == cmn.ExtTarTgz {
 				files, err = tutils.GetFileInfosFromTarBuffer(buffer, gzipped)
-			} else if df.extension == dsort.ExtZip {
+			} else if df.extension == cmn.ExtZip {
 				files, err = tutils.GetFileInfosFromZipBuffer(buffer)
 			}
 
@@ -920,7 +920,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       200,
 					fileInTarballCnt: 50,
-					extension:        dsort.ExtTarTgz,
+					extension:        cmn.ExtTarTgz,
 					maxMemUsage:      "1KB",
 				}
 			)
@@ -1153,7 +1153,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       1000,
 					fileInTarballCnt: 50,
-					extension:        dsort.ExtTarTgz,
+					extension:        cmn.ExtTarTgz,
 					maxMemUsage:      "99%",
 				}
 			)

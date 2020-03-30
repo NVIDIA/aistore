@@ -11,13 +11,13 @@ RUN pip3 install awscli
 ARG cld_provider=0
 ENV CLD_PROVIDER ${cld_provider}
 
-COPY tar2tf/requirements-jupyter.txt .
+COPY python/tar2tf/requirements-jupyter.txt .
 RUN pip3 install virtualenv && virtualenv -p /usr/bin/python3 /venv && . /venv/bin/activate && \
     pip3 install -r requirements-jupyter.txt && rm requirements-jupyter.txt
 
 COPY . $GOPATH/src/github.com/NVIDIA/aistore/
 
-WORKDIR $GOPATH/src/github.com/NVIDIA/aistore/tar2tf
+WORKDIR $GOPATH/src/github.com/NVIDIA/aistore/python/tar2tf
 EXPOSE 8888
 
 ENTRYPOINT [ "sh", "-c", "$GOPATH/src/github.com/NVIDIA/aistore/deploy/tar2tf/docker/entrypoint.sh" ]

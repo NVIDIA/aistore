@@ -1,7 +1,12 @@
-import requests
+#
+# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+#
+
+import requests, json
 
 TAR2TF = "tar2tf"
 OBJECTS = "objects"
+START = "start"
 
 
 # pylint: disable=unused-variable
@@ -24,3 +29,7 @@ class AisClient:
     def get_objects_names(self, target_url, template):
         url = "{}/v1/{}/{}/{}/{}".format(target_url, TAR2TF, OBJECTS, self.bucket, template)
         return requests.get(url=url)
+
+    def start_target_job_stream(self, target_url, target_msg):
+        url = "{}/v1/{}/{}/{}".format(target_url, TAR2TF, START, self.bucket)
+        return requests.get(url=url, data=json.dumps(dict(target_msg)), stream=True)

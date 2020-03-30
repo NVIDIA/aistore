@@ -7,3 +7,4 @@ jupyter-core >= 4.6.3
 jupyterlab-server >= 1.0.7
 ipython >= 7.13.0
 humanfriendly
+tensorflow-addons

@@ -140,3 +140,37 @@ func HrwMpath(uname string) (mi *fs.MountpathInfo, digest uint64, err error) {
 	}
 	return
 }
+
+func HrwIterMatchingObjects(t Target, bck *Bck, template cmn.ParsedTemplate, apply func(lom *LOM) error) error {
+	var (
+		iter   = template.Iter()
+		config = cmn.GCO.Get()
+		smap   = t.GetSowner().Get()
+	)
+
+	for objName, hasNext := iter(); hasNext; objName, hasNext = iter() {
+		lom := &LOM{T: t, ObjName: objName}
+		if err := lom.Init(bck.Bck, config); err != nil {
+			return err
+		}
+		si, err := HrwTarget(lom.Uname(), smap)
+		if err != nil {
+			return err
+		}
+
+		if si.ID() != t.Snode().ID() {
+			continue
+		}
+		if err := lom.Load(); err != nil {
+			if !cmn.IsObjNotExist(err) {
+				return err
+			}
+		}
+
+		if err := apply(lom); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

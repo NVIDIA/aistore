@@ -18,10 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/ais/cloud"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
@@ -352,101 +351,6 @@ func (t *targetrunner) Stop(err error) {
 //
 // http handlers
 //
-
-// verb /v1/tar2tf
-func (t *targetrunner) tar2tfHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		t.httptar2tfget(w, r)
-	default:
-		t.invalmsghdlr(w, r, r.Method+" operation not supported", 400)
-	}
-}
-
-// /v1/tar2tf/
-func (t *targetrunner) httptar2tfget(w http.ResponseWriter, r *http.Request) {
-	var (
-		config   = cmn.GCO.Get()
-		query    = r.URL.Query()
-		bck      *cluster.Bck
-		err      error
-		apiItems []string
-	)
-	apiItems, err = t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.Tar2Tf)
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if len(apiItems) == 0 {
-		t.invalmsghdlr(w, r, "expected more api items")
-		return
-	}
-
-	switch apiItems[0] {
-	case cmn.GetTargetObjects:
-		if len(apiItems) < 3 {
-			t.invalmsghdlr(w, r, "expected at least 3 api items for get target objects")
-			return
-		}
-
-		bucket, template := apiItems[1], apiItems[2]
-		bck, err = newBckFromQuery(bucket, query)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		pt, err := cmn.ParseBashTemplate(template)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-
-		// FIXME
-		objs := make([]string, 0, cmn.Min(int(pt.Count()), 1000))
-		iter := pt.Iter()
-
-		for objName, hasNext := iter(); hasNext; objName, hasNext = iter() {
-			lom := &cluster.LOM{T: t, ObjName: objName}
-			if err = lom.Init(bck.Bck, config); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-
-			smap := t.owner.smap.Get()
-			si, err := cluster.HrwTarget(lom.Uname(), smap)
-			if err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-
-			if si.ID() != t.Snode().ID() {
-				continue
-			}
-
-			if err = lom.Load(); err != nil {
-				if !cmn.IsObjNotExist(err) {
-					glog.Errorf(err.Error())
-				}
-				continue
-			}
-
-			objs = append(objs, objName)
-		}
-
-		body, err := jsoniter.Marshal(objs)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-
-		t.writeJSON(w, r, body, cmn.GetTargetObjects)
-	default:
-		s := fmt.Sprintf("Invalid route /tar2tf/%s", apiItems[0])
-		t.invalmsghdlr(w, r, s)
-	}
-}
 
 // verb /v1/buckets
 func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {

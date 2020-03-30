@@ -64,6 +64,7 @@ var XactsMeta = map[string]XactMetadata{
 
 	ActListObjects:   {Type: XactTypeTask, Startable: false},
 	ActSummaryBucket: {Type: XactTypeTask, Startable: false},
+	ActTar2Tf:        {Type: XactTypeTask, Startable: false},
 }
 
 // SelectMsg represents properties and options for requests which fetch entities

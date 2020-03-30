@@ -135,7 +135,7 @@ type testContext struct {
 func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 	// Initialize dSort manager
 	rs := &ParsedRequestSpec{
-		Extension: ExtTar,
+		Extension: cmn.ExtTar,
 		Algorithm: &SortAlgorithm{
 			FormatType: extract.FormatTypeString,
 		},
@@ -433,7 +433,7 @@ var _ = Describe("Distributed Sort", func() {
 								Decreasing: true,
 								FormatType: extract.FormatTypeString,
 							},
-							Extension:   ExtTar,
+							Extension:   cmn.ExtTar,
 							MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0},
 							DSorterType: DSorterGeneralType,
 						}

@@ -4,7 +4,7 @@
 # page by page. After each page it prints page summary.
 #
 # Bucket name is set via environment variable BUCKET. Example:
-#  $ cd python-client
+#  $ cd python/api-client
 #  $ BUCKET=nvais python list_bucket.py
 #  Page #1, objects 2, marker:
 #    imageset/tiny-set.tar              32 KB

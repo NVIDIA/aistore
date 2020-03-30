@@ -74,6 +74,7 @@ const (
 	ActStartGFN      = "metasync-start-gfn"
 	ActRecoverBck    = "recoverbck"
 	ActAsyncTask     = "task"
+	ActTar2Tf        = "tar2tf"
 
 	// Actions to manipulate mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"

@@ -43,6 +43,15 @@ const (
 	GiB = 1024 * MiB
 	TiB = 1024 * GiB
 
+	// ExtTar is tar files extension
+	ExtTar = ".tar"
+	// ExtTgz is short tar tgz files extension
+	ExtTgz = ".tgz"
+	// ExtTarTgz is tar tgz files extension
+	ExtTarTgz = ".tar.gz"
+	// ExtZip is zip files extension
+	ExtZip = ".zip"
+
 	// Constant seeds for UUID generator
 	uuidWorker = 1
 	uuidSeed   = 17
@@ -57,22 +66,18 @@ const (
 
 	configHomeEnvVar = "XDG_CONFIG_HOME" // https://wiki.archlinux.org/index.php/XDG_Base_Directory
 	configDirMode    = 0755 | os.ModeDir
-)
-const (
+
 	assertMsg = "assertion failed"
-)
-const (
+
 	DoesNotExist = "does not exist"
 	NoMountpaths = "no mountpaths"
 
 	GcsUA     = "gcloud-golang-storage/20151204" // NOTE: taken from cloud.google.com/go/storage/storage.go (userAgent)
 	GcsURL    = "http://storage.googleapis.com"
 	GcsURLAlt = "http://www.googleapis.com"
-)
-const (
+
 	LetterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-)
-const (
+
 	QuantityPercent = "percent"
 	QuantityBytes   = "bytes"
 )

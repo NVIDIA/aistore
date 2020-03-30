@@ -447,11 +447,11 @@ func (m *Manager) setExtractCreator() (err error) {
 
 	var extractCreator extract.ExtractCreator
 	switch m.rs.Extension {
-	case ExtTar:
+	case cmn.ExtTar:
 		extractCreator = extract.NewTarExtractCreator(m.ctx.t)
-	case ExtTarTgz, ExtTgz:
+	case cmn.ExtTarTgz, cmn.ExtTgz:
 		extractCreator = extract.NewTargzExtractCreator(m.ctx.t)
-	case ExtZip:
+	case cmn.ExtZip:
 		extractCreator = extract.NewZipExtractCreator(m.ctx.t)
 	default:
 		cmn.AssertMsg(false, fmt.Sprintf("unknown extension %s", m.rs.Extension))

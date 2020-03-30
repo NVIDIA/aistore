@@ -23,7 +23,7 @@ trap cleanup EXIT
 pushd $AISTORE_PATH > /dev/null
 (echo -e "4\n4\n3\n${CLD_PROVIDER}" | make deploy) && make cli && sleep 5
 
-pushd tar2tf > /dev/null
+pushd python/tar2tf > /dev/null
 ais create bucket tar-bucket
 if [[ -d $DOCKER_DATA_DIR ]]; then
    find $DOCKER_DATA_DIR -type f -regex ".*\(.tar.gz\|.tar\|.tar.xz\|.tgz\|.txz\)" -exec ais put {} ais://tar-bucket --progress --verbose \;
