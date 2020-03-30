@@ -37,6 +37,7 @@ const (
 	whatRenamedLB = "renamedlb"
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
 	fmtUnknownAct = "unexpected action message <- JSON [%v]"
+	fmtUnknownQue = "unexpected query [what=%s]"
 	guestError    = "guest account does not have permissions for the operation"
 	ciePrefix     = "cluster integrity error: cie#"
 	githubHome    = "https://github.com/NVIDIA/aistore"
@@ -2064,11 +2065,10 @@ func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
-		q           = r.URL.Query()
-		getWhat     = q.Get(cmn.URLParamWhat)
-		httpdaeWhat = "httpdaeget-" + getWhat
+		q    = r.URL.Query()
+		what = q.Get(cmn.URLParamWhat)
 	)
-	switch getWhat {
+	switch what {
 	case cmn.GetWhatBMD:
 		if renamedBucket := q.Get(whatRenamedLB); renamedBucket != "" {
 			p.handlePendingRenamedLB(renamedBucket)
@@ -2079,10 +2079,10 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatStats:
 		pst := getproxystatsrunner()
 		body := pst.GetWhatStats()
-		p.writeJSON(w, r, body, httpdaeWhat)
+		p.writeJSON(w, r, body, what)
 	case cmn.GetWhatSysInfo:
 		body := cmn.MustMarshal(daemon.gmm.FetchSysInfo())
-		p.writeJSON(w, r, body, httpdaeWhat)
+		p.writeJSON(w, r, body, what)
 	case cmn.GetWhatSmap:
 		smap := p.owner.smap.get()
 		for smap == nil || !smap.isValid() {
@@ -2096,7 +2096,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			smap = p.owner.smap.get()
 		}
 		body := cmn.MustMarshal(smap)
-		p.writeJSON(w, r, body, httpdaeWhat)
+		p.writeJSON(w, r, body, what)
 	case cmn.GetWhatDaemonStatus:
 		pst := getproxystatsrunner()
 		msg := &stats.DaemonStatus{
@@ -2106,7 +2106,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Stats:       pst.Core,
 		}
 		body := cmn.MustMarshal(msg)
-		p.writeJSON(w, r, body, httpdaeWhat)
+		p.writeJSON(w, r, body, what)
 	default:
 		p.httprunner.httpdaeget(w, r)
 	}
@@ -2531,70 +2531,49 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// gets target info
+///////////////////////////////////
+// query target states and stats //
+///////////////////////////////////
+
 func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
-	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
-	switch getWhat {
+	what := r.URL.Query().Get(cmn.URLParamWhat)
+	switch what {
 	case cmn.GetWhatStats:
-		p.invokeHTTPGetClusterStats(w, r)
+		p.queryClusterStats(w, r, what)
 	case cmn.GetWhatSysInfo:
-		p.invokeHTTPGetClusterSysinfo(w, r)
+		p.queryClusterSysinfo(w, r, what)
 	case cmn.GetWhatXaction:
-		p.invokeHTTPGetXaction(w, r)
+		p.queryXaction(w, r, what)
 	case cmn.GetWhatMountpaths:
-		p.invokeHTTPGetClusterMountpaths(w, r)
+		p.queryClusterMountpaths(w, r, what)
 	default:
-		s := fmt.Sprintf("unexpected GET request, invalid param 'what': [%s]", getWhat)
+		s := fmt.Sprintf(fmtUnknownQue, what)
 		cmn.InvalidHandlerWithMsg(w, r, s)
 	}
 }
 
-func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Request) bool {
-	results, ok := p.invokeHTTPSelectMsgOnTargets(w, r, true /*silent*/)
-	if !ok {
-		return false
-	}
-	body := cmn.MustMarshal(results)
-	return p.writeJSON(w, r, body, "getXaction")
-}
-
-func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *http.Request, silent bool) (cmn.JSONRawMsgs, bool) {
+func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
 	var (
-		err  error
-		body []byte
+		msg = &cmn.ActionMsg{}
 	)
-	if r.Body != nil {
-		body, err = cmn.ReadBytes(r)
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return nil, false
-		}
+	if cmn.ReadJSON(w, r, msg) != nil {
+		return
 	}
-	results := p.bcastTo(bcastArgs{
+	results := p.bcastGet(bcastArgs{
 		req: cmn.ReqArgs{
-			Method: r.Method,
-			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-			Query:  r.URL.Query(),
-			Body:   body,
+			Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
+			Query: r.URL.Query(),
+			Body:  cmn.MustMarshal(msg),
 		},
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	})
-	targetResults := make(cmn.JSONRawMsgs, len(results))
-	for res := range results {
-		if res.err != nil {
-			if silent {
-				p.invalmsghdlrsilent(w, r, res.details)
-			} else {
-				p.invalmsghdlr(w, r, res.details)
-			}
-			return nil, false
-		}
-		targetResults[res.si.ID()] = jsoniter.RawMessage(res.outjson)
+	targetResults := p._queryResults(w, r, results)
+	if targetResults != nil {
+		p.writeJSON(w, r, cmn.MustMarshal(targetResults), what)
 	}
-	return targetResults, true
 }
 
-func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http.Request) bool {
+func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string) {
 	fetchResults := func(broadcastType int) (cmn.JSONRawMsgs, string) {
 		results := p.bcastTo(bcastArgs{
 			req: cmn.ReqArgs{
@@ -2616,65 +2595,92 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 	}
 
 	out := &cmn.ClusterSysInfoRaw{}
-
 	proxyResults, err := fetchResults(cluster.Proxies)
 	if err != "" {
 		p.invalmsghdlr(w, r, err)
-		return false
+		return
 	}
 
 	out.Proxy = proxyResults
-
 	targetResults, err := fetchResults(cluster.Targets)
 	if err != "" {
 		p.invalmsghdlr(w, r, err)
-		return false
+		return
 	}
 
 	out.Target = targetResults
-
 	body := cmn.MustMarshal(out)
-	ok := p.writeJSON(w, r, body, "HttpGetClusterSysInfo")
-	return ok
+	_ = p.writeJSON(w, r, body, what)
 }
 
-// FIXME: read-lock
-func (p *proxyrunner) invokeHTTPGetClusterStats(w http.ResponseWriter, r *http.Request) bool {
-	targetStats, ok := p.invokeHTTPSelectMsgOnTargets(w, r, false /*not silent*/)
-	if !ok {
-		errstr := fmt.Sprintf("Unable to invoke cmn.SelectMsg on targets. Query: [%s]", r.URL.RawQuery)
-		glog.Errorf(errstr)
-		p.invalmsghdlr(w, r, errstr)
-		return false
+func (p *proxyrunner) queryClusterStats(w http.ResponseWriter, r *http.Request, what string) {
+	targetStats := p._queryTargets(w, r)
+	if targetStats == nil {
+		return
 	}
 	out := &stats.ClusterStatsRaw{}
 	out.Target = targetStats
 	rr := getproxystatsrunner()
 	out.Proxy = rr.Core
 	body := cmn.MustMarshal(out)
-	ok = p.writeJSON(w, r, body, "HttpGetClusterStats")
-	return ok
+	_ = p.writeJSON(w, r, body, what)
 }
 
-func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *http.Request) bool {
-	targetMountpaths, ok := p.invokeHTTPSelectMsgOnTargets(w, r, false /*not silent*/)
-	if !ok {
-		errstr := fmt.Sprintf(
-			"Unable to invoke cmn.SelectMsg on targets. Query: [%s]", r.URL.RawQuery)
-		glog.Errorf(errstr)
-		p.invalmsghdlr(w, r, errstr)
-		return false
+func (p *proxyrunner) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, what string) {
+	targetMountpaths := p._queryTargets(w, r)
+	if targetMountpaths == nil {
+		return
 	}
-
 	out := &ClusterMountpathsRaw{}
 	out.Targets = targetMountpaths
 	body := cmn.MustMarshal(out)
-	ok = p.writeJSON(w, r, body, "HttpGetClusterMountpaths")
-	return ok
+	_ = p.writeJSON(w, r, body, what)
 }
 
-// register|keepalive target|proxy
-// start|stop xaction
+// helper methods for querying targets
+
+func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.JSONRawMsgs {
+	var (
+		err  error
+		body []byte
+	)
+	if r.Body != nil {
+		body, err = cmn.ReadBytes(r)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return nil
+		}
+	}
+	results := p.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: r.Method,
+			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+			Query:  r.URL.Query(),
+			Body:   body,
+		},
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+	})
+	return p._queryResults(w, r, results)
+}
+
+func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, results chan callResult) cmn.JSONRawMsgs {
+	targetResults := make(cmn.JSONRawMsgs, len(results))
+	for res := range results {
+		if res.err != nil {
+			p.invalmsghdlr(w, r, res.details)
+			return nil
+		}
+		targetResults[res.si.ID()] = jsoniter.RawMessage(res.outjson)
+	}
+	return targetResults
+}
+
+//////////////////////////////////////
+// commands:
+// - register|keepalive target|proxy
+// - start|stop xaction
+//////////////////////////////////////
+
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
 		regReq                                targetRegMeta
@@ -3118,12 +3124,8 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, nil)})
 	case cmn.ActXactStart, cmn.ActXactStop:
 		body := cmn.MustMarshal(msg)
-		results := p.bcastTo(bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPut,
-				Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-				Body:   body,
-			},
+		results := p.bcastPut(bcastArgs{
+			req: cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Xactions), Body: body},
 		})
 		for res := range results {
 			if res.err != nil {

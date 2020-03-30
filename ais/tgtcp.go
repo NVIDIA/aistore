@@ -203,37 +203,6 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActShutdown:
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-	case cmn.ActXactStart, cmn.ActXactStop:
-		var (
-			bck    *cluster.Bck
-			kind   = msg.Name
-			bucket = msg.Value.(string)
-		)
-		if bucket != "" {
-			bck, err = newBckFromQuery(bucket, r.URL.Query())
-			if err != nil {
-				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-				return
-			}
-			if err := bck.Init(t.owner.bmd, t.si); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-		}
-		if msg.Action == cmn.ActXactStart {
-			if kind == cmn.ActRebalance {
-				// see p.httpcluput()
-				t.invalmsghdlr(w, r, "Invalid API request: expecting action="+cmn.ActRebalance)
-				return
-			}
-			if err := t.xactsStartRequest(r, kind, bck); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-		} else {
-			xaction.Registry.DoAbort(kind, bck)
-		}
-		return
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		t.invalmsghdlr(w, r, s)
@@ -313,49 +282,6 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		rst := getstorstatsrunner()
 		body := rst.GetWhatStats()
 		t.writeJSON(w, r, body, httpdaeWhat)
-	case cmn.GetWhatXaction:
-		var (
-			body []byte
-			err  error
-			msg  cmn.ActionMsg
-		)
-		if cmn.ReadJSON(w, r, &msg) != nil {
-			return
-		}
-		xactMsg, err := cmn.ReadXactionRequestMessage(&msg)
-		if err != nil {
-			msg := fmt.Sprintf("could not parse xaction action message: %v", err)
-			t.invalmsghdlr(w, r, msg, http.StatusBadRequest)
-			return
-		}
-
-		switch msg.Action {
-		case cmn.ActXactStats:
-			var bck *cluster.Bck
-			if xactMsg.Bck.Name != "" {
-				bck = cluster.NewBckEmbed(xactMsg.Bck)
-				if err := bck.Init(t.owner.bmd, t.si); err != nil {
-					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
-					return
-				}
-			}
-
-			kind, onlyRecent := msg.Name, !xactMsg.All
-			body, err = t.xactStatsRequest(kind, bck, onlyRecent)
-			if err != nil {
-				if _, ok := err.(cmn.XactionNotFoundError); ok {
-					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
-				} else {
-					t.invalmsghdlr(w, r, err.Error())
-				}
-				return
-			}
-		default:
-			t.invalmsghdlr(w, r, fmt.Sprintf("Unrecognized xaction action %s", msg.Action), http.StatusBadRequest)
-			return
-		}
-
-		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatMountpaths:
 		mpList := cmn.MountpathList{}
 		availablePaths, disabledPaths := fs.Mountpaths.Get()
@@ -385,7 +311,6 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				cmn.Assert(ok)
 			}
 		}
-
 		msg := &stats.DaemonStatus{
 			Snode:       t.httprunner.si,
 			SmapVersion: t.owner.smap.get().Version,
@@ -394,7 +319,6 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Capacity:    tstats.Capacity,
 			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},
 		}
-
 		body := cmn.MustMarshal(msg)
 		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatDiskStats:
@@ -404,79 +328,6 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	default:
 		t.httprunner.httpdaeget(w, r)
 	}
-}
-
-func (t *targetrunner) xactStatsRequest(kind string, bck *cluster.Bck, onlyRecent bool) ([]byte, error) {
-	xactStatsMap, err := xaction.Registry.GetStats(kind, bck, onlyRecent)
-	if err != nil {
-		return nil, err
-	}
-	xactStats := make([]stats.XactStats, 0, len(xactStatsMap))
-	for _, stat := range xactStatsMap {
-		if stat == nil {
-			continue
-		}
-		xactStats = append(xactStats, stat)
-	}
-	return jsoniter.Marshal(xactStats)
-}
-
-func (t *targetrunner) xactsStartRequest(r *http.Request, kind string, bck *cluster.Bck) error {
-	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
-	const erfmn = "xaction %q requires a bucket to start"
-	switch kind {
-	// 1. globals
-	case cmn.ActLRU:
-		if bck != nil {
-			glog.Errorf(erfmb, kind, bck)
-		}
-		go t.RunLRU()
-	case cmn.ActResilver:
-		if bck != nil {
-			glog.Errorf(erfmb, kind, bck)
-		}
-		go t.rebManager.RunResilver(false /*skipGlobMisplaced*/)
-	// 2. with bucket
-	case cmn.ActPrefetch:
-		if bck == nil {
-			return fmt.Errorf(erfmn, kind)
-		}
-		args := &xaction.DeletePrefetchArgs{
-			Ctx:      t.contextWithAuth(r.Header),
-			RangeMsg: &cmn.RangeMsg{},
-		}
-		xact, err := xaction.Registry.RenewPrefetch(t, bck, args)
-		if err != nil {
-			return err
-		}
-		go xact.Run(args)
-	case cmn.ActECPut:
-		if bck == nil {
-			return fmt.Errorf(erfmn, kind)
-		}
-		ec.ECM.RestoreBckPutXact(bck)
-	case cmn.ActECGet:
-		if bck == nil {
-			return fmt.Errorf(erfmn, kind)
-		}
-		ec.ECM.RestoreBckGetXact(bck)
-	case cmn.ActECRespond:
-		if bck == nil {
-			return fmt.Errorf(erfmn, kind)
-		}
-		ec.ECM.RestoreBckRespXact(bck)
-	// 3. cannot start
-	case cmn.ActPutCopies:
-		return fmt.Errorf("cannot start xaction %q - it is invoked automatically by PUTs into mirrored bucket", kind)
-	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete, cmn.ActMakeNCopies, cmn.ActECEncode:
-		return fmt.Errorf("initiating xaction %q must be done via a separate documented API", kind)
-	// 4. unknown
-	case "":
-		return errors.New("unspecified (empty) xaction kind")
-	default:
-		return fmt.Errorf("starting %q xaction is unsupported", kind)
-	}
-	return nil
 }
 
 // register target

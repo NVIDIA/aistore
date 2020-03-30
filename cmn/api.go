@@ -470,18 +470,6 @@ func (bp *BucketProps) Apply(propsToUpdate BucketPropsToUpdate) {
 	copyProps(propsToUpdate, bp)
 }
 
-func ReadXactionRequestMessage(actionMsg *ActionMsg) (*XactionExtMsg, error) {
-	xactMsg := &XactionExtMsg{}
-	xactMsgJSON, err := jsoniter.Marshal(actionMsg.Value)
-	if err != nil {
-		return nil, fmt.Errorf("unable to marshal action message: %v. error: %v", actionMsg, err)
-	}
-	if err := jsoniter.Unmarshal(xactMsgJSON, xactMsg); err != nil {
-		return nil, err
-	}
-	return xactMsg, nil
-}
-
 func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error) {
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val

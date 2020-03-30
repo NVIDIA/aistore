@@ -269,10 +269,10 @@ const (
 	Transport = "transport"
 	Reverse   = "reverse"
 	Rebalance = "rebalance"
-	Txn       = "txn" // control plane transactions
+	Txn       = "txn" // 2PC
+	Xactions  = "xactions"
 	Tar2Tf    = "tar2tf"
-	// l2 AuthN
-	Users = "users"
+	Users     = "users" // AuthN
 
 	// l3
 	SyncSmap     = "syncsmap"

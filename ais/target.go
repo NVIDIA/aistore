@@ -279,7 +279,8 @@ func (t *targetrunner) Run() error {
 		{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 		{r: cmn.Rebalance, h: t.rebalanceHandler, net: []string{cmn.NetworkIntraData}},
 
-		{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}}, // control plane transactions
+		{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Xactions, h: t.xactHandler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 	}
