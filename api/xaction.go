@@ -63,7 +63,7 @@ func (xs NodesXactStats) ObjCount() (count int64) {
 }
 
 func execXactionAction(baseParams BaseParams, args XactReqArgs, action string) error {
-	actMsg := cmn.ActionMsg{
+	msg := cmn.ActionMsg{
 		Action: action,
 		Name:   args.Kind,
 		Value:  args.Bck.Name,
@@ -72,7 +72,7 @@ func execXactionAction(baseParams BaseParams, args XactReqArgs, action string) e
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
-		Body:       cmn.MustMarshal(actMsg),
+		Body:       cmn.MustMarshal(msg),
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	})
 }
@@ -95,9 +95,10 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 //
 // GetXactionStats gets all xaction stats for given kind and bucket (optional).
 func GetXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactStats, err error) {
-	actMsg := cmn.ActionMsg{
-		Action: cmn.ActXactStats,
-		Name:   args.Kind,
+	// TODO: msg.Action field is unused and shouldn't be used (as well as the entire action message)
+	// TODO: #668
+	msg := cmn.ActionMsg{
+		Name: args.Kind,
 		Value: cmn.XactionExtMsg{
 			Bck: args.Bck,
 			All: !args.Latest,
@@ -107,8 +108,8 @@ func GetXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXa
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
-		Body:       cmn.MustMarshal(actMsg),
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXaction}},
+		Body:       cmn.MustMarshal(msg),
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactStats}},
 	}, &xactStats)
 	return xactStats, err
 }

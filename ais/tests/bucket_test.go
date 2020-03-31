@@ -1570,7 +1570,7 @@ func TestCopyBucket(t *testing.T) {
 				xactArgs := api.XactReqArgs{
 					Kind:    cmn.ActCopyBucket,
 					Bck:     dstm.bck,
-					Timeout: rebalanceTimeout,
+					Timeout: copyBucketTimeout,
 				}
 				err = api.WaitForXaction(baseParams, xactArgs)
 				tassert.CheckFatal(t, err)

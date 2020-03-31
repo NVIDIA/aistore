@@ -69,6 +69,12 @@ type (
 
 	MountpathXact    struct{}
 	NonmountpathXact struct{}
+
+	XactRunningStatus struct {
+		Kind string `json:"kind"`
+		Bck
+		Running bool `json:"running"`
+	}
 )
 
 func (e *ErrXactExpired) Error() string            { return e.msg }

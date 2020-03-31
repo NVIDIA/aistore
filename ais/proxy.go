@@ -589,7 +589,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
-		vote := xaction.Registry.GlobalXactRunning(cmn.ActElection)
+		vote := xaction.Registry.IsXactRunning(cmn.ActElection)
 		s := fmt.Sprintf("primary %s cannot receive cluster meta (election=%t)", p.si, vote)
 		p.invalmsghdlr(w, r, s)
 		return
@@ -831,8 +831,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bucketTo)
+		// NOTE: destination MUST be AIS; TODO: support destination namespace via API
 		bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
-		if err := p.copyBucket(bckFrom, bckTo, &msg, config); err != nil {
+		if err := p.copyBucket(bckFrom, bckTo, &msg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -2542,7 +2543,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.queryClusterStats(w, r, what)
 	case cmn.GetWhatSysInfo:
 		p.queryClusterSysinfo(w, r, what)
-	case cmn.GetWhatXaction:
+	case cmn.GetWhatXactStats, cmn.GetWhatXactRunStatus:
 		p.queryXaction(w, r, what)
 	case cmn.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)

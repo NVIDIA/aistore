@@ -212,6 +212,8 @@ func (bck *Bck) GetNameLockPair() (nlp NameLockPair) {
 	return
 }
 
-func (nlp *NameLockPair) Lock()         { nlp.nlc.Lock(nlp.uname, true) }
-func (nlp *NameLockPair) Unlock()       { nlp.nlc.Unlock(nlp.uname, true) }
-func (nlp *NameLockPair) TryLock() bool { return nlp.nlc.TryLock(nlp.uname, true) }
+func (nlp *NameLockPair) Lock()          { nlp.nlc.Lock(nlp.uname, true) }
+func (nlp *NameLockPair) Unlock()        { nlp.nlc.Unlock(nlp.uname, true) }
+func (nlp *NameLockPair) TryLock() bool  { return nlp.nlc.TryLock(nlp.uname, true) }
+func (nlp *NameLockPair) TryRLock() bool { return nlp.nlc.TryLock(nlp.uname, false) }
+func (nlp *NameLockPair) RUnlock()       { nlp.nlc.Unlock(nlp.uname, false) }

@@ -897,28 +897,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		go xact.Run(args)
-	case cmn.ActCopyBucket:
-		var (
-			phase = apiItems[1]
-		)
-		bckFrom := bck
-		// TODO: Currently `copybck` is only supported if the destination is AIS bucket.
-		bckTo := cluster.NewBck(msg.Name, cmn.ProviderAIS, cmn.NsGlobal)
-		switch phase {
-		case cmn.ActBegin:
-			err = t.beginCopyLB(bckFrom, bckTo, msg.Action)
-		case cmn.ActAbort:
-			t.abortCopyLB(bckFrom, bckTo, msg.Action)
-		case cmn.ActCommit:
-			err = t.commitCopyLB(bckFrom, bckTo)
-		default:
-			err = fmt.Errorf("invalid phase %s: %s %s => %s", phase, msg.Action, bckFrom, bckTo)
-		}
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		glog.Infof("%s %s bucket %s => %s", phase, msg.Action, bckFrom, bckTo)
 	case cmn.ActListObjects:
 		// list the bucket and return
 		if ok := t.listbucket(w, r, bck, msg); !ok {

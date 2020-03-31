@@ -6,7 +6,6 @@ package ais
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -71,28 +70,28 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
 		if res.err != nil {
-			// 3. abort
+			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 			return res.err
 		}
 	}
 
-	// 4. lock & update BMD locally, unlock bucket
+	// 3. lock & update BMD locally
 	p.owner.bmd.Lock()
 	clone := p.owner.bmd.get().clone()
 	added := clone.add(bck, bucketProps)
 	cmn.Assert(added)
 	p.owner.bmd.put(clone)
 
-	// 5. metasync updated BMD & unlock BMD
+	// 4. metasync updated BMD & unlock BMD
 	c.msg.BMDVersion = clone.version()
 	wg := p.metasyncer.sync(revsPair{clone, c.msg})
 	p.owner.bmd.Unlock()
 
 	wg.Wait() // to synchronize prior to committing
 
-	// 6. commit
+	// 5. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive // making exception for this critical op
 	c.req.Query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
@@ -161,14 +160,14 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
 		if res.err != nil {
-			// 3. abort
+			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 			return res.err
 		}
 	}
 
-	// 4. lock & update BMD locally, unlock bucket
+	// 3. lock & update BMD locally
 	p.owner.bmd.Lock()
 	clone := p.owner.bmd.get().clone()
 	bprops, present := clone.Get(bck)
@@ -180,14 +179,14 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	clone.set(bck, nprops)
 	p.owner.bmd.put(clone)
 
-	// 5. metasync updated BMD; unlock BMD
+	// 4. metasync updated BMD; unlock BMD
 	c.msg.BMDVersion = clone.version()
 	wg := p.metasyncer.sync(revsPair{clone, c.msg})
 	p.owner.bmd.Unlock()
 
 	wg.Wait()
 
-	// 6. commit
+	// 5. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
@@ -233,18 +232,17 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, props
 	nmsg.Value = nprops
 	c = p.prepTxnClient(nmsg, bck)
 
-	// 2. begin
 	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
 		if res.err != nil {
-			// 3. abort
+			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 			return res.err
 		}
 	}
 
-	// 4. lock and update BMD locally; unlock bucket
+	// 3. lock and update BMD locally
 	p.owner.bmd.Lock()
 	clone := p.owner.bmd.get().clone()
 	bprops, present = clone.Get(bck)
@@ -256,14 +254,14 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, props
 	clone.set(bck, nprops)
 	p.owner.bmd.put(clone)
 
-	// 5. metasync updated BMD; unlock BMD
+	// 4. metasync updated BMD; unlock BMD
 	c.msg.BMDVersion = clone.version()
 	wg := p.metasyncer.sync(revsPair{clone, c.msg})
 	p.owner.bmd.Unlock()
 
 	wg.Wait()
 
-	// 6. commit
+	// 5. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
@@ -286,8 +284,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		nlpFrom.Unlock()
 		return cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
 	}
-
-	unlock := func() { nlpFrom.Unlock(); nlpTo.Unlock() }
+	unlock := func() { nlpTo.Unlock(); nlpFrom.Unlock() }
 
 	// 1. confirm existence & non-existence
 	p.owner.bmd.Lock()
@@ -313,7 +310,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
 		if res.err != nil {
-			// 3. abort
+			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 			unlock()
@@ -321,7 +318,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		}
 	}
 
-	// 3. lock and update BMD locally; unlock bucket
+	// 3. lock and update BMD locally
 	p.owner.bmd.Lock()
 	cloneBMD := p.owner.bmd.get().clone()
 	bprops, present := cloneBMD.Get(bckFrom)
@@ -400,83 +397,130 @@ poll:
 		}
 		break
 	}
-	nlpFrom.Unlock()
 	nlpTo.Unlock()
+	nlpFrom.Unlock()
 }
 
-// copy-bucket: TODO -- FIXME: use txn*
-func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, config *cmn.Config) (err error) {
+// copy-bucket: { confirm existence -- begin -- conditional metasync -- commit -- wait for copy-done and unlock }
+func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
+		c       *txnClientCtx
+		nmsg    = &cmn.ActionMsg{} // + bckTo
 		nlpFrom = bckFrom.GetNameLockPair()
-		smap    = p.owner.smap.get()
-		tout    = config.Timeout.MaxKeepalive
+		nlpTo   = bckTo.GetNameLockPair()
+		pname   = p.si.String()
 	)
-	nlpFrom.Lock()
-	defer nlpFrom.Unlock()
+	if !nlpFrom.TryRLock() {
+		return cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
+	}
+	if !nlpTo.TryLock() {
+		nlpFrom.RUnlock()
+		return cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
+	}
+	unlock := func() { nlpTo.Unlock(); nlpFrom.RUnlock() }
 
+	// 1. confirm existence
 	p.owner.bmd.Lock()
-	clone := p.owner.bmd.get().clone()
-
-	// Re-init under a lock
-	if err = bckFrom.Init(p.owner.bmd, p.si); err != nil {
+	bmd := p.owner.bmd.get()
+	if _, present := bmd.Get(bckFrom); !present {
 		p.owner.bmd.Unlock()
-		return
+		unlock()
+		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, pname)
 	}
-	if err := bckTo.Init(p.owner.bmd, p.si); err != nil {
-		bckToProps := bckFrom.Props.Clone()
-		clone.add(bckTo, bckToProps)
-	}
-
-	p.owner.bmd.put(clone)
-
-	// Distribute temporary bucket
-	aisMsg := p.newAisMsg(msg, smap, clone)
-	wg := p.metasyncer.sync(revsPair{clone, aisMsg})
 	p.owner.bmd.Unlock()
 
-	wg.Wait()
+	// msg{} => nmsg{bckTo} and prep context(nmsg)
+	*nmsg = *msg
+	nmsg.Value = bckTo.Bck
+	c = p.prepTxnClient(nmsg, bckFrom)
 
-	errHandler := func() {
-		p.owner.bmd.Lock()
-		clone := p.owner.bmd.get().clone()
+	// 2. begin
+	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	for res := range results {
+		if res.err != nil {
+			// abort
+			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
+			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+			unlock()
+			return res.err
+		}
+	}
 
-		clone.del(bckTo)
+	// 3. lock and update BMD locally
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
+	bprops, present := clone.Get(bckFrom)
+	cmn.Assert(present)
+
+	event := txnCommitEventNone
+
+	// create destination bucket but only if it doesn't exist
+	if _, present = clone.Get(bckTo); !present {
+		bckFrom.Props = bprops.Clone()
+		bckTo.Props = bprops.Clone()
+		added := clone.add(bckTo, bckTo.Props)
+		cmn.Assert(added)
 		p.owner.bmd.put(clone)
 
-		_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, smap, clone)})
+		// 4. metasync updated BMD; unlock BMD
+		c.msg.BMDVersion = clone.version()
+		wg := p.metasyncer.sync(revsPair{clone, c.msg})
+		p.owner.bmd.Unlock()
+
+		wg.Wait()
+
+		event = txnCommitEventMetasync
+	} else {
 		p.owner.bmd.Unlock()
 	}
 
-	// Begin
-	var (
-		body   = cmn.MustMarshal(aisMsg)
-		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name)
-		errmsg = fmt.Sprintf("cannot %s bucket %s", msg.Action, bckFrom)
-	)
-	args := bcastArgs{req: cmn.ReqArgs{Path: path, Body: body}, smap: smap, timeout: tout}
-	err = p.bcast2Phase(args, errmsg, false /*commit*/)
-	if err != nil {
-		// Abort
-		errHandler()
-		return
-	}
+	// 5. commit
+	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+	c.req.Query.Set(cmn.URLParamTxnEvent, event)
+	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
-	// Commit
-	args.req.Body = body
-	args.req.Path = cmn.URLPath(path, cmn.ActCommit)
-	results := p.bcastPost(args)
-	for res := range results {
-		if res.err != nil {
-			err = fmt.Errorf("%s: failed to %s bucket %s: %v(%d)",
-				res.si, msg.Action, bckFrom, res.err, res.status)
-			break
-		}
-	}
-	if err != nil {
-		errHandler()
-		return
-	}
+	// 6. wait for copy to finish and unlock buckets
+	go p.waitCopyBuckets(bckTo, &nlpFrom, &nlpTo)
 	return
+}
+
+func (p *proxyrunner) waitCopyBuckets(bckTo *cluster.Bck, nlpFrom, nlpTo *cluster.NameLockPair) {
+	var (
+		// TODO: #668
+		msg = cmn.ActionMsg{
+			Name:  cmn.ActCopyBucket, // kind
+			Value: cmn.XactionExtMsg{Bck: bckTo.Bck},
+		}
+		config = cmn.GCO.Get()
+		sleep  = config.Timeout.CplaneOperation
+	)
+	time.Sleep(sleep)
+loop:
+	for {
+		results := p.bcastGet(bcastArgs{
+			req: cmn.ReqArgs{
+				Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
+				Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactRunStatus}},
+				Body:  cmn.MustMarshal(msg),
+			},
+			timeout: config.Timeout.CplaneOperation,
+		})
+		for res := range results {
+			if res.err != nil {
+				break loop
+			}
+			var status cmn.XactRunningStatus
+			err := jsoniter.Unmarshal(res.outjson, &status)
+			cmn.AssertNoErr(err)
+			if status.Running {
+				time.Sleep(sleep)
+				continue loop
+			}
+		}
+		break
+	}
+	nlpTo.Unlock()
+	nlpFrom.RUnlock()
 }
 
 /////////////////////////////

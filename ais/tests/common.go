@@ -35,6 +35,7 @@ const (
 	DeleteStr               = "delete"
 	SmokeStr                = "smoke"
 	largeFileSize           = 4 * cmn.MiB
+	copyBucketTimeout       = 3 * time.Minute
 	rebalanceTimeout        = 5 * time.Minute
 	rebalanceStartTimeout   = 10 * time.Second
 )

@@ -31,22 +31,26 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		switch msg.Action {
-		case cmn.ActXactStats:
-			xactMsg, err := unmarshalXactMsg(msg)
-			if err != nil {
-				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		var (
+			query        = r.URL.Query()
+			what         = query.Get(cmn.URLParamWhat)
+			xactMsg, err = unmarshalXactMsg(msg)
+		)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var bck *cluster.Bck
+		if xactMsg.Bck.Name != "" {
+			bck = cluster.NewBckEmbed(xactMsg.Bck)
+			if err := bck.Init(t.owner.bmd, t.si); err != nil {
+				t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 				return
 			}
-			var bck *cluster.Bck
-			if xactMsg.Bck.Name != "" {
-				bck = cluster.NewBckEmbed(xactMsg.Bck)
-				if err := bck.Init(t.owner.bmd, t.si); err != nil {
-					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
-					return
-				}
-			}
-			kind, onlyRecent := msg.Name, !xactMsg.All
+		}
+		kind, onlyRecent := msg.Name, !xactMsg.All
+		switch what {
+		case cmn.GetWhatXactStats:
 			body, err := t.queryXactStats(kind, bck, onlyRecent)
 			if err != nil {
 				if _, ok := err.(cmn.XactionNotFoundError); ok {
@@ -56,9 +60,16 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				return
 			}
-			t.writeJSON(w, r, body, msg.Action)
+			t.writeJSON(w, r, body, what)
+		case cmn.GetWhatXactRunStatus:
+			running := xaction.Registry.IsXactRunning(kind, bck)
+			status := &cmn.XactRunningStatus{Kind: kind, Running: running}
+			if bck != nil {
+				status.Bck = bck.Bck
+			}
+			t.writeJSON(w, r, cmn.MustMarshal(status), what)
 		default:
-			t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownAct, msg))
+			t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
 		}
 	case http.MethodPut:
 		var (

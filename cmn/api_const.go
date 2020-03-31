@@ -75,18 +75,17 @@ const (
 	ActRecoverBck    = "recoverbck"
 	ActAsyncTask     = "task"
 
-	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
+	// Actions to manipulate mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
 	ActMountpathDisable = "disable"
 	ActMountpathAdd     = "add"
 	ActMountpathRemove  = "remove"
 
-	// Actions for xactions
-	ActXactStats = "stats"
+	// Actions on xactions
 	ActXactStop  = "stop"
 	ActXactStart = "start"
 
-	// auxiliary actions
+	// auxiliary
 	ActPersist = "persist" // store a piece of metadata or configuration
 )
 
@@ -189,8 +188,9 @@ const (
 	URLParamTimeout     = "timeout" // FIXME
 	URLParamDescription = "description"
 
-	// cp transactions
-	URLParamTxnTimeout = "tno" // transaction timeout
+	// 2PC (control plane)
+	URLParamTxnTimeout = "txntout" // transaction timeout
+	URLParamTxnEvent   = "txnevnt" // enum { txnCommitEvent* }
 )
 
 // enum: task action (cmn.URLParamTaskAction)
@@ -202,17 +202,18 @@ const (
 
 // URLParamWhat enum
 const (
-	GetWhatConfig       = "config"
-	GetWhatSmap         = "smap"
-	GetWhatBMD          = "bmd"
-	GetWhatStats        = "stats"
-	GetWhatXaction      = "xaction"
-	GetWhatSmapVote     = "smapvote"
-	GetWhatMountpaths   = "mountpaths"
-	GetWhatSnode        = "snode"
-	GetWhatSysInfo      = "sysinfo"
-	GetWhatDiskStats    = "disk"
-	GetWhatDaemonStatus = "status"
+	GetWhatConfig        = "config"
+	GetWhatSmap          = "smap"
+	GetWhatBMD           = "bmd"
+	GetWhatStats         = "stats"
+	GetWhatXactStats     = "xstats"
+	GetWhatXactRunStatus = "xrunstatus"
+	GetWhatSmapVote      = "smapvote"
+	GetWhatMountpaths    = "mountpaths"
+	GetWhatSnode         = "snode"
+	GetWhatSysInfo       = "sysinfo"
+	GetWhatDiskStats     = "disk"
+	GetWhatDaemonStatus  = "status"
 )
 
 // SelectMsg.TimeFormat enum

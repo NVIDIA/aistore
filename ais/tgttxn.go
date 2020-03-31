@@ -29,6 +29,7 @@ type txnServerCtx struct {
 	msg     *aisMsg
 	caller  string
 	bck     *cluster.Bck
+	event   string
 }
 
 // verb /v1/txn
@@ -72,6 +73,10 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActRenameLB:
 		if err = t.renameBucket(c); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
+	case cmn.ActCopyBucket:
+		if err = t.copyBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	default:
@@ -336,6 +341,80 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 	return
 }
 
+////////////////
+// copyBucket //
+////////////////
+
+// TODO -- FIXME: part copy-paste from the above
+
+func (t *targetrunner) copyBucket(c *txnServerCtx) error {
+	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+		return err
+	}
+	switch c.phase {
+	case cmn.ActBegin:
+		var (
+			bckTo   *cluster.Bck
+			bckFrom = c.bck
+			err     error
+		)
+		// TODO -- FIXME: mountpath validation when destination does not exist
+		if bckTo, err = t.validateBckCpTxn(bckFrom, c.msg); err != nil {
+			return err
+		}
+		txn := newTxnCopyBucket(c, bckFrom, bckTo)
+		if err := t.transactions.begin(txn); err != nil {
+			return err
+		}
+	case cmn.ActAbort:
+		t.transactions.find(c.uuid, true /* remove */)
+	case cmn.ActCommit:
+		var xact *mirror.XactBckCopy
+		txn, err := t.transactions.find(c.uuid, false)
+		if err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		txnCpBck := txn.(*txnCopyBucket)
+		if c.event == txnCommitEventMetasync {
+			// wait for metasync
+			if err = t.transactions.wait(txn, c.timeout); err != nil {
+				return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			}
+		} else {
+			cmn.Assert(c.event == txnCommitEventNone)
+			t.transactions.find(c.uuid, true /* remove */)
+		}
+		xact, err = xaction.Registry.RenewBckCopy(t, txnCpBck.bckFrom, txnCpBck.bckTo, cmn.ActCommit)
+		if err != nil {
+			return err
+		}
+		go xact.Run()
+	default:
+		cmn.Assert(false)
+	}
+	return nil
+}
+
+func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckTo *cluster.Bck, err error) {
+	var (
+		bTo    = cmn.Bck{}
+		body   = cmn.MustMarshal(msg.Value)
+		config = cmn.GCO.Get()
+	)
+	if err = jsoniter.Unmarshal(body, &bTo); err != nil {
+		return
+	}
+	if capInfo := t.AvgCapUsed(config); capInfo.Err != nil {
+		return nil, capInfo.Err
+	}
+	bckTo = cluster.NewBckEmbed(bTo)
+	bmd := t.owner.bmd.get()
+	if _, present := bmd.Get(bckFrom); !present {
+		return bckTo, cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
+	}
+	return
+}
+
 //////////
 // misc //
 //////////
@@ -358,6 +437,7 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, apiItems []st
 		return c, nil
 	}
 	c.timeout, err = cmn.S2Duration(query.Get(cmn.URLParamTxnTimeout))
+	c.event = query.Get(cmn.URLParamTxnEvent)
 
 	c.smapVer = t.owner.smap.get().version()
 	c.bmdVer = t.owner.bmd.get().version()

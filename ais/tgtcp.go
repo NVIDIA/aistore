@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
@@ -217,7 +216,7 @@ func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) {
 
 	config := cmn.GCO.Get()
 	if prevConfig.LRU.Enabled && !config.LRU.Enabled {
-		lruRunning := xaction.Registry.GlobalXactRunning(cmn.ActLRU)
+		lruRunning := xaction.Registry.IsXactRunning(cmn.ActLRU)
 		if lruRunning {
 			glog.V(3).Infof("Aborting LRU due to lru.enabled config change")
 			xaction.Registry.DoAbort(cmn.ActLRU, nil)
@@ -1197,51 +1196,6 @@ func (t *targetrunner) enable() error {
 	t.regstate.disabled = false
 	glog.Infof("%s has been enabled", t.si)
 	return nil
-}
-
-//
-// copy bucket: 2-phase commit
-//
-func (t *targetrunner) beginCopyLB(bckFrom, bckTo *cluster.Bck, action string) (err error) {
-	capInfo := t.AvgCapUsed(cmn.GCO.Get())
-	if capInfo.Err != nil {
-		return capInfo.Err
-	}
-	if err = bckFrom.Init(t.owner.bmd, t.si); err != nil {
-		return
-	}
-	if err = bckTo.Init(t.owner.bmd, t.si); err != nil {
-		return
-	}
-
-	switch action {
-	case cmn.ActCopyBucket:
-		_, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActBegin)
-	default:
-		cmn.Assert(false)
-	}
-	return
-}
-
-func (t *targetrunner) abortCopyLB(bckFrom, bckTo *cluster.Bck, action string) {
-	if _, ok := t.owner.bmd.get().Get(bckTo); !ok {
-		return
-	}
-	xaction.Registry.DoAbort(action, bckFrom)
-}
-
-func (t *targetrunner) commitCopyLB(bckFrom, bckTo *cluster.Bck) (err error) {
-	var xact *mirror.XactBckCopy
-	if err := bckTo.Init(t.owner.bmd, t.si); err != nil {
-		return err
-	}
-	xact, err = xaction.Registry.RenewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)
-	if err != nil {
-		glog.Error(err) // unexpected at commit time
-		return
-	}
-	go xact.Run()
-	return
 }
 
 func (t *targetrunner) beginECEncode(bck *cluster.Bck) (err error) {

@@ -36,7 +36,6 @@ type (
 		Result interface{} `json:"res"`
 		Err    error       `json:"error"`
 	}
-
 	RebBase struct {
 		cmn.XactBase
 		wg *sync.WaitGroup
@@ -93,6 +92,8 @@ type (
 	}
 )
 
+// Registry is a global registry (see above) that keeps track of all running xactons
+// In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`
 var Registry *registry
 
 func init() {
@@ -245,8 +246,8 @@ func (r *registry) AbortAllMountpathsXactions() {
 	})
 }
 
-func (r *registry) GlobalXactRunning(kind string) bool {
-	entry, ok := r.GetLatest(kind)
+func (r *registry) IsXactRunning(kind string, bck ...*cluster.Bck) bool {
+	entry, ok := r.GetLatest(kind, bck...)
 	if !ok {
 		return false
 	}
@@ -285,7 +286,7 @@ func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map
 			return r.matchingXactsStats(func(_ cmn.Xact) bool { return true }), nil
 		}
 
-		// Add these xactions which are the most recent ones, even if they are finished
+		// Add the most recent xactions (both currently running and already finished)
 		matching := make(map[string]stats.XactStats, 10)
 		for _, latest := range r.latest {
 			latest.Range(func(_, e interface{}) bool {

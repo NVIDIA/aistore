@@ -21,6 +21,11 @@ const (
 	txnsNumKeep   = 16
 )
 
+const (
+	txnCommitEventNone     = "none"
+	txnCommitEventMetasync = "metasync"
+)
+
 type (
 	txn interface {
 		// accessors
@@ -83,6 +88,11 @@ type (
 		nprops *cmn.BucketProps
 	}
 	txnRenameBucket struct {
+		txnBckBase
+		bckFrom *cluster.Bck
+		bckTo   *cluster.Bck
+	}
+	txnCopyBucket struct {
 		txnBckBase
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
@@ -424,3 +434,15 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 ///////////////////
 // txnCopyBucket //
 ///////////////////
+var _ txn = &txnCopyBucket{}
+
+// c-tor
+func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnCopyBucket) {
+	txn = &txnCopyBucket{
+		txnBckBase{txnBase{kind: "bcp"}, *bckFrom},
+		bckFrom,
+		bckTo,
+	}
+	txn.fillFromCtx(c)
+	return
+}
