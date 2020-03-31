@@ -165,20 +165,20 @@ func (y *metasyncer) Run() error {
 				y.timerStopped = true
 				break
 			}
-			cnt := y.doSync(revsReq.pairs, revsReq.reqType)
+			failedCnt := y.doSync(revsReq.pairs, revsReq.reqType)
 			if revsReq.wg != nil {
 				if revsReq.failedCnt != nil {
-					revsReq.failedCnt.Store(int32(cnt))
+					revsReq.failedCnt.Store(int32(failedCnt))
 				}
 				revsReq.wg.Done()
 			}
-			if cnt > 0 && y.timerStopped && len(revsReq.pairs) > 0 {
+			if failedCnt > 0 && y.timerStopped {
 				y.retryTimer.Reset(config.Periodic.RetrySyncTime)
 				y.timerStopped = false
 			}
 		case <-y.retryTimer.C:
-			cnt := y.handlePending()
-			if cnt > 0 {
+			failedCnt := y.handlePending()
+			if failedCnt > 0 {
 				y.retryTimer.Reset(config.Periodic.RetrySyncTime)
 				y.timerStopped = false
 			} else {
@@ -247,7 +247,7 @@ func (y *metasyncer) becomeNonPrimary() {
 //
 
 // main method; see top of the file; returns number of "sync" failures
-func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (cnt int) {
+func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	var (
 		refused     cluster.NodeMap
 		pairsToSend []revsPair
@@ -357,16 +357,13 @@ outer:
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		// in addition to "connection-refused" always retry newTargetID - the joining one
 		if cmn.IsErrConnectionRefused(r.err) || cmn.StringInSlice(r.si.ID(), newTargetIDs) {
-			if refused == nil {
-				refused = make(cluster.NodeMap, 4)
-			}
-			refused[r.si.ID()] = r.si
+			refused.Add(r.si)
 		} else {
-			cnt++
+			failedCnt++
 		}
 	}
 	// step 5: handle connection-refused right away
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 4; i++ {
 		if len(refused) == 0 {
 			break
 		}
@@ -386,7 +383,7 @@ outer:
 			delete(y.nodesRevs, id)
 		}
 	}
-	cnt += len(refused)
+	failedCnt += len(refused)
 	return
 }
 
@@ -408,7 +405,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused 
 	res := y.p.bcast(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: urlPath, Body: body},
 		network: cmn.NetworkIntraControl,
-		timeout: config.Timeout.MaxKeepalive, // config "max_keepalive"
+		timeout: config.Timeout.MaxKeepalive,
 		nodes:   []cluster.NodeMap{refused},
 	})
 	for r := range res {
@@ -424,41 +421,39 @@ func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused 
 
 // pending (map), if requested, contains only those daemons that need
 // to get at least one of the most recently sync-ed tag-ed revs
-func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap, smap *smapX) {
+func (y *metasyncer) pending() (pending cluster.NodeMap, smap *smapX) {
 	smap = y.p.owner.smap.get()
 	if !smap.isPrimary(y.p.si) {
 		y.becomeNonPrimary()
 		return
 	}
-	for _, nodes := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
-		for id, si := range nodes {
-			rvd, ok := y.nodesRevs[id]
+	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
+		for _, si := range serverMap {
+			if si.DaemonID == y.p.si.DaemonID {
+				continue
+			}
+			rvd, ok := y.nodesRevs[si.DaemonID]
 			if !ok {
-				rvd = nodeRevs{versions: make(map[string]int64)}
-				y.nodesRevs[id] = rvd
-				count++
-				if !needMap {
-					continue
+				y.nodesRevs[si.DaemonID] = nodeRevs{
+					versions: make(map[string]int64, 3),
 				}
 			} else {
 				inSync := true
 				for tag, revs := range y.lastSynced {
 					v, ok := rvd.versions[tag]
-					if !ok || v != revs.version() {
-						cmn.Assert(!ok || v < revs.version())
-						count++
+					if !ok || v < revs.version() {
 						inSync = false
 						break
+					} else if v > revs.version() {
+						msg := fmt.Sprintf("v: %d; revs.version: %d", v, revs.version())
+						cmn.AssertMsg(false, msg)
 					}
 				}
-				if !needMap || inSync {
-					continue
+				if inSync {
+					return
 				}
 			}
-			if pending == nil {
-				pending = make(cluster.NodeMap)
-			}
-			pending[id] = si
+			pending.Add(si)
 		}
 	}
 	return
@@ -466,9 +461,9 @@ func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap, 
 
 // gets invoked when retryTimer fires; returns updated number of still pending
 // using MethodPut since revsReqType here is always revsReqSync
-func (y *metasyncer) handlePending() (cnt int) {
-	count, pending, smap := y.pending(true)
-	if count == 0 {
+func (y *metasyncer) handlePending() (failedCnt int) {
+	pending, smap := y.pending()
+	if len(pending) == 0 {
 		glog.Infof("no pending revs - all good")
 		return
 	}
@@ -498,7 +493,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 			y.syncDone(r.si.ID(), pairs)
 			glog.Infof("handle-pending: sync-ed %s", r.si)
 		} else {
-			cnt++
+			failedCnt++
 			glog.Warningf("handle-pending: failing to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		}
 	}
@@ -532,8 +527,11 @@ func (y *metasyncer) lastVersion(tag string) int64 {
 
 func (y *metasyncer) countNewMembers(smap *smapX) (count int) {
 	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
-		for id := range serverMap {
-			if _, ok := y.nodesRevs[id]; !ok {
+		for _, si := range serverMap {
+			if si.DaemonID == y.p.si.DaemonID {
+				continue
+			}
+			if _, ok := y.nodesRevs[si.DaemonID]; !ok {
 				count++
 			}
 		}

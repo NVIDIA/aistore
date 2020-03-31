@@ -93,6 +93,7 @@ func newPrimary() *proxyrunner {
 	p.owner.smap.put(smap)
 
 	config := cmn.GCO.BeginUpdate()
+	config.Confdir = "/tmp/ais-tests"
 	config.Periodic.RetrySyncTime = time.Millisecond * 100
 	config.KeepaliveTracker.Proxy.Name = "heartbeat"
 	config.KeepaliveTracker.Proxy.IntervalStr = "as"
@@ -101,6 +102,7 @@ func newPrimary() *proxyrunner {
 	config.Client.Timeout = 10 * time.Second
 	config.Client.TimeoutLong = 10 * time.Second
 	cmn.GCO.CommitUpdate(config)
+	cmn.GCO.SetConfigFile("/tmp/ais-tests/ais.config")
 
 	p.httpclientGetPut = &http.Client{}
 	p.httpclient = &http.Client{}
@@ -416,11 +418,30 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 
 	smap := primary.owner.smap.get()
 	msg := primary.newAisMsgStr("", smap, nil)
-	wg := syncer.sync(revsPair{smap, msg})
-	wg.Wait()
-	syncer.sync(revsPair{smap, msg})
-	wg = syncer.sync(revsPair{smap, msg})
-	wg.Wait()
+	syncer.sync(revsPair{smap, msg}).Wait()
+
+	primary.owner.smap.modify(
+		func(clone *smapX) error {
+			clone.Version++
+			return nil
+		},
+		func(clone *smapX) {
+			msg := primary.newAisMsgStr("", clone, nil)
+			syncer.sync(revsPair{clone, msg})
+		},
+	)
+
+	primary.owner.smap.modify(
+		func(clone *smapX) error {
+			clone.Version++
+			return nil
+		},
+		func(clone *smapX) {
+			msg := primary.newAisMsgStr("", clone, nil)
+			syncer.sync(revsPair{clone, msg}).Wait()
+		},
+	)
+
 	return []transportData{
 		{true, "p1", 1},
 		{true, "p1", 2},
@@ -486,11 +507,17 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	f()
 
 	// testcase #2: long delay
-	clone = primary.owner.smap.get().clone()
-	clone.Version++
-	primary.owner.smap.put(clone)
-	msg = primary.newAisMsgStr("", clone, nil)
-	syncer.sync(revsPair{clone, msg})
+	primary.owner.smap.modify(
+		func(clone *smapX) error {
+			clone.Version++
+			return nil
+		},
+		func(clone *smapX) {
+			msg := primary.newAisMsgStr("", clone, nil)
+			syncer.sync(revsPair{clone, msg})
+		},
+	)
+
 	time.Sleep(2 * time.Second)
 	f()
 

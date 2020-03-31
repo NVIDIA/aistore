@@ -251,6 +251,13 @@ func (a *Smap) Compare(b *Smap) (sameOrigin, sameVersion, eq bool) {
 	return
 }
 
+func (m *NodeMap) Add(snode *Snode) {
+	if *m == nil {
+		*m = make(NodeMap)
+	}
+	(*m)[snode.DaemonID] = snode
+}
+
 func mapsEq(a, b NodeMap) bool {
 	if len(a) != len(b) {
 		return false
