@@ -118,7 +118,7 @@ test-short)
   SECONDS=0
   errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 30m -short "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL")
   err_count=$(echo "${errs}" | wc -l)
-  echo "Tests took: $((SECONDS/3600))h$((SECONDS/60))m$((SECONDS%60))s"
+  echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
   if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
     echo "test-short: ${err_count} failed" >&2
@@ -132,7 +132,7 @@ test-long)
   SECONDS=0
   errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 2h "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL")
   err_count=$(echo "${errs}" | wc -l)
-  echo "Tests took: $((SECONDS/3600))h$((SECONDS/60))m$((SECONDS%60))s"
+  echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
   if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
     echo "test-long: ${err_count} failed" >&2
