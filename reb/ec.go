@@ -438,6 +438,9 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 					if found.meta == nil {
 						found.meta = ct.meta
 					}
+					// Copy the following fields as they are vital for local slices
+					found.hrwFQN = ct.hrwFQN
+					found.realFQN = ct.realFQN
 					err = fmt.Errorf("duplicated %s/%s SliceID %d replaced daemonID %s with %s",
 						ct.Name, ct.ObjName, ct.SliceID, found.DaemonID, ct.DaemonID)
 					return err
@@ -602,7 +605,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	reb.ec.ackCTs.add(rt)
 
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("sending slice %d[%s] of %s/%s to %s", sliceID, xxhash, ct.Bck.Name, ct.ObjName, target)
+		glog.Infof("sending slice %d(%d)[%s] of %s/%s to %s", sliceID, size, xxhash, ct.Bck.Name, ct.ObjName, target)
 	}
 	reb.ec.onAir.Inc()
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
@@ -750,7 +753,6 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 		ckval, _ := cksumForSlice(memsys.NewReader(waitFor.sgl), waitFor.sgl.Size(), reb.t.GetMMSA())
 		if hdr.ObjAttrs.CksumValue != ckval {
 			reb.statRunner.AddMany(stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1})
-			glog.Errorf("%s HDR: %d, sgl: %d", hdr.ObjName, hdr.ObjAttrs.Size, waitFor.sgl.Size())
 			return cmn.NewBadDataCksumError(
 				cmn.NewCksum(cmn.ChecksumXXHash, ckval),
 				cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
@@ -1038,22 +1040,20 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	// generate CT path in the same mpath that metadata is, and detect CT
-	isReplica := true
-	fileFQN := ct.Make(fs.ObjectType)
-	if _, err := os.Stat(fileFQN); err != nil {
-		isReplica = false
+	// check if both slice/replica and metafile exist
+	isReplica := md.SliceID == 0
+	var fileFQN, hrwFQN string
+	if isReplica {
+		fileFQN = ct.Make(fs.ObjectType)
+	} else {
 		fileFQN = ct.Make(ec.SliceType)
-		_, err = os.Stat(fileFQN)
-		// found metadata without a corresponding CT
-		if err != nil {
-			glog.Warningf("%s no CT for metadata: %s", reb.t.Snode(), fileFQN)
-			return nil
-		}
+	}
+	if err := fs.Access(fileFQN); err != nil {
+		glog.Warningf("%s no CT for metadata[%d]: %s", reb.t.Snode(), md.SliceID, fileFQN)
+		return nil
 	}
 
 	// calculate correct FQN
-	var hrwFQN string
 	if isReplica {
 		hrwFQN, _, err = cluster.HrwFQN(ct.Bck(), fs.ObjectType, ct.ObjName())
 	} else {
