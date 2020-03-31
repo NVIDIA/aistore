@@ -147,6 +147,6 @@ func TestDynSemaphore(t *testing.T) {
 	}
 
 	if int(res) != limit {
-		t.Fatalf("acutall limit %d was different than expected %d", res, limit)
+		t.Fatalf("acutal limit %d was different than expected %d", res, limit)
 	}
 }

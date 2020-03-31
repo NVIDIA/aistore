@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/errgroup"
 )
 
 type (
@@ -31,17 +32,16 @@ type (
 		ver  int64
 	}
 	rebArgs struct {
-		id        int64
-		smap      *cluster.Smap
-		config    *cmn.Config
-		paths     fs.MPI
-		ecUsed    bool
-		singleBck bool // rebalance running for a single bucket (e.g. after rename)
+		id     int64
+		smap   *cluster.Smap
+		config *cmn.Config
+		paths  fs.MPI
+		ecUsed bool
 	}
 )
 
-func (reb *Manager) rebPrecheck(md *rebArgs) bool {
-	glog.FastV(4, glog.SmoduleReb).Infof("global reb (v%d) started precheck", md.id)
+func (reb *Manager) rebPreInit(md *rebArgs) bool {
+	glog.FastV(4, glog.SmoduleReb).Infof("global reb (v%d) started pre init", md.id)
 	// 1. check whether other targets are up and running
 	glog.FastV(4, glog.SmoduleReb).Infof("global reb broadcast (v%d)", md.id)
 	if errCnt := reb.bcast(md, reb.pingTarget); errCnt > 0 {
@@ -65,21 +65,17 @@ func (reb *Manager) rebPrecheck(md *rebArgs) bool {
 	return true
 }
 
-func (reb *Manager) rebInit(md *rebArgs, buckets ...string) bool {
-	/* ================== rebStageInit ================== */
+func (reb *Manager) rebInit(md *rebArgs) bool {
 	reb.stages.stage.Store(rebStageInit)
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("rebalance (v%d) in %s state", md.id, stages[rebStageInit])
 	}
-	// It the only place that modifies `reb.xreb`. Since only single rebalance
-	// can be active at a time, we have to protect `xreb` from races just
-	// because `xreb` can be read by another goroutine: it is node health
-	// handler that reads `RebStatus`. Using atomic pointer reads for only
-	// two places looked overhead, so a separate mutex is used.
+
 	xact := xaction.Registry.RenewRebalance(md.id, reb.statRunner)
 	if xact == nil {
 		return false
 	}
+
 	// get EC rebalancer ready
 	if md.ecUsed {
 		reb.cleanupEC()
@@ -88,10 +84,6 @@ func (reb *Manager) rebInit(md *rebArgs, buckets ...string) bool {
 
 	reb.setXact(xact)
 	defer reb.xact().MarkDone()
-
-	if len(buckets) > 0 {
-		reb.xact().SetBucket(buckets[0]) // for better identity (limited usage)
-	}
 
 	// 3. init streams and data structures
 	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))
@@ -113,7 +105,6 @@ func (reb *Manager) rebInit(md *rebArgs, buckets ...string) bool {
 	reb.rebID.Store(md.id)
 	reb.stages.cleanup()
 	glog.Infof("%s: %s", reb.logHdr(md), reb.xact().String())
-
 	return true
 }
 
@@ -215,20 +206,17 @@ func (reb *Manager) rebalanceRunEC(md *rebArgs) error {
 // when no bucket has EC enabled
 func (reb *Manager) rebalanceRun(md *rebArgs) error {
 	var (
-		wg         = &sync.WaitGroup{}
 		ver        = md.smap.Version
 		multiplier = md.config.Rebalance.Multiplier
-		cfg        = cmn.GCO.Get()
 	)
 	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
 	if reb.xact().Aborted() {
 		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
 	}
+
+	wg := &sync.WaitGroup{}
 	for _, mpathInfo := range md.paths {
-		var (
-			sema *cmn.DynSemaphore
-			bck  = cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-		)
+		var sema *cmn.DynSemaphore
 		if multiplier > 1 {
 			sema = cmn.NewDynSemaphore(int(multiplier))
 		}
@@ -237,26 +225,10 @@ func (reb *Manager) rebalanceRun(md *rebArgs) error {
 			smap:       md.smap, sema: sema, ver: ver,
 		}
 		wg.Add(1)
-		go rl.jog(mpathInfo, bck)
-	}
-	if cfg.Cloud.Supported {
-		for _, mpathInfo := range md.paths {
-			var (
-				sema *cmn.DynSemaphore
-				bck  = cmn.Bck{Provider: cfg.Cloud.Provider, Ns: cfg.Cloud.Ns}
-			)
-			if multiplier > 1 {
-				sema = cmn.NewDynSemaphore(int(multiplier))
-			}
-			rc := &rebalanceJogger{
-				joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase, wg: wg},
-				smap:       md.smap, sema: sema, ver: ver,
-			}
-			wg.Add(1)
-			go rc.jog(mpathInfo, bck)
-		}
+		go rl.jog(mpathInfo)
 	}
 	wg.Wait()
+
 	if reb.xact().Aborted() {
 		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
 	}
@@ -280,38 +252,18 @@ func (reb *Manager) rebSyncAndRun(md *rebArgs) error {
 		glog.Infof("starting only regular rebalance (g%d)", md.id)
 		return reb.rebalanceRun(md)
 	}
-	// Single bucket is rebalancing and it is a bucket with EC enabled.
-	// Run only EC rebalance.
-	if md.singleBck {
-		glog.Infof("starting only EC rebalance (g%d) for a bucket", md.id)
-		return reb.rebalanceRunEC(md)
-	}
 
 	// In all other cases run both rebalances simultaneously
-	var rebErr, ecRebErr error
-	wg := &sync.WaitGroup{}
-	ecMD := *md
-	glog.Infof("starting regular rebalance (g%d)", md.id)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		md.ecUsed = false
-		rebErr = reb.rebalanceRun(md)
-	}()
-
-	wg.Add(1)
-	glog.Infof("EC detected - starting EC rebalance (g%d)", md.id)
-	go func() {
-		defer wg.Done()
-		ecRebErr = reb.rebalanceRunEC(&ecMD)
-	}()
-	wg.Wait()
-
-	// Return the first encountered error
-	if rebErr != nil {
-		return rebErr
-	}
-	return ecRebErr
+	group := &errgroup.Group{}
+	group.Go(func() error {
+		glog.Infof("starting regular rebalance (g%d)", md.id)
+		return reb.rebalanceRun(md)
+	})
+	group.Go(func() error {
+		glog.Infof("EC detected - starting EC rebalance (g%d)", md.id)
+		return reb.rebalanceRunEC(md)
+	})
+	return group.Wait()
 }
 
 func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
@@ -497,30 +449,18 @@ func (reb *Manager) rebFini(md *rebArgs) {
 // 4. Regular rebalance do checks like `stage > rebStageTraverse` or
 //    `stage < rebStageWaitAck`. But since all EC stages are between
 //    `Traverse` and `WaitAck` regular rebalance does not notice stage changes.
-func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, buckets ...string) {
+func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64) {
 	md := &rebArgs{
-		id:        id,
-		smap:      smap,
-		config:    cmn.GCO.Get(),
-		singleBck: len(buckets) == 1,
-	}
-	if len(buckets) == 0 || buckets[0] == "" {
-		md.ecUsed = reb.t.GetBowner().Get().IsECUsed()
-	} else {
-		// single bucket rebalance is AIS case only
-		bck := cluster.NewBck(buckets[0], cmn.ProviderAIS, cmn.NsGlobal)
-		props, ok := reb.t.GetBowner().Get().Get(bck)
-		if !ok {
-			glog.Errorf("Bucket %q not found", bck.Name)
-			return
-		}
-		md.ecUsed = props.EC.Enabled
+		id:     id,
+		smap:   smap,
+		config: cmn.GCO.Get(),
+		ecUsed: reb.t.GetBowner().Get().IsECUsed(),
 	}
 
-	if !reb.rebPrecheck(md) {
+	if !reb.rebPreInit(md) {
 		return
 	}
-	if !reb.rebInit(md, buckets...) {
+	if !reb.rebInit(md) {
 		return
 	}
 
@@ -570,33 +510,35 @@ func (reb *Manager) RebECDataStatus() (body []byte, status int) {
 // rebalanceJogger
 //
 
-func (rj *rebalanceJogger) jog(mpathInfo *fs.MountpathInfo, bck cmn.Bck) {
+func (rj *rebalanceJogger) jog(mpathInfo *fs.MountpathInfo) {
 	// the jogger is running in separate goroutine, so use defer to be
 	// sure that `Done` is called even if the jogger crashes to avoid hang up
 	defer rj.wg.Done()
+
 	opts := &fs.Options{
 		Mpath:    mpathInfo,
-		Bck:      bck,
-		CTs:      []string{fs.ObjectType}, // TODO: handle rebalance for other content-type
+		CTs:      []string{fs.ObjectType},
 		Callback: rj.walk,
 		Sorted:   false,
 	}
-	if err := fs.Walk(opts); err != nil {
-		if rj.xreb.Aborted() || rj.xreb.Finished() {
-			glog.Infof("aborting traversal")
-		} else {
-			glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode(), err)
+	rj.m.t.GetBowner().Get().Range(nil, nil, func(bck *cluster.Bck) bool {
+		opts.ErrCallback = nil
+		opts.Bck = bck.Bck
+		if err := fs.Walk(opts); err != nil {
+			if rj.xreb.Aborted() {
+				glog.Infof("aborting traversal")
+			} else {
+				glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode(), err)
+			}
+			return true
 		}
-	}
+		return rj.m.xact().Aborted()
+	})
 
 	if rj.sema != nil {
 		// Make sure that all sends have finished by acquiring all semaphores.
-		for i := 0; i < rj.sema.Size(); i++ {
-			rj.sema.Acquire()
-		}
-		for i := 0; i < rj.sema.Size(); i++ {
-			rj.sema.Release()
-		}
+		rj.sema.Acquire(rj.sema.Size())
+		rj.sema.Release(rj.sema.Size())
 	}
 }
 

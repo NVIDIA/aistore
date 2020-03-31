@@ -149,26 +149,35 @@ func (s *DynSemaphore) SetSize(n int) {
 	s.mu.Unlock()
 }
 
-func (s *DynSemaphore) Acquire() {
+func (s *DynSemaphore) Acquire(cnts ...int) {
+	var cnt = 1
+	if len(cnts) > 0 {
+		cnt = cnts[0]
+	}
 	s.mu.Lock()
-	if s.cur < s.size {
-		s.cur++
+check:
+	if s.cur+cnt <= s.size {
+		s.cur += cnt
 		s.mu.Unlock()
 		return
 	}
 
-	// Wait for vacant place
+	// Wait for vacant place(s)
 	s.c.Wait()
-	s.cur++
-	s.mu.Unlock()
+	goto check
 }
 
-func (s *DynSemaphore) Release() {
+func (s *DynSemaphore) Release(cnts ...int) {
+	var cnt = 1
+	if len(cnts) > 0 {
+		cnt = cnts[0]
+	}
+
 	s.mu.Lock()
 
-	Assert(s.cur >= 1)
+	Assert(s.cur >= cnt)
 
-	s.cur--
+	s.cur -= cnt
 	s.c.Signal()
 	s.mu.Unlock()
 }

@@ -78,6 +78,6 @@ type RebalanceInfo struct {
 }
 
 type RebManager interface {
-	RunResilver(id string, skipMisplaced bool, bucket ...string)
-	RunRebalance(smap *Smap, rebID int64, bucket ...string)
+	RunResilver(id string, skipMisplaced bool)
+	RunRebalance(smap *Smap, rebID int64)
 }
