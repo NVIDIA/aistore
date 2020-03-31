@@ -51,28 +51,49 @@ type ecOptions struct {
 	objCount    int
 	dataCnt     int
 	parityCnt   int
+	minTgt      int
 	pattern     string
 	sema        *cmn.DynSemaphore
 	silent      bool
 	rnd         *rand.Rand
+	smap        *cluster.Smap
 }
 
-func (o ecOptions) init() *ecOptions {
+// Intializes the EC options, validatas the number of targets.
+// If initial dataCnt value is negative, it sets the number of data and
+// parity slices to maximum possible for the cluster.
+func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
+	o.smap = tutils.GetClusterMap(t, proxyURL)
+	if o.smap.CountTargets() <= o.minTgt {
+		t.Fatalf("insufficient number of targets. Required at least %d targets", o.minTgt)
+	}
 	if o.concurrency > 0 {
 		o.sema = cmn.NewDynSemaphore(o.concurrency)
 	}
 	o.seed = time.Now().UnixNano()
 	o.rnd = rand.New(rand.NewSource(o.seed))
+	if o.dataCnt < 0 {
+		total := o.smap.CountTargets() - 2
+		o.parityCnt = total / 2
+		o.dataCnt = total - o.parityCnt
+	}
 	return &o
 }
 func (o *ecOptions) sliceTotal() int {
 	return o.dataCnt + o.parityCnt
 }
 
-// var (
-// 	ecDataSliceCnt   = 2
-// 	ecParitySliceCnt = 2
-// )
+type ecTest struct {
+	name   string
+	data   int
+	parity int
+}
+
+var ecTests = []ecTest{
+	{"EC 1:1", 1, 1},
+	{"EC 1:2", 1, 2},
+	{"EC 2:2", 2, 2},
+}
 
 func defaultECBckProps(o *ecOptions) cmn.BucketPropsToUpdate {
 	return cmn.BucketPropsToUpdate{
@@ -84,32 +105,6 @@ func defaultECBckProps(o *ecOptions) cmn.BucketPropsToUpdate {
 			ParitySlices: api.Int(o.parityCnt),
 		},
 	}
-}
-
-func ecSliceNumInit(t *testing.T, smap *cluster.Smap, o *ecOptions, silent ...bool) error {
-	var tCnt = smap.CountTargets()
-	if tCnt < 4 {
-		return fmt.Errorf("%s requires at least 4 targets", t.Name())
-	}
-	defer func() {
-		if len(silent) == 0 || !silent[0] {
-			tutils.Logf("Running EC %d:%d based on the number of ais targets %d\n", o.dataCnt, o.parityCnt, tCnt)
-		}
-	}()
-
-	if tCnt == 4 {
-		o.dataCnt = 1
-		o.parityCnt = 1
-		return nil
-	}
-	if tCnt == 5 {
-		o.dataCnt = 1
-		o.parityCnt = 2
-		return nil
-	}
-	o.dataCnt = 2
-	o.parityCnt = 2
-	return nil
 }
 
 // Since all replicas are identical, it is difficult to differentiate main one from others.
@@ -868,42 +863,41 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 	)
 
 	o := ecOptions{
+		minTgt:      3,
 		objCount:    100,
 		concurrency: 8,
 		pattern:     "obj-rest-cloud-%04d",
-	}.init()
+	}.init(t, proxyURL)
 
 	if !isCloudBucket(t, proxyURL, bck) {
 		t.Skip("test requires a cloud bucket")
 	}
 
-	smap := tutils.GetClusterMap(t, proxyURL)
-	err := ecSliceNumInit(t, smap, o)
-	tassert.CheckFatal(t, err)
+	for _, test := range ecTests {
+		t.Run(test.name, func(t *testing.T) {
+			if o.smap.CountTargets() <= test.parity+test.data {
+				t.Skip("insufficient number of targets")
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			setBucketECProps(t, baseParams, bck, defaultECBckProps(o))
+			defer api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+				EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+			})
 
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
+			wg := sync.WaitGroup{}
 
-	setBucketECProps(t, baseParams, bck, defaultECBckProps(o))
-	defer api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
-		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
-	})
-
-	wg := sync.WaitGroup{}
-
-	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
-		go func(i int) {
-			defer wg.Done()
-			createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
-		}(i)
-	}
-	wg.Wait()
-	defer clearAllECObjects(t, bck, true, o)
-
-	if t.Failed() {
-		t.FailNow()
+			wg.Add(o.objCount)
+			for i := 0; i < o.objCount; i++ {
+				objName := fmt.Sprintf(o.pattern, i)
+				go func(i int) {
+					defer wg.Done()
+					createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
+				}(i)
+			}
+			wg.Wait()
+			defer clearAllECObjects(t, bck, true, o)
+		})
 	}
 }
 
@@ -924,38 +918,34 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	)
 
 	o := ecOptions{
+		minTgt:      3,
 		objCount:    50,
 		concurrency: 8,
 		pattern:     "obj-rest-%04d",
-	}.init()
+	}.init(t, proxyURL)
 
-	smap := tutils.GetClusterMap(t, proxyURL)
-	err := ecSliceNumInit(t, smap, o)
-	tassert.CheckFatal(t, err)
+	for _, test := range ecTests {
+		t.Run(test.name, func(t *testing.T) {
+			if o.smap.CountTargets() <= test.parity+test.data {
+				t.Skip("insufficient number of targets")
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+			defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
-
-	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
-
-	wg := sync.WaitGroup{}
-
-	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
-		go func(objName string, i int) {
-			defer wg.Done()
-			createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
-		}(fmt.Sprintf(o.pattern, i), i)
+			wg := sync.WaitGroup{}
+			wg.Add(o.objCount)
+			for i := 0; i < o.objCount; i++ {
+				go func(objName string, i int) {
+					defer wg.Done()
+					createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
+				}(fmt.Sprintf(o.pattern, i), i)
+			}
+			wg.Wait()
+			assertBucketSize(t, baseParams, bck, o.objCount)
+		})
 	}
-	wg.Wait()
-
-	if t.Failed() {
-		t.FailNow()
-	}
-
-	assertBucketSize(t, baseParams, bck, o.objCount)
-	clearAllECObjects(t, bck, true, o)
 }
 
 func putECFile(baseParams api.BaseParams, bck cmn.Bck, objName string) error {
@@ -1007,15 +997,11 @@ func TestECChecksum(t *testing.T) {
 	)
 
 	o := ecOptions{
-		pattern: "obj-cksum-%04d",
-	}.init()
-
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
-
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
-
+		minTgt:    3,
+		dataCnt:   1,
+		parityCnt: 1,
+		pattern:   "obj-cksum-%04d",
+	}.init(t, proxyURL)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1078,16 +1064,13 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	)
 
 	o := ecOptions{
+		minTgt:      3,
+		dataCnt:     1,
+		parityCnt:   1,
 		objCount:    25,
 		concurrency: 8,
 		pattern:     "obj-rest-%04d",
-	}.init()
-
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
-
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
+	}.init(t, proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -1172,16 +1155,13 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	)
 
 	o := ecOptions{
+		minTgt:      3,
+		dataCnt:     1,
+		parityCnt:   1,
 		objCount:    5,
 		concurrency: 8,
 		pattern:     "obj-disable-enable-load-%04d",
-	}.init()
-
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
-
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
+	}.init(t, proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -1312,34 +1292,39 @@ func TestECStress(t *testing.T) {
 			Name:     TestBucketName + "-ec-stress",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
+		minTgt:      3,
 		objCount:    400,
 		concurrency: 12,
 		pattern:     "obj-stress-%04d",
-	}.init()
+	}.init(t, proxyURL)
 
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
+	for _, test := range ecTests {
+		t.Run(test.name, func(t *testing.T) {
+			if o.smap.CountTargets() <= test.data+test.parity {
+				t.Skip("insufficient taregts")
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
+			defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+			doECPutsAndCheck(t, baseParams, bck, o)
 
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+			var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
+			reslist, err := api.ListBucket(baseParams, bck, msg, 0)
+			tassert.CheckFatal(t, err)
+			reslist.Entries = filterObjListOK(reslist.Entries)
 
-	doECPutsAndCheck(t, baseParams, bck, o)
-
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
-	reslist, err := api.ListBucket(baseParams, bck, msg, 0)
-	tassert.CheckFatal(t, err)
-	reslist.Entries = filterObjListOK(reslist.Entries)
-
-	tassert.Fatalf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
+			tassert.Fatalf(t, len(reslist.Entries) == o.objCount,
+				"Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
+		})
+	}
 }
 
 // Stress 2 buckets at the same time
@@ -1361,22 +1346,21 @@ func TestECStressManyBuckets(t *testing.T) {
 	)
 
 	o1 := ecOptions{
+		minTgt:      3,
+		parityCnt:   1,
+		dataCnt:     1,
 		objCount:    200,
 		concurrency: 12,
 		pattern:     "obj-stress-manybck-%04d",
-	}.init()
+	}.init(t, proxyURL)
 	o2 := ecOptions{
+		minTgt:      3,
+		parityCnt:   1,
+		dataCnt:     1,
 		objCount:    200,
 		concurrency: 12,
 		pattern:     "obj-stress-manybck-%04d",
-	}.init()
-
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o1))
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o2))
-
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
+	}.init(t, proxyURL)
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	newLocalBckWithProps(t, baseParams, bck1, defaultECBckProps(o1), o1)
@@ -1433,24 +1417,38 @@ func TestECExtraStress(t *testing.T) {
 			Name:     TestBucketName + "-extrastress",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL    = tutils.GetPrimaryURL()
-		waitAllTime = time.Minute * 4 // should be enough for all object to complete EC
-		totalSlices atomic.Int64
+		proxyURL = tutils.GetPrimaryURL()
 	)
 
 	o := ecOptions{
+		minTgt:      3,
 		objCount:    400,
 		concurrency: 12,
 		pattern:     objStart + "%04d",
-	}.init()
+	}.init(t, proxyURL)
 
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
+	for _, test := range ecTests {
+		t.Run(test.name, func(t *testing.T) {
+			if o.smap.CountTargets() <= test.data+test.parity {
+				t.Skip("insufficient taregts")
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			ecStressCore(t, o, proxyURL, bck)
+		})
+	}
+}
 
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
-
-	baseParams := tutils.BaseAPIParams(proxyURL)
+func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
+	const (
+		objStart   = "obj-extra-"
+		smallEvery = 7
+	)
+	var (
+		waitAllTime = time.Minute * 4 // should be enough for all object to complete EC
+		totalSlices atomic.Int64
+		baseParams  = tutils.BaseAPIParams(proxyURL)
+	)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -1531,11 +1529,10 @@ func TestECExtraStress(t *testing.T) {
 
 // Quick check that EC keeps xattrs:
 // - enable EC and versioning for the bucket
-// - put/damage/restore one by one a few object two times to increase their versions
+// - put/damage/restore one by one a few objects two times to increase their versions
 // - get the list of the objects at the end and check that they all have the correct versions
 func TestECXattrs(t *testing.T) {
 	const (
-		sliceDelPct      = 50              // %% of objects that have damaged body and a slice
 		sleepRestoreTime = time.Second * 5 // wait time after GET restores slices
 		finalVersion     = "2"
 		smallEvery       = 4
@@ -1554,16 +1551,13 @@ func TestECXattrs(t *testing.T) {
 	)
 
 	o := ecOptions{
+		minTgt:      3,
+		dataCnt:     1,
+		parityCnt:   1,
 		objCount:    30,
 		concurrency: 8,
 		pattern:     "obj-xattr-%04d",
-	}.init()
-
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
-
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
+	}.init(t, proxyURL)
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
@@ -1575,22 +1569,11 @@ func TestECXattrs(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	oneObj := func(idx int, objName string) {
-		delSlice := false // delete only main object
-		deletedFiles := 1
-		if o.sliceTotal() > 2 && o.rnd.Intn(100) < sliceDelPct {
-			// delete a random slice, too
-			delSlice = true
-			deletedFiles = 2
-		}
-
 		totalCnt, objSize, sliceSize, doEC := randObjectSize(idx, smallEvery, o)
 		objPath := ecTestDir + objName
 		ecStr, delStr := "-", "obj"
 		if doEC {
 			ecStr = "EC"
-		}
-		if delSlice {
-			delStr = fmt.Sprintf("obj+slice [%d]", deletedFiles)
 		}
 		tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 		r, err := tutils.NewRandReader(objSize, false)
@@ -1616,40 +1599,10 @@ func TestECXattrs(t *testing.T) {
 		metafile := ct.Make(ec.MetaType)
 		tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
 		tassert.CheckFatal(t, os.Remove(metafile))
-		if delSlice {
-			sliceToDel := ""
-			for k := range foundParts {
-				ct, err := cluster.NewCTFromFQN(k, nil)
-				tassert.CheckFatal(t, err)
-
-				if k != mainObjPath && ct.ContentType() == ec.SliceType && doEC {
-					sliceToDel = k
-					break
-				} else if k != mainObjPath && ct.ContentType() == fs.ObjectType && !doEC {
-					sliceToDel = k
-					break
-				}
-			}
-			if sliceToDel == "" {
-				t.Fatalf("Failed to select random slice for %s", objName)
-			}
-			tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
-			tassert.CheckFatal(t, os.Remove(sliceToDel))
-
-			ct, err := cluster.NewCTFromFQN(sliceToDel, nil)
-			tassert.CheckFatal(t, err)
-			metafile := ct.Make(ec.MetaType)
-			if doEC {
-				tutils.Logf("Removing slice meta %s\n", metafile)
-			} else {
-				tutils.Logf("Removing replica meta %s\n", metafile)
-			}
-			tassert.CheckFatal(t, os.Remove(metafile))
-		}
 
 		partsAfterRemove, _ := ecGetAllSlices(t, bck, objName)
 		_, ok := partsAfterRemove[mainObjPath]
-		if ok || len(partsAfterRemove) != len(foundParts)-deletedFiles*2 {
+		if ok || len(partsAfterRemove) != len(foundParts)-2 {
 			t.Fatalf("Files are not deleted [%d - %d]: %#v", len(foundParts), len(partsAfterRemove), partsAfterRemove)
 		}
 
@@ -1694,8 +1647,6 @@ func TestECXattrs(t *testing.T) {
 	if len(reslist.Entries) != o.objCount {
 		t.Fatalf("Invalid number of objects: %d, expected %d", len(reslist.Entries), 1)
 	}
-
-	clearAllECObjects(t, bck, true, o)
 }
 
 // 1. start putting EC files into the cluster
@@ -1713,22 +1664,19 @@ func TestECDestroyBucket(t *testing.T) {
 			Name:     TestBucketName + "-DESTROY",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
+		minTgt:      3,
+		dataCnt:     1,
+		parityCnt:   1,
 		objCount:    100,
 		concurrency: 10,
 		pattern:     "obj-destroy-bck-%04d",
-	}.init()
+	}.init(t, proxyURL)
 
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
-
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
-
-	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)
 
@@ -1815,13 +1763,12 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	)
 
 	o := ecOptions{
+		minTgt:      4,
+		dataCnt:     -1,
 		objCount:    100,
 		concurrency: 12,
 		pattern:     "obj-emt-%04d",
-	}.init()
-
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
+	}.init(t, proxyURL)
 
 	// Increase number of EC data slices, now there's just enough targets to handle EC requests
 	// Encoding will fail if even one is missing, restoring should still work
@@ -1881,7 +1828,10 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	}
 
 	// 2. Kill a random target
-	var removedTarget *cluster.Snode
+	var (
+		removedTarget *cluster.Snode
+		smap          = o.smap
+	)
 	smap, removedTarget = tutils.RemoveTarget(t, proxyURL, smap)
 
 	defer func() {
@@ -1916,31 +1866,26 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	)
 
 	o := ecOptions{
+		minTgt:      4,
+		dataCnt:     -1,
 		objCount:    50,
 		concurrency: 8,
 		pattern:     "obj-rest-%04d",
-	}.init()
+	}.init(t, proxyURL)
 
-	initialSmap := tutils.GetClusterMap(t, proxyURL)
-
-	if initialSmap.CountTargets() > 10 {
+	if o.smap.CountTargets() > 10 {
 		// Reason: calculating main obj directory based on DeamonID
 		// see getOneObj, 'HACK' annotation
 		t.Skip("Test requires at most 10 targets")
 	}
 
-	tassert.CheckFatal(t, ecSliceNumInit(t, initialSmap, o))
-
-	for _, target := range initialSmap.Tmap {
+	for _, target := range o.smap.Tmap {
 		target.Digest()
 	}
 
 	// Increase number of EC data slices, now there's just enough targets to handle EC requests
 	// Encoding will fail if even one is missing, restoring should still work
 	o.dataCnt++
-
-	sgl := tutils.MMSA.NewSGL(0)
-	defer sgl.Free()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
@@ -1998,7 +1943,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 		// 1) hack: calculate which targets stored a replica
 		cbck := cluster.NewBck(bck.Name, bck.Provider, cmn.NsGlobal)
-		targets, err := cluster.HrwTargetList(cbck.MakeUname(ecTestDir+objName), initialSmap, o.parityCnt+1)
+		targets, err := cluster.HrwTargetList(cbck.MakeUname(ecTestDir+objName), o.smap, o.parityCnt+1)
 		tassert.CheckFatal(t, err)
 
 		mainTarget := targets[0]
@@ -2068,15 +2013,15 @@ func TestECEmergencyMpath(t *testing.T) {
 	)
 
 	o := ecOptions{
+		minTgt:      3,
+		dataCnt:     1,
+		parityCnt:   1,
 		objCount:    400,
 		concurrency: 24,
 		pattern:     "obj-em-mpath-%04d",
-	}.init()
+	}.init(t, proxyURL)
 
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tassert.CheckFatal(t, ecSliceNumInit(t, smap, o))
-
-	removeTarget := tutils.ExtractTargetNodes(smap)[0]
+	removeTarget := tutils.ExtractTargetNodes(o.smap)[0]
 	mpathList, err := api.GetMountpaths(baseParams, removeTarget)
 	tassert.CheckFatal(t, err)
 	if len(mpathList.Available) < 2 {
@@ -2209,9 +2154,6 @@ func moveAllFiles(t *testing.T, pathFrom, pathTo string) {
 	filepath.Walk(pathFrom, walkMove)
 }
 
-// The test only checks that the number of object after rebalance equals
-// the number of objects before it
-// TODO: add reading objects
 func TestECRebalance(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
@@ -2225,30 +2167,38 @@ func TestECRebalance(t *testing.T) {
 			Name:     TestBucketName + "-ec-rebalance",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL = tutils.GetPrimaryURL()
 	)
 	o := ecOptions{
 		objCount:    30,
 		concurrency: 8,
 		pattern:     "obj-reb-chk-%04d",
-		dataCnt:     1,
-		parityCnt:   2,
 		silent:      true,
-	}.init()
-	smap := tutils.GetClusterMap(t, proxyURL)
+	}.init(t, proxyURL)
 
-	err := ecSliceNumInit(t, smap, o)
-	tassert.CheckFatal(t, err)
-	if len(smap.Tmap) < 4 {
-		t.Skip(fmt.Sprintf("%q: have %d target(s), need at least 4", t.Name(), len(smap.Tmap)))
+	for _, test := range ecTests {
+		t.Run(test.name, func(t *testing.T) {
+			if o.smap.CountTargets() <= test.parity+test.data {
+				t.Skip("insufficient number of targets")
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			ecOnlyRebalance(t, o, proxyURL, bck)
+		})
 	}
+}
+
+// The test only checks that the number of object after rebalance equals
+// the number of objects before it
+func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
+	var (
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	wg := sync.WaitGroup{}
-
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
 		objName := fmt.Sprintf(o.pattern, i)
@@ -2271,7 +2221,7 @@ func TestECRebalance(t *testing.T) {
 
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
-	tgtList := tutils.ExtractTargetNodes(smap)
+	tgtList := tutils.ExtractTargetNodes(o.smap)
 	tgtLost, tgtSwap := tgtList[0], tgtList[1]
 
 	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
@@ -2309,7 +2259,10 @@ func TestECRebalance(t *testing.T) {
 	moveAllFiles(t, swapPathObj2, swapPathObj1)
 
 	// Kill a random target
-	var removedTarget *cluster.Snode
+	var (
+		removedTarget *cluster.Snode
+		smap          = o.smap
+	)
 	smap, removedTarget = tutils.RemoveTarget(t, proxyURL, smap)
 	// Initiate rebalance
 	tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
@@ -2380,7 +2333,6 @@ func TestECBucketEncode(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, m.bck)
 
 	m.puts()
-
 	if t.Failed() {
 		t.FailNow()
 	}
@@ -2479,9 +2431,6 @@ func TestECAndRegularRebalance(t *testing.T) {
 		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
 	}
 
-	const (
-		fileSize = 32 * cmn.KiB
-	)
 	var (
 		bckReg = cmn.Bck{
 			Name:     TestBucketName + "-REG",
@@ -2491,24 +2440,35 @@ func TestECAndRegularRebalance(t *testing.T) {
 			Name:     TestBucketName + "-EC",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL = tutils.GetPrimaryURL()
 	)
 	o := ecOptions{
+		minTgt:      4,
 		objCount:    90,
 		concurrency: 8,
 		pattern:     "obj-reb-chk-%04d",
-		dataCnt:     1,
-		parityCnt:   2,
 		silent:      true,
-	}.init()
+	}.init(t, proxyURL)
 
-	smap := tutils.GetClusterMap(t, proxyURL)
-	err := ecSliceNumInit(t, smap, o)
-	tassert.CheckFatal(t, err)
-	if len(smap.Tmap) < 4 {
-		t.Skip(fmt.Sprintf("%q requires at least 4 targets to have parity>=2, found %d", t.Name(), len(smap.Tmap)))
+	for _, test := range ecTests {
+		t.Run(test.name, func(t *testing.T) {
+			if o.smap.CountTargets() <= test.parity+test.data+1 {
+				t.Skip("insufficient number of targets")
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			ecAndRegularRebalance(t, o, proxyURL, bckReg, bckEC)
+		})
 	}
+}
+
+func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, bckEC cmn.Bck) {
+	const (
+		fileSize = 32 * cmn.KiB
+	)
+	var (
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckReg)
 	defer tutils.DestroyBucket(t, proxyURL, bckReg)
@@ -2517,14 +2477,14 @@ func TestECAndRegularRebalance(t *testing.T) {
 
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
-	tgtList := tutils.ExtractTargetNodes(smap)
+	tgtList := tutils.ExtractTargetNodes(o.smap)
 	tgtLost := tgtList[0]
 
 	tutils.Logf("Unregistering %s...\n", tgtLost.ID())
-	err = tutils.UnregisterNode(proxyURL, tgtLost.ID())
+	err := tutils.UnregisterNode(proxyURL, tgtLost.ID())
 	tassert.CheckFatal(t, err)
 	registered := false
-	smap = tutils.GetClusterMap(t, proxyURL)
+	smap := tutils.GetClusterMap(t, proxyURL)
 	defer func() {
 		if !registered {
 			err = tutils.RegisterNode(proxyURL, tgtLost, smap)
@@ -2602,7 +2562,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 // 2. Remove mpath from one target
 // 3. Creates enough objects to have at least one per mpath
 //    So, minimal is <target count>*<mpath count>*2.
-//    For tests 150 looks good
+//    For tests 100 looks good
 // 4. Attach removed mpath
 // 5. Wait for rebalance to finish
 // 6. Check that all objects returns the non-zero number of Data and Parity
@@ -2618,26 +2578,36 @@ func TestECResilver(t *testing.T) {
 			Name:     TestBucketName + "-ec-resilver",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL = tutils.GetPrimaryURL()
 	)
 	o := ecOptions{
-		objCount:    150,
+		objCount:    100,
 		concurrency: 8,
 		pattern:     "obj-reb-loc-%04d",
-		dataCnt:     1,
-		parityCnt:   2,
 		silent:      true,
-	}.init()
+	}.init(t, proxyURL)
 
-	smap := tutils.GetClusterMap(t, proxyURL)
-	err := ecSliceNumInit(t, smap, o)
-	tassert.CheckFatal(t, err)
+	for _, test := range ecTests {
+		t.Run(test.name, func(t *testing.T) {
+			if o.smap.CountTargets() <= test.parity+test.data {
+				t.Skip("insufficient number of targets")
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			ecResilver(t, o, proxyURL, bck)
+		})
+	}
+}
+
+func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
+	var (
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tgtList := tutils.ExtractTargetNodes(smap)
+	tgtList := tutils.ExtractTargetNodes(o.smap)
 	tgtLost := tgtList[0]
 	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
 	tassert.CheckFatal(t, err)
@@ -2701,6 +2671,9 @@ func TestECResilver(t *testing.T) {
 // 8. Stop reading loop and read all objects once more (nothing should fail)
 // 9. Get the number of objects in the bucket (must be the same as at start)
 func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
 	}
@@ -2712,50 +2685,22 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		smap       = tutils.GetClusterMap(t, proxyURL)
-		origOpts   = ecOptions{
+		o          = ecOptions{
+			minTgt:      4,
 			objCount:    300,
 			concurrency: 8,
 			pattern:     "obj-reb-chk-%04d",
-			dataCnt:     1,
-			parityCnt:   2,
 			silent:      true,
-		}
+		}.init(t, proxyURL)
 	)
-	if testing.Short() {
-		// TODO: run origOpts.objCount = 30 once #659 gets cleared
-		t.Skip(tutils.SkipMsg)
-	}
 
-	// run tests
-	var (
-		tests = []struct {
-			name      string
-			parityCnt int
-		}{
-			{
-				name:      "parity=2",
-				parityCnt: 2,
-			},
-			{
-				name:      "parity=1",
-				parityCnt: 1,
-			},
-		}
-	)
-	for _, test := range tests {
+	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			o := origOpts.init()
-			err := ecSliceNumInit(t, smap, o, true /*silent*/)
-			tassert.CheckFatal(t, err)
-
-			if test.parityCnt == 1 && o.parityCnt > 1 {
-				o.parityCnt = 1
-			} else if test.parityCnt == 2 && o.parityCnt == 1 {
-				tutils.Logf("%q requires at least 5 targets (have %d)\n", t.Name(), smap.CountTargets())
-				t.Skip(tutils.SkipMsg)
+			if o.smap.CountTargets() <= test.parity+test.data+1 {
+				t.Skip("insufficient number of targets")
 			}
-			tutils.Logf("Running EC %d:%d\n", o.dataCnt, o.parityCnt)
-
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
 			newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
 			defer tutils.DestroyBucket(t, proxyURL, bckEC)
 			ecAndRegularUnregisterWhileRebalancing(t, o, smap, bckEC)
