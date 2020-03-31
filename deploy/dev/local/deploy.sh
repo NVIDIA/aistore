@@ -146,7 +146,7 @@ echo " 1: Amazon Cloud"
 echo " 2: Google Cloud"
 echo " 3: AIS Cloud - remote cluster"
 echo " 4: Azure Cloud"
-echo "Enter your provider choice (0, 1, 2, 3 or 4):"
+echo "Select cloud provider (0, 1, 2, 3, or 4):"
 read -r cld_provider
 is_number ${cld_provider}
 

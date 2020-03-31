@@ -33,7 +33,7 @@ Value for the `type` field (see above) *must* be provided *every* time the bucke
 Example of setting bucket properties:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"checksum": {"type": "xxhash", "validate_cold_get": true, "validate_warm_get": false, "enable_read_range": false}}}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops", "value": {"checksum": {"type": "xxhash", "validate_cold_get": true, "validate_warm_get": false, "enable_read_range": false}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 ## LRU
@@ -52,14 +52,16 @@ Overriding the global configuration can be achieved by specifying the fields of 
 Example of setting bucket properties:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"checksum":{"type":"none","validate_cold_get":true,"validate_warm_get":true,"enable_read_range":true},"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}}}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops","value":{"checksum":{"type":"none","validate_cold_get":true,"validate_warm_get":true,"enable_read_range":true},"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
-To revert a bucket's entire configuration back to use global parameters, use `"action":"resetprops"` to the same PUT endpoint as above as such:
+To revert bucket's entire configuration back to global (configurable) defaults, use `"action":"resetbprops"` with the same PATCH endpoint, e.g.:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"resetbprops"}' 'http://G/v1/buckets/<bucket-name>'
 ```
+
+In effect, resetting bucket properties is equivalent to populating all properties with the values from the corresponding sections of the [global configuration](/deploy/dev/local/aisnode_config.sh).
 
 ## Erasure coding
 
@@ -90,13 +92,13 @@ Notes:
 Example of setting bucket properties:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}, "ec": {"enabled": true, "data": 4, "parity": 2}}}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops","value":{"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}, "ec": {"enabled": true, "data": 4, "parity": 2}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 To change only one EC property(e.g, enable or disable EC for a bucket) without touching other bucket properties, use the single set property API. Example of disabling EC:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "ec.enabled", "value": false}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops", "name": "ec.enabled", "value": false}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 or using AIS CLI utility:

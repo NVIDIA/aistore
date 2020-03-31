@@ -97,7 +97,8 @@ Select:
  1: Amazon Cloud
  2: Google Cloud
  3: AIS Cloud - remote cluster
-Enter your provider choice (0, 1, 2 or 3):
+ 4: Azure Cloud
+Select cloud provider (0, 1, 2, 3, or 4):
 0
 ```
 

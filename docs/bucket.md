@@ -119,7 +119,7 @@ $ ais set props abc 'access=ro'
 The same expressed via `curl` will look as follows:
 
 ```console
-$ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setprops", "value": {"access": 18446744073709551587}}' http://localhost:8080/v1/buckets/abc
+$ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setbprops", "value": {"access": 18446744073709551587}}' http://localhost:8080/v1/buckets/abc
 ```
 
 > 18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)

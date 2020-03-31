@@ -167,7 +167,8 @@ echo " 0: No cloud provider"
 echo " 1: Amazon Cloud"
 echo " 2: Google Cloud"
 echo " 3: AIS Cloud - remote cluster"
-echo "Enter your provider choice (0, 1, 2 or 3):"
+echo " 4: Azure Cloud"
+echo "Select cloud provider (0, 1, 2, 3, or 4):"
 read cldprovider
 if [ $cldprovider -eq 1 ]; then
     CLDPROVIDER="aws"

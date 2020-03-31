@@ -67,7 +67,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = t.makeNCopies(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-	case cmn.ActSetBprops:
+	case cmn.ActSetBprops, cmn.ActResetBprops:
 		if err = t.setBucketProps(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}

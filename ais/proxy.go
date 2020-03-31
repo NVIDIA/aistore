@@ -268,8 +268,6 @@ func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpbckpost(w, r)
 	case http.MethodHead:
 		p.httpbckhead(w, r)
-	case http.MethodPut:
-		p.httpbckput(w, r)
 	case http.MethodPatch:
 		p.httpbckpatch(w, r)
 	default:
@@ -1143,66 +1141,6 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
-// PUT /v1/buckets/bucket-name
-func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
-	if err != nil {
-		return
-	}
-	bucket := apitems[0]
-	bck, err := newBckFromQuery(bucket, r.URL.Query())
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
-			return
-		}
-	}
-
-	msg := &cmn.ActionMsg{}
-	if err = cmn.ReadJSON(w, r, msg); err != nil {
-		s := fmt.Sprintf("Failed to unmarshal: %v", err)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
-	if err := p.checkAction(msg, cmn.ActResetProps); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if p.forwardCP(w, r, msg, "httpbckput", nil) {
-		return
-	}
-
-	p.owner.bmd.Lock()
-	clone := p.owner.bmd.get().clone()
-	_, exists := clone.Get(bck)
-	if !exists {
-		cmn.Assert(!bck.IsAIS())
-		var (
-			err        error
-			cloudProps http.Header
-		)
-		if cloudProps, err = p.cbExists(bck.Name); err != nil {
-			p.owner.bmd.Unlock()
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		bprops := cmn.CloudBucketProps(cloudProps)
-		clone.add(bck, bprops)
-	} else {
-		bprops := cmn.DefaultBucketProps()
-		clone.set(bck, bprops)
-	}
-	p.owner.bmd.put(clone)
-
-	_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, clone)})
-
-	p.owner.bmd.Unlock()
-}
-
 // PATCH /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -1229,7 +1167,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
-	if err = p.checkAction(msg, cmn.ActSetBprops); err != nil {
+	if err = p.checkAction(msg, cmn.ActSetBprops, cmn.ActResetBprops); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}

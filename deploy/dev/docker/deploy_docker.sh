@@ -292,7 +292,8 @@ if [[ -z $CLOUD ]]; then
     echo " 1: Use AWS"
     echo " 2: Use GCP"
     echo " 3: Use AIS remote cluster"
-    echo "Enter your provider choice (0, 1, 2 or 3):"
+    echo " 4: Azure Cloud"
+    echo "Select cloud provider (0, 1, 2, 3, or 4):"
     read -r CLOUD
     is_number $CLOUD
     if [ $CLOUD -ne 0 ] && [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ] && [ $CLOUD -ne 3]; then

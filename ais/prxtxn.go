@@ -224,8 +224,15 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, props
 	p.owner.bmd.Unlock()
 
 	// 2. begin
-	if nprops, err = p.makeNprops(bck, propsToUpdate); err != nil {
-		return
+	switch msg.Action {
+	case cmn.ActSetBprops:
+		if nprops, err = p.makeNprops(bck, propsToUpdate); err != nil {
+			return
+		}
+	case cmn.ActResetBprops:
+		nprops = cmn.DefaultBucketProps()
+	default:
+		cmn.Assert(false)
 	}
 	// msg{propsToUpdate} => nmsg{nprops} and prep context(nmsg)
 	*nmsg = *msg
@@ -247,10 +254,11 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, props
 	clone := p.owner.bmd.get().clone()
 	bprops, present = clone.Get(bck)
 	cmn.Assert(present)
-	bck.Props = bprops
-	nprops, err = p.makeNprops(bck, propsToUpdate)
-	cmn.AssertNoErr(err)
-
+	if msg.Action == cmn.ActSetBprops {
+		bck.Props = bprops
+		nprops, err = p.makeNprops(bck, propsToUpdate)
+		cmn.AssertNoErr(err)
+	}
 	clone.set(bck, nprops)
 	p.owner.bmd.put(clone)
 

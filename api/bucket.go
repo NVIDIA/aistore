@@ -24,36 +24,27 @@ const (
 // property structure to be set.
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props cmn.BucketPropsToUpdate, query ...url.Values) error {
-	var (
-		b = cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
-		q url.Values
-	)
-	if len(query) > 0 {
-		q = query[0]
-	}
-	q = cmn.AddBckToQuery(q, bck)
-
-	baseParams.Method = http.MethodPatch
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: b, Query: q})
+	b := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
+	return patchBucketProps(baseParams, bck, b, query...)
 }
 
 // ResetBucketProps API
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
 func ResetBucketProps(baseParams BaseParams, bck cmn.Bck, query ...url.Values) error {
-	var (
-		b = cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetProps})
-		q url.Values
-	)
+	b := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetBprops})
+	return patchBucketProps(baseParams, bck, b, query...)
+}
+
+func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...url.Values) error {
+	var q url.Values
 	if len(query) > 0 {
 		q = query[0]
 	}
 	q = cmn.AddBckToQuery(q, bck)
-
-	baseParams.Method = http.MethodPut
+	baseParams.Method = http.MethodPatch
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: b, Query: q})
+	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: body, Query: q})
 }
 
 // HeadBucket API
