@@ -72,6 +72,12 @@ type (
 		Get() cmn.Xact
 		Stats(xact cmn.Xact) stats.XactStats
 	}
+	XactQuery struct {
+		ID         string
+		Kind       string
+		Bck        *cluster.Bck
+		OnlyRecent bool
+	}
 	registry struct {
 		sync.RWMutex
 
@@ -154,12 +160,19 @@ func (r *registry) GetTaskXact(id string) (baseEntry, bool) {
 	return nil, false
 }
 
-func (r *registry) GetLatest(kind string, bckDefault ...*cluster.Bck) (baseEntry, bool) {
-	cmn.AssertMsg(cmn.IsValidXaction(kind), kind)
-	latest := r.latest[kind]
-	if cmn.IsXactTypeBck(kind) {
-		bck := bckDefault[0]
-		if e, exists := latest.Load(bck.MakeUname("")); exists {
+func (r *registry) GetLatest(query XactQuery) (baseEntry, bool) {
+	if query.ID != "" {
+		e, exists := r.byID.Load(cmn.XactBaseID(query.ID))
+		if !exists {
+			return nil, false
+		}
+		return e.(baseEntry), true
+	}
+
+	cmn.AssertMsg(cmn.IsValidXaction(query.Kind), query.Kind)
+	latest := r.latest[query.Kind]
+	if cmn.IsXactTypeBck(query.Kind) {
+		if e, exists := latest.Load(query.Bck.MakeUname("")); exists {
 			return e.(baseEntry), true
 		}
 		return nil, false
@@ -170,10 +183,10 @@ func (r *registry) GetLatest(kind string, bckDefault ...*cluster.Bck) (baseEntry
 		return nil, false
 	}
 	entry := e.(baseEntry)
-	if len(bckDefault) == 0 || bckDefault[0] == nil {
+	if query.Bck == nil {
 		return entry, true
 	}
-	return entry, entry.Get().Bck().Equal(bckDefault[0].Bck)
+	return entry, entry.Get().Bck().Equal(query.Bck.Bck)
 }
 
 // registry - private methods
@@ -245,8 +258,8 @@ func (r *registry) AbortAllMountpathsXactions() {
 	})
 }
 
-func (r *registry) IsXactRunning(kind string, bck ...*cluster.Bck) bool {
-	entry, ok := r.GetLatest(kind, bck...)
+func (r *registry) IsXactRunning(query XactQuery) bool {
+	entry, ok := r.GetLatest(query)
 	if !ok {
 		return false
 	}
@@ -254,7 +267,7 @@ func (r *registry) IsXactRunning(kind string, bck ...*cluster.Bck) bool {
 }
 
 func (r *registry) abortLatest(kind string, bck *cluster.Bck) (aborted bool) {
-	entry, exists := r.GetLatest(kind, bck)
+	entry, exists := r.GetLatest(XactQuery{Kind: kind, Bck: bck})
 	if !exists {
 		return false
 	}
@@ -279,9 +292,13 @@ func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) map[string
 	return sts
 }
 
-func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map[string]stats.XactStats, error) {
-	if bck == nil && kind == "" {
-		if !onlyRecent {
+func (r *registry) GetStats(query XactQuery) (map[string]stats.XactStats, error) {
+	if query.ID != "" {
+		return r.matchingXactsStats(func(xact cmn.Xact) bool {
+			return xact.ID().String() == query.ID
+		}), nil
+	} else if query.Bck == nil && query.Kind == "" {
+		if !query.OnlyRecent {
 			return r.matchingXactsStats(func(_ cmn.Xact) bool { return true }), nil
 		}
 
@@ -296,15 +313,15 @@ func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map
 			})
 		}
 		return matching, nil
-	} else if bck == nil && kind != "" {
-		if !cmn.IsValidXaction(kind) {
-			return nil, cmn.NewXactionNotFoundError(kind)
-		} else if cmn.IsXactTypeBck(kind) {
-			return nil, fmt.Errorf("bucket xaction %q requires bucket", kind)
+	} else if query.Bck == nil && query.Kind != "" {
+		if !cmn.IsValidXaction(query.Kind) {
+			return nil, cmn.NewXactionNotFoundError(query.Kind)
+		} else if cmn.IsXactTypeBck(query.Kind) {
+			return nil, fmt.Errorf("bucket xaction %q requires bucket", query.Kind)
 		}
 
-		if onlyRecent {
-			entry, exists := r.GetLatest(kind)
+		if query.OnlyRecent {
+			entry, exists := r.GetLatest(XactQuery{Kind: query.Kind})
 			if !exists {
 				return map[string]stats.XactStats{}, nil
 			}
@@ -312,17 +329,17 @@ func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map
 			return map[string]stats.XactStats{xact.ID().String(): entry.Stats(xact)}, nil
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return xact.Kind() == kind
+			return xact.Kind() == query.Kind
 		}), nil
-	} else if bck != nil && kind == "" {
-		if !bck.HasProvider() {
-			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", kind, bck.Name)
+	} else if query.Bck != nil && query.Kind == "" {
+		if !query.Bck.HasProvider() {
+			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", query.Kind, query.Bck.Name)
 		}
 
-		if onlyRecent {
+		if query.OnlyRecent {
 			matching := make(map[string]stats.XactStats, 10)
 			for kind := range r.latest {
-				entry, exists := r.GetLatest(kind, bck)
+				entry, exists := r.GetLatest(XactQuery{Kind: kind, Bck: query.Bck})
 				if exists {
 					xact := entry.Get()
 					matching[xact.ID().String()] = entry.Stats(xact)
@@ -331,18 +348,18 @@ func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map
 			return matching, nil
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return cmn.IsXactTypeBck(xact.Kind()) && xact.Bck().Equal(bck.Bck)
+			return cmn.IsXactTypeBck(xact.Kind()) && xact.Bck().Equal(query.Bck.Bck)
 		}), nil
-	} else if bck != nil && kind != "" {
-		if !bck.HasProvider() {
-			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", kind, bck)
-		} else if !cmn.IsValidXaction(kind) {
-			return nil, cmn.NewXactionNotFoundError(kind)
+	} else if query.Bck != nil && query.Kind != "" {
+		if !query.Bck.HasProvider() {
+			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", query.Kind, query.Bck)
+		} else if !cmn.IsValidXaction(query.Kind) {
+			return nil, cmn.NewXactionNotFoundError(query.Kind)
 		}
 
-		if onlyRecent {
+		if query.OnlyRecent {
 			matching := make(map[string]stats.XactStats, 1)
-			entry, exists := r.GetLatest(kind, bck)
+			entry, exists := r.GetLatest(XactQuery{Kind: query.Kind, Bck: query.Bck})
 			if exists {
 				xact := entry.Get()
 				matching[xact.ID().String()] = entry.Stats(xact)
@@ -350,7 +367,7 @@ func (r *registry) GetStats(kind string, bck *cluster.Bck, onlyRecent bool) (map
 			return matching, nil
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return xact.Kind() == kind && xact.Bck().Equal(bck.Bck)
+			return xact.Kind() == query.Kind && xact.Bck().Equal(query.Bck.Bck)
 		}), nil
 	}
 
@@ -440,14 +457,14 @@ func (r *registry) cleanUpFinished() time.Duration {
 		// given kind. If it is we want to keep it anyway.
 		switch cmn.XactType[entry.Kind()] {
 		case cmn.XactTypeGlobal:
-			entry, exists := r.GetLatest(entry.Kind())
+			entry, exists := r.GetLatest(XactQuery{Kind: entry.Kind()})
 			if exists && entry.Get().ID() == eID {
 				return true
 			}
 		case cmn.XactTypeBck:
 			bck := cluster.NewBckEmbed(xact.Bck())
 			cmn.Assert(bck.HasProvider())
-			entry, exists := r.GetLatest(entry.Kind(), bck)
+			entry, exists := r.GetLatest(XactQuery{Kind: entry.Kind(), Bck: bck})
 			if exists && entry.Get().ID() == eID {
 				return true
 			}
@@ -480,7 +497,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 
 func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck) (bucketEntry, error) {
 	r.RLock()
-	if e, exists := r.GetLatest(entry.Kind(), bck); exists {
+	if e, exists := r.GetLatest(XactQuery{Kind: entry.Kind(), Bck: bck}); exists {
 		prevEntry := e.(bucketEntry)
 		if !prevEntry.Get().Finished() {
 			if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
@@ -497,7 +514,7 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck) (buck
 		running   = false
 		prevEntry bucketEntry
 	)
-	if e, exists := r.GetLatest(entry.Kind(), bck); exists {
+	if e, exists := r.GetLatest(XactQuery{Kind: entry.Kind(), Bck: bck}); exists {
 		prevEntry = e.(bucketEntry)
 		if !prevEntry.Get().Finished() {
 			running = true
@@ -519,7 +536,7 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck) (buck
 
 func (r *registry) renewGlobalXaction(id string, entry globalEntry) (globalEntry, bool, error) {
 	r.RLock()
-	if e, exists := r.GetLatest(entry.Kind()); exists {
+	if e, exists := r.GetLatest(XactQuery{Kind: entry.Kind()}); exists {
 		prevEntry := e.(globalEntry)
 		if !prevEntry.Get().Finished() {
 			if entry.preRenewHook(prevEntry) {
@@ -536,7 +553,7 @@ func (r *registry) renewGlobalXaction(id string, entry globalEntry) (globalEntry
 		running   = false
 		prevEntry globalEntry
 	)
-	if e, exists := r.GetLatest(entry.Kind()); exists {
+	if e, exists := r.GetLatest(XactQuery{Kind: entry.Kind()}); exists {
 		prevEntry = e.(globalEntry)
 		if !prevEntry.Get().Finished() {
 			running = true

@@ -109,6 +109,7 @@ func GetXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXa
 	msg := cmn.ActionMsg{
 		Name: args.Kind,
 		Value: cmn.XactionExtMsg{
+			ID:  args.ID,
 			Bck: args.Bck,
 			All: !args.Latest,
 		},

@@ -374,7 +374,7 @@ func (r *FastRen) Run(rmdVersion int64) {
 	var running bool
 	for !running && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Second)
-		rebStats, err := Registry.GetStats(cmn.ActRebalance, nil, false /*onlyRecent*/)
+		rebStats, err := Registry.GetStats(XactQuery{Kind: cmn.ActRebalance})
 		cmn.AssertNoErr(err)
 		for _, stat := range rebStats {
 			rebStats := stat.(*stats.RebalanceTargetStats)
@@ -389,7 +389,7 @@ func (r *FastRen) Run(rmdVersion int64) {
 		for kind, state := range xactState {
 			if !state.finished {
 				state.finished = true
-				rebStats, err := Registry.GetStats(kind, nil, false /*onlyRecent*/)
+				rebStats, err := Registry.GetStats(XactQuery{Kind: kind})
 				cmn.AssertNoErr(err)
 				for _, stat := range rebStats {
 					state.finished = state.finished && stat.Finished()

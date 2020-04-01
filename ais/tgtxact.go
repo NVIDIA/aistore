@@ -40,11 +40,11 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		var (
-			query        = r.URL.Query()
-			what         = query.Get(cmn.URLParamWhat)
-			xactMsg, err = unmarshalXactMsg(msg)
+			query   = r.URL.Query()
+			what    = query.Get(cmn.URLParamWhat)
+			xactMsg cmn.XactionExtMsg
 		)
-		if err != nil {
+		if err := cmn.TryUnmarshal(msg.Value, &xactMsg); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -56,10 +56,10 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		kind, onlyRecent := msg.Name, !xactMsg.All
+		xactQuery := xaction.XactQuery{ID: xactMsg.ID, Kind: msg.Action, Bck: bck, OnlyRecent: !xactMsg.All}
 		switch what {
 		case cmn.GetWhatXactStats:
-			body, err := t.queryXactStats(kind, bck, onlyRecent)
+			body, err := t.queryXactStats(xactQuery)
 			if err != nil {
 				if _, ok := err.(cmn.XactionNotFoundError); ok {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
@@ -70,8 +70,8 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			t.writeJSON(w, r, body, what)
 		case cmn.GetWhatXactRunStatus:
-			running := xaction.Registry.IsXactRunning(kind, bck)
-			status := &cmn.XactRunningStatus{Kind: kind, Running: running}
+			running := xaction.Registry.IsXactRunning(xactQuery)
+			status := &cmn.XactRunningStatus{Kind: xactQuery.Kind, Running: running}
 			if bck != nil {
 				status.Bck = bck.Bck
 			}
@@ -114,22 +114,8 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func unmarshalXactMsg(msg *cmn.ActionMsg) (*cmn.XactionExtMsg, error) {
-	var (
-		xactMsg          = &cmn.XactionExtMsg{}
-		xactMsgJSON, err = jsoniter.Marshal(msg.Value)
-	)
-	if err != nil {
-		return nil, fmt.Errorf("unable to marshal action message: %v. error: %v", msg, err)
-	}
-	if err := jsoniter.Unmarshal(xactMsgJSON, xactMsg); err != nil {
-		return nil, err
-	}
-	return xactMsg, nil
-}
-
-func (t *targetrunner) queryXactStats(kind string, bck *cluster.Bck, onlyRecent bool) ([]byte, error) {
-	xactStatsMap, err := xaction.Registry.GetStats(kind, bck, onlyRecent)
+func (t *targetrunner) queryXactStats(query xaction.XactQuery) ([]byte, error) {
+	xactStatsMap, err := xaction.Registry.GetStats(query)
 	if err != nil {
 		return nil, err
 	}

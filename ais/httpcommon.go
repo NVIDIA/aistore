@@ -885,7 +885,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatBMD:
 		body = cmn.MustMarshal(h.owner.bmd.get())
 	case cmn.GetWhatSmapVote:
-		voteInProgress := xaction.Registry.IsXactRunning(cmn.ActElection)
+		voteInProgress := xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: cmn.ActElection})
 		msg := SmapVoteMsg{VoteInProgress: voteInProgress, Smap: h.owner.smap.get(), BucketMD: h.owner.bmd.get()}
 		body = cmn.MustMarshal(msg)
 	case cmn.GetWhatSnode:

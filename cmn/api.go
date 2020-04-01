@@ -99,6 +99,7 @@ type MountpathList struct {
 
 type XactionExtMsg struct {
 	Target string `json:"target,omitempty"`
+	ID     string `json:"id"`
 	Bck    Bck    `json:"bck"`
 	All    bool   `json:"all,omitempty"`
 }

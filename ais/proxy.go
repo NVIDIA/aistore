@@ -587,7 +587,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
-		vote := xaction.Registry.IsXactRunning(cmn.ActElection)
+		vote := xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: cmn.ActElection})
 		s := fmt.Sprintf("primary %s cannot receive cluster meta (election=%t)", p.si, vote)
 		p.invalmsghdlr(w, r, s)
 		return

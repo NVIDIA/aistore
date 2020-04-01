@@ -292,7 +292,7 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 		}
 
 		// Check current xaction
-		entry, ok := xaction.Registry.GetLatest(cmn.ActRebalance)
+		entry, ok := xaction.Registry.GetLatest(xaction.XactQuery{Kind: cmn.ActRebalance})
 		if !ok {
 			if canRun {
 				return
