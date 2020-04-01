@@ -56,7 +56,7 @@ type Target interface {
 	Cloud() CloudProvider
 	RebalanceInfo() RebalanceInfo
 	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)
-	RunLRU()
+	RunLRU(id string)
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum *cmn.Cksum, started time.Time) error
@@ -78,6 +78,6 @@ type RebalanceInfo struct {
 }
 
 type RebManager interface {
-	RunResilver(skipMisplaced bool, bucket ...string)
+	RunResilver(id string, skipMisplaced bool, bucket ...string)
 	RunRebalance(smap *Smap, rebID int64, bucket ...string)
 }

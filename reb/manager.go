@@ -261,7 +261,6 @@ func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
 
 func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 	var (
-		ver    = md.smap.Version
 		sleep  = md.config.Timeout.CplaneOperation
 		canRun bool
 	)
@@ -305,9 +304,9 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 				cmn.Assert(otherXreb.Finished())
 				return
 			}
-			if otherXreb.SmapVersion < ver && !otherXreb.Finished() {
+			if otherXreb.ID().Int() < md.id && !otherXreb.Finished() {
 				otherXreb.Abort()
-				glog.Warningf("%s: aborting older Smap [%s]", logHdr, otherXreb)
+				glog.Warningf("%s: aborting older [%s]", logHdr, otherXreb)
 			} else {
 				glog.Warningf("%s: latest finished [%s] but cannot start ???", logHdr, otherXreb)
 			}

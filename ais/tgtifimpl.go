@@ -88,12 +88,12 @@ func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cm
 
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
-func (t *targetrunner) RunLRU() {
+func (t *targetrunner) RunLRU(id string) {
 	if t.RebalanceInfo().IsRebalancing {
 		glog.Infoln("Warning: rebalancing (local or global) is in progress, skipping LRU run")
 		return
 	}
-	xlru := xaction.Registry.RenewLRU()
+	xlru := xaction.Registry.RenewLRU(id)
 	if xlru == nil {
 		return
 	}

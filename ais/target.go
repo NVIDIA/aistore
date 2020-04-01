@@ -293,7 +293,7 @@ func (t *targetrunner) Run() error {
 	if aborted {
 		go func() {
 			glog.Infoln("resuming resilver...")
-			t.rebManager.RunResilver(false /*skipGlobMisplaced*/)
+			t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
 		}()
 	}
 

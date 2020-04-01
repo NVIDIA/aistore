@@ -18,6 +18,14 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+type (
+	xactMsg struct {
+		ID   string  `json:"id"`
+		Kind string  `json:"kind"`
+		Bck  cmn.Bck `json:"bck"`
+	}
+)
+
 // TODO: uplift via higher-level query and similar (#668)
 
 // verb /v1/xactions
@@ -73,17 +81,17 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case http.MethodPut:
 		var (
-			bck    *cluster.Bck
-			kind   = msg.Name
-			err    error
-			bucket = msg.Value.(string)
+			xmsg xactMsg
+			bck  *cluster.Bck
 		)
-		if bucket != "" {
-			bck, err = newBckFromQuery(bucket, r.URL.Query())
-			if err != nil {
-				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-				return
-			}
+
+		if err := cmn.TryUnmarshal(msg.Value, &xmsg); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
+		if !xmsg.Bck.IsEmpty() {
+			bck = cluster.NewBckEmbed(xmsg.Bck)
 			if err := bck.Init(t.owner.bmd, t.si); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
@@ -91,17 +99,12 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		switch msg.Action {
 		case cmn.ActXactStart:
-			if kind == cmn.ActRebalance {
-				// see p.httpcluput()
-				t.invalmsghdlr(w, r, "Invalid API request: expecting action="+cmn.ActRebalance)
-				return
-			}
-			if err := t.cmdXactStart(r, kind, bck); err != nil {
+			if err := t.cmdXactStart(r, xmsg, bck); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
 		case cmn.ActXactStop:
-			xaction.Registry.DoAbort(kind, bck)
+			xaction.Registry.DoAbort(xmsg.Kind, bck)
 			return
 		default:
 			t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownAct, msg))
@@ -140,25 +143,25 @@ func (t *targetrunner) queryXactStats(kind string, bck *cluster.Bck, onlyRecent 
 	return jsoniter.Marshal(xactStats)
 }
 
-func (t *targetrunner) cmdXactStart(r *http.Request, kind string, bck *cluster.Bck) error {
+func (t *targetrunner) cmdXactStart(r *http.Request, xmsg xactMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
-	switch kind {
+	switch xmsg.Kind {
 	// 1. globals
 	case cmn.ActLRU:
 		if bck != nil {
-			glog.Errorf(erfmb, kind, bck)
+			glog.Errorf(erfmb, xmsg.Kind, bck)
 		}
-		go t.RunLRU()
+		go t.RunLRU(xmsg.ID)
 	case cmn.ActResilver:
 		if bck != nil {
-			glog.Errorf(erfmb, kind, bck)
+			glog.Errorf(erfmb, xmsg.Kind, bck)
 		}
-		go t.rebManager.RunResilver(false /*skipGlobMisplaced*/)
+		go t.rebManager.RunResilver(xmsg.ID, false /*skipGlobMisplaced*/)
 	// 2. with bucket
 	case cmn.ActPrefetch:
 		if bck == nil {
-			return fmt.Errorf(erfmn, kind)
+			return fmt.Errorf(erfmn, xmsg.Kind)
 		}
 		args := &xaction.DeletePrefetchArgs{
 			Ctx:      t.contextWithAuth(r.Header),
@@ -171,29 +174,29 @@ func (t *targetrunner) cmdXactStart(r *http.Request, kind string, bck *cluster.B
 		go xact.Run(args)
 	case cmn.ActECPut:
 		if bck == nil {
-			return fmt.Errorf(erfmn, kind)
+			return fmt.Errorf(erfmn, xmsg.Kind)
 		}
 		ec.ECM.RestoreBckPutXact(bck)
 	case cmn.ActECGet:
 		if bck == nil {
-			return fmt.Errorf(erfmn, kind)
+			return fmt.Errorf(erfmn, xmsg.Kind)
 		}
 		ec.ECM.RestoreBckGetXact(bck)
 	case cmn.ActECRespond:
 		if bck == nil {
-			return fmt.Errorf(erfmn, kind)
+			return fmt.Errorf(erfmn, xmsg.Kind)
 		}
 		ec.ECM.RestoreBckRespXact(bck)
 	// 3. cannot start
 	case cmn.ActPutCopies:
-		return fmt.Errorf("cannot start xaction %q - it is invoked automatically by PUTs into mirrored bucket", kind)
+		return fmt.Errorf("cannot start xaction %q - it is invoked automatically by PUTs into mirrored bucket", xmsg.Kind)
 	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete, cmn.ActMakeNCopies, cmn.ActECEncode:
-		return fmt.Errorf("initiating xaction %q must be done via a separate documented API", kind)
+		return fmt.Errorf("initiating xaction %q must be done via a separate documented API", xmsg.Kind)
 	// 4. unknown
 	case "":
 		return errors.New("unspecified (empty) xaction kind")
 	default:
-		return fmt.Errorf("starting %q xaction is unsupported", kind)
+		return fmt.Errorf("starting %q xaction is unsupported", xmsg.Kind)
 	}
 	return nil
 }

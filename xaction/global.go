@@ -5,6 +5,7 @@
 package xaction
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -35,7 +36,7 @@ type lruEntry struct {
 }
 
 func (e *lruEntry) Start(id string, _ cmn.Bck) error {
-	e.xact = &lru.Xaction{XactBase: *cmn.NewXactBase(id, cmn.ActLRU)}
+	e.xact = &lru.Xaction{XactBase: *cmn.NewXactBase(cmn.XactBaseID(id), cmn.ActLRU)}
 	return nil
 }
 
@@ -47,20 +48,27 @@ func (e *lruEntry) preRenewHook(_ globalEntry) bool { return true }
 //
 // rebalanceEntry
 //
+
+type rebID int64
+
 type rebalanceEntry struct {
 	baseGlobalEntry
-	id          int64 // rebalance id
-	xact        *Rebalance
-	statRunner  *stats.Trunner
-	smapVersion int64
+	id         rebID // rebalance id
+	xact       *Rebalance
+	statRunner *stats.Trunner
 }
 
-func (e *rebalanceEntry) Start(id string, _ cmn.Bck) error {
+var (
+	_ cmn.XactID = rebID(0)
+)
+
+func (id rebID) String() string { return fmt.Sprintf("g%d", id) }
+func (id rebID) Int() int64     { return int64(id) }
+
+func (e *rebalanceEntry) Start(_ string, _ cmn.Bck) error {
 	xreb := &Rebalance{
-		RebBase:     makeXactRebBase(id, cmn.ActRebalance),
-		SmapVersion: e.smapVersion,
+		RebBase: makeXactRebBase(e.id, cmn.ActRebalance),
 	}
-	xreb.XactBase.SetGID(e.id)
 	e.xact = xreb
 	return nil
 }
@@ -68,13 +76,13 @@ func (e *rebalanceEntry) Kind() string  { return cmn.ActRebalance }
 func (e *rebalanceEntry) Get() cmn.Xact { return e.xact }
 
 func (e *rebalanceEntry) preRenewHook(previousEntry globalEntry) (keep bool) {
-	xreb := previousEntry.(*rebalanceEntry).xact
-	if xreb.SmapVersion > e.smapVersion {
-		glog.Errorf("(reb: %s) Smap v%d is greater than v%d", xreb, xreb.SmapVersion, e.smapVersion)
+	xreb := previousEntry.(*rebalanceEntry)
+	if xreb.id > e.id {
+		glog.Errorf("(reb: %s) g%d is greater than g%d", xreb.xact, xreb.id, e.id)
 		keep = true
-	} else if xreb.SmapVersion == e.smapVersion {
+	} else if xreb.id == e.id {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s already running, nothing to do", xreb)
+			glog.Infof("%s already running, nothing to do", xreb.xact)
 		}
 		keep = true
 	}
@@ -97,7 +105,7 @@ func (e *rebalanceEntry) Stats(xact cmn.Xact) stats.XactStats {
 //
 // resilver|rebalance helper
 //
-func makeXactRebBase(id, kind string) RebBase {
+func makeXactRebBase(id cmn.XactID, kind string) RebBase {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	return RebBase{
@@ -116,7 +124,7 @@ type resilverEntry struct {
 
 func (e *resilverEntry) Start(id string, _ cmn.Bck) error {
 	e.xact = &Resilver{
-		RebBase: makeXactRebBase(id, cmn.ActResilver),
+		RebBase: makeXactRebBase(cmn.XactBaseID(id), cmn.ActResilver),
 	}
 	return nil
 }
@@ -139,7 +147,7 @@ type electionEntry struct {
 
 func (e *electionEntry) Start(id string, _ cmn.Bck) error {
 	e.xact = &Election{
-		XactBase: *cmn.NewXactBase(id, cmn.ActElection),
+		XactBase: *cmn.NewXactBase(cmn.XactBaseID(id), cmn.ActElection),
 	}
 	return nil
 }

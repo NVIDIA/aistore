@@ -3062,6 +3062,17 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		})
 		_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, nil)})
 	case cmn.ActXactStart, cmn.ActXactStop:
+		bck, err := newBckFromQuery(msg.Value.(string), r.URL.Query())
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		id := cmn.GenUserID()
+		msg = &cmn.ActionMsg{Action: msg.Action, Value: xactMsg{
+			ID:   id,
+			Kind: msg.Name,
+			Bck:  bck.Bck,
+		}}
 		body := cmn.MustMarshal(msg)
 		results := p.bcastPut(bcastArgs{
 			req: cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Xactions), Body: body},
@@ -3071,6 +3082,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, res.err.Error())
 				return
 			}
+		}
+		if msg.Action == cmn.ActXactStart {
+			w.Write([]byte(id))
 		}
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)

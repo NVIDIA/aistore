@@ -31,7 +31,7 @@ func NewTargetMock(bo Bowner) *TargetMock {
 }
 
 func (*TargetMock) Snode() *Snode                                              { return nil }
-func (*TargetMock) RunLRU()                                                    {}
+func (*TargetMock) RunLRU(id string)                                           {}
 func (t *TargetMock) GetBowner() Bowner                                        { return t.BO }
 func (t *TargetMock) GetSowner() Sowner                                        { return nil }
 func (*TargetMock) FSHC(err error, path string)                                {}

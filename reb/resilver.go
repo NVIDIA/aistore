@@ -29,7 +29,7 @@ type (
 )
 
 // TODO: support non-object content types
-func (reb *Manager) RunResilver(skipGlobMisplaced bool, buckets ...string) {
+func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, buckets ...string) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()
 		cfg               = cmn.GCO.Get()
@@ -41,7 +41,7 @@ func (reb *Manager) RunResilver(skipGlobMisplaced bool, buckets ...string) {
 		glog.Errorln("failed to create resilver marker", err)
 	}
 
-	xreb := xaction.Registry.RenewResilver()
+	xreb := xaction.Registry.RenewResilver(id)
 	defer xreb.MarkDone()
 
 	if len(buckets) > 0 {

@@ -35,19 +35,19 @@ func (g *fsprungroup) init(t *targetrunner) {
 }
 
 func (g *fsprungroup) Reg(r fs.PathRunner) {
-	cmn.Assert(r.ID() != "")
+	cmn.Assert(r.Name() != "")
 	g.Lock()
-	_, ok := g.runners[r.ID()]
+	_, ok := g.runners[r.Name()]
 	cmn.Assert(!ok)
-	g.runners[r.ID()] = r
+	g.runners[r.Name()] = r
 	g.Unlock()
 }
 
 func (g *fsprungroup) Unreg(r fs.PathRunner) {
 	g.Lock()
-	_, ok := g.runners[r.ID()]
+	_, ok := g.runners[r.Name()]
 	cmn.Assert(ok)
-	delete(g.runners, r.ID())
+	delete(g.runners, r.Name())
 	g.Unlock()
 }
 
@@ -126,7 +126,7 @@ func (g *fsprungroup) newMountpathEvent(action, mpath string) {
 	}
 	g.RUnlock()
 	go func() {
-		g.t.rebManager.RunResilver(false /*skipGlobMisplaced*/)
+		g.t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
 		xaction.Registry.RenewObjsRedundancy(g.t)
 	}()
 	g.checkEnable(action, mpath)
@@ -151,7 +151,7 @@ func (g *fsprungroup) lostMountpathEvent(action, mpath string) {
 	}
 
 	go func() {
-		g.t.rebManager.RunResilver(false /*skipGlobMisplaced*/)
+		g.t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
 		xaction.Registry.RenewObjsRedundancy(g.t)
 	}()
 }

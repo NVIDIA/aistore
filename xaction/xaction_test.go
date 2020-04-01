@@ -26,7 +26,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer wg.Done()
-			ch <- xactions.RenewLRU()
+			ch <- xactions.RenewLRU("")
 		}()
 	}
 
@@ -88,7 +88,7 @@ func TestXactionAbortAll(t *testing.T) {
 	bmd.Add(bckTo)
 	tMock := cluster.NewTargetMock(bmd)
 
-	xactGlob := xactions.RenewLRU()
+	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
 	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
@@ -110,7 +110,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	bmd.Add(bckTo)
 	tMock := cluster.NewTargetMock(bmd)
 
-	xactGlob := xactions.RenewLRU()
+	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
 	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
@@ -133,7 +133,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 	bmd.Add(bckTo)
 	tMock := cluster.NewTargetMock(bmd)
 
-	xactGlob := xactions.RenewLRU()
+	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
 	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")

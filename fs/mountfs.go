@@ -60,7 +60,7 @@ type (
 	// as a `PathRunner`s to `PathRunGroup` events and adapt on the fly.
 	PathRunner interface {
 		cmn.Runner
-		ID() string
+		Name() string
 		ReqAddMountpath(mpath string)
 		ReqRemoveMountpath(mpath string)
 		ReqEnableMountpath(mpath string)

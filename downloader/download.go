@@ -234,6 +234,7 @@ var (
 	_ fs.PathRunner = &Downloader{}
 )
 
+func (d *Downloader) Name() string                    { return d.XactBase.ID().String() }
 func (d *Downloader) ReqAddMountpath(mpath string)    { d.mpathReqCh <- fs.MountpathAdd(mpath) }
 func (d *Downloader) ReqRemoveMountpath(mpath string) { d.mpathReqCh <- fs.MountpathRem(mpath) }
 func (d *Downloader) ReqEnableMountpath(_ string)     {}

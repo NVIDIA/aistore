@@ -18,9 +18,14 @@ const timeStampFormat = "15:04:05.000000"
 const xactIdleTimeout = time.Minute * 3
 
 type (
+	XactID interface {
+		String() string
+		Int() int64
+	}
+
 	Xact interface {
 		XactCountStats
-		ID() string
+		ID() XactID
 		Kind() string
 		Bck() Bck
 		SetBucket(bucket string)
@@ -36,8 +41,7 @@ type (
 	}
 	XactBase struct {
 		XactBaseCountStats
-		id      string
-		gid     int64
+		id      XactID
 		sutime  atomic.Int64
 		eutime  atomic.Int64
 		kind    string
@@ -45,6 +49,8 @@ type (
 		abrt    chan struct{}
 		aborted atomic.Bool
 	}
+	XactBaseID string
+
 	//
 	// xaction that self-terminates after staying idle for a while
 	// with an added capability to renew itself and ref-count its pending work
@@ -81,31 +87,33 @@ func (e *ErrXactExpired) Error() string            { return e.msg }
 func NewErrXactExpired(msg string) *ErrXactExpired { return &ErrXactExpired{msg: msg} }
 func IsErrXactExpired(err error) bool              { _, ok := err.(*ErrXactExpired); return ok }
 
+func (id XactBaseID) String() string { return string(id) }
+func (id XactBaseID) Int() int64     { Assert(false); return 0 }
+
 //
 // XactBase - partially implements Xact interface
 //
 
-func NewXactBase(id, kind string) *XactBase {
+func NewXactBase(id XactID, kind string) *XactBase {
 	stime := time.Now()
-	Assert(id != "" && kind != "")
+	Assert(id.String() != "" && kind != "")
 	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{})}
 	xact.sutime.Store(stime.UnixNano())
 	return xact
 }
 func NewXactBaseWithBucket(id, kind string, bck Bck) *XactBase {
-	xact := NewXactBase(id, kind)
+	xact := NewXactBase(XactBaseID(id), kind)
 	xact.bck = bck
 	return xact
 }
 
-func (xact *XactBase) ID() string                 { return xact.id }
+func (xact *XactBase) ID() XactID                 { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bck() Bck                   { return xact.bck }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
 
-func (xact *XactBase) SetGID(gid int64)        { xact.gid = gid }
 func (xact *XactBase) SetBucket(bucket string) { xact.bck.Name = bucket }
 
 func (xact *XactBase) String() string {
@@ -116,10 +124,7 @@ func (xact *XactBase) String() string {
 		prefix += "@" + xact.bck.Name
 	}
 	if !xact.Finished() {
-		if xact.gid == 0 {
-			return fmt.Sprintf("%s(%s)", prefix, xact.ID())
-		}
-		return fmt.Sprintf("%s[%s, g%d]", prefix, xact.ID(), xact.gid)
+		return fmt.Sprintf("%s(%s)", prefix, xact.ID())
 	}
 	var (
 		stime    = xact.StartTime()
@@ -127,12 +132,8 @@ func (xact *XactBase) String() string {
 		etime    = xact.EndTime()
 		d        = etime.Sub(stime)
 	)
-	if xact.gid == 0 {
-		return fmt.Sprintf("%s(%s) started %s ended %s (%v)",
-			prefix, xact.ID(), stimestr, etime.Format(timeStampFormat), d)
-	}
-	return fmt.Sprintf("%s[%s, g%d] started %s ended %s (%v)",
-		prefix, xact.ID(), xact.gid, stimestr, etime.Format(timeStampFormat), d)
+	return fmt.Sprintf("%s(%s) started %s ended %s (%v)",
+		prefix, xact.ID(), stimestr, etime.Format(timeStampFormat), d)
 }
 
 func (xact *XactBase) StartTime(s ...time.Time) time.Time {

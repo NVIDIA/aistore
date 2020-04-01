@@ -98,7 +98,7 @@ func downloaderCompleted(t *testing.T, targetID string, targetsStats api.NodesXa
 	downloaderStat, exists := targetsStats[targetID]
 	for _, xaction := range downloaderStat {
 		if xaction.Running() {
-			tutils.Logf("%s(%s) in progress for %s\n", xaction.Kind(), xaction.ID(), targetID)
+			tutils.Logf("%s in progress for %s\n", xaction.Kind(), targetID)
 			return false
 		}
 	}

@@ -76,7 +76,7 @@ func (reb *Manager) rebInit(md *rebArgs, buckets ...string) bool {
 	// because `xreb` can be read by another goroutine: it is node health
 	// handler that reads `RebStatus`. Using atomic pointer reads for only
 	// two places looked overhead, so a separate mutex is used.
-	xact := xaction.Registry.RenewRebalance(md.smap.Version, md.id, reb.statRunner)
+	xact := xaction.Registry.RenewRebalance(md.id, reb.statRunner)
 	if xact == nil {
 		return false
 	}

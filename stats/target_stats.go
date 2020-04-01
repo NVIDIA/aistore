@@ -184,7 +184,7 @@ func (r *Trunner) log(uptime time.Duration) (runlru bool) {
 func (r *Trunner) housekeep(runlru bool) {
 	var config = cmn.GCO.Get()
 	if runlru && config.LRU.Enabled {
-		go r.T.RunLRU()
+		go r.T.RunLRU("")
 	}
 
 	r.statsRunner.housekeep(runlru)

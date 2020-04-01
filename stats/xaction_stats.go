@@ -12,7 +12,6 @@ import (
 )
 
 type XactStats interface {
-	ID() string
 	Kind() string
 	Bck() cmn.Bck
 	StartTime() time.Time
@@ -25,7 +24,6 @@ type XactStats interface {
 }
 
 type BaseXactStats struct {
-	IDX         string    `json:"id"`
 	KindX       string    `json:"kind"`
 	BckX        cmn.Bck   `json:"bck"`
 	StartTimeX  time.Time `json:"start_time"`
@@ -43,7 +41,6 @@ type BaseXactStatsExt struct {
 
 func NewXactStats(xact cmn.Xact) *BaseXactStats {
 	return &BaseXactStats{
-		IDX:         xact.ID(),
 		KindX:       xact.Kind(),
 		StartTimeX:  xact.StartTime(),
 		EndTimeX:    xact.EndTime(),
@@ -54,7 +51,6 @@ func NewXactStats(xact cmn.Xact) *BaseXactStats {
 	}
 }
 
-func (b *BaseXactStats) ID() string           { return b.IDX }
 func (b *BaseXactStats) Kind() string         { return b.KindX }
 func (b *BaseXactStats) Bck() cmn.Bck         { return b.BckX }
 func (b *BaseXactStats) StartTime() time.Time { return b.StartTimeX }
