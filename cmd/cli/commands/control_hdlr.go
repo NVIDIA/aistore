@@ -142,11 +142,14 @@ func startXactionHandler(c *cli.Context) (err error) {
 		return errors.New(`cannot start "type=task" xaction`)
 	}
 
-	xactArgs := api.XactReqArgs{Kind: xactKind, Bck: bck}
-	if err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
+	var (
+		id       string
+		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck}
+	)
+	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Started %q xaction.\n", xactKind)
+	fmt.Fprintf(c.App.Writer, "Started %q xaction (ID: %s).\n", xactKind, id)
 	return
 }
 

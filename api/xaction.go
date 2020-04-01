@@ -22,6 +22,7 @@ type (
 	NodesXactStats map[string][]*stats.BaseXactStatsExt
 
 	XactReqArgs struct {
+		ID      string
 		Kind    string  // Xaction kind, see: cmn.XactType
 		Bck     cmn.Bck // Optional bucket
 		Latest  bool    // Determines if we should get latest or all xactions
@@ -62,9 +63,31 @@ func (xs NodesXactStats) ObjCount() (count int64) {
 	return
 }
 
-func execXactionAction(baseParams BaseParams, args XactReqArgs, action string) error {
+// StartXaction API
+//
+// StartXaction starts a given xaction.
+func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
 	msg := cmn.ActionMsg{
-		Action: action,
+		Action: cmn.ActXactStart,
+		Name:   args.Kind,
+		Value:  args.Bck.Name,
+	}
+	baseParams.Method = http.MethodPut
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Body:       cmn.MustMarshal(msg),
+		Query:      cmn.AddBckToQuery(nil, args.Bck),
+	}, &id)
+	return id, err
+}
+
+// AbortXaction API
+//
+// AbortXaction aborts a given xaction.
+func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
+	msg := cmn.ActionMsg{
+		Action: cmn.ActXactStop,
 		Name:   args.Kind,
 		Value:  args.Bck.Name,
 	}
@@ -75,20 +98,6 @@ func execXactionAction(baseParams BaseParams, args XactReqArgs, action string) e
 		Body:       cmn.MustMarshal(msg),
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	})
-}
-
-// StartXaction API
-//
-// StartXaction starts a given xaction.
-func StartXaction(baseParams BaseParams, args XactReqArgs) error {
-	return execXactionAction(baseParams, args, cmn.ActXactStart)
-}
-
-// AbortXaction API
-//
-// AbortXaction aborts a given xaction.
-func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
-	return execXactionAction(baseParams, args, cmn.ActXactStop)
 }
 
 // GetXactionStats API

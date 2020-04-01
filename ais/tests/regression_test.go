@@ -748,7 +748,8 @@ func TestLRU(t *testing.T) {
 	})
 
 	tutils.Logln("starting LRU...")
-	err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActLRU})
+	// TODO: wait for returned ID
+	_, err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActLRU})
 	tassert.CheckFatal(t, err)
 
 	xactArgs := api.XactReqArgs{Kind: cmn.ActLRU, Timeout: rebalanceTimeout}
