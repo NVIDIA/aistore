@@ -88,7 +88,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		return true
 	}
 
-	xactStats, ok := xaction.Registry.GetTaskXact(msg.TaskID)
+	xactStats, ok := xaction.Registry.GetXact(msg.TaskID)
 	// task never started
 	if !ok {
 		s := fmt.Sprintf("Task %s not found", msg.TaskID)
