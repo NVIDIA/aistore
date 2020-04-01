@@ -57,7 +57,7 @@ term-reset = $(shell { tput sgr0 || tput me; } 2>/dev/null)
 $(call make-lazy,cyan)
 $(call make-lazy,term-reset)
 
-.PHONY: all node cli aisfs authn cli-autocomplete
+.PHONY: all node cli cli-autocompletions aisfs authn aisloader
 
 all: node cli aisfs authn ## Build all main binaries
 
@@ -85,7 +85,7 @@ cli: ## Build CLI ('ais' binary)
 	@go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/cli/*.go
 	@echo "done."
 
-cli-autocomplete: ## Add CLI autocompletions
+cli-autocompletions: ## Add CLI autocompletions
 	@echo "Adding CLI autocomplete..."
 	@./$(BUILD_DIR)/cli/autocomplete/install.sh
 

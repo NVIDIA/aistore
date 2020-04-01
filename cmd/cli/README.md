@@ -5,8 +5,8 @@ create or delete resources or download files to buckets directly from the comman
 
 ## Getting Started
 
-Run the `install.sh` script to install AIS CLI binary in your `$GOPATH/bin` directory.
-The script also allows you to install [shell autocompletions](#ais-cli-shell-auto-complete) for AIS CLI.
+Run `make cli` in AIStore repo root directory to install AIS CLI binary in your `$GOPATH/bin` directory.
+You can also install [shell autocompletions](#ais-cli-shell-autocomplete) for AIS CLI with `make cli-autocompletions`.
 
 > The rest of the README assumes that user's `PATH` environment variable contains `$GOPATH/bin` directory.
 > Run `export PATH=$PATH:$GOPATH/bin` if this is not the case for you.
@@ -33,7 +33,7 @@ This command returns the status of the cluster; if successful, the cluster addre
 $ ais status
 ```
 
-## AIS CLI Shell Auto-Complete
+## AIS CLI Shell Autocomplete
 
 The CLI tool supports `bash` and `zsh` auto-complete functionality.
 
@@ -70,7 +70,7 @@ The CLI uses [urfave/cli](https://github.com/urfave/cli) framework.
 
 ### Adding New Commands
 
-Currently, the CLI has the format of '`ais <command> <resource>`'.
+Currently, the CLI has the format of `ais <command> <resource>`.
 
 To add a new resource to an existing command,
 
@@ -94,5 +94,5 @@ Provider syntax `[provider://]BUCKET_NAME` is valid CLI-wide, meaning that every
 also supports provider syntax. For more details refer to each command's documentation.
 
 Allowed values: `''` (autodetect provider), `ais` (local cluster), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform),
-`cloud` (anonymous - cloud provider determined automatically). 
-Additionally `provider://` syntax supports aliases `s3` (for `aws`) and `gs` (for `gcp`).
+`azure` (Microsoft Azure), `cloud` (anonymous - cloud provider determined automatically). 
+Additionally `provider://` syntax supports aliases `s3` (for `aws`), `gs` (for `gcp`) and `az` (for `azure`).
