@@ -41,6 +41,7 @@ var _ = Describe("IterFields", func() {
 					EC: cmn.ECConf{
 						Enabled:      true,
 						ParitySlices: 1024,
+						BatchSize:    32,
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
@@ -59,6 +60,7 @@ var _ = Describe("IterFields", func() {
 					"ec.enabled":       true,
 					"ec.parity_slices": 1024,
 					"ec.data_slices":   0,
+					"ec.batch_size":    32,
 					"ec.objsize_limit": int64(0),
 					"ec.compression":   "",
 

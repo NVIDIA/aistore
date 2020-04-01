@@ -14,6 +14,7 @@
     "objsize_limit": 262144,
     "data_slices": 1,
     "parity_slices": 1,
+    "batch_size": 64,
     "compression": "never",
     "enabled": false
   },

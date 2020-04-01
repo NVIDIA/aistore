@@ -96,7 +96,10 @@ var _ = Describe("ECWaiter", func() {
 		}
 
 		By("cleaning up invalid batch should not change waiter list")
-		wt.cleanupBatch(rebObjs, len(rebObjs)+10)
+		config := cmn.GCO.Get()
+		config.EC.BatchSize = 64
+		md := &rebArgs{config: config}
+		wt.cleanupBatch(md, rebObjs, len(rebObjs)+10)
 		Expect(len(wt.objs)).To(Equal(len(rebObjs)))
 
 		// after that first and last item should still exist, so "creating"

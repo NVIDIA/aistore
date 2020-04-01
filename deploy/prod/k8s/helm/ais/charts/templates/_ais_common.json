@@ -45,6 +45,7 @@
         "objsize_limit":        {{ .ec.objsize_limit }},
         "data_slices":          {{ .ec.data_slices }},
         "parity_slices":        {{ .ec.parity_slices }},
+        "batch_size":        {{ .ec.batch_size }},
         "compression":          {{ .ec.compression | quote }},
         "enabled":              {{ .ec.enabled }}
 },

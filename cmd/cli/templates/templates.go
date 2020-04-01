@@ -233,6 +233,7 @@ const (
 		" Minimum object size for EC:\t{{$obj.ObjSizeLimit}}\n" +
 		" Number of data slices:\t{{$obj.DataSlices}}\n" +
 		" Number of parity slices:\t{{$obj.ParitySlices}}\n" +
+		" Rebalance batch size:\t{{$obj.BatchSize}}\n" +
 		" Compression options:\t{{$obj.Compression}}\n"
 	GlobalConfTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.Cloud.Provider}}\n"
 

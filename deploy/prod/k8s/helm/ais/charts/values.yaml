@@ -58,6 +58,7 @@ ais_config_common:
     objsize_limit: 262144
     data_slices:   2
     parity_slices: 2
+    batch_size:    64
     compression:   never
   fshc:
     enabled:       true

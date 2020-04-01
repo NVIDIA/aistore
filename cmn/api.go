@@ -264,6 +264,7 @@ type ECConf struct {
 	ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
 	Compression  string `json:"compression"`   // see CompressAlways, etc. enum
 	Enabled      bool   `json:"enabled"`       // EC is enabled
+	BatchSize    int    `json:"batch_size"`    // Batch size for EC rebalance
 }
 
 type ECConfToUpdate struct {

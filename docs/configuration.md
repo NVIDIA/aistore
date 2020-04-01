@@ -118,6 +118,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `ec.enabled` | `false` | Enables or disables data protection |
 | `ec.data_slices` | `2` | Represents the number of fragments an object is broken into (in the range [2, 100]) |
 | `ec.parity_slices` | `2` | Represents the number of redundant fragments to provide protection from failures (in the range [2, 32]) |
+| `ec.batch_size` | `64` | Represents the number of misplaced and broken objects(with missing EC parts) processed by EC rebalance in a singe batch (in the range [4, 256]). Increasing the batch size improves rebalance time but requires more memory |
 | `ec.objsize_limit` | `262144` | Indicated the minimum size of an object in bytes that is erasure encoded. Smaller objects are replicated |
 | `ec.compression` | `"never"` | LZ4 compression parameters used when EC sends its fragments and replicas over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
 | `compression.block_size` | `262144` | Maximum data block size used by LZ4, greater values may increase compression ration but requires more memory. Value is one of 64KB, 256KB(AIS default), 1MB, and 4MB |

@@ -16,7 +16,8 @@ cat > $CONFFILE <<EOL
 		"data_slices":		${DATA_SLICES:-1},
 		"parity_slices":	${PARITY_SLICES:-1},
 		"compression":		"${COMPRESSION:-never}",
-		"enabled":		${EC_ENABLED:-false}
+		"enabled":		${EC_ENABLED:-false},
+		"batch_size":	${EC_BATCH_SIZE:-64}
 	},
 	"log": {
 		"dir":       "${LOGDIR:-/tmp/ais$NEXT_TIER/log}",

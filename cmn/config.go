@@ -791,6 +791,12 @@ func (c *ECConf) Validate(_ *Config) error {
 		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])",
 			c.ParitySlices, MinSliceCount, MaxSliceCount)
 	}
+	if c.BatchSize == 0 {
+		c.BatchSize = 64
+	}
+	if c.BatchSize < 4 || c.BatchSize > 128 {
+		return fmt.Errorf("invalid ec.batch_size: %d (must be in the range 4..128)", c.ObjSizeLimit)
+	}
 	return nil
 }
 

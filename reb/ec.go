@@ -86,8 +86,6 @@ import (
 //     Targets finalize rebalance.
 
 const (
-	// the number of objects processed a time
-	ecRebBatchSize = 64
 	// a target wait for the first slice(not a full replica) to come
 	anySliceID = math.MaxInt16
 )
@@ -1503,7 +1501,7 @@ func (reb *Manager) firstEmptyTgt(obj *rebObject) *cluster.Snode {
 	return nil
 }
 
-func (reb *Manager) allCTReceived(_ *rebArgs) bool {
+func (reb *Manager) allCTReceived(md *rebArgs) bool {
 	for {
 		if reb.xact().Aborted() {
 			return false
@@ -1514,7 +1512,7 @@ func (reb *Manager) allCTReceived(_ *rebArgs) bool {
 		}
 		var obj *rebObject
 		batchCurr := int(reb.stages.currBatch.Load())
-		for j := 0; j+batchCurr < len(reb.ec.broken) && j < ecRebBatchSize; j++ {
+		for j := 0; j+batchCurr < len(reb.ec.broken) && j < md.config.EC.BatchSize; j++ {
 			o := reb.ec.broken[j+batchCurr]
 			if uid == o.uid {
 				obj = o
@@ -1692,9 +1690,9 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 	return reb.rebuildFromDisk(obj)
 }
 
-func (reb *Manager) cleanupBatch() {
-	reb.ec.waiter.cleanupBatch(reb.ec.broken, int(reb.stages.currBatch.Load()))
-	reb.releaseSGLs(reb.ec.broken)
+func (reb *Manager) cleanupBatch(md *rebArgs) {
+	reb.ec.waiter.cleanupBatch(md, reb.ec.broken, int(reb.stages.currBatch.Load()))
+	reb.releaseSGLs(md, reb.ec.broken)
 	reb.ec.ackCTs.clear(reb.t.GetSmallMMSA())
 }
 
@@ -1848,7 +1846,7 @@ func (reb *Manager) waitECAck(md *rebArgs) {
 
 // Rebalances the current batch of broken objects
 func (reb *Manager) rebalanceBatch(md *rebArgs, batchCurr int64) error {
-	batchEnd := cmn.Min(int(batchCurr)+ecRebBatchSize, len(reb.ec.broken))
+	batchEnd := cmn.Min(int(batchCurr)+md.config.EC.BatchSize, len(reb.ec.broken))
 	for objIdx := int(batchCurr); objIdx < batchEnd; objIdx++ {
 		if reb.xact().Aborted() {
 			return cmn.NewAbortedError("rebalance batch")
@@ -1875,20 +1873,20 @@ func (reb *Manager) rebalance(md *rebArgs) (err error) {
 	reb.stages.lastBatch.Store(batchLast)
 	for batchCurr <= batchLast {
 		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Infof("Starting batch of %d from %d", ecRebBatchSize, batchCurr)
+			glog.Infof("Starting batch of %d from %d", md.config.EC.BatchSize, batchCurr)
 		}
 
 		if err = reb.rebalanceBatch(md, batchCurr); err != nil {
-			reb.cleanupBatch()
+			reb.cleanupBatch(md)
 			return err
 		}
 
 		err = reb.finalizeBatch(md)
-		reb.cleanupBatch()
+		reb.cleanupBatch(md)
 		if err != nil {
 			return err
 		}
-		batchCurr = reb.stages.currBatch.Add(int64(ecRebBatchSize))
+		batchCurr = reb.stages.currBatch.Add(int64(md.config.EC.BatchSize))
 	}
 	reb.changeStage(rebStageECCleanup, 0)
 	return nil
@@ -1896,9 +1894,9 @@ func (reb *Manager) rebalance(md *rebArgs) (err error) {
 
 // Free allocated memory for EC reconstruction, close opened file handles of replicas.
 // Used to clean up memory after finishing a batch
-func (reb *Manager) releaseSGLs(objList []*rebObject) {
+func (reb *Manager) releaseSGLs(md *rebArgs, objList []*rebObject) {
 	batchCurr := int(reb.stages.currBatch.Load())
-	for i := batchCurr; i < batchCurr+ecRebBatchSize && i < len(objList); i++ {
+	for i := batchCurr; i < batchCurr+md.config.EC.BatchSize && i < len(objList); i++ {
 		obj := objList[i]
 		for _, sg := range obj.rebuildSGLs {
 			if sg != nil {
@@ -2443,7 +2441,7 @@ func (wt *ctWaiter) cleanup() {
 
 // Range freeing: if idx is not defined, cleanup all waiting objects,
 // otherwise cleanup only objects which names matches objects in range idx0..idx1
-func (wt *ctWaiter) cleanupBatch(broken []*rebObject, idx ...int) {
+func (wt *ctWaiter) cleanupBatch(md *rebArgs, broken []*rebObject, idx ...int) {
 	wt.mx.Lock()
 	if len(idx) == 0 {
 		for uid := range wt.objs {
@@ -2451,7 +2449,7 @@ func (wt *ctWaiter) cleanupBatch(broken []*rebObject, idx ...int) {
 		}
 	} else {
 		start := idx[0]
-		for objIdx := start; objIdx < start+ecRebBatchSize; objIdx++ {
+		for objIdx := start; objIdx < start+md.config.EC.BatchSize; objIdx++ {
 			if objIdx >= len(broken) {
 				break
 			}
@@ -2546,7 +2544,7 @@ func (wt *ctWaiter) updateRebuildInfo(uid string) bool {
 // Returns UID and data for the next object that has all slices/replicas
 // received and can be rebuild.
 // The number of object in `wt.objs` map is less than the number of object
-// in a batch (ecRebBatchSize). So, linear algorithm is fast enough.
+// in a batch (md.config.EC.BatchSize). So, linear algorithm is fast enough.
 func (wt *ctWaiter) nextReadyObj() (uid string, wObj *waitObject) {
 	wt.mx.Lock()
 	defer wt.mx.Unlock()
