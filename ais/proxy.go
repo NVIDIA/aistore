@@ -3046,7 +3046,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActXactStart, cmn.ActXactStop:
 		xactMsg := cmn.XactionMsg{}
-		if err := cmn.TryUnmarshal(msg.Value, xactMsg); err != nil {
+		if err := cmn.TryUnmarshal(msg.Value, &xactMsg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}

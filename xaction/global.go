@@ -32,11 +32,12 @@ type globalEntry interface {
 //
 type lruEntry struct {
 	baseGlobalEntry
+	id   string
 	xact *lru.Xaction
 }
 
-func (e *lruEntry) Start(id string, _ cmn.Bck) error {
-	e.xact = &lru.Xaction{XactBase: *cmn.NewXactBase(cmn.XactBaseID(id), cmn.ActLRU)}
+func (e *lruEntry) Start(_ cmn.Bck) error {
+	e.xact = &lru.Xaction{XactBase: *cmn.NewXactBase(cmn.XactBaseID(e.id), cmn.ActLRU)}
 	return nil
 }
 
@@ -66,7 +67,7 @@ var (
 func (id rebID) String() string { return fmt.Sprintf("g%d", id) }
 func (id rebID) Int() int64     { return int64(id) }
 
-func (e *rebalanceEntry) Start(_ string, _ cmn.Bck) error {
+func (e *rebalanceEntry) Start(_ cmn.Bck) error {
 	xreb := &Rebalance{
 		RebBase: makeXactRebBase(e.id, cmn.ActRebalance),
 	}
@@ -120,12 +121,13 @@ func makeXactRebBase(id cmn.XactID, kind string) RebBase {
 //
 type resilverEntry struct {
 	baseGlobalEntry
+	id   string
 	xact *Resilver
 }
 
-func (e *resilverEntry) Start(id string, _ cmn.Bck) error {
+func (e *resilverEntry) Start(_ cmn.Bck) error {
 	e.xact = &Resilver{
-		RebBase: makeXactRebBase(cmn.XactBaseID(id), cmn.ActResilver),
+		RebBase: makeXactRebBase(cmn.XactBaseID(e.id), cmn.ActResilver),
 	}
 	return nil
 }
@@ -146,9 +148,9 @@ type electionEntry struct {
 	xact *Election
 }
 
-func (e *electionEntry) Start(id string, _ cmn.Bck) error {
+func (e *electionEntry) Start(_ cmn.Bck) error {
 	e.xact = &Election{
-		XactBase: *cmn.NewXactBase(cmn.XactBaseID(id), cmn.ActElection),
+		XactBase: *cmn.NewXactBase(cmn.XactBaseID(""), cmn.ActElection),
 	}
 	return nil
 }
@@ -168,8 +170,8 @@ type downloaderEntry struct {
 	statsT stats.Tracker
 }
 
-func (e *downloaderEntry) Start(id string, _ cmn.Bck) error {
-	xdl := downloader.NewDownloader(e.t, e.statsT, fs.Mountpaths, id, cmn.Download)
+func (e *downloaderEntry) Start(_ cmn.Bck) error {
+	xdl := downloader.NewDownloader(e.t, e.statsT, fs.Mountpaths)
 	e.xact = xdl
 	go xdl.Run()
 	return nil

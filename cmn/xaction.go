@@ -97,7 +97,7 @@ func (id XactBaseID) Int() int64     { Assert(false); return 0 }
 
 func NewXactBase(id XactID, kind string) *XactBase {
 	stime := time.Now()
-	Assert(id.String() != "" && kind != "")
+	Assert(kind != "")
 	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{})}
 	xact.sutime.Store(stime.UnixNano())
 	return xact
@@ -184,14 +184,14 @@ func (xact *XactBase) Result() (interface{}, error) {
 // XactDemandBase - partially implements XactDemand interface
 //
 
-func NewXactDemandBase(id, kind string, bck Bck, idleTime ...time.Duration) *XactDemandBase {
+func NewXactDemandBase(kind string, bck Bck, idleTime ...time.Duration) *XactDemandBase {
 	tickTime := xactIdleTimeout
 	if len(idleTime) != 0 {
 		tickTime = idleTime[0]
 	}
 	ticker := time.NewTicker(tickTime)
 	return &XactDemandBase{
-		XactBase: *NewXactBaseWithBucket(id, kind, bck),
+		XactBase: *NewXactBaseWithBucket("", kind, bck),
 		ticker:   ticker,
 	}
 }

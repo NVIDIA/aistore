@@ -41,13 +41,13 @@ type (
 // public methods
 //
 
-func RunXactPutLRepl(id string, lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err error) {
+func RunXactPutLRepl(lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err error) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()
 		mpathCount        = len(availablePaths)
 	)
 	r = &XactPutLRepl{
-		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bck().Bck),
+		XactDemandBase: *cmn.NewXactDemandBase(cmn.ActPutCopies, lom.Bck().Bck),
 		slab:           slab,
 		mirror:         *lom.MirrorConf(),
 	}

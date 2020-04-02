@@ -44,7 +44,7 @@ type bckListTaskEntry struct {
 	msg  *cmn.SelectMsg
 }
 
-func (e *bckListTaskEntry) Start(_ string, bck cmn.Bck) error {
+func (e *bckListTaskEntry) Start(bck cmn.Bck) error {
 	xact := &bckListTask{
 		XactBase: *cmn.NewXactBaseWithBucket(e.id, cmn.ActListObjects, bck),
 		ctx:      e.ctx,
@@ -72,7 +72,7 @@ type bckSummaryTaskEntry struct {
 	msg  *cmn.SelectMsg
 }
 
-func (e *bckSummaryTaskEntry) Start(_ string, bck cmn.Bck) error {
+func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	xact := &bckSummaryTask{
 		XactBase: *cmn.NewXactBaseWithBucket(e.id, cmn.ActSummaryBucket, bck),
 		t:        e.t,

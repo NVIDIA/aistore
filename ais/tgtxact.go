@@ -13,9 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // TODO: uplift via higher-level query and similar (#668)
@@ -104,18 +102,11 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) queryXactStats(query xaction.XactQuery) ([]byte, error) {
-	xactStatsMap, err := xaction.Registry.GetStats(query)
+	xactStats, err := xaction.Registry.GetStats(query)
 	if err != nil {
 		return nil, err
 	}
-	xactStats := make([]stats.XactStats, 0, len(xactStatsMap))
-	for _, stat := range xactStatsMap {
-		if stat == nil {
-			continue
-		}
-		xactStats = append(xactStats, stat)
-	}
-	return jsoniter.Marshal(xactStats)
+	return cmn.MustMarshal(xactStats), nil
 }
 
 func (t *targetrunner) cmdXactStart(r *http.Request, xactMsg cmn.XactionMsg, bck *cluster.Bck) error {

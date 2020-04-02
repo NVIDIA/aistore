@@ -29,9 +29,9 @@ type (
 // public methods
 //
 
-func NewXactDirPromote(id, dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
+func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
 	return &XactDirPromote{
-		xactBckBase: *newXactBckBase(id, cmn.ActPromote, bck, t),
+		xactBckBase: *newXactBckBase("", cmn.ActPromote, bck, t),
 		dir:         dir,
 		params:      params,
 	}

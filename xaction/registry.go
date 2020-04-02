@@ -70,7 +70,7 @@ type (
 		res atomic.Pointer
 	}
 	baseEntry interface {
-		Start(id string, bck cmn.Bck) error // starts an xaction, will be called when entry is stored into registry
+		Start(bck cmn.Bck) error // starts an xaction, will be called when entry is stored into registry
 		Kind() string
 		Get() cmn.Xact
 		Stats(xact cmn.Xact) stats.XactStats
@@ -263,12 +263,6 @@ func (r *registry) GetLatest(query XactQuery) (baseEntry, bool) {
 	return entry, entry.Get().Bck().Equal(query.Bck.Bck)
 }
 
-// registry - private methods
-
-func (r *registry) uniqueID() string {
-	return cmn.GenUserID()
-}
-
 // AbortAllBuckets aborts all xactions that run with any of the provided bcks.
 // It not only stops the "bucket xactions" but possibly "task xactions" which
 // are running on given bucket.
@@ -351,20 +345,19 @@ func (r *registry) abortLatest(kind string, bck *cluster.Bck) (aborted bool) {
 	return
 }
 
-func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) map[string]stats.XactStats {
-	sts := make(map[string]stats.XactStats, 20)
+func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []stats.XactStats {
+	sts := make([]stats.XactStats, 0, 20)
 	r.entries.forEach(false /*exclusive*/, func(entry baseEntry) bool {
 		if !match(entry.Get()) {
 			return true
 		}
-		xact := entry.Get()
-		sts[xact.ID().String()] = entry.Stats(xact)
+		sts = append(sts, entry.Stats(entry.Get()))
 		return true
 	})
 	return sts
 }
 
-func (r *registry) GetStats(query XactQuery) (map[string]stats.XactStats, error) {
+func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 	if query.ID != "" {
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
 			return xact.ID().String() == query.ID
@@ -375,12 +368,11 @@ func (r *registry) GetStats(query XactQuery) (map[string]stats.XactStats, error)
 		}
 
 		// Add the most recent xactions (both currently running and already finished)
-		matching := make(map[string]stats.XactStats, 10)
+		matching := make([]stats.XactStats, 0, 10)
 		for _, latest := range r.latest {
 			latest.Range(func(_, e interface{}) bool {
 				entry := e.(baseEntry)
-				xact := entry.Get()
-				matching[xact.ID().String()] = entry.Stats(xact)
+				matching = append(matching, entry.Stats(entry.Get()))
 				return true
 			})
 		}
@@ -395,10 +387,10 @@ func (r *registry) GetStats(query XactQuery) (map[string]stats.XactStats, error)
 		if query.OnlyRecent {
 			entry, exists := r.GetLatest(XactQuery{Kind: query.Kind})
 			if !exists {
-				return map[string]stats.XactStats{}, nil
+				return []stats.XactStats{}, nil
 			}
 			xact := entry.Get()
-			return map[string]stats.XactStats{xact.ID().String(): entry.Stats(xact)}, nil
+			return []stats.XactStats{entry.Stats(xact)}, nil
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
 			return xact.Kind() == query.Kind
@@ -409,12 +401,11 @@ func (r *registry) GetStats(query XactQuery) (map[string]stats.XactStats, error)
 		}
 
 		if query.OnlyRecent {
-			matching := make(map[string]stats.XactStats, 10)
+			matching := make([]stats.XactStats, 0, 10)
 			for kind := range r.latest {
 				entry, exists := r.GetLatest(XactQuery{Kind: kind, Bck: query.Bck})
 				if exists {
-					xact := entry.Get()
-					matching[xact.ID().String()] = entry.Stats(xact)
+					matching = append(matching, entry.Stats(entry.Get()))
 				}
 			}
 			return matching, nil
@@ -430,11 +421,10 @@ func (r *registry) GetStats(query XactQuery) (map[string]stats.XactStats, error)
 		}
 
 		if query.OnlyRecent {
-			matching := make(map[string]stats.XactStats, 1)
+			matching := make([]stats.XactStats, 0, 1)
 			entry, exists := r.GetLatest(XactQuery{Kind: query.Kind, Bck: query.Bck})
 			if exists {
-				xact := entry.Get()
-				matching[xact.ID().String()] = entry.Stats(xact)
+				matching = append(matching, entry.Stats(entry.Get()))
 			}
 			return matching, nil
 		}
@@ -587,7 +577,7 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck) (buck
 		}
 	}
 
-	if err := entry.Start(r.uniqueID(), bck.Bck); err != nil {
+	if err := entry.Start(bck.Bck); err != nil {
 		return nil, err
 	}
 	r.storeEntry(entry)
@@ -597,7 +587,7 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck) (buck
 	return entry, nil
 }
 
-func (r *registry) renewGlobalXaction(id string, entry globalEntry) (globalEntry, bool, error) {
+func (r *registry) renewGlobalXaction(entry globalEntry) (globalEntry, bool, error) {
 	r.RLock()
 	if e, exists := r.GetLatest(XactQuery{Kind: entry.Kind()}); exists {
 		prevEntry := e.(globalEntry)
@@ -626,13 +616,7 @@ func (r *registry) renewGlobalXaction(id string, entry globalEntry) (globalEntry
 		}
 	}
 
-	// TODO: for now setting alternative `id`. In the future, xactions
-	//  with empty `id` must be seen as anonymous.
-	if id == "" {
-		id = r.uniqueID()
-	}
-
-	if err := entry.Start(id, cmn.Bck{}); err != nil {
+	if err := entry.Start(cmn.Bck{}); err != nil {
 		return nil, false, err
 	}
 	r.storeEntry(entry)
@@ -643,8 +627,8 @@ func (r *registry) renewGlobalXaction(id string, entry globalEntry) (globalEntry
 }
 
 func (r *registry) RenewLRU(id string) *lru.Xaction {
-	e := &lruEntry{}
-	ee, keep, _ := r.renewGlobalXaction(id, e)
+	e := &lruEntry{id: id}
+	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*lruEntry)
 	if keep { // previous LRU is still running
 		return nil
@@ -654,7 +638,7 @@ func (r *registry) RenewLRU(id string) *lru.Xaction {
 
 func (r *registry) RenewRebalance(id int64, statRunner *stats.Trunner) *Rebalance {
 	e := &rebalanceEntry{id: rebID(id), statRunner: statRunner}
-	ee, keep, _ := r.renewGlobalXaction("", e)
+	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*rebalanceEntry)
 	if keep { // previous global rebalance is still running
 		return nil
@@ -663,8 +647,8 @@ func (r *registry) RenewRebalance(id int64, statRunner *stats.Trunner) *Rebalanc
 }
 
 func (r *registry) RenewResilver(id string) *Resilver {
-	e := &resilverEntry{}
-	ee, keep, _ := r.renewGlobalXaction(id, e)
+	e := &resilverEntry{id: id}
+	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*resilverEntry)
 	cmn.Assert(!keep) // resilver must be always preempted
 	return entry.xact
@@ -672,7 +656,7 @@ func (r *registry) RenewResilver(id string) *Resilver {
 
 func (r *registry) RenewElection() *Election {
 	e := &electionEntry{}
-	ee, keep, _ := r.renewGlobalXaction("", e)
+	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*electionEntry)
 	if keep { // previous election is still running
 		return nil
@@ -682,7 +666,7 @@ func (r *registry) RenewElection() *Election {
 
 func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*downloader.Downloader, error) {
 	e := &downloaderEntry{t: t, statsT: statsT}
-	ee, _, err := r.renewGlobalXaction("", e)
+	ee, _, err := r.renewGlobalXaction(e)
 	if err != nil {
 		return nil, err
 	}
@@ -702,7 +686,7 @@ func (r *registry) RenewBckListXact(ctx context.Context, t cluster.Target, bck *
 		id:  id,
 		msg: msg,
 	}
-	if err := e.Start(id, bck.Bck); err != nil {
+	if err := e.Start(bck.Bck); err != nil {
 		return nil, err
 	}
 	r.storeEntry(e)
@@ -721,7 +705,7 @@ func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bc
 		t:   t,
 		msg: msg,
 	}
-	if err := e.Start(id, bck.Bck); err != nil {
+	if err := e.Start(bck.Bck); err != nil {
 		return nil, err
 	}
 	r.storeEntry(e)

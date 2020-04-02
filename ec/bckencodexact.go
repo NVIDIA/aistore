@@ -38,9 +38,9 @@ type (
 	}
 )
 
-func NewXactBckEncode(id string, bck cmn.Bck, t cluster.Target) *XactBckEncode {
+func NewXactBckEncode(bck cmn.Bck, t cluster.Target) *XactBckEncode {
 	return &XactBckEncode{
-		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActECEncode, bck),
+		XactBase: *cmn.NewXactBaseWithBucket("", cmn.ActECEncode, bck),
 		t:        t,
 		bck:      bck,
 		wg:       &sync.WaitGroup{},

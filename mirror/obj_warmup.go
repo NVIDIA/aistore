@@ -25,8 +25,8 @@ type (
 // public methods
 //
 
-func NewXactLLC(t cluster.Target, id string, bck cmn.Bck) *XactBckLoadLomCache {
-	return &XactBckLoadLomCache{xactBckBase: *newXactBckBase(id, cmn.ActLoadLomCache, bck, t)}
+func NewXactLLC(t cluster.Target, bck cmn.Bck) *XactBckLoadLomCache {
+	return &XactBckLoadLomCache{xactBckBase: *newXactBckBase("", cmn.ActLoadLomCache, bck, t)}
 }
 
 func (r *XactBckLoadLomCache) Run() (err error) {

@@ -42,9 +42,9 @@ type ecGetEntry struct {
 	xact *ec.XactGet
 }
 
-func (e *ecGetEntry) Start(id string, bck cmn.Bck) error {
+func (e *ecGetEntry) Start(bck cmn.Bck) error {
 	xec := ec.ECM.NewGetXact(bck)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, bck)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECGet, bck)
 	e.xact = xec
 	go xec.Run()
 	return nil
@@ -65,9 +65,9 @@ type ecPutEntry struct {
 	xact *ec.XactPut
 }
 
-func (e *ecPutEntry) Start(id string, bck cmn.Bck) error {
+func (e *ecPutEntry) Start(bck cmn.Bck) error {
 	xec := ec.ECM.NewPutXact(bck)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, bck)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECPut, bck)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -88,9 +88,9 @@ type ecRespondEntry struct {
 	xact *ec.XactRespond
 }
 
-func (e *ecRespondEntry) Start(id string, bck cmn.Bck) error {
+func (e *ecRespondEntry) Start(bck cmn.Bck) error {
 	xec := ec.ECM.NewRespondXact(bck)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, bck)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECRespond, bck)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -113,8 +113,8 @@ type ecEncodeEntry struct {
 	phase string
 }
 
-func (e *ecEncodeEntry) Start(id string, bck cmn.Bck) error {
-	xec := ec.NewXactBckEncode(id, bck, e.t)
+func (e *ecEncodeEntry) Start(bck cmn.Bck) error {
+	xec := ec.NewXactBckEncode(bck, e.t)
 	e.xact = xec
 	return nil
 }
@@ -152,10 +152,10 @@ type mncEntry struct {
 	copies int
 }
 
-func (e *mncEntry) Start(id string, bck cmn.Bck) error {
+func (e *mncEntry) Start(bck cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
-	xmnc := mirror.NewXactMNC(id, bck, e.t, slab, e.copies)
+	xmnc := mirror.NewXactMNC(bck, e.t, slab, e.copies)
 	go xmnc.Run()
 	e.xact = xmnc
 	return nil
@@ -204,8 +204,8 @@ type dpromoteEntry struct {
 	params *cmn.ActValPromote
 }
 
-func (e *dpromoteEntry) Start(id string, bck cmn.Bck) error {
-	xact := mirror.NewXactDirPromote(id, e.dir, bck, e.t, e.params)
+func (e *dpromoteEntry) Start(bck cmn.Bck) error {
+	xact := mirror.NewXactDirPromote(e.dir, bck, e.t, e.params)
 	go xact.Run()
 	e.xact = xact
 	return nil
@@ -231,8 +231,8 @@ type loadLomCacheEntry struct {
 	xact *mirror.XactBckLoadLomCache
 }
 
-func (e *loadLomCacheEntry) Start(id string, bck cmn.Bck) error {
-	x := mirror.NewXactLLC(e.t, id, bck)
+func (e *loadLomCacheEntry) Start(bck cmn.Bck) error {
+	x := mirror.NewXactLLC(e.t, bck)
 	go x.Run()
 	e.xact = x
 
@@ -260,10 +260,10 @@ type putLocReplicasEntry struct {
 	xact *mirror.XactPutLRepl
 }
 
-func (e *putLocReplicasEntry) Start(id string, _ cmn.Bck) error {
+func (e *putLocReplicasEntry) Start(_ cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
-	x, err := mirror.RunXactPutLRepl(id, e.lom, slab)
+	x, err := mirror.RunXactPutLRepl(e.lom, slab)
 
 	if err != nil {
 		glog.Error(err)
@@ -297,10 +297,10 @@ type bccEntry struct {
 	phase   string
 }
 
-func (e *bccEntry) Start(id string, _ cmn.Bck) error {
+func (e *bccEntry) Start(_ cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
-	e.xact = mirror.NewXactBCC(id, e.bckFrom, e.bckTo, e.t, slab)
+	e.xact = mirror.NewXactBCC("", e.bckFrom, e.bckTo, e.t, slab)
 	return nil
 }
 func (e *bccEntry) Kind() string  { return cmn.ActCopyBucket }
@@ -403,9 +403,9 @@ func (r *FastRen) Run(rmdVersion int64) {
 	r.EndTime(time.Now())
 }
 
-func (e *FastRenEntry) Start(id string, bck cmn.Bck) error {
+func (e *FastRenEntry) Start(bck cmn.Bck) error {
 	e.xact = &FastRen{
-		XactBase:   *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
+		XactBase:   *cmn.NewXactBaseWithBucket("", e.Kind(), bck),
 		t:          e.t,
 		bckFrom:    e.bckFrom,
 		bckTo:      e.bckTo,
@@ -488,10 +488,10 @@ func (r *EvictDelete) Run(args *DeletePrefetchArgs) {
 	r.EndTime(time.Now())
 }
 
-func (e *evictDeleteEntry) Start(id string, bck cmn.Bck) error {
+func (e *evictDeleteEntry) Start(bck cmn.Bck) error {
 	e.xact = &EvictDelete{
 		listRangeBase: listRangeBase{
-			XactBase: *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
+			XactBase: *cmn.NewXactBaseWithBucket("", e.Kind(), bck),
 			t:        e.t,
 		},
 	}
@@ -541,10 +541,10 @@ func (e *prefetchEntry) Get() cmn.Xact { return e.xact }
 func (e *prefetchEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 	return false, nil
 }
-func (e *prefetchEntry) Start(id string, bck cmn.Bck) error {
+func (e *prefetchEntry) Start(bck cmn.Bck) error {
 	e.xact = &Prefetch{
 		listRangeBase: listRangeBase{
-			XactBase: *cmn.NewXactBaseWithBucket(id, e.Kind(), bck),
+			XactBase: *cmn.NewXactBaseWithBucket("", e.Kind(), bck),
 			t:        e.t,
 		},
 	}

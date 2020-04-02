@@ -234,15 +234,15 @@ var (
 	_ fs.PathRunner = &Downloader{}
 )
 
-func (d *Downloader) Name() string                    { return d.XactBase.ID().String() }
+func (d *Downloader) Name() string                    { return "downloader" }
 func (d *Downloader) ReqAddMountpath(mpath string)    { d.mpathReqCh <- fs.MountpathAdd(mpath) }
 func (d *Downloader) ReqRemoveMountpath(mpath string) { d.mpathReqCh <- fs.MountpathRem(mpath) }
 func (d *Downloader) ReqEnableMountpath(_ string)     {}
 func (d *Downloader) ReqDisableMountpath(_ string)    {}
 
-func NewDownloader(t cluster.Target, statsT stats.Tracker, f *fs.MountedFS, id, kind string) (d *Downloader) {
+func NewDownloader(t cluster.Target, statsT stats.Tracker, f *fs.MountedFS) (d *Downloader) {
 	downloader := &Downloader{
-		XactDemandBase: *cmn.NewXactDemandBase(id, kind, cmn.Bck{Provider: cmn.ProviderAIS}),
+		XactDemandBase: *cmn.NewXactDemandBase(cmn.Download, cmn.Bck{Provider: cmn.ProviderAIS}),
 		t:              t,
 		statsT:         statsT,
 		mountpaths:     f,
