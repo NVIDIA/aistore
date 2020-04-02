@@ -2485,17 +2485,15 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
-	var (
-		msg = &cmn.ActionMsg{}
-	)
-	if cmn.ReadJSON(w, r, msg) != nil {
+	xactMsg := cmn.XactionMsg{}
+	if cmn.ReadJSON(w, r, &xactMsg) != nil {
 		return
 	}
 	results := p.bcastGet(bcastArgs{
 		req: cmn.ReqArgs{
 			Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
 			Query: r.URL.Query(),
-			Body:  cmn.MustMarshal(msg),
+			Body:  cmn.MustMarshal(xactMsg),
 		},
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	})
@@ -3005,9 +3003,6 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, "", nil) {
 		return
 	}
-	if msg.Action == cmn.ActXactStart && msg.Name /*kind*/ == cmn.ActRebalance {
-		msg.Action = cmn.ActRebalance
-	}
 	// handle the action
 	switch msg.Action {
 	case cmn.ActSetConfig:
@@ -3049,26 +3044,29 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		p.bcastTo(args)
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-	case cmn.ActRebalance:
-		clone := p.owner.rmd.modify(func(clone *rebMD) {
-			clone.inc()
-		})
-		_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, nil)})
 	case cmn.ActXactStart, cmn.ActXactStop:
-		bck, err := newBckFromQuery(msg.Value.(string), r.URL.Query())
-		if err != nil {
+		xactMsg := cmn.XactionMsg{}
+		if err := cmn.TryUnmarshal(msg.Value, xactMsg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		id := cmn.GenUserID()
-		msg = &cmn.ActionMsg{Action: msg.Action, Value: xactMsg{
-			ID:   id,
-			Kind: msg.Name,
-			Bck:  bck.Bck,
-		}}
-		body := cmn.MustMarshal(msg)
+		if msg.Action == cmn.ActXactStart && xactMsg.Kind == cmn.ActRebalance {
+			clone := p.owner.rmd.modify(func(clone *rebMD) {
+				clone.inc()
+			})
+			msg := &cmn.ActionMsg{Action: cmn.ActRebalance}
+			_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, nil)})
+			return
+		}
+
+		if msg.Action == cmn.ActXactStart {
+			xactMsg.ID = cmn.GenUserID()
+		}
 		results := p.bcastPut(bcastArgs{
-			req: cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Xactions), Body: body},
+			req: cmn.ReqArgs{
+				Path: cmn.URLPath(cmn.Version, cmn.Xactions),
+				Body: cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg}),
+			},
 		})
 		for res := range results {
 			if res.err != nil {
@@ -3077,7 +3075,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if msg.Action == cmn.ActXactStart {
-			w.Write([]byte(id))
+			w.Write([]byte(xactMsg.ID))
 		}
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)

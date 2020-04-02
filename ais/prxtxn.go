@@ -494,11 +494,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 
 func (p *proxyrunner) waitCopyBuckets(bckTo *cluster.Bck, nlpFrom, nlpTo *cluster.NameLockPair) {
 	var (
-		// TODO: #668
-		msg = cmn.ActionMsg{
-			Name:  cmn.ActCopyBucket, // kind
-			Value: cmn.XactionExtMsg{Bck: bckTo.Bck},
-		}
+		msg    = cmn.XactionMsg{Kind: cmn.ActCopyBucket, Bck: bckTo.Bck}
 		config = cmn.GCO.Get()
 		sleep  = config.Timeout.CplaneOperation
 	)

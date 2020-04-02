@@ -18,37 +18,23 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-type (
-	xactMsg struct {
-		ID   string  `json:"id"`
-		Kind string  `json:"kind"`
-		Bck  cmn.Bck `json:"bck"`
-	}
-)
-
 // TODO: uplift via higher-level query and similar (#668)
 
 // verb /v1/xactions
 func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
-	msg := &cmn.ActionMsg{}
-	if cmn.ReadJSON(w, r, msg) != nil {
-		return
-	}
 	if _, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Xactions); err != nil {
 		return
 	}
 	switch r.Method {
 	case http.MethodGet:
 		var (
-			query   = r.URL.Query()
-			what    = query.Get(cmn.URLParamWhat)
-			xactMsg cmn.XactionExtMsg
+			bck     *cluster.Bck
+			xactMsg = cmn.XactionMsg{}
+			what    = r.URL.Query().Get(cmn.URLParamWhat)
 		)
-		if err := cmn.TryUnmarshal(msg.Value, &xactMsg); err != nil {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		if cmn.ReadJSON(w, r, &xactMsg) != nil {
 			return
 		}
-		var bck *cluster.Bck
 		if xactMsg.Bck.Name != "" {
 			bck = cluster.NewBckEmbed(xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd, t.si); err != nil {
@@ -56,7 +42,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		xactQuery := xaction.XactQuery{ID: xactMsg.ID, Kind: msg.Name, Bck: bck, OnlyRecent: !xactMsg.All}
+		xactQuery := xaction.XactQuery{ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRecent: !xactMsg.All}
 		switch what {
 		case cmn.GetWhatXactStats:
 			body, err := t.queryXactStats(xactQuery)
@@ -71,7 +57,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeJSON(w, r, body, what)
 		case cmn.GetWhatXactRunStatus:
 			running := xaction.Registry.IsXactRunning(xactQuery)
-			status := &cmn.XactRunningStatus{Kind: xactQuery.Kind, Running: running}
+			status := &cmn.XactRunningStatus{ID: xactQuery.ID, Kind: xactQuery.Kind, Running: running}
 			if bck != nil {
 				status.Bck = bck.Bck
 			}
@@ -81,17 +67,20 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case http.MethodPut:
 		var (
-			xmsg xactMsg
-			bck  *cluster.Bck
+			msg     cmn.ActionMsg
+			xactMsg cmn.XactionMsg
+			bck     *cluster.Bck
 		)
-
-		if err := cmn.TryUnmarshal(msg.Value, &xmsg); err != nil {
+		if cmn.ReadJSON(w, r, &msg) != nil {
+			return
+		}
+		if err := cmn.TryUnmarshal(msg.Value, &xactMsg); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 
-		if !xmsg.Bck.IsEmpty() {
-			bck = cluster.NewBckEmbed(xmsg.Bck)
+		if !xactMsg.Bck.IsEmpty() {
+			bck = cluster.NewBckEmbed(xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd, t.si); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
@@ -99,12 +88,12 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		switch msg.Action {
 		case cmn.ActXactStart:
-			if err := t.cmdXactStart(r, xmsg, bck); err != nil {
+			if err := t.cmdXactStart(r, xactMsg, bck); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
 		case cmn.ActXactStop:
-			xaction.Registry.DoAbort(xmsg.Kind, bck)
+			xaction.Registry.DoAbort(xactMsg.Kind, bck)
 			return
 		default:
 			t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownAct, msg))
@@ -129,25 +118,25 @@ func (t *targetrunner) queryXactStats(query xaction.XactQuery) ([]byte, error) {
 	return jsoniter.Marshal(xactStats)
 }
 
-func (t *targetrunner) cmdXactStart(r *http.Request, xmsg xactMsg, bck *cluster.Bck) error {
+func (t *targetrunner) cmdXactStart(r *http.Request, xactMsg cmn.XactionMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
-	switch xmsg.Kind {
+	switch xactMsg.Kind {
 	// 1. globals
 	case cmn.ActLRU:
 		if bck != nil {
-			glog.Errorf(erfmb, xmsg.Kind, bck)
+			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
-		go t.RunLRU(xmsg.ID)
+		go t.RunLRU(xactMsg.ID)
 	case cmn.ActResilver:
 		if bck != nil {
-			glog.Errorf(erfmb, xmsg.Kind, bck)
+			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
-		go t.rebManager.RunResilver(xmsg.ID, false /*skipGlobMisplaced*/)
+		go t.rebManager.RunResilver(xactMsg.ID, false /*skipGlobMisplaced*/)
 	// 2. with bucket
 	case cmn.ActPrefetch:
 		if bck == nil {
-			return fmt.Errorf(erfmn, xmsg.Kind)
+			return fmt.Errorf(erfmn, xactMsg.Kind)
 		}
 		args := &xaction.DeletePrefetchArgs{
 			Ctx:      t.contextWithAuth(r.Header),
@@ -160,29 +149,29 @@ func (t *targetrunner) cmdXactStart(r *http.Request, xmsg xactMsg, bck *cluster.
 		go xact.Run(args)
 	case cmn.ActECPut:
 		if bck == nil {
-			return fmt.Errorf(erfmn, xmsg.Kind)
+			return fmt.Errorf(erfmn, xactMsg.Kind)
 		}
 		ec.ECM.RestoreBckPutXact(bck)
 	case cmn.ActECGet:
 		if bck == nil {
-			return fmt.Errorf(erfmn, xmsg.Kind)
+			return fmt.Errorf(erfmn, xactMsg.Kind)
 		}
 		ec.ECM.RestoreBckGetXact(bck)
 	case cmn.ActECRespond:
 		if bck == nil {
-			return fmt.Errorf(erfmn, xmsg.Kind)
+			return fmt.Errorf(erfmn, xactMsg.Kind)
 		}
 		ec.ECM.RestoreBckRespXact(bck)
 	// 3. cannot start
 	case cmn.ActPutCopies:
-		return fmt.Errorf("cannot start xaction %q - it is invoked automatically by PUTs into mirrored bucket", xmsg.Kind)
+		return fmt.Errorf("cannot start xaction %q - it is invoked automatically by PUTs into mirrored bucket", xactMsg.Kind)
 	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete, cmn.ActMakeNCopies, cmn.ActECEncode:
-		return fmt.Errorf("initiating xaction %q must be done via a separate documented API", xmsg.Kind)
+		return fmt.Errorf("initiating xaction %q must be done via a separate documented API", xactMsg.Kind)
 	// 4. unknown
 	case "":
 		return errors.New("unspecified (empty) xaction kind")
 	default:
-		return fmt.Errorf("starting %q xaction is unsupported", xmsg.Kind)
+		return fmt.Errorf("starting %q xaction is unsupported", xactMsg.Kind)
 	}
 	return nil
 }

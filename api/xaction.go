@@ -69,8 +69,10 @@ func (xs NodesXactStats) ObjCount() (count int64) {
 func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStart,
-		Name:   args.Kind,
-		Value:  args.Bck.Name,
+		Value: cmn.XactionMsg{
+			Kind: args.Kind,
+			Bck:  args.Bck,
+		},
 	}
 	baseParams.Method = http.MethodPut
 	err = DoHTTPRequest(ReqParams{
@@ -88,8 +90,11 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
-		Name:   args.Kind,
-		Value:  args.Bck.Name,
+		Value: cmn.XactionMsg{
+			ID:   args.ID,
+			Kind: args.Kind,
+			Bck:  args.Bck,
+		},
 	}
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
@@ -104,15 +109,11 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 //
 // GetXactionStats gets all xaction stats for given kind and bucket (optional).
 func GetXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactStats, err error) {
-	// TODO: msg.Action field is unused and shouldn't be used (as well as the entire action message)
-	// TODO: #668
-	msg := cmn.ActionMsg{
-		Name: args.Kind,
-		Value: cmn.XactionExtMsg{
-			ID:  args.ID,
-			Bck: args.Bck,
-			All: !args.Latest,
-		},
+	msg := cmn.XactionMsg{
+		ID:   args.ID,
+		Kind: args.Kind,
+		Bck:  args.Bck,
+		All:  !args.Latest,
 	}
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{

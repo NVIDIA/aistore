@@ -77,9 +77,10 @@ type (
 	NonmountpathXact struct{}
 
 	XactRunningStatus struct {
-		Kind string `json:"kind"`
-		Bck
-		Running bool `json:"running"`
+		ID      string `json:"id"`
+		Kind    string `json:"kind"`
+		Bck     Bck    `json:"bck"`
+		Running bool   `json:"running"`
 	}
 )
 

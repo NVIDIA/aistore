@@ -97,9 +97,10 @@ type MountpathList struct {
 	Disabled  []string `json:"disabled"`
 }
 
-type XactionExtMsg struct {
+type XactionMsg struct {
 	Target string `json:"target,omitempty"`
 	ID     string `json:"id"`
+	Kind   string `json:"kind"`
 	Bck    Bck    `json:"bck"`
 	All    bool   `json:"all,omitempty"`
 }
