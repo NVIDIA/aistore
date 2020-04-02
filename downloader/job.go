@@ -93,8 +93,8 @@ type (
 		FinishedTime atomic.Time `json:"-"`
 	}
 
-	ListBucketPageCb func(bucket, pageMarker string) (*cmn.BucketList, error)
-	TargetObjsCb     func(objects cmn.SimpleKVs, bucket string, cloud bool) ([]DlObj, error)
+	ListObjectsPageCb func(bucket, pageMarker string) (*cmn.BucketList, error)
+	TargetObjsCb      func(objects cmn.SimpleKVs, bucket string, cloud bool) ([]DlObj, error)
 )
 
 func (j *BaseDlJob) ID() string          { return j.id }
@@ -156,7 +156,7 @@ func (j *CloudBucketDlJob) genNext() (objs []DlObj, ok bool) {
 func (j *CloudBucketDlJob) getNextObjs() error {
 	j.objs = []DlObj{}
 	if j.pagesCnt > 0 && j.pageMarker == "" {
-		// Cloud ListBucket returned empty pageMarker after at least one reqest
+		// Cloud ListObjects returned empty pageMarker after at least one reqest
 		// this means there are no more objects in to list
 		return nil
 	}
@@ -171,7 +171,7 @@ func (j *CloudBucketDlJob) getNextObjs() error {
 			Fast:       true,
 		}
 
-		bckList, err, _ := j.t.Cloud().ListBucket(j.ctx, j.bck.Name, msg)
+		bckList, err, _ := j.t.Cloud().ListObjects(j.ctx, j.bck.Name, msg)
 		if err != nil {
 			return err
 		}

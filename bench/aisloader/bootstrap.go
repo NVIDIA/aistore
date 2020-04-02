@@ -1077,7 +1077,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 func bootStrap() error {
 	names, err := tutils.ListObjectsFast(runParams.proxyURL, runParams.bck, "")
 	if err != nil {
-		fmt.Printf("Failed to list bucket %s, proxy %s, err: %v\n",
+		fmt.Printf("Failed to list_objects %s, proxy %s, err: %v\n",
 			runParams.bck, runParams.proxyURL, err)
 		return err
 	}

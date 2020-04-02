@@ -54,7 +54,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 		}
 	}
 
-	reslist := testListBucket(t, proxyURL, bck, msg, 0)
+	reslist := testListObjects(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		return
 	}
@@ -144,7 +144,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 
 	// read a new object list and check that evicted objects do not have atime and iscached==false
 	// version must be the same
-	reslist := testListBucket(t, proxyURL, bck, msg, 0)
+	reslist := testListObjects(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		return
 	}
@@ -190,7 +190,7 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 	tutils.Logf("Refetching objects...\n")
 	propsReadObjects(t, proxyURL, bck, objs)
 	tutils.Logf("Checking objects properties after refetching...\n")
-	reslist := testListBucket(t, proxyURL, bck, msg, 0)
+	reslist := testListObjects(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
 	}
@@ -267,7 +267,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	tutils.Logf("Reading file versions...\n")
-	reslist := testListBucket(t, proxyURL, bck, msg, 0)
+	reslist := testListObjects(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
 	}
@@ -353,7 +353,7 @@ func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
 	// Read object versions
 	msg := &cmn.SelectMsg{Prefix: versionDir}
 	msg.AddProps(cmn.GetPropsVersion, cmn.GetPropsIsCached, cmn.GetPropsAtime, cmn.GetPropsStatus)
-	reslist := testListBucket(t, proxyURL, bck, msg, 0)
+	reslist := testListObjects(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
 		return

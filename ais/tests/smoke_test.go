@@ -103,14 +103,14 @@ func getRandomFiles(proxyURL string, bck cmn.Bck, numGets int, prefix string, t 
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	items, err := api.ListBucket(baseParams, bck, msg, 0)
+	items, err := api.ListObjects(baseParams, bck, msg, 0)
 	if err != nil {
 		errCh <- err
 		t.Error(err)
 		return
 	}
 	if len(items.Entries) == 0 {
-		errCh <- fmt.Errorf("listbucket %s: is empty - no entries", bck)
+		errCh <- fmt.Errorf("list_objects %s: is empty - no entries", bck)
 		// not considered a failure
 		return
 	}

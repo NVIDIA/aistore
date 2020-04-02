@@ -229,9 +229,9 @@ func Test_putdelete(t *testing.T) {
 }
 
 func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, objLimit int) (*cmn.BucketList, error) {
-	resList := testListBucket(t, proxyURL, bck, msg, objLimit)
+	resList := testListObjects(t, proxyURL, bck, msg, objLimit)
 	if resList == nil {
-		return nil, fmt.Errorf("failed to list bucket %s", bck)
+		return nil, fmt.Errorf("failed to list_objects %s", bck)
 	}
 	for _, m := range resList.Entries {
 		if len(m.Checksum) > 8 {
@@ -276,7 +276,7 @@ func Test_matchdelete(t *testing.T) {
 	// list the bucket
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	reslist, err := api.ListBucket(baseParams, bck, msg, 0)
+	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	if err != nil {
 		t.Error(err)
 		return
@@ -403,7 +403,7 @@ func Test_putdeleteRange(t *testing.T) {
 		}
 
 		totalFiles -= test.delta
-		bktlst, err := api.ListBucket(baseParams, bck, msg, 0)
+		bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -417,7 +417,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	tutils.Logf("Cleaning up remained objects...\n")
 	msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
-	bckList, err := api.ListBucket(baseParams, bck, msg, 0)
+	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 	if err != nil {
 		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
 	}
@@ -698,7 +698,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	err := api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	resLocal, err := api.ListBucket(baseParams, bckLocal, msg, 0)
+	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckCloud)
@@ -711,7 +711,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	resCloud, err := api.ListBucket(baseParams, bckCloud, msg, 0)
+	resCloud, err := api.ListObjects(baseParams, bckCloud, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	if len(resLocal.Entries) != 1 {
@@ -965,7 +965,7 @@ func deleteFiles(proxyURL string, bck cmn.Bck, keynames <-chan string, wg *sync.
 func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch string,
 	keynameChans []chan string, outputChan chan string) int {
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
-	reslist := testListBucket(t, proxyURL, bck, msg, 0)
+	reslist := testListObjects(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		return 0
 	}
@@ -996,13 +996,13 @@ func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch stri
 	return num
 }
 
-func testListBucket(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, limit int) *cmn.BucketList {
-	tutils.Logf("LIST bucket %s [fast: %v, prefix: %q, page_size: %d, marker: %q]\n",
+func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, limit int) *cmn.BucketList {
+	tutils.Logf("LIST objects %s [fast: %v, prefix: %q, page_size: %d, marker: %q]\n",
 		bck, msg.Fast, msg.Prefix, msg.PageSize, msg.PageMarker)
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	resList, err := api.ListBucket(baseParams, bck, msg, limit)
+	resList, err := api.ListObjects(baseParams, bck, msg, limit)
 	if err != nil {
-		t.Errorf("List bucket %s failed, err = %v", bck, err)
+		t.Errorf("List objects %s failed, err = %v", bck, err)
 		return nil
 	}
 

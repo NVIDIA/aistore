@@ -130,7 +130,6 @@ func init() {
 	flag.StringVar(&daemon.cli.config.ConfFile, "config", "", "config filename: local file that stores this daemon's configuration")
 	flag.StringVar(&daemon.cli.config.LogLevel, "loglevel", "", "log verbosity level (2 - minimal, 3 - default, 4 - super-verbose)")
 	flag.DurationVar(&daemon.cli.config.StatsTime, "stats_time", 0, "stats reporting (logging) interval")
-	flag.DurationVar(&daemon.cli.config.ListBucketTime, "list_time", 0, "list bucket timeout")
 	flag.StringVar(&daemon.cli.config.ProxyURL, "proxyurl", "", "primary proxy/gateway URL to override local configuration")
 	flag.StringVar(&daemon.cli.confjson, "confjson", "", "JSON formatted \"{name: value, ...}\" string to override selected knob(s)")
 	flag.BoolVar(&daemon.cli.persist, "persist", false,

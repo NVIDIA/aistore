@@ -146,7 +146,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	)
 	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListBucket(baseParams, m.bck, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
+	bucketList, err := api.ListObjects(baseParams, m.bck, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
 	tassert.CheckFatal(t, err)
 	for _, obj := range bucketList.Entries {
 		targetObjectCount[obj.TargetURL]++
@@ -192,7 +192,7 @@ func (m *ioContext) cloudPuts(evict bool) {
 		tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bck)
 	}
 
-	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
 	leftToFill := m.num - len(objList.Entries)
@@ -220,10 +220,10 @@ func (m *ioContext) cloudPuts(evict bool) {
 	tassert.SelectErr(m.t, errCh, "put", true)
 	tutils.Logln("cloud PUT done")
 
-	objList, err = api.ListBucket(baseParams, m.bck, msg, 0)
+	objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 	if len(objList.Entries) != m.num {
-		m.t.Fatalf("list-bucket err: %d != %d", len(objList.Entries), m.num)
+		m.t.Fatalf("list_objects err: %d != %d", len(objList.Entries), m.num)
 	}
 
 	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
@@ -241,7 +241,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 		msg        = &cmn.SelectMsg{}
 	)
 
-	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
 	tutils.Logf("cloud PREFETCH %d objects...\n", prefetchCnt)
@@ -270,7 +270,7 @@ func (m *ioContext) cloudDelete() {
 	)
 
 	cmn.Assert(m.bck.Provider == cmn.Cloud)
-	objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
 	tutils.Logln("deleting cloud objects...")
@@ -386,7 +386,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	query := make(url.Values)
 	msg := &cmn.SelectMsg{Cached: true}
 	msg.AddProps(cmn.GetPropsCopies, cmn.GetPropsAtime, cmn.GetPropsStatus)
-	objectList, err := api.ListBucket(baseParams, m.bck, msg, 0, query)
+	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0, query)
 	tassert.CheckFatal(m.t, err)
 
 	copiesToNumObjects := make(map[int]int)
@@ -399,7 +399,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	}
 	tutils.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
 	if total != m.num {
-		m.t.Fatalf("listbucket: expecting %d objects, got %d", m.num, total)
+		m.t.Fatalf("list_objects: expecting %d objects, got %d", m.num, total)
 	}
 
 	if len(copiesToNumObjects) != 1 {

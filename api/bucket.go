@@ -323,11 +323,11 @@ func handleAsyncReqAccepted(id, action string, origMsg *cmn.SelectMsg, reqParams
 	return
 }
 
-// ListBucket API
+// ListObjects API
 //
-// ListBucket returns list of objects in a bucket. numObjects is the
-// maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
-func ListBucket(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
+// ListObjects returns list of objects in a bucket. numObjects is the
+// maximum number of objects returned by ListObjects (0 - return all objects in a bucket)
+func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	var (
 		q       = url.Values{}
@@ -350,7 +350,7 @@ func ListBucket(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjec
 	}
 
 	// An optimization to read as few objects from bucket as possible.
-	// `toRead` is the current number of objects `ListBucket` must read before
+	// `toRead` is the current number of objects `ListObjects` must read before
 	// returning the list. Every cycle the loop reads objects by pages and
 	// decreases `toRead` by the number of received objects. When `toRead` gets less
 	// than `pageSize`, the loop does the final request with reduced `pageSize`.
@@ -416,10 +416,10 @@ func ListBucket(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjec
 	return bckList, nil
 }
 
-// ListBucketPage returns the first page of bucket objects
+// ListObjectsPage returns the first page of bucket objects
 // On success the function updates msg.PageMarker, so a client can reuse
 // the message to fetch the next page
-func ListBucketPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
+func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	if msg == nil {
 		msg = &cmn.SelectMsg{}
@@ -447,11 +447,11 @@ func ListBucketPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, quer
 	return page, nil
 }
 
-// ListBucketFast returns list of objects in a bucket.
+// ListObjectsFast returns list of objects in a bucket.
 // Build an object list with minimal set of properties: name and size.
 // All SelectMsg fields except prefix do not work and are skipped.
 // Function always returns the whole list of objects without paging
-func ListBucketFast(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
+func ListObjectsFast(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
 	if msg == nil {
 		msg = &cmn.SelectMsg{}
 	}

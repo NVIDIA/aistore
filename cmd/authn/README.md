@@ -115,7 +115,7 @@ At this moment, only requests to buckets and objects API require a token.
 
 ### AuthN server typical workflow
 
-If the AuthN server is enabled then all requests to buckets and objects should contain a valid token issued by AuthN. Requests without a token are rejected unless the AIS cluster is deployed with guest support enabled. In this case GET, HEAD, and list bucket requests do not require authorization - anyone can read the data but modifications are allowed only for registered users.
+If the AuthN server is enabled then all requests to buckets and objects should contain a valid token issued by AuthN. Requests without a token are rejected unless the AIS cluster is deployed with guest support enabled. In this case GET, HEAD, and list objects requests do not require authorization - anyone can read the data but modifications are allowed only for registered users.
 
 Steps to generate and use a token:
 
@@ -143,7 +143,7 @@ $ curl -X POST http://AUTHSRV/v1/users/username \
 
 {"token": "eyJhbGciOiJI.eyJjcmVkcyI.T6r6790"}
 ```
-4. The user adds the token for every AIStore request(list bucket names example)
+4. The user adds the token for every AIStore request (list buckets names example)
 
 ```console
 $ curl -L  http://PROXY/v1/buckets/* -X GET \

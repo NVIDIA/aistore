@@ -60,7 +60,7 @@ var (
 	}
 )
 
-func TestLocalListBucketGetTargetURL(t *testing.T) {
+func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	const (
 		num      = 1000
 		filesize = 1024
@@ -89,7 +89,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	close(errCh)
 
 	msg := &cmn.SelectMsg{PageSize: int(pagesize), Props: cmn.GetTargetURL}
-	bl, err := api.ListBucket(baseParams, bck, msg, num)
+	bl, err := api.ListObjects(baseParams, bck, msg, num)
 	tassert.CheckFatal(t, err)
 
 	if len(bl.Entries) != num {
@@ -117,7 +117,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	msg.Props = ""
-	bl, err = api.ListBucket(baseParams, bck, msg, num)
+	bl, err = api.ListObjects(baseParams, bck, msg, num)
 	tassert.CheckFatal(t, err)
 
 	if len(bl.Entries) != num {
@@ -131,7 +131,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	}
 }
 
-func TestCloudListBucketGetTargetURL(t *testing.T) {
+func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	const (
 		numberOfFiles = 100
 		fileSize      = 1024
@@ -176,8 +176,8 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}()
 
-	listBucketMsg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize), Props: cmn.GetTargetURL}
-	bucketList, err := api.ListBucket(baseParams, bck, listBucketMsg, 0)
+	listObjectsMsg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize), Props: cmn.GetTargetURL}
+	bucketList, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -207,8 +207,8 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	}
 
 	// Ensure no target URLs are returned when the property is not requested
-	listBucketMsg.Props = ""
-	bucketList, err = api.ListBucket(baseParams, bck, listBucketMsg, 0)
+	listObjectsMsg.Props = ""
+	bucketList, err = api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -396,7 +396,7 @@ func postRenameWaitAndCheck(t *testing.T, proxyURL string, rtd regressionTestDat
 		t.Fatalf("renamed ais bucket %s does not exist after rename", rtd.renamedBck)
 	}
 
-	bckList, err := api.ListBucket(baseParams, rtd.renamedBck, &cmn.SelectMsg{}, 0)
+	bckList, err := api.ListObjects(baseParams, rtd.renamedBck, &cmn.SelectMsg{}, 0)
 	tassert.CheckFatal(t, err)
 	unique := make(map[string]bool)
 	for _, e := range bckList.Entries {
@@ -872,7 +872,7 @@ func TestDeleteList(t *testing.T) {
 
 	// 3. Check to see that all the files have been deleted
 	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
-	bktlst, err := api.ListBucket(baseParams, bck, msg, 0)
+	bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -913,7 +913,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 2. Discover the number of items we expect to be prefetched
 	msg := &cmn.SelectMsg{Prefix: prefetchPrefix, PageSize: int(pagesize)}
-	objsToFilter := testListBucket(t, proxyURL, bck, msg, 0)
+	objsToFilter := testListObjects(t, proxyURL, bck, msg, 0)
 	files := make([]string, 0)
 	if objsToFilter != nil {
 		for _, be := range objsToFilter.Entries {
@@ -998,7 +998,7 @@ func TestDeleteRange(t *testing.T) {
 
 	// 3. Check to see that the correct files have been deleted
 	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
-	bktlst, err := api.ListBucket(baseParams, bck, msg, 0)
+	bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
 		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
@@ -1025,7 +1025,7 @@ func TestDeleteRange(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// 5. Check to see that all the files have been deleted
-	bktlst, err = api.ListBucket(baseParams, bck, msg, 0)
+	bktlst, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1105,7 +1105,7 @@ func TestStressDeleteRange(t *testing.T) {
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
 	msg := &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: int(pagesize)}
-	bckList, err := api.ListBucket(baseParams, bck, msg, 0)
+	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bckList.Entries) != expectedRemaining {
 		t.Errorf("Incorrect number of remaining objects: %d, expected: %d", len(bckList.Entries), expectedRemaining)
@@ -1134,7 +1134,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 5. Check to see that all files have been deleted
 	msg = &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: int(pagesize)}
-	bckList, err = api.ListBucket(baseParams, bck, msg, 0)
+	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bckList.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bckList.Entries))

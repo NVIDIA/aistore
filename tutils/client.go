@@ -509,7 +509,7 @@ func ListObjects(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit i
 	msg := &cmn.SelectMsg{Prefix: prefix}
 	baseParams := BaseAPIParams(proxyURL)
 
-	data, err := api.ListBucket(baseParams, bck, msg, objectCountLimit)
+	data, err := api.ListObjects(baseParams, bck, msg, objectCountLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +533,7 @@ func ListObjectsFast(proxyURL string, bck cmn.Bck, prefix string) ([]string, err
 		query.Add(cmn.URLParamPrefix, prefix)
 	}
 
-	data, err := api.ListBucketFast(baseParams, bck, nil, query)
+	data, err := api.ListObjectsFast(baseParams, bck, nil, query)
 	if err != nil {
 		return nil, err
 	}
@@ -659,7 +659,7 @@ func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName 
 			return fmt.Errorf("timed out when downloading %s/%s", bck, objName)
 		}
 
-		reslist, err := api.ListBucket(baseParams, bck, &cmn.SelectMsg{Fast: true}, 0)
+		reslist, err := api.ListObjects(baseParams, bck, &cmn.SelectMsg{Fast: true}, 0)
 		if err != nil {
 			return err
 		}
@@ -705,7 +705,7 @@ func putObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, errCh
 		fullObjName := path.Join(objPath, objName)
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
-		// compared to the listbucket call that getRandomFiles does)
+		// compared to the list objects call that getRandomFiles does)
 		baseParams := BaseAPIParams(proxyURL)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -799,7 +799,7 @@ func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, proxyURL string, 
 
 func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object, timeFormat string) time.Time {
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
-	bucketList, err := api.ListBucket(baseParams, bck, msg, 0)
+	bucketList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	for _, entry := range bucketList.Entries {

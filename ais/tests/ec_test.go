@@ -506,7 +506,7 @@ func assertBucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objC
 
 func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
-	reslist, err := api.ListBucket(baseParams, bck, msg, 0)
+	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
@@ -1317,7 +1317,7 @@ func TestECStress(t *testing.T) {
 			doECPutsAndCheck(t, baseParams, bck, o)
 
 			var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
-			reslist, err := api.ListBucket(baseParams, bck, msg, 0)
+			reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 			tassert.CheckFatal(t, err)
 			reslist.Entries = filterObjListOK(reslist.Entries)
 
@@ -1382,14 +1382,14 @@ func TestECStressManyBuckets(t *testing.T) {
 	wg.Wait()
 
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
-	reslist, err := api.ListBucket(baseParams, bck1, msg, 0)
+	reslist, err := api.ListObjects(baseParams, bck1, msg, 0)
 	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
 	tassert.Fatalf(t, len(reslist.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1, len(reslist.Entries), o1.objCount)
 
 	msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
-	reslist, err = api.ListBucket(baseParams, bck2, msg, 0)
+	reslist, err = api.ListObjects(baseParams, bck2, msg, 0)
 	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
@@ -1520,7 +1520,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	t.Logf("Total test time %v\n", delta)
 
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
-	reslist, err := api.ListBucket(baseParams, bck, msg, 0)
+	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
@@ -1633,7 +1633,7 @@ func TestECXattrs(t *testing.T) {
 	}
 
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
-	reslist, err := api.ListBucket(baseParams, bck, msg, 0)
+	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	// check that all returned objects and their repicas have the same version
@@ -1731,7 +1731,7 @@ func TestECDestroyBucket(t *testing.T) {
 
 	// check if get requests are successful
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
-	reslist, err := api.ListBucket(baseParams, bck, msg, 0)
+	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -1842,10 +1842,10 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	// 3. Read objects
 	objectsExist(t, baseParams, bck, o.pattern, o.objCount)
 
-	// 4. Check that ListBucket returns correct number of items
+	// 4. Check that ListObjects returns correct number of items
 	tutils.Logln("DONE\nReading bucket list...")
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
-	reslist, err := api.ListBucket(baseParams, bck, msg, 0)
+	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -2093,10 +2093,10 @@ func TestECEmergencyMpath(t *testing.T) {
 	// 3. Read objects
 	objectsExist(t, baseParams, bck, o.pattern, o.objCount)
 
-	// 4. Check that ListBucket returns correct number of items
+	// 4. Check that ListObjects returns correct number of items
 	tutils.Logf("DONE\nReading bucket list...\n")
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
-	reslist, err := api.ListBucket(baseParams, bck, msg, 0)
+	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -2214,7 +2214,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 
 	msg := &cmn.SelectMsg{}
-	res, err := api.ListBucket(baseParams, bck, msg, 0)
+	res, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	oldBucketList := filterObjListOK(res.Entries)
 	tutils.Logf("%d objects created, starting rebalance\n", len(oldBucketList))
@@ -2268,7 +2268,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	res, err = api.ListBucket(baseParams, bck, msg, 0)
+	res, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	newBucketList := filterObjListOK(res.Entries)
 	if len(oldBucketList) != len(newBucketList) {
@@ -2310,7 +2310,7 @@ func TestECBucketEncode(t *testing.T) {
 	// TODO: Renable if we implement listing bucket with additional objects like
 	// mirroring and EC. For now we remove the duplicates and in result get
 	// fewer objects.
-	t.Skip("ListBucket does not include EC and Mirroring objects")
+	t.Skip("ListObjects does not include EC and Mirroring objects")
 
 	const parityCnt = 2
 	var (
@@ -2337,13 +2337,13 @@ func TestECBucketEncode(t *testing.T) {
 		t.FailNow()
 	}
 
-	reslist, err := api.ListBucketFast(baseParams, m.bck, nil)
+	reslist, err := api.ListObjectsFast(baseParams, m.bck, nil)
 	if err != nil {
-		t.Fatalf("List bucket %s failed, err = %v", m.bck, err)
+		t.Fatalf("list_objects %s failed, err = %v", m.bck, err)
 	}
 	tutils.Logf("Object count: %d\n", len(reslist.Entries))
 	if len(reslist.Entries) != m.num {
-		t.Fatalf("List bucket %s invalid number of files %d, expected %d", m.bck, len(reslist.Entries), m.num)
+		t.Fatalf("list_objects %s invalid number of files %d, expected %d", m.bck, len(reslist.Entries), m.num)
 	}
 
 	tutils.Logf("Enabling EC\n")
@@ -2369,13 +2369,13 @@ func TestECBucketEncode(t *testing.T) {
 	err = api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
-	reslist, err = api.ListBucketFast(baseParams, m.bck, nil)
+	reslist, err = api.ListObjectsFast(baseParams, m.bck, nil)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Object count after EC finishes: %d\n", len(reslist.Entries))
 	expect := (parityCnt + 1) * m.num
 	if len(reslist.Entries) != expect {
-		t.Fatalf("List bucket after EC %s invalid number of files %d, expected %d", m.bck, len(reslist.Entries), expect)
+		t.Fatalf("list_objects after EC %s invalid number of files %d, expected %d", m.bck, len(reslist.Entries), expect)
 	}
 }
 
@@ -2519,10 +2519,10 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tutils.PutObjsFromList(proxyURL, bckReg, ecTestDir, fileSize, fileList, errCh, objsPutCh)
 
 	msg := &cmn.SelectMsg{}
-	resECOld, err := api.ListBucket(baseParams, bckEC, msg, 0)
+	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
 	oldECList := filterObjListOK(resECOld.Entries)
-	resRegOld, err := api.ListBucket(baseParams, bckReg, msg, 0)
+	resRegOld, err := api.ListObjects(baseParams, bckReg, msg, 0)
 	tassert.CheckError(t, err)
 	oldRegList := filterObjListOK(resRegOld.Entries)
 	tutils.Logf("Created %d objects in %s, %d objects in %s. Starting rebalance\n",
@@ -2535,12 +2535,12 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	tutils.Logln("Getting the number of objects after rebalance")
-	resECNew, err := api.ListBucket(baseParams, bckEC, msg, 0)
+	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
 	newECList := filterObjListOK(resECNew.Entries)
 	tutils.Logf("%d objects in %s after rebalance\n",
 		len(newECList), bckEC)
-	resRegNew, err := api.ListBucket(baseParams, bckReg, msg, 0)
+	resRegNew, err := api.ListObjects(baseParams, bckReg, msg, 0)
 	tassert.CheckError(t, err)
 	newRegList := filterObjListOK(resRegNew.Entries)
 	tutils.Logf("%d objects in %s after rebalance\n",
@@ -2642,7 +2642,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size"}
-	resEC, err := api.ListBucket(baseParams, bck, msg, 0)
+	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	newECList := filterObjListOK(resEC.Entries)
 	tutils.Logf("%d objects in %s after rebalance\n", len(newECList), bck)
@@ -2748,7 +2748,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	}
 
 	msg := &cmn.SelectMsg{}
-	resECOld, err := api.ListBucket(baseParams, bckEC, msg, 0)
+	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
 	oldECList := filterObjListOK(resECOld.Entries)
 	tutils.Logf("Created %d objects in %s. Starting rebalance\n", len(oldECList), bckEC)
@@ -2790,7 +2790,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	stopCh.Close()
 
 	tutils.Logln("Getting the number of objects after rebalance")
-	resECNew, err := api.ListBucket(baseParams, bckEC, msg, 0)
+	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
 	newECList := filterObjListOK(resECNew.Entries)
 	tutils.Logf("%d objects in %s after rebalance\n",
@@ -2806,7 +2806,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	}
 
 	tutils.Logln("Getting the number of objects after reading")
-	resECNew, err = api.ListBucket(baseParams, bckEC, msg, 0)
+	resECNew, err = api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
 	newECList = filterObjListOK(resECNew.Entries)
 	tutils.Logf("%d objects in %s after reading\n",

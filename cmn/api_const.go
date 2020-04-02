@@ -247,7 +247,7 @@ const (
 	EntryIsCached   = 1 << (EntryStatusBits + 1) // StatusMaskBits + 1
 )
 
-// list-bucket default page size
+// List objects default page size
 const (
 	DefaultListPageSize = 1000
 )

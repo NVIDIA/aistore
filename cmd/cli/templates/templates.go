@@ -142,7 +142,7 @@ const (
 	ClientConfTmpl = "\n{{$obj := .Client}}Client Config\n" +
 		" Timeout:\t{{$obj.TimeoutStr}}\n" +
 		" Long Timeout:\t{{$obj.TimeoutLongStr}}\n" +
-		" List Time:\t{{$obj.ListBucketStr}}\n"
+		" List Time:\t{{$obj.ListObjectsStr}}\n"
 	ProxyConfTmpl = "\n{{$obj := .Proxy}}Proxy Config\n" +
 		" Non Electable:\t{{$obj.NonElectable}}\n" +
 		" Primary URL:\t{{$obj.PrimaryURL}}\n" +

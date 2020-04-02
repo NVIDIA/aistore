@@ -95,7 +95,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `timeout.max_host_busy` | `1m` | Determines how long should we wait for particular action to happen due to possible node/network overload |
 | `client.client_timeout` | `10s` | Default client timeout |
 | `client.client_long_timeout` | `30m` | Default _long_ client timeout |
-| `client.list_timeout` | `2m` | Client list-bucket timeout |
+| `client.list_timeout` | `2m` | Client list objects timeout |
 | `checksum.type` | `xxhash` | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
 | `checksum.validate_cold_get` | `true` | Enables and disables checking the hash of received object after downloading it from the cloud |
 | `checksum.validate_warm_get` | `false` | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |

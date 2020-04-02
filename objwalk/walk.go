@@ -182,7 +182,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	if w.msg.Cached {
 		return w.LocalObjPage()
 	}
-	bucketList, err, _ := w.t.Cloud().ListBucket(w.ctx, w.bck.Name, w.msg)
+	bucketList, err, _ := w.t.Cloud().ListObjects(w.ctx, w.bck.Name, w.msg)
 	if err != nil {
 		return nil, err
 	}

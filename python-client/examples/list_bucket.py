@@ -44,7 +44,7 @@ def get_bucket_page(bucket_name, marker):
     input_params = ais_client.models.InputParameters(ais_client.models.Actions.LISTOBJECTS, value=requestParams)
     bapi = BucketApi()
 
-    # list bucket API is asynchronous, so the first request must return a task
+    # list objects API is asynchronous, so the first request must return a task
     # ID to monitor its state. Task ID is an int64 number
     resp = bapi.perform_operation(bucket_name, input_params)
     if type(resp) is int:

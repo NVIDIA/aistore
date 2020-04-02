@@ -860,7 +860,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActListObjects:
 		started := time.Now()
-		p.listBucketAndCollectStats(w, r, bck, msg, started, false /* fast listing */)
+		p.listObjectsAndCollectStats(w, r, bck, msg, started, false /* fast listing */)
 	case cmn.ActSummaryBucket:
 		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
@@ -882,7 +882,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
+func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
 	amsg cmn.ActionMsg, started time.Time, fast bool) {
 	var (
 		taskID  string
@@ -915,7 +915,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		//
 		// NOTE: for async tasks, user must check for StatusAccepted and use returned TaskID
 		//
-		bckList, taskID, status, err = p.listCloudBucket(bck, smsg)
+		bckList, taskID, status, err = p.listObjectsCloud(bck, smsg)
 		if status == http.StatusGone {
 			// at this point we know that this cloud bucket exists and is offline
 			smsg.Cached = true
@@ -944,7 +944,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 	bckList = nil
 	go cmn.FreeMemToOS(time.Second)
 
-	if p.writeJSON(w, r, b, "listbucket") {
+	if p.writeJSON(w, r, b, "list_objects") {
 		delta := time.Since(started)
 		p.statsT.AddMany(
 			stats.NamedVal64{Name: stats.ListCount, Value: 1},
@@ -1587,10 +1587,10 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (all
 //      * non-zero taskID if the task is still running
 //      * error
 //
-func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (
+func (p *proxyrunner) listObjectsCloud(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 	allEntries *cmn.BucketList, taskID string, status int, err error) {
 	if selMsg.PageSize > cmn.DefaultListPageSize {
-		glog.Warningf("list-bucket page size %d for bucket %s exceeds the default maximum %d ",
+		glog.Warningf("list_objects page size %d for bucket %s exceeds the default maximum %d ",
 			selMsg.PageSize, bck, cmn.DefaultListPageSize)
 	}
 	pageSize := selMsg.PageSize
@@ -1603,7 +1603,7 @@ func (p *proxyrunner) listCloudBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap          = p.owner.smap.get()
-		reqTimeout    = cmn.GCO.Get().Client.ListBucket
+		reqTimeout    = cmn.GCO.Get().Client.ListObjects
 		aisMsg        = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &selMsg}, smap, nil)
 		body          = cmn.MustMarshal(aisMsg)
 		needLocalData = selMsg.NeedLocalData()
@@ -1811,7 +1811,7 @@ func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query
 	bmd := p.owner.bmd.get()
 	body := cmn.MustMarshal(p.newAisMsg(msg, smap, bmd))
 	if wait {
-		timeout = cmn.GCO.Get().Client.ListBucket
+		timeout = cmn.GCO.Get().Client.ListObjects
 	} else {
 		timeout = cmn.DefaultTimeout
 	}

@@ -173,7 +173,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 
 	if flagIsSet(c, fastFlag) && (cmn.IsProviderAIS(bck) || msg.Cached) {
 		msg.Fast = true
-		objList, err := api.ListBucketFast(defaultAPIParams, bck, msg, query)
+		objList, err := api.ListObjectsFast(defaultAPIParams, bck, msg, query)
 		if err != nil {
 			return err
 		}
@@ -200,7 +200,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	if flagIsSet(c, pagedFlag) {
 		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), limit
 		for {
-			objList, err := api.ListBucketPage(defaultAPIParams, bck, msg, query)
+			objList, err := api.ListObjectsPage(defaultAPIParams, bck, msg, query)
 			if err != nil {
 				return err
 			}
@@ -239,7 +239,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	}
 
 	// retrieve the entire bucket list and print it
-	objList, err := api.ListBucket(defaultAPIParams, bck, msg, limit, query)
+	objList, err := api.ListObjects(defaultAPIParams, bck, msg, limit, query)
 	if err != nil {
 		return err
 	}

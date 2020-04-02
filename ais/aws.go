@@ -158,13 +158,13 @@ func awsIsVersionSet(version *string) bool {
 	return version != nil && *version != "null" && *version != ""
 }
 
-/////////////////
-// LIST BUCKET //
-/////////////////
+//////////////////
+// LIST OBJECTS //
+//////////////////
 
-func (awsp *awsProvider) ListBucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (awsp *awsProvider) ListObjects(ct context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("listbucket %s", bucket)
+		glog.Infof("list_objects %s", bucket)
 	}
 	sess := createSession(ct)
 	svc := s3.New(sess)

@@ -93,7 +93,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 					}
 				}
 				m.puts()
-				if _, err := api.ListBucketFast(baseParams, m.bck, nil); err != nil {
+				if _, err := api.ListObjectsFast(baseParams, m.bck, nil); err != nil {
 					return err
 				}
 				m.gets()
@@ -304,7 +304,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 
 	tutils.Logf("Reading bucket %q objects\n", bck)
 	msg := &cmn.SelectMsg{Prefix: objectDir, Props: cmn.GetPropsVersion}
-	bckObjs, err := api.ListBucket(baseParams, bck, msg, 0)
+	bckObjs, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 
 	tutils.Logf("Checking bucket %q object versions[total: %d]\n", bck, len(bckObjs.Entries))
@@ -424,7 +424,7 @@ func TestListObjects(t *testing.T) {
 				if test.withSize {
 					msg.AddProps(cmn.GetPropsSize)
 				}
-				bckList, err := api.ListBucket(baseParams, bck, msg, 0)
+				bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
 				if len(bckList.Entries) != totalObjects {
@@ -493,9 +493,9 @@ func TestListObjects(t *testing.T) {
 						Prefix: prefix,
 					}
 					if !test.fast {
-						bckList, err = api.ListBucket(baseParams, bck, msg, 0)
+						bckList, err = api.ListObjects(baseParams, bck, msg, 0)
 					} else {
-						bckList, err = api.ListBucketFast(baseParams, bck, msg)
+						bckList, err = api.ListObjectsFast(baseParams, bck, msg)
 					}
 					tassert.CheckFatal(t, err)
 
@@ -645,14 +645,14 @@ func TestListObjectsPrefix(t *testing.T) {
 						tutils.Logf("Prefix: %q, Expected objects: %d\n", test.prefix, test.expected)
 						msg := &cmn.SelectMsg{Fast: fast, PageSize: test.pageSize, Prefix: test.prefix}
 						tutils.Logf(
-							"LIST bucket %s [fast: %v, prefix: %q, page_size: %d]\n",
+							"list_objects %s [fast: %v, prefix: %q, page_size: %d]\n",
 							bck, msg.Fast, msg.Prefix, msg.PageSize,
 						)
 
-						bckList, err := api.ListBucket(baseParams, bck, msg, test.limit)
+						bckList, err := api.ListObjects(baseParams, bck, msg, test.limit)
 						tassert.CheckFatal(t, err)
 
-						tutils.Logf("LIST output: %d objects\n", len(bckList.Entries))
+						tutils.Logf("list_objects output: %d objects\n", len(bckList.Entries))
 
 						if len(bckList.Entries) != test.expected {
 							t.Errorf("returned %d objects instead of %d", len(bckList.Entries), test.expected)
@@ -772,7 +772,7 @@ func TestBucketListAndSummary(t *testing.T) {
 					t.Errorf("number of objects in summary (%d) is different than expected (%d)", summary.ObjCount, expectedFiles)
 				}
 			} else {
-				objList, err := api.ListBucket(baseParams, m.bck, msg, 0)
+				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
 				if len(objList.Entries) != expectedFiles {
@@ -1111,7 +1111,7 @@ func TestCloudMirror(t *testing.T) {
 	})
 
 	// list
-	objectList, err := api.ListBucket(baseParams, m.bck, nil, 0)
+	objectList, err := api.ListObjects(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objectList.Entries) == m.num, "insufficient number of objects in the Cloud bucket %s, required %d", m.bck, m.num)
 
@@ -1548,13 +1548,13 @@ func TestCopyBucket(t *testing.T) {
 			if cmn.IsProviderAIS(cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}) {
 				srcm.puts()
 
-				srcBckList, err = api.ListBucket(baseParams, srcm.bck, nil, 0)
+				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
 			} else if cmn.IsProviderCloud(cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}, true /*acceptAnon*/) {
 				srcm.cloudPuts(false /*evict*/)
 				defer srcm.cloudDelete()
 
-				srcBckList, err = api.ListBucket(baseParams, srcm.bck, nil, 0)
+				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
 			} else {
 				panic(test.provider)
@@ -1610,10 +1610,10 @@ func TestCopyBucket(t *testing.T) {
 					expectedObjCount += dstm.num
 				}
 
-				dstBckList, err := api.ListBucketFast(baseParams, dstm.bck, nil)
+				dstBckList, err := api.ListObjectsFast(baseParams, dstm.bck, nil)
 				tassert.CheckFatal(t, err)
 				if len(dstBckList.Entries) != expectedObjCount {
-					t.Fatalf("list-bucket: dst %d != %d src", len(dstBckList.Entries), expectedObjCount)
+					t.Fatalf("list_objects: dst %d != %d src", len(dstBckList.Entries), expectedObjCount)
 				}
 				for _, a := range srcBckList.Entries {
 					var found bool

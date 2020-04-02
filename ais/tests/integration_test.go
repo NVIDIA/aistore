@@ -1291,7 +1291,7 @@ func TestAtimeRebalance(t *testing.T) {
 	msg := &cmn.SelectMsg{TimeFormat: time.StampNano}
 	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListBucket(baseParams, m.bck, msg, 0)
+	bucketList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	objNames := make(cmn.SimpleKVs, 10)
@@ -1317,7 +1317,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	msg = &cmn.SelectMsg{TimeFormat: time.StampNano}
 	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
-	bucketListReb, err := api.ListBucket(baseParams, m.bck, msg, 0)
+	bucketListReb, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	itemCount, itemCountOk := len(bucketListReb.Entries), 0

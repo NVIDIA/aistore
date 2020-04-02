@@ -95,10 +95,10 @@ func (m *aisCloudProvider) newBaseParams() api.BaseParams {
 	}
 }
 
-func (m *aisCloudProvider) ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (m *aisCloudProvider) ListObjects(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	err = m.try(func() error {
 		bp := m.newBaseParams()
-		bckList, err = api.ListBucket(bp, cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}, msg, 0)
+		bckList, err = api.ListObjects(bp, cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}, msg, 0)
 		return err
 	})
 	err, errCode = extractErrCode(err)

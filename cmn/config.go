@@ -334,8 +334,8 @@ type ClientConf struct {
 	Timeout        time.Duration `json:"-"`
 	TimeoutLongStr string        `json:"client_long_timeout"`
 	TimeoutLong    time.Duration `json:"-"`
-	ListBucketStr  string        `json:"list_timeout"`
-	ListBucket     time.Duration `json:"-"`
+	ListObjectsStr string        `json:"list_timeout"`
+	ListObjects    time.Duration `json:"-"`
 }
 
 type ProxyConf struct {
@@ -842,8 +842,8 @@ func (c *ClientConf) Validate(_ *Config) (err error) {
 	if c.TimeoutLong, err = time.ParseDuration(c.TimeoutLongStr); err != nil {
 		return fmt.Errorf("invalid client.default_long format %s, err %v", c.TimeoutLongStr, err)
 	}
-	if c.ListBucket, err = time.ParseDuration(c.ListBucketStr); err != nil {
-		return fmt.Errorf("invalid client.list_timeout format %s, err %v", c.ListBucketStr, err)
+	if c.ListObjects, err = time.ParseDuration(c.ListObjectsStr); err != nil {
+		return fmt.Errorf("invalid client.list_timeout format %s, err %v", c.ListObjectsStr, err)
 	}
 	return nil
 }

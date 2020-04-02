@@ -241,7 +241,7 @@ func (ap *azureProvider) headBucket(ctx context.Context, bucket string) (bucketP
 }
 
 // Default page size for Azure is 5000 blobs a page.
-func (ap *azureProvider) ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (ap *azureProvider) ListObjects(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	cntURL := ap.s.NewContainerURL(bucket)
 	marker := azblob.Marker{}
 	if msg.PageMarker != "" {
@@ -260,7 +260,7 @@ func (ap *azureProvider) ListBucket(ctx context.Context, bucket string, msg *cmn
 		return nil, err, status
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return nil, fmt.Errorf("failed to list bucket %s", bucket), resp.StatusCode()
+		return nil, fmt.Errorf("failed to list objects %s", bucket), resp.StatusCode()
 	}
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
 	for _, blob := range resp.Segment.BlobItems {

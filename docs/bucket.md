@@ -7,7 +7,7 @@
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Cloud Bucket](#evict-cloud-bucket)
 - [Bucket Access Attributes](#bucket-access-attributes)
-- [List Bucket](#list-bucket)
+- [List Objects](#list-objects)
   - [Properties and Options](#properties-and-options)
   - [Curl example: listing ais and Cloud buckets](#curl-example-listing-ais-and-cloud-buckets)
   - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
@@ -124,11 +124,12 @@ $ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setbprop
 
 > 18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)
 
-## List Bucket
+## List Objects
 
-ListBucket API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor or a marker for the *next* page retrieval.
+ListObjects API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor or a marker for the *next* page retrieval.
 
 ### Properties and options
+
 The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see examples). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
 
 | Property/Option | Description | Value |
@@ -136,11 +137,11 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 | props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","version","targetURL","copies","status". <sup id="a6">[6](#ft6)</sup> |
 | time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
 | prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
-| pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
+| pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
 | pagesize | The maximum number of object names returned in response | Default value is 1000. GCP and ais bucket support greater page sizes. AWS is unable to return more than [1000 objects in one page](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html) |
 | fast | Perform fast traversal of bucket contents | If `true`, the list of objects is generated much faster but the result is less accurate and has a few limitations: the only name of object is returned(props is ignored) and paging is unsupported as it always returns the entire bucket list(unless prefix is defined) |
 | cached | Return only objects that are cached on local drives | For ais buckets the option is ignored. For cloud buckets, if `cached` is `true`, the cluster does not retrieve any data from the cloud, it reads only information from local drives |
-| taskid | ID of the list bucket operation (string) | Listing a bucket is an asynchronous operation. First, a client should start the operation by sending `"0"` as `taskid` - `"0"` means initialize a new list operation. In response, a proxy returns a `taskid` generated for the operation. Then the client should poll the operation status using the same JSON-encoded structure but with `taskid` set to the received value. If the operation is still in progress the proxy returns status code 202(Accepted) and an empty body. If the operation is completed, it returns 200(OK) and the list of objects. The proxy can return status 410(Gone) indicating that the operation restarted and got a new ID. In this case, the client should read new operation ID from the response body |
+| taskid | ID of the list objects operation (string) | Listing objects is an asynchronous operation. First, a client should start the operation by sending `"0"` as `taskid` - `"0"` means initialize a new list operation. In response, a proxy returns a `taskid` generated for the operation. Then the client should poll the operation status using the same JSON-encoded structure but with `taskid` set to the received value. If the operation is still in progress the proxy returns status code 202(Accepted) and an empty body. If the operation is completed, it returns 200(OK) and the list of objects. The proxy can return status 410(Gone) indicating that the operation restarted and got a new ID. In this case, the client should read new operation ID from the response body |
 
 The full list of bucket properties are:
 

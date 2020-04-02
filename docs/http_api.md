@@ -45,7 +45,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | --- | ---|
 | `cluster` | cluster-wide control-plane operation |
 | `daemon` | control-plane request to update or query specific AIS daemon (proxy or target) |
-| `buckets` | create, destroy, rename and list bucket(s), get bucket names, get bucket properties |
+| `buckets` | create, destroy, rename and list objects, get bucket names, get bucket properties |
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 | `download` | download external resources (datasets, files) into cluster |
 
@@ -111,7 +111,7 @@ ___
 
 <a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
-<a name="ft2">2</a>: See the [List Bucket section](bucket.md#list-bucket) for details. [↩](#a2)
+<a name="ft2">2</a>: See the [List Objects section](bucket.md#list-objects) for details. [↩](#a2)
 
 <a name="ft3">3</a>: Notice the -L option here and elsewhere. [↩](#a3)
 

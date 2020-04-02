@@ -899,7 +899,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		go xact.Run(args)
 	case cmn.ActListObjects:
 		// list the bucket and return
-		if ok := t.listbucket(w, r, bck, msg); !ok {
+		if ok := t.listObjects(w, r, bck, msg); !ok {
 			return
 		}
 

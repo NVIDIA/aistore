@@ -546,7 +546,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 	})
 
 	// free all memory taken by cleaned up tasks
-	// Tasks like ListBucket ones may take up huge amount of memory, so they
+	// Tasks like ListObjects ones may take up huge amount of memory, so they
 	// must be cleaned up as soon as possible
 	if anyTaskDeleted {
 		cmn.FreeMemToOS(time.Second)

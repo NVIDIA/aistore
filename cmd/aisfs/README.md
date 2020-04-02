@@ -52,13 +52,13 @@ and frameworks.
 
 #### Namespace caching
 
-To provide for faster access, `aisfs` periodically queries cluster via list-bucket API and then updates its local cache. By totally eliminating or greatly reducing POSIX lookups, `aisfs` cache may significantly improve I/O throughput, especially when the workload "concentrates" inside few selected POSIX directories. Caching, however, does not affect read/write performance on the level of individual objects (ie., files). To state the same differently, user data is currently _not_ being cached on the file-client side.
+To provide for faster access, `aisfs` periodically queries cluster via list-objects API and then updates its local cache. By totally eliminating or greatly reducing POSIX lookups, `aisfs` cache may significantly improve I/O throughput, especially when the workload "concentrates" inside few selected POSIX directories. Caching, however, does not affect read/write performance on the level of individual objects (ie., files). To state the same differently, user data is currently _not_ being cached on the file-client side.
 
 Performance of the cache depends in part on its configuration described in the [configuration section](#configuration) below.
 
 Note that the current implementation may not be as efficient for buckets containing large numbers of objects (files) with no subdirectories.
 
-When the space required to cache the entire directory hiearchy and file names is larger than the configured memory limit the current implementations "falls" back to the regular mechanism that involves additional HTTP requests to AIS cluster.
+When the space required to cache the entire directory hierarchy and file names is larger than the configured memory limit the current implementations "falls" back to the regular mechanism that involves additional HTTP requests to AIS cluster.
 
 ## Prerequisites
 

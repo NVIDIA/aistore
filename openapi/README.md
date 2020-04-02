@@ -183,7 +183,7 @@ First, create an api instance `bucket_api = ais_client.api.bucket_api.BucketApi(
 
 <a name="ftb1">1</a>: Optional parameter `loc=true` can be used to retrieve just the ais buckets, this causes the `cloud` property to be the empty array
 
-<a name="ftb2">2</a>: See the [List Bucket section](/docs/bucket.md#list-bucket) for details.
+<a name="ftb2">2</a>: See the [List Objects section](/docs/bucket.md#list-objects) for details.
 
 <a name="ftb3">3</a>: See the [List/Range Operations section](/docs/batch.md#listrange-operations) for details.
 

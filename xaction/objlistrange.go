@@ -217,7 +217,7 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 			walk := objwalk.NewWalk(context.Background(), r.t, r.Bck(), msg)
 			bucketListPage, err = walk.LocalObjPage()
 		} else {
-			bucketListPage, err, _ = r.t.Cloud().ListBucket(args.Ctx, r.Bck().Name, msg)
+			bucketListPage, err, _ = r.t.Cloud().ListObjects(args.Ctx, r.Bck().Name, msg)
 		}
 		if err != nil {
 			return err

@@ -30,7 +30,7 @@ func _emptyNode(lom *cluster.LOM) string {
 	return lom.T.Snode().String()
 }
 
-func (m *emptyCloudProvider) ListBucket(ctx context.Context, bucket string,
+func (m *emptyCloudProvider) ListObjects(ctx context.Context, bucket string,
 	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	return nil, cmn.NewErrorCloudBucketOffline(cmn.Bck{Name: bucket}, ""), http.StatusNotFound
 }

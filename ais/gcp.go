@@ -188,11 +188,11 @@ func handleObjectError(objErr error, lom *cluster.LOM, gcpBucket *storage.Bucket
 	return objErr, http.StatusBadRequest
 }
 
-/////////////////
-// LIST BUCKET //
-/////////////////
+//////////////////
+// LIST OBJECTS //
+//////////////////
 
-func (gcpp *gcpProvider) ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (gcpp *gcpProvider) ListObjects(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("list_bucket %s", bucket)
 	}

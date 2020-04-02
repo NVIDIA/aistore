@@ -21,11 +21,10 @@ import (
 
 // selected config overrides via command line
 type ConfigCLI struct {
-	ConfFile       string        // config filename
-	LogLevel       string        // takes precedence over config.Log.Level
-	StatsTime      time.Duration // overrides config.Periodic.StatsTime
-	ListBucketTime time.Duration // overrides config.Timeout.ListBucket
-	ProxyURL       string        // primary proxy URL to override config.Proxy.PrimaryURL
+	ConfFile  string        // config filename
+	LogLevel  string        // takes precedence over config.Log.Level
+	StatsTime time.Duration // overrides config.Periodic.StatsTime
+	ProxyURL  string        // primary proxy URL to override config.Proxy.PrimaryURL
 }
 
 func LoadConfig(clivars *ConfigCLI) (*cmn.Config, bool) {
@@ -90,10 +89,6 @@ func _loadConfig(clivars *ConfigCLI) (config *cmn.Config, changed bool, err erro
 	// CLI override
 	if clivars.StatsTime != 0 {
 		config.Periodic.StatsTime = clivars.StatsTime
-		changed = true
-	}
-	if clivars.ListBucketTime != 0 {
-		config.Client.ListBucket = clivars.ListBucketTime
 		changed = true
 	}
 	if clivars.ProxyURL != "" {
