@@ -450,7 +450,7 @@ func (y *metasyncer) pending() (pending cluster.NodeMap, smap *smapX) {
 					}
 				}
 				if inSync {
-					return
+					continue
 				}
 			}
 			pending.Add(si)

@@ -137,14 +137,14 @@ func newSecondary(name string) *proxyrunner {
 }
 
 // newTransportServer creates a http test server to simulate a proxy or a target, it is used to test the
-// transport of mets sync, which is making sync calls, retry failed calls, etc. it doesn't involve the actual
+// transport of metasync, which is making sync calls, retry failed calls, etc. it doesn't involve the actual
 // content of the meta data received.
 // newTransportServer's http handler calls the sync function which decide how to respond to the sync call,
 // counts number of times sync call received, sends result to the result channel on each sync (error or
 // no error), completes the http request with the status returned by the sync function.
 func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- transportData) *httptest.Server {
 	cnt := 0
-	// notes: needs to assgin these from 's', otherwise 'f' captures what in 's' which changes from call to call
+	// notes: needs to assign these from 's', otherwise 'f' captures what in 's' which changes from call to call
 	isProxy := s.isProxy
 	id := s.id
 	sf := s.sf
@@ -280,7 +280,6 @@ func failFirst(w http.ResponseWriter, r *http.Request, cnt int) (int, error) {
 	if cnt == 1 {
 		return http.StatusForbidden, fmt.Errorf("fail first call")
 	}
-
 	return 0, nil
 }
 
