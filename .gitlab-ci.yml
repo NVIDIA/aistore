@@ -28,6 +28,7 @@ build:linux:
     - CLDPROVIDER="aws" make node
     - CLDPROVIDER="gcp" make node
     - CLDPROVIDER="ais" make node
+    - CLDPROVIDER="azure" make node
     - CLDPROVIDER="" make node
     - make authn
     - make aisfs
@@ -55,7 +56,7 @@ test:long:
   only:
     - schedules
   script:
-    - make deploy <<< $'5\n5\n3\n0'
+    - make deploy <<< $'6\n5\n3\n0'
     - BUCKET="test" make test-long
 
 test:soak:
