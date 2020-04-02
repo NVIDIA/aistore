@@ -50,7 +50,7 @@ var (
 				{
 					Name:         subcmdStartXaction,
 					Usage:        "start an xaction",
-					ArgsUsage:    xactionWithOptionalBucketArgument,
+					ArgsUsage:    "XACTION_NAME [BUCKET_NAME]",
 					Description:  xactKindsMsg,
 					Flags:        startCmdsFlags[subcmdStartXaction],
 					Action:       startXactionHandler,
@@ -81,7 +81,7 @@ var (
 				{
 					Name:         subcmdStopXaction,
 					Usage:        "stops xactions",
-					ArgsUsage:    stopCommandXactionArgument,
+					ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
 					Description:  xactKindsMsg,
 					Flags:        stopCmdsFlags[subcmdStopXaction],
 					Action:       stopXactionHandler,
@@ -108,37 +108,20 @@ var (
 )
 
 func startXactionHandler(c *cli.Context) (err error) {
-	var (
-		bck      cmn.Bck
-		objName  string
-		xactKind = c.Args().First() // empty string if no args given
-	)
-
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "xaction name")
 	}
 
-	if !cmn.IsValidXaction(xactKind) {
-		return fmt.Errorf("%q is not a valid xaction", xactKind)
+	xactID, xactKind, bck, err := parseXactionFromArgs(c)
+	if err != nil {
+		return err
 	}
 
-	switch cmn.XactType[xactKind] {
-	case cmn.XactTypeGlobal:
-		if c.NArg() > 1 {
-			fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a global xaction, ignoring bucket name\n", xactKind)
-		}
-	case cmn.XactTypeBck:
-		bck, objName, err = parseBckObjectURI(c.Args().Get(1))
-		if err != nil {
-			return
-		}
-		if objName != "" {
-			return objectNameArgumentNotSupported(c, objName)
-		}
-		if bck, err = validateBucket(c, bck, "", false); err != nil {
-			return
-		}
-	case cmn.XactTypeTask:
+	if xactID != "" {
+		return fmt.Errorf("%q is not a valid xaction", xactID)
+	}
+
+	if cmn.XactType[xactKind] == cmn.XactTypeTask {
 		return errors.New(`cannot start "type=task" xaction`)
 	}
 
@@ -154,55 +137,28 @@ func startXactionHandler(c *cli.Context) (err error) {
 }
 
 func stopXactionHandler(c *cli.Context) (err error) {
-	var (
-		bck      cmn.Bck
-		objName  string
-		xactKind = c.Args().First() // empty string if no args given
-	)
-
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, fmt.Sprintf("xaction name or %q", allArgument))
+		return missingArgumentsError(c, "xaction name or id")
 	}
 
-	if xactKind == allArgument {
-		xactKind = ""
-		bck.Name = c.Args().Get(1)
-	} else if !cmn.IsValidXaction(xactKind) {
-		return fmt.Errorf("%q is not a valid xaction", xactKind)
-	} else { // valid xaction
-		switch cmn.XactType[xactKind] {
-		case cmn.XactTypeGlobal:
-			if c.NArg() > 1 {
-				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a task xaction, ignoring bucket name\n", xactKind)
-			}
-		case cmn.XactTypeBck:
-			bck, objName, err = parseBckObjectURI(c.Args().Get(1))
-			if err != nil {
-				return
-			}
-			if objName != "" {
-				return objectNameArgumentNotSupported(c, objName)
-			}
-			if bck, err = validateBucket(c, bck, "", false); err != nil {
-				return
-			}
-		case cmn.XactTypeTask:
-			// TODO: we probably should not ignore bucket...
-			if c.NArg() > 1 {
-				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a task xaction, ignoring bucket name\n", xactKind)
-			}
-		}
+	xactID, xactKind, bck, err := parseXactionFromArgs(c)
+	if err != nil {
+		return err
 	}
 
-	xactArgs := api.XactReqArgs{Kind: xactKind, Bck: bck}
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
 	if err = api.AbortXaction(defaultAPIParams, xactArgs); err != nil {
 		return
 	}
 
-	if xactKind == "" {
-		fmt.Fprintln(c.App.Writer, "Stopped all xactions.")
+	if xactID != "" {
+		fmt.Fprintf(c.App.Writer, "Stopped xaction with \"id=%s\".\n", xactID)
 	} else {
-		fmt.Fprintf(c.App.Writer, "Stopped %q xaction.\n", xactKind)
+		if bck.IsEmpty() {
+			fmt.Fprintf(c.App.Writer, "Stopped xaction with \"kind=%s\".\n", xactKind)
+		} else {
+			fmt.Fprintf(c.App.Writer, "Stopped xaction with \"kind=%s\" && \"bucket=%s\".\n", xactKind, bck)
+		}
 	}
 	return
 }

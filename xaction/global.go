@@ -59,6 +59,7 @@ type rebalanceEntry struct {
 }
 
 var (
+	// interface guard
 	_ cmn.XactID = rebID(0)
 )
 

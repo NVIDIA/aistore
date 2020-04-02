@@ -37,7 +37,7 @@ var (
 				{
 					Name:         subcmdWaitXaction,
 					Usage:        "wait for xaction to finish",
-					ArgsUsage:    xactionWithOptionalBucketArgument,
+					ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
 					Flags:        waitCmdsFlags[subcmdWaitXaction],
 					Action:       waitXactionHandler,
 					BashComplete: xactionCompletions,
@@ -68,31 +68,15 @@ func waitXactionHandler(c *cli.Context) error {
 		return missingArgumentsError(c, "xaction name")
 	}
 
-	xactKind, bucketName := c.Args()[0], ""
-	if c.NArg() >= 2 {
-		bucketName = c.Args()[1]
-	}
-
-	if !cmn.IsValidXaction(xactKind) {
-		return fmt.Errorf("%q is not a valid xaction", xactKind)
-	}
-
-	bck, _, err := parseBckObjectURI(bucketName)
+	xactID, xactKind, bck, err := parseXactionFromArgs(c)
 	if err != nil {
 		return err
-	}
-	if bck, err = validateBucket(c, bck, "", true); err != nil {
-		return err
-	}
-
-	if bck.IsEmpty() && cmn.XactType[xactKind] == cmn.XactTypeBck {
-		return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction %q", xactKind))
 	}
 
 	var (
 		aborted     bool
 		refreshRate = calcRefreshRate(c)
-		xactArgs    = api.XactReqArgs{Kind: xactKind, Bck: bck}
+		xactArgs    = api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
 	)
 	for {
 		xactStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)

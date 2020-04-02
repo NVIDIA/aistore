@@ -276,11 +276,13 @@ const (
 
 	XactionsBodyTmpl = XactionStatsHeader +
 		"{{range $daemon := $.Stats }}" + XactionBody + "{{end}}"
-	XactionStatsHeader = "DAEMON ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t ABORTED" +
+	XactionStatsHeader = "DAEMON ID\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t ABORTED" +
 		"{{if $.Verbose}}\t MORE{{end}}\n"
 	XactionBody = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
-		"{{if $daemon.Stats}}\t \t \t \t \t \t \t{{if $.Verbose}} \t {{end}}\n{{end}}"
-	XactionStatsBody = "{{ $daemon.DaemonID }}\t {{$xact.KindX}}\t " +
+		"{{if $daemon.Stats}}\t \t \t \t \t \t \t \t{{if $.Verbose}} \t {{end}}\n{{end}}"
+	XactionStatsBody = "{{ $daemon.DaemonID }}\t " +
+		"{{if $xact.IDX}}{{$xact.IDX}}{{else}}-{{end}}\t " +
+		"{{$xact.KindX}}\t " +
 		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t " +
 		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t " +
 		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +

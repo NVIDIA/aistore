@@ -11,36 +11,46 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-type XactStats interface {
-	Kind() string
-	Bck() cmn.Bck
-	StartTime() time.Time
-	EndTime() time.Time
-	ObjCount() int64
-	BytesCount() int64
-	Aborted() bool
-	Running() bool
-	Finished() bool
-}
+type (
+	XactStats interface {
+		ID() string
+		Kind() string
+		Bck() cmn.Bck
+		StartTime() time.Time
+		EndTime() time.Time
+		ObjCount() int64
+		BytesCount() int64
+		Aborted() bool
+		Running() bool
+		Finished() bool
+	}
 
-type BaseXactStats struct {
-	KindX       string    `json:"kind"`
-	BckX        cmn.Bck   `json:"bck"`
-	StartTimeX  time.Time `json:"start_time"`
-	EndTimeX    time.Time `json:"end_time"`
-	ObjCountX   int64     `json:"obj_count,string"`
-	BytesCountX int64     `json:"bytes_count,string"`
-	AbortedX    bool      `json:"aborted"`
-}
+	BaseXactStats struct {
+		IDX         string    `json:"id"`
+		KindX       string    `json:"kind"`
+		BckX        cmn.Bck   `json:"bck"`
+		StartTimeX  time.Time `json:"start_time"`
+		EndTimeX    time.Time `json:"end_time"`
+		ObjCountX   int64     `json:"obj_count,string"`
+		BytesCountX int64     `json:"bytes_count,string"`
+		AbortedX    bool      `json:"aborted"`
+	}
 
-// Used to cast to generic stats type, with some more information in ext
-type BaseXactStatsExt struct {
-	BaseXactStats
-	Ext interface{} `json:"ext"`
-}
+	// Used to cast to generic stats type, with some more information in ext
+	BaseXactStatsExt struct {
+		BaseXactStats
+		Ext interface{} `json:"ext"`
+	}
+)
+
+var (
+	// interface guard
+	_ XactStats = &BaseXactStats{}
+)
 
 func NewXactStats(xact cmn.Xact) *BaseXactStats {
 	return &BaseXactStats{
+		IDX:         xact.ID().String(),
 		KindX:       xact.Kind(),
 		StartTimeX:  xact.StartTime(),
 		EndTimeX:    xact.EndTime(),
@@ -51,6 +61,7 @@ func NewXactStats(xact cmn.Xact) *BaseXactStats {
 	}
 }
 
+func (b *BaseXactStats) ID() string           { return b.IDX }
 func (b *BaseXactStats) Kind() string         { return b.KindX }
 func (b *BaseXactStats) Bck() cmn.Bck         { return b.BckX }
 func (b *BaseXactStats) StartTime() time.Time { return b.StartTimeX }

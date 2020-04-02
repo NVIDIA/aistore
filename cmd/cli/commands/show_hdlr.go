@@ -138,7 +138,7 @@ var (
 				{
 					Name:         subcmdShowXaction,
 					Usage:        "show xaction details",
-					ArgsUsage:    optionalXactionWithOptionalBucketArgument,
+					ArgsUsage:    "[XACTION_ID|XACTION_NAME] [BUCKET_NAME]",
 					Description:  xactKindsMsg,
 					Flags:        showCmdsFlags[subcmdShowXaction],
 					Action:       showXactionHandler,
@@ -244,40 +244,12 @@ func showNodeHandler(c *cli.Context) (err error) {
 }
 
 func showXactionHandler(c *cli.Context) (err error) {
-	var (
-		bck        cmn.Bck
-		objName    string
-		xactKind   = c.Args().Get(0) // empty string if no arg given
-		bucketName = c.Args().Get(1) // empty string if no arg given
-	)
-
-	if bucketName != "" {
-		bck, objName, err = parseBckObjectURI(bucketName)
-		if err != nil {
-			return
-		}
-		if objName != "" {
-			return objectNameArgumentNotSupported(c, objName)
-		}
-		if bck, err = validateBucket(c, bck, "", false); err != nil {
-			return
-		}
+	xactID, xactKind, bck, err := parseXactionFromArgs(c)
+	if err != nil {
+		return err
 	}
 
-	if xactKind != "" {
-		if !cmn.IsValidXaction(xactKind) {
-			return fmt.Errorf("%q is not a valid xaction", xactKind)
-		}
-
-		// valid xaction
-		if cmn.IsXactTypeBck(xactKind) {
-			if bck.Name == "" {
-				return missingArgumentsError(c, fmt.Sprintf("bucket name for xaction %q", xactKind))
-			}
-		}
-	}
-
-	xactArgs := api.XactReqArgs{Kind: xactKind, Bck: bck, Latest: !flagIsSet(c, allItemsFlag)}
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Latest: !flagIsSet(c, allItemsFlag)}
 	xactStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)
 	if err != nil {
 		return

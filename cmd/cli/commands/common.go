@@ -119,7 +119,6 @@ const (
 const (
 	// Common
 	noArguments           = " "
-	allArgument           = "all"
 	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"
 
 	// Job IDs (download, dsort)
@@ -155,10 +154,7 @@ const (
 	jsonSpecArgument           = "JSON_SPECIFICATION"
 
 	// Xactions
-	xactionArgument                           = "XACTION_NAME"
-	xactionWithOptionalBucketArgument         = "XACTION_NAME [BUCKET_NAME]"
-	optionalXactionWithOptionalBucketArgument = "[XACTION_NAME] [BUCKET_NAME]"
-	stopCommandXactionArgument                = "XACTION_NAME|" + allArgument + " [BUCKET_NAME]"
+	xactionArgument = "XACTION_NAME"
 
 	// List command
 	listCommandArgument = "[PROVIDER://][BUCKET_NAME]"

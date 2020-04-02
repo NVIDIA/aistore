@@ -20,9 +20,9 @@ Started "lru" xaction.
 
 ## Stop xaction
 
-`ais stop xaction XACTION_NAME|all [BUCKET_NAME]`
+`ais stop xaction XACTION_ID|XACTION_NAME [BUCKET_NAME]`
 
-Stop xaction(s). If the first argument is `all`, all xactions are stopped.
+Stop xaction(s).
 The second argument is used to determine the bucket name if it is required.
 
 ### Examples
@@ -38,9 +38,9 @@ Stopped "lru" xaction.
 
 ## Show xaction stats
 
-`ais show xaction [XACTION_NAME] [BUCKET_NAME]`
+`ais show xaction [XACTION_ID|XACTION_NAME] [BUCKET_NAME]`
 
-Display details about `XACTION_NAME` xaction. If no arguments are given, displays details about all xactions.
+Display details about `XACTION_ID` or `XACTION_NAME` xaction. If no arguments are given, displays details about all xactions.
 The second argument is used to determine the bucket name if it is required.
 
 ### Options
@@ -64,9 +64,9 @@ Output of this command differs from the generic xaction output.
 
 ## Wait for xaction
 
-`ais wait xaction XACTION_NAME [BUCKET_NAME]`
+`ais wait xaction XACTION_ID|XACTION_NAME [BUCKET_NAME]`
 
-Wait for the `XACTION_NAME` xaction to finish.
+Wait for the `XACTION_ID` or `XACTION_NAME` xaction to finish.
 
 ### Options
 

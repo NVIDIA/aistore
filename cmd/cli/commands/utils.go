@@ -528,6 +528,41 @@ func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 	return
 }
 
+// Parses [XACTION_ID|XACTION_NAME] [BUCKET_NAME]
+func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck, err error) {
+	xactKind = c.Args().Get(0)
+	bckName := c.Args().Get(1)
+	if !cmn.IsValidXaction(xactKind) {
+		xactID = xactKind
+		xactKind = ""
+	} else {
+		switch cmn.XactType[xactKind] {
+		case cmn.XactTypeGlobal:
+			if c.NArg() > 1 {
+				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a global xaction, ignoring bucket name\n", xactKind)
+			}
+		case cmn.XactTypeBck:
+			var objName string
+			bck, objName, err = parseBckObjectURI(bckName)
+			if err != nil {
+				return "", "", bck, err
+			}
+			if objName != "" {
+				return "", "", bck, objectNameArgumentNotSupported(c, objName)
+			}
+			if bck, err = validateBucket(c, bck, "", true); err != nil {
+				return "", "", bck, err
+			}
+		case cmn.XactTypeTask:
+			// TODO: we probably should not ignore bucket...
+			if c.NArg() > 1 {
+				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a task xaction, ignoring bucket name\n", xactKind)
+			}
+		}
+	}
+	return
+}
+
 func validateLocalBuckets(buckets []cmn.Bck, operation string) error {
 	for _, bck := range buckets {
 		if cmn.IsProviderCloud(bck, true) {
