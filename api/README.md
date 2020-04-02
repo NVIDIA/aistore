@@ -198,8 +198,8 @@ A pointer to an instance of `cmn.BucketProps`, consisting of all the properties 
 Error from AIStore in completing the request
 ___
 
-#### GetBucketNames
-Given the url of an existing proxy in a cluster, `GetBucketNames` returns the names of all existing local and cloud buckets
+#### ListBuckets
+Given the url of an AIS gateway, `ListBuckets` returns the names of all existing local and cloud buckets
 
 ##### Parameters
 | Name       | Type         | Description                                                                           |

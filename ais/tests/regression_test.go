@@ -302,7 +302,7 @@ func TestRenameBucket(t *testing.T) {
 			defer tutils.DestroyBucket(t, proxyURL, bck)
 			defer tutils.DestroyBucket(t, proxyURL, renamedBck)
 
-			b, err := api.GetBucketNames(baseParams, bck)
+			b, err := api.ListBuckets(baseParams, bck)
 			tassert.CheckFatal(t, err)
 
 			doBucketRegressionTest(t, proxyURL, regressionTestData{
@@ -375,7 +375,7 @@ func postRenameWaitAndCheck(t *testing.T, proxyURL string, rtd regressionTestDat
 	tassert.CheckFatal(t, err)
 	tutils.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
 
-	buckets, err := api.GetBucketNames(baseParams, rtd.bck)
+	buckets, err := api.ListBuckets(baseParams, rtd.bck)
 	tassert.CheckFatal(t, err)
 
 	if len(buckets.AIS) != rtd.numBuckets {

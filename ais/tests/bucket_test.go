@@ -1215,7 +1215,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.GetBucketNames(baseParams, srcBck)
+	names, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
 	exists := cmn.StringInSlice(dstBck.Name, names.AIS)
@@ -1326,7 +1326,7 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 	}
 
 	// Check if the old bucket still appears in the list
-	names, err := api.GetBucketNames(baseParams, m.bck)
+	names, err := api.ListBuckets(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
 	if !cmn.StringInSlice(m.bck.Name, names.AIS) || !cmn.StringInSlice(tmpBck.Name, names.AIS) {
@@ -1403,7 +1403,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.GetBucketNames(baseParams, srcBck)
+	names, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
 	if cmn.StringInSlice(srcBck.Name, names.AIS) {
@@ -1701,7 +1701,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.GetBucketNames(baseParams, srcBck)
+	names, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
 	if cmn.StringInSlice(srcBck.Name, names.AIS) {
@@ -1785,7 +1785,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.GetBucketNames(baseParams, srcBck)
+	names, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
 	if !cmn.StringInSlice(srcBck.Name, names.AIS) {

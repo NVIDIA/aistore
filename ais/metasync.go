@@ -296,7 +296,7 @@ outer:
 		switch lversion := y.lastVersion(tag); {
 		case lversion == revs.version():
 			if newCnt == 0 {
-				glog.Errorf("%s: %s duplicated - already sync-ed or pending", y.p.si, s)
+				glog.Warningf("%s: %s duplicated - already sync-ed or pending", y.p.si, s)
 				continue outer
 			}
 			glog.Infof("%s: %s duplicated - proceeding to sync %d new member(s)", y.p.si, s, newCnt)

@@ -464,7 +464,7 @@ func Test_BucketNames(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	buckets, err := api.GetBucketNames(baseParams, cmn.Bck{})
+	buckets, err := api.ListBuckets(baseParams, cmn.Bck{})
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("ais bucket names:\n")
@@ -473,7 +473,7 @@ func Test_BucketNames(t *testing.T) {
 	printBucketNames(t, buckets.Cloud)
 
 	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure} {
-		cloudBuckets, err := api.GetBucketNames(baseParams, cmn.Bck{Provider: provider})
+		cloudBuckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: provider})
 		tassert.CheckError(t, err)
 		if len(cloudBuckets.Cloud) != len(buckets.Cloud) {
 			t.Fatalf("%s: cloud buckets: %d != %d\n", provider, len(cloudBuckets.Cloud), len(buckets.Cloud))
@@ -482,7 +482,7 @@ func Test_BucketNames(t *testing.T) {
 			t.Fatalf("cloud buckets contain ais: %+v\n", cloudBuckets.AIS)
 		}
 	}
-	aisBuckets, err := api.GetBucketNames(baseParams, cmn.Bck{Provider: cmn.ProviderAIS})
+	aisBuckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: cmn.ProviderAIS})
 	tassert.CheckError(t, err)
 	if len(aisBuckets.AIS) != len(buckets.AIS) {
 		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets.AIS), len(buckets.AIS))
@@ -1627,7 +1627,7 @@ func createBucketIfNotCloud(t *testing.T, proxyURL string, bck *cmn.Bck) (create
 
 func isCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck) bool {
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	buckets, err := api.GetBucketNames(baseParams, bck)
+	buckets, err := api.ListBuckets(baseParams, bck)
 	if err != nil {
 		t.Fatalf("Failed to read bucket names: %v", err)
 	}

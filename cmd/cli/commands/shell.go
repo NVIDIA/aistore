@@ -197,7 +197,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 
 		for _, provider := range providers {
 			bck.Provider = provider
-			r, err := api.GetBucketNames(defaultAPIParams, bck)
+			r, err := api.ListBuckets(defaultAPIParams, bck)
 			if err != nil {
 				return
 			}

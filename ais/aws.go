@@ -306,7 +306,7 @@ func (awsp *awsProvider) headBucket(ctx context.Context, bucket string) (bckProp
 // BUCKET NAMES //
 //////////////////
 
-func (awsp *awsProvider) getBucketNames(ctx context.Context) (buckets []string, err error, errCode int) {
+func (awsp *awsProvider) listBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
 	svc := s3.New(createSession(ctx))
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {

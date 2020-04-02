@@ -193,6 +193,8 @@ func (bs *BucketSummary) Aggregate(bckSummary BucketSummary) {
 type BucketsSummaries map[string]BucketSummary
 
 // BucketNames is used to transfer all bucket names known to the system
+// TODO: must change to adequately represent {provider => namespace => bucket} hierarchy
+//       with multiple runtime-supported providers and potentially non-empty namespaces
 type BucketNames struct {
 	Cloud []string `json:"cloud"`
 	AIS   []string `json:"ais"`

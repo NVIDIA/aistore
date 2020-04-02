@@ -41,6 +41,7 @@ const (
 	guestError    = "guest account does not have permissions for the operation"
 	ciePrefix     = "cluster integrity error: cie#"
 	githubHome    = "https://github.com/NVIDIA/aistore"
+	listBuckets   = "listBuckets"
 )
 
 type (
@@ -312,7 +313,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
-		p.getBucketNames(w, r, bck)
+		p.listBuckets(w, r, bck)
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
 		p.invalmsghdlr(w, r, s)
@@ -1304,22 +1305,14 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error)
 	return
 }
 
-func (p *proxyrunner) getBucketNames(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
-	var (
-		bmd      = p.owner.bmd.get()
-		bckQuery = fmt.Sprintf(
-			"?%s=%s&%s=%s",
-			cmn.URLParamProvider, bck.Provider, cmn.URLParamNamespace, bck.Ns,
-		)
-	)
-
+func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
+	var bmd = p.owner.bmd.get()
 	if cmn.IsProviderAIS(bck.Bck) {
-		bucketNames := p.getBucketNamesAIS(bmd)
+		bucketNames := p.listAisBuckets(bmd)
 		body := cmn.MustMarshal(bucketNames)
-		p.writeJSON(w, r, body, "getbucketnames"+bckQuery)
+		p.writeJSON(w, r, body, listBuckets)
 		return
 	}
-
 	si, err := p.owner.smap.get().GetRandTarget()
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1340,7 +1333,7 @@ func (p *proxyrunner) getBucketNames(w http.ResponseWriter, r *http.Request, bck
 		p.invalmsghdlr(w, r, res.details)
 		p.keepalive.onerr(res.err, res.status)
 	} else {
-		p.writeJSON(w, r, res.outjson, "getbucketnames"+bckQuery)
+		p.writeJSON(w, r, res.outjson, listBuckets)
 	}
 }
 

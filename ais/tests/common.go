@@ -443,11 +443,11 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 			}
 		} else {
 			baseParams.URL = m.proxyURL
-			proxyLBNames, err := api.GetBucketNames(baseParams, m.bck)
+			proxyLBNames, err := api.ListBuckets(baseParams, m.bck)
 			tassert.CheckFatal(m.t, err)
 
 			baseParams.URL = target.URL(cmn.NetworkPublic)
-			targetLBNames, err := api.GetBucketNames(baseParams, m.bck)
+			targetLBNames, err := api.ListBuckets(baseParams, m.bck)
 			tassert.CheckFatal(m.t, err)
 			// T3
 			if cmn.StrSlicesEqual(proxyLBNames.AIS, targetLBNames.AIS) {

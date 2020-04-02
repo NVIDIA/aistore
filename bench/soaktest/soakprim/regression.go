@@ -38,7 +38,7 @@ type regressionContext struct {
 
 // Regression runs a constant get request throughout the testing
 func cleanupRegression() {
-	names, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.Bck{Provider: cmn.ProviderAIS})
+	names, err := api.ListBuckets(tutils.BaseAPIParams(primaryURL), cmn.Bck{Provider: cmn.ProviderAIS})
 	cmn.AssertNoErr(err)
 
 	for _, name := range names.AIS {

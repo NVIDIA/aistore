@@ -135,7 +135,7 @@ func saveCredentialsToFile(baseDir, userID, userCreds string) (string, error) {
 //    it from environment variable GOOGLE_CLOUD_PROJECT
 // The function returns:
 //   connection to the cloud, GCP context, project_id, error_string
-// project_id is used only by getBucketNames function
+// project_id is used only by listBuckets function
 
 func createClient(ctx context.Context) (*storage.Client, context.Context, string, error) {
 	userID := getStringFromContext(ctx, ctxUserID)
@@ -276,7 +276,7 @@ func (gcpp *gcpProvider) headBucket(ctx context.Context, bucket string) (bckProp
 // BUCKET NAMES //
 //////////////////
 
-func (gcpp *gcpProvider) getBucketNames(ctx context.Context) (buckets []string, err error, errCode int) {
+func (gcpp *gcpProvider) listBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
 	gcpClient, gctx, projectID, err := createClient(ctx)
 	if err != nil {
 		return

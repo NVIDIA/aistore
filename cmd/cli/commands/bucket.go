@@ -128,7 +128,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 
 // List bucket names
 func listBucketNames(c *cli.Context, bck cmn.Bck) (err error) {
-	bucketNames, err := api.GetBucketNames(defaultAPIParams, bck)
+	bucketNames, err := api.ListBuckets(defaultAPIParams, bck)
 	if err != nil {
 		return
 	}

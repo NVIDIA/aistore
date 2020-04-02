@@ -118,7 +118,7 @@ type (
 	cloudProvider interface {
 		cluster.CloudProvider
 		headBucket(ctx context.Context, bucket string) (bucketProps cmn.SimpleKVs, err error, errCode int)
-		getBucketNames(ctx context.Context) (buckets []string, err error, errCode int)
+		listBuckets(ctx context.Context) (buckets []string, err error, errCode int)
 
 		headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int)
 		getObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int)
@@ -1245,7 +1245,7 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config 
 	})
 }
 
-func (h *httprunner) getBucketNamesAIS(bmd *bucketMD) *cmn.BucketNames {
+func (h *httprunner) listAisBuckets(bmd *bucketMD) *cmn.BucketNames {
 	var (
 		na          = bmd.NumAIS(nil /*all namespaces*/)
 		bucketNames = &cmn.BucketNames{AIS: make([]string, 0, na)}

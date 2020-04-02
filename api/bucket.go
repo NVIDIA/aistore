@@ -77,11 +77,11 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p cmn.
 	return
 }
 
-// GetBucketNames API
+// ListBuckets API
 //
 // provider takes one of Cloud Provider enum names (see cmn/bucket.go). If provider is empty, return all names.
 // Otherwise, return cloud or ais bucket names.
-func GetBucketNames(baseParams BaseParams, bck cmn.Bck) (*cmn.BucketNames, error) {
+func ListBuckets(baseParams BaseParams, bck cmn.Bck) (*cmn.BucketNames, error) {
 	var (
 		bucketNames = &cmn.BucketNames{}
 		path        = cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)
@@ -150,7 +150,7 @@ func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 // DoesBucketExist queries a proxy or target to get a list of all ais buckets,
 // returns true if the bucket is present in the list.
 func DoesBucketExist(baseParams BaseParams, bck cmn.Bck) (bool, error) {
-	buckets, err := GetBucketNames(baseParams, bck)
+	buckets, err := ListBuckets(baseParams, bck)
 	if err != nil {
 		return false, err
 	}

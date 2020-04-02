@@ -497,7 +497,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.writeJSON(w, r, body, "get-what-bmd")
 		} else {
 			provider := r.URL.Query().Get(cmn.URLParamProvider)
-			t.getBucketNames(w, r, provider)
+			t.listBuckets(w, r, provider)
 		}
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
@@ -1204,7 +1204,7 @@ func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) 
 	return
 }
 
-func (t *targetrunner) getBucketNames(w http.ResponseWriter, r *http.Request, provider string) {
+func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, provider string) {
 	var (
 		bmd         = t.owner.bmd.get()
 		bucketNames = &cmn.BucketNames{}
@@ -1213,10 +1213,10 @@ func (t *targetrunner) getBucketNames(w http.ResponseWriter, r *http.Request, pr
 	)
 
 	if all || cmn.IsProviderAIS(bck) {
-		bucketNames = t.getBucketNamesAIS(bmd)
+		bucketNames = t.listAisBuckets(bmd)
 	}
 	if all || cmn.IsProviderCloud(bck, true /*acceptAnon*/) {
-		buckets, err, errcode := t.cloud.getBucketNames(t.contextWithAuth(r.Header))
+		buckets, err, errcode := t.cloud.listBuckets(t.contextWithAuth(r.Header))
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)
 			t.invalmsghdlr(w, r, errMsg, errcode)
@@ -1227,7 +1227,7 @@ func (t *targetrunner) getBucketNames(w http.ResponseWriter, r *http.Request, pr
 	}
 
 	body := cmn.MustMarshal(bucketNames)
-	t.writeJSON(w, r, body, "getbucketnames")
+	t.writeJSON(w, r, body, listBuckets)
 }
 
 func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (filePath string, err error, errCode int) {
