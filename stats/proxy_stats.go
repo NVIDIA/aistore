@@ -32,10 +32,6 @@ type (
 	}
 )
 
-// the items that change in every collection cycle; the system is idle when there are
-// no other stats changes (see also targetLogIdleItems)
-var proxyLogIdleItems = []string{"kalive.µs.min", "kalive.µs", "kalive.µs.max", "pst.n"}
-
 //
 // Prunner
 //
@@ -50,7 +46,6 @@ func (r *Prunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *
 	r.ctracker = make(copyTracker, 24)
 	r.Core.initStatsD(daemonStr, daemonID)
 
-	r.statsRunner.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(r.Core.statsTime))
 	r.statsRunner.daemonStarted = daemonStarted
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
@@ -73,21 +68,15 @@ func (r *Prunner) GetWhatStats() []byte {
 }
 
 // statslogger interface impl
-func (r *Prunner) log(uptime time.Duration) (runlru bool) {
+func (r *Prunner) log(uptime time.Duration) {
 	r.Core.UpdateUptime(uptime)
-	n := r.Core.copyT(r.ctracker)
-	if n > len(proxyLogIdleItems) {
+	if idle := r.Core.copyT(r.ctracker, []string{"kalive", PostCount, Uptime}); !idle {
 		b, _ := jsonCompat.Marshal(r.ctracker)
 		glog.Infoln(string(b))
 	}
-	return
 }
 
 func (r *Prunner) doAdd(nv NamedVal64) {
 	s := r.Core
 	s.doAdd(nv.Name, nv.NameSuffix, nv.Value)
-}
-
-func (r *Prunner) housekeep(runlru bool) {
-	r.statsRunner.housekeep(runlru)
 }

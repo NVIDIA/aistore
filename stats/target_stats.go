@@ -59,10 +59,6 @@ const (
 	RebGlobID = "reb.glob.id"
 )
 
-// the item that changes in every collection cycle; the target is idle when there are
-// no other stats changes (see also proxyLogIdleItems)
-var targetLogIdleItems = []string{"kalive.µs"}
-
 //
 // public type
 //
@@ -117,7 +113,6 @@ func (r *Trunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *
 	lim := cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
 	r.timecounts.capLimit.Store(lim)
 
-	r.statsRunner.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(config.Periodic.StatsTime))
 	r.statsRunner.daemonStarted = daemonStarted
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
@@ -147,14 +142,12 @@ func (r *Trunner) GetWhatStats() []byte {
 	return cmn.MustMarshal(crunner)
 }
 
-func (r *Trunner) log(uptime time.Duration) (runlru bool) {
+func (r *Trunner) log(uptime time.Duration) {
 	r.lines = r.lines[:0]
 
 	// copy stats, reset latencies
 	r.Core.UpdateUptime(uptime)
-	n := r.Core.copyT(r.ctracker)
-
-	if n > len(targetLogIdleItems) {
+	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
 		b, _ := jsonCompat.Marshal(r.ctracker)
 		r.lines = append(r.lines, string(b))
 	}
@@ -163,7 +156,11 @@ func (r *Trunner) log(uptime time.Duration) (runlru bool) {
 	availableMountpaths, _ := fs.Mountpaths.Get()
 	r.timecounts.capIdx++
 	if r.timecounts.capIdx >= r.timecounts.capLimit.Load() {
-		runlru = r.UpdateCapacityOOS(availableMountpaths)
+		if runlru := r.UpdateCapacityOOS(availableMountpaths); runlru {
+			if cmn.GCO.Get().LRU.Enabled {
+				go r.T.RunLRU("")
+			}
+		}
 		r.timecounts.capIdx = 0
 		for mpath, fsCapacity := range r.Capacity {
 			b := cmn.MustMarshal(fsCapacity)
@@ -178,16 +175,6 @@ func (r *Trunner) log(uptime time.Duration) (runlru bool) {
 	for _, ln := range r.lines {
 		glog.Infoln(ln)
 	}
-	return
-}
-
-func (r *Trunner) housekeep(runlru bool) {
-	var config = cmn.GCO.Get()
-	if runlru && config.LRU.Enabled {
-		go r.T.RunLRU("")
-	}
-
-	r.statsRunner.housekeep(runlru)
 }
 
 func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {

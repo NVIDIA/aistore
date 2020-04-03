@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -30,7 +31,7 @@ import (
 //
 //==============================
 
-const logsMaxSizeCheckTime = time.Hour // how often we check if logs have exceeded the limit
+const logsMaxSizeCheckTime = 48 * time.Minute // how often do we check the logs for max accumulated size
 
 const (
 	KindCounter    = "counter"
@@ -130,8 +131,7 @@ type (
 
 	// implemented by the stats runners
 	statslogger interface {
-		log(uptime time.Duration) (runlru bool)
-		housekeep(bool)
+		log(uptime time.Duration)
 		doAdd(nv NamedVal64)
 	}
 	// implements Tracker, inherited by Prunner and Trunner
@@ -141,8 +141,6 @@ type (
 		workCh        chan NamedVal64
 		ticker        *time.Ticker
 		ctracker      copyTracker // to avoid making it at runtime
-		logLimit      int64       // check log size
-		logIdx        int64       // time interval counting
 		daemonStarted *atomic.Bool
 		startedUp     atomic.Bool
 	}
@@ -242,14 +240,17 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	}
 }
 
-func (s *CoreStats) copyT(ctracker copyTracker) (updatedCnt int) {
+func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) {
+	idle = true
 	for name, v := range s.Tracker {
 		switch v.kind {
 		case KindLatency:
 			v.Lock()
 			if v.numSamples > 0 {
 				ctracker[name] = &copyValue{Value: v.Value / v.numSamples}
-				updatedCnt++
+				if !match(name, idlePrefs) {
+					idle = false
+				}
 			}
 			v.Value = 0
 			v.numSamples = 0
@@ -260,7 +261,7 @@ func (s *CoreStats) copyT(ctracker copyTracker) (updatedCnt int) {
 			if v.Value > 0 {
 				throughput = v.Value / cmn.MaxI64(int64(s.statsTime.Seconds()), 1)
 				ctracker[name] = &copyValue{Value: throughput}
-				updatedCnt++
+				idle = false
 				v.Value = 0
 			}
 			v.Unlock()
@@ -275,7 +276,9 @@ func (s *CoreStats) copyT(ctracker copyTracker) (updatedCnt int) {
 			if v.Value > 0 {
 				if prev, ok := ctracker[name]; !ok || prev.Value != v.Value {
 					ctracker[name] = &copyValue{Value: v.Value}
-					updatedCnt++
+					if !match(name, idlePrefs) {
+						idle = false
+					}
 				}
 			}
 			v.RUnlock()
@@ -415,7 +418,7 @@ dummy:
 			}
 			i++
 			if i*sleep > config.Timeout.Startup {
-				glog.Errorf("waiting unusually long time...")
+				glog.Errorf("initializing unusually long time...")
 				i = 0
 			}
 		}
@@ -424,6 +427,7 @@ dummy:
 
 	// for real now
 	glog.Infof("Starting %s", r.GetRunName())
+	hk.Housekeeper.Register(r.GetRunName()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
 	r.ticker = time.NewTicker(config.Periodic.StatsTime)
 	startTime := time.Now()
 	r.startedUp.Store(true)
@@ -434,8 +438,7 @@ dummy:
 				logger.doAdd(nv)
 			}
 		case <-r.ticker.C:
-			runlru := logger.log(time.Since(startTime))
-			logger.housekeep(runlru)
+			logger.log(time.Since(startTime))
 		case <-r.stopCh:
 			r.ticker.Stop()
 			return nil
@@ -449,7 +452,6 @@ func (r *statsRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	if oldConf.Periodic.StatsTime != newConf.Periodic.StatsTime {
 		r.ticker.Stop()
 		r.ticker = time.NewTicker(newConf.Periodic.StatsTime)
-		r.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(newConf.Periodic.StatsTime))
 	}
 }
 
@@ -468,13 +470,11 @@ func (r *statsRunner) AddMany(nvs ...NamedVal64) {
 		r.workCh <- nv
 	}
 }
-func (r *statsRunner) housekeep(bool) {
+
+func (r *statsRunner) recycleLogs() time.Duration {
 	// keep total log size below the configured max
-	r.logIdx++
-	if r.logIdx >= r.logLimit {
-		go r.removeLogs(cmn.GCO.Get())
-		r.logIdx = 0
-	}
+	go r.removeLogs(cmn.GCO.Get())
+	return logsMaxSizeCheckTime
 }
 
 func (r *statsRunner) removeLogs(config *cmn.Config) {
@@ -556,4 +556,14 @@ func (r *statsRunner) AddErrorHTTP(method string, val int64) {
 	default:
 		r.workCh <- NamedVal64{Name: ErrCount, Value: val}
 	}
+}
+
+// (don't log when the only updated vars are those that match "idle" prefixes)
+func match(s string, prefs []string) bool {
+	for _, p := range prefs {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
 }
