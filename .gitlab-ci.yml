@@ -59,6 +59,16 @@ test:long:
     - make deploy <<< $'6\n5\n3\n0'
     - BUCKET="test" make test-long
 
+test:cloud:
+  stage: test-long
+  variables:
+    AWS_REGION: us-west-2
+  only:
+    - schedules
+  script:
+    - make deploy <<< $'6\n5\n3\n1'
+    - BUCKET="ci-aistore" make test-long
+
 test:soak:
   stage: test-long
   only:
