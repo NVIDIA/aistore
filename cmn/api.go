@@ -101,11 +101,12 @@ type MountpathList struct {
 }
 
 type XactionMsg struct {
-	Target string `json:"target,omitempty"`
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	Bck    Bck    `json:"bck"`
-	All    bool   `json:"all,omitempty"`
+	Target   string `json:"target,omitempty"`
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Bck      Bck    `json:"bck"`
+	All      bool   `json:"all,omitempty"`
+	Finished bool   `json:"finished"`
 }
 
 // GetPropsAll is a list of all GetProps* options

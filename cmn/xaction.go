@@ -7,6 +7,7 @@ package cmn
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -21,6 +22,7 @@ type (
 	XactID interface {
 		String() string
 		Int() int64
+		Compare(string) int // -1 = less, 0 = equal, +1 = greater
 	}
 
 	Xact interface {
@@ -88,8 +90,9 @@ func (e *ErrXactExpired) Error() string            { return e.msg }
 func NewErrXactExpired(msg string) *ErrXactExpired { return &ErrXactExpired{msg: msg} }
 func IsErrXactExpired(err error) bool              { _, ok := err.(*ErrXactExpired); return ok }
 
-func (id XactBaseID) String() string { return string(id) }
-func (id XactBaseID) Int() int64     { Assert(false); return 0 }
+func (id XactBaseID) String() string           { return string(id) }
+func (id XactBaseID) Int() int64               { Assert(false); return 0 }
+func (id XactBaseID) Compare(other string) int { return strings.Compare(string(id), other) }
 
 //
 // XactBase - partially implements Xact interface

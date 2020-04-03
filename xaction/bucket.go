@@ -7,6 +7,7 @@ package xaction
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -358,44 +359,20 @@ func (r *FastRen) IsMountpathXact() bool { return true }
 func (r *FastRen) String() string        { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
 func (r *FastRen) Run(rmdVersion int64) {
-	var (
-		allFinished bool
-
-		deadline  = time.Now().Add(cmn.GCO.Get().Timeout.MaxHostBusy) // wait at most `MaxHostBusy` for rebalance/resilver to start
-		xactState = map[string]*struct{ finished bool }{
-			cmn.ActResilver:  {},
-			cmn.ActRebalance: {},
-		}
-	)
-
 	glog.Infoln(r.String())
 
-	// Wait for particular rebalance to start.
-	var running bool
-	for !running && time.Now().Before(deadline) {
+	// FIXME: smart wait for resilver. For now assuming that rebalance takes longer than resilver.
+	var finished bool
+	for !finished {
 		time.Sleep(10 * time.Second)
-		rebStats, err := Registry.GetStats(XactQuery{Kind: cmn.ActRebalance})
+		rebStats, err := Registry.GetStats(XactQuery{
+			ID:       strconv.FormatInt(rmdVersion, 10),
+			Kind:     cmn.ActRebalance,
+			Finished: true,
+		})
 		cmn.AssertNoErr(err)
 		for _, stat := range rebStats {
-			rebStats := stat.(*stats.RebalanceTargetStats)
-			running = running || (stat.Running() && rebStats.Ext.RebID >= rmdVersion)
-		}
-	}
-
-	// Wait for rebalance or resilver to finish.
-	for running && !allFinished {
-		time.Sleep(5 * time.Second)
-		allFinished = true
-		for kind, state := range xactState {
-			if !state.finished {
-				state.finished = true
-				rebStats, err := Registry.GetStats(XactQuery{Kind: kind})
-				cmn.AssertNoErr(err)
-				for _, stat := range rebStats {
-					state.finished = state.finished && stat.Finished()
-				}
-			}
-			allFinished = allFinished && state.finished
+			finished = finished || stat.Finished()
 		}
 	}
 

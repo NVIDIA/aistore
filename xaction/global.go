@@ -6,6 +6,7 @@ package xaction
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -66,6 +67,27 @@ var (
 
 func (id rebID) String() string { return fmt.Sprintf("g%d", id) }
 func (id rebID) Int() int64     { return int64(id) }
+func (id rebID) Compare(other string) int {
+	var (
+		o   int64
+		err error
+	)
+	if o, err = strconv.ParseInt(other, 10, 64); err == nil {
+		goto compare
+	} else if o, err = strconv.ParseInt(other[1:], 10, 64); err == nil {
+		goto compare
+	} else {
+		return -1
+	}
+compare:
+	if int64(id) < o {
+		return -1
+	}
+	if int64(id) > o {
+		return 1
+	}
+	return 0
+}
 
 func (e *rebalanceEntry) Start(_ cmn.Bck) error {
 	xreb := &Rebalance{

@@ -94,6 +94,7 @@ type (
 		Kind       string
 		Bck        *cluster.Bck
 		OnlyRecent bool
+		Finished   bool // only finished xactions (FIXME: only works when `ID` is set)
 	}
 	registryEntries struct {
 		mtx       sync.RWMutex
@@ -173,7 +174,7 @@ func (e *registryEntries) find(id string) baseEntry {
 	e.mtx.RLock()
 	defer e.mtx.RUnlock()
 	for _, entry := range e.entries {
-		if entry.Get().ID().String() == id {
+		if entry.Get().ID().Compare(id) == 0 {
 			return entry
 		}
 	}
@@ -371,8 +372,17 @@ func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []stats.Xa
 
 func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 	if query.ID != "" {
+		if !query.Finished {
+			return r.matchingXactsStats(func(xact cmn.Xact) bool {
+				return xact.ID().Compare(query.ID) == 0
+			}), nil
+		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return xact.ID().String() == query.ID
+			if xact.Kind() == cmn.ActRebalance {
+				// Any rebalance after a given ID that finished and was not aborted
+				return xact.ID().Compare(query.ID) >= 0 && xact.Finished() && !xact.Aborted()
+			}
+			return xact.ID().Compare(query.ID) == 0 && xact.Finished() && !xact.Aborted()
 		}), nil
 	} else if query.Bck == nil && query.Kind == "" {
 		if !query.OnlyRecent {

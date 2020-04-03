@@ -9,12 +9,13 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/reb"
+	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -349,7 +350,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	wg.Wait()
 
-	p.owner.rmd.modify(
+	rmd := p.owner.rmd.modify(
 		func(clone *rebMD) {
 			clone.inc()
 			clone.Resilver = true
@@ -371,42 +372,45 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	wg.Wait()
 
 	// 7. wait for rebalance to finish and unlock buckets
-	go p.waitRebalance(&nlpFrom, &nlpTo)
+	go p.waitRebalance(rmd, &nlpFrom, &nlpTo)
 	return
 }
 
-func (p *proxyrunner) waitRebalance(nlpFrom, nlpTo *cluster.NameLockPair) {
+func (p *proxyrunner) waitRebalance(rmd *rebMD, nlpFrom, nlpTo *cluster.NameLockPair) {
+	defer func() {
+		nlpTo.Unlock()
+		nlpFrom.Unlock()
+	}()
+
 	var (
-		query  = make(url.Values)
-		req    = cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Health), Query: query}
-		smap   = p.owner.smap.get()
-		config = cmn.GCO.Get()
-		sleep  = config.Timeout.CplaneOperation
+		allFinished bool
+		msg         = cmn.XactionMsg{ID: strconv.FormatInt(rmd.Version, 10), Finished: true}
+		reqArgs     = cmn.ReqArgs{
+			Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
+			Body:  cmn.MustMarshal(msg),
+			Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactStats}},
+		}
+		sleep = cmn.GCO.Get().Timeout.CplaneOperation
 	)
-	query.Add(cmn.URLParamRebStatus, "true")
-poll:
-	for {
+	for !allFinished {
 		time.Sleep(sleep)
-		results := p.bcastGet(bcastArgs{req: req, smap: smap})
+		allFinished = true
+		results := p.bcastGet(bcastArgs{req: reqArgs})
 		for res := range results {
 			if res.err != nil {
 				glog.Errorf("%s: (%s: %v)", p.si, res.si, res.err)
-				break poll
+				return
 			}
-			status := &reb.Status{}
-			err := jsoniter.Unmarshal(res.outjson, status)
-			if err != nil {
-				glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", p.si, res.si, res.err)
-				break poll
+			var xactStats []*stats.BaseXactStatsExt
+			if err := jsoniter.Unmarshal(res.outjson, &xactStats); err != nil {
+				glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", p.si, res.si, err)
+				return
 			}
-			if status.Running {
-				continue poll
+			if len(xactStats) == 0 {
+				allFinished = false
 			}
 		}
-		break
 	}
-	nlpTo.Unlock()
-	nlpFrom.Unlock()
 }
 
 // copy-bucket: { confirm existence -- begin -- conditional metasync -- commit -- wait for copy-done and unlock }
@@ -494,21 +498,20 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 
 func (p *proxyrunner) waitCopyBuckets(bckTo *cluster.Bck, nlpFrom, nlpTo *cluster.NameLockPair) {
 	var (
-		msg    = cmn.XactionMsg{Kind: cmn.ActCopyBucket, Bck: bckTo.Bck}
+		// TODO: wait with cmn.XactionExtMsg.Finished
+		msg     = cmn.XactionMsg{Kind: cmn.ActCopyBucket, Bck: bckTo.Bck}
+		reqArgs = cmn.ReqArgs{
+			Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
+			Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactRunStatus}},
+			Body:  cmn.MustMarshal(msg),
+		}
 		config = cmn.GCO.Get()
 		sleep  = config.Timeout.CplaneOperation
 	)
 	time.Sleep(sleep)
 loop:
 	for {
-		results := p.bcastGet(bcastArgs{
-			req: cmn.ReqArgs{
-				Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
-				Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactRunStatus}},
-				Body:  cmn.MustMarshal(msg),
-			},
-			timeout: config.Timeout.CplaneOperation,
-		})
+		results := p.bcastGet(bcastArgs{req: reqArgs, timeout: config.Timeout.CplaneOperation})
 		for res := range results {
 			if res.err != nil {
 				break loop

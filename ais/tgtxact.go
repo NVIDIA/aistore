@@ -39,7 +39,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		xactQuery := xaction.XactQuery{ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRecent: !xactMsg.All}
+		xactQuery := xaction.XactQuery{ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRecent: !xactMsg.All, Finished: xactMsg.Finished}
 		switch what {
 		case cmn.GetWhatXactStats:
 			body, err := t.queryXactStats(xactQuery)
