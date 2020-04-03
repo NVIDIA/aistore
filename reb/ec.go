@@ -179,14 +179,9 @@ type (
 
 	// CT destination (to use later for retransmitting lost CTs)
 	retransmitCT struct {
-		daemonID    string           // destination
-		header      transport.Header // original transport header copy
-		fqn         string           // for sending CT from local drives
-		sgl         *memsys.SGL      // CT was rebuilt and it is in-memory one
-		sliceOffset int64            // slice offset for data slice
-		sliceSize   int64            // slice data size for data slice
-		slicePad    int64            // slice padding size for data slice
-		sliceID     int16
+		daemonID string           // destination
+		header   transport.Header // original transport header copy
+		sliceID  int16
 	}
 
 	// a list of CTs waiting for receive acknowledge from remote targets
@@ -324,23 +319,6 @@ func (ack *ackCT) remove(rt *retransmitCT) {
 	ack.mtx.Unlock()
 }
 
-// Removes all waiting ACKs for the object. Used after sending slices
-// failed, so no ACK would be sent by a destination
-func (ack *ackCT) removeObject(bck cmn.Bck, objName string) {
-	ack.mtx.Lock()
-	l := len(ack.ct)
-	for idx := 0; idx < l; {
-		if ack.ct[idx].header.ObjName != objName || !ack.ct[idx].header.Bck.Equal(bck) {
-			idx++
-			continue
-		}
-		l--
-		ack.ct[idx] = ack.ct[l]
-		ack.ct = ack.ct[:l]
-	}
-	ack.mtx.Unlock()
-}
-
 // Returns the number of ACKs that the node have not received yet
 func (ack *ackCT) waiting() int {
 	ack.mtx.Lock()
@@ -472,9 +450,9 @@ func (s *ecData) appendNodeData(daemonID string, ct *rebCT) {
 	s.mtx.Unlock()
 }
 
-// Sends local CT along with EC metadata to remote targets.
+// Sends local CT along with EC metadata to default target.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
-func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
+func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 	var (
 		lom *cluster.LOM
 		fqn = ct.realFQN
@@ -525,19 +503,14 @@ func (reb *Manager) sendFromDisk(ct *rebCT, targets ...*cluster.Snode) error {
 	if ct.SliceID != 0 {
 		hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
 	}
-	for _, tgt := range targets {
-		dest := &retransmitCT{sliceID: ct.SliceID, daemonID: tgt.ID(), header: hdr, fqn: ct.hrwFQN}
-		reb.ec.ackCTs.add(dest)
-	}
 	reb.ec.onAir.Inc()
 	hdr.Opaque = req.NewPack(mm)
 
-	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, targets...); err != nil {
+	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, target); err != nil {
 		reb.ec.onAir.Dec()
 		mm.Free(hdr.Opaque)
 		fh.Close()
-		reb.ec.ackCTs.removeObject(ct.Bck, ct.ObjName)
-		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", targets[0].ID(), err)
+		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
 	reb.statRunner.AddMany(
 		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
@@ -1423,10 +1396,8 @@ func (reb *Manager) sendLocalData(md *rebArgs, obj *rebObject, si ...*cluster.Sn
 	return reb.sendFromDisk(ct, target)
 }
 
-// Sends one or more replicas of the object to fulfill EC parity requirement.
-// First, check that local target is responsible for it: it must be the first
-// target by HRW that has one of replicas
-func (reb *Manager) bcastLocalReplica(obj *rebObject) error {
+// Sends replica to the default target.
+func (reb *Manager) sendLocalReplica(md *rebArgs, obj *rebObject) error {
 	cmn.Assert(obj.sender != nil) // mustn't happen
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s object %s sender %s", reb.t.Snode(), obj.uid, obj.sender)
@@ -1436,31 +1407,10 @@ func (reb *Manager) bcastLocalReplica(obj *rebObject) error {
 		return nil
 	}
 
-	// calculate how many replicas the target should send
-	ctDiff := obj.requiredCT() - obj.foundCT()
-	if ctDiff == 0 && !obj.mainHasAny {
-		// when 'main' target does not have replica but the number
-		// of replicas is OK, we have to copy replica to main anyway
-		ctDiff = 1
-	}
-	sendTo := make([]*cluster.Snode, 0, ctDiff+1)
+	sendTo := md.smap.Tmap[obj.mainDaemon]
 	ct, ok := obj.locCT[reb.t.Snode().ID()]
 	cmn.Assert(ok)
-	for _, si := range obj.hrwTargets {
-		if _, ok := obj.locCT[si.ID()]; ok {
-			continue
-		}
-		sendTo = append(sendTo, si)
-		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Infof("%s #4.4 - sending %s a replica of %s to %s", reb.t.Snode(), ct.hrwFQN, ct.ObjName, si)
-		}
-		ctDiff--
-		if ctDiff == 0 {
-			break
-		}
-	}
-	cmn.Assert(len(sendTo) != 0)
-	if err := reb.sendFromDisk(ct, sendTo...); err != nil {
+	if err := reb.sendFromDisk(ct, sendTo); err != nil {
 		return fmt.Errorf("failed to send %s: %v", ct.ObjName, err)
 	}
 	return nil
@@ -1559,7 +1509,7 @@ func (reb *Manager) waitForExistingSlices(obj *rebObject) (err error) {
 	return nil
 }
 
-func (reb *Manager) restoreReplicas(obj *rebObject) (err error) {
+func (reb *Manager) restoreReplicas(md *rebArgs, obj *rebObject) (err error) {
 	// add to ZIL if any replica is missing and it is main target
 	if obj.isMain && obj.mainHasAny {
 		if glog.FastV(4, glog.SmoduleReb) {
@@ -1573,7 +1523,7 @@ func (reb *Manager) restoreReplicas(obj *rebObject) (err error) {
 		}
 		reb.ec.waiter.lookupCreate(obj.uid, 0, waitForSingleSlice)
 	}
-	return reb.bcastLocalReplica(obj)
+	return reb.sendLocalReplica(md, obj)
 }
 
 func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
@@ -1603,7 +1553,7 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 
 	// Case #4: object was replicated
 	if obj.isECCopy {
-		return reb.restoreReplicas(obj)
+		return reb.restoreReplicas(md, obj)
 	}
 
 	// Case #5: the object is erasure coded
@@ -1674,60 +1624,15 @@ func (reb *Manager) finalizeBatch(md *rebArgs) error {
 	return nil
 }
 
-func (reb *Manager) tryRetransmit(md *rebArgs, ct *retransmitCT, wg *sync.WaitGroup, cnt *atomic.Int32) {
-	defer wg.Done()
-	si := md.smap.Tmap[ct.daemonID]
-	_, err := ec.RequestECMeta(ct.header.Bck, ct.header.ObjName, si)
-	if err == nil {
-		// Destination got new CT, but failed to send - cleanup ACK
-		if bool(glog.FastV(4, glog.SmoduleReb)) {
-			glog.Infof("%s Did not receive ACK %s/%s but the data transferred. Cleanup ACK",
-				reb.t.Snode().ID(), ct.header.Bck, ct.header.ObjName)
-		}
-		reb.ec.ackCTs.remove(ct)
-		return
-	}
-
-	// Destination still waits for the data, resend
-	glog.Warningf("Did not receive ACK from %s for %s/%s. Retransmit",
-		ct.daemonID, ct.header.Bck, ct.header.ObjName)
-	reb.resendCT(md, ct)
-
-	cnt.Inc()
-	reb.statRunner.AddMany(
-		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
-		stats.NamedVal64{Name: stats.TxRebSize, Value: ct.header.ObjAttrs.Size},
-	)
-}
-
-// Check the list of sent CTs and resent ones that have not been responded.
-// All targets are checked in parallel for better performance
-// Returns the number of resent CTs
-func (reb *Manager) retransmitEC(md *rebArgs) int {
-	var (
-		counter = atomic.NewInt32(0)
-		wg      = &sync.WaitGroup{}
-	)
-	// Note on intended "double" `ackCTs` lock: it is locked for a short
-	// time while the loop is creating goroutines. And if a goroutine manages
-	// to send request and receive respond or resend the whole object before
-	// this loop finishes, that goroutine will wait on its internal lock
-	// until this loop completes before removing ACK from the list.
+// Add to log all slices that were sent to targets but this target
+// has not received ACKs
+func (reb *Manager) logNoAck() {
 	reb.ec.ackCTs.mtx.Lock()
 	for _, dest := range reb.ec.ackCTs.ct {
-		if reb.xact().Aborted() {
-			break
-		}
-		wg.Add(1)
-		go reb.tryRetransmit(md, dest, wg, counter)
+		// TODO: add to ZIL
+		reb.ec.ackCTs.remove(dest)
 	}
 	reb.ec.ackCTs.mtx.Unlock()
-	wg.Wait()
-
-	if reb.xact().Aborted() {
-		return 0
-	}
-	return int(counter.Load())
 }
 
 func (reb *Manager) allAckReceived(_ *rebArgs) bool {
@@ -1760,37 +1665,7 @@ func (reb *Manager) waitECAck(md *rebArgs) {
 	if aborted := reb.waitEvent(md, reb.allAckReceived, maxWait); aborted {
 		return
 	}
-	maxwt := md.config.Rebalance.DestRetryTime
-	maxwt += time.Duration(int64(time.Minute) * int64(md.smap.CountTargets()/10))
-	maxwt = cmn.MinDuration(maxwt, md.config.Rebalance.DestRetryTime*2)
-	curwt := time.Duration(0)
-	for curwt < maxwt {
-		cnt := reb.retransmitEC(md)
-		if cnt == 0 || reb.xact().Aborted() {
-			return
-		}
-		if reb.xact().AbortedAfter(sleep) {
-			glog.Infof("%s: abort", logHdr)
-			return
-		}
-		curwt += sleep
-		for reb.ec.onAir.Load() > 0 {
-			// `retransmit` has resent some CTs, so we have to wait for
-			// transfer to finish, and then reset the time counter.
-			// Time counter does not increase while waiting.
-			if reb.xact().AbortedAfter(sleep) {
-				reb.ec.onAir.Store(0)
-				glog.Infof("%s: abort", logHdr)
-				return
-			}
-			curwt = 0
-		}
-		glog.Warningf("%s: retransmitted %d, more wack...", logHdr, cnt)
-	}
-	// short wait for cluster-wide quiescence after anything retransmitted
-	if aborted := reb.waitQuiesce(md, sleep, reb.nodesQuiescent); aborted {
-		return
-	}
+	reb.logNoAck()
 }
 
 // Rebalances the current batch of broken objects
@@ -1992,7 +1867,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 
 		// TODO: mark this retransmition as non-vital and just add it to LOG
 		// if we do not receive ACK back
-		dest := &retransmitCT{sgl: obj.rebuildSGLs[i], sliceID: int16(i + 1)}
+		dest := &retransmitCT{sliceID: int16(i + 1)}
 		if err := reb.sendFromReader(reader, sl, i+1, cksumVal, si, dest); err != nil {
 			return fmt.Errorf("failed to send slice %d of %s to %s: %v", i, obj.uid, si, err)
 		}
@@ -2074,62 +1949,6 @@ func (reb *Manager) rebuildAndSend(obj *rebObject, slices []*waitCT) error {
 	}
 
 	return reb.rebuildFromSlices(obj, slices)
-}
-
-// Resends any CTs that was sent to a target but the destination has not
-// received it (no ACK and the destination does not have the CT yet)
-func (reb *Manager) resendCT(md *rebArgs, ct *retransmitCT) {
-	var err error
-	si := md.smap.Tmap[ct.daemonID]
-	reb.ec.onAir.Inc()
-	if ct.sgl != nil {
-		trObj := transport.Obj{Hdr: ct.header, Callback: reb.transportECCB}
-		// Resend from memory
-		if ct.sliceSize == 0 {
-			err = reb.streams.Send(trObj, memsys.NewReader(ct.sgl), si)
-		} else {
-			reader := memsys.NewSliceReader(ct.sgl, ct.sliceOffset, ct.sliceSize)
-			err = reb.streams.Send(trObj, reader, si)
-		}
-		if err != nil {
-			glog.Errorf("[sgl] failed to retransmit %s/%s to %s: %v",
-				ct.header.Bck.Name, ct.header.ObjName, ct.daemonID, err)
-			reb.ec.onAir.Dec()
-		}
-		return
-	}
-
-	// Resend a file from local drive
-	cmn.Assert(ct.fqn != "")
-	fh, err := cmn.NewFileHandle(ct.fqn)
-	if err != nil {
-		// It was available, where it has gone? Maybe someone deleted the
-		// object in-between. Force clean the ACK and forget
-		reb.ec.onAir.Dec()
-		reb.ec.ackCTs.remove(ct)
-		return
-	}
-	cb := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
-		// Reader is a file slice, so transport does not know about
-		// a file opened for it and cannot close it
-		fh.Close()
-		reb.ec.onAir.Dec()
-	}
-	trObj := transport.Obj{Hdr: ct.header, Callback: cb}
-	if ct.sliceSize == 0 {
-		// Entire file
-		err = reb.streams.Send(trObj, fh, si)
-	} else {
-		// A slice of a file. Constructor never fails
-		reader, _ := cmn.NewFileSectionHandle(fh, ct.sliceOffset, ct.sliceSize, ct.slicePad)
-		err = reb.streams.Send(trObj, reader, si)
-	}
-	if err != nil {
-		glog.Errorf("[disk] failed to retransmit %s/%s to %s: %v",
-			ct.header.Bck.Name, ct.header.ObjName, ct.daemonID, err)
-		fh.Close()
-		reb.ec.onAir.Dec()
-	}
 }
 
 // Returns XXHash calculated for the reader
