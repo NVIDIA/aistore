@@ -353,7 +353,6 @@ func (reb *Manager) waitStage(si *cluster.Snode, md *rebArgs, stage uint32) bool
 		}
 
 		curwt += sleep
-		time.Sleep(sleep)
 	}
 	return false
 }

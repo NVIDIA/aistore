@@ -934,6 +934,7 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 		errCh   = make(chan error, 2)
 	)
 
+	// TODO: remove sleep
 	// Kind of hack.. Making sure that rebalance starts. We cannot use
 	// `api.WaitForXactionToStart` because we are not sure if a local and/or global
 	// rebalance will be started for all the cases where we use this function.

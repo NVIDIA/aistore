@@ -515,6 +515,7 @@ func AssertFmt(cond bool, args ...interface{}) {
 // this and the other two asserts get inlined and optimized
 func Assert(cond bool) {
 	if !cond {
+		glog.Flush()
 		panic(assertMsg)
 	}
 }
@@ -524,11 +525,13 @@ func Assert(cond bool) {
 // - otherwise the message (e.g. Sprintf) may get evaluated every time
 func AssertMsg(cond bool, msg string) {
 	if !cond {
+		glog.Flush()
 		panic(assertMsg + ": " + msg)
 	}
 }
 func AssertNoErr(err error) {
 	if err != nil {
+		glog.Flush()
 		panic(err)
 	}
 }
