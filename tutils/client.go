@@ -42,7 +42,8 @@ const (
 	//	2. local docker instance		- works
 	// 	3. AWS-deployed cluster 		- not tested (but runs mainly with Ansible)
 	MockDaemonID       = "MOCK"
-	proxyChangeLatency = time.Minute * 2
+	proxyChangeLatency = 2 * time.Minute
+	dsortFinishTimeout = 6 * time.Minute
 )
 
 const (
@@ -653,24 +654,20 @@ func UnregisterNode(proxyURL, sid string) error {
 
 func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName string, timeout time.Duration) error {
 	maxTime := time.Now().Add(timeout)
-
 	for {
 		if time.Now().After(maxTime) {
 			return fmt.Errorf("timed out when downloading %s/%s", bck, objName)
 		}
-
 		reslist, err := api.ListObjects(baseParams, bck, &cmn.SelectMsg{Fast: true}, 0)
 		if err != nil {
 			return err
 		}
-
 		for _, obj := range reslist.Entries {
 			if obj.Name == objName {
 				return nil
 			}
 		}
-
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -820,7 +817,7 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 	Logln("waiting for distributed sort to finish...")
 
 	baseParams := BaseAPIParams(proxyURL)
-	deadline := time.Now().Add(4 * time.Minute)
+	deadline := time.Now().Add(dsortFinishTimeout)
 	for time.Now().Before(deadline) {
 		allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
 		if err != nil {
@@ -831,17 +828,18 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 		allFinished := true
 		for _, metrics := range allMetrics {
 			allAborted = allAborted && metrics.Aborted.Load()
-			allFinished = allFinished && !metrics.Aborted.Load() && metrics.Extraction.Finished && metrics.Sorting.Finished && metrics.Creation.Finished
+			allFinished = allFinished &&
+				!metrics.Aborted.Load() &&
+				metrics.Extraction.Finished &&
+				metrics.Sorting.Finished &&
+				metrics.Creation.Finished
 		}
-
 		if allAborted {
 			return true, nil
 		}
-
 		if allFinished {
 			return false, nil
 		}
-
 		time.Sleep(500 * time.Millisecond)
 	}
 	return false, fmt.Errorf("deadline exceeded")

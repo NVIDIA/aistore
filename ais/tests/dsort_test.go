@@ -542,7 +542,7 @@ func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 			break
 		}
 
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -1656,7 +1656,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 			df.checkOutputShards(0)
 
 			tutils.Logln("checking if metrics are still accessible after some time..")
-			time.Sleep(time.Second * 2)
+			time.Sleep(2 * time.Second)
 
 			// Check if metrics can be fetched after some time
 			df.checkMetrics(false /* expectAbort */)
