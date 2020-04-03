@@ -20,6 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais/cloud"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -433,9 +435,9 @@ func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
 	}
 
 	if user != nil {
-		ct = context.WithValue(ct, ctxUserID, user.userID)
-		ct = context.WithValue(ct, ctxCredsDir, config.Auth.CredDir)
-		ct = context.WithValue(ct, ctxUserCreds, user.creds)
+		ct = context.WithValue(ct, cloud.CtxUserID, user.userID)
+		ct = context.WithValue(ct, cloud.CtxCredsDir, config.Auth.CredDir)
+		ct = context.WithValue(ct, cloud.CtxUserCreds, user.creds)
 	}
 
 	return ct

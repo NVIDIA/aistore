@@ -647,7 +647,17 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		started := time.Now()
 		lom.SetAtimeUnix(started.UnixNano())
 		rc := ioutil.NopCloser(object)
-		if err := m.ctx.t.PutObject(workFQN, rc, lom, cluster.WarmGet, nil, started); err != nil {
+
+		err = m.ctx.t.PutObject(cluster.PutObjectParams{
+			LOM:          lom,
+			Reader:       rc,
+			WorkFQN:      workFQN,
+			RecvType:     cluster.WarmGet,
+			Cksum:        nil,
+			Started:      started,
+			WithFinalize: true,
+		})
+		if err != nil {
 			m.abort(err)
 			return
 		}

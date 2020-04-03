@@ -1,10 +1,10 @@
 // +build azure
 
-// Package ais provides core functionality for the AIStore object storage.
+// Package cloud contains implementation of various cloud providers.
 /*
  * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package cloud
 
 import (
 	"context"
@@ -28,7 +28,7 @@ type (
 	azureProvider struct {
 		u string
 		c *azblob.SharedKeyCredential
-		t *targetrunner
+		t cluster.Target
 		s azblob.ServiceURL
 	}
 )
@@ -55,7 +55,7 @@ const (
 )
 
 var (
-	_ cloudProvider = &azureProvider{}
+	_ cluster.CloudProvider = &azureProvider{}
 )
 
 // Simple path.Join does not work, because it removes duplicated
@@ -130,7 +130,7 @@ func azureURL() string {
 
 // Only one authentication way is supported: with Shared Credentials that
 // requires Account name and key.
-func newAzureProvider(t *targetrunner) (*azureProvider, error) {
+func NewAzure(t cluster.Target) (cluster.CloudProvider, error) {
 	path := azureURL()
 	u, err := url.Parse(path)
 	if err != nil {
@@ -174,7 +174,7 @@ func (ap *azureProvider) azureErrorToAISError(azureError error, bucket, objName 
 	}
 }
 
-func (ap *azureProvider) listBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
+func (ap *azureProvider) ListBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
 	var (
 		o          azblob.ListContainersSegmentOptions
 		marker     azblob.Marker
@@ -224,7 +224,7 @@ func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (error
 	return nil, http.StatusOK
 }
 
-func (ap *azureProvider) headBucket(ctx context.Context, bucket string) (bucketProps cmn.SimpleKVs, err error, errCode int) {
+func (ap *azureProvider) HeadBucket(ctx context.Context, bucket string) (bucketProps cmn.SimpleKVs, err error, errCode int) {
 	bckProps := make(cmn.SimpleKVs)
 	cntURL := ap.s.NewContainerURL(bucket)
 	resp, err := cntURL.GetProperties(ctx, azblob.LeaseAccessConditions{})
@@ -288,7 +288,7 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bucket string, msg *cm
 	return
 }
 
-func (ap *azureProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	objMeta = make(cmn.SimpleKVs)
 	cntURL := ap.s.NewContainerURL(lom.BckName())
 	blobURL := cntURL.NewBlobURL(lom.ObjName)
@@ -311,7 +311,7 @@ func (ap *azureProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	return
 }
 
-func (ap *azureProvider) getObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	cntURL := ap.s.NewContainerURL(lom.BckName())
 	blobURL := cntURL.NewBlobURL(lom.ObjName)
 
@@ -336,15 +336,15 @@ func (ap *azureProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	}
 
 	retryOpts := azblob.RetryReaderOptions{MaxRetryRequests: 3}
-	poi := &putObjInfo{
-		t:            ap.t,
-		lom:          lom,
-		r:            resp.Body(retryOpts),
-		cksumToCheck: cksumToCheck,
-		workFQN:      workFQN,
-		cold:         true,
-	}
-	if err = poi.writeToFile(); err != nil {
+	err = ap.t.PutObject(cluster.PutObjectParams{
+		LOM:          lom,
+		Reader:       resp.Body(retryOpts),
+		WorkFQN:      workFQN,
+		RecvType:     cluster.ColdGet,
+		Cksum:        cksumToCheck,
+		WithFinalize: false,
+	})
+	if err != nil {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -353,7 +353,7 @@ func (ap *azureProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	return
 }
 
-func (ap *azureProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var leaseID string
 	cntURL := ap.s.NewContainerURL(lom.BckName())
 	blobURL := cntURL.NewBlockBlobURL(lom.ObjName)

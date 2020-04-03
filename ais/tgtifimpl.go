@@ -123,23 +123,28 @@ func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Tim
 }
 
 // slight variation vs t.doPut() above
-func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *cluster.LOM, recvType cluster.RecvType, cksum *cmn.Cksum, started time.Time) error {
+func (t *targetrunner) PutObject(params cluster.PutObjectParams) error {
 	poi := &putObjInfo{
-		started: started,
 		t:       t,
-		lom:     lom,
-		r:       reader,
-		workFQN: workFQN,
+		lom:     params.LOM,
+		r:       params.Reader,
+		workFQN: params.WorkFQN,
 		ctx:     context.Background(),
+		started: params.Started,
 	}
-	if recvType == cluster.Migrated {
-		poi.cksumToCheck = cksum
+	if params.RecvType == cluster.Migrated {
+		poi.cksumToCheck = params.Cksum
 		poi.migrated = true
-	} else if recvType == cluster.ColdGet {
+	} else if params.RecvType == cluster.ColdGet {
 		poi.cold = true
-		poi.cksumToCheck = cksum
+		poi.cksumToCheck = params.Cksum
 	}
-	err, _ := poi.putObject()
+	var err error
+	if params.WithFinalize {
+		err, _ = poi.putObject()
+	} else {
+		err = poi.writeToFile()
+	}
 	return err
 }
 
@@ -170,7 +175,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		vchanged, crace bool
 		workFQN         = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
 	)
-	if err, errCode = t.cloud.getObj(ct, workFQN, lom); err != nil {
+	if err, errCode = t.cloud.GetObj(ct, workFQN, lom); err != nil {
 		lom.Unlock(true)
 		err = fmt.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
 		return

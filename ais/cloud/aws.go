@@ -1,10 +1,10 @@
 // +build aws
 
-// Package ais provides core functionality for the AIStore object storage.
+// Package cloud contains implementation of various cloud providers.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package cloud
 
 import (
 	"context"
@@ -39,15 +39,15 @@ type (
 	}
 
 	awsProvider struct {
-		t *targetrunner
+		t cluster.Target
 	}
 )
 
 var (
-	_ cloudProvider = &awsProvider{}
+	_ cluster.CloudProvider = &awsProvider{}
 )
 
-func newAWSProvider(t *targetrunner) (cloudProvider, error) { return &awsProvider{t}, nil }
+func NewAWS(t cluster.Target) (cluster.CloudProvider, error) { return &awsProvider{t}, nil }
 
 // If extractAWSCreds returns no error and awsCreds is nil then the default
 //   AWS client is used (that loads credentials from ~/.aws/credentials)
@@ -111,10 +111,10 @@ func extractAWSCreds(credsList map[string]string) *awsCreds {
 //    aws_secret_access_key = USERSECRET
 // If creation of a session with provided directory and userID fails, it
 // tries to create a session with default parameters
-func createSession(ct context.Context) *session.Session {
+func createSession(ctx context.Context) *session.Session {
 	// TODO: avoid creating sessions for each request
-	userID := getStringFromContext(ct, ctxUserID)
-	userCreds := userCredsFromContext(ct)
+	userID := getStringFromContext(ctx, CtxUserID)
+	userCreds := userCredsFromContext(ctx)
 	if userID == "" || userCreds == nil {
 		if glog.V(5) {
 			glog.Info("No user ID or empty credentials: opening default session")
@@ -273,7 +273,7 @@ func (awsp *awsProvider) ListObjects(ct context.Context, bucket string, msg *cmn
 // HEAD BUCKET //
 /////////////////
 
-func (awsp *awsProvider) headBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[head_bucket] %s", bucket)
 	}
@@ -306,7 +306,7 @@ func (awsp *awsProvider) headBucket(ctx context.Context, bucket string) (bckProp
 // BUCKET NAMES //
 //////////////////
 
-func (awsp *awsProvider) listBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
+func (awsp *awsProvider) ListBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
 	svc := s3.New(createSession(ctx))
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
@@ -328,7 +328,7 @@ func (awsp *awsProvider) listBuckets(ctx context.Context) (buckets []string, err
 // HEAD OBJECT //
 ////////////////
 
-func (awsp *awsProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	objMeta = make(cmn.SimpleKVs)
 
 	sess := createSession(ctx)
@@ -356,7 +356,7 @@ func (awsp *awsProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta
 // GET OBJECT //
 ////////////////
 
-func (awsp *awsProvider) getObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	var (
 		cksum        *cmn.Cksum
 		cksumToCheck *cmn.Cksum
@@ -387,15 +387,15 @@ func (awsp *awsProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	if obj.VersionId != nil {
 		lom.SetVersion(*obj.VersionId)
 	}
-	poi := &putObjInfo{
-		t:            awsp.t,
-		lom:          lom,
-		r:            obj.Body,
-		cksumToCheck: cksumToCheck,
-		workFQN:      workFQN,
-		cold:         true,
-	}
-	if err = poi.writeToFile(); err != nil {
+	err = awsp.t.PutObject(cluster.PutObjectParams{
+		LOM:          lom,
+		Reader:       obj.Body,
+		WorkFQN:      workFQN,
+		RecvType:     cluster.ColdGet,
+		Cksum:        cksumToCheck,
+		WithFinalize: false,
+	})
+	if err != nil {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -408,7 +408,7 @@ func (awsp *awsProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 // PUT OBJECT //
 ////////////////
 
-func (awsp *awsProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var (
 		uploadOutput          *s3manager.UploadOutput
 		cksumType, cksumValue = lom.Cksum().Get()

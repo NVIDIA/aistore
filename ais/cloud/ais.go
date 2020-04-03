@@ -1,8 +1,8 @@
-// Package ais provides core functionality for the AIStore object storage.
+// Package cloud contains implementation of various cloud providers.
 /*
  * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package cloud
 
 import (
 	"context"
@@ -25,7 +25,7 @@ const (
 
 type (
 	aisCloudProvider struct {
-		t           *targetrunner
+		t           cluster.Target
 		clusterConf cmn.CloudConfAIS
 
 		contactURL string   // selected URL to which currently we should contact
@@ -35,10 +35,10 @@ type (
 )
 
 var (
-	_ cloudProvider = &aisCloudProvider{}
+	_ cluster.CloudProvider = &aisCloudProvider{}
 )
 
-func newAISCloudProvider(t *targetrunner, clusterConf cmn.CloudConfAIS) (cloudProvider, error) {
+func NewAIS(t cluster.Target, clusterConf cmn.CloudConfAIS) (cluster.CloudProvider, error) {
 	var (
 		found      bool
 		url        string
@@ -105,7 +105,7 @@ func (m *aisCloudProvider) ListObjects(ctx context.Context, bucket string, msg *
 	return bckList, err, errCode
 }
 
-func (m *aisCloudProvider) headBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (m *aisCloudProvider) HeadBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	err = m.try(func() error {
 		bp := m.newBaseParams()
 
@@ -121,7 +121,7 @@ func (m *aisCloudProvider) headBucket(ctx context.Context, bucket string) (bckPr
 	return bckProps, err, errCode
 }
 
-func (m *aisCloudProvider) listBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
+func (m *aisCloudProvider) ListBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
 	err = m.try(func() error {
 		bp := m.newBaseParams()
 		names, err := api.ListBuckets(bp, cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
@@ -135,7 +135,7 @@ func (m *aisCloudProvider) listBuckets(ctx context.Context) (buckets []string, e
 	return buckets, err, errCode
 }
 
-func (m *aisCloudProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (m *aisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	err = m.try(func() error {
 		var (
 			bp  = m.newBaseParams()
@@ -156,7 +156,7 @@ func (m *aisCloudProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMe
 	return objMeta, err, errCode
 }
 
-func (m *aisCloudProvider) getObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+func (m *aisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	err = m.try(func() error {
 		var (
 			r, w  = io.Pipe()
@@ -178,14 +178,13 @@ func (m *aisCloudProvider) getObj(ctx context.Context, workFQN string, lom *clus
 			errCh <- err
 		}()
 
-		poi := &putObjInfo{
-			t:       m.t,
-			cold:    true,
-			r:       r,
-			lom:     lom,
-			workFQN: workFQN,
-		}
-		err = poi.writeToFile()
+		err := m.t.PutObject(cluster.PutObjectParams{
+			LOM:          lom,
+			Reader:       r,
+			RecvType:     cluster.ColdGet,
+			WorkFQN:      workFQN,
+			WithFinalize: false,
+		})
 		r.CloseWithError(err)
 		if err != nil {
 			return err
@@ -198,7 +197,7 @@ func (m *aisCloudProvider) getObj(ctx context.Context, workFQN string, lom *clus
 	return extractErrCode(err)
 }
 
-func (m *aisCloudProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+func (m *aisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	err = m.try(func() error {
 		cksumValue := lom.Cksum().Value()
 		args := api.PutObjectArgs{

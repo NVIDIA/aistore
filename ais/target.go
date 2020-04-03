@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais/cloud"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -68,7 +70,7 @@ type (
 	// main
 	targetrunner struct {
 		httprunner
-		cloud        cloudProvider // multi-cloud backend
+		cloud        cluster.CloudProvider // multi-cloud backend
 		authn        *authManager
 		fsprg        fsprungroup
 		rebManager   *reb.Manager
@@ -229,18 +231,18 @@ func (t *targetrunner) Run() error {
 			var (
 				clusterConf = providerConf.(cmn.CloudConfAIS)
 			)
-			t.cloud, err = newAISCloudProvider(t, clusterConf)
+			t.cloud, err = cloud.NewAIS(t, clusterConf)
 		case cmn.ProviderAmazon:
-			t.cloud, err = newAWSProvider(t)
+			t.cloud, err = cloud.NewAWS(t)
 		case cmn.ProviderGoogle:
-			t.cloud, err = newGCPProvider(t)
+			t.cloud, err = cloud.NewGCP(t)
 		case cmn.ProviderAzure:
-			t.cloud, err = newAzureProvider(t)
+			t.cloud, err = cloud.NewAzure(t)
 		default:
 			cmn.AssertMsg(false, fmt.Sprintf("unsupported cloud provider: %s", config.Cloud.Provider))
 		}
 	} else {
-		t.cloud, err = newEmptyCloud() // mock
+		t.cloud, err = cloud.NewEmptyCloud() // mock
 	}
 	if err != nil {
 		cmn.ExitLogf("%v", err)
@@ -991,7 +993,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// + cloud
-	bucketProps, err, code = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
+	bucketProps, err, code = t.cloud.HeadBucket(t.contextWithAuth(r.Header), bucket)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
@@ -1111,7 +1113,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		var objMeta cmn.SimpleKVs
-		objMeta, err, errCode = t.cloud.headObj(t.contextWithAuth(r.Header), lom)
+		objMeta, err, errCode = t.cloud.HeadObj(t.contextWithAuth(r.Header), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)
@@ -1190,7 +1192,7 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 // should be called only if the local copy exists
 func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
 	var objMeta cmn.SimpleKVs
-	objMeta, err, errCode = t.cloud.headObj(ctx, lom)
+	objMeta, err, errCode = t.cloud.HeadObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
 		return
@@ -1216,7 +1218,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, provi
 		bucketNames = t.listAisBuckets(bmd)
 	}
 	if all || cmn.IsProviderCloud(bck, true /*acceptAnon*/) {
-		buckets, err, errcode := t.cloud.listBuckets(t.contextWithAuth(r.Header))
+		buckets, err, errcode := t.cloud.ListBuckets(t.contextWithAuth(r.Header))
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)
 			t.invalmsghdlr(w, r, errMsg, errcode)

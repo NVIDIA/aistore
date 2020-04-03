@@ -354,7 +354,15 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	go func() {
 		var err error
 		if !m.rs.DryRun {
-			err = m.ctx.t.PutObject(workFQN, r, lom, cluster.WarmGet, nil, beforeCreation)
+			err = m.ctx.t.PutObject(cluster.PutObjectParams{
+				LOM:          lom,
+				Reader:       r,
+				WorkFQN:      workFQN,
+				RecvType:     cluster.WarmGet,
+				Cksum:        nil,
+				Started:      beforeCreation,
+				WithFinalize: true,
+			})
 			n = lom.Size()
 		} else {
 			n, err = io.Copy(ioutil.Discard, r)

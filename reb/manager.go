@@ -419,14 +419,15 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
 	lom.SetVersion(hdr.ObjAttrs.Version)
 
-	if err := reb.t.PutObject(
-		fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
-		ioutil.NopCloser(objReader),
-		lom,
-		cluster.Migrated,
-		cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
-		time.Now(),
-	); err != nil {
+	if err := reb.t.PutObject(cluster.PutObjectParams{
+		LOM:          lom,
+		Reader:       ioutil.NopCloser(objReader),
+		WorkFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
+		RecvType:     cluster.Migrated,
+		Cksum:        cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		Started:      time.Now(),
+		WithFinalize: true,
+	}); err != nil {
 		glog.Error(err)
 		return
 	}

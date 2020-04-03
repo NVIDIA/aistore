@@ -26,7 +26,6 @@
 package ais
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -34,15 +33,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	jwt "github.com/dgrijalva/jwt-go"
-)
-
-// Declare a new type for Context field names
-type contextID string
-
-const (
-	ctxUserID    contextID = "userID"    // a field name of a context that contains userID
-	ctxCredsDir  contextID = "credDir"   // a field of a context that contains path to directory with credentials
-	ctxUserCreds contextID = "userCreds" // a field of a context that contains user credentials
 )
 
 type (
@@ -136,40 +126,6 @@ func decryptToken(tokenStr string) (*authRec, error) {
 	}
 
 	return rec, nil
-}
-
-// Retrieves a string from context field or empty string if nothing found or
-// the field is not of string type.
-//
-// nolint:unused,deadcode // used by `aws` and `gcp` but needs to compiled by tags
-func getStringFromContext(ct context.Context, fieldName contextID) string {
-	fieldIf := ct.Value(fieldName)
-	if fieldIf == nil {
-		return ""
-	}
-
-	strVal, ok := fieldIf.(string)
-	if !ok {
-		return ""
-	}
-
-	return strVal
-}
-
-// Retreives a userCreds from context or nil if nothing found
-//
-// nolint:unused,deadcode // used by `aws` and `gcp` but needs to compiled by tags
-func userCredsFromContext(ct context.Context) cmn.SimpleKVs {
-	userIf := ct.Value(ctxUserCreds)
-	if userIf == nil {
-		return nil
-	}
-
-	if userCreds, ok := userIf.(cmn.SimpleKVs); ok {
-		return userCreds
-	}
-
-	return nil
 }
 
 // Add tokens to list of invalid ones. After that it cleans up the list

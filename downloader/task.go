@@ -133,7 +133,16 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) er
 	t.setTotalSize(resp)
 
 	cksum := getCksum(t.obj.Link, resp)
-	if err := t.parent.t.PutObject(postFQN, progressReader, lom, cluster.ColdGet, cksum, started); err != nil {
+	err = t.parent.t.PutObject(cluster.PutObjectParams{
+		LOM:          lom,
+		Reader:       progressReader,
+		WorkFQN:      postFQN,
+		RecvType:     cluster.ColdGet,
+		Cksum:        cksum,
+		Started:      started,
+		WithFinalize: true,
+	})
+	if err != nil {
 		return err
 	}
 	if err := lom.Load(); err != nil {

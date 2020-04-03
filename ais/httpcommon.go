@@ -114,17 +114,6 @@ type (
 		statsT stats.Tracker
 	}
 
-	// AWS and GCP provider interface
-	cloudProvider interface {
-		cluster.CloudProvider
-		headBucket(ctx context.Context, bucket string) (bucketProps cmn.SimpleKVs, err error, errCode int)
-		listBuckets(ctx context.Context) (buckets []string, err error, errCode int)
-
-		headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int)
-		getObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int)
-		putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int)
-	}
-
 	glogWriter struct{}
 
 	// BMD & its uuid
@@ -133,11 +122,6 @@ type (
 	errBmdUUIDSplit     struct{ detail string }
 	// ditto Smap
 	errSmapUUIDDiffer struct{ detail string }
-)
-
-const (
-	// nolint:unused,varcheck,deadcode // used by `aws` and `gcp` but needs to compiled by tags
-	initialBucketListSize = 128
 )
 
 ///////////////////

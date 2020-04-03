@@ -1,10 +1,10 @@
 // +build gcp
 
-// Package ais provides core functionality for the AIStore object storage.
+// Package cloud contains implementation of various cloud providers.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package cloud
 
 import (
 	"context"
@@ -48,12 +48,12 @@ type (
 	}
 
 	gcpProvider struct {
-		t *targetrunner
+		t cluster.Target
 	}
 )
 
 var (
-	_ cloudProvider = &gcpProvider{}
+	_ cluster.CloudProvider = &gcpProvider{}
 )
 
 //======
@@ -61,7 +61,7 @@ var (
 // global - FIXME: environ
 //
 //======
-func newGCPProvider(t *targetrunner) (cloudProvider, error) { return &gcpProvider{t}, nil }
+func NewGCP(t cluster.Target) (cluster.CloudProvider, error) { return &gcpProvider{t}, nil }
 
 func getProjID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")
@@ -138,9 +138,9 @@ func saveCredentialsToFile(baseDir, userID, userCreds string) (string, error) {
 // project_id is used only by listBuckets function
 
 func createClient(ctx context.Context) (*storage.Client, context.Context, string, error) {
-	userID := getStringFromContext(ctx, ctxUserID)
+	userID := getStringFromContext(ctx, CtxUserID)
 	userCreds := userCredsFromContext(ctx)
-	credsDir := getStringFromContext(ctx, ctxCredsDir)
+	credsDir := getStringFromContext(ctx, CtxCredsDir)
 	if userID == "" || userCreds == nil || credsDir == "" {
 		return defaultClient(ctx)
 	}
@@ -250,7 +250,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bucket string, msg *cm
 	return
 }
 
-func (gcpp *gcpProvider) headBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("head_bucket %s", bucket)
 	}
@@ -276,7 +276,7 @@ func (gcpp *gcpProvider) headBucket(ctx context.Context, bucket string) (bckProp
 // BUCKET NAMES //
 //////////////////
 
-func (gcpp *gcpProvider) listBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
+func (gcpp *gcpProvider) ListBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
 	gcpClient, gctx, projectID, err := createClient(ctx)
 	if err != nil {
 		return
@@ -307,7 +307,7 @@ func (gcpp *gcpProvider) listBuckets(ctx context.Context) (buckets []string, err
 // HEAD OBJECT //
 /////////////////
 
-func (gcpp *gcpProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	objMeta = make(cmn.SimpleKVs)
 
 	gcpClient, gctx, _, err := createClient(ctx)
@@ -331,7 +331,7 @@ func (gcpp *gcpProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta
 // GET OBJECT //
 ////////////////
 
-func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
@@ -352,15 +352,15 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	}
 	lom.SetCksum(cksum)
 	lom.SetVersion(strconv.FormatInt(attrs.Generation, 10))
-	poi := &putObjInfo{
-		t:            gcpp.t,
-		cold:         true,
-		r:            rc,
-		cksumToCheck: cksumToCheck,
-		lom:          lom,
-		workFQN:      workFQN,
-	}
-	if err = poi.writeToFile(); err != nil {
+	err = gcpp.t.PutObject(cluster.PutObjectParams{
+		LOM:          lom,
+		Reader:       rc,
+		WorkFQN:      workFQN,
+		RecvType:     cluster.ColdGet,
+		Cksum:        cksumToCheck,
+		WithFinalize: false,
+	})
+	if err != nil {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -373,7 +373,7 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 // PUT OBJECT //
 ////////////////
 
-func (gcpp *gcpProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
@@ -385,7 +385,7 @@ func (gcpp *gcpProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 	gcpObj := gcpClient.Bucket(lom.BckName()).Object(lom.ObjName)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
-	buf, slab := daemon.gmm.Alloc()
+	buf, slab := gcpp.t.GetMMSA().Alloc()
 	written, err := io.CopyBuffer(wc, r, buf)
 	slab.Free(buf)
 	if err != nil {

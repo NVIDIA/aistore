@@ -31,8 +31,14 @@ const (
 )
 
 type CloudProvider interface {
-	ListObjects(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
+	GetObj(ctx context.Context, fqn string, lom *LOM) (err error, errCode int)
+	PutObj(ctx context.Context, r io.Reader, lom *LOM) (version string, err error, errCode int)
 	DeleteObj(ctx context.Context, lom *LOM) (error, int)
+	HeadObj(ctx context.Context, lom *LOM) (objMeta cmn.SimpleKVs, err error, errCode int)
+
+	HeadBucket(ctx context.Context, bucket string) (bucketProps cmn.SimpleKVs, err error, errCode int)
+	ListObjects(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
+	ListBuckets(ctx context.Context) (buckets []string, err error, errCode int)
 }
 
 // a callback called by EC PUT jogger after the object is processed and
@@ -42,6 +48,16 @@ type OnFinishObj = func(lom *LOM, err error)
 type GFN interface {
 	Activate() bool
 	Deactivate()
+}
+
+type PutObjectParams struct {
+	LOM          *LOM
+	Reader       io.ReadCloser
+	WorkFQN      string
+	RecvType     RecvType
+	Cksum        *cmn.Cksum // checksum to check
+	Started      time.Time
+	WithFinalize bool // determines if we should also finalize the object
 }
 
 // NOTE: For implementations, please refer to ais/tgtifimpl.go
@@ -59,7 +75,7 @@ type Target interface {
 	RunLRU(id string)
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
-	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum *cmn.Cksum, started time.Time) error
+	PutObject(params PutObjectParams) error
 	CopyObject(lom *LOM, bckTo *Bck, buf []byte, localOnly bool) (bool, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(srcFQN string, bck *Bck, objName string, overwrite, safe, verbose bool) (err error)

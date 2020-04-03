@@ -168,7 +168,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 			return
 		}
 		cmn.Assert(lom.Cksum() != nil)
-		ver, err, errCode = poi.t.cloud.putObj(poi.ctx, file, lom)
+		ver, err, errCode = poi.t.cloud.PutObj(poi.ctx, file, lom)
 		file.Close()
 		if err != nil {
 			err = fmt.Errorf("%s: PUT failed, err: %v", lom, err)
