@@ -1456,8 +1456,6 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes, phases: dsortPhases},
 		func(dsorterType, phase string, t *testing.T) {
-			defer os.RemoveAll(newMountpath)
-
 			for _, adding := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%v", adding), func(t *testing.T) {
 					var (
@@ -1504,6 +1502,22 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 						}
 					}
 
+					defer func() {
+						for target, mpath := range mountpaths {
+							if adding {
+								tutils.Logf("removing mountpath %q to %s...\n", mpath, target.ID())
+								err := api.RemoveMountpath(df.baseParams, target.ID(), mpath)
+								tassert.CheckError(t, err)
+								err = os.RemoveAll(mpath)
+								tassert.CheckError(t, err)
+							} else {
+								tutils.Logf("adding mountpath %q to %s...\n", mpath, target.ID())
+								err := api.AddMountpath(df.baseParams, target, mpath)
+								tassert.CheckError(t, err)
+							}
+						}
+					}()
+
 					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 					defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1531,18 +1545,6 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					tassert.CheckError(t, err)
 
 					df.checkMetrics(true /* expectAbort */)
-
-					for target, mpath := range mountpaths {
-						if adding {
-							tutils.Logf("removing mountpath %q to %s...\n", mpath, target.ID())
-							err := api.RemoveMountpath(df.baseParams, target.ID(), mpath)
-							tassert.CheckFatal(t, err)
-						} else {
-							tutils.Logf("adding mountpath %q to %s...\n", mpath, target.ID())
-							err := api.AddMountpath(df.baseParams, target, mpath)
-							tassert.CheckFatal(t, err)
-						}
-					}
 				})
 			}
 		},

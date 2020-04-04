@@ -330,9 +330,12 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 }
 
 func rwstress(t *testing.T) {
-	if err := cmn.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir)); err != nil {
-		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, rwdir, err)
-	}
+	err := cmn.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir))
+	tassert.CheckFatal(t, err)
+	defer func() {
+		err := os.RemoveAll(fmt.Sprintf("%s/%s", baseDir, rwdir))
+		tassert.CheckFatal(t, err)
+	}()
 
 	var (
 		proxyURL = tutils.GetPrimaryURL()
@@ -356,22 +359,9 @@ func rwstress(t *testing.T) {
 
 	wg.Wait()
 	rwDelLoop(t, proxyURL, fileNames, nil, doneCh, rwRunCleanUp)
-	rwstressCleanup(t)
 
 	if created {
 		tutils.DestroyBucket(t, proxyURL, bck)
-	}
-}
-
-func rwstressCleanup(t *testing.T) {
-	fileDir := fmt.Sprintf("%s/%s", baseDir, rwdir)
-
-	for _, fileName := range fileNames {
-		e := os.Remove(fmt.Sprintf("%s/%s", fileDir, fileName))
-		if e != nil {
-			tutils.Logf("Failed to remove file %s: %v\n", fileName, e)
-			t.Error(e)
-		}
 	}
 }
 
