@@ -22,6 +22,10 @@ before_script:
   - ln -s /go/src/github.com/NVIDIA/aistore /go/src/_/builds/NVIDIA
   - cd /go/src/github.com/NVIDIA/aistore
 
+after_script:
+  - mkdir $CI_PROJECT_DIR/logs
+  - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+
 build:linux:
   stage: build
   script:
@@ -58,6 +62,10 @@ test:long:
   script:
     - make deploy <<< $'6\n5\n3\n0'
     - BUCKET="test" make test-long
+  artifacts:
+    when: on_failure
+    paths: [logs/]
+    expire_in: 2 days
 
 test:cloud:
   stage: test-long
@@ -68,6 +76,10 @@ test:cloud:
   script:
     - make deploy <<< $'6\n5\n3\n1'
     - BUCKET="ci-aistore" make test-long
+  artifacts:
+    when: on_failure
+    paths: [logs/]
+    expire_in: 2 days
 
 test:soak:
   stage: test-long
