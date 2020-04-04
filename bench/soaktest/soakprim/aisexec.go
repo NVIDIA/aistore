@@ -99,15 +99,16 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bck cmn.Bck, numWorker
 	var err error
 
 	if params.stopable {
-		cmd.Start()
-		<-params.stopCh
-		err = cmd.Process.Signal(syscall.SIGTERM)
-		if err != nil {
-			cmd.Process.Kill()
-		} else {
-			err = cmd.Wait()
+		if err = cmd.Start(); err == nil {
+			<-params.stopCh
+			err = cmd.Process.Signal(syscall.SIGTERM)
+			if err != nil {
+				cmd.Process.Kill()
+			} else {
+				err = cmd.Wait()
+			}
+			out = []byte("<Regression Run>")
 		}
-		out = []byte("<Regression Run>")
 	} else {
 		out, err = cmd.Output()
 	}
