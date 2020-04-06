@@ -79,7 +79,6 @@ func (reb *Manager) rebInit(md *rebArgs) bool {
 	// get EC rebalancer ready
 	if md.ecUsed {
 		reb.cleanupEC()
-		reb.ec.waiter.waitFor.Store(0)
 	}
 
 	reb.setXact(xact)

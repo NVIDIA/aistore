@@ -210,7 +210,7 @@ func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *
 		statRunner: strunner,
 		stages:     newNodeStages(),
 	}
-	reb.ec = newECData(t)
+	reb.ec = newECData()
 	reb.initStreams()
 	return reb
 }

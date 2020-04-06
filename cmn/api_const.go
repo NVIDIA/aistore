@@ -260,6 +260,7 @@ const (
 	// l2
 	Buckets   = "buckets"
 	Objects   = "objects"
+	EC        = "ec"
 	Download  = "download"
 	Daemon    = "daemon"
 	Cluster   = "cluster"

@@ -9,7 +9,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -85,22 +86,7 @@ import (
 // 20. All batches processed, rebalance moves to the next stage (rebStageECCleanup).
 //     Targets finalize rebalance.
 
-const (
-	// a target wait for the first slice(not a full replica) to come
-	anySliceID = math.MaxInt16
-)
-
-// A "default" target wait state when it does not have full object
-const (
-	// target wait for a single slice that would be just saved to local drives
-	waitForSingleSlice = iota
-	// full object exists but on another target, wait until that target sends it
-	waitForReplica
-	// full object does exist, wait other targets send their slices and then rebuild
-	waitForAllSlices
-)
-
-// status of an object which CT the target awaits
+// Status of an object which CT the target awaits
 const (
 	// not enough local slices to rebuild the object
 	objWaiting = iota
@@ -118,6 +104,7 @@ type (
 		realFQN string       // mpath CT real
 		hrwFQN  string       // mpath CT by HRW
 		meta    *ec.Metadata // metadata loaded from a local file
+		sgl     *memsys.SGL  // for received data
 
 		cmn.Bck
 		ObjName      string `json:"obj"`
@@ -129,21 +116,11 @@ type (
 		ParitySlices int16  `json:"parity"`
 	}
 
-	// A single object description which CT the targets waits for
-	waitObject struct {
-		// list of CTs to wait
-		cts []*waitCT
-		// wait type: see waitFor* enum
-		wt int
-		// object wait status: objWaiting, objReceived, objDone
-		status int
-	}
-
-	ctList     = map[string][]*rebCT    // EC CTs grouped by a rule
-	ctWaitList = map[string]*waitObject // object uid <-> list of CTs
+	ctList = map[string][]*rebCT // EC CTs grouped by a rule
 	// a full info about an object that resides on the local target.
 	// Contains both global and calculated local info
 	rebObject struct {
+		mtx          sync.Mutex
 		cts          ctList            // obj hash <-> list of CTs with the same hash
 		hrwTargets   []*cluster.Snode  // the list of targets that should have CT
 		rebuildSGLs  []*memsys.SGL     // temporary slices for [re]building EC
@@ -154,19 +131,20 @@ type (
 		mainDaemon   string            // hrw target for an object
 		uid          string            // unique identifier for the object (Bucket#Object#IsAIS)
 		bck          cmn.Bck
-		objName      string // object name for faster access
-		objSize      int64  // object size
-		sliceSize    int64  // a size of an object slice
-		dataSlices   int16  // the number of data slices
-		paritySlices int16  // the number of parity slices
-		mainSliceID  int16  // sliceID on the main target
-		isECCopy     bool   // replicated or erasure coded
-		hasCT        bool   // local target has any obj's CT
-		mainHasAny   bool   // is default target has any part of the object
-		isMain       bool   // is local target a default one
-		inHrwList    bool   // is local target should have any CT according to HRW
-		fullObjFound bool   // some target has the full object, no need to rebuild, just copy
-		hasAllSlices bool   // true: all slices existed before rebalance
+		objName      string       // object name for faster access
+		objSize      int64        // object size
+		sliceSize    int64        // a size of an object slice
+		ready        atomic.Int32 // object state: objWaiting, objReceived, objDone
+		dataSlices   int16        // the number of data slices
+		paritySlices int16        // the number of parity slices
+		mainSliceID  int16        // sliceID on the main target
+		isECCopy     bool         // replicated or erasure coded
+		hasCT        bool         // local target has any obj's CT
+		mainHasAny   bool         // is default target has any part of the object
+		isMain       bool         // is local target a default one
+		inHrwList    bool         // is local target should have any CT according to HRW
+		fullObjFound bool         // some target has the full object, no need to rebuild, just copy
+		hasAllSlices bool         // true: all slices existed before rebalance
 	}
 	rebBck struct {
 		objs map[string]*rebObject // maps ObjectName <-> object info
@@ -182,6 +160,13 @@ type (
 		daemonID string           // destination
 		header   transport.Header // original transport header copy
 		sliceID  int16
+	}
+	// Struct to receive data from GET slice API request
+	sliceGetResp struct {
+		err     error
+		sgl     *memsys.SGL
+		meta    *ec.Metadata
+		sliceID int16
 	}
 
 	// a list of CTs waiting for receive acknowledge from remote targets
@@ -200,29 +185,12 @@ type (
 	ecData struct {
 		cts    ctList // maps daemonID <-> CT List
 		mtx    sync.Mutex
-		waiter *ctWaiter // helper to manage a list of CT for current batch to wait by local target
 		broken []*rebObject
 		ackCTs ackCT
 		onAir  atomic.Int64 // the number of CTs passed to transport but not yet sent to a remote target
 
 		// list of CTs that should be moved between local mpaths
 		localActions []*rebCT
-	}
-	// a description of a CT that local target awaits from another target
-	waitCT struct {
-		mtx     sync.Mutex
-		sgl     *memsys.SGL  // SGL to save the received CT
-		meta    *ec.Metadata // CT's EC metadata
-		sliceID int16        // slice ID to wait (special value `anySliceID` - wait for the first slice for the object)
-		recv    atomic.Bool  // if this CT has been received already (for proper clean, rebuild, and check)
-	}
-	// helper object that manages slices the local target waits for from remote targets
-	ctWaiter struct {
-		mx        sync.Mutex
-		waitFor   atomic.Int32 // the current number of slices local target awaits
-		toRebuild atomic.Int32 // the current number of objects the target has to rebuild
-		objs      ctWaitList   // the CT for the current batch
-		mem       *memsys.MMSA
 	}
 )
 
@@ -305,6 +273,11 @@ func (ack *ackCT) add(rt *retransmitCT) {
 // Even for 10 parity slices it makes only 80 items in array at max.
 func (ack *ackCT) remove(rt *retransmitCT) {
 	ack.mtx.Lock()
+	ack.removeUnlocked(rt)
+	ack.mtx.Unlock()
+}
+
+func (ack *ackCT) removeUnlocked(rt *retransmitCT) {
 	for idx, c := range ack.ct {
 		if !rt.equal(c) {
 			continue
@@ -316,15 +289,6 @@ func (ack *ackCT) remove(rt *retransmitCT) {
 		ack.ct = ack.ct[:l]
 		break
 	}
-	ack.mtx.Unlock()
-}
-
-// Returns the number of ACKs that the node have not received yet
-func (ack *ackCT) waiting() int {
-	ack.mtx.Lock()
-	cnt := len(ack.ct)
-	ack.mtx.Unlock()
-	return cnt
 }
 
 // Keep allocated capacity for the next batch
@@ -419,9 +383,8 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 // EC Rebalancer methods and utilities
 //
 
-func newECData(t cluster.Target) *ecData {
+func newECData() *ecData {
 	return &ecData{
-		waiter:       newWaiter(t.GetMMSA()),
 		cts:          make(ctList),
 		localActions: make([]*rebCT, 0),
 		ackCTs:       ackCT{ct: make([]*retransmitCT, 0)},
@@ -582,7 +545,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 //   1. Full object/replica is received
 //   2. A CT is received and this target is not the default target (it
 //      means that the CTs came from default target after EC had been rebuilt)
-func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, hdr transport.Header) error {
+func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Header) error {
 	cmn.Assert(req.md != nil)
 	var (
 		ctFQN    string
@@ -641,7 +604,7 @@ func (reb *Manager) saveCTToDisk(data *memsys.SGL, req *pushReq, hdr transport.H
 		return err
 	}
 	tmpFQN := mpath.MakePathFQN(hdr.Bck, fs.WorkfileType, hdr.ObjName)
-	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, memsys.NewReader(data), buffer, true)
+	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, data, buffer, true)
 	if err == nil {
 		if req.md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
 			err = fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
@@ -683,31 +646,54 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 		glog.Infof(">>> %s got CT %d for %s/%s %d", reb.t.Snode(), sliceID, hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Size)
 	}
 	uid := uniqueWaitID(hdr.Bck, hdr.ObjName)
-	waitFor := reb.ec.waiter.lookupCreate(uid, int16(sliceID), waitForSingleSlice)
-	if waitFor == nil {
-		return fmt.Errorf(fmtErrCleanedUp, hdr.Bck, hdr.ObjName, sliceID)
-	}
-	waitFor.mtx.Lock()
-	defer waitFor.mtx.Unlock()
-	// Double check - sgl could be freed while awaiting Lock
-	if waitFor.sgl == nil {
-		return fmt.Errorf(fmtErrCleanedUp, hdr.Bck, hdr.ObjName, sliceID)
-	}
-	if waitFor.recv.Load() {
+
+	// TODO: batch size can be changed on the fly
+	batchSize := cmn.GCO.Get().EC.BatchSize
+	obj := reb.objByUID(batchSize, uid)
+	if obj == nil {
+		glog.Warningf("DaemonID %s sent slice %d of %s to late?", req.daemonID, req.md.SliceID, uid)
 		return nil
 	}
-
-	waitFor.meta = req.md
-	n, err := io.Copy(waitFor.sgl, reader)
+	obj.mtx.Lock()
+	defer obj.mtx.Unlock()
+	ct, ok := obj.locCT[req.daemonID]
+	cmn.AssertMsg(ok || sliceID != 0, req.daemonID+" : "+uid)
+	if !ok {
+		// Main target sends a rebuilt slice, need to receive it and save.
+		if err := reb.saveCTToDisk(reader, req, hdr); err != nil {
+			glog.Errorf("failed to save CT %d of %s: %v", sliceID, hdr.ObjName, err)
+			if obj.isMain {
+				reb.abortRebalance()
+				return err
+			}
+			// If the target is not a default one, return `nil immediately`.
+			// In this case, the default target does receive ACK and marks
+			// the slice to resend by a scrubber
+		}
+		return nil
+	}
+	if ct.sgl != nil || obj.ready.Load() != objWaiting {
+		cmn.DrainReader(reader)
+		glog.Infof(fmtErrCleanedUp, hdr.Bck, hdr.ObjName, sliceID)
+		return nil
+	}
+	size := cmn.MinI64(obj.objSize, cmn.MiB)
+	mmsa := reb.t.GetMMSA()
+	ct.sgl = mmsa.NewSGL(size)
+	ct.meta = req.md
+	buf, slab := mmsa.Alloc(size)
+	n, err := io.CopyBuffer(ct.sgl, reader, buf)
+	slab.Free(buf)
 	if err != nil {
 		return fmt.Errorf("failed to read slice %d for %s/%s: %v", sliceID, hdr.Bck, hdr.ObjName, err)
 	}
+
 	reb.statRunner.AddMany(
 		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
 		stats.NamedVal64{Name: stats.RxRebSize, Value: n},
 	)
 	if hdr.ObjAttrs.CksumValue != "" {
-		ckval, _ := cksumForSlice(memsys.NewReader(waitFor.sgl), waitFor.sgl.Size(), reb.t.GetMMSA())
+		ckval, _ := cksumForSlice(memsys.NewReader(ct.sgl), ct.sgl.Size(), reb.t.GetMMSA())
 		if hdr.ObjAttrs.CksumValue != ckval {
 			reb.statRunner.AddMany(stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1})
 			return cmn.NewBadDataCksumError(
@@ -716,20 +702,26 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 				"rebalance")
 		}
 	}
-	waitFor.recv.Store(true)
-	waitRebuild := reb.ec.waiter.updateRebuildInfo(uid)
-
-	if !waitRebuild || sliceID == 0 {
-		if err := reb.saveCTToDisk(waitFor.sgl, req, hdr); err != nil {
+	saveToDisk := ct.SliceID == 0 || !obj.isMain
+	if saveToDisk {
+		obj.ready.Store(objDone)
+		if err := reb.saveCTToDisk(memsys.NewReader(ct.sgl), req, hdr); err != nil {
 			glog.Errorf("failed to save CT %d of %s: %v", sliceID, hdr.ObjName, err)
-			reb.abortRebalance()
+			if obj.isMain {
+				reb.abortRebalance()
+				return err
+			}
+			// If the target is not a default one, return `nil immediately`.
+			// In this case, the default target does receive ACK and marks
+			// the slice to resend by a scrubber
+			return nil
 		}
+	} else {
+		reb.updateRebuildInfo(obj)
 	}
-
-	// notify that another slice is received successfully
-	remains := reb.ec.waiter.waitFor.Dec()
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("CTs to get remains: %d", remains)
+		waitSlice, waitRebuild := reb.toWait(batchSize)
+		glog.Infof("CTs to get remains: %d, waiting for rebuild: %d", waitSlice, waitRebuild)
 	}
 
 	// ACK
@@ -1050,7 +1042,6 @@ func (reb *Manager) cleanupEC() {
 	reb.ec.localActions = make([]*rebCT, 0)
 	reb.ec.broken = nil
 	reb.ec.mtx.Unlock()
-	reb.ec.waiter.cleanup()
 }
 
 // Main method - starts all mountpaths walkers, waits for them to finish, and
@@ -1312,6 +1303,7 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 		glog.Infof("%s: slice found %d vs required %d[all slices: %v], is in HRW %v [sender %s]",
 			obj.uid, ctFound, ctReq, obj.hasAllSlices, obj.inHrwList, obj.sender)
 	}
+	reb.stages.currBatch.Store(0)
 	return nil
 }
 
@@ -1320,10 +1312,10 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 func (reb *Manager) shouldSkipObj(obj *rebObject) bool {
 	anyOnMain := obj.mainHasAny && obj.mainSliceID == 0
 	noOnSecondary := !obj.hasCT && !obj.isMain
-	notSender := obj.sender != nil && obj.isECCopy && obj.sender.ID() != reb.t.Snode().ID()
+	notSender := obj.sender != nil && obj.isECCopy && obj.sender.ID() != reb.t.Snode().ID() && !obj.isMain
 	skip := anyOnMain || noOnSecondary || notSender
 	if skip && bool(glog.FastV(4, glog.SmoduleReb)) {
-		glog.Infof("#0 SKIP %s - main has it", obj.uid)
+		glog.Infof("#0 SKIP %s - main has it: %v - %v -%v", obj.uid, anyOnMain, noOnSecondary, notSender)
 		// TODO: else add to ZIL
 	}
 	return skip
@@ -1416,46 +1408,191 @@ func (reb *Manager) sendLocalReplica(md *rebArgs, obj *rebObject) error {
 	return nil
 }
 
-func (reb *Manager) allCTReceived(md *rebArgs) bool {
-	for {
+func (reb *Manager) rebuildReceived(md *rebArgs) {
+	for obj := reb.firstReadyObj(md); obj != nil; obj = reb.firstReadyObj(md) {
 		if reb.xact().Aborted() {
-			return false
+			return
 		}
-		uid, wObj := reb.ec.waiter.nextReadyObj()
-		if wObj == nil {
+		obj.mtx.Lock()
+		err := reb.rebuildAndSend(obj)
+		obj.ready.Store(objDone)
+		obj.mtx.Unlock()
+		if err != nil {
+			glog.Errorf("Failed to rebuild %s: %v", obj.uid, err)
+			reb.abortRebalance()
 			break
 		}
-		var obj *rebObject
-		batchCurr := int(reb.stages.currBatch.Load())
-		for j := 0; j+batchCurr < len(reb.ec.broken) && j < md.config.EC.BatchSize; j++ {
-			o := reb.ec.broken[j+batchCurr]
-			if uid == o.uid {
-				obj = o
-				break
-			}
-		}
-		cmn.Assert(obj != nil)
-		// Rebuild only if there were missing slices or main object.
-		// Otherwise, just mark it done and continue.
-		rebuildSlices := obj.isECCopy && !obj.hasAllSlices
-		rebuildObject := !obj.mainHasAny && !obj.fullObjFound
-		if rebuildSlices || rebuildObject {
-			if err := reb.rebuildAndSend(obj, wObj.cts); err != nil {
-				glog.Errorf("Failed to rebuild %s: %v", uid, err)
-			}
-		}
-		wObj.status = objDone
-		reb.ec.waiter.toRebuild.Dec()
 	}
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("CT waitFor: %d, toRebuild: %d", reb.ec.waiter.waitFor.Load(), reb.ec.waiter.toRebuild.Load())
-	}
-
-	// must be the last check, because even if a target has all slices
-	// it may need to rebuild and send repaired slices
-	return reb.ec.waiter.waitFor.Load() == 0 && reb.ec.waiter.toRebuild.Load() == 0
 }
 
+// Internal function used in goroutines, so it does not return anything.
+// Requests a CT and its metadata from a target:
+//   1. Gets metadata from the remote target
+//   2. If it exists, downloads the CT into `slice` writer
+//   3. When successful, fills `slice` fields with received information
+//   4. On error, copies the error to `slice` argument
+func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp) {
+	// First, read metadata
+	qMeta := url.Values{}
+	qMeta = cmn.AddBckToQuery(qMeta, obj.bck)
+	qMeta.Add(cmn.URLParamECMeta, "true")
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("Getting slice %d for %s via API", slice.sliceID, obj.objName)
+	}
+	path := cmn.URLPath(cmn.Version, cmn.Objects, obj.bck.Name, obj.objName)
+	urlPath := si.URL(cmn.NetworkIntraData) + path
+
+	var (
+		rq   *http.Request
+		resp *http.Response
+	)
+	if rq, slice.err = http.NewRequest(http.MethodHead, urlPath, nil); slice.err != nil {
+		return
+	}
+	rq.URL.RawQuery = qMeta.Encode()
+	if resp, slice.err = http.DefaultClient.Do(rq); slice.err != nil {
+		return
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		slice.err = fmt.Errorf("failed to read metadata, HTTP status: %d", resp.StatusCode)
+		return
+	}
+	metaBytes := resp.Header.Get(cmn.HeaderObjECMeta)
+	if metaBytes == "" {
+		slice.err = fmt.Errorf("empty metadata")
+		return
+	}
+	metadata := ec.Metadata{}
+	if slice.err = jsoniter.Unmarshal([]byte(metaBytes), &metadata); slice.err != nil {
+		return
+	}
+
+	// Second, get the slice
+	if slice.sliceID != 0 {
+		path = cmn.URLPath(cmn.Version, cmn.EC, obj.bck.Name, obj.objName)
+	} else {
+		path = cmn.URLPath(cmn.Version, cmn.Objects, obj.bck.Name, obj.objName)
+	}
+	urlPath = si.URL(cmn.NetworkIntraData) + path
+	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {
+		return
+	}
+	rq.URL.RawQuery = qMeta.Encode()
+	if resp, slice.err = http.DefaultClient.Do(rq); slice.err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		cmn.DrainReader(resp.Body)
+		slice.err = fmt.Errorf("failed to read slice, HTTP status: %d", resp.StatusCode)
+		return
+	}
+	if _, slice.err = io.Copy(slice.sgl, resp.Body); slice.err != nil {
+		return
+	}
+	slice.meta = &metadata
+}
+
+// Fetches missing slices from targets that have not sent them yet.
+// Returns and error if it failed to get sufficient number of slices.
+func (reb *Manager) rerequestObj(md *rebArgs, obj *rebObject) error {
+	if obj.ready.Load() == objDone {
+		return nil
+	}
+
+	// detect received
+	toRequest := make(map[string]*sliceGetResp, len(obj.locCT))
+	for daemonID, rec := range obj.locCT {
+		if rec.sgl != nil {
+			continue
+		}
+		rec.sgl = reb.t.GetMMSA().NewSGL(cmn.MinI64(obj.objSize, cmn.MiB))
+		toRequest[daemonID] = &sliceGetResp{sliceID: rec.SliceID, sgl: rec.sgl}
+	}
+	if len(toRequest) == 0 {
+		return nil
+	}
+
+	// receive all missing slices
+	wg := &sync.WaitGroup{}
+	for sid, slice := range toRequest {
+		si := md.smap.Tmap[sid]
+		wg.Add(1)
+		go func(si *cluster.Snode, slice *sliceGetResp) {
+			defer wg.Done()
+			reb.getCT(si, obj, slice)
+			if slice.err != nil {
+				// It is OK to have one or few reads failed. Later it
+				// checks if there are enough slices to rebuild.
+				glog.Errorf("Failed to read slice %d from %s: %v", slice.sliceID, si.Name(), slice.err)
+			}
+		}(si, slice)
+	}
+	wg.Wait()
+	for sid, resp := range toRequest {
+		if resp.err != nil {
+			continue
+		}
+		obj.locCT[sid].meta = resp.meta
+	}
+	// update object status: e.g, mark an object ready to rebuild if it
+	// received enough slice to do it
+	reb.updateRebuildInfo(obj)
+	state := obj.ready.Load()
+	if state == objWaiting {
+		return fmt.Errorf("failed to restore %s/%s - insuffient number of slices", obj.bck, obj.objName)
+	}
+	return nil
+}
+
+// When the target finishes the current batch, it checks if it has to
+// rebuild any objects. When such object is found and the target still has
+// not received enough slices, it rerequest them from all targets that have
+// slices and have not sent anything to this one. After receiving all the
+// data, the function updates the object status (changes objWaiting to
+// objReceived or objDone depending on whether the object needs rebuilding)
+func (reb *Manager) rerequest(md *rebArgs) {
+	var (
+		batchSize = md.config.EC.BatchSize
+		start     = int(reb.stages.currBatch.Load())
+	)
+	for objIdx := start; objIdx < start+batchSize; objIdx++ {
+		if reb.xact().Aborted() {
+			return
+		}
+		if objIdx >= len(reb.ec.broken) {
+			break
+		}
+		obj := reb.ec.broken[objIdx]
+		obj.mtx.Lock()
+		err := reb.rerequestObj(md, obj)
+		obj.mtx.Unlock()
+		if err != nil {
+			glog.Error(err)
+			reb.abortRebalance()
+			break
+		}
+	}
+}
+
+// Ensures that no objects are stuck waiting for a slice from a remote
+// target. For each object that is marked objWaiting it rerequest slices
+// from the targets that have slices this taregt has not received yet.
+// Then it rebuilds the objects which full replicas must be on this target.
+func (reb *Manager) allCTReceived(md *rebArgs) bool {
+	toWait, toRebuild := reb.toWait(md.config.EC.BatchSize)
+	if toWait == 0 && toRebuild == 0 {
+		return true
+	}
+	if toWait != 0 {
+		reb.rerequest(md)
+	}
+	reb.rebuildReceived(md)
+	return true
+}
+
+// Returns true if all target have finished the current batch.
 func (reb *Manager) allNodesCompletedBatch(md *rebArgs) bool {
 	cnt := 0
 	batchID := reb.stages.currBatch.Load()
@@ -1475,54 +1612,24 @@ func (reb *Manager) allNodesCompletedBatch(md *rebArgs) bool {
 	return cnt == len(smap)
 }
 
-func (reb *Manager) waitForFullObject(obj *rebObject) error {
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("#5.3/4 Waiting for an object %s", obj.uid)
-	}
-	reb.ec.waiter.lookupCreate(obj.uid, 0, waitForReplica)
-	reb.ec.waiter.updateRebuildInfo(obj.uid)
-	reb.ec.waiter.toRebuild.Inc()
-	return nil
-}
-
-func (reb *Manager) waitForExistingSlices(obj *rebObject) (err error) {
-	for _, sl := range obj.locCT {
-		// case with sliceID == 0 must be processed in the beginning
-		cmn.Assert(sl.SliceID != 0)
-
-		// wait slices only from `dataSliceCount` first HRW targets
-		tgtIndex := reb.targetIndex(sl.DaemonID, obj)
-		if tgtIndex < 0 || tgtIndex >= int(obj.dataSlices) {
-			if glog.FastV(4, glog.SmoduleReb) {
-				glog.Infof("#5.5 Waiting for slice %d %s - [SKIPPED %d]", sl.SliceID, obj.uid, tgtIndex)
-			}
-			continue
-		}
-
-		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Infof("#5.5 Waiting for slice %d %s", sl.SliceID, obj.uid)
-		}
-		reb.ec.waiter.lookupCreate(obj.uid, sl.SliceID, waitForAllSlices)
-	}
-	reb.ec.waiter.updateRebuildInfo(obj.uid)
-	reb.ec.waiter.toRebuild.Inc()
-	return nil
-}
-
-func (reb *Manager) restoreReplicas(md *rebArgs, obj *rebObject) (err error) {
+// Sends the full replica to the default target if the default target does not
+// have the full replica, this target has one, and it is chosen by HRW
+func (reb *Manager) restoreReplica(md *rebArgs, obj *rebObject) (err error) {
 	// add to ZIL if any replica is missing and it is main target
 	if obj.isMain && obj.mainHasAny {
 		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("#4 Skip replicas sending %s - main has it", obj.uid)
 		}
+		obj.ready.Store(objDone)
 		return nil
 	}
 	if obj.isMain {
 		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("#4 Waiting for replica %s", obj.uid)
 		}
-		reb.ec.waiter.lookupCreate(obj.uid, 0, waitForSingleSlice)
+		return
 	}
+	obj.ready.Store(objDone)
 	return reb.sendLocalReplica(md, obj)
 }
 
@@ -1532,11 +1639,13 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("SKIPPING %s", obj.uid)
 		}
+		obj.ready.Store(objDone)
 		return nil
 	}
 
 	// Case #2: this target has someone's main object
 	if reb.hasFullObjMisplaced(obj) {
+		obj.ready.Store(objDone)
 		return reb.sendLocalData(md, obj)
 	}
 
@@ -1545,6 +1654,7 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 	// targets which have any slice.
 	hasSlice, shouldSend := reb.shouldSendSlice(obj)
 	if !obj.fullObjFound && hasSlice {
+		obj.ready.Store(objDone)
 		if shouldSend {
 			return reb.sendLocalData(md, obj)
 		}
@@ -1553,7 +1663,7 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 
 	// Case #4: object was replicated
 	if obj.isECCopy {
-		return reb.restoreReplicas(md, obj)
+		return reb.restoreReplica(md, obj)
 	}
 
 	// Case #5: the object is erasure coded
@@ -1563,24 +1673,17 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("#5.1 Object %s skipped", obj.uid)
 		}
+		obj.ready.Store(objDone)
 		return nil
 	}
 
 	// Case #5.3: main has nothing, but full object and all slices exists
-	if obj.isMain && !obj.mainHasAny && obj.fullObjFound {
-		return reb.waitForFullObject(obj)
-	}
-
-	// Case #5.4: main has a slice instead of a full object, send local
-	// slice to a free target and wait for another target sends the full obj
-	if obj.isMain && obj.mainHasAny && obj.mainSliceID != 0 && obj.fullObjFound {
-		// TODO: add to ZIL
+	noReplicaOnMain := !obj.mainHasAny || (obj.mainHasAny && obj.mainSliceID != 0)
+	if obj.isMain && noReplicaOnMain {
+		if glog.FastV(4, glog.SmoduleReb) {
+			glog.Infof("#5.3 Waiting for an object %s or its slices", obj.uid)
+		}
 		return nil
-	}
-
-	// Case #5.5: it is main target and full object is missing
-	if obj.isMain && !obj.fullObjFound {
-		return reb.waitForExistingSlices(obj)
 	}
 
 	cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
@@ -1589,8 +1692,8 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 	return nil
 }
 
+// Frees all SGLs and file handles opened during rebalancing the current batch
 func (reb *Manager) cleanupBatch(md *rebArgs) {
-	reb.ec.waiter.cleanupBatch(md, reb.ec.broken, int(reb.stages.currBatch.Load()))
 	reb.releaseSGLs(md, reb.ec.broken)
 	reb.ec.ackCTs.clear(reb.t.GetSmallMMSA())
 }
@@ -1600,7 +1703,6 @@ func (reb *Manager) finalizeBatch(md *rebArgs) error {
 	// First, wait for all slices the local target wants to receive
 	maxWait := md.config.Rebalance.Quiesce
 	if aborted := reb.waitQuiesce(md, maxWait, reb.allCTReceived); aborted {
-		reb.ec.waiter.waitFor.Store(0)
 		return cmn.NewAbortedError("finalize batch - all ct received")
 	}
 	// wait until all rebuilt slices are sent
@@ -1617,7 +1719,6 @@ func (reb *Manager) finalizeBatch(md *rebArgs) error {
 		glog.Infof("%s waiting for ALL batch %d DONE", reb.t.Snode().ID(), reb.stages.currBatch.Load())
 	}
 	if aborted := reb.waitEvent(md, reb.allNodesCompletedBatch); aborted {
-		reb.ec.waiter.waitFor.Store(0)
 		return cmn.NewAbortedError("finalize batch - wait nodes to complete")
 	}
 
@@ -1630,16 +1731,9 @@ func (reb *Manager) logNoAck() {
 	reb.ec.ackCTs.mtx.Lock()
 	for _, dest := range reb.ec.ackCTs.ct {
 		// TODO: add to ZIL
-		reb.ec.ackCTs.remove(dest)
+		reb.ec.ackCTs.removeUnlocked(dest)
 	}
 	reb.ec.ackCTs.mtx.Unlock()
-}
-
-func (reb *Manager) allAckReceived(_ *rebArgs) bool {
-	if reb.xact().Aborted() {
-		return false
-	}
-	return reb.ec.ackCTs.waiting() == 0
 }
 
 func (reb *Manager) waitECAck(md *rebArgs) {
@@ -1660,11 +1754,6 @@ func (reb *Manager) waitECAck(md *rebArgs) {
 		return
 	}
 
-	// now check that all ACKs received after quiescent state
-	maxWait := md.config.Rebalance.Quiesce
-	if aborted := reb.waitEvent(md, reb.allAckReceived, maxWait); aborted {
-		return
-	}
 	reb.logNoAck()
 }
 
@@ -1732,30 +1821,18 @@ func (reb *Manager) releaseSGLs(md *rebArgs, objList []*rebObject) {
 			obj.fh.Close()
 			obj.fh = nil
 		}
-	}
-}
-
-// when local target is a default one, and the full object is missing, the target
-// receives existing slices with metadata, then it rebuild the object and missing
-// slices. Finally it sends rebuilt slices to other targets, for this it needs
-// correct metadata. The function generates metadata for a new slice for first
-// received slice
-func (reb *Manager) metadataForSlice(slices []*waitCT, sliceID int) *ec.Metadata {
-	for _, sl := range slices {
-		if !sl.recv.Load() {
-			continue
+		for _, ct := range obj.locCT {
+			if ct.sgl != nil {
+				ct.sgl.Free()
+			}
 		}
-		md := *sl.meta
-		md.SliceID = sliceID
-		return &md
 	}
-	return nil
 }
 
 // Object is missing (and maybe a few slices as well). Default target receives all
 // existing slices into SGLs, restores the object, rebuilds slices, and finally
 // send missing slices to other targets
-func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err error) {
+func (reb *Manager) rebuildFromSlices(obj *rebObject) (err error) {
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s rebuilding slices (mem) of %s and send them", reb.t.Snode(), obj.objName)
 	}
@@ -1773,12 +1850,12 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 	obj.rebuildSGLs = make([]*memsys.SGL, sliceCnt)
 
 	// put existing slices to readers list, and create SGL as writers for missing ones
-	for _, sl := range slices {
-		if !sl.recv.Load() {
+	for _, sl := range obj.locCT {
+		if sl.sgl == nil || sl.sgl.Size() == 0 {
 			continue
 		}
-		id := sl.sliceID - 1
-		cmn.Assert(readers[id] == nil)
+		id := sl.SliceID - 1
+		cmn.AssertMsg(sl.SliceID != 0 && readers[id] == nil, obj.uid)
 		readers[id] = memsys.NewReader(sl.sgl)
 		rereaders[id] = memsys.NewReader(sl.sgl)
 		slicesFound++
@@ -1787,7 +1864,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		}
 	}
 
-	cmn.Assert(meta != nil)
+	cmn.AssertMsg(meta != nil, obj.uid)
 	ecMD := *meta // clone
 	for i, rd := range readers {
 		if rd != nil {
@@ -1849,8 +1926,6 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, slices []*waitCT) (err err
 		reader := memsys.NewReader(obj.rebuildSGLs[i])
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
-		md := reb.metadataForSlice(slices, sliceID)
-		cmn.Assert(md != nil)
 
 		sliceMD := ecMD // copy
 		sliceMD.SliceID = sliceID
@@ -1929,26 +2004,31 @@ func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Read
 // Default target does not have object (but it can be on another target) and
 // few slices may be missing. The function detects whether it needs to reconstruct
 // the object and then rebuild and send missing slices
-func (reb *Manager) rebuildAndSend(obj *rebObject, slices []*waitCT) error {
-	// look through received slices if one of them is the object's replica
-	var replica *waitCT
-	recv := 0
-	for _, s := range slices {
-		if s.sliceID == 0 {
-			replica = s
+func (reb *Manager) rebuildAndSend(obj *rebObject) error {
+	// Look through received slices if one of them is the object's replica.
+	// In this case there is nothing to rebuild, just save it to disk
+	for _, s := range obj.locCT {
+		if s.SliceID != 0 || s.sgl == nil || s.sgl.Size() == 0 {
+			continue
 		}
-		if s.recv.Load() {
-			recv++
+		cmn.AssertMsg(s.meta != nil, obj.uid)
+		req := &pushReq{md: s.meta}
+		hdr := transport.Header{
+			Bck:     obj.bck,
+			ObjName: obj.objName,
+			ObjAttrs: transport.ObjectAttrs{
+				Size:       obj.objSize,
+				CksumType:  s.meta.ObjCksum,
+				CksumValue: s.meta.CksumType,
+				Version:    s.meta.ObjVersion,
+			},
 		}
-	}
-	cmn.Assert(recv != 0) // sanity check
-
-	if replica != nil {
-		// Main target has replica, add slices to ZIL
+		reb.saveCTToDisk(memsys.NewReader(s.sgl), req, hdr)
+		obj.ready.Store(objDone)
 		return nil
 	}
 
-	return reb.rebuildFromSlices(obj, slices)
+	return reb.rebuildFromSlices(obj)
 }
 
 // Returns XXHash calculated for the reader
@@ -1958,162 +2038,82 @@ func cksumForSlice(reader io.Reader, sliceSize int64, mem *memsys.MMSA) (string,
 	return cmn.ComputeXXHash(reader, buf)
 }
 
-//
-// ctWaiter
-//
-
-func newWaiter(mem *memsys.MMSA) *ctWaiter {
-	return &ctWaiter{
-		objs: make(ctWaitList),
-		mem:  mem,
+// Returns an object within the current batch by its UID.
+// It is called from function that does not have rebArgs, so batchSize is explicit
+func (reb *Manager) objByUID(batchSize int, uid string) *rebObject {
+	var (
+		obj   *rebObject
+		start = int(reb.stages.currBatch.Load())
+	)
+	// a target can receive a CT from the next batch if another target
+	// starts the next batch a bit faster, so "batchSize*2"
+	for objIdx := start; objIdx < start+batchSize*2; objIdx++ {
+		if objIdx >= len(reb.ec.broken) {
+			break
+		}
+		if reb.ec.broken[objIdx].uid == uid {
+			obj = reb.ec.broken[objIdx]
+			break
+		}
 	}
+	return obj
 }
 
-// object is processed, cleanup allocated memory
-func (wt *ctWaiter) removeObj(uid string) {
-	wt.mx.Lock()
-	wt.removeObjUnlocked(uid)
-	wt.mx.Unlock()
+// Returns the first object that has received enough slices to rebuild object
+func (reb *Manager) firstReadyObj(md *rebArgs) *rebObject {
+	var (
+		start = int(reb.stages.currBatch.Load())
+	)
+	for objIdx := start; objIdx < start+md.config.EC.BatchSize; objIdx++ {
+		if objIdx >= len(reb.ec.broken) {
+			break
+		}
+		if reb.ec.broken[objIdx].ready.Load() == objReceived {
+			return reb.ec.broken[objIdx]
+		}
+	}
+	return nil
 }
 
-func (wt *ctWaiter) removeObjUnlocked(uid string) {
-	wo, ok := wt.objs[uid]
-	if ok {
-		for _, slice := range wo.cts {
-			slice.mtx.Lock()
-			if slice.sgl != nil {
-				slice.sgl.Free()
-			}
-			slice.mtx.Unlock()
+// Returns the number of objects waiting for a slice/replica, and the
+// number of objects waiting for full object reconstuction.
+func (reb *Manager) toWait(batchSize int) (wait, rebuild int) {
+	var (
+		start = int(reb.stages.currBatch.Load())
+	)
+	for objIdx := start; objIdx < start+batchSize; objIdx++ {
+		if objIdx >= len(reb.ec.broken) {
+			break
 		}
-		delete(wt.objs, uid)
+		switch reb.ec.broken[objIdx].ready.Load() {
+		case objWaiting:
+			wait++
+		case objReceived:
+			rebuild++
+		}
 	}
+	return
 }
 
-// final cleanup after rebalance is done
-func (wt *ctWaiter) cleanup() {
-	for uid := range wt.objs {
-		wt.removeObj(uid)
+// Check if the target received enough slices to start rebuilding
+func (reb *Manager) updateRebuildInfo(obj *rebObject) {
+	if obj.ready.Load() != objWaiting {
+		return
 	}
-	wt.waitFor.Store(0)
-	wt.toRebuild.Store(0)
-}
-
-// Range freeing: if idx is not defined, cleanup all waiting objects,
-// otherwise cleanup only objects which names matches objects in range idx0..idx1
-func (wt *ctWaiter) cleanupBatch(md *rebArgs, broken []*rebObject, idx ...int) {
-	wt.mx.Lock()
-	if len(idx) == 0 {
-		for uid := range wt.objs {
-			wt.removeObjUnlocked(uid)
-		}
-	} else {
-		start := idx[0]
-		for objIdx := start; objIdx < start+md.config.EC.BatchSize; objIdx++ {
-			if objIdx >= len(broken) {
-				break
-			}
-			wt.removeObjUnlocked(broken[objIdx].uid)
+	cnt := 0
+	for _, ct := range obj.locCT {
+		if ct.sgl != nil && ct.sgl.Size() != 0 {
+			cnt++
 		}
 	}
-	wt.mx.Unlock()
-}
-
-// Looks through the list of slices to wait and returns the one
-// with given uid. If nothing found, it creates a new wait object and
-// returns it. This case is possible when another target is faster than this
-// one and starts sending slices before this target builds its list
-func (wt *ctWaiter) lookupCreate(uid string, sliceID int16, waitType int) *waitCT {
-	wt.mx.Lock()
-	defer wt.mx.Unlock()
-
-	wObj, ok := wt.objs[uid]
-	if !ok {
-		// first slice of the object, initialize everything
-		slice := &waitCT{
-			sliceID: sliceID,
-			sgl:     wt.mem.NewSGL(memsys.DefaultBufSize),
-		}
-		wt.objs[uid] = &waitObject{wt: waitType, cts: []*waitCT{slice}}
-		wt.waitFor.Inc()
-		return slice
+	if cnt != 0 && !obj.isMain {
+		// if it is not main target, it needs only one slice
+		obj.ready.Store(objDone)
+	} else if obj.isMain && obj.isECCopy && cnt != 0 {
+		obj.ready.Store(objReceived)
+		// TODO: add to ZIL  missing replicas
+	} else if cnt >= int(obj.dataSlices) {
+		// if it is main target, it needs dataSlices slices to rebuild
+		obj.ready.CAS(objWaiting, objReceived)
 	}
-
-	// in case of other target sent a slice before this one had initialized
-	// wait structure, replace current waitType if it is not a generic one
-	if waitType != waitForSingleSlice {
-		wObj.wt = waitType
-	}
-
-	// check if the slice is already initialized and return it
-	for _, ct := range wObj.cts {
-		if ct.sliceID == anySliceID || ct.sliceID == sliceID || sliceID == anySliceID {
-			return ct
-		}
-	}
-
-	// slice is not in wait list yet, add it
-	ct := &waitCT{
-		sliceID: sliceID,
-		sgl:     wt.mem.NewSGL(memsys.DefaultBufSize),
-	}
-	wt.objs[uid].cts = append(wt.objs[uid].cts, ct)
-	wt.waitFor.Inc()
-	return ct
-}
-
-// Updates object readiness to be rebuild (i.e., the target has received all
-// required slices/replicas).
-// Returns `true` if a target waits for slices only to rebuild the object,
-// so the received slices should not be saved to local drives.
-func (wt *ctWaiter) updateRebuildInfo(uid string) bool {
-	wt.mx.Lock()
-	defer wt.mx.Unlock()
-
-	wObj, ok := wt.objs[uid]
-	cmn.Assert(ok)
-	if wObj.wt == waitForSingleSlice || wObj.status != objWaiting {
-		// object should not be rebuilt, or it is already done: nothing to do
-		return wObj.wt != waitForSingleSlice
-	}
-
-	if wObj.wt == waitForReplica {
-		// For replica case, a target needs only 1 replica to start rebuilding
-		for _, ct := range wObj.cts {
-			if ct.sliceID == 0 && ct.recv.Load() {
-				wObj.status = objReceived
-				break
-			}
-		}
-	} else {
-		// For EC case, a target needs all slices to start rebuilding
-		done := true
-		for _, ct := range wObj.cts {
-			if !ct.recv.Load() {
-				done = false
-				break
-			}
-		}
-		if done {
-			wObj.status = objReceived
-		}
-	}
-	return wObj.wt != waitForSingleSlice
-}
-
-// Returns UID and data for the next object that has all slices/replicas
-// received and can be rebuild.
-// The number of object in `wt.objs` map is less than the number of object
-// in a batch (md.config.EC.BatchSize). So, linear algorithm is fast enough.
-func (wt *ctWaiter) nextReadyObj() (uid string, wObj *waitObject) {
-	wt.mx.Lock()
-	defer wt.mx.Unlock()
-
-	for uid, obj := range wt.objs {
-		if obj.status == objReceived && obj.wt != waitForSingleSlice {
-			return uid, obj
-		}
-	}
-
-	return "", nil
 }

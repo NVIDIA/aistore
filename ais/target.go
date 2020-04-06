@@ -270,6 +270,7 @@ func (t *targetrunner) Run() error {
 	networkHandlers := []networkHandler{
 		{r: cmn.Buckets, h: t.bucketHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 		{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
+		{r: cmn.EC, h: t.ecHandler, net: []string{cmn.NetworkIntraData}},
 		{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Tar2Tf, h: t.tar2tfHandler, net: []string{cmn.NetworkPublic}},
@@ -386,6 +387,17 @@ func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// verb /v1/slices
+// Non-public inerface
+func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		t.httpecget(w, r)
+	default:
+		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /slices path")
+	}
+}
+
 // GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
@@ -431,6 +443,56 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 		return false
 	}
 	return true
+}
+
+// Returns a slice. Does not use GFN.
+func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
+	var (
+		config = cmn.GCO.Get()
+	)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.EC)
+	if err != nil {
+		return
+	}
+	bucket, objName := apiItems[0], apiItems[1]
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+	lom := &cluster.LOM{T: t, ObjName: objName}
+	if err = lom.Init(bck.Bck, config); err != nil {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			err = lom.Init(bck.Bck, config)
+		}
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+	}
+	sliceFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(bck.Bck, ec.SliceType, objName)
+	finfo, err := os.Stat(sliceFQN)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		return
+	}
+	file, err := os.Open(sliceFQN)
+	if err != nil {
+		t.fshc(err, sliceFQN)
+		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	buf, slab := daemon.gmm.Alloc(finfo.Size())
+	w.Header().Set("Content-Length", strconv.FormatInt(finfo.Size(), 10))
+	_, err = io.CopyBuffer(w, file, buf)
+	slab.Free(buf)
+	file.Close()
+	if err != nil {
+		glog.Errorf("Failed to send slice %s/%s: %v", bck, objName, err)
+	}
 }
 
 // GET /v1/objects/bucket[+"/"+objName]
