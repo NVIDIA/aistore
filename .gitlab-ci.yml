@@ -1,5 +1,17 @@
 image: golang:1.13
 
+.test_long_template: &test_long_def
+  stage: test-long
+  only:
+    - schedules
+  after_script:
+    - mkdir $CI_PROJECT_DIR/logs
+    - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+  artifacts:
+    when: on_failure
+    paths: [logs/]
+    expire_in: 2 days
+
 stages:
   - build
   - test-short
@@ -21,10 +33,6 @@ before_script:
   - cp -r $CI_PROJECT_DIR /go/src/github.com/NVIDIA/aistore
   - ln -s /go/src/github.com/NVIDIA/aistore /go/src/_/builds/NVIDIA
   - cd /go/src/github.com/NVIDIA/aistore
-
-after_script:
-  - mkdir $CI_PROJECT_DIR/logs
-  - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
 
 build:linux:
   stage: build
@@ -56,30 +64,18 @@ test:short:
     - BUCKET="test" make test-short
 
 test:long:
-  stage: test-long
-  only:
-    - schedules
+  <<: *test_long_def
   script:
     - make deploy <<< $'6\n5\n3\n0'
     - BUCKET="test" make test-long
-  artifacts:
-    when: on_failure
-    paths: [logs/]
-    expire_in: 2 days
 
 test:cloud:
-  stage: test-long
+  <<: *test_long_def
   variables:
     AWS_REGION: us-west-2
-  only:
-    - schedules
   script:
     - make deploy <<< $'6\n5\n3\n1'
     - BUCKET="ci-aistore" make test-long
-  artifacts:
-    when: on_failure
-    paths: [logs/]
-    expire_in: 2 days
 
 test:soak:
   stage: test-long
