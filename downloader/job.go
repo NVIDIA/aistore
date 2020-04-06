@@ -156,7 +156,7 @@ func (j *CloudBucketDlJob) genNext() (objs []DlObj, ok bool) {
 func (j *CloudBucketDlJob) getNextObjs() error {
 	j.objs = []DlObj{}
 	if j.pagesCnt > 0 && j.pageMarker == "" {
-		// Cloud ListObjects returned empty pageMarker after at least one reqest
+		// Cloud ListObjects returned empty pageMarker after at least one request
 		// this means there are no more objects in to list
 		return nil
 	}
@@ -171,7 +171,7 @@ func (j *CloudBucketDlJob) getNextObjs() error {
 			Fast:       true,
 		}
 
-		bckList, err, _ := j.t.Cloud().ListObjects(j.ctx, j.bck.Name, msg)
+		bckList, err, _ := j.t.Cloud().ListObjects(j.ctx, j.bck.Bck, msg)
 		if err != nil {
 			return err
 		}

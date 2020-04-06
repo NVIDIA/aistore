@@ -993,7 +993,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// + cloud
-	bucketProps, err, code = t.cloud.HeadBucket(t.contextWithAuth(r.Header), bucket)
+	bucketProps, err, code = t.cloud.HeadBucket(t.contextWithAuth(r.Header), bck.Bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {

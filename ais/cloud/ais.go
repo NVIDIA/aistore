@@ -95,21 +95,23 @@ func (m *aisCloudProvider) newBaseParams() api.BaseParams {
 	}
 }
 
-func (m *aisCloudProvider) ListObjects(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (m *aisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+	cmn.Assert(bck.Provider == cmn.ProviderAIS)
 	err = m.try(func() error {
 		bp := m.newBaseParams()
-		bckList, err = api.ListObjects(bp, cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}, msg, 0)
+		bckList, err = api.ListObjects(bp, bck, msg, 0)
 		return err
 	})
 	err, errCode = extractErrCode(err)
 	return bckList, err, errCode
 }
 
-func (m *aisCloudProvider) HeadBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (m *aisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+	cmn.Assert(bck.Provider == cmn.ProviderAIS)
 	err = m.try(func() error {
 		bp := m.newBaseParams()
 
-		p, err := api.HeadBucket(bp, cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
+		p, err := api.HeadBucket(bp, bck)
 		bckProps = make(cmn.SimpleKVs)
 		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 			bckProps[uniqueTag] = fmt.Sprintf("%v", field.Value())

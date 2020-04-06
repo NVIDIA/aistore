@@ -227,16 +227,16 @@ func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (error
 	return nil, http.StatusOK
 }
 
-func (ap *azureProvider) HeadBucket(ctx context.Context, bucket string) (bucketProps cmn.SimpleKVs, err error, errCode int) {
+func (ap *azureProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bucketProps cmn.SimpleKVs, err error, errCode int) {
 	bckProps := make(cmn.SimpleKVs)
-	cntURL := ap.s.NewContainerURL(bucket)
+	cntURL := ap.s.NewContainerURL(bck.Name)
 	resp, err := cntURL.GetProperties(ctx, azblob.LeaseAccessConditions{})
 	if err != nil {
-		err, status := ap.azureErrorToAISError(err, bucket, "")
+		err, status := ap.azureErrorToAISError(err, bck.Name, "")
 		return bckProps, err, status
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return bckProps, fmt.Errorf("failed to read bucket %s props", bucket), resp.StatusCode()
+		return bckProps, fmt.Errorf("failed to read bucket %s props", bck.Name), resp.StatusCode()
 	}
 	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAzure
 	bckProps[cmn.HeaderBucketVerEnabled] = "true"
@@ -244,8 +244,8 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bucket string) (bucketP
 }
 
 // Default page size for Azure is 5000 blobs a page.
-func (ap *azureProvider) ListObjects(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
-	cntURL := ap.s.NewContainerURL(bucket)
+func (ap *azureProvider) ListObjects(ctx context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+	cntURL := ap.s.NewContainerURL(bck.Name)
 	marker := azblob.Marker{}
 	if msg.PageMarker != "" {
 		marker.Val = &msg.PageMarker
@@ -259,11 +259,11 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bucket string, msg *cm
 	}
 	resp, err := cntURL.ListBlobsFlatSegment(ctx, marker, opts)
 	if err != nil {
-		err, status := ap.azureErrorToAISError(err, bucket, "")
+		err, status := ap.azureErrorToAISError(err, bck.Name, "")
 		return nil, err, status
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return nil, fmt.Errorf("failed to list objects %s", bucket), resp.StatusCode()
+		return nil, fmt.Errorf("failed to list objects %s", bck.Name), resp.StatusCode()
 	}
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
 	for _, blob := range resp.Segment.BlobItems {

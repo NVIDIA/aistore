@@ -192,9 +192,9 @@ func handleObjectError(objErr error, lom *cluster.LOM, gcpBucket *storage.Bucket
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("list_bucket %s", bucket)
+		glog.Infof("list_bucket %s", bck.Name)
 	}
 	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
@@ -212,7 +212,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bucket string, msg *cm
 		pageToken = msg.PageMarker
 	}
 
-	it := gcpClient.Bucket(bucket).Objects(gctx, query)
+	it := gcpClient.Bucket(bck.Name).Objects(gctx, query)
 	pageSize := gcpPageSize
 	if msg.PageSize != 0 {
 		pageSize = msg.PageSize
@@ -221,7 +221,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bucket string, msg *cm
 	objs := make([]*storage.ObjectAttrs, 0)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {
-		err, errCode = gcpErrorToAISError(err, cluster.NewBck(bucket, cmn.ProviderGoogle, cmn.NsGlobal), "")
+		err, errCode = gcpErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderGoogle, cmn.NsGlobal), "")
 		return
 	}
 
@@ -250,9 +250,9 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bucket string, msg *cm
 	return
 }
 
-func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("head_bucket %s", bucket)
+		glog.Infof("head_bucket %s", bck.Name)
 	}
 	bckProps = make(cmn.SimpleKVs)
 
@@ -260,9 +260,9 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bucket string) (bckProp
 	if err != nil {
 		return
 	}
-	_, err = gcpClient.Bucket(bucket).Attrs(gctx)
+	_, err = gcpClient.Bucket(bck.Name).Attrs(gctx)
 	if err != nil {
-		err, errCode = gcpErrorToAISError(err, cluster.NewBck(bucket, cmn.ProviderGoogle, cmn.NsGlobal), "")
+		err, errCode = gcpErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderGoogle, cmn.NsGlobal), "")
 		return
 	}
 	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderGoogle

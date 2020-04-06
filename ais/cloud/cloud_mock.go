@@ -30,12 +30,12 @@ func _emptyNode(lom *cluster.LOM) string {
 	return lom.T.Snode().String()
 }
 
-func (m *emptyCloudProvider) ListObjects(ctx context.Context, bucket string,
+func (m *emptyCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
 	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
-	return nil, cmn.NewErrorCloudBucketOffline(cmn.Bck{Name: bucket}, ""), http.StatusNotFound
+	return nil, cmn.NewErrorCloudBucketOffline(bck, ""), http.StatusNotFound
 }
-func (m *emptyCloudProvider) HeadBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
-	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketOffline(cmn.Bck{Name: bucket}, ""), http.StatusNotFound
+func (m *emptyCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketOffline(bck, ""), http.StatusNotFound
 }
 
 // the function must not fail - it should return empty list

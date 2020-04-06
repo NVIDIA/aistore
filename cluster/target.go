@@ -36,8 +36,8 @@ type CloudProvider interface {
 	DeleteObj(ctx context.Context, lom *LOM) (error, int)
 	HeadObj(ctx context.Context, lom *LOM) (objMeta cmn.SimpleKVs, err error, errCode int)
 
-	HeadBucket(ctx context.Context, bucket string) (bucketProps cmn.SimpleKVs, err error, errCode int)
-	ListObjects(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
+	HeadBucket(ctx context.Context, bck cmn.Bck) (bucketProps cmn.SimpleKVs, err error, errCode int)
+	ListObjects(ctx context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
 	ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int)
 }
 

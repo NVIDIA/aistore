@@ -162,14 +162,14 @@ func awsIsVersionSet(version *string) bool {
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(ct context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (awsp *awsProvider) ListObjects(ct context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("list_objects %s", bucket)
+		glog.Infof("list_objects %s", bck.Name)
 	}
 	sess := createSession(ct)
 	svc := s3.New(sess)
 
-	params := &s3.ListObjectsInput{Bucket: aws.String(bucket)}
+	params := &s3.ListObjectsInput{Bucket: aws.String(bck.Name)}
 	if msg.Prefix != "" {
 		params.Prefix = aws.String(msg.Prefix)
 	}
@@ -187,7 +187,7 @@ func (awsp *awsProvider) ListObjects(ct context.Context, bucket string, msg *cmn
 
 	resp, err := svc.ListObjects(params)
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cluster.NewBck(bucket, cmn.ProviderAmazon, cmn.NsGlobal), "")
+		err, errCode = awsErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderAmazon, cmn.NsGlobal), "")
 		return
 	}
 
@@ -227,7 +227,7 @@ func (awsp *awsProvider) ListObjects(ct context.Context, bucket string, msg *cmn
 		versions := make(map[string]*string, initialBucketListSize)
 		keyMarker := msg.PageMarker
 
-		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket)}
+		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bck.Name)}
 		if msg.Prefix != "" {
 			verParams.Prefix = aws.String(msg.Prefix)
 		}
@@ -239,7 +239,7 @@ func (awsp *awsProvider) ListObjects(ct context.Context, bucket string, msg *cmn
 
 			verResp, err := svc.ListObjectVersions(verParams)
 			if err != nil {
-				err, errCode := awsErrorToAISError(err, cluster.NewBck(bucket, cmn.ProviderAmazon, cmn.NsGlobal), "")
+				err, errCode := awsErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderAmazon, cmn.NsGlobal), "")
 				return nil, err, errCode
 			}
 
@@ -273,26 +273,26 @@ func (awsp *awsProvider) ListObjects(ct context.Context, bucket string, msg *cmn
 // HEAD BUCKET //
 /////////////////
 
-func (awsp *awsProvider) HeadBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[head_bucket] %s", bucket)
+		glog.Infof("[head_bucket] %s", bck.Name)
 	}
 	bckProps = make(cmn.SimpleKVs)
 
 	svc := s3.New(createSession(ctx))
 	_, err = svc.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(bck.Name),
 	})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cluster.NewBck(bucket, cmn.ProviderAmazon, cmn.NsGlobal), "")
+		err, errCode = awsErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderAmazon, cmn.NsGlobal), "")
 		return
 	}
 	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
 
-	inputVers := &s3.GetBucketVersioningInput{Bucket: aws.String(bucket)}
+	inputVers := &s3.GetBucketVersioningInput{Bucket: aws.String(bck.Name)}
 	result, err := svc.GetBucketVersioning(inputVers)
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cluster.NewBck(bucket, cmn.ProviderAmazon, cmn.NsGlobal), "")
+		err, errCode = awsErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderAmazon, cmn.NsGlobal), "")
 		return
 	}
 
