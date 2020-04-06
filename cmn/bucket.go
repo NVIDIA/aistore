@@ -119,7 +119,7 @@ func (b Bck) IsCloud() bool     { return IsProviderCloud(b, false /*acceptAnon*/
 func (b Bck) HasProvider() bool { return b.IsAIS() || b.IsCloud() }
 
 func IsProviderAIS(bck Bck) bool {
-	return bck.Provider == ProviderAIS && bck.Ns == NsGlobal
+	return bck.Provider == ProviderAIS && bck.Ns.UUID == ""
 }
 
 func IsProviderCloud(bck Bck, acceptAnon bool) bool {

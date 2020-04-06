@@ -174,7 +174,7 @@ func (ap *azureProvider) azureErrorToAISError(azureError error, bucket, objName 
 	}
 }
 
-func (ap *azureProvider) ListBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
+func (ap *azureProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
 	var (
 		o          azblob.ListContainersSegmentOptions
 		marker     azblob.Marker
@@ -188,7 +188,10 @@ func (ap *azureProvider) ListBuckets(ctx context.Context) (buckets []string, err
 		}
 
 		for _, container := range containers.ContainerItems {
-			buckets = append(buckets, container.Name)
+			buckets = append(buckets, cmn.Bck{
+				Name:     container.Name,
+				Provider: cmn.ProviderAzure,
+			})
 		}
 		marker = containers.NextMarker
 	}

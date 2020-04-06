@@ -467,32 +467,23 @@ func Test_BucketNames(t *testing.T) {
 	buckets, err := api.ListBuckets(baseParams, cmn.Bck{})
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("ais bucket names:\n")
-	printBucketNames(t, buckets.AIS)
-	tutils.Logf("cloud bucket names:\n")
-	printBucketNames(t, buckets.Cloud)
+	printBucketNames(t, buckets)
 
 	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure} {
 		cloudBuckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: provider})
 		tassert.CheckError(t, err)
-		if len(cloudBuckets.Cloud) != len(buckets.Cloud) {
-			t.Fatalf("%s: cloud buckets: %d != %d\n", provider, len(cloudBuckets.Cloud), len(buckets.Cloud))
-		}
-		if len(cloudBuckets.AIS) != 0 {
-			t.Fatalf("cloud buckets contain ais: %+v\n", cloudBuckets.AIS)
+		if len(cloudBuckets) != len(buckets.Select(provider)) {
+			t.Fatalf("%s: cloud buckets: %d != %d\n", provider, len(cloudBuckets), len(buckets.Select(provider)))
 		}
 	}
 	aisBuckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: cmn.ProviderAIS})
 	tassert.CheckError(t, err)
-	if len(aisBuckets.AIS) != len(buckets.AIS) {
-		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets.AIS), len(buckets.AIS))
-	}
-	if len(aisBuckets.Cloud) != 0 {
-		t.Fatalf("ais buckets contain cloud: %+v\n", aisBuckets.Cloud)
+	if len(aisBuckets) != len(buckets.Select(cmn.ProviderAIS)) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(cmn.ProviderAIS)))
 	}
 }
 
-func printBucketNames(t *testing.T, bucketNames []string) {
+func printBucketNames(t *testing.T, bucketNames cmn.BucketNames) {
 	pretty, err := jsoniter.MarshalIndent(bucketNames, "", " ")
 	if err != nil {
 		t.Errorf("Failed to pretty-print bucket names, err: %v", err)
@@ -1627,12 +1618,9 @@ func createBucketIfNotCloud(t *testing.T, proxyURL string, bck *cmn.Bck) (create
 
 func isCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck) bool {
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	buckets, err := api.ListBuckets(baseParams, bck)
-	if err != nil {
-		t.Fatalf("Failed to read bucket names: %v", err)
-	}
-
-	return cmn.StringInSlice(bck.Name, buckets.Cloud)
+	bcks, err := api.ListBuckets(baseParams, bck)
+	tassert.CheckFatal(t, err)
+	return bcks.Match(bck)
 }
 
 func validateBucketProps(t *testing.T, expected cmn.BucketPropsToUpdate, actual cmn.BucketProps) {

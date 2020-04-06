@@ -201,13 +201,10 @@ func cleanupAllRecipeBuckets() {
 		return
 	}
 
-	bckNames, _ := api.ListBuckets(tutils.BaseAPIParams(primaryURL), cmn.Bck{Provider: cmn.ProviderAIS})
-	for _, bckName := range bckNames.AIS {
-		if strings.HasPrefix(bckName, soakPrefix) {
-			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), cmn.Bck{
-				Name:     bckName,
-				Provider: cmn.ProviderAIS,
-			})
+	bcks, _ := api.ListBuckets(tutils.BaseAPIParams(primaryURL), cmn.Bck{Provider: cmn.ProviderAIS})
+	for _, bck := range bcks {
+		if strings.HasPrefix(bck.Name, soakPrefix) {
+			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bck)
 		}
 	}
 }
@@ -219,7 +216,7 @@ func bckNamePrefix(bckName string) cmn.Bck {
 	}
 }
 
-func bcknameDePrefix(bckName string) (res string) {
+func bckNameWithoutPrefix(bckName string) (res string) {
 	if strings.HasPrefix(bckName, uniqueProcessPrefix) {
 		return strings.TrimPrefix(bckName, uniqueProcessPrefix)
 	}
@@ -228,16 +225,15 @@ func bcknameDePrefix(bckName string) (res string) {
 
 // fetchBuckets returns a list of buckets in the proxy without the soakPrefix
 func fetchBuckets(tag string) []string {
-	bckNames, err := api.ListBuckets(tutils.BaseAPIParams(primaryURL), cmn.Bck{Provider: cmn.ProviderAIS})
-
+	bcks, err := api.ListBuckets(tutils.BaseAPIParams(primaryURL), cmn.Bck{Provider: cmn.ProviderAIS})
 	if err != nil {
 		cmn.AssertNoErr(fmt.Errorf("error fetching bucketnames for %v: %v", tag, err.Error()))
 	}
 
 	var res []string
-	for _, bckName := range bckNames.AIS {
-		if bckName = bcknameDePrefix(bckName); bckName != "" {
-			res = append(res, bckName)
+	for _, bck := range bcks {
+		if bck.Name = bckNameWithoutPrefix(bck.Name); bck.Name != "" {
+			res = append(res, bck.Name)
 		}
 	}
 

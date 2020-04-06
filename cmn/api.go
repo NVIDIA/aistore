@@ -197,11 +197,67 @@ func (bs *BucketSummary) Aggregate(bckSummary BucketSummary) {
 type BucketsSummaries map[string]BucketSummary
 
 // BucketNames is used to transfer all bucket names known to the system
-// TODO: must change to adequately represent {provider => namespace => bucket} hierarchy
-//       with multiple runtime-supported providers and potentially non-empty namespaces
-type BucketNames struct {
-	Cloud []string `json:"cloud"`
-	AIS   []string `json:"ais"`
+type BucketNames []Bck
+
+func (b BucketNames) Len() int {
+	return len(b)
+}
+
+func (b BucketNames) Less(i, j int) bool {
+	if b[i].Provider != b[j].Provider {
+		return b[i].Provider < b[j].Provider
+	}
+	if b[i].Ns.IsGlobal() && !b[j].Ns.IsGlobal() {
+		return false
+	}
+	if !b[i].Ns.IsGlobal() && b[j].Ns.IsGlobal() {
+		return true
+	}
+	if b[i].Ns.String() != b[j].Ns.String() {
+		return b[i].Ns.String() < b[j].Ns.String()
+	}
+	return b[i].Name < b[j].Name
+}
+
+func (b BucketNames) Swap(i, j int) {
+	b[i], b[j] = b[j], b[i]
+}
+
+func (b BucketNames) Select(provider string) BucketNames {
+	filtered := make(BucketNames, 0, 10)
+	for _, bck := range b {
+		if bck.Provider == provider {
+			filtered = append(filtered, bck)
+		}
+	}
+	return filtered
+}
+
+func (b BucketNames) Equal(bcks BucketNames) bool {
+	if len(b) != len(bcks) {
+		return false
+	}
+	for _, bck := range b {
+		if !bcks.Match(bck) {
+			return false
+		}
+	}
+	return true
+}
+
+func (b BucketNames) Match(other Bck) bool {
+	for _, bck := range b {
+		if bck.Name == other.Name {
+			if other.Provider == "" {
+				return true
+			} else if other.Provider == Cloud && bck.IsCloud() {
+				return true
+			} else if bck.Equal(other) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func MakeAccess(aattr uint64, action string, bits uint64) uint64 {

@@ -1215,11 +1215,10 @@ func TestRenameEmptyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.ListBuckets(baseParams, srcBck)
+	bcks, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
-	exists := cmn.StringInSlice(dstBck.Name, names.AIS)
-	if !exists {
+	if !bcks.Match(dstBck) {
 		t.Error("new bucket not found in buckets list")
 	}
 
@@ -1326,10 +1325,10 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 	}
 
 	// Check if the old bucket still appears in the list
-	names, err := api.ListBuckets(baseParams, m.bck)
+	bcks, err := api.ListBuckets(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
-	if !cmn.StringInSlice(m.bck.Name, names.AIS) || !cmn.StringInSlice(tmpBck.Name, names.AIS) {
+	if !bcks.Match(m.bck) || !bcks.Match(tmpBck) {
 		t.Error("one of the buckets was not found in buckets list")
 	}
 
@@ -1403,16 +1402,16 @@ func TestRenameBucketTwice(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.ListBuckets(baseParams, srcBck)
+	bcks, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
-	if cmn.StringInSlice(srcBck.Name, names.AIS) {
+	if bcks.Match(srcBck) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !cmn.StringInSlice(dstBck1.Name, names.AIS) {
+	if !bcks.Match(dstBck1) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if cmn.StringInSlice(dstBck2.Name, names.AIS) {
+	if bcks.Match(dstBck2) {
 		t.Error("second (failed) destination bucket not found in buckets list")
 	}
 }
@@ -1701,16 +1700,16 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.ListBuckets(baseParams, srcBck)
+	bcks, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
-	if cmn.StringInSlice(srcBck.Name, names.AIS) {
+	if bcks.Match(srcBck) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !cmn.StringInSlice(dstBck1.Name, names.AIS) {
+	if !bcks.Match(dstBck1) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if cmn.StringInSlice(dstBck2.Name, names.AIS) {
+	if bcks.Match(dstBck2) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }
@@ -1785,16 +1784,16 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	names, err := api.ListBuckets(baseParams, srcBck)
+	bcks, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
-	if !cmn.StringInSlice(srcBck.Name, names.AIS) {
-		t.Error("source bucket not found in buckets list")
+	if bcks.Match(srcBck) {
+		t.Error("source bucket found in buckets list")
 	}
-	if !cmn.StringInSlice(dstBck1.Name, names.AIS) {
+	if !bcks.Match(dstBck1) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if cmn.StringInSlice(dstBck2.Name, names.AIS) {
+	if bcks.Match(dstBck2) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }

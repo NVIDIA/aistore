@@ -197,18 +197,16 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 
 		for _, provider := range providers {
 			bck.Provider = provider
-			r, err := api.ListBuckets(defaultAPIParams, bck)
+			buckets, err := api.ListBuckets(defaultAPIParams, bck)
 			if err != nil {
 				return
 			}
-
-			buckets := r.Cloud
-			if provider == cmn.ProviderAIS {
-				buckets = r.AIS
-			}
-
 			for _, b := range buckets {
-				bucketNames = append(bucketNames, fmt.Sprintf("%s\\://%s", provider, b))
+				if b.Ns.IsGlobal() {
+					bucketNames = append(bucketNames, fmt.Sprintf("%s\\://%s", b.Provider, b.Name))
+				} else {
+					bucketNames = append(bucketNames, fmt.Sprintf("%s\\://%s/%s", b.Provider, b.Ns, b.Name))
+				}
 			}
 		}
 

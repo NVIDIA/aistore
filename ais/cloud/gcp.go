@@ -276,12 +276,12 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bucket string) (bckProp
 // BUCKET NAMES //
 //////////////////
 
-func (gcpp *gcpProvider) ListBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
+func (gcpp *gcpProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
 	gcpClient, gctx, projectID, err := createClient(ctx)
 	if err != nil {
 		return
 	}
-	buckets = make([]string, 0, 16)
+	buckets = make(cmn.BucketNames, 0, 16)
 	it := gcpClient.Buckets(gctx, projectID)
 	for {
 		var battrs *storage.BucketAttrs
@@ -295,7 +295,10 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context) (buckets []string, err
 			err, errCode = gcpErrorToAISError(err, cluster.NewBck("", cmn.ProviderGoogle, cmn.NsGlobal), "")
 			return
 		}
-		buckets = append(buckets, battrs.Name)
+		buckets = append(buckets, cmn.Bck{
+			Name:     battrs.Name,
+			Provider: cmn.ProviderGoogle,
+		})
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("[bucket_names] %s: created %v, versioning %t", battrs.Name, battrs.Created, battrs.VersioningEnabled)
 		}

@@ -39,8 +39,8 @@ func (m *emptyCloudProvider) HeadBucket(ctx context.Context, bucket string) (bck
 }
 
 // the function must not fail - it should return empty list
-func (m *emptyCloudProvider) ListBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
-	return []string{}, nil, 0
+func (m *emptyCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
+	return cmn.BucketNames{}, nil, 0
 }
 func (m *emptyCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	bck, node := lom.Bck().Bck, _emptyNode(lom)

@@ -1308,8 +1308,8 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error)
 func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
 	var bmd = p.owner.bmd.get()
 	if cmn.IsProviderAIS(bck.Bck) {
-		bucketNames := p.listAisBuckets(bmd)
-		body := cmn.MustMarshal(bucketNames)
+		bcks := p.listAisBuckets(bmd)
+		body := cmn.MustMarshal(bcks)
 		p.writeJSON(w, r, body, listBuckets)
 		return
 	}

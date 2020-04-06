@@ -306,7 +306,7 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bucket string) (bckProp
 // BUCKET NAMES //
 //////////////////
 
-func (awsp *awsProvider) ListBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
+func (awsp *awsProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
 	svc := s3.New(createSession(ctx))
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
@@ -314,12 +314,15 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context) (buckets []string, err
 		return
 	}
 
-	buckets = make([]string, len(result.Buckets))
+	buckets = make(cmn.BucketNames, len(result.Buckets))
 	for idx, bck := range result.Buckets {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("[bucket_names] %s: created %v", aws.StringValue(bck.Name), *bck.CreationDate)
 		}
-		buckets[idx] = aws.StringValue(bck.Name)
+		buckets[idx] = cmn.Bck{
+			Name:     aws.StringValue(bck.Name),
+			Provider: cmn.ProviderAmazon,
+		}
 	}
 	return
 }

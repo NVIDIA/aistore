@@ -24,27 +24,21 @@ type (
 	}
 )
 
-func destroyMatchingBuckets(name string) (err error) {
+func destroyMatchingBuckets(subName string) (err error) {
 	proxyURL := GetPrimaryURL()
 	baseParams := BaseAPIParams(proxyURL)
 
-	bucketNames, err := api.ListBuckets(baseParams, cmn.Bck{
+	bcks, err := api.ListBuckets(baseParams, cmn.Bck{
 		Provider: cmn.ProviderAIS,
 	})
 	if err != nil {
 		return err
 	}
 
-	for _, bckName := range bucketNames.AIS {
-		if !strings.Contains(bckName, name) {
+	for _, bck := range bcks {
+		if !strings.Contains(bck.Name, subName) {
 			continue
 		}
-
-		bck := cmn.Bck{
-			Name:     bckName,
-			Provider: cmn.ProviderAIS,
-		}
-
 		if errD := api.DestroyBucket(baseParams, bck); errD != nil && err == nil {
 			err = errD
 		}

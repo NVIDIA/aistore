@@ -302,11 +302,11 @@ func TestRenameBucket(t *testing.T) {
 			defer tutils.DestroyBucket(t, proxyURL, bck)
 			defer tutils.DestroyBucket(t, proxyURL, renamedBck)
 
-			b, err := api.ListBuckets(baseParams, bck)
+			bcks, err := api.ListBuckets(baseParams, bck)
 			tassert.CheckFatal(t, err)
 
 			doBucketRegressionTest(t, proxyURL, regressionTestData{
-				bck: bck, renamedBck: renamedBck, numBuckets: len(b.AIS), rename: true, wait: wait,
+				bck: bck, renamedBck: renamedBck, numBuckets: len(bcks), rename: true, wait: wait,
 			})
 		})
 	}
@@ -375,19 +375,19 @@ func postRenameWaitAndCheck(t *testing.T, proxyURL string, rtd regressionTestDat
 	tassert.CheckFatal(t, err)
 	tutils.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
 
-	buckets, err := api.ListBuckets(baseParams, rtd.bck)
+	bcks, err := api.ListBuckets(baseParams, rtd.bck)
 	tassert.CheckFatal(t, err)
 
-	if len(buckets.AIS) != rtd.numBuckets {
+	if len(bcks) != rtd.numBuckets {
 		t.Fatalf("wrong number of ais buckets (names) before and after rename (before: %d. after: %+v)",
-			rtd.numBuckets, buckets.AIS)
+			rtd.numBuckets, bcks)
 	}
 
 	renamedBucketExists := false
-	for _, b := range buckets.AIS {
-		if b == rtd.renamedBck.Name {
+	for _, bck := range bcks {
+		if bck.Name == rtd.renamedBck.Name {
 			renamedBucketExists = true
-		} else if b == rtd.bck.Name {
+		} else if bck.Name == rtd.bck.Name {
 			t.Fatalf("original ais bucket %s still exists after rename", rtd.bck)
 		}
 	}

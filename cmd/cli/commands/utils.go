@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -468,21 +467,6 @@ func makePairs(args []string) (nvs cmn.SimpleKVs, err error) {
 	return
 }
 
-func regexFilter(regex string, strList []string) (retList []string) {
-	if regex == "" {
-		return strList
-	}
-
-	retList = strList[:0]
-	r, _ := regexp.Compile(regex)
-	for _, item := range strList {
-		if r.MatchString(item) {
-			retList = append(retList, item)
-		}
-	}
-	return retList
-}
-
 func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 	if useShort {
 		return tmplShort
@@ -524,7 +508,6 @@ func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 	if len(s) > 1 {
 		object = s[1]
 	}
-
 	return
 }
 

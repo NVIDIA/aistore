@@ -121,14 +121,14 @@ func (m *aisCloudProvider) HeadBucket(ctx context.Context, bucket string) (bckPr
 	return bckProps, err, errCode
 }
 
-func (m *aisCloudProvider) ListBuckets(ctx context.Context) (buckets []string, err error, errCode int) {
+func (m *aisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
 	err = m.try(func() error {
 		bp := m.newBaseParams()
 		names, err := api.ListBuckets(bp, cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
 		if err != nil {
 			return err
 		}
-		buckets = names.AIS
+		buckets = names
 		return err
 	})
 	err, errCode = extractErrCode(err)

@@ -1209,7 +1209,7 @@ func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) 
 func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, provider string) {
 	var (
 		bmd         = t.owner.bmd.get()
-		bucketNames = &cmn.BucketNames{}
+		bucketNames = cmn.BucketNames{}
 		all         = provider == "" /*all providers*/
 		bck         = cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
 	)
@@ -1224,9 +1224,9 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, provi
 			t.invalmsghdlr(w, r, errMsg, errcode)
 			return
 		}
-		bucketNames.Cloud = buckets
-		sort.Strings(bucketNames.Cloud) // sort by name
+		bucketNames = append(bucketNames, buckets...)
 	}
+	sort.Sort(bucketNames)
 
 	body := cmn.MustMarshal(bucketNames)
 	t.writeJSON(w, r, body, listBuckets)

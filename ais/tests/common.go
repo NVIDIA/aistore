@@ -443,14 +443,14 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 			}
 		} else {
 			baseParams.URL = m.proxyURL
-			proxyLBNames, err := api.ListBuckets(baseParams, m.bck)
+			proxyBcks, err := api.ListBuckets(baseParams, m.bck)
 			tassert.CheckFatal(m.t, err)
 
 			baseParams.URL = target.URL(cmn.NetworkPublic)
-			targetLBNames, err := api.ListBuckets(baseParams, m.bck)
+			targetBcks, err := api.ListBuckets(baseParams, m.bck)
 			tassert.CheckFatal(m.t, err)
 			// T3
-			if cmn.StrSlicesEqual(proxyLBNames.AIS, targetLBNames.AIS) {
+			if proxyBcks.Equal(targetBcks) {
 				tutils.Logf("T3: registered target %s got updated with the new BMD\n", target.ID())
 				return
 			}
