@@ -47,19 +47,16 @@ type (
 const (
 	soaktestDirname = "/tmp/ais-soak/"
 	aisloaderFolder = soaktestDirname + "/aisloaderexec"
-)
-
-var (
-	aisloaderSrc    = path.Join(os.Getenv("GOPATH"), "src/github.com/NVIDIA/aistore/bench/aisloader")
-	aisloaderTarget = path.Join(aisloaderFolder, "aisloader")
+	aisloaderTarget = aisloaderFolder + "/aisloader"
 )
 
 func init() {
 	os.RemoveAll(aisloaderFolder)
 	os.MkdirAll(soaktestDirname, 0755)
 	os.MkdirAll(aisloaderFolder, 0755)
-	cmd := exec.Command("go", "build", "-o", aisloaderTarget)
-	cmd.Dir = aisloaderSrc
+	cmd := exec.Command("make", "aisloader")
+	cmd.Dir = path.Join(os.Getenv("GOPATH"), "src/github.com/NVIDIA/aistore")
+	cmd.Env = append(cmd.Env, fmt.Sprintf("GOBIN=%s", aisloaderFolder))
 	err := cmd.Run()
 	cmn.AssertNoErr(err)
 }
@@ -93,7 +90,7 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bck cmn.Bck, numWorker
 		spf("-readlen=%v", params.readlen),
 		spf("-stats-output=%s", filename),
 		"-statsinterval=0", "-cleanup=false", "-json=true")
-	cmd.Dir = aisloaderSrc
+	cmd.Dir = soaktestDirname
 
 	var out []byte
 	var err error
