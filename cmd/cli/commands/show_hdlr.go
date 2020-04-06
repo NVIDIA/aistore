@@ -139,10 +139,10 @@ var (
 					Name:         subcmdShowXaction,
 					Usage:        "show xaction details",
 					ArgsUsage:    "[XACTION_ID|XACTION_NAME] [BUCKET_NAME]",
-					Description:  xactKindsMsg,
+					Description:  xactionDesc(""),
 					Flags:        showCmdsFlags[subcmdShowXaction],
 					Action:       showXactionHandler,
-					BashComplete: xactionCompletions,
+					BashComplete: xactionCompletions(""),
 				},
 				{
 					Name:         subcmdShowRebalance,

@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/xaction"
 )
 
@@ -138,21 +137,6 @@ func (t *targetrunner) cmdXactStart(r *http.Request, xactMsg cmn.XactionMsg, bck
 			return err
 		}
 		go xact.Run(args)
-	case cmn.ActECPut:
-		if bck == nil {
-			return fmt.Errorf(erfmn, xactMsg.Kind)
-		}
-		ec.ECM.RestoreBckPutXact(bck)
-	case cmn.ActECGet:
-		if bck == nil {
-			return fmt.Errorf(erfmn, xactMsg.Kind)
-		}
-		ec.ECM.RestoreBckGetXact(bck)
-	case cmn.ActECRespond:
-		if bck == nil {
-			return fmt.Errorf(erfmn, xactMsg.Kind)
-		}
-		ec.ECM.RestoreBckRespXact(bck)
 	// 3. cannot start
 	case cmn.ActPutCopies:
 		return fmt.Errorf("cannot start xaction %q - it is invoked automatically by PUTs into mirrored bucket", xactMsg.Kind)

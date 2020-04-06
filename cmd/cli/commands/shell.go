@@ -314,20 +314,35 @@ func putPromoteObjectCompletions(c *cli.Context) {
 // Xaction //
 /////////////
 
-func xactionCompletions(c *cli.Context) {
-	if c.NArg() == 0 {
-		for key := range cmn.XactType {
-			fmt.Println(key)
+func xactionCompletions(cmd string) func(ctx *cli.Context) {
+	return func(c *cli.Context) {
+		if c.NArg() == 0 {
+			for kind, meta := range cmn.XactsMeta {
+				if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && meta.Startable) {
+					fmt.Println(kind)
+				}
+			}
+			return
 		}
-		return
-	}
 
-	xactName := c.Args().First()
-	if cmn.IsXactTypeBck(xactName) {
-		bucketCompletions()(c)
-		return
+		xactName := c.Args().First()
+		if cmn.IsXactTypeBck(xactName) {
+			bucketCompletions()(c)
+			return
+		}
+		flagCompletions(c)
 	}
-	flagCompletions(c)
+}
+
+func xactionDesc(cmd string) string {
+	xactKinds := make([]string, 0, len(cmn.XactsMeta))
+	for kind, meta := range cmn.XactsMeta {
+		if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && meta.Startable) {
+			xactKinds = append(xactKinds, kind)
+		}
+	}
+	sort.Strings(xactKinds)
+	return fmt.Sprintf("%s can be one of: %q", xactionArgument, strings.Join(xactKinds, ", "))
 }
 
 //////////////////////

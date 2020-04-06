@@ -187,7 +187,7 @@ func (e *registryEntries) removeUnlocked(id string) {
 			e.entries[idx] = e.entries[len(e.entries)-1]
 			e.entries = e.entries[:len(e.entries)-1]
 
-			if cmn.XactType[entry.Kind()] == cmn.XactTypeTask {
+			if cmn.XactsMeta[entry.Kind()].Type == cmn.XactTypeTask {
 				e.taskCount.Dec()
 			}
 			return
@@ -208,7 +208,7 @@ func (e *registryEntries) insert(entry baseEntry) {
 
 	// Increase after cleanup to not force trigger it. If it was just added, for
 	// sure it didn't yet finish.
-	if cmn.XactType[entry.Kind()] == cmn.XactTypeTask {
+	if cmn.XactsMeta[entry.Kind()].Type == cmn.XactTypeTask {
 		e.taskCount.Inc()
 	}
 }
@@ -224,7 +224,7 @@ func newRegistry() *registry {
 		latest:  make(map[string]*sync.Map),
 		entries: newRegistryEntries(),
 	}
-	for kind := range cmn.XactType {
+	for kind := range cmn.XactsMeta {
 		xar.latest[kind] = &sync.Map{}
 	}
 	hk.Housekeeper.Register("xactions", xar.cleanUpFinished)
@@ -297,7 +297,7 @@ func (r *registry) AbortAll(ty ...string) bool {
 	r.entries.forEach(false /*exclusive*/, func(entry baseEntry) bool {
 		xact := entry.Get()
 		if !xact.Finished() {
-			if len(ty) > 0 && ty[0] != cmn.XactType[xact.Kind()] {
+			if len(ty) > 0 && ty[0] != cmn.XactsMeta[xact.Kind()].Type {
 				return true
 			}
 
@@ -509,7 +509,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 		//
 		// We need to check if the entry is not the most recent entry for
 		// given kind. If it is we want to keep it anyway.
-		switch cmn.XactType[entry.Kind()] {
+		switch cmn.XactsMeta[entry.Kind()].Type {
 		case cmn.XactTypeGlobal:
 			entry, exists := r.GetLatest(XactQuery{Kind: entry.Kind()})
 			if exists && entry.Get().ID() == eID {
@@ -527,7 +527,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 		if xact.EndTime().Add(entryOldAge).Before(startTime) {
 			// xaction has finished more than entryOldAge ago
 			r.entries.removeUnlocked(eID.String())
-			if cmn.XactType[entry.Kind()] == cmn.XactTypeTask {
+			if cmn.XactsMeta[entry.Kind()].Type == cmn.XactTypeTask {
 				anyTaskDeleted = true
 			}
 			return true

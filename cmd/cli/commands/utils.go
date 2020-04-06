@@ -536,7 +536,7 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 		xactID = xactKind
 		xactKind = ""
 	} else {
-		switch cmn.XactType[xactKind] {
+		switch cmn.XactsMeta[xactKind].Type {
 		case cmn.XactTypeGlobal:
 			if c.NArg() > 1 {
 				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a global xaction, ignoring bucket name\n", xactKind)

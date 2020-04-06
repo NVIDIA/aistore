@@ -23,8 +23,6 @@ import (
 )
 
 var (
-	xactKindsMsg = buildXactKindsMsg()
-
 	startCmdsFlags = map[string][]cli.Flag{
 		subcmdStartXaction: {},
 		subcmdStartDownload: {
@@ -51,10 +49,10 @@ var (
 					Name:         subcmdStartXaction,
 					Usage:        "start an xaction",
 					ArgsUsage:    "XACTION_NAME [BUCKET_NAME]",
-					Description:  xactKindsMsg,
+					Description:  xactionDesc(cmn.ActXactStart),
 					Flags:        startCmdsFlags[subcmdStartXaction],
 					Action:       startXactionHandler,
-					BashComplete: xactionCompletions,
+					BashComplete: xactionCompletions(cmn.ActXactStart),
 				},
 				{
 					Name:         subcmdStartDownload,
@@ -82,10 +80,10 @@ var (
 					Name:         subcmdStopXaction,
 					Usage:        "stops xactions",
 					ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
-					Description:  xactKindsMsg,
+					Description:  xactionDesc(cmn.ActXactStop),
 					Flags:        stopCmdsFlags[subcmdStopXaction],
 					Action:       stopXactionHandler,
-					BashComplete: xactionCompletions,
+					BashComplete: xactionCompletions(cmn.ActXactStop),
 				},
 				{
 					Name:         subcmdStopDownload,
@@ -116,15 +114,9 @@ func startXactionHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
 	if xactID != "" {
 		return fmt.Errorf("%q is not a valid xaction", xactID)
 	}
-
-	if cmn.XactType[xactKind] == cmn.XactTypeTask {
-		return errors.New(`cannot start "type=task" xaction`)
-	}
-
 	var (
 		id       string
 		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck}
@@ -325,12 +317,4 @@ func stopDsortHandler(c *cli.Context) (err error) {
 
 	fmt.Fprintf(c.App.Writer, "%s job %q successfully stopped\n", cmn.DSortName, id)
 	return
-}
-
-func buildXactKindsMsg() string {
-	xactKinds := make([]string, 0, len(cmn.XactType))
-	for kind := range cmn.XactType {
-		xactKinds = append(xactKinds, kind)
-	}
-	return fmt.Sprintf("%s can be one of: %q", xactionArgument, strings.Join(xactKinds, ", "))
 }

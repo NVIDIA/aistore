@@ -6,6 +6,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -23,7 +24,7 @@ type (
 
 	XactReqArgs struct {
 		ID      string
-		Kind    string  // Xaction kind, see: cmn.XactType
+		Kind    string  // Xaction kind, see: cmn.XactsMeta
 		Bck     cmn.Bck // Optional bucket
 		Latest  bool    // Determines if we should get latest or all xactions
 		Timeout time.Duration
@@ -67,6 +68,10 @@ func (xs NodesXactStats) ObjCount() (count int64) {
 //
 // StartXaction starts a given xaction.
 func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
+	if !cmn.XactsMeta[args.Kind].Startable {
+		return id, fmt.Errorf("cannot start \"kind=%s\" xaction", args.Kind)
+	}
+
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStart,
 		Value: cmn.XactionMsg{

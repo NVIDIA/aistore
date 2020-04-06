@@ -34,33 +34,36 @@ const (
 	XactTypeTask   = "task"
 )
 
-type XactKindType map[string]string
+type XactMetadata struct {
+	Type      string
+	Startable bool // determines if can be started via API
+}
 
-var XactType = XactKindType{
+var XactsMeta = map[string]XactMetadata{
 	// global kinds
-	ActLRU:       XactTypeGlobal,
-	ActElection:  XactTypeGlobal,
-	ActResilver:  XactTypeGlobal,
-	ActRebalance: XactTypeGlobal,
-	ActDownload:  XactTypeGlobal,
+	ActLRU:       {Type: XactTypeGlobal, Startable: true},
+	ActElection:  {Type: XactTypeGlobal, Startable: false},
+	ActResilver:  {Type: XactTypeGlobal, Startable: true},
+	ActRebalance: {Type: XactTypeGlobal, Startable: true},
+	ActDownload:  {Type: XactTypeGlobal, Startable: false},
 
 	// bucket's kinds
-	ActECGet:        XactTypeBck,
-	ActECPut:        XactTypeBck,
-	ActECRespond:    XactTypeBck,
-	ActMakeNCopies:  XactTypeBck,
-	ActPutCopies:    XactTypeBck,
-	ActRenameLB:     XactTypeBck,
-	ActCopyBucket:   XactTypeBck,
-	ActECEncode:     XactTypeBck,
-	ActEvictObjects: XactTypeBck,
-	ActDelete:       XactTypeBck,
-	ActLoadLomCache: XactTypeBck,
-	ActPrefetch:     XactTypeBck,
-	ActPromote:      XactTypeBck,
+	ActECGet:        {Type: XactTypeBck, Startable: false},
+	ActECPut:        {Type: XactTypeBck, Startable: false},
+	ActECRespond:    {Type: XactTypeBck, Startable: false},
+	ActMakeNCopies:  {Type: XactTypeBck, Startable: false},
+	ActPutCopies:    {Type: XactTypeBck, Startable: false},
+	ActRenameLB:     {Type: XactTypeBck, Startable: false},
+	ActCopyBucket:   {Type: XactTypeBck, Startable: false},
+	ActECEncode:     {Type: XactTypeBck, Startable: false},
+	ActEvictObjects: {Type: XactTypeBck, Startable: false},
+	ActDelete:       {Type: XactTypeBck, Startable: false},
+	ActLoadLomCache: {Type: XactTypeBck, Startable: false},
+	ActPrefetch:     {Type: XactTypeBck, Startable: true},
+	ActPromote:      {Type: XactTypeBck, Startable: false},
 
-	ActListObjects:   XactTypeTask,
-	ActSummaryBucket: XactTypeTask,
+	ActListObjects:   {Type: XactTypeTask, Startable: false},
+	ActSummaryBucket: {Type: XactTypeTask, Startable: false},
 }
 
 // SelectMsg represents properties and options for requests which fetch entities

@@ -213,12 +213,12 @@ func (r *XactDemandBase) Timeout() bool {
 func (r *XactDemandBase) Stop() { r.ticker.Stop() }
 
 func IsValidXaction(kind string) bool {
-	_, ok := XactType[kind]
+	_, ok := XactsMeta[kind]
 	return ok
 }
 
 func IsXactTypeBck(kind string) bool {
-	return XactType[kind] == XactTypeBck
+	return XactsMeta[kind].Type == XactTypeBck
 }
 
 func (*MountpathXact) IsMountpathXact() bool    { return true }

@@ -40,7 +40,7 @@ var (
 					ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
 					Flags:        waitCmdsFlags[subcmdWaitXaction],
 					Action:       waitXactionHandler,
-					BashComplete: xactionCompletions,
+					BashComplete: xactionCompletions(""),
 				},
 				{
 					Name:         subcmdWaitDownload,
