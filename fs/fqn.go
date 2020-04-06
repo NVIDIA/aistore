@@ -15,8 +15,8 @@ import (
 const (
 	prefCT       = '%'
 	prefProvider = '@'
-	prefNsLocal  = '#'
-	prefNsCloud  = ':'
+	prefNsUUID   = cmn.NsUUIDPrefix
+	prefNsName   = cmn.NsNamePrefix
 )
 
 const (
@@ -74,14 +74,14 @@ func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 			}
 
 			switch item[0] {
-			case prefNsLocal:
+			case prefNsName:
 				parsed.Bck.Ns = cmn.Ns{
 					Name: item[1:],
 				}
 				itemIdx-- // we must visit this case again
-			case prefNsCloud:
+			case prefNsUUID:
 				ns := item[1:]
-				idx := strings.IndexRune(ns, prefNsLocal)
+				idx := strings.IndexRune(ns, prefNsName)
 				if idx == -1 {
 					err = fmt.Errorf("invalid fqn %s: bad namespace %q", fqn, ns)
 				}

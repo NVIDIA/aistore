@@ -258,10 +258,10 @@ func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int)
 	if nsLen > 0 {
 		buf = append(buf, filepath.Separator)
 		if bck.Ns.IsCloud() {
-			buf = append(buf, prefNsCloud)
+			buf = append(buf, prefNsUUID)
 			buf = append(buf, bck.Ns.UUID...)
 		}
-		buf = append(buf, prefNsLocal)
+		buf = append(buf, prefNsName)
 		buf = append(buf, bck.Ns.Name...)
 	}
 	if bckNameLen > 0 {

@@ -21,8 +21,8 @@ var _ = Describe("Mirror", func() {
 		testDir = "/tmp/mirror-test_q/"
 
 		testBucketName = "TEST_LOCAL_MIRROR_BUCKET"
-		mpath          = testDir + "mirrortest_mpath/1"
-		mpath2         = testDir + "mirrortest_mpath/2"
+		mpath          = testDir + "mirrortest_mpath/2"
+		mpath2         = testDir + "mirrortest_mpath/1"
 
 		testObjectName = "mirrortestobj.ext"
 		testObjectSize = 1234

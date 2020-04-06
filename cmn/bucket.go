@@ -18,7 +18,8 @@ const (
 	ProviderAIS    = "ais"
 	ProviderAzure  = "azure"
 
-	nsSeparator = '#'
+	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
+	NsNamePrefix = '#' // BEWARE: used by on-disk layout
 
 	BckProviderSeparator = "://"
 )
@@ -58,10 +59,15 @@ var (
 	}
 )
 
+// Parses [@uuid][#namespace]. It does a little bit more than just parsing
+// a string from `Uname` so that logic can be reused in different places.
 func ParseNsUname(s string) (n Ns) {
-	idx := strings.IndexByte(s, nsSeparator)
+	if len(s) > 0 && s[0] == NsUUIDPrefix {
+		s = s[1:]
+	}
+	idx := strings.IndexByte(s, NsNamePrefix)
 	if idx == -1 {
-		n.Name = s
+		n.UUID = s
 	} else {
 		n.UUID = s[:idx]
 		n.Name = s[idx+1:]
@@ -73,20 +79,32 @@ func (n Ns) String() string {
 	if n.IsGlobal() {
 		return ""
 	}
-	if n.UUID == "" {
-		return n.Name
+	res := ""
+	if n.UUID != "" {
+		res += string(NsUUIDPrefix) + n.UUID
 	}
-	return fmt.Sprintf("%s%c%s", n.UUID, nsSeparator, n.Name)
+	if n.Name != "" {
+		res += string(NsNamePrefix) + n.Name
+	}
+	return res
 }
 
-func (n Ns) Uname() string  { return n.String() }
+func (n Ns) Uname() string {
+	b := make([]byte, 0, 2+len(n.UUID)+len(n.Name))
+	b = append(b, NsUUIDPrefix)
+	b = append(b, n.UUID...)
+	b = append(b, NsNamePrefix)
+	b = append(b, n.Name...)
+	return string(b)
+}
+
 func (n Ns) IsGlobal() bool { return n == NsGlobal }
 func (n Ns) IsCloud() bool  { return n.UUID != "" }
 func (n Ns) Validate() error {
 	if !nsReg.MatchString(n.UUID) || !nsReg.MatchString(n.Name) {
 		return fmt.Errorf(
-			"namespace (name: %s, uuid: %s) may only contain letters, numbers, dashes (-), underscores (_)",
-			n.Name, n.UUID,
+			"namespace (uuid: %q, name: %q) may only contain letters, numbers, dashes (-), underscores (_)",
+			n.UUID, n.Name,
 		)
 	}
 	return nil

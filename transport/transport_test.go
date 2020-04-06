@@ -121,7 +121,7 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bck:aws://uuid#namespace/abc ObjName:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[]} (119)
+	// {Bck:aws://@uuid#namespace/abc ObjName:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[]} (119)
 	// {Bck:ais://abracadabra ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51]} (121)
 }
 

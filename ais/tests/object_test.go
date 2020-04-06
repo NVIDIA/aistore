@@ -28,7 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
-	jsoniter "github.com/json-iterator/go"
 )
 
 func TestCloudBucketObject(t *testing.T) {
@@ -467,7 +466,7 @@ func Test_BucketNames(t *testing.T) {
 	buckets, err := api.ListBuckets(baseParams, cmn.Bck{})
 	tassert.CheckFatal(t, err)
 
-	printBucketNames(t, buckets)
+	printBucketNames(buckets)
 
 	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure} {
 		cloudBuckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: provider})
@@ -483,13 +482,10 @@ func Test_BucketNames(t *testing.T) {
 	}
 }
 
-func printBucketNames(t *testing.T, bucketNames cmn.BucketNames) {
-	pretty, err := jsoniter.MarshalIndent(bucketNames, "", " ")
-	if err != nil {
-		t.Errorf("Failed to pretty-print bucket names, err: %v", err)
-		return
+func printBucketNames(bcks cmn.BucketNames) {
+	for _, bck := range bcks {
+		fmt.Fprintf(os.Stdout, "  provider: %s, name: %s\n", bck.Provider, bck.Name)
 	}
-	fmt.Fprintln(os.Stdout, string(pretty))
 }
 
 func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {

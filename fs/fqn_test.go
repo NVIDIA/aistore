@@ -60,7 +60,7 @@ func TestParseFQN(t *testing.T) {
 		},
 		{
 			"cloud namespace",
-			"/tmp/@ais/:uuid#namespace/bucket/%ob/objname",
+			"/tmp/@ais/@uuid#namespace/bucket/%ob/objname",
 			[]string{"/tmp"},
 			"/tmp", cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}}, fs.ObjectType, "objname", false,
 		},
@@ -158,7 +158,7 @@ func TestParseFQN(t *testing.T) {
 		},
 		{
 			"invalid cloud namespace",
-			"/tmp/@cloud/:uuid/bucket/%ob/objname",
+			"/tmp/@cloud/@uuid/bucket/%ob/objname",
 			[]string{"/tmp"},
 			"", cmn.Bck{}, "", "", true,
 		},

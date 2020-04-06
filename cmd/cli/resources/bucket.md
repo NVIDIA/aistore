@@ -19,6 +19,31 @@ $ ais create bucket ais://bucket_name1 bucket_name2
 "bucket_name2" bucket created
 ```
 
+#### Create AIS bucket in local namespace
+
+Create bucket `bucket_name` in `ml` namespace.
+
+```console
+$ ais create bucket ais://#ml/bucket_name
+"ais://#ml/bucket_name" bucket created
+```
+
+#### Create bucket in remote AIS cluster
+
+Create bucket `bucket_name` in global namespace of AIS remote cluster with `Bghort1l` UUID.
+
+```console
+$ ais create bucket ais://@Bghort1l/bucket_name
+"ais://@Bghort1l/bucket_name" bucket created
+```
+
+Create bucket `bucket_name` in `ml` namespace of AIS remote cluster with `Bghort1l` UUID.
+
+```console
+$ ais create bucket ais://@Bghort1l#ml/bucket_name
+"ais://@Bghort1l#ml/bucket_name" bucket created
+```
+
 #### Incorrect buckets creation
 
 ```console
@@ -44,6 +69,31 @@ $ ais rm bucket ais://bucket_name1 bucket_name2
 "bucket_name2" bucket destroyed
 ```
 
+#### Remove local bucket in local namespace
+
+Remove bucket `bucket_name` from `ml` namespace.
+
+```console
+$ ais rm bucket ais://#ml/bucket_name
+"ais://#ml/bucket_name" bucket destroyed
+```
+
+#### Remove bucket in remote AIS cluster
+
+Remove bucket `bucket_name` from global namespace of AIS remote cluster with `Bghort1l` UUID.
+
+```console
+$ ais rm bucket ais://@Bghort1l/bucket_name
+"ais://@Bghort1l/bucket_name" bucket destroyed
+```
+
+Remove bucket `bucket_name` from `ml` namespace of AIS remote cluster with `Bghort1l` UUID.
+
+```console
+$ ais rm bucket ais://@Bghort1l#ml/bucket_name
+"ais://@Bghort1l#ml/bucket_name" bucket destroyed
+```
+
 #### Incorrect buckets removal
 
 Removing cloud buckets is not supported.
@@ -62,6 +112,15 @@ List all bucket names.
 `ais ls cloud://` or `ais ls ais://`
 
 List all bucket names for the specific provider.
+
+`ais ls ais://#name`
+
+List all bucket names for the `ais` provider and `name` namespace.
+
+`ais ls ais://@uuid#namespace`
+
+List all bucket names for the `ais` provider and `uuid#namespace` namespace.
+`uuid` should be equal to remote cluster UUID and `namespace` is optional name of the remote namespace (if `namespace` not provided the global namespace will be used).
 
 ### Options
 
@@ -134,6 +193,18 @@ List objects in the cloud bucket `bucket_name`.
 
 ```console
 ais ls cloud://bucket_name
+NAME		SIZE		VERSION
+shard-0.tar	16.00KiB	1
+shard-1.tar	16.00KiB	1
+...
+```
+
+#### From AIS remote cluster with specific namespace
+
+List objects in the bucket `bucket_name` and `ml` namespace contained on AIS remote cluster with `Bghort1l` UUID.
+
+```console
+$ ais ls ais://@Bghort1l#ml/bucket_name
 NAME		SIZE		VERSION
 shard-0.tar	16.00KiB	1
 shard-1.tar	16.00KiB	1

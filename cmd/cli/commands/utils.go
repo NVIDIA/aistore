@@ -488,25 +488,34 @@ func parseBckProvider(provider string) string {
 	return provider
 }
 
+// Parses "provider://@uuid#namespace/bucketName/objectName"
 func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 	const (
 		bucketSepa = "/"
 	)
 
-	providerSplit := strings.SplitN(objName, cmn.BckProviderSeparator, 2)
-	if len(providerSplit) > 1 {
-		bck.Provider = parseBckProvider(providerSplit[0])
-		objName = providerSplit[1]
+	parts := strings.SplitN(objName, cmn.BckProviderSeparator, 2)
+	if len(parts) > 1 {
+		bck.Provider = parseBckProvider(parts[0])
+		objName = parts[1]
 	}
 	bck.Provider = parseBckProvider(bck.Provider)
 	if bck.Provider != "" && !cmn.IsValidProvider(bck.Provider) && bck.Provider != cmn.Cloud {
 		return bck, "", fmt.Errorf("invalid bucket provider %q", bck.Provider)
 	}
 
-	s := strings.SplitN(objName, bucketSepa, 2)
-	bck.Name = s[0]
-	if len(s) > 1 {
-		object = s[1]
+	parts = strings.SplitN(objName, bucketSepa, 2)
+	if len(parts[0]) > 0 && (parts[0][0] == cmn.NsUUIDPrefix || parts[0][0] == cmn.NsNamePrefix) {
+		bck.Ns = cmn.ParseNsUname(parts[0])
+		if err := bck.Ns.Validate(); err != nil {
+			return bck, "", err
+		}
+		parts = strings.SplitN(parts[1], bucketSepa, 2)
+	}
+
+	bck.Name = parts[0]
+	if len(parts) > 1 {
+		object = parts[1]
 	}
 	return
 }
