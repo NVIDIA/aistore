@@ -53,7 +53,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | --- | ---|
 | `cluster` | cluster-wide control-plane operation |
 | `daemon` | control-plane request to update or query specific AIS daemon (proxy or target) |
-| `buckets` | create, destroy, rename and list bucket(s), get bucket names, get bucket properties |
+| `buckets` | create, destroy, rename and list objects, get bucket names, get bucket properties |
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 | `download` | download external resources (datasets, files) into cluster |
 
@@ -63,7 +63,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 
 > For developers and first-time users: if you deployed AIS locally having followed [these instructions](../README.md#local-non-containerized) then most likely you will have `http://localhost:8080` as the primary proxy, and generally, `http://localhost:808x` for all locally-deployed AIS daemons.
 
-> The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](../cli/README.md).
+> The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](../cmd/cli/README.md).
 
 ### API Reference
 
@@ -80,8 +80,8 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Set cluster-wide configuration **via URL query** (proxy) | PUT /v1/cluster/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](./configuration.md#runtime-configuration) |
 | Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-or-T/v1/daemon'` |
 | Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-primary/v1/cluster'` |
-| Rebalance cluster (proxy) | PUT {"action": "rebalance", "value": "start"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance", "value": "start"}' 'http://G/v1/cluster'` |
-| Abort global (automated or manually started) rebalance (proxy) | PUT {"action": "rebalance", "value": "abort"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance", "value": "abort"}' 'http://G/v1/cluster'` |
+| Rebalance cluster (proxy) | PUT {"action": "start", "value": {"kind": "rebalance"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "value": {"kind": "rebalance"}}' 'http://G/v1/cluster'` |
+| Abort global (automated or manually started) rebalance (proxy) | PUT {"action": "stop", "value": {"kind": "rebalance"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "stop", "value": {"kind": "rebalance"}}' 'http://G/v1/cluster'` |
 | Create ais [bucket](bucket.md) (proxy) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' 'http://G/v1/buckets/abc'` |
 | Destroy ais [bucket](bucket.md) (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' 'http://G/v1/buckets/abc'` |
 | Rename ais [bucket](bucket.md) (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' 'http://G/v1/buckets/oldname'` |
@@ -102,8 +102,8 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Delete a range of objects | DELETE '{"action":"delete", "value":{"template":"your-prefix{min..max}"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | Configure bucket as [n-way mirror](storage_svcs.md#n-way-mirror) (proxy) | POST {"action": "makencopies", "value": n} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"makencopies", "value": 2}' 'http://G/v1/buckets/abc'` |
 | Enable [erasure coding](storage_svcs.md#erasure-coding) protection for all objects (proxy) | POST {"action": "ecencode"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"ecencode"}' 'http://G/v1/buckets/abc'` |
-| Set [bucket properties](bucket.md#properties-and-options) (proxy) | PATCH {"action": "setprops"} /v1/buckets/bucket-name | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum": {"type": "inherit"}, "mirror": {"enable": true}}' 'http://G/v1/buckets/abc'` |
-| Reset [bucket properties](bucket.md#properties-and-options) (proxy) | PUT {"action": "resetprops"} /v1/buckets/bucket-name | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://G/v1/buckets/abc'` |
+| Set [bucket properties](bucket.md#properties-and-options) (proxy) | PATCH {"action": "setbprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops", "value": {"checksum": {"type": "inherit"}, "mirror": {"enable": true}}' 'http://G/v1/buckets/abc'` |
+| Reset [bucket properties](bucket.md#properties-and-options) (proxy) | PATCH {"action": "resetbprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"resetbprops"}' 'http://G/v1/buckets/abc'` |
 | [Prefetch](bucket.md#prefetchevict-objects) a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"]}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | [Prefetch](bucket.md#prefetchevict-objects) a range of objects| POST '{"action":"prefetch", "value":{"template":"your-prefix{min..max}" }}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | [Evict](bucket.md#prefetchevict-objects) object from cache | DELETE '{"action": "evictobjects"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evictobjects"}' 'http://G/v1/objects/mybucket/myobject'` |
@@ -119,7 +119,7 @@ ___
 
 <a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
-<a name="ft2">2</a>: See the [List Bucket section](bucket.md#list-bucket) for details. [↩](#a2)
+<a name="ft2">2</a>: See the [List Objects section](bucket.md#list-objects) for details. [↩](#a2)
 
 <a name="ft3">3</a>: Notice the -L option here and elsewhere. [↩](#a3)
 
@@ -147,8 +147,8 @@ Curl example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=
 
 For more information, CLI examples, and the most recent updates, please see:
 - [Cloud Providers](./providers.md)
-- [CLI: operations on buckets](/aistore/cli/resources/bucket.md)
-- [CLI: operations on objects](/aistore/cli/resources/object.md)
+- [CLI: operations on buckets](/aistore/cmd/cli/resources/bucket.md)
+- [CLI: operations on objects](/aistore/cmd/cli/resources/object.md)
 - [On-Disk Layout](./on-disk-layout.md)
 
 #### Supported APIs

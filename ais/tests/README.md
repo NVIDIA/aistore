@@ -6,8 +6,7 @@ redirect_from:
  - ais/tests/README.md/
 ---
 
-AIStore testing
------------------------------------------------------------------
+## AIStore testing
 
 AIStore provides both unit tests and integration tests that can be run individually or in batches. Some tests require AIStore cluster, others do not, and some of the tests require the cluster (under test) to be deployed with more than one storage target and more than one proxy/gateway.
 
@@ -41,7 +40,7 @@ $ BUCKET=<bucket name> go test ./ais/tests -run=TestProxy/PrimaryCrash
 $ BUCKET=<bucket name> go test ./ais/tests -v -run=smoke -numworkers=4
 ```
 
-Note that, when running individual tests, more command line optons are available, for example: matching criteria, number of workers, etc.
+Note that, when running individual tests, more command line options are available, for example: matching criteria, number of workers, etc.
 For the full list of supported command line arguments:
 
 ```console

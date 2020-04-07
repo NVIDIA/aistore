@@ -180,7 +180,7 @@ First, create an api instance `bucket_api = ais_client.api.bucket_api.BucketApi(
 | Destroy ais bucket (proxy) | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DESTROYLB))` | None |
 | Rename ais bucket (proxy) | `bucket_api.perform_operation('oldname', openapi_params(openapi_actions.RENAMELB, name='newname'))` | ObjectPropertyList |
 | [Evict](/aistore/docs/bucket.md#evict-bucket) cloud bucket (proxy) | `bucket_api.delete('myS3bucket', openapi_params(openapi_actions.EVICTCB))` | None |
-| Set bucket props (proxy) | `bucket_api.set_properties('mybucket', openapi_params(openapi_actions.SETPROPS, value=openapi_models.BucketProps(next_tier_url="http://localhost:8082", cloud_provider="ais", read_policy="next_tier", write_policy="next_tier", cksum=openapi_models.BucketPropsCksum(checksum="inherit"))))` | None |
+| Set bucket props (proxy) | `bucket_api.set_properties('mybucket', openapi_params(openapi_actions.SETPROPS, value=openapi_models.BucketProps(provider="ais", checksum=openapi_models.BucketPropsCksum(checksum="inherit"))))` | None |
 | [Prefetch](/aistore/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | ObjectPropertyList |
 | [Prefetch](/aistore/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.RangeParameters(template="__tst/test-{1000..2000}")))` <sup>[3](#ftb3)</sup> | None |
 | Delete a list of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DELETE, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | None |
@@ -191,7 +191,7 @@ First, create an api instance `bucket_api = ais_client.api.bucket_api.BucketApi(
 
 <a name="ftb1">1</a>: Optional parameter `loc=true` can be used to retrieve just the ais buckets, this causes the `cloud` property to be the empty array
 
-<a name="ftb2">2</a>: See the [List Bucket section](/aistore/docs/bucket.md#list-bucket) for details.
+<a name="ftb2">2</a>: See the [List Objects section](/aistore/docs/bucket.md#list-objects) for details.
 
 <a name="ftb3">3</a>: See the [List/Range Operations section](/aistore/docs/batch.md#listrange-operations) for details.
 

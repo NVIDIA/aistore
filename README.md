@@ -26,7 +26,7 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 * HTTP REST API to GET/PUT objects, create, destroy, list and configure buckets;
 * FUSE client (`aisfs`) to access AIS objects as files;
 * arbitrary number of (extremely lightweight) access points;
-* easy-to-use CLI supporting command-line (TAB) completions;
+* easy-to-use CLI that supports [TAB auto-completions](cmd/cli/README.md);
 * automated rebalancing upon changes in cluster membership, drive failures, bucket renames;
 * N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
 
@@ -106,7 +106,8 @@ Select:
  1: Amazon Cloud
  2: Google Cloud
  3: AIS Cloud - remote cluster
-Enter your provider choice (0, 1, 2 or 3):
+ 4: Azure Cloud
+Select cloud provider (0, 1, 2, 3, or 4):
 0
 ```
 
@@ -138,10 +139,10 @@ This command runs a test that matches the specified string ("download"). The tes
 
 ## Build, Make and Development Tools
 
-As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](dev/kubernetes/Dockerfile). As the very first step, run `make help` for help on:
+As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
 
-* **building** AIS binary (called `aisnode`) deployable as both a storage target _or_ a proxy/gateway;
-* **building** [CLI](cli/README.md), FUSE [aisfs](fuse/README.md), and benchmark binaries;
+* **building** AIS binary (called `aisnode`) deployable as both a storage target **or** a proxy/gateway;
+* **building** [CLI](cmd/cli/README.md), [aisfs](cmd/aisfs/README.md), and benchmark binaries;
 
 In particular, the `make` provides a growing number of developer-friendly commands to:
 
@@ -161,7 +162,7 @@ To get started with AIStore and Docker, see: [Getting started with Docker](docs/
 
 ### Local Kubernetes
 
-The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/kubernetes).
+The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/k8s).
 
 ## Containerized Deployments: Host Resource Sharing
 
@@ -187,7 +188,7 @@ As is usually the case with storage clusters, there are multiple ways to monitor
 
 > AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [AIS Load Generator](docs/howto_benchmark.md).
 
-For starters, AIS collects and logs a fairly large and constantly growing number of counters that describe all aspects of its operation, including (but not limited to) those that reflect cluster recovery/rebalancing, all [extended long-running operations](docs/xaction.md), and, of course, object storage transactions.
+For starters, AIS collects and logs a fairly large and constantly growing number of counters that describe all aspects of its operation, including (but not limited to) those that reflect cluster recovery/rebalancing, all [extended long-running operations](xaction/README.md), and, of course, object storage transactions.
 
 In particular:
 
@@ -198,16 +199,18 @@ The logging interval is called `stats_time` (default `10s`) and is [configurable
 
 However. Speaking of ways to monitor AIS remotely, the two most obvious ones would be:
 
-* [AIS CLI](cli/README.md)
+* [AIS CLI](cmd/cli/README.md)
 * Graphite/Grafana
 
 As far as Graphite/Grafana, AIS integrates with these popular backends via [StatsD](https://github.com/etsy/statsd) - the *daemon for easy but powerful stats aggregation*. StatsD can be connected to Graphite, which then can be used as a data source for Grafana to get a visual overview of the statistics and metrics.
 
 > The scripts for easy deployment of both Graphite and Grafana are included (see below).
 
-> For [local non-containerized deployments](#deployment-local-non-containerized), use `./ais/setup/deploy_grafana.sh` to start Graphite and Grafana containers. Local deployment scripts will automatically "notice" the presence of the containers and will send statistics to the Graphite.
+> For local non-containerized deployments, use `./deploy/dev/local/deploy_grafana.sh` to start Graphite and Grafana containers.
+> Local deployment scripts will automatically "notice" the presence of the containers and will send statistics to the Graphite.
 
-> For [local docker-compose based deployments](#deployment-local-docker-compose), make sure to use `-grafana` command-line option. The `deploy_docker.sh` script will then spin-up Graphite and Grafana containers.
+> For local docker-compose based deployments, make sure to use `-grafana` command-line option.
+> The `./deploy/dev/docker/deploy_docker.sh` script will then spin-up Graphite and Grafana containers.
 
 In both of these cases, Grafana will be accessible at [localhost:3000](http://localhost:3000).
 
@@ -215,7 +218,7 @@ In both of these cases, Grafana will be accessible at [localhost:3000](http://lo
 
 ## Configuration
 
-AIS configuration is consolidated in a single [JSON template](ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, whereby the majority of those (except maybe just a few) have pre-assigned default values. The configuration template serves as a **single source for all deployment-specific configurations**, examples of which can be found under the folder that consolidates both [containerized-development and production deployment scripts](deploy).
+AIS configuration is consolidated in a single [JSON template](/aistore/deploy/dev/local/aisnode_config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, whereby the majority of those (except maybe just a few) have pre-assigned default values. The configuration template serves as a **single source for all deployment-specific configurations**, examples of which can be found under the folder that consolidates both [containerized-development and production deployment scripts](deploy).
 
 AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
 
@@ -223,7 +226,7 @@ AIS production deployment, in particular, requires careful consideration of at l
 * intra-cluster control
 * intra-cluster data
 
-with the corresponding [JSON names](ais/setup/config.sh), respectively:
+with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh), respectively:
 
 * `ipv4`
 * `ipv4_intra_control`
@@ -231,9 +234,9 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 
 ## Assorted Tips
 
-* To enable an optional AIStore authentication server, execute `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
-* In addition to AIStore - the storage cluster, you can also deploy [aisfs](fuse/README.md) - to access AIS objects as files, and [AIS CLI](cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
-* AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais status` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
+* To enable an optional AIStore authentication server, execute `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](cmd/authn/README.md).
+* In addition to AIStore - the storage cluster, you can also deploy [aisfs](cmd/aisfs/README.md) - to access AIS objects as files, and [AIS CLI](cmd/cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
+* AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais status` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cmd/cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
 * For more testing commands and options, please refer to the [testing README](ais/tests/README.md).
 * For `aisnode` command-line options, see: [command-line options](docs/command_line.md).
 * For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful-links.md).
@@ -242,7 +245,7 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 ## Guides and References
 
 - [AIS Overview](docs/overview.md)
-- [CLI](cli/README.md)
+- [CLI](cmd/cli/README.md)
 - [On-Disk Layout](docs/on-disk-layout.md)
 - [Command line parameters](docs/command_line.md)
 - [AIS Load Generator: integrated benchmark tool](bench/aisloader/README.md)
@@ -253,12 +256,12 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 - [Highly available control plane](docs/ha.md)
 - [How to benchmark](docs/howto_benchmark.md)
 - [RESTful API](docs/http_api.md)
-- [File access](fuse/README.md)
+- [File access](cmd/aisfs/README.md)
 - [Joining AIS cluster](docs/join_cluster.md)
 - [AIS Buckets: definition, operations, properties](docs/bucket.md#bucket)
 - [Statistics, Collected Metrics, Visualization](docs/metrics.md)
 - [Performance: Tuning and Testing](docs/performance.md)
-- [Cluster-wide Rebalancing](docs/rebalance.md)
+- [Rebalance](docs/rebalance.md)
 - [Storage Services](docs/storage_svcs.md)
 - [Extended Actions](xaction/README.md)
 - [Integrated Internet Downloader](downloader/README.md)
@@ -267,8 +270,8 @@ with the corresponding [JSON names](ais/setup/config.sh), respectively:
 
 ## Selected Package READMEs
 - [Package `api`](api/README.md)
-- [Package `cli`](cli/README.md)
-- [Package `fuse`](fuse/README.md)
+- [Package `cli`](cmd/cli/README.md)
+- [Package `fuse`](cmd/aisfs/README.md)
 - [Package `downloader`](downloader/README.md)
 - [Package `memsys`](memsys/README.md)
 - [Package `transport`](transport/README.md)

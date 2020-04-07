@@ -18,7 +18,7 @@ redirect_from:
 
 ## Storage Services
 
-By default, buckets inherit [global configuration](/aistore/ais/setup/config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
+By default, buckets inherit [global configuration](/aistore/deploy/dev/local/aisnode_config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
 
 ### Notation
 
@@ -28,20 +28,20 @@ In this document, `G` - denotes a (hostname:port) pair of any gateway in the AIS
 
 Checksumming on bucket level is configured by setting bucket properties:
 
-* `cksum.type`: `"none"`,`"xxhash"` or `"inherit"` configure hashing type. Value
+* `checksum.type`: `"none"`,`"xxhash"` or `"inherit"` configure hashing type. Value
 `"inherit"` indicates that the global checksumming configuration should be used.
-* `cksum.validate_cold_get`: `true` or `false` indicates
+* `checksum.validate_cold_get`: `true` or `false` indicates
 whether to perform checksum validation during cold GET.
-* `cksum.validate_warm_get`: `true` or `false` indicates
+* `checksum.validate_warm_get`: `true` or `false` indicates
 whether to perform checksum validation during warm GET.
-* `cksum.enable_read_range`: `true` or `false` indicates whether to perform checksum validation during byte serving.
+* `checksum.enable_read_range`: `true` or `false` indicates whether to perform checksum validation during byte serving.
 
 Value for the `type` field (see above) *must* be provided *every* time the bucket properties are updated, otherwise, the request will be rejected.
 
 Example of setting bucket properties:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum": {"type": "xxhash", "validate_cold_get": true, "validate_warm_get": false, "enable_read_range": false}}}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops", "value": {"checksum": {"type": "xxhash", "validate_cold_get": true, "validate_warm_get": false, "enable_read_range": false}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 ## LRU
@@ -60,14 +60,16 @@ Overriding the global configuration can be achieved by specifying the fields of 
 Example of setting bucket properties:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"cksum":{"type":"none","validate_cold_get":true,"validate_warm_get":true,"enable_read_range":true},"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}}}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops","value":{"checksum":{"type":"none","validate_cold_get":true,"validate_warm_get":true,"enable_read_range":true},"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
-To revert a bucket's entire configuration back to use global parameters, use `"action":"resetprops"` to the same PUT endpoint as above as such:
+To revert bucket's entire configuration back to global (configurable) defaults, use `"action":"resetbprops"` with the same PATCH endpoint, e.g.:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"resetbprops"}' 'http://G/v1/buckets/<bucket-name>'
 ```
+
+In effect, resetting bucket properties is equivalent to populating all properties with the values from the corresponding sections of the [global configuration](/aistore/deploy/dev/local/aisnode_config.sh).
 
 ## Erasure coding
 
@@ -87,7 +89,7 @@ A bucket inherits EC settings from global configuration. But it can be overridde
 
 Choose the number data and parity slices depending on the required level of protection and the cluster configuration. The number of storage targets must be greater than the sum of the number of data and parity slices. If the cluster uses only replication (by setting `objsize_limit` to a very high value), the number of storage targets must exceed the number of parity slices.
 
-Global rebalance supports erasure-coded buckets. Besides moving existing objects between targets, it repairs damaged objects and their slices if possible.
+Rebalance supports erasure-coded buckets. Besides moving existing objects between targets, it repairs damaged objects and their slices if possible.
 
 Notes:
 
@@ -98,13 +100,13 @@ Notes:
 Example of setting bucket properties:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}, "ec": {"enabled": true, "data": 4, "parity": 2}}}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops","value":{"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}, "ec": {"enabled": true, "data": 4, "parity": 2}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 To change only one EC property(e.g, enable or disable EC for a bucket) without touching other bucket properties, use the single set property API. Example of disabling EC:
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "ec.enabled", "value": false}' 'http://G/v1/buckets/<bucket-name>'
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops", "name": "ec.enabled", "value": false}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 or using AIS CLI utility:
@@ -145,7 +147,7 @@ In other words, AIS n-way mirroring is intended to withstand loss of disks, not 
 
 The service ensures is that for any given object there will be *no two replicas* sharing the same local disk.
 
-> Unlike [erasure coding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the name implies, local. When a bucket is [configured as a mirror](/aistore/ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
+> Unlike [erasure coding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the name implies, local. When a bucket is [configured as a mirror](/aistore/deploy/dev/local/aisnode_config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
 
 > As aside, note that AIS storage targets can be deployed to utilize Linux LVMs that provide a variety of RAID/mirror schemas.
 

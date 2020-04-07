@@ -5,12 +5,12 @@
         "enabled":      {{ .auth.enabled }},
         "creddir":      {{ .auth.creddir | quote }}
 },
-"cksum": {
-        "type":                 {{ .cksum.type | quote }},
-        "validate_cold_get":    {{ .cksum.validate_cold_get }},
-        "validate_warm_get":    {{ .cksum.validate_warm_get }},
-        "validate_obj_move":    {{ .cksum.validate_obj_move }},
-        "enable_read_range":    {{ .cksum.enable_read_range }}
+"checksum": {
+        "type":                 {{ .checksum.type | quote }},
+        "validate_cold_get":    {{ .checksum.validate_cold_get }},
+        "validate_warm_get":    {{ .checksum.validate_warm_get }},
+        "validate_obj_move":    {{ .checksum.validate_obj_move }},
+        "enable_read_range":    {{ .checksum.enable_read_range }}
 },
 "cloud": {
         {{ .cloud_provider | quote }}: {}
@@ -45,6 +45,7 @@
         "objsize_limit":        {{ .ec.objsize_limit }},
         "data_slices":          {{ .ec.data_slices }},
         "parity_slices":        {{ .ec.parity_slices }},
+        "batch_size":        {{ .ec.batch_size }},
         "compression":          {{ .ec.compression | quote }},
         "enabled":              {{ .ec.enabled }}
 },
@@ -100,14 +101,16 @@
         "multiplier":      {{ .rebalance.multiplier }}
 },
 "timeout": {
-        "default_timeout":      {{ .timeout.default_timeout | quote }},
-        "default_long_timeout": {{ .timeout.default_long_timeout | quote }},
-        "list_timeout":         {{ .timeout.list_timeout | quote }},
         "max_keepalive":        {{ .timeout.max_keepalive | quote }},
-        "proxy_ping":           {{ .timeout.proxy_ping | quote }},
         "cplane_operation":     {{ .timeout.cplane_operation | quote }},
         "send_file_time":       {{ .timeout.send_file_time | quote }},
-        "startup_time":         {{ .timeout.startup_time | quote }}
+        "startup_time":         {{ .timeout.startup_time | quote }},
+        "max_host_busy":        {{ .timeout.max_host_busy | quote }}
+},
+"client": {
+        "client_timeout":       {{ .timeout.default_timeout | quote }},
+        "client_long_timeout":  {{ .timeout.default_long_timeout | quote }},
+        "list_timeout":         {{ .timeout.list_timeout | quote }}
 },
 "versioning": {
         "enabled":              {{ .versioning.enabled }},

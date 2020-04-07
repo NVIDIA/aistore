@@ -42,7 +42,7 @@ AIS proxy and AIS target (executables) both support the following command-line a
   -stats_time duration
         stats reporting (logging) interval
   -list_time duration
-        list bucket timeout
+        list objects timeout
   -stderrthreshold value
         logs at or above this threshold go to stderr
   -vmodule value

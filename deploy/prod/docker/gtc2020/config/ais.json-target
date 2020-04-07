@@ -12,6 +12,7 @@
     "objsize_limit": 262144,
     "data_slices": 1,
     "parity_slices": 1,
+    "batch_size": 64,
     "compression": "never",
     "enabled": false
   },
@@ -26,14 +27,16 @@
     "retry_sync_time": "2s"
   },
   "timeout": {
-    "default_timeout": "10s",
-    "default_long_timeout": "30m",
-    "max_keepalive": "4s",
-    "proxy_ping": "100ms",
-    "cplane_operation": "2s",
-    "send_file_time": "5m",
-    "startup_time": "1m",
-    "list_timeout": "2m"
+    "max_keepalive":        "4s",
+    "cplane_operation":     "2s",
+    "send_file_time":       "5m",
+    "startup_time":         "1m",
+    "max_host_busy":        "1m"
+  },
+  "client": {
+    "client_timeout":      "10s",
+    "client_long_timeout": "30m",
+    "list_timeout":        "2m"
   },
   "proxy": {
     "primary_url": "http://localhost:51080",

@@ -53,7 +53,7 @@ All collected/tracked *counters* are 64-bit cumulative integers that continuousl
 | `aisproxy.<daemon_id>.get` | number of GET-object requests |
 | `aisproxy.<daemon_id>.put` | number of PUT-object requests |
 | `aisproxy.<daemon_id>.del` | number of DELETE-object requests |
-| `aisproxy.<daemon_id>.lst` | number of LIST-bucket requests |
+| `aisproxy.<daemon_id>.lst` | number of LIST-objects requests |
 | `aisproxy.<daemon_id>.ren` | ... RENAME ... |
 | `aisproxy.<daemon_id>.pst` | ... POST ... |
 
@@ -66,7 +66,7 @@ All collected/tracked *counters* are 64-bit cumulative integers that continuousl
 | `aisproxy.<daemon_id>.err.put` | Number of PUT-object errors |
 | `aisproxy.<daemon_id>.err.head` | Number of HEAD-object errors |
 | `aisproxy.<daemon_id>.err.delete` | Number of DELETE-object errors |
-| `aisproxy.<daemon_id>.err.list` | Number of LIST-bucket errors |
+| `aisproxy.<daemon_id>.err.list` | Number of LIST-objects errors |
 | `aisproxy.<daemon_id>.err.range` | ... RANGE ... |
 | `aisproxy.<daemon_id>.err.post` | ... POST ... |
 
@@ -83,7 +83,7 @@ All request latencies are reported to **StatsD/Grafana in milliseconds**.
 | Name | Comment |
 | --- | --- |
 | `aisproxy.<daemon_id>.get` | GET-object latency |
-| `aisproxy.<daemon_id>.lst` | LIST-bucket latency |
+| `aisproxy.<daemon_id>.lst` | LIST-objects latency |
 | `aisproxy.<daemon_id>.kalive` | Keep-Alive (roundtrip) latency |
 
 ### Target Metrics

@@ -300,7 +300,7 @@ Example output for single node:
 
 ## API
 
-You can use the [AIS's CLI](/aistore/cli/README.md) to start, abort, retrieve metrics or list dSort jobs.
+You can use the [AIS's CLI](/aistore/cmd/cli/README.md) to start, abort, retrieve metrics or list dSort jobs.
 It is also possible generate random dataset to test dSort's capabilities.
 
 ## Config

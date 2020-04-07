@@ -11,7 +11,7 @@ redirect_from:
 - [Runtime configuration](#runtime-configuration)
 - [Configuration persistence](#configuration-persistence)
 - [Startup override](#startup-override)
-- [Managing filesystems](#managing-filesystems)
+- [Managing mountpaths](#managing-mountpaths)
 - [Disabling extended attributes](#disabling-extended-attributes)
 - [Enabling HTTPS](#enabling-https)
 - [Filesystem Health Checker](#filesystem-health-checker)
@@ -20,7 +20,7 @@ redirect_from:
 - [Curl examples](#curl-examples)
 - [CLI examples](#cli-examples)
 
-AIS configuration is consolidated in a single [JSON template](/aistore/ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The configuration template serves as a single source for all deployment-specific configurations, examples of which can be found under [/deploy](the folder that consolidates containerized-development and production deployment scripts).
+AIS configuration is consolidated in a single [JSON template](/aistore/deploy/dev/local/aisnode_config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The configuration template serves as a single source for all deployment-specific configurations, examples of which can be found under [/deploy](the folder that consolidates containerized-development and production deployment scripts).
 
 AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are: user (aka public), intra-cluster control, and intra-cluster data - the corresponding JSON names are, respectively: `ipv4`, `ipv4_intra_control`, and `ipv4_intra_data`.
 
@@ -32,7 +32,7 @@ Further, `test_fspaths` section (see below) corresponds to a **single local file
 
 <img src="images/ais-config-2-commented.png" alt="Configuration: local filesystems" width="600">
 
-In production we use an alternative configuration called `fspaths`: the section of the [config](/aistore/ais/setup/config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
+In production we use an alternative configuration called `fspaths`: the section of the [config](/aistore/deploy/dev/local/aisnode_config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
 
 > Terminology: *mountpath* is a triplet **(local filesystem (LFS), disks that this LFS utilizes, LFS directory)**. The following rules are enforced: 1) different mountpaths use different LFSes, and 2) different LFSes use different disks.
 
@@ -95,17 +95,19 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `disk.disk_util_high_wm` | `80` | Operations that implement self-throttling mechanism, e.g. LRU, turn on the maximum throttle if disk utilization is higher than `disk_util_high_wm` |
 | `disk.iostat_time_long` | `2s` | The interval that disk utilization is checked when disk utilization is below `disk_util_low_wm`. |
 | `disk.iostat_time_short` | `100ms` | Used instead of `iostat_time_long` when disk utilization reaches `disk_util_high_wm`. If disk utilization is between `disk_util_high_wm` and `disk_util_low_wm`, a proportional value between `iostat_time_short` and `iostat_time_long` is used. |
-| `rebalance.enabled` | `true` | Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(`PUT {"action": "rebalance" v1/cluster`) to initiate cluster-wide rebalancing operation |
+| `rebalance.enabled` | `true` | Enables and disables automatic rebalance after a target receives the updated cluster map. If the (automated rebalancing) option is disabled, you can still use the REST API (`PUT {"action": "start", "value": {"kind": "rebalance"}} v1/cluster`) to initiate cluster-wide rebalancing operation |
 | `rebalance.dest_retry_time` | `2m` | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | `rebalance.multiplier` | `4` | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
 | `rebalance.quiescent` | `20s` | Rebalace moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
 | `timeout.send_file_time` | `5m` | Timeout for getting an object from a neighbor target or for sending an object to the correct target while rebalance is in progress |
-| `timeout.default_timeout` | `30s` | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
-| `timeout.default_long_timeout` | `30m` | Default timeout for long intra-cluster requests, e.g. reading an object from a neighbor target while rebalancing |
-| `cksum.type` | `xxhash` | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
-| `cksum.validate_cold_get` | `true` | Enables and disables checking the hash of received object after downloading it from the cloud |
-| `cksum.validate_warm_get` | `false` | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |
-| `cksum.enable_read_range` | `false` | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
+| `timeout.max_host_busy` | `1m` | Determines how long should we wait for particular action to happen due to possible node/network overload |
+| `client.client_timeout` | `10s` | Default client timeout |
+| `client.client_long_timeout` | `30m` | Default _long_ client timeout |
+| `client.list_timeout` | `2m` | Client list objects timeout |
+| `checksum.type` | `xxhash` | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
+| `checksum.validate_cold_get` | `true` | Enables and disables checking the hash of received object after downloading it from the cloud |
+| `checksum.validate_warm_get` | `false` | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |
+| `checksum.enable_read_range` | `false` | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
 | `versioning.enabled` | `true` | Enables and disables versioning. For Cloud-based buckets, versioning is on only when it is enabled in both places: in the Cloud for the bucket and in the AIS configuration |
 | `versioning.validate_warm_get` | `false` | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |
 | `fshc.enabled` | `true` | Enables and disables filesystem health checker (FSHC) |
@@ -124,6 +126,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `ec.enabled` | `false` | Enables or disables data protection |
 | `ec.data_slices` | `2` | Represents the number of fragments an object is broken into (in the range [2, 100]) |
 | `ec.parity_slices` | `2` | Represents the number of redundant fragments to provide protection from failures (in the range [2, 32]) |
+| `ec.batch_size` | `64` | Represents the number of misplaced and broken objects(with missing EC parts) processed by EC rebalance in a singe batch (in the range [4, 256]). Increasing the batch size improves rebalance time but requires more memory |
 | `ec.objsize_limit` | `262144` | Indicated the minimum size of an object in bytes that is erasure encoded. Smaller objects are replicated |
 | `ec.compression` | `"never"` | LZ4 compression parameters used when EC sends its fragments and replicas over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
 | `compression.block_size` | `262144` | Maximum data block size used by LZ4, greater values may increase compression ration but requires more memory. Value is one of 64KB, 256KB(AIS default), 1MB, and 4MB |
@@ -147,13 +150,13 @@ $ curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?periodic.stats_time=1m&persi
 AIS command-line allows to override (and, optionally, persist) configuration at AIS node's startup. For example:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -persist=true -confjson="{\"timeout.default_timeout\": \"13s\" }"
+$ aisnode -config=/etc/ais.json -role=target -persist=true -confjson="{\"timeout.client_timeout\": \"13s\" }"
 ```
 
 As shown above, the CLI option in-question is: `confjson`. It's value is a JSON-formatted map of string names and string values. You can *persist* the updated configuration either via `-persist` command-line option or via an additional JSON tuple:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -confjson="{\"timeout.default_timeout\": \"13s\", \"persist\": \"true\" }"
+$ aisnode -config=/etc/ais.json -role=target -confjson="{\"timeout.client_timeout\": \"13s\", \"persist\": \"true\" }"
 ```
 
 Another example. To temporarily override locally-configured address of the primary proxy, run:
@@ -183,15 +186,15 @@ AIStore [HTTP API](/aistore/docs/http_api.md) makes it possible to list, add, re
 
 ## Disabling extended attributes
 
-To make sure that AIStore does not utilize xattrs, configure `checksum`=`none` and `versioning`=`none` for all targets in a AIStore cluster. This can be done via the [common configuration "part"](/aistore/ais/setup/config.sh) that'd be further used to deploy the cluster.
+To make sure that AIStore does not utilize xattrs, configure `checksum`=`none` and `versioning`=`none` for all targets in a AIStore cluster. This can be done via the [common configuration "part"](/aistore/deploy/dev/local/aisnode_config.sh) that'd be further used to deploy the cluster.
 
 ## Enabling HTTPS
 
-To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_certificate` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/aistore/ais/setup/config.sh)).
+To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_certificate` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/aistore/deploy/dev/local/aisnode_config.sh)).
 
 ## Filesystem Health Checker
 
-Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fshc" of the [configuration](/aistore/ais/setup/config.sh).
+Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fshc" of the [configuration](/aistore/deploy/dev/local/aisnode_config.sh).
 
 When enabled, FSHC gets notified on every I/O error upon which it performs extensive checks on the corresponding local filesystem. One possible outcome of this health-checking process is that FSHC disables the faulty filesystems leaving the target with one filesystem less to distribute incoming data.
 
@@ -199,13 +202,13 @@ Please see [FSHC readme](/aistore/health/fshc.md) for further details.
 
 ## Networking
 
-In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [net section of the configuration](/aistore/ais/setup/config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](/aistore/docs/ha.md#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
+In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [net section of the configuration](/aistore/deploy/dev/local/aisnode_config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](/aistore/docs/ha.md#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
 
 All the 3 (three) networking options are enumerated [here](/aistore/cmn/network.go).
 
 ## Reverse proxy
 
-AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/aistore/ais/setup/config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](/aistore/docs/rproxy.md).
+AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/aistore/deploy/dev/local/aisnode_config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](/aistore/docs/rproxy.md).
 
 ## Curl examples
 
@@ -251,7 +254,7 @@ $ curl -i -X PUT 'http://G/v1/daemon/setconfig?vmodule=ais/targ*=1'
 
 ## CLI examples
 
-[AIS CLI](../cli/README.md) is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring "time" in their names, second - modifies `list_timeout` from 2 minutes to 5 minutes, and finally, displays the modified value:
+[AIS CLI](../cmd/cli/README.md) is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring "time" in their names, second - modifies `list_timeout` from 2 minutes to 5 minutes, and finally, displays the modified value:
 
 ```console
 $ ais show config 844974_8080 --json | jq '.timeout.list_timeout'

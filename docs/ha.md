@@ -58,7 +58,7 @@ The primary proxy election process is as follows:
 
 ### Non-electable gateways
 
-AIStore cluster can be *stretched* to collocate its redundant gateways with the compute nodes. Those non-electable local gateways ([AIStore configuration](/aistore/ais/setup/config.sh)) will only serve as access points but will never take on the responsibility of leading the cluster.
+AIStore cluster can be *stretched* to collocate its redundant gateways with the compute nodes. Those non-electable local gateways ([AIStore configuration](/aistore/deploy/dev/local/aisnode_config.sh)) will only serve as access points but will never take on the responsibility of leading the cluster.
 
 ### Metasync
 

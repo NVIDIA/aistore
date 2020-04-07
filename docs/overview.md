@@ -17,7 +17,7 @@ In this [white paper](https://arxiv.org/abs/2001.01858) we describe AIStore and 
 
 The rest of this document is structured as follows:
 
-- [Design Philosophy](#ais-design-philosophy)
+- [Design Philosophy](#design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
 - [Datapath](#datapath)
 - [Open Format](#open-format)
@@ -32,6 +32,7 @@ The rest of this document is structured as follows:
 - [AIS Limitations](#ais-limitations)
 
 ## Design Philosophy
+
 It is often more optimal to let applications control how and whether the stored content is stored in chunks. That's the simple truth that holds, in particular, for AI datasets that are often pre-sharded with content and boundaries of those shards based on application-specific optimization criteria. More exactly, the datasets could be pre-sharded, post-sharded, and otherwise transformed to facilitate training, inference, and simulation by the AI apps.
 
 The corollary of this statement is two-fold:
@@ -40,6 +41,7 @@ The corollary of this statement is two-fold:
 - Instead of breaking the objects in pieces (and then reassembling them with the help of a carefully maintained metadata), the storage system must better focus on providing assistance to simplify and accelerate dataset transformations.
 
 ## Key Concepts and Diagrams
+
 In this section: high-level diagrams that introduce key concepts and architecture, as well as possible deployment options.
 
 AIS cluster *comprises* arbitrary (and not necessarily equal) numbers of **gateways** and **storage targets**. Targets utilize local disks while gateways are HTTP **proxies** that provide most of the control plane and never touch the data.
@@ -99,7 +101,7 @@ One common way to use AIStore includes the most basic step: populating it with a
 
 1. [Cold GET](#existing-datasets-cold-get)
 2. [Prefetch](#existing-datasets-batch-prefetch)
-3. [Internet Downloader](#existing-datasets-internet-downloader)
+3. [Internet Downloader](#existing-datasets-integrated-downloader)
 4. [Reverse Proxy](#existing-datasets-reverse-proxy)
 5. [Promote (API and CLI)](#existing-datasets-promote-api-and-cli)
 
@@ -122,14 +124,14 @@ Alternatively or in parallel, you can also *prefetch* a flexibly-defined *list* 
 
 But what if the dataset in question exists in the form of (vanilla) HTTP/HTTPS URL(s)? What if there's a popular bucket in, say, Google Cloud that contains images that you'd like to bring over into your Data Center and make available locally for AI researchers?
 
-For these and similar use cases we have [AIS Downloader](downloader/README.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
+For these and similar use cases we have [AIS Downloader](../downloader/README.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
 
 ### Existing Datasets: Reverse Proxy
 
 AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation is limited to Google Cloud Storage (GCS) and requires:
 
 1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment
-2. AIS configuration: set `rproxy=cloud` in the [configuration](ais/setup/config.sh)
+2. AIS configuration: set `rproxy=cloud` in the [configuration](/aistore/deploy/dev/local/aisnode_config.sh)
 
 Note that `http_proxy` is supported by most UNIX systems and is recognized by most (but not all) HTTP clients:
 
@@ -145,7 +147,7 @@ Further details and examples are available [in this readme](rproxy.md).
 
 Finally, AIS can *promote* files and directories to objects. The only requirement is that the files and directories in question are colocated within AIS storage target machines.
 
-Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/aistore/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
+Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/aistore/cmd/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
 
 ```console
 $ ais promote /tmp/mydata mybucket/ -r
@@ -174,15 +176,15 @@ As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its 
 ## Other Services
 
 The (quickly growing) list of services includes (but is not limited to):
-* [health monitoring and recovery](health/fshc.md)
+* [health monitoring and recovery](../health/fshc.md)
 * [range read](http_api.md)
 * [dry-run (to measure raw network and disk performance)](performance.md#performance-testing)
 * performance and capacity monitoring with full observability via StatsD/Grafana
 * load balancing
 
-> Load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](storage_svcs.md#local-mirroring-and-load-balancing).
+> Load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](storage_svcs.md#read-load-balancing).
 
-Most notably, AIStore provides **[dSort](dsort/README.md)** - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
+Most notably, AIStore provides **[dSort](../dsort/README.md)** - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
 
 ## dSort
 
@@ -192,7 +194,7 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 
 ## CLI
 
-AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](cli/README.md). Once [installed](cli/README.md#getting-started), to start using it, simply execute:
+AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](../cmd/cli/README.md). Once [installed](../cmd/cli/README.md#getting-started), to start using it, simply execute:
 
  ```console
 $ export AIS_URL=http://G
@@ -201,28 +203,19 @@ $ ais --help
 
 where `G` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
 
-One salient feature of AIS CLI is its Bash style **auto-completions** that allow users to easily navigate supported operations and options by simply pressing the TAB key. For instance, when you type:
+One salient feature of AIS CLI is its Bash style [auto-completions](../cmd/cli/README.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
 
-```console
-$ ais s[TAB-TAB]
-```
+<img src="images/ais3.1.gif" alt="CLI-tab" width="900" height="130">
 
-the tool will suggest the following "expansion" from which you can further choose by typing one or more letters and pressing the TAB key, etc.
-
-```console
-$ ais s
-set          set-copies   show         start        status       stop
-```
-
-AIS CLI is still at its early stage and will keep quickly developing. For more information, please see the project's own [README](cli/README.md).
+AIS CLI is currently quickly developing. For more information, please see the project's own [README](../cmd/cli/README.md).
 
 ## Python Client
 
 AIStore provides an easy way to generate a python client package for simplified integration. The user can, after following a few simple steps, import the generated package and start communicating with AIS via its [RESTful API](http_api.md). The generated package will cover the entire functionality of the API.
 
-> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](openapi/openapi.yaml).
+> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](../openapi/openapi.yaml).
 
-To get started with the python client package, you need to first generate the client package. These instuctions can also be found [here](openapi/README.md#how-to-generate-package).
+To get started with the python client package, you need to first generate the client package. These instructions can also be found [here](../openapi/README.md#how-to-generate-package).
 
 1. Obtain the latest openapi-generator jar by running the following command:
 
@@ -246,11 +239,11 @@ $ pip install -r python-client/requirements.txt
 $ pip install -r python-client/test-requirements.txt
 ```
 
-These steps should produce the python client package, which will be located [here](python-client).
+These steps should produce the python client package, which will be located [here](../python-client).
 
 Should you have any difficulty generating the python client package with these instructions, please open a ticket, and we will provide further assistance.
 
-Once the package is generated, it can be installed as follows, these commands can also be found [here](openapi/README.md#how-to-install).
+Once the package is generated, it can be installed as follows, these commands can also be found [here](../openapi/README.md#how-to-install).
 
 ```console
 $ cd <path_to_repo>/python-client
@@ -279,7 +272,7 @@ daemon_api = ais_client.api.daemon_api.DaemonApi(proxyClient)
 print(daemon_api.get(openapi_models.GetWhat.SMAP))
 ```
 
-There's a lot more that the python client package can do. Be sure to read [the complete guide on using the package](openapi/README.md#how-to-use-package).
+There's a lot more that the python client package can do. Be sure to read [the complete guide on using the package](../openapi/README.md#how-to-use-package).
 
 ## AIS Limitations
 There are **no** designed-in limitations on the:
