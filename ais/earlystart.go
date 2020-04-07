@@ -362,7 +362,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	clone := p.owner.smap.get().clone()
 	if !eq {
 		_, err := maxVerSmap.merge(clone, false /*err if detected (IP, port) duplicates*/)
-		cmn.ExitLogf("%s: %s vs [%s %s]", p.si, err, maxVerSmap.ProxySI, maxVerSmap.StringEx())
+		cmn.ExitLogf("%s: %v vs [%s: %s]", p.si, err, maxVerSmap.ProxySI, maxVerSmap.StringEx())
 	}
 	clone.Version = cmn.MaxI64(clone.version(), maxVerSmap.version()) + 1
 	p.owner.smap.put(clone)

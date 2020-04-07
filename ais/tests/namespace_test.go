@@ -13,14 +13,21 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
+// TODO: add test for checking if everything works correctly with scenario:
+//  1. Create remote bucket
+//  2. Silently destroy bucket with remote url (not with local url, so the bucket stays locally)
+//  3. Do List/Summary
+
 func TestNamespace(t *testing.T) {
 	tests := []struct {
-		name string
-		bck1 cmn.Bck
-		bck2 cmn.Bck
+		name   string
+		remote bool
+		bck1   cmn.Bck
+		bck2   cmn.Bck
 	}{
 		{
-			name: "global_and_local_namespace",
+			name:   "global_and_local_namespace",
+			remote: false,
 			bck1: cmn.Bck{
 				Name:     "tmp",
 				Provider: cmn.ProviderAIS,
@@ -35,7 +42,8 @@ func TestNamespace(t *testing.T) {
 			},
 		},
 		{
-			name: "two_local_namespaces",
+			name:   "two_local_namespaces",
+			remote: false,
 			bck1: cmn.Bck{
 				Name:     "tmp",
 				Provider: cmn.ProviderAIS,
@@ -49,6 +57,62 @@ func TestNamespace(t *testing.T) {
 				Provider: cmn.ProviderAIS,
 				Ns: cmn.Ns{
 					UUID: "",
+					Name: "ns2",
+				},
+			},
+		},
+		{
+			name:   "global_namespaces_with_remote_cluster",
+			remote: true,
+			bck1: cmn.Bck{
+				Name:     "tmp",
+				Provider: cmn.ProviderAIS,
+			},
+			bck2: cmn.Bck{
+				Name:     "tmp",
+				Provider: cmn.ProviderAIS,
+				Ns: cmn.Ns{
+					UUID: remoteCluster.uuid,
+					Name: cmn.NsGlobal.Name,
+				},
+			},
+		},
+		{
+			name:   "namespaces_with_remote_cluster",
+			remote: true,
+			bck1: cmn.Bck{
+				Name:     "tmp",
+				Provider: cmn.ProviderAIS,
+				Ns: cmn.Ns{
+					UUID: "",
+					Name: "ns1",
+				},
+			},
+			bck2: cmn.Bck{
+				Name:     "tmp",
+				Provider: cmn.ProviderAIS,
+				Ns: cmn.Ns{
+					UUID: remoteCluster.uuid,
+					Name: "ns1",
+				},
+			},
+		},
+		{
+			name:   "namespaces_with_only_remote_cluster",
+			remote: true,
+			bck1: cmn.Bck{
+				Name:     "tmp",
+				Provider: cmn.ProviderAIS,
+				Ns: cmn.Ns{
+					UUID: remoteCluster.uuid,
+					Name: "ns1",
+				},
+			},
+			bck2: cmn.Bck{
+				Name:     "tmp",
+				Provider: cmn.ProviderAIS,
+				Ns: cmn.Ns{
+					UUID: remoteCluster.uuid,
 					Name: "ns2",
 				},
 			},
@@ -75,24 +139,56 @@ func TestNamespace(t *testing.T) {
 				}
 			)
 
+			checkSkip(t, skipTestArgs{
+				requiresRemote: test.remote,
+			})
+
 			m1.init()
 			m2.init()
 
-			tutils.CreateFreshBucket(t, proxyURL, m1.bck)
-			tutils.CreateFreshBucket(t, proxyURL, m2.bck)
+			if m1.bck.IsRemote() {
+				bck := m1.bck
+				bck.Ns.UUID = ""
+				tutils.CreateFreshBucket(t, remoteCluster.url, bck)
+			} else {
+				tutils.CreateFreshBucket(t, proxyURL, m1.bck)
+			}
+			if m2.bck.IsRemote() {
+				bck := m2.bck
+				bck.Ns.UUID = ""
+				tutils.CreateFreshBucket(t, remoteCluster.url, bck)
+			} else {
+				tutils.CreateFreshBucket(t, proxyURL, m2.bck)
+			}
 
 			defer func() {
-				tutils.DestroyBucket(t, proxyURL, m2.bck)
-				tutils.DestroyBucket(t, proxyURL, m1.bck)
+				if m2.bck.IsRemote() {
+					api.EvictCloudBucket(baseParams, m2.bck)
+					bck := m2.bck
+					bck.Ns.UUID = ""
+					tutils.DestroyBucket(t, remoteCluster.url, bck)
+				} else {
+					tutils.DestroyBucket(t, proxyURL, m2.bck)
+				}
+				if m1.bck.IsRemote() {
+					api.EvictCloudBucket(baseParams, m1.bck)
+					bck := m1.bck
+					bck.Ns.UUID = ""
+					tutils.DestroyBucket(t, remoteCluster.url, bck)
+				} else {
+					tutils.DestroyBucket(t, proxyURL, m1.bck)
+				}
 			}()
 
 			// Test listing buckets
-			buckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: cmn.ProviderAIS})
-			tassert.CheckFatal(t, err)
-			tassert.Errorf(
-				t, len(buckets) == 2,
-				"number of buckets (%d) should be equal to 2", len(buckets),
-			)
+			if !test.remote {
+				buckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: cmn.ProviderAIS})
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(
+					t, len(buckets) == 2,
+					"number of buckets (%d) should be equal to 2", len(buckets),
+				)
+			}
 
 			m1.puts()
 			m2.puts()
@@ -113,26 +209,28 @@ func TestNamespace(t *testing.T) {
 			)
 
 			// Test summary
-			summaries, err := api.GetBucketsSummaries(baseParams, cmn.Bck{Provider: cmn.ProviderAIS}, nil)
-			tassert.CheckFatal(t, err)
-			tassert.Errorf(
-				t, len(summaries) == 2,
-				"number of summaries (%d) should be equal to 2", len(summaries),
-			)
+			if !test.remote {
+				summaries, err := api.GetBucketsSummaries(baseParams, cmn.Bck{Provider: cmn.ProviderAIS}, nil)
+				tassert.CheckFatal(t, err)
+				tassert.Errorf(
+					t, len(summaries) == 2,
+					"number of summaries (%d) should be equal to 2", len(summaries),
+				)
 
-			for _, summary := range summaries {
-				if summary.Bck.Equal(m1.bck) {
-					tassert.Errorf(
-						t, summary.ObjCount == uint64(m1.num),
-						"number of objects (%d) should be equal to (%d)", summary.ObjCount, m1.num,
-					)
-				} else if summary.Bck.Equal(m2.bck) {
-					tassert.Errorf(
-						t, summary.ObjCount == uint64(m2.num),
-						"number of objects (%d) should be equal to (%d)", summary.ObjCount, m2.num,
-					)
-				} else {
-					t.Errorf("unknown bucket in summary: %q", summary.Bck)
+				for _, summary := range summaries {
+					if summary.Bck.Equal(m1.bck) {
+						tassert.Errorf(
+							t, summary.ObjCount == uint64(m1.num),
+							"number of objects (%d) should be equal to (%d)", summary.ObjCount, m1.num,
+						)
+					} else if summary.Bck.Equal(m2.bck) {
+						tassert.Errorf(
+							t, summary.ObjCount == uint64(m2.num),
+							"number of objects (%d) should be equal to (%d)", summary.ObjCount, m2.num,
+						)
+					} else {
+						t.Errorf("unknown bucket in summary: %q", summary.Bck)
+					}
 				}
 			}
 

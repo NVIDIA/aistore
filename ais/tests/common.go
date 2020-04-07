@@ -56,8 +56,22 @@ var (
 	clichecksum            string
 	cycles                 int
 
-	clibucket string
+	clibucket     string
+	remoteCluster struct {
+		uuid string
+		url  string
+	}
 )
+
+type skipTestArgs struct {
+	requiresRemote bool
+}
+
+func checkSkip(t *testing.T, args skipTestArgs) {
+	if args.requiresRemote && remoteCluster.uuid == "" {
+		t.Skip("remote uuid and url (REMOTE_CLUSTER) was not provided")
+	}
+}
 
 // nolint:maligned // no performance critical code
 type ioContext struct {

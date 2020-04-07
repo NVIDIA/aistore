@@ -50,13 +50,13 @@ type (
 	NodeMap map[string]*Snode // map of Snodes: DaemonID => Snodes
 
 	Smap struct {
-		Tmap         NodeMap       `json:"tmap"`           // targetID -> targetInfo
-		Pmap         NodeMap       `json:"pmap"`           // proxyID -> proxyInfo
-		NonElects    cmn.SimpleKVs `json:"non_electable"`  // non-electable proxies: DaemonID => [info]
-		ProxySI      *Snode        `json:"proxy_si"`       // primary
-		Version      int64         `json:"version,string"` // version
-		UUID         string        `json:"uuid"`           // UUID - assigned at creation time
-		CreationTime string        `json:"creation_time"`  // creation time
+		Tmap         NodeMap       `json:"tmap"`                    // targetID -> targetInfo
+		Pmap         NodeMap       `json:"pmap"`                    // proxyID -> proxyInfo
+		NonElects    cmn.SimpleKVs `json:"non_electable,omitempty"` // non-electable proxies: DaemonID => [info]
+		ProxySI      *Snode        `json:"proxy_si"`                // primary
+		Version      int64         `json:"version,string"`          // version
+		UUID         string        `json:"uuid"`                    // UUID - assigned at creation time
+		CreationTime string        `json:"creation_time"`           // creation time
 	}
 )
 
@@ -243,7 +243,7 @@ func (a *Smap) Compare(b *Smap) (sameOrigin, sameVersion, eq bool) {
 		eq = false
 		return
 	}
-	if !reflect.DeepEqual(a.NonElects, b.NonElects) {
+	if !a.NonElects.Compare(b.NonElects) {
 		eq = false
 		return
 	}

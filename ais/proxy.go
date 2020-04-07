@@ -1019,6 +1019,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, selMsg cmn.SelectMsg
 			},
 			smap:    smap,
 			timeout: config.Timeout.MaxHostBusy + config.Timeout.CplaneOperation,
+			to:      cluster.Targets,
 		}
 	)
 	results := p.bcastPost(args)
@@ -2083,6 +2084,19 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if err := jsp.SetConfigMany(kvs); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
+			}
+			return
+		case cmn.ActAttach:
+			var (
+				query = r.URL.Query()
+				what  = query.Get(cmn.URLParamWhat)
+			)
+			if what != cmn.GetWhatRemoteAIS {
+				p.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
+				return
+			}
+			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatRemoteAIS)); err != nil {
+				glog.Error(err)
 			}
 			return
 		}

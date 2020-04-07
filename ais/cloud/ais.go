@@ -215,6 +215,7 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
 		return
 	}
 	err = m.try(func() error {
+		bck.Ns.UUID = ""
 		bckList, err = api.ListObjects(bp, bck, msg, 0)
 		return err
 	})

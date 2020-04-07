@@ -317,6 +317,15 @@ func NewSimpleKVsFromQuery(query url.Values) SimpleKVs {
 	return kvs
 }
 
+func (kv SimpleKVs) Compare(other SimpleKVs) bool {
+	if len(kv) != len(other) {
+		return false
+	} else if len(kv) > 0 {
+		return reflect.DeepEqual(kv, other)
+	}
+	return true
+}
+
 func (ss StringSet) Add(key string) {
 	ss[key] = struct{}{}
 }
@@ -324,25 +333,6 @@ func (ss StringSet) Add(key string) {
 func (ss StringSet) Contains(key string) bool {
 	_, ok := ss[key]
 	return ok
-}
-
-//
-// PairF32
-//
-
-func NewPairF32(p *atomic.PairF32) PairF32 {
-	min, max := p.Load()
-	return PairF32{
-		Min: min,
-		Max: max,
-	}
-}
-
-func (fpair PairF32) String() string {
-	if fpair.Min == 0 && fpair.Max == 0 {
-		return "()"
-	}
-	return fmt.Sprintf("(%.2f, %.2f)", fpair.Min, fpair.Max)
 }
 
 //

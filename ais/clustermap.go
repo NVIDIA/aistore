@@ -60,7 +60,9 @@ func newSmap() (smap *smapX) {
 func (m *smapX) init(tsize, psize, elsize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
 	m.Pmap = make(cluster.NodeMap, psize)
-	m.NonElects = make(cmn.SimpleKVs, elsize)
+	if elsize > 0 {
+		m.NonElects = make(cmn.SimpleKVs, elsize)
+	}
 }
 
 func (m *smapX) tag() string    { return revsSmapTag }

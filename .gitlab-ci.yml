@@ -59,8 +59,12 @@ lint:linux:
 test:short:
   stage: test-short
   script:
-    - make cli aisfs
+    - export LOCAL_URL="http://127.0.0.1:8080" REMOTE_URL="http://127.0.0.1:11080" && export REMOTE_CLUSTER="randstring=${REMOTE_URL}"
+    - make aisfs cli
+    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\n0'
     - make deploy <<< $'5\n5\n3\n0'
+    - sleep 3
+    - ais attach remote ${REMOTE_CLUSTER} # attach to remote cluster
     - BUCKET="test" make test-short
 
 test:long:

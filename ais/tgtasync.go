@@ -149,7 +149,6 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 				}(bckList.Entries)
 			}
 		}
-
 	default:
 		break
 	}

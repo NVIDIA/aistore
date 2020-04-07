@@ -245,7 +245,7 @@ const (
 		" On LRU Eviction:\t{{$obj.OnLRUEviction}}\n"
 
 	ConfigTmpl = GlobalConfTmpl +
-		MirrorConfTmpl + LogConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
+		MirrorConfTmpl + LogConfTmpl + ClientConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
 		ProxyConfTmpl + LRUConfTmpl + DiskConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
 		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl +
@@ -358,25 +358,41 @@ var (
 	}
 )
 
-type DiskStatsTemplateHelper struct {
-	TargetID string
-	DiskName string
-	Stat     *ios.SelectedDiskStats
-}
+type (
+	// Used to return specific fields/objects for marshaling (MarshalIdent).
+	forMarshaler interface {
+		forMarshal() interface{}
+	}
 
-type ObjectStatTemplateHelper struct {
-	Name  string
-	Props *cmn.ObjectProps
-}
+	DiskStatsTemplateHelper struct {
+		TargetID string
+		DiskName string
+		Stat     *ios.SelectedDiskStats
+	}
 
-type SmapTemplateHelper struct {
-	Smap         *cluster.Smap
-	ExtendedURLs bool
-}
+	ObjectStatTemplateHelper struct {
+		Name  string
+		Props *cmn.ObjectProps
+	}
 
-type StatusTemplateHelper struct {
-	Smap   *cluster.Smap
-	Status map[string]*stats.DaemonStatus
+	SmapTemplateHelper struct {
+		Smap         *cluster.Smap
+		ExtendedURLs bool
+	}
+
+	StatusTemplateHelper struct {
+		Smap   *cluster.Smap
+		Status map[string]*stats.DaemonStatus
+	}
+)
+
+var (
+	// interface guard
+	_ forMarshaler = SmapTemplateHelper{}
+)
+
+func (sth SmapTemplateHelper) forMarshal() interface{} {
+	return sth.Smap
 }
 
 // Gets the associated value from CoreStats
@@ -431,6 +447,7 @@ var (
 		"global":               GlobalConfTmpl,
 		"mirror":               MirrorConfTmpl,
 		"log":                  LogConfTmpl,
+		"client":               ClientConfTmpl,
 		"periodic":             PeriodConfTmpl,
 		"timeout":              TimeoutConfTmpl,
 		"proxy":                ProxyConfTmpl,
@@ -502,6 +519,9 @@ func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, 
 	}
 
 	if useJSON {
+		if o, ok := object.(forMarshaler); ok {
+			object = o.forMarshal()
+		}
 		out, err := jsoniter.MarshalIndent(object, "", "    ")
 		if err != nil {
 			return err

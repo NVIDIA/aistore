@@ -1198,11 +1198,6 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *
 		err         error
 		config      = cmn.GCO.Get()
 	)
-	if !bck.Ns.IsGlobal() && !bck.Ns.IsGlobalRemote() {
-		s := fmt.Sprintf("%s: listing buckets for a non-global namespace %s is not supported yet", t.si, bck)
-		t.invalmsghdlr(w, r, s, http.StatusBadRequest)
-		return
-	}
 	// cmn.AnyCloud translates as any (one!) *3rd party* Cloud
 	if bck.Provider == cmn.AnyCloud {
 		bck.Provider = config.Cloud.Provider

@@ -14,7 +14,7 @@ import (
 
 // TODO: detach remote cluster
 // TODO: show attached clusters and their props
-// TODO: attach or emable mountpath
+// TODO: attach or enable mountpath
 // TODO: detach/disable ALL OF THE ABOVE
 // TODO: help messages and other usability
 
@@ -58,7 +58,7 @@ func attachRemoteAISHandler(c *cli.Context) (err error) {
 	if err = api.AttachRemoteAIS(defaultAPIParams, alias, url); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "remote cluster successfully attached\n")
+	fmt.Fprintf(c.App.Writer, "Remote cluster (%s=%s) successfully attached\n", alias, url)
 	return
 }
 
