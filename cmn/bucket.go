@@ -114,6 +114,22 @@ func (b Bck) Valid() bool {
 	return ValidateBckName(b.Name) == nil && IsValidProvider(b.Provider) && b.Ns.Validate() == nil
 }
 
+func (b Bck) Less(other Bck) bool {
+	if b.Provider != other.Provider {
+		return b.Provider < other.Provider
+	}
+	if b.Ns.IsGlobal() && !other.Ns.IsGlobal() {
+		return false
+	}
+	if !b.Ns.IsGlobal() && other.Ns.IsGlobal() {
+		return true
+	}
+	if b.Ns.String() != other.Ns.String() {
+		return b.Ns.String() < other.Ns.String()
+	}
+	return b.Name < other.Name
+}
+
 func (b Bck) Equal(other Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
 }

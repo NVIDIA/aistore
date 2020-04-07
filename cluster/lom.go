@@ -634,6 +634,11 @@ func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 		} else if bck.Provider != prov {
 			return fmt.Errorf("lom-init %s: provider mismatch (%s != %s)", lom.FQN, bck.Provider, prov)
 		}
+		if bck.Ns.IsGlobal() {
+			bck.Ns = lom.ParsedFQN.Bck.Ns
+		} else if bck.Ns != lom.ParsedFQN.Bck.Ns {
+			return fmt.Errorf("lom-init %s: namespace mismatch (%s != %s)", lom.FQN, bck.Ns, lom.ParsedFQN.Bck.Ns)
+		}
 	}
 	bowner := lom.T.GetBowner()
 	lom.bck = NewBckEmbed(bck)

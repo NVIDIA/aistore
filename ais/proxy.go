@@ -1004,10 +1004,9 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, selMsg cmn.SelectMsg
 	summaries cmn.BucketsSummaries, taskID string, err error) {
 	var (
 		// start new async task if client did not provide taskID(neither in Headers nor in SelectMsg),
-		isNew, q = p.initAsyncQuery(&selMsg)
+		isNew, q = p.initAsyncQuery(bck, &selMsg)
 		config   = cmn.GCO.Get()
 	)
-	q = cmn.AddBckToQuery(q, bck.Bck)
 	var (
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &selMsg}, smap, nil)
@@ -1036,14 +1035,12 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, selMsg cmn.SelectMsg
 
 	// all targets are ready, prepare the final result
 	q = url.Values{}
-	summaries = make(cmn.BucketsSummaries)
-
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
 	args.req.Query = q
-	results = p.bcastPost(args)
-	for result := range results {
+	summaries = make(cmn.BucketsSummaries, 0)
+	for result := range p.bcastPost(args) {
 		if result.err != nil {
 			return nil, "", result.err
 		}
@@ -1053,13 +1050,8 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, selMsg cmn.SelectMsg
 			return nil, "", err
 		}
 
-		for bckName, v := range targetSummary {
-			if prevV, ok := summaries[bckName]; !ok {
-				summaries[bckName] = v
-			} else {
-				prevV.Aggregate(v)
-				summaries[bckName] = prevV
-			}
+		for _, bckSummary := range targetSummary {
+			summaries.Aggregate(bckSummary)
 		}
 	}
 
@@ -1444,7 +1436,7 @@ func (p *proxyrunner) cbExists(bucket string) (header http.Header, err error) {
 	return
 }
 
-func (p *proxyrunner) initAsyncQuery(msg *cmn.SelectMsg) (bool, url.Values) {
+func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, msg *cmn.SelectMsg) (bool, url.Values) {
 	isNew := msg.TaskID == ""
 	q := url.Values{}
 	if isNew {
@@ -1461,6 +1453,7 @@ func (p *proxyrunner) initAsyncQuery(msg *cmn.SelectMsg) (bool, url.Values) {
 			glog.Infof("proxy: reading async task %s result", msg.TaskID)
 		}
 	}
+	q = cmn.AddBckToQuery(q, bck.Bck)
 	return isNew, q
 }
 
@@ -1495,7 +1488,7 @@ func (p *proxyrunner) checkBckTaskResp(taskID string, results chan callResult) (
 //      * non-zero taskID if the task is still running
 //      * error
 func (p *proxyrunner) listAISBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (allEntries *cmn.BucketList, taskID string, err error) {
-	isNew, q := p.initAsyncQuery(&selMsg) // new async task if taskID is not present in headers and SelectMsg
+	isNew, q := p.initAsyncQuery(bck, &selMsg) // new async task if taskID is not present in headers and SelectMsg
 	var (
 		config = cmn.GCO.Get()
 		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &selMsg}, nil, nil)
@@ -1525,6 +1518,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (all
 
 	// All targets are ready, prepare the final result.
 	q = url.Values{}
+	q = cmn.AddBckToQuery(q, bck.Bck)
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
 	args.req.Query = q
@@ -1595,8 +1589,7 @@ func (p *proxyrunner) listObjectsCloud(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 	}
 
 	// start new async task if client did not provide taskID (neither in headers nor in SelectMsg)
-	isNew, q := p.initAsyncQuery(&selMsg)
-	q = cmn.AddBckToQuery(q, bck.Bck)
+	isNew, q := p.initAsyncQuery(bck, &selMsg)
 	var (
 		smap          = p.owner.smap.get()
 		reqTimeout    = cmn.GCO.Get().Client.ListObjects

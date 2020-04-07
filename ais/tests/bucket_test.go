@@ -767,7 +767,8 @@ func TestBucketListAndSummary(t *testing.T) {
 					t.Fatalf("number of summaries (%d) is larger than 1", len(summaries))
 				}
 
-				summary := summaries[m.bck.Name]
+				summary, exists := summaries.Get(m.bck)
+				tassert.Errorf(t, exists, "summary for bucket %q should exist", m.bck)
 				if summary.ObjCount != uint64(expectedFiles) {
 					t.Errorf("number of objects in summary (%d) is different than expected (%d)", summary.ObjCount, expectedFiles)
 				}

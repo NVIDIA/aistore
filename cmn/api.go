@@ -195,7 +195,39 @@ func (bs *BucketSummary) Aggregate(bckSummary BucketSummary) {
 	bs.UsedPct = float64(bs.Size) * 100 / float64(bs.TotalDisksSize)
 }
 
-type BucketsSummaries map[string]BucketSummary
+type BucketsSummaries []BucketSummary
+
+func (s BucketsSummaries) Len() int {
+	return len(s)
+}
+
+func (s BucketsSummaries) Less(i, j int) bool {
+	return s[i].Bck.Less(s[j].Bck)
+}
+
+func (s BucketsSummaries) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s *BucketsSummaries) Aggregate(summary BucketSummary) {
+	for idx, bckSummary := range *s {
+		if bckSummary.Bck.Equal(summary.Bck) {
+			bckSummary.Aggregate(summary)
+			(*s)[idx] = bckSummary
+			return
+		}
+	}
+	*s = append(*s, summary)
+}
+
+func (s BucketsSummaries) Get(bck Bck) (BucketSummary, bool) {
+	for _, bckSummary := range s {
+		if bckSummary.Bck.Equal(bck) {
+			return bckSummary, true
+		}
+	}
+	return BucketSummary{}, false
+}
 
 // BucketNames is used to transfer all bucket names known to the system
 type BucketNames []Bck
@@ -205,19 +237,7 @@ func (b BucketNames) Len() int {
 }
 
 func (b BucketNames) Less(i, j int) bool {
-	if b[i].Provider != b[j].Provider {
-		return b[i].Provider < b[j].Provider
-	}
-	if b[i].Ns.IsGlobal() && !b[j].Ns.IsGlobal() {
-		return false
-	}
-	if !b[i].Ns.IsGlobal() && b[j].Ns.IsGlobal() {
-		return true
-	}
-	if b[i].Ns.String() != b[j].Ns.String() {
-		return b[i].Ns.String() < b[j].Ns.String()
-	}
-	return b[i].Name < b[j].Name
+	return b[i].Less(b[j])
 }
 
 func (b BucketNames) Swap(i, j int) {

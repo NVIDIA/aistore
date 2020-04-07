@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -116,6 +117,7 @@ func GetBucketsSummaries(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg)
 	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBucket, msg, &summaries); err != nil {
 		return nil, err
 	}
+	sort.Sort(summaries)
 	return summaries, nil
 }
 

@@ -165,7 +165,7 @@ func (t *bckSummaryTask) Run() {
 		mtx       sync.Mutex
 		wg        = &sync.WaitGroup{}
 		errCh     = make(chan error, len(buckets))
-		summaries = make(cmn.BucketsSummaries, len(buckets))
+		summaries = make(cmn.BucketsSummaries, 0, len(buckets))
 	)
 	wg.Add(len(buckets))
 
@@ -251,7 +251,7 @@ func (t *bckSummaryTask) Run() {
 			}
 
 			mtx.Lock()
-			summaries[bck.Name] = summary
+			summaries = append(summaries, summary)
 			mtx.Unlock()
 		}(bck)
 	}
