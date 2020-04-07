@@ -341,15 +341,12 @@ func (t *targetrunner) registerStats() {
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.GetRunName(), err)
-	sleep := xaction.Registry.AbortAll()
+	xaction.Registry.AbortAll()
 	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
 	}
 
 	t.httprunner.stop(err)
-	if sleep {
-		time.Sleep(time.Second)
-	}
 }
 
 //

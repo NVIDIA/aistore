@@ -35,6 +35,20 @@ const (
 )
 
 type (
+	// If any of the section is set (mountpaths, bcks, all) the other all ignored.
+	abortArgs struct {
+		// Abort all xactions matching any of the buckets.
+		bcks []*cluster.Bck
+
+		// Abort all mountpath xactions.
+		mountpaths bool
+
+		// Abort all xactions. `ty` can be set so only
+		// xactions matching type `ty` will be aborted.
+		all bool
+		ty  string
+	}
+
 	taskState struct {
 		Result interface{} `json:"res"`
 		Err    error       `json:"error"`
@@ -267,41 +281,51 @@ func (r *registry) GetLatest(query XactQuery) (baseEntry, bool) {
 // It not only stops the "bucket xactions" but possibly "task xactions" which
 // are running on given bucket.
 func (r *registry) AbortAllBuckets(bcks ...*cluster.Bck) {
+	r.abort(abortArgs{bcks: bcks})
+}
+
+// AbortAll waits until abort of all xactions is finished
+// Every abort is done asynchronously
+func (r *registry) AbortAll(tys ...string) {
+	var ty string
+	if len(tys) > 0 {
+		ty = tys[0]
+	}
+	r.abort(abortArgs{all: true, ty: ty})
+}
+
+func (r *registry) AbortAllMountpathsXactions() {
+	r.abort(abortArgs{mountpaths: true})
+}
+
+func (r *registry) abort(args abortArgs) {
 	wg := &sync.WaitGroup{}
 	r.entries.forEach(false /*exclusive*/, func(entry baseEntry) bool {
 		xact := entry.Get()
 		if xact.Finished() {
 			return true
 		}
-		for _, bck := range bcks {
-			if bck.Bck.Equal(xact.Bck()) {
-				wg.Add(1)
-				go func(xact cmn.Xact) {
-					xact.Abort()
-					wg.Done()
-				}(xact)
-				break
+
+		abort := false
+		if args.mountpaths {
+			if xact.IsMountpathXact() {
+				abort = true
+			}
+		} else if len(args.bcks) > 0 {
+			for _, bck := range args.bcks {
+				if bck.Bck.Equal(xact.Bck()) {
+					abort = true
+					break
+				}
+			}
+		} else if args.all {
+			abort = true
+			if args.ty != "" && args.ty != cmn.XactsMeta[xact.Kind()].Type {
+				abort = false
 			}
 		}
-		return true
-	})
-	wg.Wait()
-}
 
-// AbortAll waits until abort of all xactions is finished
-// Every abort is done asynchronously
-func (r *registry) AbortAll(ty ...string) bool {
-	sleep := false
-	wg := &sync.WaitGroup{}
-
-	r.entries.forEach(false /*exclusive*/, func(entry baseEntry) bool {
-		xact := entry.Get()
-		if !xact.Finished() {
-			if len(ty) > 0 && ty[0] != cmn.XactsMeta[xact.Kind()].Type {
-				return true
-			}
-
-			sleep = true
+		if abort {
 			wg.Add(1)
 			go func() {
 				xact.Abort()
@@ -310,19 +334,7 @@ func (r *registry) AbortAll(ty ...string) bool {
 		}
 		return true
 	})
-
 	wg.Wait()
-	return sleep
-}
-
-func (r *registry) AbortAllMountpathsXactions() {
-	r.entries.forEach(false /*exclusive*/, func(entry baseEntry) bool {
-		xact := entry.Get()
-		if !xact.Finished() && xact.IsMountpathXact() {
-			xact.Abort()
-		}
-		return true
-	})
 }
 
 func (r *registry) IsXactRunning(query XactQuery) bool {
