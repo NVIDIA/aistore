@@ -180,7 +180,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		}
 
 		bck := cmn.Bck{
-			Provider: bucketProvider(argsProvider),
+			Provider: argsProvider,
 		}
 
 		if bck.Provider == "" {

@@ -10,12 +10,13 @@ Create an ais bucket or buckets.
 
 #### Create AIS bucket
 
-Create buckets `bucket_name1` and `bucket_name2`, both with AIS provider (`bucket_name2` provider is implicit) 
+Create buckets `bucket_name1` and `bucket_name2`, both with AIS provider.
+`bucket_name2`'s provider by default is set to `ais://`, see [bucket provider info](../README.md#bucket-provider).
 
 ```console
 $ ais create bucket ais://bucket_name1 bucket_name2
-ais://bucket_name1 bucket created
-bucket_name2 bucket created
+"ais://bucket_name1" bucket created
+"bucket_name2" bucket created
 ```
 
 #### Incorrect buckets creation
@@ -35,12 +36,12 @@ Delete an ais bucket or buckets.
 
 #### Remove local buckets
 
-Remove local buckets `bucket_name1` and `bucket_name2`
+Remove local buckets `bucket_name1` and `bucket_name2`.
 
 ```console
 $ ais rm bucket ais://bucket_name1 bucket_name2
-ais://bucket_name1 bucket destroyed
-bucket_name2 bucket destroyed
+"ais://bucket_name1" bucket destroyed
+"bucket_name2" bucket destroyed
 ```
 
 #### Incorrect buckets removal
@@ -199,7 +200,7 @@ Copy local bucket `bucket_name` to local bucket `new_bucket_name`.
 
 ```console
 $ ais cp bucket ais://bucket_name new_bucket_name
-Copying bucket bucket_name to new_bucket_name in progress.
+Copying bucket "bucket_name" to "new_bucket_name" in progress.
 To check the status, run: ais show xaction copybck new_bucket_name
 ```
 

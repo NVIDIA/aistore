@@ -498,7 +498,7 @@ func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 		bck.Provider = parseBckProvider(providerSplit[0])
 		objName = providerSplit[1]
 	}
-	bck.Provider = parseBckProvider(bucketProvider(bck.Provider))
+	bck.Provider = parseBckProvider(bck.Provider)
 	if bck.Provider != "" && !cmn.IsValidProvider(bck.Provider) && bck.Provider != cmn.Cloud {
 		return bck, "", fmt.Errorf("invalid bucket provider %q", bck.Provider)
 	}
@@ -598,20 +598,6 @@ func canReachBucket(bck cmn.Bck) error {
 		return fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)
 	}
 	return nil
-}
-
-// Function returns the bucket provider either from:
-// 1) Function argument provider (highest priority)
-// 2) Environment variable (lowest priority)
-func bucketProvider(providers ...string) string {
-	provider := ""
-	if len(providers) > 0 {
-		provider = providers[0]
-	}
-	if provider == "" {
-		provider = os.Getenv(aisProviderEnvVar)
-	}
-	return provider
 }
 
 //

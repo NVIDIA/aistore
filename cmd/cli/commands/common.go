@@ -106,9 +106,6 @@ const (
 	subcmdWaitDownload = subcmdDownload
 	subcmdWaitDSort    = subcmdDsort
 
-	// Env. var. related constants
-	aisProviderEnvVar = "AIS_BUCKET_PROVIDER"
-
 	// Default values for long running operations
 	refreshRateDefault = time.Second
 	countDefault       = 1
