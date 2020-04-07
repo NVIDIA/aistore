@@ -39,6 +39,7 @@ type (
 	}
 
 	awsProvider struct {
+		configurable
 		t cluster.Target
 	}
 )
@@ -47,7 +48,7 @@ var (
 	_ cluster.CloudProvider = &awsProvider{}
 )
 
-func NewAWS(t cluster.Target) (cluster.CloudProvider, error) { return &awsProvider{t}, nil }
+func NewAWS(t cluster.Target) (cluster.CloudProvider, error) { return &awsProvider{t: t}, nil }
 
 // If extractAWSCreds returns no error and awsCreds is nil then the default
 //   AWS client is used (that loads credentials from ~/.aws/credentials)

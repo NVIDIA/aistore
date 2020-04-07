@@ -12,11 +12,11 @@ import (
 
 type (
 	azureProvider struct {
-		emptyCloudProvider
+		dummyCloudProvider
 		t cluster.Target
 	}
 )
 
 func NewAzure(t cluster.Target) (cluster.CloudProvider, error) {
-	return &azureProvider{emptyCloudProvider{}, t}, nil
+	return &azureProvider{dummyCloudProvider{}, t}, nil
 }

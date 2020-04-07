@@ -12,11 +12,11 @@ import (
 
 type (
 	gcpProvider struct {
-		emptyCloudProvider
+		dummyCloudProvider
 		t cluster.Target
 	}
 )
 
 func NewGCP(t cluster.Target) (cluster.CloudProvider, error) {
-	return &gcpProvider{emptyCloudProvider{}, t}, nil
+	return &gcpProvider{dummyCloudProvider{}, t}, nil
 }

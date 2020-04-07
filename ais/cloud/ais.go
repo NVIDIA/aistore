@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -24,13 +25,13 @@ const (
 )
 
 type (
+	remAisClust struct {
+		url  string
+		smap *cluster.Smap
+	}
 	aisCloudProvider struct {
-		t           cluster.Target
-		clusterConf cmn.CloudConfAIS
-
-		contactURL string   // selected URL to which currently we should contact
-		urls       []string // URLs provider by the user to which we should contact
-		failedURLs []string // URLs that failed to contact
+		t      cluster.Target
+		remote map[string]*remAisClust
 	}
 )
 
@@ -38,67 +39,60 @@ var (
 	_ cluster.CloudProvider = &aisCloudProvider{}
 )
 
-func NewAIS(t cluster.Target, clusterConf cmn.CloudConfAIS) (cluster.CloudProvider, error) {
+func NewAIS(t cluster.Target) cluster.CloudProvider { return &aisCloudProvider{t: t} }
+
+func (m *aisCloudProvider) Configure(v interface{}) error {
 	var (
-		found      bool
-		url        string
-		failedURLs []string
-		urls       []string
-		cfg        = cmn.GCO.Get()
+		cfg             = cmn.GCO.Get()
+		clusterConf, ok = v.(cmn.CloudConfAIS)
 	)
-
-	for _, clusterURLs := range clusterConf {
-		urls = clusterURLs
-		break
+	if !ok {
+		return fmt.Errorf("invalid ais cloud config (%+v, %T)", v, v)
 	}
-
-	for _, url = range urls {
-		smap, err := api.GetClusterMap(api.BaseParams{
-			Client: cmn.NewClient(cmn.TransportArgs{
-				Timeout: cfg.Client.TimeoutLong,
-			}),
-			URL: url,
-		})
-		if err != nil {
-			failedURLs = append(failedURLs, url)
-			continue
+	for uuid, clusterURLs := range clusterConf {
+		remote := &remAisClust{}
+		if err := remote.init(uuid, clusterURLs, cfg); err != nil {
+			return err
 		}
-
-		found = true
-		// Extend contact URLs with proxies of different cluster.
-		for _, node := range smap.Pmap {
-			urls = append(urls, node.URL(cmn.NetworkPublic))
-		}
-		break
+		m.remote[uuid] = remote
 	}
-
-	if !found {
-		return nil, fmt.Errorf("failed to contact any of the provided URLs: %v", urls)
-	}
-
-	return &aisCloudProvider{
-		t:           t,
-		clusterConf: clusterConf,
-		contactURL:  url,
-		urls:        urls,
-		failedURLs:  failedURLs,
-	}, nil
+	return nil
 }
 
-func (m *aisCloudProvider) newBaseParams() api.BaseParams {
-	cfg := cmn.GCO.Get()
-	return api.BaseParams{
-		Client: cmn.NewClient(cmn.TransportArgs{
-			Timeout: cfg.Client.TimeoutLong,
-		}),
-		URL: m.contactURL,
+func (r *remAisClust) init(uuid string, confURLs []string, cfg *cmn.Config) (err error) {
+	var (
+		url           string
+		remSmap, smap *cluster.Smap
+		client        = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout})
+	)
+	for _, u := range confURLs {
+		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u}); err != nil {
+			continue
+		}
+		if remSmap == nil || remSmap.Version < smap.Version {
+			remSmap, url = smap, u
+		}
 	}
+	if remSmap == nil {
+		return fmt.Errorf("failed to reach remote AIS cluster [%s] via any/all of the configured URLs %v", uuid, confURLs)
+	}
+	r.smap, r.url = remSmap, url
+	return nil
+}
+
+func (m *aisCloudProvider) newBaseParams(uuid string) api.BaseParams {
+	var (
+		cfg        = cmn.GCO.Get()
+		remAis, ok = m.remote[uuid]
+	)
+	cmn.AssertMsg(ok, "ais cloud: unknown UUID "+uuid)
+	return api.BaseParams{Client: cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout}), URL: remAis.url}
 }
 
 func (m *aisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	cmn.Assert(bck.Provider == cmn.ProviderAIS)
 	err = m.try(func() error {
-		bp := m.newBaseParams()
+		bp := m.newBaseParams(bck.Ns.UUID)
 		bckList, err = api.ListObjects(bp, bck, msg, 0)
 		return err
 	})
@@ -107,10 +101,9 @@ func (m *aisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck, msg *cm
 }
 
 func (m *aisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+	bp := m.newBaseParams(bck.Ns.UUID)
 	cmn.Assert(bck.Provider == cmn.ProviderAIS)
 	err = m.try(func() error {
-		bp := m.newBaseParams()
-
 		p, err := api.HeadBucket(bp, bck)
 		bckProps = make(cmn.SimpleKVs)
 		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
@@ -124,29 +117,35 @@ func (m *aisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProp
 }
 
 func (m *aisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
-	err = m.try(func() error {
-		bp := m.newBaseParams()
-		names, err := api.ListBuckets(bp, cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
-		if err != nil {
-			return err
+	var (
+		bck = cmn.Bck{Provider: cmn.ProviderAIS}
+	)
+	for uuid := range m.remote {
+		bp := m.newBaseParams(uuid)
+		er := m.try(func() (err error) {
+			var names cmn.BucketNames
+			names, err = api.ListBuckets(bp, bck)
+			if err == nil {
+				buckets = append(buckets, names...)
+			} else {
+				glog.Errorf("list-bucket(uuid=%s): %v", uuid, err)
+			}
+			return
+		})
+		if er != nil {
+			err = er
 		}
-		buckets = names
-		return err
-	})
+	}
 	err, errCode = extractErrCode(err)
-	return buckets, err, errCode
+	return
 }
 
 func (m *aisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+	var (
+		bck = cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+		bp  = m.newBaseParams(bck.Ns.UUID)
+	)
 	err = m.try(func() error {
-		var (
-			bp  = m.newBaseParams()
-			bck = cmn.Bck{
-				Name:     lom.BckName(),
-				Provider: cmn.ProviderAIS,
-				Ns:       cmn.NsGlobal,
-			}
-		)
 		p, err := api.HeadObject(bp, bck, lom.ObjName)
 		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 			objMeta[uniqueTag] = fmt.Sprintf("%v", field.Value())
@@ -159,19 +158,15 @@ func (m *aisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMe
 }
 
 func (m *aisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+	bck := cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 	err = m.try(func() error {
 		var (
 			r, w  = io.Pipe()
 			errCh = make(chan error, 1)
-			bck   = cmn.Bck{
-				Name:     lom.BckName(),
-				Provider: cmn.ProviderAIS,
-				Ns:       cmn.NsGlobal,
-			}
 		)
 
 		go func() {
-			bp := m.newBaseParams()
+			bp := m.newBaseParams(bck.Ns.UUID)
 			goi := api.GetObjectInput{
 				Writer: w,
 			}
@@ -200,11 +195,15 @@ func (m *aisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 }
 
 func (m *aisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+	var (
+		bck = cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+		bp  = m.newBaseParams(bck.Ns.UUID)
+	)
 	err = m.try(func() error {
 		cksumValue := lom.Cksum().Value()
 		args := api.PutObjectArgs{
-			BaseParams: m.newBaseParams(),
-			Bck:        cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
+			BaseParams: bp,
+			Bck:        bck,
 			Object:     lom.ObjName,
 			Hash:       cksumValue,
 			Reader:     cmn.NopOpener(ioutil.NopCloser(r)),
@@ -217,67 +216,36 @@ func (m *aisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 }
 
 func (m *aisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
-	bp := m.newBaseParams()
+	var (
+		bck = cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+		bp  = m.newBaseParams(bck.Ns.UUID)
+	)
 	err = m.try(func() error {
-		bck := cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 		return api.DeleteObject(bp, bck, lom.ObjName)
 	})
 	return extractErrCode(err)
 }
 
-func (m *aisCloudProvider) try(f func() error) error {
-	err := f()
+func (m *aisCloudProvider) try(f func() error) (err error) {
+	err = f()
 	if err == nil {
 		return nil
 	}
-
 	timeout := cmn.GCO.Get().Timeout.CplaneOperation
+	//
+	// TODO -- FIXME: utilize m.remote[uuid].smap
+	//
 	for i := 0; i < aisCloudRetries; i++ {
 		err = f()
-		if err == nil || cmn.IsErrConnectionReset(err) {
+		if err == nil {
 			break
 		}
 		if !cmn.IsErrConnectionRefused(err) && !cmn.IsErrConnectionReset(err) {
 			return err
 		}
-		// In case connection refused we should try again after a short break.
-		if cmn.IsErrConnectionRefused(err) {
-			time.Sleep(timeout)
-		}
+		time.Sleep(timeout)
 	}
-
-	m.failedURLs = append(m.failedURLs, m.contactURL)
-
-	cfg := cmn.GCO.Get()
-	for _, url := range m.urls {
-		if cmn.StringInSlice(url, m.failedURLs) {
-			continue
-		}
-
-		smap, err := api.GetClusterMap(api.BaseParams{
-			Client: cmn.NewClient(cmn.TransportArgs{
-				Timeout: cfg.Client.TimeoutLong,
-			}),
-			URL: url,
-		})
-		if err != nil {
-			m.failedURLs = append(m.failedURLs, url)
-			continue
-		}
-
-		// Extend contact URLs with proxies of different cluster.
-		for _, node := range smap.Pmap {
-			nodeURL := node.URL(cmn.NetworkPublic)
-			if cmn.StringInSlice(nodeURL, m.failedURLs) || cmn.StringInSlice(nodeURL, m.urls) {
-				continue
-			}
-			m.urls = append(m.urls, nodeURL)
-		}
-		m.contactURL = url
-		break
-	}
-
-	return f()
+	return
 }
 
 func extractErrCode(e error) (error, int) {

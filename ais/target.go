@@ -231,7 +231,8 @@ func (t *targetrunner) Run() error {
 			var (
 				clusterConf = providerConf.(cmn.CloudConfAIS)
 			)
-			t.cloud, err = cloud.NewAIS(t, clusterConf)
+			t.cloud = cloud.NewAIS(t)
+			err = t.cloud.Configure(clusterConf) // TODO -- FIXME: remove
 		case cmn.ProviderAmazon:
 			t.cloud, err = cloud.NewAWS(t)
 		case cmn.ProviderGoogle:
@@ -242,7 +243,7 @@ func (t *targetrunner) Run() error {
 			cmn.AssertMsg(false, fmt.Sprintf("unsupported cloud provider: %s", config.Cloud.Provider))
 		}
 	} else {
-		t.cloud, err = cloud.NewEmptyCloud() // mock
+		t.cloud, err = cloud.NewDummyCloud()
 	}
 	if err != nil {
 		cmn.ExitLogf("%v", err)

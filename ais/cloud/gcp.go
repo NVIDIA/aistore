@@ -48,6 +48,7 @@ type (
 	}
 
 	gcpProvider struct {
+		configurable
 		t cluster.Target
 	}
 )
@@ -56,12 +57,7 @@ var (
 	_ cluster.CloudProvider = &gcpProvider{}
 )
 
-//======
-//
-// global - FIXME: environ
-//
-//======
-func NewGCP(t cluster.Target) (cluster.CloudProvider, error) { return &gcpProvider{t}, nil }
+func NewGCP(t cluster.Target) (cluster.CloudProvider, error) { return &gcpProvider{t: t}, nil }
 
 func getProjID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")

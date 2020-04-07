@@ -10,11 +10,11 @@ import "github.com/NVIDIA/aistore/cluster"
 
 type (
 	awsProvider struct { // mock
-		emptyCloudProvider
+		dummyCloudProvider
 		t cluster.Target
 	}
 )
 
 func NewAWS(t cluster.Target) (cluster.CloudProvider, error) {
-	return &awsProvider{emptyCloudProvider{}, t}, nil
+	return &awsProvider{dummyCloudProvider{}, t}, nil
 }

@@ -14,47 +14,50 @@ import (
 )
 
 type (
-	emptyCloudProvider struct{}
+	configurable       struct{}
+	dummyCloudProvider struct{ configurable }
 )
 
 var (
-	_ cluster.CloudProvider = &emptyCloudProvider{}
+	_ cluster.CloudProvider = &dummyCloudProvider{}
 )
 
-func NewEmptyCloud() (cluster.CloudProvider, error) { return &emptyCloudProvider{}, nil }
+func (c *configurable) Configure(_ interface{}) error { return nil }
 
-func _emptyNode(lom *cluster.LOM) string {
+func NewDummyCloud() (cluster.CloudProvider, error) { return &dummyCloudProvider{}, nil }
+
+func _dummyNode(lom *cluster.LOM) string {
 	if lom.T == nil || lom.T.Snode() == nil {
 		return ""
 	}
 	return lom.T.Snode().String()
 }
 
-func (m *emptyCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
+func (m *dummyCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
 	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	return nil, cmn.NewErrorCloudBucketOffline(bck, ""), http.StatusNotFound
 }
-func (m *emptyCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (m *dummyCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketOffline(bck, ""), http.StatusNotFound
 }
 
 // the function must not fail - it should return empty list
-func (m *emptyCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
+func (m *dummyCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
 	return cmn.BucketNames{}, nil, 0
 }
-func (m *emptyCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
-	bck, node := lom.Bck().Bck, _emptyNode(lom)
+func (m *dummyCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+	bck, node := lom.Bck().Bck, _dummyNode(lom)
 	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }
-func (m *emptyCloudProvider) GetObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int) {
-	bck, node := lom.Bck().Bck, _emptyNode(lom)
+func (m *dummyCloudProvider) GetObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int) {
+	bck, node := lom.Bck().Bck, _dummyNode(lom)
 	return cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }
-func (m *emptyCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
-	bck, node := lom.Bck().Bck, _emptyNode(lom)
+func (m *dummyCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+	bck, node := lom.Bck().Bck, _dummyNode(lom)
 	return "", cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }
-func (m *emptyCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
-	bck, node := lom.Bck().Bck, _emptyNode(lom)
+func (m *dummyCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+	bck, node := lom.Bck().Bck, _dummyNode(lom)
 	return cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
 }

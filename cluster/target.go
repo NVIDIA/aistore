@@ -31,6 +31,7 @@ const (
 )
 
 type CloudProvider interface {
+	Configure(v interface{}) error
 	GetObj(ctx context.Context, fqn string, lom *LOM) (err error, errCode int)
 	PutObj(ctx context.Context, r io.Reader, lom *LOM) (version string, err error, errCode int)
 	DeleteObj(ctx context.Context, lom *LOM) (error, int)
