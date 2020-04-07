@@ -302,6 +302,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Unregister target 0
+	tutils.Logf("Unregister target %s\n", targets[0].ID())
 	err := tutils.UnregisterNode(m.proxyURL, targets[0].ID())
 	tassert.CheckFatal(t, err)
 	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
@@ -321,7 +322,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	// Register target 0 in parallel
 	go func() {
 		defer wg.Done()
-		tutils.Logf("Register target %s\n", targets[0].URL(cmn.NetworkPublic))
+		tutils.Logf("Register target %s\n", targets[0].ID())
 		err = tutils.RegisterNode(m.proxyURL, targets[0], m.smap)
 		tassert.CheckFatal(t, err)
 	}()
@@ -329,7 +330,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	// Unregister target 1 in parallel
 	go func() {
 		defer wg.Done()
-		tutils.Logf("Unregister target %s\n", targets[1].URL(cmn.NetworkPublic))
+		tutils.Logf("Unregister target %s\n", targets[1].ID())
 		err = tutils.UnregisterNode(m.proxyURL, targets[1].ID())
 		tassert.CheckFatal(t, err)
 	}()

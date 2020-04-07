@@ -1229,13 +1229,16 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config 
 	})
 }
 
-func (h *httprunner) listAisBuckets(bmd *bucketMD) cmn.BucketNames {
+func (h *httprunner) listProvidersBuckets(bmd *bucketMD, provider string) cmn.BucketNames {
 	var (
-		na       = bmd.NumAIS(nil /*all namespaces*/)
-		bcks     = make(cmn.BucketNames, 0, na)
-		provider = cmn.ProviderAIS
+		na   = bmd.NumAIS(nil /*all namespaces*/)
+		bcks = make(cmn.BucketNames, 0, na)
+		cp   = &provider
 	)
-	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+	if provider == "" {
+		cp = nil
+	}
+	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
 		bcks = append(bcks, bck.Bck)
 		return false
 	})

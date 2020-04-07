@@ -1206,30 +1206,43 @@ func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) 
 	return
 }
 
+// TODO: support AIS cloud + other cloud
+// TODO: support Select Where (namespace = bck.Ns) and/OR (name = bck.Name)
 func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, provider string) {
 	var (
-		bmd         = t.owner.bmd.get()
-		bucketNames = cmn.BucketNames{}
-		all         = provider == "" /*all providers*/
-		bck         = cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
+		config      = cmn.GCO.Get()
+		bucketNames cmn.BucketNames
 	)
-
-	if all || cmn.IsProviderAIS(bck) {
-		bucketNames = t.listAisBuckets(bmd)
+	// cmn.Cloud translates as any 3rd party Cloud
+	if config.Cloud.Supported && provider == cmn.Cloud {
+		provider = config.Cloud.Provider
 	}
-	if all || cmn.IsProviderCloud(bck, true /*acceptAnon*/) {
+	if config.Cloud.Supported && (provider == config.Cloud.Provider || provider == "") {
 		buckets, err, errcode := t.cloud.ListBuckets(t.contextWithAuth(r.Header))
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)
 			t.invalmsghdlr(w, r, errMsg, errcode)
 			return
 		}
-		bucketNames = append(bucketNames, buckets...)
+		bucketNames = buckets
+		// provider == "": include all providers including 3rd party Cloud if configured
+		if provider == "" {
+			for provider = range cmn.Providers {
+				// done above
+				if provider == config.Cloud.Provider {
+					continue
+				}
+				// select from BMD
+				buckets = t.listProvidersBuckets(t.owner.bmd.get(), provider)
+				bucketNames = append(bucketNames, buckets...)
+			}
+		}
+	} else {
+		// otherwise, select from BMD
+		bucketNames = t.listProvidersBuckets(t.owner.bmd.get(), provider)
 	}
 	sort.Sort(bucketNames)
-
-	body := cmn.MustMarshal(bucketNames)
-	t.writeJSON(w, r, body, listBuckets)
+	t.writeJSON(w, r, cmn.MustMarshal(bucketNames), listBuckets)
 }
 
 func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (filePath string, err error, errCode int) {
