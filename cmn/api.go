@@ -209,15 +209,16 @@ func (s BucketsSummaries) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s *BucketsSummaries) Aggregate(summary BucketSummary) {
-	for idx, bckSummary := range *s {
+func (s BucketsSummaries) Aggregate(summary BucketSummary) BucketsSummaries {
+	for idx, bckSummary := range s {
 		if bckSummary.Bck.Equal(summary.Bck) {
 			bckSummary.Aggregate(summary)
-			(*s)[idx] = bckSummary
-			return
+			s[idx] = bckSummary
+			return s
 		}
 	}
-	*s = append(*s, summary)
+	s = append(s, summary)
+	return s
 }
 
 func (s BucketsSummaries) Get(bck Bck) (BucketSummary, bool) {

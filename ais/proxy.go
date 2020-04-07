@@ -1051,7 +1051,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, selMsg cmn.SelectMsg
 		}
 
 		for _, bckSummary := range targetSummary {
-			summaries.Aggregate(bckSummary)
+			summaries = summaries.Aggregate(bckSummary)
 		}
 	}
 
