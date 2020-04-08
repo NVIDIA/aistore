@@ -268,3 +268,11 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [Package `transport`](transport/README.md)
 - [Package `dSort`](dsort/README.md)
 - [Package `openapi`](openapi/README.md)
+
+## License
+
+MIT
+
+## Author
+
+Alex Aizman (NVIDIA)
