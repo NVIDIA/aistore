@@ -537,7 +537,7 @@ func (p1 *BucketProps) Equal(p2 *BucketProps) bool {
 
 func (bp *BucketProps) Validate(targetCnt int) error {
 	if !IsValidProvider(bp.Provider) {
-		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.Provider, ListProviders())
+		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.Provider, allProviders)
 	}
 	validationArgs := &ValidationArgs{TargetCnt: targetCnt}
 	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC}

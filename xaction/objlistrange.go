@@ -63,7 +63,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 	}
 
 	if delFromCloud {
-		if err, _ := r.t.Cloud().DeleteObj(args.Ctx, lom); err != nil {
+		if err, _ := r.t.Cloud(lom.Bck().Provider).DeleteObj(args.Ctx, lom); err != nil {
 			cloudErr = err
 		}
 	}
@@ -217,7 +217,7 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 			walk := objwalk.NewWalk(context.Background(), r.t, r.Bck(), msg)
 			bucketListPage, err = walk.LocalObjPage()
 		} else {
-			bucketListPage, err, _ = r.t.Cloud().ListObjects(args.Ctx, r.Bck(), msg)
+			bucketListPage, err, _ = r.t.Cloud(r.Bck().Provider).ListObjects(args.Ctx, r.Bck(), msg)
 		}
 		if err != nil {
 			return err

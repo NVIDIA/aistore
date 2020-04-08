@@ -31,14 +31,20 @@ import (
 
 var _ cluster.Target = &targetrunner{}
 
-func (t *targetrunner) GetBowner() cluster.Bowner    { return t.owner.bmd }
-func (t *targetrunner) GetSowner() cluster.Sowner    { return t.owner.smap }
-func (t *targetrunner) FSHC(err error, path string)  { t.fshc(err, path) }
-func (t *targetrunner) GetMMSA() *memsys.MMSA        { return daemon.gmm }
-func (t *targetrunner) GetSmallMMSA() *memsys.MMSA   { return daemon.smm }
-func (t *targetrunner) GetFSPRG() fs.PathRunGroup    { return &t.fsprg }
-func (t *targetrunner) Snode() *cluster.Snode        { return t.si }
-func (t *targetrunner) Cloud() cluster.CloudProvider { return t.cloud }
+func (t *targetrunner) GetBowner() cluster.Bowner   { return t.owner.bmd }
+func (t *targetrunner) GetSowner() cluster.Sowner   { return t.owner.smap }
+func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
+func (t *targetrunner) GetMMSA() *memsys.MMSA       { return daemon.gmm }
+func (t *targetrunner) GetSmallMMSA() *memsys.MMSA  { return daemon.smm }
+func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
+func (t *targetrunner) Snode() *cluster.Snode       { return t.si }
+
+func (t *targetrunner) Cloud(provider string) cluster.CloudProvider {
+	if provider == cmn.ProviderAIS {
+		return t.cloud.ais
+	}
+	return t.cloud.ext
+}
 
 func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
 	switch gfnType {
@@ -175,7 +181,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		vchanged, crace bool
 		workFQN         = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
 	)
-	if err, errCode = t.cloud.GetObj(ct, workFQN, lom); err != nil {
+	if err, errCode = t.Cloud(lom.Bck().Provider).GetObj(ct, workFQN, lom); err != nil {
 		lom.Unlock(true)
 		err = fmt.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
 		return

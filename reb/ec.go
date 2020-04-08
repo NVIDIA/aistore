@@ -1061,7 +1061,7 @@ func (reb *Manager) runEC() {
 		go reb.jogEC(mpathInfo, bck, wg)
 	}
 
-	if cfg.Cloud.Supported {
+	if cfg.Cloud.Provider != "" {
 		for _, mpathInfo := range availablePaths {
 			bck := cmn.Bck{Name: bck.Name, Provider: cfg.Cloud.Provider, Ns: bck.Ns}
 			wg.Add(1)

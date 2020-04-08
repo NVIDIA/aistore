@@ -118,7 +118,7 @@ func InitAndRun(ini *InitLRU) {
 	}
 
 	// NOTE: the sequence: cloud buckets first, ais buckets second
-	if config.Cloud.Supported {
+	if config.Cloud.Provider != "" {
 		if aborted := startLRUJoggers(config.Cloud.Provider); aborted {
 			return
 		}

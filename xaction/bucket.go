@@ -178,7 +178,8 @@ func (r *registry) RenewObjsRedundancy(t cluster.Target) {
 		}
 		return false
 	})
-	if cfg.Cloud.Supported {
+	// TODO -- FIXME: remote ais
+	if cfg.Cloud.Provider != "" {
 		provider = cfg.Cloud.Provider
 		namespace := cfg.Cloud.Ns
 		bmd.Range(&provider, &namespace, func(bck *cluster.Bck) bool {

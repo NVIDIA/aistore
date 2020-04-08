@@ -89,7 +89,6 @@ var _ = Describe("LOM", func() {
 	BeforeEach(func() {
 		// Dummy cloud provider for tests involving cloud buckets
 		config := cmn.GCO.BeginUpdate()
-		config.Cloud.Supported = true
 		config.Cloud.Provider = cmn.ProviderAmazon
 		cmn.GCO.CommitUpdate(config)
 

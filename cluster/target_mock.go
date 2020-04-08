@@ -43,7 +43,7 @@ func (*TargetMock) GetCold(_ context.Context, _ *LOM, _ bool) (error, int)     {
 func (*TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte, _ bool) (bool, error)  { return false, nil }
 func (*TargetMock) PromoteFile(_ string, _ *Bck, _ string, _, _, _ bool) error { return nil }
 func (*TargetMock) GetFSPRG() fs.PathRunGroup                                  { return nil }
-func (*TargetMock) Cloud() CloudProvider                                       { return nil }
+func (*TargetMock) Cloud(provider string) CloudProvider                        { return nil }
 func (*TargetMock) StartTime() time.Time                                       { return time.Now() }
 func (*TargetMock) GetGFN(_ GFNType) GFN                                       { return nil }
 func (*TargetMock) LookupRemoteSingle(_ *LOM, _ *Snode) bool                   { return false }

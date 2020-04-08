@@ -66,10 +66,14 @@ type (
 		used int32
 		oos  bool
 	}
+	clouds struct {
+		ais cluster.CloudProvider
+		ext cluster.CloudProvider
+	}
 	// main
 	targetrunner struct {
 		httprunner
-		cloud        cluster.CloudProvider // multi-cloud backend
+		cloud        clouds
 		authn        *authManager
 		fsprg        fsprungroup
 		rebManager   *reb.Manager
@@ -219,34 +223,8 @@ func (t *targetrunner) Run() error {
 
 	t.detectMpathChanges()
 
-	// cloud provider (empty stubs that may get populated via build tags)
-	var (
-		err          error
-		providerConf = config.Cloud.ProviderConf()
-	)
-	if config.Cloud.Supported {
-		switch config.Cloud.Provider {
-		case cmn.ProviderAIS:
-			var (
-				clusterConf = providerConf.(cmn.CloudConfAIS)
-			)
-			t.cloud = cloud.NewAIS(t)
-			err = t.cloud.Configure(clusterConf) // TODO -- FIXME: remove
-		case cmn.ProviderAmazon:
-			t.cloud, err = cloud.NewAWS(t)
-		case cmn.ProviderGoogle:
-			t.cloud, err = cloud.NewGCP(t)
-		case cmn.ProviderAzure:
-			t.cloud, err = cloud.NewAzure(t)
-		default:
-			cmn.AssertMsg(false, fmt.Sprintf("unsupported cloud provider: %s", config.Cloud.Provider))
-		}
-	} else {
-		t.cloud, err = cloud.NewDummyCloud()
-	}
-	if err != nil {
-		cmn.ExitLogf("%v", err)
-	}
+	// init cloud
+	t.cloud.init(t, config)
 
 	t.authn = &authManager{
 		tokens:        make(map[string]*authRec),
@@ -267,27 +245,7 @@ func (t *targetrunner) Run() error {
 	if config.Net.UseIntraData {
 		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.mux)
 	}
-	networkHandlers := []networkHandler{
-		{r: cmn.Buckets, h: t.bucketHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
-		{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
-		{r: cmn.EC, h: t.ecHandler, net: []string{cmn.NetworkIntraData}},
-		{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-		{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Tar2Tf, h: t.tar2tfHandler, net: []string{cmn.NetworkPublic}},
-
-		{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
-		{r: cmn.Rebalance, h: t.rebalanceHandler, net: []string{cmn.NetworkIntraData}},
-
-		{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Xactions, h: t.xactHandler, net: []string{cmn.NetworkIntraControl}},
-
-		{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
-	}
-	t.registerNetworkHandlers(networkHandlers)
+	t.initRecvHandlers()
 
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
 	ec.Init(t, xaction.Registry)
@@ -305,6 +263,62 @@ func (t *targetrunner) Run() error {
 		return err
 	}
 	return nil
+}
+
+func (c *clouds) init(t *targetrunner, config *cmn.Config) {
+	// ais cloud always enabled
+	c.ais = cloud.NewAIS(t)
+	if aisConf, ok := config.Cloud.ProviderConf(cmn.ProviderAIS); ok {
+		if err := c.ais.Configure(aisConf); err != nil {
+			cmn.ExitLogf("%v", err)
+		}
+	}
+	// 3rd part cloud: empty stubs unless populated via build tags
+	var (
+		err error
+	)
+	switch config.Cloud.Provider {
+	case cmn.ProviderAmazon:
+		c.ext, err = cloud.NewAWS(t)
+	case cmn.ProviderGoogle:
+		c.ext, err = cloud.NewGCP(t)
+	case cmn.ProviderAzure:
+		c.ext, err = cloud.NewAzure(t)
+	case "":
+		c.ext, err = cloud.NewDummyCloud()
+	default:
+		err = fmt.Errorf("unknown cloud provider: %q", config.Cloud.Provider)
+	}
+	if err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+}
+
+func (t *targetrunner) initRecvHandlers() {
+	var (
+		allNets         = []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}
+		networkHandlers = []networkHandler{
+			{r: cmn.Buckets, h: t.bucketHandler, net: allNets},
+			{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
+			{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+			{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
+			{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
+			{r: cmn.Xactions, h: t.xactHandler, net: []string{cmn.NetworkIntraControl}},
+			{r: cmn.Rebalance, h: t.rebalanceHandler, net: []string{cmn.NetworkIntraData}},
+			{r: cmn.EC, h: t.ecHandler, net: []string{cmn.NetworkIntraData}},
+			{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
+			{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}},
+
+			{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
+
+			{r: cmn.Tar2Tf, h: t.tar2tfHandler, net: []string{cmn.NetworkPublic}},
+			{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
+			{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+
+			{r: "/", h: cmn.InvalidHandler, net: allNets},
+		}
+	)
+	t.registerNetworkHandlers(networkHandlers)
 }
 
 // target-only stats
@@ -957,7 +971,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// + cloud
-	bucketProps, err, code = t.cloud.HeadBucket(t.contextWithAuth(r.Header), bck.Bck)
+	bucketProps, err, code = t.Cloud(bck.Provider).HeadBucket(t.contextWithAuth(r.Header), bck.Bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
@@ -1077,7 +1091,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		var objMeta cmn.SimpleKVs
-		objMeta, err, errCode = t.cloud.HeadObj(t.contextWithAuth(r.Header), lom)
+		objMeta, err, errCode = t.Cloud(lom.Bck().Provider).HeadObj(t.contextWithAuth(r.Header), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)
@@ -1156,7 +1170,7 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 // should be called only if the local copy exists
 func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
 	var objMeta cmn.SimpleKVs
-	objMeta, err, errCode = t.cloud.HeadObj(ctx, lom)
+	objMeta, err, errCode = t.Cloud(lom.Bck().Provider).HeadObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
 		return
@@ -1170,39 +1184,45 @@ func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) 
 	return
 }
 
-// TODO: support AIS cloud + other cloud
-// TODO: support Select Where (namespace = bck.Ns) and/OR (name = bck.Name)
+// TODO: Select Where (namespace = bck.Ns) and/OR (name = bck.Name)
 func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, provider string) {
 	var (
 		config      = cmn.GCO.Get()
 		bucketNames cmn.BucketNames
 	)
-	// cmn.Cloud translates as any 3rd party Cloud
-	if config.Cloud.Supported && provider == cmn.Cloud {
+	// cmn.Cloud translates as any (one!) *3rd party* Cloud
+	if provider == cmn.Cloud {
 		provider = config.Cloud.Provider
 	}
-	if config.Cloud.Supported && (provider == config.Cloud.Provider || provider == "") {
-		buckets, err, errcode := t.cloud.ListBuckets(t.contextWithAuth(r.Header))
+	switch {
+	case provider == config.Cloud.Provider && provider != "": // 3rd party cloud
+		buckets, err, errcode := t.Cloud(config.Cloud.Provider).ListBuckets(t.contextWithAuth(r.Header))
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)
 			t.invalmsghdlr(w, r, errMsg, errcode)
 			return
 		}
 		bucketNames = buckets
-		// provider == "": include all providers including 3rd party Cloud if configured
-		if provider == "" {
-			for provider = range cmn.Providers {
-				// done above
-				if provider == config.Cloud.Provider {
-					continue
+	case provider == "": // NOTE: refers to {ais cloud + 3rd party Cloud + other cached BMD}
+		for provider = range cmn.Providers {
+			if provider == cmn.ProviderAIS || provider == config.Cloud.Provider {
+				buckets, err, errcode := t.Cloud(provider).ListBuckets(t.contextWithAuth(r.Header))
+				if err != nil {
+					glog.Errorf("failed to list all '%s' buckets, err: %v(%d)", provider, err, errcode)
+				} else if len(buckets) > 0 {
+					bucketNames = append(bucketNames, buckets...)
 				}
-				// select from BMD
-				buckets = t.listProvidersBuckets(t.owner.bmd.get(), provider)
+			}
+			if provider == config.Cloud.Provider {
+				continue
+			}
+			// select from BMD
+			buckets := t.listProvidersBuckets(t.owner.bmd.get(), provider)
+			if len(buckets) > 0 {
 				bucketNames = append(bucketNames, buckets...)
 			}
 		}
-	} else {
-		// otherwise, select from BMD
+	default: // _select_ from BMD
 		bucketNames = t.listProvidersBuckets(t.owner.bmd.get(), provider)
 	}
 	sort.Sort(bucketNames)
@@ -1305,7 +1325,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	}
 
 	if delFromCloud {
-		if err, _ := t.cloud.DeleteObj(ctx, lom); err != nil {
+		if err, _ := t.Cloud(lom.Bck().Provider).DeleteObj(ctx, lom); err != nil {
 			cloudErr = fmt.Errorf("%s: DELETE failed, err: %v", lom, err)
 			t.statsT.Add(stats.DeleteCount, 1)
 		}

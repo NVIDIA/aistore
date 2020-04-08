@@ -26,8 +26,9 @@ const (
 
 type (
 	remAisClust struct {
-		url  string
-		smap *cluster.Smap
+		alias string
+		url   string
+		smap  *cluster.Smap
 	}
 	aisCloudProvider struct {
 		t      cluster.Target
@@ -39,6 +40,8 @@ var (
 	_ cluster.CloudProvider = &aisCloudProvider{}
 )
 
+// TODO -- FIXME: reload remote Smap every so often OR (***) get notified
+
 func NewAIS(t cluster.Target) cluster.CloudProvider { return &aisCloudProvider{t: t} }
 
 func (m *aisCloudProvider) Configure(v interface{}) error {
@@ -49,17 +52,17 @@ func (m *aisCloudProvider) Configure(v interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid ais cloud config (%+v, %T)", v, v)
 	}
-	for uuid, clusterURLs := range clusterConf {
-		remote := &remAisClust{}
-		if err := remote.init(uuid, clusterURLs, cfg); err != nil {
+	for alias, clusterURLs := range clusterConf {
+		var remote = &remAisClust{}
+		if err := remote.init(alias, clusterURLs, cfg); err != nil {
 			return err
 		}
-		m.remote[uuid] = remote
+		m.remote[remote.smap.UUID] = remote
 	}
 	return nil
 }
 
-func (r *remAisClust) init(uuid string, confURLs []string, cfg *cmn.Config) (err error) {
+func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (err error) {
 	var (
 		url           string
 		remSmap, smap *cluster.Smap
@@ -67,16 +70,26 @@ func (r *remAisClust) init(uuid string, confURLs []string, cfg *cmn.Config) (err
 	)
 	for _, u := range confURLs {
 		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u}); err != nil {
+			glog.Errorf("remote AIS cluster %q via %s: %v", alias, u, err)
 			continue
 		}
-		if remSmap == nil || remSmap.Version < smap.Version {
+		if remSmap == nil {
+			remSmap, url = smap, u
+			continue
+		}
+		if remSmap.UUID != smap.UUID {
+			return fmt.Errorf("remote AIS %q(%v) references two different clusters UUIDs=[%s, %s]",
+				alias, confURLs, remSmap.UUID, smap.UUID)
+		}
+		if remSmap.Version < smap.Version {
 			remSmap, url = smap, u
 		}
 	}
 	if remSmap == nil {
-		return fmt.Errorf("failed to reach remote AIS cluster [%s] via any/all of the configured URLs %v", uuid, confURLs)
+		return fmt.Errorf("failed to reach remote AIS cluster %q via any/all of the configured URLs %v",
+			alias, confURLs)
 	}
-	r.smap, r.url = remSmap, url
+	r.alias, r.smap, r.url = alias, remSmap, url
 	return nil
 }
 
@@ -89,7 +102,8 @@ func (m *aisCloudProvider) newBaseParams(uuid string) api.BaseParams {
 	return api.BaseParams{Client: cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout}), URL: remAis.url}
 }
 
-func (m *aisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (m *aisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
+	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	cmn.Assert(bck.Provider == cmn.ProviderAIS)
 	err = m.try(func() error {
 		bp := m.newBaseParams(bck.Ns.UUID)

@@ -17,6 +17,7 @@ const (
 	ProviderGoogle = "gcp"
 	ProviderAIS    = "ais"
 	ProviderAzure  = "azure"
+	allProviders   = "aws, gcp, ais, azure"
 
 	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
@@ -163,12 +164,4 @@ func IsProviderCloud(bck Bck, acceptAnon bool) bool {
 func IsValidProvider(provider string) bool {
 	_, ok := Providers[provider]
 	return ok
-}
-
-func ListProviders() string {
-	keys := make([]string, 0, len(Providers))
-	for k := range Providers {
-		keys = append(keys, k)
-	}
-	return strings.Join(keys, ", ")
 }

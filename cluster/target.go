@@ -70,7 +70,7 @@ type Target interface {
 	GetSmallMMSA() *memsys.MMSA
 	GetFSPRG() fs.PathRunGroup
 	Snode() *Snode
-	Cloud() CloudProvider
+	Cloud(provider string) CloudProvider
 	RebalanceInfo() RebalanceInfo
 	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)
 	RunLRU(id string)
