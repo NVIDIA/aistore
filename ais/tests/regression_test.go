@@ -768,7 +768,7 @@ func TestLRU(t *testing.T) {
 		)
 
 		if diffFilesEvicted == 0 {
-			t.Errorf("Target %s: LRU failed to any evict files", k)
+			t.Errorf("Target %s: LRU failed to evict any objects", k)
 		}
 	}
 }

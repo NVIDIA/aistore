@@ -134,8 +134,11 @@ func Walk(opts *Options) error {
 				fqns = children[:0] // optimization to reuse previously allocated slice
 			}
 			for _, child := range children {
+				bck.Name = child
+				if cmn.ValidateBckName(bck.Name) != nil {
+					continue
+				}
 				for _, ct := range opts.CTs {
-					bck.Name = child
 					fqns = append(fqns, opts.Mpath.MakePathCT(bck, ct))
 				}
 			}
