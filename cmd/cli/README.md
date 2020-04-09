@@ -9,7 +9,7 @@ redirect_from:
 AIS Command Line Interface is a tool used to interact with resources of AIStore. It gives users the ability to query information from specific daemons,
 create or delete resources or download files to buckets directly from the command line.
 
-<img src="../../docs/images/ais2.13.gif" alt="CLI-playback" width="900">
+<img src="/aistore/docs/images/ais2.13.gif" alt="CLI-playback" width="900">
 
 ## Getting Started
 

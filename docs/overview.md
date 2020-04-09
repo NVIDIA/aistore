@@ -227,26 +227,26 @@ $ wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.
 
 ```console
 $ cd <path_to_repo>
-$ java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -c openapi/config.json -g python -o ./python-client/
+$ java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -c openapi/config.json -g python -o ./python/api-client/
 ```
 
 3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
 
-4. Install required Python packages using `pip` and requirement files located in `python-client` directory:
+4. Install required Python packages using `pip` and requirement files located in `python/api-client` directory:
 
 ```console
-$ pip install -r python-client/requirements.txt
-$ pip install -r python-client/test-requirements.txt
+$ pip install -r python/api-client/requirements.txt
+$ pip install -r python/api-client/test-requirements.txt
 ```
 
-These steps should produce the python client package, which will be located [here](../python-client).
+These steps should produce the python client package, which will be located [here](../python/api-client).
 
 Should you have any difficulty generating the python client package with these instructions, please open a ticket, and we will provide further assistance.
 
 Once the package is generated, it can be installed as follows, these commands can also be found [here](../openapi/README.md#how-to-install).
 
 ```console
-$ cd <path_to_repo>/python-client
+$ cd <path_to_repo>/python/api-client
 $ pip uninstall ais_client #uninstalls any previous versions
 $ pip install .
 ```

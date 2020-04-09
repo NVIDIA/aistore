@@ -277,3 +277,11 @@ with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh)
 - [Package `transport`](transport/README.md)
 - [Package `dSort`](dsort/README.md)
 - [Package `openapi`](openapi/README.md)
+
+## License
+
+MIT
+
+## Author
+
+Alex Aizman (NVIDIA)

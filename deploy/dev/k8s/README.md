@@ -14,7 +14,7 @@ For a more robust version, the development team has switched over to Docker. If 
 
 For development purposes, we are going to use [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) to create a simple two node cluster with any number of proxies and any number of targets. Users can also decide to deploy AIS with a single-node.
 
-<img src="../../../docs/images/k8s_arch.png" width="50%" >
+<img src="/aistore/docs/images/k8s_arch.png" width="50%" >
 
 > Using [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/) to deploy a Kubernetes cluster will also work for deploying single node clusters. It cannot be used for multi-node deployments due to its limitations.
 
