@@ -158,7 +158,7 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	} else if cmn.IsProviderCloud(b.Bck, true) {
 		cloudConf := cmn.GCO.Get().Cloud
 		b.Provider = cloudConf.Provider
-		b.Ns = cloudConf.Ns
+		b.Ns = cloudConf.Ns // TODO -- FIXME: remove
 		bmd.initBckCloudProvider(b)
 	} else {
 		b.Props, _ = bmd.Get(b)

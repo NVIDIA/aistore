@@ -274,7 +274,7 @@ type Config struct {
 }
 
 type CloudConf struct {
-	Conf map[string]interface{} `json:"-"` // implementation depends on cloud provider
+	Conf map[string]interface{} `json:"conf,omitempty"` // implementation depends on cloud provider
 
 	// 3rd party Cloud -- set during validation
 	Ns       Ns     `json:"-"`

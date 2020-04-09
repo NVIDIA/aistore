@@ -52,12 +52,14 @@ func (m *aisCloudProvider) Configure(v interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid ais cloud config (%+v, %T)", v, v)
 	}
+	m.remote = make(map[string]*remAisClust, len(clusterConf))
 	for alias, clusterURLs := range clusterConf {
 		var remote = &remAisClust{}
 		if err := remote.init(alias, clusterURLs, cfg); err != nil {
 			return err
 		}
 		m.remote[remote.smap.UUID] = remote
+		glog.Infof("remote AIS: %s => (%s, %s)", remote.smap.UUID, alias, remote.smap)
 	}
 	return nil
 }

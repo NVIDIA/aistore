@@ -37,6 +37,7 @@ func createBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
+	// TODO: remote AIS cluster: extend existing API with create-bucket, et al. (v4.x)
 	if err := validateLocalBuckets(buckets, "creating"); err != nil {
 		return err
 	}

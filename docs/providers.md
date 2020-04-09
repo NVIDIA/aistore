@@ -22,15 +22,17 @@ AIS can be deployed as a fast tier in front of several storage backends. Support
 
 Remote AIS cluster is specified in the `cloud` section of the [configuration](./configuration.md).
 
-Example:
+* Example: single remote-cluster URL
 ```json
 "cloud": {
-  "ais": {
-    "cluster-uuid": [
-      "http://192.168.4.2:8080",
-      "https://ais-cluster.example.org"
-    ]
-  }
+     "ais": {"remote-cluster-alias": ["http://10.233.84.233:11080"]}
+}
+```
+
+* Example: multiple URL
+```json
+"cloud": {
+     "ais": {"remote-cluster-alias": ["http://10.233.84.217", "https://nvidia.ais-cluster.org"]}
 }
 ```
 Multiple remote AIS cluster URLs can be provided for the same usual reasons that include redundancy and (future) load balancing.
