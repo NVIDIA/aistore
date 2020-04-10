@@ -222,9 +222,8 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	if daemon.dryRun.disk {
 		return
 	}
-	if file, err = cmn.CreateFile(poi.workFQN); err != nil {
-		poi.t.fshc(err, poi.workFQN)
-		return fmt.Errorf("failed to create %s, err: %s", poi.workFQN, err)
+	if file, err = poi.lom.CreateFile(poi.workFQN); err != nil {
+		return
 	}
 
 	if poi.size == 0 {
@@ -736,7 +735,7 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 		var f *os.File
 		if filePath == "" {
 			filePath = fs.CSM.GenContentParsedFQN(aoi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfileAppend)
-			f, err = cmn.CreateFile(filePath)
+			f, err = aoi.lom.CreateFile(filePath)
 			if err != nil {
 				return "", err, http.StatusInternalServerError
 			}

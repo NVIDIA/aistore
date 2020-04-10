@@ -26,13 +26,13 @@ type targzExtractCreator struct {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, extractor RecordExtractor,
+	toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
-		size   int64
-		header *tar.Header
-
-		// tarFQN
-		workFQN = fs.CSM.GenContentParsedFQN(fqn, filetype.DSortFileType, "")
+		size    int64
+		header  *tar.Header
+		fqn     = lom.ParsedFQN
+		workFQN = fs.CSM.GenContentParsedFQN(fqn, filetype.DSortFileType, "") // tarFQN
 	)
 
 	gzr, err := gzip.NewReader(r)

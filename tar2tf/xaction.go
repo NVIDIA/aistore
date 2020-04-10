@@ -136,7 +136,7 @@ func extractRecords(target cluster.Target, lom *cluster.LOM) (*extract.RecordMan
 		return nil, err
 	}
 	reader := io.NewSectionReader(f, 0, lom.Size())
-	_, _, err = extractCreator.ExtractShard(lom.ParsedFQN, reader, recordManager, false)
+	_, _, err = extractCreator.ExtractShard(lom, reader, recordManager, false)
 
 	return recordManager, err
 }

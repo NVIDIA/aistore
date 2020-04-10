@@ -1002,3 +1002,22 @@ func (lom *LOM) Unlock(exclusive bool) {
 	)
 	nlc.Unlock(lom.Uname(), exclusive)
 }
+
+//
+// create file
+//
+
+func (lom *LOM) CreateFile(fqn string) (*os.File, error) {
+	var (
+		mi  = lom.ParsedFQN.MpathInfo
+		dir = mi.MakePathBck(lom.Bck().Bck)
+	)
+	if _, err := os.Stat(dir); err != nil {
+		return nil, fmt.Errorf("failed to create %s: bucket directory %s %v", fqn, dir, err)
+	}
+	fh, err := cmn.CreateFile(fqn)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to create %s: %v", lom, fqn, err)
+	}
+	return fh, nil
+}

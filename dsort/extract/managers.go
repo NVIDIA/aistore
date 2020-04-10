@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/filetype"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pkg/errors"
 )
@@ -58,7 +57,7 @@ type (
 	// ExtractCreator is interface which describes set of functions which each
 	// shard creator should implement.
 	ExtractCreator interface {
-		ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (int64, int, error)
+		ExtractShard(lom *cluster.LOM, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (int64, int, error)
 		CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (int64, error)
 		UsingCompression() bool
 		SupportsOffset() bool

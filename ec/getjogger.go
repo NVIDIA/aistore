@@ -265,7 +265,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bck(), req.LOM.ObjName)
 
-		w, err := cmn.CreateFile(tmpFQN)
+		w, err := req.LOM.CreateFile(tmpFQN)
 		if err != nil {
 			glog.Errorf("Failed to create file: %v", err)
 			break
@@ -351,7 +351,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 		if toDisk {
 			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
 			fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
-			fh, err := cmn.CreateFile(fqn)
+			fh, err := req.LOM.CreateFile(fqn)
 			if err != nil {
 				return slices, nil, err
 			}
@@ -410,7 +410,7 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice,
 	if toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", id)
 		fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
-		file, err := cmn.CreateFile(fqn)
+		file, err := req.LOM.CreateFile(fqn)
 		if err != nil {
 			return err
 		}

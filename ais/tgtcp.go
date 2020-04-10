@@ -505,6 +505,21 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	var (
+		cleanMpath, _     = cmn.ValidateMpath(mountpath)
+		availablePaths, _ = fs.Mountpaths.Get()
+		mi                = availablePaths[cleanMpath]
+		bmd               = t.owner.bmd.get()
+	)
+	// create missing buckets dirs
+	bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
+		err = mi.CreateMissingBckDirs(bck.Bck)
+		return err != nil // break on error
+	})
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
 
 	// TODO: Currently we must abort on enabling mountpath. In some places we open
 	// files directly and put them directly on mountpaths. This can lead to
@@ -534,8 +549,24 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 }
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	if err := t.fsprg.addMountpath(mountpath); err != nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %s", err.Error()))
+	err := t.fsprg.addMountpath(mountpath)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	var (
+		cleanMpath, _     = cmn.ValidateMpath(mountpath)
+		availablePaths, _ = fs.Mountpaths.Get()
+		mi                = availablePaths[cleanMpath]
+		bmd               = t.owner.bmd.get()
+	)
+	// create missing buckets dirs
+	bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
+		err = mi.CreateMissingBckDirs(bck.Bck)
+		return err != nil // break on error
+	})
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 

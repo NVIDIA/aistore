@@ -7,7 +7,7 @@ package extract
 import (
 	"io"
 
-	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/cluster"
 )
 
 var (
@@ -23,8 +23,8 @@ func NopExtractCreator(internal ExtractCreator) ExtractCreator {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *nopExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
-	return t.internal.ExtractShard(fqn, r, extractor, toDisk)
+func (t *nopExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+	return t.internal.ExtractShard(lom, r, extractor, toDisk)
 }
 
 // CreateShard creates a new shard locally based on the Shard.

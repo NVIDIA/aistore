@@ -11,7 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -143,11 +142,13 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *tarExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, extractor RecordExtractor,
+	toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
 		size   int64
-		tr     = tar.NewReader(r)
 		header *tar.Header
+		fqn    = lom.ParsedFQN
+		tr     = tar.NewReader(r)
 	)
 
 	buf, slab := t.t.GetMMSA().Alloc(r.Size())

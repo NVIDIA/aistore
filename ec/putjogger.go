@@ -365,11 +365,12 @@ func generateSlicesToMemory(lom *cluster.LOM, dataSlices, paritySlices int) (cmn
 // Returns:
 // * Main object file handle
 // * constructed from the main object slices
-func generateSlicesToDisk(fqn string, dataSlices, paritySlices int) (cmn.ReadOpenCloser, []*slice, error) {
+func generateSlicesToDisk(lom *cluster.LOM, dataSlices, paritySlices int) (cmn.ReadOpenCloser, []*slice, error) {
 	var (
+		fh       *cmn.FileHandle
+		fqn      = lom.FQN
 		totalCnt = paritySlices + dataSlices
 		slices   = make([]*slice, totalCnt)
-		fh       *cmn.FileHandle
 	)
 
 	stat, err := os.Stat(fqn)
@@ -429,7 +430,7 @@ func generateSlicesToDisk(fqn string, dataSlices, paritySlices int) (cmn.ReadOpe
 
 	for i := 0; i < paritySlices; i++ {
 		workFQN := fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
-		writer, err := cmn.CreateFile(workFQN)
+		writer, err := lom.CreateFile(workFQN)
 		if err != nil {
 			return fh, slices, err
 		}
@@ -488,7 +489,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		slices    []*slice
 	)
 	if c.toDisk {
-		objReader, slices, err = generateSlicesToDisk(req.LOM.FQN, ecConf.DataSlices, ecConf.ParitySlices)
+		objReader, slices, err = generateSlicesToDisk(req.LOM, ecConf.DataSlices, ecConf.ParitySlices)
 	} else {
 		objReader, slices, err = generateSlicesToMemory(req.LOM, ecConf.DataSlices, ecConf.ParitySlices)
 	}

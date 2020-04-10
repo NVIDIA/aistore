@@ -663,6 +663,19 @@ func (mfs *MountedFS) RenameBucketDirs(bckFrom, bckTo cmn.Bck) (err error) {
 	return
 }
 
+func (mi *MountpathInfo) CreateMissingBckDirs(bck cmn.Bck) (err error) {
+	for contentType := range CSM.RegisteredContentTypes {
+		dir := mi.MakePathCT(bck, contentType)
+		if err = Access(dir); err == nil {
+			continue
+		}
+		if err = cmn.CreateDir(dir); err != nil {
+			return
+		}
+	}
+	return
+}
+
 //
 // private methods
 //

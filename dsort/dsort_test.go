@@ -105,7 +105,7 @@ type extractCreatorMock struct {
 	createShard    func(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) // func to hijack CreateShard function
 }
 
-func (ec *extractCreatorMock) ExtractShard(fqn fs.ParsedFQN, f *io.SectionReader, extractor extract.RecordExtractor, toDisk bool) (int64, int, error) {
+func (ec *extractCreatorMock) ExtractShard(lom *cluster.LOM, f *io.SectionReader, extractor extract.RecordExtractor, toDisk bool) (int64, int, error) {
 	return 0, 0, nil
 }
 func (ec *extractCreatorMock) CreateShard(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) (int64, error) {
