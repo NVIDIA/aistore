@@ -495,7 +495,8 @@ func getOldNewBucketName(c *cli.Context) (bucket, newBucket string, err error) {
 
 func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders bool) {
 	for provider := range cmn.Providers {
-		bcks := bucketNames.Select(provider)
+		selbck := cmn.Bck{Provider: provider}
+		bcks := bucketNames.Select(selbck)
 		if len(bcks) == 0 {
 			continue
 		}

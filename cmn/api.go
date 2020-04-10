@@ -246,10 +246,15 @@ func (b BucketNames) Swap(i, j int) {
 	b[i], b[j] = b[j], b[i]
 }
 
-func (b BucketNames) Select(provider string) BucketNames {
+func (b BucketNames) Select(selbck Bck) BucketNames {
 	filtered := make(BucketNames, 0, 10)
+	Assert(selbck.Ns.IsGlobal() || selbck.Ns.IsGlobalRemote()) // TODO: gen-purpose select where...
 	for _, bck := range b {
-		if bck.Provider == provider {
+		var (
+			providerMatch = selbck.Provider == "" || bck.Provider == selbck.Provider
+			nsMatch       = bck.Ns == selbck.Ns || (selbck.Ns.IsGlobalRemote() && bck.Ns.IsCloud())
+		)
+		if providerMatch && nsMatch {
 			filtered = append(filtered, bck)
 		}
 	}

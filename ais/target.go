@@ -426,8 +426,12 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			body := cmn.MustMarshal(t.owner.bmd.get())
 			t.writeJSON(w, r, body, "get-what-bmd")
 		} else {
-			provider := r.URL.Query().Get(cmn.URLParamProvider)
-			t.listBuckets(w, r, provider)
+			bck, err := newBckFromQuery("", r.URL.Query())
+			if err != nil {
+				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+				return
+			}
+			t.listBuckets(w, r, bck)
 		}
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
@@ -1184,49 +1188,53 @@ func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) 
 	return
 }
 
-// TODO: Select Where (namespace = bck.Ns) and/OR (name = bck.Name)
-func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, provider string) {
+func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
 	var (
-		config      = cmn.GCO.Get()
 		bucketNames cmn.BucketNames
+		code        int
+		err         error
+		config      = cmn.GCO.Get()
 	)
-	// cmn.Cloud translates as any (one!) *3rd party* Cloud
-	if provider == cmn.Cloud {
-		provider = config.Cloud.Provider
+	if !bck.Ns.IsGlobal() && !bck.Ns.IsGlobalRemote() {
+		s := fmt.Sprintf("%s: listing buckets for a non-global namespace %s is not supported yet", t.si, bck)
+		t.invalmsghdlr(w, r, s, http.StatusBadRequest)
+		return
 	}
-	switch {
-	case provider == config.Cloud.Provider && provider != "": // 3rd party cloud
-		buckets, err, errcode := t.Cloud(config.Cloud.Provider).ListBuckets(t.contextWithAuth(r.Header))
+	// cmn.Cloud translates as any (one!) *3rd party* Cloud
+	if bck.Provider == cmn.Cloud {
+		bck.Provider = config.Cloud.Provider
+	}
+	if bck.Provider != "" {
+		bucketNames, err, code = t._listBcks(r, bck, config)
 		if err != nil {
-			errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)
-			t.invalmsghdlr(w, r, errMsg, errcode)
+			s := fmt.Sprintf("failed to list buckets for %s, err: %v(%d)", bck, err, code)
+			t.invalmsghdlr(w, r, s, code)
 			return
 		}
-		bucketNames = buckets
-	case provider == "": // NOTE: refers to {ais cloud + 3rd party Cloud + other cached BMD}
-		for provider = range cmn.Providers {
-			if provider == cmn.ProviderAIS || provider == config.Cloud.Provider {
-				buckets, err, errcode := t.Cloud(provider).ListBuckets(t.contextWithAuth(r.Header))
-				if err != nil {
-					glog.Errorf("failed to list all '%s' buckets, err: %v(%d)", provider, err, errcode)
-				} else if len(buckets) > 0 {
-					bucketNames = append(bucketNames, buckets...)
-				}
-			}
-			if provider == config.Cloud.Provider {
-				continue
-			}
-			// select from BMD
-			buckets := t.listProvidersBuckets(t.owner.bmd.get(), provider)
-			if len(buckets) > 0 {
+	} else /* all providers */ {
+		for provider := range cmn.Providers {
+			var buckets cmn.BucketNames
+			bck.Provider = provider
+			buckets, err, code = t._listBcks(r, bck, config)
+			if err != nil {
+				glog.Errorf("failed to list buckets for %s, err: %v(%d)", bck, err, code)
+			} else {
 				bucketNames = append(bucketNames, buckets...)
 			}
 		}
-	default: // _select_ from BMD
-		bucketNames = t.listProvidersBuckets(t.owner.bmd.get(), provider)
 	}
 	sort.Sort(bucketNames)
 	t.writeJSON(w, r, cmn.MustMarshal(bucketNames), listBuckets)
+}
+
+func (t *targetrunner) _listBcks(r *http.Request, bck *cluster.Bck, cfg *cmn.Config) (bucketNames cmn.BucketNames, err error, c int) {
+	// 3rd party cloud or remote ais
+	if bck.Provider == cfg.Cloud.Provider || (bck.Provider == cmn.ProviderAIS && bck.Ns.IsGlobalRemote()) {
+		bucketNames, err, c = t.Cloud(bck.Provider).ListBuckets(t.contextWithAuth(r.Header))
+	} else { // BMD
+		bucketNames = t.listProvidersBuckets(t.owner.bmd.get(), bck.Provider)
+	}
+	return
 }
 
 func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (filePath string, err error, errCode int) {

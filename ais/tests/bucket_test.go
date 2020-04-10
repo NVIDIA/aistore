@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,6 +23,56 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	"golang.org/x/sync/errgroup"
 )
+
+func Test_BucketNames(t *testing.T) {
+	var (
+		bck = cmn.Bck{
+			Name:     t.Name() + "Bucket",
+			Provider: cmn.ProviderAIS,
+		}
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	buckets, err := api.ListBuckets(baseParams, cmn.Bck{})
+	tassert.CheckFatal(t, err)
+
+	printBucketNames(buckets)
+
+	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure} {
+		selbck := cmn.Bck{Provider: provider}
+		cloudBuckets, err := api.ListBuckets(baseParams, selbck)
+		tassert.CheckError(t, err)
+		if len(cloudBuckets) != len(buckets.Select(selbck)) {
+			t.Fatalf("%s: cloud buckets: %d != %d\n", provider, len(cloudBuckets), len(buckets.Select(selbck)))
+		}
+	}
+	// NsGlobal
+	selbck := cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+	aisBuckets, err := api.ListBuckets(baseParams, selbck)
+	tassert.CheckError(t, err)
+	if len(aisBuckets) != len(buckets.Select(selbck)) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(selbck)))
+	}
+	// NsGlobalRemote
+	selbck = cmn.Bck{Ns: cmn.NsGlobalRemote}
+	buckets, err = api.ListBuckets(baseParams, selbck)
+	tassert.CheckError(t, err)
+	selbck = cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobalRemote}
+	aisBuckets, err = api.ListBuckets(baseParams, selbck)
+	tassert.CheckError(t, err)
+	if len(aisBuckets) != len(buckets.Select(selbck)) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(selbck)))
+	}
+}
+
+func printBucketNames(bcks cmn.BucketNames) {
+	for _, bck := range bcks {
+		fmt.Fprintf(os.Stdout, "  provider: %s, name: %s\n", bck.Provider, bck.Name)
+	}
+}
 
 func TestDefaultBucketProps(t *testing.T) {
 	const dataSlices = 7

@@ -118,12 +118,11 @@ func (b *Bck) unmaskBID() uint64 {
 func (b *Bck) String() string {
 	var (
 		bid = b.unmaskBID()
-		ns  = b.Ns.String()
 	)
-	if ns != "" {
-		ns = ", " + ns
+	if bid == 0 {
+		return b.Bck.String()
 	}
-	return fmt.Sprintf("%s(%#x, %s%s)", b.Name, bid, b.Provider, ns)
+	return fmt.Sprintf("%s%#x", b.Bck.String(), bid)
 }
 
 func (b *Bck) Equal(other *Bck, sameID bool) bool {

@@ -451,43 +451,6 @@ func Test_putdeleteRange(t *testing.T) {
 	tassert.SelectErr(t, errCh, "delete", false)
 }
 
-func Test_BucketNames(t *testing.T) {
-	var (
-		bck = cmn.Bck{
-			Name:     t.Name() + "Bucket",
-			Provider: cmn.ProviderAIS,
-		}
-		proxyURL   = tutils.GetPrimaryURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
-	)
-	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
-
-	buckets, err := api.ListBuckets(baseParams, cmn.Bck{})
-	tassert.CheckFatal(t, err)
-
-	printBucketNames(buckets)
-
-	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure} {
-		cloudBuckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: provider})
-		tassert.CheckError(t, err)
-		if len(cloudBuckets) != len(buckets.Select(provider)) {
-			t.Fatalf("%s: cloud buckets: %d != %d\n", provider, len(cloudBuckets), len(buckets.Select(provider)))
-		}
-	}
-	aisBuckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: cmn.ProviderAIS})
-	tassert.CheckError(t, err)
-	if len(aisBuckets) != len(buckets.Select(cmn.ProviderAIS)) {
-		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(cmn.ProviderAIS)))
-	}
-}
-
-func printBucketNames(bcks cmn.BucketNames) {
-	for _, bck := range bcks {
-		fmt.Fprintf(os.Stdout, "  provider: %s, name: %s\n", bck.Provider, bck.Name)
-	}
-}
-
 func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()

@@ -48,9 +48,12 @@ type (
 )
 
 var (
-	// NsGlobal represents an global namespace that is used by default when
+	// NsGlobal represents *this* cluster's global namespace that is used by default when
 	// no specific namespace was defined or provided by the user.
 	NsGlobal = Ns{}
+	// NsGlobalRemote represents combined remote namespaces. As such, NsGlobalRemote applies
+	// exclusively to AIS (provider) given that other Cloud providers are remote by definition.
+	NsGlobalRemote = Ns{UUID: string(NsUUIDPrefix)}
 
 	Providers = map[string]struct{}{
 		ProviderAIS:    {},
@@ -99,8 +102,9 @@ func (n Ns) Uname() string {
 	return string(b)
 }
 
-func (n Ns) IsGlobal() bool { return n == NsGlobal }
-func (n Ns) IsCloud() bool  { return n.UUID != "" }
+func (n Ns) IsGlobal() bool       { return n == NsGlobal }
+func (n Ns) IsGlobalRemote() bool { return n == NsGlobalRemote }
+func (n Ns) IsCloud() bool        { return n.UUID != "" }
 func (n Ns) Validate() error {
 	if !nsReg.MatchString(n.UUID) || !nsReg.MatchString(n.Name) {
 		return fmt.Errorf(
