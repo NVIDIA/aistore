@@ -408,7 +408,7 @@ func Test_ObjAttrs(t *testing.T) {
 		cmn.Assert(err == nil)
 
 		idx := hdr.Opaque[0]
-		cmn.AssertMsg(cmn.IsProviderAIS(hdr.Bck), "expecting ais bucket")
+		cmn.AssertMsg(hdr.Bck.IsAIS(), "expecting ais bucket")
 		cmn.AssertMsg(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
 			fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
 

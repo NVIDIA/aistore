@@ -537,7 +537,7 @@ loop:
 // txn client context
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnClientCtx {
 	var (
-		query url.Values
+		query = make(url.Values)
 		c     = &txnClientCtx{}
 	)
 	c.uuid = cmn.GenUUID()
@@ -549,9 +549,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 
 	c.path = cmn.URLPath(cmn.Version, cmn.Txn, bck.Name)
 	if bck != nil {
-		query = cmn.AddBckToQuery(nil, bck.Bck)
-	} else {
-		query = make(url.Values)
+		_ = cmn.AddBckToQuery(query, bck.Bck)
 	}
 	c.timeout = cmn.GCO.Get().Timeout.CplaneOperation
 	query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))

@@ -55,7 +55,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromCloud := lom.Bck().IsCloud() && !args.Evict
+	delFromCloud := lom.Bck().IsCloud(false) && !args.Evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsErrObjNought(err) {
@@ -78,7 +78,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 			}
 		}
 		if args.Evict {
-			cmn.Assert(lom.Bck().IsCloud())
+			cmn.Assert(lom.Bck().IsCloud(false))
 		}
 	}
 	return cloudErr
@@ -229,7 +229,7 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 			if r.Aborted() {
 				return nil
 			}
-			if r.Bck().IsCloud() {
+			if r.Bck().IsCloud(false) {
 				local, err := isLocalObject(smap, r.Bck(), be.Name, sid)
 				if err != nil {
 					return err

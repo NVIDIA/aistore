@@ -557,7 +557,7 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 
 func validateLocalBuckets(buckets []cmn.Bck, operation string) error {
 	for _, bck := range buckets {
-		if cmn.IsProviderCloud(bck, true) {
+		if bck.IsCloud(true) {
 			return fmt.Errorf("%s cloud buckets (%s) is not supported", operation, bck)
 		}
 		bck.Provider = cmn.ProviderAIS

@@ -852,7 +852,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActPrefetch:
-		if !bck.IsCloud() {
+		if !bck.IsCloud(false) {
 			t.invalmsghdlr(w, r, msg.Action+" requires a Cloud bucket")
 			return
 		}
@@ -988,9 +988,9 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketProps = make(cmn.SimpleKVs)
-		glog.Warningf("%s: %s bucket %s, err: %v(%d)", t.si, bck.Provider, bucket, err, code)
+		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, bck, err, code)
 		bucketProps[cmn.HeaderCloudProvider] = bck.Provider
-		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
+		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud(false))
 	}
 	for k, v := range bucketProps {
 		hdr.Set(k, v)
@@ -1325,7 +1325,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromCloud := lom.Bck().IsCloud() && !evict
+	delFromCloud := lom.Bck().IsCloud(false) && !evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsObjNotExist(err) || (!delFromCloud && cmn.IsObjNotExist(err)) {
@@ -1349,7 +1349,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 			}
 		}
 		if evict {
-			cmn.Assert(lom.Bck().IsCloud())
+			cmn.Assert(lom.Bck().IsCloud(false))
 			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
 				stats.NamedVal64{Name: stats.LruEvictSize, Value: lom.Size()},
@@ -1382,7 +1382,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if lom.Bck().IsCloud() {
+	if lom.Bck().IsCloud(false) {
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename object from Cloud bucket", lom))
 		return
 	}

@@ -697,7 +697,7 @@ func multiObjOp(c *cli.Context, command string) error {
 			}
 			fmt.Fprintf(c.App.Writer, "%q deleted from %q bucket\n", objectName, bck)
 		case commandEvict:
-			if cmn.IsProviderAIS(bck) {
+			if bck.IsAIS() {
 				return fmt.Errorf("evicting objects from AIS bucket is not allowed")
 			}
 			if flagIsSet(c, dryRunFlag) {

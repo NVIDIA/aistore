@@ -252,7 +252,7 @@ func (b BucketNames) Select(selbck Bck) BucketNames {
 	for _, bck := range b {
 		var (
 			providerMatch = selbck.Provider == "" || bck.Provider == selbck.Provider
-			nsMatch       = bck.Ns == selbck.Ns || (selbck.Ns.IsGlobalRemote() && bck.Ns.IsCloud())
+			nsMatch       = bck.Ns == selbck.Ns || (selbck.Ns.IsGlobalRemote() && bck.Ns.IsRemote())
 		)
 		if providerMatch && nsMatch {
 			filtered = append(filtered, bck)
@@ -278,7 +278,7 @@ func (b BucketNames) Match(other Bck) bool {
 		if bck.Name == other.Name {
 			if other.Provider == "" {
 				return true
-			} else if other.Provider == Cloud && bck.IsCloud() {
+			} else if other.Provider == Cloud && bck.IsCloud(false) {
 				return true
 			} else if bck.Equal(other) {
 				return true

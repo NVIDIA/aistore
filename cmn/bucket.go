@@ -102,9 +102,6 @@ func (n Ns) Uname() string {
 	return string(b)
 }
 
-func (n Ns) IsGlobal() bool       { return n == NsGlobal }
-func (n Ns) IsGlobalRemote() bool { return n == NsGlobalRemote }
-func (n Ns) IsCloud() bool        { return n.UUID != "" }
 func (n Ns) Validate() error {
 	if !nsReg.MatchString(n.UUID) || !nsReg.MatchString(n.Name) {
 		return fmt.Errorf(
@@ -152,18 +149,26 @@ func (b Bck) String() string {
 	return fmt.Sprintf("%s%s%s/%s", b.Provider, BckProviderSeparator, b.Ns, b.Name)
 }
 
-func (b Bck) IsEmpty() bool     { return b.Name == "" && b.Provider == "" && b.Ns == NsGlobal }
-func (b Bck) IsAIS() bool       { return IsProviderAIS(b) }
-func (b Bck) IsCloud() bool     { return IsProviderCloud(b, false /*acceptAnon*/) }
-func (b Bck) HasProvider() bool { return b.IsAIS() || b.IsCloud() }
+func (b Bck) IsEmpty() bool { return b.Name == "" && b.Provider == "" && b.Ns == NsGlobal }
 
-func IsProviderAIS(bck Bck) bool {
-	return bck.Provider == ProviderAIS && bck.Ns.UUID == ""
-}
+///////////////
+// Is-What-s //
+///////////////
 
-func IsProviderCloud(bck Bck, acceptAnon bool) bool {
-	return (!IsProviderAIS(bck) && IsValidProvider(bck.Provider)) || (acceptAnon && bck.Provider == Cloud)
+func (n Ns) IsGlobal() bool       { return n == NsGlobal }
+func (n Ns) IsGlobalRemote() bool { return n == NsGlobalRemote }
+func (n Ns) IsRemote() bool       { return n.UUID != "" }
+
+func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRemote() } // is local AIS cluster
+func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }  // is remote AIS cluster
+// is 3rd party Cloud
+func (b Bck) IsCloud(acceptAnon bool) bool {
+	if b.Provider == ProviderAIS {
+		return false
+	}
+	return IsValidProvider(b.Provider) || (acceptAnon && b.Provider == Cloud)
 }
+func (b Bck) HasProvider() bool { return b.IsAIS() || b.IsCloud(false) }
 
 func IsValidProvider(provider string) bool {
 	_, ok := Providers[provider]

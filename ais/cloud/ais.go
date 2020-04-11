@@ -95,20 +95,29 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (er
 	return nil
 }
 
-func (m *aisCloudProvider) newBaseParams(uuid string) api.BaseParams {
+func (m *aisCloudProvider) newBaseParams(uuid string) (bp api.BaseParams, err error) {
 	var (
 		cfg        = cmn.GCO.Get()
 		remAis, ok = m.remote[uuid]
 	)
-	cmn.AssertMsg(ok, "ais cloud: unknown UUID "+uuid)
-	return api.BaseParams{Client: cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout}), URL: remAis.url}
+	if !ok {
+		err = errors.New("ais cloud: unknown UUID " + uuid)
+		return
+	}
+	bp = api.BaseParams{Client: cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout}), URL: remAis.url}
+	return
 }
 
 func (m *aisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
 	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+	var (
+		bp api.BaseParams
+	)
 	cmn.Assert(bck.Provider == cmn.ProviderAIS)
+	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
+		return
+	}
 	err = m.try(func() error {
-		bp := m.newBaseParams(bck.Ns.UUID)
 		bckList, err = api.ListObjects(bp, bck, msg, 0)
 		return err
 	})
@@ -117,16 +126,25 @@ func (m *aisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
 }
 
 func (m *aisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
-	bp := m.newBaseParams(bck.Ns.UUID)
 	cmn.Assert(bck.Provider == cmn.ProviderAIS)
+	var (
+		bp api.BaseParams
+	)
+	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
+		return
+	}
 	err = m.try(func() error {
+		bck.Ns.UUID = "" // (sic! here and elsewhere)
 		p, err := api.HeadBucket(bp, bck)
+		if err != nil {
+			return err
+		}
 		bckProps = make(cmn.SimpleKVs)
 		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 			bckProps[uniqueTag] = fmt.Sprintf("%v", field.Value())
 			return nil, false
 		})
-		return err
+		return nil
 	})
 	err, errCode = extractErrCode(err)
 	return bckProps, err, errCode
@@ -135,7 +153,7 @@ func (m *aisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProp
 func (m *aisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
 	for uuid := range m.remote {
 		var (
-			bp     = m.newBaseParams(uuid)
+			bp, _  = m.newBaseParams(uuid)
 			selbck = cmn.Bck{Provider: cmn.ProviderAIS}
 		)
 		er := m.try(func() (err error) {
@@ -162,10 +180,14 @@ func (m *aisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketN
 
 func (m *aisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
-		bck = cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-		bp  = m.newBaseParams(bck.Ns.UUID)
+		bp  api.BaseParams
+		bck = lom.Bck().Bck
 	)
+	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
+		return
+	}
 	err = m.try(func() error {
+		bck.Ns.UUID = ""
 		p, err := api.HeadObject(bp, bck, lom.ObjName)
 		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 			objMeta[uniqueTag] = fmt.Sprintf("%v", field.Value())
@@ -178,15 +200,20 @@ func (m *aisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMe
 }
 
 func (m *aisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
-	bck := cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+	var (
+		bp  api.BaseParams
+		bck = lom.Bck().Bck
+	)
+	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
+		return
+	}
 	err = m.try(func() error {
 		var (
 			r, w  = io.Pipe()
 			errCh = make(chan error, 1)
 		)
-
 		go func() {
-			bp := m.newBaseParams(bck.Ns.UUID)
+			bck.Ns.UUID = ""
 			goi := api.GetObjectInput{
 				Writer: w,
 			}
@@ -216,10 +243,14 @@ func (m *aisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 
 func (m *aisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var (
-		bck = cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-		bp  = m.newBaseParams(bck.Ns.UUID)
+		bp  api.BaseParams
+		bck = lom.Bck().Bck
 	)
+	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
+		return
+	}
 	err = m.try(func() error {
+		bck.Ns.UUID = ""
 		cksumValue := lom.Cksum().Value()
 		args := api.PutObjectArgs{
 			BaseParams: bp,
@@ -237,10 +268,14 @@ func (m *aisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 
 func (m *aisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	var (
-		bck = cmn.Bck{Name: lom.BckName(), Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-		bp  = m.newBaseParams(bck.Ns.UUID)
+		bp  api.BaseParams
+		bck = lom.Bck().Bck
 	)
+	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
+		return
+	}
 	err = m.try(func() error {
+		bck.Ns.UUID = ""
 		return api.DeleteObject(bp, bck, lom.ObjName)
 	})
 	return extractErrCode(err)

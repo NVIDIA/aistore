@@ -244,14 +244,13 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request) (ok bool) {
 	var (
-		bucket  string
 		query   = r.URL.Query()
 		payload = &downloader.DlBase{}
 	)
 	payload.InitWithQuery(query)
 	bck := cluster.NewBckEmbed(payload.Bck)
 	if err := bck.Init(p.owner.bmd, p.si); err != nil {
-		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bck, err); err != nil {
 			return
 		}
 	}

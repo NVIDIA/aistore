@@ -65,7 +65,7 @@ func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, lin
 	return DlObj{
 		ObjName:   objName,
 		Link:      link,
-		FromCloud: cmn.IsProviderCloud(bck.Bck, true /*acceptAnon*/),
+		FromCloud: bck.IsCloud(true),
 	}, nil
 }
 
@@ -144,7 +144,7 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		if err := bck.Init(t.GetBowner(), t.Snode()); err != nil {
 			return nil, err
 		}
-		if !bck.IsCloud() {
+		if !bck.IsCloud(false) {
 			return nil, errors.New("bucket download requires cloud bucket")
 		}
 

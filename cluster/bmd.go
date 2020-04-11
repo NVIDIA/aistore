@@ -58,7 +58,7 @@ func (m *BMD) NumCloud(nsQuery *string) (nc int) {
 	for provider, namespaces := range m.Providers {
 		for nsUname, buckets := range namespaces {
 			bck := cmn.Bck{Provider: provider, Ns: cmn.ParseNsUname(nsUname)}
-			if cmn.IsProviderAIS(bck) {
+			if bck.IsAIS() {
 				continue
 			}
 			if nsQuery != nil && nsUname != *nsQuery {
@@ -82,12 +82,6 @@ func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
 	buckets := m.getBuckets(bck)
 	if buckets != nil {
 		p, present = buckets[bck.Name]
-	}
-	if bck.IsAIS() {
-		return
-	}
-	if !present {
-		p = cmn.DefaultBucketProps()
 	}
 	return
 }
@@ -209,23 +203,28 @@ func (m *BMD) initBckAnyProvider(bck *Bck) {
 			}
 		}
 	}
-	m.initBckCloudProvider(bck)
+	if !m.initBckCloudProvider(bck) {
+		bck.Provider = cmn.ProviderAIS
+	}
 }
 
-func (m *BMD) initBckCloudProvider(bck *Bck) {
+func (m *BMD) initBckCloudProvider(bck *Bck) bool {
 	for provider, namespaces := range m.Providers {
 		for nsUname, buckets := range namespaces {
-			ns := cmn.ParseNsUname(nsUname)
-			if cmn.IsProviderAIS(cmn.Bck{Provider: provider, Ns: ns}) {
+			var (
+				ns = cmn.ParseNsUname(nsUname)
+				b  = cmn.Bck{Provider: provider, Ns: ns}
+			)
+			if b.IsAIS() {
 				continue
 			}
-
 			if p, present := buckets[bck.Name]; present {
 				bck.Provider = provider
 				bck.Ns = ns
 				bck.Props = p
-				return
+				return true
 			}
 		}
 	}
+	return false
 }

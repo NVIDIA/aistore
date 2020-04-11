@@ -237,7 +237,7 @@ func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int)
 	)
 	if !bck.Ns.IsGlobal() {
 		nsLen = 1
-		if bck.Ns.IsCloud() {
+		if bck.Ns.IsRemote() {
 			nsLen += 1 + len(bck.Ns.UUID)
 		}
 		nsLen += 1 + len(bck.Ns.Name)
@@ -257,7 +257,7 @@ func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int)
 	buf = append(buf, bck.Provider...)
 	if nsLen > 0 {
 		buf = append(buf, filepath.Separator)
-		if bck.Ns.IsCloud() {
+		if bck.Ns.IsRemote() {
 			buf = append(buf, prefNsUUID)
 			buf = append(buf, bck.Ns.UUID...)
 		}

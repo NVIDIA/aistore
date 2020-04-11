@@ -310,7 +310,7 @@ func (ack *ackCT) clear(mm *memsys.MMSA) {
 // and the CT's info about object matches previously found CTs.
 func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error {
 	bckList := rr.ais
-	if cmn.IsProviderCloud(ct.Bck, false /*acceptAnon*/) {
+	if ct.Bck.IsCloud(false) {
 		bckList = rr.cloud
 	}
 	bck, ok := bckList[ct.Name]
@@ -916,7 +916,7 @@ func (reb *Manager) detectBroken(md *rebArgs, res *globalCTList) {
 	// sort order: IsAIS/Bucket name/Object name
 	ctLess := func(i, j int) bool {
 		if reb.ec.broken[i].bck.Provider != reb.ec.broken[j].bck.Provider {
-			return cmn.IsProviderAIS(reb.ec.broken[j].bck)
+			return reb.ec.broken[j].bck.IsAIS()
 		}
 		bi := reb.ec.broken[i].bck.Name
 		bj := reb.ec.broken[j].bck.Name

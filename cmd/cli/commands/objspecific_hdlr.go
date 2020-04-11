@@ -132,7 +132,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 	if bck, objectName, err = parseBckObjectURI(c.Args().First()); err != nil {
 		return
 	}
-	if cmn.IsProviderAIS(bck) {
+	if bck.IsAIS() {
 		return fmt.Errorf("prefetch command doesn't support local buckets")
 	}
 	if bck, err = validateBucket(c, bck, "", false); err != nil {
@@ -163,7 +163,7 @@ func evictHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		if cmn.IsProviderAIS(bck) {
+		if bck.IsAIS() {
 			return fmt.Errorf("evict command doesn't support local buckets")
 		}
 

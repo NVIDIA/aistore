@@ -48,8 +48,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	if cmn.IsProviderCloud(fromBck, true) || cmn.IsProviderCloud(toBck, true) {
+	if fromBck.IsCloud(true) || toBck.IsCloud(true) {
 		return fmt.Errorf("copying of cloud buckets not supported")
 	}
 	if objName != "" {

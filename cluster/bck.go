@@ -142,7 +142,10 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 	if b.IsAIS() && other.IsAIS() {
 		return true
 	}
-	return b.IsCloud() && other.IsCloud()
+	if b.IsCloud(false) && other.IsCloud(false) {
+		return true
+	}
+	return b.IsRemoteAIS() && other.IsRemoteAIS()
 }
 
 // NOTE: when the specified bucket is not present in the BMD:
@@ -154,7 +157,7 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
-	} else if cmn.IsProviderCloud(b.Bck, true) {
+	} else if b.IsCloud(true) {
 		cloudConf := cmn.GCO.Get().Cloud
 		b.Provider = cloudConf.Provider
 		b.Ns = cloudConf.Ns // TODO -- FIXME: remove
@@ -167,7 +170,7 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 		if si != nil {
 			name = si.Name()
 		}
-		if cmn.IsProviderAIS(b.Bck) {
+		if b.IsAIS() {
 			return cmn.NewErrorBucketDoesNotExist(b.Bck, name)
 		}
 		return cmn.NewErrorCloudBucketDoesNotExist(b.Bck, name)

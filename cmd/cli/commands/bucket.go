@@ -166,12 +166,12 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
 	query.Add(cmn.URLParamPrefix, prefix)
-	if flagIsSet(c, cachedFlag) && cmn.IsProviderAIS(bck) {
+	if flagIsSet(c, cachedFlag) && bck.IsAIS() {
 		fmt.Fprintf(c.App.ErrWriter, "warning: ignoring %q flag: irrelevant for ais buckets\n", cachedFlag.Name)
 		msg.Cached = false
 	}
 
-	if flagIsSet(c, fastFlag) && (cmn.IsProviderAIS(bck) || msg.Cached) {
+	if flagIsSet(c, fastFlag) && (bck.IsAIS() || msg.Cached) {
 		msg.Fast = true
 		objList, err := api.ListObjectsFast(defaultAPIParams, bck, msg, query)
 		if err != nil {
@@ -181,7 +181,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 		return printObjectNames(c, objList.Entries, objectListFilter, showUnmatched, !flagIsSet(c, noHeaderFlag))
 	}
 
-	if !cmn.IsProviderAIS(bck) && flagIsSet(c, fastFlag) {
+	if !bck.IsAIS() && flagIsSet(c, fastFlag) {
 		fmt.Fprintf(c.App.ErrWriter, "warning: %q for cloud buckets takes an effect only with %q\n",
 			fastFlag.Name, cachedFlag.Name)
 	}

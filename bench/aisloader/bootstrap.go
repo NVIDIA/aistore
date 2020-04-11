@@ -475,7 +475,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	if !p.cleanUp.IsSet {
-		p.cleanUp.Val = cmn.IsProviderAIS(p.bck)
+		p.cleanUp.Val = p.bck.IsAIS()
 	}
 
 	// For Dry-Run on Docker
@@ -1019,7 +1019,7 @@ func cleanup() {
 		wg.Wait()
 	}
 
-	if cmn.IsProviderAIS(runParams.bck) {
+	if runParams.bck.IsAIS() {
 		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
 		api.DestroyBucket(baseParams, runParams.bck)
 	}
