@@ -161,7 +161,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		lom = poi.lom
 		bck = lom.Bck()
 	)
-	if bck.IsCloud(false) && !poi.migrated {
+	if bck.IsRemote() && !poi.migrated {
 		file, err1 := os.Open(poi.workFQN)
 		if err1 != nil {
 			err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, err1)
@@ -375,7 +375,8 @@ do:
 		goi.lom.Lock(false)
 		goto get
 	}
-	if !coldGet && goi.lom.Bck().IsCloud(false) { // exists && cloud-bucket : check ver if requested
+	// exists && remote|cloud: check ver if requested
+	if !coldGet && goi.lom.Bck().IsRemote() {
 		if goi.lom.Version() != "" && goi.lom.VerConf().ValidateWarmGet {
 			goi.lom.Unlock(false)
 			if coldGet, err, errCode = goi.t.CheckCloudVersion(goi.ctx, goi.lom); err != nil {

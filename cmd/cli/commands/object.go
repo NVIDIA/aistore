@@ -612,11 +612,11 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		err = api.DeleteList(defaultAPIParams, bck, fileList)
 		command = "removed"
 	case commandPrefetch:
-		bck.Provider = cmn.Cloud
+		bck.Provider = cmn.AnyCloud
 		err = api.PrefetchList(defaultAPIParams, bck, fileList)
 		command += "ed"
 	case commandEvict:
-		bck.Provider = cmn.Cloud
+		bck.Provider = cmn.AnyCloud
 		err = api.EvictList(defaultAPIParams, bck, fileList)
 		command += "ed"
 	default:
@@ -655,11 +655,11 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		err = api.DeleteRange(defaultAPIParams, bck, rangeStr)
 		command = "removed"
 	case commandPrefetch:
-		bck.Provider = cmn.Cloud
+		bck.Provider = cmn.AnyCloud
 		err = api.PrefetchRange(defaultAPIParams, bck, rangeStr)
 		command += "ed"
 	case commandEvict:
-		bck.Provider = cmn.Cloud
+		bck.Provider = cmn.AnyCloud
 		err = api.EvictRange(defaultAPIParams, bck, rangeStr)
 		command += "ed"
 	default:

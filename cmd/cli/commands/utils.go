@@ -500,7 +500,7 @@ func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 		objName = parts[1]
 	}
 	bck.Provider = parseBckProvider(bck.Provider)
-	if bck.Provider != "" && !cmn.IsValidProvider(bck.Provider) && bck.Provider != cmn.Cloud {
+	if bck.Provider != "" && !cmn.IsValidProvider(bck.Provider) && bck.Provider != cmn.AnyCloud {
 		return bck, "", fmt.Errorf("invalid bucket provider %q", bck.Provider)
 	}
 
@@ -557,8 +557,11 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 
 func validateLocalBuckets(buckets []cmn.Bck, operation string) error {
 	for _, bck := range buckets {
-		if bck.IsCloud(true) {
+		if bck.IsCloud(cmn.AnyCloud) {
 			return fmt.Errorf("%s cloud buckets (%s) is not supported", operation, bck)
+		}
+		if bck.IsRemoteAIS() {
+			return fmt.Errorf("%s remote ais buckets (%s) is not supported", operation, bck)
 		}
 		bck.Provider = cmn.ProviderAIS
 	}

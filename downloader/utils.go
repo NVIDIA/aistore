@@ -65,7 +65,7 @@ func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, lin
 	return DlObj{
 		ObjName:   objName,
 		Link:      link,
-		FromCloud: bck.IsCloud(true),
+		FromCloud: bck.IsCloud(cmn.AnyCloud),
 	}, nil
 }
 
@@ -144,8 +144,8 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		if err := bck.Init(t.GetBowner(), t.Snode()); err != nil {
 			return nil, err
 		}
-		if !bck.IsCloud(false) {
-			return nil, errors.New("bucket download requires cloud bucket")
+		if !bck.IsCloud() {
+			return nil, errors.New("bucket download requires a cloud bucket")
 		}
 
 		baseJob := newBaseDlJob(id, bck, cloudPayload.Timeout, payload.Description)
@@ -160,7 +160,7 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 
 	bck := cluster.NewBckEmbed(payload.Bck)
 	if err = bck.Init(t.GetBowner(), t.Snode()); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
 			return nil, err
 		}
 	}

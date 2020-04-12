@@ -1229,17 +1229,22 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config 
 	})
 }
 
-func (h *httprunner) listProvidersBuckets(bmd *bucketMD, provider string) cmn.BucketNames {
+func (h *httprunner) selectBMDBuckets(bmd *bucketMD, selbck *cluster.Bck) cmn.BucketNames {
 	var (
 		na   = bmd.NumAIS(nil /*all namespaces*/)
 		bcks = make(cmn.BucketNames, 0, na)
-		cp   = &provider
+		cp   = &selbck.Provider
 	)
-	if provider == "" {
+	if selbck.Provider == "" {
 		cp = nil
 	}
 	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		bcks = append(bcks, bck.Bck)
+		nsMatch := bck.Ns == selbck.Ns ||
+			selbck.Ns.IsGlobal() && bck.IsAIS() ||
+			selbck.Ns.IsGlobalRemote() && bck.IsRemote()
+		if nsMatch {
+			bcks = append(bcks, bck.Bck)
+		}
 		return false
 	})
 	sort.Sort(bcks)
@@ -1248,7 +1253,7 @@ func (h *httprunner) listProvidersBuckets(bmd *bucketMD, provider string) cmn.Bu
 
 func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
 	provider := query.Get(cmn.URLParamProvider)
-	if provider != "" && provider != cmn.Cloud && !cmn.IsValidProvider(provider) {
+	if provider != "" && provider != cmn.AnyCloud && !cmn.IsValidProvider(provider) {
 		return nil, fmt.Errorf("invalid provider %q", provider)
 	}
 	namespace := cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))

@@ -713,8 +713,8 @@ func (lom *LOM) checkBucket() error {
 	)
 	if !present { // bucket does not exist
 		node := lom.T.Snode().String()
-		if lom.bck.IsCloud(false) {
-			return cmn.NewErrorCloudBucketDoesNotExist(lom.Bck().Bck, node)
+		if lom.bck.IsRemote() {
+			return cmn.NewErrorRemoteBucketDoesNotExist(lom.Bck().Bck, node)
 		}
 		return cmn.NewErrorBucketDoesNotExist(lom.Bck().Bck, node)
 	}

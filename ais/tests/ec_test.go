@@ -856,7 +856,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)

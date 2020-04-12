@@ -300,7 +300,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		objectCount = 1340 // must be greater than 1000(AWS page size)
 		bck         = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 		proxyURL = tutils.GetPrimaryURL()
 		wg       = &sync.WaitGroup{}
@@ -581,7 +581,7 @@ func TestListObjectsPrefix(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	for _, provider := range []string{cmn.ProviderAIS, cmn.Cloud} {
+	for _, provider := range []string{cmn.ProviderAIS, cmn.AnyCloud} {
 		t.Run(provider, func(t *testing.T) {
 			var (
 				bck        cmn.Bck
@@ -590,7 +590,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				customPage = true
 			)
 			bckTest := cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
-			if bckTest.IsCloud(true) {
+			if bckTest.IsCloud(cmn.AnyCloud) {
 				bck = cmn.Bck{
 					Name:     clibucket,
 					Provider: provider,
@@ -728,7 +728,7 @@ func TestBucketListAndSummary(t *testing.T) {
 	}
 
 	var tests []test
-	for _, provider := range []string{cmn.ProviderAIS, cmn.Cloud} {
+	for _, provider := range []string{cmn.ProviderAIS, cmn.AnyCloud} {
 		for _, summary := range []bool{false, true} {
 			for _, cached := range []bool{false, true} {
 				for _, fast := range []bool{false, true} {
@@ -786,7 +786,7 @@ func TestBucketListAndSummary(t *testing.T) {
 				defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 				m.puts()
-			} else if bckTest.IsCloud(true) {
+			} else if bckTest.IsCloud(cmn.AnyCloud) {
 				m.bck.Name = clibucket
 
 				if !isCloudBucket(t, proxyURL, m.bck) {
@@ -963,7 +963,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 
 	bck := cmn.Bck{
 		Name:     bucket,
-		Provider: cmn.Cloud,
+		Provider: cmn.AnyCloud,
 	}
 
 	err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
@@ -993,7 +993,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 
 	bck := cmn.Bck{
 		Name:     bucket,
-		Provider: cmn.Cloud,
+		Provider: cmn.AnyCloud,
 	}
 
 	err = api.SetBucketProps(baseParams, bck, bucketProps)
@@ -1140,7 +1140,7 @@ func TestCloudMirror(t *testing.T) {
 			num: 64,
 			bck: cmn.Bck{
 				Name:     clibucket,
-				Provider: cmn.Cloud,
+				Provider: cmn.AnyCloud,
 			},
 		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
@@ -1485,11 +1485,11 @@ func TestCopyBucket(t *testing.T) {
 		{provider: cmn.ProviderAIS, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
 
 		// cloud
-		{provider: cmn.Cloud, dstBckExist: false, dstBckHasObjects: false},
-		{provider: cmn.Cloud, dstBckExist: true, dstBckHasObjects: false},
-		{provider: cmn.Cloud, dstBckExist: true, dstBckHasObjects: true},
-		{provider: cmn.Cloud, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
-		{provider: cmn.Cloud, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
+		{provider: cmn.AnyCloud, dstBckExist: false, dstBckHasObjects: false},
+		{provider: cmn.AnyCloud, dstBckExist: true, dstBckHasObjects: false},
+		{provider: cmn.AnyCloud, dstBckExist: true, dstBckHasObjects: true},
+		{provider: cmn.AnyCloud, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
+		{provider: cmn.AnyCloud, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
 	}
 
 	for _, test := range tests {
@@ -1548,10 +1548,10 @@ func TestCopyBucket(t *testing.T) {
 				})
 			}
 			bckTest := cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}
-			if bckTest.IsCloud(true) {
+			if bckTest.IsCloud(cmn.AnyCloud) {
 				srcm.bck = cmn.Bck{
 					Name:     clibucket,
-					Provider: cmn.Cloud,
+					Provider: cmn.AnyCloud,
 				}
 
 				if !isCloudBucket(t, proxyURL, srcm.bck) {
@@ -1601,7 +1601,7 @@ func TestCopyBucket(t *testing.T) {
 
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
-			} else if bckTest.IsCloud(true) {
+			} else if bckTest.IsCloud(cmn.AnyCloud) {
 				srcm.cloudPuts(false /*evict*/)
 				defer srcm.cloudDelete()
 

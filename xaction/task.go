@@ -149,7 +149,7 @@ func (t *bckSummaryTask) Run() {
 				return false
 			})
 		}
-		if !t.Bck().HasProvider() || t.Bck().IsCloud(true) {
+		if !t.Bck().HasProvider() || t.Bck().IsCloud(cmn.AnyCloud) {
 			var (
 				provider  = cfg.Cloud.Provider
 				namespace = cfg.Cloud.Ns

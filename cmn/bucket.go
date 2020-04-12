@@ -11,7 +11,7 @@ import (
 
 // Cloud Provider enum
 const (
-	Cloud = "cloud" // used only for API
+	AnyCloud = "cloud" // refers to any 3rd party Cloud
 
 	ProviderAmazon = "aws"
 	ProviderGoogle = "gcp"
@@ -161,14 +161,18 @@ func (n Ns) IsRemote() bool       { return n.UUID != "" }
 
 func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRemote() } // is local AIS cluster
 func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }  // is remote AIS cluster
+func (b Bck) IsRemote() bool    { return b.IsCloud() || b.IsRemoteAIS() }                // is remote
 // is 3rd party Cloud
-func (b Bck) IsCloud(acceptAnon bool) bool {
+func (b Bck) IsCloud(anyCloud ...string) bool {
 	if b.Provider == ProviderAIS {
 		return false
 	}
-	return IsValidProvider(b.Provider) || (acceptAnon && b.Provider == Cloud)
+	if IsValidProvider(b.Provider) {
+		return true
+	}
+	return len(anyCloud) > 0 && b.Provider == AnyCloud && b.Provider == anyCloud[0]
 }
-func (b Bck) HasProvider() bool { return b.IsAIS() || b.IsCloud(false) }
+func (b Bck) HasProvider() bool { return b.IsAIS() || b.IsCloud() }
 
 func IsValidProvider(provider string) bool {
 	_, ok := Providers[provider]

@@ -19,11 +19,11 @@ type (
 		node string
 		bck  Bck
 	}
-	ErrorBucketAlreadyExists     nodeBckPair
-	ErrorCloudBucketDoesNotExist nodeBckPair
-	ErrorCloudBucketOffline      nodeBckPair
-	ErrorBucketDoesNotExist      nodeBckPair
-	ErrorBucketIsBusy            nodeBckPair
+	ErrorBucketAlreadyExists      nodeBckPair
+	ErrorRemoteBucketDoesNotExist nodeBckPair
+	ErrorCloudBucketOffline       nodeBckPair
+	ErrorBucketDoesNotExist       nodeBckPair
+	ErrorBucketIsBusy             nodeBckPair
 
 	ErrorCapacityExceeded struct {
 		prefix string
@@ -83,11 +83,14 @@ func (e *ErrorBucketAlreadyExists) Error() string {
 	return _errBucket(fmt.Sprintf("bucket %s already exists", e.bck), e.node)
 }
 
-func NewErrorCloudBucketDoesNotExist(bck Bck, node string) *ErrorCloudBucketDoesNotExist {
-	return &ErrorCloudBucketDoesNotExist{node: node, bck: bck}
+func NewErrorRemoteBucketDoesNotExist(bck Bck, node string) *ErrorRemoteBucketDoesNotExist {
+	return &ErrorRemoteBucketDoesNotExist{node: node, bck: bck}
 }
-func (e *ErrorCloudBucketDoesNotExist) Error() string {
-	return _errBucket(fmt.Sprintf("cloud bucket %s does not exist", e.bck), e.node)
+func (e *ErrorRemoteBucketDoesNotExist) Error() string {
+	if e.bck.IsCloud(AnyCloud) {
+		return _errBucket(fmt.Sprintf("cloud bucket %s does not exist", e.bck), e.node)
+	}
+	return _errBucket(fmt.Sprintf("remote ais bucket %s does not exist", e.bck), e.node)
 }
 
 func NewErrorCloudBucketOffline(bck Bck, node string) *ErrorCloudBucketOffline {
@@ -221,7 +224,7 @@ func IsErrBucketNought(err error) bool {
 	if _, ok := err.(*ErrorBucketDoesNotExist); ok {
 		return true
 	}
-	if _, ok := err.(*ErrorCloudBucketDoesNotExist); ok {
+	if _, ok := err.(*ErrorRemoteBucketDoesNotExist); ok {
 		return true
 	}
 	_, ok := err.(*ErrorCloudBucketOffline)

@@ -47,7 +47,7 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 		props = optProps[0]
 	}
 	if !cmn.IsValidProvider(provider) {
-		cmn.Assert(provider == "" || provider == cmn.Cloud)
+		cmn.Assert(provider == "" || provider == cmn.AnyCloud)
 	}
 	b := &Bck{Bck: bck, Props: props}
 	return b
@@ -142,22 +142,22 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 	if b.IsAIS() && other.IsAIS() {
 		return true
 	}
-	if b.IsCloud(false) && other.IsCloud(false) {
+	if b.IsCloud() && other.IsCloud() {
 		return true
 	}
 	return b.IsRemoteAIS() && other.IsRemoteAIS()
 }
 
 // NOTE: when the specified bucket is not present in the BMD:
-//       - always returns the corresponding *DoesNotExist error
-//       - for Cloud bucket - fills in the props with defaults from config
-//       - for AIS bucket - sets the props to nil
-//       - for Cloud bucket, the caller can type-cast err.(*cmn.ErrorCloudBucketDoesNotExist) and proceed
+// - always returns the corresponding *DoesNotExist error
+// - for Cloud bucket - fills in the props with defaults from config
+// - for AIS bucket - sets the props to nil
+// - for Remote (Cloud or Remote AIS) bucket, the caller can type-cast err.(*cmn.ErrorRemoteBucketDoesNotExist) and proceed
 func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
-	} else if b.IsCloud(true) {
+	} else if b.IsCloud(cmn.AnyCloud) {
 		cloudConf := cmn.GCO.Get().Cloud
 		b.Provider = cloudConf.Provider
 		b.Ns = cloudConf.Ns // TODO -- FIXME: remove
@@ -173,7 +173,7 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 		if b.IsAIS() {
 			return cmn.NewErrorBucketDoesNotExist(b.Bck, name)
 		}
-		return cmn.NewErrorCloudBucketDoesNotExist(b.Bck, name)
+		return cmn.NewErrorRemoteBucketDoesNotExist(b.Bck, name)
 	}
 	return
 }

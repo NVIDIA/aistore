@@ -62,7 +62,7 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        objectSpecificCmdsFlags[commandPrefetch],
 			Action:       prefetchHandler,
-			BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.Cloud}),
+			BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.AnyCloud}),
 		},
 		{
 			Name:         commandEvict,
@@ -70,7 +70,7 @@ var (
 			ArgsUsage:    optionalObjectsArgument,
 			Flags:        objectSpecificCmdsFlags[commandEvict],
 			Action:       evictHandler,
-			BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.Cloud}),
+			BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.AnyCloud}),
 		},
 		{
 			Name:         commandGet,

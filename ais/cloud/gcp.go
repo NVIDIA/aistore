@@ -164,7 +164,7 @@ func createClient(ctx context.Context) (*storage.Client, context.Context, string
 
 func gcpErrorToAISError(gcpError error, bck *cluster.Bck, node string) (error, int) {
 	if gcpError == storage.ErrBucketNotExist {
-		return cmn.NewErrorCloudBucketDoesNotExist(bck.Bck, node), http.StatusNotFound
+		return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, node), http.StatusNotFound
 	}
 
 	return gcpError, http.StatusBadRequest

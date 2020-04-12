@@ -184,7 +184,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		}
 
 		if bck.Provider == "" {
-			providers = []string{cmn.ProviderAIS, cmn.Cloud}
+			providers = []string{cmn.ProviderAIS, cmn.AnyCloud}
 		} else {
 			providers = []string{bck.Provider}
 		}

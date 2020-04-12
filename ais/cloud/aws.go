@@ -143,11 +143,11 @@ func createSession(ctx context.Context) *session.Session {
 func awsErrorToAISError(awsError error, bck *cluster.Bck, node string) (error, int) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return cmn.NewErrorCloudBucketDoesNotExist(bck.Bck, node), reqErr.StatusCode()
+			return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, node), reqErr.StatusCode()
 		}
 		// AWS returns confusing error when a bucket does not exist in the region, ideally we should never rely on error message
 		if reqErr.StatusCode() == http.StatusMovedPermanently && strings.Contains(reqErr.Error(), "BucketRegionError") {
-			return cmn.NewErrorCloudBucketDoesNotExist(bck.Bck, node), http.StatusNotFound
+			return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, node), http.StatusNotFound
 		}
 		return awsError, reqErr.StatusCode()
 	}

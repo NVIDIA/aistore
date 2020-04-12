@@ -751,7 +751,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if bck.IsCloud(true) {
+		if bck.IsCloud(cmn.AnyCloud) || bck.IsRemoteAIS() {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtErr, msg.Action, bck.Provider))
 			return
 		}
@@ -770,7 +770,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		_, ok := err.(*cmn.ErrorCloudBucketDoesNotExist)
+		_, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist)
 		if ok && msg.Action == cmn.ActRenameLB {
 			errMsg := fmt.Sprintf("cannot %q: ais bucket %q does not exist", msg.Action, bucket)
 			p.invalmsghdlr(w, r, errMsg, http.StatusNotFound)
@@ -1298,12 +1298,9 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error)
 }
 
 func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
-	var (
-		bmd      = p.owner.bmd.get()
-		provider = bck.Bck.Provider
-	)
+	bmd := p.owner.bmd.get()
 	if bck.IsAIS() {
-		bcks := p.listProvidersBuckets(bmd, provider)
+		bcks := p.selectBMDBuckets(bmd, bck)
 		body := cmn.MustMarshal(bcks)
 		p.writeJSON(w, r, body, listBuckets)
 		return
@@ -1369,7 +1366,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 
 // for 3rd party cloud and remote ais buckets - check existence and update BMD
 func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, queryBck *cluster.Bck, erc error) (bck *cluster.Bck, err error) {
-	if _, ok := erc.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+	if _, ok := erc.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
 		err = erc
 		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
 			p.invalmsghdlr(w, r, erc.Error(), http.StatusNotFound)
@@ -1390,7 +1387,7 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, queryBc
 	}
 	var cloudProps http.Header
 	if cloudProps, err = p.cbExists(queryBck); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			p.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 		} else {
 			p.invalmsghdlr(w, r, err.Error())
@@ -1438,7 +1435,7 @@ func (p *proxyrunner) cbExists(queryBck *cluster.Bck) (header http.Header, err e
 	}
 	res := p.call(args)
 	if res.status == http.StatusNotFound {
-		err = cmn.NewErrorCloudBucketDoesNotExist(queryBck.Bck, pname)
+		err = cmn.NewErrorRemoteBucketDoesNotExist(queryBck.Bck, pname)
 	} else if res.status == http.StatusGone {
 		err = cmn.NewErrorCloudBucketOffline(queryBck.Bck, pname)
 	} else if res.err != nil {

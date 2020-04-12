@@ -269,7 +269,7 @@ func (m *ioContext) cloudDelete() {
 		sema       = make(chan struct{}, 40)
 	)
 
-	cmn.Assert(m.bck.Provider == cmn.Cloud)
+	cmn.Assert(m.bck.Provider == cmn.AnyCloud)
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 

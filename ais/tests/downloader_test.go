@@ -394,7 +394,7 @@ func TestDownloadCloud(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		bck        = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 
 		fileCnt = 5

@@ -480,7 +480,7 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 	}
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = lom.Init(bck.Bck, config)
 		}
@@ -545,7 +545,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = lom.Init(bck.Bck, config)
 		}
@@ -630,7 +630,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = lom.Init(bck.Bck, config)
 		}
@@ -683,7 +683,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = bck.Init(t.owner.bmd, t.si)
 		}
@@ -841,7 +841,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = bck.Init(t.owner.bmd, t.si)
 		}
@@ -852,8 +852,9 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActPrefetch:
-		if !bck.IsCloud(false) {
-			t.invalmsghdlr(w, r, msg.Action+" requires a Cloud bucket")
+		if !bck.IsRemote() {
+			t.invalmsghdlr(w, r, fmt.Sprintf("%s: expecting remote bucket, got %s, action=%s",
+				t.si, bck, msg.Action))
 			return
 		}
 		var (
@@ -960,7 +961,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -979,7 +980,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
-				err = cmn.NewErrorCloudBucketDoesNotExist(bck.Bck, t.si.String())
+				err = cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, t.si.String())
 				t.invalmsghdlrsilent(w, r, err.Error(), code)
 			} else {
 				err = fmt.Errorf("%s: bucket %s, err: %v", t.si, bucket, err)
@@ -990,7 +991,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketProps = make(cmn.SimpleKVs)
 		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, bck, err, code)
 		bucketProps[cmn.HeaderCloudProvider] = bck.Provider
-		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud(false))
+		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
+		bucketProps[cmn.HeaderRemoteAisOffline] = strconv.FormatBool(bck.IsRemoteAIS())
 	}
 	for k, v := range bucketProps {
 		hdr.Set(k, v)
@@ -1033,7 +1035,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err = bck.Init(t.owner.bmd, t.si); err != nil {
-			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
+			if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -1200,8 +1202,8 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *
 		t.invalmsghdlr(w, r, s, http.StatusBadRequest)
 		return
 	}
-	// cmn.Cloud translates as any (one!) *3rd party* Cloud
-	if bck.Provider == cmn.Cloud {
+	// cmn.AnyCloud translates as any (one!) *3rd party* Cloud
+	if bck.Provider == cmn.AnyCloud {
 		bck.Provider = config.Cloud.Provider
 	}
 	if bck.Provider != "" {
@@ -1229,10 +1231,10 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *
 
 func (t *targetrunner) _listBcks(r *http.Request, bck *cluster.Bck, cfg *cmn.Config) (bucketNames cmn.BucketNames, err error, c int) {
 	// 3rd party cloud or remote ais
-	if bck.Provider == cfg.Cloud.Provider || (bck.Provider == cmn.ProviderAIS && bck.Ns.IsGlobalRemote()) {
+	if bck.Provider == cfg.Cloud.Provider || bck.IsRemoteAIS() {
 		bucketNames, err, c = t.Cloud(bck.Provider).ListBuckets(t.contextWithAuth(r.Header))
 	} else { // BMD
-		bucketNames = t.listProvidersBuckets(t.owner.bmd.get(), bck.Provider)
+		bucketNames = t.selectBMDBuckets(t.owner.bmd.get(), bck)
 	}
 	return
 }
@@ -1325,7 +1327,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromCloud := lom.Bck().IsCloud(false) && !evict
+	delFromCloud := lom.Bck().IsRemote() && !evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsObjNotExist(err) || (!delFromCloud && cmn.IsObjNotExist(err)) {
@@ -1349,7 +1351,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 			}
 		}
 		if evict {
-			cmn.Assert(lom.Bck().IsCloud(false))
+			cmn.Assert(lom.Bck().IsRemote())
 			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
 				stats.NamedVal64{Name: stats.LruEvictSize, Value: lom.Size()},
@@ -1382,8 +1384,8 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if lom.Bck().IsCloud(false) {
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename object from Cloud bucket", lom))
+	if lom.Bck().IsRemote() {
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename object from remote bucket", lom))
 		return
 	}
 	// TODO -- FIXME: cannot rename erasure-coded
@@ -1449,7 +1451,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = bck.Init(t.owner.bmd, t.si)
 		}

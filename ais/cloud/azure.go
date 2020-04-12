@@ -160,7 +160,7 @@ func (ap *azureProvider) azureErrorToAISError(azureError error, bucket, objName 
 	switch stgErr.ServiceCode() {
 	case azblob.ServiceCodeContainerNotFound:
 		bck := cmn.Bck{Name: bucket, Provider: cmn.ProviderAzure}
-		return cmn.NewErrorCloudBucketDoesNotExist(bck, ap.t.Snode().Name()), http.StatusNotFound
+		return cmn.NewErrorRemoteBucketDoesNotExist(bck, ap.t.Snode().Name()), http.StatusNotFound
 	case azblob.ServiceCodeBlobNotFound:
 		msg := fmt.Sprintf("%s/%s not found", bucket, objName)
 		return &cmn.HTTPError{Status: http.StatusNotFound, Message: msg}, http.StatusNotFound

@@ -1380,7 +1380,7 @@ func TestAtimeColdGet(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)
@@ -1418,7 +1418,7 @@ func TestAtimePrefetch(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)

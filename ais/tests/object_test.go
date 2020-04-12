@@ -44,7 +44,7 @@ func TestCloudBucketObject(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		bck        = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 	)
 
@@ -461,7 +461,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		}
 		bckCloud = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 		fileName1 = "mytestobj1.txt"
 		fileName2 = "mytestobj2.txt"
@@ -612,7 +612,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		}
 		bckCloud = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
 		fileName   = "mytestobj1.txt"
@@ -760,7 +760,7 @@ func Test_coldgetmd5(t *testing.T) {
 		wg         = &sync.WaitGroup{}
 		bck        = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 		totalSize = int64(numPuts * largeFileSize)
 		proxyURL  = tutils.GetPrimaryURL()
@@ -852,7 +852,7 @@ func TestHeadCloudBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 	)
 
@@ -979,7 +979,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		tMock       = cluster.NewTargetMock(bmdMock)
 		bck         = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 	)
 	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
@@ -1075,7 +1075,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		wg         = &sync.WaitGroup{}
 		bck        = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
@@ -1144,7 +1144,7 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, file
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 	)
 	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
@@ -1427,7 +1427,7 @@ func Test_checksum(t *testing.T) {
 		numPuts = 5
 		bck     = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 
 		filesPutCh = make(chan string, numPuts)
@@ -1562,7 +1562,7 @@ func getFromObjList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []
 
 func createBucketIfNotCloud(t *testing.T, proxyURL string, bck *cmn.Bck) (created bool) {
 	if isCloudBucket(t, proxyURL, *bck) {
-		bck.Provider = cmn.Cloud
+		bck.Provider = cmn.AnyCloud
 		return false
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)

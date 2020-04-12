@@ -143,7 +143,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		targets    = make(map[string]struct{})
 		bck        = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -681,7 +681,7 @@ func TestLRU(t *testing.T) {
 			t: t,
 			bck: cmn.Bck{
 				Name:     clibucket,
-				Provider: cmn.Cloud,
+				Provider: cmn.AnyCloud,
 			},
 			num: 100,
 		}
@@ -783,7 +783,7 @@ func TestPrefetchList(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 	)
 
@@ -891,7 +891,7 @@ func TestPrefetchRange(t *testing.T) {
 		prefetchPrefix = "regressionList/obj"
 		bck            = cmn.Bck{
 			Name:     clibucket,
-			Provider: cmn.Cloud,
+			Provider: cmn.AnyCloud,
 		}
 	)
 

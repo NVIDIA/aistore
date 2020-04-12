@@ -247,18 +247,37 @@ func (b BucketNames) Swap(i, j int) {
 }
 
 func (b BucketNames) Select(selbck Bck) BucketNames {
+	Assert(selbck.Name == "")
 	filtered := make(BucketNames, 0, 10)
-	Assert(selbck.Ns.IsGlobal() || selbck.Ns.IsGlobalRemote()) // TODO: gen-purpose select where...
 	for _, bck := range b {
 		var (
-			providerMatch = selbck.Provider == "" || bck.Provider == selbck.Provider
-			nsMatch       = bck.Ns == selbck.Ns || (selbck.Ns.IsGlobalRemote() && bck.Ns.IsRemote())
+			pvMatch = bck.Provider == selbck.Provider ||
+				selbck.Provider == "" ||
+				selbck.Provider == AnyCloud && bck.IsCloud()
+			nsMatch = bck.Ns == selbck.Ns ||
+				selbck.Ns.IsGlobal() && bck.IsAIS() ||
+				selbck.Ns.IsGlobalRemote() && bck.IsRemote()
 		)
-		if providerMatch && nsMatch {
+		if pvMatch && nsMatch {
 			filtered = append(filtered, bck)
 		}
 	}
 	return filtered
+}
+
+func (b BucketNames) Match(other Bck) bool {
+	for _, bck := range b {
+		if bck.Name == other.Name {
+			if other.Provider == "" {
+				return true
+			} else if other.Provider == AnyCloud && bck.IsCloud() {
+				return true
+			} else if bck.Equal(other) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (b BucketNames) Equal(bcks BucketNames) bool {
@@ -271,21 +290,6 @@ func (b BucketNames) Equal(bcks BucketNames) bool {
 		}
 	}
 	return true
-}
-
-func (b BucketNames) Match(other Bck) bool {
-	for _, bck := range b {
-		if bck.Name == other.Name {
-			if other.Provider == "" {
-				return true
-			} else if other.Provider == Cloud && bck.IsCloud(false) {
-				return true
-			} else if bck.Equal(other) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func MakeAccess(aattr uint64, action string, bits uint64) uint64 {

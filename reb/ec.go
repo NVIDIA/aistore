@@ -310,7 +310,7 @@ func (ack *ackCT) clear(mm *memsys.MMSA) {
 // and the CT's info about object matches previously found CTs.
 func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error {
 	bckList := rr.ais
-	if ct.Bck.IsCloud(false) {
+	if ct.Bck.IsRemote() {
 		bckList = rr.cloud
 	}
 	bck, ok := bckList[ct.Name]

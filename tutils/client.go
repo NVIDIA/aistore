@@ -611,7 +611,7 @@ func DestroyBucket(t *testing.T, proxyURL string, bck cmn.Bck) {
 }
 
 func CleanCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
-	bck.Provider = cmn.Cloud
+	bck.Provider = cmn.AnyCloud
 	toDelete, err := ListObjects(proxyURL, bck, prefix, 0)
 	tassert.CheckFatal(t, err)
 	baseParams := BaseAPIParams(proxyURL)

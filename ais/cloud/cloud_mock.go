@@ -47,17 +47,17 @@ func (m *dummyCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.Bucke
 }
 func (m *dummyCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	bck, node := lom.Bck().Bck, _dummyNode(lom)
-	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
+	return cmn.SimpleKVs{}, cmn.NewErrorRemoteBucketDoesNotExist(bck, node), http.StatusNotFound
 }
 func (m *dummyCloudProvider) GetObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int) {
 	bck, node := lom.Bck().Bck, _dummyNode(lom)
-	return cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
+	return cmn.NewErrorRemoteBucketDoesNotExist(bck, node), http.StatusNotFound
 }
 func (m *dummyCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	bck, node := lom.Bck().Bck, _dummyNode(lom)
-	return "", cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
+	return "", cmn.NewErrorRemoteBucketDoesNotExist(bck, node), http.StatusNotFound
 }
 func (m *dummyCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	bck, node := lom.Bck().Bck, _dummyNode(lom)
-	return cmn.NewErrorCloudBucketDoesNotExist(bck, node), http.StatusNotFound
+	return cmn.NewErrorRemoteBucketDoesNotExist(bck, node), http.StatusNotFound
 }

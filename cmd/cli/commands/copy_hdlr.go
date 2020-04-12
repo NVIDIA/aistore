@@ -48,8 +48,11 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if fromBck.IsCloud(true) || toBck.IsCloud(true) {
+	if fromBck.IsCloud(cmn.AnyCloud) || toBck.IsCloud(cmn.AnyCloud) {
 		return fmt.Errorf("copying of cloud buckets not supported")
+	}
+	if fromBck.IsRemoteAIS() || toBck.IsRemoteAIS() {
+		return fmt.Errorf("copying of remote ais buckets not supported")
 	}
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
