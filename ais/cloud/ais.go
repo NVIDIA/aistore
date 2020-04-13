@@ -25,13 +25,14 @@ const (
 
 type (
 	remAisClust struct {
-		alias string
-		url   string
-		smap  *cluster.Smap
+		url  string
+		smap *cluster.Smap
+		m    *aisCloudProvider
 	}
 	aisCloudProvider struct {
 		t      cluster.Target
-		remote map[string]*remAisClust
+		remote map[string]*remAisClust // by UUID:  1 to 1
+		alias  map[string]string       // by alias: many to 1 UUID
 	}
 )
 
@@ -39,9 +40,22 @@ var (
 	_ cluster.CloudProvider = &aisCloudProvider{}
 )
 
-// TODO -- FIXME: reload remote Smap every so often OR (***) get notified
+// TODO - FIXME: review/refactor try{}
+
+// TODO: refresh remote Smap every so often
+// TODO: utilize m.remote[uuid].smap
 
 func NewAIS(t cluster.Target) cluster.CloudProvider { return &aisCloudProvider{t: t} }
+
+func (r *remAisClust) String() string {
+	var aliases []string
+	for alias, uuid := range r.m.alias {
+		if uuid == r.smap.UUID {
+			aliases = append(aliases, alias)
+		}
+	}
+	return fmt.Sprintf("remote cluster: %s => (%q, %v, %s)", r.url, aliases, r.smap.UUID, r.smap)
+}
 
 func (m *aisCloudProvider) Configure(v interface{}) error {
 	var (
@@ -52,13 +66,15 @@ func (m *aisCloudProvider) Configure(v interface{}) error {
 		return fmt.Errorf("invalid ais cloud config (%+v, %T)", v, v)
 	}
 	m.remote = make(map[string]*remAisClust, len(clusterConf))
+	m.alias = make(map[string]string, len(clusterConf))
 	for alias, clusterURLs := range clusterConf {
-		var remote = &remAisClust{}
-		if err := remote.init(alias, clusterURLs, cfg); err != nil {
+		var remAis = &remAisClust{}
+		if err := remAis.init(alias, clusterURLs, cfg); err != nil {
 			return err
 		}
-		m.remote[remote.smap.UUID] = remote
-		glog.Infof("remote AIS: %s => (%s, %s)", remote.smap.UUID, alias, remote.smap)
+		if err := m.add(remAis, alias); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -71,7 +87,7 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (er
 	)
 	for _, u := range confURLs {
 		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u}); err != nil {
-			glog.Errorf("remote AIS cluster %q via %s: %v", alias, u, err)
+			glog.Errorf("remote cluster %q via %s: %v", alias, u, err)
 			continue
 		}
 		if remSmap == nil {
@@ -79,7 +95,7 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (er
 			continue
 		}
 		if remSmap.UUID != smap.UUID {
-			return fmt.Errorf("remote AIS %q(%v) references two different clusters UUIDs=[%s, %s]",
+			return fmt.Errorf("%q(%v) references two different remote clusters UUIDs=[%s, %s]",
 				alias, confURLs, remSmap.UUID, smap.UUID)
 		}
 		if remSmap.Version < smap.Version {
@@ -87,11 +103,45 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (er
 		}
 	}
 	if remSmap == nil {
-		return fmt.Errorf("failed to reach remote AIS cluster %q via any/all of the configured URLs %v",
+		return fmt.Errorf("failed to reach remote cluster %q via any/all of the configured URLs %v",
 			alias, confURLs)
 	}
-	r.alias, r.smap, r.url = alias, remSmap, url
+	r.smap, r.url = remSmap, url
 	return nil
+}
+
+// for user convenience, supporting both (alias, URL) and (UUID, URL) attachments
+// - with 1 to 1 for UUID mapping and
+// - many(aliases) to 1 (cluster) for aliases
+func (m *aisCloudProvider) add(newAis *remAisClust, newAlias string) (err error) {
+	newAis.m = m
+	if newAlias == newAis.smap.UUID {
+		// not an alias
+		goto ad
+	}
+	if remAis, ok := m.remote[newAis.smap.UUID]; ok {
+		m.alias[newAlias] = newAis.smap.UUID            // another alias
+		if newAis.smap.Version >= remAis.smap.Version { // override
+			if newAis.url != remAis.url {
+				glog.Errorf("Warning: different URLs %s vs %s(new) - overriding...", remAis, newAis)
+			} else {
+				glog.Infof("%s vs %s(new) - overriding...", remAis, newAis)
+			}
+			goto ad
+		} else {
+			return fmt.Errorf("attempt to downgrade %s with %s", remAis, newAis)
+		}
+	}
+	if uuid, ok := m.alias[newAlias]; ok {
+		remAis, ok := m.remote[uuid]
+		cmn.Assert(ok)
+		return fmt.Errorf("alias %q is already in use for %s", newAlias, remAis)
+	}
+	m.alias[newAlias] = newAis.smap.UUID
+ad:
+	m.remote[newAis.smap.UUID] = newAis
+	glog.Infof("%s added", newAis)
+	return
 }
 
 func (m *aisCloudProvider) newBaseParams(uuid string) (bp api.BaseParams, err error) {
@@ -100,8 +150,14 @@ func (m *aisCloudProvider) newBaseParams(uuid string) (bp api.BaseParams, err er
 		remAis, ok = m.remote[uuid]
 	)
 	if !ok {
-		err = errors.New("ais cloud: unknown UUID " + uuid)
-		return
+		// double take (see "for user convenience" above)
+		var orig = uuid
+		if uuid, ok = m.alias[uuid /* alias? */]; !ok {
+			err = errors.New("remote ais: unknown UUID/alias " + orig)
+			return
+		}
+		remAis, ok = m.remote[uuid]
+		cmn.Assert(ok)
 	}
 	bp = api.BaseParams{Client: cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout}), URL: remAis.url}
 	return
@@ -288,9 +344,6 @@ func (m *aisCloudProvider) try(f func() error) (err error) {
 		return nil
 	}
 	timeout := cmn.GCO.Get().Timeout.CplaneOperation
-	//
-	// TODO -- FIXME: utilize m.remote[uuid].smap
-	//
 	for i := 0; i < aisCloudRetries; i++ {
 		err = f()
 		if err == nil {
