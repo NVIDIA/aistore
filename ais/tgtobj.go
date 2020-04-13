@@ -162,14 +162,12 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		bck = lom.Bck()
 	)
 	if bck.IsRemote() && !poi.migrated {
-		file, err1 := os.Open(poi.workFQN)
-		if err1 != nil {
-			err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, err1)
-			return
-		}
 		cmn.Assert(lom.Cksum() != nil)
-		ver, err, errCode = poi.t.Cloud(bck.Provider).PutObj(poi.ctx, file, lom)
-		file.Close()
+		if bck.IsCloud() {
+			ver, err, errCode = poi.putCloud()
+		} else {
+			ver, err, errCode = poi.putRemoteAIS()
+		}
 		if err != nil {
 			err = fmt.Errorf("%s: PUT failed, err: %v", lom, err)
 			return
@@ -207,6 +205,37 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		return
 	}
 	lom.ReCache()
+	return
+}
+
+func (poi *putObjInfo) putCloud() (ver string, err error, errCode int) {
+	var (
+		lom = poi.lom
+		bck = lom.Bck()
+	)
+	file, errOpen := os.Open(poi.workFQN)
+	if errOpen != nil {
+		err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, errOpen)
+		return
+	}
+	ver, err, errCode = poi.t.Cloud(bck.Provider).PutObj(poi.ctx, file, lom)
+	file.Close()
+	return
+}
+
+func (poi *putObjInfo) putRemoteAIS() (ver string, err error, errCode int) {
+	var (
+		lom = poi.lom
+		bck = lom.Bck()
+	)
+	cmn.Assert(bck.IsRemoteAIS())
+	fh, errOpen := cmn.NewFileHandle(poi.workFQN)
+	if errOpen != nil {
+		err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, errOpen)
+		return
+	}
+	ver, err, errCode = poi.t.Cloud(bck.Provider).PutObj(poi.ctx, fh, lom)
+	fh.Close()
 	return
 }
 

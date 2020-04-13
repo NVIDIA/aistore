@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -249,6 +248,8 @@ func (m *aisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
 		return
 	}
+	fh, ok := r.(*cmn.FileHandle)
+	cmn.Assert(ok) // http redirect requires Open()
 	err = m.try(func() error {
 		bck.Ns.UUID = ""
 		cksumValue := lom.Cksum().Value()
@@ -257,7 +258,7 @@ func (m *aisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 			Bck:        bck,
 			Object:     lom.ObjName,
 			Hash:       cksumValue,
-			Reader:     cmn.NopOpener(ioutil.NopCloser(r)),
+			Reader:     fh,
 			Size:       uint64(lom.Size()),
 		}
 		return api.PutObject(args)
