@@ -96,8 +96,13 @@ func (eack *ecAck) Pack(packer *cmn.BytePack) {
 }
 
 func (eack *ecAck) NewPack(mm *memsys.MMSA) []byte {
-	l := rebMsgKindSize + eack.PackedSize()
-	buf, _ := mm.Alloc(int64(l))
+	var (
+		buf []byte
+		l   = rebMsgKindSize + eack.PackedSize()
+	)
+	if mm != nil {
+		buf, _ = mm.Alloc(int64(l))
+	}
 	packer := cmn.NewPacker(buf, l)
 	packer.WriteByte(rebMsgEC)
 	packer.WriteAny(eack)

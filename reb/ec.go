@@ -214,10 +214,19 @@ func uniqueWaitID(bck cmn.Bck, objName string) string {
 func (so *rebObject) newest() []*rebCT {
 	var l []*rebCT
 	max := 0
-	for _, ctList := range so.cts {
-		if max < len(ctList) {
+	maxHash := ""
+	for hash, ctList := range so.cts {
+		if max > len(ctList) || len(ctList) == 0 {
+			continue
+		}
+		// Choose the longest list of CTs.
+		// If length is the same, take the list with greater hash value.
+		if max < len(ctList) || hash > maxHash {
 			max = len(ctList)
 			l = ctList
+			maxHash = hash
+		} else if max == len(ctList) {
+			glog.Warningf("The same size but hash is less. Skipping %s", hash)
 		}
 	}
 	return l
@@ -292,11 +301,8 @@ func (ack *ackCT) removeUnlocked(rt *retransmitCT) {
 }
 
 // Keep allocated capacity for the next batch
-func (ack *ackCT) clear(mm *memsys.MMSA) {
+func (ack *ackCT) clear() {
 	ack.mtx.Lock()
-	for _, rt := range ack.ct {
-		mm.Free(rt.header.Opaque)
-	}
 	ack.ct = ack.ct[:0]
 	ack.mtx.Unlock()
 }
@@ -357,9 +363,17 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 				ct.Name, ct.ObjName, ct.SliceID, ct.DaemonID)
 			for _, tgt := range tgtList {
 				if tgt.ID() == found.DaemonID {
+					if found.DaemonID == ct.DaemonID && found.meta == nil {
+						found.meta = ct.meta
+						found.hrwFQN = ct.hrwFQN
+						found.realFQN = ct.realFQN
+						err = fmt.Errorf("duplicated slice from the same daemon: %s", ct.ObjName)
+					}
 					return err
 				}
 				if tgt.ID() == ct.DaemonID {
+					err = fmt.Errorf("duplicated %s/%s SliceID %d replaced daemonID %s with %s",
+						ct.Name, ct.ObjName, ct.SliceID, found.DaemonID, ct.DaemonID)
 					found.DaemonID = ct.DaemonID
 					if found.meta == nil {
 						found.meta = ct.meta
@@ -367,8 +381,6 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 					// Copy the following fields as they are vital for local slices
 					found.hrwFQN = ct.hrwFQN
 					found.realFQN = ct.realFQN
-					err = fmt.Errorf("duplicated %s/%s SliceID %d replaced daemonID %s with %s",
-						ct.Name, ct.ObjName, ct.SliceID, found.DaemonID, ct.DaemonID)
 					return err
 				}
 			}
@@ -449,7 +461,6 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 			rebID:    reb.rebID.Load(),
 			md:       ct.meta,
 		}
-		mm  = reb.t.GetSmallMMSA()
 		hdr = transport.Header{
 			Bck:      ct.Bck,
 			ObjName:  ct.ObjName,
@@ -467,11 +478,10 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 		hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
 	}
 	reb.ec.onAir.Inc()
-	hdr.Opaque = req.NewPack(mm)
+	hdr.Opaque = req.NewPack(nil)
 
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, target); err != nil {
 		reb.ec.onAir.Dec()
-		mm.Free(hdr.Opaque)
 		fh.Close()
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
@@ -485,7 +495,6 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 // Track the number of sent CTs
 func (reb *Manager) transportECCB(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, _ error) {
 	reb.ec.onAir.Dec()
-	reb.t.GetSmallMMSA().Free(hdr.Opaque)
 }
 
 // Sends reconstructed slice along with EC metadata to remote target.
@@ -511,10 +520,9 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 			ObjName:  ct.ObjName,
 			ObjAttrs: transport.ObjectAttrs{Size: size},
 		}
-		mm = reb.t.GetSmallMMSA()
 	)
 	newMeta.SliceID = sliceID
-	hdr.Opaque = req.NewPack(mm)
+	hdr.Opaque = req.NewPack(nil)
 	if xxhash != "" {
 		hdr.ObjAttrs.CksumValue = xxhash
 		hdr.ObjAttrs.CksumType = cmn.ChecksumXXHash
@@ -530,7 +538,6 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	reb.ec.onAir.Inc()
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
 		reb.ec.onAir.Dec()
-		mm.Free(hdr.Opaque)
 		reb.ec.ackCTs.remove(rt)
 		return fmt.Errorf("failed to send slices to node %s: %v", target, err)
 	}
@@ -660,6 +667,9 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	cmn.AssertMsg(ok || sliceID != 0, req.daemonID+" : "+uid)
 	if !ok {
 		// Main target sends a rebuilt slice, need to receive it and save.
+		if glog.FastV(4, glog.SmoduleReb) {
+			glog.Infof("Saving to local drives %s[%d]", uid, sliceID)
+		}
 		if err := reb.saveCTToDisk(reader, req, hdr); err != nil {
 			glog.Errorf("failed to save CT %d of %s: %v", sliceID, hdr.ObjName, err)
 			if obj.isMain {
@@ -728,24 +738,18 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	var (
 		smap = (*cluster.Smap)(reb.smap.Load())
 		tsi  = smap.GetTarget(req.daemonID)
-		mm   = reb.t.GetSmallMMSA()
 		ack  = &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.Snode().ID()}
 	)
-	hdr.Opaque = ack.NewPack(mm)
+	hdr.Opaque = ack.NewPack(nil)
 	hdr.ObjAttrs.Size = 0
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("Sending ACK for %s/%s to %s", hdr.Bck, hdr.ObjName, tsi.ID())
 	}
-	if err := reb.acks.Send(transport.Obj{Hdr: hdr, Callback: reb.eackSentCallback}, nil, tsi); err != nil {
-		mm.Free(hdr.Opaque)
+	if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
 		glog.Error(err)
 	}
 
 	return nil
-}
-
-func (reb *Manager) eackSentCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
-	reb.t.GetSmallMMSA().Free(hdr.Opaque)
 }
 
 // On receiving an EC CT or EC namespace
@@ -755,7 +759,7 @@ func (reb *Manager) recvECData(hdr transport.Header, unpacker *cmn.ByteUnpack, r
 	req := &pushReq{}
 	err := unpacker.ReadAny(req)
 	if err != nil {
-		glog.Errorf("invalid push notification: %v", err)
+		glog.Errorf("invalid push notification %s: %v", hdr.ObjName, err)
 		return
 	}
 
@@ -840,12 +844,12 @@ func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 					reb.abortRebalance()
 					return nil
 				}
-				glog.Warning(err)
+				glog.Warningf("%s: %v", sid, err)
 				continue
 			}
 			if local && ct.hrwFQN != ct.realFQN {
 				reb.ec.localActions = append(reb.ec.localActions, ct)
-				if bool(glog.FastV(4, glog.SmoduleReb)) {
+				if glog.FastV(4, glog.SmoduleReb) {
 					glog.Infof("%s %s -> %s", reb.t.Snode(), ct.hrwFQN, ct.realFQN)
 				}
 			}
@@ -1298,8 +1302,8 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 
 	cmn.Assert(obj.sender != nil) // must not happen
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d]",
-			reb.t.Snode(), obj.uid, obj.hasCT, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID)
+		glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], obj size: %d[%s]",
+			reb.t.Snode(), obj.uid, obj.hasCT, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID, obj.objSize, mainSlice.ObjHash)
 		glog.Infof("%s: slice found %d vs required %d[all slices: %v], is in HRW %v [sender %s]",
 			obj.uid, ctFound, ctReq, obj.hasAllSlices, obj.inHrwList, obj.sender)
 	}
@@ -1354,7 +1358,7 @@ func (reb *Manager) shouldSendSlice(obj *rebObject) (hasSlice, shouldSend bool) 
 	hasSlice = obj.hasCT && !obj.isMain && !obj.isECCopy && !obj.fullObjFound
 	if hasSlice && (bool(glog.FastV(4, glog.SmoduleReb))) {
 		locSlice := obj.locCT[reb.t.Snode().ID()]
-		glog.Infof("should send: %s[%d] - %d : %v / %v", obj.uid, locSlice.SliceID, tgtIndex,
+		glog.Infof("should send: %s[%d - %d] - %d : %v / %v", obj.uid, locSlice.SliceID, obj.sliceSize, tgtIndex,
 			hasSlice, shouldSend)
 	}
 	return hasSlice, shouldSend
@@ -1695,7 +1699,7 @@ func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
 // Frees all SGLs and file handles opened during rebalancing the current batch
 func (reb *Manager) cleanupBatch(md *rebArgs) {
 	reb.releaseSGLs(md, reb.ec.broken)
-	reb.ec.ackCTs.clear(reb.t.GetSmallMMSA())
+	reb.ec.ackCTs.clear()
 }
 
 // Wait for all targets to finish the current batch and then free allocated resources
@@ -1809,24 +1813,35 @@ func (reb *Manager) rebalance(md *rebArgs) (err error) {
 // Used to clean up memory after finishing a batch
 func (reb *Manager) releaseSGLs(md *rebArgs, objList []*rebObject) {
 	batchCurr := int(reb.stages.currBatch.Load())
-	for i := batchCurr; i < batchCurr+md.config.EC.BatchSize && i < len(objList); i++ {
-		obj := objList[i]
-		for _, sg := range obj.rebuildSGLs {
-			if sg != nil {
-				sg.Free()
+	batchSize := md.config.EC.BatchSize
+	go func(objList []*rebObject) {
+		// Allow all HTTPs to finish sending all SGLs. Should fix errors like:
+		//   panic: runtime error: invalid memory address or nil pointer dereference
+		//       goroutine 820839 [running]:
+		//       github.com/NVIDIA/aistore/memsys.(*Slab).Size(...)
+		// See discussions at:
+		//   https://gitlab-master.nvidia.com/aistorage/aistore/issues/472#note_4212419
+		//   https://github.com/golang/go/issues/30597
+		time.Sleep(5 * time.Second)
+		for i := batchCurr; i < batchCurr+batchSize && i < len(objList); i++ {
+			obj := objList[i]
+			for _, sg := range obj.rebuildSGLs {
+				if sg != nil {
+					sg.Free()
+				}
+			}
+			obj.rebuildSGLs = nil
+			if obj.fh != nil {
+				obj.fh.Close()
+				obj.fh = nil
+			}
+			for _, ct := range obj.locCT {
+				if ct.sgl != nil {
+					ct.sgl.Free()
+				}
 			}
 		}
-		obj.rebuildSGLs = nil
-		if obj.fh != nil {
-			obj.fh.Close()
-			obj.fh = nil
-		}
-		for _, ct := range obj.locCT {
-			if ct.sgl != nil {
-				ct.sgl.Free()
-			}
-		}
-	}
+	}(objList)
 }
 
 // Object is missing (and maybe a few slices as well). Default target receives all
@@ -1863,8 +1878,10 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject) (err error) {
 			meta = sl.meta
 		}
 	}
-
 	cmn.AssertMsg(meta != nil, obj.uid)
+	// keep it for a while to be sure it does not happen
+	cmn.AssertMsg(meta.Size == obj.objSize, obj.uid)
+
 	ecMD := *meta // clone
 	for i, rd := range readers {
 		if rd != nil {

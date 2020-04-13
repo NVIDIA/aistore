@@ -169,6 +169,9 @@ func (br *ByteUnpack) ReadBytes() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(br.b)-br.off < int(l) {
+		return nil, ErrorBufferUnderrun
+	}
 	start := br.off
 	br.off += int(l)
 	return br.b[start : start+int(l)], nil
