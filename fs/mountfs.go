@@ -392,7 +392,7 @@ func (mfs *MountedFS) Add(mpath string) error {
 	}
 	statfs := syscall.Statfs_t{}
 	if err := syscall.Statfs(cleanMpath, &statfs); err != nil {
-		return fmt.Errorf("cannot statfs fspath %q, err: %v", mpath, err)
+		return fmt.Errorf("cannot statfs fspath %q, err: %w", mpath, err)
 	}
 
 	fs, err := fqn2fsAtStartup(cleanMpath)
@@ -704,7 +704,7 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
 				glog.Warning(err)
 			}
 		} else if err := cmn.CreateDir(dir); err != nil {
-			return num, fmt.Errorf("bucket %s: failed to create directory %s: %v", bck, dir, err)
+			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
 		}
 		num++
 	}

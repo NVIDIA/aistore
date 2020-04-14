@@ -198,7 +198,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	}
 
 	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
-		return fmt.Errorf("rename failed => %s: %v", lom, err), 0
+		return fmt.Errorf("rename failed => %s: %w", lom, err), 0
 	}
 
 	if err = lom.DelAllCopies(); err != nil {
@@ -215,7 +215,7 @@ func (poi *putObjInfo) putCloud() (ver string, err error, errCode int) {
 	)
 	file, errOpen := os.Open(poi.workFQN)
 	if errOpen != nil {
-		err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, errOpen)
+		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
 		return
 	}
 	ver, err, errCode = poi.t.Cloud(bck.Provider).PutObj(poi.ctx, file, lom)
@@ -231,7 +231,7 @@ func (poi *putObjInfo) putRemoteAIS() (ver string, err error, errCode int) {
 	cmn.Assert(bck.IsRemoteAIS())
 	fh, errOpen := cmn.NewFileHandle(poi.workFQN)
 	if errOpen != nil {
-		err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, errOpen)
+		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
 		return
 	}
 	ver, err, errCode = poi.t.Cloud(bck.Provider).PutObj(poi.ctx, fh, lom)
@@ -346,7 +346,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		poi.lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(saveHash)))
 	}
 	if err = file.Close(); err != nil {
-		return fmt.Errorf("failed to close received file %s, err: %v", poi.workFQN, err)
+		return fmt.Errorf("failed to close received file %s, err: %w", poi.workFQN, err)
 	}
 	return nil
 }
@@ -683,7 +683,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 			retry = true // (!lom.IsAIS() || lom.ECEnabled() || GFN...)
 		} else {
 			goi.t.fshc(err, fqn)
-			err = fmt.Errorf("%s: err: %v", goi.lom, err)
+			err = fmt.Errorf("%s: err: %w", goi.lom, err)
 			errCode = http.StatusInternalServerError
 		}
 		return
@@ -719,7 +719,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 			return
 		}
 		goi.t.fshc(err, fqn)
-		err = fmt.Errorf("failed to GET %s, err: %v", fqn, err)
+		err = fmt.Errorf("failed to GET %s, err: %w", fqn, err)
 		errCode = http.StatusInternalServerError
 		goi.t.statsT.Add(stats.ErrGetCount, 1)
 		return

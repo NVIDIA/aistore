@@ -91,7 +91,7 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 			return err
 		}
 		if err := os.RemoveAll(fqnMeta); err != nil {
-			return fmt.Errorf("error removing %s %q: %v", tp, fqnMeta, err)
+			return fmt.Errorf("error removing %s %q: %w", tp, fqnMeta, err)
 		}
 	}
 

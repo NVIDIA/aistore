@@ -576,7 +576,7 @@ func (lom *LOM) CksumComputeIfMissing() (cksum *cmn.Cksum, err error) {
 func (lom *LOM) computeXXHash(fqn string, size int64) (cksumValue string, err error) {
 	file, err := os.Open(fqn)
 	if err != nil {
-		err = fmt.Errorf("%s, err: %v", fqn, err)
+		err = fmt.Errorf("%s, err: %w", fqn, err)
 		return
 	}
 	buf, slab := lom.T.GetMMSA().Alloc(size)
@@ -757,7 +757,7 @@ beg:
 	finfo, err = os.Stat(lom.FQN)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			err = fmt.Errorf("%s: errstat %v", lom, err)
+			err = fmt.Errorf("%s: errstat %w", lom, err)
 			lom.T.FSHC(err, lom.FQN)
 		}
 		return
