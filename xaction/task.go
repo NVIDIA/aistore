@@ -260,6 +260,7 @@ func (t *bckSummaryTask) Run() {
 	close(errCh)
 	for err := range errCh {
 		t.UpdateResult(nil, err)
+		return
 	}
 
 	t.UpdateResult(summaries, nil)

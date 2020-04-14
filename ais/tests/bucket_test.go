@@ -801,7 +801,7 @@ func TestBucketListAndSummary(t *testing.T) {
 					expectedFiles = cacheSize
 				}
 			} else {
-				panic(test.provider)
+				t.Fatal(test.provider)
 			}
 
 			tutils.Logln("checking objects...")
@@ -815,12 +815,14 @@ func TestBucketListAndSummary(t *testing.T) {
 				summaries, err := api.GetBucketsSummaries(baseParams, m.bck, msg)
 				tassert.CheckFatal(t, err)
 
+				if len(summaries) == 0 {
+					t.Fatalf("summary for bucket %q should exist", m.bck)
+				}
 				if len(summaries) != 1 {
 					t.Fatalf("number of summaries (%d) is larger than 1", len(summaries))
 				}
 
-				summary, exists := summaries.Get(m.bck)
-				tassert.Errorf(t, exists, "summary for bucket %q should exist", m.bck)
+				summary := summaries[0]
 				if summary.ObjCount != uint64(expectedFiles) {
 					t.Errorf("number of objects in summary (%d) is different than expected (%d)", summary.ObjCount, expectedFiles)
 				}
