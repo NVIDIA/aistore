@@ -654,6 +654,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	lom.SetAtimeUnix(started.UnixNano())
 	if appendTy == "" {
 		if err, errCode := t.doPut(r, lom, started); err != nil {
+			t.fshc(err, lom.FQN)
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 	} else {

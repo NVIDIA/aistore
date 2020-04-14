@@ -99,9 +99,9 @@ func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, m
 	return
 }
 
-func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList) {
+func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, suffix string) {
 	md.wg.Add(1)
-	go runAsyncJob(md.t, md.bck, md.wg, method, mpath, fileNames, md.chfail, md.chstop)
+	go runAsyncJob(md.t, md.bck, md.wg, method, mpath, fileNames, md.chfail, md.chstop, suffix)
 	// let the job run for a while and then make a mountpath broken
 	time.Sleep(2 * time.Second)
 	md.chfail <- struct{}{}
@@ -112,12 +112,12 @@ func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath st
 	}
 	md.wg.Wait()
 
-	repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled))
+	repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
 }
 
-func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, objList []string) {
+func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, objList []string, suffix string) {
 	os.RemoveAll(mpath)
-	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled))
+	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
 
 	f, err := cmn.CreateFile(mpath)
 	if err != nil {
@@ -193,15 +193,20 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 	return false
 }
 
-func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen, disabledLen int) {
+func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen, disabledLen int, suffix string) {
 	var (
 		err        error
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
+
+	// "broken" mpath does no exist, nothing to restore
+	if _, err := os.Stat(mpath + suffix); err != nil {
+		return
+	}
 	// cleanup
 	// restore original mountpath
 	os.Remove(mpath)
-	cmn.CreateDir(mpath)
+	cmn.Rename(mpath+suffix, mpath)
 
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list
@@ -234,7 +239,7 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	}
 }
 
-func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}) {
+func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, suffix string) {
 	defer wg.Done()
 
 	const fileSize = 64 * cmn.KiB
@@ -254,7 +259,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 				// It is the easiest way to simulate: stop putting data and
 				// replace the mountpath with regular file. If we do not stop
 				// putting objects it recreates the mountpath and does not fail
-				os.RemoveAll(mpath)
+				os.Rename(mpath, mpath+suffix)
 				f, err := os.OpenFile(mpath, os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
 					t.Errorf("Failed to create file: %v", err)
@@ -293,7 +298,8 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	}
 
 	var (
-		md = newCheckerMD(t)
+		md     = newCheckerMD(t)
+		suffix = "-" + cmn.RandString(5)
 	)
 
 	if md.origAvail == 0 {
@@ -319,9 +325,9 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	generateRandomData(md.numObjs)
 
 	// Checking detection on object PUT
-	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMpathList)
+	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMpathList, suffix)
 	// Checking detection on object GET
-	md.runTestAsync(http.MethodGet, selectedTarget, selectedMpath, selectedMpathList)
+	md.runTestAsync(http.MethodGet, selectedTarget, selectedMpath, selectedMpathList, suffix)
 
 	// Checking that reading "bad" objects does not disable mpath if the mpath is OK
 	tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
@@ -333,7 +339,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	}
 	if detected := waitForMountpathChanges(t, selectedTarget, len(selectedMpathList.Available), len(selectedMpathList.Disabled), false); !detected {
 		t.Error("GETting non-existing objects should not disable mountpath")
-		repairMountpath(t, selectedTarget, selectedMpath, len(selectedMpathList.Available), len(selectedMpathList.Disabled))
+		repairMountpath(t, selectedTarget, selectedMpath, len(selectedMpathList.Available), len(selectedMpathList.Disabled), suffix)
 	}
 }
 
@@ -347,7 +353,8 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	}
 
 	var (
-		md = newCheckerMD(t)
+		md     = newCheckerMD(t)
+		suffix = "-" + cmn.RandString(5)
 	)
 
 	if md.origAvail == 0 {
@@ -381,9 +388,9 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	}
 
 	// Checking detection on object PUT
-	md.runTestSync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, objList)
+	md.runTestSync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, objList, suffix)
 	// Checking detection on object GET
-	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, objList)
+	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, objList, suffix)
 
 	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(md.proxyURL), rebalanceTimeout)
 }
