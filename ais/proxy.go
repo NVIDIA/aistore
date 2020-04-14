@@ -3001,6 +3001,39 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			return
+		case cmn.ActAttach:
+			var (
+				query = r.URL.Query()
+				what  = query.Get(cmn.URLParamWhat)
+			)
+			// TODO: cmn.ActAttach to attach mountpath as well
+			if what != cmn.GetWhatCluster {
+				cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf(fmtUnknownQue, what))
+				return
+			}
+			if err := p.attachRemoteAIS(query); err != nil {
+				cmn.InvalidHandlerWithMsg(w, r, err.Error())
+				return
+			}
+			results := p.bcastPut(bcastArgs{
+				req: cmn.ReqArgs{
+					Path:  cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActAttach),
+					Query: query,
+				},
+				to: cluster.AllNodes,
+			})
+			for res := range results {
+				if res.err != nil {
+					p.invalmsghdlr(w, r, res.err.Error())
+					p.keepalive.onerr(err, res.status)
+					return
+				}
+			}
+			// NOTE: save config unconditionally (see also: cmn.ActPersist)
+			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatCluster)); err != nil {
+				glog.Error(err)
+			}
+			return
 		}
 	}
 	if cmn.ReadJSON(w, r, msg) != nil {
@@ -3017,7 +3050,8 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			ok    bool
 		)
 		if value, ok = msg.Value.(string); !ok {
-			p.invalmsghdlr(w, r, fmt.Sprintf("%s: invalid value format (%+v, %T)", cmn.ActSetConfig, msg.Value, msg.Value))
+			p.invalmsghdlr(w, r, fmt.Sprintf("%s: invalid value format (%+v, %T)",
+				cmn.ActSetConfig, msg.Value, msg.Value))
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})

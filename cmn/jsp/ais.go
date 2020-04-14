@@ -145,12 +145,17 @@ func SetConfigMany(nvmap cmn.SimpleKVs) (err error) {
 	cmn.GCO.CommitUpdate(conf)
 
 	if persist {
-		conf := cmn.GCO.Get()
-		if err := Save(cmn.GCO.GetConfigFile(), conf, Options{}); err != nil {
-			glog.Errorf("%s: failed to write, err: %v", cmn.ActSetConfig, err)
-		} else {
-			glog.Infof("%s: stored", cmn.ActSetConfig)
-		}
+		_ = SaveConfig(cmn.ActSetConfig)
+	}
+	return
+}
+
+func SaveConfig(action string) (err error) {
+	conf := cmn.GCO.Get()
+	if err = Save(cmn.GCO.GetConfigFile(), conf, Options{}); err != nil {
+		glog.Errorf("%s: failed to write, err: %v", action, err)
+	} else {
+		glog.Infof("%s: stored", action)
 	}
 	return
 }

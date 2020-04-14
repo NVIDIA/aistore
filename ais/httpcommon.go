@@ -1282,3 +1282,44 @@ func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucke
 	}
 	return msg
 }
+
+func (h *httprunner) attachRemoteAIS(query url.Values) error {
+	var (
+		aisConf cmn.CloudConfAIS
+		config  = cmn.GCO.BeginUpdate()
+		v, ok   = config.Cloud.ProviderConf(cmn.ProviderAIS)
+	)
+	if !ok {
+		aisConf = make(cmn.CloudConfAIS)
+	} else {
+		aisConf, ok = v.(cmn.CloudConfAIS)
+		cmn.Assert(ok)
+	}
+	found := false
+	for alias, urls := range query {
+		if alias == cmn.URLParamWhat {
+			continue
+		}
+		for _, u := range urls {
+			if _, err := url.ParseRequestURI(u); err != nil {
+				cmn.GCO.DiscardUpdate()
+				return fmt.Errorf("%s: cannot attach remote cluster: %v", h.si, err)
+			}
+			found = true
+		}
+		if found {
+			if confURLs, ok := aisConf[alias]; ok {
+				aisConf[alias] = append(confURLs, urls...)
+			} else {
+				aisConf[alias] = urls
+			}
+		}
+	}
+	if !found {
+		cmn.GCO.DiscardUpdate()
+		return fmt.Errorf("%s: empty request to attach remote cluster", h.si)
+	}
+	config.Cloud.ProviderConf(cmn.ProviderAIS, aisConf)
+	cmn.GCO.CommitUpdate(config)
+	return nil
+}

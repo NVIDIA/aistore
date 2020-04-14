@@ -129,3 +129,20 @@ func SetClusterConfig(baseParams BaseParams, nvs cmn.SimpleKVs) error {
 		Query:      q,
 	})
 }
+
+// AttachRemoteAIS API
+//
+// TODO: add API to detach remote cluster
+// TODO: add APIs to attach or enable (detach or disable) mountpath - use cmn.GetWhatMountpaths
+//
+func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
+	q := make(url.Values)
+	q.Set(cmn.URLParamWhat, cmn.GetWhatCluster)
+	q.Set(alias, u)
+	baseParams.Method = http.MethodPut
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster, cmn.ActAttach),
+		Query:      q,
+	})
+}

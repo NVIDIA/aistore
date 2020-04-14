@@ -37,6 +37,7 @@ const (
 	commandConcat    = "concat"
 	commandCat       = "cat"
 	commandWait      = "wait"
+	commandAttach    = "attach"
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase
@@ -52,6 +53,8 @@ const (
 	subcmdNode      = "node"
 	subcmdProxy     = "proxy"
 	subcmdTarget    = "target"
+	subcmdRemoteAIS = cmn.GetWhatCluster
+	subcmdMountpath = "mountpath"
 
 	// Show subcommands
 	subcmdShowBucket    = subcmdBucket
@@ -93,9 +96,13 @@ const (
 	subcmdStopDsort    = subcmdDsort
 	subcmdStopDownload = subcmdDownload
 
-	// Set subcommands
+	// Set subcommand
 	subcmdSetConfig = subcmdConfig
 	subcmdSetProps  = subcmdProps
+
+	// Attach/Detach subcommand
+	subcmdAttachRemoteAIS = subcmdRemoteAIS
+	subcmdAttachMountpath = subcmdMountpath
 
 	// Register subcommands
 	subcmdRegisterProxy  = subcmdProxy
@@ -115,8 +122,10 @@ const (
 // Name format: *Argument
 const (
 	// Common
-	noArguments           = " "
-	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"
+	noArguments                 = " "
+	keyValuePairsArgument       = "KEY=VALUE [KEY=VALUE...]"
+	aliasURLPairArgument        = "ALIAS=URL (or UUID=URL)"
+	daemonMountpathPairArgument = "DAEMON_ID=MOUNTPATH [DAEMON_ID=MOUNTPATH...]"
 
 	// Job IDs (download, dsort)
 	jobIDArgument         = "JOB_ID"
@@ -146,6 +155,8 @@ const (
 	daemonStatusArgument       = optionalDaemonTypeArgument + "|" + optionalDaemonIDArgument
 	showConfigArgument         = "DAEMON_ID [CONFIG_SECTION]"
 	setConfigArgument          = optionalDaemonIDArgument + " " + keyValuePairsArgument
+	attachRemoteAISArgument    = aliasURLPairArgument
+	attachMountpathArgument    = daemonMountpathPairArgument
 	registerNodeArgument       = "IP:PORT " + optionalDaemonIDArgument
 	startDownloadArgument      = "SOURCE DESTINATION"
 	jsonSpecArgument           = "JSON_SPECIFICATION"

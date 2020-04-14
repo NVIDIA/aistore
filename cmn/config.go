@@ -694,7 +694,10 @@ func (c *CloudConf) validateConf(provider string) (err error) {
 	return nil
 }
 
-func (c *CloudConf) ProviderConf(provider string) (conf interface{}, ok bool) {
+func (c *CloudConf) ProviderConf(provider string, newConf ...interface{}) (conf interface{}, ok bool) {
+	if len(newConf) > 0 {
+		c.Conf[provider] = newConf[0]
+	}
 	conf, ok = c.Conf[provider]
 	return
 }

@@ -20,7 +20,7 @@ import (
 
 const (
 	// Number of retries when operation to remote cluster fails with "connection refused".
-	aisCloudRetries = 3
+	aisCloudRetries = 1
 )
 
 type (
@@ -115,6 +115,7 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (er
 // - many(aliases) to 1 (cluster) for aliases
 func (m *aisCloudProvider) add(newAis *remAisClust, newAlias string) (err error) {
 	newAis.m = m
+	tag := "added"
 	if newAlias == newAis.smap.UUID {
 		// not an alias
 		goto ad
@@ -125,8 +126,9 @@ func (m *aisCloudProvider) add(newAis *remAisClust, newAlias string) (err error)
 			if newAis.url != remAis.url {
 				glog.Errorf("Warning: different URLs %s vs %s(new) - overriding...", remAis, newAis)
 			} else {
-				glog.Infof("%s vs %s(new) - overriding...", remAis, newAis)
+				glog.Infof("%s vs %s(new) - updating...", remAis, newAis)
 			}
+			tag = "updated"
 			goto ad
 		} else {
 			return fmt.Errorf("attempt to downgrade %s with %s", remAis, newAis)
@@ -140,7 +142,7 @@ func (m *aisCloudProvider) add(newAis *remAisClust, newAlias string) (err error)
 	m.alias[newAlias] = newAis.smap.UUID
 ad:
 	m.remote[newAis.smap.UUID] = newAis
-	glog.Infof("%s added", newAis)
+	glog.Infof("%s %s", newAis, tag)
 	return
 }
 

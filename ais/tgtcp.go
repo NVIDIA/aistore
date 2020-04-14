@@ -177,6 +177,30 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			return
+		case cmn.ActAttach:
+			var (
+				query = r.URL.Query()
+				what  = query.Get(cmn.URLParamWhat)
+			)
+			if what != cmn.GetWhatCluster {
+				t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
+				return
+			}
+			if err := t.attachRemoteAIS(query); err != nil {
+				t.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			// NOTE: adding new ones and _refreshing_ old/existing
+			aisConf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
+			cmn.Assert(ok)
+			if err := t.Cloud(cmn.ProviderAIS).Configure(aisConf); err != nil {
+				t.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatCluster)); err != nil {
+				glog.Error(err)
+			}
+			return
 		}
 	}
 	//

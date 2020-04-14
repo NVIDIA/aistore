@@ -75,6 +75,7 @@ const (
 	ActRecoverBck    = "recoverbck"
 	ActAsyncTask     = "task"
 	ActTar2Tf        = "tar2tf"
+	ActAttach        = "attach"
 
 	// Actions to manipulate mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
@@ -216,6 +217,7 @@ const (
 	GetWhatSysInfo       = "sysinfo"
 	GetWhatDiskStats     = "disk"
 	GetWhatDaemonStatus  = "status"
+	GetWhatCluster       = "cluster"
 )
 
 // SelectMsg.TimeFormat enum

@@ -270,7 +270,7 @@ func (c *clouds) init(t *targetrunner, config *cmn.Config) {
 	c.ais = cloud.NewAIS(t)
 	if aisConf, ok := config.Cloud.ProviderConf(cmn.ProviderAIS); ok {
 		if err := c.ais.Configure(aisConf); err != nil {
-			cmn.ExitLogf("%v", err)
+			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
 		}
 	}
 	// 3rd part cloud: empty stubs unless populated via build tags

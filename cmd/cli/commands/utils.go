@@ -520,6 +520,27 @@ func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 	return
 }
 
+func parseAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
+	var parts []string
+	if c.NArg() == 0 {
+		err = missingArgumentsError(c, aliasURLPairArgument)
+		return
+	}
+	if c.NArg() > 1 {
+		alias, remAisURL = c.Args().Get(0), c.Args().Get(1)
+		goto ret
+	}
+	parts = strings.SplitN(c.Args().First(), keyAndValueSeparator, 2)
+	if len(parts) < 2 {
+		err = missingArgumentsError(c, aliasURLPairArgument)
+		return
+	}
+	alias, remAisURL = parts[0], parts[1]
+ret:
+	_, err = url.ParseRequestURI(remAisURL)
+	return
+}
+
 // Parses [XACTION_ID|XACTION_NAME] [BUCKET_NAME]
 func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck, err error) {
 	xactKind = c.Args().Get(0)
