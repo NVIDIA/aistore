@@ -178,6 +178,14 @@ func (t *targetrunner) Run() error {
 	t.registerStats()
 	t.httprunner.keepalive = gettargetkeepalive()
 
+	// register object type and workfile type
+	if err := fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+	if err := fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+
 	dryRunInit()
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
@@ -212,14 +220,6 @@ func (t *targetrunner) Run() error {
 	}
 
 	go t.pollClusterStarted(config.Timeout.CplaneOperation)
-
-	// register object type and workfile type
-	if err := fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-	if err := fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
 
 	t.detectMpathChanges()
 
