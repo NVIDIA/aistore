@@ -1388,7 +1388,7 @@ func TestAtimeColdGet(t *testing.T) {
 		objectContent = tutils.NewBytesReader([]byte("file content"))
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skip("test requires a cloud bucket")
 	}
 	tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
@@ -1426,7 +1426,7 @@ func TestAtimePrefetch(t *testing.T) {
 		objectContent = tutils.NewBytesReader([]byte("file content"))
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skip("test requires a cloud bucket")
 	}
 	tutils.CleanCloudBucket(t, proxyURL, bck, objectName)

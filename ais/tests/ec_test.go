@@ -869,7 +869,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 		pattern:     "obj-rest-cloud-%04d",
 	}.init(t, proxyURL)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skip("test requires a cloud bucket")
 	}
 

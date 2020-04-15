@@ -48,7 +48,7 @@ func TestCloudBucketObject(t *testing.T) {
 		}
 	)
 
-	if !isCloudBucket(t, baseParams.URL, bck) {
+	if !isBucketExist(t, baseParams.URL, bck) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
@@ -180,7 +180,7 @@ func Test_putdelete(t *testing.T) {
 		bck      = cmn.Bck{Name: clibucket}
 	)
 
-	if testing.Short() && isCloudBucket(t, proxyURL, bck) {
+	if testing.Short() && isBucketExist(t, proxyURL, bck) {
 		t.Skipf("don't run when short mode and cloud bucket")
 	}
 
@@ -321,7 +321,7 @@ func Test_putdeleteRange(t *testing.T) {
 		t.Skip("numfiles must be a positive multiple of 10")
 	}
 
-	if testing.Short() && isCloudBucket(t, proxyURL, bck) {
+	if testing.Short() && isBucketExist(t, proxyURL, bck) {
 		t.Skipf("don't run when short mode and cloud bucket")
 	}
 
@@ -470,7 +470,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		files     = []string{fileName1, fileName2}
 	)
 
-	if !isCloudBucket(t, proxyURL, bckCloud) {
+	if !isBucketExist(t, proxyURL, bckCloud) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
@@ -623,7 +623,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		found      = false
 	)
 
-	if !isCloudBucket(t, proxyURL, bckCloud) {
+	if !isBucketExist(t, proxyURL, bckCloud) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
@@ -766,7 +766,7 @@ func Test_coldgetmd5(t *testing.T) {
 		proxyURL  = tutils.GetPrimaryURL()
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
@@ -856,7 +856,7 @@ func TestHeadCloudBucket(t *testing.T) {
 		}
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skip(fmt.Sprintf("%s requires a cloud bucket", t.Name()))
 	}
 
@@ -985,7 +985,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
 	bmdMock.Add(cluster.NewBck(TestBucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
 
@@ -1081,7 +1081,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
@@ -1437,7 +1437,7 @@ func Test_checksum(t *testing.T) {
 		proxyURL   = tutils.GetPrimaryURL()
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
@@ -1561,7 +1561,7 @@ func getFromObjList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []
 }
 
 func createBucketIfNotCloud(t *testing.T, proxyURL string, bck *cmn.Bck) (created bool) {
-	if isCloudBucket(t, proxyURL, *bck) {
+	if isBucketExist(t, proxyURL, *bck) {
 		bck.Provider = cmn.AnyCloud
 		return false
 	}
@@ -1575,7 +1575,7 @@ func createBucketIfNotCloud(t *testing.T, proxyURL string, bck *cmn.Bck) (create
 	return true
 }
 
-func isCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck) bool {
+func isBucketExist(t *testing.T, proxyURL string, bck cmn.Bck) bool {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bcks, err := api.ListBuckets(baseParams, bck)
 	tassert.CheckFatal(t, err)

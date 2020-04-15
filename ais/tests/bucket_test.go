@@ -310,7 +310,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skip("test requires a cloud bucket")
 	}
 
@@ -337,7 +337,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		t.Skip("test requires a cloud bucket with enabled versioning")
 	}
 
-	tutils.Logf("Filling the bucket %s\n", bck)
+	tutils.Logf("Filling bucket %s\n", bck)
 	for wid := 0; wid < workerCount; wid++ {
 		wg.Add(1)
 		go func(wid int) {
@@ -353,12 +353,12 @@ func TestCloudListObjectVersions(t *testing.T) {
 	}
 	wg.Wait()
 
-	tutils.Logf("Reading bucket %q objects\n", bck)
+	tutils.Logf("Reading %q objects\n", bck)
 	msg := &cmn.SelectMsg{Prefix: objectDir, Props: cmn.GetPropsVersion}
 	bckObjs, err := api.ListObjects(baseParams, bck, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Checking bucket %q object versions[total: %d]\n", bck, len(bckObjs.Entries))
+	tutils.Logf("Checking %q object versions[total: %d]\n", bck, len(bckObjs.Entries))
 	for _, entry := range bckObjs.Entries {
 		if entry.Version == "" {
 			t.Errorf("Object %s does not have version", entry.Name)
@@ -596,7 +596,7 @@ func TestListObjectsPrefix(t *testing.T) {
 					Provider: provider,
 				}
 
-				if !isCloudBucket(t, proxyURL, bck) {
+				if !isBucketExist(t, proxyURL, bck) {
 					t.Skipf("test requires a cloud bucket")
 				}
 				bckProp, err := api.HeadBucket(baseParams, bck)
@@ -789,7 +789,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			} else if bckTest.IsCloud(cmn.AnyCloud) {
 				m.bck.Name = clibucket
 
-				if !isCloudBucket(t, proxyURL, m.bck) {
+				if !isBucketExist(t, proxyURL, m.bck) {
 					t.Skip("test requires a cloud bucket")
 				}
 
@@ -1149,7 +1149,7 @@ func TestCloudMirror(t *testing.T) {
 	)
 
 	m.saveClusterState()
-	if !isCloudBucket(t, m.proxyURL, m.bck) {
+	if !isBucketExist(t, m.proxyURL, m.bck) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
@@ -1556,7 +1556,7 @@ func TestCopyBucket(t *testing.T) {
 					Provider: cmn.AnyCloud,
 				}
 
-				if !isCloudBucket(t, proxyURL, srcm.bck) {
+				if !isBucketExist(t, proxyURL, srcm.bck) {
 					t.Skip("test requires a cloud bucket")
 				}
 			}

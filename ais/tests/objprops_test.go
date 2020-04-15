@@ -528,7 +528,7 @@ func TestObjProps(t *testing.T) {
 					Name:     clibucket,
 					Provider: cmn.AnyCloud,
 				}
-				if !isCloudBucket(t, proxyURL, m.bck) {
+				if !isBucketExist(t, proxyURL, m.bck) {
 					t.Skip("test requires a cloud bucket")
 				}
 			} else {

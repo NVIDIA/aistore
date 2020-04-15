@@ -402,7 +402,7 @@ func TestDownloadCloud(t *testing.T) {
 		suffix  = ".tgz"
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skip("test requires a cloud bucket")
 	}
 

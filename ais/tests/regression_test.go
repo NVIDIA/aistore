@@ -150,7 +150,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		prefix     = tutils.GenRandomString(32)
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 	smap := tutils.GetClusterMap(t, proxyURL)
@@ -687,7 +687,7 @@ func TestLRU(t *testing.T) {
 		}
 	)
 
-	if !isCloudBucket(t, proxyURL, m.bck) {
+	if !isBucketExist(t, proxyURL, m.bck) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
@@ -787,7 +787,7 @@ func TestPrefetchList(t *testing.T) {
 		}
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skipf("Cannot prefetch from ais bucket %s", clibucket)
 	}
 
@@ -895,7 +895,7 @@ func TestPrefetchRange(t *testing.T) {
 		}
 	)
 
-	if !isCloudBucket(t, proxyURL, bck) {
+	if !isBucketExist(t, proxyURL, bck) {
 		t.Skipf("Cannot prefetch from ais bucket %s", clibucket)
 	}
 

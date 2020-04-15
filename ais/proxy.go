@@ -1625,12 +1625,9 @@ func (p *proxyrunner) listObjectsCloud(bck *cluster.Bck, selMsg cmn.SelectMsg) (
 	} else {
 		// only cloud options are requested - call one random target for data
 		for _, si := range smap.Tmap {
-			results = p.bcast(bcastArgs{
-				req:     args.req,
-				network: cmn.NetworkIntraControl,
-				timeout: reqTimeout,
-				nodes:   []cluster.NodeMap{{si.ID(): si}},
-			})
+			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout})
+			results = make(chan callResult, 1)
+			results <- res
 			break
 		}
 	}
