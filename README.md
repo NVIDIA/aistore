@@ -47,6 +47,10 @@ For AIStore **white paper** and design philosophy, please see the [overview docu
 
 ## Prerequisites
 
+AIStore runs on commodity Linux machines with no special hardware requirements whatsoever. Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
+
+> It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.
+
 * [Linux](#Linux) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) or [MacOS](#MacOS)
 * [Go 1.13 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see below)
@@ -64,13 +68,11 @@ The capability called [extended attributes](https://en.wikipedia.org/wiki/Extend
 
 MacOS/Darwin is also supported, albeit for development only. Certain capabilities related to querying the state-and-status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
 
-## Getting Started
+## Local Playground
 
-AIStore runs on commodity Linux machines with no special hardware requirements whatsoever. Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
+For production deployments, please refer to [this folder](deploy/prod) and, in particular, its [Kubernetes](deploy/prod/k8s) subfolder.
 
-> It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.
-
-Assuming that [Go](https://golang.org/dl/) is already installed, the remaining getting-started steps are:
+Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single (development) machine:
 
 ```console
 $ cd $GOPATH/src
