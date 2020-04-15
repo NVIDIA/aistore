@@ -32,14 +32,11 @@ func IsRebalancing(kind string) (aborted, running bool) {
 	if MarkerExists(kind) {
 		aborted = true
 	}
-	entry, ok := xaction.Registry.GetLatest(xaction.XactQuery{Kind: kind})
-	if !ok {
+	running = xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: kind})
+	if !running {
 		return
 	}
-	running = !entry.Get().Finished()
-	if running {
-		aborted = false
-	}
+	aborted = false
 	return
 }
 

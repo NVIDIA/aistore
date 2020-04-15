@@ -32,6 +32,9 @@ const (
 
 	// Initial capacity of entries array in registry.
 	registryEntriesCap = 1000
+
+	// Threshold (number of finished entries) to start `entries.active` slice cleanup
+	hkFinishedCntThreshold = 50
 )
 
 type (
@@ -90,29 +93,20 @@ type (
 		Stats(xact cmn.Xact) stats.XactStats
 	}
 	XactQuery struct {
-		ID         string
-		Kind       string
-		Bck        *cluster.Bck
-		OnlyRecent bool
-		Finished   bool // only finished xactions (FIXME: only works when `ID` is set)
+		ID          string
+		Kind        string
+		Bck         *cluster.Bck
+		OnlyRunning bool
+		Finished    bool // only finished xactions (FIXME: only works when `ID` is set)
 	}
 	registryEntries struct {
 		mtx       sync.RWMutex
+		active    []baseEntry // running entries - finished entries are gradually removed
 		entries   []baseEntry
 		taskCount atomic.Int64
 	}
 	registry struct {
-		sync.RWMutex
-
-		// Latest keeps recent `baseEntries` in double nested map.
-		// At first level we keep the entries by kind and in the second level
-		// we keep them by buckets.
-		//
-		// NOTE: first level is static and never changes so it does not require
-		//  locking. Second level is bucket level so we need to use locking
-		//  and we use `sync.Map` - it should be super fast though since
-		//  the keys do not change frequently (this is when `sync.Map` excels).
-		latest map[string]*sync.Map // kind => bck => (baseEntry|globalEntry|bucketEntry)
+		mtx sync.RWMutex // lock for transactions
 
 		// All entries in the registry. The entries are periodically cleaned up
 		// to make sure that we don't keep old entries forever.
@@ -170,25 +164,56 @@ func newRegistryEntries() *registryEntries {
 	}
 }
 
-func (e *registryEntries) find(id string) baseEntry {
-	e.mtx.RLock()
-	defer e.mtx.RUnlock()
-	for _, entry := range e.entries {
-		if entry.Get().ID().Compare(id) == 0 {
-			return entry
+func (e *registryEntries) findUnlocked(query XactQuery) baseEntry {
+	if !query.OnlyRunning {
+		// Loop in reverse to search for the latest (there is great chance
+		// that searched xaction at the end rather at the beginning).
+		for idx := len(e.entries) - 1; idx >= 0; idx-- {
+			entry := e.entries[idx]
+			if matchEntry(entry, query) {
+				return entry
+			}
+		}
+	} else {
+		cmn.AssertMsg(cmn.IsValidXaction(query.Kind), query.Kind)
+		finishedCnt := 0
+		for _, entry := range e.active {
+			if entry.Get().Finished() {
+				finishedCnt++
+				continue
+			}
+			if matchEntry(entry, query) {
+				return entry
+			}
+		}
+		if finishedCnt > hkFinishedCntThreshold {
+			go e.housekeepActive()
 		}
 	}
 	return nil
 }
 
-func (e *registryEntries) forEach(exclusive bool, matcher func(entry baseEntry) bool) {
-	if exclusive {
-		e.mtx.Lock()
-		defer e.mtx.Unlock()
-	} else {
-		e.mtx.RLock()
-		defer e.mtx.RUnlock()
+func (e *registryEntries) find(query XactQuery) baseEntry {
+	e.mtx.RLock()
+	defer e.mtx.RUnlock()
+	return e.findUnlocked(query)
+}
+
+func (e *registryEntries) housekeepActive() {
+	e.mtx.Lock()
+	defer e.mtx.Unlock()
+	newActive := e.active[:0]
+	for _, entry := range e.active {
+		if !entry.Get().Finished() {
+			newActive = append(newActive, entry)
+		}
 	}
+	e.active = newActive
+}
+
+func (e *registryEntries) forEach(matcher func(entry baseEntry) bool) {
+	e.mtx.RLock()
+	defer e.mtx.RUnlock()
 	for _, entry := range e.entries {
 		if !matcher(entry) {
 			return
@@ -196,7 +221,9 @@ func (e *registryEntries) forEach(exclusive bool, matcher func(entry baseEntry) 
 	}
 }
 
-func (e *registryEntries) removeUnlocked(id string) {
+func (e *registryEntries) remove(id string) {
+	e.mtx.Lock()
+	defer e.mtx.Unlock()
 	for idx, entry := range e.entries {
 		if entry.Get().ID().String() == id {
 			e.entries[idx] = e.entries[len(e.entries)-1]
@@ -205,19 +232,21 @@ func (e *registryEntries) removeUnlocked(id string) {
 			if cmn.XactsMeta[entry.Kind()].Type == cmn.XactTypeTask {
 				e.taskCount.Dec()
 			}
+			break
+		}
+	}
+	for idx, entry := range e.active {
+		if entry.Get().ID().String() == id {
+			e.active[idx] = e.active[len(e.active)-1]
+			e.active = e.active[:len(e.active)-1]
 			return
 		}
 	}
 }
 
-func (e *registryEntries) remove(id string) {
-	e.mtx.Lock()
-	e.removeUnlocked(id)
-	e.mtx.Unlock()
-}
-
 func (e *registryEntries) insert(entry baseEntry) {
 	e.mtx.Lock()
+	e.active = append(e.active, entry)
 	e.entries = append(e.entries, entry)
 	e.mtx.Unlock()
 
@@ -236,46 +265,27 @@ func (e *registryEntries) len() int {
 
 func newRegistry() *registry {
 	xar := &registry{
-		latest:  make(map[string]*sync.Map),
 		entries: newRegistryEntries(),
-	}
-	for kind := range cmn.XactsMeta {
-		xar.latest[kind] = &sync.Map{}
 	}
 	hk.Housekeeper.Register("xactions", xar.cleanUpFinished)
 	return xar
 }
 
-func (r *registry) GetXact(id string) (baseEntry, bool) {
+func (r *registry) GetXact(id string) baseEntry {
 	cmn.Assert(id != "")
-	entry := r.entries.find(id)
-	return entry, entry != nil
+	entry := r.entries.find(XactQuery{ID: id})
+	return entry
 }
 
-func (r *registry) GetLatest(query XactQuery) (baseEntry, bool) {
-	if query.ID != "" {
-		entry := r.entries.find(query.ID)
-		return entry, entry != nil
-	}
+func (r *registry) GetRunning(query XactQuery) baseEntry {
+	query.OnlyRunning = true
+	entry := r.entries.find(query)
+	return entry
+}
 
-	cmn.AssertMsg(cmn.IsValidXaction(query.Kind), query.Kind)
-	latest := r.latest[query.Kind]
-	if cmn.IsXactTypeBck(query.Kind) {
-		if e, exists := latest.Load(query.Bck.MakeUname("")); exists {
-			return e.(baseEntry), true
-		}
-		return nil, false
-	}
-
-	e, exists := latest.Load("")
-	if !exists {
-		return nil, false
-	}
-	entry := e.(baseEntry)
-	if query.Bck == nil {
-		return entry, true
-	}
-	return entry, entry.Get().Bck().Equal(query.Bck.Bck)
+func (r *registry) GetLatest(query XactQuery) baseEntry {
+	entry := r.entries.find(query)
+	return entry
 }
 
 // AbortAllBuckets aborts all xactions that run with any of the provided bcks.
@@ -301,7 +311,7 @@ func (r *registry) AbortAllMountpathsXactions() {
 
 func (r *registry) abort(args abortArgs) {
 	wg := &sync.WaitGroup{}
-	r.entries.forEach(false /*exclusive*/, func(entry baseEntry) bool {
+	r.entries.forEach(func(entry baseEntry) bool {
 		xact := entry.Get()
 		if xact.Finished() {
 			return true
@@ -338,35 +348,27 @@ func (r *registry) abort(args abortArgs) {
 	wg.Wait()
 }
 
-func (r *registry) IsXactRunning(query XactQuery) bool {
-	entry, ok := r.GetLatest(query)
-	if !ok {
-		return false
-	}
-	return !entry.Get().Finished()
-}
-
-func (r *registry) abortLatest(kind string, bck *cluster.Bck) (aborted bool) {
-	entry, exists := r.GetLatest(XactQuery{Kind: kind, Bck: bck})
-	if !exists {
-		return false
-	}
-	if !entry.Get().Finished() {
-		entry.Get().Abort()
-		aborted = true
-	}
-	return
+func (r *registry) IsXactRunning(query XactQuery) (running bool) {
+	entry := r.GetRunning(query)
+	return entry != nil
 }
 
 func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []stats.XactStats {
-	sts := make([]stats.XactStats, 0, 20)
-	r.entries.forEach(false /*exclusive*/, func(entry baseEntry) bool {
+	matchingEntries := make([]baseEntry, 0, 20)
+	r.entries.forEach(func(entry baseEntry) bool {
 		if !match(entry.Get()) {
 			return true
 		}
-		sts = append(sts, entry.Stats(entry.Get()))
+		matchingEntries = append(matchingEntries, entry)
 		return true
 	})
+
+	// TODO: we cannot do this inside `forEach` because possibly
+	//  we have recursive RLock what can deadlock.
+	sts := make([]stats.XactStats, 0, len(matchingEntries))
+	for _, entry := range matchingEntries {
+		sts = append(sts, entry.Stats(entry.Get()))
+	}
 	return sts
 }
 
@@ -385,20 +387,12 @@ func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 			return xact.ID().Compare(query.ID) == 0 && xact.Finished() && !xact.Aborted()
 		}), nil
 	} else if query.Bck == nil && query.Kind == "" {
-		if !query.OnlyRecent {
-			return r.matchingXactsStats(func(_ cmn.Xact) bool { return true }), nil
-		}
-
-		// Add the most recent xactions (both currently running and already finished)
-		matching := make([]stats.XactStats, 0, 10)
-		for _, latest := range r.latest {
-			latest.Range(func(_, e interface{}) bool {
-				entry := e.(baseEntry)
-				matching = append(matching, entry.Stats(entry.Get()))
+		return r.matchingXactsStats(func(xact cmn.Xact) bool {
+			if !query.OnlyRunning || (query.OnlyRunning && !xact.Finished()) {
 				return true
-			})
-		}
-		return matching, nil
+			}
+			return false
+		}), nil
 	} else if query.Bck == nil && query.Kind != "" {
 		if !cmn.IsValidXaction(query.Kind) {
 			return nil, cmn.NewXactionNotFoundError(query.Kind)
@@ -406,9 +400,9 @@ func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 			return nil, fmt.Errorf("bucket xaction %q requires a bucket", query.Kind)
 		}
 
-		if query.OnlyRecent {
-			entry, exists := r.GetLatest(XactQuery{Kind: query.Kind})
-			if !exists {
+		if query.OnlyRunning {
+			entry := r.GetRunning(XactQuery{Kind: query.Kind})
+			if entry == nil {
 				return []stats.XactStats{}, nil
 			}
 			xact := entry.Get()
@@ -422,11 +416,11 @@ func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", query.Kind, query.Bck.Name)
 		}
 
-		if query.OnlyRecent {
+		if query.OnlyRunning {
 			matching := make([]stats.XactStats, 0, 10)
-			for kind := range r.latest {
-				entry, exists := r.GetLatest(XactQuery{Kind: kind, Bck: query.Bck})
-				if exists {
+			for kind := range cmn.XactsMeta {
+				entry := r.GetRunning(XactQuery{Kind: kind, Bck: query.Bck})
+				if entry != nil {
 					matching = append(matching, entry.Stats(entry.Get()))
 				}
 			}
@@ -442,10 +436,10 @@ func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 			return nil, cmn.NewXactionNotFoundError(query.Kind)
 		}
 
-		if query.OnlyRecent {
+		if query.OnlyRunning {
 			matching := make([]stats.XactStats, 0, 1)
-			entry, exists := r.GetLatest(XactQuery{Kind: query.Kind, Bck: query.Bck})
-			if exists {
+			entry := r.GetRunning(XactQuery{Kind: query.Kind, Bck: query.Bck})
+			if entry != nil {
 				matching = append(matching, entry.Stats(entry.Get()))
 			}
 			return matching, nil
@@ -470,13 +464,18 @@ func (r *registry) DoAbort(kind string, bck *cluster.Bck) (aborted bool) {
 		}
 		aborted = true
 	} else {
-		r.abortLatest(kind, bck)
+		entry := r.GetRunning(XactQuery{Kind: kind, Bck: bck})
+		if entry == nil {
+			return false
+		}
+		entry.Get().Abort()
+		return true
 	}
 	return
 }
 
 func (r *registry) removeFinishedByID(id string) error {
-	entry := r.entries.find(id)
+	entry := r.entries.find(XactQuery{ID: id})
 	if entry == nil {
 		return nil
 	}
@@ -493,13 +492,6 @@ func (r *registry) removeFinishedByID(id string) error {
 }
 
 func (r *registry) storeEntry(entry baseEntry) {
-	if !cmn.IsXactTypeBck(entry.Kind()) {
-		r.latest[entry.Kind()].Store("", entry)
-	} else {
-		bck := cluster.NewBckEmbed(entry.Get().Bck())
-		cmn.Assert(bck.HasProvider())
-		r.latest[entry.Kind()].Store(bck.MakeUname(""), entry)
-	}
 	r.entries.insert(entry)
 }
 
@@ -516,7 +508,8 @@ func (r *registry) cleanUpFinished() time.Duration {
 		}
 	}
 	anyTaskDeleted := false
-	r.entries.forEach(true /*exclusive*/, func(entry baseEntry) bool {
+	toRemove := make([]string, 0, 100)
+	r.entries.forEach(func(entry baseEntry) bool {
 		var (
 			xact = entry.Get()
 			eID  = xact.ID()
@@ -533,22 +526,22 @@ func (r *registry) cleanUpFinished() time.Duration {
 		// given kind. If it is we want to keep it anyway.
 		switch cmn.XactsMeta[entry.Kind()].Type {
 		case cmn.XactTypeGlobal:
-			entry, exists := r.GetLatest(XactQuery{Kind: entry.Kind()})
-			if exists && entry.Get().ID() == eID {
+			entry := r.entries.findUnlocked(XactQuery{Kind: entry.Kind(), OnlyRunning: true})
+			if entry != nil && entry.Get().ID() == eID {
 				return true
 			}
 		case cmn.XactTypeBck:
 			bck := cluster.NewBckEmbed(xact.Bck())
 			cmn.Assert(bck.HasProvider())
-			entry, exists := r.GetLatest(XactQuery{Kind: entry.Kind(), Bck: bck})
-			if exists && entry.Get().ID() == eID {
+			entry := r.entries.findUnlocked(XactQuery{Kind: entry.Kind(), Bck: bck, OnlyRunning: true})
+			if entry != nil && entry.Get().ID() == eID {
 				return true
 			}
 		}
 
 		if xact.EndTime().Add(entryOldAge).Before(startTime) {
 			// xaction has finished more than entryOldAge ago
-			r.entries.removeUnlocked(eID.String())
+			toRemove = append(toRemove, eID.String())
 			if cmn.XactsMeta[entry.Kind()].Type == cmn.XactTypeTask {
 				anyTaskDeleted = true
 			}
@@ -556,6 +549,10 @@ func (r *registry) cleanUpFinished() time.Duration {
 		}
 		return true
 	})
+
+	for _, id := range toRemove {
+		r.entries.remove(id)
+	}
 
 	// free all memory taken by cleaned up tasks
 	// Tasks like ListObjects ones may take up huge amount of memory, so they
@@ -571,31 +568,27 @@ func (r *registry) cleanUpFinished() time.Duration {
 //
 
 func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck) (bucketEntry, error) {
-	r.RLock()
-	if e, exists := r.GetLatest(XactQuery{Kind: entry.Kind(), Bck: bck}); exists {
+	r.mtx.RLock()
+	if e := r.GetRunning(XactQuery{Kind: entry.Kind(), Bck: bck}); e != nil {
 		prevEntry := e.(bucketEntry)
-		if !prevEntry.Get().Finished() {
-			if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
-				r.RUnlock()
-				return prevEntry, err
-			}
+		if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
+			r.mtx.RUnlock()
+			return prevEntry, err
 		}
 	}
-	r.RUnlock()
+	r.mtx.RUnlock()
 
-	r.Lock()
-	defer r.Unlock()
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
 	var (
 		running   = false
 		prevEntry bucketEntry
 	)
-	if e, exists := r.GetLatest(XactQuery{Kind: entry.Kind(), Bck: bck}); exists {
+	if e := r.GetRunning(XactQuery{Kind: entry.Kind(), Bck: bck}); e != nil {
 		prevEntry = e.(bucketEntry)
-		if !prevEntry.Get().Finished() {
-			running = true
-			if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
-				return prevEntry, err
-			}
+		running = true
+		if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
+			return prevEntry, err
 		}
 	}
 
@@ -610,31 +603,27 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck) (buck
 }
 
 func (r *registry) renewGlobalXaction(entry globalEntry) (globalEntry, bool, error) {
-	r.RLock()
-	if e, exists := r.GetLatest(XactQuery{Kind: entry.Kind()}); exists {
+	r.mtx.RLock()
+	if e := r.GetRunning(XactQuery{Kind: entry.Kind()}); e != nil {
 		prevEntry := e.(globalEntry)
-		if !prevEntry.Get().Finished() {
-			if entry.preRenewHook(prevEntry) {
-				r.RUnlock()
-				return prevEntry, true, nil
-			}
+		if entry.preRenewHook(prevEntry) {
+			r.mtx.RUnlock()
+			return prevEntry, true, nil
 		}
 	}
-	r.RUnlock()
+	r.mtx.RUnlock()
 
-	r.Lock()
-	defer r.Unlock()
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
 	var (
 		running   = false
 		prevEntry globalEntry
 	)
-	if e, exists := r.GetLatest(XactQuery{Kind: entry.Kind()}); exists {
+	if e := r.GetRunning(XactQuery{Kind: entry.Kind()}); e != nil {
 		prevEntry = e.(globalEntry)
-		if !prevEntry.Get().Finished() {
-			running = true
-			if entry.preRenewHook(prevEntry) {
-				return prevEntry, true, nil
-			}
+		running = true
+		if entry.preRenewHook(prevEntry) {
+			return prevEntry, true, nil
 		}
 	}
 
@@ -732,4 +721,19 @@ func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bc
 	}
 	r.storeEntry(e)
 	return e.xact, nil
+}
+
+func matchEntry(entry baseEntry, query XactQuery) (matches bool) {
+	if query.ID != "" {
+		return entry.Get().ID().Compare(query.ID) == 0
+	}
+	if entry.Kind() == query.Kind {
+		if query.Bck == nil || query.Bck.IsEmpty() {
+			return true
+		}
+		if !query.Bck.IsEmpty() && entry.Get().Bck().Equal(query.Bck.Bck) {
+			return true
+		}
+	}
+	return false
 }

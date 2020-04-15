@@ -332,7 +332,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		tstats := getstorstatsrunner()
 
 		var rebStats *stats.RebalanceTargetStats
-		if entry, ok := xaction.Registry.GetLatest(xaction.XactQuery{Kind: cmn.ActRebalance}); ok {
+		if entry := xaction.Registry.GetLatest(xaction.XactQuery{Kind: cmn.ActRebalance}); entry != nil {
 			if xact := entry.Get(); xact != nil {
 				var ok bool
 				rebStats, ok = entry.Stats(xact).(*stats.RebalanceTargetStats)

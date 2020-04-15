@@ -281,7 +281,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
 	// run until rebalance is completed
-	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Latest: true}
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance}
 	for {
 		rebStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)
 		if err != nil {

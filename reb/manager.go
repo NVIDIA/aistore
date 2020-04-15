@@ -292,8 +292,8 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 		}
 
 		// Check current xaction
-		entry, ok := xaction.Registry.GetLatest(xaction.XactQuery{Kind: cmn.ActRebalance})
-		if !ok {
+		entry := xaction.Registry.GetRunning(xaction.XactQuery{Kind: cmn.ActRebalance})
+		if entry == nil {
 			if canRun {
 				return
 			}
@@ -301,14 +301,11 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 		} else {
 			otherXreb := entry.Get().(*xaction.Rebalance) // running or previous
 			if canRun {
-				cmn.Assert(otherXreb.Finished())
 				return
 			}
-			if otherXreb.ID().Int() < md.id && !otherXreb.Finished() {
+			if otherXreb.ID().Int() < md.id {
 				otherXreb.Abort()
 				glog.Warningf("%s: aborting older [%s]", logHdr, otherXreb)
-			} else {
-				glog.Warningf("%s: latest finished [%s] but cannot start ???", logHdr, otherXreb)
 			}
 		}
 		cmn.Assert(!canRun)
