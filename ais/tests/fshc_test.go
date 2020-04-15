@@ -116,15 +116,8 @@ func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath st
 }
 
 func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, objList []string, suffix string) {
-	os.RemoveAll(mpath)
+	breakMountpath(md.t, mpath, suffix)
 	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
-
-	f, err := cmn.CreateFile(mpath)
-	if err != nil {
-		md.t.Errorf("Failed to create file: %v", err)
-		return
-	}
-	f.Close()
 
 	switch method {
 	case http.MethodPut:
@@ -193,6 +186,19 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 	return false
 }
 
+// Simulating mountpath death requested.
+// It is the easiest way to simulate: stop putting data and
+// replace the mountpath with regular file. If we do not stop
+// putting objects it recreates the mountpath and does not fail
+func breakMountpath(t *testing.T, mpath, suffix string) {
+	os.Rename(mpath, mpath+suffix)
+	f, err := os.OpenFile(mpath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Errorf("Failed to create file: %v", err)
+	}
+	f.Close()
+}
+
 func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen, disabledLen int, suffix string) {
 	var (
 		err        error
@@ -255,16 +261,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 		for _, fname := range filelist {
 			select {
 			case <-chfail:
-				// simulating mountpath death requested
-				// It is the easiest way to simulate: stop putting data and
-				// replace the mountpath with regular file. If we do not stop
-				// putting objects it recreates the mountpath and does not fail
-				os.Rename(mpath, mpath+suffix)
-				f, err := os.OpenFile(mpath, os.O_CREATE|os.O_WRONLY, 0644)
-				if err != nil {
-					t.Errorf("Failed to create file: %v", err)
-				}
-				f.Close()
+				breakMountpath(t, mpath, suffix)
 			case <-chstop:
 				return
 			default:
