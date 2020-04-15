@@ -2484,6 +2484,27 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.queryXaction(w, r, what)
 	case cmn.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
+	case cmn.GetWhatRemoteAIS:
+		config := cmn.GCO.Get()
+		smap := p.owner.smap.get()
+		for _, si := range smap.Tmap {
+			args := callArgs{
+				si: si,
+				req: cmn.ReqArgs{
+					Method: r.Method,
+					Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+					Query:  r.URL.Query(),
+				},
+				timeout: config.Timeout.CplaneOperation,
+			}
+			res := p.call(args)
+			if res.err != nil {
+				p.invalmsghdlr(w, r, res.err.Error())
+				return
+			}
+			p.writeJSON(w, r, res.outjson, what)
+			break
+		}
 	default:
 		s := fmt.Sprintf(fmtUnknownQue, what)
 		cmn.InvalidHandlerWithMsg(w, r, s)
@@ -3007,7 +3028,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				what  = query.Get(cmn.URLParamWhat)
 			)
 			// TODO: cmn.ActAttach to attach mountpath as well
-			if what != cmn.GetWhatCluster {
+			if what != cmn.GetWhatRemoteAIS {
 				cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf(fmtUnknownQue, what))
 				return
 			}
@@ -3030,7 +3051,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			// NOTE: save config unconditionally (see also: cmn.ActPersist)
-			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatCluster)); err != nil {
+			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatRemoteAIS)); err != nil {
 				glog.Error(err)
 			}
 			return

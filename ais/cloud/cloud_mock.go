@@ -14,15 +14,12 @@ import (
 )
 
 type (
-	configurable       struct{}
-	dummyCloudProvider struct{ configurable }
+	dummyCloudProvider struct{}
 )
 
 var (
 	_ cluster.CloudProvider = &dummyCloudProvider{}
 )
-
-func (c *configurable) Configure(_ interface{}) error { return nil }
 
 func NewDummyCloud() (cluster.CloudProvider, error) { return &dummyCloudProvider{}, nil }
 

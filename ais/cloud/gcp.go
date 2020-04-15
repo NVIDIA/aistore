@@ -48,7 +48,6 @@ type (
 	}
 
 	gcpProvider struct {
-		configurable
 		t cluster.Target
 	}
 )

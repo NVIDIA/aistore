@@ -8,6 +8,7 @@ package commands
 import (
 	"fmt"
 	"sort"
+	"text/tabwriter"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -79,6 +80,9 @@ var (
 		},
 		subcmdShowSmap: {
 			jsonFlag,
+		},
+		subcmdShowRemoteAIS: {
+			noHeaderFlag,
 		},
 	}
 
@@ -175,6 +179,14 @@ var (
 					Flags:        showCmdsFlags[subcmdShowSmap],
 					Action:       showSmapHandler,
 					BashComplete: daemonCompletions(true /* optional */, false /* omit proxies */),
+				},
+				{
+					Name:         subcmdShowRemoteAIS,
+					Usage:        "show attached AIS clusters",
+					ArgsUsage:    "",
+					Flags:        showCmdsFlags[subcmdShowRemoteAIS],
+					Action:       showRemoteAISHandler,
+					BashComplete: daemonCompletions(true /* optional */, true /* omit proxies */),
 				},
 			},
 		},
@@ -354,4 +366,21 @@ func showConfigHandler(c *cli.Context) (err error) {
 		return
 	}
 	return getDaemonConfig(c)
+}
+
+func showRemoteAISHandler(c *cli.Context) (err error) {
+	aisCloudInfo, err := api.GetRemoteAIS(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	tw := &tabwriter.Writer{}
+	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
+	if !flagIsSet(c, noHeaderFlag) {
+		fmt.Fprintln(tw, "UUID\tURL\tAlias\tInfo")
+	}
+	for uuid, info := range aisCloudInfo {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", uuid, info[0], info[1], info[2])
+	}
+	tw.Flush()
+	return
 }

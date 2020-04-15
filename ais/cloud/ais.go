@@ -27,9 +27,9 @@ type (
 	remAisClust struct {
 		url  string
 		smap *cluster.Smap
-		m    *aisCloudProvider
+		m    *AisCloudProvider
 	}
-	aisCloudProvider struct {
+	AisCloudProvider struct {
 		t      cluster.Target
 		remote map[string]*remAisClust // by UUID:  1 to 1
 		alias  map[string]string       // by alias: many to 1 UUID
@@ -37,7 +37,7 @@ type (
 )
 
 var (
-	_ cluster.CloudProvider = &aisCloudProvider{}
+	_ cluster.CloudProvider = &AisCloudProvider{}
 )
 
 // TODO - FIXME: review/refactor try{}
@@ -45,7 +45,7 @@ var (
 // TODO: refresh remote Smap every so often
 // TODO: utilize m.remote[uuid].smap
 
-func NewAIS(t cluster.Target) cluster.CloudProvider { return &aisCloudProvider{t: t} }
+func NewAIS(t cluster.Target) *AisCloudProvider { return &AisCloudProvider{t: t} }
 
 func (r *remAisClust) String() string {
 	var aliases []string
@@ -57,7 +57,8 @@ func (r *remAisClust) String() string {
 	return fmt.Sprintf("remote cluster: %s => (%q, %v, %s)", r.url, aliases, r.smap.UUID, r.smap)
 }
 
-func (m *aisCloudProvider) Configure(v interface{}) error {
+// NOTE: this and the next method are part of the of the AIS cloud extended API
+func (m *AisCloudProvider) Configure(v interface{}) error {
 	var (
 		cfg             = cmn.GCO.Get()
 		clusterConf, ok = v.(cmn.CloudConfAIS)
@@ -77,6 +78,40 @@ func (m *aisCloudProvider) Configure(v interface{}) error {
 		}
 	}
 	return nil
+}
+
+// cluster uuid -> [ urls, aliases, other info ]
+func (m *AisCloudProvider) GetInfo() (info cmn.CloudInfoAIS) {
+	info = make(cmn.CloudInfoAIS, len(m.remote))
+	for uuid, remAis := range m.remote {
+		var (
+			aliases []string
+			value   = make([]string, 3)
+		)
+		value[0] = remAis.url
+		for a, u := range m.alias {
+			if uuid == u {
+				aliases = append(aliases, a)
+			}
+		}
+		if len(aliases) > 0 {
+			value[1] = fmt.Sprintf("%v", aliases)
+		}
+		value[2] = fmt.Sprintf("%s(storage nodes: %d)", remAis.smap, remAis.smap.CountTargets())
+		info[uuid] = value
+	}
+	var offline []string
+	for alias, uuid := range m.alias {
+		if _, ok := info[uuid]; !ok {
+			offline = append(offline, alias)
+		}
+	}
+	if len(offline) > 0 {
+		value := make([]string, 3)
+		value[1] = fmt.Sprintf("%v", offline)
+		info["n/a"] = value
+	}
+	return
 }
 
 func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (err error) {
@@ -110,10 +145,11 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (er
 	return nil
 }
 
-// for user convenience, supporting both (alias, URL) and (UUID, URL) attachments
-// - with 1 to 1 for UUID mapping and
-// - many(aliases) to 1 (cluster) for aliases
-func (m *aisCloudProvider) add(newAis *remAisClust, newAlias string) (err error) {
+// for user convenience we are supporting the capability to attach remote cluster
+// both by (alias => URL) and (UUID => URL) interchangeably
+// with 1 to 1 for UUID mapping, and
+// many(aliases) to 1 (cluster) - for aliases
+func (m *AisCloudProvider) add(newAis *remAisClust, newAlias string) (err error) {
 	newAis.m = m
 	tag := "added"
 	if newAlias == newAis.smap.UUID {
@@ -146,7 +182,7 @@ ad:
 	return
 }
 
-func (m *aisCloudProvider) newBaseParams(uuid string) (bp api.BaseParams, err error) {
+func (m *AisCloudProvider) newBaseParams(uuid string) (bp api.BaseParams, err error) {
 	var (
 		cfg        = cmn.GCO.Get()
 		remAis, ok = m.remote[uuid]
@@ -165,7 +201,11 @@ func (m *aisCloudProvider) newBaseParams(uuid string) (bp api.BaseParams, err er
 	return
 }
 
-func (m *aisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
+////////////////////////////////
+// cluster.CloudProvider APIs //
+////////////////////////////////
+
+func (m *AisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
 	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	var (
 		bp api.BaseParams
@@ -182,7 +222,7 @@ func (m *aisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
 	return bckList, err, errCode
 }
 
-func (m *aisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (m *AisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	cmn.Assert(bck.Provider == cmn.ProviderAIS)
 	var (
 		bp api.BaseParams
@@ -207,7 +247,7 @@ func (m *aisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProp
 	return bckProps, err, errCode
 }
 
-func (m *aisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
+func (m *AisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
 	for uuid := range m.remote {
 		var (
 			bp, _  = m.newBaseParams(uuid)
@@ -235,7 +275,7 @@ func (m *aisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketN
 	return
 }
 
-func (m *aisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
 		bp  api.BaseParams
 		bck = lom.Bck().Bck
@@ -256,7 +296,7 @@ func (m *aisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMe
 	return objMeta, err, errCode
 }
 
-func (m *aisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	var (
 		bp  api.BaseParams
 		bck = lom.Bck().Bck
@@ -298,7 +338,7 @@ func (m *aisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 	return extractErrCode(err)
 }
 
-func (m *aisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var (
 		bp  api.BaseParams
 		bck = lom.Bck().Bck
@@ -325,7 +365,7 @@ func (m *aisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 	return lom.Version(), err, errCode
 }
 
-func (m *aisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+func (m *AisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	var (
 		bp  api.BaseParams
 		bck = lom.Bck().Bck
@@ -340,7 +380,7 @@ func (m *aisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err
 	return extractErrCode(err)
 }
 
-func (m *aisCloudProvider) try(f func() error) (err error) {
+func (m *AisCloudProvider) try(f func() error) (err error) {
 	err = f()
 	if err == nil {
 		return nil

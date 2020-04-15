@@ -53,7 +53,7 @@ const (
 	subcmdNode      = "node"
 	subcmdProxy     = "proxy"
 	subcmdTarget    = "target"
-	subcmdRemoteAIS = cmn.GetWhatCluster
+	subcmdRemoteAIS = cmn.GetWhatRemoteAIS
 	subcmdMountpath = "mountpath"
 
 	// Show subcommands
@@ -68,6 +68,7 @@ const (
 	subcmdShowBckProps  = subcmdProps
 	subcmdShowConfig    = subcmdConfig
 	subcmdShowSmap      = subcmdSmap
+	subcmdShowRemoteAIS = subcmdRemoteAIS
 
 	// Create subcommands
 	subcmdCreateBucket = subcmdBucket

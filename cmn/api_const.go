@@ -217,7 +217,7 @@ const (
 	GetWhatSysInfo       = "sysinfo"
 	GetWhatDiskStats     = "disk"
 	GetWhatDaemonStatus  = "status"
-	GetWhatCluster       = "cluster"
+	GetWhatRemoteAIS     = "remote"
 )
 
 // SelectMsg.TimeFormat enum

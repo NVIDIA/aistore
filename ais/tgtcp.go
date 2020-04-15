@@ -182,7 +182,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				query = r.URL.Query()
 				what  = query.Get(cmn.URLParamWhat)
 			)
-			if what != cmn.GetWhatCluster {
+			if what != cmn.GetWhatRemoteAIS {
 				t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
 				return
 			}
@@ -193,11 +193,11 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			// NOTE: adding new ones and _refreshing_ old/existing
 			aisConf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
 			cmn.Assert(ok)
-			if err := t.Cloud(cmn.ProviderAIS).Configure(aisConf); err != nil {
+			if err := t.cloud.ais.Configure(aisConf); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
-			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatCluster)); err != nil {
+			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatRemoteAIS)); err != nil {
 				glog.Error(err)
 			}
 			return
@@ -349,6 +349,10 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatDiskStats:
 		diskStats := fs.Mountpaths.GetSelectedDiskStats()
 		body := cmn.MustMarshal(diskStats)
+		t.writeJSON(w, r, body, httpdaeWhat)
+	case cmn.GetWhatRemoteAIS:
+		aisCloudInfo := t.cloud.ais.GetInfo()
+		body := cmn.MustMarshal(aisCloudInfo)
 		t.writeJSON(w, r, body, httpdaeWhat)
 	default:
 		t.httprunner.httpdaeget(w, r)

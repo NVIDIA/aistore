@@ -39,7 +39,6 @@ type (
 	}
 
 	awsProvider struct {
-		configurable
 		t cluster.Target
 	}
 )

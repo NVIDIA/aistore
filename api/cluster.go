@@ -24,7 +24,7 @@ func GetClusterMap(baseParams BaseParams) (smap *cluster.Smap, err error) {
 		Path:       cmn.URLPath(cmn.Version, cmn.Daemon),
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
 	}, &smap)
-	return smap, err
+	return
 }
 
 // GetNodeClusterMap API
@@ -38,7 +38,7 @@ func GetNodeClusterMap(baseParams BaseParams, nodeID string) (smap *cluster.Smap
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
 		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
 	}, &smap)
-	return smap, err
+	return
 }
 
 // GetClusterSysInfo API
@@ -51,7 +51,7 @@ func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err e
 		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSysInfo}},
 	}, &sysInfo)
-	return sysInfo, err
+	return
 }
 
 // GetClusterStats API
@@ -64,7 +64,7 @@ func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStats, er
 		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}},
 	}, &clusterStats)
-	return clusterStats, err
+	return
 }
 
 func GetTargetDiskStats(baseParams BaseParams, targetID string) (diskStats map[string]*ios.SelectedDiskStats, err error) {
@@ -75,7 +75,17 @@ func GetTargetDiskStats(baseParams BaseParams, targetID string) (diskStats map[s
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDiskStats}},
 		Header:     http.Header{cmn.HeaderNodeID: []string{targetID}},
 	}, &diskStats)
-	return diskStats, err
+	return
+}
+
+func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.CloudInfoAIS, err error) {
+	baseParams.Method = http.MethodGet
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}},
+	}, &aisInfo)
+	return
 }
 
 // RegisterNode API
@@ -137,7 +147,7 @@ func SetClusterConfig(baseParams BaseParams, nvs cmn.SimpleKVs) error {
 //
 func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
 	q := make(url.Values)
-	q.Set(cmn.URLParamWhat, cmn.GetWhatCluster)
+	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)
 	q.Set(alias, u)
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{

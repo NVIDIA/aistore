@@ -282,6 +282,7 @@ type CloudConf struct {
 }
 
 type CloudConfAIS map[string][]string // cluster alias -> [urls...]
+type CloudInfoAIS map[string][]string // cluster uuid -> [ urls, aliases, info ]
 
 type MirrorConf struct {
 	Copies      int64 `json:"copies"`       // num local copies

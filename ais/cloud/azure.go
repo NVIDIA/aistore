@@ -26,7 +26,6 @@ import (
 
 type (
 	azureProvider struct {
-		configurable
 		u string
 		c *azblob.SharedKeyCredential
 		t cluster.Target

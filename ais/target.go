@@ -67,7 +67,7 @@ type (
 		oos  bool
 	}
 	clouds struct {
-		ais cluster.CloudProvider
+		ais *cloud.AisCloudProvider
 		ext cluster.CloudProvider
 	}
 	// main
