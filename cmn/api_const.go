@@ -76,6 +76,7 @@ const (
 	ActAsyncTask     = "task"
 	ActTar2Tf        = "tar2tf"
 	ActAttach        = "attach"
+	ActDetach        = "detach"
 
 	// Actions to manipulate mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"

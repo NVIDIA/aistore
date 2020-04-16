@@ -1283,19 +1283,37 @@ func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucke
 	return msg
 }
 
-func (h *httprunner) attachRemoteAIS(query url.Values) error {
+func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string) error {
 	var (
 		aisConf cmn.CloudConfAIS
 		config  = cmn.GCO.BeginUpdate()
 		v, ok   = config.Cloud.ProviderConf(cmn.ProviderAIS)
+		changed bool
 	)
 	if !ok {
+		if action == cmn.ActDetach {
+			cmn.GCO.DiscardUpdate()
+			return fmt.Errorf("%s: remote cluster config is empty", h.si)
+		}
 		aisConf = make(cmn.CloudConfAIS)
 	} else {
 		aisConf, ok = v.(cmn.CloudConfAIS)
 		cmn.Assert(ok)
 	}
-	found := false
+	// detach
+	if action == cmn.ActDetach {
+		for alias := range query {
+			if alias == cmn.URLParamWhat {
+				continue
+			}
+			if _, ok := aisConf[alias]; ok {
+				changed = true
+				delete(aisConf, alias)
+			}
+		}
+		goto rret
+	}
+	// attach
 	for alias, urls := range query {
 		if alias == cmn.URLParamWhat {
 			continue
@@ -1305,9 +1323,9 @@ func (h *httprunner) attachRemoteAIS(query url.Values) error {
 				cmn.GCO.DiscardUpdate()
 				return fmt.Errorf("%s: cannot attach remote cluster: %v", h.si, err)
 			}
-			found = true
+			changed = true
 		}
-		if found {
+		if changed {
 			if confURLs, ok := aisConf[alias]; ok {
 				aisConf[alias] = append(confURLs, urls...)
 			} else {
@@ -1315,9 +1333,10 @@ func (h *httprunner) attachRemoteAIS(query url.Values) error {
 			}
 		}
 	}
-	if !found {
+rret:
+	if !changed {
 		cmn.GCO.DiscardUpdate()
-		return fmt.Errorf("%s: empty request to attach remote cluster", h.si)
+		return fmt.Errorf("%s: request to %s remote cluster - nothing to do", h.si, action)
 	}
 	config.Cloud.ProviderConf(cmn.ProviderAIS, aisConf)
 	cmn.GCO.CommitUpdate(config)

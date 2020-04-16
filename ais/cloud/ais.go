@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -31,6 +32,7 @@ type (
 	}
 	AisCloudProvider struct {
 		t      cluster.Target
+		mu     *sync.RWMutex
 		remote map[string]*remAisClust // by UUID:  1 to 1
 		alias  map[string]string       // by alias: many to 1 UUID
 	}
@@ -43,9 +45,16 @@ var (
 // TODO - FIXME: review/refactor try{}
 
 // TODO: refresh remote Smap every so often
-// TODO: utilize m.remote[uuid].smap
+// TODO: utilize m.remote[uuid].smap to load balance and retry disconnects
 
-func NewAIS(t cluster.Target) *AisCloudProvider { return &AisCloudProvider{t: t} }
+func NewAIS(t cluster.Target) *AisCloudProvider {
+	return &AisCloudProvider{
+		t:      t,
+		mu:     &sync.RWMutex{},
+		remote: make(map[string]*remAisClust),
+		alias:  make(map[string]string),
+	}
+}
 
 func (r *remAisClust) String() string {
 	var aliases []string
@@ -57,8 +66,11 @@ func (r *remAisClust) String() string {
 	return fmt.Sprintf("remote cluster: %s => (%q, %v, %s)", r.url, aliases, r.smap.UUID, r.smap)
 }
 
-// NOTE: this and the next method are part of the of the AIS cloud extended API
-func (m *AisCloudProvider) Configure(v interface{}) error {
+// NOTE: this and the next method are part of the of the *extended* AIS cloud API
+//       in addition to the basic GetObj, et al.
+
+// apply new or updated (attach, detach) cmn.CloudConfAIS configuration
+func (m *AisCloudProvider) Apply(v interface{}, action string) error {
 	var (
 		cfg             = cmn.GCO.Get()
 		clusterConf, ok = v.(cmn.CloudConfAIS)
@@ -66,11 +78,27 @@ func (m *AisCloudProvider) Configure(v interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid ais cloud config (%+v, %T)", v, v)
 	}
-	m.remote = make(map[string]*remAisClust, len(clusterConf))
-	m.alias = make(map[string]string, len(clusterConf))
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// detach
+	if action == cmn.ActDetach {
+		for alias, uuid := range m.alias {
+			if _, ok := clusterConf[alias]; !ok {
+				if _, ok = clusterConf[uuid]; !ok {
+					delete(m.alias, alias)
+					delete(m.remote, uuid)
+				}
+			}
+		}
+		return nil
+	}
+	// init and attach
 	for alias, clusterURLs := range clusterConf {
 		var remAis = &remAisClust{}
-		if err := remAis.init(alias, clusterURLs, cfg); err != nil {
+		if offline, err := remAis.init(alias, clusterURLs, cfg); err != nil { // and check connectivity
+			if offline {
+				continue
+			}
 			return err
 		}
 		if err := m.add(remAis, alias); err != nil {
@@ -81,8 +109,11 @@ func (m *AisCloudProvider) Configure(v interface{}) error {
 }
 
 // cluster uuid -> [ urls, aliases, other info ]
-func (m *AisCloudProvider) GetInfo() (info cmn.CloudInfoAIS) {
+// TODO: check reachability - ping them all
+func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (info cmn.CloudInfoAIS) {
 	info = make(cmn.CloudInfoAIS, len(m.remote))
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	for uuid, remAis := range m.remote {
 		var (
 			aliases []string
@@ -94,27 +125,33 @@ func (m *AisCloudProvider) GetInfo() (info cmn.CloudInfoAIS) {
 				aliases = append(aliases, a)
 			}
 		}
-		if len(aliases) > 0 {
+		if len(aliases) == 1 {
+			value[1] = aliases[0]
+		} else if len(aliases) > 1 {
 			value[1] = fmt.Sprintf("%v", aliases)
 		}
 		value[2] = fmt.Sprintf("%s(storage nodes: %d)", remAis.smap, remAis.smap.CountTargets())
 		info[uuid] = value
 	}
-	var offline []string
-	for alias, uuid := range m.alias {
-		if _, ok := info[uuid]; !ok {
-			offline = append(offline, alias)
+	// offline
+	for alias, clusterURLs := range clusterConf {
+		if _, ok := m.alias[alias]; !ok {
+			if _, ok = m.remote[alias]; !ok {
+				value := make([]string, 3)
+				if len(clusterURLs) == 1 {
+					value[0] = "<" + clusterURLs[0] + ">"
+				} else if len(clusterURLs) > 1 {
+					value[0] = fmt.Sprintf("<%v>", clusterURLs)
+				}
+				value[2] = "<offline>"
+				info[alias] = value
+			}
 		}
-	}
-	if len(offline) > 0 {
-		value := make([]string, 3)
-		value[1] = fmt.Sprintf("%v", offline)
-		info["n/a"] = value
 	}
 	return
 }
 
-func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (err error) {
+func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (offline bool, err error) {
 	var (
 		url           string
 		remSmap, smap *cluster.Smap
@@ -122,7 +159,7 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (er
 	)
 	for _, u := range confURLs {
 		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u}); err != nil {
-			glog.Errorf("remote cluster %q via %s: %v", alias, u, err)
+			glog.Warningf("remote cluster %q via %s: %v", alias, u, err)
 			continue
 		}
 		if remSmap == nil {
@@ -130,19 +167,22 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (er
 			continue
 		}
 		if remSmap.UUID != smap.UUID {
-			return fmt.Errorf("%q(%v) references two different remote clusters UUIDs=[%s, %s]",
+			err = fmt.Errorf("%q(%v) references two different remote clusters UUIDs=[%s, %s]",
 				alias, confURLs, remSmap.UUID, smap.UUID)
+			return
 		}
 		if remSmap.Version < smap.Version {
 			remSmap, url = smap, u
 		}
 	}
 	if remSmap == nil {
-		return fmt.Errorf("failed to reach remote cluster %q via any/all of the configured URLs %v",
+		err = fmt.Errorf("failed to reach remote cluster %q via any/all of the configured URLs %v",
 			alias, confURLs)
+		offline = true
+		return
 	}
 	r.smap, r.url = remSmap, url
-	return nil
+	return
 }
 
 // for user convenience we are supporting the capability to attach remote cluster

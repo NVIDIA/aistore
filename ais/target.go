@@ -269,7 +269,7 @@ func (c *clouds) init(t *targetrunner, config *cmn.Config) {
 	// ais cloud always enabled
 	c.ais = cloud.NewAIS(t)
 	if aisConf, ok := config.Cloud.ProviderConf(cmn.ProviderAIS); ok {
-		if err := c.ais.Configure(aisConf); err != nil {
+		if err := c.ais.Apply(aisConf, "init"); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
 		}
 	}

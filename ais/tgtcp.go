@@ -151,61 +151,14 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if len(apitems) > 0 {
-		switch apitems[0] {
-		// PUT /v1/daemon/proxy/newprimaryproxyid
-		case cmn.Proxy:
-			t.httpdaesetprimaryproxy(w, r, apitems)
-			return
-		case cmn.SyncSmap:
-			var newsmap = &smapX{}
-			if cmn.ReadJSON(w, r, newsmap) != nil {
-				return
-			}
-			if err := t.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
-				t.invalmsghdlr(w, r, fmt.Sprintf("failed to sync Smap: %s", err))
-			}
-			glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
-			return
-		case cmn.Mountpaths:
-			t.handleMountpathReq(w, r)
-			return
-		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-			kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
-			if err := t.setConfig(kvs); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			return
-		case cmn.ActAttach:
-			var (
-				query = r.URL.Query()
-				what  = query.Get(cmn.URLParamWhat)
-			)
-			if what != cmn.GetWhatRemoteAIS {
-				t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
-				return
-			}
-			if err := t.attachRemoteAIS(query); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			// NOTE: adding new ones and _refreshing_ old/existing
-			aisConf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
-			cmn.Assert(ok)
-			if err := t.cloud.ais.Configure(aisConf); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatRemoteAIS)); err != nil {
-				glog.Error(err)
-			}
-			return
-		}
+	if len(apitems) == 0 {
+		t.daeputJSON(w, r)
+	} else {
+		t.daeputQuery(w, r, apitems)
 	}
-	//
-	// other PUT /daemon actions
-	//
+}
+
+func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	var msg cmn.ActionMsg
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
@@ -224,13 +177,63 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
 		if err := t.setConfig(kvs); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
-			return
 		}
 	case cmn.ActShutdown:
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		t.invalmsghdlr(w, r, s)
+	}
+}
+
+func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apitems []string) {
+	switch apitems[0] {
+	case cmn.Proxy:
+		// PUT /v1/daemon/proxy/newprimaryproxyid
+		t.httpdaesetprimaryproxy(w, r, apitems)
+	case cmn.SyncSmap:
+		var newsmap = &smapX{}
+		if cmn.ReadJSON(w, r, newsmap) != nil {
+			return
+		}
+		if err := t.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("failed to sync Smap: %s", err))
+		}
+		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
+	case cmn.Mountpaths:
+		t.handleMountpathReq(w, r)
+	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
+		kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
+		if err := t.setConfig(kvs); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
+	case cmn.ActAttach, cmn.ActDetach:
+		var (
+			query  = r.URL.Query()
+			what   = query.Get(cmn.URLParamWhat)
+			action = apitems[0]
+		)
+		if what != cmn.GetWhatRemoteAIS {
+			t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
+			return
+		}
+		if err := t.attachDetachRemoteAIS(query, action); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		// NOTE: once validated, save this config unconditionally, and prior to attempting attachment(s)
+		// TODO: metasync
+		if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", action, cmn.GetWhatRemoteAIS)); err != nil {
+			glog.Error(err)
+		}
+		//
+		// NOTE: apply the entire config: add new and _refresh_ existing
+		//
+		aisConf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
+		cmn.Assert(ok)
+		if err := t.cloud.ais.Apply(aisConf, action); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
 	}
 }
 
@@ -351,7 +354,15 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		body := cmn.MustMarshal(diskStats)
 		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatRemoteAIS:
-		aisCloudInfo := t.cloud.ais.GetInfo()
+		conf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
+		if !ok {
+			body := cmn.MustMarshal(cmn.CloudInfoAIS{})
+			t.writeJSON(w, r, body, httpdaeWhat)
+			return
+		}
+		clusterConf, ok := conf.(cmn.CloudConfAIS)
+		cmn.Assert(ok)
+		aisCloudInfo := t.cloud.ais.GetInfo(clusterConf)
 		body := cmn.MustMarshal(aisCloudInfo)
 		t.writeJSON(w, r, body, httpdaeWhat)
 	default:

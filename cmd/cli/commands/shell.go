@@ -107,13 +107,10 @@ func setConfigCompletions(c *cli.Context) {
 	flagCompletions(c)
 }
 
-func attachRemoteAISCompletions(c *cli.Context) {
-	flagCompletions(c)
-}
-
-func attachMountpathCompletions(c *cli.Context) {
-	flagCompletions(c)
-}
+func attachRemoteAISCompletions(c *cli.Context) { flagCompletions(c) }
+func detachRemoteAISCompletions(c *cli.Context) { flagCompletions(c) }
+func attachMountpathCompletions(c *cli.Context) { flagCompletions(c) }
+func detachMountpathCompletions(c *cli.Context) { flagCompletions(c) }
 
 func suggestDaemon(omitProxies bool) {
 	smap, err := api.GetClusterMap(cliAPIParams(clusterURL))

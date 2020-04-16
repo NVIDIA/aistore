@@ -2998,76 +2998,22 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 // '{"action": cmn.ActRebalance}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	var (
-		msg = &cmn.ActionMsg{}
-	)
 	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
 	if err != nil {
 		return
 	}
-	// cluster-wide: designate a new primary proxy administratively
-	if len(apitems) > 0 {
-		switch apitems[0] {
-		case cmn.Proxy:
-			p.httpclusetprimaryproxy(w, r)
-			return
-		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-			query := r.URL.Query()
-			kvs := cmn.NewSimpleKVsFromQuery(query)
-			if err := jsp.SetConfigMany(kvs); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			results := p.bcastPut(bcastArgs{
-				req: cmn.ReqArgs{
-					Path:  cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig),
-					Query: query,
-				},
-				to: cluster.AllNodes,
-			})
-			for res := range results {
-				if res.err != nil {
-					p.invalmsghdlr(w, r, res.err.Error())
-					p.keepalive.onerr(err, res.status)
-					return
-				}
-			}
-			return
-		case cmn.ActAttach:
-			var (
-				query = r.URL.Query()
-				what  = query.Get(cmn.URLParamWhat)
-			)
-			// TODO: cmn.ActAttach to attach mountpath as well
-			if what != cmn.GetWhatRemoteAIS {
-				cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf(fmtUnknownQue, what))
-				return
-			}
-			if err := p.attachRemoteAIS(query); err != nil {
-				cmn.InvalidHandlerWithMsg(w, r, err.Error())
-				return
-			}
-			results := p.bcastPut(bcastArgs{
-				req: cmn.ReqArgs{
-					Path:  cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActAttach),
-					Query: query,
-				},
-				to: cluster.AllNodes,
-			})
-			for res := range results {
-				if res.err != nil {
-					p.invalmsghdlr(w, r, res.err.Error())
-					p.keepalive.onerr(err, res.status)
-					return
-				}
-			}
-			// NOTE: save config unconditionally (see also: cmn.ActPersist)
-			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatRemoteAIS)); err != nil {
-				glog.Error(err)
-			}
-			return
-		}
+	if len(apitems) == 0 {
+		p.cluputJSON(w, r)
+	} else {
+		p.cluputQuery(w, r, apitems[0])
 	}
+}
+
+func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
+	var (
+		err error
+		msg = &cmn.ActionMsg{}
+	)
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
@@ -3152,6 +3098,69 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		p.invalmsghdlr(w, r, s)
+	}
+}
+
+func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action string) {
+	var (
+		err   error
+		query = r.URL.Query()
+	)
+	switch action {
+	case cmn.Proxy:
+		// cluster-wide: designate a new primary proxy administratively
+		p.httpclusetprimaryproxy(w, r)
+	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
+		kvs := cmn.NewSimpleKVsFromQuery(query)
+		if err := jsp.SetConfigMany(kvs); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		results := p.bcastPut(bcastArgs{
+			req: cmn.ReqArgs{
+				Path:  cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig),
+				Query: query,
+			},
+			to: cluster.AllNodes,
+		})
+		for res := range results {
+			if res.err != nil {
+				p.invalmsghdlr(w, r, res.err.Error())
+				p.keepalive.onerr(err, res.status)
+				return
+			}
+		}
+	case cmn.ActAttach, cmn.ActDetach: // TODO: add cmn.ActAttach/Detach mountpath as well
+		var (
+			what = query.Get(cmn.URLParamWhat)
+		)
+		if what != cmn.GetWhatRemoteAIS {
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf(fmtUnknownQue, what))
+			return
+		}
+		if err := p.attachDetachRemoteAIS(query, action); err != nil {
+			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			return
+		}
+		results := p.bcastPut(bcastArgs{
+			req: cmn.ReqArgs{
+				Path:  cmn.URLPath(cmn.Version, cmn.Daemon, action),
+				Query: query,
+			},
+			to: cluster.AllNodes,
+		})
+		// NOTE: save this config unconditionally
+		// TODO: metasync
+		if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", action, cmn.GetWhatRemoteAIS)); err != nil {
+			glog.Error(err)
+		}
+		for res := range results {
+			if res.err != nil {
+				p.invalmsghdlr(w, r, res.err.Error())
+				p.keepalive.onerr(err, res.status)
+				return
+			}
+		}
 	}
 }
 

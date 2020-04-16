@@ -12,11 +12,9 @@ import (
 	"github.com/urfave/cli"
 )
 
-// TODO: detach remote cluster
-// TODO: show attached clusters and their props
-// TODO: attach or enable mountpath
-// TODO: detach/disable ALL OF THE ABOVE
-// TODO: help messages and other usability
+// TODO: attach/enable/detach/disable mountpath
+// TODO: remote detach: use showRemoteAISHandler() to populate completions
+// TODO: help messages and usability
 
 var (
 	attachCmdsFlags = map[string][]cli.Flag{
@@ -48,6 +46,35 @@ var (
 			},
 		},
 	}
+	detachCmdsFlags = map[string][]cli.Flag{
+		subcmdAttachRemoteAIS: {},
+		subcmdAttachMountpath: {},
+	}
+
+	detachCmds = []cli.Command{
+		{
+			Name:  commandDetach,
+			Usage: "detach remote cluster; detach mountpath",
+			Subcommands: []cli.Command{
+				{
+					Name:         subcmdDetachRemoteAIS,
+					Usage:        "detach remote cluster",
+					ArgsUsage:    detachRemoteAISArgument,
+					Flags:        detachCmdsFlags[subcmdDetachRemoteAIS],
+					Action:       detachRemoteAISHandler,
+					BashComplete: detachRemoteAISCompletions,
+				},
+				{
+					Name:         subcmdDetachMountpath,
+					Usage:        "detach mountpath",
+					ArgsUsage:    detachMountpathArgument,
+					Flags:        detachCmdsFlags[subcmdDetachMountpath],
+					Action:       detachMountpathHandler,
+					BashComplete: detachMountpathCompletions,
+				},
+			},
+		},
+	}
 )
 
 func attachRemoteAISHandler(c *cli.Context) (err error) {
@@ -62,6 +89,22 @@ func attachRemoteAISHandler(c *cli.Context) (err error) {
 	return
 }
 
+func detachRemoteAISHandler(c *cli.Context) (err error) {
+	if c.NArg() == 0 {
+		err = missingArgumentsError(c, aliasArgument)
+		return
+	}
+	alias := c.Args().Get(0)
+	if err = api.DetachRemoteAIS(defaultAPIParams, alias); err != nil {
+		return
+	}
+	fmt.Fprintf(c.App.Writer, "remote cluster successfully detached\n")
+	return
+}
+
 func attachMountpathHandler(c *cli.Context) (err error) {
+	return incorrectUsageMsg(c, "not implemented yet")
+}
+func detachMountpathHandler(c *cli.Context) (err error) {
 	return incorrectUsageMsg(c, "not implemented yet")
 }

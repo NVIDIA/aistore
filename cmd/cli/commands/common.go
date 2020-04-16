@@ -38,6 +38,7 @@ const (
 	commandCat       = "cat"
 	commandWait      = "wait"
 	commandAttach    = "attach"
+	commandDetach    = "detach"
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase
@@ -104,6 +105,8 @@ const (
 	// Attach/Detach subcommand
 	subcmdAttachRemoteAIS = subcmdRemoteAIS
 	subcmdAttachMountpath = subcmdMountpath
+	subcmdDetachRemoteAIS = subcmdRemoteAIS
+	subcmdDetachMountpath = subcmdMountpath
 
 	// Register subcommands
 	subcmdRegisterProxy  = subcmdProxy
@@ -126,6 +129,7 @@ const (
 	noArguments                 = " "
 	keyValuePairsArgument       = "KEY=VALUE [KEY=VALUE...]"
 	aliasURLPairArgument        = "ALIAS=URL (or UUID=URL)"
+	aliasArgument               = "ALIAS (or UUID)"
 	daemonMountpathPairArgument = "DAEMON_ID=MOUNTPATH [DAEMON_ID=MOUNTPATH...]"
 
 	// Job IDs (download, dsort)
@@ -157,7 +161,9 @@ const (
 	showConfigArgument         = "DAEMON_ID [CONFIG_SECTION]"
 	setConfigArgument          = optionalDaemonIDArgument + " " + keyValuePairsArgument
 	attachRemoteAISArgument    = aliasURLPairArgument
+	detachRemoteAISArgument    = aliasArgument
 	attachMountpathArgument    = daemonMountpathPairArgument
+	detachMountpathArgument    = daemonMountpathPairArgument
 	registerNodeArgument       = "IP:PORT " + optionalDaemonIDArgument
 	startDownloadArgument      = "SOURCE DESTINATION"
 	jsonSpecArgument           = "JSON_SPECIFICATION"
