@@ -320,7 +320,7 @@ var (
 		"size":      "{{FormatBytesSigned $obj.Size 2}}\t",
 		"checksum":  "{{$obj.Checksum}}\t",
 		"type":      "{{$obj.Type}}\t",
-		"atime":     "{{FormatUnixNano $obj.Atime}}\t",
+		"atime":     "{{$obj.Atime}}\t",
 		"bucket":    "{{$obj.Bucket}}\t",
 		"version":   "{{$obj.Version}}\t",
 		"targetURL": "{{$obj.TargetURL}}\t",
