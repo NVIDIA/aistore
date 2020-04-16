@@ -18,27 +18,25 @@ node /opt/statsd/stats.js /opt/statsd/statsd.conf &
 mkdir /var/log/aismisc
 
 #
-# If this pod is part of the proxy daemonset then the initContainer in that
-# daemonset spec has run to completion and checked whether the node we're
-# hosted on is labeled as initial primary proxy. If it is, then the current
-# pod is labeled as initial primary proxy (satisfying the selection criteria
-# for the primary proxy headless service, so creating the DNS entry we
-# require).
+# If /var/ais_env/env exists then the initContainer that runs only on
+# prody pods has determined:
+#  - that we're in initial cluster deployment (proxy clusterIP can't return an smap)
+#  - that the current node is labeled as initial primary proxy
+# We'll pass a hint on to the aisnode instance that it is likely the (initial) primary.
 #
-# It would be nice to consult metadata.labels in the Downward API to
-# see if this pod has been labeled as described. Alas, the Downward API
-# offers only the value from before the pod started and the initContainer ran.
-# We also cannot use kubectl without granting this AIS pod more privs than
-# is suitable. So instead we continue to rely on a file passed in a mount
-# path.
-#
-if [[ -f /var/ais_env/env ]]; then
-    echo "The initContainer detected running on node labeled as initial primary proxy"
+if [[ "${ROLE}" != "target" && -f /var/ais_env/env ]]; then
+    echo "Running on node labeled as initial primary proxy during initial cluster deployment"
     export AIS_IS_PRIMARY=True
     is_primary=true
 else
+    #
+    # This path is taken for:
+    #  - all target pods
+    #  - proxy pods during initial deployment starting up on a node that is not labeled
+    #    as initial primary proxy
+    #  - all proxy pods once initial k8s deployment is done
     # Caution - don't set AIS_IS_PRIMARY false here, it just looks for any non-NULL value
-    echo "The initContainer determined our node is not labeled as initial primary proxy"
+    #
     is_primary=false
 fi
 
@@ -63,80 +61,49 @@ fi
 echo "Our ais daemon id will be $AIS_DAEMONID"
 
 #
-# During initial cluster deployment (helm install), there's no assured sequencing of the
-# relative startup order of proxy & target pods on a node, not to mention across multiple nodes.
-# So target pods can start before any proxy pods - and, even if all proxies started before targets,
-# the proxies need some time to get their house in order. If a newly-minted target pod
-# tries way too early then we might not yet have published the DNS entry for
-# the ais-initial-primary-proxy service (that pod may still be starting, it may
-# even still be in the process of downloading the appropriate container image) and
-# registration attempts will short-circuit with name resolution failures.
-# After a few retries AIS will give up, and that can be quite a short period
-# in cases like that of name resolution failure. As a daemonset it will just be restarted,
-# but if it happens too quickly k8s will apply a backoff time and can eventually
-# place us in error state.
-#
-# A helm preinstall hook removes .ais./smap and helminstall.timestamp. We use the
-# latter file to record the approximate time of initial cluster deployment - approximate
-# because we only create it below and our execution may have been delayed by image download
-# etc. Really, it is a measure of the first time this proxy or target container has
-# ever started up up on this node since helm install.
-#
-
-tsf=/etc/ais/helminstall.timestamp
-if [[ -f $tsf ]]; then
-    install_age=$(( $(date +%s) - $(stat --format=%Y $tsf) ))
-    early_startup=false
-    [[ $install_age -lt 90 ]] && early_startup=true
-    echo "Deployment age is ~${install_age}s, early_startup=$early_startup"
-else
-    touch $tsf
-    early_startup=true
-    echo "This is the first startup of this container for the current deployment"
-    rm -f /etc/ais/*.agg
-fi
-
-#
-# Decide the cases in which we must wait for the initial primary proxy to become pingable.
-# 
-# Once early startup is past, we never wait for the initial primary proxy - it's only
-# required for initial startup and thereafter its absence must not be a barrier to nodes
-# joining the cluster (some other proxy should have become primary).
-#
-# During early startup, all target and non-primary proxy nodes must wait for the initial primary
-# to be resolvable and pingable.
-#
-must_wait=false
-if $early_startup; then
-    if [[ "$ROLE" == "target" ]]; then
-        must_wait=true
-    elif ! $is_primary; then
-        must_wait=true
-    fi
-fi
-
-#
-# The following is informational. Since .ais.smap is removed by the preinstall hook, seeing
-# an .ais.smap usually means this is an aisnode restart in an established cluster. But if
-# an aisnode exits and we restart during early startup it may already have created an .ais.smap
-# which will change the startup logic for the new instance - perhaps there's a case for
-# removing the cached .ais.smap in the early start case, but we'll just log the existence
-# or absence of the file.
+# Informational
 #
 if [[ -f /etc/ais/.ais.smap ]]; then
-    echo "A cached .ais.smap is present"
+    cat <<-EOM
+     --- BEGIN cached .ais.smap ---
+     $(usr/local/bin/xmeta -x -in=/etc/ais/.ais.smap)
+     --- END cached .ais.smap ---
+EOM
 else
     echo "No cached .ais.smap"
 fi
 
+#
+# During initial cluster deployment (helm install), there's no assured sequencing of the
+# relative startup order of proxy & target pods on a node, not to mention across multiple nodes.
+# So target pods can start before any proxy pods - and, even if all proxies started before targets,
+# the proxies need some time to get their house in order. These times can also be stretched
+# by such things as container image download.
+# 
+# Thus we require that all pods (except the initial primary proxy during initial cluster
+# deployment) wait here until they can both:
+#  - resolve and ping the proxy clusterIP service; this should always be possible since the
+#    DNS entry is created by virtue of defining the service, and a clusterIP service is
+#    pingable even if it has no endpoints
+#  - retrieve an smap from the clusterIP service; for an established cluster this is a given
+#    so does not delay rolling upgrade; during initial cluster deployment the initial primary
+#    proxy will respond on the v1/daemon endpoint as soon as it is bootstrapped and ready for
+#    registrations (note that it won't respond on v1/health until an initial startup period
+#    has passed).
+#
 total_wait=0
-if $must_wait; then
-    echo "Waiting for initial primary proxy to be resolvable and pingable"
+if ! $is_primary; then
+    echo "Waiting for proxy clusterIP service ($CLUSTERIP_PROXY_SERVICE_HOSTNAME) to be resolvable and pingable"
     ping_result="failure"
-    # k8s liveness will likely fail and restart us before the 120s period is over, anyway
-    while [[ $total_wait -lt 120 ]]; do
+    
+    #
+    # Note that a clusterIP service is pingable *once created*, irrespective of whether it is
+    # yet backed by any endpoints. So the following wait tends to be pretty short.
+    #
+    elapsed=0
+    while [[ $elapsed -lt 60 ]]; do
         # Single success will end, otherwise wait at most 10s
-        ping -c 1 -w 10 $PRIMARY_PROXY_SERVICE_HOSTNAME
+        ping -c 1 -w 10 $CLUSTERIP_PROXY_SERVICE_HOSTNAME
         if [[ $? -eq 0 ]]; then
             ping_result="success"
             break
@@ -145,31 +112,57 @@ if $must_wait; then
         if [[ $? -eq 1 ]]; then
             # could resolve but not ping, nearly there! the -w timeout means we
             # waited 10s during the ping.
-            total_wait=$((total_wait + 10))
+            echo "ping timeout after 10s, can resolve but not ping; retrying"
+            elapsed=$((elapsed + 10))
         else
+            echo "ping timeout after 10s, cannot resolve or other failure; retry in 5s to a max of 60s"
             sleep 5                     # code 2 means resolve failure, treat any others the same
-            total_wait=$((total_wait + 5))
+            elapsed=$((elapsed + 5))
         fi
 
-        echo "Ping total wait time so far: $total_wait"
+        echo "Ping total wait time so far: $elapsed"
+    done
+    total_wait=$((total_wait + elapsed))
+
+    echo "Ping $ping_result; waited a total of around $elapsed seconds"
+    [[ $ping_result == "failure" ]] && exit 2
+
+    #
+    # Now that the proxy clusterIP has a DNS entry and is pingable, wait until we're able
+    # to retrieve a valid smap via the service. During initial deployment all non-primary
+    # proxies along with target pods will wait here until the initial primary proxy
+    # starts responding; for restarts in an established cluster we should succeed
+    # immediately (and if it doesn't there's no point in proceeding past this point, anyway).
+    #
+    proxy_ok=false
+    d_url="http://${CLUSTERIP_PROXY_SERVICE_HOSTNAME}:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/daemon?what=smap"
+    echo "Waiting for a 200 result on ${d_url}"
+    elapsed=0
+    while [[ $elapsed -lt 60 ]]; do
+        d_code=$(curl -X GET -o /dev/null --silent -w "%{http_code}" $d_url)
+        if [[ "$d_code" == "200" ]]; then
+            echo "   ... success after ${elapsed}s"
+            proxy_ok=true
+            break
+        else
+            echo "   ... failed (code=$d_code) at ${elapsed}s, trying for up to 60s"
+            elapsed=$((elapsed + 1))
+            sleep 1
+        fi
     done
 
-    echo "Ping $ping_result; waited a total of around $total_wait seconds"
+    total_wait=$((total_wait + elapsed))
 
-    #
-    # Can resolve and ping, or gave up; regardless, introduce a brief snooze before proceeding
-    # to give the initial primary a few moments to establish before further aisnode instances
-    # start trying to register.
-    #
-    # XXX Should also consider the pingability of the proxy clusterIP service?
-    #
-    sleep 5
+    $proxy_ok || exit 3
 fi
 
 # token effort to allow StatsD to set up shop before ais tries to connect
 [[ $total_wait -le 2 ]] && sleep 2
 
-ARGS="-config=/etc/ais/$(basename -- $CONFFILE) -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true"
+ARGS="-config=/etc/ais/$(basename -- $CONFFILE) -role=$ROLE -alsologtostderr=true -stderrthreshold=1"
+
+$is_primary && ARGS+=" -ntargets=$TARGETS"
+echo "aisnode args: $ARGS"
 
 # See https://github.com/golang/go/issues/28466
 export GODEBUG="madvdontneed=1"
@@ -187,10 +180,29 @@ do
         (cd /go/src/github.com/NVIDIA/aistore/ais && go run -gcflags="all=-N -l" setup/aisnode.go $ARGS)
     else
         echo "Cannot find an ais binary or source tree"
+    exit 2
     fi
 
-    # Ye olde debug hack - create this in the hostmount to cause us to loop and restart on exit
-    # XXX TODO remove me someday
+    rc=$?   # exit code from aisnode
+
+    #
+    # If/when aisnode exits, aggregate aisnode logs in a persistent
+    # location so that we can see all logs across container restarts
+    # (kubectl logs only has the current and previous container
+    # instances available).
+    #
+    # XXX Needs some log rotation etc in time, just a quick fix for
+    # now.
+    #
+    cat /var/log/ais/aisnode.INFO >> /etc/ais/INFO.agg
+    cat /var/log/ais/aisnode.ERROR >> /etc/ais/ERROR.agg
+    cat /var/log/ais/aisnode.WARNING >> /etc/ais/WARNING.agg
+
+    # Exit now if aisnode received SIGINT (see preStop lifecycle hook)
+    [[ $rc -eq $((128 + 2)) ]] && exit 0
+
+    # Ye olde debug hack - create this in the hostmount to cause us to
+    # loop and restart on exit
     [[ -f "/etc/ais/debug_doloop" ]] || break
     echo "ais exited, restarting in loop per debug request in /etc/ais/debug_doloop"
     sleep 5 # slow any rapid-fail loops!
@@ -202,21 +214,3 @@ do
     done
 
 done
-
-
-#
-# TODO: On non-zero return from ais preserve some logs into a hostPath mounted
-# volume.
-#
-
-#
-# If/when aisnode exits, aggregate aisnode logs in a persistent location so that we
-# can see all logs across container restarts (kubectl logs only has the current and
-# previous container instances available).
-#
-# XXX Needs some log rotation etc in time, just a quick fix for now. These files are
-# removed on helm install - see earlier in this file.
-#
-cat /var/log/ais/aisnode.INFO >> /etc/ais/INFO.agg
-cat /var/log/ais/aisnode.ERROR >> /etc/ais/ERROR.agg
-cat /var/log/ais/aisnode.WARNING >> /etc/ais/WARNING.agg

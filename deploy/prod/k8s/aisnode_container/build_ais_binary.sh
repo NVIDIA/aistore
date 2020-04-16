@@ -78,7 +78,7 @@ fi
 # image that is then also cloud-specific).
 #
 echo "Cloud provider set to: ${CLDPROVIDER}"
-cd "${GOPATH}/src/${AISTORE_SRC}" && MODE=$2 GOBIN=$1 make node
-[[ $? -eq 0 ]] || whinge "failed to compile 'node'"
+cd "${GOPATH}/src/${AISTORE_SRC}" && MODE=$2 GOBIN=$1 make node cli xmeta
+[[ $? -eq 0 ]] || whinge "failed to compile one of 'node', 'cli', or 'xmeta'"
 
 exit 0

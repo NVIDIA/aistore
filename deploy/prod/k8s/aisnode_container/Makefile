@@ -64,7 +64,8 @@ DOCKER_CTXDIR:=$(shell mktemp -d)
 aisnode_image:
 	$(BUILD_AISNODE) $(DOCKER_CTXDIR)
 	cp $(DOCKERFILE_AISNODE) $(DOCKER_CTXDIR)/Dockerfile
-	cp $(DOCKER_START) $(DOCKER_CTXDIR)
+	cp $(DOCKER_START) $(DOCKER_CTXDIR) 
+	cp ais_readiness.sh $(DOCKER_CTXDIR)
 	git show-branch --more=10 > $(DOCKER_CTXDIR)/git-showbranch.out
 	$(DOCKER) build \
 		-f $(DOCKER_CTXDIR)/Dockerfile \
@@ -76,6 +77,7 @@ aisnode_image:
 aisnode_debug_image:
 	cp $(DOCKERFILE_AISNODE_DEBUG) $(DOCKER_CTXDIR)/Dockerfile
 	cp $(DOCKER_START) $(DOCKER_CTXDIR)
+	cp ais_readiness.sh $(DOCKER_CTXDIR)
 	mkdir $(DOCKER_CTXDIR)/go
 	cp -r $(HOME)/go $(DOCKER_CTXDIR)/go
 	$(DOCKER) build \
