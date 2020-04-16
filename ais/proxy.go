@@ -165,6 +165,8 @@ func (p *proxyrunner) Run() error {
 	}
 	p.registerNetworkHandlers(networkHandlers)
 
+	p.registerPublicNetHandler("/s3", p.s3Handler)
+
 	glog.Infof("%s: [public net] listening on: %s", p.si, p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {
 		glog.Infof("%s: [intra control net] listening on: %s", p.si, p.si.IntraControlNet.DirectURL)

@@ -319,6 +319,12 @@ func (t *targetrunner) initRecvHandlers() {
 		}
 	)
 	t.registerNetworkHandlers(networkHandlers)
+
+	// S3 compatibility layer
+	t.registerPublicNetHandler("/s3", t.s3Handler)
+	if cmn.GCO.Get().Net.UseIntraData {
+		t.registerIntraDataNetHandler("/s3", t.s3Handler)
+	}
 }
 
 // target-only stats
