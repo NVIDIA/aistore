@@ -510,10 +510,19 @@ func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 		if err := bck.Ns.Validate(); err != nil {
 			return bck, "", err
 		}
+		if len(parts) == 1 {
+			// Only "provider://@uuid#ns" was provided
+			return bck, "", nil
+		}
 		parts = strings.SplitN(parts[1], bucketSepa, 2)
 	}
 
 	bck.Name = parts[0]
+	if bck.Name != "" {
+		if err := cmn.ValidateBckName(bck.Name); err != nil {
+			return bck, "", err
+		}
+	}
 	if len(parts) > 1 {
 		object = parts[1]
 	}
