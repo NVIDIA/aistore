@@ -141,12 +141,10 @@ TEST_FSPATH_COUNT=${test_fspath_cnt}
 
 CLDPROVIDER=""
 echo "Select:"
-echo " 0: No cloud provider"
-echo " 1: Amazon Cloud"
-echo " 2: Google Cloud"
-echo " 3: AIS Cloud - remote cluster"
-echo " 4: Azure Cloud"
-echo "Select cloud provider (0, 1, 2, 3, or 4):"
+echo " 0: No 3rd party Cloud"
+echo " 1: Amazon S3"
+echo " 2: Google Cloud Storage"
+echo " 3: Azure Cloud"
 read -r cld_provider
 is_number ${cld_provider}
 
@@ -157,11 +155,9 @@ elif [[ ${cld_provider} -eq 1 ]]; then
 elif [[ ${cld_provider} -eq 2 ]]; then
   CLDPROVIDER="gcp"
 elif [[ ${cld_provider} -eq 3 ]]; then
-  CLDPROVIDER="ais"
-elif [[ ${cld_provider} -eq 4 ]]; then
   CLDPROVIDER="azure"
 else
-  printError "${cld_provider} is not a valid entry"
+  printError "${cld_provider} is not a valid entry - expecting 0, 1, 2, or 3"
 fi
 
 if ! CLDPROVIDER=${CLDPROVIDER} make --no-print-directory -C ${AISTORE_DIR} node; then

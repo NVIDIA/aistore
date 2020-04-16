@@ -163,12 +163,10 @@ TEST_FSPATH_COUNT=$testfspathcnt
 LOCAL_AWS="/aisconfig/aws.env"
 CLDPROVIDER="" # See deploy.sh for more informations about empty CLDPROVIDER
 echo "Select:"
-echo " 0: No cloud provider"
-echo " 1: Amazon Cloud"
-echo " 2: Google Cloud"
-echo " 3: AIS Cloud - remote cluster"
-echo " 4: Azure Cloud"
-echo "Select cloud provider (0, 1, 2, 3, or 4):"
+echo " 0: No 3rd party Cloud"
+echo " 1: Amazon S3"
+echo " 2: Google Cloud Storage"
+echo " 3: Azure Cloud"
 read cldprovider
 if [ $cldprovider -eq 1 ]; then
     CLDPROVIDER="aws"
@@ -211,8 +209,9 @@ if [ $cldprovider -eq 1 ]; then
 elif [ $cldprovider -eq 2 ]; then
   CLDPROVIDER="gcp"
   echo "" > ${LOCAL_AWS}
+
 elif [ $cldprovider -eq 3 ]; then
-  CLDPROVIDER="ais"
+  CLDPROVIDER="azure"
   echo "" > ${LOCAL_AWS}
 fi
 

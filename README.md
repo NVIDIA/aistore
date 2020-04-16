@@ -95,12 +95,10 @@ Enter number of proxies (gateways):
 Number of local cache directories (enter 0 to use preconfigured filesystems):
 2
 Select:
- 0: No cloud provider
- 1: Amazon Cloud
- 2: Google Cloud
- 3: AIS Cloud - remote cluster
- 4: Azure Cloud
-Select cloud provider (0, 1, 2, 3, or 4):
+ 0: No 3rd party Cloud
+ 1: Amazon S3
+ 2: Google Cloud Storage
+ 3: Azure Cloud
 0
 ```
 
@@ -110,7 +108,7 @@ Or, you can run all of the above non-interactively:
 $ make kill; make deploy <<< $'10\n3\n2\n0'
 ```
 
->  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud Provider" prompt above and the fact that access to Cloud storage is specified at the deployment time.
+>  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
 > `make kill` will terminate local AIStore if it's already running.
 

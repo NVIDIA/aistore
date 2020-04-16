@@ -287,13 +287,11 @@ if [ $DRYRUN -ne 0 ]; then
 fi
 
 if [[ -z $CLOUD ]]; then
-    echo "Select"
-    echo " 0: No cloud provider"
-    echo " 1: Use AWS"
-    echo " 2: Use GCP"
-    echo " 3: Use AIS remote cluster"
-    echo " 4: Azure Cloud"
-    echo "Select cloud provider (0, 1, 2, 3, or 4):"
+    echo "Select:"
+    echo " 0: No 3rd party Cloud"
+    echo " 1: Amazon S3"
+    echo " 2: Google Cloud Storage"
+    echo " 3: Azure Cloud"
     read -r CLOUD
     is_number $CLOUD
     if [ $CLOUD -ne 0 ] && [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ] && [ $CLOUD -ne 3]; then
@@ -347,6 +345,9 @@ if [ $CLOUD -eq 1 ]; then
     sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
 elif [ $CLOUD -eq 2 ]; then
     CLDPROVIDER="gcp"
+    touch $LOCAL_AWS
+elif [ $CLOUD -eq 3 ]; then
+    CLDPROVIDER="azure"
     touch $LOCAL_AWS
 else
     CLDPROVIDER=""
