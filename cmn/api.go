@@ -600,3 +600,9 @@ func AddBckToQuery(query url.Values, bck Bck) url.Values {
 	}
 	return query
 }
+
+func DelBckFromQuery(query url.Values) url.Values {
+	query.Del(URLParamProvider)
+	query.Del(URLParamNamespace)
+	return query
+}

@@ -146,38 +146,16 @@ func TestNamespace(t *testing.T) {
 			m1.init()
 			m2.init()
 
-			if m1.bck.IsRemote() {
-				bck := m1.bck
-				bck.Ns.UUID = ""
-				tutils.CreateFreshBucket(t, remoteCluster.url, bck)
-			} else {
-				tutils.CreateFreshBucket(t, proxyURL, m1.bck)
-			}
-			if m2.bck.IsRemote() {
-				bck := m2.bck
-				bck.Ns.UUID = ""
-				tutils.CreateFreshBucket(t, remoteCluster.url, bck)
-			} else {
-				tutils.CreateFreshBucket(t, proxyURL, m2.bck)
-			}
+			err := api.CreateBucket(baseParams, m1.bck)
+			tassert.CheckFatal(t, err)
+			err = api.CreateBucket(baseParams, m2.bck)
+			tassert.CheckFatal(t, err)
 
 			defer func() {
-				if m2.bck.IsRemote() {
-					api.EvictCloudBucket(baseParams, m2.bck)
-					bck := m2.bck
-					bck.Ns.UUID = ""
-					tutils.DestroyBucket(t, remoteCluster.url, bck)
-				} else {
-					tutils.DestroyBucket(t, proxyURL, m2.bck)
-				}
-				if m1.bck.IsRemote() {
-					api.EvictCloudBucket(baseParams, m1.bck)
-					bck := m1.bck
-					bck.Ns.UUID = ""
-					tutils.DestroyBucket(t, remoteCluster.url, bck)
-				} else {
-					tutils.DestroyBucket(t, proxyURL, m1.bck)
-				}
+				err := api.DestroyBucket(baseParams, m2.bck)
+				tassert.CheckFatal(t, err)
+				err = api.DestroyBucket(baseParams, m1.bck)
+				tassert.CheckFatal(t, err)
 			}()
 
 			// Test listing buckets

@@ -551,6 +551,11 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
+		if bck.IsRemoteAIS() {
+			if err := p.reverseReqRemote(w, r, &msg, bck.Bck); err != nil {
+				return
+			}
+		}
 		if err := p.destroyBucket(&msg, bck); err != nil {
 			if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok { // race
 				glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
@@ -738,6 +743,12 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	if bck.IsRemoteAIS() {
+		p.reverseReqRemote(w, r, &msg, bck.Bck)
+		return
+	}
+
 	config := cmn.GCO.Get()
 
 	if msg.Action != cmn.ActListObjects && guestAccess {
@@ -751,7 +762,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if bck.IsCloud(cmn.AnyCloud) || bck.IsRemoteAIS() {
+		if bck.IsCloud(cmn.AnyCloud) {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtErr, msg.Action, bck.Provider))
 			return
 		}
@@ -1285,6 +1296,47 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 	}
 
 	rproxy.ServeHTTP(w, r)
+}
+
+func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck cmn.Bck) (err error) {
+	var (
+		remoteUUID = bck.Ns.UUID
+		query      = r.URL.Query()
+
+		v, configured = cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
+	)
+
+	if !configured {
+		err = errors.New("ais remote cloud is not configured")
+		p.invalmsghdlr(w, r, err.Error())
+		return err
+	}
+
+	aisConf := v.(cmn.CloudConfAIS)
+	urls, exists := aisConf[remoteUUID]
+	if !exists {
+		err = fmt.Errorf("remote UUID/alias (%s) not found", remoteUUID)
+		p.invalmsghdlr(w, r, err.Error())
+		return err
+	}
+
+	cmn.Assert(len(urls) > 0)
+	u, err := url.Parse(urls[0])
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return err
+	}
+	if msg != nil {
+		body := cmn.MustMarshal(msg)
+		r.Body = ioutil.NopCloser(bytes.NewReader(body))
+	}
+
+	bck.Ns.UUID = ""
+	query = cmn.DelBckFromQuery(query)
+	query = cmn.AddBckToQuery(query, bck)
+	r.URL.RawQuery = query.Encode()
+	p.reverseRequest(w, r, remoteUUID, u)
+	return nil
 }
 
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error) {
@@ -2086,13 +2138,17 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			return
-		case cmn.ActAttach:
+		case cmn.ActAttach, cmn.ActDetach:
 			var (
 				query = r.URL.Query()
 				what  = query.Get(cmn.URLParamWhat)
 			)
 			if what != cmn.GetWhatRemoteAIS {
 				p.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
+				return
+			}
+			if err := p.attachDetachRemoteAIS(query, apitems[0]); err != nil {
+				cmn.InvalidHandlerWithMsg(w, r, err.Error())
 				return
 			}
 			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatRemoteAIS)); err != nil {

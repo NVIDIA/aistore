@@ -590,9 +590,6 @@ func validateLocalBuckets(buckets []cmn.Bck, operation string) error {
 		if bck.IsCloud(cmn.AnyCloud) {
 			return fmt.Errorf("%s cloud buckets (%s) is not supported", operation, bck)
 		}
-		if bck.IsRemoteAIS() {
-			return fmt.Errorf("%s remote ais buckets (%s) is not supported", operation, bck)
-		}
 		bck.Provider = cmn.ProviderAIS
 	}
 	return nil
