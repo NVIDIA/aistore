@@ -1256,7 +1256,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
-	if !bcks.Match(dstBck) {
+	if !bcks.Contains(dstBck) {
 		t.Error("new bucket not found in buckets list")
 	}
 
@@ -1364,7 +1364,7 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
-	if !bcks.Match(m.bck) || !bcks.Match(tmpBck) {
+	if !bcks.Contains(m.bck) || !bcks.Contains(tmpBck) {
 		t.Error("one of the buckets was not found in buckets list")
 	}
 
@@ -1441,13 +1441,13 @@ func TestRenameBucketTwice(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
-	if bcks.Match(srcBck) {
+	if bcks.Contains(srcBck) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !bcks.Match(dstBck1) {
+	if !bcks.Contains(dstBck1) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if bcks.Match(dstBck2) {
+	if bcks.Contains(dstBck2) {
 		t.Error("second (failed) destination bucket not found in buckets list")
 	}
 }
@@ -1735,13 +1735,13 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
-	if bcks.Match(srcBck) {
+	if bcks.Contains(srcBck) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !bcks.Match(dstBck1) {
+	if !bcks.Contains(dstBck1) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if bcks.Match(dstBck2) {
+	if bcks.Contains(dstBck2) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }
@@ -1819,13 +1819,13 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
-	if bcks.Match(srcBck) {
+	if bcks.Contains(srcBck) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !bcks.Match(dstBck1) {
+	if !bcks.Contains(dstBck1) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if bcks.Match(dstBck2) {
+	if bcks.Contains(dstBck2) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }

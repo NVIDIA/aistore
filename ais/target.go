@@ -1232,12 +1232,14 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *
 	t.writeJSON(w, r, cmn.MustMarshal(bucketNames), listBuckets)
 }
 
-func (t *targetrunner) _listBcks(r *http.Request, bck *cluster.Bck, cfg *cmn.Config) (bucketNames cmn.BucketNames, err error, c int) {
+func (t *targetrunner) _listBcks(r *http.Request, bck *cluster.Bck, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {
 	// 3rd party cloud or remote ais
 	if bck.Provider == cfg.Cloud.Provider || bck.IsRemoteAIS() {
-		bucketNames, err, c = t.Cloud(bck.Provider).ListBuckets(t.contextWithAuth(r.Header))
+		names, err, c = t.Cloud(bck.Provider).ListBuckets(t.contextWithAuth(r.Header))
+		names = names.Select(bck.Bck)
+		sort.Sort(names)
 	} else { // BMD
-		bucketNames = t.selectBMDBuckets(t.owner.bmd.get(), bck)
+		names = t.selectBMDBuckets(t.owner.bmd.get(), bck)
 	}
 	return
 }

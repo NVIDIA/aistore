@@ -1231,24 +1231,20 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config 
 
 func (h *httprunner) selectBMDBuckets(bmd *bucketMD, selbck *cluster.Bck) cmn.BucketNames {
 	var (
-		na   = bmd.NumAIS(nil /*all namespaces*/)
-		bcks = make(cmn.BucketNames, 0, na)
-		cp   = &selbck.Provider
+		names = make(cmn.BucketNames, 0, 10)
+		cp    = &selbck.Provider
 	)
 	if selbck.Provider == "" {
 		cp = nil
 	}
 	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		nsMatch := bck.Ns == selbck.Ns ||
-			selbck.Ns.IsGlobal() && bck.IsAIS() ||
-			selbck.Ns.IsGlobalRemote() && bck.IsRemote()
-		if nsMatch {
-			bcks = append(bcks, bck.Bck)
+		if selbck.Bck.Equal(bck.Bck) || selbck.Bck.Contains(bck.Bck) {
+			names = append(names, bck.Bck)
 		}
 		return false
 	})
-	sort.Sort(bcks)
-	return bcks
+	sort.Sort(names)
+	return names
 }
 
 func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {

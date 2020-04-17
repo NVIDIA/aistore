@@ -154,5 +154,5 @@ func IsCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck) bool {
 	baseParams := BaseAPIParams(proxyURL)
 	bcks, err := api.ListBuckets(baseParams, bck)
 	tassert.CheckFatal(t, err)
-	return bcks.Match(bck)
+	return bcks.Contains(bck)
 }

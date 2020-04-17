@@ -156,7 +156,7 @@ func DoesBucketExist(baseParams BaseParams, bck cmn.Bck) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return bcks.Match(bck), nil
+	return bcks.Contains(bck), nil
 }
 
 // CopyBucket API

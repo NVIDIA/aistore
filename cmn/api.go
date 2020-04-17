@@ -231,78 +231,6 @@ func (s BucketsSummaries) Get(bck Bck) (BucketSummary, bool) {
 	return BucketSummary{}, false
 }
 
-// BucketNames is used to transfer all bucket names known to the system
-type BucketNames []Bck
-
-func (b BucketNames) Len() int {
-	return len(b)
-}
-
-func (b BucketNames) Less(i, j int) bool {
-	return b[i].Less(b[j])
-}
-
-func (b BucketNames) Swap(i, j int) {
-	b[i], b[j] = b[j], b[i]
-}
-
-func (b BucketNames) Select(selbck Bck) BucketNames {
-	Assert(selbck.Name == "")
-	filtered := make(BucketNames, 0, 10)
-	for _, bck := range b {
-		var (
-			pvMatch = bck.Provider == selbck.Provider ||
-				selbck.Provider == "" ||
-				selbck.Provider == AnyCloud && bck.IsCloud()
-			nsMatch = bck.Ns == selbck.Ns ||
-				selbck.Ns.IsGlobal() && bck.IsAIS() ||
-				selbck.Ns.IsGlobalRemote() && bck.IsRemote()
-		)
-		if pvMatch && nsMatch {
-			filtered = append(filtered, bck)
-		}
-	}
-	return filtered
-}
-
-func (b BucketNames) Match(other Bck) bool {
-	for _, bck := range b {
-		if bck.Name == other.Name {
-			if other.Provider == "" {
-				return true
-			} else if other.Provider == AnyCloud && bck.IsCloud() {
-				return true
-			} else if bck.Equal(other) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (b BucketNames) Equal(bcks BucketNames) bool {
-	if len(b) != len(bcks) {
-		return false
-	}
-	for _, bck := range b {
-		if !bcks.Match(bck) {
-			return false
-		}
-	}
-	return true
-}
-
-func MakeAccess(aattr uint64, action string, bits uint64) uint64 {
-	if aattr == AllowAnyAccess {
-		aattr = AllowAllAccess
-	}
-	if action == AllowAccess {
-		return aattr | bits
-	}
-	Assert(action == DenyAccess)
-	return aattr & (AllowAllAccess ^ bits)
-}
-
 // BucketProps defines the configuration of the bucket with regard to
 // its type, checksum, and LRU. These characteristics determine its behavior
 // in response to operations on the bucket itself or the objects inside the bucket.
@@ -438,6 +366,17 @@ func (c *BucketProps) AccessToStr() string {
 		accList = append(accList, "ColdGET")
 	}
 	return strings.Join(accList, ",")
+}
+
+func MakeAccess(aattr uint64, action string, bits uint64) uint64 {
+	if aattr == AllowAnyAccess {
+		aattr = AllowAllAccess
+	}
+	if action == AllowAccess {
+		return aattr | bits
+	}
+	Assert(action == DenyAccess)
+	return aattr & (AllowAllAccess ^ bits)
 }
 
 func (c *MirrorConf) String() string {

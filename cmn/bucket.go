@@ -45,6 +45,8 @@ type (
 		Provider string `json:"provider"`
 		Ns       Ns     `json:"namespace"`
 	}
+
+	BucketNames []Bck
 )
 
 var (
@@ -79,6 +81,10 @@ func ParseNsUname(s string) (n Ns) {
 	return
 }
 
+////////
+// Ns //
+////////
+
 func (n Ns) String() string {
 	if n.IsGlobal() {
 		return ""
@@ -112,28 +118,55 @@ func (n Ns) Validate() error {
 	return nil
 }
 
-func (b Bck) Valid() bool {
-	return ValidateBckName(b.Name) == nil && IsValidProvider(b.Provider) && b.Ns.Validate() == nil
+func (n Ns) Contains(other Ns) bool {
+	if n.IsGlobal() {
+		return !other.IsRemote()
+	}
+	if n.IsGlobalRemote() {
+		return other.IsRemote()
+	}
+	return n == other
+}
+
+/////////
+// Bck //
+/////////
+
+// TODO: s/query Bck/query QueryBck/
+func (query Bck) Contains(other Bck) bool {
+	if query.Name != "" {
+		// NOTE: named bucket with no provider is assumed to be ais://
+		if other.Provider == "" {
+			other.Provider = ProviderAIS
+		}
+		return query.Equal(other)
+	}
+	ok := query.Provider == other.Provider ||
+		query.Provider == "" ||
+		query.Provider == AnyCloud && other.IsCloud()
+	return ok && query.Ns.Contains(other.Ns)
 }
 
 func (b Bck) Less(other Bck) bool {
+	if b.Contains(other) {
+		return true
+	}
 	if b.Provider != other.Provider {
 		return b.Provider < other.Provider
 	}
-	if b.Ns.IsGlobal() && !other.Ns.IsGlobal() {
-		return false
-	}
-	if !b.Ns.IsGlobal() && other.Ns.IsGlobal() {
-		return true
-	}
-	if b.Ns.String() != other.Ns.String() {
-		return b.Ns.String() < other.Ns.String()
+	sb, so := b.Ns.String(), other.Ns.String()
+	if sb != so {
+		return sb < so
 	}
 	return b.Name < other.Name
 }
 
 func (b Bck) Equal(other Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
+}
+
+func (b Bck) Valid() bool {
+	return ValidateBckName(b.Name) == nil && IsValidProvider(b.Provider) && b.Ns.Validate() == nil
 }
 
 func (b Bck) String() string {
@@ -151,9 +184,9 @@ func (b Bck) String() string {
 
 func (b Bck) IsEmpty() bool { return b.Name == "" && b.Provider == "" && b.Ns == NsGlobal }
 
-///////////////
-// Is-What-s //
-///////////////
+//
+// Is-Whats
+//
 
 func (n Ns) IsGlobal() bool       { return n == NsGlobal }
 func (n Ns) IsGlobalRemote() bool { return n == NsGlobalRemote }
@@ -177,4 +210,65 @@ func (b Bck) HasProvider() bool { return b.IsAIS() || b.IsCloud() }
 func IsValidProvider(provider string) bool {
 	_, ok := Providers[provider]
 	return ok
+}
+
+/////////////////
+// BucketNames //
+/////////////////
+
+func (names BucketNames) Len() int {
+	return len(names)
+}
+
+func (names BucketNames) Less(i, j int) bool {
+	return names[i].Less(names[j])
+}
+
+func (names BucketNames) Swap(i, j int) {
+	names[i], names[j] = names[j], names[i]
+}
+
+func (names BucketNames) Select(selbck Bck) (filtered BucketNames) {
+	for i, bck := range names {
+		if selbck.Contains(bck) {
+			if filtered != nil {
+				filtered = append(filtered, bck)
+			}
+		} else if filtered == nil {
+			filtered = make(BucketNames, 0, i+1)
+			filtered = append(filtered, names[:i]...)
+		}
+	}
+	if filtered == nil {
+		return names
+	}
+	return filtered
+}
+
+func (names BucketNames) Contains(other Bck) bool {
+	for _, bck := range names {
+		if bck.Equal(other) || bck.Contains(other) {
+			return true
+		}
+	}
+	return false
+}
+
+func (names BucketNames) Equal(other BucketNames) bool {
+	if len(names) != len(other) {
+		return false
+	}
+	for _, b1 := range names {
+		var found bool
+		for _, b2 := range other {
+			if b1.Equal(b2) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
