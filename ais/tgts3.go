@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/ec"
 )
 
 // PUT s3/bckName/objName
@@ -30,6 +31,8 @@ func (t *targetrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 		t.getObjS3(w, r, apitems)
 	case http.MethodPut:
 		t.putObjS3(w, r, apitems)
+	case http.MethodDelete:
+		t.delObjS3(w, r, apitems)
 	default:
 		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 		t.invalmsghdlr(w, r, s)
@@ -183,4 +186,43 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 		return
 	}
 	s3compat.SetHeaderFromLOM(w.Header(), lom)
+}
+
+// DEL s3/bckName/objName
+func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+	config := cmn.GCO.Get()
+	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+	if err := bck.Init(t.owner.bmd, nil); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if len(items) < 2 {
+		t.invalmsghdlr(w, r, "object name is undefined")
+		return
+	}
+	var (
+		err error
+	)
+	if err = bck.AllowDELETE(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	objName := path.Join(items[1:]...)
+	lom := &cluster.LOM{T: t, ObjName: objName}
+	if err = lom.Init(bck.Bck, config); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	err = t.objDelete(t.contextWithAuth(r.Header), lom, false)
+	if err != nil {
+		if cmn.IsObjNotExist(err) {
+			t.invalmsghdlrsilent(w, r,
+				fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.ObjName), http.StatusNotFound)
+		} else {
+			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err))
+		}
+		return
+	}
+	// EC cleanup if EC is enabled
+	ec.ECM.CleanupObject(lom)
 }

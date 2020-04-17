@@ -66,8 +66,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 			p.delBckS3(w, r, apitems[0])
 			return
 		}
-		// TODO: p.delObjS3(w, r, apitems)
-		p.invalmsghdlr(w, r, "not supported yet")
+		p.delObjS3(w, r, apitems)
 	default:
 		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 		p.invalmsghdlr(w, r, s)
@@ -292,5 +291,39 @@ func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []
 		glog.Infof("AISS3 %s %s/%s => %s", r.Method, bucket, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+}
+
+// DEL s3/bckName/objName
+func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+	started := time.Now()
+	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+	if err := bck.Init(p.owner.bmd, nil); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if len(items) < 2 {
+		p.invalmsghdlr(w, r, "object name is undefined")
+		return
+	}
+	var (
+		si   *cluster.Snode
+		smap = p.owner.smap.get()
+		err  error
+	)
+	if err = bck.AllowDELETE(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	objName := path.Join(items[1:]...)
+	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
+	}
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
