@@ -30,7 +30,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(apitems) == 1 {
-			p.invalmsghdlr(w, r, "HEAD for bucket is not implemnted yet")
+			p.headBckS3(w, r, apitems[0])
 			return
 		}
 		p.headObjS3(w, r, apitems)
@@ -48,11 +48,26 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 		// object data otherwise
 		p.getObjS3(w, r, apitems)
 	case http.MethodPut:
-		if len(apitems) < 2 {
-			p.invalmsghdlr(w, r, "objectname required")
+		if len(apitems) == 0 {
+			p.invalmsghdlr(w, r, "object or bucket name required")
+			return
+		}
+		if len(apitems) == 1 {
+			p.putBckS3(w, r, apitems[0])
 			return
 		}
 		p.putObjS3(w, r, apitems)
+	case http.MethodDelete:
+		if len(apitems) == 0 {
+			p.invalmsghdlr(w, r, "object or bucket name required")
+			return
+		}
+		if len(apitems) == 1 {
+			p.delBckS3(w, r, apitems[0])
+			return
+		}
+		// TODO: p.delObjS3(w, r, apitems)
+		p.invalmsghdlr(w, r, "not supported yet")
 	default:
 		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 		p.invalmsghdlr(w, r, s)
@@ -71,6 +86,74 @@ func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
 	b := resp.MustMarshal()
 	w.Header().Set("Content-Type", s3compat.ContentType)
 	w.Write(b)
+}
+
+// PUT s3/bck-name
+func (p *proxyrunner) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
+	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
+	if err := cmn.ValidateBckName(bucket); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	msg := cmn.ActionMsg{Action: cmn.ActCreateLB}
+	if p.forwardCP(w, r, &msg, bucket, nil) {
+		return
+	}
+	if err := p.createBucket(&msg, bck); err != nil {
+		errCode := http.StatusInternalServerError
+		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
+			errCode = http.StatusConflict
+		}
+		p.invalmsghdlr(w, r, err.Error(), errCode)
+	}
+}
+
+// DEL s3/bck-name
+// TODO: AWS allows to delete bucket only if it is empty
+func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
+	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
+	msg := cmn.ActionMsg{Action: cmn.ActDestroyLB}
+	if err := bck.Init(p.owner.bmd, p.si); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err := bck.AllowDELETE(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if p.forwardCP(w, r, &msg, bucket, nil) {
+		return
+	}
+	if err := p.destroyBucket(&msg, bck); err != nil {
+		errCode := http.StatusInternalServerError
+		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
+			glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
+			return
+		}
+		p.invalmsghdlr(w, r, err.Error(), errCode)
+	}
+}
+
+// HEAD s3/bck-name
+// TODO: AWS CLI does not use this API, so it is not tested for comatibility.
+// Requesting with cURL works.
+func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
+	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
+	if err := bck.Init(p.owner.bmd, p.si); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err := bck.AllowHEAD(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	// From AWS docs:
+	// This operation is useful to determine if a bucket exists and you have
+	// permission to access it. The operation returns a 200 OK if the bucket
+	// exists and you have permission to access it. Otherwise, the operation
+	// might return responses such as 404 Not Found and 403 Forbidden.
+	//
+	// So, as a basic implementation, it is enough to return status 200.
 }
 
 // GET s3/bckName
