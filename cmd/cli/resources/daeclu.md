@@ -107,25 +107,25 @@ Target		Disk	Read		Write		%Util
 164472t8087	sda	1.00KiB/s	4.26MiB/s	96
 ```
 
-## Register a node
+## Join a node
 
-`ais register proxy IP:PORT [DAEMON_ID]`
+`ais join proxy IP:PORT [DAEMON_ID]`
 
-Register a proxy in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+Join a proxy in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
 
-`ais register target IP:PORT [DAEMON_ID]`
+`ais join target IP:PORT [DAEMON_ID]`
 
-Register a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+Join a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
 
 ### Examples
 
-#### Register node
+#### Join node
 
-Register a proxy node with ID `23kfa10f` and socket address `192.168.0.185:8086`
+Join a proxy node with ID `23kfa10f` and socket address `192.168.0.185:8086`
 
 ```console
-$ ais register proxy 192.168.0.185:8086 23kfa10f
-Node with ID "23kfa10f" has been successfully added to the cluster.
+$ ais join proxy 192.168.0.185:8086 23kfa10f
+Proxy with ID "23kfa10f" has been successfully joined the cluster.
 ```
 
 ## Remove a node

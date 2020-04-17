@@ -20,29 +20,29 @@ var (
 		commandStatus: append(longRunFlags, jsonFlag, noHeaderFlag),
 	}
 
-	registerCmdsFlags = map[string][]cli.Flag{
-		subcmdRegisterProxy:  {},
-		subcmdRegisterTarget: {},
+	joinCmdsFlags = map[string][]cli.Flag{
+		subcmdJoinProxy:  {},
+		subcmdJoinTarget: {},
 	}
 
 	cluSpecificCmds = []cli.Command{
 		{
-			Name:  commandRegister,
+			Name:  commandJoin,
 			Usage: "add a node to the cluster",
 			Subcommands: []cli.Command{
 				{
-					Name:      subcmdRegisterProxy,
+					Name:      subcmdJoinProxy,
 					Usage:     "add a proxy node to the cluster",
-					ArgsUsage: registerNodeArgument,
-					Flags:     registerCmdsFlags[subcmdRegisterProxy],
-					Action:    registerNodeHandler,
+					ArgsUsage: joinNodeArgument,
+					Flags:     joinCmdsFlags[subcmdJoinProxy],
+					Action:    joinNodeHandler,
 				},
 				{
-					Name:      subcmdRegisterTarget,
+					Name:      subcmdJoinTarget,
 					Usage:     "add a target node to the cluster",
-					ArgsUsage: registerNodeArgument,
-					Flags:     registerCmdsFlags[subcmdRegisterTarget],
-					Action:    registerNodeHandler,
+					ArgsUsage: joinNodeArgument,
+					Flags:     joinCmdsFlags[subcmdJoinTarget],
+					Action:    joinNodeHandler,
 				},
 			},
 		},
@@ -57,7 +57,7 @@ var (
 	}
 )
 
-func registerNodeHandler(c *cli.Context) (err error) {
+func joinNodeHandler(c *cli.Context) (err error) {
 	var (
 		daemonType      = c.Command.Name // proxy|target
 		prefix          string
@@ -101,7 +101,7 @@ func registerNodeHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Node with ID %q successfully added to the cluster\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "%s with ID %q successfully joined the cluster\n", cmn.CapitalizeString(daemonType), daemonID)
 	return
 }
 

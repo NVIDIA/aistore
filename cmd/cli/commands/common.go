@@ -29,7 +29,7 @@ const (
 	commandRemove    = "rm"
 	commandEvict     = "evict"
 	commandCopy      = "cp"
-	commandRegister  = "register"
+	commandJoin      = "join"
 	commandGet       = "get"
 	commandPut       = "put"
 	commandPromote   = "promote"
@@ -108,9 +108,9 @@ const (
 	subcmdDetachRemoteAIS = subcmdRemoteAIS
 	subcmdDetachMountpath = subcmdMountpath
 
-	// Register subcommands
-	subcmdRegisterProxy  = subcmdProxy
-	subcmdRegisterTarget = subcmdTarget
+	// Join subcommands
+	subcmdJoinProxy  = subcmdProxy
+	subcmdJoinTarget = subcmdTarget
 
 	// Wait subcommands
 	subcmdWaitXaction  = subcmdXaction
@@ -164,7 +164,7 @@ const (
 	detachRemoteAISArgument    = aliasArgument
 	attachMountpathArgument    = daemonMountpathPairArgument
 	detachMountpathArgument    = daemonMountpathPairArgument
-	registerNodeArgument       = "IP:PORT " + optionalDaemonIDArgument
+	joinNodeArgument           = "IP:PORT " + optionalDaemonIDArgument
 	startDownloadArgument      = "SOURCE DESTINATION"
 	jsonSpecArgument           = "JSON_SPECIFICATION"
 
