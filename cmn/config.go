@@ -281,8 +281,17 @@ type CloudConf struct {
 	Provider string `json:"-"`
 }
 
+type RemoteAISInfo struct {
+	URL     string `json:"url"`
+	Alias   string `json:"alias"`
+	Primary string `json:"primary"`
+	Smap    int64  `json:"smap"`
+	Targets int32  `json:"targets"`
+	Online  bool   `json:"online"`
+}
+
 type CloudConfAIS map[string][]string // cluster alias -> [urls...]
-type CloudInfoAIS map[string][]string // cluster uuid -> [ urls, aliases, info ]
+type CloudInfoAIS map[string]*RemoteAISInfo
 
 type MirrorConf struct {
 	Copies      int64 `json:"copies"`       // num local copies

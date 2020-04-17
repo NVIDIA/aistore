@@ -98,7 +98,7 @@ func detachRemoteAISHandler(c *cli.Context) (err error) {
 	if err = api.DetachRemoteAIS(defaultAPIParams, alias); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "remote cluster successfully detached\n")
+	fmt.Fprintf(c.App.Writer, "Remote cluster %s successfully detached\n", alias)
 	return
 }
 

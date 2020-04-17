@@ -8,6 +8,7 @@ package commands
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/NVIDIA/aistore/api"
@@ -376,10 +377,25 @@ func showRemoteAISHandler(c *cli.Context) (err error) {
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 	if !flagIsSet(c, noHeaderFlag) {
-		fmt.Fprintln(tw, "UUID\tURL\tAlias\tInfo")
+		fmt.Fprintln(tw, "UUID\tURL\tAlias\tPrimary\tSmap\tTargets\tOnline")
 	}
 	for uuid, info := range aisCloudInfo {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", uuid, info[0], info[1], info[2])
+		online := "no"
+		if info.Online {
+			online = "yes"
+		}
+		if info.Smap > 0 {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\tv%d\t%d\t%s\n",
+				uuid, info.URL, info.Alias, info.Primary, info.Smap, info.Targets, online)
+		} else {
+			url := info.URL
+			if url[0] == '[' {
+				url = strings.Replace(url, "[", "<", 1)
+				url = strings.Replace(url, "]", ">", 1)
+			}
+			fmt.Fprintf(tw, "<%s>\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				uuid, url, info.Alias, "n/a", "n/a", "n/a", online)
+		}
 	}
 	tw.Flush()
 	return
