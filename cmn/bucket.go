@@ -45,6 +45,7 @@ type (
 		Provider string `json:"provider"`
 		Ns       Ns     `json:"namespace"`
 	}
+	QueryBcks Bck
 
 	BucketNames []Bck
 )
@@ -132,23 +133,8 @@ func (n Ns) Contains(other Ns) bool {
 // Bck //
 /////////
 
-// TODO: s/query Bck/query QueryBck/
-func (query Bck) Contains(other Bck) bool {
-	if query.Name != "" {
-		// NOTE: named bucket with no provider is assumed to be ais://
-		if other.Provider == "" {
-			other.Provider = ProviderAIS
-		}
-		return query.Equal(other)
-	}
-	ok := query.Provider == other.Provider ||
-		query.Provider == "" ||
-		query.Provider == AnyCloud && other.IsCloud()
-	return ok && query.Ns.Contains(other.Ns)
-}
-
 func (b Bck) Less(other Bck) bool {
-	if b.Contains(other) {
+	if QueryBcks(b).Contains(other) {
 		return true
 	}
 	if b.Provider != other.Provider {
@@ -212,6 +198,27 @@ func IsValidProvider(provider string) bool {
 	return ok
 }
 
+func (query QueryBcks) IsAIS() bool        { return Bck(query).IsAIS() }
+func (query QueryBcks) IsRemoteAIS() bool  { return Bck(query).IsRemoteAIS() }
+func (query QueryBcks) Equal(bck Bck) bool { return Bck(query).Equal(bck) }
+func (query QueryBcks) Contains(other Bck) bool {
+	if query.Name != "" {
+		// NOTE: named bucket with no provider is assumed to be ais://
+		if other.Provider == "" {
+			other.Provider = ProviderAIS
+		}
+		if query.Provider == "" {
+			// If query's provider not set, we should match the expected bucket
+			query.Provider = other.Provider
+		}
+		return query.Equal(other)
+	}
+	ok := query.Provider == other.Provider ||
+		query.Provider == "" ||
+		query.Provider == AnyCloud && other.IsCloud()
+	return ok && query.Ns.Contains(other.Ns)
+}
+
 /////////////////
 // BucketNames //
 /////////////////
@@ -228,9 +235,9 @@ func (names BucketNames) Swap(i, j int) {
 	names[i], names[j] = names[j], names[i]
 }
 
-func (names BucketNames) Select(selbck Bck) (filtered BucketNames) {
+func (names BucketNames) Select(query QueryBcks) (filtered BucketNames) {
 	for i, bck := range names {
-		if selbck.Contains(bck) {
+		if query.Contains(bck) {
 			if filtered != nil {
 				filtered = append(filtered, bck)
 			}
@@ -245,9 +252,9 @@ func (names BucketNames) Select(selbck Bck) (filtered BucketNames) {
 	return filtered
 }
 
-func (names BucketNames) Contains(other Bck) bool {
+func (names BucketNames) Contains(query QueryBcks) bool {
 	for _, bck := range names {
-		if bck.Equal(other) || bck.Contains(other) {
+		if query.Equal(bck) || query.Contains(bck) {
 			return true
 		}
 	}

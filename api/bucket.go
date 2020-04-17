@@ -82,11 +82,11 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p cmn.
 //
 // provider takes one of Cloud Provider enum names (see cmn/bucket.go). If provider is empty, return all names.
 // Otherwise, return cloud or ais bucket names.
-func ListBuckets(baseParams BaseParams, bck cmn.Bck) (cmn.BucketNames, error) {
+func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketNames, error) {
 	var (
 		bucketNames = cmn.BucketNames{}
 		path        = cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)
-		query       = cmn.AddBckToQuery(nil, bck)
+		query       = cmn.AddBckToQuery(nil, cmn.Bck(queryBcks))
 	)
 
 	baseParams.Method = http.MethodGet
@@ -100,7 +100,7 @@ func ListBuckets(baseParams BaseParams, bck cmn.Bck) (cmn.BucketNames, error) {
 // GetBucketsSummaries API
 //
 // Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
-func GetBucketsSummaries(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg) (cmn.BucketsSummaries, error) {
+func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.SelectMsg) (cmn.BucketsSummaries, error) {
 	if msg == nil {
 		msg = &cmn.SelectMsg{}
 	}
@@ -109,9 +109,9 @@ func GetBucketsSummaries(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg)
 
 	reqParams := ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, query.Name),
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Query:      cmn.AddBckToQuery(nil, bck),
+		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
 	var summaries cmn.BucketsSummaries
 	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBucket, msg, &summaries); err != nil {
@@ -151,12 +151,12 @@ func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 //
 // DoesBucketExist queries a proxy or target to get a list of all ais buckets,
 // returns true if the bucket is present in the list.
-func DoesBucketExist(baseParams BaseParams, bck cmn.Bck) (bool, error) {
-	bcks, err := ListBuckets(baseParams, bck)
+func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
+	bcks, err := ListBuckets(baseParams, query)
 	if err != nil {
 		return false, err
 	}
-	return bcks.Contains(bck), nil
+	return bcks.Contains(query), nil
 }
 
 // CopyBucket API

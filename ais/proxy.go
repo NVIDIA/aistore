@@ -315,7 +315,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
-		p.listBuckets(w, r, bck)
+		p.listBuckets(w, r, cmn.QueryBcks(bck.Bck))
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
 		p.invalmsghdlr(w, r, s)
@@ -1352,10 +1352,10 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error)
 	return
 }
 
-func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
+func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
 	bmd := p.owner.bmd.get()
-	if bck.IsAIS() {
-		bcks := p.selectBMDBuckets(bmd, bck)
+	if query.IsAIS() {
+		bcks := p.selectBMDBuckets(bmd, query)
 		body := cmn.MustMarshal(bcks)
 		p.writeJSON(w, r, body, listBuckets)
 		return

@@ -541,7 +541,7 @@ func setupBucket(runParams *params) error {
 		return nil
 	}
 	baseParams := tutils.BaseAPIParams(runParams.proxyURL)
-	exists, err := api.DoesBucketExist(baseParams, runParams.bck)
+	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(runParams.bck))
 	if err != nil {
 		return fmt.Errorf("failed to get ais bucket lists to check for %s, err = %v", runParams.bck, err)
 	}

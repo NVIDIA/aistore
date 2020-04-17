@@ -152,7 +152,7 @@ func CheckSkip(t *testing.T, args SkipTestArgs) {
 func IsCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck) bool {
 	bck.Provider = cmn.AnyCloud
 	baseParams := BaseAPIParams(proxyURL)
-	bcks, err := api.ListBuckets(baseParams, bck)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
 	tassert.CheckFatal(t, err)
-	return bcks.Contains(bck)
+	return bcks.Contains(cmn.QueryBcks(bck))
 }

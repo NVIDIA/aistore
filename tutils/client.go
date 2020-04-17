@@ -602,7 +602,7 @@ func CreateFreshBucket(t *testing.T, proxyURL string, bck cmn.Bck) {
 
 func DestroyBucket(t *testing.T, proxyURL string, bck cmn.Bck) {
 	baseParams := BaseAPIParams(proxyURL)
-	exists, err := api.DoesBucketExist(baseParams, bck)
+	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(bck))
 	tassert.CheckFatal(t, err)
 	if exists {
 		err = api.DestroyBucket(baseParams, bck)
@@ -883,7 +883,7 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 }
 
 // waitForBucket waits until all targets ack having ais bucket created or deleted
-func WaitForBucket(proxyURL string, bck cmn.Bck, exists bool) error {
+func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
@@ -893,7 +893,7 @@ func WaitForBucket(proxyURL string, bck cmn.Bck, exists bool) error {
 	for _, s := range smap.Tmap {
 		for {
 			baseParams := BaseAPIParams(s.URL(cmn.NetworkPublic))
-			bucketExists, err := api.DoesBucketExist(baseParams, bck)
+			bucketExists, err := api.DoesBucketExist(baseParams, query)
 			if err != nil {
 				return err
 			}

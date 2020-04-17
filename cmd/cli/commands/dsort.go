@@ -114,7 +114,7 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 func setupBucket(c *cli.Context, bck cmn.Bck) error {
 	cleanup := flagIsSet(c, cleanupFlag)
 
-	exists, err := api.DoesBucketExist(defaultAPIParams, bck)
+	exists, err := api.DoesBucketExist(defaultAPIParams, cmn.QueryBcks(bck))
 	if err != nil {
 		return err
 	}

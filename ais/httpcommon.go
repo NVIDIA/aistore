@@ -1229,16 +1229,16 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config 
 	})
 }
 
-func (h *httprunner) selectBMDBuckets(bmd *bucketMD, selbck *cluster.Bck) cmn.BucketNames {
+func (h *httprunner) selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.BucketNames {
 	var (
 		names = make(cmn.BucketNames, 0, 10)
-		cp    = &selbck.Provider
+		cp    = &query.Provider
 	)
-	if selbck.Provider == "" {
+	if query.Provider == "" {
 		cp = nil
 	}
 	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		if selbck.Bck.Equal(bck.Bck) || selbck.Bck.Contains(bck.Bck) {
+		if query.Equal(bck.Bck) || query.Contains(bck.Bck) {
 			names = append(names, bck.Bck)
 		}
 		return false

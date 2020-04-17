@@ -311,25 +311,24 @@ func (m *AisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProp
 func (m *AisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
 	for uuid := range m.remote {
 		var (
-			bp, _  = m.newBaseParams(uuid)
-			selbck = cmn.Bck{Provider: cmn.ProviderAIS}
+			bp, _ = m.newBaseParams(uuid)
+			query = cmn.QueryBcks{Provider: cmn.ProviderAIS}
 		)
-		er := m.try(func() (err error) {
-			var rembcks cmn.BucketNames
-			rembcks, err = api.ListBuckets(bp, selbck)
-			if err == nil {
-				for i, bck := range rembcks {
-					bck.Ns.UUID = uuid
-					rembcks[i] = bck
-				}
-				buckets = append(buckets, rembcks...)
-			} else {
+		tryErr := m.try(func() (err error) {
+			remoteBcks, err := api.ListBuckets(bp, query)
+			if err != nil {
 				glog.Errorf("list-bucket(uuid=%s): %v", uuid, err)
+				return err
 			}
-			return
+			for i, bck := range remoteBcks {
+				bck.Ns.UUID = uuid
+				remoteBcks[i] = bck
+			}
+			buckets = append(buckets, remoteBcks...)
+			return nil
 		})
-		if er != nil {
-			err = er
+		if tryErr != nil {
+			err = tryErr
 		}
 	}
 	err, errCode = extractErrCode(err)

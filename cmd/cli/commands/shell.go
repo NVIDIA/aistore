@@ -184,14 +184,14 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 			return
 		}
 
-		bck := cmn.Bck{
+		query := cmn.QueryBcks{
 			Provider: argsProvider,
 		}
 
-		if bck.Provider == "" {
+		if query.Provider == "" {
 			providers = []string{cmn.ProviderAIS, cmn.AnyCloud}
 		} else {
-			providers = []string{bck.Provider}
+			providers = []string{query.Provider}
 		}
 
 		if withProviders {
@@ -201,8 +201,8 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		}
 
 		for _, provider := range providers {
-			bck.Provider = provider
-			buckets, err := api.ListBuckets(defaultAPIParams, bck)
+			query.Provider = provider
+			buckets, err := api.ListBuckets(defaultAPIParams, query)
 			if err != nil {
 				return
 			}

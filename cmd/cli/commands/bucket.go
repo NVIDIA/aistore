@@ -127,8 +127,8 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 }
 
 // List bucket names
-func listBucketNames(c *cli.Context, bck cmn.Bck) (err error) {
-	bucketNames, err := api.ListBuckets(defaultAPIParams, bck)
+func listBucketNames(c *cli.Context, query cmn.QueryBcks) (err error) {
+	bucketNames, err := api.ListBuckets(defaultAPIParams, query)
 	if err != nil {
 		return
 	}
@@ -247,21 +247,21 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-func bucketDetails(c *cli.Context, bck cmn.Bck) error {
+func bucketDetails(c *cli.Context, query cmn.QueryBcks) error {
 	fDetails := func() error {
-		return bucketDetailsSync(c, bck)
+		return bucketDetailsSync(c, query)
 	}
 	return cmn.WaitForFunc(fDetails, longCommandTime)
 }
 
 // The function shows bucket details
-func bucketDetailsSync(c *cli.Context, bck cmn.Bck) error {
+func bucketDetailsSync(c *cli.Context, query cmn.QueryBcks) error {
 	// Request bucket summaries
 	msg := &cmn.SelectMsg{
 		Fast:   flagIsSet(c, fastDetailsFlag),
 		Cached: flagIsSet(c, cachedFlag),
 	}
-	summaries, err := api.GetBucketsSummaries(defaultAPIParams, bck, msg)
+	summaries, err := api.GetBucketsSummaries(defaultAPIParams, query, msg)
 	if err != nil {
 		return err
 	}
@@ -495,8 +495,8 @@ func getOldNewBucketName(c *cli.Context) (bucket, newBucket string, err error) {
 
 func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders bool) {
 	for provider := range cmn.Providers {
-		selbck := cmn.Bck{Provider: provider}
-		bcks := bucketNames.Select(selbck)
+		query := cmn.QueryBcks{Provider: provider}
+		bcks := bucketNames.Select(query)
 		if len(bcks) == 0 {
 			continue
 		}

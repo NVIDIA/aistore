@@ -36,35 +36,35 @@ func Test_BucketNames(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	buckets, err := api.ListBuckets(baseParams, cmn.Bck{})
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{})
 	tassert.CheckFatal(t, err)
 
 	printBucketNames(buckets)
 
 	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure} {
-		selbck := cmn.Bck{Provider: provider}
-		cloudBuckets, err := api.ListBuckets(baseParams, selbck)
+		query := cmn.QueryBcks{Provider: provider}
+		cloudBuckets, err := api.ListBuckets(baseParams, query)
 		tassert.CheckError(t, err)
-		if len(cloudBuckets) != len(buckets.Select(selbck)) {
-			t.Fatalf("%s: cloud buckets: %d != %d\n", provider, len(cloudBuckets), len(buckets.Select(selbck)))
+		if len(cloudBuckets) != len(buckets.Select(query)) {
+			t.Fatalf("%s: cloud buckets: %d != %d\n", provider, len(cloudBuckets), len(buckets.Select(query)))
 		}
 	}
 	// NsGlobal
-	selbck := cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-	aisBuckets, err := api.ListBuckets(baseParams, selbck)
+	query := cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+	aisBuckets, err := api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
-	if len(aisBuckets) != len(buckets.Select(selbck)) {
-		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(selbck)))
+	if len(aisBuckets) != len(buckets.Select(query)) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(query)))
 	}
 	// NsGlobalRemote
-	selbck = cmn.Bck{Ns: cmn.NsGlobalRemote}
-	buckets, err = api.ListBuckets(baseParams, selbck)
+	query = cmn.QueryBcks{Ns: cmn.NsGlobalRemote}
+	buckets, err = api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
-	selbck = cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobalRemote}
-	aisBuckets, err = api.ListBuckets(baseParams, selbck)
+	query = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobalRemote}
+	aisBuckets, err = api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
-	if len(aisBuckets) != len(buckets.Select(selbck)) {
-		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(selbck)))
+	if len(aisBuckets) != len(buckets.Select(query)) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(query)))
 	}
 }
 
@@ -799,7 +799,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			}
 
 			if test.summary {
-				summaries, err := api.GetBucketsSummaries(baseParams, m.bck, msg)
+				summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks(m.bck), msg)
 				tassert.CheckFatal(t, err)
 
 				if len(summaries) == 0 {
@@ -1253,10 +1253,10 @@ func TestRenameEmptyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, srcBck)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck))
 	tassert.CheckFatal(t, err)
 
-	if !bcks.Contains(dstBck) {
+	if !bcks.Contains(cmn.QueryBcks(dstBck)) {
 		t.Error("new bucket not found in buckets list")
 	}
 
@@ -1361,10 +1361,10 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 	}
 
 	// Check if the old bucket still appears in the list
-	bcks, err := api.ListBuckets(baseParams, m.bck)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(m.bck))
 	tassert.CheckFatal(t, err)
 
-	if !bcks.Contains(m.bck) || !bcks.Contains(tmpBck) {
+	if !bcks.Contains(cmn.QueryBcks(m.bck)) || !bcks.Contains(cmn.QueryBcks(tmpBck)) {
 		t.Error("one of the buckets was not found in buckets list")
 	}
 
@@ -1438,16 +1438,16 @@ func TestRenameBucketTwice(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, srcBck)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck))
 	tassert.CheckFatal(t, err)
 
-	if bcks.Contains(srcBck) {
+	if bcks.Contains(cmn.QueryBcks(srcBck)) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !bcks.Contains(dstBck1) {
+	if !bcks.Contains(cmn.QueryBcks(dstBck1)) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if bcks.Contains(dstBck2) {
+	if bcks.Contains(cmn.QueryBcks(dstBck2)) {
 		t.Error("second (failed) destination bucket not found in buckets list")
 	}
 }
@@ -1732,16 +1732,16 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, srcBck)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck))
 	tassert.CheckFatal(t, err)
 
-	if bcks.Contains(srcBck) {
+	if bcks.Contains(cmn.QueryBcks(srcBck)) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !bcks.Contains(dstBck1) {
+	if !bcks.Contains(cmn.QueryBcks(dstBck1)) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if bcks.Contains(dstBck2) {
+	if bcks.Contains(cmn.QueryBcks(dstBck2)) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }
@@ -1816,16 +1816,16 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, srcBck)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck))
 	tassert.CheckFatal(t, err)
 
-	if bcks.Contains(srcBck) {
+	if bcks.Contains(cmn.QueryBcks(srcBck)) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !bcks.Contains(dstBck1) {
+	if !bcks.Contains(cmn.QueryBcks(dstBck1)) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if bcks.Contains(dstBck2) {
+	if bcks.Contains(cmn.QueryBcks(dstBck2)) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }

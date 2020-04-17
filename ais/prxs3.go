@@ -76,8 +76,8 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 // GET s3/
 func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
 	bmd := p.owner.bmd.get()
-	bck := cluster.NewBck("", cmn.ProviderAIS, cmn.NsGlobal)
-	bcks := p.selectBMDBuckets(bmd, bck)
+	query := cmn.QueryBcks{Provider: cmn.ProviderAIS}
+	bcks := p.selectBMDBuckets(bmd, query)
 	resp := s3compat.NewListBucketResult()
 	for _, bck := range bcks {
 		resp.Add(&bck)

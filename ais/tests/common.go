@@ -442,12 +442,13 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 				tutils.Logf("T2: registered target %s\n", target.ID())
 			}
 		} else {
+			query := cmn.QueryBcks(m.bck)
 			baseParams.URL = m.proxyURL
-			proxyBcks, err := api.ListBuckets(baseParams, m.bck)
+			proxyBcks, err := api.ListBuckets(baseParams, query)
 			tassert.CheckFatal(m.t, err)
 
 			baseParams.URL = target.URL(cmn.NetworkPublic)
-			targetBcks, err := api.ListBuckets(baseParams, m.bck)
+			targetBcks, err := api.ListBuckets(baseParams, query)
 			tassert.CheckFatal(m.t, err)
 			// T3
 			if proxyBcks.Equal(targetBcks) {

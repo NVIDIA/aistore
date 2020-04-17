@@ -86,7 +86,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 		exec.Command("fusermount", "-u", fuseDir).Run()
 		os.RemoveAll(fuseDir)
 
-		exists, err := api.DoesBucketExist(baseParams, bck)
+		exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(bck))
 		Expect(err).NotTo(HaveOccurred())
 		if exists {
 			err = api.DestroyBucket(baseParams, bck)

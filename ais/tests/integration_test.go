@@ -1164,7 +1164,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	}
 
 	tutils.Logf("waiting for ais bucket %s to appear on all targets\n", m.bck)
-	err = tutils.WaitForBucket(m.proxyURL, m.bck, true /*exists*/)
+	err = tutils.WaitForBucket(m.proxyURL, cmn.QueryBcks(m.bck), true /*exists*/)
 	tassert.CheckFatal(t, err)
 
 	// Put and read random files

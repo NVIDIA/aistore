@@ -205,7 +205,7 @@ func showBucketHandler(c *cli.Context) (err error) {
 	if bck, err = validateBucket(c, bck, "", true); err != nil {
 		return
 	}
-	return bucketDetails(c, bck)
+	return bucketDetails(c, cmn.QueryBcks(bck))
 }
 
 func showDisksHandler(c *cli.Context) (err error) {

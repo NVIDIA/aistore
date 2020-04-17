@@ -437,7 +437,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 				return
 			}
-			t.listBuckets(w, r, bck)
+			t.listBuckets(w, r, cmn.QueryBcks(bck.Bck))
 		}
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
@@ -1198,7 +1198,7 @@ func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) 
 	return
 }
 
-func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
+func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
 	var (
 		bucketNames cmn.BucketNames
 		code        int
@@ -1206,23 +1206,23 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *
 		config      = cmn.GCO.Get()
 	)
 	// cmn.AnyCloud translates as any (one!) *3rd party* Cloud
-	if bck.Provider == cmn.AnyCloud {
-		bck.Provider = config.Cloud.Provider
+	if query.Provider == cmn.AnyCloud {
+		query.Provider = config.Cloud.Provider
 	}
-	if bck.Provider != "" {
-		bucketNames, err, code = t._listBcks(r, bck, config)
+	if query.Provider != "" {
+		bucketNames, err, code = t._listBcks(r, query, config)
 		if err != nil {
-			s := fmt.Sprintf("failed to list buckets for %s, err: %v(%d)", bck, err, code)
+			s := fmt.Sprintf("failed to list buckets for %s, err: %v(%d)", query, err, code)
 			t.invalmsghdlr(w, r, s, code)
 			return
 		}
 	} else /* all providers */ {
 		for provider := range cmn.Providers {
 			var buckets cmn.BucketNames
-			bck.Provider = provider
-			buckets, err, code = t._listBcks(r, bck, config)
+			query.Provider = provider
+			buckets, err, code = t._listBcks(r, query, config)
 			if err != nil {
-				glog.Errorf("failed to list buckets for %s, err: %v(%d)", bck, err, code)
+				glog.Errorf("failed to list buckets for %s, err: %v(%d)", query, err, code)
 			} else {
 				bucketNames = append(bucketNames, buckets...)
 			}
@@ -1232,14 +1232,14 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, bck *
 	t.writeJSON(w, r, cmn.MustMarshal(bucketNames), listBuckets)
 }
 
-func (t *targetrunner) _listBcks(r *http.Request, bck *cluster.Bck, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {
+func (t *targetrunner) _listBcks(r *http.Request, query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {
 	// 3rd party cloud or remote ais
-	if bck.Provider == cfg.Cloud.Provider || bck.IsRemoteAIS() {
-		names, err, c = t.Cloud(bck.Provider).ListBuckets(t.contextWithAuth(r.Header))
-		names = names.Select(bck.Bck)
+	if query.Provider == cfg.Cloud.Provider || query.IsRemoteAIS() {
+		names, err, c = t.Cloud(query.Provider).ListBuckets(t.contextWithAuth(r.Header))
+		names = names.Select(query)
 		sort.Sort(names)
 	} else { // BMD
-		names = t.selectBMDBuckets(t.owner.bmd.get(), bck)
+		names = t.selectBMDBuckets(t.owner.bmd.get(), query)
 	}
 	return
 }

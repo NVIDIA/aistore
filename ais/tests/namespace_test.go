@@ -160,7 +160,7 @@ func TestNamespace(t *testing.T) {
 
 			// Test listing buckets
 			if !test.remote {
-				buckets, err := api.ListBuckets(baseParams, cmn.Bck{Provider: cmn.ProviderAIS})
+				buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS})
 				tassert.CheckFatal(t, err)
 				tassert.Fatalf(
 					t, len(buckets) == 2,
@@ -188,7 +188,7 @@ func TestNamespace(t *testing.T) {
 
 			// Test summary
 			if !test.remote {
-				summaries, err := api.GetBucketsSummaries(baseParams, cmn.Bck{Provider: cmn.ProviderAIS}, nil)
+				summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS}, nil)
 				tassert.CheckFatal(t, err)
 				tassert.Errorf(
 					t, len(summaries) == 2,

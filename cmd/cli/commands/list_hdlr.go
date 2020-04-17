@@ -59,7 +59,7 @@ func defaultListHandler(c *cli.Context) (err error) {
 	}
 
 	if bck.Name == "" {
-		return listBucketNames(c, bck)
+		return listBucketNames(c, cmn.QueryBcks(bck))
 	}
 
 	bck.Name = strings.TrimSuffix(bck.Name, "/")
