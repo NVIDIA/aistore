@@ -47,12 +47,21 @@ func destroyMatchingBuckets(subName string) (err error) {
 	return err
 }
 
+func randomTarget() string {
+	smap, err := api.GetClusterMap(BaseAPIParams(proxyURL))
+	cmn.AssertNoErr(err)
+	si, err := smap.GetRandTarget()
+	cmn.AssertNoErr(err)
+	return si.DaemonID
+}
+
 func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 	var (
 		outs []string
 
-		bucket = GenRandomString(10)
-		space  = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
+		bucket   = GenRandomString(10)
+		space    = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
+		targetID = randomTarget()
 	)
 
 	defer func() {
@@ -70,6 +79,14 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 	inFile, err := os.Open(inputFileName)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	defer inFile.Close()
+
+	substituteVariables := func(s string) string {
+		s = strings.ReplaceAll(s, "$BUCKET", bucket)
+		s = strings.ReplaceAll(s, "$OBJECT", object)
+		s = strings.ReplaceAll(s, "$RANDOM_TARGET", targetID)
+		s = strings.ReplaceAll(s, "$DIR", f.Dir)
+		return s
+	}
 
 	scanner := bufio.NewScanner(inFile)
 	for scanner.Scan() {
@@ -99,16 +116,13 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 					firstIdx := strings.Index(comment, `"`)
 					lastIdx := strings.LastIndex(comment, `"`)
 					expectFailMsg = comment[firstIdx+1 : lastIdx]
-					expectFailMsg = strings.ReplaceAll(expectFailMsg, "$BUCKET", bucket)
-					expectFailMsg = strings.ReplaceAll(expectFailMsg, "$OBJECT", object)
+					expectFailMsg = substituteVariables(expectFailMsg)
 					expectFailMsg = strings.ToLower(expectFailMsg)
 				}
 			}
 		}
 
-		scmd = strings.ReplaceAll(scmd, "$BUCKET", bucket)
-		scmd = strings.ReplaceAll(scmd, "$OBJECT", object)
-		scmd = strings.ReplaceAll(scmd, "$DIR", f.Dir)
+		scmd = substituteVariables(scmd)
 		if strings.Contains(scmd, "$PRINT_SIZE") {
 			// Expecting: $PRINT_SIZE FILE_NAME
 			fileName := strings.ReplaceAll(scmd, "$PRINT_SIZE ", "")
@@ -157,9 +171,7 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		)
 		expectedOut := scanner.Text()
 		expectedOut = space.ReplaceAllString(expectedOut, "")
-		expectedOut = strings.ReplaceAll(expectedOut, "$BUCKET", bucket)
-		expectedOut = strings.ReplaceAll(expectedOut, "$OBJECT", object)
-		expectedOut = strings.ReplaceAll(expectedOut, "$DIR", f.Dir)
+		expectedOut = substituteVariables(expectedOut)
 
 		out := strings.TrimSpace(outs[idx])
 		out = space.ReplaceAllString(out, "")

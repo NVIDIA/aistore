@@ -1,1 +1,1 @@
-ais show config $(ais status | grep -m 1 -oE "^[[:digit:]]{4,6}t[[:digit:]]{4,5}") // IGNORE
+ais show config $RANDOM_TARGET // IGNORE

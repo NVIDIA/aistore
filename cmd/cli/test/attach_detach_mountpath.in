@@ -2,8 +2,8 @@ ais attach mountpath // FAIL
 ais detach mountpath // FAIL
 ais attach mountpath something // FAIL "no value for something"
 ais detach mountpath something // FAIL "no value for something"
-ais attach mountpath $(ais status | grep -m 1 -oE "^[[:digit:]]{4,6}t[[:digit:]]{4,5}")=/nonexisting // FAIL "fspath "/nonexisting" does not exist, err: no such file or directory"
-ais detach mountpath $(ais status | grep -m 1 -oE "^[[:digit:]]{4,6}t[[:digit:]]{4,5}")=/nonexisting // FAIL "fspath "/nonexisting" does not exist, err: no such file or directory"
+ais attach mountpath $RANDOM_TARGET=/nonexisting // FAIL "fspath "/nonexisting" does not exist, err: no such file or directory"
+ais detach mountpath $RANDOM_TARGET=/nonexisting // FAIL "fspath "/nonexisting" does not exist, err: no such file or directory"
 
-ais attach mountpath $(ais status | grep -m 1 -oE "^[[:digit:]]{4,6}t[[:digit:]]{4,5}")=/tmp/ais
-ais detach mountpath $(ais status | grep -m 1 -oE "^[[:digit:]]{4,6}t[[:digit:]]{4,5}")=/tmp/ais
+ais attach mountpath $RANDOM_TARGET=/tmp/ais
+ais detach mountpath $RANDOM_TARGET=/tmp/ais
