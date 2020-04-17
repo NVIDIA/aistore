@@ -381,9 +381,7 @@ func TestRWStressShort(t *testing.T) {
 // If the test runs asynchronusly all three kinds of operations then after the
 //    test finishes it executes extra loop to delete all files
 func TestRWStress(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	numLoops = cycles
 	numFiles = numfiles

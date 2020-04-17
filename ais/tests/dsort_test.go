@@ -547,9 +547,7 @@ func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 }
 
 func TestDistributedSort(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		// Include empty ("") type - in this case type must be selected automatically.
@@ -688,9 +686,7 @@ func TestDistributedSortWithEmptyBucket(t *testing.T) {
 }
 
 func TestDistributedSortWithOutputBucket(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -744,9 +740,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 
 // TestDistributedSortParallel runs multiple dSorts in parallel
 func TestDistributedSortParallel(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -782,9 +776,7 @@ func TestDistributedSortParallel(t *testing.T) {
 
 // TestDistributedSortChain runs multiple dSorts one after another
 func TestDistributedSortChain(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -952,9 +944,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 }
 
 func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = &ioContext{
@@ -1019,9 +1009,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 }
 
 func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = &ioContext{
@@ -1087,9 +1075,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 }
 
 func TestDistributedSortZip(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1136,9 +1122,7 @@ func TestDistributedSortZip(t *testing.T) {
 }
 
 func TestDistributedSortWithCompression(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1185,9 +1169,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 }
 
 func TestDistributedSortWithContent(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1324,9 +1306,7 @@ func TestDistributedSortAbort(t *testing.T) {
 }
 
 func TestDistributedSortAbortDuringPhases(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes, phases: dsortPhases},
@@ -1375,9 +1355,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes, phases: dsortPhases},
@@ -1447,9 +1425,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	const newMountpath = "/tmp/ais/mountpath"
 
@@ -1552,9 +1528,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortAddTarget(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes},
@@ -1764,9 +1738,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 }
 
 func TestDistributedSortMissingShards(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes, reactions: cmn.SupportedReactions, scopes: dsortSettingScopes},
@@ -1828,9 +1800,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 }
 
 func TestDistributedSortDuplications(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes, reactions: cmn.SupportedReactions, scopes: dsortSettingScopes},
@@ -1993,9 +1963,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 }
 
 func TestDistributedSortDryRun(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -2039,9 +2007,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 }
 
 func TestDistributedSortDryRunDisk(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},

@@ -111,9 +111,8 @@ func Test_CompressedOne(t *testing.T) {
 }
 
 func Test_DryRun(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
 	err := os.Setenv("AIS_STREAM_DRY_RUN", "true")
 	defer os.Unsetenv("AIS_STREAM_DRY_RUN")
 	tassert.CheckFatal(t, err)

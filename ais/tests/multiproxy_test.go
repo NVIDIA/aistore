@@ -54,9 +54,7 @@ var (
 )
 
 func TestMultiProxy(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	proxyURL := tutils.GetPrimaryURL()
 	smap := tutils.GetClusterMap(t, proxyURL)

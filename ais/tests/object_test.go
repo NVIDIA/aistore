@@ -31,10 +31,6 @@ import (
 )
 
 func TestCloudBucketObject(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
 	const (
 		getOP = "get"
 		putOP = "put"
@@ -48,9 +44,7 @@ func TestCloudBucketObject(t *testing.T) {
 		}
 	)
 
-	if !isBucketExist(t, baseParams.URL, bck) {
-		t.Skipf("%s requires a cloud bucket", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
 
 	tests := []struct {
 		ty     string
@@ -180,7 +174,7 @@ func Test_putdelete(t *testing.T) {
 		bck      = cmn.Bck{Name: clibucket}
 	)
 
-	if testing.Short() && isBucketExist(t, proxyURL, bck) {
+	if testing.Short() && tutils.IsCloudBucket(t, proxyURL, bck) {
 		t.Skipf("don't run when short mode and cloud bucket")
 	}
 
@@ -321,7 +315,7 @@ func Test_putdeleteRange(t *testing.T) {
 		t.Skip("numfiles must be a positive multiple of 10")
 	}
 
-	if testing.Short() && isBucketExist(t, proxyURL, bck) {
+	if testing.Short() && tutils.IsCloudBucket(t, proxyURL, bck) {
 		t.Skipf("don't run when short mode and cloud bucket")
 	}
 
@@ -470,9 +464,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		files     = []string{fileName1, fileName2}
 	)
 
-	if !isBucketExist(t, proxyURL, bckCloud) {
-		t.Skipf("%s requires a cloud bucket", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bckCloud})
 
 	putArgsLocal := api.PutObjectArgs{
 		BaseParams: baseParams,
@@ -623,9 +615,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		found      = false
 	)
 
-	if !isBucketExist(t, proxyURL, bckCloud) {
-		t.Skipf("%s requires a cloud bucket", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bckCloud})
 
 	tutils.CreateFreshBucket(t, proxyURL, bckLocal)
 	defer tutils.DestroyBucket(t, proxyURL, bckLocal)
@@ -766,9 +756,7 @@ func Test_coldgetmd5(t *testing.T) {
 		proxyURL  = tutils.GetPrimaryURL()
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skipf("%s requires a cloud bucket", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	config := tutils.GetClusterConfig(t)
 	bcoldget := config.Cksum.ValidateColdGet
@@ -856,9 +844,7 @@ func TestHeadCloudBucket(t *testing.T) {
 		}
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skip(fmt.Sprintf("%s requires a cloud bucket", t.Name()))
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	bckPropsToUpdate := cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
@@ -985,9 +971,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
 	bmdMock.Add(cluster.NewBck(TestBucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
@@ -1081,9 +1065,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skipf("%s requires a cloud bucket", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	defer func() {
 		// Cleanup
@@ -1416,10 +1398,6 @@ func verifyInvalidParams(t *testing.T, proxyURL string, bck cmn.Bck, fileName, o
 }
 
 func Test_checksum(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
 	var (
 		start, curr time.Time
 		duration    time.Duration
@@ -1437,9 +1415,7 @@ func Test_checksum(t *testing.T) {
 		proxyURL   = tutils.GetPrimaryURL()
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skipf("%s requires a cloud bucket", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
 
 	// Get Current Config
 	config := tutils.GetClusterConfig(t)
@@ -1561,7 +1537,7 @@ func getFromObjList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []
 }
 
 func createBucketIfNotCloud(t *testing.T, proxyURL string, bck *cmn.Bck) (created bool) {
-	if isBucketExist(t, proxyURL, *bck) {
+	if tutils.IsCloudBucket(t, proxyURL, *bck) {
 		bck.Provider = cmn.AnyCloud
 		return false
 	}
@@ -1573,13 +1549,6 @@ func createBucketIfNotCloud(t *testing.T, proxyURL string, bck *cmn.Bck) (create
 	}
 
 	return true
-}
-
-func isBucketExist(t *testing.T, proxyURL string, bck cmn.Bck) bool {
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	bcks, err := api.ListBuckets(baseParams, bck)
-	tassert.CheckFatal(t, err)
-	return bcks.Match(bck)
 }
 
 func validateBucketProps(t *testing.T, expected cmn.BucketPropsToUpdate, actual cmn.BucketProps) {

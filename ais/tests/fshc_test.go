@@ -13,14 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/containers"
-
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 const (
@@ -286,13 +283,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 }
 
 func TestFSCheckerDetectionEnabled(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
-	if containers.DockerRunning() {
-		t.Skipf("%s requires direct filesystem access, doesn't work with docker", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		md     = newCheckerMD(t)
@@ -341,13 +332,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 }
 
 func TestFSCheckerDetectionDisabled(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
-	if containers.DockerRunning() {
-		t.Skipf("%s requires direct filesystem access, doesn't work with docker", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		md     = newCheckerMD(t)

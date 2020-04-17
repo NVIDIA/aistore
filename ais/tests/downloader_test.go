@@ -385,10 +385,6 @@ func TestDownloadTimeout(t *testing.T) {
 }
 
 func TestDownloadCloud(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
@@ -402,9 +398,7 @@ func TestDownloadCloud(t *testing.T) {
 		suffix  = ".tgz"
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skip("test requires a cloud bucket")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
 
 	clearDownloadList(t)
 
@@ -526,9 +520,7 @@ func TestDownloadStatus(t *testing.T) {
 }
 
 func TestDownloadStatusError(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -581,9 +573,7 @@ func TestDownloadStatusError(t *testing.T) {
 }
 
 func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
@@ -625,9 +615,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 }
 
 func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
@@ -668,9 +656,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 }
 
 func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		proxyURL   = tutils.GetPrimaryURL()

@@ -22,9 +22,7 @@ var (
 )
 
 func TestSmoke(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck      = cmn.Bck{Name: clibucket}

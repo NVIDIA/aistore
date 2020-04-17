@@ -108,9 +108,7 @@ func TestDefaultBucketProps(t *testing.T) {
 }
 
 func TestStressCreateDestroyBucket(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	const (
 		bckCount  = 10
@@ -307,12 +305,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		sema     = make(chan struct{}, 40) // throttle DELETE
 	)
 
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skip("test requires a cloud bucket")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
 
 	// Enable local versioning management
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -596,9 +589,8 @@ func TestListObjectsPrefix(t *testing.T) {
 					Provider: provider,
 				}
 
-				if !isBucketExist(t, proxyURL, bck) {
-					t.Skipf("test requires a cloud bucket")
-				}
+				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+
 				bckProp, err := api.HeadBucket(baseParams, bck)
 				tassert.CheckFatal(t, err)
 				customPage = bckProp.Provider != cmn.ProviderAzure
@@ -716,9 +708,7 @@ func TestListObjectsPrefix(t *testing.T) {
 }
 
 func TestBucketListAndSummary(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	type test struct {
 		provider string
@@ -770,7 +760,6 @@ func TestBucketListAndSummary(t *testing.T) {
 					num: 2234,
 				}
 				cacheSize  = 1234 // determines number of objects which should be cached
-				proxyURL   = tutils.GetPrimaryURL()
 				baseParams = tutils.DefaultBaseAPIParams(t)
 			)
 
@@ -789,9 +778,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			} else if bckTest.IsCloud(cmn.AnyCloud) {
 				m.bck.Name = clibucket
 
-				if !isBucketExist(t, proxyURL, m.bck) {
-					t.Skip("test requires a cloud bucket")
-				}
+				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
 				m.cloudPuts(true /*evict*/)
 				defer m.cloudDelete()
@@ -1052,9 +1039,7 @@ func TestLocalMirror(t *testing.T) {
 	}
 }
 func testLocalMirror(t *testing.T, numCopies []int) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -1148,11 +1133,9 @@ func TestCloudMirror(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
-	m.saveClusterState()
-	if !isBucketExist(t, m.proxyURL, m.bck) {
-		t.Skipf("%s requires a cloud bucket", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
+	m.saveClusterState()
 	m.cloudPuts(true /*evict*/)
 	defer m.cloudDelete()
 
@@ -1286,9 +1269,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 }
 
 func TestRenameNonEmptyBucket(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:               t,
@@ -1536,7 +1517,6 @@ func TestCopyBucket(t *testing.T) {
 					},
 				}
 				baseParams = tutils.DefaultBaseAPIParams(t)
-				proxyURL   = tutils.GetPrimaryURL()
 			)
 
 			if test.multipleDests {
@@ -1556,9 +1536,7 @@ func TestCopyBucket(t *testing.T) {
 					Provider: cmn.AnyCloud,
 				}
 
-				if !isBucketExist(t, proxyURL, srcm.bck) {
-					t.Skip("test requires a cloud bucket")
-				}
+				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: srcm.bck})
 			}
 
 			// Initialize ioContext

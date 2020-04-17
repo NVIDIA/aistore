@@ -150,9 +150,8 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		prefix     = tutils.GenRandomString(32)
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skipf("%s requires a cloud bucket", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+
 	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountTargets() == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
@@ -278,9 +277,7 @@ func TestRegressionBuckets(t *testing.T) {
 }
 
 func TestRenameBucket(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -474,17 +471,13 @@ func TestObjectPrefix(t *testing.T) {
 }
 
 func TestObjectsVersions(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	propsMainTest(t, true /*versioning enabled*/)
 }
 
 func TestReregisterMultipleTargets(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		filesSentOrig = make(map[string]int64)
@@ -687,9 +680,7 @@ func TestLRU(t *testing.T) {
 		}
 	)
 
-	if !isBucketExist(t, proxyURL, m.bck) {
-		t.Skipf("%s requires a cloud bucket", t.Name())
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
 	m.saveClusterState()
 	m.cloudPuts(false /*evict*/)
@@ -774,9 +765,7 @@ func TestLRU(t *testing.T) {
 }
 
 func TestPrefetchList(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		toprefetch = make(chan string, numfiles)
 		proxyURL   = tutils.GetPrimaryURL()
@@ -787,9 +776,7 @@ func TestPrefetchList(t *testing.T) {
 		}
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skipf("Cannot prefetch from ais bucket %s", clibucket)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	// 1. Get keys to prefetch
 	n := int64(getMatchingKeys(t, proxyURL, bck, match, []chan string{toprefetch}, nil))
@@ -880,9 +867,7 @@ func TestDeleteList(t *testing.T) {
 }
 
 func TestPrefetchRange(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		err            error
 		rmin, rmax     int64
@@ -895,9 +880,7 @@ func TestPrefetchRange(t *testing.T) {
 		}
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skipf("Cannot prefetch from ais bucket %s", clibucket)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	// 1. Parse arguments
 	if prefetchRange != "" {
@@ -1034,9 +1017,7 @@ func TestDeleteRange(t *testing.T) {
 
 // Testing only ais bucket objects since generally not concerned with cloud bucket object deletion
 func TestStressDeleteRange(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	const (
 		numFiles   = 20000 // FIXME: must divide by 10 and by the numReaders

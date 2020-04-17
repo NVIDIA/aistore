@@ -18,11 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 	"github.com/OneOfOne/xxhash"
-)
-
-const (
-	SkipMsg = "skipping test in short mode."
 )
 
 func prependTime(msg string) string {
@@ -128,4 +125,34 @@ func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (s
 		shash = cmn.HashToStr(h)
 	}
 	return shash, nil
+}
+
+type SkipTestArgs struct {
+	RequiresRemote bool
+	Long           bool
+	Cloud          bool
+	Bck            cmn.Bck
+}
+
+func CheckSkip(t *testing.T, args SkipTestArgs) {
+	if args.RequiresRemote && RemoteCluster.UUID == "" {
+		t.Skip("remote uuid and url (REMOTE_CLUSTER) was not provided")
+	}
+	if args.Long && testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+	if args.Cloud {
+		proxyURL := GetPrimaryURL()
+		if !IsCloudBucket(t, proxyURL, args.Bck) {
+			t.Skip("test requires a cloud bucket")
+		}
+	}
+}
+
+func IsCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck) bool {
+	bck.Provider = cmn.AnyCloud
+	baseParams := BaseAPIParams(proxyURL)
+	bcks, err := api.ListBuckets(baseParams, bck)
+	tassert.CheckFatal(t, err)
+	return bcks.Match(bck)
 }

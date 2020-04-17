@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -47,6 +48,11 @@ var (
 	HTTPClient        *http.Client
 	HTTPClientGetPut  *http.Client
 
+	RemoteCluster struct {
+		UUID string
+		URL  string
+	}
+
 	MMSA *memsys.MMSA
 )
 
@@ -58,6 +64,15 @@ func init() {
 	HTTPClientGetPut = cmn.NewClient(transportArgs)
 
 	initProxyURL()
+
+	if remote := os.Getenv("REMOTE_CLUSTER"); remote != "" {
+		parts := strings.Split(remote, "=")
+		if len(parts) != 2 {
+			cmn.ExitLogf("REMOTE_CLUSTER variable should be in form: UUID=URL")
+		}
+		RemoteCluster.UUID = parts[0]
+		RemoteCluster.URL = parts[1]
+	}
 }
 
 func initProxyURL() {

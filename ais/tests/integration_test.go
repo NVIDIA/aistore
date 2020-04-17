@@ -29,9 +29,7 @@ import (
 // 3. PUT large amount of objects into the ais bucket
 // 4. GET the objects while simultaneously registering the target T
 func TestGetAndReRegisterInParallel(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -93,9 +91,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 // 3. Crash the primary proxy and PUT in parallel
 // 4. Failback to the original primary proxy, register target, and GET in parallel
 func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -176,9 +172,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 // 3. PUT large amounts of objects into ais bucket
 // 4. Get the objects while simultaneously registering the target
 func TestGetAndRestoreInParallel(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -279,9 +273,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 }
 
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -349,9 +341,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 }
 
 func TestAckRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		md = ioContext{
@@ -398,9 +388,7 @@ func TestAckRebalance(t *testing.T) {
 }
 
 func TestStressRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		md = &ioContext{
@@ -488,9 +476,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 }
 
 func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -563,9 +549,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 }
 
 func TestPutDuringRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -621,9 +605,7 @@ func TestPutDuringRebalance(t *testing.T) {
 }
 
 func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -732,9 +714,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 }
 
 func TestGetDuringLocalRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -804,9 +784,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 }
 
 func TestGetDuringRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		md = ioContext{
@@ -862,9 +840,7 @@ func TestGetDuringRebalance(t *testing.T) {
 }
 
 func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	const (
 		unregisterTargetCount = 2
@@ -926,9 +902,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 }
 
 func TestAddAndRemoveMountpath(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -987,9 +961,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 }
 
 func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	const newMountpath = "/tmp/ais/mountpath"
 
@@ -1053,9 +1025,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 }
 
 func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	const (
 		newMountpath = "/tmp/ais/mountpath"
@@ -1254,9 +1224,7 @@ func TestForwardCP(t *testing.T) {
 }
 
 func TestAtimeRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -1388,9 +1356,8 @@ func TestAtimeColdGet(t *testing.T) {
 		objectContent = tutils.NewBytesReader([]byte("file content"))
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skip("test requires a cloud bucket")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+
 	tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
 	defer tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
 
@@ -1411,9 +1378,7 @@ func TestAtimeColdGet(t *testing.T) {
 }
 
 func TestAtimePrefetch(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1426,9 +1391,7 @@ func TestAtimePrefetch(t *testing.T) {
 		objectContent = tutils.NewBytesReader([]byte("file content"))
 	)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skip("test requires a cloud bucket")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 	tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
 	defer tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
 
@@ -1483,9 +1446,7 @@ func TestAtimeLocalPut(t *testing.T) {
 // 4. Put objects
 // 5. Get objects - everything should succeed
 func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -1530,9 +1491,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 // 4. Reregister target - rebalance kicks in
 // 5. Get objects - everything should succeed
 func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -1579,9 +1538,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 }
 
 func TestRenewRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -1652,9 +1609,7 @@ func TestRenewRebalance(t *testing.T) {
 }
 
 func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		copies = 2
 		m      = ioContext{
@@ -1716,9 +1671,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 }
 
 func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:               t,

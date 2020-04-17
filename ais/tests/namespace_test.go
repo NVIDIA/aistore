@@ -72,7 +72,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: cmn.ProviderAIS,
 				Ns: cmn.Ns{
-					UUID: remoteCluster.uuid,
+					UUID: tutils.RemoteCluster.UUID,
 					Name: cmn.NsGlobal.Name,
 				},
 			},
@@ -92,7 +92,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: cmn.ProviderAIS,
 				Ns: cmn.Ns{
-					UUID: remoteCluster.uuid,
+					UUID: tutils.RemoteCluster.UUID,
 					Name: "ns1",
 				},
 			},
@@ -104,7 +104,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: cmn.ProviderAIS,
 				Ns: cmn.Ns{
-					UUID: remoteCluster.uuid,
+					UUID: tutils.RemoteCluster.UUID,
 					Name: "ns1",
 				},
 			},
@@ -112,7 +112,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: cmn.ProviderAIS,
 				Ns: cmn.Ns{
-					UUID: remoteCluster.uuid,
+					UUID: tutils.RemoteCluster.UUID,
 					Name: "ns2",
 				},
 			},
@@ -139,8 +139,8 @@ func TestNamespace(t *testing.T) {
 				}
 			)
 
-			checkSkip(t, skipTestArgs{
-				requiresRemote: test.remote,
+			tutils.CheckSkip(t, tutils.SkipTestArgs{
+				RequiresRemote: test.remote,
 			})
 
 			m1.init()

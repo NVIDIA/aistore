@@ -465,18 +465,12 @@ func propsMainTest(t *testing.T, versioning bool) {
 }
 
 func TestObjPropsVersionEnabled(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	propsMainTest(t, true)
 }
 
 func TestObjPropsVersionDisabled(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	propsMainTest(t, false)
 }
 
@@ -528,9 +522,7 @@ func TestObjProps(t *testing.T) {
 					Name:     clibucket,
 					Provider: cmn.AnyCloud,
 				}
-				if !isBucketExist(t, proxyURL, m.bck) {
-					t.Skip("test requires a cloud bucket")
-				}
+				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 			} else {
 				tutils.CreateFreshBucket(t, proxyURL, m.bck)
 				defer tutils.DestroyBucket(t, proxyURL, m.bck)

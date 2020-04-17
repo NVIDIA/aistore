@@ -26,9 +26,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		wg                   = &sync.WaitGroup{}
 	)
 
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer func() {
@@ -66,9 +64,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		proxyURL        = tutils.GetPrimaryURL()
 	)
 
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	for i := 0; i < stressReps; i++ {
 		numObjs := (i + 1) * numObjIncrement

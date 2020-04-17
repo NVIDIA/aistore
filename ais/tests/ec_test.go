@@ -869,9 +869,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 		pattern:     "obj-rest-cloud-%04d",
 	}.init(t, proxyURL)
 
-	if !isBucketExist(t, proxyURL, bck) {
-		t.Skip("test requires a cloud bucket")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1050,9 +1048,7 @@ func TestECChecksum(t *testing.T) {
 }
 
 func TestECEnabledDisabledEnabled(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1141,9 +1137,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 }
 
 func TestECDisableEnableDuringLoad(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1283,9 +1277,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 //  - The target restores the original object from slices/copies and returns it
 //  - No errors must occur
 func TestECStress(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Long run only")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1329,9 +1321,7 @@ func TestECStress(t *testing.T) {
 
 // Stress 2 buckets at the same time
 func TestECStressManyBuckets(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Long run only")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck1 = cmn.Bck{
@@ -1404,12 +1394,10 @@ func TestECStressManyBuckets(t *testing.T) {
 //  - filepath.Walk checks that the number of metafiles at the end is correct
 //  - No errors must occur
 func TestECExtraStress(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Long run only")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
 	const (
-		objStart   = "obj-extra-"
-		smallEvery = 7
+		objStart = "obj-extra-"
 	)
 
 	var (
@@ -1538,9 +1526,7 @@ func TestECXattrs(t *testing.T) {
 		smallEvery       = 4
 	)
 
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1655,9 +1641,7 @@ func TestECXattrs(t *testing.T) {
 // 4. create bucket with the same name
 // 5. check that EC is working properly for this bucket
 func TestECDestroyBucket(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1749,9 +1733,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		smallEvery = 4
 	)
 
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1853,9 +1835,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 }
 
 func TestECEmergencyTargetForReplica(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1999,9 +1979,7 @@ func TestECEmergencyMpath(t *testing.T) {
 		smallEvery = 4
 	)
 
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -2155,9 +2133,7 @@ func moveAllFiles(t *testing.T, pathFrom, pathTo string) {
 }
 
 func TestECRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
 	}
@@ -2303,9 +2279,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 // Simple test to check if EC correctly finds all the objects and its slices
 // that will be used by rebalance
 func TestECBucketEncode(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	// TODO: Renable if we implement listing bucket with additional objects like
 	// mirroring and EC. For now we remove the duplicates and in result get
@@ -2424,9 +2398,7 @@ func init() {
 // Creates two buckets (with EC enabled and disabled), fill them with data,
 // and then runs two parallel rebalances
 func TestECAndRegularRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
 	}
@@ -2569,9 +2541,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 //    slices in HEAD response
 // 7. Extra check: the number of objects after rebalance equals initial number
 func TestECResilver(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -2671,9 +2641,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 // 8. Stop reading loop and read all objects once more (nothing should fail)
 // 9. Get the number of objects in the bucket (must be the same as at start)
 func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
 	}

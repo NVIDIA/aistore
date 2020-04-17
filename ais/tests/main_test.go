@@ -8,7 +8,6 @@ import (
 	"flag"
 	"math/rand"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -40,15 +39,6 @@ func TestMain(m *testing.M) {
 	clibucket = os.Getenv("BUCKET")
 	if clibucket == "" {
 		cmn.ExitInfof("Bucket name is empty")
-	}
-
-	if remote := os.Getenv("REMOTE_CLUSTER"); remote != "" {
-		parts := strings.Split(remote, "=")
-		if len(parts) != 2 {
-			cmn.ExitLogf("REMOTE_CLUSTER variable should be in form: UUID=URL")
-		}
-		remoteCluster.uuid = parts[0]
-		remoteCluster.url = parts[1]
 	}
 
 	rand.Seed(time.Now().UnixNano())

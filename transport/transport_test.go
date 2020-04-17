@@ -232,9 +232,8 @@ func Test_OneStream(t *testing.T) {
 }
 
 func Test_MultiStream(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
 	tutils.Logf("Duration %v\n", duration)
 	mux := mux.NewServeMux()
 	transport.SetMux("n1", mux)
