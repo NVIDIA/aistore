@@ -125,7 +125,7 @@ Join a proxy node with ID `23kfa10f` and socket address `192.168.0.185:8086`
 
 ```console
 $ ais join proxy 192.168.0.185:8086 23kfa10f
-Proxy with ID "23kfa10f" has been successfully joined the cluster.
+Proxy with ID "23kfa10f" successfully joined the cluster.
 ```
 
 ## Remove a node
