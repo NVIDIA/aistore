@@ -1,0 +1,2 @@
+^Mountpath "/tmp/ais" was attached successfully to deamon (.*)$
+^Mountpath "/tmp/ais" was detached successfully from deamon (.*)$

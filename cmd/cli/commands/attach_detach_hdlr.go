@@ -103,8 +103,53 @@ func detachRemoteAISHandler(c *cli.Context) (err error) {
 }
 
 func attachMountpathHandler(c *cli.Context) (err error) {
-	return incorrectUsageMsg(c, "not implemented yet")
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, daemonMountpathPairArgument)
+	}
+
+	kvs, err := makePairs(c.Args())
+	if err != nil {
+		return err
+	}
+	smap, err := fillMap()
+	if err != nil {
+		return err
+	}
+	for nodeID, mountpath := range kvs {
+		si := smap.GetTarget(nodeID)
+		if si == nil {
+			return fmt.Errorf("daemon with ID (%s) does not exist", nodeID)
+		}
+		if err := api.AddMountpath(defaultAPIParams, si, mountpath); err != nil {
+			return err
+		}
+		fmt.Fprintf(c.App.Writer, "Mountpath %q was attached successfully to deamon %q\n", mountpath, si.DaemonID)
+	}
+	return nil
 }
+
 func detachMountpathHandler(c *cli.Context) (err error) {
-	return incorrectUsageMsg(c, "not implemented yet")
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, daemonMountpathPairArgument)
+	}
+
+	kvs, err := makePairs(c.Args())
+	if err != nil {
+		return err
+	}
+	smap, err := fillMap()
+	if err != nil {
+		return err
+	}
+	for nodeID, mountpath := range kvs {
+		si := smap.GetTarget(nodeID)
+		if si == nil {
+			return fmt.Errorf("daemon with ID (%s) does not exist", nodeID)
+		}
+		if err := api.RemoveMountpath(defaultAPIParams, si.DaemonID, mountpath); err != nil {
+			return err
+		}
+		fmt.Fprintf(c.App.Writer, "Mountpath %q was detached successfully from deamon %q\n", mountpath, si.DaemonID)
+	}
+	return nil
 }

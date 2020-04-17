@@ -3130,7 +3130,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 				return
 			}
 		}
-	case cmn.ActAttach, cmn.ActDetach: // TODO: add cmn.ActAttach/Detach mountpath as well
+	case cmn.ActAttach, cmn.ActDetach:
 		var (
 			what = query.Get(cmn.URLParamWhat)
 		)
