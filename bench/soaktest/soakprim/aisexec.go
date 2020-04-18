@@ -45,7 +45,7 @@ type (
 )
 
 const (
-	soaktestDirname = "/tmp/ais-soak/"
+	soaktestDirname = "/tmp/ais-soak"
 	aisloaderFolder = soaktestDirname + "/aisloaderexec"
 	aisloaderTarget = aisloaderFolder + "/aisloader"
 )
@@ -56,7 +56,7 @@ func init() {
 	os.MkdirAll(aisloaderFolder, 0755)
 	cmd := exec.Command("make", "aisloader")
 	cmd.Dir = path.Join(os.Getenv("GOPATH"), "src/github.com/NVIDIA/aistore")
-	cmd.Env = append(cmd.Env, fmt.Sprintf("GOBIN=%s", aisloaderFolder))
+	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s", aisloaderFolder))
 	err := cmd.Run()
 	cmn.AssertNoErr(err)
 }

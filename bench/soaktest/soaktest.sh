@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMP_DIR=/tmp/ais-soak/soaktestexec
 OUT_FIL="${TMP_DIR}/soaktest"
 
