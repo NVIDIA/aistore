@@ -8,6 +8,11 @@ const (
 	Root        = "s3"
 	ContentType = "application/xml"
 
+	// versioning
+	URLParamVersioning = "versioning" // URL parameter
+	versioningEnabled  = "Enabled"
+	versioningDisabled = "Suspended"
+
 	s3Namespace = "http://s3.amazonaws.com/doc/2006-03-01"
 	// TODO: can it be omitted? // storageClass = "STANDARD"
 

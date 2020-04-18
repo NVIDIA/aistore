@@ -26,6 +26,11 @@ type (
 		Name    string `xml:"Name"`
 		Created string `xml:"CreationDate"`
 	}
+
+	// Bucket versioning
+	VersioningConfiguration struct {
+		Status string `xml:"Status"`
+	}
 )
 
 func NewListBucketResult() *ListBucketResult {
@@ -54,4 +59,21 @@ func (r *ListBucketResult) MustMarshal() []byte {
 
 func (r *ListBucketResult) Add(bck *cmn.Bck) {
 	r.Buckets = append(r.Buckets, bckToS3(bck))
+}
+
+func NewVersioningConfiguration(enabled bool) *VersioningConfiguration {
+	if enabled {
+		return &VersioningConfiguration{Status: versioningEnabled}
+	}
+	return &VersioningConfiguration{Status: versioningDisabled}
+}
+
+func (r *VersioningConfiguration) MustMarshal() []byte {
+	b, err := xml.Marshal(r)
+	cmn.AssertNoErr(err)
+	return []byte(xml.Header + string(b))
+}
+
+func (r *VersioningConfiguration) Enabled() bool {
+	return r.Status == versioningEnabled
 }

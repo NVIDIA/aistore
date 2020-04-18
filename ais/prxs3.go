@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"path"
@@ -41,8 +42,14 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(apitems) == 1 {
+			q := r.URL.Query()
+			_, versioning := q[s3compat.URLParamVersioning]
+			if versioning {
+				p.getBckVersioningS3(w, r, apitems[0])
+				return
+			}
 			// only bucket name - list objects in the bucket
-			p.bckListS3(w, r, apitems)
+			p.bckListS3(w, r, apitems[0])
 			return
 		}
 		// object data otherwise
@@ -53,6 +60,12 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(apitems) == 1 {
+			q := r.URL.Query()
+			_, versioning := q[s3compat.URLParamVersioning]
+			if versioning {
+				p.putBckVersioningS3(w, r, apitems[0])
+				return
+			}
 			p.putBckS3(w, r, apitems[0])
 			return
 		}
@@ -156,8 +169,8 @@ func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket s
 }
 
 // GET s3/bckName
-func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket string) {
+	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd, nil); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -326,4 +339,54 @@ func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []s
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+}
+
+// GET s3/bk-name?versioning
+func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
+	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
+	if err := bck.Init(p.owner.bmd, nil); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	props, exists := p.owner.bmd.get().Get(bck)
+	if !exists {
+		p.invalmsghdlr(w, r, "bucket does not exists", http.StatusNotFound)
+		return
+	}
+	resp := s3compat.NewVersioningConfiguration(props.Versioning.Enabled)
+	b := resp.MustMarshal()
+	w.Header().Set("Content-Type", s3compat.ContentType)
+	w.Write(b)
+}
+
+// PUT s3/bk-name?versioning
+func (p *proxyrunner) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
+	msg := &cmn.ActionMsg{Action: cmn.ActSetBprops}
+	if p.forwardCP(w, r, msg, bucket, nil) {
+		return
+	}
+	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
+	if err := bck.Init(p.owner.bmd, nil); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	_, exists := p.owner.bmd.get().Get(bck)
+	if !exists {
+		p.invalmsghdlr(w, r, "bucket does not exists", http.StatusNotFound)
+		return
+	}
+	decoder := xml.NewDecoder(r.Body)
+	defer r.Body.Close()
+	vconf := &s3compat.VersioningConfiguration{}
+	if err := decoder.Decode(vconf); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	enabled := vconf.Enabled()
+	propsToUpdate := cmn.BucketPropsToUpdate{
+		Versioning: &cmn.VersionConfToUpdate{Enabled: &enabled},
+	}
+	if err := p.setBucketProps(msg, bck, propsToUpdate); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+	}
 }
