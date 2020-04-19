@@ -130,7 +130,7 @@ var _ = Describe("Common file", func() {
 			byteBuffer := make([]byte, bytesLimit*2)
 			reader := &io.LimitedReader{R: rand.Reader, N: bytesLimit}
 
-			_, err := cmn.SaveReader(nonExistingFile, reader, byteBuffer, false)
+			_, err := cmn.SaveReader(nonExistingFile, reader, byteBuffer, false, -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			validateSaveReaderOutput(nonExistingFile, byteBuffer[:bytesLimit])

@@ -227,7 +227,9 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	req.LOM.FQN = objFQN
 	req.LOM.SetSize(writer.Size())
 	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
-	if _, err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer), buffer, false); err != nil {
+	mi := req.LOM.ParsedFQN.MpathInfo
+	bdir := mi.MakePathBck(req.LOM.Bck().Bck)
+	if _, err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer), buffer, false, writer.Size(), bdir); err != nil {
 		writer.Free()
 		return err
 	}
@@ -239,7 +241,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 
 	b := cmn.MustMarshal(meta)
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false, -1); err != nil {
 		writer.Free()
 		<-c.diskCh
 		return err
@@ -303,7 +305,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 
 	b := cmn.MustMarshal(meta)
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false, -1); err != nil {
 		<-c.diskCh
 		return err
 	}
@@ -461,7 +463,8 @@ func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGrou
 // * idToNode - remote location of the slices (SliceID <-> DaemonID)
 // Returns:
 // * list of created SGLs to be freed later
-func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string, toDisk bool, buffer []byte) ([]*slice, error) {
+func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string,
+	toDisk bool, buffer []byte) ([]*slice, error) {
 	var err error
 	sliceCnt := meta.Data + meta.Parity
 	sliceSize := SliceSize(meta.Size, meta.Data)
@@ -599,7 +602,9 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	tmpFQN := fs.CSM.GenContentFQN(mainFQN, fs.WorkfileType, "ec")
 	// recalculate hash for the main object before saving the object's xattrs
 	// otherwise the main object gets hash from one of slices
-	cksum, err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, true, meta.Size)
+	mi := req.LOM.ParsedFQN.MpathInfo
+	bdir := mi.MakePathBck(req.LOM.Bck().Bck)
+	cksum, err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, true, meta.Size, bdir)
 	if err != nil {
 		<-c.diskCh
 		return restored, err
@@ -622,7 +627,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		glog.Infof("Saving main meta %s/%s to %q", req.LOM.Bck(), req.LOM.ObjName, metaFQN)
 	}
 
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false, -1); err != nil {
 		return restored, err
 	}
 

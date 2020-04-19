@@ -884,55 +884,63 @@ func CopyFile(src, dst string, buf []byte, needCksum bool) (written int64, cksum
 	return
 }
 
-// Saves the reader directly to a local file
-// `size` is an optional argument, if it is set only first `size` bytes
-// are saved to the file
-func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool, size ...int64) (cksum *Cksum, err error) {
-	file, err := CreateFile(fqn)
-	if err != nil {
-		return nil, err
-	}
-
+// Saves the reader directly to a local file, xxhash-checksums if requested
+func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool, size int64) (cksum *Cksum, err error) {
 	var (
-		hasher *xxhash.XXHash64
-		writer io.Writer = file
+		written   int64
+		hasher    *xxhash.XXHash64
+		file, erc           = CreateFile(fqn)
+		writer    io.Writer = file
 	)
+	if erc != nil {
+		return nil, erc
+	}
+	defer func() {
+		if err != nil {
+			os.Remove(fqn)
+		}
+	}()
 	if needCksum {
 		hasher = xxhash.New64()
 		writer = io.MultiWriter(file, hasher)
 	}
-	if len(size) != 0 {
-		sz := size[0]
-		_, err = io.CopyBuffer(writer, io.LimitReader(reader, sz), buf)
-	} else {
-		_, err = io.CopyBuffer(writer, reader, buf)
+	if size >= 0 {
+		reader = io.LimitReader(reader, size)
 	}
 
-	file.Close()
+	written, err = io.CopyBuffer(writer, reader, buf)
+	erc = file.Close()
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to save to %q: %v", fqn, err)
+		err = fmt.Errorf("failed to save to %q: %w", fqn, err)
+		return
 	}
-
+	if size >= 0 && written != size {
+		err = fmt.Errorf("wrong size when saving to %q: expected %d, got %d", fqn, size, written)
+		return
+	}
+	if erc != nil {
+		err = fmt.Errorf("failed to close %q: %w", fqn, erc)
+		return
+	}
 	if needCksum {
 		cksum = NewCksum(ChecksumXXHash, HashToStr(hasher))
 	}
-
-	return cksum, nil
+	return
 }
 
-// Saves the reader to a temporary file `tmpfqn`, and if everything is OK
-// it moves the temporary file to a given `fqn`
-// `size` is an optional argument, if it is set only first `size` bytes
-// are saved to the file
-func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, needCksum bool, size ...int64) (cksum *Cksum, err error) {
-	if fqn == "" {
-		return nil, nil
+// same as above, plus rename
+func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, needCksum bool,
+	size int64, dirMustExist string) (cksum *Cksum, err error) {
+	Assert(fqn != "")
+	if dirMustExist != "" {
+		if _, err := os.Stat(dirMustExist); err != nil {
+			return nil, fmt.Errorf("failed to save-safe %s: directory %s %w", fqn, dirMustExist, err)
+		}
 	}
-
-	if cksum, err = SaveReader(tmpfqn, reader, buf, needCksum, size...); err != nil {
+	if cksum, err = SaveReader(tmpfqn, reader, buf, needCksum, size); err != nil {
 		return nil, err
 	}
-
 	if err := Rename(tmpfqn, fqn); err != nil {
 		return nil, err
 	}

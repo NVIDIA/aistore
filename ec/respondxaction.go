@@ -151,7 +151,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 
 func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
 	uname := unique(iReq.sender, bck, objName)
-
+	bdir := ""
 	drain := func() {
 		if err := cmn.DrainReader(object); err != nil {
 			glog.Warningf("Failed to drain reader %s/%s: %v", bck.Name, objName, err)
@@ -185,7 +185,8 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 		)
 		if iReq.isSlice {
 			if glog.V(4) {
-				glog.Infof("Got slice response from %s (#%d of %s/%s) v%s", iReq.sender, iReq.meta.SliceID, bck.Name, objName, meta.ObjVersion)
+				glog.Infof("Got slice response from %s (#%d of %s/%s) v%s",
+					iReq.sender, iReq.meta.SliceID, bck.Name, objName, meta.ObjVersion)
 			}
 			objFQN, _, err = cluster.HrwFQN(bck, SliceType, objName)
 			if err != nil {
@@ -203,21 +204,22 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 				glog.Error(err)
 				return
 			}
+			lom = &cluster.LOM{T: r.t, FQN: objFQN}
+			err = lom.Init(bck.Bck)
+			if err != nil {
+				glog.Errorf("Failed to init %s: %s", lom, err)
+				return
+			}
+			mi := lom.ParsedFQN.MpathInfo
+			bdir = mi.MakePathBck(lom.Bck().Bck)
 		}
 
 		// save slice/object
 		tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
 		buf, slab := mm.Alloc()
-		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false)
+		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false, objAttrs.Size, bdir)
 		// save xattrs only for object replicas (slices have xattrs empty)
 		if err == nil && !iReq.isSlice {
-			lom = &cluster.LOM{T: r.t, FQN: objFQN}
-			err = lom.Init(bck.Bck)
-			if err != nil {
-				glog.Errorf("Failed to read resolve FQN %s: %s", objFQN, err)
-				slab.Free(buf)
-				return
-			}
 			lom.SetVersion(objAttrs.Version)
 			lom.SetAtimeUnix(objAttrs.Atime)
 			lom.SetSize(objAttrs.Size)
@@ -237,7 +239,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 		// save its metadata
 		metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
 		metaBuf := meta.Marshal()
-		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false)
+		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false, -1)
 
 		slab.Free(buf)
 		if err != nil {

@@ -556,6 +556,8 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 	cmn.Assert(req.md != nil)
 	var (
 		ctFQN    string
+		size     int64
+		bdir     string
 		lom      *cluster.LOM
 		bck      = cluster.NewBckEmbed(hdr.Bck)
 		needSave = req.md.SliceID == 0 // full object always saved
@@ -582,6 +584,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 	}
 	if req.md.SliceID != 0 {
 		ctFQN = mpath.MakePathFQN(hdr.Bck, ec.SliceType, hdr.ObjName)
+		size = -1
 	} else {
 		lom = &cluster.LOM{T: reb.t, ObjName: hdr.ObjName}
 		if err := lom.Init(hdr.Bck); err != nil {
@@ -589,6 +592,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 		}
 		ctFQN = lom.FQN
 		lom.SetSize(hdr.ObjAttrs.Size)
+		size = hdr.ObjAttrs.Size
 		if hdr.ObjAttrs.Version != "" {
 			lom.SetVersion(hdr.ObjAttrs.Version)
 		}
@@ -598,6 +602,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 		if hdr.ObjAttrs.Atime != 0 {
 			lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
 		}
+		bdir = mpath.MakePathBck(lom.Bck().Bck)
 		lom.Lock(true)
 		defer lom.Unlock(true)
 		lom.Uncache()
@@ -605,13 +610,13 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 
 	buffer, slab := reb.t.GetMMSA().Alloc()
 	metaFQN := mpath.MakePathFQN(hdr.Bck, ec.MetaType, hdr.ObjName)
-	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.md.Marshal()), buffer, false)
+	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.md.Marshal()), buffer, false, size)
 	if err != nil {
 		slab.Free(buffer)
 		return err
 	}
 	tmpFQN := mpath.MakePathFQN(hdr.Bck, fs.WorkfileType, hdr.ObjName)
-	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, data, buffer, true)
+	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, data, buffer, true, hdr.ObjAttrs.Size, bdir)
 	if err == nil {
 		if req.md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
 			err = fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
@@ -1984,7 +1989,9 @@ func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Read
 	}
 	tmpFQN := fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec")
 	buffer, slab := reb.t.GetMMSA().Alloc()
-	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize); err != nil {
+	mi := lom.ParsedFQN.MpathInfo
+	bdir := mi.MakePathBck(lom.Bck().Bck)
+	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize, bdir); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
 		reb.t.FSHC(err, lom.FQN)
@@ -1995,7 +2002,7 @@ func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Read
 	lom.SetCksum(cksum)
 	metaFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(obj.bck, ec.MetaType, obj.objName)
 	metaBuf := cmn.MustMarshal(&objMD)
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false, -1); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
 		if rmErr := os.Remove(lom.FQN); rmErr != nil {

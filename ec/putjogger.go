@@ -152,7 +152,7 @@ func (c *putJogger) encode(req *Request) error {
 		return err
 	}
 	metaBuf := meta.Marshal()
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), c.buffer, false); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), c.buffer, false, -1); err != nil {
 		return err
 	}
 
