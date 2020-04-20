@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -407,7 +408,7 @@ func TestDownloadCloud(t *testing.T) {
 
 	expectedObjs := make([]string, 0, fileCnt)
 	for i := 0; i < fileCnt; i++ {
-		reader, err := tutils.NewRandReader(cmn.MiB, false /* withHash */)
+		reader, err := readers.NewRandReader(cmn.MiB, false /* withHash */)
 		tassert.CheckFatal(t, err)
 
 		objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)

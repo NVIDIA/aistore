@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -1321,7 +1322,7 @@ func TestAtimeLocalGet(t *testing.T) {
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)
 		objectName    = t.Name()
-		objectContent = tutils.NewBytesReader([]byte("file content"))
+		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -1353,7 +1354,7 @@ func TestAtimeColdGet(t *testing.T) {
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)
 		objectName    = t.Name()
-		objectContent = tutils.NewBytesReader([]byte("file content"))
+		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
@@ -1388,7 +1389,7 @@ func TestAtimePrefetch(t *testing.T) {
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)
 		objectName    = t.Name()
-		objectContent = tutils.NewBytesReader([]byte("file content"))
+		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
@@ -1422,7 +1423,7 @@ func TestAtimeLocalPut(t *testing.T) {
 		proxyURL      = tutils.GetPrimaryURL()
 		baseParams    = tutils.DefaultBaseAPIParams(t)
 		objectName    = t.Name()
-		objectContent = tutils.NewBytesReader([]byte("file content"))
+		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)

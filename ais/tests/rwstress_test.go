@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -150,7 +151,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 
 			// Note: This test depends on the files it creates, so ignore reader type, always use file reader
-			r, err := tutils.NewFileReader(baseDir, keyname, fileSize, true /* withHash */)
+			r, err := readers.NewFileReader(baseDir, keyname, fileSize, true /* withHash */)
 			if err != nil {
 				tutils.Logf("PUT write FAIL: %v\n", err)
 				t.Error(err)

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	"golang.org/x/sync/errgroup"
 )
@@ -335,7 +336,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		wg.Add(1)
 		go func(wid int) {
 			defer wg.Done()
-			reader, err := tutils.NewRandReader(int64(objectSize), true)
+			reader, err := readers.NewRandReader(int64(objectSize), true)
 			tassert.CheckFatal(t, err)
 			objectsToPut := objectCount / workerCount
 			if wid == workerCount-1 { // last worker puts leftovers
@@ -440,7 +441,7 @@ func TestListObjects(t *testing.T) {
 						defer wg.Done()
 
 						objectSize := int64(rand.Intn(256) + 20)
-						reader, err := tutils.NewRandReader(objectSize, true)
+						reader, err := readers.NewRandReader(objectSize, true)
 						tassert.CheckFatal(t, err)
 						objDir := tutils.RandomObjDir(dirLen, 5)
 						objectsToPut := objectCount / workerCount

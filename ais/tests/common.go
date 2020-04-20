@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -209,7 +210,7 @@ func (m *ioContext) cloudPuts(evict bool) {
 	)
 	m.objNames = m.objNames[:0]
 	for i := 0; i < leftToFill; i++ {
-		r, err := tutils.NewRandReader(int64(m.fileSize), true /*withHash*/)
+		r, err := readers.NewRandReader(int64(m.fileSize), true /*withHash*/)
 		tassert.CheckFatal(m.t, err)
 		objName := fmt.Sprintf("%s%s%d", "copy/cloud_", cmn.RandString(4), i)
 		wg.Add(1)
@@ -254,7 +255,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 
 		wg.Add(1)
 		go func(obj *cmn.BucketEntry) {
-			_, err := tutils.GetDiscard(m.proxyURL, m.bck, obj.Name, true /*validate*/, 0, 0)
+			_, err := api.GetObject(baseParams, m.bck, obj.Name)
 			tassert.CheckError(m.t, err)
 			wg.Done()
 		}(obj)

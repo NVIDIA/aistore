@@ -238,7 +238,7 @@ func main() {
 	if soakcmn.Params.IP == "" && soakcmn.Params.Port == "" {
 		if containers.DockerRunning() {
 			dockerEnvFile := "/tmp/docker_ais/deploy.env"
-			envVars := tutils.ParseEnvVariables(dockerEnvFile)
+			envVars := cmn.ParseEnvVariables(dockerEnvFile)
 			soakcmn.Params.IP = envVars["PRIMARY_HOST_IP"]
 			soakcmn.Params.Port = envVars["PORT"]
 		} else {

@@ -1,8 +1,8 @@
-// Package tutils provides common low-level utilities for all aistore unit and integration tests
+// Package readers provides implementation for common reader types
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package tutils
+package readers
 
 import (
 	"bytes"
@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -46,7 +47,12 @@ type randReader struct {
 	xxHash string
 }
 
-var _ Reader = &randReader{}
+var (
+	mmsa = memsys.DefaultPageMM()
+
+	// interface guard
+	_ Reader = &randReader{}
+)
 
 // Read implements the Reader interface.
 func (r *randReader) Read(buf []byte) (int, error) {
@@ -132,7 +138,7 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 		err  error
 		seed = time.Now().UnixNano()
 	)
-	slab, err := MMSA.GetSlab(cmn.KiB * 32)
+	slab, err := mmsa.GetSlab(cmn.KiB * 32)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +232,7 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 
 	var hash string
 	if withHash {
-		buf, slab := MMSA.Alloc()
+		buf, slab := mmsa.Alloc()
 		_, hash, err = cmn.WriteWithHash(ioutil.Discard, f, buf, cmn.ChecksumXXHash)
 		if err != nil {
 			return nil, err
@@ -318,4 +324,40 @@ func NewReader(p ParamReader) (Reader, error) {
 	default:
 		return nil, fmt.Errorf("unknown memory type for creating inmem reader")
 	}
+}
+
+// copyRandWithHash reads data from random source and writes it to a writer while
+// optionally computing xxhash
+// See related: memsys_test.copyRand
+func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (string, error) {
+	var (
+		rem   = size
+		shash string
+		h     *xxhash.XXHash64
+	)
+	buf, s := mmsa.Alloc()
+	blkSize := int64(len(buf))
+	defer s.Free(buf)
+
+	if withHash {
+		h = xxhash.New64()
+	}
+	for i := int64(0); i <= size/blkSize; i++ {
+		n := int(cmn.MinI64(blkSize, rem))
+		rnd.Read(buf[:n])
+		m, err := w.Write(buf[:n])
+		if err != nil {
+			return "", err
+		}
+
+		if withHash {
+			h.Write(buf[:m])
+		}
+		cmn.Assert(m == n)
+		rem -= int64(m)
+	}
+	if withHash {
+		shash = cmn.HashToStr(h)
+	}
+	return shash, nil
 }

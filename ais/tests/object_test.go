@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -67,7 +68,7 @@ func TestCloudBucketObject(t *testing.T) {
 				bck.Name = clibucket
 			}
 
-			reader, err := tutils.NewRandReader(cmn.KiB, false /* withHash */)
+			reader, err := readers.NewRandReader(cmn.KiB, false /* withHash */)
 			tassert.CheckFatal(t, err)
 
 			defer api.DeleteObject(baseParams, bck, object)
@@ -470,14 +471,14 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		BaseParams: baseParams,
 		Bck:        bckLocal,
 		Object:     fileName1,
-		Reader:     tutils.NewBytesReader(dataLocal),
+		Reader:     readers.NewBytesReader(dataLocal),
 	}
 
 	putArgsCloud := api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        bckCloud,
 		Object:     fileName1,
-		Reader:     tutils.NewBytesReader(dataCloud),
+		Reader:     readers.NewBytesReader(dataCloud),
 	}
 
 	xactArgsPrefetch := api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bckCloud, Timeout: rebalanceTimeout}
@@ -633,7 +634,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		BaseParams: baseParams,
 		Bck:        bckLocal,
 		Object:     fileName,
-		Reader:     tutils.NewBytesReader(dataLocal),
+		Reader:     readers.NewBytesReader(dataLocal),
 	}
 	err := api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
@@ -646,7 +647,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		BaseParams: baseParams,
 		Bck:        bckCloud,
 		Object:     fileName,
-		Reader:     tutils.NewBytesReader(dataCloud),
+		Reader:     readers.NewBytesReader(dataCloud),
 	}
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils/readers"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/tutils"
@@ -30,7 +31,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	for i := 0; i < numworkers; i++ {
-		reader, err := tutils.NewRandReader(fileSize, true)
+		reader, err := readers.NewRandReader(fileSize, true)
 		tassert.CheckFatal(t, err)
 		wg.Add(1)
 		go func() {
@@ -42,7 +43,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 	tutils.DestroyBucket(t, proxyURL, bck)
 }
 
-func putRR(t *testing.T, reader tutils.Reader, bck cmn.Bck, dir string, objCount int) []string {
+func putRR(t *testing.T, reader readers.Reader, bck cmn.Bck, dir string, objCount int) []string {
 	var (
 		objNames = make([]string, objCount)
 	)

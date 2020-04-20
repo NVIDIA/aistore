@@ -6,7 +6,6 @@ package tutils
 
 import (
 	"net/http"
-	"net/http/httptrace"
 	"os"
 	"strings"
 	"time"
@@ -27,14 +26,6 @@ const (
 
 )
 
-type (
-	tracectx struct {
-		tr           *traceableTransport
-		trace        *httptrace.ClientTrace
-		tracedClient *http.Client
-	}
-)
-
 var (
 	proxyURLReadOnly string // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
 
@@ -43,7 +34,6 @@ var (
 		IdleConnsPerHost: 100,
 		UseHTTPProxyEnv:  true,
 	}
-	transport         = cmn.NewTransport(transportArgs)
 	DefaultHTTPClient = &http.Client{}
 	HTTPClient        *http.Client
 	HTTPClientGetPut  *http.Client
@@ -76,7 +66,7 @@ func init() {
 }
 
 func initProxyURL() {
-	envVars := ParseEnvVariables(dockerEnvFile)                        // Gets the fields from the .env file from which the docker was deployed
+	envVars := cmn.ParseEnvVariables(dockerEnvFile)                    // Gets the fields from the .env file from which the docker was deployed
 	primaryHostIP, port := envVars["PRIMARY_HOST_IP"], envVars["PORT"] // Host IP and port of primary cluster
 
 	proxyURLReadOnly = proxyURL
@@ -95,33 +85,8 @@ func initProxyURL() {
 	// no new cluster is re-deployed before each test.
 	// Finds who is the current primary proxy.
 	primary, err := GetPrimaryProxy(proxyURLReadOnly)
-
-	// TODO: since `tutils` is used in various places like `aisloader` we cannot
-	//  simply fail on error. If pinging proxy fails, it must be lazily
-	//  discovered once `proxyURLReadOnly` is accessed somewhere in the code.
-	proxyURLReadOnly = "FAILED TO INITIALIZE"
-	if err == nil {
-		proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
+	if err != nil {
+		cmn.ExitInfof("Failed to get primary proxy, err = %v", err)
 	}
-}
-
-func newTraceCtx() *tracectx {
-	tctx := &tracectx{}
-
-	tctx.tr = &traceableTransport{
-		transport: transport,
-		tsBegin:   time.Now(),
-	}
-	tctx.trace = &httptrace.ClientTrace{
-		GotConn:              tctx.tr.GotConn,
-		WroteHeaders:         tctx.tr.WroteHeaders,
-		WroteRequest:         tctx.tr.WroteRequest,
-		GotFirstResponseByte: tctx.tr.GotFirstResponseByte,
-	}
-	tctx.tracedClient = &http.Client{
-		Transport: tctx.tr,
-		Timeout:   600 * time.Second,
-	}
-
-	return tctx
+	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
 }

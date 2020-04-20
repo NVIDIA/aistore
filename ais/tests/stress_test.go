@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -43,7 +44,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			reader, err := tutils.NewRandReader(objSize, true)
+			reader, err := readers.NewRandReader(objSize, true)
 			tassert.CheckFatal(t, err)
 			objDir := tutils.RandomObjDir(10, 5)
 			putRR(t, reader, bck, objDir, objectCountPerWorker)
@@ -80,7 +81,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 			go func() {
 				defer wg.Done()
 
-				reader, err := tutils.NewRandReader(objSize, true)
+				reader, err := readers.NewRandReader(objSize, true)
 				tassert.CheckFatal(t, err)
 				objDir := tutils.RandomObjDir(10, 5)
 				putRR(t, reader, bck, objDir, numObjs)

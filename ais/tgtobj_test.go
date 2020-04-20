@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 )
 
 const (
@@ -105,7 +105,7 @@ func BenchmarkObjPut(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				r, _ := tutils.NewRandReader(bench.fileSize, false)
+				r, _ := readers.NewRandReader(bench.fileSize, false)
 				poi := &putObjInfo{
 					started: time.Now(),
 					t:       t,
@@ -152,7 +152,7 @@ func BenchmarkObjAppend(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				r, _ := tutils.NewRandReader(bench.fileSize, false)
+				r, _ := readers.NewRandReader(bench.fileSize, false)
 				aoi := &appendObjInfo{
 					started:  time.Now(),
 					t:        t,
@@ -208,7 +208,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			r, _ := tutils.NewRandReader(bench.fileSize, false)
+			r, _ := readers.NewRandReader(bench.fileSize, false)
 			poi := &putObjInfo{
 				started: time.Now(),
 				t:       t,

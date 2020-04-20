@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -836,7 +837,7 @@ func TestDeleteList(t *testing.T) {
 
 	// 1. Put files to delete
 	for i := 0; i < numfiles; i++ {
-		r, err := tutils.NewRandReader(fileSize, true /* withHash */)
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
 		tassert.CheckFatal(t, err)
 
 		keyname := fmt.Sprintf("%s%d", prefix, i)
@@ -961,7 +962,7 @@ func TestDeleteRange(t *testing.T) {
 
 	// 1. Put files to delete
 	for i := 0; i < numfiles; i++ {
-		r, err := tutils.NewRandReader(fileSize, true /* withHash */)
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
 		tassert.CheckFatal(t, err)
 
 		wg.Add(1)
@@ -1048,11 +1049,11 @@ func TestStressDeleteRange(t *testing.T) {
 	for i := 0; i < numReaders; i++ {
 		size := rand.Int63n(cmn.KiB*128) + cmn.KiB/3
 		tassert.CheckFatal(t, err)
-		reader, err := tutils.NewRandReader(size, true /* withHash */)
+		reader, err := readers.NewRandReader(size, true /* withHash */)
 		tassert.CheckFatal(t, err)
 
 		wg.Add(1)
-		go func(i int, reader tutils.Reader) {
+		go func(i int, reader readers.Reader) {
 			defer wg.Done()
 
 			for j := 0; j < numFiles/numReaders; j++ {

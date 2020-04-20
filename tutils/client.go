@@ -11,15 +11,11 @@ package tutils
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
-	"net/http/httptrace"
-	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -48,102 +45,6 @@ const (
 const (
 	evictPrefetchTimeout = 2 * time.Minute
 )
-
-type (
-	// traceableTransport is an http.RoundTripper that keeps track of a http
-	// request and implements hooks to report HTTP tracing events.
-	traceableTransport struct {
-		transport             *http.Transport
-		current               *http.Request
-		tsBegin               time.Time // request initialized
-		tsProxyConn           time.Time // connected with proxy
-		tsRedirect            time.Time // redirected
-		tsTargetConn          time.Time // connected with target
-		tsHTTPEnd             time.Time // http request returned
-		tsProxyWroteHeaders   time.Time
-		tsProxyWroteRequest   time.Time
-		tsProxyFirstResponse  time.Time
-		tsTargetWroteHeaders  time.Time
-		tsTargetWroteRequest  time.Time
-		tsTargetFirstResponse time.Time
-		connCnt               int
-	}
-
-	// HTTPLatencies stores latency of a http request
-	HTTPLatencies struct {
-		ProxyConn           time.Duration // from request is created to proxy connection is established
-		Proxy               time.Duration // from proxy connection is established to redirected
-		TargetConn          time.Duration // from request is redirected to target connection is established
-		Target              time.Duration // from target connection is established to request is completed
-		PostHTTP            time.Duration // from http ends to after read data from http response and verify hash (if specified)
-		ProxyWroteHeader    time.Duration // from ProxyConn to header is written
-		ProxyWroteRequest   time.Duration // from ProxyWroteHeader to response body is written
-		ProxyFirstResponse  time.Duration // from ProxyWroteRequest to first byte of response
-		TargetWroteHeader   time.Duration // from TargetConn to header is written
-		TargetWroteRequest  time.Duration // from TargetWroteHeader to response body is written
-		TargetFirstResponse time.Duration // from TargetWroteRequest to first byte of response
-	}
-)
-
-// RoundTrip records the proxy redirect time and keeps track of requests.
-func (t *traceableTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if t.connCnt == 1 {
-		t.tsRedirect = time.Now()
-	}
-
-	t.current = req
-	return t.transport.RoundTrip(req)
-}
-
-// GotConn records when the connection to proxy/target is made.
-func (t *traceableTransport) GotConn(info httptrace.GotConnInfo) {
-	switch t.connCnt {
-	case 0:
-		t.tsProxyConn = time.Now()
-	case 1:
-		t.tsTargetConn = time.Now()
-	default:
-		// ignore
-		// this can happen during proxy stress test when the proxy dies
-	}
-	t.connCnt++
-}
-
-// WroteHeaders records when the header is written to
-func (t *traceableTransport) WroteHeaders() {
-	switch t.connCnt {
-	case 1:
-		t.tsProxyWroteHeaders = time.Now()
-	case 2:
-		t.tsTargetWroteHeaders = time.Now()
-	default:
-		// ignore
-	}
-}
-
-// WroteRequest records when the request is completely written
-func (t *traceableTransport) WroteRequest(wr httptrace.WroteRequestInfo) {
-	switch t.connCnt {
-	case 1:
-		t.tsProxyWroteRequest = time.Now()
-	case 2:
-		t.tsTargetWroteRequest = time.Now()
-	default:
-		// ignore
-	}
-}
-
-// GotFirstResponseByte records when the response starts to come back
-func (t *traceableTransport) GotFirstResponseByte() {
-	switch t.connCnt {
-	case 1:
-		t.tsProxyFirstResponse = time.Now()
-	case 2:
-		t.tsTargetFirstResponse = time.Now()
-	default:
-		// ignore
-	}
-}
 
 type ReqError struct {
 	code    int
@@ -173,233 +74,6 @@ func PingURL(url string) (err error) {
 	return
 }
 
-func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, string, error) {
-	var (
-		n        int64
-		cksumVal string
-		err      error
-	)
-
-	if r.StatusCode >= http.StatusBadRequest {
-		bytes, err := ioutil.ReadAll(r.Body)
-		if err == nil {
-			return 0, "", fmt.Errorf("bad status %d from %s, response: %s", r.StatusCode, src, string(bytes))
-		}
-		return 0, "", fmt.Errorf("bad status %d from %s, err: %v", r.StatusCode, src, err)
-	}
-
-	buf, slab := MMSA.Alloc()
-	defer slab.Free(buf)
-
-	if cksumType != "" {
-		n, cksumVal, err = cmn.WriteWithHash(w, r.Body, buf, cksumType)
-		if err != nil {
-			return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
-		}
-	} else if n, err = io.CopyBuffer(w, r.Body, buf); err != nil {
-		return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
-	}
-
-	return n, cksumVal, nil
-}
-
-func discardResponse(r *http.Response, src string) (int64, error) {
-	n, _, err := readResponse(r, ioutil.Discard, src, "")
-	return n, err
-}
-
-func emitError(r *http.Response, err error, errCh chan error) {
-	if err == nil || errCh == nil {
-		return
-	}
-
-	if r != nil {
-		errObj := NewReqError(err.Error(), r.StatusCode)
-		errCh <- errObj
-	} else {
-		errCh <- err
-	}
-}
-
-//
-// GetDiscard sends a GET request and discards returned data
-//
-func GetDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, error) {
-	var (
-		hdrCksumValue, hdrCksumType string
-		query                       url.Values
-	)
-	query = cmn.AddBckToQuery(query, bck)
-	if length > 0 {
-		query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
-		query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
-	}
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodGet,
-		Base:   proxyURL,
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
-		Query:  query,
-	}
-	req, err := reqArgs.Req()
-	if err != nil {
-		return 0, err
-	}
-	resp, err := HTTPClientGetPut.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if validate {
-		hdrCksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
-		hdrCksumType = resp.Header.Get(cmn.HeaderObjCksumType)
-	}
-	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
-	n, cksumValue, err := readResponse(resp, ioutil.Discard, src, hdrCksumType)
-	if err != nil {
-		return 0, err
-	}
-	if validate && hdrCksumValue != cksumValue {
-		return 0, cmn.NewInvalidCksumError(hdrCksumValue, cksumValue)
-	}
-	return n, err
-}
-
-// same as above with HTTP trace
-func GetTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool,
-	offset, length int64) (int64, HTTPLatencies, error) {
-	var (
-		hdrCksumValue, hdrCksumType string
-	)
-	query := url.Values{}
-	query = cmn.AddBckToQuery(query, bck)
-	if length > 0 {
-		query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
-		query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
-	}
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodGet,
-		Base:   proxyURL,
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
-		Query:  query,
-	}
-	req, err := reqArgs.Req()
-	if err != nil {
-		return 0, HTTPLatencies{}, err
-	}
-
-	tctx := newTraceCtx()
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
-
-	resp, err := tctx.tracedClient.Do(req)
-	if err != nil {
-		return 0, HTTPLatencies{}, err
-	}
-	defer resp.Body.Close()
-
-	tctx.tr.tsHTTPEnd = time.Now()
-	if validate {
-		hdrCksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
-		hdrCksumType = resp.Header.Get(cmn.HeaderObjCksumType)
-	}
-
-	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
-	n, cksumValue, err := readResponse(resp, ioutil.Discard, src, hdrCksumType)
-	if err != nil {
-		return 0, HTTPLatencies{}, err
-	}
-	if validate && hdrCksumValue != cksumValue {
-		err = cmn.NewInvalidCksumError(hdrCksumValue, cksumValue)
-	}
-
-	latencies := HTTPLatencies{
-		ProxyConn:           cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
-		Proxy:               cmn.TimeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
-		TargetConn:          cmn.TimeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
-		Target:              cmn.TimeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
-		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
-		ProxyWroteHeader:    cmn.TimeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
-		ProxyWroteRequest:   cmn.TimeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
-		ProxyFirstResponse:  cmn.TimeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
-		TargetWroteHeader:   cmn.TimeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
-		TargetWroteRequest:  cmn.TimeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
-		TargetFirstResponse: cmn.TimeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
-	}
-	return n, latencies, err
-}
-
-//
-// Put executes PUT
-//
-func Put(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.ReadOpenCloser) error {
-	var (
-		baseParams = api.BaseParams{
-			Client: HTTPClientGetPut,
-			URL:    proxyURL,
-			Method: http.MethodPut,
-		}
-		args = api.PutObjectArgs{
-			BaseParams: baseParams,
-			Bck:        bck,
-			Object:     object,
-			Hash:       hash,
-			Reader:     reader,
-		}
-	)
-	return api.PutObject(args)
-}
-
-// PUT with HTTP trace
-func PutWithTrace(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.ReadOpenCloser) (HTTPLatencies, error) { // nolint:interfacer // we use `reader.Open` method
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   proxyURL,
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object),
-		Query:  cmn.AddBckToQuery(nil, bck),
-		BodyR:  reader,
-	}
-
-	tctx := newTraceCtx()
-	newReq := func(reqArgs cmn.ReqArgs) (request *http.Request, err error) {
-		req, err := reqArgs.Req()
-		if err != nil {
-			return nil, err
-		}
-
-		// The HTTP package doesn't automatically set this for files, so it has to be done manually
-		// If it wasn't set, we would need to deal with the redirect manually.
-		req.GetBody = reader.Open
-		if hash != "" {
-			req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
-			req.Header.Set(cmn.HeaderObjCksumVal, hash)
-		}
-
-		request = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
-		return
-	}
-
-	_, err := api.DoReqWithRetry(tctx.tracedClient, newReq, reqArgs) // nolint:bodyclose // it's closed inside
-	if err != nil {
-		return HTTPLatencies{}, err
-	}
-
-	tctx.tr.tsHTTPEnd = time.Now()
-	l := HTTPLatencies{
-		ProxyConn:           cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
-		Proxy:               cmn.TimeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
-		TargetConn:          cmn.TimeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
-		Target:              cmn.TimeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
-		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
-		ProxyWroteHeader:    cmn.TimeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
-		ProxyWroteRequest:   cmn.TimeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
-		ProxyFirstResponse:  cmn.TimeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
-		TargetWroteHeader:   cmn.TimeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
-		TargetWroteRequest:  cmn.TimeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
-		TargetFirstResponse: cmn.TimeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
-	}
-	return l, nil
-}
-
 func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
 	if wg != nil {
 		defer wg.Done()
@@ -409,7 +83,9 @@ func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh 
 	}
 	baseParams := BaseAPIParams(proxyURL)
 	err := api.DeleteObject(baseParams, bck, object)
-	emitError(nil, err, errCh)
+	if err != nil && errCh != nil {
+		errCh <- err
+	}
 	return err
 }
 
@@ -439,7 +115,7 @@ func CheckExists(proxyURL string, bck cmn.Bck, objName string) (bool, error) {
 }
 
 // PutAsync sends a PUT request to the given URL
-func PutAsync(wg *sync.WaitGroup, proxyURL string, bck cmn.Bck, object string, reader Reader, errCh chan error) {
+func PutAsync(wg *sync.WaitGroup, proxyURL string, bck cmn.Bck, object string, reader readers.Reader, errCh chan error) {
 	defer wg.Done()
 	baseParams := BaseAPIParams(proxyURL)
 	putArgs := api.PutObjectArgs{
@@ -478,55 +154,6 @@ func ListObjects(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit i
 	}
 
 	return objs, nil
-}
-
-// ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjectsFast(proxyURL string, bck cmn.Bck, prefix string) ([]string, error) {
-	baseParams := BaseAPIParams(proxyURL)
-	query := url.Values{}
-	if prefix != "" {
-		query.Add(cmn.URLParamPrefix, prefix)
-	}
-
-	data, err := api.ListObjectsFast(baseParams, bck, nil, query)
-	if err != nil {
-		return nil, err
-	}
-
-	objs := make([]string, 0, len(data.Entries))
-	for _, obj := range data.Entries {
-		// Skip directories
-		if obj.Name[len(obj.Name)-1] != '/' {
-			objs = append(objs, obj.Name)
-		}
-	}
-
-	return objs, nil
-}
-
-// GetConfig sends a {what:config} request to the url and discard the message
-// For testing purpose only
-func GetConfig(server string) (HTTPLatencies, error) {
-	tctx := newTraceCtx()
-
-	url := server + cmn.URLPath(cmn.Version, cmn.Daemon)
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	req.URL.RawQuery = GetWhatRawQuery(cmn.GetWhatConfig, "")
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
-
-	resp, err := tctx.tracedClient.Do(req)
-	if err != nil {
-		return HTTPLatencies{}, err
-	}
-	defer resp.Body.Close()
-
-	_, err = discardResponse(resp, "GetConfig")
-	emitError(resp, err, nil)
-	l := HTTPLatencies{
-		ProxyConn: cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
-		Proxy:     time.Since(tctx.tr.tsProxyConn),
-	}
-	return l, err
 }
 
 func GetPrimaryURL() string {
@@ -571,15 +198,6 @@ func CleanCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string)
 	baseParams := BaseAPIParams(proxyURL)
 	err = api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
-}
-
-func GetWhatRawQuery(getWhat, getProps string) string {
-	q := url.Values{}
-	q.Add(cmn.URLParamWhat, getWhat)
-	if getProps != "" {
-		q.Add(cmn.URLParamProps, getProps)
-	}
-	return q.Encode()
 }
 
 func UnregisterNode(proxyURL, sid string) error {
@@ -637,7 +255,7 @@ func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck cmn.Bck, object
 func putObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, errCh chan error, objCh, objsPutCh chan string) {
 	var (
 		size   = objSize
-		reader Reader
+		reader readers.Reader
 		err    error
 	)
 	for {
@@ -650,7 +268,7 @@ func putObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, errCh
 		}
 
 		sgl := MMSA.NewSGL(int64(size))
-		reader, err = NewSGReader(sgl, int64(size), true /* with Hash */)
+		reader, err = readers.NewSGReader(sgl, int64(size), true /* with Hash */)
 		cmn.AssertNoErr(err)
 
 		fullObjName := path.Join(objPath, objName)
@@ -812,30 +430,6 @@ func BaseAPIParams(url string) api.BaseParams {
 	}
 }
 
-// ParseEnvVariables takes in a .env file and parses its contents
-func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
-	m := map[string]string{}
-	dlim := "="
-	data, err := ioutil.ReadFile(fpath)
-	if err != nil {
-		return nil
-	}
-
-	if len(delimiter) > 0 {
-		dlim = delimiter[0]
-	}
-
-	paramList := strings.Split(string(data), "\n")
-	for _, dat := range paramList {
-		datum := strings.Split(dat, dlim)
-		// key=val
-		if len(datum) == 2 {
-			m[datum[0]] = datum[1]
-		}
-	}
-	return m
-}
-
 // waitForBucket waits until all targets ack having ais bucket created or deleted
 func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
 	baseParams := BaseAPIParams(proxyURL)
@@ -938,7 +532,7 @@ func GetNamedTargetStats(trunner *stats.Trunner, name string) int64 {
 }
 
 func GetDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
-	q := GetWhatRawQuery(cmn.GetWhatStats, "")
+	q := api.GetWhatRawQuery(cmn.GetWhatStats, "")
 	url = fmt.Sprintf("%s?%s", url+cmn.URLPath(cmn.Version, cmn.Daemon), q)
 	resp, err := DefaultHTTPClient.Get(url)
 	if err != nil {

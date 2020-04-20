@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -254,7 +255,7 @@ func (df *dsortFramework) createInputShards() {
 			fqn := path + df.extension
 			defer os.Remove(fqn)
 
-			reader, err := tutils.NewFileReaderFromFile(fqn, false)
+			reader, err := readers.NewFileReaderFromFile(fqn, false)
 			tassert.CheckFatal(df.m.t, err)
 
 			tutils.PutAsync(wg, df.m.proxyURL, df.m.bck, filepath.Base(fqn), reader, errCh)
@@ -1925,7 +1926,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					ekm[recordName] = shardFmts[idx%len(shardFmts)]
 				}
 			}
-			args := api.PutObjectArgs{BaseParams: baseParams, Bck: m.bck, Object: orderFileName, Reader: tutils.NewBytesReader(buffer.Bytes())}
+			args := api.PutObjectArgs{BaseParams: baseParams, Bck: m.bck, Object: orderFileName, Reader: readers.NewBytesReader(buffer.Bytes())}
 			err = api.PutObject(args)
 			tassert.CheckFatal(t, err)
 

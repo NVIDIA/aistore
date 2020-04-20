@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 )
 
 const (
@@ -68,7 +69,7 @@ func putSpecificFiles(fileSize uint64, numPuts int, bck cmn.Bck, pool chan func(
 	cmn.CreateDir(smokeDir)
 
 	for i := 1; i < numPuts+1; i++ {
-		r, err := tutils.NewRandReader(int64(fileSize), true /* withHash */)
+		r, err := readers.NewRandReader(int64(fileSize), true /* withHash */)
 		if err != nil {
 			return err
 		}

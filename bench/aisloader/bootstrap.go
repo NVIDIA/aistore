@@ -57,7 +57,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats/statsd"
-	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -87,7 +87,7 @@ type (
 		err       error
 		start     time.Time
 		end       time.Time
-		latencies tutils.HTTPLatencies
+		latencies httpLatencies
 	}
 
 	// nolint:maligned // no performance critical code
@@ -104,6 +104,7 @@ type (
 
 		loaderID             string // used with multiple loader instances generating objects in parallel
 		proxyURL             string
+		bp                   api.BaseParams
 		bck                  cmn.Bck
 		readerType           string
 		tmpDir               string // used only when usingFile
@@ -140,7 +141,7 @@ type (
 		stoppable      bool // true: terminate by Ctrl-C
 		statsdRequired bool
 		dryRun         bool // true: print configuration and parameters that aisloader will use at runtime
-		traceHTTP      bool // true: trace http latencies as per tutils.HTTPLatencies & https://golang.org/pkg/net/http/httptrace
+		traceHTTP      bool // true: trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
 	}
 
 	// sts records accumulated puts/gets information.
@@ -192,8 +193,8 @@ var (
 
 	numGets atomic.Int64
 
-	envVars      = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
-	dockerHostIP = envVars["PRIMARY_HOST_IP"]              // Host IP of primary cluster
+	envVars      = cmn.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
+	dockerHostIP = envVars["PRIMARY_HOST_IP"]           // Host IP of primary cluster
 	dockerPort   = envVars["PORT"]
 )
 
@@ -251,8 +252,8 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&p.verifyHash, "verifyhash", false, "true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
-	f.StringVar(&p.readerType, "readertype", tutils.ReaderTypeSG,
-		fmt.Sprintf("Type of reader: %s(default) | %s | %s", tutils.ReaderTypeSG, tutils.ReaderTypeFile, tutils.ReaderTypeRand))
+	f.StringVar(&p.readerType, "readertype", readers.ReaderTypeSG,
+		fmt.Sprintf("Type of reader: %s(default) | %s | %s", readers.ReaderTypeSG, readers.ReaderTypeFile, readers.ReaderTypeRand))
 	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
 	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname")
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port")
@@ -288,7 +289,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.statsOutput, "stats-output", "", "filename to log statistics (empty string translates as standard output (default))")
 	f.BoolVar(&p.stoppable, "stoppable", false, "true: stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "true: show the configuration and parameters that aisloader will use for benchmark")
-	f.BoolVar(&p.traceHTTP, "trace-http", false, "true: trace HTTP latencies") // see tutils.HTTPLatencies
+	f.BoolVar(&p.traceHTTP, "trace-http", false, "true: trace HTTP latencies") // see httpLatencies
 
 	f.Parse(os.Args[1:])
 
@@ -309,8 +310,8 @@ func parseCmdLine() (params, error) {
 		os.Exit(0)
 	}
 
-	p.usingSG = p.readerType == tutils.ReaderTypeSG
-	p.usingFile = p.readerType == tutils.ReaderTypeFile
+	p.usingSG = p.readerType == readers.ReaderTypeSG
+	p.usingFile = p.readerType == readers.ReaderTypeFile
 
 	if p.seed == 0 {
 		p.seed = time.Now().UnixNano()
@@ -490,6 +491,10 @@ func parseCmdLine() (params, error) {
 	traceHTTPSig.Store(p.traceHTTP)
 
 	p.proxyURL = "http://" + ip + ":" + port
+	p.bp = api.BaseParams{
+		Client: httpClient,
+		URL:    p.proxyURL,
+	}
 
 	// Don't print arguments when just getting loaderID
 	if !p.getLoaderID {
@@ -540,14 +545,13 @@ func setupBucket(runParams *params) error {
 	if runParams.bck.Provider != cmn.ProviderAIS || runParams.getConfig {
 		return nil
 	}
-	baseParams := tutils.BaseAPIParams(runParams.proxyURL)
-	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(runParams.bck))
+	exists, err := api.DoesBucketExist(runParams.bp, cmn.QueryBcks(runParams.bck))
 	if err != nil {
 		return fmt.Errorf("failed to get ais bucket lists to check for %s, err = %v", runParams.bck, err)
 	}
 
 	if !exists {
-		err := api.CreateBucket(baseParams, runParams.bck)
+		err := api.CreateBucket(runParams.bp, runParams.bck)
 		if err != nil {
 			return fmt.Errorf("failed to create ais bucket %s, err = %s", runParams.bck, err)
 		}
@@ -559,7 +563,7 @@ func setupBucket(runParams *params) error {
 
 	propsToUpdate := cmn.BucketPropsToUpdate{}
 	// update bucket props if bPropsStr is set
-	oldProps, err := api.HeadBucket(baseParams, runParams.bck)
+	oldProps, err := api.HeadBucket(runParams.bp, runParams.bck)
 	if err != nil {
 		return fmt.Errorf("failed to read bucket %s properties: %v", runParams.bck, err)
 	}
@@ -582,7 +586,7 @@ func setupBucket(runParams *params) error {
 		change = true
 	}
 	if change {
-		if err = api.SetBucketProps(baseParams, runParams.bck, propsToUpdate); err != nil {
+		if err = api.SetBucketProps(runParams.bp, runParams.bck, propsToUpdate); err != nil {
 			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bck, err)
 		}
 	}
@@ -1020,8 +1024,7 @@ func cleanup() {
 	}
 
 	if runParams.bck.IsAIS() {
-		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
-		api.DestroyBucket(baseParams, runParams.bck)
+		api.DestroyBucket(runParams.bp, runParams.bck)
 	}
 	fmt.Println(prettyTimeStamp() + " Done")
 }
@@ -1030,8 +1033,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var (
-		baseParams = tutils.BaseAPIParams(runParams.proxyURL)
-		xactArgs   = api.XactReqArgs{Kind: cmn.ActDelete, Bck: runParams.bck}
+		xactArgs = api.XactReqArgs{Kind: cmn.ActDelete, Bck: runParams.bck}
 	)
 
 	t := len(objs)
@@ -1041,23 +1043,23 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	b := cmn.Min(t, runParams.batchSize)
 	n := t / b
 	for i := 0; i < n; i++ {
-		err := api.DeleteList(baseParams, runParams.bck, objs[i*b:(i+1)*b])
+		err := api.DeleteList(runParams.bp, runParams.bck, objs[i*b:(i+1)*b])
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
-		err = api.WaitForXaction(baseParams, xactArgs)
+		err = api.WaitForXaction(runParams.bp, xactArgs)
 		if err != nil {
 			fmt.Println("wait for xaction err ", err)
 		}
 	}
 
 	if t%b != 0 {
-		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bck,
+		err := api.DeleteList(runParams.bp, runParams.bck,
 			objs[n*b:])
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
-		api.WaitForXaction(baseParams, xactArgs)
+		api.WaitForXaction(runParams.bp, xactArgs)
 		if err != nil {
 			fmt.Println("wait for xaction err ", err)
 		}
@@ -1075,7 +1077,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
-	names, err := tutils.ListObjectsFast(runParams.proxyURL, runParams.bck, "")
+	names, err := listObjectsFast(runParams.bp, runParams.bck, "")
 	if err != nil {
 		fmt.Printf("Failed to list_objects %s, proxy %s, err: %v\n",
 			runParams.bck, runParams.proxyURL, err)

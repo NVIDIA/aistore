@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -34,7 +35,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 	versionEnabled, bckIsAIS bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
-	r, err := tutils.NewRandReader(int64(fileSize), true /* withHash */)
+	r, err := readers.NewRandReader(int64(fileSize), true /* withHash */)
 	if err != nil {
 		t.Errorf("Failed to create reader: %v", err)
 		t.Fail()

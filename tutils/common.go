@@ -7,7 +7,6 @@ package tutils
 import (
 	"errors"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -19,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils/tassert"
-	"github.com/OneOfOne/xxhash"
 )
 
 func prependTime(msg string) string {
@@ -89,42 +87,6 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 	}
 
 	return "", errors.New("error generating bucket name: too many tries gave no result")
-}
-
-// copyRandWithHash reads data from random source and writes it to a writer while
-// optionally computing xxhash
-// See related: memsys_test.copyRand
-func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (string, error) {
-	var (
-		rem   = size
-		shash string
-		h     *xxhash.XXHash64
-	)
-	buf, s := MMSA.Alloc()
-	blkSize := int64(len(buf))
-	defer s.Free(buf)
-
-	if withHash {
-		h = xxhash.New64()
-	}
-	for i := int64(0); i <= size/blkSize; i++ {
-		n := int(cmn.MinI64(blkSize, rem))
-		rnd.Read(buf[:n])
-		m, err := w.Write(buf[:n])
-		if err != nil {
-			return "", err
-		}
-
-		if withHash {
-			h.Write(buf[:m])
-		}
-		cmn.Assert(m == n)
-		rem -= int64(m)
-	}
-	if withHash {
-		shash = cmn.HashToStr(h)
-	}
-	return shash, nil
 }
 
 type SkipTestArgs struct {

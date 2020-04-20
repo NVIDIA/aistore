@@ -17,16 +17,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/containers"
-
-	"github.com/NVIDIA/aistore/tutils/tassert"
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 	"github.com/OneOfOne/xxhash"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -580,7 +579,7 @@ func concurrentPutGetDel(t *testing.T) {
 func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck) error {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for i := 0; i < count; i++ {
-		reader, err := tutils.NewRandReader(fileSize, true /* withHash */)
+		reader, err := readers.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			return fmt.Errorf("error creating reader: %v", err)
 		}
@@ -646,7 +645,7 @@ loop:
 		default:
 		}
 
-		reader, err := tutils.NewRandReader(fileSize, true /* withHash */)
+		reader, err := readers.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			errCh <- err
 			continue

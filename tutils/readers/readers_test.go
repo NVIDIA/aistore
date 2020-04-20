@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package tutils_test
+package readers_test
 
 import (
 	"io"
@@ -10,20 +10,26 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tutils/readers"
+
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
+var (
+	mmsa = memsys.DefaultPageMM()
+)
+
 func TestFileReader(t *testing.T) {
-	r, err := tutils.NewFileReader("/tmp", "seek", 10240, false /* withHash */)
+	r, err := readers.NewFileReader("/tmp", "seek", 10240, false /* withHash */)
 	if err != nil {
 		t.Fatal("Failed to create file reader", err)
 	}
 	tassert.CheckFatal(t, r.Close())
 }
 
-func testReaderBasic(t *testing.T, r tutils.Reader, size int64) {
+func testReaderBasic(t *testing.T, r readers.Reader, size int64) {
 	_, err := r.Seek(0, io.SeekStart)
 	if err != nil {
 		t.Fatal("Failed to seek", err)
@@ -97,7 +103,7 @@ func testReaderBasic(t *testing.T, r tutils.Reader, size int64) {
 }
 
 // Note: These are testcases that fail when running on SGReader.
-func testReaderAdv(t *testing.T, r tutils.Reader, size int64) {
+func testReaderAdv(t *testing.T, r readers.Reader, size int64) {
 	buf := make([]byte, size)
 	_, err := r.Seek(0, io.SeekStart)
 	if err != nil {
@@ -227,7 +233,7 @@ func testReaderAdv(t *testing.T, r tutils.Reader, size int64) {
 
 func TestRandReader(t *testing.T) {
 	size := int64(1024)
-	r, err := tutils.NewRandReader(size, true /* withHash */)
+	r, err := readers.NewRandReader(size, true /* withHash */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,10 +246,10 @@ func TestSGReader(t *testing.T) {
 	{
 		// Basic read
 		size := int64(1024)
-		sgl := tutils.MMSA.NewSGL(size)
+		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := tutils.NewSGReader(sgl, size, true /* withHash */)
+		r, err := readers.NewSGReader(sgl, size, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -272,10 +278,10 @@ func TestSGReader(t *testing.T) {
 
 	{
 		size := int64(1024)
-		sgl := tutils.MMSA.NewSGL(size)
+		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := tutils.NewSGReader(sgl, size, true /* withHash */)
+		r, err := readers.NewSGReader(sgl, size, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -289,7 +295,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewFileReader(filepath, fn, cmn.MiB, true /* withHash */)
+		r, err := readers.NewFileReader(filepath, fn, cmn.MiB, true /* withHash */)
 		if err != nil {
 			os.Remove(path.Join(filepath, fn))
 			b.Fatal(err)
@@ -304,7 +310,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewRandReader(cmn.MiB, true /* withHash */)
+		r, err := readers.NewRandReader(cmn.MiB, true /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -313,12 +319,12 @@ func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
-	sgl := tutils.MMSA.NewSGL(cmn.MiB)
+	sgl := mmsa.NewSGL(cmn.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()
-		r, err := tutils.NewSGReader(sgl, cmn.MiB, true /* withHash */)
+		r, err := readers.NewSGReader(sgl, cmn.MiB, true /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -331,7 +337,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewFileReader(filepath, fn, cmn.MiB, false /* withHash */)
+		r, err := readers.NewFileReader(filepath, fn, cmn.MiB, false /* withHash */)
 		if err != nil {
 			os.Remove(path.Join(filepath, fn))
 			b.Fatal(err)
@@ -346,7 +352,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewRandReader(cmn.MiB, false /* withHash */)
+		r, err := readers.NewRandReader(cmn.MiB, false /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -355,12 +361,12 @@ func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
-	sgl := tutils.MMSA.NewSGL(cmn.MiB)
+	sgl := mmsa.NewSGL(cmn.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()
-		r, err := tutils.NewSGReader(sgl, cmn.MiB, false /* withHash */)
+		r, err := readers.NewSGReader(sgl, cmn.MiB, false /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)

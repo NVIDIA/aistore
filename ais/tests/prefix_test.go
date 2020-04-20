@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 )
 
 //
@@ -79,7 +80,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
-		r, err := tutils.NewRandReader(fileSize, true /* withHash */)
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -94,7 +95,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 	for _, fName := range extraNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
-		r, err := tutils.NewRandReader(fileSize, true /* withHash */)
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}

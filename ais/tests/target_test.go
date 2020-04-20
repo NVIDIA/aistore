@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -34,7 +35,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 
 	url := smap.Tmap[sid].URL(cmn.NetworkPublic)
 	baseParams := tutils.BaseAPIParams(url)
-	reader := tutils.NewBytesReader(objDummyData)
+	reader := readers.NewBytesReader(objDummyData)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        bck,

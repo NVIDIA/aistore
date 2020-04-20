@@ -14,13 +14,21 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 )
+
+var (
+	mmsa *memsys.MMSA
+)
+
+func init() {
+	mmsa = memsys.DefaultPageMM()
+}
 
 func doPut(wo *workOrder) {
 	var sgl *memsys.SGL
 	if runParams.usingSG {
-		sgl = tutils.MMSA.NewSGL(wo.size)
+		sgl = mmsa.NewSGL(wo.size)
 		defer func() {
 			// FIXME: due to critical bug (https://github.com/golang/go/issues/30597)
 			// we need to postpone `sgl.Free` to a little bit later time, otherwise
@@ -33,7 +41,7 @@ func doPut(wo *workOrder) {
 		}()
 	}
 
-	r, err := tutils.NewReader(tutils.ParamReader{
+	r, err := readers.NewReader(readers.ParamReader{
 		Type: runParams.readerType,
 		SGL:  sgl,
 		Path: runParams.tmpDir,
@@ -41,7 +49,7 @@ func doPut(wo *workOrder) {
 		Size: wo.size,
 	})
 
-	if runParams.readerType == tutils.ReaderTypeFile {
+	if runParams.readerType == readers.ReaderTypeFile {
 		defer os.Remove(path.Join(runParams.tmpDir, wo.objName))
 	}
 
@@ -50,24 +58,24 @@ func doPut(wo *workOrder) {
 		return
 	}
 	if !traceHTTPSig.Load() {
-		wo.err = tutils.Put(wo.proxyURL, wo.bck, wo.objName, r.XXHash(), r)
+		wo.err = put(wo.proxyURL, wo.bck, wo.objName, r.XXHash(), r)
 	} else {
-		wo.latencies, wo.err = tutils.PutWithTrace(wo.proxyURL, wo.bck, wo.objName, r.XXHash(), r)
+		wo.latencies, wo.err = putWithTrace(wo.proxyURL, wo.bck, wo.objName, r.XXHash(), r)
 	}
 }
 
 func doGet(wo *workOrder) {
 	if !traceHTTPSig.Load() {
-		wo.size, wo.err = tutils.GetDiscard(wo.proxyURL, wo.bck,
+		wo.size, wo.err = getDiscard(wo.proxyURL, wo.bck,
 			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
 	} else {
-		wo.size, wo.latencies, wo.err = tutils.GetTraceDiscard(wo.proxyURL, wo.bck,
+		wo.size, wo.latencies, wo.err = getTraceDiscard(wo.proxyURL, wo.bck,
 			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
 	}
 }
 
 func doGetConfig(wo *workOrder) {
-	wo.latencies, wo.err = tutils.GetConfig(wo.proxyURL)
+	wo.latencies, wo.err = getConfig(wo.proxyURL)
 }
 
 func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup, numGets *atomic.Int64) {

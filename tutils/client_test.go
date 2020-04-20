@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -47,7 +48,7 @@ func TestPutSG(t *testing.T) {
 func putFile(size int64, withHash bool) error {
 	fn := "ais-client-test-" + tutils.GenRandomString(32)
 	dir := "/tmp"
-	r, err := tutils.NewFileReader(dir, fn, size, withHash)
+	r, err := readers.NewFileReader(dir, fn, size, withHash)
 	if err != nil {
 		return err
 	}
@@ -64,7 +65,7 @@ func putFile(size int64, withHash bool) error {
 }
 
 func putRand(size int64, withHash bool) error {
-	r, err := tutils.NewRandReader(size, withHash)
+	r, err := readers.NewRandReader(size, withHash)
 	if err != nil {
 		return err
 	}
@@ -80,7 +81,7 @@ func putRand(size int64, withHash bool) error {
 
 func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
 	sgl.Reset()
-	r, err := tutils.NewSGReader(sgl, size, withHash)
+	r, err := readers.NewSGReader(sgl, size, withHash)
 	if err != nil {
 		return err
 	}

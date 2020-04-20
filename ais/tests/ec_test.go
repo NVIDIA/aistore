@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -399,7 +400,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 				}
 			}
 
-			r, err := tutils.NewRandReader(objSize, false)
+			r, err := readers.NewRandReader(objSize, false)
 			defer func() {
 				r.Close()
 				o.sema.Release()
@@ -514,7 +515,7 @@ func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
 }
 
 func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath string, size int) {
-	r, err := tutils.NewRandReader(int64(size), false)
+	r, err := readers.NewRandReader(int64(size), false)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
 
@@ -689,7 +690,7 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objN
 	objPath := ecTestDir + objName
 
 	tutils.Logf("Creating %s, size %8d\n", objPath, objSize)
-	r, err := tutils.NewRandReader(objSize, false)
+	r, err := readers.NewRandReader(objSize, false)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
 
@@ -721,7 +722,7 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objNam
 	if !o.silent {
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 	}
-	r, err := tutils.NewRandReader(objSize, false)
+	r, err := readers.NewRandReader(objSize, false)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
 
@@ -768,7 +769,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		delStr = "obj+slice"
 	}
 	tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
-	r, err := tutils.NewRandReader(objSize, false)
+	r, err := readers.NewRandReader(objSize, false)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
 
@@ -950,7 +951,7 @@ func putECFile(baseParams api.BaseParams, bck cmn.Bck, objName string) error {
 	objSize := int64(ecMinBigSize * 2)
 	objPath := ecTestDir + objName
 
-	r, err := tutils.NewRandReader(objSize, false)
+	r, err := readers.NewRandReader(objSize, false)
 	if err != nil {
 		return err
 	}
@@ -1467,7 +1468,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			} else {
 				tutils.Logf("Object %s, size %9d[%9s]\n", objName, objSize, "-")
 			}
-			r, err := tutils.NewRandReader(objSize, false)
+			r, err := readers.NewRandReader(objSize, false)
 			tassert.Errorf(t, err == nil, "Failed to create reader: %v", err)
 			putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
 			err = api.PutObject(putArgs)
@@ -1562,7 +1563,7 @@ func TestECXattrs(t *testing.T) {
 			ecStr = "EC"
 		}
 		tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
-		r, err := tutils.NewRandReader(objSize, false)
+		r, err := readers.NewRandReader(objSize, false)
 		tassert.CheckFatal(t, err)
 		defer r.Close()
 		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
@@ -1779,7 +1780,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 			ecStr = "EC"
 		}
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
-		r, err := tutils.NewRandReader(objSize, false)
+		r, err := readers.NewRandReader(objSize, false)
 		tassert.CheckFatal(t, err)
 		defer r.Close()
 		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
@@ -2029,7 +2030,7 @@ func TestECEmergencyMpath(t *testing.T) {
 			ecStr = "EC"
 		}
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
-		r, err := tutils.NewRandReader(objSize, false)
+		r, err := readers.NewRandReader(objSize, false)
 		tassert.CheckFatal(t, err)
 		defer r.Close()
 		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}

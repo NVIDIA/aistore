@@ -189,3 +189,12 @@ func setAuthToken(r *http.Request, baseParams BaseParams) {
 		r.Header.Set(cmn.HeaderAuthorization, cmn.MakeHeaderAuthnToken(baseParams.Token))
 	}
 }
+
+func GetWhatRawQuery(getWhat, getProps string) string {
+	q := url.Values{}
+	q.Add(cmn.URLParamWhat, getWhat)
+	if getProps != "" {
+		q.Add(cmn.URLParamProps, getProps)
+	}
+	return q.Encode()
+}
