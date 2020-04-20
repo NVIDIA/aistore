@@ -1,0 +1,4 @@
+make_bucket: $BUCKET
+1
+0123456789
+remove_bucket: $BUCKET

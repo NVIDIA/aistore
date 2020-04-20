@@ -12,6 +12,16 @@ image: golang:1.13
     paths: [logs/]
     expire_in: 2 days
 
+.aws_cli_install: &aws_cli
+  - apt-get install -y python3-pip
+  - pip3 install setuptools
+  - pip3 install awscli --upgrade --user
+
+.aws_cli_install: &aws_cli
+  - apt-get install -y python3-pip
+  - pip3 install setuptools
+  - pip3 install awscli --upgrade --user
+
 stages:
   - build
   - test-short
@@ -59,6 +69,7 @@ lint:linux:
 test:short:
   stage: test-short
   script:
+    - *aws_cli
     - export LOCAL_URL="http://127.0.0.1:8080" REMOTE_URL="http://127.0.0.1:11080" && export REMOTE_CLUSTER="randstring=${REMOTE_URL}"
     - make aisfs cli
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\n0'
@@ -70,6 +81,7 @@ test:short:
 test:long:
   <<: *test_long_def
   script:
+    - *aws_cli
     - make deploy <<< $'6\n5\n3\n0'
     - BUCKET="test" make test-long
 
