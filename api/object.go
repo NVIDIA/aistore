@@ -343,7 +343,7 @@ exit:
 }
 
 func shouldRetryHTTP(err error) bool {
-	return err != nil && (cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err))
+	return err != nil && (cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err))
 }
 
 // FlushObject API
