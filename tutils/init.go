@@ -91,13 +91,18 @@ func initProxyURL() {
 		proxyURLReadOnly = "http://" + cliAISURL
 	}
 
-	// primary proxy can change if proxy tests are run and no new cluster is re-deployed before each test.
-	// finds who is the current primary proxy
+	// Primary proxy can change if proxy tests are run and
+	// no new cluster is re-deployed before each test.
+	// Finds who is the current primary proxy.
 	primary, err := GetPrimaryProxy(proxyURLReadOnly)
-	if err != nil {
-		cmn.ExitInfof("Failed to get primary proxy, err = %v", err)
+
+	// TODO: since `tutils` is used in various places like `aisloader` we cannot
+	//  simply fail on error. If pinging proxy fails, it must be lazily
+	//  discovered once `proxyURLReadOnly` is accessed somewhere in the code.
+	proxyURLReadOnly = "FAILED TO INITIALIZE"
+	if err == nil {
+		proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
 	}
-	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
 }
 
 func newTraceCtx() *tracectx {
