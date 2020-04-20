@@ -401,18 +401,6 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 	})
 }
 
-// ReplicateObject API
-//
-// ReplicateObject replicates given object in bucket using targetrunner's replicate endpoint.
-func ReplicateObject(baseParams BaseParams, bck cmn.Bck, object string) error {
-	baseParams.Method = http.MethodPost
-	return DoHTTPRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActReplicate}),
-	})
-}
-
 // Downloader API
 
 func DownloadSingle(baseParams BaseParams, description string, bck cmn.Bck, objName, link string) (string, error) {

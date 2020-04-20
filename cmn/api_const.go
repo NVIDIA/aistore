@@ -52,7 +52,6 @@ const (
 	ActSummaryBucket = "summarybck"
 	ActRenameObject  = "renameobj"
 	ActPromote       = "promote"
-	ActReplicate     = "replicate"
 	ActEvictObjects  = "evictobj"
 	ActDelete        = "delete"
 	ActPrefetch      = "prefetch"
