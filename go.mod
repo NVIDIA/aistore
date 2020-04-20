@@ -31,7 +31,7 @@ require (
 	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
 	github.com/urfave/cli v1.22.4
-	github.com/valyala/fasthttp v1.9.0
+	github.com/valyala/fasthttp v1.11.0
 	github.com/vbauerster/mpb/v4 v4.10.1
 	golang.org/x/image v0.0.0-20200119044424-58c23975cae1 // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
