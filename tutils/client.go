@@ -46,8 +46,6 @@ const (
 )
 
 const (
-	httpMaxRetries       = 5                     // maximum number of retries for an HTTP request
-	httpRetrySleep       = 30 * time.Millisecond // a sleep between HTTP request retries
 	evictPrefetchTimeout = 2 * time.Minute
 )
 
@@ -351,66 +349,41 @@ func Put(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.ReadOpenC
 	return api.PutObject(args)
 }
 
-// PUT with HTTP trace FIXME: copy-paste
-func PutWithTrace(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.ReadOpenCloser) (HTTPLatencies, error) {
-	handle, err := reader.Open()
-	if err != nil {
-		return HTTPLatencies{}, fmt.Errorf("failed to open reader, err: %v", err)
-	}
-	defer handle.Close()
-
-	query := url.Values{}
-	query = cmn.AddBckToQuery(query, bck)
+// PUT with HTTP trace
+func PutWithTrace(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.ReadOpenCloser) (HTTPLatencies, error) { // nolint:interfacer // we use `reader.Open` method
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   proxyURL,
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object),
-		Query:  query,
-		BodyR:  handle,
+		Query:  cmn.AddBckToQuery(nil, bck),
+		BodyR:  reader,
 	}
-	req, err := reqArgs.Req()
+
+	tctx := newTraceCtx()
+	newReq := func(reqArgs cmn.ReqArgs) (request *http.Request, err error) {
+		req, err := reqArgs.Req()
+		if err != nil {
+			return nil, err
+		}
+
+		// The HTTP package doesn't automatically set this for files, so it has to be done manually
+		// If it wasn't set, we would need to deal with the redirect manually.
+		req.GetBody = reader.Open
+		if hash != "" {
+			req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
+			req.Header.Set(cmn.HeaderObjCksumVal, hash)
+		}
+
+		request = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
+		return
+	}
+
+	_, err := api.DoReqWithRetry(tctx.tracedClient, newReq, reqArgs) // nolint:bodyclose // it's closed inside
 	if err != nil {
 		return HTTPLatencies{}, err
 	}
 
-	// The HTTP package doesn't automatically set this for files, so it has to be done manually
-	// If it wasn't set, we would need to deal with the redirect manually.
-	req.GetBody = reader.Open
-	if hash != "" {
-		req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
-		req.Header.Set(cmn.HeaderObjCksumVal, hash)
-	}
-
-	tctx := newTraceCtx()
-
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
-	resp, err := tctx.tracedClient.Do(req) // nolint:bodyclose // it's closed later
-	if err != nil {
-		sleep := httpRetrySleep
-		if cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err) {
-			for i := 0; i < httpMaxRetries && err != nil; i++ {
-				time.Sleep(sleep)
-				resp, err = tctx.tracedClient.Do(req) // nolint:bodyclose // it's closed later
-				sleep += sleep / 2
-			}
-		}
-	}
-
-	if err != nil {
-		return HTTPLatencies{}, fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
-	}
-
-	defer resp.Body.Close()
 	tctx.tr.tsHTTPEnd = time.Now()
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return HTTPLatencies{}, fmt.Errorf("failed to read response, err: %v", err)
-		}
-		return HTTPLatencies{}, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
-	}
-
 	l := HTTPLatencies{
 		ProxyConn:           cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
 		Proxy:               cmn.TimeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),

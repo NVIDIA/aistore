@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	httpMaxRetries = 5                     // maximum number of retries for an HTTP request
-	httpRetrySleep = 30 * time.Millisecond // a sleep between HTTP request retries
+	httpMaxRetries = 3                      // maximum number of retries for an HTTP request
+	httpRetrySleep = 100 * time.Millisecond // a sleep between HTTP request retries
 )
 
 // GetObjectInput is used to hold optional parameters for GetObject and GetObjectWithValidation
@@ -227,9 +227,7 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) (err e
 
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
 		// If it wasn't set, we would need to deal with the redirect manually.
-		req.GetBody = func() (io.ReadCloser, error) {
-			return args.Reader.Open()
-		}
+		req.GetBody = args.Reader.Open
 		if args.Hash != "" {
 			req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
 			req.Header.Set(cmn.HeaderObjCksumVal, args.Hash)
@@ -244,7 +242,7 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) (err e
 		setAuthToken(req, args.BaseParams)
 		return req, nil
 	}
-	_, err = doReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // it's closed inside
+	_, err = DoReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // it's closed inside
 	return err
 }
 
@@ -285,14 +283,12 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
 		// If it wasn't set, we would need to deal with the redirect manually.
-		req.GetBody = func() (io.ReadCloser, error) {
-			return args.Reader.Open()
-		}
+		req.GetBody = args.Reader.Open
 		setAuthToken(req, args.BaseParams)
 		return req, nil
 	}
 
-	resp, err := doReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // it's closed inside
+	resp, err := DoReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // it's closed inside
 	if err != nil {
 		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
@@ -301,7 +297,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 
 // Makes Client.Do request and retries it when got Broken Pipe or Connection Refused error
 // Should be used for PUT requests as it puts reader into a request
-func doReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.Request, error), reqArgs cmn.ReqArgs) (resp *http.Response, err error) {
+func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.Request, error), reqArgs cmn.ReqArgs) (resp *http.Response, err error) {
 	var (
 		r     io.ReadCloser
 		req   *http.Request
