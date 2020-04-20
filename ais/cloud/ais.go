@@ -29,6 +29,9 @@ type (
 		url  string
 		smap *cluster.Smap
 		m    *AisCloudProvider
+
+		uuid string
+		bp   api.BaseParams
 	}
 	AisCloudProvider struct {
 		t      cluster.Target
@@ -192,6 +195,8 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (of
 		return
 	}
 	r.smap, r.url = remSmap, url
+	r.bp = api.BaseParams{Client: cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout}), URL: url}
+	r.uuid = remSmap.UUID
 	return
 }
 
@@ -245,8 +250,7 @@ ad:
 // cluster.CloudProvider APIs //
 ////////////////////////////////
 
-func (m *AisCloudProvider) newBaseParams(uuid string) (bp api.BaseParams, err error) {
-	cfg := cmn.GCO.Get()
+func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	m.mu.RLock()
 	remAis, ok := m.remote[uuid]
 	if !ok {
@@ -254,46 +258,40 @@ func (m *AisCloudProvider) newBaseParams(uuid string) (bp api.BaseParams, err er
 		var orig = uuid
 		if uuid, ok = m.alias[uuid /* alias? */]; !ok {
 			m.mu.RUnlock()
-			err = fmt.Errorf("%s: unknown uuid (or alias?) %q", aisCloudPrefix, orig)
-			return
+			return nil, fmt.Errorf("%s: unknown uuid (or alias) %q", aisCloudPrefix, orig)
 		}
 		remAis, ok = m.remote[uuid]
 		cmn.Assert(ok)
 	}
 	m.mu.RUnlock()
-	bp = api.BaseParams{Client: cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout}), URL: remAis.url}
-	return
+	return remAis, nil
 }
 
-func (m *AisCloudProvider) ListObjects(ctx context.Context, bck cmn.Bck,
+func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck cmn.Bck,
 	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
-	var (
-		bp api.BaseParams
-	)
-	cmn.Assert(bck.Provider == cmn.ProviderAIS)
-	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
-		return
+	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
+
+	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
+	if err != nil {
+		return nil, err, errCode
 	}
-	err = m.try(func() error {
-		bck.Ns.UUID = ""
-		bckList, err = api.ListObjects(bp, bck, msg, 0)
+	err = m.try(remoteBck, func(bck cmn.Bck) error {
+		bckList, err = api.ListObjects(aisCluster.bp, bck, msg, 0)
 		return err
 	})
 	err, errCode = extractErrCode(err)
 	return bckList, err, errCode
 }
 
-func (m *AisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
-	cmn.Assert(bck.Provider == cmn.ProviderAIS)
-	var (
-		bp api.BaseParams
-	)
-	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
-		return
+func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
+
+	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
+	if err != nil {
+		return nil, err, errCode
 	}
-	err = m.try(func() error {
-		bck.Ns.UUID = "" // (sic! here and elsewhere)
-		p, err := api.HeadBucket(bp, bck)
+	err = m.try(remoteBck, func(bck cmn.Bck) error {
+		p, err := api.HeadBucket(aisCluster.bp, bck)
 		if err != nil {
 			return err
 		}
@@ -308,27 +306,36 @@ func (m *AisCloudProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProp
 	return bckProps, err, errCode
 }
 
-func (m *AisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
-	for uuid := range m.remote {
-		var (
-			bp, _ = m.newBaseParams(uuid)
-			query = cmn.QueryBcks{Provider: cmn.ProviderAIS}
-		)
-		tryErr := m.try(func() (err error) {
-			remoteBcks, err := api.ListBuckets(bp, query)
-			if err != nil {
-				glog.Errorf("list-bucket(uuid=%s): %v", uuid, err)
-				return err
-			}
-			for i, bck := range remoteBcks {
-				bck.Ns.UUID = uuid
-				remoteBcks[i] = bck
-			}
+func (m *AisCloudProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (buckets cmn.BucketNames, err error) {
+	var (
+		aisCluster, _ = m.remoteCluster(uuid)
+		remoteQuery   = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: query.Ns.Name}}
+	)
+	err = m.try(cmn.Bck{}, func(_ cmn.Bck) (err error) {
+		buckets, err = api.ListBuckets(aisCluster.bp, remoteQuery)
+		if err != nil {
+			glog.Errorf("list-bucket(uuid=%s): %v", uuid, err)
+			return err
+		}
+		for i, bck := range buckets {
+			bck.Ns.UUID = uuid // if `uuid` is alias we need to preserve it
+			buckets[i] = bck
+		}
+		return err
+	})
+	return
+}
+
+func (m *AisCloudProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
+	if !query.Ns.IsAnyRemote() {
+		buckets, err = m.listBucketsCluster(query.Ns.UUID, query)
+	} else {
+		for uuid := range m.remote {
+			remoteBcks, tryErr := m.listBucketsCluster(uuid, query)
 			buckets = append(buckets, remoteBcks...)
-			return nil
-		})
-		if tryErr != nil {
-			err = tryErr
+			if tryErr != nil {
+				err = tryErr
+			}
 		}
 	}
 	err, errCode = extractErrCode(err)
@@ -337,15 +344,14 @@ func (m *AisCloudProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketN
 
 func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
-		bp  api.BaseParams
-		bck = lom.Bck().Bck
+		remoteBck = lom.Bck().Bck
 	)
-	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
-		return
+	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
+	if err != nil {
+		return nil, err, errCode
 	}
-	err = m.try(func() error {
-		bck.Ns.UUID = ""
-		p, err := api.HeadObject(bp, bck, lom.ObjName)
+	err = m.try(remoteBck, func(bck cmn.Bck) error {
+		p, err := api.HeadObject(aisCluster.bp, bck, lom.ObjName)
 		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 			objMeta[uniqueTag] = fmt.Sprintf("%v", field.Value())
 			return nil, false
@@ -358,23 +364,22 @@ func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMe
 
 func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	var (
-		bp  api.BaseParams
-		bck = lom.Bck().Bck
+		remoteBck = lom.Bck().Bck
 	)
-	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
-		return
+	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
+	if err != nil {
+		return err, errCode
 	}
-	err = m.try(func() error {
+	err = m.try(remoteBck, func(bck cmn.Bck) error {
 		var (
 			r, w  = io.Pipe()
 			errCh = make(chan error, 1)
 		)
 		go func() {
-			bck.Ns.UUID = ""
 			goi := api.GetObjectInput{
 				Writer: w,
 			}
-			_, err = api.GetObject(bp, bck, lom.ObjName, goi)
+			_, err = api.GetObject(aisCluster.bp, bck, lom.ObjName, goi)
 			w.CloseWithError(err)
 			errCh <- err
 		}()
@@ -400,19 +405,19 @@ func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 
 func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var (
-		bp  api.BaseParams
-		bck = lom.Bck().Bck
+		remoteBck = lom.Bck().Bck
 	)
-	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
-		return
+
+	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
+	if err != nil {
+		return "", err, errCode
 	}
 	fh, ok := r.(*cmn.FileHandle)
 	cmn.Assert(ok) // http redirect requires Open()
-	err = m.try(func() error {
-		bck.Ns.UUID = ""
+	err = m.try(remoteBck, func(bck cmn.Bck) error {
 		cksumValue := lom.Cksum().Value()
 		args := api.PutObjectArgs{
-			BaseParams: bp,
+			BaseParams: aisCluster.bp,
 			Bck:        bck,
 			Object:     lom.ObjName,
 			Hash:       cksumValue,
@@ -427,34 +432,26 @@ func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 
 func (m *AisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	var (
-		bp  api.BaseParams
-		bck = lom.Bck().Bck
+		remoteBck = lom.Bck().Bck
 	)
-	if bp, err = m.newBaseParams(bck.Ns.UUID); err != nil {
-		return
+	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
+	if err != nil {
+		return err, errCode
 	}
-	err = m.try(func() error {
-		bck.Ns.UUID = ""
-		return api.DeleteObject(bp, bck, lom.ObjName)
+	err = m.try(remoteBck, func(bck cmn.Bck) error {
+		return api.DeleteObject(aisCluster.bp, bck, lom.ObjName)
 	})
 	return extractErrCode(err)
 }
 
-func (m *AisCloudProvider) try(f func() error) (err error) {
-	err = f()
-	if err == nil {
-		return nil
-	}
-	timeout := cmn.GCO.Get().Timeout.CplaneOperation
-	for i := 0; i < aisCloudRetries; i++ {
-		err = f()
-		if err == nil {
+func (m *AisCloudProvider) try(remoteBck cmn.Bck, f func(bck cmn.Bck) error) (err error) {
+	remoteBck.Ns.UUID = ""
+	for i := 0; i < aisCloudRetries+1; i++ {
+		err = f(remoteBck)
+		if err == nil || !(cmn.IsErrConnectionRefused(err) || cmn.IsErrConnectionReset(err)) {
 			break
 		}
-		if !cmn.IsErrConnectionRefused(err) && !cmn.IsErrConnectionReset(err) {
-			return err
-		}
-		time.Sleep(timeout)
+		time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
 	}
 	return
 }

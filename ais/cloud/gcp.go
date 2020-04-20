@@ -271,7 +271,7 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps 
 // BUCKET NAMES //
 //////////////////
 
-func (gcpp *gcpProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
+func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
 	gcpClient, gctx, projectID, err := createClient(ctx)
 	if err != nil {
 		return

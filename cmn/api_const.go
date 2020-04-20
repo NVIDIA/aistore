@@ -100,8 +100,8 @@ const (
 
 // Header Key enum - conventions:
 // - the constant equals the path of a value in BucketProps structure
-// - if a property is a root one, then the constant is just a lowercased propery name
-// - if a property is nested, then its value is propertie's parent and propery name separated with a dash
+// - if a property is a root one, then the constant is just a lowercased property name
+// - if a property is nested, then its value is property's parent and property name separated with a dot
 const (
 	HeaderCloudProvider    = "provider"           // ProviderAmazon et al. - see cmn/bucket.go
 	HeaderCloudOffline     = "cloud.offline"      // when accessing cached cloud bucket with no Cloud connectivity

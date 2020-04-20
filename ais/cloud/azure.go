@@ -174,7 +174,7 @@ func (ap *azureProvider) azureErrorToAISError(azureError error, bucket, objName 
 	}
 }
 
-func (ap *azureProvider) ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int) {
+func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
 	var (
 		o          azblob.ListContainersSegmentOptions
 		marker     azblob.Marker

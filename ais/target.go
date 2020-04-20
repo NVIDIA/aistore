@@ -1235,8 +1235,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 func (t *targetrunner) _listBcks(r *http.Request, query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {
 	// 3rd party cloud or remote ais
 	if query.Provider == cfg.Cloud.Provider || query.IsRemoteAIS() {
-		names, err, c = t.Cloud(query.Provider).ListBuckets(t.contextWithAuth(r.Header))
-		names = names.Select(query)
+		names, err, c = t.Cloud(query.Provider).ListBuckets(t.contextWithAuth(r.Header), query)
 		sort.Sort(names)
 	} else { // BMD
 		names = t.selectBMDBuckets(t.owner.bmd.get(), query)

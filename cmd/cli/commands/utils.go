@@ -489,7 +489,7 @@ func parseBckProvider(provider string) string {
 }
 
 // Parses "provider://@uuid#namespace/bucketName/objectName"
-func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
+func parseBckObjectURI(objName string, query ...bool) (bck cmn.Bck, object string, err error) {
 	const (
 		bucketSepa = "/"
 	)
@@ -511,9 +511,19 @@ func parseBckObjectURI(objName string) (bck cmn.Bck, object string, err error) {
 			return bck, "", err
 		}
 		if len(parts) == 1 {
-			// Only "provider://@uuid#ns" was provided
+			isQuery := len(query) > 0 && query[0]
+			if parts[0] == string(cmn.NsUUIDPrefix) && isQuery {
+				// Case: "[provider://]@" (only valid if uri is query)
+				// We need to list buckets from all possible remote clusters
+				bck.Ns = cmn.NsAnyRemote
+				return bck, "", nil
+			}
+
+			// Case: "[provider://]@uuid#ns"
 			return bck, "", nil
 		}
+
+		// Case: "[provider://]@uuid#ns/bucket"
 		parts = strings.SplitN(parts[1], bucketSepa, 2)
 	}
 

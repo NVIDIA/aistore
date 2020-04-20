@@ -54,9 +54,9 @@ var (
 	// NsGlobal represents *this* cluster's global namespace that is used by default when
 	// no specific namespace was defined or provided by the user.
 	NsGlobal = Ns{}
-	// NsGlobalRemote represents combined remote namespaces. As such, NsGlobalRemote applies
+	// NsAnyRemote represents any remote cluster. As such, NsGlobalRemote applies
 	// exclusively to AIS (provider) given that other Cloud providers are remote by definition.
-	NsGlobalRemote = Ns{UUID: string(NsUUIDPrefix)}
+	NsAnyRemote = Ns{UUID: string(NsUUIDPrefix)}
 
 	Providers = map[string]struct{}{
 		ProviderAIS:    {},
@@ -121,9 +121,9 @@ func (n Ns) Validate() error {
 
 func (n Ns) Contains(other Ns) bool {
 	if n.IsGlobal() {
-		return !other.IsRemote()
+		return true // If query is empty (global) we accept any namespace
 	}
-	if n.IsGlobalRemote() {
+	if n.IsAnyRemote() {
 		return other.IsRemote()
 	}
 	return n == other
@@ -174,9 +174,9 @@ func (b Bck) IsEmpty() bool { return b.Name == "" && b.Provider == "" && b.Ns ==
 // Is-Whats
 //
 
-func (n Ns) IsGlobal() bool       { return n == NsGlobal }
-func (n Ns) IsGlobalRemote() bool { return n == NsGlobalRemote }
-func (n Ns) IsRemote() bool       { return n.UUID != "" }
+func (n Ns) IsGlobal() bool    { return n == NsGlobal }
+func (n Ns) IsAnyRemote() bool { return n == NsAnyRemote }
+func (n Ns) IsRemote() bool    { return n.UUID != "" }
 
 func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRemote() } // is local AIS cluster
 func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }  // is remote AIS cluster
@@ -215,7 +215,7 @@ func (query QueryBcks) Contains(other Bck) bool {
 	}
 	ok := query.Provider == other.Provider ||
 		query.Provider == "" ||
-		query.Provider == AnyCloud && other.IsCloud()
+		(query.Provider == AnyCloud && other.IsCloud())
 	return ok && query.Ns.Contains(other.Ns)
 }
 
@@ -236,18 +236,10 @@ func (names BucketNames) Swap(i, j int) {
 }
 
 func (names BucketNames) Select(query QueryBcks) (filtered BucketNames) {
-	for i, bck := range names {
+	for _, bck := range names {
 		if query.Contains(bck) {
-			if filtered != nil {
-				filtered = append(filtered, bck)
-			}
-		} else if filtered == nil {
-			filtered = make(BucketNames, 0, i+1)
-			filtered = append(filtered, names[:i]...)
+			filtered = append(filtered, bck)
 		}
-	}
-	if filtered == nil {
-		return names
 	}
 	return filtered
 }

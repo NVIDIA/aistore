@@ -146,6 +146,7 @@ func TestMakePairsErrors(t *testing.T) {
 func TestParseBckObjectURI(t *testing.T) {
 	var tests = []struct {
 		uri         string
+		query       bool
 		expectedErr bool
 		expectedBck cmn.Bck
 		expectedObj string
@@ -180,6 +181,15 @@ func TestParseBckObjectURI(t *testing.T) {
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
 		},
 		{
+			uri:         "ais://@",
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
+		},
+		{
+			uri:         "ais://@",
+			query:       true,
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsAnyRemote},
+		},
+		{
 			uri:         "ais://@#/bucket",
 			expectedBck: cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
 		},
@@ -206,7 +216,7 @@ func TestParseBckObjectURI(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		bck, obj, err := parseBckObjectURI(test.uri)
+		bck, obj, err := parseBckObjectURI(test.uri, test.query)
 		if err == nil && test.expectedErr {
 			t.Errorf("expected error for input: %s", test.uri)
 			continue

@@ -47,7 +47,7 @@ func defaultListHandler(c *cli.Context) (err error) {
 		bck     cmn.Bck
 		objName string
 	)
-	if bck, objName, err = parseBckObjectURI(c.Args().First()); err != nil {
+	if bck, objName, err = parseBckObjectURI(c.Args().First(), true /*query*/); err != nil {
 		return
 	}
 	if objName != "" {

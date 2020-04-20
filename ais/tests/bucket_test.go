@@ -50,6 +50,7 @@ func Test_BucketNames(t *testing.T) {
 			t.Fatalf("%s: cloud buckets: %d != %d\n", provider, len(cloudBuckets), len(buckets.Select(query)))
 		}
 	}
+
 	// NsGlobal
 	query := cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 	aisBuckets, err := api.ListBuckets(baseParams, query)
@@ -57,11 +58,12 @@ func Test_BucketNames(t *testing.T) {
 	if len(aisBuckets) != len(buckets.Select(query)) {
 		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(query)))
 	}
-	// NsGlobalRemote
-	query = cmn.QueryBcks{Ns: cmn.NsGlobalRemote}
+
+	// NsAnyRemote
+	query = cmn.QueryBcks{Ns: cmn.NsAnyRemote}
 	buckets, err = api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
-	query = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobalRemote}
+	query = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.NsAnyRemote}
 	aisBuckets, err = api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
 	if len(aisBuckets) != len(buckets.Select(query)) {

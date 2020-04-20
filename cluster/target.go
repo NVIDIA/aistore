@@ -38,7 +38,7 @@ type CloudProvider interface {
 
 	HeadBucket(ctx context.Context, bck cmn.Bck) (bucketProps cmn.SimpleKVs, err error, errCode int)
 	ListObjects(ctx context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
-	ListBuckets(ctx context.Context) (buckets cmn.BucketNames, err error, errCode int)
+	ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int)
 }
 
 // a callback called by EC PUT jogger after the object is processed and

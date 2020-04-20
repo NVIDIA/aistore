@@ -233,7 +233,7 @@ func (t *bckSummaryTask) Run() {
 						// We should not include object count for cloud buckets
 						// as other target will do that for us. We just need to
 						// report the size on the disk.
-						if bck.IsAIS() || (!bck.IsAIS() && (shouldListCB || t.msg.Cached)) {
+						if bck.IsAIS() || (!bck.IsAIS() && shouldListCB) {
 							summary.ObjCount++
 						}
 

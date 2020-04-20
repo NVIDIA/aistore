@@ -1365,23 +1365,7 @@ func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query 
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	args := callArgs{
-		si: si,
-		req: cmn.ReqArgs{
-			Method: r.Method,
-			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets),
-			Query:  r.URL.Query(),
-			Header: r.Header,
-		},
-		timeout: cmn.DefaultTimeout,
-	}
-	res := p.call(args)
-	if res.err != nil {
-		p.invalmsghdlr(w, r, res.details)
-		p.keepalive.onerr(res.err, res.status)
-	} else {
-		p.writeJSON(w, r, res.outjson, listBuckets)
-	}
+	p.reverseNodeRequest(w, r, si)
 }
 
 func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, netName string) (redirect string) {
