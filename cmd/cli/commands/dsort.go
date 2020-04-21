@@ -52,12 +52,11 @@ var (
 
 	dSortCmds = []cli.Command{
 		{
-			Name:         commandGenShards,
-			Usage:        fmt.Sprintf("put randomly generated shards that can be used for %s testing", cmn.DSortName),
-			ArgsUsage:    noArguments,
-			Flags:        dSortCmdsFlags[commandGenShards],
-			Action:       genShardsHandler,
-			BashComplete: flagCompletions,
+			Name:      commandGenShards,
+			Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", cmn.DSortName),
+			ArgsUsage: noArguments,
+			Flags:     dSortCmdsFlags[commandGenShards],
+			Action:    genShardsHandler,
 		},
 	}
 )

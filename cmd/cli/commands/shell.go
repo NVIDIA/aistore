@@ -18,83 +18,38 @@ import (
 	"github.com/urfave/cli"
 )
 
-/////////////
-// General //
-/////////////
-
-func noSuggestionCompletions(numArgs int) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		if c.NArg() >= numArgs {
-			flagCompletions(c)
-		}
-	}
-}
-
-//////////
-// Flag //
-//////////
-
-func flagCompletions(c *cli.Context) {
-	suggestFlags(c)
-}
-
-func suggestFlags(c *cli.Context, flagsToSkip ...string) {
-	for _, flag := range c.Command.Flags {
-		if flag == cli.HelpFlag {
-			continue
-		}
-
-		flagName := cleanFlag(flag.GetName())
-
-		if c.IsSet(flagName) {
-			continue
-		}
-		if cmn.StringInSlice(flagName, flagsToSkip) {
-			continue
-		}
-
-		fmt.Printf("--%s\n", flagName)
-	}
-}
-
 //////////////////////
 // Cluster / Daemon //
 //////////////////////
 
-func daemonCompletions(optional, omitProxies bool) cli.BashCompleteFunc {
+func daemonCompletions(omitProxies bool) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		// daemon already given as argument
 		if c.NArg() >= 1 {
-			flagCompletions(c)
 			return
 		}
 
 		suggestDaemon(omitProxies)
-
-		if optional {
-			flagCompletions(c)
-		}
 	}
 }
 
-func daemonConfigSectionCompletions(daemonOptional, configOptional bool) cli.BashCompleteFunc {
+func daemonConfigSectionCompletions(daemonOptional bool) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		// daemon and config already given as arguments
 		if c.NArg() >= 2 {
-			flagCompletions(c)
 			return
 		}
 
 		// daemon already given as argument
 		if c.NArg() == 1 {
-			suggestConfigSection(c, configOptional)
+			suggestConfigSection()
 			return
 		}
 
 		// no arguments given
 		suggestDaemon(false /* omit proxies */)
 		if daemonOptional {
-			suggestConfigSection(c, configOptional)
+			suggestConfigSection()
 		}
 	}
 }
@@ -104,13 +59,7 @@ func setConfigCompletions(c *cli.Context) {
 		suggestDaemon(false /* omit proxies */)
 	}
 	suggestUpdatableConfig(c)
-	flagCompletions(c)
 }
-
-func attachRemoteAISCompletions(c *cli.Context) { flagCompletions(c) }
-func detachRemoteAISCompletions(c *cli.Context) { flagCompletions(c) }
-func attachMountpathCompletions(c *cli.Context) { flagCompletions(c) }
-func detachMountpathCompletions(c *cli.Context) { flagCompletions(c) }
 
 func suggestDaemon(omitProxies bool) {
 	smap, err := api.GetClusterMap(cliAPIParams(clusterURL))
@@ -127,12 +76,9 @@ func suggestDaemon(omitProxies bool) {
 	}
 }
 
-func suggestConfigSection(c *cli.Context, optional bool) {
+func suggestConfigSection() {
 	for k := range templates.ConfigSectionTmpl {
 		fmt.Println(k)
-	}
-	if optional {
-		flagCompletions(c)
 	}
 }
 
@@ -180,7 +126,6 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 			for _, f := range additionalCompletions {
 				f(c)
 			}
-			flagCompletions(c)
 			return
 		}
 
@@ -249,7 +194,6 @@ func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, se
 			for _, f := range additionalCompletions {
 				f(c)
 			}
-			flagCompletions(c)
 			return
 		}
 
@@ -310,7 +254,6 @@ func putPromoteObjectCompletions(c *cli.Context) {
 		bucketCompletions(bckCompletionsOpts{separator: true})(c)
 		return
 	}
-	flagCompletions(c)
 }
 
 /////////////
@@ -333,7 +276,6 @@ func xactionCompletions(cmd string) func(ctx *cli.Context) {
 			bucketCompletions()(c)
 			return
 		}
-		flagCompletions(c)
 	}
 }
 
@@ -366,7 +308,6 @@ func downloadIDFinishedCompletions(c *cli.Context) {
 
 func suggestDownloadID(c *cli.Context, filter func(*downloader.DlJobInfo) bool) {
 	if c.NArg() > 0 {
-		flagCompletions(c)
 		return
 	}
 
@@ -393,7 +334,6 @@ func dsortIDFinishedCompletions(c *cli.Context) {
 
 func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 	if c.NArg() > 0 {
-		flagCompletions(c)
 		return
 	}
 

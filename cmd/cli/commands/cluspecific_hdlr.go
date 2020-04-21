@@ -52,7 +52,7 @@ var (
 			ArgsUsage:    daemonStatusArgument,
 			Action:       statusHandler,
 			Flags:        cluSpecificCmdsFlags[commandStatus],
-			BashComplete: daemonCompletions(true /* optional */, false /* omit proxies */),
+			BashComplete: daemonCompletions(false /* omit proxies */),
 		},
 	}
 )

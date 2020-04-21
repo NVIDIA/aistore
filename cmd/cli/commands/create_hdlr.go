@@ -20,12 +20,11 @@ var (
 			Usage: "create ais buckets",
 			Subcommands: []cli.Command{
 				{
-					Name:         subcmdCreateBucket,
-					Usage:        "create ais buckets",
-					ArgsUsage:    bucketsArgument,
-					Flags:        createCmdsFlags[subcmdCreateBucket],
-					Action:       createBucketHandler,
-					BashComplete: flagCompletions,
+					Name:      subcmdCreateBucket,
+					Usage:     "create ais buckets",
+					ArgsUsage: bucketsArgument,
+					Flags:     createCmdsFlags[subcmdCreateBucket],
+					Action:    createBucketHandler,
 				},
 			},
 		},

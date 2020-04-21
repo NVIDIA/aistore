@@ -106,7 +106,7 @@ var (
 					ArgsUsage:    optionalTargetIDArgument,
 					Flags:        showCmdsFlags[subcmdShowDisk],
 					Action:       showDisksHandler,
-					BashComplete: daemonCompletions(true /* optional */, true /* omit proxies */),
+					BashComplete: daemonCompletions(true /* omit proxies */),
 				},
 				{
 					Name:         subcmdShowDownload,
@@ -138,7 +138,7 @@ var (
 					ArgsUsage:    optionalDaemonIDArgument,
 					Flags:        showCmdsFlags[subcmdShowNode],
 					Action:       showNodeHandler,
-					BashComplete: daemonCompletions(true /* optional */, false /* omit proxies */),
+					BashComplete: daemonCompletions(false /* omit proxies */),
 				},
 				{
 					Name:         subcmdShowXaction,
@@ -150,12 +150,11 @@ var (
 					BashComplete: xactionCompletions(""),
 				},
 				{
-					Name:         subcmdShowRebalance,
-					Usage:        "show rebalance details",
-					ArgsUsage:    noArguments,
-					Flags:        showCmdsFlags[subcmdShowRebalance],
-					Action:       showRebalanceHandler,
-					BashComplete: flagCompletions,
+					Name:      subcmdShowRebalance,
+					Usage:     "show rebalance details",
+					ArgsUsage: noArguments,
+					Flags:     showCmdsFlags[subcmdShowRebalance],
+					Action:    showRebalanceHandler,
 				},
 				{
 					Name:         subcmdShowBckProps,
@@ -171,7 +170,7 @@ var (
 					ArgsUsage:    showConfigArgument,
 					Flags:        showCmdsFlags[subcmdShowConfig],
 					Action:       showConfigHandler,
-					BashComplete: daemonConfigSectionCompletions(false /* daemon optional */, true /* config optional */),
+					BashComplete: daemonConfigSectionCompletions(false /* daemon optional */),
 				},
 				{
 					Name:         subcmdShowSmap,
@@ -179,7 +178,7 @@ var (
 					ArgsUsage:    optionalDaemonIDArgument,
 					Flags:        showCmdsFlags[subcmdShowSmap],
 					Action:       showSmapHandler,
-					BashComplete: daemonCompletions(true /* optional */, false /* omit proxies */),
+					BashComplete: daemonCompletions(false /* omit proxies */),
 				},
 				{
 					Name:         subcmdShowRemoteAIS,
@@ -187,7 +186,7 @@ var (
 					ArgsUsage:    "",
 					Flags:        showCmdsFlags[subcmdShowRemoteAIS],
 					Action:       showRemoteAISHandler,
-					BashComplete: daemonCompletions(true /* optional */, true /* omit proxies */),
+					BashComplete: daemonCompletions(true /* omit proxies */),
 				},
 			},
 		},
