@@ -105,22 +105,6 @@ func clusterRemoveNode(c *cli.Context, daemonID string) (err error) {
 	return nil
 }
 
-// Displays the stats of a daemon
-func daemonStats(c *cli.Context, daemonID string, useJSON bool) error {
-	if res, ok := proxy[daemonID]; ok {
-		return templates.DisplayOutput(res, c.App.Writer, templates.ProxyStatsTmpl, useJSON)
-	} else if res, ok := target[daemonID]; ok {
-		return templates.DisplayOutput(res, c.App.Writer, templates.TargetStatsTmpl, useJSON)
-	} else if daemonID == "" {
-		body, err := api.GetClusterStats(defaultAPIParams)
-		if err != nil {
-			return err
-		}
-		return templates.DisplayOutput(body, c.App.Writer, templates.StatsTmpl, useJSON)
-	}
-	return fmt.Errorf(invalidDaemonMsg, daemonID)
-}
-
 // Displays the disk stats of a target
 func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {

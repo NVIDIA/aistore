@@ -59,9 +59,10 @@ var (
 			noHeaderFlag,
 			jsonFlag,
 		},
-		subcmdShowNode: append(
+		subcmdShowCluster: append(
 			longRunFlags,
 			jsonFlag,
+			noHeaderFlag,
 		),
 		subcmdShowXaction: {
 			jsonFlag,
@@ -77,9 +78,6 @@ var (
 			verboseFlag,
 		},
 		subcmdShowConfig: {
-			jsonFlag,
-		},
-		subcmdShowSmap: {
 			jsonFlag,
 		},
 		subcmdShowRemoteAIS: {
@@ -133,12 +131,27 @@ var (
 					BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
 				},
 				{
-					Name:         subcmdShowNode,
-					Usage:        "show node details",
-					ArgsUsage:    optionalDaemonIDArgument,
-					Flags:        showCmdsFlags[subcmdShowNode],
-					Action:       showNodeHandler,
-					BashComplete: daemonCompletions(false /* omit proxies */),
+					Name:      subcmdShowCluster,
+					Usage:     "show cluster details",
+					ArgsUsage: "[DAEMON_ID|DAEMON_TYPE]",
+					Flags:     showCmdsFlags[subcmdShowCluster],
+					Action:    showClusterHandler,
+					BashComplete: func(c *cli.Context) {
+						if c.NArg() == 0 {
+							fmt.Printf("%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap)
+						}
+						daemonCompletions(false /* omit proxies */)(c)
+					},
+					Subcommands: []cli.Command{
+						{
+							Name:         subcmdSmap,
+							Usage:        "display an smap copy of a node",
+							ArgsUsage:    optionalDaemonIDArgument,
+							Flags:        showCmdsFlags[subcmdSmap],
+							Action:       showSmapHandler,
+							BashComplete: daemonCompletions(false /* omit proxies */),
+						},
+					},
 				},
 				{
 					Name:         subcmdShowXaction,
@@ -171,14 +184,6 @@ var (
 					Flags:        showCmdsFlags[subcmdShowConfig],
 					Action:       showConfigHandler,
 					BashComplete: daemonConfigSectionCompletions(false /* daemon optional */),
-				},
-				{
-					Name:         subcmdShowSmap,
-					Usage:        "display an smap copy of a node",
-					ArgsUsage:    optionalDaemonIDArgument,
-					Flags:        showCmdsFlags[subcmdShowSmap],
-					Action:       showSmapHandler,
-					BashComplete: daemonCompletions(false /* omit proxies */),
 				},
 				{
 					Name:         subcmdShowRemoteAIS,
@@ -242,17 +247,17 @@ func showDsortHandler(c *cli.Context) (err error) {
 	return dsortJobStatus(c, id)
 }
 
-func showNodeHandler(c *cli.Context) (err error) {
+func showClusterHandler(c *cli.Context) (err error) {
 	daemonID := c.Args().First()
-	if _, err = fillMap(); err != nil {
+	primarySmap, err := fillMap()
+	if err != nil {
 		return
 	}
 
 	if err = updateLongRunParams(c); err != nil {
 		return
 	}
-
-	return daemonStats(c, daemonID, flagIsSet(c, jsonFlag))
+	return clusterDaemonStatus(c, primarySmap, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 }
 
 func showXactionHandler(c *cli.Context) (err error) {

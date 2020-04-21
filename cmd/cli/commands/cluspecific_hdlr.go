@@ -16,10 +16,6 @@ import (
 )
 
 var (
-	cluSpecificCmdsFlags = map[string][]cli.Flag{
-		commandStatus: append(longRunFlags, jsonFlag, noHeaderFlag),
-	}
-
 	joinCmdsFlags = map[string][]cli.Flag{
 		subcmdJoinProxy:  {},
 		subcmdJoinTarget: {},
@@ -45,14 +41,6 @@ var (
 					Action:    joinNodeHandler,
 				},
 			},
-		},
-		{
-			Name:         commandStatus,
-			Usage:        "display status of a daemon",
-			ArgsUsage:    daemonStatusArgument,
-			Action:       statusHandler,
-			Flags:        cluSpecificCmdsFlags[commandStatus],
-			BashComplete: daemonCompletions(false /* omit proxies */),
 		},
 	}
 )
@@ -103,19 +91,4 @@ func joinNodeHandler(c *cli.Context) (err error) {
 
 	fmt.Fprintf(c.App.Writer, "%s with ID %q successfully joined the cluster\n", cmn.CapitalizeString(daemonType), daemonID)
 	return
-}
-
-func statusHandler(c *cli.Context) (err error) {
-	daemonID := c.Args().First() // empty string if no arg given
-
-	primarySmap, err := fillMap()
-	if err != nil {
-		return
-	}
-
-	if err = updateLongRunParams(c); err != nil {
-		return
-	}
-
-	return clusterDaemonStatus(c, primarySmap, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 }

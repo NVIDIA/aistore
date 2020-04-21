@@ -14,31 +14,30 @@ import (
 
 const (
 	// Commands (top-level) - preferably verbs
-	commandRename    = "rename"
-	commandPrefetch  = cmn.ActPrefetch
-	commandStart     = cmn.ActXactStart
-	commandStop      = cmn.ActXactStop
-	commandStatus    = cmn.GetWhatDaemonStatus
-	commandShow      = "show"
-	commandGenShards = "gen-shards"
+	commandAttach    = "attach"
 	commandAuth      = "auth"
-	commandList      = "ls"
+	commandCat       = "cat"
+	commandConcat    = "concat"
+	commandCopy      = "cp"
 	commandCreate    = "create"
+	commandDetach    = "detach"
+	commandECEncode  = "ec-encode"
+	commandEvict     = "evict"
+	commandGenShards = "gen-shards"
+	commandGet       = "get"
+	commandJoin      = "join"
+	commandList      = "ls"
+	commandPrefetch  = cmn.ActPrefetch
+	commandPromote   = "promote"
+	commandPut       = "put"
+	commandRemove    = "rm"
+	commandRename    = "rename"
 	commandSet       = "set"
 	commandSetCopies = "set-copies"
-	commandRemove    = "rm"
-	commandEvict     = "evict"
-	commandCopy      = "cp"
-	commandJoin      = "join"
-	commandGet       = "get"
-	commandPut       = "put"
-	commandPromote   = "promote"
-	commandECEncode  = "ec-encode"
-	commandConcat    = "concat"
-	commandCat       = "cat"
+	commandShow      = "show"
+	commandStart     = cmn.ActXactStart
+	commandStop      = cmn.ActXactStop
 	commandWait      = "wait"
-	commandAttach    = "attach"
-	commandDetach    = "detach"
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase
@@ -56,6 +55,7 @@ const (
 	subcmdTarget    = "target"
 	subcmdRemoteAIS = cmn.GetWhatRemoteAIS
 	subcmdMountpath = "mountpath"
+	subcmdCluster   = "cluster"
 
 	// Show subcommands
 	subcmdShowBucket    = subcmdBucket
@@ -63,13 +63,12 @@ const (
 	subcmdShowDownload  = subcmdDownload
 	subcmdShowDsort     = subcmdDsort
 	subcmdShowObject    = subcmdObject
-	subcmdShowNode      = subcmdNode
 	subcmdShowXaction   = subcmdXaction
 	subcmdShowRebalance = subcmdRebalance
 	subcmdShowBckProps  = subcmdProps
 	subcmdShowConfig    = subcmdConfig
-	subcmdShowSmap      = subcmdSmap
 	subcmdShowRemoteAIS = subcmdRemoteAIS
+	subcmdShowCluster   = subcmdCluster
 
 	// Create subcommands
 	subcmdCreateBucket = subcmdBucket
@@ -153,20 +152,18 @@ const (
 	objectOldNewArgument     = "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME"
 
 	// Daemons
-	daemonIDArgument           = "DAEMON_ID"
-	optionalDaemonIDArgument   = "[DAEMON_ID]"
-	optionalTargetIDArgument   = "[TARGET_ID]"
-	optionalDaemonTypeArgument = "[DAEMON_TYPE]"
-	daemonStatusArgument       = optionalDaemonTypeArgument + "|" + optionalDaemonIDArgument
-	showConfigArgument         = "DAEMON_ID [CONFIG_SECTION]"
-	setConfigArgument          = optionalDaemonIDArgument + " " + keyValuePairsArgument
-	attachRemoteAISArgument    = aliasURLPairArgument
-	detachRemoteAISArgument    = aliasArgument
-	attachMountpathArgument    = daemonMountpathPairArgument
-	detachMountpathArgument    = daemonMountpathPairArgument
-	joinNodeArgument           = "IP:PORT " + optionalDaemonIDArgument
-	startDownloadArgument      = "SOURCE DESTINATION"
-	jsonSpecArgument           = "JSON_SPECIFICATION"
+	daemonIDArgument         = "DAEMON_ID"
+	optionalDaemonIDArgument = "[DAEMON_ID]"
+	optionalTargetIDArgument = "[TARGET_ID]"
+	showConfigArgument       = "DAEMON_ID [CONFIG_SECTION]"
+	setConfigArgument        = optionalDaemonIDArgument + " " + keyValuePairsArgument
+	attachRemoteAISArgument  = aliasURLPairArgument
+	detachRemoteAISArgument  = aliasArgument
+	attachMountpathArgument  = daemonMountpathPairArgument
+	detachMountpathArgument  = daemonMountpathPairArgument
+	joinNodeArgument         = "IP:PORT " + optionalDaemonIDArgument
+	startDownloadArgument    = "SOURCE DESTINATION"
+	jsonSpecArgument         = "JSON_SPECIFICATION"
 
 	// Xactions
 	xactionArgument = "XACTION_NAME"
