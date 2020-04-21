@@ -9,18 +9,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
 type signalError struct {
-	sig syscall.Signal
+	signal syscall.Signal
 }
 
-func (se *signalError) Error() string { return fmt.Sprintf("Signal %d", se.sig) }
-func pexit()                          { time.Sleep(time.Second * 3); os.Exit(1) }
+func (se *signalError) Error() string { return fmt.Sprintf("Signal %d", se.signal) }
 
 //===========================================================================
 //
@@ -29,37 +27,27 @@ func pexit()                          { time.Sleep(time.Second * 3); os.Exit(1) 
 //===========================================================================
 type sigrunner struct {
 	cmn.Named
-	chsig chan os.Signal
+	ch chan os.Signal
 }
 
 // signal handler
 func (r *sigrunner) Run() error {
-	r.chsig = make(chan os.Signal, 1)
-	signal.Notify(r.chsig,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-	s, ok := <-r.chsig
-	signal.Stop(r.chsig) // stop immediately
-	if ok {
-		go pexit()
-	}
-	switch s {
-	case syscall.SIGHUP: // kill -SIGHUP XXXX
-		return &signalError{sig: syscall.SIGHUP}
-	case syscall.SIGINT: // kill -SIGINT XXXX or Ctrl+c
-		return &signalError{sig: syscall.SIGINT}
-	case syscall.SIGTERM: // kill -SIGTERM XXXX
-		return &signalError{sig: syscall.SIGTERM}
-	case syscall.SIGQUIT: // kill -SIGQUIT XXXX
-		return &signalError{sig: syscall.SIGQUIT}
+	r.ch = make(chan os.Signal, 1)
+	signal.Notify(r.ch,
+		syscall.SIGHUP,  // kill -SIGHUP XXXX
+		syscall.SIGINT,  // kill -SIGINT XXXX or Ctrl+c
+		syscall.SIGTERM, // kill -SIGTERM XXXX
+		syscall.SIGQUIT, // kill -SIGQUIT XXXX
+	)
+	if s, ok := <-r.ch; ok {
+		signal.Stop(r.ch)
+		return &signalError{signal: s.(syscall.Signal)}
 	}
 	return nil
 }
 
 func (r *sigrunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.GetRunName(), err)
-	signal.Stop(r.chsig)
-	close(r.chsig)
+	signal.Stop(r.ch)
+	close(r.ch)
 }

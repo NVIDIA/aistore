@@ -306,8 +306,10 @@ func Run(version, build string) {
 		glog.Infoln("Terminated OK")
 		return
 	}
-	if _, ok := err.(*signalError); ok {
-		glog.Infoln("Terminated OK (via signal)")
+	if e, ok := err.(*signalError); ok {
+		glog.Infof("Terminated OK (via signal: %s)\n", e.signal.String())
+		exitCode := 128 + int(e.signal) // see: https://tldp.org/LDP/abs/html/exitcodes.html
+		cmn.ExitWithCode(exitCode)
 		return
 	}
 	cmn.ExitLogf("Terminated with err: %s", err)

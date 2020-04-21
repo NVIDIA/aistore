@@ -423,6 +423,11 @@ func ConvertToString(value interface{}) (valstr string, err error) {
 	return
 }
 
+func ExitWithCode(code int) {
+	glog.Flush()
+	os.Exit(code)
+}
+
 func ExitInfof(f string, a ...interface{}) {
 	fmt.Fprintf(os.Stderr, f, a...)
 	fmt.Fprintln(os.Stderr)
