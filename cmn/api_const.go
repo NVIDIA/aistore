@@ -112,6 +112,7 @@ const (
 	HeaderBucketVerEnabled      = "versioning.enabled"           // Enable/disable object versioning in a bucket
 	HeaderBucketVerValidateWarm = "versioning.validate_warm_get" // Validate version on warm GET
 	HeaderBucketAccessAttrs     = "access"                       // Bucket access attributes
+	HeaderBucketCreated         = "created"                      // Bucket creation time
 
 	// object meta
 	HeaderObjCksumType = "checksum.type"  // Checksum Type (xxhash, md5, none)

@@ -155,6 +155,7 @@ The full list of bucket properties are:
 | Versioning | `versioning` | Configuration for object versioning support. `enabled` represents if object versioning is enabled for a bucket. For Cloud-based bucket, its versioning must be enabled in the cloud prior to enabling on AIS side. `validate_warm_get`: determines if the object's version is checked(if in Cloud-based bucket) | `"versioning": { "enabled": true, "validate_warm_get": false }`|
 | AccessAttrs | `access` | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"access": "0" ` |
 | BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
+| Created | `created` | Readonly property: bucket creation date, in nanoseconds(Unix time) | `"created": "1546300800000000000"` |
 
 `SetBucketProps` allows the following configurations to be changed:
 

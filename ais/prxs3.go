@@ -90,11 +90,16 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
 	bmd := p.owner.bmd.get()
 	query := cmn.QueryBcks{Provider: cmn.ProviderAIS}
-	bcks := p.selectBMDBuckets(bmd, query)
+	cp := &query.Provider
+
 	resp := s3compat.NewListBucketResult()
-	for _, bck := range bcks {
-		resp.Add(&bck)
-	}
+	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
+		if query.Equal(bck.Bck) || query.Contains(bck.Bck) {
+			resp.Add(bck)
+		}
+		return false
+	})
+
 	b := resp.MustMarshal()
 	w.Header().Set("Content-Type", s3compat.ContentType)
 	w.Write(b)

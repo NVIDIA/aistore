@@ -266,6 +266,9 @@ type BucketProps struct {
 	// unique bucket ID
 	BID uint64 `json:"bid,string" list:"omit"`
 
+	// Bucket creation time
+	Created int64 `json:"created,string" list:"readonly"`
+
 	// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
 	Renamed string `list:"omit"`
 }
@@ -477,6 +480,7 @@ func (p1 *BucketProps) Equal(p2 *BucketProps) bool {
 		p11        = p1.Clone()
 	)
 	p11.BID = p2.BID
+	p11.Created = p2.Created
 
 	s1, _ := jsonCompat.Marshal(p11)
 	s2, _ := jsonCompat.Marshal(p2)

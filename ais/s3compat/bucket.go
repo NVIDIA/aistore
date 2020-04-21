@@ -8,7 +8,14 @@ import (
 	"encoding/xml"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+)
+
+var (
+	// It is 2019-01-01, midnight in UnixNano. Used as creation date
+	// for buckets that do not have creation date(created with older AIS)
+	defaultDate = time.Unix(0, 1546300800000000000)
 )
 
 type (
@@ -44,10 +51,17 @@ func NewListBucketResult() *ListBucketResult {
 	}
 }
 
-func bckToS3(bck *cmn.Bck) *Bucket {
+func bckToS3(bck *cluster.Bck) *Bucket {
+	created := time.Unix(0, bck.Props.Created)
+	if created.Before(defaultDate) {
+		// TODO: it is for existing buckets. Their creation time is zero,
+		// and AWS CLI complains about "date out of range".
+		// Without `Created` AWS CLI complains that field not found.
+		created = defaultDate
+	}
 	return &Bucket{
 		Name:    bck.Name,
-		Created: time.Now().UTC().Format(time.RFC3339), // TODO:
+		Created: created.Format(time.RFC3339),
 	}
 }
 
@@ -57,7 +71,7 @@ func (r *ListBucketResult) MustMarshal() []byte {
 	return []byte(xml.Header + string(b))
 }
 
-func (r *ListBucketResult) Add(bck *cmn.Bck) {
+func (r *ListBucketResult) Add(bck *cluster.Bck) {
 	r.Buckets = append(r.Buckets, bckToS3(bck))
 }
 

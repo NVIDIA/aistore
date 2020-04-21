@@ -423,6 +423,7 @@ func printBckHeadTable(c *cli.Context, props cmn.BucketProps, section string) er
 		cmn.AssertNoErr(err)
 	} else {
 		propList = []prop{
+			{"created", time.Unix(0, props.Created).Format(time.RFC3339)},
 			{"provider", props.Provider},
 			{"access", props.AccessToStr()},
 			{"checksum", props.Cksum.String()},

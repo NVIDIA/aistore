@@ -80,7 +80,8 @@ var _ = Describe("IterFields", func() {
 					"lru.dont_evict_time":   "",
 					"lru.capacity_upd_time": "",
 
-					"access": uint64(0),
+					"access":  uint64(0),
+					"created": int64(0),
 				},
 			),
 			Entry("list BucketPropsToUpdate fields",

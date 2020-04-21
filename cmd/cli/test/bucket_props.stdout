@@ -4,6 +4,7 @@ Bucket props successfully updated
 PROPERTY	 VALUE
 access		 GET,HEAD
 checksum	 Type: xxhash | Validate: ColdGET
+^created.*$
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 2 copies
@@ -14,6 +15,7 @@ Bucket props successfully updated
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
+^created.*$
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 Disabled

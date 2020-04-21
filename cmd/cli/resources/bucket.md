@@ -336,13 +336,14 @@ Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioni
 
 #### Show bucket props with provided section
 
-Show only `lru` section of bucket props for `bucket_name` bucket. 
+Show only `lru` section of bucket props for `bucket_name` bucket.
 
 ```console
 $ ais show props bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
+created		2020-04-08T16:20:12-08:00
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 Disabled
@@ -464,6 +465,7 @@ $ ais show props bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
+created		2020-04-08T16:20:12-08:00
 ec		 2:2 (250KiB)
 lru		 Watermarks: 20%/80% | Do not evict time: 120m | OOS: 90%
 mirror		 Disabled
@@ -491,6 +493,7 @@ $ ais show props bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
+created		2020-04-08T16:20:12-08:00
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 2 copies

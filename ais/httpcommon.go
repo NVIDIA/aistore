@@ -1222,6 +1222,9 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config 
 				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verEnabled))
 			}
 			return nil, false
+		} else if fieldName == cmn.HeaderBucketCreated {
+			created := time.Unix(0, field.Value().(int64))
+			hdr.Set(cmn.HeaderBucketCreated, created.Format(time.RFC3339))
 		}
 
 		hdr.Set(fieldName, fmt.Sprintf("%v", field.Value()))
