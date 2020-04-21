@@ -24,7 +24,8 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 Also, AIStore:
 
 * can be deployed on any commodity hardware;
-* supports Amazon S3 and Google Cloud Storage backends (and all GCS and S3-compliant object storages);
+* supports Amazon S3, Google Cloud, and Microsoft Azure Blob Storage backends (and all S3, GCS, and Azure-compliant object storages);
+* provides [Unified Global Namespace](docs/providers.md);
 * can be used as a fast tier or a cache for GCS and S3; can be populated on-demand and/or via separate `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;
 * includes MapReduce extension for massively parallel resharding of very large datasets.
