@@ -468,13 +468,13 @@ Put `file.txt` object to `cloudbucket` bucket and evict it locally.
 $ ais put file.txt cloudbucket/file.txt
 PUT file.txt into bucket cloudbucket
 $ ais show bucket cloudbucket --cached # show only cloudbucket objects present in the AIS cluster
-NAME	     OBJECTS	 SIZE    USED %  PROVIDER
-cloudbucket  1           702B    0%      aws
+NAME	           OBJECTS	 SIZE    USED %
+aws://cloudbucket  1             702B    0%
 $ ais evict cloudbucket/file.txt
 file.txt evicted from cloudbucket bucket
 $ ais show bucket cloudbucket --cached
-NAME	     OBJECTS	 SIZE    USED %  PROVIDER
-cloudbucket  0           0B      0%      aws
+NAME	           OBJECTS	 SIZE    USED %
+aws://cloudbucket  0             0B      0%
 ```
 
 ## Prefetch objects

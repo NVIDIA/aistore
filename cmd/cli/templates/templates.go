@@ -298,10 +298,10 @@ const (
 		"{{else}}-{{end}}"
 
 	// Buckets templates
-	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. SIZE\t EST. USED %\t PROVIDER\n" + bucketsSummariesBody
-	BucketsSummariesTmpl     = "NAME\t OBJECTS\t SIZE \t USED %\t PROVIDER\n" + bucketsSummariesBody
+	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. SIZE\t EST. USED %\n" + bucketsSummariesBody
+	BucketsSummariesTmpl     = "NAME\t OBJECTS\t SIZE \t USED %\n" + bucketsSummariesBody
 	bucketsSummariesBody     = "{{range $k, $v := . }}" +
-		"{{$v.Name}}\t {{$v.ObjCount}}\t {{FormatBytesUnsigned $v.Size 2}}\t {{FormatFloat $v.UsedPct}}%\t {{$v.Provider}}\n" +
+		"{{$v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUnsigned $v.Size 2}}\t {{FormatFloat $v.UsedPct}}%\n" +
 		"{{end}}"
 
 	// For `object put` mass uploader. A caller adds to the template

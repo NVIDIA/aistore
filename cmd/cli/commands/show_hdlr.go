@@ -199,7 +199,7 @@ var (
 )
 
 func showBucketHandler(c *cli.Context) (err error) {
-	bck, objName, err := parseBckObjectURI(c.Args().First())
+	bck, objName, err := parseBckObjectURI(c.Args().First(), true /*query*/)
 	if err != nil {
 		return
 	}
