@@ -17,7 +17,7 @@ require (
 	github.com/jacobsa/fuse v0.0.0-20190923155423-081e9f4bc7d4
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
 	github.com/json-iterator/go v1.1.7
-	github.com/karrick/godirwalk v1.12.0
+	github.com/karrick/godirwalk v1.15.6
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lufia/iostat v0.0.0-20170605150913-9f7362b77ad3
