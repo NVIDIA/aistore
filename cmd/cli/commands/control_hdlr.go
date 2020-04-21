@@ -167,9 +167,11 @@ func startDownloadHandler(c *cli.Context) error {
 		return missingArgumentsError(c, "destination")
 	}
 	if c.NArg() > 2 {
+		const q = "For range download, enclose source in quotation marks, e.g.: \"gs://imagenet/train-{00..99}.tgz\""
+		s := fmt.Sprintf("too many arguments - expected 2, got %d.\n%s", len(c.Args()), q)
 		return &usageError{
 			context:      c,
-			message:      fmt.Sprintf("too many arguments, got %d, expected 2\n\nFor range download put source link in quotation marks", len(c.Args())),
+			message:      s,
 			helpData:     c.Command,
 			helpTemplate: cli.CommandHelpTemplate,
 		}
@@ -222,6 +224,7 @@ func startDownloadHandler(c *cli.Context) error {
 	}
 
 	fmt.Fprintln(c.App.Writer, id)
+	fmt.Fprintf(c.App.Writer, "Run `ais show download %s` to monitor the progress of downloading.\n", id)
 	return nil
 }
 

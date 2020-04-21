@@ -1,25 +1,52 @@
 ## Why Downloader?
 
-It is a well-known fact that some of the most popular AI datasets are available on the Internet.
+It probably won't be much of an exaggeration to say that the majority of popular AI datasets are available on the Internet and public Clouds. Those datasets are often growing in size, thus continuously providing a wealth of information to research and analyze.
 
-> See, for instance, [Revisiting Unreasonable Effectiveness of Data in Deep Learning Era](https://arxiv.org/abs/1707.02968) - the paper lists a good number of very large and very popular datasets.
+It is, therefore, appropriate to ask a follow-up question: how to efficiently work with those datasets? And what happens if the dataset in question is *larger* than the capacity of a single host? What happens if it is large enough to require a cluster of storage servers?
 
-Given that fact, it is only natural to ask the follow-up question: how to work with those datasets? And what happens if the dataset in question is *larger* than a single host? Meaning, what happens if it is large enough to warrant (and require) a distributed storage system?
+> The often cited paper called [Revisiting Unreasonable Effectiveness of Data in Deep Learning Era](https://arxiv.org/abs/1707.02968) lists a good number of those large and very popular datasets, as well as the reasons to utilize them for training.
 
-Meet **Internet downloader** - an integrated part of the AIStore. AIStore cluster can be quickly deployed locally to the compute clients, and the **downloader** can then be used to quickly populate a specified AIS bucket with the objects from a given Internet location.
+Meet **Internet Downloader** - an integrated part of the AIStore. AIS clusters can be easily deployed on any commodity hardware, and AIS **downloader** can then be used to quickly populate AIS buckets with any contents from a given location.
 
-## Download Request
+## Example
 
-AIS *Downloader* supports 4 types of download requests:
+Downloading jobs run asynchronously; you can monitor the progress of each specific job. The following example runs two jobs, each downloading 10 objects (gzipped tarballs in this case) from a given Google Cloud bucket:
+
+```console
+# ais start download "gs://lpr-imagenet/train-{0001..0010}.tgz" ais://imagenet
+Ocw-ZfZqn
+Run `ais show download Ocw-ZfZqn` to monitor the progress of downloading.
+
+# ais start download "gs://lpr-imagenet/train-{0011..0020}.tgz" ais://imagenet
+LXn--fZqg
+Run `ais show download LXn--fZqg` to monitor the progress of downloading.
+
+# ais show download
+JOB ID           STATUS          ERRORS  DESCRIPTION
+Ocw-ZfZqn        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0001..0010}.tgz -> ais://imagenet
+LXn--fZqg        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0011..0020}.tgz -> ais://imagenet
+```
+
+## Request to download
+
+AIS Downloader supports 4 (four) request types:
 
 * *Single* - download a single object
 * *Multi* - download multiple objects provided by JSON map (string -> string) or list of strings
 * *Range* - download multiple objects based on a given naming pattern
 * *Cloud* - given optional prefix and optional suffix, download matching objects from the specified cloud bucket
 
-> Prior to downloading, make sure that AIS (destination) bucket already exists. See [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/README.md#python-client). Error is returned when provided bucket does not exist.
+> Prior to downloading, make sure that AIS (destination) bucket already exists. To create a bucket using AIS CLI, run `ais create bucket`, for instance:
+>
+> ```console
+> ais create bucket imagenet
+> ```
+>
+> Also, see [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/README.md#python-client). Error is returned when provided bucket does not exist.
 
-The rest of this document is structured around all supported types of downloads:
+------------
+
+The rest of this document is structured around supported *types of downloading jobs* and can serve as an API reference for the Downloader.
 
 ## Table of Contents
 - [Single (object) download](#single-download)
