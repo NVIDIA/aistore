@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -257,8 +258,58 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 	w.Write(b)
 }
 
-// PUT s3/bckName/objName
-func (p *proxyrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+// PUT s3/bckName/objName - with HeaderObjSrc in request header - a source
+func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+	started := time.Now()
+	src := r.Header.Get(s3compat.HeaderObjSrc)
+	src = strings.Trim(src, "/") // in examples the path starts with "/"
+	parts := strings.SplitN(src, "/", 2)
+	if len(parts) < 2 {
+		p.invalmsghdlr(w, r, "copy is not an object name")
+		return
+	}
+	bckSrc := cluster.NewBck(parts[0], cmn.ProviderAIS, cmn.NsGlobal)
+	if err := bckSrc.Init(p.owner.bmd, nil); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if err := bckSrc.AllowGET(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	bckDst := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+	if err := bckDst.Init(p.owner.bmd, nil); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if len(items) < 2 {
+		p.invalmsghdlr(w, r, "object name is undefined")
+		return
+	}
+	var (
+		si   *cluster.Snode
+		smap = p.owner.smap.get()
+		err  error
+	)
+	if err = bckDst.AllowPUT(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	objName := strings.Trim(parts[1], "/")
+	si, err = cluster.HrwTarget(bckSrc.MakeUname(objName), &smap.Smap)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("AISS3 COPY: %s %s/%s => %s/%v %s", r.Method, bckSrc, objName, bckDst, items, si)
+	}
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+}
+
+// PUT s3/bckName/objName - without extra info in request header
+func (p *proxyrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd, nil); err != nil {
@@ -289,6 +340,15 @@ func (p *proxyrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []s
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+}
+
+// PUT s3/bckName/objName
+func (p *proxyrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+	if r.Header.Get(s3compat.HeaderObjSrc) == "" {
+		p.directPutObjS3(w, r, items)
+		return
+	}
+	p.copyObjS3(w, r, items)
 }
 
 // GET s3/bckName/objName

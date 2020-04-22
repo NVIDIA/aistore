@@ -21,5 +21,6 @@ const (
 	headerSize    = "Content-Length"
 	headerETag    = "ETag"
 	headerVersion = "x-amz-version-id"
+	HeaderObjSrc  = "x-amz-copy-source"
 	headerAtime   = "Last-Modified"
 )

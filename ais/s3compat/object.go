@@ -34,6 +34,12 @@ type (
 		Size         int64  `xml:"Size"`
 		Class        string `xml:"StorageClass"`
 	}
+
+	// Response for object copy request
+	CopyObjectResult struct {
+		LastModified string `xml:"LastModified"`
+		ETag         string `xml:"ETag"`
+	}
 )
 
 func FillMsgFromS3Query(query url.Values, msg *cmn.SelectMsg) {
@@ -98,4 +104,10 @@ func SetHeaderFromLOM(header http.Header, lom *cluster.LOM) {
 	header.Set(headerVersion, lom.Version())
 	header.Set(headerSize, strconv.FormatInt(lom.Size(), 10))
 	header.Set(headerAtime, lom.Atime().UTC().Format(time.RFC3339))
+}
+
+func (r *CopyObjectResult) MustMarshal() []byte {
+	b, err := xml.Marshal(r)
+	cmn.AssertNoErr(err)
+	return []byte(xml.Header + string(b))
 }
