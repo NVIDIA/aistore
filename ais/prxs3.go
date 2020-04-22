@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"net/url"
 	"path"
 	"time"
 
@@ -76,6 +77,12 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(apitems) == 1 {
+			q := r.URL.Query()
+			_, multiple := q[s3compat.URLParamMultiDelete]
+			if multiple {
+				p.delMultipleObjs(w, r, apitems[0])
+				return
+			}
 			p.delBckS3(w, r, apitems[0])
 			return
 		}
@@ -148,6 +155,41 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 			return
 		}
 		p.invalmsghdlr(w, r, err.Error(), errCode)
+	}
+}
+
+// DEL s3/bck-name?delete
+// Delete list of objects
+func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
+	defer r.Body.Close()
+	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
+	if err := bck.Init(p.owner.bmd, p.si); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err := bck.AllowDELETE(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	decoder := xml.NewDecoder(r.Body)
+	objList := &s3compat.Delete{}
+	if err := decoder.Decode(objList); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if len(objList.Object) == 0 {
+		return
+	}
+	msg := cmn.ActionMsg{Action: cmn.ActDelete}
+	query := make(url.Values)
+	query.Set(cmn.URLParamProvider, cmn.ProviderAIS)
+	listMsg := &cmn.ListMsg{ObjNames: make([]string, len(objList.Object))}
+	for _, obj := range objList.Object {
+		listMsg.ObjNames = append(listMsg.ObjNames, obj.Key)
+	}
+	msg.Value = listMsg
+	if err := p.doListRange(http.MethodDelete, bucket, &msg, query); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 	}
 }
 

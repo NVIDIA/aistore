@@ -570,7 +570,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 			return
 		}
-		if err = p.listRange(http.MethodDelete, bucket, &msg, r.URL.Query()); err != nil {
+		if err = p.doListRange(http.MethodDelete, bucket, &msg, r.URL.Query()); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	default:
@@ -869,7 +869,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 			return
 		}
-		if err = p.listRange(http.MethodPost, bucket, &msg, r.URL.Query()); err != nil {
+		if err = p.doListRange(http.MethodPost, bucket, &msg, r.URL.Query()); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActListObjects:
@@ -1828,7 +1828,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	}
 }
 
-func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) error {
+func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) error {
 	var (
 		timeout time.Duration
 		results chan callResult
@@ -1863,7 +1863,7 @@ func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query
 	})
 	for res := range results {
 		if res.err != nil {
-			return fmt.Errorf("failed to List/Range: %v (%d: %s)", res.err, res.status, res.details)
+			return fmt.Errorf("%s failed to %s List/Range: %v (%d: %s)", res.si, msg.Action, res.err, res.status, res.details)
 		}
 	}
 	return nil

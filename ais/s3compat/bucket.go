@@ -38,6 +38,16 @@ type (
 	VersioningConfiguration struct {
 		Status string `xml:"Status"`
 	}
+
+	// Multiple object delete request
+	Delete struct {
+		Quiet  bool                `xml:"Quiet"`
+		Object []*DeleteObjectInfo `xml:"Object"`
+	}
+	DeleteObjectInfo struct {
+		Key     string `xml:"Key"`
+		Version string `xml:"Version"`
+	}
 )
 
 func NewListBucketResult() *ListBucketResult {
