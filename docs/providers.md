@@ -59,9 +59,9 @@ Further:
 Examples first. The following two commands attach and then show remote cluster at the address`my.remote.ais:51080`:
 
 ```console
-# ais attach remote alias111=http://my.remote.ais:51080
+$ ais attach remote alias111=http://my.remote.ais:51080
 Remote cluster (alias111=http://my.remote.ais:51080) successfully attached
-# ais show remote
+$ ais show remote
 UUID      URL                     Alias     Primary         Smap  Targets  Online
 eKyvPyHr  my.remote.ais:51080     alias111  p[80381p11080]  v27   10       yes
 ```
@@ -72,10 +72,10 @@ Notice two aspects of this:
 * the remote cluster does *not* have to be online at attachment time; offline or currently not reachable clusters are shown as follows: 
 
 ```console
-# ais show remote
-UUID        URL                     Alias     Primary         Smap  Targets  Online
-eKyvPyHr    my.remote.ais:51080     alias111  p[primary1]     v27   10       no
-<alias222>  <other.remote.ais:51080>          n/a             n/a   n/a      no
+$ ais show remote
+UUID        URL                       Alias     Primary         Smap  Targets  Online
+eKyvPyHr    my.remote.ais:51080       alias111  p[primary1]     v27   10       no
+<alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
 ```
 
 Notice the difference between the first and the second lines in the printout above: while both clusters appear to be currently offline (see the rightmost column), the first one was accessible at some earlier time and therefore we do show that it has (in this example) 10 storage nodes and other details.
@@ -83,32 +83,46 @@ Notice the difference between the first and the second lines in the printout abo
 To `detach` any of the previously configured association, simply run:
 
 ```console
-# ais detach remote alias111
-# ais show remote
-UUID        URL                     Alias     Primary         Smap  Targets  Online
-<alias222>  <other.remote.ais:51080>          n/a             n/a   n/a      no
+$ ais detach remote alias111
+$ ais show remote
+UUID        URL                       Alias     Primary         Smap  Targets  Online
+<alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
 ```
 
 ----------
 
 Configuration-wise, the following two examples specify a single-URL and multi-URL attachments that can be also be [configured](configuration.md) prior to runtime (*or* can be added at runtime via the `ais remote attach` CLI as shown above):
 
-```json
-"cloud": {
-     "ais": {"remote-cluster-alias": ["http://10.233.84.233:51080"]}
-}
-```
+* Example: single URL
+
+    ```json
+    "cloud": {
+        "ais": {
+            "remote-cluster-alias": ["http://10.233.84.233:51080"]
+        }
+    }
+    ```
 
 * Example: multiple URL
-```json
-"cloud": {
-     "ais": {"remote-cluster-alias": ["http://10.233.84.217", "https://nvidia.ais-cluster.org"]}
-}
-```
-> Multiple remote URLs can be provided for the same typical reasons that include fault tolerance. However, once connected we will rely on the remote cluster map to retry upon connection errors and load balance.
+
+    ```json
+    "cloud": {
+         "ais": {
+              "remote-cluster-alias": [
+                    "http://10.233.84.217",
+                    "https://nvidia.ais-cluster.org",
+              ]
+          }
+    }
+    ```
+
+> Multiple remote URLs can be provided for the same typical reasons that include fault tolerance.
+> However, once connected we will rely on the remote cluster map to retry upon connection errors and load balance.
 
 For more usage examples, please see [working with remote AIS bucket](bucket.md#cli-example-working-with-remote-ais-bucket).
 
 And one final comment:
 
-You can run `ais remote attach` and/or `ais show remote  ` CLI to  *refresh* remote configuration: check availability and reload cluster maps. In other words, repeating the same `ais attach remote` command will have the side effect of refreshing all the currently configured attachments. Or, use `ais show remote` CLI for the same exact purpose.
+You can run `ais remote attach` and/or `ais show remote` CLI to *refresh* remote configuration: check availability and reload cluster maps.
+In other words, repeating the same `ais attach remote` command will have the side effect of refreshing all the currently configured attachments.
+Or, use `ais show remote` CLI for the same exact purpose.

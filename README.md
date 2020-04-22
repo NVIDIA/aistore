@@ -36,7 +36,6 @@ For AIStore **white paper** and design philosophy, please see the [overview docu
 
 **Table of Contents**
 - [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
 - [Build, Make, and Development Tools](#build-make-and-development-tools)
 - [Deployment](#deployment)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)

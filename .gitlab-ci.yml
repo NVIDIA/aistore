@@ -13,36 +13,20 @@ image: golang:1.13
     expire_in: 2 days
 
 .aws_cli_install: &aws_cli
-  - apt-get install -y python3-pip
-  - pip3 install setuptools
   - pip3 install awscli --upgrade --user
 
-.aws_cli_install: &aws_cli
-  - apt-get install -y python3-pip
-  - pip3 install setuptools
-  - pip3 install awscli --upgrade --user
+variables:
+  GOPATH: /go
+
+before_script:
+  - export PATH="$PATH:$GOPATH/bin"
+  - apt-get update -yq
+  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse python3-pip python3-setuptools
 
 stages:
   - build
   - test-short
   - test-long
-
-cache:
-  paths:
-    - /apt-cache
-    - /go/src/github.com
-    - /go/src/golang.org
-    - /go/src/google.golang.org
-    - /go/src/gopkg.in
-
-before_script:
-  - apt-get clean && apt-get update
-  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse
-  - apt-get -y clean all
-  - mkdir -p /go/src/github.com/NVIDIA /go/src/_/builds
-  - cp -r $CI_PROJECT_DIR /go/src/github.com/NVIDIA/aistore
-  - ln -s /go/src/github.com/NVIDIA/aistore /go/src/_/builds/NVIDIA
-  - cd /go/src/github.com/NVIDIA/aistore
 
 build:linux:
   stage: build
@@ -60,8 +44,7 @@ build:linux:
 lint:linux:
   stage: build
   script:
-    - apt-get install -y python3-pip
-    - pip3 install setuptools yapf pylint
+    - pip3 install yapf pylint
     - make lint
     - make fmt-check
     - make spell-check
@@ -70,7 +53,7 @@ test:short:
   stage: test-short
   script:
     - *aws_cli
-    - export LOCAL_URL="http://127.0.0.1:8080" REMOTE_URL="http://127.0.0.1:11080" && export REMOTE_CLUSTER="randstring=${REMOTE_URL}"
+    - export LOCAL_URL="http://127.0.0.1:8080" REMOTE_URL="http://127.0.0.1:11080" && export REMOTE_CLUSTER="alias=${REMOTE_URL}"
     - make aisfs cli
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\n0'
     - make deploy <<< $'5\n5\n3\n0'

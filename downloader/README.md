@@ -13,15 +13,13 @@ Meet **Internet Downloader** - an integrated part of the AIStore. AIS clusters c
 Downloading jobs run asynchronously; you can monitor the progress of each specific job. The following example runs two jobs, each downloading 10 objects (gzipped tarballs in this case) from a given Google Cloud bucket:
 
 ```console
-# ais start download "gs://lpr-imagenet/train-{0001..0010}.tgz" ais://imagenet
+$ ais start download "gs://lpr-imagenet/train-{0001..0010}.tgz" ais://imagenet
 Ocw-ZfZqn
 Run `ais show download Ocw-ZfZqn` to monitor the progress of downloading.
-
-# ais start download "gs://lpr-imagenet/train-{0011..0020}.tgz" ais://imagenet
+$ ais start download "gs://lpr-imagenet/train-{0011..0020}.tgz" ais://imagenet
 LXn--fZqg
 Run `ais show download LXn--fZqg` to monitor the progress of downloading.
-
-# ais show download
+$ ais show download
 JOB ID           STATUS          ERRORS  DESCRIPTION
 Ocw-ZfZqn        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0001..0010}.tgz -> ais://imagenet
 LXn--fZqg        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0011..0020}.tgz -> ais://imagenet
@@ -36,13 +34,16 @@ AIS Downloader supports 4 (four) request types:
 * *Range* - download multiple objects based on a given naming pattern
 * *Cloud* - given optional prefix and optional suffix, download matching objects from the specified cloud bucket
 
-> Prior to downloading, make sure that AIS (destination) bucket already exists. To create a bucket using AIS CLI, run `ais create bucket`, for instance:
+> Prior to downloading, make sure that AIS (destination) bucket already exists.
+> To create a bucket using AIS CLI, run `ais create bucket`, for instance:
 >
 > ```console
-> ais create bucket imagenet
+> $ ais create bucket imagenet
 > ```
 >
-> Also, see [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/README.md#python-client). Error is returned when provided bucket does not exist.
+> Also, see [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets.
+> For Python-based clients, a better starting point could be [here](/docs/overview.md#python-client).
+> Error is returned when provided bucket does not exist.
 
 ------------
 
