@@ -243,6 +243,10 @@ func TestNamespace(t *testing.T) {
 }
 
 func TestRemoteWithAliasAndUUID(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{
+		RequiresRemote: true,
+	})
+
 	var (
 		smap = tutils.GetClusterMap(t, tutils.RemoteCluster.URL)
 
@@ -250,9 +254,6 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 		uuid  = smap.UUID
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{
-		RequiresRemote: true,
-	})
 	if alias == uuid {
 		t.Skipf("expected %q to be alias of cluster uuid: %q", alias, uuid)
 	}
