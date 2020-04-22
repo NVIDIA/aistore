@@ -247,21 +247,13 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 		RequiresRemote: true,
 	})
 
-	var (
-		smap = tutils.GetClusterMap(t, tutils.RemoteCluster.URL)
-
-		alias = tutils.RemoteCluster.UUID
-		uuid  = smap.UUID
-	)
-
-	if alias == uuid {
-		t.Skipf("expected %q to be alias of cluster uuid: %q", alias, uuid)
-	}
-
 	// TODO: make it work
 	t.Skip("NYI")
 
 	var (
+		alias = tutils.RemoteCluster.Alias
+		uuid  = tutils.RemoteCluster.UUID
+
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 

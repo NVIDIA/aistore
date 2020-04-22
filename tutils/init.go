@@ -7,9 +7,9 @@ package tutils
 import (
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/memsys"
@@ -39,8 +39,9 @@ var (
 	HTTPClientGetPut  *http.Client
 
 	RemoteCluster struct {
-		UUID string
-		URL  string
+		UUID  string
+		Alias string
+		URL   string
 	}
 
 	MMSA *memsys.MMSA
@@ -55,13 +56,21 @@ func init() {
 
 	initProxyURL()
 
-	if remote := os.Getenv("REMOTE_CLUSTER"); remote != "" {
-		parts := strings.Split(remote, "=")
-		if len(parts) != 2 {
-			cmn.ExitLogf("REMOTE_CLUSTER variable should be in form: UUID=URL")
+	aisInfo, err := api.GetRemoteAIS(BaseAPIParams(proxyURLReadOnly))
+	if err != nil {
+		Logf("failed to get remote cluster information: %v", err)
+	} else {
+		for _, clusterInfo := range aisInfo {
+			if !clusterInfo.Online {
+				continue
+			}
+			// TODO: use actual UUID (for now it doesn't work correctly as
+			//  proxy may not have full information about the remote cluster)
+			RemoteCluster.UUID = clusterInfo.Alias
+			RemoteCluster.Alias = clusterInfo.Alias
+			RemoteCluster.URL = clusterInfo.URL
+			break
 		}
-		RemoteCluster.UUID = parts[0]
-		RemoteCluster.URL = parts[1]
 	}
 }
 
