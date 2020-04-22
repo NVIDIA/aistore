@@ -1112,6 +1112,11 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: external health-ping from %s", t.si, r.RemoteAddr)
 		}
+		if !t.clusterStarted.Load() {
+			// kubernetes requires >=400 status code to indicate not-ready state
+			// target will be in ready state when it has joined the cluster and cluster has started
+			w.WriteHeader(http.StatusBadRequest)
+		}
 		return
 	} else if callerID == "" || caller == "" {
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si, callerID, caller))

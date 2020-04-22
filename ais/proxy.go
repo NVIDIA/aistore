@@ -686,11 +686,22 @@ func (p *proxyrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request
 // GET /v1/health
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.startedUp.Load() {
+		var (
+			callerID = r.Header.Get(cmn.HeaderCallerID)
+			caller   = r.Header.Get(cmn.HeaderCallerName)
+		)
+		if callerID == "" && caller == "" {
+			// kubernetes requires >=400 status code to indicate not-ready state
+			// proxy will be in ready state when it has registered as a primary or secondary proxy
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		// If not yet ready we need to send status accepted -> completed but
 		// not yet ready.
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
+
 	w.WriteHeader(http.StatusOK)
 }
 

@@ -169,3 +169,13 @@ func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 		Query:      q,
 	})
 }
+
+func Health(baseParams BaseParams, si *cluster.Snode) error {
+	baseParams.Method = http.MethodGet
+	baseParams.URL = si.PublicNet.DirectURL
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Health),
+		Query:      make(url.Values),
+	})
+}

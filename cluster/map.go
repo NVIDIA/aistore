@@ -196,6 +196,21 @@ func (m *Smap) GetRandTarget() (si *Snode, err error) {
 	return
 }
 
+func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
+	if excludePrimary {
+		for _, proxy := range m.Pmap {
+			if m.ProxySI.DaemonID != proxy.DaemonID {
+				return proxy, nil
+			}
+		}
+		return nil, fmt.Errorf("internal error: couldn't find non primary proxy")
+	}
+	for _, proxy := range m.Pmap {
+		return proxy, nil
+	}
+	return nil, fmt.Errorf("cluster doesn't have enough proxies, expected at least 1")
+}
+
 func (m *Smap) GetProxy(pid string) *Snode {
 	pi, ok := m.Pmap[pid]
 	if !ok {
