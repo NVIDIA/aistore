@@ -14,17 +14,23 @@ AIStore natively integrates with 3 (three) 3rd party Cloud storages:
 * [Google Cloud Storage](https://cloud.google.com)
 * [Microsoft Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs)
 
-In each case, we use vendor's own SDK/API to provide transparent access to Cloud storage with the additional capability of *persistently caching* all read data in the AIStore's [cloud buckets](bucket.md).
+In each case, we use the vendor's own SDK/API to provide transparent access to Cloud storage with the additional capability of *persistently caching* all read data in the AIStore's [cloud buckets](bucket.md).
 
-> The term "persistent caching" is used to indicate much more than what's conventionally understood as "caching": irrespectively of its origin and source, all data inside an AIStore cluster is end-to-end checksummed and protected by the storage services](storage_svcs.md) configured both globally and on a per AIS bucket (which may happen to be a *cloud bucket*).
+> The term "persistent caching" is used to indicate much more than what's conventionally understood as "caching": irrespectively of its origin and source, all data inside an AIStore cluster is end-to-end checksummed and protected by the [storage services](storage_svcs.md) configured both globally and on a per bucket basis. For instance, both cloud buckets and ais buckets can be erasure coded, etc.
 
-> Notwithstanding, *cloud buckets* will often serve as a fast cache or a fast tier in front of a 3rd party Cloud storage.
+> Notwithstanding, *cloud buckets* will often serve as a fast cache or a fast tier in front of a given 3rd party Cloud storage.
 
-> Note as well that AIS provides [5 (five) easy ways to populate its *cloud buckets*](overview.md)  - including, but not limited to conventional on-demand caching (aka *cold GET*).
+> Note as well that AIS provides [5 (five) easy ways to populate its *cloud buckets*](overview.md) - including, but not limited to conventional on-demand caching (aka *cold GET*).
 
 But there's more.
 
-In addition to 3rd party Clouds, AIS integrates with itself to ad-hoc generate a unified global namespace of all individually hosted datasets. Between two AIS clusters A and B (see [Terminology](#Terminology) the same exact rules apply: as soon as B gets attached to A, any read access to (remote) objects and datasets from B will have the side effect of cluster A persistently caching those objects and datasets on its own clustered servers (aka storage targets), subject to the rules and policies configured on the corresponding A's buckets.
+In addition to the listed above 3rd party Cloud storages, AIS integrates with itself via its own RESTful API. One AIS cluster can be *attached* to another.
+
+Between two AIS clusters A and B (see [Terminology](#Terminology) the same exact rules apply: as soon as B gets attached to A, any read access to (remote) objects and datasets from B will have the side effect of cluster A persistently caching those objects and datasets on its own clustered servers (aka storage targets), subject to the rules and policies configured on the corresponding A's buckets.
+
+By *attaching* AIS clusters we are, effectively and ad-hoc, forming a unified global namespace of all individually hosted datasets.
+
+---------------------
 
 To reiterate, a storage bucket that is visible/accessible/modifiable via AIS may originate in a given AIS cluster, or:
 
@@ -100,6 +106,8 @@ Configuration-wise, the following two examples specify a single-URL and multi-UR
 }
 ```
 > Multiple remote URLs can be provided for the same typical reasons that include fault tolerance. However, once connected we will rely on the remote cluster map to retry upon connection errors and load balance.
+
+For more usage examples, please see [working with remote AIS bucket](bucket.md#cli-example-working-with-remote-ais-bucket).
 
 And one final comment:
 

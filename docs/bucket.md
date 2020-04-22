@@ -3,6 +3,7 @@
   - [Cloud Provider](#cloud-provider)
 - [AIS Bucket](#ais-bucket)
   - [Curl examples: create, rename and, destroy ais bucket](#curl-examples-create-rename-and-destroy-ais-bucket)
+- [CLI Example: working with remote AIS bucket](#cli-example-working-with-remote-ais-bucket)
 - [Cloud Bucket](#cloud-bucket)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Cloud Bucket](#evict-cloud-bucket)
@@ -24,7 +25,7 @@ AIS supports two kinds of buckets: **ais buckets** and **3rd party Cloud-based b
 
 All the [supported storage services](storage_svcs.md) equally apply to both kinds of buckets, with only a few exceptions. The following table summarizes them.
 
-| Kind | Description | Supported Storage Services (as of v2.0) |
+| Kind | Description | Supported Storage Services |
 | --- | --- | --- |
 | ais buckets | buckets that are **not** 3rd party Cloud-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). Unlike cloud buckets, ais buckets can be created through the [RESTful API](http_api.md). Similar to cloud buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 | cloud buckets | When AIS is deployed as [fast tier](/docs/overview.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as ais buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **Cloud-based buckets** (or **cloud buckets** for short). | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Erasure Coding](storage_svcs.md#erasure-coding), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
@@ -58,9 +59,63 @@ $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "renamelb",
 $ curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://localhost:8080/v1/buckets/myBucket2
 ```
 
+## CLI Example: working with remote AIS bucket
+
+AIS clusters can be attached to each other, thus forming a global (and globally accessible) namespace of all individually hosted datasets. For background and details on AIS multi-clustering, please refer to this [document](providers.md).
+
+The following example creates an attachment between two clusters, lists all remote buckets, and then list objects in one of those remote buckets (see comments inline):
+
+```console
+
+# attach remote AIS cluster and assign it an alias `teamZ` (for convenience and for future reference):
+$ ais attach remote teamZ=http://cluster.ais.org:51080
+Remote cluster (teamZ=http://cluster.ais.org:51080) successfully attached
+
+# the cluster at http://cluster.ais.org:51080 is now persistently attached:
+$ ais show remote
+UUID      URL                            Alias     Primary      Smap   Targets  Online
+MCBgkFqp  http://cluster.ais.org:51080   teamZ     p[primary]   v317   10       yes
+
+# list all buckets in all remote clusters
+# notice the syntax: by convention, we use `@` to prefix remote cluster UUIDs, and so
+# `ais://@` translates as "AIS cloud provider, any remote cluster"
+
+$ ais ls ais://@
+AIS Buckets (4)
+	  ais://@MCBgkFqp/imagenet
+	  ais://@MCBgkFqp/coco
+	  ais://@MCBgkFqp/imagenet-augmented
+	  ais://@MCBgkFqp/imagenet-inflated
+
+# list all buckets in the remote cluster with UUID = MCBgkFqp
+# notice again the syntax: `ais://@some-string` translates as "remote AIS cluster with alias or UUID equal some-string"
+
+$ ais ls ais://@MCBgkFqp
+AIS Buckets (4)
+	  ais://@MCBgkFqp/imagenet
+	  ais://@MCBgkFqp/coco
+	  ais://@MCBgkFqp/imagenet-augmented
+	  ais://@MCBgkFqp/imagenet-inflated
+
+# we can conveniently keep using our previously selected alias for the remote cluster -
+# the following lists selected remote bucket using the cluster's alias:
+$ ais ls ais://@teamZ/imagenet-augmented
+NAME              SIZE
+train-001.tgz     153.52KiB
+train-002.tgz     136.44KiB
+...
+
+# the same, but this time using the cluster's UUID:
+$ ais ls ais://@MCBgkFqp/imagenet-augmented
+NAME              SIZE
+train-001.tgz     153.52KiB
+train-002.tgz     136.44KiB
+...
+```
+
 ## Cloud Bucket
 
-Cloud buckets are existing buckets in the cloud storage when AIS is deployed as [fast tier](/README.md#fast-tier).
+Cloud buckets are existing buckets in the 3rd party Cloud storage when AIS is deployed as [fast tier](/README.md#fast-tier).
 
 > By default, AIS does not keep track of the cloud buckets in its configuration map. However, if users modify the properties of the cloud bucket, AIS will then keep track.
 
