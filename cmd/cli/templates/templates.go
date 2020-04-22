@@ -326,18 +326,18 @@ var (
 		"targetURL": "{{$obj.TargetURL}}\t",
 		"status":    "{{FormatObjStatus $obj}}\t",
 		"copies":    "{{$obj.Copies}}\t",
-		"iscached":  "{{FormatObjIsCached $obj}}\t",
+		"cached":    "{{FormatObjIsCached $obj}}\t",
 	}
 
 	ObjStatMap = map[string]string{
-		"provider": "{{ .Provider }}\t",
-		"iscached": "{{ .Present }}\t",
-		"size":     "{{ FormatBytesSigned .Size 2 }}\t",
-		"version":  "{{ .Version }}\t",
-		"atime":    "{{ if (eq .Atime 0) }}-{{else}}{{ FormatUnixNano .Atime }}{{end}}\t",
-		"copies":   "{{ if .NumCopies }}{{ .NumCopies }}{{else}}-{{end}}\t",
-		"checksum": "{{ if .Checksum.Value }}{{ .Checksum.Value }}{{else}}-{{end}}\t",
-		"ec":       "{{ if (eq .DataSlices 0) }}-{{else}}{{ FormatEC .DataSlices .ParitySlices .IsECCopy}}{{end}}\t",
+		"provider": "{{.Provider}}\t",
+		"cached":   "{{FormatBool .Present}}\t",
+		"size":     "{{FormatBytesSigned .Size 2}}\t",
+		"version":  "{{.Version}}\t",
+		"atime":    "{{if (eq .Atime 0)}}-{{else}}{{FormatUnixNano .Atime}}{{end}}\t",
+		"copies":   "{{if .NumCopies}}{{.NumCopies}}{{else}}-{{end}}\t",
+		"checksum": "{{if .Checksum.Value}}{{.Checksum.Value}}{{else}}-{{end}}\t",
+		"ec":       "{{if (eq .DataSlices 0)}}-{{else}}{{FormatEC .DataSlices .ParitySlices .IsECCopy}}{{end}}\t",
 	}
 
 	funcMap = template.FuncMap{
@@ -355,6 +355,7 @@ var (
 		"FormatObjIsCached":   fmtObjIsCached,
 		"FormatDaemonID":      fmtDaemonID,
 		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
+		"FormatBool":          fmtBool,
 	}
 )
 
@@ -471,10 +472,14 @@ var (
 )
 
 func fmtObjIsCached(obj *cmn.BucketEntry) string {
-	if obj.CheckExists() {
-		return "true"
+	return fmtBool(obj.CheckExists())
+}
+
+func fmtBool(t bool) string {
+	if t {
+		return "yes"
 	}
-	return "false"
+	return "no"
 }
 
 func isUnsetTime(t time.Time) bool {

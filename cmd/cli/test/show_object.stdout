@@ -1,6 +1,6 @@
 "$BUCKET_1" bucket created
 PUT "object_1.txt" into bucket "$BUCKET_1"
-CHECKSUM		 SIZE	 ATIME			 ISCACHED	 VERSION	 COPIES  EC
-^05967d5390ac53b0 11B (.*) true 1 1 -$
+CHECKSUM		 SIZE	 ATIME			 CACHED	 VERSION	 COPIES  EC
+^05967d5390ac53b0 11B (.*) yes 1 1 -$
 SIZE	 VERSION
 11B	1

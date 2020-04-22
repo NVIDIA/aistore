@@ -72,7 +72,7 @@ var XactsMeta = map[string]XactMetadata{
 //       in one response. The result list is unsorted and contains only object
 //       names: even field `Status` is filled with zero value
 type SelectMsg struct {
-	Props      string `json:"props"`       // e.g. "checksum, size"|"atime, size"|"iscached"|"bucket, size"
+	Props      string `json:"props"`       // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"
 	TimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
 	Prefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
 	PageMarker string `json:"pagemarker"`  // marker - the last object in previous page

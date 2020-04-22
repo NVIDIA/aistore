@@ -1618,7 +1618,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (all
 }
 
 // selects a random target to GET the list of objects from the cloud
-// - if iscached or atime property is requested performs extra steps:
+// - if `cached` or `atime` property is requested performs extra steps:
 //      * get list of cached files info from all targets
 //      * updates the list of objects from the cloud with cached info
 // returns:

@@ -107,7 +107,7 @@ If `PROP_LIST` is omitted default properties are shown (all except `provider` pr
 Supported properties:
 
 - `provider` - provider of the object's bucket, `ais` returned if local bucket
-- `iscached` - is the object cached on local drives (always `true` for AIS buckets)
+- `cached` - is the object cached on local drives (always `true` for AIS buckets)
 - `size` - object size
 - `version` - object version (it is empty if versioning is disabled for the bucket)
 - `atime` - object's last access time
@@ -123,8 +123,8 @@ Display all properties of object `list.txt` from bucket `texts`.
 
 ```console
 $ ais show object texts/list.txt
-CHECKSUM                SIZE    ATIME                   ISCACHED        VERSION COPIES  EC
-2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     true            1       1       2:2[encoded]
+CHECKSUM                SIZE    ATIME                   CACHED        VERSION COPIES  EC
+2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     yes           1       1       2:2[encoded]
 ```
 
 #### Show selected object properties 

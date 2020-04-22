@@ -143,7 +143,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 
 	tutils.Logf("Reading object list...\n")
 
-	// read a new object list and check that evicted objects do not have atime and iscached==false
+	// read a new object list and check that evicted objects do not have atime and cached==false
 	// version must be the same
 	reslist := testListObjects(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
@@ -155,7 +155,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		if !ok {
 			continue
 		}
-		tutils.Logf("%s/%s [%d] - iscached: [%v], atime [%v]\n", bck, m.Name, m.Flags, m.CheckExists, m.Atime)
+		tutils.Logf("%s/%s [%d] - cached: [%v], atime [%v]\n", bck, m.Name, m.Flags, m.CheckExists, m.Atime)
 
 		// invalid object: rebalance leftover or uploaded directly to target
 		if !m.IsStatusOK() {
@@ -360,7 +360,7 @@ func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
 		return
 	}
 
-	// PUT objects must have all properties set: atime, iscached, version
+	// PUT objects must have all properties set: atime, cached, version
 	for _, m := range reslist.Entries {
 		if _, ok := fileslist[m.Name]; !ok {
 			continue
@@ -400,7 +400,7 @@ func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
 		// try to evict some files and check if they are gone
 		propsEvict(t, proxyURL, bck, newVersions, msg, versionEnabled)
 
-		// read objects to put them to the cache. After that all objects must have iscached=true
+		// read objects to put them to the cache. After that all objects must have cached=true
 		propsRecacheObjects(t, proxyURL, bck, newVersions, msg, versionEnabled)
 	}
 
