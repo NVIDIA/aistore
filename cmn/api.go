@@ -110,12 +110,13 @@ type XactionMsg struct {
 	Finished bool   `json:"finished"`
 }
 
-// GetPropsAll is a list of all GetProps* options
-var GetPropsAll = []string{
-	GetPropsChecksum, GetPropsSize, GetPropsAtime,
-	GetPropsIsCached, GetPropsVersion,
-	GetTargetURL, GetPropsStatus, GetPropsCopies,
+// GetPropsDefault is a list of default (most relevant) GetProps* options
+var GetPropsDefault = []string{
+	GetPropsChecksum, GetPropsSize, GetPropsAtime, GetPropsVersion,
 }
+
+// GetPropsAll is a list of all GetProps* options
+var GetPropsAll = append(GetPropsDefault, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC)
 
 // NeedLocalData returns true if ListObjects for a cloud bucket needs
 // to return object properties that can be retrieved only from local caches
@@ -123,7 +124,7 @@ func (msg *SelectMsg) NeedLocalData() bool {
 	return strings.Contains(msg.Props, GetPropsAtime) ||
 		strings.Contains(msg.Props, GetPropsStatus) ||
 		strings.Contains(msg.Props, GetPropsCopies) ||
-		strings.Contains(msg.Props, GetPropsIsCached)
+		strings.Contains(msg.Props, GetPropsCached)
 }
 
 // WantProp returns true if msg request requires to return propName property
@@ -159,7 +160,7 @@ type BucketEntry struct {
 	Checksum  string `json:"checksum,omitempty"`    // checksum
 	Atime     string `json:"atime,omitempty"`       // formatted as per SelectMsg.TimeFormat
 	Version   string `json:"version,omitempty"`     // version/generation ID. In GCP it is int64, in AWS it is a string
-	TargetURL string `json:"targetURL,omitempty"`   // URL of target which has the entry
+	TargetURL string `json:"target_url,omitempty"`  // URL of target which has the entry
 	Copies    int16  `json:"copies,omitempty"`      // ## copies (non-replicated = 1)
 	Flags     uint16 `json:"flags,omitempty"`       // object flags, like CheckExists, IsMoved etc
 }

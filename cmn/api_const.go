@@ -231,11 +231,12 @@ const (
 	GetPropsChecksum = "checksum"
 	GetPropsSize     = "size"
 	GetPropsAtime    = "atime"
-	GetPropsIsCached = "cached"
+	GetPropsCached   = "cached"
 	GetPropsVersion  = "version"
-	GetTargetURL     = "targetURL"
+	GetTargetURL     = "target_url"
 	GetPropsStatus   = "status"
 	GetPropsCopies   = "copies"
+	GetPropsEC       = "ec"
 )
 
 // BucketEntry.Status

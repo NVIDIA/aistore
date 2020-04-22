@@ -517,10 +517,8 @@ func calcPutRefresh(c *cli.Context) time.Duration {
 
 func buildObjStatTemplate(props string, showHeaders bool) string {
 	var (
-		headSb strings.Builder
-		bodySb strings.Builder
-
-		propsList = makeList(props, ",")
+		headSb, bodySb strings.Builder
+		propsList      = makeList(props, ",")
 	)
 	for _, field := range propsList {
 		if _, ok := templates.ObjStatMap[field]; !ok {
@@ -530,7 +528,7 @@ func buildObjStatTemplate(props string, showHeaders bool) string {
 			continue
 		}
 		headSb.WriteString(strings.ToUpper(field) + "\t ")
-		bodySb.WriteString(templates.ObjStatMap[field])
+		bodySb.WriteString(templates.ObjStatMap[field] + "\t ")
 	}
 	headSb.WriteString("\n")
 	bodySb.WriteString("\n")
@@ -538,21 +536,19 @@ func buildObjStatTemplate(props string, showHeaders bool) string {
 	if showHeaders {
 		return headSb.String() + bodySb.String()
 	}
-
 	return bodySb.String()
 }
 
 // Displays object properties
 func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
-	props, propsFlag := "local,", ""
+	props, propsFlag := "", ""
 	if flagIsSet(c, objPropsFlag) {
 		propsFlag = parseStrFlag(c, objPropsFlag)
 	}
-	if propsFlag == "all" || propsFlag == "" {
-		// do not include `ec` into `GetPropsAll` - `GetPropsAll` is used
-		// by object list operation, and getting EC info is heavy operation.
-		// So, it is local to `show object` command for now.
-		props += strings.Join(cmn.GetPropsAll, ",") + ",ec"
+	if propsFlag == "" {
+		props += strings.Join(cmn.GetPropsDefault, ",")
+	} else if propsFlag == "all" {
+		props += strings.Join(cmn.GetPropsAll, ",")
 	} else {
 		props += parseStrFlag(c, objPropsFlag)
 	}
@@ -562,7 +558,6 @@ func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
 	if err != nil {
 		return handleObjHeadError(err, bck, object)
 	}
-
 	return templates.DisplayOutput(objProps, c.App.Writer, tmpl, flagIsSet(c, jsonFlag))
 }
 

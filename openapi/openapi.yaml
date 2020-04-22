@@ -1268,7 +1268,7 @@ components:
           type: string
         version:
           type: string
-        targetURL:
+        target_url:
           type: string
         flags:
           type: integer
@@ -1285,7 +1285,7 @@ components:
             $ref: '#/components/schemas/ObjectProperties'
     ObjectPropertyTypes:
       type: string
-      enum: [size, checksum, atime, bucket, version, copies, flags, targetURL]
+      enum: [size, checksum, atime, bucket, version, copies, flags, target_url]
     TimeFormat:
       type: string
       enum: [ANSIC, UnixDate, RubyDate, RFC822, RFC822Z, RFC850, RFC1123, RFC1123Z, RFC3339, RFC3339Nano, Kitchen, Stamp, StampMilli, StampMicro, StampNano]

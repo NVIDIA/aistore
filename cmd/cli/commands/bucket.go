@@ -510,41 +510,39 @@ func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders b
 	}
 }
 
-func buildOutputTemplate(props string, showHeaders bool) (string, error) {
+func buildOutputTemplate(props string, showHeaders bool) string {
 	var (
 		headSb strings.Builder
 		bodySb strings.Builder
 
 		propsList = makeList(props, ",")
 	)
-	bodySb.WriteString("{{range $obj := .}}")
 
+	bodySb.WriteString("{{range $obj := .}}")
 	for _, field := range propsList {
 		if _, ok := templates.ObjectPropsMap[field]; !ok {
-			return "", fmt.Errorf("%q is not a valid property", field)
+			continue
 		}
-		headSb.WriteString(strings.ToUpper(field) + "\t ")
-		bodySb.WriteString(templates.ObjectPropsMap[field])
+		columnName := strings.ReplaceAll(strings.ToUpper(field), "_", " ")
+		headSb.WriteString(columnName + "\t ")
+		bodySb.WriteString(templates.ObjectPropsMap[field] + "\t ")
 	}
 	headSb.WriteString("\n")
 	bodySb.WriteString("\n{{end}}")
 
 	if showHeaders {
-		return headSb.String() + bodySb.String(), nil
+		return headSb.String() + bodySb.String()
 	}
 
-	return bodySb.String(), nil
+	return bodySb.String()
 }
 
 func printObjectProps(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string, showUnmatched, showHeaders bool) error {
-	outputTemplate, err := buildOutputTemplate(props, showHeaders)
-	if err != nil {
-		return err
-	}
-
-	matchingEntries, rest := objectFilter.filter(entries)
-
-	err = templates.DisplayOutput(matchingEntries, c.App.Writer, outputTemplate)
+	var (
+		outputTemplate        = buildOutputTemplate(props, showHeaders)
+		matchingEntries, rest = objectFilter.filter(entries)
+	)
+	err := templates.DisplayOutput(matchingEntries, c.App.Writer, outputTemplate)
 	if err != nil {
 		return err
 	}
@@ -553,7 +551,6 @@ func printObjectProps(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *
 		outputTemplate = "Unmatched objects:\n" + outputTemplate
 		err = templates.DisplayOutput(rest, c.App.Writer, outputTemplate)
 	}
-
 	return err
 }
 

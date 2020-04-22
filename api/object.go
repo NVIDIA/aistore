@@ -92,15 +92,16 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	}
 
 	objProps := &cmn.ObjectProps{}
-	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (error, bool) {
-		if ecStr := resp.Header.Get(cmn.HeaderObjECMeta); ecStr != "" {
-			if md, err := ec.StringToMeta(ecStr); err == nil {
-				objProps.DataSlices = md.Data
-				objProps.ParitySlices = md.Parity
-				objProps.IsECCopy = md.IsCopy
-			}
-			return nil, false
+	if ecStr := resp.Header.Get(cmn.HeaderObjECMeta); ecStr != "" {
+		md, err := ec.StringToMeta(ecStr)
+		if err != nil {
+			return nil, err
 		}
+		objProps.DataSlices = md.Data
+		objProps.ParitySlices = md.Parity
+		objProps.IsECCopy = md.IsCopy
+	}
+	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (error, bool) {
 		err := field.SetValue(resp.Header.Get(tag), true /*force*/)
 		return err, false
 	})

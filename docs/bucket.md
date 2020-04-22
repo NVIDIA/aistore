@@ -189,7 +189,7 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 
 | Property/Option | Description | Value |
 | --- | --- | --- |
-| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","version","targetURL","copies","status". <sup id="a6">[6](#ft6)</sup> |
+| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","version","target_url","copies","status". <sup id="a6">[6](#ft6)</sup> |
 | time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
 | prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
 | pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |

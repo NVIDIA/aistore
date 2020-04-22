@@ -2,6 +2,7 @@ ais gen-shards --bucket $BUCKET_1 --ext .tar --template="tmp/shard-{0..4}" --fco
 ais ls $BUCKET_1
 ais ls $BUCKET_1/
 ais ls $BUCKET_1
+ais ls $BUCKET_1 --props=all
 ais ls ais://$BUCKET_1/
 ais ls cloud://$BUCKET_1/ // FAIL "bucket with name "$BUCKET_1" does not exists"
 ais ls gs:// // IGNORE

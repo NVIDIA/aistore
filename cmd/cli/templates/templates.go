@@ -316,28 +316,26 @@ const (
 var (
 	// ObjectPropsMap matches BucketEntry field
 	ObjectPropsMap = map[string]string{
-		"name":      "{{$obj.Name}}\t",
-		"size":      "{{FormatBytesSigned $obj.Size 2}}\t",
-		"checksum":  "{{$obj.Checksum}}\t",
-		"type":      "{{$obj.Type}}\t",
-		"atime":     "{{$obj.Atime}}\t",
-		"bucket":    "{{$obj.Bucket}}\t",
-		"version":   "{{$obj.Version}}\t",
-		"targetURL": "{{$obj.TargetURL}}\t",
-		"status":    "{{FormatObjStatus $obj}}\t",
-		"copies":    "{{$obj.Copies}}\t",
-		"cached":    "{{FormatObjIsCached $obj}}\t",
+		"name":       "{{$obj.Name}}",
+		"size":       "{{FormatBytesSigned $obj.Size 2}}",
+		"checksum":   "{{$obj.Checksum}}",
+		"type":       "{{$obj.Type}}",
+		"atime":      "{{$obj.Atime}}",
+		"version":    "{{$obj.Version}}",
+		"target_url": "{{$obj.TargetURL}}",
+		"status":     "{{FormatObjStatus $obj}}",
+		"copies":     "{{$obj.Copies}}",
+		"cached":     "{{FormatObjIsCached $obj}}",
 	}
 
 	ObjStatMap = map[string]string{
-		"provider": "{{.Provider}}\t",
-		"cached":   "{{FormatBool .Present}}\t",
-		"size":     "{{FormatBytesSigned .Size 2}}\t",
-		"version":  "{{.Version}}\t",
-		"atime":    "{{if (eq .Atime 0)}}-{{else}}{{FormatUnixNano .Atime}}{{end}}\t",
-		"copies":   "{{if .NumCopies}}{{.NumCopies}}{{else}}-{{end}}\t",
-		"checksum": "{{if .Checksum.Value}}{{.Checksum.Value}}{{else}}-{{end}}\t",
-		"ec":       "{{if (eq .DataSlices 0)}}-{{else}}{{FormatEC .DataSlices .ParitySlices .IsECCopy}}{{end}}\t",
+		"cached":   "{{FormatBool .Present}}",
+		"size":     "{{FormatBytesSigned .Size 2}}",
+		"version":  "{{.Version}}",
+		"atime":    "{{if (eq .Atime 0)}}-{{else}}{{FormatUnixNano .Atime}}{{end}}",
+		"copies":   "{{if .NumCopies}}{{.NumCopies}}{{else}}-{{end}}",
+		"checksum": "{{if .Checksum.Value}}{{.Checksum.Value}}{{else}}-{{end}}",
+		"ec":       "{{if (eq .DataSlices 0)}}-{{else}}{{FormatEC .DataSlices .ParitySlices .IsECCopy}}{{end}}",
 	}
 
 	funcMap = template.FuncMap{
@@ -438,9 +436,9 @@ func fmtXactStatus(tStatus *stats.TargetStatus) string {
 
 func fmtObjStatus(obj *cmn.BucketEntry) string {
 	if obj.IsStatusOK() {
-		return ""
+		return "ok"
 	}
-	return "Moved"
+	return "moved"
 }
 
 var (
