@@ -556,7 +556,6 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 	cmn.Assert(req.md != nil)
 	var (
 		ctFQN    string
-		size     int64
 		bdir     string
 		lom      *cluster.LOM
 		bck      = cluster.NewBckEmbed(hdr.Bck)
@@ -584,7 +583,6 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 	}
 	if req.md.SliceID != 0 {
 		ctFQN = mpath.MakePathFQN(hdr.Bck, ec.SliceType, hdr.ObjName)
-		size = -1
 	} else {
 		lom = &cluster.LOM{T: reb.t, ObjName: hdr.ObjName}
 		if err := lom.Init(hdr.Bck); err != nil {
@@ -592,7 +590,6 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 		}
 		ctFQN = lom.FQN
 		lom.SetSize(hdr.ObjAttrs.Size)
-		size = hdr.ObjAttrs.Size
 		if hdr.ObjAttrs.Version != "" {
 			lom.SetVersion(hdr.ObjAttrs.Version)
 		}
@@ -610,7 +607,8 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 
 	buffer, slab := reb.t.GetMMSA().Alloc()
 	metaFQN := mpath.MakePathFQN(hdr.Bck, ec.MetaType, hdr.ObjName)
-	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(req.md.Marshal()), buffer, false, size)
+	metaBytes := req.md.Marshal()
+	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBytes), buffer, false, int64(len(metaBytes)))
 	if err != nil {
 		slab.Free(buffer)
 		return err
