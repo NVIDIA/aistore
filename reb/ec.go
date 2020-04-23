@@ -2040,8 +2040,8 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 			ObjName: obj.objName,
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       obj.objSize,
-				CksumType:  s.meta.ObjCksum,
-				CksumValue: s.meta.CksumType,
+				CksumType:  s.meta.CksumType,
+				CksumValue: s.meta.ObjCksum,
 				Version:    s.meta.ObjVersion,
 			},
 		}
