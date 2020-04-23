@@ -264,7 +264,6 @@ func parseSource(rawURL string) (link string, err error) {
 		RawQuery: u.RawQuery,
 		Fragment: u.Fragment,
 	}
-
 	return url.QueryUnescape(normalizedURL.String())
 }
 

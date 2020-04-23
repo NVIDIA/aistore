@@ -120,9 +120,7 @@ const (
 )
 
 var (
-	httpClient = &http.Client{
-		Timeout: cmn.GCO.Get().Client.TimeoutLong,
-	}
+	httpClient = &http.Client{}
 )
 
 // public types
@@ -412,7 +410,7 @@ func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
 			info := TaskDlInfo{
 				Name:       task.obj.ObjName,
 				Downloaded: task.currentSize.Load(),
-				Total:      task.totalSize,
+				Total:      task.totalSize.Load(),
 
 				StartTime: task.started,
 				EndTime:   task.ended,

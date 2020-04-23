@@ -225,7 +225,7 @@ func (b *downloaderPB) trackNewFile(state downloader.TaskDlInfo) {
 }
 
 func (b *downloaderPB) updateFileBar(newState downloader.TaskDlInfo, state *fileDownloadingState) {
-	if state.total == 0 && newState.Total != 0 {
+	if (state.total == 0 && newState.Total != 0) || (state.total != newState.Total) {
 		state.total = newState.Total
 		state.bar.SetTotal(newState.Total, false)
 	}
@@ -239,6 +239,9 @@ func (b *downloaderPB) updateFileBar(newState downloader.TaskDlInfo, state *file
 			state.bar.SetTotal(state.downloaded+unknownTotalIncrement, false)
 		}
 		state.bar.IncrBy(int(progress))
+	} else {
+		// If progress was reverted due error and retry we must update progress
+		state.bar.SetCurrent(state.downloaded)
 	}
 }
 

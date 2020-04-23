@@ -23,7 +23,7 @@ func IsGoogleStorageURL(u *url.URL) bool {
 }
 
 func IsGoogleAPIURL(u *url.URL) bool {
-	return u.Host == gsAPIURL && strings.HasPrefix(u.Path, gsAPIPathPrefix)
+	return u.Host == gsAPIURL && strings.Contains(u.Path, gsAPIPathPrefix)
 }
 
 func IsS3URL(link string) bool {
