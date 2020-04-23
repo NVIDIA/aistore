@@ -656,7 +656,7 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 		lom.Unlock(false)
 		return
 	}
-	if cksum, err = lom.CksumComputeIfMissing(); err != nil {
+	if cksum, err = lom.ComputeCksumIfMissing(); err != nil {
 		return
 	}
 	cksumType, cksumValue = cksum.Get()

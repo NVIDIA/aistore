@@ -327,7 +327,7 @@ var _ = Describe("LOM", func() {
 					noneFQN := mis[0].MakePathFQN(localBckA, fs.ObjectType, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
-					cksum, err := lom.CksumComputeIfMissing()
+					cksum, err := lom.ComputeCksumIfMissing()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cksum).To(BeNil())
 				})
@@ -338,7 +338,7 @@ var _ = Describe("LOM", func() {
 
 					lom := NewBasicLom(noneFQN, tMock)
 					lom.SetCksum(dummyCksm)
-					cksum, err := lom.CksumComputeIfMissing()
+					cksum, err := lom.ComputeCksumIfMissing()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cksum).To(BeEquivalentTo(dummyCksm))
 				})
@@ -347,7 +347,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
 					expectedChecksum := getTestFileHash(localFQN)
 
-					cksum, err := lom.CksumComputeIfMissing()
+					cksum, err := lom.ComputeCksumIfMissing()
 					Expect(err).NotTo(HaveOccurred())
 					cksumType, cksumValue := cksum.Get()
 					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumXXHash))

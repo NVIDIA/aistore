@@ -103,7 +103,7 @@ var _ = Describe("Mirror", func() {
 			// Check reloaded copyLOM
 			copyLOM := newBasicLom(expectedCopyFQN, tMock)
 			Expect(copyLOM.Load(false)).ShouldNot(HaveOccurred())
-			copyCksum, err := copyLOM.CksumComputeIfMissing()
+			copyCksum, err := copyLOM.ComputeCksumIfMissing()
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(copyCksum.Value()).To(Equal(newLOM.Cksum().Value()))
 			Expect(copyLOM.HrwFQN).To(BeEquivalentTo(lom.HrwFQN))

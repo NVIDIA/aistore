@@ -1,12 +1,14 @@
+// Package downloader implements functionality to download resources into AIS cluster from external source.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
-package tests
+package downloader
 
 import (
 	"testing"
 
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func TestNormalizeObjName(t *testing.T) {
@@ -24,7 +26,7 @@ func TestNormalizeObjName(t *testing.T) {
 	}
 
 	for _, test := range normalizeObjTests {
-		actual, err := downloader.NormalizeObjName(test.objName)
+		actual, err := NormalizeObjName(test.objName)
 
 		if err != nil {
 			t.Errorf("Unexpected error while normalizing %s: %v", test.objName, err)
@@ -34,4 +36,19 @@ func TestNormalizeObjName(t *testing.T) {
 			t.Errorf("normalizeObjName(%s) expected: %s, got: %s", test.objName, test.expected, actual)
 		}
 	}
+}
+
+func TestCompareObjectNotEqualSizes(t *testing.T) {
+	var (
+		dlObj = DlObj{
+			Link: "https://storage.googleapis.com/lpr-vision/imagenet256/imagenet256_train-000105.tgz",
+		}
+		lom = &cluster.LOM{}
+	)
+
+	lom.SetSize(10)
+
+	equal, err := compareObjects(dlObj, lom)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, !equal, "expected the objects to be equal")
 }

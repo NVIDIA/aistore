@@ -1025,13 +1025,18 @@ func WriteWithHash(w io.Writer, r io.Reader, buf []byte, hashType string) (int64
 		h = xxhash.New64()
 	case ChecksumMD5:
 		h = md5.New()
+	case ChecksumCRC32C:
+		h = NewCRC32C()
 	case ChecksumNone:
 		n, err := io.CopyBuffer(w, r, buf)
 		return n, "", err
 	default:
 		return 0, "", fmt.Errorf("unsupported hash type used: %q", hashType)
 	}
-	mw := io.MultiWriter(h, w)
+	var mw io.Writer = h
+	if w != ioutil.Discard {
+		mw = io.MultiWriter(h, w)
+	}
 	total, err := io.CopyBuffer(mw, r, buf)
 	return total, HashToStr(h), err
 }
@@ -1053,15 +1058,8 @@ func ReceiveAndChecksum(w io.Writer, r io.Reader, buf []byte, hashes ...hash.Has
 }
 
 func ComputeXXHash(reader io.Reader, buf []byte) (cksumValue string, err error) {
-	var (
-		xx hash.Hash = xxhash.New64()
-	)
-
-	_, err = io.CopyBuffer(xx.(io.Writer), reader, buf)
-	if err != nil {
-		return "", fmt.Errorf("failed to copy buffer, err: %v", err)
-	}
-	return HashToStr(xx), nil
+	_, cksumValue, err = WriteWithHash(ioutil.Discard, reader, buf, ChecksumXXHash)
+	return
 }
 
 func CheckI64Range(v, low, high int64) (int64, error) {

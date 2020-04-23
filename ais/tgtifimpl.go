@@ -296,7 +296,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		}
 		written = fi.Size()
 		clone := lom.Clone(srcFQN)
-		cksum, err := clone.CksumComputeIfMissing()
+		cksum, err := clone.ComputeCksumIfMissing()
 		if err != nil {
 			return err
 		}

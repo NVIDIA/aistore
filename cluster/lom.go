@@ -6,6 +6,7 @@ package cluster
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"runtime"
 	"strconv"
@@ -513,8 +514,8 @@ func (lom *LOM) ValidateMetaChecksum() error {
 // Use lom.ValidateMetaChecksum() to check lom's checksum vs on-disk metadata.
 func (lom *LOM) ValidateContentChecksum() (err error) {
 	var (
-		storedCksum, computedCksumValue string
-		cksumType                       = lom.CksumConf().Type
+		storedCksum string
+		cksumType   = lom.CksumConf().Type
 	)
 	if cksumType == cmn.ChecksumNone {
 		return
@@ -525,12 +526,13 @@ func (lom *LOM) ValidateContentChecksum() (err error) {
 		_, storedCksum = lom.md.cksum.Get()
 	}
 	// compute
-	if computedCksumValue, err = lom.computeXXHash(lom.FQN, lom.md.size); err != nil {
-		return
+	computedCksum, err := lom.ComputeCksum(cksumType)
+	if err != nil {
+		return err
 	}
 	if storedCksum == "" { // store with lom meta on disk
 		oldCksm := lom.md.cksum
-		lom.md.cksum = cmn.NewCksum(cksumType, computedCksumValue)
+		lom.md.cksum = computedCksum
 		if err := lom.Persist(); err != nil {
 			lom.md.cksum = oldCksm
 			return err
@@ -538,7 +540,6 @@ func (lom *LOM) ValidateContentChecksum() (err error) {
 		lom.ReCache()
 		return
 	}
-	computedCksum := cmn.NewCksum(cksumType, computedCksumValue)
 	if cmn.EqCksum(lom.md.cksum, computedCksum) {
 		return
 	}
@@ -553,11 +554,8 @@ func (lom *LOM) ValidateContentChecksum() (err error) {
 	return
 }
 
-func (lom *LOM) CksumComputeIfMissing() (cksum *cmn.Cksum, err error) {
-	var (
-		val       string
-		cksumType = lom.CksumConf().Type
-	)
+func (lom *LOM) ComputeCksumIfMissing() (cksum *cmn.Cksum, err error) {
+	cksumType := lom.CksumConf().Type
 	if cksumType == cmn.ChecksumNone {
 		return
 	}
@@ -565,24 +563,24 @@ func (lom *LOM) CksumComputeIfMissing() (cksum *cmn.Cksum, err error) {
 		cksum = lom.md.cksum
 		return
 	}
-	val, err = lom.computeXXHash(lom.FQN, lom.md.size)
-	if err != nil {
-		return
-	}
-	cksum = cmn.NewCksum(cmn.ChecksumXXHash, val)
-	return
+	cmn.Assert(cksumType == cmn.ChecksumXXHash) // sha256 et al. not implemented yet
+	return lom.ComputeCksum(cmn.ChecksumXXHash)
 }
 
-func (lom *LOM) computeXXHash(fqn string, size int64) (cksumValue string, err error) {
-	file, err := os.Open(fqn)
+func (lom *LOM) ComputeCksum(cksumType string) (cksum *cmn.Cksum, err error) {
+	file, err := os.Open(lom.FQN)
 	if err != nil {
-		err = fmt.Errorf("%s, err: %w", fqn, err)
+		err = fmt.Errorf("%s, err: %w", lom.FQN, err)
 		return
 	}
-	buf, slab := lom.T.GetMMSA().Alloc(size)
-	cksumValue, err = cmn.ComputeXXHash(file, buf)
+	buf, slab := lom.T.GetMMSA().Alloc(lom.Size())
+	_, cksumValue, err := cmn.WriteWithHash(ioutil.Discard, file, buf, cksumType)
 	file.Close()
 	slab.Free(buf)
+	if err != nil {
+		return nil, err
+	}
+	cksum = cmn.NewCksum(cksumType, cksumValue)
 	return
 }
 

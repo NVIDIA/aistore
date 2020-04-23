@@ -196,11 +196,18 @@ func (d *dispatcher) createTasksLom(job DlJob, obj DlObj) (*cluster.LOM, error) 
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	if err == nil { // TODO -- FIXME: check version
-		if glog.V(4) {
-			glog.Infof("object %q already exists - skipping", obj.ObjName)
+	if err == nil {
+		equal, err := compareObjects(obj, lom)
+		if err != nil {
+			return nil, err
 		}
-		return nil, nil
+		if equal {
+			if glog.V(4) {
+				glog.Infof("object %q already exists and seems to match remote - skipping", obj.ObjName)
+			}
+			return nil, nil
+		}
+		glog.Warningf("object %q already exists but does not match with remote - overriding", obj.ObjName)
 	}
 
 	if lom.ParsedFQN.MpathInfo == nil {

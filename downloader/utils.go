@@ -174,3 +174,37 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 
 	return newSliceDlJob(input.ID, input.Objs, bck, payload.Timeout, payload.Description), nil
 }
+
+func headLink(link string) (*http.Response, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, link, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body.Close()
+	return resp, nil
+}
+
+func compareObjects(obj DlObj, lom *cluster.LOM) (equal bool, err error) {
+	resp, err := headLink(obj.Link)
+	if err != nil {
+		return false, err
+	}
+	if resp.ContentLength != 0 && resp.ContentLength != lom.Size() {
+		return false, nil
+	}
+	cksum := getCksum(obj.Link, resp)
+	if cksum != nil {
+		computedCksum, err := lom.ComputeCksum(cksum.Type())
+		if err != nil || !cmn.EqCksum(cksum, computedCksum) {
+			return false, err
+		}
+	}
+	// Cannot prove that the objects are different so assume they are equal.
+	return true, nil
+}

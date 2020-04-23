@@ -23,6 +23,7 @@ const (
 	retryCnt          = 10               // number of retries to external resource
 	defaultReqTimeout = 30 * time.Minute // default request timeout when downloading web content
 	reqTimeoutFactor  = 1.2              // newTimeout = prevTimeout * reqTimeoutFactor
+	headReqTimeout    = 5 * time.Second  // timeout for HEAD request to get the Content-Length
 	internalErrorMsg  = "internal server error"
 )
 
