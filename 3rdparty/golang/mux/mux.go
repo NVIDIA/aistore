@@ -1,3 +1,9 @@
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// This is a minor fork of the ServeMux portion of the https://golang.org/src/net/http/server.go
+
 package mux
 
 import (
@@ -5,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -47,7 +54,8 @@ import (
 type ServeMux struct {
 	mu    sync.RWMutex
 	m     map[string]muxEntry
-	hosts bool // whether any patterns contain hostnames
+	es    []muxEntry // slice of entries sorted from longest to shortest.
+	hosts bool       // whether any patterns contain hostnames
 }
 
 type muxEntry struct {
@@ -62,19 +70,6 @@ func NewServeMux() *ServeMux { return new(ServeMux) }
 var DefaultServeMux = &defaultServeMux
 
 var defaultServeMux ServeMux
-
-// Does path match pattern?
-func pathMatch(pattern, path string) bool {
-	if pattern == "" {
-		// should not happen
-		return false
-	}
-	n := len(pattern)
-	if pattern[n-1] != '/' {
-		return pattern == path
-	}
-	return len(path) >= n && path[0:n] == pattern
-}
 
 // cleanPath returns the canonical path for p, eliminating . and .. elements.
 func cleanPath(p string) string {
@@ -120,19 +115,14 @@ func (mux *ServeMux) match(path string) (h http.Handler, pattern string) {
 		return v.h, v.pattern
 	}
 
-	// Check for longest valid match.
-	var n = 0
-	for k, v := range mux.m {
-		if !pathMatch(k, path) {
-			continue
-		}
-		if h == nil || len(k) > n {
-			n = len(k)
-			h = v.h
-			pattern = v.pattern
+	// Check for longest valid match.  mux.es contains all patterns
+	// that end in / sorted from longest to shortest.
+	for _, e := range mux.es {
+		if strings.HasPrefix(path, e.pattern) {
+			return e.h, e.pattern
 		}
 	}
-	return
+	return nil, ""
 }
 
 // redirectToPathSlash determines if the given path needs appending "/" to it.
@@ -219,15 +209,13 @@ func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
 		_, pattern = mux.handler(host, path)
 		url := *r.URL
 		url.Path = path
-		// Return HTTP status 308 instead of 301 if clean path does not match
-		// the original URL path.
-		// Some clients(including Go HTTP.Client) resend POST, DELETE, and PUT
-		// requests as GET ones when a server responds with 301 or 302 status.
-		// As it is described in (sections 10.3.2 and 10.3.3):
-		// https://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html
-		// Returning 307 and 308 statuses makes clients to use the original
-		// HTTP request method without modification
-		return http.RedirectHandler(url.String(), http.StatusPermanentRedirect), pattern
+		// Some clients resend POST as GET when a server responds with 301 or 302.
+		// RFC 7238 defines 308 (Permanent Redirect) status code
+		// specifically _not_ to allow the request method to be changed from POST
+		if r.Method == http.MethodPost {
+			return http.RedirectHandler(url.String(), http.StatusPermanentRedirect), pattern
+		}
+		return http.RedirectHandler(url.String(), http.StatusMovedPermanently), pattern
 	}
 
 	return mux.handler(host, r.URL.Path)
@@ -285,11 +273,30 @@ func (mux *ServeMux) Handle(pattern string, handler http.Handler) {
 	if mux.m == nil {
 		mux.m = make(map[string]muxEntry)
 	}
-	mux.m[pattern] = muxEntry{h: handler, pattern: pattern}
+	e := muxEntry{h: handler, pattern: pattern}
+	mux.m[pattern] = e
+	if pattern[len(pattern)-1] == '/' {
+		mux.es = appendSorted(mux.es, e)
+	}
 
 	if pattern[0] != '/' {
 		mux.hosts = true
 	}
+}
+
+func appendSorted(es []muxEntry, e muxEntry) []muxEntry {
+	n := len(es)
+	i := sort.Search(n, func(i int) bool {
+		return len(es[i].pattern) < len(e.pattern)
+	})
+	if i == n {
+		return append(es, e)
+	}
+	// we now know that i points at where we want to insert
+	es = append(es, muxEntry{}) // try to grow the slice in place, any entry works.
+	copy(es[i+1:], es[i:])      // Move shorter entries down
+	es[i] = e
+	return es
 }
 
 // HandleFunc registers the handler function for the given pattern.
@@ -300,7 +307,13 @@ func (mux *ServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter
 	mux.Handle(pattern, http.HandlerFunc(handler))
 }
 
-// HandleFunc registers the handler function for the given pattern in the DefaultServeMux.
+// Handle registers the handler for the given pattern
+// in the DefaultServeMux.
+// The documentation for ServeMux explains how patterns are matched.
+func Handle(pattern string, handler http.Handler) { DefaultServeMux.Handle(pattern, handler) }
+
+// HandleFunc registers the handler function for the given pattern
+// in the DefaultServeMux.
 // The documentation for ServeMux explains how patterns are matched.
 func HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	DefaultServeMux.HandleFunc(pattern, handler)
