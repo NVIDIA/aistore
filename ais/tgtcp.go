@@ -1102,20 +1102,16 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		query    = r.URL.Query()
 	)
 
+	// external (i.e. not intra-cluster) call
 	if callerID == "" && caller == "" {
-		// External call - eg. by user to check if target is alive or by kubernetes service.
-		//
-		// TODO: we most probably need to split the external API call and
-		// internal one. Same goes for proxy - in proxy we also send some stats
-		// which are most probably not relevant to the user as it only wants
-		// to get 200 in case everything is fine.
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: external health-ping from %s", t.si, r.RemoteAddr)
 		}
 		if !t.clusterStarted.Load() {
-			// kubernetes requires >=400 status code to indicate not-ready state
-			// target will be in ready state when it has joined the cluster and cluster has started
-			w.WriteHeader(http.StatusBadRequest)
+			// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
+			// see also:
+			// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
+			w.WriteHeader(http.StatusServiceUnavailable)
 		}
 		return
 	} else if callerID == "" || caller == "" {

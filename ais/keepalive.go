@@ -23,6 +23,8 @@ const (
 	kaStopMsg       = "stop"
 	kaRegisterMsg   = "register"
 	kaUnregisterMsg = "unregister"
+
+	kaNumRetries = 3
 )
 
 var (
@@ -337,11 +339,13 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 				return true, false
 			}
 			i++
-			if i == 3 {
+			if i == kaNumRetries {
 				glog.Warningf("keepalive failed after %d attempts, removing %s from Smap", i, si)
 				return false, false
 			}
-			if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
+			if cmn.IsErrConnectionRefused(res.err) ||
+				res.status == http.StatusRequestTimeout ||
+				res.status == http.StatusServiceUnavailable {
 				continue
 			}
 			glog.Warningf("keepalive: unexpected status %d, err: %v", res.status, res.err)
