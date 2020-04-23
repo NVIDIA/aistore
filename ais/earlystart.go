@@ -141,9 +141,18 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) error {
 		return err
 	}
 
+	// `primaryURL` may not be the real primary proxy but expected to be
+	// primary - it might have changed in the meantime. Therefore we must
+	// get smap from the current primary proxy to be sure we are in it.
+	smap := p.owner.smap.get()
+	cmn.Assert(smap.isValid()) // at this point the smap should be already be valid
+	if err := retrievePrimarySmap(smap.ProxySI.URL(cmn.NetworkIntraControl)); err != nil {
+		return err
+	}
+
 	p.owner.smap.Lock()
 	defer p.owner.smap.Unlock()
-	smap := p.owner.smap.get()
+	smap = p.owner.smap.get()
 	if !smap.isPresent(p.si) {
 		return fmt.Errorf("%s failed to register self - not present in the %s", p.si, smap.pp())
 	}
