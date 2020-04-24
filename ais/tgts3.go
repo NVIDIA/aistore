@@ -259,7 +259,8 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 	var (
-		err error
+		err            error
+		offset, length int64
 	)
 	if err = bck.AllowPUT(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -277,17 +278,36 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		}
 		return
 	}
+	if err = lom.Load(true); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
 
+	val := r.Header.Get(s3compat.HeaderRange)
+	if val != "" {
+		offset, length, err = s3compat.ParseS3Range(val, lom.Size())
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error(), http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("S3 HEADER Range: %s [from %d for %d]", val, offset, length)
+	}
 	goi := &getObjInfo{
 		started: started,
 		t:       t,
 		lom:     lom,
 		w:       w,
 		ctx:     t.contextWithAuth(r.Header),
-		offset:  0, //TODO: rangeOff,
-		length:  0, // TODO: rangeLen,
+		offset:  offset,
+		length:  length,
 	}
-	s3compat.SetHeaderFromLOM(w.Header(), lom)
+	if val == "" {
+		s3compat.SetHeaderFromLOM(w.Header(), lom)
+	} else {
+		s3compat.SetHeaderRange(w.Header(), offset, length, lom)
+	}
 	if err, errCode := goi.getObject(); err != nil {
 		if cmn.IsErrConnectionReset(err) {
 			glog.Errorf("GET %s: %v", lom, err)

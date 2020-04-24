@@ -1,0 +1,14 @@
+printf "0123456789" > $OBJECT.txt
+aws --endpoint-url http://localhost:8080/s3 s3 mb s3://$BUCKET // IGNORE
+aws --endpoint-url http://localhost:8080/s3 s3 cp $OBJECT.txt s3://$BUCKET$OBJECT // IGNORE
+aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket $BUCKET --key $OBJECT --range bytes=1-5 /tmp/objpart // IGNORE
+cat /tmp/objpart
+aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket $BUCKET --key $OBJECT --range bytes=4- /tmp/objpart // IGNORE
+cat /tmp/objpart
+aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket $BUCKET --key $OBJECT --range bytes=6-15 /tmp/objpart // IGNORE
+cat /tmp/objpart
+aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket $BUCKET --key $OBJECT --range bytes=-7 /tmp/objpart // IGNORE
+cat /tmp/objpart
+aws --endpoint-url http://localhost:8080/s3 s3 rb s3://$BUCKET // IGNORE
+rm $OBJECT.txt // IGNORE
+rm /tmp/objpart // IGNORE

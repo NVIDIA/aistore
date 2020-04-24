@@ -1,10 +1,10 @@
 echo "0123456789" > $OBJECT.txt
 aws --endpoint-url http://localhost:8080/s3 s3 mb s3://$BUCKET
-aws --endpoint-url http://localhost:8080/s3 s3 cp $OBJECT.txt s3://$BUCKET/$OBJECT // IGNORE
+aws --endpoint-url http://localhost:8080/s3 s3 cp $OBJECT.txt s3://$BUCKET$OBJECT // IGNORE
 aws --endpoint-url http://localhost:8080/s3 s3 ls s3://$BUCKET | wc -l
-aws --endpoint-url http://localhost:8080/s3 s3 cp s3://$BUCKET/$OBJECT $OBJECT_copy.txt  // IGNORE
+aws --endpoint-url http://localhost:8080/s3 s3 cp s3://$BUCKET$OBJECT $OBJECT_copy.txt  // IGNORE
 cat $OBJECT_copy.txt
-aws --endpoint-url http://localhost:8080/s3 s3 rm s3://$BUCKET/$OBJECT  // IGNORE
+aws --endpoint-url http://localhost:8080/s3 s3 rm s3://$BUCKET$OBJECT  // IGNORE
 aws --endpoint-url http://localhost:8080/s3 s3 rb s3://$BUCKET
 rm $OBJECT.txt // IGNORE
 rm $OBJECT_copy.txt // IGNORE

@@ -6,6 +6,7 @@ package s3compat
 
 import (
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -104,6 +105,15 @@ func SetHeaderFromLOM(header http.Header, lom *cluster.LOM) {
 	header.Set(headerVersion, lom.Version())
 	header.Set(headerSize, strconv.FormatInt(lom.Size(), 10))
 	header.Set(headerAtime, lom.Atime().UTC().Format(time.RFC3339))
+	header.Set(headerContentType, getContentType)
+}
+
+func SetHeaderRange(header http.Header, offset, length int64, lom *cluster.LOM) {
+	SetHeaderFromLOM(header, lom)
+	header.Set(headerSize, strconv.FormatInt(length, 10))
+	header.Set(headerAcceptRanges, acceptRanges)
+	rng := fmt.Sprintf("bytes %d-%d/%d", offset, offset+length, lom.Size())
+	header.Set(headerContentRange, rng)
 }
 
 func (r *CopyObjectResult) MustMarshal() []byte {
