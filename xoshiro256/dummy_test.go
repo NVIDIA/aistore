@@ -1,3 +1,5 @@
+// Package xoshiro256 implements the xoshiro256** RNG
+// no-copyright
 package xoshiro256
 
 import "testing"

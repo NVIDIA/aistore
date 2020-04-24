@@ -1,3 +1,7 @@
+// Package main
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ */
 package main
 
 import (

@@ -1,3 +1,4 @@
+// Package soaktest provides tools to perform soak tests on AIS cluster
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */

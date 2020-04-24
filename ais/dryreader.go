@@ -1,8 +1,8 @@
+// Package ais provides core functionality for the AIStore object storage.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-
 package ais
 
 import (

@@ -3,9 +3,55 @@
 AISTORE_DIR="$(cd "$(dirname "$0")/../../"; pwd -P)"
 YAPF_STYLE="$(dirname ${0})/config/.style.yapf"
 PYLINT_STYLE="$(dirname ${0})/config/.pylintrc"
+EXTERNAL_SRC_REGEX=".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"
 
 function list_all_go_dirs {
   go list -f '{{.Dir}}' "${AISTORE_DIR}/..."
+}
+
+function check_files_headers {
+  for f in $(find ${AISTORE_DIR} -type f -name "*.go" ! -regex $EXTERNAL_SRC_REGEX); do
+    out=$(head -n 1 $f | grep -P "(\s*+build.*|\/(\/|\*)(\s)*Package(.)*)$")
+    if [[ $? -ne 0 ]]; then
+      echo "$f: first line should be package a description. Instead got:"
+      head -n 1 $f
+      exit 1
+    fi
+
+    out=$(head -n 10 $f | grep -P "((.)*no-copyright(.)*|(.)*NVIDIA(.)*All rights reserved(.)*)")
+    if [[ $? -ne 0 ]]; then
+      echo "$f: copyright statement not found in first 10 lines. Use no-copyright to skip"
+      exit 1
+    fi
+  done
+}
+
+function check_python_formatting {
+  i=0
+  for f in $(find . -type f -name "*.py" ! -regex ".*__init__.py" ! -regex $EXTERNAL_SRC_REGEX); do
+    pylint --rcfile=$PYLINT_STYLE $f --msg-template="{path} ({C}):{line:3d},{column:2d}: {msg} ({msg_id}:{symbol})" 2>/dev/null
+    if [[ $? -gt 0 ]]; then i=$((i+1)); fi
+  done
+
+  if [[ $i -ne 0 ]]; then
+    printf "\npylint failed, fix before continuing\n"
+    exit 1
+  fi
+
+  i=0
+  for f in $(find . -type f -name "*.py" ! -regex $EXTERNAL_SRC_REGEX); do
+     yapf -d --style=$YAPF_STYLE $f
+     if [[ $? -gt 0 ]]; then i=$((i+1)); fi
+  done
+
+  if [[ $i -ne 0 ]]; then
+    printf "\nIncorrect python formatting. Run make fmt-fix to fix it.\n\n" >&2
+    exit 1
+  fi
+}
+
+function python_yapf_fix {
+  find . -type f -name "*.py" ! -regex $EXTERNAL_SRC_REGEX -exec yapf -i --style=$YAPF_STYLE {} ";"
 }
 
 # This script is used by Makefile to run commands.
@@ -23,7 +69,7 @@ fmt)
   case $2 in
   --fix)
     gofmt -w ${AISTORE_DIR}
-    find . -type f -name "*.py" ! -regex ".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*" -exec yapf -i --style=$YAPF_STYLE {} ";"
+    python_yapf_fix
     ;;
   *)
     out=$(gofmt -l -e ${AISTORE_DIR})
@@ -33,27 +79,8 @@ fmt)
       exit 1
     fi
 
-    i=0
-    for f in $(find . -type f -name "*.py" ! -regex ".*__init__.py" ! -regex ".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"); do
-      pylint --rcfile=$PYLINT_STYLE $f --msg-template="{path} ({C}):{line:3d},{column:2d}: {msg} ({msg_id}:{symbol})" 2>/dev/null
-      if [[ $? -gt 0 ]]; then i=$((i+1)); fi
-    done
-
-    if [[ $i -ne 0 ]]; then
-      printf "\npylint failed, fix before continuing\n"
-      exit 1
-    fi
-
-    i=0
-    for f in $(find . -type f -name "*.py" ! -regex ".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"); do
-       yapf -d --style=$YAPF_STYLE $f
-       if [[ $? -gt 0 ]]; then i=$((i+1)); fi
-    done
-
-    if [[ $i -ne 0 ]]; then
-      printf "\nIncorrect python formatting. Run make fmt-fix to fix it.\n\n" >&2
-      exit 1
-    fi
+    check_files_headers
+    check_python_formatting
 
     ;;
   esac

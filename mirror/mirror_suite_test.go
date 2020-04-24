@@ -1,6 +1,6 @@
+// Package mirror provides local mirroring and replica management
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
- *
  */
 package mirror
 

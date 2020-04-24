@@ -1,3 +1,4 @@
+// Package ais_test provides tests of ais package.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */

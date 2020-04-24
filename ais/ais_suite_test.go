@@ -1,3 +1,4 @@
+// Package ais_tests provides tests of AIS cluster.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  *

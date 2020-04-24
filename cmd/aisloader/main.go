@@ -1,4 +1,4 @@
-// The main package for the `aisloader` executable.
+// Package main for the `aisloader` executable.
 /*
  * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
  */

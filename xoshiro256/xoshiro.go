@@ -1,4 +1,5 @@
 // Package xoshiro256 implements the xoshiro256** RNG
+// no-copyright
 /*
 Translated from
 	http://xoshiro.di.unimi.it/xoshiro256starstar.c

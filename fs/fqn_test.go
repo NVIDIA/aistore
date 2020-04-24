@@ -1,3 +1,7 @@
+// Package fs_test provides tests for fs package
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package fs_test
 
 import (

@@ -1,4 +1,4 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package test provides tests for common low-level types and utilities for all aistore projects
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */

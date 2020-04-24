@@ -1,3 +1,7 @@
+// Package test provides E2E tests of AIS CLI
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package test
 
 import (

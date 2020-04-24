@@ -1,3 +1,4 @@
+// Package tutils provides common low-level utilities for all aistore unit and integration tests
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */

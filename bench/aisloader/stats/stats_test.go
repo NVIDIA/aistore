@@ -1,3 +1,4 @@
+// Package stats_test provides tests of aisloader stats package
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */

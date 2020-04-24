@@ -1,4 +1,4 @@
-// The main package for the AIS node executable.
+// Package main for the AIS node executable.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */

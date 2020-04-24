@@ -1,3 +1,4 @@
+// Package readers provides implementation for common reader types
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
