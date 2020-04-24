@@ -483,6 +483,9 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 
 	// function shared between the two cases: start proxy, wait for a sync call
 	f := func() {
+		timer := time.NewTimer(time.Minute)
+		defer timer.Stop()
+
 		wg := &sync.WaitGroup{}
 		s := &http.Server{Addr: addrInfo.String()}
 
@@ -492,7 +495,12 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 			s.ListenAndServe()
 		}()
 
-		<-ch
+		select {
+		case <-timer.C:
+			t.Log("timed out") // TODO: the test is prone to race - refactor
+		case <-ch:
+		}
+
 		s.Close()
 		wg.Wait()
 	}
