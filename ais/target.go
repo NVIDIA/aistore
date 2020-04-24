@@ -193,7 +193,10 @@ func (t *targetrunner) Run() error {
 	t.owner.bmd.init() // BMD
 	smap := newSmap()  // Smap
 	if err := t.owner.smap.load(smap, config); err == nil {
-		smap.Tmap[t.si.ID()] = t.si
+		if errSmap := t.changedIPvsSmap(smap); errSmap != nil {
+			smap = newSmap()
+			glog.Error(errSmap)
+		}
 	} else if !os.IsNotExist(err) {
 		glog.Errorf("%s: cannot load Smap (- corruption?), err: %v", t.si, err)
 	}

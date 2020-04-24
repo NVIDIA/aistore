@@ -38,6 +38,12 @@ func (p *proxyrunner) bootstrap() {
 	if err := p.owner.smap.load(smap, config); err == nil {
 		loaded = true
 	}
+	// persistent Smap cannot be relied upon or used anyhow if my own (Snode) IP has changed
+	if err := p.changedIPvsSmap(smap); err != nil {
+		glog.Error(err)
+		smap = newSmap()
+		loaded = false
+	}
 	// 2: am primary (tentative)
 	primaryEnv, _ := cmn.ParseBool(os.Getenv("AIS_PRIMARYPROXY"))
 	glog.Infof("%s: %s, loaded=%t, primary-env=%t", p.si, smap.StringEx(), loaded, primaryEnv)

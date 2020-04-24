@@ -27,8 +27,8 @@ type localIPv4Info struct {
 }
 
 // getLocalIPv4List returns a list of local unicast IPv4 with MTU
-func getLocalIPv4List(allowLoopback bool) (addrlist []*localIPv4Info, err error) {
-	addrlist = make([]*localIPv4Info, 0)
+func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
+	addrlist = make([]*localIPv4Info, 0, 4)
 	addrs, e := net.InterfaceAddrs()
 	if e != nil {
 		err = fmt.Errorf("failed to get host unicast IPs, err: %v", e)
@@ -42,7 +42,7 @@ func getLocalIPv4List(allowLoopback bool) (addrlist []*localIPv4Info, err error)
 
 	for _, addr := range addrs {
 		curr := &localIPv4Info{}
-		if ipnet, ok := addr.(*net.IPNet); ok && (!ipnet.IP.IsLoopback() || allowLoopback) {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
 				curr.ipv4 = ipnet.IP.String()
 			}

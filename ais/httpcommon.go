@@ -370,11 +370,10 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 // initSI initializes this cluster.Snode
 func (h *httprunner) initSI(daemonType string) {
 	var (
-		s                string
-		config           = cmn.GCO.Get()
-		port             = config.Net.L4.Port
-		allowLoopback, _ = cmn.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
-		addrList, err    = getLocalIPv4List(allowLoopback)
+		s             string
+		config        = cmn.GCO.Get()
+		port          = config.Net.L4.Port
+		addrList, err = getLocalIPv4List()
 	)
 	if err != nil {
 		glog.Fatalf("FATAL: %v", err)
@@ -415,14 +414,6 @@ func (h *httprunner) initSI(daemonType string) {
 		glog.Infof("INTRA-DATA access: [%s:%d]%s", ipAddrIntraData, config.Net.L4.PortIntraData, s)
 	}
 
-	mustDiffer := func(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bool, tag string) {
-		if !use1 || !use2 {
-			return
-		}
-		if string(ip1) == string(ip2) && port1 == port2 {
-			glog.Fatalf("%s: cannot use the same IP:port (%s:%d) for two networks", tag, string(ip1), port1)
-		}
-	}
 	mustDiffer(ipAddr, config.Net.L4.Port, true,
 		ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "pub/ctl")
 	mustDiffer(ipAddr, config.Net.L4.Port, true, ipAddrIntraData, config.Net.L4.PortIntraData, config.Net.UseIntraData, "pub/data")
@@ -459,6 +450,49 @@ func (h *httprunner) initSI(daemonType string) {
 	}
 
 	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
+}
+
+func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bool, tag string) {
+	if !use1 || !use2 {
+		return
+	}
+	if string(ip1) == string(ip2) && port1 == port2 {
+		glog.Fatalf("%s: cannot use the same IP:port (%s:%d) for two networks", tag, string(ip1), port1)
+	}
+}
+
+// is called at startup:
+// given just loaded (persistent) Smap, determines whether my Snode info has changed and,
+// in particular, finds out whether there's a change in my own IPv4
+func (h *httprunner) changedIPvsSmap(smap *smapX) error {
+	var snode *cluster.Snode
+	if h.si.IsTarget() {
+		snode = smap.GetTarget(h.si.ID())
+	} else {
+		cmn.Assert(h.si.IsProxy())
+		snode = smap.GetProxy(h.si.ID())
+	}
+	if snode == nil {
+		return fmt.Errorf("%s: not present in the loaded Smap", h.si)
+	}
+	if h.si.PublicNet.NodeIPAddr != snode.PublicNet.NodeIPAddr {
+		return fmt.Errorf("%s: PUBLIC (user) IPv4 changed: previous %s, current %s", h.si,
+			snode.PublicNet.NodeIPAddr, h.si.PublicNet.NodeIPAddr)
+	}
+	if h.si.IntraControlNet.NodeIPAddr != snode.IntraControlNet.NodeIPAddr {
+		return fmt.Errorf("%s: INTRA-CONTROL IPv4 changed: previous %s, current %s", h.si,
+			snode.PublicNet.NodeIPAddr, h.si.PublicNet.NodeIPAddr)
+	}
+	if h.si.PublicNet != snode.PublicNet ||
+		h.si.IntraControlNet != snode.IntraControlNet ||
+		h.si.IntraDataNet != snode.IntraDataNet {
+		prev, _ := jsonCompat.MarshalIndent(snode, "", " ")
+		curr, _ := jsonCompat.MarshalIndent(h.si, "", " ")
+		glog.Errorf("Warning: %s detected a change in network config:\n%scurrently:\n%s\n- proceeding anyway...",
+			h.si, string(prev), string(curr))
+	}
+
+	return nil
 }
 
 func (h *httprunner) run() error {
