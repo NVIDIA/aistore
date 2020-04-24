@@ -252,15 +252,20 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	clone := newSmap.clone()
 	metaction := "keepalive: removing ["
 	for sid := range toRemoveCh {
+		metaction += "["
 		if clone.GetProxy(sid) != nil {
 			clone.delProxy(sid)
-			metaction += " proxy " + sid
-		} else {
+			metaction += cmn.Proxy
+		} else if clone.GetTarget(sid) != nil {
 			clone.delTarget(sid)
-			metaction += " target " + sid
+			metaction += cmn.Target
+		} else {
+			metaction += "unknown"
+			glog.Warningf("tried to remove node (%s) but it isn't present in the smap; (old smap: %s, new smap: %s)", sid, smap, newSmap)
 		}
+		metaction += ": " + sid + "],"
 	}
-	metaction += " ]"
+	metaction += "]"
 
 	pkr.p.owner.smap.put(clone)
 	if err := pkr.p.owner.smap.persist(clone); err != nil {
