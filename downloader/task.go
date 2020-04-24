@@ -68,10 +68,6 @@ func (t *singleObjectTask) download() {
 		t.markFailed(internalErrorMsg)
 		return
 	}
-	if err == nil {
-		t.markFailed(t.obj.objName + " already exists")
-		return
-	}
 
 	if glog.V(4) {
 		glog.Infof("Starting download for %v", t)
@@ -143,13 +139,14 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time,
 
 	t.setTotalSize(resp)
 
-	cksum := getCksum(t.obj.link, resp)
+	roi := getRemoteObjInfo(t.obj.link, resp)
 	err = t.parent.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       progressReader,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
-		Cksum:        cksum,
+		Cksum:        roi.cksum,
+		Version:      roi.version,
 		Started:      started,
 		WithFinalize: true,
 	})

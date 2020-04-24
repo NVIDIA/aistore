@@ -136,6 +136,27 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 	}
 }
 
+func downloadObject(t *testing.T, bck cmn.Bck, objName, link string) { // nolint:unparam // it's better to keep link as parameter
+	id, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bck, objName, link)
+	tassert.CheckError(t, err)
+	waitForDownload(t, id, 20*time.Second)
+}
+
+func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version string) *cmn.ObjectProps {
+	objProps, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), bck, objName)
+	tassert.CheckError(t, err)
+
+	tassert.Errorf(
+		t, objProps.Size == size,
+		"size mismatch (%d vs %d)", objProps.Size, size,
+	)
+	tassert.Errorf(
+		t, objProps.Version == version,
+		"version mismatch (%s vs %s)", objProps.Version, version,
+	)
+	return objProps
+}
+
 func TestDownloadSingle(t *testing.T) {
 	var (
 		bck = cmn.Bck{
@@ -783,4 +804,77 @@ func TestDownloadMpathEvents(t *testing.T) {
 	objs, err = tutils.ListObjects(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs)) // 21: from cifar10.tgz to cifar30.tgz
+}
+
+// NOTE: Test may fail if the content (or version) of the link changes
+func TestDownloadOverrideObject(t *testing.T) {
+	var (
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		bck        = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
+
+		objName = cmn.RandString(10)
+		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
+
+		expectedSize    int64 = 65
+		expectedVersion       = "1503349750687573"
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	downloadObject(t, bck, objName, link)
+	oldProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
+
+	// Update the file
+	r, _ := readers.NewRandReader(10, true)
+	err := api.PutObject(api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     objName,
+		Hash:       r.XXHash(),
+		Reader:     r,
+	})
+	tassert.CheckFatal(t, err)
+	verifyProps(t, bck, objName, 10, "1503349750687574")
+
+	downloadObject(t, bck, objName, link)
+	newProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
+	tassert.Errorf(
+		t, oldProps.Atime != newProps.Atime,
+		"atime mismatch (%v vs %v)", oldProps.Atime, newProps.Atime,
+	)
+}
+
+// NOTE: Test may fail if the content (or version) of the link changes
+func TestDownloadSkipObject(t *testing.T) {
+	var (
+		proxyURL = tutils.GetPrimaryURL()
+		bck      = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
+
+		objName = cmn.RandString(10)
+		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
+
+		expectedSize    int64 = 65
+		expectedVersion       = "1503349750687573"
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	downloadObject(t, bck, objName, link)
+	oldProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
+
+	downloadObject(t, bck, objName, link)
+	newProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
+	tassert.Errorf(
+		t, oldProps.Atime == newProps.Atime,
+		"atime mismatch (%v vs %v)", oldProps.Atime, newProps.Atime,
+	)
 }

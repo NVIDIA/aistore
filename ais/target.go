@@ -1268,14 +1268,13 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		header     = r.Header
 		cksumType  = header.Get(cmn.HeaderObjCksumType)
 		cksumValue = header.Get(cmn.HeaderObjCksumVal)
-		cksum      = cmn.NewCksum(cksumType, cksumValue)
 	)
 	poi := &putObjInfo{
 		started:      started,
 		t:            t,
 		lom:          lom,
 		r:            r.Body,
-		cksumToCheck: cksum,
+		cksumToCheck: cmn.NewCksum(cksumType, cksumValue),
 		ctx:          t.contextWithAuth(header),
 		workFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}

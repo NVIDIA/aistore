@@ -136,6 +136,7 @@ func (t *targetrunner) PutObject(params cluster.PutObjectParams) error {
 		r:       params.Reader,
 		workFQN: params.WorkFQN,
 		ctx:     context.Background(),
+		version: params.Version,
 		started: params.Started,
 	}
 	if params.RecvType == cluster.Migrated {

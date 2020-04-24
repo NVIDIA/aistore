@@ -173,7 +173,6 @@ func (t *targetrunner) localObjCopy(src *cluster.LOM, bck cmn.Bck, objName strin
 	}
 
 	dstLom.SetAtimeUnix(started.UnixNano())
-	dstLom.SetVersion(src.Version())
 	file, err := os.Open(src.FQN)
 	if err != nil {
 		t.fshc(err, src.FQN)
@@ -185,6 +184,7 @@ func (t *targetrunner) localObjCopy(src *cluster.LOM, bck cmn.Bck, objName strin
 		t:       t,
 		lom:     dstLom,
 		r:       file,
+		version: src.Version(),
 		workFQN: fs.CSM.GenContentParsedFQN(dstLom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
 	err, _ = poi.putObject()

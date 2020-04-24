@@ -215,7 +215,6 @@ func (d *dispatcher) createTasksLom(job DlJob, obj dlObj) (*cluster.LOM, error) 
 		glog.Error(err)
 		return nil, err
 	}
-
 	return lom, nil
 }
 
@@ -237,12 +236,14 @@ func (d *dispatcher) prepareTask(job DlJob, obj dlObj) (*singleObjectTask, *jogg
 		d.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
 		dlStore.persistError(t.id, t.obj.objName, err.Error())
-		return nil, nil, err
+		// NOTE: do not propagate single task errors
+		return nil, nil, nil
 	}
 
 	if lom == nil {
 		// object already exists
-		return nil, nil, nil
+		err = dlStore.incFinished(job.ID())
+		return nil, nil, err
 	}
 
 	t.fqn = lom.FQN
@@ -261,8 +262,7 @@ func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj dlObj) (err e
 		return err, true
 	}
 	if task == nil || jogger == nil {
-		err = dlStore.incFinished(job.ID())
-		return err, true
+		return nil, true
 	}
 
 	select {

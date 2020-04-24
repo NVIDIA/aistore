@@ -56,6 +56,7 @@ type PutObjectParams struct {
 	WorkFQN      string
 	RecvType     RecvType
 	Cksum        *cmn.Cksum // checksum to check
+	Version      string     // custom version to set
 	Started      time.Time
 	WithFinalize bool // determines if we should also finalize the object
 }

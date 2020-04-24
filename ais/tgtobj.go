@@ -38,6 +38,8 @@ type (
 		// Checksum which needs to be checked on receive. It is only checked
 		// on specific occasions: see `writeToFile` method.
 		cksumToCheck *cmn.Cksum
+		// Custom version that should be set after object is successfully put.
+		version string
 		// object size aka Content-Length
 		size int64
 		// Context used when putting the object which should be contained in
@@ -157,23 +159,23 @@ func (poi *putObjInfo) finalize() (err error, errCode int) {
 // poi.workFQN => LOM
 func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	var (
-		ver string
 		lom = poi.lom
 		bck = lom.Bck()
 	)
 	if bck.IsRemote() && !poi.migrated {
 		cmn.Assert(lom.Cksum() != nil)
+		var version string
 		if bck.IsCloud() {
-			ver, err, errCode = poi.putCloud()
+			version, err, errCode = poi.putCloud()
 		} else {
-			ver, err, errCode = poi.putRemoteAIS()
+			version, err, errCode = poi.putRemoteAIS()
 		}
 		if err != nil {
 			err = fmt.Errorf("%s: PUT failed, err: %v", lom, err)
 			return
 		}
 		if lom.VerConf().Enabled {
-			lom.SetVersion(ver)
+			poi.version = version
 		}
 	}
 
@@ -191,7 +193,13 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	if bck.IsAIS() && lom.VerConf().Enabled && !poi.migrated {
+	if poi.version != "" {
+		// TODO: currently we set the version to opaque string. It can possibly
+		//  break the default incrementation if the opaque string is not an
+		//  number. See: #722. To fix this we should probably maintain different
+		//  versions or the origin of the object.
+		lom.SetVersion(poi.version)
+	} else if bck.IsAIS() && lom.VerConf().Enabled && !poi.migrated {
 		if err = lom.IncVersion(); err != nil {
 			return
 		}
@@ -593,13 +601,13 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	}
 	lom.SetAtimeUnix(atime)
 	lom.SetCksum(cksum)
-	lom.SetVersion(version)
 	poi := &putObjInfo{
 		t:        goi.t,
 		lom:      lom,
-		workFQN:  workFQN,
 		r:        resp.Body,
+		version:  version,
 		migrated: true,
+		workFQN:  workFQN,
 	}
 	if err, _ := poi.putObject(); err != nil {
 		glog.Error(err)
