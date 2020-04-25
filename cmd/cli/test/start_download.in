@@ -1,0 +1,12 @@
+ais create bucket $BUCKET
+ais start download gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz ais://$BUCKET // FAIL "too many arguments"
+
+ais start download gs://minikube/iso/minikube-v0.23.2.iso.sha256 ais://$BUCKET --desc="minikube" // IGNORE
+ais wait download $(ais show download --regex="minikube" | awk 'NR==2 {print $1}')
+ais show download --regex="minikube"
+ais show download $(ais show download --regex="minikube" | awk 'NR==2 {print $1}')
+
+ais start download "gs://minikube/iso/minikube-v0.23.{2..4}.iso.sha256" ais://$BUCKET --desc="minikube-range" // IGNORE
+ais wait download $(ais show download --regex="minikube-range" | awk 'NR==2 {print $1}')
+ais show download --regex="minikube"
+ais show download $(ais show download --regex="minikube-range" | awk 'NR==2 {print $1}')
