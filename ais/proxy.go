@@ -574,25 +574,17 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	default:
-		p.invalmsghdlr(w, r, "unsupported action: "+msg.Action)
-	}
-}
-
-// [METHOD] /v1/metasync
-func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPut:
-		p.metasyncHandlerPut(w, r)
-	case http.MethodPost:
-		p.metasyncHandlerPost(w, r)
-	default:
-		p.invalmsghdlr(w, r, "invalid method for metasync", http.StatusBadRequest)
+		s := fmt.Sprintf(fmtUnknownAct, msg)
+		p.invalmsghdlr(w, r, s)
 	}
 }
 
 // PUT /v1/metasync
-func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
-	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
+func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		p.invalmsghdlr(w, r, "invalid method "+r.Method, http.StatusBadRequest)
+		return
+	}
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
 		vote := xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: cmn.ActElection})
@@ -670,15 +662,6 @@ ExtractRMD:
 	if len(errs) > 0 {
 		msg := fmt.Sprintf("%v", errs)
 		p.invalmsghdlr(w, r, msg)
-		return
-	}
-}
-
-// POST /v1/metasync
-func (p *proxyrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
-	var payload = make(msPayload)
-	if err := jsp.Decode(r.Body, &payload, jsp.CCSign(), "metasync post"); err != nil {
-		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return
 	}
 }
@@ -2854,15 +2837,11 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 		func(clone *smapX) error {
 			smap = p.owner.smap.get()
 			exists = clone.putNode(nsi, nonElectable)
-
-			// Notify all nodes about a new one (targets probably need to set up GFN)
-			aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
-			notifyPairs := revsPair{clone, aisMsg}
-			failCnt := p.metasyncer.notify(true, notifyPairs)
-			if failCnt > 1 {
-				return fmt.Errorf("cannot join %s - unable to reach %d nodes", nsi, failCnt)
-			} else if failCnt > 0 {
-				glog.Warning("unable to reach 1 node")
+			if nsi.IsTarget() {
+				// Notify targets that they need to set up GFN
+				aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
+				notifyPairs := revsPair{clone, aisMsg}
+				_ = p.metasyncer.notify(true, notifyPairs)
 			}
 			return nil
 		},

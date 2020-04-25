@@ -202,6 +202,7 @@ func (y *metasyncer) Stop(err error) {
 // methods (notify, sync, becomeNonPrimary) constistute internal API
 //
 
+// notify only targets - see bcastTo below
 func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 	cmn.Assert(y.isPrimary()) // caller must check before
 	var (
@@ -338,12 +339,16 @@ outer:
 	var (
 		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)
 		body    = jsp.EncodeBuf(payload, jsp.CCSign())
+		to      = cluster.AllNodes
 	)
+	if revsReqType == revsReqNotify {
+		to = cluster.Targets
+	}
 	res := y.p.bcastTo(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: urlPath, Body: body},
 		smap:    smap,
 		timeout: config.Timeout.MaxKeepalive, // making exception for this critical op
-		to:      cluster.AllNodes,
+		to:      to,
 	})
 
 	// step 4: count failures and fill-in refused
