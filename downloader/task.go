@@ -59,7 +59,7 @@ type (
 )
 
 func (t *singleObjectTask) download() {
-	lom := &cluster.LOM{T: t.parent.t, ObjName: t.obj.ObjName}
+	lom := &cluster.LOM{T: t.parent.t, ObjName: t.obj.objName}
 	err := lom.Init(t.bck)
 	if err == nil {
 		err = lom.Load()
@@ -69,7 +69,7 @@ func (t *singleObjectTask) download() {
 		return
 	}
 	if err == nil {
-		t.markFailed(t.obj.ObjName + " already exists")
+		t.markFailed(t.obj.objName + " already exists")
 		return
 	}
 
@@ -79,7 +79,7 @@ func (t *singleObjectTask) download() {
 
 	t.started = time.Now()
 	lom.SetAtimeUnix(t.started.UnixNano())
-	if t.obj.FromCloud {
+	if t.obj.fromCloud {
 		err = t.downloadCloud(lom)
 	} else {
 		err = t.downloadLocal(lom, t.started)
@@ -111,7 +111,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time,
 	ctx, cancel := context.WithTimeout(t.downloadCtx, timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.obj.Link, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.obj.link, nil)
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time,
 
 	t.setTotalSize(resp)
 
-	cksum := getCksum(t.obj.Link, resp)
+	cksum := getCksum(t.obj.link, resp)
 	err = t.parent.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       progressReader,
@@ -220,7 +220,7 @@ func (t *singleObjectTask) markFailed(statusMsg string) {
 	t.cancel()
 	t.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
-	dlStore.persistError(t.id, t.obj.ObjName, statusMsg)
+	dlStore.persistError(t.id, t.obj.objName, statusMsg)
 	if err := dlStore.incErrorCnt(t.id); err != nil {
 		glog.Error(err)
 	}
@@ -228,7 +228,7 @@ func (t *singleObjectTask) markFailed(statusMsg string) {
 
 func (t *singleObjectTask) persist() {
 	_ = dlStore.persistTaskInfo(t.id, TaskDlInfo{
-		Name:       t.obj.ObjName,
+		Name:       t.obj.objName,
 		Downloaded: t.currentSize.Load(),
 		Total:      t.totalSize.Load(),
 

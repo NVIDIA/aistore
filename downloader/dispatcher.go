@@ -144,7 +144,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 
 			err, ok := d.blockingDispatchDownloadSingle(job, obj)
 			if err != nil {
-				glog.Errorf("Download job %s failed, couldn't download object %s, aborting; %s", job.ID(), obj.Link, err.Error())
+				glog.Errorf("Download job %s failed, couldn't download object %s, aborting; %s", job.ID(), obj.link, err.Error())
 				cmn.AssertNoErr(dlStore.setAborted(job.ID()))
 				return ok
 			}
@@ -187,8 +187,8 @@ func (d *dispatcher) checkAborted() bool {
 	}
 }
 
-func (d *dispatcher) createTasksLom(job DlJob, obj DlObj) (*cluster.LOM, error) {
-	lom := &cluster.LOM{T: d.parent.t, ObjName: obj.ObjName}
+func (d *dispatcher) createTasksLom(job DlJob, obj dlObj) (*cluster.LOM, error) {
+	lom := &cluster.LOM{T: d.parent.t, ObjName: obj.objName}
 	err := lom.Init(job.Bck())
 	if err == nil {
 		err = lom.Load()
@@ -203,15 +203,15 @@ func (d *dispatcher) createTasksLom(job DlJob, obj DlObj) (*cluster.LOM, error) 
 		}
 		if equal {
 			if glog.V(4) {
-				glog.Infof("object %q already exists and seems to match remote - skipping", obj.ObjName)
+				glog.Infof("object %q already exists and seems to match remote - skipping", obj.objName)
 			}
 			return nil, nil
 		}
-		glog.Warningf("object %q already exists but does not match with remote - overriding", obj.ObjName)
+		glog.Warningf("object %q already exists but does not match with remote - overriding", obj.objName)
 	}
 
 	if lom.ParsedFQN.MpathInfo == nil {
-		err = fmt.Errorf("download task for %s failed. Failed to get mountpath for the request's fqn %s", obj.Link, lom.FQN)
+		err = fmt.Errorf("download task for %s failed. Failed to get mountpath for the request's fqn %s", obj.link, lom.FQN)
 		glog.Error(err)
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func (d *dispatcher) createTasksLom(job DlJob, obj DlObj) (*cluster.LOM, error) 
 	return lom, nil
 }
 
-func (d *dispatcher) prepareTask(job DlJob, obj DlObj) (*singleObjectTask, *jogger, error) {
+func (d *dispatcher) prepareTask(job DlJob, obj dlObj) (*singleObjectTask, *jogger, error) {
 	t := &singleObjectTask{
 		parent: d.parent,
 		request: &request{
@@ -236,7 +236,7 @@ func (d *dispatcher) prepareTask(job DlJob, obj DlObj) (*singleObjectTask, *jogg
 		glog.Warningf("error in handling downloader request: %v", err)
 		d.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
-		dlStore.persistError(t.id, t.obj.ObjName, err.Error())
+		dlStore.persistError(t.id, t.obj.objName, err.Error())
 		return nil, nil, err
 	}
 
@@ -252,7 +252,7 @@ func (d *dispatcher) prepareTask(job DlJob, obj DlObj) (*singleObjectTask, *jogg
 }
 
 // returns false if dispatcher was aborted in the meantime, true otherwise
-func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj DlObj) (err error, ok bool) {
+func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj dlObj) (err error, ok bool) {
 	if err := dlStore.incScheduled(job.ID()); err != nil {
 		glog.Error(err)
 	}

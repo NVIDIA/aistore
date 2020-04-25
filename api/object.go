@@ -402,7 +402,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 
 func DownloadSingle(baseParams BaseParams, description string, bck cmn.Bck, objName, link string) (string, error) {
 	dlBody := downloader.DlSingleBody{
-		DlObj: downloader.DlObj{
+		DlSingleObj: downloader.DlSingleObj{
 			ObjName: objName,
 			Link:    link,
 		},

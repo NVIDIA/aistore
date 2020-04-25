@@ -7,7 +7,6 @@ package downloader
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -147,10 +146,8 @@ func (q *queue) get() (foundTask *singleObjectTask) {
 	}
 
 	timeout := cmn.GCO.Get().Downloader.Timeout
-	if foundTask.timeout != "" {
-		var err error
-		timeout, err = time.ParseDuration(foundTask.timeout)
-		cmn.AssertNoErr(err) // This should be checked beforehand
+	if foundTask.timeout != 0 {
+		timeout = foundTask.timeout
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

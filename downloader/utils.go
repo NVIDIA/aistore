@@ -20,58 +20,53 @@ var (
 	errInvalidTarget = errors.New("invalid target")
 )
 
-// BuildDownloaderInput takes payload, extracted from user's request and returnes DlBody
-// which contains metadata of objects supposed to be downloaded by target t
-func buildDownloaderInput(t cluster.Target, id string, bck *cluster.Bck,
-	payload *DlBase, objects cmn.SimpleKVs) (*DlBody, error) {
+// buildDlObjs returns list of objects that must be downloaded by target.
+func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cmn.SimpleKVs) ([]dlObj, error) {
 	var (
-		dlBody = &DlBody{ID: id}
-		smap   = t.GetSowner().Get()
-		sid    = t.Snode().ID()
+		smap = t.GetSowner().Get()
+		sid  = t.Snode().ID()
 	)
-	dlBody.Bck = bck.Bck
-	dlBody.Timeout = payload.Timeout
-	dlBody.Description = payload.Description
 
+	objs := make([]dlObj, 0, len(objects))
 	for name, link := range objects {
-		dlJob, err := jobForObject(smap, sid, bck, name, link)
+		job, err := jobForObject(smap, sid, bck, name, link)
 		if err != nil {
 			if err == errInvalidTarget {
 				continue
 			}
 			return nil, err
 		}
-		dlBody.Objs = append(dlBody.Objs, dlJob)
+		objs = append(objs, job)
 	}
-	return dlBody, nil
+	return objs, nil
 }
 
-func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, link string) (DlObj, error) {
-	objName, err := NormalizeObjName(objName)
+func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, link string) (dlObj, error) {
+	objName, err := normalizeObjName(objName)
 	if err != nil {
-		return DlObj{}, err
+		return dlObj{}, err
 	}
 	// Make sure that link contains protocol (absence of protocol can result in errors).
 	link = cmn.PrependProtocol(link)
 
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), smap)
 	if err != nil {
-		return DlObj{}, err
+		return dlObj{}, err
 	}
 	if si.ID() != sid {
-		return DlObj{}, errInvalidTarget
+		return dlObj{}, errInvalidTarget
 	}
 
-	return DlObj{
-		ObjName:   objName,
-		Link:      link,
-		FromCloud: bck.IsCloud(cmn.AnyCloud),
+	return dlObj{
+		objName:   objName,
+		link:      link,
+		fromCloud: bck.IsCloud(cmn.AnyCloud),
 	}, nil
 }
 
 // Removes everything that goes after '?', eg. "?query=key..." so it will not
 // be part of final object name.
-func NormalizeObjName(objName string) (string, error) {
+func normalizeObjName(objName string) (string, error) {
 	u, err := url.Parse(objName)
 	if err != nil {
 		return "", nil
@@ -167,12 +162,13 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 	if !bck.IsAIS() {
 		return nil, errors.New("regular download requires ais bucket")
 	}
-	input, err := buildDownloaderInput(t, id, bck, payload, objects)
+	objs, err := buildDlObjs(t, bck, objects)
 	if err != nil {
 		return nil, err
 	}
 
-	return newSliceDlJob(input.ID, input.Objs, bck, payload.Timeout, payload.Description), nil
+	baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description)
+	return newSliceDlJob(baseJob, objs), nil
 }
 
 func headLink(link string) (*http.Response, error) {
@@ -190,15 +186,15 @@ func headLink(link string) (*http.Response, error) {
 	return resp, nil
 }
 
-func compareObjects(obj DlObj, lom *cluster.LOM) (equal bool, err error) {
-	resp, err := headLink(obj.Link)
+func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
+	resp, err := headLink(obj.link)
 	if err != nil {
 		return false, err
 	}
 	if resp.ContentLength != 0 && resp.ContentLength != lom.Size() {
 		return false, nil
 	}
-	cksum := getCksum(obj.Link, resp)
+	cksum := getCksum(obj.link, resp)
 	if cksum != nil {
 		computedCksum, err := lom.ComputeCksum(cksum.Type())
 		if err != nil || !cmn.EqCksum(cksum, computedCksum) {

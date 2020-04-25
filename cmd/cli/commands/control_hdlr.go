@@ -212,7 +212,7 @@ func startDownloadHandler(c *cli.Context) error {
 		// Single
 		payload := downloader.DlSingleBody{
 			DlBase: basePayload,
-			DlObj: downloader.DlObj{
+			DlSingleObj: downloader.DlSingleObj{
 				Link:    link,
 				ObjName: pathSuffix, // in this case pathSuffix is a full name of the object
 			},

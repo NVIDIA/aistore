@@ -26,7 +26,7 @@ func TestNormalizeObjName(t *testing.T) {
 	}
 
 	for _, test := range normalizeObjTests {
-		actual, err := NormalizeObjName(test.objName)
+		actual, err := normalizeObjName(test.objName)
 
 		if err != nil {
 			t.Errorf("Unexpected error while normalizing %s: %v", test.objName, err)
@@ -40,15 +40,15 @@ func TestNormalizeObjName(t *testing.T) {
 
 func TestCompareObjectNotEqualSizes(t *testing.T) {
 	var (
-		dlObj = DlObj{
-			Link: "https://storage.googleapis.com/lpr-vision/imagenet256/imagenet256_train-000105.tgz",
+		obj = dlObj{
+			link: "https://storage.googleapis.com/lpr-vision/imagenet256/imagenet256_train-000105.tgz",
 		}
 		lom = &cluster.LOM{}
 	)
 
 	lom.SetSize(10)
 
-	equal, err := compareObjects(dlObj, lom)
+	equal, err := compareObjects(obj, lom)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects to be equal")
 }

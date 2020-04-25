@@ -164,9 +164,9 @@ type (
 		action     string         // one of: adminAbort, adminList, adminStatus, adminRemove, taskDownload
 		id         string         // id of the job task
 		regex      *regexp.Regexp // regex of descriptions to return if id is empty
-		obj        DlObj
+		obj        dlObj
 		bck        cmn.Bck
-		timeout    string
+		timeout    time.Duration
 		fqn        string         // fqn of the object after it has been committed
 		responseCh chan *response // where the outcome of the request is written
 	}
@@ -180,7 +180,7 @@ type (
 //==================================== Requests ===========================================
 
 func (req *request) String() (str string) {
-	str += fmt.Sprintf("id: %q, objname: %q, link: %q, from_cloud: %v, ", req.id, req.obj.ObjName, req.obj.Link, req.obj.FromCloud)
+	str += fmt.Sprintf("id: %q, objname: %q, link: %q, from_cloud: %v, ", req.id, req.obj.objName, req.obj.link, req.obj.fromCloud)
 	if req.bck.Name != "" {
 		str += fmt.Sprintf("bucket: %q, ", req.bck)
 	}
@@ -189,7 +189,7 @@ func (req *request) String() (str string) {
 }
 
 func (req *request) uid() string {
-	return fmt.Sprintf("%s|%s|%s|%v", req.obj.Link, req.bck, req.obj.ObjName, req.obj.FromCloud)
+	return fmt.Sprintf("%s|%s|%s|%v", req.obj.link, req.bck, req.obj.objName, req.obj.fromCloud)
 }
 
 func (req *request) write(resp interface{}, err error, statusCode int) {
@@ -386,7 +386,7 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error
 	return r.resp, r.err, r.statusCode
 }
 
-func (d *Downloader) checkJob(req *request) (*DownloadJobInfo, error) {
+func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	jInfo, err := dlStore.getJob(req.id)
 	if err != nil {
 		if err == errJobNotFound {
@@ -408,7 +408,7 @@ func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
 		task := j.task
 		if task != nil && task.id == reqID {
 			info := TaskDlInfo{
-				Name:       task.obj.ObjName,
+				Name:       task.obj.objName,
 				Downloaded: task.currentSize.Load(),
 				Total:      task.totalSize.Load(),
 

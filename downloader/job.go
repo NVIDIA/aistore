@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -19,58 +20,62 @@ import (
 const sliceDownloadBatchSize = 1000
 
 var (
-	_ DlJob = &SliceDlJob{}
-	_ DlJob = &CloudBucketDlJob{}
-	_ DlJob = &RangeDlJob{}
+	_ DlJob = &sliceDlJob{}
+	_ DlJob = &cloudBucketDlJob{}
+	_ DlJob = &rangeDlJob{}
 )
 
 type (
+	dlObj struct {
+		objName   string
+		link      string
+		fromCloud bool
+	}
+
 	DlJob interface {
 		ID() string
 		Bck() cmn.Bck
 
-		// FIXME: change to time.Duration
-		Timeout() string
+		Timeout() time.Duration
 
 		// genNext is supposed to fulfill the following protocol:
 		// ok is set to true if there is batch to process, false otherwise
-		genNext() (objs []DlObj, ok bool)
+		genNext() (objs []dlObj, ok bool)
 
 		Description() string
 		// if total length (size) of download job is not known, -1 should be returned
 		Len() int
 	}
 
-	BaseDlJob struct {
+	baseDlJob struct {
 		id          string
 		bck         *cluster.Bck
-		timeout     string
+		timeout     time.Duration
 		description string
 	}
 
-	SliceDlJob struct {
-		BaseDlJob
-		objs    []DlObj
-		timeout string
+	sliceDlJob struct {
+		baseDlJob
+		objs    []dlObj
 		current int
 	}
 
-	RangeDlJob struct {
-		BaseDlJob
+	rangeDlJob struct {
+		baseDlJob
 		t     cluster.Target
-		objs  []DlObj               // objects' metas which are ready to be downloaded
+		objs  []dlObj               // objects' metas which are ready to be downloaded
 		iter  func() (string, bool) // links iterator
 		count int                   // total number object to download by a target
 		dir   string                // objects directory(prefix) from request
 		done  bool                  // true = the iterator is exhausted, nothing left to read
 	}
 
-	CloudBucketDlJob struct {
-		BaseDlJob
+	cloudBucketDlJob struct {
+		baseDlJob
 		t   cluster.Target
 		ctx context.Context // context for the request, user etc...
 
-		objs       []DlObj // objects' metas which are ready to be downloaded
+		objs       []dlObj // objects' metas which are ready to be downloaded
 		pageMarker string
 		prefix     string
 		suffix     string
@@ -78,7 +83,7 @@ type (
 		pagesCnt   int
 	}
 
-	DownloadJobInfo struct {
+	downloadJobInfo struct {
 		ID          string `json:"id"`
 		Description string `json:"description"`
 
@@ -92,24 +97,22 @@ type (
 
 		FinishedTime atomic.Time `json:"-"`
 	}
-
-	ListObjectsPageCb func(bucket, pageMarker string) (*cmn.BucketList, error)
-	TargetObjsCb      func(objects cmn.SimpleKVs, bucket string, cloud bool) ([]DlObj, error)
 )
 
-func (j *BaseDlJob) ID() string          { return j.id }
-func (j *BaseDlJob) Bck() cmn.Bck        { return j.bck.Bck }
-func (j *BaseDlJob) Timeout() string     { return j.timeout }
-func (j *BaseDlJob) Description() string { return j.description }
+func (j *baseDlJob) ID() string             { return j.id }
+func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
+func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
+func (j *baseDlJob) Description() string    { return j.description }
 
-func newBaseDlJob(id string, bck *cluster.Bck, timeout, desc string) *BaseDlJob {
-	return &BaseDlJob{id: id, bck: bck, timeout: timeout, description: desc}
+func newBaseDlJob(id string, bck *cluster.Bck, timeout, desc string) *baseDlJob {
+	t, _ := time.ParseDuration(timeout)
+	return &baseDlJob{id: id, bck: bck, timeout: t, description: desc}
 }
 
-func (j *SliceDlJob) Len() int { return len(j.objs) }
-func (j *SliceDlJob) genNext() (objs []DlObj, ok bool) {
+func (j *sliceDlJob) Len() int { return len(j.objs) }
+func (j *sliceDlJob) genNext() (objs []dlObj, ok bool) {
 	if j.current == len(j.objs) {
-		return []DlObj{}, false
+		return []dlObj{}, false
 	}
 
 	if j.current+sliceDownloadBatchSize >= len(j.objs) {
@@ -123,16 +126,15 @@ func (j *SliceDlJob) genNext() (objs []DlObj, ok bool) {
 	return objs, true
 }
 
-func newSliceDlJob(id string, objs []DlObj, bck *cluster.Bck, timeout, description string) *SliceDlJob {
-	return &SliceDlJob{
-		BaseDlJob: BaseDlJob{id: id, bck: bck, timeout: timeout, description: description},
+func newSliceDlJob(base *baseDlJob, objs []dlObj) *sliceDlJob {
+	return &sliceDlJob{
+		baseDlJob: *base,
 		objs:      objs,
-		timeout:   timeout,
 	}
 }
 
-func (j *CloudBucketDlJob) Len() int { return -1 }
-func (j *CloudBucketDlJob) genNext() (objs []DlObj, ok bool) {
+func (j *cloudBucketDlJob) Len() int { return -1 }
+func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
@@ -145,7 +147,7 @@ func (j *CloudBucketDlJob) genNext() (objs []DlObj, ok bool) {
 		glog.Error(err)
 		// this makes genNext return ok = false in the next
 		// loop iteration
-		j.objs, j.pageMarker = []DlObj{}, ""
+		j.objs, j.pageMarker = []dlObj{}, ""
 	}
 
 	return readyToDownloadObjs, true
@@ -153,8 +155,8 @@ func (j *CloudBucketDlJob) genNext() (objs []DlObj, ok bool) {
 
 // Reads the content of a cloud bucket page by page until any objects to
 // download found or the bucket list is over.
-func (j *CloudBucketDlJob) getNextObjs() error {
-	j.objs = []DlObj{}
+func (j *cloudBucketDlJob) getNextObjs() error {
+	j.objs = []dlObj{}
 	if j.pagesCnt > 0 && j.pageMarker == "" {
 		// Cloud ListObjects returned empty pageMarker after at least one request
 		// this means there are no more objects in to list
@@ -181,14 +183,14 @@ func (j *CloudBucketDlJob) getNextObjs() error {
 			if !strings.HasSuffix(entry.Name, j.suffix) {
 				continue
 			}
-			dlJob, err := jobForObject(smap, sid, j.bck, entry.Name, "")
+			job, err := jobForObject(smap, sid, j.bck, entry.Name, "")
 			if err != nil {
 				if err == errInvalidTarget {
 					continue
 				}
 				return err
 			}
-			j.objs = append(j.objs, dlJob)
+			j.objs = append(j.objs, job)
 		}
 		if j.pageMarker == "" || len(j.objs) != 0 {
 			break
@@ -198,28 +200,28 @@ func (j *CloudBucketDlJob) getNextObjs() error {
 	return nil
 }
 
-func (j *RangeDlJob) Len() int { return j.count }
+func (j *rangeDlJob) Len() int { return j.count }
 
-func (j *RangeDlJob) genNext() ([]DlObj, bool) {
+func (j *rangeDlJob) genNext() ([]dlObj, bool) {
 	readyToDownloadObjs := j.objs
 	if j.done {
-		j.objs = []DlObj{}
+		j.objs = []dlObj{}
 		return readyToDownloadObjs, len(readyToDownloadObjs) != 0
 	}
 	if err := j.getNextObjs(); err != nil {
-		return []DlObj{}, false
+		return []dlObj{}, false
 	}
 	return readyToDownloadObjs, true
 }
 
-func (j *RangeDlJob) getNextObjs() error {
+func (j *rangeDlJob) getNextObjs() error {
 	var (
 		link string
 		smap = j.t.GetSowner().Get()
 		sid  = j.t.Snode().ID()
 		ok   = true
 	)
-	j.objs = []DlObj{}
+	j.objs = []dlObj{}
 
 	for len(j.objs) < sliceDownloadBatchSize && ok {
 		link, ok = j.iter()
@@ -240,9 +242,9 @@ func (j *RangeDlJob) getNextObjs() error {
 	return nil
 }
 
-func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *BaseDlJob, prefix, suffix string) (*CloudBucketDlJob, error) {
-	job := &CloudBucketDlJob{
-		BaseDlJob:  *base,
+func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *baseDlJob, prefix, suffix string) (*cloudBucketDlJob, error) {
+	job := &cloudBucketDlJob{
+		baseDlJob:  *base,
 		pageMarker: "",
 		t:          t,
 		ctx:        ctx,
@@ -264,7 +266,7 @@ func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *clus
 
 	for link, ok := iter(); ok; link, ok = iter() {
 		name := path.Join(dir, path.Base(link))
-		name, err = NormalizeObjName(name)
+		name, err = normalizeObjName(name)
 		if err != nil {
 			return
 		}
@@ -279,13 +281,13 @@ func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *clus
 	return cnt, nil
 }
 
-func newRangeDlJob(t cluster.Target, base *BaseDlJob, pt cmn.ParsedTemplate, subdir string) (*RangeDlJob, error) {
+func newRangeDlJob(t cluster.Target, base *baseDlJob, pt cmn.ParsedTemplate, subdir string) (*rangeDlJob, error) {
 	cnt, err := countObjects(t, pt, subdir, base.bck)
 	if err != nil {
 		return nil, err
 	}
-	job := &RangeDlJob{
-		BaseDlJob: *base,
+	job := &rangeDlJob{
+		baseDlJob: *base,
 		t:         t,
 		iter:      pt.Iter(),
 		dir:       subdir,

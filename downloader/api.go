@@ -137,13 +137,13 @@ func (b *DlBase) Validate() error {
 	return nil
 }
 
-type DlObj struct {
-	ObjName   string `json:"objname"`
+type DlSingleObj struct {
+	ObjName   string `json:"object_name"`
 	Link      string `json:"link"`
 	FromCloud bool   `json:"from_cloud"`
 }
 
-func (b *DlObj) Validate() error {
+func (b *DlSingleObj) Validate() error {
 	if b.ObjName == "" {
 		objName := path.Base(b.Link)
 		if objName == "." || objName == "/" {
@@ -195,38 +195,6 @@ func (b *DlAdminBody) Validate(requireID bool) error {
 	return nil
 }
 
-// Internal download request body
-type DlBody struct {
-	DlBase
-	ID   string  `json:"id"`
-	Objs []DlObj `json:"objs"`
-
-	Aborted bool `json:"aborted"`
-}
-
-func (b *DlBody) Validate() error {
-	if err := b.DlBase.Validate(); err != nil {
-		return err
-	}
-	if b.ID == "" {
-		return fmt.Errorf("missing %q, something went wrong", cmn.URLParamID)
-	}
-	if b.Aborted {
-		// used to store abort status in db, should be unset
-		return fmt.Errorf("invalid flag 'aborted'")
-	}
-	for _, obj := range b.Objs {
-		if err := obj.Validate(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (b *DlBody) String() string {
-	return fmt.Sprintf("%s, id=%q", b.DlBase, b.ID)
-}
-
 type TaskInfoByName []TaskDlInfo
 
 func (t TaskInfoByName) Len() int           { return len(t) }
@@ -257,7 +225,7 @@ type TaskErrInfo struct {
 // Single request
 type DlSingleBody struct {
 	DlBase
-	DlObj
+	DlSingleObj
 }
 
 func (b *DlSingleBody) InitWithQuery(query url.Values) {
@@ -277,7 +245,7 @@ func (b *DlSingleBody) Validate() error {
 	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
-	if err := b.DlObj.Validate(); err != nil {
+	if err := b.DlSingleObj.Validate(); err != nil {
 		return err
 	}
 	return nil

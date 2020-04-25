@@ -26,7 +26,7 @@ type (
 
 		// FIXME: jobInfo is stored only in memory, should be persisted at some point
 		// in case, for instance, of target's powercycle
-		jobInfo map[string]*DownloadJobInfo
+		jobInfo map[string]*downloadJobInfo
 		sync.RWMutex
 	}
 )
@@ -49,13 +49,13 @@ func newInfoStore() (*infoStore, error) {
 
 	is := &infoStore{
 		downloaderDB: db,
-		jobInfo:      make(map[string]*DownloadJobInfo),
+		jobInfo:      make(map[string]*downloadJobInfo),
 	}
 	hk.Housekeeper.Register("downloader", is.housekeep, hk.DayInterval)
 	return is, nil
 }
 
-func (is *infoStore) getJob(id string) (*DownloadJobInfo, error) {
+func (is *infoStore) getJob(id string) (*downloadJobInfo, error) {
 	is.RLock()
 	defer is.RUnlock()
 
@@ -66,8 +66,8 @@ func (is *infoStore) getJob(id string) (*DownloadJobInfo, error) {
 	return nil, fmt.Errorf("download job with id %q has not been found", id)
 }
 
-func (is *infoStore) getList(descRegex *regexp.Regexp) []*DownloadJobInfo {
-	jobsInfo := make([]*DownloadJobInfo, 0)
+func (is *infoStore) getList(descRegex *regexp.Regexp) []*downloadJobInfo {
+	jobsInfo := make([]*downloadJobInfo, 0)
 
 	is.RLock()
 	for _, dji := range is.jobInfo {
@@ -81,7 +81,7 @@ func (is *infoStore) getList(descRegex *regexp.Regexp) []*DownloadJobInfo {
 }
 
 func (is *infoStore) setJob(id string, job DlJob) {
-	jInfo := &DownloadJobInfo{
+	jInfo := &downloadJobInfo{
 		ID:          job.ID(),
 		Total:       job.Len(),
 		Description: job.Description(),

@@ -354,7 +354,7 @@ func TestDownloadTimeout(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	body := downloader.DlSingleBody{
-		DlObj: downloader.DlObj{
+		DlSingleObj: downloader.DlSingleObj{
 			ObjName: objName,
 			Link:    link,
 		},
