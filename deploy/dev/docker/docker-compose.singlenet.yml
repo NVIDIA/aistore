@@ -17,7 +17,7 @@ services:
       - docker_default
     environment:
       - ROLE=proxy
-      - AIS_PRIMARYPROXY=${AIS_PRIMARYPROXY:-}
+      - AIS_IS_PRIMARY=${AIS_IS_PRIMARY:-}
     env_file:
       - /tmp/docker_ais/tmp.env
       - /tmp/docker_ais/aws.env

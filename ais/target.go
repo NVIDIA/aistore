@@ -193,13 +193,15 @@ func (t *targetrunner) Run() error {
 	t.owner.bmd.init() // BMD
 	smap := newSmap()  // Smap
 	if err := t.owner.smap.load(smap, config); err == nil {
-		if errSmap := t.changedIPvsSmap(smap); errSmap != nil {
-			smap = newSmap()
-			glog.Error(errSmap)
+		if errSmap := t.checkPresenceNetChange(smap); errSmap != nil {
+			glog.Errorf("%s - proceeding anyway...", errSmap)
 		}
 	} else if !os.IsNotExist(err) {
-		glog.Errorf("%s: cannot load Smap (- corruption?), err: %v", t.si, err)
+		glog.Errorf("%s: failed to load Smap (corruption?), err: %v", t.si, err)
 	}
+	// insert self and always proceed starting up
+	smap.Tmap[t.si.ID()] = t.si
+
 	cluster.InitTarget()
 	//
 	// join cluster

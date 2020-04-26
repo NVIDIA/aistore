@@ -23,7 +23,7 @@ function start_node {
   
   source aisnode_config.sh
 
-  AIS_DAEMONID="$1-${HOSTNAME}" AIS_PRIMARYPROXY="true" bin/aisnode_${CLDPROVIDER} \
+  AIS_DAEMONID="$1-${HOSTNAME}" AIS_IS_PRIMARY="true" bin/aisnode_${CLDPROVIDER} \
     -config=${CONFFILE} \
     -role=$1 \
     -ntargets=1 \

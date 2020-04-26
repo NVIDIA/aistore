@@ -34,10 +34,10 @@ mkdir /var/log/aismisc
 #
 if [[ -f /var/ais_env/env ]]; then
     echo "The initContainer detected running on node labeled as initial primary proxy"
-    export AIS_PRIMARYPROXY=True
+    export AIS_IS_PRIMARY=True
     is_primary=true
 else
-    # Caution - don't set AIS_PRIMARYPROXY false here, it just looks for any non-NULL value
+    # Caution - don't set AIS_IS_PRIMARY false here, it just looks for any non-NULL value
     echo "The initContainer determined our node is not labeled as initial primary proxy"
     is_primary=false
 fi

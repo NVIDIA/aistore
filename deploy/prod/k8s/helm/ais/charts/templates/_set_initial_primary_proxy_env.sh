@@ -43,7 +43,7 @@ if [[ "$primary" == "$MY_NODE" ]]; then
     #
     # Indicate to subsequent containers in this pod that we started on the primary node.
     #
-    echo "export AIS_PRIMARYPROXY=True" > $envfile
+    echo "export AIS_IS_PRIMARY=True" > $envfile
     
     #
     # Labeling the pod creates a DNS entry for the initial proxy service (by completing

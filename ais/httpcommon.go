@@ -461,11 +461,14 @@ func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bo
 	}
 }
 
-// is called at startup:
-// given just loaded (persistent) Smap, determines whether my Snode info has changed and,
-// in particular, finds out whether there's a change in my own IPv4
-func (h *httprunner) changedIPvsSmap(smap *smapX) error {
-	var snode *cluster.Snode
+// is called at startup;
+// given loaded Smap, checks whether Snode is present and whether network info has changed
+// - the latter for, possibly, legitimate reasons (K8s, etc.)
+func (h *httprunner) checkPresenceNetChange(smap *smapX) error {
+	var (
+		snode   *cluster.Snode
+		changed bool
+	)
 	if h.si.IsTarget() {
 		snode = smap.GetTarget(h.si.ID())
 	} else {
@@ -476,12 +479,17 @@ func (h *httprunner) changedIPvsSmap(smap *smapX) error {
 		return fmt.Errorf("%s: not present in the loaded Smap", h.si)
 	}
 	if h.si.PublicNet.NodeIPAddr != snode.PublicNet.NodeIPAddr {
-		return fmt.Errorf("%s: PUBLIC (user) IPv4 changed: previous %s, current %s", h.si,
+		glog.Errorf("Warning: %s: PUBLIC (user) IPv4 changed: previous %s, current %s", h.si,
 			snode.PublicNet.NodeIPAddr, h.si.PublicNet.NodeIPAddr)
+		changed = true
 	}
 	if h.si.IntraControlNet.NodeIPAddr != snode.IntraControlNet.NodeIPAddr {
-		return fmt.Errorf("%s: INTRA-CONTROL IPv4 changed: previous %s, current %s", h.si,
+		glog.Errorf("Warning: %s: INTRA-CONTROL IPv4 changed: previous %s, current %s", h.si,
 			snode.PublicNet.NodeIPAddr, h.si.PublicNet.NodeIPAddr)
+		changed = true
+	}
+	if changed {
+		return nil
 	}
 	if h.si.PublicNet != snode.PublicNet ||
 		h.si.IntraControlNet != snode.IntraControlNet ||
@@ -491,7 +499,6 @@ func (h *httprunner) changedIPvsSmap(smap *smapX) error {
 		glog.Errorf("Warning: %s detected a change in network config:\n%scurrently:\n%s\n- proceeding anyway...",
 			h.si, string(prev), string(curr))
 	}
-
 	return nil
 }
 

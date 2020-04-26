@@ -501,7 +501,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     docker-compose -p ais${i} -f ${composer_file} build
 
     echo Starting Primary Proxy
-    AIS_PRIMARYPROXY=true docker-compose -p ais${i} -f ${composer_file} up -d proxy
+    AIS_IS_PRIMARY=true docker-compose -p ais${i} -f ${composer_file} up -d proxy
     sleep 2 # give primary proxy some room to breathe
 
     echo Starting cluster ..

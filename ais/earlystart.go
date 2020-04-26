@@ -28,60 +28,105 @@ const maxRetryCnt = 4
 func (p *proxyrunner) bootstrap() {
 	var (
 		smap              *smapX
-		primaryURL        string
 		config            = cmn.GCO.Get()
 		secondary, loaded bool
 	)
 	// 1: load a local copy and try to utilize it for discovery
 	smap = newSmap()
-	smap.Pmap[p.si.ID()] = p.si
 	if err := p.owner.smap.load(smap, config); err == nil {
 		loaded = true
-	}
-	// persistent Smap cannot be relied upon or used anyhow if my own (Snode) IP has changed
-	if err := p.changedIPvsSmap(smap); err != nil {
-		glog.Error(err)
-		smap = newSmap()
-		loaded = false
-	}
-	// 2: am primary (tentative)
-	primaryEnv, _ := cmn.ParseBool(os.Getenv("AIS_PRIMARYPROXY"))
-	glog.Infof("%s: %s, loaded=%t, primary-env=%t", p.si, smap.StringEx(), loaded, primaryEnv)
-	if loaded {
-		secondary = !smap.isPrimary(p.si)
-		if secondary {
-			primaryURL = smap.ProxySI.IntraControlNet.DirectURL
-			// TODO if disagreement: url2 = found.ProxySI.IntraControlNet.DirectURL - and use it
-		}
-	} else {
-		secondary = !primaryEnv
-		smap = nil
-		if secondary {
-			primaryURL = config.Proxy.PrimaryURL
+		if err := p.checkPresenceNetChange(smap); err != nil {
+			// proxy only: local copy of Smap cannot be relied upon
+			glog.Error(err)
+			loaded = false
 		}
 	}
-	// 4: join cluster as secondary
-	if secondary {
-		glog.Infof("%s: starting up as non-primary, joining via %s", p.si, primaryURL)
-		var err error
-		if err = p.secondaryStartup(primaryURL); err != nil {
-			if loaded {
-				maxVerSmap, _ := p.uncoverMeta(smap)
-				if maxVerSmap != nil && maxVerSmap.ProxySI != nil {
-					primaryURL = maxVerSmap.ProxySI.IntraControlNet.DirectURL
-					glog.Infof("%s: second attempt - join via %s", p.si, primaryURL)
-					err = p.secondaryStartup(primaryURL)
-				}
-			}
-		}
-		if err != nil {
-			cmn.ExitLogf("FATAL: %s (non-primary) failed to join cluster, err: %v", p.si, err)
-		}
+
+	// 2. make the preliminary (primary) decision
+	smap, secondary = p.determineRole(smap, loaded)
+
+	// 3.1: start as primary
+	if !secondary {
+		glog.Infof("%s: assuming the primary role for now, starting up...", p.si)
+		go p.primaryStartup(smap, config, daemon.cli.ntargets)
 		return
 	}
-	// 5: keep starting up as a primary
-	glog.Infof("%s: assuming the primary role for now, starting up...", p.si)
-	go p.primaryStartup(smap, config, daemon.cli.ntargets)
+
+	// 3.2: otherwise, join as secondary
+	var (
+		primaryURL string
+		err        error
+	)
+	if loaded {
+		primaryURL = smap.ProxySI.IntraControlNet.DirectURL
+	} else {
+		primaryURL = config.Proxy.PrimaryURL
+	}
+	glog.Infof("%s: starting up as non-primary, joining via %s", p.si, primaryURL)
+	if err = p.secondaryStartup(primaryURL); err != nil {
+		if loaded {
+			maxVerSmap, _ := p.uncoverMeta(smap)
+			if maxVerSmap != nil && maxVerSmap.ProxySI != nil {
+				primaryURL = maxVerSmap.ProxySI.IntraControlNet.DirectURL
+				glog.Infof("%s: second attempt - join via %s", p.si, primaryURL)
+				err = p.secondaryStartup(primaryURL)
+			}
+		}
+	}
+	if err != nil {
+		cmn.ExitLogf("FATAL: %s (non-primary) failed to join cluster, err: %v", p.si, err)
+	}
+}
+
+// - make the *primary* decision taking into account both environment and
+//   loaded Smap, if exists
+// - handle AIS_PRIMARY_ID (TODO: target)
+// - see also "change of mind"
+func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (*smapX, bool) {
+	var (
+		tag       string
+		secondary bool
+	)
+	if loaded {
+		smap.Pmap[p.si.ID()] = p.si
+		tag = smap.StringEx() + ", "
+	} else {
+		smap = nil
+		tag = "no Smap, "
+	}
+
+	// parse env
+	envP := struct {
+		pid     string
+		primary bool
+	}{pid: os.Getenv("AIS_PRIMARY_ID")}
+	envP.primary, _ = cmn.ParseBool(os.Getenv("AIS_IS_PRIMARY"))
+
+	if envP.pid != "" && envP.primary && p.si.ID() != envP.pid {
+		cmn.ExitLogf("FATAL: %s: invalid combination of AIS_IS_PRIMARY=true & AIS_PRIMARY_ID=%s",
+			p.si, envP.pid)
+	}
+	glog.Infof("%s: %sprimary-env=%+v", p.si, tag, envP)
+
+	if loaded && envP.pid != "" {
+		primary := smap.GetProxy(envP.pid)
+		if primary == nil {
+			glog.Errorf("%s: ignoring AIS_PRIMARY_ID=%s - not found in the loaded %s",
+				p.si, envP.pid, smap)
+			envP.pid = ""
+		} else if smap.ProxySI.ID() != envP.pid {
+			glog.Warningf("%s: new AIS_PRIMARY_ID=%s, previous %s", p.si, envP.pid, smap.ProxySI)
+			smap.ProxySI = primary
+		}
+	}
+	if envP.pid != "" {
+		secondary = envP.pid != p.si.ID()
+	} else if loaded {
+		secondary = !smap.isPrimary(p.si)
+	} else {
+		secondary = !envP.primary
+	}
+	return smap, secondary
 }
 
 // no change of mind when on the "secondary" track

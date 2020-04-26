@@ -288,8 +288,12 @@ func newSmapOwner() *smapOwner {
 	}
 }
 
-func (r *smapOwner) load(smap *smapX, config *cmn.Config) error {
-	return jsp.Load(filepath.Join(config.Confdir, smapFname), smap, jsp.CCSign())
+func (r *smapOwner) load(smap *smapX, config *cmn.Config) (err error) {
+	err = jsp.Load(filepath.Join(config.Confdir, smapFname), smap, jsp.CCSign())
+	if err == nil && smap.version() == 0 {
+		err = fmt.Errorf("unexpected: persistent Smap %s having version zero", smap)
+	}
+	return
 }
 
 func (r *smapOwner) Get() *cluster.Smap               { return &r.get().Smap }

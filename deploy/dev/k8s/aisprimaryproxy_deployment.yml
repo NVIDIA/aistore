@@ -27,7 +27,7 @@ spec:
         env:
          - name: ROLE
            value: "proxy"
-         - name: AIS_PRIMARYPROXY
+         - name: AIS_IS_PRIMARY
            value: "TRUE"
         volumeMounts:
          - name: ais-config

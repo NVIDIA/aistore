@@ -198,9 +198,9 @@ for (( c=START; c<=END; c++ )); do
   TARGET_PARAM="-config=${CONFFILE} -role=target $1 $2"
 
   if [[ $c -eq 0 ]]; then
-    export AIS_PRIMARYPROXY="true"
+    export AIS_IS_PRIMARY="true"
     runCmd "${CMD} ${PROXY_PARAM}"
-    unset AIS_PRIMARYPROXY
+    unset AIS_IS_PRIMARY
 
     # Wait for the proxy to start up
     sleep 2
