@@ -262,7 +262,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		err            error
 		offset, length int64
 	)
-	if err = bck.AllowPUT(); err != nil {
+	if err = bck.AllowGET(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
