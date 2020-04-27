@@ -81,7 +81,6 @@ aisfs: aisfs-pre build-aisfs ## Build 'aisfs' binary
 
 cli: ## Build CLI ('ais' binary)
 	@echo "Building ais (CLI)..."
-	@./$(BUILD_DIR)/cli/install.sh --ignore-autocomplete
 	@go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/cli/*.go
 	@echo "done."
 
