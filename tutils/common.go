@@ -98,7 +98,7 @@ type SkipTestArgs struct {
 
 func CheckSkip(t *testing.T, args SkipTestArgs) {
 	if args.RequiresRemote && RemoteCluster.UUID == "" {
-		t.Skip("remote uuid and url (REMOTE_CLUSTER) was not provided")
+		t.Skip("test requires a remote cluster")
 	}
 	if args.Long && testing.Short() {
 		t.Skip("skipping test in short mode")

@@ -476,3 +476,48 @@ func (m *ioContext) setRandBucketProps() {
 	err := api.SetBucketProps(baseParams, m.bck, props)
 	tassert.CheckFatal(m.t, err)
 }
+
+func runProviderTests(t *testing.T, f func(*testing.T, cmn.Bck)) {
+	tests := []struct {
+		name     string
+		bck      cmn.Bck
+		skipArgs tutils.SkipTestArgs
+	}{
+		{
+			name: "local",
+			bck:  cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
+		},
+		{
+			name: "cloud",
+			bck:  cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
+			skipArgs: tutils.SkipTestArgs{
+				Long:  true,
+				Cloud: true,
+			},
+		},
+		{
+			name: "remote",
+			bck:  cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID}},
+			skipArgs: tutils.SkipTestArgs{
+				RequiresRemote: true,
+			},
+		},
+	}
+	for _, test := range tests { // nolint:gocritic // no performance critical code
+		t.Run(test.name, func(t *testing.T) {
+			test.skipArgs.Bck = test.bck
+			tutils.CheckSkip(t, test.skipArgs)
+
+			if test.bck.IsAIS() || test.bck.IsRemoteAIS() {
+				baseParams := tutils.DefaultBaseAPIParams(t)
+				err := api.CreateBucket(baseParams, test.bck)
+				tassert.CheckFatal(t, err)
+				defer func() {
+					api.DestroyBucket(baseParams, test.bck)
+				}()
+			}
+
+			f(t, test.bck)
+		})
+	}
+}

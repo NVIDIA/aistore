@@ -168,58 +168,51 @@ func TestAppendObject(t *testing.T) {
 
 // PUT, then delete
 func Test_putdelete(t *testing.T) {
-	const fileSize = 512 * 1024
+	const fileSize = 512 * cmn.KiB
 
 	var (
 		proxyURL = tutils.GetPrimaryURL()
-		bck      = cmn.Bck{Name: clibucket}
 	)
 
-	if testing.Short() && tutils.IsCloudBucket(t, proxyURL, bck) {
-		t.Skipf("don't run when short mode and cloud bucket")
-	}
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+		var (
+			errCh      = make(chan error, numfiles)
+			filesPutCh = make(chan string, numfiles)
+		)
 
-	var (
-		errCh      = make(chan error, numfiles)
-		filesPutCh = make(chan string, numfiles)
-	)
+		tutils.PutRandObjs(proxyURL, bck, DeleteStr, fileSize, numfiles, errCh, filesPutCh)
+		close(filesPutCh)
+		tassert.SelectErr(t, errCh, "put", true)
 
-	if createBucketIfNotCloud(t, proxyURL, &bck) {
-		defer tutils.DestroyBucket(t, proxyURL, bck)
-	}
+		// Declare one channel per worker to pass the keyname
+		nameChans := make([]chan string, numworkers)
+		for i := 0; i < numworkers; i++ {
+			// Allow a bunch of messages at a time to be written asynchronously to a channel
+			nameChans[i] = make(chan string, 100)
+		}
 
-	tutils.PutRandObjs(proxyURL, bck, DeleteStr, fileSize, numfiles, errCh, filesPutCh)
-	close(filesPutCh)
-	tassert.SelectErr(t, errCh, "put", true)
+		// Start the worker pools
+		var wg = &sync.WaitGroup{}
+		// Get the workers started
+		for i := 0; i < numworkers; i++ {
+			wg.Add(1)
+			go deleteFiles(proxyURL, bck, nameChans[i], wg, errCh)
+		}
 
-	// Declare one channel per worker to pass the keyname
-	nameChans := make([]chan string, numworkers)
-	for i := 0; i < numworkers; i++ {
-		// Allow a bunch of messages at a time to be written asynchronously to a channel
-		nameChans[i] = make(chan string, 100)
-	}
+		num := 0
+		for name := range filesPutCh {
+			nameChans[num%numworkers] <- filepath.Join(DeleteStr, name)
+			num++
+		}
 
-	// Start the worker pools
-	var wg = &sync.WaitGroup{}
-	// Get the workers started
-	for i := 0; i < numworkers; i++ {
-		wg.Add(1)
-		go deleteFiles(proxyURL, bck, nameChans[i], wg, errCh)
-	}
+		// Close the channels after the reading is done
+		for i := 0; i < numworkers; i++ {
+			close(nameChans[i])
+		}
 
-	num := 0
-	for name := range filesPutCh {
-		nameChans[num%numworkers] <- filepath.Join(DeleteStr, name)
-		num++
-	}
-
-	// Close the channels after the reading is done
-	for i := 0; i < numworkers; i++ {
-		close(nameChans[i])
-	}
-
-	wg.Wait()
-	tassert.SelectErr(t, errCh, "delete", false)
+		wg.Wait()
+		tassert.SelectErr(t, errCh, "delete", false)
+	})
 }
 
 func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, objLimit int) (*cmn.BucketList, error) {
@@ -244,206 +237,195 @@ func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg,
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
 	var (
-		bck      = cmn.Bck{Name: clibucket}
 		proxyURL = tutils.GetPrimaryURL()
 	)
 
-	if created := createBucketIfNotCloud(t, proxyURL, &bck); created {
-		defer tutils.DestroyBucket(t, proxyURL, bck)
-	}
-
-	// Declare one channel per worker to pass the keyname
-	keynameChans := make([]chan string, numworkers)
-	for i := 0; i < numworkers; i++ {
-		// Allow a bunch of messages at a time to be written asynchronously to a channel
-		keynameChans[i] = make(chan string, 100)
-	}
-	// Start the worker pools
-	errCh := make(chan error, 100)
-	var wg = &sync.WaitGroup{}
-	// Get the workers started
-	for i := 0; i < numworkers; i++ {
-		wg.Add(1)
-		go deleteFiles(proxyURL, bck, keynameChans[i], wg, errCh)
-	}
-
-	// list the bucket
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	re, err := regexp.Compile(match)
-	if err != nil {
-		t.Errorf("Invalid match expression %s, err = %v", match, err)
-		return
-	}
-
-	var num int
-	for _, entry := range reslist.Entries {
-		name := entry.Name
-		if !re.MatchString(name) {
-			continue
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+		// Declare one channel per worker to pass the keyname
+		keynameChans := make([]chan string, numworkers)
+		for i := 0; i < numworkers; i++ {
+			// Allow a bunch of messages at a time to be written asynchronously to a channel
+			keynameChans[i] = make(chan string, 100)
 		}
-		keynameChans[num%numworkers] <- name
-		num++
-		if num >= numfiles {
-			break
+		// Start the worker pools
+		errCh := make(chan error, 100)
+		var wg = &sync.WaitGroup{}
+		// Get the workers started
+		for i := 0; i < numworkers; i++ {
+			wg.Add(1)
+			go deleteFiles(proxyURL, bck, keynameChans[i], wg, errCh)
 		}
-	}
-	// Close the channels after the reading is done
-	for i := 0; i < numworkers; i++ {
-		close(keynameChans[i])
-	}
-	wg.Wait()
-	select {
-	case <-errCh:
-		t.Fail()
-	default:
-	}
+
+		// list the bucket
+		var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
+		baseParams := tutils.BaseAPIParams(proxyURL)
+		reslist, err := api.ListObjects(baseParams, bck, msg, 0)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		re, err := regexp.Compile(match)
+		if err != nil {
+			t.Errorf("Invalid match expression %s, err = %v", match, err)
+			return
+		}
+
+		var num int
+		for _, entry := range reslist.Entries {
+			name := entry.Name
+			if !re.MatchString(name) {
+				continue
+			}
+			keynameChans[num%numworkers] <- name
+			num++
+			if num >= numfiles {
+				break
+			}
+		}
+		// Close the channels after the reading is done
+		for i := 0; i < numworkers; i++ {
+			close(keynameChans[i])
+		}
+		wg.Wait()
+		select {
+		case <-errCh:
+			t.Fail()
+		default:
+		}
+	})
 }
 
 func Test_putdeleteRange(t *testing.T) {
-	var (
-		bck      = cmn.Bck{Name: clibucket}
-		proxyURL = tutils.GetPrimaryURL()
-	)
-
 	if numfiles < 10 || numfiles%10 != 0 {
-		t.Skip("numfiles must be a positive multiple of 10")
-	}
-
-	if testing.Short() && tutils.IsCloudBucket(t, proxyURL, bck) {
-		t.Skipf("don't run when short mode and cloud bucket")
+		t.Fatal("numfiles must be a positive multiple of 10")
 	}
 
 	const (
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
 		objSize      = 16 * 1024
 	)
+	var (
+		proxyURL = tutils.GetPrimaryURL()
+	)
 
-	if createBucketIfNotCloud(t, proxyURL, &bck) {
-		defer tutils.DestroyBucket(t, proxyURL, bck)
-	}
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+		errCh := make(chan error, numfiles*5)
+		objsPutCh := make(chan string, numfiles)
 
-	errCh := make(chan error, numfiles*5)
-	objsPutCh := make(chan string, numfiles)
+		objList := make([]string, 0, numfiles)
+		for i := 0; i < numfiles/2; i++ {
+			fname := fmt.Sprintf("a-%04d", i)
+			objList = append(objList, fname)
+			fname = fmt.Sprintf("b-%04d", i)
+			objList = append(objList, fname)
+		}
+		tutils.PutObjsFromList(proxyURL, bck, commonPrefix, objSize, objList, errCh, objsPutCh)
+		tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
+		close(objsPutCh)
 
-	objList := make([]string, 0, numfiles)
-	for i := 0; i < numfiles/2; i++ {
-		fname := fmt.Sprintf("a-%04d", i)
-		objList = append(objList, fname)
-		fname = fmt.Sprintf("b-%04d", i)
-		objList = append(objList, fname)
-	}
-	tutils.PutObjsFromList(proxyURL, bck, commonPrefix, objSize, objList, errCh, objsPutCh)
-	tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
-	close(objsPutCh)
-	type testParams struct {
-		// title to print out while testing
-		name string
-		// a range of file IDs
-		rangeStr string
-		// total number of files expected to delete
-		delta int
-	}
-	tests := []testParams{
-		{
-			"Trying to delete files with invalid prefix",
-			"file/a-{0..10}",
-			0,
-		},
-		{
-			"Trying to delete files out of range",
-			commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", numfiles+10, numfiles+110),
-			0,
-		},
-		{
-			fmt.Sprintf("Deleting %d files with prefix 'a-'", numfiles/10),
-			commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (numfiles-numfiles/5)/2, numfiles/2),
-			numfiles / 10,
-		},
-		{
-			fmt.Sprintf("Deleting %d files (short range)", numfiles/5),
-			commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, numfiles/5),
-			numfiles / 5,
-		},
-		{
-			"Deleting files with empty range",
-			commonPrefix + "/b-",
-			numfiles/2 - numfiles/5,
-		},
-	}
+		tests := []struct {
+			// title to print out while testing
+			name string
+			// a range of file IDs
+			rangeStr string
+			// total number of files expected to delete
+			delta int
+		}{
+			{
+				"Trying to delete files with invalid prefix",
+				"file/a-{0..10}",
+				0,
+			},
+			{
+				"Trying to delete files out of range",
+				commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", numfiles+10, numfiles+110),
+				0,
+			},
+			{
+				fmt.Sprintf("Deleting %d files with prefix 'a-'", numfiles/10),
+				commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (numfiles-numfiles/5)/2, numfiles/2),
+				numfiles / 10,
+			},
+			{
+				fmt.Sprintf("Deleting %d files (short range)", numfiles/5),
+				commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, numfiles/5),
+				numfiles / 5,
+			},
+			{
+				"Deleting files with empty range",
+				commonPrefix + "/b-",
+				numfiles/2 - numfiles/5,
+			},
+		}
 
-	totalFiles := numfiles
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck, Timeout: rebalanceTimeout}
-	for idx, test := range tests {
+		totalFiles := numfiles
+		baseParams := tutils.BaseAPIParams(proxyURL)
+		xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck, Timeout: rebalanceTimeout}
+		for idx, test := range tests {
+			msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
+			tutils.Logf("%d. %s\n  Range: [%s]\n",
+				idx+1, test.name, test.rangeStr)
+
+			err := api.DeleteRange(baseParams, bck, test.rangeStr)
+			if err != nil {
+				t.Error(err)
+				continue
+			}
+			if err := api.WaitForXaction(baseParams, xactArgs); err != nil {
+				t.Error(err)
+				continue
+			}
+
+			totalFiles -= test.delta
+			bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
+			if err != nil {
+				t.Error(err)
+				continue
+			}
+			if len(bktlst.Entries) != totalFiles {
+				t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), totalFiles)
+			} else {
+				tutils.Logf("  %d files have been deleted\n", test.delta)
+			}
+		}
+
+		tutils.Logf("Cleaning up remained objects...\n")
 		msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
-		tutils.Logf("%d. %s\n  Range: [%s]\n",
-			idx+1, test.name, test.rangeStr)
-
-		err := api.DeleteRange(baseParams, bck, test.rangeStr)
+		bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 		if err != nil {
-			t.Error(err)
-			continue
+			t.Errorf("Failed to get the list of remained files, err: %v\n", err)
 		}
-		if err := api.WaitForXaction(baseParams, xactArgs); err != nil {
-			t.Error(err)
-			continue
+		// cleanup everything at the end
+		// Declare one channel per worker to pass the keyname
+		nameChans := make([]chan string, numworkers)
+		for i := 0; i < numworkers; i++ {
+			// Allow a bunch of messages at a time to be written asynchronously to a channel
+			nameChans[i] = make(chan string, 100)
 		}
 
-		totalFiles -= test.delta
-		bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
-		if err != nil {
-			t.Error(err)
-			continue
+		// Start the worker pools
+		var wg = &sync.WaitGroup{}
+		// Get the workers started
+		for i := 0; i < numworkers; i++ {
+			wg.Add(1)
+			go deleteFiles(proxyURL, bck, nameChans[i], wg, errCh)
 		}
-		if len(bktlst.Entries) != totalFiles {
-			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), totalFiles)
-		} else {
-			tutils.Logf("  %d files have been deleted\n", test.delta)
+
+		num := 0
+		for _, entry := range bckList.Entries {
+			nameChans[num%numworkers] <- entry.Name
+			num++
 		}
-	}
 
-	tutils.Logf("Cleaning up remained objects...\n")
-	msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
-	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
-	if err != nil {
-		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
-	}
-	// cleanup everything at the end
-	// Declare one channel per worker to pass the keyname
-	nameChans := make([]chan string, numworkers)
-	for i := 0; i < numworkers; i++ {
-		// Allow a bunch of messages at a time to be written asynchronously to a channel
-		nameChans[i] = make(chan string, 100)
-	}
+		// Close the channels after the reading is done
+		for i := 0; i < numworkers; i++ {
+			close(nameChans[i])
+		}
 
-	// Start the worker pools
-	var wg = &sync.WaitGroup{}
-	// Get the workers started
-	for i := 0; i < numworkers; i++ {
-		wg.Add(1)
-		go deleteFiles(proxyURL, bck, nameChans[i], wg, errCh)
-	}
-
-	num := 0
-	for _, entry := range bckList.Entries {
-		nameChans[num%numworkers] <- entry.Name
-		num++
-	}
-
-	// Close the channels after the reading is done
-	for i := 0; i < numworkers; i++ {
-		close(nameChans[i])
-	}
-
-	wg.Wait()
-	tassert.SelectErr(t, errCh, "delete", false)
+		wg.Wait()
+		tassert.SelectErr(t, errCh, "delete", false)
+	})
 }
 
 func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {

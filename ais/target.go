@@ -647,8 +647,8 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
+			return
 		}
-		return
 	}
 	if appendTy == "" {
 		err = lom.AllowPUT()
@@ -795,13 +795,15 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	err = t.objDelete(t.contextWithAuth(r.Header), lom, evict)
+	err, errCode := t.objDelete(t.contextWithAuth(r.Header), lom, evict)
 	if err != nil {
-		if cmn.IsObjNotExist(err) {
+		if errCode == http.StatusNotFound {
 			t.invalmsghdlrsilent(w, r,
-				fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.ObjName), http.StatusNotFound)
+				fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.ObjName),
+				http.StatusNotFound,
+			)
 		} else {
-			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err))
+			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err), errCode)
 		}
 		return
 	}
@@ -1327,11 +1329,12 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	}
 }
 
-func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bool) error {
+func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bool) (error, int) {
 	var (
-		cloudErr   error
-		errRet     error
-		delFromAIS bool
+		cloudErr     error
+		cloudErrCode int
+		errRet       error
+		delFromAIS   bool
 	)
 	lom.Lock(true)
 	defer lom.Unlock(true)
@@ -1339,13 +1342,16 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	delFromCloud := lom.Bck().IsRemote() && !evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
-	} else if !cmn.IsObjNotExist(err) || (!delFromCloud && cmn.IsObjNotExist(err)) {
-		return err
+	} else if !cmn.IsObjNotExist(err) {
+		return err, 0
+	} else if !delFromCloud && cmn.IsObjNotExist(err) {
+		return err, http.StatusNotFound
 	}
 
 	if delFromCloud {
-		if err, _ := t.Cloud(lom.Bck().Provider).DeleteObj(ctx, lom); err != nil {
-			cloudErr = fmt.Errorf("%s: DELETE failed, err: %v", lom, err)
+		if err, errCode := t.Cloud(lom.Bck().Provider).DeleteObj(ctx, lom); err != nil {
+			cloudErr = err
+			cloudErrCode = errCode
 			t.statsT.Add(stats.DeleteCount, 1)
 		}
 	}
@@ -1356,7 +1362,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 				if cloudErr != nil {
 					glog.Errorf("%s: failed to delete from cloud: %v", lom, cloudErr)
 				}
-				return errRet
+				return errRet, 0
 			}
 		}
 		if evict {
@@ -1368,9 +1374,9 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 		}
 	}
 	if cloudErr != nil {
-		return fmt.Errorf("%s: failed to delete from cloud: %v", lom, cloudErr)
+		return fmt.Errorf("failed to delete from cloud: %w", cloudErr), cloudErrCode
 	}
-	return errRet
+	return errRet, 0
 }
 
 ///////////////////

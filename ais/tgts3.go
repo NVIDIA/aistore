@@ -377,26 +377,25 @@ func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.invalmsghdlr(w, r, "object name is undefined")
 		return
 	}
-	var (
-		err error
-	)
-	if err = bck.AllowDELETE(); err != nil {
+	if err := bck.AllowDELETE(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	objName := path.Join(items[1:]...)
 	lom := &cluster.LOM{T: t, ObjName: objName}
-	if err = lom.Init(bck.Bck, config); err != nil {
+	if err := lom.Init(bck.Bck, config); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	err = t.objDelete(t.contextWithAuth(r.Header), lom, false)
+	err, errCode := t.objDelete(t.contextWithAuth(r.Header), lom, false)
 	if err != nil {
-		if cmn.IsObjNotExist(err) {
+		if errCode == http.StatusNotFound {
 			t.invalmsghdlrsilent(w, r,
-				fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.ObjName), http.StatusNotFound)
+				fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.ObjName),
+				http.StatusNotFound,
+			)
 		} else {
-			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err))
+			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err), errCode)
 		}
 		return
 	}
