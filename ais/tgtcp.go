@@ -60,29 +60,18 @@ func (t *targetrunner) initHostIP() {
 	glog.Infof("AIS_HOSTIP[Public Network]: %s[%s]", hostIP, t.si.URL(cmn.NetworkPublic))
 }
 
-// register (join | keepalive) with primary
-func (t *targetrunner) register(keepalive bool, timeout time.Duration) (primaryURL string, status int, err error) {
-	var (
-		res      callResult
-		url, psi = t.getPrimaryURLAndSI()
-	)
-	if !keepalive {
-		primaryURL, res = t.join(nil)
-	} else { // keepalive
-		res = t.registerToURL(url, psi, timeout, nil, keepalive)
-		primaryURL = url
-	}
+func (t *targetrunner) joinCluster() (status int, err error) {
+	res := t.join(nil)
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
 			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
 		}
-		return primaryURL, res.status, res.err
+		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive
 	if len(res.outjson) == 0 {
 		return
 	}
-	cmn.Assert(!keepalive)
 	err = t.applyRegMeta(res.outjson, "")
 	return
 }
@@ -401,7 +390,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if _, status, err := t.register(false, cmn.DefaultTimeout); err != nil {
+	if status, err := t.joinCluster(); err != nil {
 		s := fmt.Sprintf("%s: failed to register, status %d, err: %v", t.si, status, err)
 		t.invalmsghdlr(w, r, s)
 		return
@@ -1151,35 +1140,6 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
-	for i := 1; ; i++ {
-		time.Sleep(time.Duration(i) * time.Second)
-		smap := t.owner.smap.get()
-		if !smap.isValid() {
-			continue
-		}
-		psi := smap.ProxySI
-		args := callArgs{
-			si: psi,
-			req: cmn.ReqArgs{
-				Method: http.MethodGet,
-				Base:   psi.IntraControlNet.DirectURL,
-				Path:   cmn.URLPath(cmn.Version, cmn.Health),
-			},
-			timeout: timeout,
-		}
-		res := t.call(args)
-		if res.err != nil {
-			continue
-		}
-
-		if res.status == http.StatusOK {
-			break
-		}
-	}
-	t.clusterStarted.Store(true)
-}
-
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &TokenList{}
 	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Tokens); err != nil {
@@ -1195,38 +1155,16 @@ func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 
 // unregisters the target and marks it as disabled by an internal event
 func (t *targetrunner) disable() error {
-	var (
-		status int
-		eunreg error
-	)
-
 	t.regstate.Lock()
 	defer t.regstate.Unlock()
 
 	if t.regstate.disabled {
 		return nil
 	}
-
 	glog.Infof("Disabling %s", t.si)
-	for i := 0; i < maxRetryCnt; i++ {
-		if status, eunreg = t.unregister(); eunreg != nil {
-			if cmn.IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying unregistration...", t.si)
-				time.Sleep(time.Second)
-				continue
-			}
-		}
-		break
+	if err := t.withRetry(t.unregister, "unregister"); err != nil {
+		return err
 	}
-
-	if status >= http.StatusBadRequest || eunreg != nil {
-		// do not update state on error
-		if eunreg == nil {
-			eunreg = fmt.Errorf("error unregistering %s, http status %d", t.si, status)
-		}
-		return eunreg
-	}
-
 	t.regstate.disabled = true
 	glog.Infof("%s has been disabled (unregistered)", t.si)
 	return nil
@@ -1234,38 +1172,16 @@ func (t *targetrunner) disable() error {
 
 // registers the target again if it was disabled by and internal event
 func (t *targetrunner) enable() error {
-	var (
-		status int
-		ereg   error
-	)
-
 	t.regstate.Lock()
 	defer t.regstate.Unlock()
 
 	if !t.regstate.disabled {
 		return nil
 	}
-
 	glog.Infof("Enabling %s", t.si)
-	for i := 0; i < maxRetryCnt; i++ {
-		if _, status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
-			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying registration...", t.si)
-				time.Sleep(time.Second)
-				continue
-			}
-		}
-		break
+	if err := t.withRetry(t.joinCluster, "register"); err != nil {
+		return err
 	}
-
-	if status >= http.StatusBadRequest || ereg != nil {
-		// do not update state on error
-		if ereg == nil {
-			ereg = fmt.Errorf("error registering %s, http status: %d", t.si, status)
-		}
-		return ereg
-	}
-
 	t.regstate.disabled = false
 	glog.Infof("%s has been enabled", t.si)
 	return nil

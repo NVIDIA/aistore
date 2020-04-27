@@ -165,10 +165,7 @@ func (gfn *globalGFN) activateTimed() {
 ///////////////////
 
 func (t *targetrunner) Run() error {
-	var (
-		config = cmn.GCO.Get()
-		ereg   error
-	)
+	config := cmn.GCO.Get()
 	if err := t.si.Validate(); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
@@ -207,24 +204,16 @@ func (t *targetrunner) Run() error {
 	// join cluster
 	//
 	t.owner.smap.put(smap)
-	for i := 0; i < maxRetryCnt; i++ {
-		var status int
-		if _, status, ereg = t.register(false, cmn.DefaultTimeout); ereg != nil {
-			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying registration...", t.si)
-				time.Sleep(time.Second)
-				continue
-			}
-		}
-		break
-	}
-	if ereg != nil {
-		glog.Errorf("%s failed to register, err: %v", t.si, ereg)
+	if err := t.withRetry(t.joinCluster, "join"); err != nil {
+		glog.Errorf("%s failed to register, err: %v", t.si, err)
 		glog.Errorf("%s is terminating", t.si)
-		return ereg
+		return err
 	}
 
-	go t.pollClusterStarted(config.Timeout.CplaneOperation)
+	go func() {
+		t.pollClusterStarted(config.Timeout.CplaneOperation)
+		t.clusterStarted.Store(true)
+	}()
 
 	t.detectMpathChanges()
 

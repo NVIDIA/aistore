@@ -33,15 +33,9 @@ var (
 	_ cmn.ConfigListener = &proxyKeepaliveRunner{}
 	_ keepaliver         = &targetKeepaliveRunner{}
 	_ keepaliver         = &proxyKeepaliveRunner{}
-	_ registerer         = &proxyrunner{}
-	_ registerer         = &targetrunner{}
 
 	minKeepaliveTime = float64(time.Second.Nanoseconds())
 )
-
-type registerer interface {
-	register(keepalive bool, t time.Duration) (string, int, error)
-}
 
 type keepaliver interface {
 	onerr(err error, status int)
@@ -147,7 +141,7 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 	if smap == nil || !smap.isValid() {
 		return
 	}
-	if stopped = tkr.register(tkr.t, smap.ProxySI.ID(), tkr.t.si.Name()); stopped {
+	if stopped = tkr.register(tkr.t.sendKeepalive, smap.ProxySI.ID(), tkr.t.si.Name()); stopped {
 		tkr.t.onPrimaryProxyFailure()
 	}
 	return
@@ -173,7 +167,7 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 		return
 	}
 
-	if stopped = pkr.register(pkr.p, smap.ProxySI.ID(), pkr.p.si.Name()); stopped {
+	if stopped = pkr.register(pkr.p.sendKeepalive, smap.ProxySI.ID(), pkr.p.si.Name()); stopped {
 		pkr.p.onPrimaryProxyFailure()
 	}
 	return
@@ -436,12 +430,12 @@ func (k *keepalive) Run() error {
 }
 
 // register is called by non-primary proxies and targets to send a keepalive to the primary proxy.
-func (k *keepalive) register(r registerer, primaryProxyID, hname string) (stopped bool) {
+func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), primaryProxyID, hname string) (stopped bool) {
 	var (
-		timeout        = time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
-		now            = time.Now()
-		_, status, err = r.register(true, timeout) // register
-		delta          = time.Since(now)
+		timeout     = time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
+		now         = time.Now()
+		status, err = sendKeepalive(timeout)
+		delta       = time.Since(now)
 	)
 
 	k.statsT.Add(stats.KeepAliveLatency, int64(delta))
@@ -459,7 +453,7 @@ func (k *keepalive) register(r registerer, primaryProxyID, hname string) (stoppe
 		case <-ticker.C:
 			i++
 			now = time.Now()
-			_, status, err = r.register(true, timeout)
+			status, err = sendKeepalive(timeout)
 			timeout = k.updateTimeoutForDaemon(primaryProxyID, time.Since(now))
 			if err == nil {
 				glog.Infof("%s: keepalive OK after %d attempt(s)", hname, i)

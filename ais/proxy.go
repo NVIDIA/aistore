@@ -182,28 +182,24 @@ func (p *proxyrunner) Run() error {
 	return p.httprunner.run()
 }
 
-func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (primaryURL string, status int, err error) {
-	var (
-		res  callResult
-		smap = p.owner.smap.get()
-	)
+func (p *proxyrunner) sendKeepalive(timeout time.Duration) (status int, err error) {
+	smap := p.owner.smap.get()
 	if smap != nil && smap.isPrimary(p.si) {
 		return
 	}
-	if !keepalive {
-		if cmn.GCO.Get().Proxy.NonElectable {
-			query := url.Values{}
-			query.Add(cmn.URLParamNonElectable, "true")
-			primaryURL, res = p.join(query)
-		} else {
-			primaryURL, res = p.join(nil)
-		}
-	} else { // keepalive
-		url, psi := p.getPrimaryURLAndSI()
-		res = p.registerToURL(url, psi, timeout, nil, keepalive)
-		primaryURL = url
+	return p.httprunner.sendKeepalive(timeout)
+}
+
+func (p *proxyrunner) joinCluster() (status int, err error) {
+	var query url.Values
+	if smap := p.owner.smap.get(); smap != nil && smap.isPrimary(p.si) {
+		return
 	}
-	return primaryURL, res.status, res.err
+	if cmn.GCO.Get().Proxy.NonElectable {
+		query = url.Values{cmn.URLParamNonElectable: []string{"true"}}
+	}
+	res := p.join(query)
+	return res.status, res.err
 }
 
 func (p *proxyrunner) unregisterSelf() (int, error) {

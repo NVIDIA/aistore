@@ -1152,11 +1152,13 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, err
 // - but only if those are defined and different from the previously tried.
 //
 // ================================== Background =========================================
-func (h *httprunner) join(query url.Values) (primaryURL string, res callResult) {
-	url, psi := h.getPrimaryURLAndSI()
+func (h *httprunner) join(query url.Values) (res callResult) {
+	var (
+		primaryURL string
+		url, psi   = h.getPrimaryURLAndSI()
+	)
 	res = h.registerToURL(url, psi, cmn.DefaultTimeout, query, false)
 	if res.err == nil {
-		primaryURL = url
 		return
 	}
 	config := cmn.GCO.Get()
@@ -1226,6 +1228,61 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	return
 }
 
+func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error) {
+	primaryURL, psi := h.getPrimaryURLAndSI()
+	res := h.registerToURL(primaryURL, psi, timeout, nil, true)
+	if res.err != nil {
+		if strings.Contains(res.err.Error(), ciePrefix) {
+			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
+		}
+		return res.status, res.err
+	}
+	if len(res.outjson) > 0 {
+		s := string(res.outjson)
+		if len(res.outjson) > 32 {
+			s = string(res.outjson[:32])
+		}
+		glog.Errorf("%s: unexpected keepalive response from %s: [%s]", h.si, psi, s)
+	}
+	return
+}
+
+func (h *httprunner) withRetry(call func() (int, error), action string) (err error) {
+	var (
+		config      = cmn.GCO.Get()
+		retryPolicy = struct {
+			sleep   time.Duration
+			timeout int
+			refused int
+			backoff bool
+		}{config.Timeout.CplaneOperation / 2, 2, 4, true} // NOTE: default retry policy for ops like join-cluster et al.
+		sleep = retryPolicy.sleep
+	)
+	for i, j, k := 0, 0, 1; i < retryPolicy.timeout && j < retryPolicy.refused; k++ {
+		var status int
+		if status, err = call(); err == nil && status < http.StatusBadRequest {
+			return
+		}
+		glog.Errorf("%s: failed to %s, err: %v(%d)", h.si, action, err, status)
+		if err == nil {
+			err = fmt.Errorf("http status: %d", status)
+		}
+		if cmn.IsErrConnectionRefused(err) {
+			j++
+		} else if status == http.StatusRequestTimeout {
+			i++
+		} else {
+			break
+		}
+		if retryPolicy.backoff && k > 1 {
+			sleep = cmn.MinDuration(sleep+retryPolicy.sleep, config.Timeout.MaxKeepalive)
+		}
+		time.Sleep(sleep)
+		glog.Errorf("%s: retrying(%d)...", h.si, k)
+	}
+	return
+}
+
 // getPrimaryURLAndSI is a helper function to return primary proxy's URL and daemon info
 // if Smap is not yet synced, use the primary proxy from the config
 // smap lock is acquired to avoid race between this function and other smap access (for example,
@@ -1243,6 +1300,34 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 	}
 	url, proxysi = config.Proxy.PrimaryURL, smap.ProxySI
 	return
+}
+
+func (h *httprunner) pollClusterStarted(timeout time.Duration) {
+	for i := 1; ; i++ {
+		time.Sleep(time.Duration(i) * time.Second)
+		smap := h.owner.smap.get()
+		if !smap.isValid() {
+			continue
+		}
+		psi := smap.ProxySI
+		args := callArgs{
+			si: psi,
+			req: cmn.ReqArgs{
+				Method: http.MethodGet,
+				Base:   psi.IntraControlNet.DirectURL,
+				Path:   cmn.URLPath(cmn.Version, cmn.Health),
+			},
+			timeout: timeout,
+		}
+		res := h.call(args)
+		if res.err != nil {
+			continue
+		}
+
+		if res.status == http.StatusOK {
+			break
+		}
+	}
 }
 
 func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config *cmn.Config) {
