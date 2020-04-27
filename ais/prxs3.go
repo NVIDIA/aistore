@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // [METHOD] /s3
@@ -75,6 +76,17 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.putObjS3(w, r, apitems)
+	case http.MethodPost:
+		if len(apitems) != 1 {
+			p.invalmsghdlr(w, r, "bucket name expected")
+			return
+		}
+		q := r.URL.Query()
+		if _, multiple := q[s3compat.URLParamMultiDelete]; !multiple {
+			p.invalmsghdlr(w, r, "invalid request")
+			return
+		}
+		p.delMultipleObjs(w, r, apitems[0])
 	case http.MethodDelete:
 		if len(apitems) == 0 {
 			p.invalmsghdlr(w, r, "object or bucket name required")
@@ -187,12 +199,18 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 	msg := cmn.ActionMsg{Action: cmn.ActDelete}
 	query := make(url.Values)
 	query.Set(cmn.URLParamProvider, cmn.ProviderAIS)
-	listMsg := &cmn.ListMsg{ObjNames: make([]string, len(objList.Object))}
+	listMsg := &cmn.ListMsg{ObjNames: make([]string, 0, len(objList.Object))}
 	for _, obj := range objList.Object {
 		listMsg.ObjNames = append(listMsg.ObjNames, obj.Key)
 	}
 	msg.Value = listMsg
-	if err := p.doListRange(http.MethodDelete, bucket, &msg, query); err != nil {
+	bt := cmn.MustMarshal(&msg)
+	// Marshal+Unmashal to new struct:
+	// hack to make `doListRange` treat `listMsg` as `map[string]interface`
+	var msg2 cmn.ActionMsg
+	err := jsoniter.Unmarshal(bt, &msg2)
+	cmn.AssertNoErr(err)
+	if err := p.doListRange(http.MethodDelete, bucket, &msg2, query); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 	}
 }
