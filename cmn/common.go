@@ -890,7 +890,14 @@ func CopyFile(src, dst string, buf []byte, needCksum bool) (written int64, cksum
 }
 
 // Saves the reader directly to a local file, xxhash-checksums if requested
-func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool, size int64) (cksum *Cksum, err error) {
+func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool,
+	size int64, dirMustExist string) (cksum *Cksum, err error) {
+	Assert(fqn != "")
+	if dirMustExist != "" {
+		if _, err := os.Stat(dirMustExist); err != nil {
+			return nil, fmt.Errorf("failed to save-safe %s: directory %s %w", fqn, dirMustExist, err)
+		}
+	}
 	var (
 		written   int64
 		hasher    *xxhash.XXHash64
@@ -937,13 +944,7 @@ func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool, size i
 // same as above, plus rename
 func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, needCksum bool,
 	size int64, dirMustExist string) (cksum *Cksum, err error) {
-	Assert(fqn != "")
-	if dirMustExist != "" {
-		if _, err := os.Stat(dirMustExist); err != nil {
-			return nil, fmt.Errorf("failed to save-safe %s: directory %s %w", fqn, dirMustExist, err)
-		}
-	}
-	if cksum, err = SaveReader(tmpfqn, reader, buf, needCksum, size); err != nil {
+	if cksum, err = SaveReader(tmpfqn, reader, buf, needCksum, size, dirMustExist); err != nil {
 		return nil, err
 	}
 	if err := Rename(tmpfqn, fqn); err != nil {

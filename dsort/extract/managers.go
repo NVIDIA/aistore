@@ -344,7 +344,7 @@ func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, v
 		// problem).
 		rm.extractionPaths.Store(diskPath, struct{}{})
 
-		if _, err := cmn.SaveReader(diskPath, sgl, buf, false, -1); err != nil {
+		if _, err := cmn.SaveReader(diskPath, sgl, buf, false, -1, ""); err != nil {
 			glog.Error(err)
 			return
 		}

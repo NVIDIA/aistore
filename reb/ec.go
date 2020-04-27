@@ -608,7 +608,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 	buffer, slab := reb.t.GetMMSA().Alloc()
 	metaFQN := mpath.MakePathFQN(hdr.Bck, ec.MetaType, hdr.ObjName)
 	metaBytes := req.md.Marshal()
-	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBytes), buffer, false, int64(len(metaBytes)))
+	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBytes), buffer, false, int64(len(metaBytes)), bdir)
 	if err != nil {
 		slab.Free(buffer)
 		return err
@@ -2000,7 +2000,7 @@ func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Read
 	lom.SetCksum(cksum)
 	metaFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(obj.bck, ec.MetaType, obj.objName)
 	metaBuf := cmn.MustMarshal(&objMD)
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false, -1); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false, -1, bdir); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
 		if rmErr := os.Remove(lom.FQN); rmErr != nil {

@@ -241,7 +241,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 
 	b := cmn.MustMarshal(meta)
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false, -1); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false, -1, bdir); err != nil {
 		writer.Free()
 		<-c.diskCh
 		return err
@@ -305,7 +305,9 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 
 	b := cmn.MustMarshal(meta)
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false, -1); err != nil {
+	bdir := req.LOM.ParsedFQN.MpathInfo.MakePathBck(req.LOM.Bck().Bck)
+
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false, -1, bdir); err != nil {
 		<-c.diskCh
 		return err
 	}
@@ -627,7 +629,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		glog.Infof("Saving main meta %s/%s to %q", req.LOM.Bck(), req.LOM.ObjName, metaFQN)
 	}
 
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false, -1); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false, -1, bdir); err != nil {
 		return restored, err
 	}
 

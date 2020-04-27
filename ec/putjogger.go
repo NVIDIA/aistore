@@ -152,7 +152,8 @@ func (c *putJogger) encode(req *Request) error {
 		return err
 	}
 	metaBuf := meta.Marshal()
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), c.buffer, false, -1); err != nil {
+	bdir := req.LOM.ParsedFQN.MpathInfo.MakePathBck(req.LOM.Bck().Bck)
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), c.buffer, false, -1, bdir); err != nil {
 		return err
 	}
 
