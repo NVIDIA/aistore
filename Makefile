@@ -57,7 +57,7 @@ term-reset = $(shell { tput sgr0 || tput me; } 2>/dev/null)
 $(call make-lazy,cyan)
 $(call make-lazy,term-reset)
 
-.PHONY: all node cli cli-autocompletions aisfs authn aisloader
+.PHONY: all node cli cli-autocompletions aisfs authn aisloader xmeta
 
 all: node cli aisfs authn ## Build all main binaries
 
@@ -90,6 +90,7 @@ cli-autocompletions: ## Add CLI autocompletions
 
 authn: build-authn ## Build 'authn' binary
 aisloader: build-aisloader ## Build 'aisloader' binary
+xmeta: build-xmeta ## Build 'xmeta' binary
 
 build-%:
 	@echo -n "Building $*... "
