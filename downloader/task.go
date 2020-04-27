@@ -168,7 +168,8 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (e
 		timeout = defaultReqTimeout
 	)
 	for i := 0; i < retryCnt; i++ {
-		if err := t.tryDownloadLocal(lom, started, timeout); err == nil {
+		err = t.tryDownloadLocal(lom, started, timeout)
+		if err == nil {
 			return nil
 		} else if errors.Is(err, context.DeadlineExceeded) {
 			glog.Warningf("%s [retries: %d/%d]: context exceeded with timeout (%v), increasing and retrying...", t, i, retryCnt, timeout)
