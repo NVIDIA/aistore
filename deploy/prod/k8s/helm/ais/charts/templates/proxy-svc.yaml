@@ -19,4 +19,4 @@ spec:
   selector:
       app: "{{ template "ais.name" . }}"
       release: "{{ .Release.Name }}"
-      gw: "{{ .Values.ais_k8s.clusterIP_gw_label }}"
+      function: "gateway"

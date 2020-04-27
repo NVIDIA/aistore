@@ -66,6 +66,7 @@ ais_packages:
   - ntp
   - tcptrack
   - conntrack
+  - lsof
 
 #
 # Packages unique to GPU systems. Don't include CUDA here - just generally-
@@ -329,10 +330,11 @@ ais_host_sysctl:
     comment: Keep a bit more free memory for tight situations - have seen some errors during container startup under load.
   - name: net.ipv4.tcp_max_syn_backlog
     value: 100000
+    state: present
     default: 2048
     comment: Tolerate more half-open connections
   - name: net.ipv4.tcp_rfc1337
     value: 1
+    state: present
     default: 0
     comment: Defend against time-wait assassination hazards
-

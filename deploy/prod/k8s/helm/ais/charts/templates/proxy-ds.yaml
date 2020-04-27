@@ -12,22 +12,22 @@ spec:
   selector:
     matchLabels:
       release: {{ .Release.Name }}
-  # RollingUpdate won't work for DFC Proxy because as soon as a master is killed one of the remaining proxies will
-  # try to become a master, so we have to kill them all and relaunch them
-  strategy:
-    type: Recreate
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
   template:
     metadata:
       labels:
         app: {{ template "ais.name" . }}
         component: "{{ .Values.proxy.name }}"
         release: {{ .Release.Name }}
-        gw: "{{ .Values.proxy.gw_label }}"
+        function: "gateway"
     spec:
       initContainers:
         - name: populate-env
-          image: {{ .Values.image.kubectl.repository }}:{{ .Values.image.kubectl.tag }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ .Values.aiscluster.image.kubectl.repository }}:{{ .Values.aiscluster.image.kubectl.tag }}
+          imagePullPolicy: {{ .Values.aiscluster.image.pullPolicy }}
           env:
             - name: MY_NODE
               valueFrom:
@@ -37,8 +37,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: PRIMARY_PROXY_SERVICE_HOSTNAME
-              value: {{ template "ais.fullname" . }}-initial-primary-proxy
+            - name : ROLE
+              value : "proxy"
+            - name: CLUSTERIP_PROXY_SERVICE_HOSTNAME
+              value: {{ template "ais.fullname" . }}-proxy
+            - name: CLUSTERIP_PROXY_SERVICE_PORT
+              value: "{{ .Values.proxy.service.port }}"
           command:
             - "/bin/bash"
           args: [ "-c", "/bin/bash /var/ais_config/set_initial_primary_proxy_env.sh; /bin/bash /var/ais_config/set_uuid_env.sh" ]
@@ -46,16 +50,16 @@ spec:
             - name: config-mount
               mountPath: "/var/ais_config"
             - name: env-mount
-              mountPath: "{{ .Values.proxy.envMountPath.podPath }}"
+              mountPath: "/var/ais_env"
 
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.aisnode.repository }}:{{ .Values.image.aisnode.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.aiscluster.image.aisnode.repository }}:{{ .Values.aiscluster.image.aisnode.tag }}"
+          imagePullPolicy: {{ .Values.aiscluster.image.pullPolicy }}
           securityContext:
             capabilities:
               add:
-                {{ range .Values.ais_k8s.container_capabilities }}
+                {{ range .Values.aiscluster.k8s.container_capabilities }}
                 - {{ . }}
                 {{ end }}
           env:
@@ -66,15 +70,17 @@ spec:
             - name : ROLE
               value : "proxy"
             - name : TARGETS
-              value : "0"
+              value : {{ .Values.aiscluster.expected_target_nodes | quote }}
             - name: AIS_HOSTIP
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
             - name: AIS_CLUSTER_CIDR
-              value: {{ .Values.ais_k8s.cluster_cidr | quote }}
-            - name: PRIMARY_PROXY_SERVICE_HOSTNAME
-              value: {{ template "ais.fullname" . }}-initial-primary-proxy
+              value: {{ .Values.aiscluster.k8s.cluster_cidr | quote }}
+            - name: CLUSTERIP_PROXY_SERVICE_HOSTNAME
+              value: {{ template "ais.fullname" . }}-proxy
+            - name: CLUSTERIP_PROXY_SERVICE_PORT
+              value: "{{ .Values.proxy.service.port }}"
           ports:
             - name: http
               containerPort: {{ .Values.proxy.service.port }}
@@ -83,33 +89,38 @@ spec:
             - name: config-mount
               mountPath: "/var/ais_config"
             - name: env-mount
-              mountPath: "{{ .Values.proxy.envMountPath.podPath }}"
-            - name: etc-mount
-              mountPath: "{{ .Values.ais_config_common.confdir }}"
+              mountPath: "/var/ais_env"
+            - name: state-mount
+              mountPath: "/etc/ais"
             - name: statsd-config
               mountPath: "/var/statsd_config"
+          lifecycle:
+            preStop:
+              exec:
+                command: [ "/bin/bash", "-c", "/usr/bin/pkill -SIGINT aisnode" ]
           livenessProbe:
             httpGet:
               path: /v1/health
               port: {{ .Values.proxy.service.port }}
-            initialDelaySeconds: 120
+            initialDelaySeconds: 90
             periodSeconds: 5
             failureThreshold: 3
-            timeoutSeconds: 10
+            timeoutSeconds: 5
           readinessProbe:
-            httpGet:
-              path: /v1/health
-              port: {{ .Values.proxy.service.port }}
+            exec:
+              command:
+              - /ais_readiness.sh
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 3
-            timeoutSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
           resources:
 {{ toYaml .Values.proxy.resources | indent 12 }}
       securityContext:
         sysctls:
         - name: net.core.somaxconn
-          value: {{ .Values.ais_k8s.sysctls.somaxconn | quote }}
+          value: {{ .Values.aiscluster.k8s.sysctls.somaxconn | quote }}
         - name: net.ipv4.ip_local_port_range
           value: "10240 65535"
       serviceAccount: {{ template "ais.name" . }}-sa
@@ -121,10 +132,10 @@ spec:
             name:  {{ template "ais.name" . }}-proxy
         - name: env-mount
           hostPath:
-            path: {{ .Values.proxy.envMountPath.hostPath }}
-        - name: etc-mount
+            path: "{{ .Values.aiscluster.hostpathPrefix }}/{{ .Release.Name }}/proxy_env"
+        - name: state-mount
           hostPath:
-            path: {{ .Values.proxy.etcMountPath.hostPath }}
+            path: "{{ .Values.aiscluster.hostpathPrefix }}/{{ .Release.Name }}/proxy"
         - name: statsd-config
           configMap:
             name: {{ template "ais.name" . }}-statsd
@@ -137,6 +148,6 @@ spec:
 {{ toYaml . | indent 8 }}
     {{- end }}
       imagePullSecrets:
-        {{- range .Values.image.pullSecretNames }}
+        {{- range .Values.aiscluster.image.pullSecretNames }}
         - name: {{ . }}
         {{- end }}

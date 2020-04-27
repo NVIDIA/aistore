@@ -1,7 +1,8 @@
+{{ if and ( and .Values.tags.builtin_monitoring .Values.graphite.persistence.enabled ) .Values.graphite.ais.pv.path }}
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: graphite-pvc
+  name: ais-graphite-pvc
 spec:
   accessModes:
     - ReadWriteOnce
@@ -12,3 +13,4 @@ spec:
   selector:
     matchLabels:
       consumer: graphite
+{{ end }}

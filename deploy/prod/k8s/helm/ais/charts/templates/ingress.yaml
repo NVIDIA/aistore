@@ -1,5 +1,5 @@
 ---
-{{ if and .Values.ingress.gateway.externalIP .Values.ingress.gateway.port }}
+{{ if and .Values.aiscluster.ingress.gateway.externalIP .Values.aiscluster.ingress.gateway.port }}
 #
 # LoadBalancer gateway service to expose AIS proxy service.
 # The selector matches only electable proxies.
@@ -9,6 +9,11 @@
 # or we can specify one in that range - we choose the latter
 # approach for initial simplicity.
 #
+# We use externalTrafficPolicy of "local" to preserve client IP addresses; this is
+# used in AIS to distinguish external clients from those internal to its k8s cluster
+# (necessary since we're running all of public/intra-control/intra-data on the same
+# interface).
+#
 apiVersion: v1
 kind: Service
 metadata:
@@ -16,19 +21,20 @@ metadata:
 spec:
   ports:
   - name: http
-    port: {{ .Values.ingress.gateway.port }}
+    port: {{ .Values.aiscluster.ingress.gateway.port }}
     protocol: TCP
-    targetPort: {{ .Values.ingress.gateway.targetPort }}
+    targetPort: {{ .Values.aiscluster.ingress.gateway.targetPort }}
   selector:
     app: {{ template "ais.name" . }}
     release: {{ .Release.Name }}
     component: proxy
+    function: gateway
   type: LoadBalancer
   externalTrafficPolicy: Local
-  loadBalancerIP: {{ .Values.ingress.gateway.externalIP | quote }}
+  loadBalancerIP: {{ .Values.aiscluster.ingress.gateway.externalIP | quote }}
 {{ end }}
 ---
-{{ if and .Values.ingress.grafana.externalIP .Values.ingress.grafana.port }}
+{{ if and .Values.aiscluster.ingress.grafana.externalIP .Values.aiscluster.ingress.grafana.port }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -36,13 +42,13 @@ metadata:
 spec:
   ports:
   - name: grafana
-    port: {{ .Values.ingress.grafana.port }}
+    port: {{ .Values.aiscluster.ingress.grafana.port }}
     protocol: TCP
-    targetPort: {{ .Values.ingress.grafana.targetPort }}
+    targetPort: {{ .Values.aiscluster.ingress.grafana.targetPort }}
   selector:
     app: grafana
     release: {{ .Release.Name }}
   type: LoadBalancer
   externalTrafficPolicy: Local
-  loadBalancerIP: {{ .Values.ingress.grafana.externalIP | quote }}
+  loadBalancerIP: {{ .Values.aiscluster.ingress.grafana.externalIP | quote }}
 {{ end }}

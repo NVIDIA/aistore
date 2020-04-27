@@ -12,27 +12,33 @@ spec:
   selector:
     matchLabels:
       release: {{ .Release.Name }}
-  # RollingUpdate won't work for DFC Proxy because as soon as a master is killed one of the remaining proxies will
-  # try to become a master, so we have to kill them all and relaunch them
-  strategy:
-    type: Recreate
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
   template:
     metadata:
       labels:
         app: {{ template "ais.name" . }}
         component: "{{ .Values.ne_proxy.name }}"
         release: {{ .Release.Name }}
-        gw: "{{ .Values.ne_proxy.gw_label }}"
+        function: "gateway"
     spec:
       initContainers:
         - name: populate-env
-          image: {{ .Values.image.kubectl.repository }}:{{ .Values.image.kubectl.tag }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ .Values.aiscluster.image.kubectl.repository }}:{{ .Values.aiscluster.image.kubectl.tag }}
+          imagePullPolicy: {{ .Values.aiscluster.image.pullPolicy }}
           env:
             - name: MY_NODE
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: MY_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name : ROLE
+              value : "proxy"
           command:
             - "/bin/bash"
           args: [ "-c", "/bin/bash /var/ais_config/set_uuid_env.sh" ]
@@ -40,15 +46,15 @@ spec:
             - name: config-mount
               mountPath: "/var/ais_config"
             - name: env-mount
-              mountPath: "{{ .Values.ne_proxy.envMountPath.podPath }}"
+              mountPath: "/var/ais_env"
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.aisnode.repository }}:{{ .Values.image.aisnode.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.aiscluster.image.aisnode.repository }}:{{ .Values.aiscluster.image.aisnode.tag }}"
+          imagePullPolicy: {{ .Values.aiscluster.image.pullPolicy }}
           securityContext:
             capabilities:
               add:
-                {{ range .Values.ais_k8s.container_capabilities }}
+                {{ range .Values.aiscluster.k8s.container_capabilities }}
                 - {{ . }}
                 {{ end }}
           env:
@@ -58,14 +64,14 @@ spec:
               value: "/var/statsd_config/statsd.json"
             - name : ROLE
               value : "proxy"
-            - name : TARGETS
-              value : "0"
             - name: AIS_HOSTIP
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
-            - name: PRIMARY_PROXY_SERVICE_HOSTNAME
-              value: {{ template "ais.fullname" . }}-initial-primary-proxy
+            - name: CLUSTERIP_PROXY_SERVICE_HOSTNAME
+              value: {{ template "ais.fullname" . }}-proxy
+            - name: CLUSTERIP_PROXY_SERVICE_PORT
+              value: "{{ .Values.proxy.service.port }}"
           ports:
             - name: http
               containerPort: {{ .Values.ne_proxy.service.port }}
@@ -74,11 +80,15 @@ spec:
             - name: config-mount
               mountPath: "/var/ais_config"
             - name: env-mount
-              mountPath: "{{ .Values.ne_proxy.envMountPath.podPath }}"
-            - name: etc-mount
-              mountPath: "{{ .Values.ais_config_common.confdir }}"
+              mountPath: "/var/ais_env"
+            - name: state-mount
+              mountPath: "/etc/ais"
             - name: statsd-config
               mountPath: "/var/statsd_config"
+          lifecycle:
+            preStop:
+              exec:
+                command: [ "/bin/bash", "-c", "/usr/bin/pkill -SIGINT aisnode" ]
           livenessProbe:
             httpGet:
               path: /v1/health
@@ -86,21 +96,21 @@ spec:
             initialDelaySeconds: 90
             periodSeconds: 5
             failureThreshold: 3
-            timeoutSeconds: 10
+            timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: /v1/health
               port: {{ .Values.ne_proxy.service.port }}
-            initialDelaySeconds: 10
+            initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
-            timeoutSeconds: 10
+            timeoutSeconds: 5
           resources:
 {{ toYaml .Values.ne_proxy.resources | indent 12 }}
       securityContext:
         sysctls:
         - name: net.core.somaxconn
-          value: {{ .Values.ais_k8s.sysctls.somaxconn | quote }}
+          value: {{ .Values.aiscluster.k8s.sysctls.somaxconn | quote }}
         - name: net.ipv4.ip_local_port_range
           value: "10240 65535"
       serviceAccount: {{ template "ais.name" . }}-sa
@@ -112,10 +122,10 @@ spec:
             name:  {{ template "ais.name" . }}-neproxy
         - name: env-mount
           hostPath:
-            path: {{ .Values.ne_proxy.envMountPath.hostPath }}
-        - name: etc-mount
+            path: "{{ .Values.aiscluster.hostpathPrefix }}/{{ .Release.Name }}/ne_proxy_env"
+        - name: state-mount
           hostPath:
-            path: {{ .Values.ne_proxy.etcMountPath.hostPath }}
+            path: "{{ .Values.aiscluster.hostpathPrefix }}/{{ .Release.Name }}/ne_proxy"
         - name: statsd-config
           configMap:
             name: {{ template "ais.name" . }}-statsd
@@ -128,6 +138,6 @@ spec:
 {{ toYaml . | indent 8 }}
     {{- end }}
       imagePullSecrets:
-        {{- range .Values.image.pullSecretNames }}
+        {{- range .Values.aiscluster.image.pullSecretNames }}
         - name: {{ . }}
         {{- end }}

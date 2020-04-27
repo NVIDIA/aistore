@@ -15,7 +15,7 @@
 #
 # In this example we dedicate a few addresses
 # 10.132.179.10-20 for ingress. In the AIS chart values.yaml
-# the .Values.ingress.gateway.externalIP must be in this
+# the .Values.aiscluster.ingress.gateway.externalIP must be in this
 # range, or leave it blank and let metalLB assign.
 #
 apiVersion: v1

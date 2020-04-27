@@ -17,13 +17,15 @@
 # XXX Perhaps pass a disambiguating prefix to the initContainer and containers?
 #
 
-envfile="{{ .Values.proxy.envMountPath.podPath }}/uuid_env"
+envfile="/var/ais_env/uuid_env"
 
 uuid=$(kubectl describe node $MY_NODE |  grep 'System UUID' | awk -F ' ' '{print $3}')
 
 if [[ "$uuid" =~ ^[A-F0-9a-f]{8}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{12}$ ]]; then
    uuid_hash=$(echo $uuid | sha256sum | awk -F ' ' '{print $1}')
    echo ${uuid_hash:56} > $envfile
+   echo "Labeling pod $MY_POD for ais-daemon-id=${ROLE::1}${uuid_hash:56}"
+   kubectl label pod $MY_POD ais-daemon-id="${ROLE::1}${uuid_hash:56}"
 fi
 
 {{end}}

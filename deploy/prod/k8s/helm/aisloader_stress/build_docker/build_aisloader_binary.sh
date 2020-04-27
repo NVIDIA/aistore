@@ -55,12 +55,12 @@ if [[ -n "$JENKINS_URL" ]]; then
 else
     # Use go in existing PATH
     check_go_version
-    GOPATH=${GOPATH:=$HOME/go}
-    GOBIN=${GOBIN:=$GOPATH/bin}
+    export GOPATH=${GOPATH:=$HOME/go}
+    export GOBIN=${GOBIN:=$GOPATH/bin}
     [[ -d $GOPATH/src/$AISTORE_SRC ]] || whinge "$AISTORE_SRC not found in $GOPATH/src"
 fi
 
-cd $GOPATH/src/$AISTORE_SRC && GOBIN=$1 make aisloader
+cd $GOPATH/src/$AISTORE_SRC && make aisloader && cp $GOBIN/aisloader $1
 [[ $? -eq 0 ]] || whinge "failed to compile 'aisloader'"
 
 exit 0

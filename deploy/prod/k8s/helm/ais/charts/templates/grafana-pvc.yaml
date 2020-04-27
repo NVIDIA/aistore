@@ -1,7 +1,8 @@
+{{ if and ( and .Values.tags.builtin_monitoring .Values.grafana.persistence.enabled ) .Values.grafana.ais.pv.path }}
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: grafana-pvc
+  name: ais-grafana-pvc
 spec:
   accessModes:
     - ReadWriteOnce
@@ -12,3 +13,4 @@ spec:
   selector:
     matchLabels:
       consumer: grafana
+{{ end }}

@@ -19,7 +19,7 @@
         "block_size":   {{ .compression.block_size }},
         "checksum":     {{ .compression.checksum }}
 },
-"confdir": {{ .confdir | quote }},
+"confdir": "/etc/ais",
 "disk": {
         "disk_util_low_wm":     {{ .disk.disk_util_low_wm }},
         "disk_util_high_wm":    {{ .disk.disk_util_high_wm }},
@@ -108,9 +108,9 @@
         "max_host_busy":        {{ .timeout.max_host_busy | quote }}
 },
 "client": {
-        "client_timeout":       {{ .timeout.default_timeout | quote }},
-        "client_long_timeout":  {{ .timeout.default_long_timeout | quote }},
-        "list_timeout":         {{ .timeout.list_timeout | quote }}
+        "client_timeout":       {{ .client.client_timeout | quote }},
+        "client_long_timeout":  {{ .client.client_long_timeout | quote }},
+        "list_timeout":         {{ .client.list_timeout | quote }}
 },
 "versioning": {
         "enabled":              {{ .versioning.enabled }},
@@ -118,8 +118,8 @@
 },
 {{ end -}}
 "fspaths": {
-        {{- $last_mount := last .Values.target.mountPaths -}}
-        {{- range .Values.target.mountPaths -}}
+        {{- $last_mount := last .Values.aiscluster.target.mountPaths -}}
+        {{- range .Values.aiscluster.target.mountPaths -}}
         {{- if eq . $last_mount }}
         "{{ . }}":        ""
         {{ else }}

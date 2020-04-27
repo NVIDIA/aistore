@@ -12,6 +12,10 @@ spec:
   selector:
     matchLabels:
       release: {{ .Release.Name }}
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -21,13 +25,19 @@ spec:
     spec:
       initContainers:
         - name: populate-env
-          image: {{ .Values.image.kubectl.repository }}:{{ .Values.image.kubectl.tag }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ .Values.aiscluster.image.kubectl.repository }}:{{ .Values.aiscluster.image.kubectl.tag }}
+          imagePullPolicy: {{ .Values.aiscluster.image.pullPolicy }}
           env:
             - name: MY_NODE
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: MY_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name : ROLE
+              value : "target"
           command:
             - "/bin/bash"
           args: [ "-c", "/bin/bash /var/ais_config/set_uuid_env.sh" ]
@@ -35,18 +45,18 @@ spec:
             - name: config-mount
               mountPath: "/var/ais_config"
             - name: env-mount
-              mountPath: "{{ .Values.target.envMountPath.podPath }}"
+              mountPath: "/var/ais_env"
 
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.aisnode.repository }}:{{ .Values.image.aisnode.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.aiscluster.image.aisnode.repository }}:{{ .Values.aiscluster.image.aisnode.tag }}"
+          imagePullPolicy: {{ .Values.aiscluster.image.pullPolicy }}
           securityContext:
             # required for hostport to operate, or implement a full pod security policy
             privileged: true
             capabilities:
               add:
-                {{ range .Values.ais_k8s.container_capabilities }}
+                {{ range .Values.aiscluster.k8s.container_capabilities }}
                 - {{ . }}
                 {{ end }}
           env:
@@ -56,9 +66,6 @@ spec:
               value: "/var/statsd_config/statsd.json"
             - name : ROLE
               value : "target"
-            # dummy value for target
-            - name : TARGETS
-              value : "0"
             - name: AIS_PODIP
               valueFrom:
                 fieldRef:
@@ -73,50 +80,56 @@ spec:
               value: {{ .Values.target.config.nodiskio.enabled | quote }}
             - name: AIS_DRYOBJSIZE
               value: {{ .Values.target.config.nodiskio.dryobjsize | quote }}
-            - name: PRIMARY_PROXY_SERVICE_HOSTNAME
-              value: {{ template "ais.fullname" . }}-initial-primary-proxy
+            - name: CLUSTERIP_PROXY_SERVICE_HOSTNAME
+              value: {{ template "ais.fullname" . }}-proxy
+            - name: CLUSTERIP_PROXY_SERVICE_PORT
+              value: "{{ .Values.proxy.service.port }}"
           ports:
             - name: aistarget
               containerPort: {{ .Values.target.service.port }}
-              {{ if and .Values.ais_k8s.cluster_cidr .Values.target.service.hostport }}
+              {{ if and .Values.aiscluster.k8s.cluster_cidr .Values.target.service.hostport }}
               hostPort: {{ .Values.target.service.hostport }}
               {{ end }}
               protocol: TCP
           volumeMounts:
-            - name: etc-mount
-              mountPath: "{{ .Values.ais_config_common.confdir }}"
+            - name: state-mount
+              mountPath: "/etc/ais"
             - name: env-mount
-              mountPath: "{{ .Values.target.envMountPath.podPath }}"
+              mountPath: /var/ais_env
             - name: config-mount
               mountPath: "/var/ais_config"
             - name: statsd-config
               mountPath: "/var/statsd_config"
-            {{ range .Values.target.mountPaths }}
+            {{ range .Values.aiscluster.target.mountPaths }}
             - name: fspath{{ . | replace "/" "-" }}
               mountPath: "{{ . }}"
             {{ end }}
+          lifecycle:
+            preStop:
+              exec:
+                command: [ "/bin/bash", "-c", "/usr/bin/pkill -SIGINT aisnode" ]
           livenessProbe:
             httpGet:
               path: /v1/health
               port: {{ .Values.target.service.port }}
-            initialDelaySeconds: 120
+            initialDelaySeconds: 90
             periodSeconds: 5
             failureThreshold: 3
-            timeoutSeconds: 10
+            timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: /v1/health
               port: {{ .Values.target.service.port }}
-            initialDelaySeconds: 10
-            periodSeconds: 10 
+            initialDelaySeconds: 5
+            periodSeconds: 30 
             failureThreshold: 3
-            timeoutSeconds: 10
+            timeoutSeconds: 5
           resources:
 {{ toYaml .Values.target.resources | indent 12 }}
       securityContext:
         sysctls:
         - name: net.core.somaxconn
-          value: {{ .Values.ais_k8s.sysctls.somaxconn | quote }}
+          value: {{ .Values.aiscluster.k8s.sysctls.somaxconn | quote }}
         - name: net.ipv4.ip_local_port_range
           value: "10240 65535"
       serviceAccount: {{ template "ais.name" . }}-sa
@@ -128,14 +141,14 @@ spec:
             name:  {{ template "ais.name" . }}-target
         - name: env-mount
           hostPath:
-            path: {{ .Values.target.envMountPath.hostPath }}
-        - name: etc-mount
+            path: "{{ .Values.aiscluster.hostpathPrefix }}/{{ .Release.Name }}/target"
+        - name: state-mount
           hostPath:
-            path: {{ .Values.target.etcMountPath.hostPath }}
+            path: "{{ .Values.aiscluster.hostpathPrefix }}/{{ .Release.Name }}/target"
         - name: statsd-config
           configMap:
             name: {{ template "ais.name" . }}-statsd
-        {{ range .Values.target.mountPaths }}
+        {{ range .Values.aiscluster.target.mountPaths }}
         - name: fspath{{ . | replace "/" "-" }}
           hostPath:
             path: {{ . }} 
@@ -149,6 +162,6 @@ spec:
 {{ toYaml . | indent 8 }}
     {{- end }}
       imagePullSecrets:
-        {{- range .Values.image.pullSecretNames }}
+        {{- range .Values.aiscluster.image.pullSecretNames }}
         - name: {{ . }}
         {{- end }}

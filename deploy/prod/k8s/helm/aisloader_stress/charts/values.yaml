@@ -2,9 +2,9 @@ replicaCount: 1
 
 image:
   repository: quay.io/nvidia/aisloader
-  tag: 1
+  tag: stable
   pullPolicy: IfNotPresent
-  pullSecret: requireoverride
+  pullSecret: ais-pull-secret
 
 #
 # The release name for AIS, ie the name used in 'helm install --name=foo .'' for the AIS install.
