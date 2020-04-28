@@ -412,57 +412,49 @@ func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
 }
 
 func propsMainTest(t *testing.T, versioning bool) {
-	var (
-		chkVersion = true
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+		var (
+			config = tutils.GetClusterConfig(t)
+		)
 
-		proxyURL = tutils.RandomProxyURL()
-		config   = tutils.GetClusterConfig(t)
-		bck      = cmn.Bck{
-			Name: clibucket,
-		}
-	)
+		oldChkVersion := config.Versioning.ValidateWarmGet
+		oldVersioning := config.Versioning.Enabled
 
-	oldChkVersion := config.Versioning.ValidateWarmGet
-	oldVersioning := config.Versioning.Enabled
-
-	newConfig := make(cmn.SimpleKVs)
-	if oldVersioning != versioning {
-		newConfig[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(versioning)
-	}
-	warmCheck := chkVersion && versioning
-	if oldChkVersion != warmCheck {
-		newConfig[cmn.HeaderBucketVerValidateWarm] = strconv.FormatBool(warmCheck)
-	}
-	if len(newConfig) != 0 {
-		tutils.SetClusterConfig(t, newConfig)
-	}
-	created := createBucketIfNotCloud(t, proxyURL, &bck)
-
-	defer func() {
-		// restore configuration
 		newConfig := make(cmn.SimpleKVs)
-		oldWarmCheck := oldChkVersion && oldVersioning
-		if oldWarmCheck != warmCheck {
-			newConfig[cmn.HeaderBucketVerValidateWarm] = strconv.FormatBool(oldWarmCheck)
-		}
 		if oldVersioning != versioning {
-			newConfig[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(oldVersioning)
+			newConfig[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(versioning)
+		}
+		warmCheck := versioning
+		if oldChkVersion != warmCheck {
+			newConfig[cmn.HeaderBucketVerValidateWarm] = strconv.FormatBool(warmCheck)
 		}
 		if len(newConfig) != 0 {
 			tutils.SetClusterConfig(t, newConfig)
 		}
-		if created {
-			tutils.DestroyBucket(t, proxyURL, bck)
-		}
-	}()
 
-	props, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bck)
-	if err != nil {
-		t.Fatalf("Could not execute HeadBucket Request: %v", err)
-	}
-	versionEnabled := props.Versioning.Enabled
-	bckIsAIS := props.Provider == cmn.ProviderAIS
-	propsTestCore(t, versionEnabled, bckIsAIS)
+		defer func() {
+			// restore configuration
+			newConfig := make(cmn.SimpleKVs)
+			oldWarmCheck := oldChkVersion && oldVersioning
+			if oldWarmCheck != warmCheck {
+				newConfig[cmn.HeaderBucketVerValidateWarm] = strconv.FormatBool(oldWarmCheck)
+			}
+			if oldVersioning != versioning {
+				newConfig[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(oldVersioning)
+			}
+			if len(newConfig) != 0 {
+				tutils.SetClusterConfig(t, newConfig)
+			}
+		}()
+
+		props, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bck)
+		if err != nil {
+			t.Fatalf("Could not execute HeadBucket Request: %v", err)
+		}
+		versionEnabled := props.Versioning.Enabled
+		bckIsAIS := props.Provider == cmn.ProviderAIS
+		propsTestCore(t, versionEnabled, bckIsAIS)
+	})
 }
 
 func TestObjPropsVersionEnabled(t *testing.T) {

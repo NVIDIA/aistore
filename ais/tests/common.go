@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/url"
 	"path"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -26,6 +27,7 @@ import (
 const rebalanceObjectDistributionTestCoef = 0.3
 
 const (
+	prefixDir               = "filter"
 	baseDir                 = "/tmp/ais"
 	ColdValidStr            = "coldmd5"
 	ChksumValidStr          = "chksum"
@@ -56,6 +58,7 @@ var (
 	multiProxyTestDuration time.Duration
 	clichecksum            string
 	cycles                 int
+	prefixFileNumber       int
 
 	clibucket string
 )
@@ -93,7 +96,7 @@ func (m *ioContext) saveClusterState() {
 	tutils.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
 }
 
-func (m *ioContext) init(randomProxy ...bool) {
+func (m *ioContext) init() {
 	m.proxyURL = tutils.RandomProxyURL()
 	if m.proxyURL == "" {
 		// if random selection failed, use RO url
@@ -523,5 +526,199 @@ func runProviderTests(t *testing.T, f func(*testing.T, cmn.Bck)) {
 
 			f(t, test.bck)
 		})
+	}
+}
+
+func numberOfFilesWithPrefix(fileNames []string, namePrefix, commonDir string) int {
+	numFiles := 0
+	for _, fileName := range fileNames {
+		if commonDir != "" {
+			fileName = fmt.Sprintf("%s/%s", commonDir, fileName)
+		}
+		if strings.HasPrefix(fileName, namePrefix) {
+			numFiles++
+		}
+	}
+	return numFiles
+}
+
+func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck) []string {
+	const (
+		fileSize = cmn.KiB
+	)
+
+	fileNames := make([]string, 0, prefixFileNumber)
+
+	var (
+		wg    = &sync.WaitGroup{}
+		errCh = make(chan error, numfiles)
+	)
+
+	for i := 0; i < prefixFileNumber; i++ {
+		fileName := tutils.GenRandomString(fnlen)
+		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
+
+		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		wg.Add(1)
+		go tutils.PutAsync(wg, proxyURL, bck, keyName, r, errCh)
+		fileNames = append(fileNames, fileName)
+	}
+
+	// Create specific files to test corner cases.
+	extraNames := []string{"dir/obj01", "dir/obj02", "dir/obj03", "dir1/dir2/obj04", "dir1/dir2/obj05"}
+	for _, fName := range extraNames {
+		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
+		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		wg.Add(1)
+		go tutils.PutAsync(wg, proxyURL, bck, keyName, r, errCh)
+		fileNames = append(fileNames, fName)
+	}
+
+	wg.Wait()
+
+	select {
+	case e := <-errCh:
+		tutils.Logf("Failed to PUT: %s\n", e)
+		t.Fail()
+	default:
+	}
+
+	return fileNames
+}
+
+func prefixLookupOne(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
+	tutils.Logf("Looking up for files than names start with %s\n", prefix)
+	var (
+		numFiles   = 0
+		msg        = &cmn.SelectMsg{Prefix: prefix}
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
+	if err != nil {
+		t.Errorf("List files with prefix failed, err = %v", err)
+		return
+	}
+
+	for _, entry := range objList.Entries {
+		tutils.Logf("Found object: %s\n", entry.Name)
+		numFiles++
+	}
+
+	realNumFiles := numberOfFilesWithPrefix(fileNames, prefix, prefixDir)
+	if realNumFiles == numFiles {
+		tutils.Logf("Total files with prefix found: %v\n", numFiles)
+	} else {
+		t.Errorf("Expected number of files with prefix '%s' is %v but found %v files", prefix, realNumFiles, numFiles)
+	}
+}
+
+func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
+	tutils.Logf("Looking up for files in alphabetic order\n")
+
+	var (
+		letters    = "abcdefghijklmnopqrstuvwxyz"
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+	for i := 0; i < len(letters); i++ {
+		key := letters[i : i+1]
+		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
+		var msg = &cmn.SelectMsg{Prefix: lookFor}
+		objList, err := api.ListObjects(baseParams, bck, msg, 0)
+		if err != nil {
+			t.Errorf("List files with prefix failed, err = %v", err)
+			return
+		}
+
+		numFiles := len(objList.Entries)
+		realNumFiles := numberOfFilesWithPrefix(fileNames, key, prefix)
+
+		if numFiles == realNumFiles {
+			if numFiles != 0 {
+				tutils.Logf("Found %v files starting with '%s'\n", numFiles, key)
+			}
+		} else {
+			t.Errorf("Expected number of files with prefix '%s' is %v but found %v files", key, realNumFiles, numFiles)
+			tutils.Logf("Objects returned:\n")
+			for id, oo := range objList.Entries {
+				tutils.Logf("    %d[%d]. %s\n", i, id, oo.Name)
+			}
+		}
+	}
+}
+
+func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck) {
+	tutils.Logf("Testing corner cases\n")
+
+	tests := []struct {
+		title    string
+		prefix   string
+		objCount int
+	}{
+		{"Entire list (dir)", "dir", 5},
+		{"dir/", "dir/", 3},
+		{"dir1", "dir1", 2},
+		{"dir1/", "dir1/", 2},
+	}
+	var (
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+	for idx, test := range tests {
+		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
+		tutils.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
+		var msg = &cmn.SelectMsg{Prefix: p}
+		objList, err := api.ListObjects(baseParams, bck, msg, 0)
+		if err != nil {
+			t.Errorf("List files with prefix failed, err = %v", err)
+			return
+		}
+
+		if len(objList.Entries) != test.objCount {
+			t.Errorf("Expected number of objects with prefix '%s' is %d but found %d",
+				test.prefix, test.objCount, len(objList.Entries))
+			tutils.Logf("Objects returned:\n")
+			for id, oo := range objList.Entries {
+				tutils.Logf("    %d[%d]. %s\n", idx, id, oo.Name)
+			}
+		}
+	}
+}
+
+func prefixLookup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
+	if prefix == "" {
+		prefixLookupDefault(t, proxyURL, bck, fileNames)
+		prefixLookupCornerCases(t, proxyURL, bck)
+	} else {
+		prefixLookupOne(t, proxyURL, bck, fileNames)
+	}
+}
+
+func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
+	var (
+		wg    = &sync.WaitGroup{}
+		errCh = make(chan error, numfiles)
+	)
+
+	for _, fileName := range fileNames {
+		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
+		wg.Add(1)
+		go tutils.Del(proxyURL, bck, keyName, wg, errCh, true)
+	}
+	wg.Wait()
+
+	select {
+	case e := <-errCh:
+		tutils.Logf("Failed to DEL: %s\n", e)
+		t.Fail()
+	default:
 	}
 }

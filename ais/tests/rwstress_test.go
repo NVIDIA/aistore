@@ -130,12 +130,11 @@ func rwCanRunAsync(currAsyncOps int64, maxAsycOps int) bool {
 	return currAsyncOps+1 < int64(maxAsycOps)
 }
 
-func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
+func rwPutLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
 	var (
 		totalOps   int
 		prc        int
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{Name: clibucket}
 	)
 	errCh := make(chan error, 10)
 	fileCount := len(fileNames)
@@ -214,13 +213,12 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 	}
 }
 
-func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, doCleanUp bool) {
+func rwDelLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, doCleanUp bool) {
 	var (
 		done              bool
 		totalOps, currIdx int
 		errCh             = make(chan error, 10)
 		wg                = &sync.WaitGroup{}
-		bck               = cmn.Bck{Name: clibucket}
 	)
 
 	if taskGrp != nil {
@@ -269,14 +267,13 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 	wg.Wait()
 }
 
-func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
+func rwGetLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
 	var (
 		done              bool
 		currIdx, totalOps int
 		errCh             = make(chan error, 10)
 		wg                = &sync.WaitGroup{}
 		baseParams        = tutils.BaseAPIParams(proxyURL)
-		bck               = cmn.Bck{Name: clibucket}
 	)
 
 	if taskGrp != nil {
@@ -331,39 +328,35 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 }
 
 func rwstress(t *testing.T) {
-	err := cmn.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir))
-	tassert.CheckFatal(t, err)
-	defer func() {
-		err := os.RemoveAll(fmt.Sprintf("%s/%s", baseDir, rwdir))
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+		err := cmn.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir))
 		tassert.CheckFatal(t, err)
-	}()
+		defer func() {
+			err := os.RemoveAll(fmt.Sprintf("%s/%s", baseDir, rwdir))
+			tassert.CheckFatal(t, err)
+		}()
 
-	var (
-		proxyURL = tutils.RandomProxyURL()
-		bck      = cmn.Bck{Name: clibucket}
-		created  = createBucketIfNotCloud(t, proxyURL, &bck)
-	)
-	filelock.files = make([]fileLock, numFiles)
+		var (
+			proxyURL = tutils.RandomProxyURL()
+		)
+		filelock.files = make([]fileLock, numFiles)
 
-	generateRandomData(numFiles)
+		generateRandomData(numFiles)
 
-	var wg sync.WaitGroup
-	doneCh := make(chan int, 2)
-	wg.Add(1)
-	go rwPutLoop(t, proxyURL, fileNames, &wg, doneCh)
-	wg.Add(1)
-	go rwGetLoop(t, proxyURL, fileNames, &wg, doneCh)
-	if !skipdel {
+		var wg sync.WaitGroup
+		doneCh := make(chan int, 2)
 		wg.Add(1)
-		go rwDelLoop(t, proxyURL, fileNames, &wg, doneCh, rwRunNormal)
-	}
+		go rwPutLoop(t, proxyURL, bck, fileNames, &wg, doneCh)
+		wg.Add(1)
+		go rwGetLoop(t, proxyURL, bck, fileNames, &wg, doneCh)
+		if !skipdel {
+			wg.Add(1)
+			go rwDelLoop(t, proxyURL, bck, fileNames, &wg, doneCh, rwRunNormal)
+		}
 
-	wg.Wait()
-	rwDelLoop(t, proxyURL, fileNames, nil, doneCh, rwRunCleanUp)
-
-	if created {
-		tutils.DestroyBucket(t, proxyURL, bck)
-	}
+		wg.Wait()
+		rwDelLoop(t, proxyURL, bck, fileNames, nil, doneCh, rwRunCleanUp)
+	})
 }
 
 func TestRWStressShort(t *testing.T) {
@@ -379,7 +372,7 @@ func TestRWStressShort(t *testing.T) {
 //    endlessly until PUT loop emits the done signal
 // If -nodel is on then the test runs only PUT and GET in a loop and after they
 //    complete the test runs DEL loop to clean up
-// If the test runs asynchronusly all three kinds of operations then after the
+// If the test runs asynchronously all three kinds of operations then after the
 //    test finishes it executes extra loop to delete all files
 func TestRWStress(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})

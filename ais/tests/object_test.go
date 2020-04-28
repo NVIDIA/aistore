@@ -1223,69 +1223,64 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 }
 
 func TestRangeRead(t *testing.T) {
-	const fileSize = 1024
-	var (
-		fileName string
-
-		numFiles   = 1
-		fileNameCh = make(chan string, numFiles)
-		errCh      = make(chan error, numFiles)
-		bck        = cmn.Bck{
-			Name: clibucket,
-		}
-		proxyURL = tutils.RandomProxyURL()
+	const (
+		numFiles = 1
+		fileSize = 1024
 	)
 
-	created := createBucketIfNotCloud(t, proxyURL, &bck)
-	tutils.PutRandObjs(proxyURL, bck, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, true)
-	tassert.SelectErr(t, errCh, "put", false)
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+		var (
+			fileName   string
+			fileNameCh = make(chan string, numFiles)
+			errCh      = make(chan error, numFiles)
+			proxyURL   = tutils.RandomProxyURL()
+			baseParams = tutils.DefaultBaseAPIParams(t)
+		)
 
-	// Get Current Config
-	config := tutils.GetClusterConfig(t)
-	oldEnableReadRangeChecksum := config.Cksum.EnableReadRange
+		tutils.PutRandObjs(proxyURL, bck, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, true)
+		tassert.SelectErr(t, errCh, "put", false)
 
-	fileName = <-fileNameCh
-	tutils.Logln("Testing valid cases.")
-	// Validate entire object checksum is being returned
-	if oldEnableReadRangeChecksum {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": "false"})
-		if t.Failed() {
-			goto cleanup
+		// Get Current Config
+		config := tutils.GetClusterConfig(t)
+		oldEnableReadRangeChecksum := config.Cksum.EnableReadRange
+
+		defer func() {
+			tutils.Logln("Cleaning up...")
+			err := api.DeleteObject(baseParams, bck, filepath.Join(RangeGetStr, fileName))
+			tassert.CheckError(t, err)
+			tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": fmt.Sprintf("%v", oldEnableReadRangeChecksum)})
+			close(errCh)
+			close(fileNameCh)
+		}()
+
+		fileName = <-fileNameCh
+		tutils.Logln("Testing valid cases.")
+		// Validate entire object checksum is being returned
+		if oldEnableReadRangeChecksum {
+			tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": "false"})
+			if t.Failed() {
+				t.FailNow()
+			}
 		}
-	}
-	testValidCases(t, proxyURL, bck, fileSize, fileName, true, RangeGetStr)
+		testValidCases(t, proxyURL, bck, fileSize, fileName, true, RangeGetStr)
 
-	// Validate only range checksum is being returned
-	if !oldEnableReadRangeChecksum {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": "true"})
-		if t.Failed() {
-			goto cleanup
+		// Validate only range checksum is being returned
+		if !oldEnableReadRangeChecksum {
+			tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": "true"})
+			if t.Failed() {
+				t.FailNow()
+			}
 		}
-	}
-	testValidCases(t, proxyURL, bck, fileSize, fileName, false, RangeGetStr)
+		testValidCases(t, proxyURL, bck, fileSize, fileName, false, RangeGetStr)
 
-	tutils.Logln("Testing invalid cases.")
-	verifyInvalidParams(t, proxyURL, bck, fileName, "", "1")
-	verifyInvalidParams(t, proxyURL, bck, fileName, "1", "")
-	verifyInvalidParams(t, proxyURL, bck, fileName, "-1", "-1")
-	verifyInvalidParams(t, proxyURL, bck, fileName, "1", "-1")
-	verifyInvalidParams(t, proxyURL, bck, fileName, "-1", "1")
-	verifyInvalidParams(t, proxyURL, bck, fileName, "1", "0")
-cleanup:
-	tutils.Logln("Cleaning up...")
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go tutils.Del(proxyURL, bck, filepath.Join(RangeGetStr, fileName), wg, errCh, !testing.Verbose())
-	wg.Wait()
-	tassert.SelectErr(t, errCh, "delete", false)
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": fmt.Sprintf("%v", oldEnableReadRangeChecksum)})
-	close(errCh)
-	close(fileNameCh)
-
-	if created {
-		tutils.DestroyBucket(t, proxyURL, bck)
-	}
+		tutils.Logln("Testing invalid cases.")
+		verifyInvalidParams(t, proxyURL, bck, fileName, "", "1")
+		verifyInvalidParams(t, proxyURL, bck, fileName, "1", "")
+		verifyInvalidParams(t, proxyURL, bck, fileName, "-1", "-1")
+		verifyInvalidParams(t, proxyURL, bck, fileName, "1", "-1")
+		verifyInvalidParams(t, proxyURL, bck, fileName, "-1", "1")
+		verifyInvalidParams(t, proxyURL, bck, fileName, "1", "0")
+	})
 }
 
 func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, fileSize uint64, fileName string, checkEntireObjCkSum bool, checkDir string) {
@@ -1517,21 +1512,6 @@ func getFromObjList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []
 		}
 	}
 	getsGroup.Wait()
-}
-
-func createBucketIfNotCloud(t *testing.T, proxyURL string, bck *cmn.Bck) (created bool) {
-	if tutils.IsCloudBucket(t, proxyURL, *bck) {
-		bck.Provider = cmn.AnyCloud
-		return false
-	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	bck.Provider = cmn.ProviderAIS
-	err := api.CreateBucket(baseParams, *bck)
-	if err != nil {
-		t.Fatalf("Failed to create ais bucket %s: %v", bck, err)
-	}
-
-	return true
 }
 
 func validateBucketProps(t *testing.T, expected cmn.BucketPropsToUpdate, actual cmn.BucketProps) {

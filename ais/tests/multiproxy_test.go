@@ -543,36 +543,34 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently
 func concurrentPutGetDel(t *testing.T) {
-	proxyURL := tutils.RandomProxyURL()
-	smap := tutils.GetClusterMap(t, proxyURL)
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+		proxyURL := tutils.RandomProxyURL()
+		smap := tutils.GetClusterMap(t, proxyURL)
 
-	bck := cmn.Bck{Name: clibucket}
-	createBucketIfNotCloud(t, proxyURL, &bck)
+		var (
+			errCh = make(chan error, smap.CountProxies())
+			wg    sync.WaitGroup
+		)
 
-	var (
-		errCh = make(chan error, smap.CountProxies())
-		wg    sync.WaitGroup
-	)
+		// cid = a goroutine ID to make filenames unique
+		// otherwise it is easy to run into a trouble when 2 goroutines do:
+		//   1PUT 2PUT 1DEL 2DEL
+		// And the second goroutine fails with error "object does not exist"
+		for _, v := range smap.Pmap {
+			wg.Add(1)
+			go func(url string) {
+				defer wg.Done()
+				errCh <- proxyPutGetDelete(100, url, bck)
+			}(v.PublicNet.DirectURL)
+		}
 
-	// cid = a goroutine ID to make filenames unique
-	// otherwise it is easy to run into a trouble when 2 goroutines do:
-	//   1PUT 2PUT 1DEL 2DEL
-	// And the second goroutine fails with error "object does not exist"
-	for _, v := range smap.Pmap {
-		wg.Add(1)
-		go func(url string) {
-			defer wg.Done()
-			errCh <- proxyPutGetDelete(100, url, bck)
-		}(v.PublicNet.DirectURL)
-	}
+		wg.Wait()
+		close(errCh)
 
-	wg.Wait()
-	close(errCh)
-
-	for err := range errCh {
-		tassert.CheckFatal(t, err)
-	}
-	tutils.DestroyBucket(t, proxyURL, bck)
+		for err := range errCh {
+			tassert.CheckFatal(t, err)
+		}
+	})
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
@@ -744,7 +742,8 @@ func proxyStress(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 	)
 
-	createBucketIfNotCloud(t, proxyURL, &bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	// start all workers
 	for i := 0; i < numworkers; i++ {
@@ -788,7 +787,6 @@ loop:
 	}
 
 	wg.Wait()
-	tutils.DestroyBucket(t, proxyURL, bck)
 }
 
 // smap 	- current Smap
