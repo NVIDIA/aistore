@@ -251,52 +251,77 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 }
 
 func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config, ntargets int) (maxVerSmap *smapX) {
-	var (
-		started  = time.Now()
-		deadline = config.Timeout.Startup
-		wtime    = deadline / 2 // note below
-		nt       int
-		checked  = loadedSmap == nil
-		slowp    bool
+	const (
+		// Number of iteration to consider cluster quiescent.
+		quiescentIter = 4
 	)
-	cmn.Assert(smap.CountTargets() == 0)
-	for time.Since(started) < wtime {
-		time.Sleep(time.Second)
-		smap = p.owner.smap.get()
-		if !smap.isPrimary(p.si) {
+
+	var (
+		deadlineTimer     = time.NewTimer(config.Timeout.Startup)
+		sleepTicker       = time.NewTicker(config.Timeout.MaxKeepalive)
+		checkClusterTimer = time.NewTimer(3 * config.Timeout.MaxKeepalive)
+		definedTargetCnt  = ntargets > 0
+	)
+
+	defer func() {
+		deadlineTimer.Stop()
+		sleepTicker.Stop()
+		checkClusterTimer.Stop()
+	}()
+
+MainLoop:
+	for iter := 0; iter < quiescentIter; {
+		select {
+		case <-deadlineTimer.C:
+			break MainLoop
+		case <-sleepTicker.C:
+			iter++
 			break
-		}
-		nt = smap.CountTargets()
-		if nt >= ntargets && ntargets > 0 {
-			glog.Infof("%s: reached the specified ntargets %d (curr=%d)", p.si, ntargets, nt)
-			return
-		}
-		if nt > 0 {
-			wtime = deadline // NOTE: full configured time in presence of "live" registrations
-		}
-		// check whether the cluster has moved on (but check only once)
-		if !checked && loadedSmap.CountTargets() > 0 && time.Since(started) > 2*config.Timeout.MaxKeepalive {
-			checked = true
+		case <-checkClusterTimer.C:
+			// Check whether the cluster has moved on (but check only once).
+			if loadedSmap == nil || loadedSmap.CountTargets() == 0 {
+				break
+			}
 			q := url.Values{}
-			url := cmn.URLPath(cmn.Version, cmn.Daemon)
 			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
-			args := bcastArgs{req: cmn.ReqArgs{Path: url, Query: q}, smap: loadedSmap, to: cluster.AllNodes}
-			maxVerSmap, _, _, slowp = p.bcastMaxVer(args, nil, nil)
+			args := bcastArgs{
+				req:  cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Daemon), Query: q},
+				smap: loadedSmap,
+				to:   cluster.AllNodes,
+			}
+			maxVerSmap, _, _, slowp := p.bcastMaxVer(args, nil, nil)
 			if maxVerSmap != nil && !slowp {
 				if maxVerSmap.UUID == loadedSmap.UUID && maxVerSmap.version() > loadedSmap.version() {
 					if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
 						glog.Infof("%s: %s <= max-ver %s",
 							p.si, loadedSmap.StringEx(), maxVerSmap.StringEx())
-						return
+						return maxVerSmap
 					}
 				}
 			}
-			maxVerSmap = nil
+		}
+
+		prevTargetCnt := smap.CountTargets()
+		smap = p.owner.smap.get()
+		if !smap.isPrimary(p.si) {
+			break
+		}
+		targetCnt := smap.CountTargets()
+		if targetCnt > prevTargetCnt || (definedTargetCnt && targetCnt < ntargets) {
+			// Reset the counter in case there are new targets or we wait for
+			// targets but we still don't have enough of them.
+			iter = 0
 		}
 	}
-	nt = p.owner.smap.get().CountTargets()
-	if nt > 0 {
-		glog.Warningf("%s: timed-out waiting for %d ntargets (curr=%d)", p.si, ntargets, nt)
+	targetCnt := p.owner.smap.get().CountTargets()
+	if definedTargetCnt {
+		if targetCnt >= ntargets {
+			glog.Infof("%s: reached expected %d targets (registered: %d)", p.si, ntargets, targetCnt)
+		} else {
+			glog.Warningf("%s: timed-out waiting for %d targets (registered: %d)", p.si, ntargets, targetCnt)
+		}
+	} else {
+		glog.Infof("%s: registered %d new targets", p.si, targetCnt)
 	}
 	return
 }
