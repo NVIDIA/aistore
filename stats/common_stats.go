@@ -134,15 +134,18 @@ type (
 		log(uptime time.Duration)
 		doAdd(nv NamedVal64)
 	}
+	runnerHost interface {
+		Started() bool
+	}
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
 		cmn.Named
-		stopCh        chan struct{}
-		workCh        chan NamedVal64
-		ticker        *time.Ticker
-		ctracker      copyTracker // to avoid making it at runtime
-		daemonStarted *atomic.Bool
-		startedUp     atomic.Bool
+		stopCh    chan struct{}
+		workCh    chan NamedVal64
+		ticker    *time.Ticker
+		ctracker  copyTracker // to avoid making it at runtime
+		daemon    runnerHost
+		startedUp atomic.Bool
 	}
 	// Stats are tracked via a map of stats names (key) to statsValue (values).
 	// There are two main types of stats: counter and latency declared
@@ -310,9 +313,9 @@ func (s *CoreStats) copyCumulative(ctracker copyTracker) {
 //
 // StatsD client using 8125 (default) StatsD port - https://github.com/etsy/statsd
 //
-func (s *CoreStats) initStatsD(daemonStr, daemonID string) (err error) {
-	suffix := strings.ReplaceAll(daemonID, ":", "_")
-	statsD, err := statsd.New("localhost", 8125, daemonStr+"."+suffix)
+func (s *CoreStats) initStatsD(node *cluster.Snode) (err error) {
+	suffix := strings.ReplaceAll(node.ID(), ":", "_")
+	statsD, err := statsd.New("localhost", 8125, "ais"+node.Type()+"."+suffix)
 	s.statsdC = &statsD
 	if err != nil {
 		glog.Infof("Failed to connect to StatsD daemon: %v", err)
@@ -413,7 +416,7 @@ dummy:
 			ticker.Stop()
 			return nil
 		case <-ticker.C:
-			if r.daemonStarted.Load() {
+			if r.daemon.Started() {
 				break dummy
 			}
 			i++

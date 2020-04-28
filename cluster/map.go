@@ -68,6 +68,7 @@ func (d *Snode) Digest() uint64 {
 }
 
 func (d *Snode) ID() string   { return d.DaemonID }
+func (d *Snode) Type() string { return d.DaemonType }
 func (d *Snode) Name() string { return d.name }
 func (d *Snode) SetName() {
 	if d.IsProxy() {

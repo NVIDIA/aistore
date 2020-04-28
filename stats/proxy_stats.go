@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -39,14 +40,14 @@ func (r *Prunner) Run() error                  { return r.runcommon(r) }
 func (r *Prunner) Get(name string) (val int64) { return r.Core.get(name) }
 
 // All stats that proxy currently has are CoreStats which are registered at startup
-func (r *Prunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *atomic.Bool {
+func (r *Prunner) Init(p cluster.Proxy) *atomic.Bool {
 	r.Core = &CoreStats{}
 	r.Core.init(24)
 	r.Core.statsTime = cmn.GCO.Get().Periodic.StatsTime
 	r.ctracker = make(copyTracker, 24)
-	r.Core.initStatsD(daemonStr, daemonID)
+	r.Core.initStatsD(p.Snode())
 
-	r.statsRunner.daemonStarted = daemonStarted
+	r.statsRunner.daemon = p
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
 	r.statsRunner.workCh = make(chan NamedVal64, 256)
