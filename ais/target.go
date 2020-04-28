@@ -83,8 +83,7 @@ type (
 			local  localGFN
 			global globalGFN
 		}
-		regstate       regstate // the state of being registered with the primary, can be (en/dis)abled via API
-		clusterStarted atomic.Bool
+		regstate regstate // the state of being registered with the primary, can be (en/dis)abled via API
 	}
 )
 
@@ -210,9 +209,11 @@ func (t *targetrunner) Run() error {
 		return err
 	}
 
+	t.markNodeStarted()
+
 	go func() {
 		t.pollClusterStarted(config.Timeout.CplaneOperation)
-		t.clusterStarted.Store(true)
+		t.markClusterStarted()
 	}()
 
 	t.detectMpathChanges()

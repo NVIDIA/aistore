@@ -97,6 +97,7 @@
         "enabled":         {{ .rebalance.enabled }},
         "compression":     {{ .rebalance.compression | quote }},
         "quiescent":       {{ .rebalance.quiescent | quote }},
+        "dont_run_time":   {{ .rebalance.dont_run_time | quote}},
         "dest_retry_time": {{ .rebalance.dest_retry_time | quote}},
         "multiplier":      {{ .rebalance.multiplier }}
 },

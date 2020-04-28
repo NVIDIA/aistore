@@ -21,7 +21,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -71,7 +70,6 @@ type (
 		authn      *authManager
 		metasyncer *metasyncer
 		rproxy     reverseProxy
-		startedUp  atomic.Bool
 	}
 )
 
@@ -664,7 +662,9 @@ ExtractRMD:
 
 // GET /v1/health
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.startedUp.Load() {
+	// Either we are primary and wait for the node to start or we are regular
+	// proxy and we must wait for the cluster to start up.
+	if (p.owner.smap.get().isPrimary(p.si) && !p.NodeStarted()) || !p.ClusterStarted() {
 		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
 		// see also:
 		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
@@ -2048,7 +2048,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatSmap:
 		smap := p.owner.smap.get()
 		for smap == nil || !smap.isValid() {
-			if p.startedUp.Load() { // must be starting up
+			if p.NodeStarted() { // must be starting up
 				smap = p.owner.smap.get()
 				cmn.Assert(smap.isValid())
 				break
@@ -2719,7 +2719,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if p.startedUp.Load() {
+	if p.NodeStarted() {
 		bmd := p.owner.bmd.get()
 		if err := bmd.validateUUID(regReq.BMD, p.si, nsi, ""); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
@@ -2809,7 +2809,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// no-further-checks join when cluster's starting up
-	if !p.startedUp.Load() {
+	if !p.ClusterStarted() {
 		clone := smap.clone()
 		clone.putNode(nsi, nonElectable)
 		p.owner.smap.put(clone)
@@ -2863,12 +2863,13 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 				// Trigger rebalance (in case target with given ID already exists
 				// we must trigger the rebalance and assume it is a new target
 				// with the same ID).
-				cmn.Assert(exists || p.requiresRebalance(smap, clone))
-				clone := p.owner.rmd.modify(func(clone *rebMD) {
-					clone.TargetIDs = []string{nsi.ID()}
-					clone.inc()
-				})
-				pairs = append(pairs, revsPair{clone, aisMsg})
+				if exists || p.requiresRebalance(smap, clone) {
+					clone := p.owner.rmd.modify(func(clone *rebMD) {
+						clone.TargetIDs = []string{nsi.ID()}
+						clone.inc()
+					})
+					pairs = append(pairs, revsPair{clone, aisMsg})
+				}
 			} else {
 				// Send RMD to proxies to make sure that they have
 				// the latest one - newly joined can become primary in a second.
@@ -2908,7 +2909,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 		return false
 	}
 	if osi != nil {
-		if !p.startedUp.Load() {
+		if !p.NodeStarted() {
 			return true
 		}
 		if osi.Equals(nsi) {
@@ -3010,7 +3011,7 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 		glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
 	}
 
-	if !p.startedUp.Load() {
+	if !p.NodeStarted() {
 		return
 	}
 
@@ -3341,6 +3342,14 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 }
 
 func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
+	if dontRun := cmn.GCO.Get().Rebalance.DontRunTime; dontRun > 0 {
+		if !p.NodeStarted() {
+			return false
+		}
+		if time.Since(p.NodeStartedTime()) < dontRun {
+			return false
+		}
+	}
 	if cur.CountTargets() > prev.CountTargets() {
 		return true
 	}

@@ -31,7 +31,9 @@ func NewTargetMock(bo Bowner) *TargetMock {
 }
 
 func (*TargetMock) Snode() *Snode                                              { return nil }
-func (*TargetMock) Started() bool                                              { return true }
+func (*TargetMock) ClusterStarted() bool                                       { return true }
+func (*TargetMock) NodeStarted() bool                                          { return true }
+func (*TargetMock) NodeStartedTime() time.Time                                 { return time.Now() }
 func (*TargetMock) RunLRU(_ string)                                            {}
 func (t *TargetMock) GetBowner() Bowner                                        { return t.BO }
 func (*TargetMock) GetSowner() Sowner                                          { return nil }

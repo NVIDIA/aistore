@@ -63,11 +63,12 @@ cat > $CONFFILE <<EOL
 	    "disk_util_max_wm":  95
 	},
 	"rebalance": {
-		"dest_retry_time":	"2m",
-		"quiescent":		"20s",
-		"compression":		"${COMPRESSION:-never}",
-		"multiplier":		${REBALANCE_MULTIPLIER:-4},
-		"enabled":		true
+		"enabled":         true,
+		"dont_run_time":   "0m",
+		"dest_retry_time": "2m",
+		"quiescent":       "20s",
+		"compression":     "${COMPRESSION:-never}",
+		"multiplier":      ${REBALANCE_MULTIPLIER:-4}
 	},
 	"checksum": {
 		"type":			"xxhash",

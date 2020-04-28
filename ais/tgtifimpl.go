@@ -37,8 +37,6 @@ func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
 func (t *targetrunner) GetMMSA() *memsys.MMSA       { return daemon.gmm }
 func (t *targetrunner) GetSmallMMSA() *memsys.MMSA  { return daemon.smm }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
-func (t *targetrunner) Snode() *cluster.Snode       { return t.si }
-func (t *targetrunner) Started() bool               { return t.clusterStarted.Load() }
 
 func (t *targetrunner) Cloud(provider string) cluster.CloudProvider {
 	if provider == cmn.ProviderAIS {

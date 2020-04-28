@@ -61,16 +61,22 @@ type PutObjectParams struct {
 	WithFinalize bool // determines if we should also finalize the object
 }
 
-// NOTE: For implementations, please refer to ais/tgtifimpl.go
+type node interface {
+	Snode() *Snode
+	ClusterStarted() bool
+	NodeStarted() bool
+	NodeStartedTime() time.Time
+}
+
+// NOTE: For implementations, please refer to ais/tgtifimpl.go and ais/httpcommon.go
 type Target interface {
+	node
 	GetBowner() Bowner
 	GetSowner() Sowner
 	FSHC(err error, path string)
 	GetMMSA() *memsys.MMSA
 	GetSmallMMSA() *memsys.MMSA
 	GetFSPRG() fs.PathRunGroup
-	Snode() *Snode
-	Started() bool
 	Cloud(provider string) CloudProvider
 	RebalanceInfo() RebalanceInfo
 	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)

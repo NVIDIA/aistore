@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
@@ -55,7 +56,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 	owner := newBMDOwnerPrx(config)
 	owner._put(newBucketMD())
 	p.owner.bmd = owner
-	p.keepalive = newProxyKeepaliveRunner(p, tracker, &p.startedUp)
+	p.keepalive = newProxyKeepaliveRunner(p, tracker, atomic.NewBool(true))
 	return p
 }
 

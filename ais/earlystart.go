@@ -128,9 +128,11 @@ func (p *proxyrunner) secondaryStartup(smap *smapX) error {
 		return err
 	}
 
+	p.markNodeStarted()
+
 	go func() {
 		p.pollClusterStarted(cmn.GCO.Get().Timeout.CplaneOperation)
-		p.startedUp.Store(true)
+		p.markClusterStarted()
 	}()
 
 	glog.Infof("%s: joined as non-primary, %s", p.si, smap.StringEx())
@@ -156,6 +158,8 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	smap.ProxySI = p.si
 	p.owner.smap.put(smap)
 	p.owner.smap.Unlock()
+
+	p.markNodeStarted()
 
 	if !daemon.cli.skipStartup {
 		maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
@@ -247,7 +251,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// 6: started up as primary
 	glog.Infof("%s: primary/cluster startup complete, %s", p.si, smap.StringEx())
-	p.startedUp.Store(true)
+	p.markClusterStarted()
 }
 
 func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config, ntargets int) (maxVerSmap *smapX) {

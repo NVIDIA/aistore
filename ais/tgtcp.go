@@ -1096,7 +1096,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: external health-ping from %s", t.si, r.RemoteAddr)
 		}
-		if !t.clusterStarted.Load() {
+		if !t.ClusterStarted() {
 			// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
 			// see also:
 			// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes

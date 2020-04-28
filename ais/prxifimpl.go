@@ -13,6 +13,3 @@ import (
 //
 
 var _ cluster.Proxy = &proxyrunner{}
-
-func (p *proxyrunner) Snode() *cluster.Snode { return p.si }
-func (p *proxyrunner) Started() bool         { return p.startedUp.Load() }

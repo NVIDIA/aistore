@@ -405,11 +405,13 @@ type DiskConf struct {
 }
 
 type RebalanceConf struct {
+	DontRunTimeStr   string        `json:"dont_run_time"`
+	DontRunTime      time.Duration `json:"-"`
 	DestRetryTimeStr string        `json:"dest_retry_time"` // max wait for ACKs and for neighbors to complete
-	QuiesceStr       string        `json:"quiescent"`       // max wait for no object received before moving to next stage/batch
-	Compression      string        `json:"compression"`     // see CompressAlways, etc. enum
 	Quiesce          time.Duration `json:"-"`               // (runtime)
+	QuiesceStr       string        `json:"quiescent"`       // max wait for no object received before moving to next stage/batch
 	DestRetryTime    time.Duration `json:"-"`               // (runtime)
+	Compression      string        `json:"compression"`     // see CompressAlways, etc. enum
 	Multiplier       uint8         `json:"multiplier"`      // stream-bundle-and-jogger multiplier
 	Enabled          bool          `json:"enabled"`         // true: auto-rebalance, false: manual rebalancing
 }
@@ -874,6 +876,11 @@ func (c *ClientConf) Validate(_ *Config) (err error) {
 }
 
 func (c *RebalanceConf) Validate(_ *Config) (err error) {
+	if c.DontRunTimeStr != "" { // can be missing
+		if c.DontRunTime, err = time.ParseDuration(c.DontRunTimeStr); err != nil {
+			return fmt.Errorf("invalid rebalance.dont_run_time format %s, err %v", c.DontRunTimeStr, err)
+		}
+	}
 	if c.DestRetryTime, err = time.ParseDuration(c.DestRetryTimeStr); err != nil {
 		return fmt.Errorf("invalid rebalance.dest_retry_time format %s, err %v", c.DestRetryTimeStr, err)
 	}

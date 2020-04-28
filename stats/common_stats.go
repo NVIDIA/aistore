@@ -135,7 +135,7 @@ type (
 		doAdd(nv NamedVal64)
 	}
 	runnerHost interface {
-		Started() bool
+		ClusterStarted() bool
 	}
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
@@ -416,7 +416,7 @@ dummy:
 			ticker.Stop()
 			return nil
 		case <-ticker.C:
-			if r.daemon.Started() {
+			if r.daemon.ClusterStarted() {
 				break dummy
 			}
 			i++

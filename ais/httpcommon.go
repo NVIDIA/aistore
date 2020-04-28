@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
@@ -111,7 +112,13 @@ type (
 			bmd  bmdOwner
 			rmd  *rmdOwner
 		}
-		statsT stats.Tracker
+		statsT  stats.Tracker
+		startup struct {
+			cluster atomic.Bool // determines if the cluster has started up
+			node    struct {
+				time atomic.Time // determines time when the node started up
+			}
+		}
 	}
 
 	glogWriter struct{}
@@ -127,6 +134,7 @@ type (
 ///////////////////
 // BMD uuid errs //
 ///////////////////
+
 var errNoBMD = errors.New("no bucket metadata")
 
 func (e errTgtBmdUUIDDiffer) Error() string { return e.detail }
@@ -266,6 +274,13 @@ func (server *netServer) shutdown() {
 ////////////////
 // httprunner //
 ////////////////
+
+func (h *httprunner) Snode() *cluster.Snode      { return h.si }
+func (h *httprunner) ClusterStarted() bool       { return h.startup.cluster.Load() }
+func (h *httprunner) NodeStarted() bool          { return !h.startup.node.time.Load().IsZero() }
+func (h *httprunner) NodeStartedTime() time.Time { return h.startup.node.time.Load() }
+func (h *httprunner) markClusterStarted()        { h.startup.cluster.Store(true) }
+func (h *httprunner) markNodeStarted()           { h.startup.node.time.Store(time.Now()) }
 
 func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	config := cmn.GCO.Get()
