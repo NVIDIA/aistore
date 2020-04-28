@@ -31,7 +31,7 @@ func Test_BucketNames(t *testing.T) {
 			Name:     t.Name() + "Bucket",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -80,7 +80,7 @@ func printBucketNames(bcks cmn.BucketNames) {
 func TestDefaultBucketProps(t *testing.T) {
 	const dataSlices = 7
 	var (
-		proxyURL     = tutils.GetPrimaryURL()
+		proxyURL     = tutils.RandomProxyURL()
 		globalConfig = tutils.GetClusterConfig(t)
 		bck          = cmn.Bck{
 			Name:     TestBucketName,
@@ -167,7 +167,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 
 func TestResetBucketProps(t *testing.T) {
 	var (
-		proxyURL     = tutils.GetPrimaryURL()
+		proxyURL     = tutils.RandomProxyURL()
 		globalConfig = tutils.GetClusterConfig(t)
 		baseParams   = tutils.DefaultBaseAPIParams(t)
 		bck          = cmn.Bck{
@@ -223,7 +223,7 @@ func TestResetBucketProps(t *testing.T) {
 
 func TestSetInvalidBucketProps(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     TestBucketName,
@@ -303,7 +303,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 		wg       = &sync.WaitGroup{}
 		sema     = make(chan struct{}, 40) // throttle DELETE
 	)
@@ -388,7 +388,7 @@ func TestListObjects(t *testing.T) {
 		}
 		wg = &sync.WaitGroup{}
 
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -573,7 +573,7 @@ func TestListObjectsPrefix(t *testing.T) {
 	)
 
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -1004,7 +1004,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 
 func TestBucketInvalidName(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
@@ -1288,6 +1288,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 
 	// Initialize ioContext
 	m.saveClusterState()
+	m.proxyURL = tutils.GetPrimaryURL() // TODO: fails with random proxy
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -1402,6 +1403,7 @@ func TestRenameBucketTwice(t *testing.T) {
 
 	// Initialize ioContext
 	m.saveClusterState()
+	m.proxyURL = tutils.GetPrimaryURL() // TODO: the test fails with random proxy
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}

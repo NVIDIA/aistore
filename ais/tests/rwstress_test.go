@@ -339,7 +339,7 @@ func rwstress(t *testing.T) {
 	}()
 
 	var (
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{Name: clibucket}
 		created  = createBucketIfNotCloud(t, proxyURL, &bck)
 	)

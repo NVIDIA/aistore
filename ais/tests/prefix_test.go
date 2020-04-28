@@ -38,7 +38,7 @@ func TestPrefix(t *testing.T) {
 		bck = cmn.Bck{
 			Name: clibucket,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	tutils.Logf("Looking for files with prefix [%s]\n", prefix)

@@ -525,7 +525,7 @@ func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath
 }
 
 func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps cmn.BucketPropsToUpdate, o *ecOptions) {
-	proxyURL := tutils.GetPrimaryURL()
+	proxyURL := tutils.RandomProxyURL()
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
@@ -547,7 +547,7 @@ func setBucketECProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckP
 func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOptions) {
 	var (
 		wg       = sync.WaitGroup{}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	tutils.Logln("Deleting objects...")
@@ -615,7 +615,7 @@ func damageMetadataCksum(t *testing.T, slicePath string) {
 // EC is enabled
 func TestECChange(t *testing.T) {
 	var (
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
 			Name:     TestBucketName + "-ec-change",
 			Provider: cmn.ProviderAIS,
@@ -859,7 +859,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -912,7 +912,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 			Name:     TestBucketName + "-obj-n-slice",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -988,7 +988,7 @@ func TestECChecksum(t *testing.T) {
 	}
 
 	var (
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
 			Name:     TestBucketName + "-ec-cksum",
 			Provider: cmn.ProviderAIS,
@@ -1056,7 +1056,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 			Name:     TestBucketName + "-ec-props",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -1145,7 +1145,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 			Name:     TestBucketName + "-ec-load",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -1285,7 +1285,7 @@ func TestECStress(t *testing.T) {
 			Name:     TestBucketName + "-ec-stress",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -1333,7 +1333,7 @@ func TestECStressManyBuckets(t *testing.T) {
 			Name:     TestBucketName + "2",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	o1 := ecOptions{
@@ -1406,7 +1406,7 @@ func TestECExtraStress(t *testing.T) {
 			Name:     TestBucketName + "-extrastress",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	o := ecOptions{
@@ -1534,7 +1534,7 @@ func TestECXattrs(t *testing.T) {
 			Name:     TestBucketName + "-attrs",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	o := ecOptions{
@@ -1649,7 +1649,7 @@ func TestECDestroyBucket(t *testing.T) {
 			Name:     TestBucketName + "-DESTROY",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -1741,7 +1741,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 			Name:     TestBucketName + "-slice-emergency",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -1843,7 +1843,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 			Name:     TestBucketName + "-replica-emergency",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	o := ecOptions{
@@ -1987,7 +1987,7 @@ func TestECEmergencyMpath(t *testing.T) {
 			Name:     TestBucketName + "-mpath-emergency",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -2144,7 +2144,7 @@ func TestECRebalance(t *testing.T) {
 			Name:     TestBucketName + "-ec-rebalance",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 	o := ecOptions{
 		objCount:    30,
@@ -2289,7 +2289,7 @@ func TestECBucketEncode(t *testing.T) {
 
 	const parityCnt = 2
 	var (
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 		m        = ioContext{
 			t:        t,
 			num:      50,
@@ -2413,7 +2413,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 			Name:     TestBucketName + "-EC",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 	o := ecOptions{
 		minTgt:      4,
@@ -2549,7 +2549,7 @@ func TestECResilver(t *testing.T) {
 			Name:     TestBucketName + "-ec-resilver",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 	o := ecOptions{
 		objCount:    100,
@@ -2651,7 +2651,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 			Name:     TestBucketName + "-EC",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		o          = ecOptions{
@@ -2679,7 +2679,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 
 func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cluster.Smap, bckEC cmn.Bck) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	// select a target that loses its mpath(simulate drive death),

@@ -163,7 +163,7 @@ func TestDownloadSingle(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL      = tutils.GetPrimaryURL()
+		proxyURL      = tutils.RandomProxyURL()
 		objName       = "object"
 		objNameSecond = "object-second"
 
@@ -240,7 +240,7 @@ func TestDownloadRange(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 
 		template = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000000..000007}.tgz"
 	)
@@ -268,7 +268,7 @@ func TestDownloadMultiRange(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 
 		template = "storage.googleapis.com/lpr-imagenet-augmented/imagenet_train-{0000..0007}-{001..009}.tgz"
 	)
@@ -300,7 +300,7 @@ func TestDownloadMultiMap(t *testing.T) {
 			"ais": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
 			"k8s": "https://raw.githubusercontent.com/kubernetes/kubernetes/master/README.md",
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	clearDownloadList(t)
@@ -334,7 +334,7 @@ func TestDownloadMultiList(t *testing.T) {
 			"https://raw.githubusercontent.com/kubernetes/kubernetes/master/LICENSE?query=values",
 		}
 		expectedObjs = []string{"LICENSE", "README.md"}
-		proxyURL     = tutils.GetPrimaryURL()
+		proxyURL     = tutils.RandomProxyURL()
 	)
 
 	clearDownloadList(t)
@@ -365,7 +365,7 @@ func TestDownloadTimeout(t *testing.T) {
 		}
 		objName  = "object"
 		link     = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	clearDownloadList(t)
@@ -408,7 +408,7 @@ func TestDownloadTimeout(t *testing.T) {
 
 func TestDownloadCloud(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		bck        = cmn.Bck{
 			Name:     clibucket,
@@ -554,7 +554,7 @@ func TestDownloadStatusError(t *testing.T) {
 			"notFoundFile": "https://google.com/404.tar",
 		}
 
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
@@ -598,7 +598,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
 		bck = cmn.Bck{
@@ -640,7 +640,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
 		bck = cmn.Bck{
@@ -681,7 +681,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
 		bck = cmn.Bck{
@@ -741,7 +741,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 
 func TestDownloadMpathEvents(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		bck        = cmn.Bck{
 			Name:     TestBucketName,
@@ -809,7 +809,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 // NOTE: Test may fail if the content (or version) of the link changes
 func TestDownloadOverrideObject(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		bck        = cmn.Bck{
 			Name:     cmn.RandString(10),
@@ -852,7 +852,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 // NOTE: Test may fail if the content (or version) of the link changes
 func TestDownloadSkipObject(t *testing.T) {
 	var (
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,

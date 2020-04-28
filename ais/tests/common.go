@@ -93,8 +93,12 @@ func (m *ioContext) saveClusterState() {
 	tutils.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
 }
 
-func (m *ioContext) init() {
-	m.proxyURL = tutils.GetPrimaryURL()
+func (m *ioContext) init(randomProxy ...bool) {
+	m.proxyURL = tutils.RandomProxyURL()
+	if m.proxyURL == "" {
+		// if random selection failed, use RO url
+		m.proxyURL = tutils.GetPrimaryURL()
+	}
 	if m.fileSize == 0 {
 		m.fileSize = cmn.KiB
 	}

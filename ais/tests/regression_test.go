@@ -74,7 +74,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 	smap := tutils.GetClusterMap(t, proxyURL)
@@ -146,7 +146,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		prefix     = tutils.GenRandomString(32)
 	)
@@ -235,7 +235,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 	if containers.DockerRunning() {
@@ -270,7 +270,7 @@ func TestRegressionBuckets(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -285,7 +285,7 @@ func TestRenameBucket(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		guid       = cmn.GenUUID()
 		renamedBck = cmn.Bck{
@@ -419,7 +419,7 @@ func TestRenameObjects(t *testing.T) {
 		objsPutCh    = make(chan string, numPuts)
 		errCh        = make(chan error, 2*numPuts)
 		newBaseNames = make([]string, 0, numPuts) // new basenames
-		proxyURL     = tutils.GetPrimaryURL()
+		proxyURL     = tutils.RandomProxyURL()
 		baseParams   = tutils.DefaultBaseAPIParams(t)
 		bck          = cmn.Bck{
 			Name:     t.Name(),
@@ -458,7 +458,7 @@ func TestRenameObjects(t *testing.T) {
 
 func TestObjectPrefix(t *testing.T) {
 	var (
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{Name: clibucket}
 	)
 	if createBucketIfNotCloud(t, proxyURL, &bck) {
@@ -568,7 +568,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 }
 
 func TestGetClusterStats(t *testing.T) {
-	proxyURL := tutils.GetPrimaryURL()
+	proxyURL := tutils.RandomProxyURL()
 	smap := tutils.GetClusterMap(t, proxyURL)
 	stats := tutils.GetClusterStats(t, proxyURL)
 
@@ -668,7 +668,7 @@ func TestConfig(t *testing.T) {
 
 func TestLRU(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		m = &ioContext{
@@ -769,7 +769,7 @@ func TestPrefetchList(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		toprefetch = make(chan string, numfiles)
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     clibucket,
@@ -828,7 +828,7 @@ func TestDeleteList(t *testing.T) {
 		errCh      = make(chan error, numfiles)
 		files      = make([]string, 0, numfiles)
 		bck        = cmn.Bck{Name: clibucket}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	if created := createBucketIfNotCloud(t, proxyURL, &bck); created {
@@ -872,7 +872,7 @@ func TestPrefetchRange(t *testing.T) {
 	var (
 		err            error
 		rmin, rmax     int64
-		proxyURL       = tutils.GetPrimaryURL()
+		proxyURL       = tutils.RandomProxyURL()
 		baseParams     = tutils.BaseAPIParams(proxyURL)
 		prefetchPrefix = "regressionList/obj"
 		bck            = cmn.Bck{
@@ -951,7 +951,7 @@ func TestDeleteRange(t *testing.T) {
 		bigrange       = fmt.Sprintf("%s{0000..%04d}", prefix, numfiles)
 		wg             = &sync.WaitGroup{}
 		errCh          = make(chan error, numfiles)
-		proxyURL       = tutils.GetPrimaryURL()
+		proxyURL       = tutils.RandomProxyURL()
 		baseParams     = tutils.DefaultBaseAPIParams(t)
 		bck            = cmn.Bck{Name: clibucket}
 	)
@@ -1029,7 +1029,7 @@ func TestStressDeleteRange(t *testing.T) {
 		err           error
 		wg            = &sync.WaitGroup{}
 		errCh         = make(chan error, numFiles)
-		proxyURL      = tutils.GetPrimaryURL()
+		proxyURL      = tutils.RandomProxyURL()
 		tenth         = numFiles / 10
 		objNamePrefix = fmt.Sprintf("%s/tstf-", ListRangeStr)
 		partialRange  = fmt.Sprintf("%s{%d..%d}", objNamePrefix, 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary

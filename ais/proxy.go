@@ -1234,7 +1234,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 			glog.Error("forwarded HEAD request contained non-empty body")
 			body = nil
 		}
-	} else if body == nil {
+	} else if body == nil && msg != nil {
 		body = cmn.MustMarshal(msg)
 	}
 	primary := &p.rproxy.primary
@@ -1253,7 +1253,11 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // directly setting content-length
 	}
-	glog.Infof("%s: forwarding '%s:%s' to the primary %s", p.si, msg.Action, s, smap.ProxySI)
+	if msg != nil {
+		glog.Infof("%s: forwarding '%s:%s' to the primary %s", p.si, msg.Action, s, smap.ProxySI)
+	} else {
+		glog.Infof("%s: forwarding %q to the primary %s", p.si, s, smap.ProxySI)
+	}
 	primary.rp.ServeHTTP(w, r)
 	return true
 }
@@ -2686,6 +2690,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if p.forwardCP(w, r, nil, "", nil) {
+		return
+	}
 	switch apiItems[0] {
 	case cmn.UserRegister: // manual by user (API)
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {

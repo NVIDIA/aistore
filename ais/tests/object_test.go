@@ -117,7 +117,7 @@ func TestCloudBucketObject(t *testing.T) {
 func TestAppendObject(t *testing.T) {
 	var (
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		bck        = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
@@ -171,7 +171,7 @@ func Test_putdelete(t *testing.T) {
 	const fileSize = 512 * cmn.KiB
 
 	var (
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
@@ -237,7 +237,7 @@ func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg,
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
 	var (
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
@@ -306,7 +306,7 @@ func Test_putdeleteRange(t *testing.T) {
 		objSize      = 16 * 1024
 	)
 	var (
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
@@ -430,7 +430,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		bckLocal   = cmn.Bck{
 			Name:     clibucket,
@@ -589,7 +589,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		fileName   = "mytestobj1.txt"
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		dataLocal  = []byte("im local")
@@ -736,7 +736,7 @@ func Test_coldgetmd5(t *testing.T) {
 			Provider: cmn.AnyCloud,
 		}
 		totalSize = int64(numPuts * largeFileSize)
-		proxyURL  = tutils.GetPrimaryURL()
+		proxyURL  = tutils.RandomProxyURL()
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
@@ -789,7 +789,7 @@ cleanup:
 
 func TestHeadBucket(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     TestBucketName,
@@ -819,7 +819,7 @@ func TestHeadBucket(t *testing.T) {
 
 func TestHeadCloudBucket(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     clibucket,
@@ -849,7 +849,7 @@ func TestHeadCloudBucket(t *testing.T) {
 
 func TestHeadNonexistentBucket(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -943,7 +943,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		fileName    string
 		oldFileInfo os.FileInfo
 		filesList   = make([]string, 0, numFiles)
-		proxyURL    = tutils.GetPrimaryURL()
+		proxyURL    = tutils.RandomProxyURL()
 		bmdMock     = cluster.NewBaseBownerMock()
 		tMock       = cluster.NewTargetMock(bmdMock)
 		bck         = cmn.Bck{
@@ -1044,7 +1044,7 @@ func Test_evictCloudBucket(t *testing.T) {
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
@@ -1139,7 +1139,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		numFiles   = 3
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, 100)
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		bmdMock    = cluster.NewBaseBownerMock()
 		tMock      = cluster.NewTargetMock(bmdMock)
 		bck        = cmn.Bck{
@@ -1233,7 +1233,7 @@ func TestRangeRead(t *testing.T) {
 		bck        = cmn.Bck{
 			Name: clibucket,
 		}
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 	)
 
 	created := createBucketIfNotCloud(t, proxyURL, &bck)
@@ -1395,7 +1395,7 @@ func Test_checksum(t *testing.T) {
 		filesList  = make([]string, 0, numPuts)
 		errCh      = make(chan error, numPuts*2)
 		totalSize  = int64(numPuts * largeFileSize)
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})

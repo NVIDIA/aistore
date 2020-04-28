@@ -72,6 +72,24 @@ func ExtractTargetNodes(smap *cluster.Smap) cluster.Nodes {
 	return targets
 }
 
+func ExtractProxyNodes(smap *cluster.Smap) cluster.Nodes {
+	proxies := make(cluster.Nodes, 0, smap.CountTargets())
+	for _, proxy := range smap.Pmap {
+		proxies = append(proxies, proxy)
+	}
+	return proxies
+}
+
+func RandomProxyURL() string {
+	baseParams := BaseAPIParams(proxyURLReadOnly)
+	smap, err := api.GetClusterMap(baseParams)
+	if err != nil {
+		return ""
+	}
+	Logf("Random proxy: %s\n", ExtractProxyNodes(smap)[0])
+	return ExtractProxyNodes(smap)[0].URL(cmn.NetworkPublic)
+}
+
 // WaitForPrimaryProxy reads the current primary proxy(which is proxyurl)'s smap until its
 // version changed at least once from the original version and then settles down(doesn't change anymore)
 // if primary proxy is successfully updated, wait until the map is populated to all members of the cluster

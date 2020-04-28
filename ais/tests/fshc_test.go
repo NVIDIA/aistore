@@ -49,7 +49,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		t:        t,
 		seed:     baseseed + 300,
 		numObjs:  100,
-		proxyURL: tutils.GetPrimaryURL(),
+		proxyURL: tutils.RandomProxyURL(),
 		bck: cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
@@ -246,7 +246,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 	defer wg.Done()
 
 	const fileSize = 64 * cmn.KiB
-	var proxyURL = tutils.GetPrimaryURL()
+	var proxyURL = tutils.RandomProxyURL()
 
 	tutils.Logf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
@@ -379,7 +379,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 
 func TestFSCheckerEnablingMpath(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		mpList     = make(cluster.NodeMap, 10)
@@ -433,7 +433,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 	var (
 		target *cluster.Snode
 
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		proxyCnt   = smap.CountProxies()

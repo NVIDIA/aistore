@@ -13,6 +13,34 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
+func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool) cmn.BucketNames {
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	tassert.CheckFatal(t, err)
+	if includeRemote {
+		remoteBuckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{
+			Provider: cmn.ProviderAIS,
+			Ns:       cmn.NsAnyRemote,
+		})
+		tassert.CheckFatal(t, err)
+		buckets = append(buckets, remoteBuckets...)
+
+		// Make sure that listing with specific UUID also works and have
+		// similar outcome.
+		remoteClusterBuckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{
+			Provider: cmn.ProviderAIS,
+			Ns:       cmn.Ns{UUID: tutils.RemoteCluster.UUID},
+		})
+		tassert.CheckFatal(t, err)
+		// NOTE: we cannot do `remoteClusterBuckets.Equal(remoteBuckets)` because
+		//  they will most probably have different `Ns.UUID` (alias vs uuid).
+		tassert.Fatalf(
+			t, len(remoteClusterBuckets) == len(remoteBuckets),
+			"remote buckets do not match expected: %v, got: %v", remoteClusterBuckets, remoteBuckets,
+		)
+	}
+	return buckets
+}
+
 func TestNamespace(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -115,7 +143,7 @@ func TestNamespace(t *testing.T) {
 	}
 
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -141,6 +169,7 @@ func TestNamespace(t *testing.T) {
 			m1.init()
 			m2.init()
 
+			origBuckets := listAllBuckets(t, baseParams, test.remote)
 			err := api.CreateBucket(baseParams, m1.bck)
 			tassert.CheckFatal(t, err)
 			err = api.CreateBucket(baseParams, m2.bck)
@@ -154,44 +183,21 @@ func TestNamespace(t *testing.T) {
 			}()
 
 			// Test listing buckets
-			buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS})
-			tassert.CheckFatal(t, err)
-			if test.remote {
-				remoteBuckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{
-					Provider: cmn.ProviderAIS,
-					Ns:       cmn.NsAnyRemote,
-				})
-				tassert.CheckFatal(t, err)
-				buckets = append(buckets, remoteBuckets...)
-
-				// Make sure that listing with specific UUID also works and have
-				// similar outcome.
-				remoteClusterBuckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{
-					Provider: cmn.ProviderAIS,
-					Ns:       cmn.Ns{UUID: tutils.RemoteCluster.UUID},
-				})
-				tassert.CheckFatal(t, err)
-				// NOTE: we cannot do `remoteClusterBuckets.Equal(remoteBuckets)` because
-				//  they will most probably have different `Ns.UUID` (alias vs uuid).
-				tassert.Fatalf(
-					t, len(remoteClusterBuckets) == len(remoteBuckets),
-					"remote buckets do not match expected: %v, got: %v", remoteClusterBuckets, remoteBuckets,
-				)
-			}
+			newBuckets := listAllBuckets(t, baseParams, test.remote)
 			tassert.Fatalf(
-				t, len(buckets) == 2,
-				"number of buckets (%d) should be equal to 2", len(buckets),
+				t, len(newBuckets)-len(origBuckets) == 2,
+				"number of buckets (%d) should be equal to %d", len(newBuckets), len(origBuckets)+2,
 			)
 
 			m1.puts()
 			m2.puts()
 
 			// Now remote bucket(s) should be present in BMD
-			buckets, err = api.ListBuckets(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS})
+			locBuckets := listAllBuckets(t, baseParams, false)
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(
-				t, len(buckets) == 2,
-				"number of buckets (%d) should be equal to 2", len(buckets),
+				t, len(locBuckets) == len(newBuckets),
+				"number of buckets (%d) should be equal to %d", len(locBuckets), len(newBuckets),
 			)
 
 			// Test listing objects
@@ -213,25 +219,28 @@ func TestNamespace(t *testing.T) {
 			summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS}, nil)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
-				t, len(summaries) == 2,
-				"number of summaries (%d) should be equal to 2", len(summaries),
+				t, len(summaries) == len(locBuckets),
+				"number of summaries (%d) should be equal to %d", len(summaries), len(locBuckets),
 			)
 
+			bck1Found, bck2Found := false, false
 			for _, summary := range summaries {
 				if summary.Bck.Equal(m1.bck) {
+					bck1Found = true
 					tassert.Errorf(
 						t, summary.ObjCount == uint64(m1.num),
 						"number of objects (%d) should be equal to (%d)", summary.ObjCount, m1.num,
 					)
 				} else if summary.Bck.Equal(m2.bck) {
+					bck2Found = true
 					tassert.Errorf(
 						t, summary.ObjCount == uint64(m2.num),
 						"number of objects (%d) should be equal to (%d)", summary.ObjCount, m2.num,
 					)
-				} else {
-					t.Errorf("unknown bucket in summary: %q", summary.Bck)
 				}
 			}
+			tassert.Errorf(t, bck1Found, "Bucket %s not found in summary", m1.bck)
+			tassert.Errorf(t, bck2Found, "Bucket %s not found in summary", m2.bck)
 
 			m1.gets()
 			m2.gets()
@@ -254,7 +263,7 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 		alias = tutils.RemoteCluster.Alias
 		uuid  = tutils.RemoteCluster.UUID
 
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		m1 = ioContext{
@@ -310,7 +319,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	t.Skip("NYI")
 
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		remoteBP   = tutils.BaseAPIParams(tutils.RemoteCluster.URL)
 

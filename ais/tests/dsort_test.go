@@ -1889,7 +1889,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					"input-%d-pref",
 					"smth-%d",
 				}
-				proxyURL = tutils.GetPrimaryURL()
+				proxyURL = tutils.RandomProxyURL()
 			)
 
 			// Initialize ioContext

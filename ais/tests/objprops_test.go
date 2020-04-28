@@ -336,7 +336,7 @@ func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
 			Name: clibucket,
 		}
 		versionDir = "versionid"
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 	)
 
 	// Create a few objects
@@ -415,7 +415,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 	var (
 		chkVersion = true
 
-		proxyURL = tutils.GetPrimaryURL()
+		proxyURL = tutils.RandomProxyURL()
 		config   = tutils.GetClusterConfig(t)
 		bck      = cmn.Bck{
 			Name: clibucket,
@@ -477,7 +477,7 @@ func TestObjPropsVersionDisabled(t *testing.T) {
 
 func TestObjProps(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
+		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
 		tests = []struct {

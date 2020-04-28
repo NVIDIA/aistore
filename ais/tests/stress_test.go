@@ -23,7 +23,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		objSize              = int64(cmn.KiB)
 		totalObjs            = objectCountPerWorker * workerCount
 		bck                  = cmn.Bck{Name: t.Name() + "Bucket", Provider: cmn.ProviderAIS}
-		proxyURL             = tutils.GetPrimaryURL()
+		proxyURL             = tutils.RandomProxyURL()
 		wg                   = &sync.WaitGroup{}
 	)
 
@@ -62,7 +62,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		objSize         = int64(cmn.KiB)
 		wg              = &sync.WaitGroup{}
 		bck             = cmn.Bck{Name: t.Name() + "Bucket", Provider: cmn.ProviderAIS}
-		proxyURL        = tutils.GetPrimaryURL()
+		proxyURL        = tutils.RandomProxyURL()
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
