@@ -20,18 +20,18 @@ function whinge {
 function copy_files {
     tag=$1
     selector=$2
-    pfx=$3
+    shift; shift
 
     tagdir=$TOP/$tag
     mkdir $tagdir || whinge "Failed to make $tagdir subdir"
 
-    echo "Retrieving all $pfx ..."
+    echo "Retrieving $@ ..."
 
-    for pod in $(kubectl get pods --selector="$selector" -o=custom-columns=NAME:.metadata.name | tail -n +2)
+    for pod in $(kubectl get pods -n $NAMESPACE --selector="$selector" -o=custom-columns=NAME:.metadata.name | tail -n +2)
     do
         destdir=$tagdir/$pod
         mkdir $destdir || whinge "Failed to make log subdir for pod $pod for tag $tag"
-        kubectl cp $pod:$pfx $destdir
+        kubectl exec -n $NAMESPACE $pod -- tar cf - "$@" | tar --directory=$destdir -x -f -
     done
 }
 
@@ -45,14 +45,14 @@ function get_k8s_pod_logs {
     tagdir=$TOP/$tag
     mkdir $tagdir || whinge "Failed to make $tagdir subdir"
 
-    echo "Retrieving kubectl logs ..."
+    echo "Retrieving container logs ..."
 
-    for pod in $(kubectl get pods --selector="$selector" -o=custom-columns=NAME:.metadata.name | tail -n +2)
+    for pod in $(kubectl get pods -n $NAMESPACE --selector="$selector" -o=custom-columns=NAME:.metadata.name | tail -n +2)
     do
         destdir=$tagdir/$pod
         mkdir $destdir || whinge "Failed to make log subdir for pod $pod for tag $tag"
-        kubectl logs $pod > $destdir/kubectl-log.txt
-        kubectl log --previous=true $pod > $destdir/kubectl-log-previous.txt 2>/dev/null
+        kubectl logs -n $NAMESPACE $pod > $destdir/kubectl-log.txt
+        kubectl log -n $NAMESPACE --previous=true $pod > $destdir/kubectl-log-previous.txt 2>/dev/null
         [[ -s "$destdir/kubectl-log-previous.txt" ]] || rm -f $destdir/kubectl-log-previous.txt
     done
 }
@@ -71,7 +71,9 @@ GROUP=""
 # Datestamp - likely enough that we don't need the XXX component of mktemp?
 DATESTAMP=$(date +'%Y%m%d%H%M')
 
-TEMP=$(getopt -o 'd:g:' -n 'gather_logs.sh' -- "$@")
+NAMESPACE=default
+
+TEMP=$(getopt -o 'd:g:n:' -n 'gather_logs.sh' -- "$@")
 if [ $? -ne 0 ]; then
         echo 'Terminating...' >&2
         exit 1
@@ -94,6 +96,11 @@ while true; do
                 continue
             ;;
 
+            '-n')
+                NAMESPACE="$2"
+                shift; shift
+            ;;
+
             '--')
                 shift
                 break
@@ -112,9 +119,7 @@ TOP=$(mktemp -d --tmpdir=$BASEDIR -t "$TEMPLATE")
 [[ -n "$TOP" ]] || whinge "Failed to create temporary directory for output"
 echo "Gathering data into $TOP ..."
 
-copy_files aislogs 'app=ais' var/log/ais/
-copy_files aisstate 'app=ais' etc/ais/
-copy_files aismisc 'app=ais' var/log/aismisc
+copy_files aispods 'app=ais' var/log/ais/ etc/ais var/log/aismisc
 copy_files aisloader 'app.kubernetes.io/name=aisloader-stress' var/log/aisloader 
 
 get_k8s_pod_logs kubectl_logs 'app=ais'

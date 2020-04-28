@@ -58,6 +58,8 @@ DOCKER_START_BASENAME:=$(shell basename $(DOCKER_START))
 
 DOCKER_CTXDIR:=$(shell mktemp -d)
 
+ANCESTOR:=$(shell git merge-base HEAD master)
+
 #
 # Targets to build a container
 #
@@ -66,7 +68,10 @@ aisnode_image:
 	cp $(DOCKERFILE_AISNODE) $(DOCKER_CTXDIR)/Dockerfile
 	cp $(DOCKER_START) $(DOCKER_CTXDIR) 
 	cp ais_readiness.sh $(DOCKER_CTXDIR)
-	git show-branch --more=10 > $(DOCKER_CTXDIR)/git-showbranch.out
+	echo "Most recent commit on master included in this HEAD:" > $(DOCKER_CTXDIR)/git-showbranch.out
+	git log $(ANCESTOR) -1 --format=fuller >> $(DOCKER_CTXDIR)/git-showbranch.out
+	echo "Commits on current branch (if any):" >> $(DOCKER_CTXDIR)/git-showbranch.out
+	git log $(ANCESTOR)..HEAD >> $(DOCKER_CTXDIR)/git-showbranch.out
 	$(DOCKER) build \
 		-f $(DOCKER_CTXDIR)/Dockerfile \
 		-t $(NAME_AISNODE):$(TAG_AISNODE) \
