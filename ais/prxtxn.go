@@ -536,6 +536,8 @@ loop:
 
 // txn client context
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnClientCtx {
+	cmn.Assert(p.owner.smap.get().isPrimary(p.si))
+
 	var (
 		query = make(url.Values)
 		c     = &txnClientCtx{}

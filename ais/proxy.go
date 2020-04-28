@@ -859,6 +859,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActSummaryBucket:
 		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
+		if p.forwardCP(w, r, &msg, bucket, nil) {
+			return
+		}
 		if err = p.makeNCopies(&msg, bck); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
