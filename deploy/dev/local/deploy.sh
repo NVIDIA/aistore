@@ -194,8 +194,8 @@ for (( c=START; c<=END; c++ )); do
   CONFDIR="$HOME/.ais${NEXT_TIER}$c"
   CONFFILE="$CONFDIR/ais.json"
 
-  PROXY_PARAM="-config=${CONFFILE} -role=proxy -ntargets=${TARGET_CNT} $1 $2"
-  TARGET_PARAM="-config=${CONFFILE} -role=target $1 $2"
+  PROXY_PARAM="${AISNODE_FLAGS} -config=${CONFFILE} -role=proxy -ntargets=${TARGET_CNT} $1 $2"
+  TARGET_PARAM="${AISNODE_FLAGS} -config=${CONFFILE} -role=target $1 $2"
 
   if [[ $c -eq 0 ]]; then
     export AIS_IS_PRIMARY="true"

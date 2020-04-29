@@ -17,6 +17,7 @@ image: golang:1.13
 
 variables:
   GOPATH: /go
+  AISNODE_FLAGS: "-skipstartup"
 
 before_script:
   - export PATH="$PATH:$GOPATH/bin"
@@ -54,8 +55,8 @@ test:short:
   script:
     - *aws_cli
     - make aisfs cli
-    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\n0'
     - make deploy <<< $'5\n5\n3\n0'
+    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\n0'
     - sleep 3
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
     - BUCKET="test" make test-short
