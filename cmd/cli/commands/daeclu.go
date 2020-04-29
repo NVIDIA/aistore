@@ -225,7 +225,7 @@ func setConfig(c *cli.Context) error {
 
 func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err error) {
 	if c.NArg() == 0 {
-		return "", nil, missingArgumentsError(c, "attribute key-value pairs")
+		return "", nil, missingArgumentsError(c, "attribute name-value pairs")
 	}
 
 	args := c.Args()
@@ -233,8 +233,8 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	kvs := args.Tail()
 
 	// Case when DAEMON_ID is not provided by the user:
-	// 1. Key-value pair separated with '=': `ais set log.level=5`
-	// 2. Key-value pair separated with space: `ais set log.level 5`. In this case
+	// 1. name-value pair separated with '=': `ais set log.level=5`
+	// 2. name-value pair separated with space: `ais set log.level 5`. In this case
 	//		the first word is looked up in cmn.ConfigPropList
 	propList := cmn.ConfigPropList()
 	if cmn.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
@@ -243,7 +243,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	}
 
 	if len(kvs) == 0 {
-		return "", nil, missingArgumentsError(c, "attribute key-value pairs")
+		return "", nil, missingArgumentsError(c, "attribute name-value pairs")
 	}
 
 	nvs, err = makePairs(kvs)
@@ -253,7 +253,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 
 	for k := range nvs {
 		if !cmn.StringInSlice(k, propList) {
-			return "", nil, fmt.Errorf("invalid key %q, not found in available prop list", k)
+			return "", nil, fmt.Errorf("invalid prop name %q(%+v)", k, nvs)
 		}
 	}
 
@@ -272,7 +272,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 			switch err := err.(type) {
 			case *cmn.HTTPError:
 				if err.Status == http.StatusNotFound {
-					fmt.Fprintln(c.App.Writer, "Rebalance has not been started yet.")
+					fmt.Fprintln(c.App.Writer, "Rebalance has not started yet.")
 					return nil
 				}
 				return err

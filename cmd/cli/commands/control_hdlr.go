@@ -122,11 +122,16 @@ func startXactionHandler(c *cli.Context) (err error) {
 	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Started %q xaction (ID: %s).\n", xactKind, id)
+	if id != "" {
+		fmt.Fprintf(c.App.Writer, "Started %s %q\n", xactKind, id)
+	} else {
+		fmt.Fprintf(c.App.Writer, "Started %s\n", xactKind)
+	}
 	return
 }
 
 func stopXactionHandler(c *cli.Context) (err error) {
+	var sid string
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "xaction name or id")
 	}
@@ -141,14 +146,17 @@ func stopXactionHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	if xactID != "" {
-		fmt.Fprintf(c.App.Writer, "Stopped xaction with \"id=%s\".\n", xactID)
+	if xactKind != "" && xactID != "" {
+		sid = fmt.Sprintf("%s, ID=%q", xactKind, xactID)
+	} else if xactKind != "" {
+		sid = xactKind
 	} else {
-		if bck.IsEmpty() {
-			fmt.Fprintf(c.App.Writer, "Stopped xaction with \"kind=%s\".\n", xactKind)
-		} else {
-			fmt.Fprintf(c.App.Writer, "Stopped xaction with \"kind=%s\" && \"bucket=%s\".\n", xactKind, bck)
-		}
+		sid = fmt.Sprintf("xaction ID=%q", xactID)
+	}
+	if bck.IsEmpty() {
+		fmt.Fprintf(c.App.Writer, "Stopped %s\n", sid)
+	} else {
+		fmt.Fprintf(c.App.Writer, "Stopped %s, bucket=%s\n", sid, bck)
 	}
 	return
 }

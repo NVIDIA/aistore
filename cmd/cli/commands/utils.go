@@ -446,18 +446,26 @@ func makeList(list, delimiter string) []string {
 
 // Converts a list of "key value" and "key=value" into map
 func makePairs(args []string) (nvs cmn.SimpleKVs, err error) {
+	var (
+		i  int
+		ll = len(args)
+	)
 	nvs = cmn.SimpleKVs{}
-	i := 0
-	for i < len(args) {
-		pairs := makeList(args[i], keyAndValueSeparator)
-		if len(pairs) != 1 {
-			// "key=value" case
+	for i < ll {
+		if args[i] != keyAndValueSeparator && strings.Contains(args[i], keyAndValueSeparator) {
+			pairs := makeList(args[i], keyAndValueSeparator)
+			if pairs[1] == "" {
+				return nil, fmt.Errorf("no value for '%s'", pairs[0])
+			}
 			nvs[pairs[0]] = pairs[1]
 			i++
+		} else if i < ll-2 && args[i+1] == keyAndValueSeparator {
+			nvs[args[i]] = args[i+2]
+			i += 3
 		} else {
-			// "key value" case with a corner case: last name without a value
-			if i == len(args)-1 {
-				return nil, fmt.Errorf("no value for %v", args[i])
+			// last name without a value
+			if i == ll-1 {
+				return nil, fmt.Errorf("no value for '%s'", args[i])
 			}
 			nvs[args[i]] = args[i+1]
 			i += 2
