@@ -7,6 +7,7 @@ package downloader
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -124,8 +125,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time,
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		err, _ := cmn.NewHTTPError(req, "", resp.StatusCode)
-		return err
+		return fmt.Errorf("request failed with %d status code (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
 	// Create a custom reader to monitor progress every time we read from response body stream

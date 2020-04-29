@@ -345,8 +345,9 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 			d.FinishedCnt, cmn.NounEnding(d.FinishedCnt), d.ErrorCnt, cmn.NounEnding(d.ErrorCnt))
 
 		if verbose {
+			fmt.Fprintln(w, "Errors:")
 			for _, e := range d.Errs {
-				fmt.Fprintf(w, "%s: %s\n", e.Name, e.Err)
+				fmt.Fprintf(w, "\t%s: %s\n", e.Name, e.Err)
 			}
 		}
 		return
@@ -355,22 +356,30 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 	realFinished := d.FinishedCnt + d.ErrorCnt
 	fmt.Fprintf(w, "Download progress: %d/%d (%.2f%%)\n",
 		realFinished, d.TotalCnt(), 100*float64(realFinished)/float64(d.TotalCnt()))
-	if !verbose || len(d.CurrentTasks) == 0 {
-		return
-	}
+	if verbose {
+		if len(d.CurrentTasks) > 0 {
+			sort.Slice(d.CurrentTasks, func(i, j int) bool {
+				return d.CurrentTasks[i].Name < d.CurrentTasks[j].Name
+			})
 
-	sort.Slice(d.CurrentTasks, func(i, j int) bool {
-		return d.CurrentTasks[i].Name < d.CurrentTasks[j].Name
-	})
-
-	fmt.Fprintln(w, "Progress of files that are currently being downloaded:")
-	for _, task := range d.CurrentTasks {
-		fmt.Fprintf(w, "\t%s: ", task.Name)
-		if task.Total == 0 {
-			fmt.Fprintln(w, cmn.B2S(task.Downloaded, 2))
-		} else {
-			pctDownloaded := 100 * float64(task.Downloaded) / float64(task.Total)
-			fmt.Fprintf(w, "%s/%s (%.2f%%)\n", cmn.B2S(task.Downloaded, 2), cmn.B2S(task.Total, 2), pctDownloaded)
+			fmt.Fprintln(w, "Progress of files that are currently being downloaded:")
+			for _, task := range d.CurrentTasks {
+				fmt.Fprintf(w, "\t%s: ", task.Name)
+				if task.Total == 0 {
+					fmt.Fprintln(w, cmn.B2S(task.Downloaded, 2))
+				} else {
+					pctDownloaded := 100 * float64(task.Downloaded) / float64(task.Total)
+					fmt.Fprintf(w, "%s/%s (%.2f%%)\n", cmn.B2S(task.Downloaded, 2), cmn.B2S(task.Total, 2), pctDownloaded)
+				}
+			}
 		}
+		if d.ErrorCnt > 0 {
+			fmt.Fprintln(w, "Errors:")
+			for _, e := range d.Errs {
+				fmt.Fprintf(w, "\t%s: %s\n", e.Name, e.Err)
+			}
+		}
+	} else if d.ErrorCnt > 0 {
+		fmt.Fprintf(w, "Errors (%d) occurred during the download. To see detailed info run `ais show download %s -v`\n", d.ErrorCnt, d.ID)
 	}
 }
