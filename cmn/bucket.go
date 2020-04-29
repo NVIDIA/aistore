@@ -209,6 +209,9 @@ func (query QueryBcks) Contains(other Bck) bool {
 		if query.Provider == "" {
 			// If query's provider not set, we should match the expected bucket
 			query.Provider = other.Provider
+		} else if query.Provider == AnyCloud && other.IsCloud() {
+			// If provider is any cloud then we can just match the expected cloud bucket
+			query.Provider = other.Provider
 		}
 		return query.Equal(other)
 	}
