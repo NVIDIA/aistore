@@ -33,6 +33,7 @@ type (
 		total      int64
 		downloaded int64
 		bar        *mpb.Bar
+		lastTime   time.Time
 	}
 
 	downloaderPB struct {
@@ -73,10 +74,12 @@ func (d downloadingResult) String() string {
 
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Downloaded %d out of %d files.\n", d.finishedFiles, d.totalFiles))
-	sb.WriteString("Following files caused downloading errors:")
-	for file, err := range d.downloadingErrors {
-		sb.WriteString(fmt.Sprintf("\n%s: %s", file, err))
+	sb.WriteString(fmt.Sprintf("Downloaded %d out of %d files.", d.finishedFiles, d.totalFiles))
+	if len(d.downloadingErrors) > 0 {
+		sb.WriteString("\nFollowing files caused downloading errors:")
+		for file, err := range d.downloadingErrors {
+			sb.WriteString(fmt.Sprintf("\n%s: %s", file, err))
+		}
 	}
 
 	return sb.String()
@@ -171,7 +174,6 @@ func (b *downloaderPB) updateBars(downloadStatus downloader.DlStatusResp) {
 
 	for _, newState := range fileStates {
 		oldState, ok := b.states[newState.Name]
-
 		if !ok {
 			b.trackNewFile(newState)
 			continue
@@ -207,20 +209,26 @@ func (b *downloaderPB) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
 func (b *downloaderPB) trackNewFile(state downloader.TaskDlInfo) {
 	bar := b.p.AddBar(
 		state.Total,
+		mpb.BarStyle("[=>-|"),
 		mpb.BarRemoveOnComplete(),
 		mpb.PrependDecorators(
 			decor.Name(state.Name+" ", decor.WC{W: len(state.Name) + 1, C: decor.DSyncWidthR}),
 			decor.Counters(decor.UnitKiB, "%.1f/%.1f", decor.WCSyncWidth),
 		),
-		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
+		mpb.AppendDecorators(
+			decor.EwmaETA(decor.ET_STYLE_HHMMSS, 90),
+			decor.Name(" ] "),
+			decor.EwmaSpeed(decor.UnitKiB, "% .1f", 60, decor.WC{W: 10}),
+		),
 	)
 
-	bar.IncrBy(int(state.Downloaded), 0)
+	bar.IncrBy(int(state.Downloaded))
 
 	b.states[state.Name] = &fileDownloadingState{
 		downloaded: state.Downloaded,
 		total:      state.Total,
 		bar:        bar,
+		lastTime:   time.Now(),
 	}
 }
 
@@ -238,11 +246,13 @@ func (b *downloaderPB) updateFileBar(newState downloader.TaskDlInfo, state *file
 			// If the total size of the file is unknown, keep setting a fake value to keep the bar running.
 			state.bar.SetTotal(state.downloaded+unknownTotalIncrement, false)
 		}
-		state.bar.IncrBy(int(progress))
+		state.bar.IncrBy(int(progress), time.Since(state.lastTime))
 	} else {
 		// If progress was reverted due error and retry we must update progress
 		state.bar.SetCurrent(state.downloaded)
+		state.bar.AdjustAverageDecorators(time.Now())
 	}
+	state.lastTime = time.Now()
 }
 
 func (b *downloaderPB) updateTotalBar(newFinished, total int) {
