@@ -39,7 +39,7 @@ func clearDownloadList(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	for k, v := range listDownload {
-		if v.NumPending > 0 {
+		if v.JobRunning() {
 			tutils.Logf("Canceling: %v...\n", k)
 			err := api.DownloadAbort(tutils.DefaultBaseAPIParams(t), k)
 			tassert.CheckFatal(t, err)
@@ -528,7 +528,7 @@ func TestDownloadStatus(t *testing.T) {
 	if resp.Total != 2 {
 		t.Errorf("expected %d objects, got %d", 2, resp.Total)
 	}
-	if resp.Finished != 1 {
+	if resp.FinishedCnt != 1 {
 		t.Errorf("expected the short file to be downloaded")
 	}
 	if len(resp.CurrentTasks) != 1 {
@@ -576,10 +576,10 @@ func TestDownloadStatusError(t *testing.T) {
 	if resp.Total != len(files) {
 		t.Errorf("expected %d objects, got %d", len(files), resp.Total)
 	}
-	if resp.Finished != 0 {
+	if resp.FinishedCnt != 0 {
 		t.Errorf("expected 0 files to be finished")
 	}
-	if len(resp.Errs) != len(files) {
+	if resp.ErrorCnt != len(files) {
 		t.Fatalf("expected 2 downloading errors, but got: %d errors: %v", len(resp.Errs), resp.Errs)
 	}
 

@@ -91,39 +91,9 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 			cmn.AssertNoErr(err)
 		}
 
-		finished, total, numPending, scheduled := 0, 0, 0, 0
-		allDispatchedCnt := 0
-		aborted := false
-
-		currTasks := make([]downloader.TaskDlInfo, 0, len(stats))
-		finishedTasks := make([]downloader.TaskDlInfo, 0, len(stats))
-		downloadErrs := make([]downloader.TaskErrInfo, 0)
-		for _, stat := range stats {
-			finished += stat.Finished
-			total += stat.Total
-			numPending += stat.Pending
-			scheduled += stat.Scheduled
-
-			aborted = aborted || stat.Aborted
-			if stat.AllDispatched {
-				allDispatchedCnt++
-			}
-
-			currTasks = append(currTasks, stat.CurrentTasks...)
-			finishedTasks = append(finishedTasks, stat.FinishedTasks...)
-			downloadErrs = append(downloadErrs, stat.Errs...)
-		}
-
-		resp := downloader.DlStatusResp{
-			Finished:      finished,
-			Total:         total,
-			CurrentTasks:  currTasks,
-			FinishedTasks: finishedTasks,
-			Aborted:       aborted,
-			Pending:       numPending,
-			Errs:          downloadErrs,
-			AllDispatched: allDispatchedCnt == len(stats),
-			Scheduled:     scheduled,
+		resp := stats[0]
+		for i := 1; i < len(stats); i++ {
+			resp.Aggregate(stats[i])
 		}
 
 		respJSON := cmn.MustMarshal(resp)

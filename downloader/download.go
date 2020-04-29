@@ -424,18 +424,3 @@ func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
 	sort.Sort(TaskInfoByName(currentTasks))
 	return currentTasks
 }
-
-// Gets the number of pending files of reqId
-func (d *Downloader) getNumPending(jobID string) int {
-	numPending := 0
-
-	d.dispatcher.RLock()
-	for _, j := range d.dispatcher.joggers {
-		if tasks, ok := j.q.m[jobID]; ok {
-			numPending += len(tasks)
-		}
-	}
-	d.dispatcher.RUnlock()
-
-	return numPending
-}

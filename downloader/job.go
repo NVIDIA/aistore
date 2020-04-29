@@ -297,3 +297,16 @@ func newRangeDlJob(t cluster.Target, base *baseDlJob, pt cmn.ParsedTemplate, sub
 	err = job.getNextObjs()
 	return job, err
 }
+
+func (d *downloadJobInfo) ToDlJobInfo() DlJobInfo {
+	return DlJobInfo{
+		ID:            d.ID,
+		Description:   d.Description,
+		FinishedCnt:   int(d.FinishedCnt.Load()),
+		ScheduledCnt:  int(d.ScheduledCnt.Load()),
+		ErrorCnt:      int(d.ErrorCnt.Load()),
+		Total:         d.Total,
+		AllDispatched: d.AllDispatched.Load(),
+		Aborted:       d.Aborted.Load(),
+	}
+}

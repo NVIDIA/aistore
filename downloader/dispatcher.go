@@ -284,7 +284,8 @@ func (d *dispatcher) dispatchRemove(req *request) {
 	}
 
 	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
-	if !d.parent.Aborted() && d.parent.getNumPending(jInfo.ID) != 0 {
+	dlInfo := jInfo.ToDlJobInfo()
+	if dlInfo.JobRunning() {
 		req.writeErrResp(fmt.Errorf("download job with id = %s is still running", jInfo.ID), http.StatusBadRequest)
 		return
 	}
@@ -335,8 +336,6 @@ func (d *dispatcher) dispatchStatus(req *request) {
 		return
 	}
 
-	numPending := d.parent.getNumPending(jInfo.ID)
-
 	dlErrors, err := dlStore.getErrors(req.id)
 	if err != nil {
 		req.writeErrResp(err, http.StatusInternalServerError)
@@ -345,16 +344,10 @@ func (d *dispatcher) dispatchStatus(req *request) {
 	sort.Sort(TaskErrByName(dlErrors))
 
 	req.writeResp(DlStatusResp{
-		Finished:      int(jInfo.FinishedCnt.Load()),
-		Total:         jInfo.Total,
+		DlJobInfo:     jInfo.ToDlJobInfo(),
 		CurrentTasks:  currentTasks,
 		FinishedTasks: finishedTasks,
 		Errs:          dlErrors,
-
-		Pending:       numPending,
-		Aborted:       jInfo.Aborted.Load(),
-		AllDispatched: jInfo.AllDispatched.Load(),
-		Scheduled:     int(jInfo.ScheduledCnt.Load()),
 	})
 }
 
@@ -362,13 +355,7 @@ func (d *dispatcher) dispatchList(req *request) {
 	records := dlStore.getList(req.regex)
 	respMap := make(map[string]DlJobInfo)
 	for _, r := range records {
-		respMap[r.ID] = DlJobInfo{
-			ID:          r.ID,
-			Description: r.Description,
-			NumErrors:   int(r.ErrorCnt.Load()),
-			NumPending:  d.parent.getNumPending(r.ID),
-			Aborted:     r.Aborted.Load(),
-		}
+		respMap[r.ID] = r.ToDlJobInfo()
 	}
 
 	req.writeResp(respMap)

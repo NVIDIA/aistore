@@ -21,72 +21,80 @@ type DlPostResp struct {
 	ID string `json:"id"`
 }
 
+// Summary info of the download job
+type DlJobInfo struct {
+	ID            string `json:"id"`
+	Description   string `json:"description"`
+	FinishedCnt   int    `json:"finished"`
+	ScheduledCnt  int    `json:"scheduled"` // tasks being processed or already processed by dispatched
+	ErrorCnt      int    `json:"error"`
+	Total         int    `json:"total"`          // total number of tasks, negative if unknown
+	AllDispatched bool   `json:"all_dispatched"` // if true, dispatcher has already scheduled all tasks for given job
+	Aborted       bool   `json:"aborted"`
+}
+
 type DlStatusResp struct {
-	Finished  int `json:"finished"`
-	Scheduled int `json:"scheduled"` // tasks being processed or already processed by dispatched
-	Total     int `json:"total"`     // total number of tasks, negative if unknown
-
-	Aborted       bool `json:"aborted"`
-	AllDispatched bool `json:"all_dispatched"` // if true, dispatcher has already scheduled all tasks for given job
-	Pending       int  `json:"num_pending"`    // tasks currently in download queue
-
+	DlJobInfo
 	CurrentTasks  []TaskDlInfo  `json:"current_tasks,omitempty"`
 	FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
 	Errs          []TaskErrInfo `json:"download_errors,omitempty"`
 }
 
-func (d *DlStatusResp) JobFinished() bool {
-	return d.Aborted || (d.AllDispatched && d.Scheduled == d.Finished+len(d.Errs))
-}
-
-func (d *DlStatusResp) TotalCnt() int {
-	if d.Total > 0 {
-		return d.Total
-	}
-	return d.Scheduled
-}
-
-// Summary info of the download job
-// FIXME: add more stats
-type DlJobInfo struct {
-	ID          string `json:"id"`
-	Description string `json:"description"`
-	NumErrors   int    `json:"num_errors"`
-	NumPending  int    `json:"num_pending"`
-	Aborted     bool   `json:"aborted"`
-}
-
 func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
-	j.NumErrors += rhs.NumErrors
-	j.NumPending += rhs.NumPending
+	j.FinishedCnt += rhs.FinishedCnt
+	j.ScheduledCnt += rhs.ScheduledCnt
+	j.ErrorCnt += rhs.ErrorCnt
+	j.Total += rhs.Total
+	j.AllDispatched = j.AllDispatched && rhs.AllDispatched
+	j.Aborted = j.Aborted || rhs.Aborted
 }
 
-func (j *DlJobInfo) IsRunning() bool {
-	return !j.Aborted && j.NumPending > 0
+func (j DlJobInfo) JobFinished() bool {
+	return j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.FinishedCnt+j.ErrorCnt)
 }
 
-func (j *DlJobInfo) IsFinished() bool {
-	return !j.IsRunning()
+func (j DlJobInfo) JobRunning() bool {
+	return !j.JobFinished()
 }
 
-func (j *DlJobInfo) String() string {
+func (j DlJobInfo) TotalCnt() int {
+	if j.Total > 0 {
+		return j.Total
+	}
+	return j.ScheduledCnt
+}
+
+func (j DlJobInfo) PendingCnt() int {
+	if j.Total > 0 {
+		return j.Total - j.FinishedCnt - j.ErrorCnt
+	}
+	return j.ScheduledCnt
+}
+
+func (j DlJobInfo) String() string {
 	var sb strings.Builder
 
 	sb.WriteString(j.ID)
-
 	if j.Description != "" {
-		sb.WriteString(fmt.Sprintf(" (%s)", j.Description))
+		sb.WriteString(" (")
+		sb.WriteString(j.Description)
+		sb.WriteString(")")
 	}
-
 	sb.WriteString(": ")
 
-	if j.NumPending == 0 {
+	if j.JobFinished() {
 		sb.WriteString("finished")
 	} else {
-		sb.WriteString(fmt.Sprintf("%d files still being downloaded", j.NumPending))
+		sb.WriteString(fmt.Sprintf("%d files still being downloaded", j.PendingCnt()))
 	}
-
 	return sb.String()
+}
+
+func (d *DlStatusResp) Aggregate(rhs DlStatusResp) {
+	d.DlJobInfo.Aggregate(rhs.DlJobInfo)
+	d.CurrentTasks = append(d.CurrentTasks, rhs.CurrentTasks...)
+	d.FinishedTasks = append(d.FinishedTasks, rhs.FinishedTasks...)
+	d.Errs = append(d.Errs, rhs.Errs...)
 }
 
 type DlBase struct {

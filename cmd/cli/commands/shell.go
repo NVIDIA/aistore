@@ -309,11 +309,11 @@ func downloadIDAllCompletions(c *cli.Context) {
 }
 
 func downloadIDRunningCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*downloader.DlJobInfo).IsRunning)
+	suggestDownloadID(c, (*downloader.DlJobInfo).JobRunning)
 }
 
 func downloadIDFinishedCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*downloader.DlJobInfo).IsFinished)
+	suggestDownloadID(c, (*downloader.DlJobInfo).JobFinished)
 }
 
 func suggestDownloadID(c *cli.Context, filter func(*downloader.DlJobInfo) bool) {

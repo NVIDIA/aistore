@@ -259,15 +259,15 @@ const (
 
 	DownloadListHeader = "JOB ID\t STATUS\t ERRORS\t DESCRIPTION\n"
 	DownloadListBody   = "{{$value.ID}}\t " +
-		"{{if (eq $value.Aborted true) }}Aborted" +
-		"{{else}}{{if (eq $value.NumPending 0) }}Finished{{else}}{{$value.NumPending}} pending{{end}}" +
-		"{{end}}\t {{$value.NumErrors}}\t {{$value.Description}}\n"
+		"{{if $value.Aborted}}Aborted" +
+		"{{else}}{{if $value.JobFinished}}Finished{{else}}{{$value.PendingCnt}} pending{{end}}" +
+		"{{end}}\t {{$value.ErrorCnt}}\t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
 
 	DSortListHeader = "JOB ID\t STATUS\t START\t FINISH\t DESCRIPTION\n"
 	DSortListBody   = "{{$value.ID}}\t " +
-		"{{if (eq $value.Aborted true) }}Aborted" +
-		"{{else if (eq $value.Archived true) }}Finished" +
+		"{{if $value.Aborted}}Aborted" +
+		"{{else if $value.Archived}}Finished" +
 		"{{else}}Running" +
 		"{{end}}\t {{FormatTime $value.StartedTime}}\t {{FormatTime $value.FinishTime}} \t {{$value.Description}}\n"
 	DSortListTmpl = DSortListHeader + "{{ range $value := . }}" + DSortListBody + "{{end}}"

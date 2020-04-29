@@ -132,9 +132,9 @@ func (b *downloaderPB) start() (bool, error) {
 
 	b.updateDownloadingErrors(resp.Errs)
 
-	b.finishedFiles = resp.Finished
+	b.finishedFiles = resp.FinishedCnt
 	b.totalFiles = resp.Total
-	b.scheduledFiles = resp.Scheduled
+	b.scheduledFiles = resp.ScheduledCnt
 
 	b.allDispatched = resp.AllDispatched
 	b.aborted = resp.Aborted
@@ -180,7 +180,7 @@ func (b *downloaderPB) updateBars(downloadStatus downloader.DlStatusResp) {
 		b.updateFileBar(newState, oldState)
 	}
 
-	b.updateTotalBar(downloadStatus.Finished+len(downloadStatus.Errs), downloadStatus.TotalCnt())
+	b.updateTotalBar(downloadStatus.FinishedCnt+len(downloadStatus.Errs), downloadStatus.TotalCnt())
 }
 
 func (b *downloaderPB) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
@@ -330,10 +330,9 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 		return
 	}
 
-	errCount := len(d.Errs)
 	if d.JobFinished() {
 		fmt.Fprintf(w, "Done: %d file%s downloaded, %d error%s\n",
-			d.Finished, cmn.NounEnding(d.Finished), errCount, cmn.NounEnding(errCount))
+			d.FinishedCnt, cmn.NounEnding(d.FinishedCnt), d.ErrorCnt, cmn.NounEnding(d.ErrorCnt))
 
 		if verbose {
 			for _, e := range d.Errs {
@@ -343,7 +342,7 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 		return
 	}
 
-	realFinished := d.Finished + errCount
+	realFinished := d.FinishedCnt + d.ErrorCnt
 	fmt.Fprintf(w, "Download progress: %d/%d (%.2f%%)\n",
 		realFinished, d.TotalCnt(), 100*float64(realFinished)/float64(d.TotalCnt()))
 	if !verbose || len(d.CurrentTasks) == 0 {
