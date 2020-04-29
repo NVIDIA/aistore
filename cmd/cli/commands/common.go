@@ -56,6 +56,7 @@ const (
 	subcmdRemoteAIS = cmn.GetWhatRemoteAIS
 	subcmdMountpath = "mountpath"
 	subcmdCluster   = "cluster"
+	subcmdPrimary   = "primary"
 
 	// Show subcommands
 	subcmdShowBucket    = subcmdBucket
@@ -98,8 +99,9 @@ const (
 	subcmdStopDownload = subcmdDownload
 
 	// Set subcommand
-	subcmdSetConfig = subcmdConfig
-	subcmdSetProps  = subcmdProps
+	subcmdSetConfig  = subcmdConfig
+	subcmdSetProps   = subcmdProps
+	subcmdSetPrimary = subcmdPrimary
 
 	// Attach/Detach subcommand
 	subcmdAttachRemoteAIS = subcmdRemoteAIS

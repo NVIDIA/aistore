@@ -104,7 +104,7 @@ var (
 					ArgsUsage:    optionalTargetIDArgument,
 					Flags:        showCmdsFlags[subcmdShowDisk],
 					Action:       showDisksHandler,
-					BashComplete: daemonCompletions(true /* omit proxies */),
+					BashComplete: daemonCompletions(completeTargets),
 				},
 				{
 					Name:         subcmdShowDownload,
@@ -140,7 +140,7 @@ var (
 						if c.NArg() == 0 {
 							fmt.Printf("%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap)
 						}
-						daemonCompletions(false /* omit proxies */)(c)
+						daemonCompletions(completeAllDaemons)(c)
 					},
 					Subcommands: []cli.Command{
 						{
@@ -149,7 +149,7 @@ var (
 							ArgsUsage:    optionalDaemonIDArgument,
 							Flags:        showCmdsFlags[subcmdSmap],
 							Action:       showSmapHandler,
-							BashComplete: daemonCompletions(false /* omit proxies */),
+							BashComplete: daemonCompletions(completeAllDaemons),
 						},
 					},
 				},
@@ -191,7 +191,7 @@ var (
 					ArgsUsage:    "",
 					Flags:        showCmdsFlags[subcmdShowRemoteAIS],
 					Action:       showRemoteAISHandler,
-					BashComplete: daemonCompletions(true /* omit proxies */),
+					BashComplete: daemonCompletions(completeTargets),
 				},
 			},
 		},

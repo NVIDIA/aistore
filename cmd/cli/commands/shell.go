@@ -22,14 +22,22 @@ import (
 // Cluster / Daemon //
 //////////////////////
 
-func daemonCompletions(omitProxies bool) cli.BashCompleteFunc {
+type daemonKindCompletion = int
+
+const (
+	completeTargets daemonKindCompletion = iota
+	completeProxies
+	completeAllDaemons
+)
+
+func daemonCompletions(what daemonKindCompletion) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		// daemon already given as argument
 		if c.NArg() >= 1 {
 			return
 		}
 
-		suggestDaemon(omitProxies)
+		suggestDaemon(what)
 	}
 }
 
@@ -47,7 +55,7 @@ func daemonConfigSectionCompletions(daemonOptional bool) cli.BashCompleteFunc {
 		}
 
 		// no arguments given
-		suggestDaemon(false /* omit proxies */)
+		suggestDaemon(completeAllDaemons)
 		if daemonOptional {
 			suggestConfigSection()
 		}
@@ -56,23 +64,25 @@ func daemonConfigSectionCompletions(daemonOptional bool) cli.BashCompleteFunc {
 
 func setConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		suggestDaemon(false /* omit proxies */)
+		suggestDaemon(completeAllDaemons)
 	}
 	suggestUpdatableConfig(c)
 }
 
-func suggestDaemon(omitProxies bool) {
+func suggestDaemon(what daemonKindCompletion) {
 	smap, err := api.GetClusterMap(cliAPIParams(clusterURL))
 	if err != nil {
 		return
 	}
-	if !omitProxies {
+	if what != completeTargets {
 		for dae := range smap.Pmap {
 			fmt.Println(dae)
 		}
 	}
-	for dae := range smap.Tmap {
-		fmt.Println(dae)
+	if what != completeProxies {
+		for dae := range smap.Tmap {
+			fmt.Println(dae)
+		}
 	}
 }
 

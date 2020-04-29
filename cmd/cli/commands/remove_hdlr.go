@@ -50,7 +50,7 @@ var (
 					ArgsUsage:    daemonIDArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveNode],
 					Action:       removeNodeHandler,
-					BashComplete: daemonCompletions(false /* omit proxies */),
+					BashComplete: daemonCompletions(completeAllDaemons),
 				},
 				{
 					Name:         subcmdRemoveDownload,

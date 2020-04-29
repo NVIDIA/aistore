@@ -8,6 +8,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/urfave/cli"
 )
 
@@ -18,6 +19,7 @@ var (
 			jsonspecFlag,
 			resetFlag,
 		},
+		subcmdSetPrimary: {},
 	}
 
 	setCmds = []cli.Command{
@@ -40,6 +42,14 @@ var (
 					Flags:        setCmdsFlags[subcmdSetProps],
 					Action:       setPropsHandler,
 					BashComplete: bucketCompletions(bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}}),
+				},
+				{
+					Name:         subcmdSetPrimary,
+					Usage:        "set new primary proxy",
+					ArgsUsage:    daemonIDArgument,
+					Flags:        setCmdsFlags[subcmdSetPrimary],
+					Action:       setPrimaryHandler,
+					BashComplete: daemonCompletions(completeProxies),
 				},
 			},
 		},
@@ -73,4 +83,23 @@ func setPropsHandler(c *cli.Context) (err error) {
 		return newAdditionalInfoError(err, helpMsg)
 	}
 	return
+}
+
+func setPrimaryHandler(c *cli.Context) (err error) {
+	daemonID := c.Args().First()
+	if daemonID == "" {
+		return missingArgumentsError(c, "proxy daemon ID")
+	}
+	primarySmap, err := fillMap()
+	if err != nil {
+		return
+	}
+	if _, ok := primarySmap.Pmap[daemonID]; !ok {
+		return incorrectUsageMsg(c, "%s: is not a proxy", daemonID)
+	}
+	err = api.SetPrimaryProxy(defaultAPIParams, daemonID)
+	if err == nil {
+		fmt.Fprintf(c.App.Writer, "%s has been set as a new primary proxy\n", daemonID)
+	}
+	return err
 }

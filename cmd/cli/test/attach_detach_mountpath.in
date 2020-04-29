@@ -1,7 +1,7 @@
 ais attach mountpath // FAIL
 ais detach mountpath // FAIL
-ais attach mountpath something // FAIL "no value for something"
-ais detach mountpath something // FAIL "no value for something"
+ais attach mountpath something // FAIL "no value for 'something'"
+ais detach mountpath something // FAIL "no value for 'something'"
 ais attach mountpath $RANDOM_TARGET=/nonexisting // FAIL "fspath "/nonexisting" does not exist, err: no such file or directory"
 ais detach mountpath $RANDOM_TARGET=/nonexisting // FAIL "fspath "/nonexisting" does not exist, err: no such file or directory"
 
