@@ -1288,7 +1288,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 
 	// Initialize ioContext
 	m.saveClusterState()
-	m.proxyURL = tutils.GetPrimaryURL() // TODO: fails with random proxy
+	m.proxyURL = tutils.RandomProxyURL()
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -1296,7 +1296,10 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
 	defer func() {
-		tutils.DestroyBucket(t, m.proxyURL, srcBck)
+		// This bucket should not be present (thus ignoring error) but
+		// try to delete in case something failed.
+		api.DestroyBucket(baseParams, srcBck)
+		// This bucket should be present.
 		tutils.DestroyBucket(t, m.proxyURL, dstBck)
 	}()
 	tutils.DestroyBucket(t, m.proxyURL, dstBck)
@@ -1403,7 +1406,7 @@ func TestRenameBucketTwice(t *testing.T) {
 
 	// Initialize ioContext
 	m.saveClusterState()
-	m.proxyURL = tutils.GetPrimaryURL() // TODO: the test fails with random proxy
+	m.proxyURL = tutils.RandomProxyURL()
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -1411,9 +1414,12 @@ func TestRenameBucketTwice(t *testing.T) {
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
 	defer func() {
-		tutils.DestroyBucket(t, m.proxyURL, srcBck)
+		// These buckets should not be present (thus ignoring error) but
+		// try to delete in case something failed.
+		api.DestroyBucket(baseParams, srcBck)
+		api.DestroyBucket(baseParams, dstBck2)
+		// This one should be present.
 		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
-		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
 	}()
 
 	m.puts()
