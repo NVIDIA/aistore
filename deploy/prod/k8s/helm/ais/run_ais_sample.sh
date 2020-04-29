@@ -2,14 +2,19 @@
 
 #
 # Wrapper for helm install of AIS - alternative to repeating all these
-# runes on the cmdline: copy and customize this script.
+# runes on the cmdline: copy and customize this script *if* you are
+# deploying via 'helm install' cmdline.
+#
+# The preferred deployment method is via the like of ArgoCD, in which
+# case you can ignore this script.
 #
 
 ############# BEGIN: Review customization from this point to the marker below #############
 #
-# AIS cluster name
+# AIS cluster name, k8s namespace (must already exist)
 #
 AIS_NAME=demo
+AIS_NAMESPACE=default
 
 #
 # Container images - select aisnode version, the kubectl version rarely changes
@@ -21,6 +26,8 @@ KUBECTL_IMAGE=quay.io/nvidia/ais-kubectl:1
 # *If* the images require a pull secret, then install the pull secret in k8s
 # and quote the secret name here (not the secret itself!). Leave as empty
 # string for public repos.
+#
+# Make sure you install the secret into $AIS_NAMESPACE !
 #
 PULLSECRETNAME=""
 
@@ -102,14 +109,15 @@ else
 fi
 
 helm install \
-	--name=$AIS_NAME \
-	--set image.pullPolicy=IfNotPresent \
-	--set-string image.aisnode.repository=$(echo $AISNODE_IMAGE | cut -d: -f1) \
-	--set-string image.aisnode.tag=$(echo $AISNODE_IMAGE | cut -d: -f2) \
-	--set-string image.kubectl.repository=$(echo $KUBECTL_IMAGE | cut -d: -f1) \
-	--set-string image.kubectl.tag=$(echo $KUBECTL_IMAGE | cut -d: -f2) \
-	${PULLSECRETNAME:+ --set-string image.pullSecretNames="{$PULLSECRETNAME}"} \
-	--set-string target.mountPaths="$MOUNTPATHS" \
+	$AIS_NAME \
+	--namespace=$AIS_NAMESPACE \
+	--set aiscluster.image.pullPolicy=IfNotPresent \
+	--set-string aiscluster.image.aisnode.repository=$(echo $AISNODE_IMAGE | cut -d: -f1) \
+	--set-string aiscluster.image.aisnode.tag=$(echo $AISNODE_IMAGE | cut -d: -f2) \
+	--set-string aiscluster.image.kubectl.repository=$(echo $KUBECTL_IMAGE | cut -d: -f1) \
+	--set-string aiscluster.image.kubectl.tag=$(echo $KUBECTL_IMAGE | cut -d: -f2) \
+	${PULLSECRETNAME:+ --set-string aiscluster.image.pullSecretNames="{$PULLSECRETNAME}"} \
+	--set-string aiscluster.target.mountPaths="$MOUNTPATHS" \
 	${NO_MONITORING:+ --set-string graphite.ais.pv.node=$STATS_NODENAME} \
 	${NO_MONITORING:+ --set-string graphite.ais.pv.path=${STATS_BASEPATH}/graphite} \
 	${NO_MONITORING:+ --set-string graphite.ais.pv.capacity=${STATS_SIZE}} \
@@ -120,8 +128,8 @@ helm install \
 	${CPU_LIMITS:+ --set-string target.resources.limits.cpu=${CPU_LIMIT}} \
 	${MEM_REQUESTS:+ --set-string target.resources.requests.memory=${MEM_REQUESTS}} \
 	${MEM_LIMITS:+ --set-string target.resources.limits.memory=${MEM_LIMITS}} \
-	${AIS_K8S_CLUSTER_CIDR:+ --set ais_k8s.cluster_cidr="${AIS_K8S_CLUSTER_CIDR}"} \
-	${AIS_TARGET_HOSTPORT:+ --set-string target.service.hostport=${AIS_TARGET_HOSTPORT}} \
-	${AIS_GATEWAY_EXTERNAL_IP:+ --set-string ingress.gateway.externalIP=${AIS_GATEWAY_EXTERNAL_IP}} \
-	${AIS_GRAFANA_EXTERNAL_IP:+ --set-string ingress.grafana.externalIP=${AIS_GRAFANA_EXTERNAL_IP}} \
+	${AIS_K8S_CLUSTER_CIDR:+ --set aiscluster.k8s.cluster_cidr="${AIS_K8S_CLUSTER_CIDR}"} \
+	${AIS_TARGET_HOSTPORT:+ --set-string aiscluster.target.hostPort=${AIS_TARGET_HOSTPORT}} \
+	${AIS_GATEWAY_EXTERNAL_IP:+ --set-string aiscluster.ingress.gateway.externalIP=${AIS_GATEWAY_EXTERNAL_IP}} \
+	${AIS_GRAFANA_EXTERNAL_IP:+ --set-string AIS_K8S_CLUSTER_CIDR.ingress.grafana.externalIP=${AIS_GRAFANA_EXTERNAL_IP}} \
 	charts/.

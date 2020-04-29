@@ -1,6 +1,9 @@
 ---
 #
-# ConfigMap for MetalLB
+# ConfigMap for MetalLB; not part of the AIStore Chart (or any chart) since
+# different deployments will have different LoadBalancer solutions available
+# to them. On our reference baremetal deployment we use metallb in L2 mode
+# and the template 'ingress.yaml' in the AIS chart.
 #
 # If running k8s baremetal, there's no ready-made cloud provider
 # provisioned loadbalancer service - so we use metalLB

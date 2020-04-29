@@ -75,7 +75,7 @@ spec:
                 fieldRef:
                   fieldPath: status.hostIP
             - name: AIS_TARGET_HOSTPORT
-              value: {{ .Values.target.service.hostport | quote }}
+              value: {{ .Values.aiscluster.target.hostPort | quote }}
             - name: AIS_NODISKIO
               value: {{ .Values.target.config.nodiskio.enabled | quote }}
             - name: AIS_DRYOBJSIZE
@@ -87,8 +87,8 @@ spec:
           ports:
             - name: aistarget
               containerPort: {{ .Values.target.service.port }}
-              {{ if and .Values.aiscluster.k8s.cluster_cidr .Values.target.service.hostport }}
-              hostPort: {{ .Values.target.service.hostport }}
+              {{ if and .Values.aiscluster.k8s.cluster_cidr .Values.aiscluster.target.hostPort }}
+              hostPort: {{ .Values.aiscluster.target.hostPort }}
               {{ end }}
               protocol: TCP
           volumeMounts:

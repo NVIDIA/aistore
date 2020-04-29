@@ -19,6 +19,42 @@
 # You'll also need to visit the monitoring section - tags, graphite, grafana,
 # prometheus, external_monitoring.
 #
+# Instead of leaving blank values, the values in sections for 'aiscluster' and for
+# monitoring (all preceding the big banner announcing the end of likely changes)
+# are provided for a configuration as follows:
+#
+# - using ArgoCD for deployment, editing this value file and committing in Git
+#   and driving updates from that
+# - the application name in ArgoCD (release name in Helm) is 'foo'; the chart
+#   and values don't ever mention that directly, but we need it in labeling
+#   examples below
+# - we'll label 20 nodes as target nodes (nvidia.com/ais-target=foo-ais)
+#   [aiscluster.expected_target_nodes]; if we don't want to pre-declare the
+#   intended number then set this to 0
+# - we'll label those same 20 nodes to run electable proxies (eligible to be
+#   primary proxy at any time, nvidia.com/ais-proxy=foo-ais-electable)
+# - AIS cluster state (cached cluster map etc) will be stored under /etc/ais
+#   on each node, exposed as a hostPath mount [aiscluster.hostpathPrefix]
+# - Container images are sourced from private repos on quay.io using a pre-installed
+#   secret named 'ais-pull-secret' which exist in the same namespace we intend to
+#   deploy AIStore to [aiscluster.image.*]
+# - We will configure an Ingress with externalIP 10.150.172.62 (satisfied by metallb
+#   in our case) and external port 51080. This is where external clients will contact
+#   the AIStore gateway/proxy service. We direct the traffic to the same port number
+#   internally [aiscluster.ingress.gateway]
+# - Creating that external ingress will also cause us to use a hostPort on target pods 
+#   using host port 51081; if not creating an external ingress set this to 0 to avoid
+#   opening a host port to the target pod
+# - The k8s cluster was created with a CIDR of 192.168.0.0/18; AIStore will recognize
+#   client source IPs outside this range as being external to the cluster, and proxy
+#   redirects to targets will be to the hostIP:hostPort (internal clients, if any,
+#   are directed to the podIP:podPort) [aiscluster.k8s.cluster_cidr]
+# - All target nodes have 10 x distinct filesystems for our use, all mounted at
+#   /ais/sd[a-j] on each node [aiscluster.target.mountPaths]
+# - We will deploy internal monitoring - Graphite, Grafana, Prometheus
+# - the chart will create a PV/PVC pair for both Graphite and Grafana, both using local
+#   storage on target node 'aistore0756'
+#
 
 aiscluster:
   #
@@ -37,7 +73,7 @@ aiscluster:
   image:
     aisnode:
       repository: "quay.io/nvidia/aisnode"
-      tag: "20200427.4"
+      tag: "20200429.1"
     kubectl:
       repository: quay.io/nvidia/ais-kubectl
       tag: 1
@@ -78,6 +114,7 @@ aiscluster:
   # precreated filesystems, and no two paths must reside in the same filesystem.
   #
   target:
+    hostPort: 51081
     mountPaths:
       - /ais/sda
       - /ais/sdb
@@ -128,7 +165,7 @@ tags:
 #    as the empty string.
 #
 # 2. To have this chart create a simple local-storage PV at a specified path on a specified node
-#    an a corresponding PVC leave the existingClaim as "graphite-pvc" and complete the three
+#    an a corresponding PVC leave the existingClaim as "ais-graphite-pvc" and complete the three
 #    items under ais.pv.  NOTE: You cannot update these values once the PV/PVC pair is created.
 #
 graphite:
@@ -188,6 +225,12 @@ prometheus:
 external_monitoring:
   graphite_host: somehost
   graphite_port: 2003
+
+# ---------------------------------------------------------------------------------
+# |                                                                               |
+# |          Values below much less likely to need changing                       |
+# |                                                                               |
+# ---------------------------------------------------------------------------------
 
 #
 # "Common" ais.json config values - actually not genuinely common and applicable to
@@ -382,7 +425,6 @@ target:
         chunked_transfer:  true
   service:
     port:     51081
-    hostport: 51081         # set for external ingress to hostport
   nodeSelector:
     key:   nvidia.com/ais-target
   resources: {}
