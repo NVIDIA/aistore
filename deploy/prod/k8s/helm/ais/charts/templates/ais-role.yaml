@@ -1,8 +1,0 @@
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: {{ template "ais.name" . }}-r
-rules:
-  - apiGroups: [""]
-    resources: ["secrets", "daemonsets", "services", "pods", "configmaps"]
-    verbs: ["*"]  # XXX TODO this is too liberal!
