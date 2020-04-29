@@ -68,19 +68,23 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 	case http.MethodGet:
 		if msg.ID == "" {
 			// If ID is empty, return the list of downloads
-			listDownloads := make(map[string]downloader.DlJobInfo)
+			aggregate := make(map[string]downloader.DlJobInfo)
 			for _, resp := range validResponses {
 				var parsedResp map[string]downloader.DlJobInfo
 				err := jsoniter.Unmarshal(resp.outjson, &parsedResp)
 				cmn.AssertNoErr(err)
 				for k, v := range parsedResp {
-					if oldMetric, ok := listDownloads[k]; ok {
+					if oldMetric, ok := aggregate[k]; ok {
 						v.Aggregate(oldMetric)
 					}
-					listDownloads[k] = v
+					aggregate[k] = v
 				}
 			}
 
+			listDownloads := make(downloader.DlJobInfos, 0, len(aggregate))
+			for _, v := range aggregate {
+				listDownloads = append(listDownloads, v)
+			}
 			result := cmn.MustMarshal(listDownloads)
 			return result, http.StatusOK, nil
 		}

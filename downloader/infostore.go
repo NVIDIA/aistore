@@ -85,6 +85,7 @@ func (is *infoStore) setJob(id string, job DlJob) {
 		ID:          job.ID(),
 		Total:       job.Len(),
 		Description: job.Description(),
+		StartedTime: time.Now(),
 	}
 
 	is.Lock()

@@ -373,6 +373,11 @@ type Time struct {
 	v      Int64
 }
 
+var (
+	_ json.Marshaler   = &Time{}
+	_ json.Unmarshaler = &Time{}
+)
+
 // NewTime creates a Time.
 func NewTime(d time.Time) *Time {
 	return &Time{v: *NewInt64(d.UnixNano())}
@@ -386,6 +391,19 @@ func (d *Time) Load() time.Time {
 // Store atomically stores the passed value.
 func (d *Time) Store(n time.Time) {
 	d.v.Store(n.UnixNano())
+}
+
+func (d *Time) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.Load().UnixNano())
+}
+
+func (d *Time) UnmarshalJSON(data []byte) error {
+	var y int64
+	if err := json.Unmarshal(data, &y); err != nil {
+		return err
+	}
+	d.Store(time.Unix(0, y))
+	return nil
 }
 
 // Value shadows the type of the same name from sync/atomic

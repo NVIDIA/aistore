@@ -38,19 +38,19 @@ func clearDownloadList(t *testing.T) {
 	listDownload, err := api.DownloadGetList(tutils.DefaultBaseAPIParams(t), downloadDescAllRegex)
 	tassert.CheckFatal(t, err)
 
-	for k, v := range listDownload {
+	for _, v := range listDownload {
 		if v.JobRunning() {
-			tutils.Logf("Canceling: %v...\n", k)
-			err := api.DownloadAbort(tutils.DefaultBaseAPIParams(t), k)
+			tutils.Logf("Canceling: %v...\n", v.ID)
+			err := api.DownloadAbort(tutils.DefaultBaseAPIParams(t), v.ID)
 			tassert.CheckFatal(t, err)
 		}
 	}
 
 	time.Sleep(time.Millisecond * 300)
 
-	for k := range listDownload {
-		tutils.Logf("Removing: %v...\n", k)
-		err := api.DownloadRemove(tutils.DefaultBaseAPIParams(t), k)
+	for _, v := range listDownload {
+		tutils.Logf("Removing: %v...\n", v.ID)
+		err := api.DownloadRemove(tutils.DefaultBaseAPIParams(t), v.ID)
 		tassert.CheckFatal(t, err)
 	}
 }

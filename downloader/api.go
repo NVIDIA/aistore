@@ -16,29 +16,35 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-// Download POST result returned to the user
-type DlPostResp struct {
-	ID string `json:"id"`
-}
+type (
+	// Download POST result returned to the user
+	DlPostResp struct {
+		ID string `json:"id"`
+	}
 
-// Summary info of the download job
-type DlJobInfo struct {
-	ID            string `json:"id"`
-	Description   string `json:"description"`
-	FinishedCnt   int    `json:"finished"`
-	ScheduledCnt  int    `json:"scheduled"` // tasks being processed or already processed by dispatched
-	ErrorCnt      int    `json:"error"`
-	Total         int    `json:"total"`          // total number of tasks, negative if unknown
-	AllDispatched bool   `json:"all_dispatched"` // if true, dispatcher has already scheduled all tasks for given job
-	Aborted       bool   `json:"aborted"`
-}
+	// Summary info of the download job
+	DlJobInfo struct {
+		ID            string    `json:"id"`
+		Description   string    `json:"description"`
+		FinishedCnt   int       `json:"finished_cnt"`
+		ScheduledCnt  int       `json:"scheduled_cnt"` // tasks being processed or already processed by dispatched
+		ErrorCnt      int       `json:"error_cnt"`
+		Total         int       `json:"total"`          // total number of tasks, negative if unknown
+		AllDispatched bool      `json:"all_dispatched"` // if true, dispatcher has already scheduled all tasks for given job
+		Aborted       bool      `json:"aborted"`
+		StartedTime   time.Time `json:"started_time"`
+		FinishedTime  time.Time `json:"finished_time"`
+	}
 
-type DlStatusResp struct {
-	DlJobInfo
-	CurrentTasks  []TaskDlInfo  `json:"current_tasks,omitempty"`
-	FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
-	Errs          []TaskErrInfo `json:"download_errors,omitempty"`
-}
+	DlJobInfos []DlJobInfo
+
+	DlStatusResp struct {
+		DlJobInfo
+		CurrentTasks  []TaskDlInfo  `json:"current_tasks,omitempty"`
+		FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
+		Errs          []TaskErrInfo `json:"download_errors,omitempty"`
+	}
+)
 
 func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
 	j.FinishedCnt += rhs.FinishedCnt
@@ -47,6 +53,12 @@ func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
 	j.Total += rhs.Total
 	j.AllDispatched = j.AllDispatched && rhs.AllDispatched
 	j.Aborted = j.Aborted || rhs.Aborted
+	if j.StartedTime.After(rhs.StartedTime) {
+		j.StartedTime = rhs.StartedTime
+	}
+	if j.FinishedTime.Before(rhs.FinishedTime) {
+		j.FinishedTime = rhs.FinishedTime
+	}
 }
 
 func (j DlJobInfo) JobFinished() bool {
@@ -88,6 +100,26 @@ func (j DlJobInfo) String() string {
 		sb.WriteString(fmt.Sprintf("%d files still being downloaded", j.PendingCnt()))
 	}
 	return sb.String()
+}
+
+func (d DlJobInfos) Len() int {
+	return len(d)
+}
+
+func (d DlJobInfos) Less(i, j int) bool {
+	di, dj := d[i], d[j]
+	if di.JobRunning() && dj.JobFinished() {
+		return true
+	} else if di.JobFinished() && dj.JobRunning() {
+		return false
+	} else if di.JobFinished() && dj.JobFinished() {
+		return di.FinishedTime.Before(dj.FinishedTime)
+	}
+	return di.StartedTime.Before(dj.StartedTime)
+}
+
+func (d DlJobInfos) Swap(i, j int) {
+	d[i], d[j] = d[j], d[i]
 }
 
 func (d *DlStatusResp) Aggregate(rhs DlStatusResp) {

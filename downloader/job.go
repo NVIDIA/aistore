@@ -95,7 +95,8 @@ type (
 		Aborted       atomic.Bool `json:"aborted"`
 		AllDispatched atomic.Bool `json:"all_dispatched"`
 
-		FinishedTime atomic.Time `json:"-"`
+		StartedTime  time.Time   `json:"started_time"`
+		FinishedTime atomic.Time `json:"finished_time"`
 	}
 )
 
@@ -308,5 +309,7 @@ func (d *downloadJobInfo) ToDlJobInfo() DlJobInfo {
 		Total:         d.Total,
 		AllDispatched: d.AllDispatched.Load(),
 		Aborted:       d.Aborted.Load(),
+		StartedTime:   d.StartedTime,
+		FinishedTime:  d.FinishedTime.Load(),
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"time"
 
@@ -492,7 +493,7 @@ func DownloadStatus(baseParams BaseParams, id string) (downloader.DlStatusResp, 
 	})
 }
 
-func DownloadGetList(baseParams BaseParams, regex string) (dlList map[string]downloader.DlJobInfo, err error) {
+func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJobInfos, err error) {
 	dlBody := downloader.DlAdminBody{
 		Regex: regex,
 	}
@@ -504,6 +505,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList map[string]dow
 		Path:       cmn.URLPath(cmn.Version, cmn.Download),
 		Query:      query,
 	}, &dlList)
+	sort.Sort(dlList)
 	return dlList, err
 }
 
