@@ -1220,7 +1220,11 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, s string, body []byte) (forf bool) {
 	smap := p.owner.smap.get()
 	if smap == nil || !smap.isValid() {
-		s := fmt.Sprintf("%s must be starting up: cannot execute %s:%s", p.si, msg.Action, s)
+		if msg != nil {
+			s = fmt.Sprintf(`%s must be starting up: cannot execute "%s:%s"`, p.si, msg.Action, s)
+		} else {
+			s = fmt.Sprintf("%s must be starting up: cannot execute %q", p.si, s)
+		}
 		p.invalmsghdlr(w, r, s)
 		return true
 	}
@@ -1254,7 +1258,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		r.ContentLength = int64(len(body)) // directly setting content-length
 	}
 	if msg != nil {
-		glog.Infof("%s: forwarding '%s:%s' to the primary %s", p.si, msg.Action, s, smap.ProxySI)
+		glog.Infof(`%s: forwarding "%s:%s" to the primary %s`, p.si, msg.Action, s, smap.ProxySI)
 	} else {
 		glog.Infof("%s: forwarding %q to the primary %s", p.si, s, smap.ProxySI)
 	}
@@ -2350,7 +2354,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 	proxyid := apitems[0]
 	s := "designate new primary proxy '" + proxyid + "'"
-	if p.forwardCP(w, r, &cmn.ActionMsg{}, s, nil) {
+	if p.forwardCP(w, r, nil, s, nil) {
 		return
 	}
 	smap := p.owner.smap.get()
