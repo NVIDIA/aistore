@@ -31,8 +31,8 @@ func propsStats(t *testing.T, proxyURL string) (objChanged, bytesChanged int64) 
 	return
 }
 
-func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions map[string]string, msg *cmn.SelectMsg,
-	versionEnabled, bckIsAIS bool) (newVersions map[string]string) {
+func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions map[string]string,
+	msg *cmn.SelectMsg, versionEnabled bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
 	r, err := readers.NewRandReader(int64(fileSize), true /* withHash */)
@@ -71,7 +71,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 		tutils.Logf("Object %s new version %s\n", m.Name, m.Version)
 		newVersions[m.Name] = m.Version
 
-		if !m.CheckExists() && !bckIsAIS {
+		if !m.CheckExists() && bck.IsRemote() {
 			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
 		}
 		if !versionEnabled {
@@ -155,7 +155,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		if !ok {
 			continue
 		}
-		tutils.Logf("%s/%s [%d] - cached: [%v], atime [%v]\n", bck, m.Name, m.Flags, m.CheckExists, m.Atime)
+		tutils.Logf("%s/%s [%d] - cached: [%v], atime [%v]\n", bck, m.Name, m.Flags, m.CheckExists(), m.Atime)
 
 		// invalid object: rebalance leftover or uploaded directly to target
 		if !m.IsStatusOK() {
@@ -225,7 +225,7 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 	}
 }
 
-func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *cmn.SelectMsg, versionEnabled, bckIsAIS bool) {
+func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bck, objects)
 
@@ -252,7 +252,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	tutils.Logf("Target %s [%s] is removed\n", removeTarget.ID(), removeTarget.URL(cmn.NetworkPublic))
 
 	// rewrite objects and compare versions - they should change
-	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled, bckIsAIS)
+	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled)
 
 	tutils.Logf("Reregistering target...\n")
 	err = tutils.RegisterNode(proxyURL, removeTarget, smap)
@@ -288,7 +288,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 
 		objFound++
 
-		if !m.CheckExists() && !bckIsAIS {
+		if !m.CheckExists() && bck.IsRemote() {
 			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
 		}
 		if m.Atime == "" {
@@ -322,32 +322,29 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 	close(errCh)
 }
 
-func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
+func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool) {
 	const (
 		objCountToTest = 15
-		filesize       = cmn.MiB
+		fileSize       = cmn.KiB
 	)
 	var (
 		filesPutCh = make(chan string, objCountToTest)
-		fileslist  = make(map[string]string, objCountToTest)
+		filesList  = make(map[string]string, objCountToTest)
 		errCh      = make(chan error, objCountToTest)
 		numPuts    = objCountToTest
-		bck        = cmn.Bck{
-			Name: clibucket,
-		}
 		versionDir = "versionid"
 		proxyURL   = tutils.RandomProxyURL()
 	)
 
 	// Create a few objects
 	tutils.Logf("Creating %d objects...\n", numPuts)
-	tutils.PutRandObjs(proxyURL, bck, versionDir, filesize, numPuts, errCh, filesPutCh)
+	tutils.PutRandObjs(proxyURL, bck, versionDir, fileSize, numPuts, errCh, filesPutCh)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh)
 	close(errCh)
 	for fname := range filesPutCh {
 		if fname != "" {
-			fileslist[path.Join(versionDir, fname)] = ""
+			filesList[path.Join(versionDir, fname)] = ""
 		}
 	}
 
@@ -362,12 +359,12 @@ func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
 
 	// PUT objects must have all properties set: atime, cached, version
 	for _, m := range reslist.Entries {
-		if _, ok := fileslist[m.Name]; !ok {
+		if _, ok := filesList[m.Name]; !ok {
 			continue
 		}
 		tutils.Logf("Initial version %s - %v\n", m.Name, m.Version)
 
-		if !m.CheckExists() && !bckIsAIS {
+		if !m.CheckExists() && bck.IsRemote() {
 			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
 		}
 
@@ -383,20 +380,21 @@ func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
 			t.Errorf("Failed to read object %q version", m.Name)
 			t.Fail()
 		} else {
-			fileslist[m.Name] = m.Version
+			filesList[m.Name] = m.Version
 		}
 	}
 
 	// rewrite objects and compare versions - they should change
-	newVersions := propsUpdateObjects(t, proxyURL, bck, fileslist, msg, versionEnabled, bckIsAIS)
-	if len(newVersions) != len(fileslist) {
-		t.Errorf("Number of objects mismatch. Expected: %d objects, after update: %d", len(fileslist), len(newVersions))
+	newVersions := propsUpdateObjects(t, proxyURL, bck, filesList, msg, versionEnabled)
+	if len(newVersions) != len(filesList) {
+		t.Errorf("Number of objects mismatch. Expected: %d objects, after update: %d", len(filesList), len(newVersions))
 	}
 
 	// check that files are read from cache
-	propsReadObjects(t, proxyURL, bck, fileslist)
+	propsReadObjects(t, proxyURL, bck, filesList)
 
-	if !bckIsAIS {
+	// TODO: this should work for the remote cluster as well
+	if bck.IsCloud(cmn.AnyCloud) {
 		// try to evict some files and check if they are gone
 		propsEvict(t, proxyURL, bck, newVersions, msg, versionEnabled)
 
@@ -405,7 +403,7 @@ func propsTestCore(t *testing.T, versionEnabled, bckIsAIS bool) {
 	}
 
 	// test rebalance should keep object versions
-	propsRebalance(t, proxyURL, bck, newVersions, msg, versionEnabled, bckIsAIS)
+	propsRebalance(t, proxyURL, bck, newVersions, msg, versionEnabled)
 
 	// cleanup
 	propsCleanupObjects(t, proxyURL, bck, newVersions)
@@ -452,8 +450,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 			t.Fatalf("Could not execute HeadBucket Request: %v", err)
 		}
 		versionEnabled := props.Versioning.Enabled
-		bckIsAIS := props.Provider == cmn.ProviderAIS
-		propsTestCore(t, versionEnabled, bckIsAIS)
+		propsTestCore(t, bck, versionEnabled)
 	})
 }
 
