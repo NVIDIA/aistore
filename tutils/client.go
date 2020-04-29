@@ -206,20 +206,14 @@ func UnregisterNode(proxyURL, sid string) error {
 	if err != nil {
 		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
 	}
-
-	target, ok := smap.Tmap[sid]
-	var idsToIgnore []string
-	if ok {
-		idsToIgnore = []string{target.ID()}
-	}
 	if err := api.UnregisterNode(baseParams, sid); err != nil {
 		return err
 	}
 
-	// If target does not exists in cluster we should not wait for map version
+	// If node does not exists in cluster we should not wait for map version
 	// sync because update will not be scheduled
-	if ok {
-		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, idsToIgnore)
+	if node := smap.GetNode(sid); node != nil {
+		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{node.ID()})
 	}
 	return nil
 }

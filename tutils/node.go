@@ -17,16 +17,15 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func RegisterNode(proxyURL string, targetNode *cluster.Snode, smap *cluster.Smap) error {
-	_, ok := smap.Tmap[targetNode.ID()]
+func RegisterNode(proxyURL string, node *cluster.Snode, smap *cluster.Smap) error {
 	baseParams := BaseAPIParams(proxyURL)
-	if err := api.RegisterNode(baseParams, targetNode); err != nil {
+	if err := api.RegisterNode(baseParams, node); err != nil {
 		return err
 	}
 
-	// If target is already in cluster we should not wait for map version
+	// If node is already in cluster we should not wait for map version
 	// sync because update will not be scheduled
-	if !ok {
+	if node := smap.GetNode(node.ID()); node == nil {
 		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{})
 	}
 	return nil
@@ -200,24 +199,14 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 }
 
 func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore []string) error {
-	inList := func(s string, values []string) bool {
-		for _, v := range values {
-			if s == v {
-				return true
-			}
-		}
-
-		return false
-	}
-
 	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore []string) (string, string, bool) {
 		for _, d := range smap.Pmap {
-			if !inList(d.ID(), idsToIgnore) {
+			if !cmn.StringInSlice(d.ID(), idsToIgnore) {
 				return d.ID(), d.PublicNet.DirectURL, true
 			}
 		}
 		for _, d := range smap.Tmap {
-			if !inList(d.ID(), idsToIgnore) {
+			if !cmn.StringInSlice(d.ID(), idsToIgnore) {
 				return d.ID(), d.PublicNet.DirectURL, true
 			}
 		}
