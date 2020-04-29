@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 const queueChSize = 1000
@@ -145,12 +144,7 @@ func (q *queue) get() (foundTask *singleObjectTask) {
 		q.RUnlock()
 	}
 
-	timeout := cmn.GCO.Get().Downloader.Timeout
-	if foundTask.timeout != 0 {
-		timeout = foundTask.timeout
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithCancel(context.Background())
 	foundTask.downloadCtx = ctx
 	foundTask.cancelFunc = cancel
 	return

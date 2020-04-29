@@ -20,11 +20,10 @@ import (
 )
 
 const (
-	retryCnt          = 10               // number of retries to external resource
-	defaultReqTimeout = 30 * time.Minute // default request timeout when downloading web content
-	reqTimeoutFactor  = 1.2              // newTimeout = prevTimeout * reqTimeoutFactor
-	headReqTimeout    = 5 * time.Second  // timeout for HEAD request to get the Content-Length
-	internalErrorMsg  = "internal server error"
+	retryCnt         = 10              // number of retries to external resource
+	reqTimeoutFactor = 1.2             // newTimeout = prevTimeout * reqTimeoutFactor
+	headReqTimeout   = 5 * time.Second // timeout for HEAD request to get the Content-Length
+	internalErrorMsg = "internal server error"
 )
 
 var (
@@ -162,7 +161,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time,
 func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (err error) {
 	var (
 		httpErr = &cmn.HTTPError{}
-		timeout = defaultReqTimeout
+		timeout = t.initialTimeout()
 	)
 	for i := 0; i < retryCnt; i++ {
 		err = t.tryDownloadLocal(lom, started, timeout)
@@ -201,10 +200,18 @@ func (t *singleObjectTask) reset() {
 }
 
 func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) error {
-	if err, _ := t.parent.t.GetCold(t.downloadCtx, lom, true /* prefetch */); err != nil {
-		return err
+	ctx, cancel := context.WithTimeout(t.downloadCtx, t.initialTimeout())
+	defer cancel()
+	err, _ := t.parent.t.GetCold(ctx, lom, true /* prefetch */)
+	return err
+}
+
+func (t *singleObjectTask) initialTimeout() time.Duration {
+	timeout := cmn.GCO.Get().Downloader.Timeout
+	if t.timeout != 0 {
+		timeout = t.timeout
 	}
-	return nil
+	return timeout
 }
 
 func (t *singleObjectTask) cancel() {
