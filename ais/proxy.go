@@ -1149,6 +1149,9 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if p.forwardCP(w, r, msg, "httpbckpatch", nil) {
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bck, err); err != nil {
 			return
@@ -1160,9 +1163,6 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = p.checkAction(msg, cmn.ActSetBprops, cmn.ActResetBprops); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if p.forwardCP(w, r, msg, "httpbckpatch", nil) {
 		return
 	}
 	if err = p.setBucketProps(msg, bck, propsToUpdate); err != nil {
@@ -1396,7 +1396,8 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 }
 
 // for 3rd party cloud and remote ais buckets - check existence and update BMD
-func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, queryBck *cluster.Bck, erc error) (bck *cluster.Bck, err error) {
+func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request,
+	queryBck *cluster.Bck, erc error) (bck *cluster.Bck, err error) {
 	if _, ok := erc.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
 		err = erc
 		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
