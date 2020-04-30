@@ -216,8 +216,6 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 }
 
 // HEAD s3/bck-name
-// TODO: AWS CLI does not use this API, so it is not tested for comatibility.
-// Requesting with cURL works.
 func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd, p.si); err != nil {
@@ -234,7 +232,10 @@ func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket s
 	// exists and you have permission to access it. Otherwise, the operation
 	// might return responses such as 404 Not Found and 403 Forbidden.
 	//
-	// So, as a basic implementation, it is enough to return status 200.
+	// But, after checking Amazon response, it appeared that Amazon adds
+	// region name to the response, and at least AWS CLI uses it.
+	w.Header().Set("Server", s3compat.AISSever)
+	w.Header().Set("x-amz-bucket-region", s3compat.AISRegion)
 }
 
 // GET s3/bckName
@@ -326,7 +327,16 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 		glog.Infof("AISS3 COPY: %s %s/%s => %s/%v %s", r.Method, bckSrc, objName, bckDst, items, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	s3Redirect(w, redirectURL, bckDst.Name)
+}
+
+func s3Redirect(w http.ResponseWriter, url, bck string) {
+	h := w.Header()
+
+	h.Set("Location", url)
+	h.Set("Content-Type", "text/xml; charset=utf-8")
+	w.WriteHeader(http.StatusTemporaryRedirect)
+	fmt.Fprint(w, s3compat.MakeRedirectBody(url, bck))
 }
 
 // PUT s3/bckName/objName - without extra info in request header
@@ -360,7 +370,7 @@ func (p *proxyrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, ite
 		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	s3Redirect(w, redirectURL, bck.Name)
 }
 
 // PUT s3/bckName/objName
@@ -403,7 +413,7 @@ func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []s
 		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	s3Redirect(w, redirectURL, bck.Name)
 }
 
 func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
@@ -432,7 +442,7 @@ func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []
 		glog.Infof("AISS3 %s %s/%s => %s", r.Method, bucket, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	s3Redirect(w, redirectURL, bck.Name)
 }
 
 // DEL s3/bckName/objName
@@ -466,7 +476,7 @@ func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []s
 		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	s3Redirect(w, redirectURL, bck.Name)
 }
 
 // GET s3/bk-name?versioning

@@ -16,6 +16,9 @@ const (
 	getContentType = "binary/octet-stream"
 	acceptRanges   = "bytes"
 
+	AISRegion = "ais"
+	AISSever  = "AIS"
+
 	// versioning
 	URLParamVersioning  = "versioning" // URL parameter
 	URLParamMultiDelete = "delete"
@@ -95,4 +98,27 @@ func ParseS3Range(r string, objSize int64) (int64, int64, error) {
 		return 0, 0, fmt.Errorf("range start %d is greater than its end %d", start, end)
 	}
 	return start, end - start + 1, nil
+}
+
+// ExtractEndpoint extracts an S3 endpoint from the full URL path.
+// Endpoint is a host name with port and root URL path(if it exists).
+// E.g. for AIS `http://localhost:8080/s3/bck1/obj1` the endpoint
+// is `localhost:8080/s3`
+func ExtractEndpoint(path string) string {
+	ep := path
+	if idx := strings.Index(ep, "/s3"); idx > 0 {
+		ep = ep[:idx+3]
+	}
+	ep = strings.TrimPrefix(ep, "http://")
+	ep = strings.TrimPrefix(ep, "https://")
+	return ep
+}
+
+func MakeRedirectBody(newPath, bucket string) string {
+	ep := ExtractEndpoint(newPath)
+	body := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+		"<Error><Code>TemporaryRedirect</Code><Message>Redirect</Message>" +
+		"<Endpoint>" + ep + "</Endpoint>" +
+		"<Bucket>" + bucket + "</Bucket></Error>"
+	return body
 }
