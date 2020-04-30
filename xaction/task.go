@@ -181,11 +181,9 @@ func (t *bckSummaryTask) Run() {
 		return
 	}
 
-	// When we are target which should not list CB we should only list cached objects.
-	shouldListCB := si.ID() == t.t.Snode().ID() && !t.msg.Cached
-	if !shouldListCB {
-		t.msg.Cached = true
-	}
+	// Check if we are the target that needs to list cloud bucket (we only want
+	// single target to do it).
+	shouldListCB := t.msg.Cached || (si.ID() == t.t.Snode().ID() && !t.msg.Cached)
 
 	for _, bck := range buckets {
 		go func(bck *cluster.Bck) {
@@ -196,12 +194,18 @@ func (t *bckSummaryTask) Run() {
 				return
 			}
 
-			summary := cmn.BucketSummary{
-				Bck:            bck.Bck,
-				TotalDisksSize: totalDisksSize,
-			}
+			var (
+				msg     = &cmn.SelectMsg{}
+				summary = cmn.BucketSummary{
+					Bck:            bck.Bck,
+					TotalDisksSize: totalDisksSize,
+				}
+			)
 
-			if t.msg.Fast && (bck.IsAIS() || t.msg.Cached) {
+			// Each bucket should have it's own copy of msg (we may update it).
+			cmn.CopyStruct(msg, t.msg)
+
+			if msg.Fast && (bck.IsAIS() || msg.Cached) {
 				objCount, size, err := t.doBckSummaryFast(bck)
 				if err != nil {
 					errCh <- err
@@ -215,8 +219,14 @@ func (t *bckSummaryTask) Run() {
 					err  error
 				)
 
+				if !shouldListCB {
+					// When we are not the target which should list CB then
+					// we should only list cached objects.
+					msg.Cached = true
+				}
+
 				for {
-					walk := objwalk.NewWalk(context.Background(), t.t, bck.Bck, t.msg)
+					walk := objwalk.NewWalk(context.Background(), t.t, bck.Bck, msg)
 					if bck.IsAIS() {
 						list, err = walk.LocalObjPage()
 					} else {
@@ -246,7 +256,7 @@ func (t *bckSummaryTask) Run() {
 					}
 
 					list.Entries = nil
-					t.msg.PageMarker = list.PageMarker
+					msg.PageMarker = list.PageMarker
 				}
 			}
 
