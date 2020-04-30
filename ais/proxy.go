@@ -3349,7 +3349,11 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 }
 
 func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
-	if dontRun := cmn.GCO.Get().Rebalance.DontRunTime; dontRun > 0 {
+	cfg := cmn.GCO.Get().Rebalance
+	if !cfg.Enabled {
+		return false
+	}
+	if dontRun := cfg.DontRunTime; dontRun > 0 {
 		if !p.NodeStarted() {
 			return false
 		}
