@@ -10,7 +10,8 @@ Meet **Internet Downloader** - an integrated part of the AIStore. AIS clusters c
 
 ## Example
 
-Downloading jobs run asynchronously; you can monitor the progress of each specific job. The following example runs two jobs, each downloading 10 objects (gzipped tarballs in this case) from a given Google Cloud bucket:
+Downloading jobs run asynchronously; you can monitor the progress of each specific job.
+The following example runs two jobs, each downloading 10 objects (gzipped tarballs in this case) from a given Google Cloud bucket:
 
 ```console
 $ ais start download "gs://lpr-imagenet/train-{0001..0010}.tgz" ais://imagenet
@@ -25,6 +26,8 @@ Ocw-ZfZqn        Finished        0       https://storage.googleapis.com/lpr-imag
 LXn--fZqg        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0011..0020}.tgz -> ais://imagenet
 ```
 
+For more examples see: [Downloader CLI](/cmd/cli/resources/download.md)
+
 ## Request to download
 
 AIS Downloader supports 4 (four) request types:
@@ -34,7 +37,7 @@ AIS Downloader supports 4 (four) request types:
 * *Range* - download multiple objects based on a given naming pattern
 * *Cloud* - given optional prefix and optional suffix, download matching objects from the specified cloud bucket
 
-> Prior to downloading, make sure that AIS (destination) bucket already exists.
+> Prior to downloading, make sure AIS (destination) bucket already exists.
 > To create a bucket using AIS CLI, run `ais create bucket`, for instance:
 >
 > ```console
@@ -50,6 +53,7 @@ AIS Downloader supports 4 (four) request types:
 The rest of this document is structured around supported *types of downloading jobs* and can serve as an API reference for the Downloader.
 
 ## Table of Contents
+
 - [Single (object) download](#single-download)
 - [Multi (object) download](#multi-download)
 - [Range (object) download](#range-download)
