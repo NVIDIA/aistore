@@ -7,6 +7,7 @@ require (
 	cloud.google.com/go/storage v1.0.0
 	github.com/Azure/azure-storage-blob-go v0.8.0
 	github.com/Azure/go-autorest/autorest/adal v0.8.2 // indirect
+	github.com/NVIDIA/go-tfdata v0.0.0-20200507111544-07609cc6c32e
 	github.com/OneOfOne/xxhash v1.2.7
 	github.com/aws/aws-sdk-go v1.26.5
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -16,7 +17,7 @@ require (
 	github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f
 	github.com/jacobsa/fuse v0.0.0-20190923155423-081e9f4bc7d4
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
-	github.com/json-iterator/go v1.1.7
+	github.com/json-iterator/go v1.1.9
 	github.com/karrick/godirwalk v1.15.6
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kylelemons/godebug v1.1.0 // indirect

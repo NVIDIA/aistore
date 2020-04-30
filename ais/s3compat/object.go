@@ -98,22 +98,35 @@ func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.BucketList) {
 	}
 }
 
+func SetHeaderFromSizeVersion(header http.Header, size int64, version string) {
+	header.Set(HeaderSize, strconv.FormatInt(size, 10))
+	header.Set(HeaderContentType, GetContentType)
+	header.Set(headerVersion, version)
+}
+
 func SetHeaderFromLOM(header http.Header, lom *cluster.LOM) {
 	if cksum := lom.Cksum(); cksum != nil {
 		header.Set(headerETag, cksum.Value())
 	}
-	header.Set(headerVersion, lom.Version())
-	header.Set(headerSize, strconv.FormatInt(lom.Size(), 10))
 	header.Set(headerAtime, lom.Atime().UTC().Format(time.RFC3339))
-	header.Set(headerContentType, getContentType)
+	SetHeaderFromSizeVersion(header, lom.Size(), lom.Version())
+}
+
+func SetHeaderRangeSizeVersion(header http.Header, offset, length, size int64, version string) {
+	header.Set(HeaderSize, strconv.FormatInt(length, 10))
+	header.Set(HeaderContentType, GetContentType)
+	header.Set(headerVersion, version)
+	header.Set(HeaderAcceptRanges, AcceptRanges)
+	rng := fmt.Sprintf("bytes %d-%d/%d", offset, offset+length, size)
+	header.Set(HeaderContentRange, rng)
 }
 
 func SetHeaderRange(header http.Header, offset, length int64, lom *cluster.LOM) {
 	SetHeaderFromLOM(header, lom)
-	header.Set(headerSize, strconv.FormatInt(length, 10))
-	header.Set(headerAcceptRanges, acceptRanges)
+	header.Set(HeaderSize, strconv.FormatInt(length, 10))
+	header.Set(HeaderAcceptRanges, AcceptRanges)
 	rng := fmt.Sprintf("bytes %d-%d/%d", offset, offset+length, lom.Size())
-	header.Set(headerContentRange, rng)
+	header.Set(HeaderContentRange, rng)
 }
 
 func (r *CopyObjectResult) MustMarshal() []byte {

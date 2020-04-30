@@ -13,8 +13,8 @@ import (
 const (
 	Root           = "s3"
 	ContentType    = "application/xml"
-	getContentType = "binary/octet-stream"
-	acceptRanges   = "bytes"
+	GetContentType = "binary/octet-stream"
+	AcceptRanges   = "bytes"
 
 	AISRegion = "ais"
 	AISSever  = "AIS"
@@ -29,10 +29,11 @@ const (
 	// TODO: can it be omitted? // storageClass = "STANDARD"
 
 	// Headers
-	headerSize         = "Content-Length"
-	headerContentType  = "Content-Type"
-	headerAcceptRanges = "Content-Range"
-	headerContentRange = "Accept-Ranges"
+	// TODO: move to cmn/http.go
+	HeaderSize         = "Content-Length"
+	HeaderContentType  = "Content-Type"
+	HeaderAcceptRanges = "Content-Range"
+	HeaderContentRange = "Accept-Ranges"
 	headerETag         = "ETag"
 	headerVersion      = "x-amz-version-id"
 	HeaderObjSrc       = "x-amz-copy-source"
@@ -84,7 +85,10 @@ func ParseS3Range(r string, objSize int64) (int64, int64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	if start >= objSize {
+	if start == objSize {
+		return 0, 0, nil
+	}
+	if start > objSize {
 		return 0, 0, fmt.Errorf("range start %d exceeds object size %d", start, objSize)
 	}
 	end, err := strconv.ParseInt(sizes[1], 10, 64)

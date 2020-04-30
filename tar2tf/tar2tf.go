@@ -16,6 +16,9 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/go-tfdata/tfdata/core"
+	"github.com/NVIDIA/go-tfdata/tfdata/transform"
+	"github.com/NVIDIA/go-tfdata/tfdata/transform/selection"
 	"github.com/disintegration/imaging"
 )
 
@@ -32,18 +35,10 @@ const (
 )
 
 type (
-	TarRecord      map[string]*TarRecordEntry
-	TarRecordEntry struct {
-		Value interface{}
-	}
-
 	TarRecordSelection interface {
-		Select(_ TarRecord) string
+		SelectSample(_ *core.Sample) []string // select key from samples
+		SelectValue(_ *core.Sample) string    // encode value into string
 		String() string
-	}
-
-	TarRecordConversion interface {
-		Do(_ TarRecord) TarRecord
 	}
 
 	TarConversionMsg struct {
@@ -107,7 +102,7 @@ type (
 	}
 
 	SamplesStreamJob struct {
-		Conversions []TarRecordConversion
+		Conversions []transform.SampleTransformation
 		Selections  []TarRecordSelection
 		Template    cmn.ParsedTemplate
 		Writer      http.ResponseWriter
@@ -117,8 +112,24 @@ type (
 	}
 )
 
-func NewTarRecord(size int) TarRecord {
-	return make(map[string]*TarRecordEntry, size)
+var (
+	_ selection.Sample = &Select{}
+	_ selection.Sample = &SelectJSON{}
+	_ selection.Sample = &SelectDict{}
+	_ selection.Sample = &SelectList{}
+
+	_ transform.SampleTransformation = &RenameConv{}
+	_ transform.SampleTransformation = &DecodeConv{}
+	_ transform.SampleTransformation = &ResizeConv{}
+	_ transform.SampleTransformation = &RotateConv{}
+)
+
+func sampleKeys(sample *core.Sample) []string {
+	res := make([]string, len(sample.Entries))
+	for k := range sample.Entries {
+		res = append(res, k)
+	}
+	return res
 }
 
 func (j *SamplesStreamJobMsg) ToSamplesStreamJob(req *http.Request, w http.ResponseWriter) (*SamplesStreamJob, error) {
@@ -153,7 +164,7 @@ func (j *SamplesStreamJobMsg) ToSamplesStreamJob(req *http.Request, w http.Respo
 	return r, nil
 }
 
-func (msg *TarConversionMsg) ToTarRecordConversion() (TarRecordConversion, error) {
+func (msg *TarConversionMsg) ToTarRecordConversion() (transform.SampleTransformation, error) {
 	switch msg.MsgType {
 	case TfOpDecode:
 		return &DecodeConv{key: msg.Key}, nil
@@ -199,90 +210,102 @@ func (msg *TarSelectionMsg) ToTarRecordSelection() (TarRecordSelection, error) {
 	}
 }
 
-func (c *DecodeConv) Do(record TarRecord) TarRecord {
-	img, _, err := image.Decode(cmn.NewByteHandle(record[c.key].Value.([]byte)))
+func (c *DecodeConv) TransformSample(sample *core.Sample) *core.Sample {
+	img, _, err := image.Decode(cmn.NewByteHandle(sample.Entries[c.key].([]byte)))
 	cmn.AssertNoErr(err)
-	entry := record[c.key]
-	entry.Value = img
-	return record
+	sample.Entries[c.key] = img
+	return sample
 }
 
 func (c *DecodeConv) String() string { return fmt.Sprintf("decode;%s", c.key) }
 
 func (c *RotateConv) String() string { return fmt.Sprintf("convert;%s;%f", c.key, c.angle) }
 
-func (c *RotateConv) Do(record TarRecord) TarRecord {
-	entry := record[c.key]
-	img := entry.Value.(image.Image)
+func (c *RotateConv) TransformSample(sample *core.Sample) *core.Sample {
+	img := sample.Entries[c.key].(image.Image)
 	angle := c.angle
 	if angle == 0 {
 		angle = rand.Float64() * 100
 	}
-	entry.Value = imaging.Rotate(img, angle, color.Black)
-	return record
+	sample.Entries[c.key] = imaging.Rotate(img, angle, color.Black)
+	return sample
 }
 
-func (c *ResizeConv) Do(record TarRecord) TarRecord {
-	entry := record[c.key]
-	entry.Value = imaging.Resize(entry.Value.(image.Image), c.dstSize[0], c.dstSize[1], imaging.Linear)
-	return record
+func (c *ResizeConv) TransformSample(sample *core.Sample) *core.Sample {
+	sample.Entries[c.key] = imaging.Resize(sample.Entries[c.key].(image.Image), c.dstSize[0], c.dstSize[1], imaging.Linear)
+	return sample
 }
 
 func (c *ResizeConv) String() string { return fmt.Sprintf("resize;%s;%v", c.key, c.dstSize) }
 
-func (c *RenameConv) Do(record TarRecord) TarRecord {
+func (c *RenameConv) TransformSample(sample *core.Sample) *core.Sample {
 	for dstName, srcNames := range c.renames {
 		for _, srcName := range srcNames {
-			if _, ok := record[srcName]; ok {
-				record[dstName] = record[srcName]
-				delete(record, srcName)
+			if _, ok := sample.Entries[srcName]; ok {
+				sample.Entries[dstName] = sample.Entries[srcName]
+				delete(sample.Entries, srcName)
 			}
 		}
 	}
-	return record
+	return sample
 }
 
 func (c *RenameConv) String() string { return fmt.Sprintf("rename;%v", c.renames) }
 
-func (s *Select) Select(record TarRecord) string {
-	entry := record[s.key]
-	if img, ok := entry.Value.(image.Image); ok {
+func (s *Select) SelectValue(sample *core.Sample) string {
+	if img, ok := sample.Entries[s.key].(image.Image); ok {
 		var b bytes.Buffer
 		cmn.AssertNoErr(imaging.Encode(&b, img, imaging.JPEG))
 		return b64.StdEncoding.EncodeToString(b.Bytes())
 	}
-	return b64.StdEncoding.EncodeToString(record[s.key].Value.([]byte))
+	return b64.StdEncoding.EncodeToString(sample.Entries[s.key].([]byte))
+}
+
+func (s *Select) SelectSample(sample *core.Sample) []string {
+	return []string{s.key}
 }
 
 func (s *Select) String() string { return fmt.Sprintf("select;%s", s.key) }
 
-func (s *SelectJSON) Select(record TarRecord) string {
+func (s *SelectJSON) SelectValue(sample *core.Sample) string {
 	// TODO implement
-	return string(cmn.MustMarshal(record))
+	return string(cmn.MustMarshal(sample))
+}
+
+func (s *SelectJSON) SelectSample(sample *core.Sample) []string {
+	return sampleKeys(sample)
 }
 
 func (s *SelectJSON) String() string { return fmt.Sprintf("selectjson;%s;%v", s.key, s.path) }
 
-func (s *SelectList) Select(record TarRecord) string {
+func (s *SelectList) SelectValue(sample *core.Sample) string {
 	r := make([]string, 0, len(s.list))
 
 	for _, elem := range s.list {
-		r = append(r, elem.Select(record))
+		r = append(r, elem.SelectValue(sample))
 	}
 
 	return b64.StdEncoding.EncodeToString(cmn.MustMarshal(r))
 }
 
+func (s *SelectList) SelectSample(sample *core.Sample) []string {
+	return sampleKeys(sample)
+}
+
 func (s *SelectList) String() string { return fmt.Sprintf("selectlist;%v", s.list) }
 
-func (s *SelectDict) Select(record TarRecord) string {
+func (s *SelectDict) SelectValue(sample *core.Sample) string {
 	r := make(map[string]string, len(s.dict))
 
 	for key, val := range s.dict {
-		r[key] = val.Select(record)
+		r[key] = val.SelectValue(sample)
 	}
 
 	return b64.StdEncoding.EncodeToString(cmn.MustMarshal(r))
+}
+
+func (s *SelectDict) SelectSample(sample *core.Sample) []string {
+	return sampleKeys(sample)
 }
 
 func (s *SelectDict) String() string { return fmt.Sprintf("selectdict;%v", s.dict) }

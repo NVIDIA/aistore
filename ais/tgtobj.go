@@ -64,6 +64,8 @@ type (
 		// Context used when receiving the object which is contained in cloud
 		// bucket. It usually contains credentials to access the cloud.
 		ctx context.Context
+		// tag from object name, from s3://bucket/object!tf
+		tag string
 		// Offset of the object from where the reading should start.
 		offset int64
 		// Length determines how many bytes should be read from the file,
@@ -642,7 +644,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	cksumConf := goi.lom.CksumConf()
 	cksumRange := cksumConf.Type != cmn.ChecksumNone && goi.length > 0 && cksumConf.EnableReadRange
 
-	if rw, ok := goi.w.(http.ResponseWriter); ok {
+	if rw, ok := goi.w.(http.ResponseWriter); ok && goi.tag == "" {
 		hdr = rw.Header()
 		if goi.lom.Cksum() != nil && !cksumRange {
 			cksumType, cksumValue := goi.lom.Cksum().Get()
@@ -698,30 +700,34 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	}
 
 	w := goi.w
-	if goi.length == 0 {
-		reader = file
-		if goi.chunked {
-			w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
-			buf, slab = daemon.gmm.Alloc(goi.lom.Size())
-		} else {
-			hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
-		}
-	} else {
-		buf, slab = daemon.gmm.Alloc(goi.length)
-		reader = io.NewSectionReader(file, goi.offset, goi.length)
-		if cksumRange {
-			var cksumValue string
-			sgl = slab.MMSA().NewSGL(goi.length, slab.Size())
-			if _, cksumValue, err = cmn.WriteWithHash(sgl, reader, buf, cksumConf.Type); err != nil {
-				return
+	if goi.tag == "" {
+		if goi.length == 0 {
+			reader = file
+			if goi.chunked {
+				w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
+				buf, slab = daemon.gmm.Alloc(goi.lom.Size())
+			} else {
+				hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
 			}
-			hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
-			hdr.Set(cmn.HeaderObjCksumType, cksumConf.Type)
+		} else {
+			buf, slab = daemon.gmm.Alloc(goi.length)
 			reader = io.NewSectionReader(file, goi.offset, goi.length)
+			if cksumRange {
+				var cksumValue string
+				sgl = slab.MMSA().NewSGL(goi.length, slab.Size())
+				if _, cksumValue, err = cmn.WriteWithHash(sgl, reader, buf, cksumConf.Type); err != nil {
+					return
+				}
+				hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
+				hdr.Set(cmn.HeaderObjCksumType, cksumConf.Type)
+				reader = io.NewSectionReader(file, goi.offset, goi.length)
+			}
 		}
+		written, err = io.CopyBuffer(w, reader, buf)
+	} else {
+		written, err = transformTarToTFRecord(goi)
 	}
 
-	written, err = io.CopyBuffer(w, reader, buf)
 	if err != nil {
 		if cmn.IsErrConnectionReset(err) {
 			return

@@ -80,22 +80,24 @@ func InitTarget() {
 // LOM public methods
 //
 
-func (lom *LOM) Uname() string             { return lom.md.uname }
-func (lom *LOM) Size() int64               { return lom.md.size }
-func (lom *LOM) SetSize(size int64)        { lom.md.size = size }
-func (lom *LOM) Version() string           { return lom.md.version }
-func (lom *LOM) SetVersion(ver string)     { lom.md.version = ver }
-func (lom *LOM) Cksum() *cmn.Cksum         { return lom.md.cksum }
-func (lom *LOM) SetCksum(cksum *cmn.Cksum) { lom.md.cksum = cksum }
-func (lom *LOM) Atime() time.Time          { return time.Unix(0, lom.md.atime) }
-func (lom *LOM) AtimeUnix() int64          { return lom.md.atime }
-func (lom *LOM) SetAtimeUnix(tu int64)     { lom.md.atime = tu }
-func (lom *LOM) ECEnabled() bool           { return lom.Bprops().EC.Enabled }
-func (lom *LOM) LRUEnabled() bool          { return lom.Bprops().LRU.Enabled }
-func (lom *LOM) IsHRW() bool               { return lom.HrwFQN == lom.FQN } // subj to resilvering
-func (lom *LOM) Bck() *Bck                 { return lom.bck }
-func (lom *LOM) BckName() string           { return lom.bck.Name }
-func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
+func (lom *LOM) Uname() string              { return lom.md.uname }
+func (lom *LOM) Size() int64                { return lom.md.size }
+func (lom *LOM) SetSize(size int64)         { lom.md.size = size }
+func (lom *LOM) Version() string            { return lom.md.version }
+func (lom *LOM) SetVersion(ver string)      { lom.md.version = ver }
+func (lom *LOM) Cksum() *cmn.Cksum          { return lom.md.cksum }
+func (lom *LOM) SetCksum(cksum *cmn.Cksum)  { lom.md.cksum = cksum }
+func (lom *LOM) Atime() time.Time           { return time.Unix(0, lom.md.atime) }
+func (lom *LOM) AtimeUnix() int64           { return lom.md.atime }
+func (lom *LOM) SetAtimeUnix(tu int64)      { lom.md.atime = tu }
+func (lom *LOM) ECEnabled() bool            { return lom.Bprops().EC.Enabled }
+func (lom *LOM) LRUEnabled() bool           { return lom.Bprops().LRU.Enabled }
+func (lom *LOM) IsHRW() bool                { return lom.HrwFQN == lom.FQN } // subj to resilvering
+func (lom *LOM) Bck() *Bck                  { return lom.bck }
+func (lom *LOM) BckName() string            { return lom.bck.Name }
+func (lom *LOM) Bprops() *cmn.BucketProps   { return lom.bck.Props }
+func (lom *LOM) GetFQN() string             { return lom.FQN }
+func (lom *LOM) GetParsedFQN() fs.ParsedFQN { return lom.ParsedFQN }
 
 //
 // access perms

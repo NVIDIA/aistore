@@ -382,7 +382,7 @@ func (p *proxyrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []s
 	p.copyObjS3(w, r, items)
 }
 
-// GET s3/bckName/objName
+// GET s3/bckName/objName[!tf]
 func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
@@ -403,7 +403,8 @@ func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []s
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	objName := path.Join(items[1:]...)
+	objName, _ := cmn.S3ObjNameTag(path.Join(items[1:]...))
+
 	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())

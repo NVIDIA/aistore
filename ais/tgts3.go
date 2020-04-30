@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/tar2tf"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
@@ -245,7 +247,7 @@ func (t *targetrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []
 	t.copyObjS3(w, r, items)
 }
 
-// GET s3/bckName/objName
+// GET s3/bckName/objName[!tf]
 func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		t.invalmsghdlr(w, r, "object name is undefined")
@@ -259,14 +261,23 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 	var (
-		err            error
-		offset, length int64
+		err                     error
+		offset, length, objSize int64
+		objName, tag            string
 	)
 	if err = bck.AllowGET(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	objName := path.Join(items[1:]...)
+
+	if objName, tag = cmn.S3ObjNameTag(path.Join(items[1:]...)); tag != "" {
+		cmn.Assert(tag == cmn.TF)
+		if !cmn.HasTarExtension(objName) {
+			t.invalmsghdlr(w, r, fmt.Sprintf("expected one of (%s, %s, %s) extensions", cmn.ExtTar, cmn.ExtTarTgz, cmn.ExtTarTgz))
+			return
+		}
+	}
+
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
@@ -283,9 +294,18 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 
+	objSize = lom.Size()
+	if tag != "" {
+		objSize, err = tar2tf.Cache.GetSize(lom)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+	}
+
 	val := r.Header.Get(s3compat.HeaderRange)
 	if val != "" {
-		offset, length, err = s3compat.ParseS3Range(val, lom.Size())
+		offset, length, err = s3compat.ParseS3Range(val, objSize)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusRequestedRangeNotSatisfiable)
 			return
@@ -302,11 +322,21 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		ctx:     t.contextWithAuth(r.Header),
 		offset:  offset,
 		length:  length,
+		tag:     tag,
 	}
+
 	if val == "" {
-		s3compat.SetHeaderFromLOM(w.Header(), lom)
+		if tag == "" {
+			s3compat.SetHeaderFromLOM(w.Header(), lom)
+		} else {
+			s3compat.SetHeaderFromSizeVersion(w.Header(), objSize, lom.Version())
+		}
 	} else {
-		s3compat.SetHeaderRange(w.Header(), offset, length, lom)
+		if tag == "" {
+			s3compat.SetHeaderRange(w.Header(), offset, length, lom)
+		} else {
+			s3compat.SetHeaderRangeSizeVersion(w.Header(), offset, length, objSize, lom.Version())
+		}
 	}
 	if err, errCode := goi.getObject(); err != nil {
 		if cmn.IsErrConnectionReset(err) {

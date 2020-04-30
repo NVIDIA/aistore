@@ -111,3 +111,22 @@ func (t *targetrunner) httptar2tfget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, s)
 	}
 }
+
+func transformTarToTFRecord(goi *getObjInfo) (written int64, err error) {
+	var (
+		b []byte
+		n int
+	)
+
+	b, err = tar2tf.Cache.Get(goi.lom, goi.offset, goi.length)
+	if err != nil {
+		return 0, err
+	}
+
+	n, err = goi.w.Write(b)
+	if int64(n) != goi.length {
+		return 0, fmt.Errorf("written %d, expected to write %d", n, goi.length)
+	}
+
+	return int64(n), err
+}

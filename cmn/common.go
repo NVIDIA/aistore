@@ -80,6 +80,9 @@ const (
 
 	QuantityPercent = "percent"
 	QuantityBytes   = "bytes"
+
+	S3TagSepa = "!"
+	TF        = "tf"
 )
 
 type (
@@ -604,6 +607,19 @@ func CopyStruct(dst, src interface{}) {
 	starY := y.Elem()
 	starY.Set(starX)
 	reflect.ValueOf(dst).Elem().Set(y.Elem())
+}
+
+func S3ObjNameTag(s string) (objName, tag string) {
+	if idx := strings.LastIndex(s, S3TagSepa); idx > 0 {
+		if s[idx+1:] == TF {
+			return s[:idx], s[idx+1:]
+		}
+	}
+	return s, ""
+}
+
+func HasTarExtension(objName string) bool {
+	return strings.HasSuffix(objName, ExtTar) || strings.HasSuffix(objName, ExtTarTgz) || strings.HasSuffix(objName, ExtTgz)
 }
 
 // WaitForFunc executes a function in goroutine and waits for it to finish.
