@@ -614,7 +614,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 			num:             10000,
 			numGetsEachFile: 3,
 		}
-		baseParams     = tutils.DefaultBaseAPIParams(t)
+		baseParams     = tutils.BaseAPIParams()
 		selectedTarget *cluster.Snode
 		killTarget     *cluster.Snode
 	)
@@ -722,7 +722,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 			t:   t,
 			num: 20000,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	// Init. ioContext
@@ -911,7 +911,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	// Initialize ioContext
@@ -972,7 +972,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	// Initialize ioContext
@@ -1038,7 +1038,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 			num:             10000,
 			numGetsEachFile: 5,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	// Initialize ioContext
@@ -1112,7 +1112,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	// Initialize ioContext
@@ -1320,7 +1320,7 @@ func TestAtimeLocalGet(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL      = tutils.RandomProxyURL()
-		baseParams    = tutils.DefaultBaseAPIParams(t)
+		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
@@ -1352,7 +1352,7 @@ func TestAtimeColdGet(t *testing.T) {
 			Provider: cmn.AnyCloud,
 		}
 		proxyURL      = tutils.RandomProxyURL()
-		baseParams    = tutils.DefaultBaseAPIParams(t)
+		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
@@ -1387,7 +1387,7 @@ func TestAtimePrefetch(t *testing.T) {
 			Provider: cmn.AnyCloud,
 		}
 		proxyURL      = tutils.RandomProxyURL()
-		baseParams    = tutils.DefaultBaseAPIParams(t)
+		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
@@ -1421,7 +1421,7 @@ func TestAtimeLocalPut(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL      = tutils.RandomProxyURL()
-		baseParams    = tutils.DefaultBaseAPIParams(t)
+		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("file content"))
 	)

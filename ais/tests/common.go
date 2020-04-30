@@ -192,7 +192,7 @@ func (m *ioContext) puts(dontFail ...bool) int {
 
 func (m *ioContext) cloudPuts(evict bool) {
 	var (
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{}
 	)
 
@@ -245,7 +245,7 @@ func (m *ioContext) cloudPuts(evict bool) {
 
 func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 	var (
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{}
 	)
 
@@ -272,7 +272,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 
 func (m *ioContext) cloudDelete() {
 	var (
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{}
 		sema       = make(chan struct{}, 40)
 	)
@@ -335,7 +335,7 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int) {
 
 func (m *ioContext) gets() {
 	var (
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		baseParams = tutils.BaseAPIParams()
 		totalGets  = m.num * m.numGetsEachFile
 	)
 
@@ -357,7 +357,7 @@ func (m *ioContext) gets() {
 func (m *ioContext) getsUntilStop() {
 	var (
 		idx        = 0
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		baseParams = tutils.BaseAPIParams()
 	)
 	for {
 		select {
@@ -382,7 +382,7 @@ func (m *ioContext) stopGets() {
 func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	var (
 		total      int
-		baseParams = tutils.DefaultBaseAPIParams(m.t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	time.Sleep(3 * time.Second)
@@ -470,7 +470,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 }
 
 func (m *ioContext) setRandBucketProps() {
-	baseParams := tutils.DefaultBaseAPIParams(m.t)
+	baseParams := tutils.BaseAPIParams()
 
 	// Set some weird bucket props to see if they were changed or not.
 	props := cmn.BucketPropsToUpdate{
@@ -516,7 +516,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, cmn.Bck)) {
 			tutils.CheckSkip(t, test.skipArgs)
 
 			if test.bck.IsAIS() || test.bck.IsRemoteAIS() {
-				baseParams := tutils.DefaultBaseAPIParams(t)
+				baseParams := tutils.BaseAPIParams()
 				err := api.CreateBucket(baseParams, test.bck)
 				tassert.CheckFatal(t, err)
 				defer func() {

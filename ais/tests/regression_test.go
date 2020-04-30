@@ -75,7 +75,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountTargets() == 1 {
@@ -236,7 +236,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
@@ -286,7 +286,7 @@ func TestRenameBucket(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 		guid       = cmn.GenUUID()
 		renamedBck = cmn.Bck{
 			Name:     bck.Name + "_" + guid,
@@ -419,7 +419,7 @@ func TestRenameObjects(t *testing.T) {
 		errCh        = make(chan error, 2*numPuts)
 		newBaseNames = make([]string, 0, numPuts) // new basenames
 		proxyURL     = tutils.RandomProxyURL()
-		baseParams   = tutils.DefaultBaseAPIParams(t)
+		baseParams   = tutils.BaseAPIParams(proxyURL)
 		bck          = cmn.Bck{
 			Name:     t.Name(),
 			Provider: cmn.ProviderAIS,
@@ -948,7 +948,7 @@ func TestDeleteRange(t *testing.T) {
 			wg             = &sync.WaitGroup{}
 			errCh          = make(chan error, numfiles)
 			proxyURL       = tutils.RandomProxyURL()
-			baseParams     = tutils.DefaultBaseAPIParams(t)
+			baseParams     = tutils.BaseAPIParams(proxyURL)
 		)
 
 		// 1. Put files to delete
@@ -1026,7 +1026,7 @@ func TestStressDeleteRange(t *testing.T) {
 		objNamePrefix = fmt.Sprintf("%s/tstf-", ListRangeStr)
 		partialRange  = fmt.Sprintf("%s{%d..%d}", objNamePrefix, 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
 		fullRange     = fmt.Sprintf("%s{0..%d}", objNamePrefix, numFiles)
-		baseParams    = tutils.DefaultBaseAPIParams(t)
+		baseParams    = tutils.BaseAPIParams(proxyURL)
 		bck           = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,

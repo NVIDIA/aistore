@@ -32,7 +32,7 @@ func Test_BucketNames(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -81,6 +81,7 @@ func TestDefaultBucketProps(t *testing.T) {
 	const dataSlices = 7
 	var (
 		proxyURL     = tutils.RandomProxyURL()
+		baseParams   = tutils.BaseAPIParams(proxyURL)
 		globalConfig = tutils.GetClusterConfig(t)
 		bck          = cmn.Bck{
 			Name:     TestBucketName,
@@ -100,7 +101,7 @@ func TestDefaultBucketProps(t *testing.T) {
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
-	p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bck)
+	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 	if !p.EC.Enabled {
 		t.Error("EC should be enabled for ais buckets")
@@ -119,7 +120,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 	)
 
 	var (
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 		group, _   = errgroup.WithContext(context.Background())
 	)
 
@@ -169,7 +170,7 @@ func TestResetBucketProps(t *testing.T) {
 	var (
 		proxyURL     = tutils.RandomProxyURL()
 		globalConfig = tutils.GetClusterConfig(t)
-		baseParams   = tutils.DefaultBaseAPIParams(t)
+		baseParams   = tutils.BaseAPIParams(proxyURL)
 		bck          = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
@@ -763,7 +764,7 @@ func TestBucketListAndSummary(t *testing.T) {
 					num: 2234,
 				}
 				cacheSize  = 1234 // determines number of objects which should be cached
-				baseParams = tutils.DefaultBaseAPIParams(t)
+				baseParams = tutils.BaseAPIParams()
 			)
 
 			m.saveClusterState()
@@ -839,7 +840,7 @@ func TestBucketSingleProp(t *testing.T) {
 		m = ioContext{
 			t: t,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	m.saveClusterState()
@@ -910,7 +911,7 @@ func TestBucketSingleProp(t *testing.T) {
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
-	p, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), m.bck)
+	p, err = api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 	if p.EC.DataSlices != dataSlices {
 		t.Errorf("Number of data slices was not changed to %d. Current value %d", dataSlices, p.EC.DataSlices)
@@ -933,7 +934,7 @@ func TestBucketSingleProp(t *testing.T) {
 		Mirror: &cmn.MirrorConfToUpdate{UtilThresh: api.Int64(mirrorThreshold)}},
 	)
 	tassert.CheckError(t, err)
-	p, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), m.bck)
+	p, err = api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 	if p.Mirror.UtilThresh != mirrorThreshold {
 		t.Errorf("Mirror utilization threshold was not changed to %d. Current value %d", mirrorThreshold, p.Mirror.UtilThresh)
@@ -948,7 +949,7 @@ func TestBucketSingleProp(t *testing.T) {
 
 func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 	var (
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
 	tassert.CheckFatal(t, err)
@@ -976,7 +977,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 
 func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 	var (
-		baseParams  = tutils.DefaultBaseAPIParams(t)
+		baseParams  = tutils.BaseAPIParams()
 		bucketProps = cmn.BucketPropsToUpdate{}
 	)
 
@@ -1005,7 +1006,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 func TestBucketInvalidName(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	invalidNames := []string{"*", ".", "", " ", "bucket and name", "bucket/name", "#name", "$name", "~name"}
@@ -1060,7 +1061,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 	{
 		targets := tutils.ExtractTargetNodes(m.smap)
-		baseParams := tutils.DefaultBaseAPIParams(t)
+		baseParams := tutils.BaseAPIParams()
 		mpList, err := api.GetMountpaths(baseParams, targets[0])
 		tassert.CheckFatal(t, err)
 
@@ -1075,7 +1076,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	{
-		baseParams := tutils.DefaultBaseAPIParams(t)
+		baseParams := tutils.BaseAPIParams()
 		err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 			Mirror: &cmn.MirrorConfToUpdate{
 				Enabled: api.Bool(true),
@@ -1133,7 +1134,7 @@ func TestCloudMirror(t *testing.T) {
 				Provider: cmn.AnyCloud,
 			},
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
@@ -1189,7 +1190,7 @@ func TestBucketReadOnly(t *testing.T) {
 	m.init()
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-	baseParams := tutils.DefaultBaseAPIParams(t)
+	baseParams := tutils.BaseAPIParams()
 
 	m.puts()
 	m.gets()
@@ -1225,7 +1226,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 		m = ioContext{
 			t: t,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
 			Name:     TestBucketName + "_new",
 			Provider: cmn.ProviderAIS,
@@ -1279,7 +1280,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 			num:             1000,
 			numGetsEachFile: 2,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
 			Name:     TestBucketName + "_new",
 			Provider: cmn.ProviderAIS,
@@ -1338,7 +1339,7 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 		m = ioContext{
 			t: t,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 		tmpBck     = cmn.Bck{
 			Name:     "tmp_bck_name",
 			Provider: cmn.ProviderAIS,
@@ -1393,7 +1394,7 @@ func TestRenameBucketTwice(t *testing.T) {
 			t:   t,
 			num: 500,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
 			Name:     TestBucketName + "_new1",
 			Provider: cmn.ProviderAIS,
@@ -1527,7 +1528,7 @@ func TestCopyBucket(t *testing.T) {
 						},
 					},
 				}
-				baseParams = tutils.DefaultBaseAPIParams(t)
+				baseParams = tutils.BaseAPIParams()
 			)
 
 			if test.multipleDests {
@@ -1684,7 +1685,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 			t:   t,
 			num: 500,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
 			Name:     TestBucketName + "_new1",
 			Provider: cmn.ProviderAIS,
@@ -1768,7 +1769,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 			t:   t,
 			num: 500,
 		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
 			Name:     TestBucketName + "_new1",
 			Provider: cmn.ProviderAIS,

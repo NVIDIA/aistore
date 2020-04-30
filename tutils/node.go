@@ -85,7 +85,6 @@ func RandomProxyURL() string {
 	if err != nil {
 		return ""
 	}
-	Logf("Random proxy: %s\n", ExtractProxyNodes(smap)[0])
 	return ExtractProxyNodes(smap)[0].URL(cmn.NetworkPublic)
 }
 

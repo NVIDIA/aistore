@@ -38,7 +38,7 @@ func TestCloudBucketObject(t *testing.T) {
 	)
 
 	var (
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 		bck        = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
@@ -116,8 +116,8 @@ func TestCloudBucketObject(t *testing.T) {
 
 func TestAppendObject(t *testing.T) {
 	var (
-		baseParams = tutils.DefaultBaseAPIParams(t)
 		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
@@ -431,7 +431,7 @@ func Test_putdeleteRange(t *testing.T) {
 func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 		bckLocal   = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.ProviderAIS,
@@ -590,8 +590,8 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 			Provider: cmn.AnyCloud,
 		}
 		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
 		fileName   = "mytestobj1.txt"
-		baseParams = tutils.DefaultBaseAPIParams(t)
 		dataLocal  = []byte("im local")
 		dataCloud  = []byte("I'm from the cloud!")
 		msg        = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status", Prefix: "my"}
@@ -944,6 +944,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		oldFileInfo os.FileInfo
 		filesList   = make([]string, 0, numFiles)
 		proxyURL    = tutils.RandomProxyURL()
+		baseParams  = tutils.BaseAPIParams(proxyURL)
 		bmdMock     = cluster.NewBaseBownerMock()
 		tMock       = cluster.NewTargetMock(bmdMock)
 		bck         = cmn.Bck{
@@ -967,7 +968,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	// Fetch the file from cloud bucket.
-	_, err := api.GetObjectWithValidation(tutils.DefaultBaseAPIParams(t), bck, filepath.Join(ChecksumWarmValidateStr, fileName))
+	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("Failed while fetching the file from the cloud bucket. Error: [%v]", err)
 	}
@@ -1011,7 +1012,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
 
-	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), bck, filepath.Join(ChecksumWarmValidateStr, fileName))
+	_, err = api.GetObject(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
 	tassert.Errorf(t, err == nil, "A GET on an object when checksum algo is none should pass. Error: %v", err)
 
 	// Restore old config
@@ -1045,7 +1046,7 @@ func Test_evictCloudBucket(t *testing.T) {
 			Provider: cmn.AnyCloud,
 		}
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
@@ -1140,6 +1141,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, 100)
 		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
 		bmdMock    = cluster.NewBaseBownerMock()
 		tMock      = cluster.NewTargetMock(bmdMock)
 		bck        = cmn.Bck{
@@ -1190,7 +1192,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
-	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), bck, objName)
+	_, err = api.GetObject(baseParams, bck, objName)
 	if err != nil {
 		t.Error("A GET on an object when checksum algo is none should pass")
 	}
@@ -1234,7 +1236,7 @@ func TestRangeRead(t *testing.T) {
 			fileNameCh = make(chan string, numFiles)
 			errCh      = make(chan error, numFiles)
 			proxyURL   = tutils.RandomProxyURL()
-			baseParams = tutils.DefaultBaseAPIParams(t)
+			baseParams = tutils.BaseAPIParams(proxyURL)
 		)
 
 		tutils.PutRandObjs(proxyURL, bck, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, true)

@@ -445,7 +445,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 			}
 		}()
 
-		props, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bck)
+		props, err := api.HeadBucket(tutils.BaseAPIParams(), bck)
 		if err != nil {
 			t.Fatalf("Could not execute HeadBucket Request: %v", err)
 		}
@@ -467,7 +467,7 @@ func TestObjPropsVersionDisabled(t *testing.T) {
 func TestObjProps(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		tests = []struct {
 			checkExists bool

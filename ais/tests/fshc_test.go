@@ -138,7 +138,7 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 	var (
 		err        error
 		newMpaths  *cmn.MountpathList
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	maxWaitTime := fshcDetectTimeMax
@@ -199,7 +199,7 @@ func breakMountpath(t *testing.T, mpath, suffix string) {
 func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen, disabledLen int, suffix string) {
 	var (
 		err        error
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	// "broken" mpath does no exist, nothing to restore
@@ -270,7 +270,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 				fileList := []string{fname}
 				tutils.PutObjsFromList(proxyURL, bck, fshcDir, fileSize, fileList, errCh, objsPutCh)
 			case "GET":
-				api.GetObject(tutils.DefaultBaseAPIParams(t), bck, path.Join(fshcDir, fname))
+				api.GetObject(tutils.BaseAPIParams(), bck, path.Join(fshcDir, fname))
 				time.Sleep(time.Millisecond * 10)
 			default:
 				t.Errorf("Invalid operation: %s", op)
@@ -380,7 +380,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 func TestFSCheckerEnablingMpath(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		mpList     = make(cluster.NodeMap, 10)
 		origAvail  = 0
@@ -434,7 +434,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		target *cluster.Snode
 
 		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams()
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		proxyCnt   = smap.CountProxies()
 		targetCnt  = smap.CountTargets()

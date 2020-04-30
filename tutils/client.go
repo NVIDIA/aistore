@@ -32,7 +32,7 @@ import (
 
 const (
 	// This value is holds the input of 'proxyURLFlag' from init_tests.go.
-	// It is used in DefaultBaseAPIParams to determine if the cluster is running
+	// It is used in BaseAPIParams to determine if the cluster is running
 	// on a
 	// 	1. local instance (no docker) 	- works
 	//	2. local docker instance		- works
@@ -347,7 +347,7 @@ func PutRandObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, n
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET
 func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, proxyURL string, bck cmn.Bck,
 	object string, objContent cmn.ReadOpenCloser) {
-	baseParams := DefaultBaseAPIParams(t)
+	baseParams := BaseAPIParams()
 
 	err := api.PutObject(api.PutObjectArgs{
 		BaseParams: baseParams,
@@ -411,16 +411,16 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 	return false, fmt.Errorf("deadline exceeded")
 }
 
-func DefaultBaseAPIParams(t *testing.T) api.BaseParams {
-	primary, err := GetPrimaryProxy(proxyURLReadOnly)
-	tassert.CheckFatal(t, err)
-	return BaseAPIParams(primary.URL(cmn.NetworkPublic))
-}
-
-func BaseAPIParams(url string) api.BaseParams {
+func BaseAPIParams(urls ...string) api.BaseParams {
+	var u string
+	if len(urls) > 0 {
+		u = urls[0]
+	} else {
+		u = RandomProxyURL()
+	}
 	return api.BaseParams{
 		Client: HTTPClient, // TODO -- FIXME: make use of HTTPClientGetPut as well
-		URL:    url,
+		URL:    u,
 	}
 }
 

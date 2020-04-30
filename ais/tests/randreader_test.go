@@ -51,7 +51,7 @@ func putRR(t *testing.T, reader readers.Reader, bck cmn.Bck, dir string, objCoun
 		fname := tutils.GenRandomString(fnlen)
 		objName := filepath.Join(dir, fname)
 		putArgs := api.PutObjectArgs{
-			BaseParams: tutils.DefaultBaseAPIParams(t),
+			BaseParams: tutils.BaseAPIParams(),
 			Bck:        bck,
 			Object:     objName,
 			Hash:       reader.XXHash(),
