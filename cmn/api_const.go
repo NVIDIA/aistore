@@ -86,9 +86,6 @@ const (
 	// Actions on xactions
 	ActXactStop  = "stop"
 	ActXactStart = "start"
-
-	// auxiliary
-	ActPersist = "persist" // store a piece of metadata or configuration
 )
 
 // xaction begin-commit phases
