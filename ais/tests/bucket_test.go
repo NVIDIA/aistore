@@ -1222,6 +1222,7 @@ func TestBucketReadOnly(t *testing.T) {
 }
 
 func TestRenameEmptyBucket(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t: t,
@@ -1389,6 +1390,7 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 
 // Tries to rename same source bucket to two destination buckets - the second should fail.
 func TestRenameBucketTwice(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:   t,
