@@ -321,6 +321,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		filesPutCh = make(chan string, numPuts)
 		errCh      = make(chan error, numPuts)
 		bck        = rtd.bck
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	tutils.PutRandObjs(proxyURL, rtd.bck, SmokeStr, filesize, numPuts, errCh, filesPutCh)
@@ -331,12 +332,11 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	}
 	tassert.SelectErr(t, errCh, "put", true)
 	if rtd.rename {
-		baseParams := tutils.BaseAPIParams(proxyURL)
 		err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
 		tassert.CheckFatal(t, err)
 		tutils.Logf("Renamed %s(numobjs=%d) => %s\n", rtd.bck, numPuts, rtd.renamedBck)
 		if rtd.wait {
-			postRenameWaitAndCheck(t, proxyURL, rtd, numPuts, filesPut)
+			postRenameWaitAndCheck(t, baseParams, rtd, numPuts, filesPut)
 		}
 		bck = rtd.renamedBck
 	}
@@ -361,13 +361,12 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	if !rtd.rename || rtd.wait {
 		del()
 	} else {
-		postRenameWaitAndCheck(t, proxyURL, rtd, numPuts, filesPut)
+		postRenameWaitAndCheck(t, baseParams, rtd, numPuts, filesPut)
 		del()
 	}
 }
 
-func postRenameWaitAndCheck(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh []string) {
-	baseParams := tutils.BaseAPIParams(proxyURL)
+func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, filesPutCh []string) {
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: rtd.renamedBck, Timeout: rebalanceTimeout}
 	err := api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)

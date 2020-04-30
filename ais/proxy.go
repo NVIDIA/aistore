@@ -2012,10 +2012,11 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 	p.owner.bmd.Lock()
+	defer p.owner.bmd.Unlock()
 	bmd := p.owner.bmd.get()
 	bck := cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd, p.si); err != nil {
-		p.owner.bmd.Unlock() // already removed via the the very first target calling here..
+		// Already removed via the the very first target calling here.
 		return
 	}
 	if bck.Props.Renamed == "" {
@@ -2023,10 +2024,12 @@ func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 		p.owner.bmd.Unlock()
 		return
 	}
-	bmd = bmd.clone()
-	bmd.del(bck)
-	p.owner.bmd.put(bmd)
-	p.owner.bmd.Unlock()
+	clone := bmd.clone()
+	clone.del(bck)
+	p.owner.bmd.put(clone)
+
+	msg := p.newAisMsgStr(cmn.ActRenameLB, nil, clone)
+	_ = p.metasyncer.sync(revsPair{clone, msg})
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
