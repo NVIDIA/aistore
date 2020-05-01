@@ -41,6 +41,7 @@ For AIStore **white paper** and design philosophy, please see the [overview docu
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
 - [Performance Monitoring](#performance-monitoring)
 - [Configuration](#configuration)
+- [Amazon S3 compatibility](docs/s3compat.md)
 - [Guides and References](#guides-and-references)
 - [Assorted Tips](#assorted-tips)
 - [Selected Package READMEs](#selected-package-readmes)
