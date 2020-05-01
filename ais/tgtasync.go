@@ -60,7 +60,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	var (
 		query      = r.URL.Query()
 		taskAction = query.Get(cmn.URLParamTaskAction)
-		silent, _  = cmn.ParseBool(query.Get(cmn.URLParamSilent))
+		silent     = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
 		ctx        = t.contextWithAuth(r.Header)
 		// create task call
 	)

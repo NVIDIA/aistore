@@ -47,13 +47,6 @@ type (
 	ClusterMountpathsRaw struct {
 		Targets cmn.JSONRawMsgs `json:"targets"`
 	}
-	// two pieces of metadata a self-registering (joining) target wants to know right away
-	targetRegMeta struct {
-		Smap *smapX         `json:"smap"`
-		BMD  *bucketMD      `json:"bmd"`
-		SI   *cluster.Snode `json:"si"`
-	}
-
 	reverseProxy struct {
 		cloud   *httputil.ReverseProxy // unmodified GET requests => storage.googleapis.com
 		primary struct {
@@ -63,7 +56,6 @@ type (
 		}
 		nodes sync.Map // map of reverse proxies keyed by node DaemonIDs
 	}
-
 	// proxy runner
 	proxyrunner struct {
 		httprunner
@@ -661,18 +653,47 @@ ExtractRMD:
 }
 
 // GET /v1/health
+// TODO: split/separate ais-internal vs external calls
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	// Either we are primary and wait for the node to start or we are regular
-	// proxy and we must wait for the cluster to start up.
-	if (p.owner.smap.get().isPrimary(p.si) && !p.NodeStarted()) || !p.ClusterStarted() {
+	if !p.NodeStarted() {
 		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
 		// see also:
 		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-
+	var (
+		query   = r.URL.Query()
+		smap    = p.owner.smap.get()
+		primary = smap != nil && smap.version() > 0 && smap.isPrimary(p.si)
+		getCii  = cmn.IsParseBool(query.Get(cmn.URLParamClusterInfo))
+	)
+	// NOTE: internal use
+	if getCii {
+		cii := &clusterInfo{}
+		cii.fill(p)
+		body := cmn.MustMarshal(cii)
+		_ = p.writeJSON(w, r, body, "cluster-info")
+		return
+	}
+	// non-primary will keep returning 503 until cluster starts up
+	if !primary && !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (cii *clusterInfo) fill(p *proxyrunner) {
+	var (
+		bmd  = p.owner.bmd.get()
+		smap = p.owner.smap.get()
+	)
+	cii.BMD.Version = bmd.version()
+	cii.BMD.UUID = bmd.UUID
+	cii.Smap = smap
+	cii.VoteInProgress = xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: cmn.ActElection})
+	cii.IsRebalancing = false // TODO v3.2 -- not yet available to proxies
 }
 
 // POST { action } /v1/buckets/bucket-name
@@ -1172,10 +1193,12 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
-	started := time.Now()
-	query := r.URL.Query()
-	checkExists, _ := cmn.ParseBool(query.Get(cmn.URLParamCheckExists))
-	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	var (
+		started      = time.Now()
+		query        = r.URL.Query()
+		checkExists  = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
+		apitems, err = p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	)
 	if err != nil {
 		return
 	}
@@ -1364,7 +1387,6 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	var (
 		nodeURL string
 		query   = url.Values{}
-		bmd     = p.owner.bmd.get()
 	)
 	if p.si.LocalNet == nil {
 		nodeURL = si.URL(cmn.NetworkPublic)
@@ -1389,7 +1411,6 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	}
 
 	query.Add(cmn.URLParamProxyID, p.si.ID())
-	query.Add(cmn.URLParamBMDVersion, bmd.vstr)
 	query.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(ts.UnixNano()))
 	redirect += query.Encode()
 	return
@@ -2054,16 +2075,27 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		body := cmn.MustMarshal(daemon.gmm.FetchSysInfo())
 		p.writeJSON(w, r, body, what)
 	case cmn.GetWhatSmap:
-		smap := p.owner.smap.get()
-		for smap == nil || !smap.isValid() {
-			if p.NodeStarted() { // must be starting up
+		var (
+			smap  = p.owner.smap.get()
+			sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
+			max   = 5
+		)
+		for i := 0; !smap.isValid() && i < max; i++ {
+			if !p.NodeStarted() {
+				time.Sleep(sleep)
 				smap = p.owner.smap.get()
-				cmn.Assert(smap.isValid())
+				if !smap.isValid() {
+					glog.Errorf("%s is starting up, cannot return vaid %s yet...", p.si, smap)
+				}
 				break
 			}
-			glog.Errorf("%s is starting up: cannot execute GET %s yet...", p.si, cmn.GetWhatSmap)
-			time.Sleep(time.Second)
 			smap = p.owner.smap.get()
+			time.Sleep(sleep)
+		}
+		if !smap.isValid() {
+			glog.Errorf("%s: waiting unexpectedly long time for valid %s", p.si, smap)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
 		}
 		body := cmn.MustMarshal(smap)
 		p.writeJSON(w, r, body, what)
@@ -2163,8 +2195,10 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActShutdown:
-		q := r.URL.Query()
-		force, _ := cmn.ParseBool(q.Get(cmn.URLParamForce))
+		var (
+			q     = r.URL.Query()
+			force = cmn.IsParseBool(q.Get(cmn.URLParamForce))
+		)
 		if p.owner.smap.get().isPrimary(p.si) && !force {
 			s := fmt.Sprintf("Cannot shutdown primary proxy without %s=true query parameter", cmn.URLParamForce)
 			p.invalmsghdlr(w, r, s)
@@ -2252,16 +2286,15 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 
 func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request) {
 	var (
+		query   = r.URL.Query()
 		prepare bool
 	)
-
 	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Daemon)
 	if err != nil {
 		return
 	}
-
 	proxyID := apitems[1]
-	force, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
+	force := cmn.IsParseBool(query.Get(cmn.URLParamForce))
 	// forceful primary change
 	if force && apitems[0] == cmn.Proxy {
 		if !p.owner.smap.get().isPrimary(p.si) {
@@ -2272,7 +2305,6 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	query := r.URL.Query()
 	preparestr := query.Get(cmn.URLParamPrepare)
 	if prepare, err = cmn.ParseBool(preparestr); err != nil {
 		s := fmt.Sprintf("Failed to parse %s URL parameter: %v", cmn.URLParamPrepare, err)
@@ -3328,7 +3360,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		bmds[res.si] = bmd
 	}
 	if slowp {
-		force, _ = cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
+		force = cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamForce))
 		if rbmd, err = resolveUUIDBMD(bmds); err != nil {
 			_, split := err.(*errBmdUUIDSplit)
 			if !force || errors.Is(err, errNoBMD) || split {

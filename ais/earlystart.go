@@ -37,18 +37,24 @@ func (p *proxyrunner) bootstrap() {
 			loaded = false
 		}
 	}
+	// 2. use loaded smap to discover a better one (ie., more current), if exists
+	if loaded {
+		if maxVerSmap := p.bcastHealth(smap); maxVerSmap.version() > smap.version() {
+			smap = maxVerSmap
+		}
+	}
 
-	// 2. make the preliminary (primary) decision
+	// 3. make the preliminary (primary) decision
 	smap, secondary = p.determineRole(smap, loaded)
 
-	// 3.1: start as primary
+	// 4.1: start as primary
 	if !secondary {
-		glog.Infof("%s: assuming the primary role for now, starting up...", p.si)
+		glog.Infof("%s: assuming primary role for now, starting up...", p.si)
 		go p.primaryStartup(smap, config, daemon.cli.ntargets)
 		return
 	}
 
-	// 3.2: otherwise, join as secondary
+	// 4.2: otherwise, join as secondary
 	glog.Infof("%s: starting up as non-primary", p.si)
 	err := p.secondaryStartup(smap)
 	if err != nil {
@@ -86,8 +92,10 @@ func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (*smapX, bool) {
 	envP := struct {
 		pid     string
 		primary bool
-	}{pid: os.Getenv("AIS_PRIMARY_ID")}
-	envP.primary, _ = cmn.ParseBool(os.Getenv("AIS_IS_PRIMARY"))
+	}{
+		pid:     os.Getenv("AIS_PRIMARY_ID"),
+		primary: cmn.IsParseBool(os.Getenv("AIS_IS_PRIMARY")),
+	}
 
 	if envP.pid != "" && envP.primary && p.si.ID() != envP.pid {
 		cmn.ExitLogf("FATAL: %s: invalid combination of AIS_IS_PRIMARY=true & AIS_PRIMARY_ID=%s",
@@ -123,7 +131,7 @@ func (p *proxyrunner) secondaryStartup(smap *smapX) error {
 		smap = newSmap()
 	}
 	p.owner.smap.put(smap)
-	if err := p.withRetry(p.joinCluster, "join"); err != nil {
+	if err := p.withRetry(p.joinCluster, "join", true /* backoff */); err != nil {
 		glog.Errorf("%s failed to join, err: %v", p.si, err)
 		return err
 	}
@@ -373,7 +381,9 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	clone := p.owner.smap.get().clone()
 	if !eq {
 		_, err := maxVerSmap.merge(clone, false /*err if detected (IP, port) duplicates*/)
-		cmn.ExitLogf("%s: %v vs [%s: %s]", p.si, err, maxVerSmap.ProxySI, maxVerSmap.StringEx())
+		if err != nil {
+			cmn.ExitLogf("%s: %v vs [%s: %s]", p.si, err, maxVerSmap.ProxySI, maxVerSmap.StringEx())
+		}
 	}
 	clone.Version = cmn.MaxI64(clone.version(), maxVerSmap.version()) + 1
 	p.owner.smap.put(clone)

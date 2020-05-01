@@ -441,14 +441,19 @@ func joinWhileVoteInProgress(t *testing.T) {
 	if smap.ProxySI.ID() != newPrimaryID {
 		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.ID(), newPrimaryID)
 	}
-	if _, ok := smap.Pmap[oldPrimaryID]; ok {
-		t.Fatalf("Previous primary proxy rejoined the cluster during a vote")
-	}
-
+	//
+	// FIXME: election is in progress if and only when xaction(cmn.ActElection) is running -
+	//        simulating the scenario via mocktgt.voteInProgress = true is incorrect
+	//
+	// if _, ok := smap.Pmap[oldPrimaryID]; ok {
+	//	t.Fatalf("Previous primary proxy rejoined the cluster during a vote")
+	// }
 	mocktgt.voteInProgress = false
-
-	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to synchronize new Smap", smap.Version, testing.Verbose(), oldProxyCnt, oldTargetCnt+1)
-	tassert.CheckFatal(t, err)
+	// smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to synchronize new Smap",
+	// smap.Version, testing.Verbose(), oldProxyCnt, oldTargetCnt+1)
+	// tassert.CheckFatal(t, err)
+	//
+	// end of FIXME
 
 	if smap.ProxySI.ID() != newPrimaryID {
 		t.Fatalf("Wrong primary proxy: %s, expectinge: %s", smap.ProxySI.ID(), newPrimaryID)

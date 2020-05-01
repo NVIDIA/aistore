@@ -5,8 +5,10 @@
 package cmn
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"syscall"
 )
 
@@ -36,4 +38,11 @@ func IsErrConnectionReset(err error) (yes bool) {
 // Check if a given error is a broken-pipe one.
 func IsErrBrokenPipe(err error) bool {
 	return errors.Is(err, syscall.EPIPE)
+}
+
+func IsUnreachable(err error, status int) bool {
+	return IsErrConnectionRefused(err) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		status == http.StatusRequestTimeout ||
+		status == http.StatusServiceUnavailable
 }

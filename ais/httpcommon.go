@@ -77,9 +77,16 @@ type (
 	// SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
 	// NOTE: exported for integration testing
 	SmapVoteMsg struct {
-		VoteInProgress bool      `json:"vote_in_progress"`
 		Smap           *smapX    `json:"smap"`
 		BucketMD       *bucketMD `json:"bucketmd"`
+		VoteInProgress bool      `json:"vote_in_progress"`
+	}
+
+	// two pieces of metadata a self-registering (joining) target wants to know right away
+	targetRegMeta struct {
+		Smap *smapX         `json:"smap"`
+		BMD  *bucketMD      `json:"bmd"`
+		SI   *cluster.Snode `json:"si"`
 	}
 
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
@@ -89,6 +96,17 @@ type (
 		SmapVersion int64  `json:"smapversion,string"`
 		RMDVersion  int64  `json:"rmdversion,string"`
 		TxnID       string `json:"txn_id"`
+	}
+
+	// TODO: add usage
+	clusterInfo struct {
+		BMD struct {
+			Version int64  `json:"version,string"`
+			UUID    string `json:"uuid"`
+		} `json:"bmd"`
+		Smap           *smapX `json:"smap"`
+		VoteInProgress bool   `json:"vote_in_progress"`
+		IsRebalancing  bool   `json:"reb_in_progress"`
 	}
 
 	// http server and http runner (common for proxy and target)
@@ -157,6 +175,11 @@ func (r *glogWriter) Write(p []byte) (int, error) {
 	glog.Errorln(s1)
 	return n, nil
 }
+
+/////////////////
+// clusterInfo //
+/////////////////
+func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
 
 ///////////////
 // netServer //
@@ -954,33 +977,82 @@ func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, 
 	cmn.InvalidHandlerDetailedNoLog(w, r, msg, errCode...)
 }
 
-////////////
-// health //
-////////////
+///////////////////
+// health client //
+///////////////////
 
-func (h *httprunner) Health(si *cluster.Snode, includeReb bool, timeout time.Duration) ([]byte, error) {
-	var query url.Values
-	if includeReb {
-		query = make(url.Values)
-		query.Add(cmn.URLParamRebStatus, "true")
-	}
-	args := callArgs{
-		si: si,
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Base:   si.URL(cmn.NetworkIntraControl),
-			Path:   cmn.URLPath(cmn.Version, cmn.Health),
-			Query:  query,
-		},
-		timeout: timeout,
-	}
-	res := h.call(args)
-	if res.err != nil {
-		if errors.Is(res.err, context.DeadlineExceeded) || cmn.IsErrConnectionRefused(res.err) {
-			glog.Warningf("%s: %s is unreachable(%v)", h.si, si, res.err)
+func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.Values) ([]byte, error, int) {
+	var (
+		path = cmn.URLPath(cmn.Version, cmn.Health)
+		args = callArgs{
+			si: si,
+			req: cmn.ReqArgs{
+				Method: http.MethodGet,
+				Base:   si.URL(cmn.NetworkIntraControl),
+				Path:   path,
+				Query:  query,
+			},
+			timeout: timeout,
 		}
+	)
+	res := h.call(args)
+	return res.outjson, res.err, res.status
+}
+
+// uses provided Smap and an extended version of the Health(clusterInfo) internal API
+// to discover a better Smap (ie., more current), if exists
+//
+// TODO: utilize for target startup and, for the targets, validate and return maxVerBMD
+//
+func (h *httprunner) bcastHealth(smap *smapX) (maxVerSmap *smapX) {
+	var (
+		wg      = &sync.WaitGroup{}
+		query   = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
+		timeout = cmn.GCO.Get().Timeout.CplaneOperation
+		mu      = &sync.Mutex{}
+	)
+	maxVerSmap = smap
+	for sid, si := range smap.Pmap {
+		if sid == h.si.ID() {
+			continue
+		}
+		wg.Add(1)
+		go func(si *cluster.Snode) {
+			var usableSmap *smapX
+			defer wg.Done()
+			body, err, _ := h.Health(si, timeout, query)
+			if err != nil {
+				return
+			}
+			if usableSmap = ciiToSmap(smap, body, h.si, si); usableSmap == nil {
+				return
+			}
+			mu.Lock()
+			if maxVerSmap.version() < usableSmap.version() {
+				maxVerSmap = usableSmap
+			}
+			mu.Unlock()
+		}(si)
 	}
-	return res.outjson, res.err
+	wg.Wait()
+	return
+}
+
+func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) (usableSmap *smapX) {
+	var cii clusterInfo
+	if err := jsoniter.Unmarshal(body, &cii); err != nil {
+		glog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
+		return
+	}
+	if !cii.VoteInProgress && smap.version() < cii.Smap.version() {
+		if smap.UUID != cii.Smap.UUID {
+			glog.Errorf("%s: Smap have different UUIDs: %s and %s from %s",
+				self, smap.UUID, cii.Smap.UUID, si)
+			return
+		}
+		usableSmap = cii.Smap
+	}
+	return
 }
 
 //////////////////////////
@@ -1262,29 +1334,37 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 	return
 }
 
-func (h *httprunner) withRetry(call func() (int, error), action string) (err error) {
+// NOTE: default retry policy for ops like join-cluster et al.
+func (h *httprunner) withRetry(call func() (int, error), action string, backoff bool) (err error) {
 	var (
+		sleep       time.Duration
 		config      = cmn.GCO.Get()
 		retryPolicy = struct {
 			sleep   time.Duration
 			timeout int
 			refused int
 			backoff bool
-		}{config.Timeout.CplaneOperation / 2, 2, 4, true} // NOTE: default retry policy for ops like join-cluster et al.
-		sleep = retryPolicy.sleep
+		}{backoff: backoff}
 	)
+	if backoff {
+		retryPolicy.sleep = config.Timeout.CplaneOperation / 2
+		retryPolicy.timeout = 2
+		retryPolicy.refused = 4
+	} else {
+		retryPolicy.sleep = config.Timeout.CplaneOperation / 4
+		retryPolicy.timeout = 1
+		retryPolicy.refused = 2
+	}
+	sleep = retryPolicy.sleep
 	for i, j, k := 0, 0, 1; i < retryPolicy.timeout && j < retryPolicy.refused; k++ {
 		var status int
-		if status, err = call(); err == nil && status < http.StatusBadRequest {
+		if status, err = call(); err == nil {
 			return
 		}
 		glog.Errorf("%s: failed to %s, err: %v(%d)", h.si, action, err, status)
-		if err == nil {
-			err = fmt.Errorf("http status: %d", status)
-		}
 		if cmn.IsErrConnectionRefused(err) {
 			j++
-		} else if status == http.StatusRequestTimeout {
+		} else if cmn.IsUnreachable(err, status) {
 			i++
 		} else {
 			break
@@ -1292,8 +1372,10 @@ func (h *httprunner) withRetry(call func() (int, error), action string) (err err
 		if retryPolicy.backoff && k > 1 {
 			sleep = cmn.MinDuration(sleep+retryPolicy.sleep, config.Timeout.MaxKeepalive)
 		}
-		time.Sleep(sleep)
-		glog.Errorf("%s: retrying(%d)...", h.si, k)
+		if i < retryPolicy.timeout && j < retryPolicy.refused {
+			time.Sleep(sleep)
+			glog.Errorf("%s: retrying(%d)...", h.si, k)
+		}
 	}
 	return
 }
@@ -1324,22 +1406,7 @@ func (h *httprunner) pollClusterStarted(timeout time.Duration) {
 		if !smap.isValid() {
 			continue
 		}
-		psi := smap.ProxySI
-		args := callArgs{
-			si: psi,
-			req: cmn.ReqArgs{
-				Method: http.MethodGet,
-				Base:   psi.IntraControlNet.DirectURL,
-				Path:   cmn.URLPath(cmn.Version, cmn.Health),
-			},
-			timeout: timeout,
-		}
-		res := h.call(args)
-		if res.err != nil {
-			continue
-		}
-
-		if res.status == http.StatusOK {
+		if _, err, _ := h.Health(smap.ProxySI, timeout, nil); err == nil {
 			break
 		}
 	}

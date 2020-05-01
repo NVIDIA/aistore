@@ -461,6 +461,8 @@ func ParseBool(s string) (value bool, err error) {
 	return strconv.ParseBool(s)
 }
 
+func IsParseBool(s string) (yes bool) { yes, _ = ParseBool(s); return }
+
 func StrToSentence(str string) string {
 	if str == "" {
 		return ""

@@ -8,6 +8,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -91,7 +92,7 @@ type Target interface {
 	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
 
 	GetGFN(gfnType GFNType) GFN
-	Health(si *Snode, includeReb bool, timeout time.Duration) ([]byte, error)
+	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)
 	RebalanceNamespace(si *Snode) ([]byte, int, error)
 	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 }

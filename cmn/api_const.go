@@ -160,7 +160,6 @@ const (
 	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary and the entire cluster)
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
 	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role
-	URLParamBMDVersion       = "vbm" // version of the BMD
 	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC
 	URLParamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
 	URLParamSilent           = "sln" // true: destination should not log errors (HEAD request)
@@ -169,6 +168,7 @@ const (
 	URLParamTaskID           = "tsk" // ID of a task to return its state/result
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 	URLParamECMeta           = "ecm" // true: EC metadata request
+	URLParamClusterInfo      = "cii" // true: Health to return ais.clusterInfo
 
 	URLParamAppendType   = "appendty"
 	URLParamAppendHandle = "handle"

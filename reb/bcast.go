@@ -6,6 +6,7 @@ package reb
 
 import (
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -170,15 +171,19 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		sleep  = md.config.Timeout.CplaneOperation
 		logHdr = reb.logHdr(md)
 	)
-	for i := 0; i < 3; i++ {
-		_, err := reb.t.Health(tsi, false, md.config.Timeout.MaxKeepalive)
+	for i := 0; i < 4; i++ {
+		_, err, code := reb.t.Health(tsi, md.config.Timeout.MaxKeepalive, nil)
 		if err == nil {
 			if i > 0 {
 				glog.Infof("%s: %s is online", logHdr, tsi)
 			}
 			return true
 		}
-		glog.Warningf("%s: waiting for %s, err %v", logHdr, tsi, err)
+		if !cmn.IsUnreachable(err, code) {
+			glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi, err, code)
+			return
+		}
+		glog.Warningf("%s: waiting for %s, err %v(%d)", logHdr, tsi, err, code)
 		time.Sleep(sleep)
 		nver := reb.t.GetSowner().Get().Version
 		if nver > ver {
@@ -282,18 +287,18 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md 
 	var (
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
 		logHdr     = reb.logHdr(md)
+		query      = url.Values{cmn.URLParamRebStatus: []string{"true"}}
 	)
-
-	body, err := reb.t.Health(tsi, true, cmn.DefaultTimeout)
+	body, err, code := reb.t.Health(tsi, cmn.DefaultTimeout, query)
 	if err != nil {
 		if reb.xact().AbortedAfter(sleepRetry) {
 			glog.Infof("%s: abort", logHdr)
 			return
 		}
-		body, err = reb.t.Health(tsi, true, cmn.DefaultTimeout) // retry once
+		body, err, code = reb.t.Health(tsi, cmn.DefaultTimeout, query) // retry once
 	}
 	if err != nil {
-		glog.Errorf("%s: failed to call %s, err: %v", logHdr, tsi, err)
+		glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi, err, code)
 		reb.abortRebalance()
 		return
 	}

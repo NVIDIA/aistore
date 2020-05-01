@@ -1083,6 +1083,7 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 }
 
 // GET /v1/health (cmn.Health)
+// TODO: clusterInfo - see p.healthHandler
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		callerID = r.Header.Get(cmn.HeaderCallerID)
@@ -1120,7 +1121,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	getRebStatus, _ := cmn.ParseBool(query.Get(cmn.URLParamRebStatus))
+	getRebStatus := cmn.IsParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
 		t.rebManager.RebStatus(status)
@@ -1162,7 +1163,7 @@ func (t *targetrunner) disable() error {
 		return nil
 	}
 	glog.Infof("Disabling %s", t.si)
-	if err := t.withRetry(t.unregister, "unregister"); err != nil {
+	if err := t.withRetry(t.unregister, "unregister", false /* backoff */); err != nil {
 		return err
 	}
 	t.regstate.disabled = true
@@ -1179,7 +1180,7 @@ func (t *targetrunner) enable() error {
 		return nil
 	}
 	glog.Infof("Enabling %s", t.si)
-	if err := t.withRetry(t.joinCluster, "register"); err != nil {
+	if err := t.withRetry(t.joinCluster, "register", false /* backoff */); err != nil {
 		return err
 	}
 	t.regstate.disabled = false

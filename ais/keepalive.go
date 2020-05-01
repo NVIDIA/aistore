@@ -6,7 +6,6 @@ package ais
 
 import (
 	"math"
-	"net/http"
 	"reflect"
 	"sync"
 	"time"
@@ -293,35 +292,29 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 }
 
 func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delta time.Duration) {
-	timeout := time.Duration(pkr.timeoutStatsForDaemon(to.ID()).timeout)
-	args := callArgs{
-		si: to,
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Base:   to.IntraControlNet.DirectURL,
-			Path:   cmn.URLPath(cmn.Version, cmn.Health),
-		},
-		timeout: timeout,
-	}
-	t := time.Now()
-	res := pkr.p.call(args)
+	var (
+		timeout        = time.Duration(pkr.timeoutStatsForDaemon(to.ID()).timeout)
+		t              = time.Now()
+		_, err, status = pkr.p.Health(to, timeout, nil)
+	)
 	delta = time.Since(t)
 	pkr.updateTimeoutForDaemon(to.ID(), delta)
 	pkr.statsT.Add(stats.KeepAliveLatency, int64(delta))
 
-	if res.err == nil {
+	if err == nil {
 		return true, false, delta
 	}
-	glog.Warningf("initial keepalive failed, err: %v(%d), retrying...", res.err, res.status)
-	ok, stopped = pkr.retry(to, args)
+
+	glog.Warningf("initial keepalive failed, err: %v(%d), retrying...", err, status)
+	ok, stopped = pkr.retry(to)
 	return ok, stopped, cmn.DefaultTimeout
 }
 
-func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, stopped bool) {
+func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode) (ok, stopped bool) {
 	var (
-		i       int
 		timeout = time.Duration(pkr.timeoutStatsForDaemon(si.ID()).timeout)
 		ticker  = time.NewTicker(cmn.KeepaliveRetryDuration())
+		i       int
 	)
 	defer ticker.Stop()
 	for {
@@ -331,10 +324,9 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 		select {
 		case <-ticker.C:
 			t := time.Now()
-			args.timeout = timeout
-			res := pkr.p.call(args)
+			_, err, status := pkr.p.Health(si, timeout, nil)
 			timeout = pkr.updateTimeoutForDaemon(si.ID(), time.Since(t))
-			if res.err == nil {
+			if err == nil {
 				return true, false
 			}
 			i++
@@ -342,12 +334,10 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 				glog.Warningf("keepalive failed after %d attempts, removing %s from Smap", i, si)
 				return false, false
 			}
-			if cmn.IsErrConnectionRefused(res.err) ||
-				res.status == http.StatusRequestTimeout ||
-				res.status == http.StatusServiceUnavailable {
+			if cmn.IsUnreachable(err, status) {
 				continue
 			}
-			glog.Warningf("keepalive: unexpected status %d, err: %v", res.status, res.err)
+			glog.Warningf("keepalive: unexpected error %v(%d) from %s", err, status, si)
 		case sig := <-pkr.controlCh:
 			if sig.msg == kaStopMsg {
 				return false, true
@@ -463,7 +453,7 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 				glog.Warningf("%s: keepalive failed after %d attempts, removing from Smap", hname, i)
 				return true
 			}
-			if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+			if cmn.IsUnreachable(err, status) {
 				continue
 			}
 			glog.Warningf("%s: unexpected response (err %v, status %d)", hname, err, status)
@@ -511,7 +501,7 @@ func (k *keepalive) timeoutStatsForDaemon(sid string) *timeoutStats {
 }
 
 func (k *keepalive) onerr(err error, status int) {
-	if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+	if cmn.IsUnreachable(err, status) {
 		k.controlCh <- controlSignal{msg: kaErrorMsg, err: err}
 	}
 }

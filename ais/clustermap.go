@@ -290,8 +290,8 @@ func newSmapOwner() *smapOwner {
 
 func (r *smapOwner) load(smap *smapX, config *cmn.Config) (err error) {
 	err = jsp.Load(filepath.Join(config.Confdir, smapFname), smap, jsp.CCSign())
-	if err == nil && smap.version() == 0 {
-		err = fmt.Errorf("unexpected: persistent Smap %s having version zero", smap)
+	if err == nil && (smap.version() == 0 || !smap.isValid()) {
+		err = fmt.Errorf("unexpected: persistent Smap %s is invalid", smap)
 	}
 	return
 }

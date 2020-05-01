@@ -203,7 +203,7 @@ func (t *targetrunner) Run() error {
 	// join cluster
 	//
 	t.owner.smap.put(smap)
-	if err := t.withRetry(t.joinCluster, "join"); err != nil {
+	if err := t.withRetry(t.joinCluster, "join", true /* backoff */); err != nil {
 		glog.Errorf("%s failed to register, err: %v", t.si, err)
 		glog.Errorf("%s is terminating", t.si)
 		return err
@@ -520,11 +520,10 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		config          = cmn.GCO.Get()
-		query           = r.URL.Query()
-		isGFNRequest, _ = cmn.ParseBool(query.Get(cmn.URLParamIsGFNRequest))
+		config       = cmn.GCO.Get()
+		query        = r.URL.Query()
+		isGFNRequest = cmn.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
 	)
-
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1008,14 +1007,13 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		errCode int
-		exists  bool
-
-		query             = r.URL.Query()
-		checkExists, _    = cmn.ParseBool(query.Get(cmn.URLParamCheckExists))
-		checkExistsAny, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckExistsAny))
-		checkEC, _        = cmn.ParseBool(query.Get(cmn.URLParamECMeta))
-		silent, _         = cmn.ParseBool(query.Get(cmn.URLParamSilent))
+		query          = r.URL.Query()
+		errCode        int
+		exists         bool
+		checkExists    = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
+		checkExistsAny = cmn.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
+		checkEC        = cmn.IsParseBool(query.Get(cmn.URLParamECMeta))
+		silent         = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
 	)
 
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
@@ -1153,10 +1151,10 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 //     In case of StatusOK it returns a JSON with all found slices for a given target.
 func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		caller = r.Header.Get(cmn.HeaderCallerName)
-		query  = r.URL.Query()
+		caller     = r.Header.Get(cmn.HeaderCallerName)
+		query      = r.URL.Query()
+		getRebData = cmn.IsParseBool(query.Get(cmn.URLParamRebData))
 	)
-	getRebData, _ := cmn.ParseBool(query.Get(cmn.URLParamRebData))
 	if !getRebData {
 		t.invalmsghdlr(w, r, "invalid request", http.StatusBadRequest)
 		return
