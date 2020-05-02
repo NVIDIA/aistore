@@ -192,24 +192,8 @@ func (m *smapX) deepCopy(dst *smapX) {
 }
 
 func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
-	var osi *cluster.Snode
-	f := func(nsi *cluster.Snode) { // detect duplicate URLs
-		if osi, err = dst.IsDuplicateURL(nsi); err != nil {
-			glog.Error(err)
-			if !override {
-				return
-			}
-			err = nil
-			glog.Errorf("Warning: removing (old/obsolete) %s from future Smaps", osi)
-			if osi.IsProxy() {
-				dst.delProxy(osi.ID())
-			} else {
-				dst.delTarget(osi.ID())
-			}
-		}
-	}
 	for id, si := range m.Tmap {
-		f(si)
+		err = dst.handleDuplicateURL(si, override)
 		if err != nil {
 			return
 		}
@@ -221,7 +205,7 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 		}
 	}
 	for id, si := range m.Pmap {
-		f(si)
+		err = dst.handleDuplicateURL(si, override)
 		if err != nil {
 			return
 		}
@@ -235,6 +219,26 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 	if m.UUID != "" && dst.UUID == "" {
 		dst.UUID = m.UUID
 		dst.CreationTime = m.CreationTime
+	}
+	return
+}
+
+// detect duplicate URLs and delete the old one if required
+func (m *smapX) handleDuplicateURL(nsi *cluster.Snode, del bool) (err error) {
+	var osi *cluster.Snode
+	if osi, err = m.IsDuplicateURL(nsi); err == nil {
+		return
+	}
+	glog.Error(err)
+	if !del {
+		return
+	}
+	err = nil
+	glog.Errorf("Warning: removing (old/obsolete) %s from future Smaps", osi)
+	if osi.IsProxy() {
+		m.delProxy(osi.ID())
+	} else {
+		m.delTarget(osi.ID())
 	}
 	return
 }
