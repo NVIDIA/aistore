@@ -7,9 +7,11 @@ package integration
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"testing"
 
+	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/ais"
@@ -28,6 +30,7 @@ type targetMocker interface {
 	filehdlr(w http.ResponseWriter, r *http.Request)
 	daemonhdlr(w http.ResponseWriter, r *http.Request)
 	votehdlr(w http.ResponseWriter, r *http.Request)
+	healthdlr(w http.ResponseWriter, r *http.Request)
 }
 
 type MockRegRequest struct {
@@ -41,7 +44,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Objects), mocktgt.filehdlr)
 	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Daemon), mocktgt.daemonhdlr)
 	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Vote), mocktgt.votehdlr)
-	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Health), func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Health), mocktgt.healthdlr)
 
 	ip := ""
 	for _, v := range smap.Tmap {
@@ -114,11 +117,9 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 		if err == nil {
 			_, err = w.Write(jsbytes)
 		}
-
 		if err != nil {
-			p.errCh <- fmt.Errorf("error writing message: %v", err)
+			p.errCh <- fmt.Errorf("error writing vote message: %v", err)
 		}
-
 	default:
 	}
 }
@@ -126,4 +127,18 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 func (p *voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 	// Always vote yes.
 	w.Write([]byte(ais.VoteYes))
+}
+
+func (p *voteRetryMockTarget) healthdlr(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	getRebStatus := cmn.IsParseBool(query.Get(cmn.URLParamRebStatus))
+	if getRebStatus {
+		status := &reb.Status{}
+		status.RebID = math.MaxInt64 // to abort t[MOCK] join triggered rebalance
+		body := cmn.MustMarshal(status)
+		_, err := w.Write(body)
+		if err != nil {
+			p.errCh <- fmt.Errorf("error writing reb-status: %v", err)
+		}
+	}
 }
