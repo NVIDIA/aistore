@@ -10,6 +10,7 @@ package tutils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -554,10 +555,19 @@ func GetDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
 	return
 }
 
-func GetClusterMap(t *testing.T, url string) *cluster.Smap {
-	baseParams := BaseAPIParams(url)
-	time.Sleep(time.Second * 2)
-	smap, err := api.GetClusterMap(baseParams)
+func GetClusterMap(t *testing.T, url string) (smap *cluster.Smap) {
+	var (
+		httpErr    = &cmn.HTTPError{}
+		baseParams = BaseAPIParams(url)
+		err        error
+	)
+while503:
+	smap, err = api.GetClusterMap(baseParams)
+	if err != nil && errors.As(err, &httpErr) && httpErr.Status == http.StatusServiceUnavailable {
+		t.Log("waiting for the cluster to start up...")
+		time.Sleep(time.Second)
+		goto while503
+	}
 	tassert.CheckFatal(t, err)
 	return smap
 }
