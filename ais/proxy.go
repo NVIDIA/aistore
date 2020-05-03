@@ -782,6 +782,14 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 		return
+	} else if msg.Action != cmn.ActPrefetch && msg.Action != cmn.ActECEncode {
+		// All actions that may be forwarded to the primary as-is  must be
+		// forwarded before `Bck` is created. Reason: if `bck.Init` fails,
+		// it may call `syncCBMeta` that ruins the original `msg` and
+		// replaces it with `ActionMsg{Action: cmn.RegisterCB}`.
+		if p.forwardCP(w, r, &msg, bucket, nil) {
+			return
+		}
 	}
 
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
@@ -799,9 +807,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	// 4. {action} on bucket
 	switch msg.Action {
 	case cmn.ActRenameLB:
-		if p.forwardCP(w, r, &msg, bucket, nil) {
-			return
-		}
 		if !bck.IsAIS() {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtErr, msg.Action, bck.Provider))
 			return
@@ -832,9 +837,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActCopyBucket:
-		if p.forwardCP(w, r, &msg, bucket, nil) {
-			return
-		}
 		bckFrom, bucketTo := bck, msg.Name
 		if bucket == bucketTo {
 			p.invalmsghdlr(w, r, fmt.Sprintf("cannot copy bucket %q onto itself", bucket))
@@ -852,9 +854,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActRegisterCB:
-		if p.forwardCP(w, r, &msg, bucket, nil) {
-			return
-		}
 		cloudConf := cmn.GCO.Get().Cloud
 		bck.Provider = cloudConf.Provider
 		bck.Ns = cloudConf.Ns
@@ -880,9 +879,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActSummaryBucket:
 		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
-		if p.forwardCP(w, r, &msg, bucket, nil) {
-			return
-		}
 		if err = p.makeNCopies(&msg, bck); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
