@@ -1243,28 +1243,11 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	close(abortCh)
 	time.Sleep(1 * time.Second) // wait for everything to settle down
 
-	assertBucketSize(t, baseParams, bck, o.objCount+numCreated)
-
 	if t.Failed() {
 		t.FailNow()
 	}
-
-	wg = &sync.WaitGroup{}
-	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
-		j := i + o.objCount + numCreated
-		objName := fmt.Sprintf(o.pattern, j)
-
-		go func(i int) {
-			defer wg.Done()
-			createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
-		}(j)
-	}
-
-	wg.Wait()
-
 	// Disabling and enabling EC should not result in put's failing
-	assertBucketSize(t, baseParams, bck, 2*o.objCount+numCreated)
+	assertBucketSize(t, baseParams, bck, o.objCount+numCreated)
 }
 
 // Stress test to check that EC works as expected.
