@@ -1072,7 +1072,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	}
 	getFromObjList(proxyURL, bck, errCh, filesList, false)
 	for _, fname := range filesList {
-		if b, _ := tutils.CheckExists(proxyURL, bck, fname); !b {
+		if exists := tutils.CheckObjExists(proxyURL, bck, fname); !exists {
 			t.Fatalf("Object not cached: %s", fname)
 		}
 	}
@@ -1092,7 +1092,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	for _, fname := range filesList {
-		if b, _ := tutils.CheckExists(proxyURL, bck, fname); b {
+		if exists := tutils.CheckObjExists(proxyURL, bck, fname); exists {
 			t.Errorf("%s remains cached", fname)
 		}
 	}

@@ -1215,9 +1215,14 @@ func networkFailurePrimary(t *testing.T) {
 	// Forcefully set new primary for the original one
 	baseParams := tutils.BaseAPIParams(oldPrimaryURL)
 	baseParams.Method = http.MethodPut
-	query := fmt.Sprintf("?%s=true&%s=%s", cmn.URLParamForce, cmn.URLParamPrimaryCandidate, url.QueryEscape(newPrimaryURL))
-	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Proxy, newPrimaryID) + query
-	err = api.DoHTTPRequest(api.ReqParams{BaseParams: baseParams, Path: path})
+	err = api.DoHTTPRequest(api.ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Proxy, newPrimaryID),
+		Query: url.Values{
+			cmn.URLParamForce:            {"true"},
+			cmn.URLParamPrimaryCandidate: {newPrimaryURL},
+		},
+	})
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForPrimaryProxy(

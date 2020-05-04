@@ -5,7 +5,6 @@
 package integration
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -583,10 +582,7 @@ func TestGetClusterStats(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Could not decode Target Stats: fstats.Avail")
 			}
-			usedpct, err := tfstats["usedpct"].(json.Number).Int64()
-			if err != nil {
-				t.Fatalf("Could not decode Target Stats: fstats.Usedpct")
-			}
+			usedpct := int64(tfstats["usedpct"].(float64))
 			if used != int64(fstats.Used) || avail != int64(fstats.Avail) || usedpct != int64(fstats.Usedpct) {
 				t.Errorf("Stats are different when queried from Target and Proxy: "+
 					"Used: %v, %v | Available:  %v, %v | Percentage: %v, %v",

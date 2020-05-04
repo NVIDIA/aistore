@@ -9,13 +9,12 @@
 package tutils
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"sync"
@@ -28,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -46,22 +44,6 @@ const (
 const (
 	evictPrefetchTimeout = 2 * time.Minute
 )
-
-type ReqError struct {
-	code    int
-	message string
-}
-
-func (err ReqError) Error() string {
-	return err.message
-}
-
-func NewReqError(msg string, code int) ReqError {
-	return ReqError{
-		code:    code,
-		message: msg,
-	}
-}
 
 func PingURL(url string) (err error) {
 	addr := strings.TrimPrefix(url, "http://")
@@ -90,29 +72,10 @@ func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh 
 	return err
 }
 
-func CheckExists(proxyURL string, bck cmn.Bck, objName string) (bool, error) {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName) + "?" + cmn.URLParamCheckExists + "=true"
-	r, err := HTTPClient.Head(url)
-	if err != nil {
-		return false, err
-	}
-	defer func() {
-		r.Body.Close()
-	}()
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		if r.StatusCode == http.StatusNotFound {
-			return false, nil
-		}
-		b, ioErr := ioutil.ReadAll(r.Body)
-		if ioErr != nil {
-			err = fmt.Errorf("failed to read response body, err: %v", ioErr)
-			return false, err
-		}
-		err = fmt.Errorf("CheckExists failed: bucket/object: %s/%s, HTTP status: %d, HTTP response: %s", // nolint:golint // name of the function
-			bck, objName, r.StatusCode, string(b))
-		return false, err
-	}
-	return true, nil
+func CheckObjExists(proxyURL string, bck cmn.Bck, objName string) bool {
+	baseParams := BaseAPIParams(proxyURL)
+	_, err := api.HeadObject(baseParams, bck, objName, true /*checkExists*/)
+	return err == nil
 }
 
 // PutAsync sends a PUT request to the given URL
@@ -526,32 +489,15 @@ func GetNamedTargetStats(trunner *stats.Trunner, name string) int64 {
 	return v.Value
 }
 
-func GetDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
-	q := api.GetWhatRawQuery(cmn.GetWhatStats, "")
-	url = fmt.Sprintf("%s?%s", url+cmn.URLPath(cmn.Version, cmn.Daemon), q)
-	resp, err := DefaultHTTPClient.Get(url)
-	if err != nil {
-		t.Fatalf("Failed to perform get, err = %v", err)
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed to read response body, err = %v", err)
-	}
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		t.Fatalf("HTTP error = %d, message = %s", err, string(b))
-	}
-
-	dec := jsoniter.NewDecoder(bytes.NewReader(b))
-	dec.UseNumber()
-	// If this isn't used, json.Unmarshal converts uint32s to floats, losing precision
-	err = dec.Decode(&stats)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal config: %v", err)
-	}
-
+func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
+	baseParams := BaseAPIParams(u)
+	baseParams.Method = http.MethodGet
+	err := api.DoHTTPRequest(api.ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Daemon),
+		Query:      url.Values{cmn.URLParamWhat: {cmn.GetWhatStats}},
+	}, &stats)
+	tassert.CheckFatal(t, err)
 	return
 }
 
