@@ -5,6 +5,7 @@
 package downloader
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,7 +15,9 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
+	"golang.org/x/sync/errgroup"
 )
 
 // Dispatcher serves as middle layer between receiving download requests
@@ -56,13 +59,30 @@ func (d *dispatcher) init() {
 }
 
 func (d *dispatcher) run() {
+	var (
+		// Number of concurrent job dispatches - it basically limits the number
+		// of goroutines so they won't go out of hand.
+		sema       = cmn.NewDynSemaphore(5 * fs.Mountpaths.NumAvail())
+		group, ctx = errgroup.WithContext(context.Background())
+	)
 	for {
 		select {
+		case <-ctx.Done():
+			d.stop()
+			group.Wait()
+			return
 		case job := <-d.dispatchDownloadCh:
-			if !d.dispatchDownload(job) {
-				d.stop()
-				return
-			}
+			// Start dispatching each job in new goroutine to make sure that
+			// all joggers are busy downloading the tasks (jobs with limits
+			// may not saturate the full downloader throughput).
+			sema.Acquire()
+			group.Go(func() error {
+				defer sema.Release()
+				if !d.dispatchDownload(job) {
+					return cmn.NewAbortedError("dispatcher")
+				}
+				return nil
+			})
 		case <-d.stopCh.Listen():
 			d.stop()
 			return
@@ -259,9 +279,13 @@ func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj dlObj) (err e
 		return nil, true
 	}
 
+	// NOTE: Throttle job before making jogger busy - we don't want to clog the
+	//  jogger as other tasks from other jobs can be already ready to download.
+	job.throttler().acquire()
+
 	select {
 	// FIXME: if this particular jogger is full, but others are available, dispatcher
-	// will wait with dispatching all of the requests anyway
+	//  will wait with dispatching all of the requests anyway
 	case jogger.putCh(task) <- task:
 		return nil, true
 	case <-d.jobAbortedCh(job.ID()):

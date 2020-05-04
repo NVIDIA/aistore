@@ -57,10 +57,6 @@ func (j *jogger) jog() {
 			break
 		}
 
-		// Do this before setting task as active to make sure it doesn't show
-		// as being downloaded.
-		t.job.throttler().acquire()
-
 		j.Lock()
 		if j.stopAgent {
 			j.Unlock()

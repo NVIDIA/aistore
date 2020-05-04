@@ -920,6 +920,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
+
 	tassert.Errorf(
 		t, len(resp.CurrentTasks) > smap.CountTargets(),
 		"number of tasks mismatch (expected at least: %d, got: %d)",
@@ -929,5 +930,64 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		t, len(resp.CurrentTasks) <= 2*smap.CountTargets(),
 		"number of tasks mismatch (expected as most: %d, got: %d)",
 		2*smap.CountTargets(), len(resp.CurrentTasks),
+	)
+}
+
+func TestDownloadJobConcurrency(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
+
+		template = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000001..0000140}.tgz"
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	smap, err := api.GetClusterMap(baseParams)
+	tassert.CheckFatal(t, err)
+
+	id1, err := api.DownloadRangeWithParam(baseParams, downloader.DlRangeBody{
+		DlBase: downloader.DlBase{
+			Bck: bck,
+			Limits: downloader.DlLimits{
+				Connections: 1,
+			},
+		},
+		Template: template,
+	})
+	tassert.CheckError(t, err)
+	defer api.DownloadAbort(baseParams, id1)
+
+	time.Sleep(time.Second) // wait for downloader to pick up the first job
+
+	id2, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
+	tassert.CheckError(t, err)
+	defer api.DownloadAbort(baseParams, id2)
+
+	time.Sleep(2 * time.Second) // wait for downloader to pick up the second job
+
+	resp1, err := api.DownloadStatus(baseParams, id1)
+	tassert.CheckFatal(t, err)
+
+	tassert.Errorf(
+		t, len(resp1.CurrentTasks) <= smap.CountTargets(),
+		"number of tasks mismatch (expected at most: %d, got: %d)",
+		smap.CountTargets(), len(resp1.CurrentTasks),
+	)
+
+	resp2, err := api.DownloadStatus(baseParams, id2)
+	tassert.CheckFatal(t, err)
+
+	// If downloader didn't start jobs concurrently the number of current
+	// tasks would be 0 (as the previous download would clog the downloader).
+	tassert.Errorf(
+		t, len(resp2.CurrentTasks) > smap.CountTargets(),
+		"number of tasks mismatch (expected at least: %d, got: %d)",
+		smap.CountTargets()+1, len(resp2.CurrentTasks),
 	)
 }
