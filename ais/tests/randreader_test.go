@@ -25,25 +25,28 @@ func TestRandomReaderPutStress(t *testing.T) {
 			Name:     "RRTestBucket",
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.GetPrimaryURL()
-		wg       = &sync.WaitGroup{}
-		dir      = t.Name()
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		wg         = &sync.WaitGroup{}
+		dir        = t.Name()
 	)
+
 	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
 	for i := 0; i < numworkers; i++ {
 		reader, err := readers.NewRandReader(fileSize, true)
 		tassert.CheckFatal(t, err)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			putRR(t, reader, bck, dir, numobjects)
+			putRR(t, baseParams, reader, bck, dir, numobjects)
 		}()
 	}
 	wg.Wait()
-	tutils.DestroyBucket(t, proxyURL, bck)
 }
 
-func putRR(t *testing.T, reader readers.Reader, bck cmn.Bck, dir string, objCount int) []string {
+func putRR(t *testing.T, baseParams api.BaseParams, reader readers.Reader, bck cmn.Bck, dir string, objCount int) []string {
 	var (
 		objNames = make([]string, objCount)
 	)
@@ -51,7 +54,7 @@ func putRR(t *testing.T, reader readers.Reader, bck cmn.Bck, dir string, objCoun
 		fname := tutils.GenRandomString(fnlen)
 		objName := filepath.Join(dir, fname)
 		putArgs := api.PutObjectArgs{
-			BaseParams: tutils.BaseAPIParams(),
+			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     objName,
 			Hash:       reader.XXHash(),

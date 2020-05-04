@@ -246,7 +246,10 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 	defer wg.Done()
 
 	const fileSize = 64 * cmn.KiB
-	var proxyURL = tutils.RandomProxyURL()
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
 
 	tutils.Logf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
@@ -270,7 +273,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 				fileList := []string{fname}
 				tutils.PutObjsFromList(proxyURL, bck, fshcDir, fileSize, fileList, errCh, objsPutCh)
 			case "GET":
-				api.GetObject(tutils.BaseAPIParams(), bck, path.Join(fshcDir, fname))
+				api.GetObject(baseParams, bck, path.Join(fshcDir, fname))
 				time.Sleep(time.Millisecond * 10)
 			default:
 				t.Errorf("Invalid operation: %s", op)

@@ -345,7 +345,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 			if wid == workerCount-1 { // last worker puts leftovers
 				objectsToPut += objectCount % workerCount
 			}
-			putRR(t, reader, bck, objectDir, objectsToPut)
+			putRR(t, baseParams, reader, bck, objectDir, objectsToPut)
 		}(wid)
 	}
 	wg.Wait()
@@ -451,7 +451,7 @@ func TestListObjects(t *testing.T) {
 						if wid == workerCount-1 { // last worker puts leftovers
 							objectsToPut += objectCount % workerCount
 						}
-						objNames := putRR(t, reader, bck, objDir, objectsToPut)
+						objNames := putRR(t, baseParams, reader, bck, objDir, objectsToPut)
 						for _, objName := range objNames {
 							objs.Store(objName, objEntry{
 								name: objName,
