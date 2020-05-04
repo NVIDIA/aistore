@@ -57,13 +57,22 @@ func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
 	if j.StartedTime.After(rhs.StartedTime) {
 		j.StartedTime = rhs.StartedTime
 	}
-	if j.FinishedTime.Before(rhs.FinishedTime) {
-		j.FinishedTime = rhs.FinishedTime
+	// Compute max out of `FinishedTime` only when both are non-zero.
+	if !cmn.IsTimeZero(j.FinishedTime) {
+		if cmn.IsTimeZero(rhs.FinishedTime) {
+			j.FinishedTime = rhs.FinishedTime
+		} else if j.FinishedTime.Before(rhs.FinishedTime) {
+			j.FinishedTime = rhs.FinishedTime
+		}
 	}
 }
 
 func (j DlJobInfo) JobFinished() bool {
-	return j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.FinishedCnt+j.ErrorCnt)
+	if cmn.IsTimeZero(j.FinishedTime) {
+		return false
+	}
+	cmn.Assert(j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.FinishedCnt+j.ErrorCnt))
+	return true
 }
 
 func (j DlJobInfo) JobRunning() bool {
@@ -131,7 +140,8 @@ func (d *DlStatusResp) Aggregate(rhs DlStatusResp) {
 }
 
 type DlLimits struct {
-	Connections int64 `json:"connections"`
+	Connections  int `json:"connections"`
+	BytesPerHour int `json:"bytes_per_hour"`
 }
 
 type DlBase struct {
@@ -149,7 +159,11 @@ func (b *DlBase) InitWithQuery(query url.Values) {
 	b.Bck.Ns = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
 	b.Timeout = query.Get(cmn.URLParamTimeout)
 	b.Description = query.Get(cmn.URLParamDescription)
-	b.Limits.Connections, _ = cmn.S2B(query.Get(cmn.URLParamLimitConnections))
+
+	x, _ := cmn.S2B(query.Get(cmn.URLParamLimitConnections))
+	b.Limits.Connections = int(x)
+	x, _ = cmn.S2B(query.Get(cmn.URLParamLimitBytesPerHour))
+	b.Limits.BytesPerHour = int(x)
 }
 
 func (b *DlBase) AsQuery() url.Values {
@@ -170,7 +184,10 @@ func (b *DlBase) AsQuery() url.Values {
 		query.Add(cmn.URLParamDescription, b.Description)
 	}
 	if b.Limits.Connections > 0 {
-		query.Add(cmn.URLParamLimitConnections, strconv.FormatInt(b.Limits.Connections, 10))
+		query.Add(cmn.URLParamLimitConnections, strconv.FormatInt(int64(b.Limits.Connections), 10))
+	}
+	if b.Limits.BytesPerHour > 0 {
+		query.Add(cmn.URLParamLimitBytesPerHour, strconv.FormatInt(int64(b.Limits.BytesPerHour), 10))
 	}
 	return query
 }
@@ -186,6 +203,9 @@ func (b *DlBase) Validate() error {
 	}
 	if b.Limits.Connections < 0 {
 		return fmt.Errorf("connection limit must be non-negative (got: %d)", b.Limits.Connections)
+	}
+	if b.Limits.BytesPerHour < 0 {
+		return fmt.Errorf("bytes per hour limit must be non-negative (got: %d)", b.Limits.BytesPerHour)
 	}
 	return nil
 }

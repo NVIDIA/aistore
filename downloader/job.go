@@ -46,6 +46,8 @@ type (
 		genNext() (objs []dlObj, ok bool)
 
 		throttler() *throttler
+
+		cleanup()
 	}
 
 	baseDlJob struct {
@@ -107,6 +109,13 @@ func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
 func (j *baseDlJob) throttler() *throttler  { return j.t }
+func (j *baseDlJob) cleanup() {
+	if err := dlStore.markFinished(j.ID()); err != nil {
+		glog.Error(err)
+	}
+	dlStore.flush(j.ID())
+	j.throttler().stop()
+}
 
 func newBaseDlJob(id string, bck *cluster.Bck, timeout, desc string, limits DlLimits) *baseDlJob {
 	t, _ := time.ParseDuration(timeout)

@@ -1440,3 +1440,9 @@ func S2Duration(s string) (time.Duration, error) {
 
 func UnixNano2S(unixnano int64) string   { return strconv.FormatInt(unixnano, 10) }
 func S2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
+
+// Returns if the time was never initialized.
+// See: https://github.com/golang/go/issues/33597.
+func IsTimeZero(t time.Time) bool {
+	return t.IsZero() || t.UTC().Unix() == 0
+}

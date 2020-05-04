@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -130,19 +131,21 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	}
 
 	// Create a custom reader to monitor progress every time we read from response body stream
-	progressReader := &progressReader{
+	var r io.ReadCloser = &progressReader{
 		r: resp.Body,
 		reporter: func(n int64) {
 			t.currentSize.Add(n)
 		},
 	}
+	// Wrap around throttler reader (noop if throttling is disabled)
+	r = t.job.throttler().wrapReader(ctx, r)
 
 	roi := getRemoteObjInfo(t.obj.link, resp)
 	t.setTotalSize(roi)
 
 	err = t.parent.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
-		Reader:       progressReader,
+		Reader:       r,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        roi.cksum,
@@ -168,8 +171,8 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {
 		err = t.tryDownloadLocal(lom, timeout)
 		if err == nil {
 			return nil
-		} else if errors.Is(err, context.Canceled) {
-			// Download was canceled, so just return.
+		} else if errors.Is(err, context.Canceled) || errors.Is(err, errThrottlerStopped) {
+			// Download was canceled or stopped, so just return.
 			return err
 		} else if errors.Is(err, context.DeadlineExceeded) {
 			glog.Warningf("%s [retries: %d/%d]: context exceeded with timeout (%v), increasing and retrying...", t, i, retryCnt, timeout)

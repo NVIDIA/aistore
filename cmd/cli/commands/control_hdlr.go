@@ -198,6 +198,10 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
+	limitBPH, err := parseByteFlagToInt(c, limitBytesPerHourFlag)
+	if err != nil {
+		return err
+	}
 	basePayload := downloader.DlBase{
 		Bck: cmn.Bck{
 			Name:     bucket,
@@ -207,7 +211,8 @@ func startDownloadHandler(c *cli.Context) error {
 		Timeout:     timeout,
 		Description: description,
 		Limits: downloader.DlLimits{
-			Connections: int64(parseIntFlag(c, limitConnectionsFlag)),
+			Connections:  parseIntFlag(c, limitConnectionsFlag),
+			BytesPerHour: int(limitBPH),
 		},
 	}
 

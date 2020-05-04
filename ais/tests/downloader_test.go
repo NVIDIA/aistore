@@ -50,7 +50,7 @@ func clearDownloadList(t *testing.T) {
 		}
 	}
 
-	time.Sleep(time.Millisecond * 300)
+	time.Sleep(time.Second)
 
 	for _, v := range listDownload {
 		tutils.Logf("Removing: %v...\n", v.ID)
@@ -178,6 +178,7 @@ func abortDownload(t *testing.T, id string) {
 	status, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, status.Aborted, "download was not marked aborted")
+	tassert.Fatalf(t, status.JobFinished(), "job should be finished")
 	tassert.Fatalf(t, len(status.CurrentTasks) == 0, "current tasks should be empty")
 }
 
@@ -908,7 +909,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 
-		template = "https://storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-{000001..0000140}.tgz"
+		template = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -919,7 +920,8 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 
 	id, err := api.DownloadRangeWithParam(baseParams, downloader.DlRangeBody{
 		DlBase: downloader.DlBase{
-			Bck: bck,
+			Bck:         bck,
+			Description: generateDownloadDesc(),
 			Limits: downloader.DlLimits{
 				Connections: 2,
 			},
@@ -955,7 +957,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 
-		template = "https://storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-{000001..0000140}.tgz"
+		template = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -966,7 +968,8 @@ func TestDownloadJobConcurrency(t *testing.T) {
 
 	id1, err := api.DownloadRangeWithParam(baseParams, downloader.DlRangeBody{
 		DlBase: downloader.DlBase{
-			Bck: bck,
+			Bck:         bck,
+			Description: generateDownloadDesc(),
 			Limits: downloader.DlLimits{
 				Connections: 1,
 			},
@@ -1002,5 +1005,60 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		t, len(resp2.CurrentTasks) >= smap.CountTargets(),
 		"number of tasks mismatch (expected at least: %d, got: %d)",
 		smap.CountTargets(), len(resp2.CurrentTasks),
+	)
+}
+
+// NOTE: Test may fail if the network is slow!!
+func TestDownloadJobBytesThrottling(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	const (
+		link = "https://storage.googleapis.com/minikube/iso/minikube-v0.35.0.iso"
+
+		// Bytes per hour limit.
+		softLimit = 3 * cmn.MiB
+		// Downloader could potentially download a little bit more but should
+		// never exceed this.
+		hardLimit = 4 * cmn.MiB
+	)
+
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	id, err := api.DownloadSingleWithParam(baseParams, downloader.DlSingleBody{
+		DlBase: downloader.DlBase{
+			Bck:         bck,
+			Description: generateDownloadDesc(),
+			Limits: downloader.DlLimits{
+				BytesPerHour: softLimit,
+			},
+		},
+		DlSingleObj: downloader.DlSingleObj{
+			ObjName: "object",
+			Link:    link,
+		},
+	})
+	tassert.CheckFatal(t, err)
+	defer abortDownload(t, id)
+
+	time.Sleep(10 * time.Second) // wait for downloader to download `softLimit` bytes
+
+	resp, err := api.DownloadStatus(baseParams, id)
+	tassert.CheckFatal(t, err)
+
+	tassert.Fatalf(t, len(resp.CurrentTasks) == 1, "expected one running task")
+	tassert.Errorf(
+		t, resp.CurrentTasks[0].Downloaded < hardLimit,
+		"no more than %d should be downloaded, got: %d",
+		hardLimit, resp.CurrentTasks[0].Downloaded,
 	)
 }

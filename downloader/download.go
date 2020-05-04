@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"sort"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -390,19 +389,4 @@ func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 		return nil, err
 	}
 	return jInfo, nil
-}
-
-func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
-	d.dispatcher.RLock()
-	currentTasks := make([]TaskDlInfo, 0, len(d.dispatcher.joggers))
-	for _, j := range d.dispatcher.joggers {
-		task := j.getTask()
-		if task != nil && task.id() == reqID {
-			currentTasks = append(currentTasks, task.ToTaskDlInfo())
-		}
-	}
-	d.dispatcher.RUnlock()
-
-	sort.Sort(TaskInfoByName(currentTasks))
-	return currentTasks
 }

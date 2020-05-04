@@ -162,6 +162,12 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		payload.Description = description
 	}
 
+	// TODO: this might be inaccurate if we download 1 or 2 objects because then
+	//  other targets will have limits but will not use them.
+	if payload.Limits.BytesPerHour > 0 {
+		payload.Limits.BytesPerHour /= t.GetSowner().Get().CountTargets()
+	}
+
 	baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description, payload.Limits)
 	switch dlType {
 	case dlTypeCloud:

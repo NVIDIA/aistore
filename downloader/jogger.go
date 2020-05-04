@@ -126,6 +126,13 @@ func (j *jogger) abortJob(id string) {
 	}
 }
 
+// Returns `true` if there is any task pending for a given job (either running
+// or still in queue), `false` otherwise.
+func (j *jogger) pending(id string) bool {
+	task := j.getTask()
+	return (task != nil && task.id() == id) || j.q.pending(id)
+}
+
 func newQueue() *queue {
 	return &queue{
 		ch: make(chan *singleObjectTask, queueChSize),
@@ -187,12 +194,12 @@ func (q *queue) cleanup() {
 	q.Unlock()
 }
 
-// NOTE: Should be called under `RLock()`.
+// NOTE: Should be called under `q.RLock()`.
 func (q *queue) stopped() bool {
 	return q.m == nil || q.ch == nil
 }
 
-// exists should be called under RLock()
+// NOTE: Should be called under `q.RLock()`.
 func (q *queue) exists(jobID, requestUID string) bool {
 	jobM, ok := q.m[jobID]
 
@@ -204,7 +211,14 @@ func (q *queue) exists(jobID, requestUID string) bool {
 	return ok
 }
 
-// putToSet should be called under Lock()
+func (q *queue) pending(jobID string) bool {
+	q.RLock()
+	defer q.RUnlock()
+	_, exists := q.m[jobID]
+	return exists
+}
+
+// NOTE: Should be called under `q.Lock()`.
 func (q *queue) putToSet(jobID, requestUID string) {
 	if _, ok := q.m[jobID]; !ok {
 		q.m[jobID] = make(queueEntry)
@@ -213,7 +227,7 @@ func (q *queue) putToSet(jobID, requestUID string) {
 	q.m[jobID][requestUID] = struct{}{}
 }
 
-// removeFromSet should be called under Lock()
+// NOTE: Should be called under `q.Lock()`.
 func (q *queue) removeFromSet(jobID, requestUID string) {
 	jobM, ok := q.m[jobID]
 	if !ok {

@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -140,10 +141,8 @@ func (d *dispatcher) ScheduleForDownload(job DlJob) {
 
 func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	defer func() {
-		if err := dlStore.markFinished(job.ID()); err != nil {
-			glog.Error(err)
-		}
-		dlStore.flush(job.ID())
+		d.waitFor(job)
+		job.cleanup()
 		d.cleanUpAborted(job.ID())
 	}()
 
@@ -343,7 +342,7 @@ func (d *dispatcher) dispatchStatus(req *request) {
 		return
 	}
 
-	currentTasks := d.parent.activeTasks(req.id)
+	currentTasks := d.activeTasks(req.id)
 	finishedTasks, err := dlStore.getTasks(req.id)
 	if err != nil {
 		req.writeErrResp(err, http.StatusInternalServerError)
@@ -373,4 +372,43 @@ func (d *dispatcher) dispatchList(req *request) {
 	}
 
 	req.writeResp(respMap)
+}
+
+func (d *dispatcher) activeTasks(reqID string) []TaskDlInfo {
+	d.RLock()
+	currentTasks := make([]TaskDlInfo, 0, len(d.joggers))
+	for _, j := range d.joggers {
+		task := j.getTask()
+		if task != nil && task.id() == reqID {
+			currentTasks = append(currentTasks, task.ToTaskDlInfo())
+		}
+	}
+	d.RUnlock()
+
+	sort.Sort(TaskInfoByName(currentTasks))
+	return currentTasks
+}
+
+// pending returns `true` if any joggers has pending tasks for a given `reqID`,
+// `false` otherwise.
+func (d *dispatcher) pending(reqID string) bool {
+	d.RLock()
+	defer d.RUnlock()
+	for _, j := range d.joggers {
+		if j.pending(reqID) {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *dispatcher) waitFor(job DlJob) {
+	// PRECONDITION: all tasks should be dispatched.
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		if !d.pending(job.ID()) {
+			break
+		}
+	}
 }

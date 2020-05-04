@@ -28,6 +28,7 @@ As for `DESTINATION` location, the only supported schema is `ais://` and the lin
 | `--description, --desc` | `string` | Description of the download job | `""` |
 | `--timeout` | `string` | Timeout for request to external resource | `""` |
 | `--limit-connections,--conns` | `int` | Number of connections each target can make concurrently (each target can handle at most #mountpaths connections) | `0` (unlimited - at most #mountpaths connections) |
+| `--limit-bytes-per-hour,--limit-bph,--bph` | `string` | Number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can maximally download in hour | `""` (unlimited) |
 | `--object-list,--from` | `string` | Path to file containing JSON array of strings with object names to download | `""` |
 
 ### Examples
