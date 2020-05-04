@@ -1369,8 +1369,8 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					m:                m,
 					dsorterType:      dsorterType,
 					outputTempl:      "output-{0..100000}",
-					tarballCnt:       1000,
-					fileInTarballCnt: 200,
+					tarballCnt:       2000,
+					fileInTarballCnt: 500,
 				}
 			)
 
