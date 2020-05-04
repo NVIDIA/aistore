@@ -56,6 +56,11 @@ func (j *jogger) jog() {
 		if t == nil {
 			break
 		}
+
+		// Do this before setting task as active to make sure it doesn't show
+		// as being downloaded.
+		t.job.throttler().acquire()
+
 		j.Lock()
 		if j.stopAgent {
 			j.Unlock()
@@ -66,12 +71,13 @@ func (j *jogger) jog() {
 		j.Unlock()
 
 		t.download()
+		t.job.throttler().release()
 
 		j.Lock()
 		j.task.persist()
 		j.task = nil
 		j.Unlock()
-		if exists := j.q.delete(t.request); exists {
+		if exists := j.q.delete(t); exists {
 			j.parent.parent.DecPending()
 		}
 	}
@@ -113,13 +119,13 @@ func newQueue() *queue {
 
 func (q *queue) putCh(t *singleObjectTask) (ok bool, ch chan<- *singleObjectTask) {
 	q.Lock()
-	if q.exists(t.request.id, t.request.uid()) {
+	if q.exists(t.id(), t.uid()) {
 		// If task already exists we should just omit it
 		// hence return chanel which immediately accepts and omits the task
 		q.Unlock()
 		return false, make(chan *singleObjectTask, 1)
 	}
-	q.putToSet(t.id, t.request.uid())
+	q.putToSet(t.id(), t.uid())
 	q.Unlock()
 
 	return true, q.ch
@@ -135,7 +141,7 @@ func (q *queue) get() (foundTask *singleObjectTask) {
 		}
 
 		q.RLock()
-		if q.exists(t.request.id, t.request.uid()) {
+		if q.exists(t.id(), t.uid()) {
 			// NOTE: We do not delete task here but postpone it until the task
 			// has Finished to prevent situation where we put task which is being
 			// downloaded.
@@ -150,10 +156,10 @@ func (q *queue) get() (foundTask *singleObjectTask) {
 	return
 }
 
-func (q *queue) delete(req *request) bool {
+func (q *queue) delete(t *singleObjectTask) bool {
 	q.Lock()
-	exists := q.exists(req.id, req.uid())
-	q.removeFromSet(req.id, req.uid())
+	exists := q.exists(t.id(), t.uid())
+	q.removeFromSet(t.id(), t.uid())
 	q.Unlock()
 	return exists
 }

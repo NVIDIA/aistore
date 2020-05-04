@@ -125,8 +125,8 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 			return nil, err
 		}
 		description = rangePayload.Describe()
-		bck := cluster.NewBckEmbed(rangePayload.Bck)
-		baseJob := newBaseDlJob(id, bck, rangePayload.Timeout, description)
+		bck := cluster.NewBckEmbed(payload.Bck)
+		baseJob := newBaseDlJob(id, bck, payload.Timeout, description, payload.Limits)
 		return newRangeDlJob(t, baseJob, pt, rangePayload.Subdir)
 	} else if err = multiPayload.Validate(b); err == nil {
 		if err := jsoniter.Unmarshal(b, &objectsPayload); err != nil {
@@ -146,7 +146,7 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 			return nil, errors.New("bucket download requires a cloud bucket")
 		}
 
-		baseJob := newBaseDlJob(id, bck, cloudPayload.Timeout, payload.Description)
+		baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description, payload.Limits)
 		return newCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
 	} else {
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
@@ -170,7 +170,7 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		return nil, err
 	}
 
-	baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description)
+	baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description, payload.Limits)
 	return newSliceDlJob(baseJob, objs), nil
 }
 
@@ -194,6 +194,7 @@ const (
 
 type (
 	remoteObjInfo struct {
+		size    int64
 		cksum   *cmn.Cksum
 		version string
 	}
@@ -223,6 +224,7 @@ func getRemoteObjInfo(link string, resp *http.Response) (roi remoteObjInfo) {
 			roi.version = hdr
 		}
 	}
+	roi.size = resp.ContentLength
 	return
 }
 

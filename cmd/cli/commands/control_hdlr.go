@@ -28,6 +28,7 @@ var (
 		subcmdStartDownload: {
 			timeoutFlag,
 			descriptionFlag,
+			limitConnections,
 		},
 		subcmdStartDsort: {
 			specFileFlag,
@@ -203,6 +204,9 @@ func startDownloadHandler(c *cli.Context) error {
 		},
 		Timeout:     timeout,
 		Description: description,
+		Limits: downloader.DlLimits{
+			Connections: int64(parseIntFlag(c, limitConnections)),
+		},
 	}
 
 	if strings.Contains(source, "{") && strings.Contains(source, "}") {

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -129,10 +130,15 @@ func (d *DlStatusResp) Aggregate(rhs DlStatusResp) {
 	d.Errs = append(d.Errs, rhs.Errs...)
 }
 
+type DlLimits struct {
+	Connections int64 `json:"connections"`
+}
+
 type DlBase struct {
-	Description string  `json:"description"`
-	Bck         cmn.Bck `json:"bck"`
-	Timeout     string  `json:"timeout"`
+	Description string   `json:"description"`
+	Bck         cmn.Bck  `json:"bck"`
+	Timeout     string   `json:"timeout"`
+	Limits      DlLimits `json:"limits"`
 }
 
 func (b *DlBase) InitWithQuery(query url.Values) {
@@ -143,6 +149,7 @@ func (b *DlBase) InitWithQuery(query url.Values) {
 	b.Bck.Ns = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
 	b.Timeout = query.Get(cmn.URLParamTimeout)
 	b.Description = query.Get(cmn.URLParamDescription)
+	b.Limits.Connections, _ = cmn.S2B(query.Get(cmn.URLParamLimitConnections))
 }
 
 func (b *DlBase) AsQuery() url.Values {
@@ -162,6 +169,9 @@ func (b *DlBase) AsQuery() url.Values {
 	if b.Description != "" {
 		query.Add(cmn.URLParamDescription, b.Description)
 	}
+	if b.Limits.Connections > 0 {
+		query.Add(cmn.URLParamLimitConnections, strconv.FormatInt(b.Limits.Connections, 10))
+	}
 	return query
 }
 
@@ -173,6 +183,9 @@ func (b *DlBase) Validate() error {
 		if _, err := time.ParseDuration(b.Timeout); err != nil {
 			return fmt.Errorf("failed to parse timeout field: %v", err)
 		}
+	}
+	if b.Limits.Connections < 0 {
+		return fmt.Errorf("connection limit must be non-negative (got: %d)", b.Limits.Connections)
 	}
 	return nil
 }

@@ -191,6 +191,7 @@ var (
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 	resetFlag       = cli.BoolFlag{Name: "reset", Usage: "reset to original state"}
 	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the action without really doing it"}
+	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 
 	// Bucket
 	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}
@@ -211,9 +212,9 @@ var (
 	countFlag = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
 
 	// Download
-	descriptionFlag = cli.StringFlag{Name: "description,desc", Usage: "description of the job - can be useful when listing all downloads"}
-	timeoutFlag     = cli.StringFlag{Name: "timeout", Usage: "timeout for request to external resource, eg. '30m'"}
-	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
+	descriptionFlag  = cli.StringFlag{Name: "description,desc", Usage: "description of the job - can be useful when listing all downloads"}
+	timeoutFlag      = cli.StringFlag{Name: "timeout", Usage: "timeout for request to external resource, eg. '30m'"}
+	limitConnections = cli.IntFlag{Name: "limit-connections,conns", Usage: "number of connections each target can make concurrently (each target can handle at most #mountpaths connections)"}
 
 	// dSort
 	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: cmn.DSortNameLowercase + "-testing", Usage: "bucket where shards will be put"}

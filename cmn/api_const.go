@@ -179,15 +179,16 @@ const (
 	URLParamTotalUncompressedSize     = "tunc"
 
 	// downloader - FIXME: name collisions, consistency, usage beyond downloader
-	URLParamBucket      = "bucket" // FIXME
-	URLParamID          = "id"     // FIXME
-	URLParamLink        = "link"
-	URLParamObjName     = "objname" // FIXME
-	URLParamSuffix      = "suffix"
-	URLParamTemplate    = "template"
-	URLParamSubdir      = "subdir"
-	URLParamTimeout     = "timeout" // FIXME
-	URLParamDescription = "description"
+	URLParamBucket           = "bucket" // FIXME
+	URLParamID               = "id"     // FIXME
+	URLParamLink             = "link"
+	URLParamObjName          = "objname" // FIXME
+	URLParamSuffix           = "suffix"
+	URLParamTemplate         = "template"
+	URLParamSubdir           = "subdir"
+	URLParamTimeout          = "timeout" // FIXME
+	URLParamDescription      = "description"
+	URLParamLimitConnections = "limit_conn"
 
 	// 2PC (control plane)
 	URLParamTxnTimeout = "txntout" // transaction timeout

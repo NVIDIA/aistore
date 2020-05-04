@@ -27,6 +27,7 @@ As for `DESTINATION` location, the only supported schema is `ais://` and the lin
 | --- | --- | --- | --- |
 | `--description, --desc` | `string` | Description of the download job | `""` |
 | `--timeout` | `string` | Timeout for request to external resource | `""` |
+| `--limit-connections,--conns` | `int` | Number of connections each target can make concurrently (each target can handle at most #mountpaths connections) | `0` (unlimited - at most #mountpaths connections) |
 
 ### Examples
 
@@ -104,6 +105,24 @@ Errors:
 	imagenet/imagenet_train-000049.tgz: request failed with 404 status code (Not Found)
 	imagenet/imagenet_train-000123.tgz: request failed with 404 status code (Not Found)
 	...
+```
+
+#### Download range of files from GCP with limited connections
+
+Download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-000000.tgz` to `gs://lpr-vision/imagenet/imagenet_train-000140.tgz` and saves them in `local-lpr` bucket, inside `imagenet` subdirectory.
+Since each target can make only 1 concurrent connection we only see 4 files being downloaded (started on a cluster with 4 targets).
+
+```bash
+$ ais create local-lpr
+local-lpr bucket created
+$ ais start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/ --conns=1
+QdwOYMAqg
+$ ais show download QdwOYMAqg --progress
+Files downloaded:                              0/141 [-------------------------------------------------------------]  0 %
+imagenet/imagenet_train-000003.tgz 474.6MiB/945.6MiB [==============================>------------------------------] 50 %
+imagenet/imagenet_train-000011.tgz 240.4MiB/946.4MiB [==============>----------------------------------------------] 25 %
+imagenet/imagenet_train-000025.tgz   2.0MiB/946.3MiB [-------------------------------------------------------------]  0 %
+imagenet/imagenet_train-000013.tgz   1.0MiB/946.7MiB [-------------------------------------------------------------]  0 %
 ```
 
 #### Download range of files from another AIS cluster

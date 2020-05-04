@@ -883,3 +883,51 @@ func TestDownloadSkipObject(t *testing.T) {
 		"atime mismatch (%v vs %v)", oldProps.Atime, newProps.Atime,
 	)
 }
+
+func TestDownloadJobLimitConnections(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
+
+		template = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000001..0000140}.tgz"
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	smap, err := api.GetClusterMap(baseParams)
+	tassert.CheckFatal(t, err)
+
+	id, err := api.DownloadRangeWithParam(baseParams, downloader.DlRangeBody{
+		DlBase: downloader.DlBase{
+			Bck: bck,
+			Limits: downloader.DlLimits{
+				Connections: 2,
+			},
+		},
+		Template: template,
+	})
+	tassert.CheckError(t, err)
+	defer api.DownloadAbort(baseParams, id)
+
+	time.Sleep(2 * time.Second) // wait for downloader to pick up the job
+
+	resp, err := api.DownloadStatus(baseParams, id)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(
+		t, len(resp.CurrentTasks) > smap.CountTargets(),
+		"number of tasks mismatch (expected at least: %d, got: %d)",
+		smap.CountTargets()+1, len(resp.CurrentTasks),
+	)
+	tassert.Errorf(
+		t, len(resp.CurrentTasks) <= 2*smap.CountTargets(),
+		"number of tasks mismatch (expected as most: %d, got: %d)",
+		2*smap.CountTargets(), len(resp.CurrentTasks),
+	)
+}

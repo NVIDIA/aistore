@@ -35,16 +35,17 @@ type (
 	DlJob interface {
 		ID() string
 		Bck() cmn.Bck
-
+		Description() string
 		Timeout() time.Duration
+
+		// If total length (size) of download job is not known, -1 should be returned.
+		Len() int
 
 		// genNext is supposed to fulfill the following protocol:
 		// ok is set to true if there is batch to process, false otherwise
 		genNext() (objs []dlObj, ok bool)
 
-		Description() string
-		// if total length (size) of download job is not known, -1 should be returned
-		Len() int
+		throttler() *throttler
 	}
 
 	baseDlJob struct {
@@ -52,6 +53,7 @@ type (
 		bck         *cluster.Bck
 		timeout     time.Duration
 		description string
+		t           *throttler
 	}
 
 	sliceDlJob struct {
@@ -104,10 +106,17 @@ func (j *baseDlJob) ID() string             { return j.id }
 func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
+func (j *baseDlJob) throttler() *throttler  { return j.t }
 
-func newBaseDlJob(id string, bck *cluster.Bck, timeout, desc string) *baseDlJob {
+func newBaseDlJob(id string, bck *cluster.Bck, timeout, desc string, limits DlLimits) *baseDlJob {
 	t, _ := time.ParseDuration(timeout)
-	return &baseDlJob{id: id, bck: bck, timeout: t, description: desc}
+	return &baseDlJob{
+		id:          id,
+		bck:         bck,
+		timeout:     t,
+		description: desc,
+		t:           newThrottler(limits),
+	}
 }
 
 func (j *sliceDlJob) Len() int { return len(j.objs) }

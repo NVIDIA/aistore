@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -107,11 +106,10 @@ import (
 // ================================ Summary ====================================
 
 const (
-	actRemove   = "REMOVE"
-	actAbort    = "ABORT"
-	actStatus   = "STATUS"
-	actList     = "LIST"
-	actDownload = "DOWNLOAD"
+	actRemove = "REMOVE"
+	actAbort  = "ABORT"
+	actStatus = "STATUS"
+	actList   = "LIST"
 
 	jobsChSize = 1000
 )
@@ -154,17 +152,13 @@ type (
 	}
 
 	// Calling Downloader's exposed methods results in creation of a request
-	// for admin related tasks (i.e. aborting and status updates) and a dlTask
-	// for a download request. These objects are used by Downloader to process
-	// the request, and are then dispatched to the correct jogger to be handled.
+	// for admin related tasks (i.e. aborting and status updates). These
+	// objects are used by Downloader to process the request, and are then
+	// dispatched to the correct jogger to be handled.
 	request struct {
-		action     string         // one of: adminAbort, adminList, adminStatus, adminRemove, taskDownload
+		action     string         // one of: adminAbort, adminList, adminStatus, adminRemove
 		id         string         // id of the job task
 		regex      *regexp.Regexp // regex of descriptions to return if id is empty
-		obj        dlObj
-		bck        cmn.Bck
-		timeout    time.Duration
-		fqn        string         // fqn of the object after it has been committed
 		responseCh chan *response // where the outcome of the request is written
 	}
 
@@ -175,19 +169,6 @@ type (
 )
 
 //==================================== Requests ===========================================
-
-func (req *request) String() (str string) {
-	str += fmt.Sprintf("id: %q, objname: %q, link: %q, from_cloud: %v, ", req.id, req.obj.objName, req.obj.link, req.obj.fromCloud)
-	if req.bck.Name != "" {
-		str += fmt.Sprintf("bucket: %q, ", req.bck)
-	}
-
-	return "{" + strings.TrimSuffix(str, ", ") + "}"
-}
-
-func (req *request) uid() string {
-	return fmt.Sprintf("%s|%s|%s|%v", req.obj.link, req.bck, req.obj.objName, req.obj.fromCloud)
-}
 
 func (req *request) write(resp interface{}, err error, statusCode int) {
 	req.responseCh <- &response{
@@ -403,7 +384,7 @@ func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
 		j.Lock()
 
 		task := j.task
-		if task != nil && task.id == reqID {
+		if task != nil && task.id() == reqID {
 			info := TaskDlInfo{
 				Name:       task.obj.objName,
 				Downloaded: task.currentSize.Load(),

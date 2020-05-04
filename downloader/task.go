@@ -45,7 +45,8 @@ var (
 type (
 	singleObjectTask struct {
 		parent *Downloader
-		*request
+		job    DlJob
+		obj    dlObj
 
 		started time.Time
 		ended   time.Time
@@ -60,7 +61,7 @@ type (
 
 func (t *singleObjectTask) download() {
 	lom := &cluster.LOM{T: t.parent.t, ObjName: t.obj.objName}
-	err := lom.Init(t.bck)
+	err := lom.Init(t.job.Bck())
 	if err == nil {
 		err = lom.Load()
 	}
@@ -87,7 +88,7 @@ func (t *singleObjectTask) download() {
 		return
 	}
 
-	if err := dlStore.incFinished(t.id); err != nil {
+	if err := dlStore.incFinished(t.id()); err != nil {
 		glog.Error(err)
 	}
 
@@ -136,9 +137,9 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time,
 		},
 	}
 
-	t.setTotalSize(resp)
-
 	roi := getRemoteObjInfo(t.obj.link, resp)
+	t.setTotalSize(roi)
+
 	err = t.parent.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       progressReader,
@@ -188,9 +189,9 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (e
 	return
 }
 
-func (t *singleObjectTask) setTotalSize(resp *http.Response) {
-	if resp.ContentLength > 0 {
-		t.totalSize.Store(resp.ContentLength)
+func (t *singleObjectTask) setTotalSize(roi remoteObjInfo) {
+	if roi.size > 0 {
+		t.totalSize.Store(roi.size)
 	}
 }
 
@@ -208,8 +209,8 @@ func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) error {
 
 func (t *singleObjectTask) initialTimeout() time.Duration {
 	timeout := cmn.GCO.Get().Downloader.Timeout
-	if t.timeout != 0 {
-		timeout = t.timeout
+	if t.job.Timeout() != 0 {
+		timeout = t.job.Timeout()
 	}
 	return timeout
 }
@@ -225,14 +226,14 @@ func (t *singleObjectTask) markFailed(statusMsg string) {
 	t.cancel()
 	t.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
-	dlStore.persistError(t.id, t.obj.objName, statusMsg)
-	if err := dlStore.incErrorCnt(t.id); err != nil {
+	dlStore.persistError(t.id(), t.obj.objName, statusMsg)
+	if err := dlStore.incErrorCnt(t.id()); err != nil {
 		glog.Error(err)
 	}
 }
 
 func (t *singleObjectTask) persist() {
-	_ = dlStore.persistTaskInfo(t.id, TaskDlInfo{
+	_ = dlStore.persistTaskInfo(t.id(), TaskDlInfo{
 		Name:       t.obj.objName,
 		Downloaded: t.currentSize.Load(),
 		Total:      t.totalSize.Load(),
@@ -244,6 +245,14 @@ func (t *singleObjectTask) persist() {
 	})
 }
 
-func (t *singleObjectTask) String() string {
-	return t.request.String()
+func (t *singleObjectTask) id() string { return t.job.ID() }
+func (t *singleObjectTask) uid() string {
+	return fmt.Sprintf("%s|%s|%s|%v", t.obj.link, t.job.Bck(), t.obj.objName, t.obj.fromCloud)
+}
+
+func (t *singleObjectTask) String() (str string) {
+	return fmt.Sprintf(
+		"{id: %q, obj_name: %q, link: %q, from_cloud: %v, bucket: %q}",
+		t.id(), t.obj.objName, t.obj.link, t.obj.fromCloud, t.job.Bck(),
+	)
 }

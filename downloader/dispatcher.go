@@ -221,13 +221,8 @@ func (d *dispatcher) createTasksLom(job DlJob, obj dlObj) (*cluster.LOM, error) 
 func (d *dispatcher) prepareTask(job DlJob, obj dlObj) (*singleObjectTask, *jogger, error) {
 	t := &singleObjectTask{
 		parent: d.parent,
-		request: &request{
-			action:  actDownload,
-			id:      job.ID(),
-			obj:     obj,
-			bck:     job.Bck(),
-			timeout: job.Timeout(),
-		},
+		obj:    obj,
+		job:    job,
 	}
 
 	lom, err := d.createTasksLom(job, obj)
@@ -235,7 +230,7 @@ func (d *dispatcher) prepareTask(job DlJob, obj dlObj) (*singleObjectTask, *jogg
 		glog.Warningf("error in handling downloader request: %v", err)
 		d.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
-		dlStore.persistError(t.id, t.obj.objName, err.Error())
+		dlStore.persistError(job.ID(), obj.objName, err.Error())
 		// NOTE: do not propagate single task errors
 		return nil, nil, nil
 	}
@@ -246,7 +241,6 @@ func (d *dispatcher) prepareTask(job DlJob, obj dlObj) (*singleObjectTask, *jogg
 		return nil, nil, err
 	}
 
-	t.fqn = lom.FQN
 	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
 	cmn.AssertMsg(ok, fmt.Sprintf("no jogger for mpath %s exists for %v", lom.ParsedFQN.MpathInfo.Path, t))
 	return t, j, nil
@@ -304,7 +298,7 @@ func (d *dispatcher) dispatchAbort(req *request) {
 		j.Lock()
 
 		// Abort currently running task, if belongs to a given job
-		if j.task != nil && j.task.request.id == req.id {
+		if j.task != nil && j.task.id() == req.id {
 			// Task is running
 			j.task.cancel()
 		}
