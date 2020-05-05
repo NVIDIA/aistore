@@ -226,7 +226,7 @@ func (poi *putObjInfo) putCloud() (ver string, err error, errCode int) {
 		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
 		return
 	}
-	ver, err, errCode = poi.t.Cloud(bck.Provider).PutObj(poi.ctx, file, lom)
+	ver, err, errCode = poi.t.Cloud(bck).PutObj(poi.ctx, file, lom)
 	file.Close()
 	return
 }
@@ -242,7 +242,7 @@ func (poi *putObjInfo) putRemoteAIS() (ver string, err error, errCode int) {
 		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
 		return
 	}
-	ver, err, errCode = poi.t.Cloud(bck.Provider).PutObj(poi.ctx, fh, lom)
+	ver, err, errCode = poi.t.Cloud(bck).PutObj(poi.ctx, fh, lom)
 	fh.Close()
 	return
 }
@@ -458,14 +458,14 @@ do:
 			capInfo = goi.t.AvgCapUsed(goi.lom.Config())
 		}
 		if capInfo.OOS {
-			// no space left to refetch object
+			// no space left to prefetch object
 			return capInfo.Err, http.StatusBadRequest
 		}
 		if err := goi.lom.AllowColdGET(); err != nil {
 			return err, http.StatusBadRequest
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
-		if err, errCode := goi.t.GetCold(goi.ctx, goi.lom, false); err != nil {
+		if err, errCode := goi.t.GetCold(goi.ctx, goi.lom, false /*prefetch*/); err != nil {
 			return err, errCode
 		}
 		goi.t.putMirror(goi.lom)

@@ -18,7 +18,7 @@ var _ = Describe("Bck", func() {
 				bck := NewBck(bckName, bckProvider, bckNs)
 				uname := bck.MakeUname(objName)
 
-				gotBck, gotObjName := ParseUname(uname)
+				gotBck, gotObjName := parseUname(uname)
 				Expect(gotBck.Name).To(Equal(bckName))
 				Expect(gotBck.Provider).To(Equal(bckProvider))
 				Expect(gotBck.Ns).To(Equal(bckNs))
@@ -58,6 +58,7 @@ var _ = Describe("Bck", func() {
 	Describe("Equal", func() {
 		DescribeTable("should not be equal",
 			func(a, b *Bck) {
+				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
 				Expect(a.Equal(b, true /*same BID*/)).To(BeFalse())
 			},
 			Entry(
@@ -104,6 +105,7 @@ var _ = Describe("Bck", func() {
 
 		DescribeTable("should be equal",
 			func(a, b *Bck) {
+				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
 				Expect(a.Equal(b, true /*same BID*/)).To(BeTrue())
 			},
 			Entry(

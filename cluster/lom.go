@@ -806,8 +806,8 @@ func EvictLomCache(b *Bck) {
 		go func(cache *sync.Map) {
 			cache.Range(func(hkey, _ interface{}) bool {
 				uname := hkey.(string)
-				bck, _ := ParseUname(uname)
-				if bck.Equal(b, false /*ignore BID*/) {
+				bck, _ := parseUname(uname)
+				if bck.Bck.Equal(b.Bck) {
 					cache.Delete(hkey)
 				}
 				return true
@@ -928,7 +928,7 @@ func (lom *LOM) flushAtime(atime time.Time) {
 //
 func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
 	var (
-		bck, objName = ParseUname(md.uname)
+		bck, objName = parseUname(md.uname)
 		err          error
 	)
 	lom = &LOM{ObjName: objName, bck: &bck}

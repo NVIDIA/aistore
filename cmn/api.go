@@ -246,6 +246,9 @@ type BucketProps struct {
 	// meaning that `` or `cloud` values are forbidden.
 	Provider string `json:"provider" list:"readonly"`
 
+	// OriginBck if set it contains cloud bucket to which AIS bucket points to.
+	OriginBck Bck `json:"origin_bck,omitempty"`
+
 	// Versioning can be enabled or disabled on a per-bucket basis
 	Versioning VersionConf `json:"versioning"`
 
@@ -275,12 +278,18 @@ type BucketProps struct {
 }
 
 type BucketPropsToUpdate struct {
+	OriginBck   *BckToUpdate         `json:"origin_bck"`
 	Versioning  *VersionConfToUpdate `json:"versioning"`
 	Cksum       *CksumConfToUpdate   `json:"checksum"`
 	LRU         *LRUConfToUpdate     `json:"lru"`
 	Mirror      *MirrorConfToUpdate  `json:"mirror"`
 	EC          *ECConfToUpdate      `json:"ec"`
 	AccessAttrs *uint64              `json:"access,string"`
+}
+
+type BckToUpdate struct {
+	Name     *string `json:"name"`
+	Provider *string `json:"provider"`
 }
 
 // ECConfig - per-bucket erasure coding configuration
@@ -492,6 +501,15 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 	if !IsValidProvider(bp.Provider) {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.Provider, allProviders)
 	}
+	if !bp.OriginBck.IsEmpty() {
+		if !bp.OriginBck.IsCloud() {
+			return fmt.Errorf("origin bucket should point to cloud bucket")
+		}
+		if bp.Provider != ProviderAIS {
+			return fmt.Errorf("origin bucket can only be set for AIS buckets")
+		}
+	}
+
 	validationArgs := &ValidationArgs{TargetCnt: targetCnt}
 	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC}
 	for _, validator := range validators {

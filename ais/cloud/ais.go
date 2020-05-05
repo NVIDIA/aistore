@@ -250,6 +250,10 @@ ad:
 // cluster.CloudProvider APIs //
 ////////////////////////////////
 
+func (m *AisCloudProvider) Provider() string {
+	return cmn.ProviderAIS
+}
+
 func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	m.mu.RLock()
 	remAis, ok := m.remote[uuid]
@@ -267,7 +271,7 @@ func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	return remAis, nil
 }
 
-func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck cmn.Bck,
+func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.Bck,
 	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
@@ -275,7 +279,7 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck cmn.Bck,
 	if err != nil {
 		return nil, err, errCode
 	}
-	err = m.try(remoteBck, func(bck cmn.Bck) error {
+	err = m.try(remoteBck.Bck, func(bck cmn.Bck) error {
 		bckList, err = api.ListObjects(aisCluster.bp, bck, msg, 0)
 		return err
 	})
@@ -283,14 +287,14 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck cmn.Bck,
 	return bckList, err, errCode
 }
 
-func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return nil, err, errCode
 	}
-	err = m.try(remoteBck, func(bck cmn.Bck) error {
+	err = m.try(remoteBck.Bck, func(bck cmn.Bck) error {
 		p, err := api.HeadBucket(aisCluster.bp, bck)
 		if err != nil {
 			return err

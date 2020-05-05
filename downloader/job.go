@@ -183,7 +183,7 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 			Fast:       true,
 		}
 
-		bckList, err, _ := j.t.Cloud(j.bck.Provider).ListObjects(j.ctx, j.bck.Bck, msg)
+		bckList, err, _ := j.t.Cloud(j.bck).ListObjects(j.ctx, j.bck, msg)
 		if err != nil {
 			return err
 		}

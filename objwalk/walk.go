@@ -26,7 +26,7 @@ type (
 	Walk struct {
 		ctx context.Context
 		t   cluster.Target
-		bck cmn.Bck
+		bck *cluster.Bck
 		msg *cmn.SelectMsg
 	}
 	mresp struct {
@@ -79,7 +79,7 @@ func (w *Walk) newFileWalk(ctx context.Context, bucket string, msg *cmn.SelectMs
 	return ci
 }
 
-func NewWalk(ctx context.Context, t cluster.Target, bck cmn.Bck, msg *cmn.SelectMsg) *Walk {
+func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.SelectMsg) *Walk {
 	return &Walk{
 		ctx: ctx,
 		t:   t,
@@ -138,7 +138,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 	}
 	for _, mpathInfo := range availablePaths {
 		wg.Add(1)
-		go walkMpath(mpathInfo, w.bck, cts)
+		go walkMpath(mpathInfo, w.bck.Bck, cts)
 	}
 	wg.Wait()
 	close(ch)
@@ -182,7 +182,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	if w.msg.Cached {
 		return w.LocalObjPage()
 	}
-	bucketList, err, _ := w.t.Cloud(w.bck.Provider).ListObjects(w.ctx, w.bck, w.msg)
+	bucketList, err, _ := w.t.Cloud(w.bck).ListObjects(w.ctx, w.bck, w.msg)
 	if err != nil {
 		return nil, err
 	}
@@ -201,9 +201,8 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 		needCopies  = w.msg.WantProp(cmn.GetPropsCopies)
 	)
 
-	bck := cluster.NewBckEmbed(w.bck)
 	for _, e := range bucketList.Entries {
-		si, _ := cluster.HrwTarget(bck.MakeUname(e.Name), smap)
+		si, _ := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)
 		if si.ID() != localID {
 			continue
 		}
@@ -212,7 +211,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 			e.TargetURL = localURL
 		}
 		lom := &cluster.LOM{T: w.t, ObjName: e.Name}
-		err := lom.Init(w.bck, config)
+		err := lom.Init(w.bck.Bck, config)
 		if err != nil {
 			if cmn.IsErrBucketNought(err) {
 				return nil, err

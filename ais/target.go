@@ -996,7 +996,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// + cloud
-	bucketProps, err, code = t.Cloud(bck.Provider).HeadBucket(t.contextWithAuth(r.Header), bck.Bck)
+	bucketProps, err, code = t.Cloud(bck).HeadBucket(t.contextWithAuth(r.Header), bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
@@ -1116,7 +1116,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		var objMeta cmn.SimpleKVs
-		objMeta, err, errCode = t.Cloud(lom.Bck().Provider).HeadObj(t.contextWithAuth(r.Header), lom)
+		objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(t.contextWithAuth(r.Header), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)
@@ -1195,7 +1195,7 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 // should be called only if the local copy exists
 func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
 	var objMeta cmn.SimpleKVs
-	objMeta, err, errCode = t.Cloud(lom.Bck().Provider).HeadObj(ctx, lom)
+	objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
 		return
@@ -1246,7 +1246,8 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 func (t *targetrunner) _listBcks(r *http.Request, query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {
 	// 3rd party cloud or remote ais
 	if query.Provider == cfg.Cloud.Provider || query.IsRemoteAIS() {
-		names, err, c = t.Cloud(query.Provider).ListBuckets(t.contextWithAuth(r.Header), query)
+		bck := cluster.NewBck("", query.Provider, query.Ns)
+		names, err, c = t.Cloud(bck).ListBuckets(t.contextWithAuth(r.Header), query)
 		sort.Sort(names)
 	} else { // BMD
 		names = t.selectBMDBuckets(t.owner.bmd.get(), query)
@@ -1352,7 +1353,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	}
 
 	if delFromCloud {
-		if err, errCode := t.Cloud(lom.Bck().Provider).DeleteObj(ctx, lom); err != nil {
+		if err, errCode := t.Cloud(lom.Bck()).DeleteObj(ctx, lom); err != nil {
 			cloudErr = err
 			cloudErrCode = errCode
 			t.statsT.Add(stats.DeleteCount, 1)

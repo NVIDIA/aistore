@@ -1843,3 +1843,109 @@ func TestCopyAndRenameBucket(t *testing.T) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }
+
+func TestOriginBucket(t *testing.T) {
+	var (
+		cloudBck = cmn.Bck{
+			Name:     clibucket,
+			Provider: cmn.AnyCloud,
+		}
+		aisBck = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
+		m = ioContext{
+			t:   t,
+			num: 10,
+			bck: cloudBck,
+		}
+
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: cloudBck})
+
+	m.init()
+
+	tutils.CreateFreshBucket(t, proxyURL, aisBck)
+	defer tutils.DestroyBucket(t, proxyURL, aisBck)
+
+	p, err := api.HeadBucket(baseParams, cloudBck)
+	tassert.CheckFatal(t, err)
+	cloudBck.Provider = p.Provider
+
+	m.cloudPuts(false /*evict*/)
+	defer m.cloudDelete()
+
+	cloudObjList, err := api.ListObjects(baseParams, cloudBck, nil, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(cloudObjList.Entries) > 0, "empty object list")
+
+	err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
+		OriginBck: &cmn.BckToUpdate{
+			Name:     api.String(cloudBck.Name),
+			Provider: api.String(cloudBck.Provider),
+		},
+	})
+	tassert.CheckFatal(t, err)
+
+	p, err = api.HeadBucket(baseParams, aisBck)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(
+		t, p.OriginBck.Equal(cloudBck),
+		"origin bucket wasn't set correctly (got: %s, expected: %s)",
+		p.OriginBck, cloudBck,
+	)
+
+	// Try to cache object.
+	cachedObjName := cloudObjList.Entries[0].Name
+	_, err = api.GetObject(baseParams, aisBck, cachedObjName)
+	tassert.CheckFatal(t, err)
+
+	// Check if listing objects will result in listing origin bucket objects.
+	aisObjList, err := api.ListObjects(baseParams, aisBck, nil, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(
+		t, len(cloudObjList.Entries) == len(aisObjList.Entries),
+		"object lists cloud vs ais does not match (got: %+v, expected: %+v)",
+		aisObjList.Entries, cloudObjList.Entries,
+	)
+
+	// Check if cached listing works correctly.
+	aisObjList, err = api.ListObjects(baseParams, aisBck, &cmn.SelectMsg{Cached: true}, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(
+		t, len(aisObjList.Entries) == 1,
+		"bucket contains incorrect number of cached objects (got: %+v, expected: [%s])",
+		aisObjList.Entries, cachedObjName,
+	)
+
+	// Disconnect origin bucket.
+	err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
+		OriginBck: &cmn.BckToUpdate{
+			Name:     api.String(""),
+			Provider: api.String(""),
+		},
+	})
+	tassert.CheckFatal(t, err)
+	p, err = api.HeadBucket(baseParams, aisBck)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, p.OriginBck.IsEmpty(), "origin bucket isn't empty")
+
+	// Check if we can still get object and list objects.
+	_, err = api.GetObject(baseParams, aisBck, cachedObjName)
+	tassert.CheckFatal(t, err)
+
+	aisObjList, err = api.ListObjects(baseParams, aisBck, nil, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(
+		t, len(aisObjList.Entries) == 1,
+		"bucket contains incorrect number of objects (got: %+v, expected: [%s])",
+		aisObjList.Entries, cachedObjName,
+	)
+
+	// Check that we cannot do cold gets anymore.
+	_, err = api.GetObject(baseParams, aisBck, cloudObjList.Entries[1].Name)
+	tassert.Fatalf(t, err != nil, "expected error (object should not exist)")
+}

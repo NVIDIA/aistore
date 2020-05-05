@@ -63,7 +63,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 	}
 
 	if delFromCloud {
-		if err, _ := r.t.Cloud(lom.Bck().Provider).DeleteObj(args.Ctx, lom); err != nil {
+		if err, _ := r.t.Cloud(lom.Bck()).DeleteObj(args.Ctx, lom); err != nil {
 			cloudErr = err
 		}
 	}
@@ -211,13 +211,19 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 		sid            = r.t.Snode().ID()
 		err            error
 	)
+
+	bck := cluster.NewBckEmbed(r.Bck())
+	if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+		return err
+	}
+
 	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	for !r.Aborted() {
 		if r.Bck().IsAIS() {
-			walk := objwalk.NewWalk(context.Background(), r.t, r.Bck(), msg)
+			walk := objwalk.NewWalk(context.Background(), r.t, bck, msg)
 			bucketListPage, err = walk.LocalObjPage()
 		} else {
-			bucketListPage, err, _ = r.t.Cloud(r.Bck().Provider).ListObjects(args.Ctx, r.Bck(), msg)
+			bucketListPage, err, _ = r.t.Cloud(bck).ListObjects(args.Ctx, bck, msg)
 		}
 		if err != nil {
 			return err

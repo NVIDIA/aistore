@@ -139,14 +139,14 @@ func createSession(ctx context.Context) *session.Session {
 	return session.Must(session.NewSessionWithOptions(session.Options{Config: conf}))
 }
 
-func awsErrorToAISError(awsError error, bck *cluster.Bck, node string) (error, int) {
+func awsErrorToAISError(awsError error, bck cmn.Bck, node string) (error, int) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, node), reqErr.StatusCode()
+			return cmn.NewErrorRemoteBucketDoesNotExist(bck, node), reqErr.StatusCode()
 		}
 		// AWS returns confusing error when a bucket does not exist in the region, ideally we should never rely on error message
 		if reqErr.StatusCode() == http.StatusMovedPermanently && strings.Contains(reqErr.Error(), "BucketRegionError") {
-			return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, node), http.StatusNotFound
+			return cmn.NewErrorRemoteBucketDoesNotExist(bck, node), http.StatusNotFound
 		}
 		return awsError, reqErr.StatusCode()
 	}
@@ -158,18 +158,24 @@ func awsIsVersionSet(version *string) bool {
 	return version != nil && *version != "null" && *version != ""
 }
 
+func (awsp *awsProvider) Provider() string {
+	return cmn.ProviderAmazon
+}
+
 //////////////////
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(ct context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+	var (
+		cloudBck = bck.CloudBck()
+		svc      = s3.New(createSession(ctx))
+	)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("list_objects %s", bck.Name)
+		glog.Infof("list_objects %s", cloudBck.Name)
 	}
-	sess := createSession(ct)
-	svc := s3.New(sess)
 
-	params := &s3.ListObjectsInput{Bucket: aws.String(bck.Name)}
+	params := &s3.ListObjectsInput{Bucket: aws.String(cloudBck.Name)}
 	if msg.Prefix != "" {
 		params.Prefix = aws.String(msg.Prefix)
 	}
@@ -187,7 +193,7 @@ func (awsp *awsProvider) ListObjects(ct context.Context, bck cmn.Bck, msg *cmn.S
 
 	resp, err := svc.ListObjects(params)
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderAmazon, cmn.NsGlobal), "")
+		err, errCode = awsErrorToAISError(err, cloudBck, "")
 		return
 	}
 
@@ -239,7 +245,7 @@ func (awsp *awsProvider) ListObjects(ct context.Context, bck cmn.Bck, msg *cmn.S
 
 			verResp, err := svc.ListObjectVersions(verParams)
 			if err != nil {
-				err, errCode := awsErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderAmazon, cmn.NsGlobal), "")
+				err, errCode := awsErrorToAISError(err, cloudBck, "")
 				return nil, err, errCode
 			}
 
@@ -273,29 +279,31 @@ func (awsp *awsProvider) ListObjects(ct context.Context, bck cmn.Bck, msg *cmn.S
 // HEAD BUCKET //
 /////////////////
 
-func (awsp *awsProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+	var (
+		cloudBck = bck.CloudBck()
+		svc      = s3.New(createSession(ctx))
+	)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[head_bucket] %s", bck.Name)
+		glog.Infof("[head_bucket] %s", cloudBck.Name)
 	}
-	bckProps = make(cmn.SimpleKVs)
-
-	svc := s3.New(createSession(ctx))
 	_, err = svc.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(bck.Name),
+		Bucket: aws.String(cloudBck.Name),
 	})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderAmazon, cmn.NsGlobal), "")
+		err, errCode = awsErrorToAISError(err, cloudBck, "")
 		return
 	}
-	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
 
-	inputVers := &s3.GetBucketVersioningInput{Bucket: aws.String(bck.Name)}
-	result, err := svc.GetBucketVersioning(inputVers)
+	inputVersion := &s3.GetBucketVersioningInput{Bucket: aws.String(cloudBck.Name)}
+	result, err := svc.GetBucketVersioning(inputVersion)
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cluster.NewBck(bck.Name, cmn.ProviderAmazon, cmn.NsGlobal), "")
+		err, errCode = awsErrorToAISError(err, cloudBck, "")
 		return
 	}
 
+	bckProps = make(cmn.SimpleKVs, 2)
+	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
 	bckProps[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(
 		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
 	)
@@ -307,10 +315,12 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bck cmn.Bck) (bckProps 
 //////////////////
 
 func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
-	svc := s3.New(createSession(ctx))
+	var (
+		svc = s3.New(createSession(ctx))
+	)
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cluster.NewBck("", cmn.ProviderAmazon, cmn.NsGlobal), "")
+		err, errCode = awsErrorToAISError(err, cmn.Bck{Provider: cmn.ProviderAmazon}, "")
 		return
 	}
 
@@ -332,23 +342,23 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 ////////////////
 
 func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
-	objMeta = make(cmn.SimpleKVs)
-
-	sess := createSession(ctx)
-	svc := s3.New(sess)
-	input := &s3.HeadObjectInput{Bucket: aws.String(lom.BckName()), Key: aws.String(lom.ObjName)}
+	var (
+		cloudBck = lom.Bck().CloudBck()
+		svc      = s3.New(createSession(ctx))
+		input    = &s3.HeadObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(lom.ObjName)}
+	)
 
 	headOutput, err := svc.HeadObject(input)
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, lom.Bck(), lom.T.Snode().Name())
+		err, errCode = awsErrorToAISError(err, cloudBck, lom.T.Snode().Name())
 		return
 	}
+	objMeta = make(cmn.SimpleKVs, 3)
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
+	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(*headOutput.ContentLength, 10)
 	if awsIsVersionSet(headOutput.VersionId) {
 		objMeta[cmn.HeaderObjVersion] = *headOutput.VersionId
 	}
-	size := strconv.FormatInt(*headOutput.ContentLength, 10)
-	objMeta[cmn.HeaderObjSize] = size
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[head_object] %s", lom)
 	}
@@ -363,15 +373,16 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	var (
 		cksum        *cmn.Cksum
 		cksumToCheck *cmn.Cksum
+		bck          = lom.Bck().CloudBck()
 	)
 	sess := createSession(ctx)
 	svc := s3.New(sess)
 	obj, err := svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(lom.BckName()),
+		Bucket: aws.String(bck.Name),
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, lom.Bck(), lom.T.Snode().Name())
+		err, errCode = awsErrorToAISError(err, bck, lom.T.Snode().Name())
 		return
 	}
 	// may not have ais metadata
@@ -415,20 +426,21 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	var (
 		uploadOutput          *s3manager.UploadOutput
 		cksumType, cksumValue = lom.Cksum().Get()
-		md                    = make(map[string]*string)
+		cloudBck              = lom.Bck().CloudBck()
+		md                    = make(map[string]*string, 2)
 	)
 	md[awsChecksumType] = aws.String(cksumType)
 	md[awsChecksumVal] = aws.String(cksumValue)
 
 	uploader := s3manager.NewUploader(createSession(ctx))
 	uploadOutput, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket:   aws.String(lom.BckName()),
+		Bucket:   aws.String(cloudBck.Name),
 		Key:      aws.String(lom.ObjName),
 		Body:     r,
 		Metadata: md,
 	})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, lom.Bck(), lom.T.Snode().Name())
+		err, errCode = awsErrorToAISError(err, cloudBck, lom.T.Snode().Name())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -447,10 +459,13 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 ///////////////////
 
 func (awsp *awsProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
-	svc := s3.New(createSession(ctx))
-	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(lom.BckName()), Key: aws.String(lom.ObjName)})
+	var (
+		cloudBck = lom.Bck().CloudBck()
+		svc      = s3.New(createSession(ctx))
+	)
+	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(lom.ObjName)})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, lom.Bck(), lom.T.Snode().Name())
+		err, errCode = awsErrorToAISError(err, cloudBck, lom.T.Snode().Name())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

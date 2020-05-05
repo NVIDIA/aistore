@@ -38,6 +38,10 @@ var _ = Describe("IterFields", func() {
 			Entry("list BucketProps fields",
 				cmn.BucketProps{
 					Provider: cmn.ProviderAIS,
+					OriginBck: cmn.Bck{
+						Name:     "name",
+						Provider: cmn.ProviderGoogle,
+					},
 					EC: cmn.ECConf{
 						Enabled:      true,
 						ParitySlices: 1024,
@@ -50,6 +54,12 @@ var _ = Describe("IterFields", func() {
 				},
 				map[string]interface{}{
 					"provider": cmn.ProviderAIS,
+
+					"origin_bck.name":     "name",
+					"origin_bck.provider": cmn.ProviderGoogle,
+					// TODO: these should not be shown
+					"origin_bck.namespace.name": "",
+					"origin_bck.namespace.uuid": "",
 
 					"mirror.enabled":      false,
 					"mirror.copies":       int64(0),
@@ -97,6 +107,9 @@ var _ = Describe("IterFields", func() {
 					AccessAttrs: api.Uint64(1024),
 				},
 				map[string]interface{}{
+					"origin_bck.name":     (*string)(nil),
+					"origin_bck.provider": (*string)(nil),
+
 					"mirror.enabled":      (*bool)(nil),
 					"mirror.copies":       (*int64)(nil),
 					"mirror.util_thresh":  (*int64)(nil),

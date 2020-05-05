@@ -101,10 +101,10 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 		return false
 	}
 	m.Version++
-	p.BID = bck.MaskBID(m.Version)
-	p.Provider = bck.Provider
-	p.Created = time.Now().UnixNano()
 	bck.Props = p
+	p.Provider = bck.Provider
+	p.BID = bck.MaskBID(m.Version)
+	p.Created = time.Now().UnixNano()
 
 	m.Add(bck)
 	return true

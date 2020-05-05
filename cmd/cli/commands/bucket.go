@@ -272,9 +272,25 @@ func bucketDetailsSync(c *cli.Context, query cmn.QueryBcks) error {
 	return templates.DisplayOutput(summaries, c.App.Writer, tmpl)
 }
 
-// replace user-friendly properties like `access=ro` with real values
-// like `access = GET | HEAD`. All numbers are passed to API as is
+// Replace user-friendly properties like:
+//  * `access=ro` with real values `access = GET | HEAD` (all numbers are
+//     passed to API as is).
+//  * `origin_bck=gcp://bucket_name` with `origin_bck.name=bucket_name` and
+//    `origin_bck.provider=gcp` so they match the expected fields in structs.
 func reformatBucketProps(bck cmn.Bck, nvs cmn.SimpleKVs) error {
+	if v, ok := nvs[cmn.HeaderOriginBck]; ok {
+		delete(nvs, cmn.HeaderOriginBck)
+		bck, objName, err := parseBckObjectURI(v)
+		if err != nil {
+			return err
+		}
+		if objName != "" {
+			return fmt.Errorf("invalid format of %q", cmn.HeaderOriginBck)
+		}
+		nvs[cmn.HeaderOriginBckName] = bck.Name
+		nvs[cmn.HeaderOriginBckProvider] = bck.Provider
+	}
+
 	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {
 		props, err := api.HeadBucket(defaultAPIParams, bck)
 		if err != nil {

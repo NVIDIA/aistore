@@ -55,23 +55,7 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 
 func NewBckEmbed(bck cmn.Bck) *Bck { return &Bck{Bck: bck} }
 
-func (b *Bck) MakeUname(objName string) string {
-	var (
-		nsUname = b.Ns.Uname()
-		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName)
-		buf     = make([]byte, 0, l)
-	)
-	buf = append(buf, b.Provider...)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, nsUname...)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, b.Name...)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, objName...)
-	return *(*string)(unsafe.Pointer(&buf))
-}
-
-func ParseUname(uname string) (b Bck, objName string) {
+func parseUname(uname string) (b Bck, objName string) {
 	var (
 		prev, itemIdx int
 	)
@@ -96,6 +80,22 @@ func ParseUname(uname string) (b Bck, objName string) {
 		prev = i + 1
 	}
 	return
+}
+
+func (b *Bck) MakeUname(objName string) string {
+	var (
+		nsUname = b.Ns.Uname()
+		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName)
+		buf     = make([]byte, 0, l)
+	)
+	buf = append(buf, b.Provider...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, nsUname...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, b.Name...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, objName...)
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 func (b *Bck) MaskBID(i int64) uint64 {
@@ -142,10 +142,29 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 	if b.IsAIS() && other.IsAIS() {
 		return true
 	}
+	if (b.HasOriginBck() && !other.HasOriginBck()) || (!b.HasOriginBck() && other.HasOriginBck()) {
+		// Case when either bck has origin bucket - we say it's a match since
+		// origin bucket was either connected or disconnected.
+		return true
+	}
 	if b.IsCloud() && other.IsCloud() {
 		return true
 	}
 	return b.IsRemoteAIS() && other.IsRemoteAIS()
+}
+
+func (b *Bck) IsAIS() bool                     { return b.Bck.IsAIS() && !b.HasOriginBck() }
+func (b *Bck) IsCloud(anyCloud ...string) bool { return b.Bck.IsCloud(anyCloud...) || b.HasOriginBck() }
+func (b *Bck) IsRemote() bool                  { return b.Bck.IsRemote() || b.HasOriginBck() }
+func (b *Bck) HasOriginBck() bool              { return !b.Props.OriginBck.IsEmpty() }
+func (b *Bck) CloudBck() cmn.Bck {
+	// NOTE: It's required that props are initialized for AIS bucket. It
+	//  might not be the case for cloud buckets (see: `HeadBucket`).
+	if b.Provider == cmn.ProviderAIS && b.HasOriginBck() {
+		return b.Props.OriginBck
+	}
+	cmn.Assert(b.Bck.IsCloud())
+	return b.Bck
 }
 
 // NOTE: when the specified bucket is not present in the BMD:
@@ -157,7 +176,7 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
-	} else if b.IsCloud(cmn.AnyCloud) {
+	} else if b.Bck.IsCloud(cmn.AnyCloud) {
 		cloudConf := cmn.GCO.Get().Cloud
 		b.Provider = cloudConf.Provider
 		b.Ns = cloudConf.Ns // TODO -- FIXME: remove
@@ -170,7 +189,7 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 		if si != nil {
 			name = si.Name()
 		}
-		if b.IsAIS() {
+		if b.Bck.IsAIS() {
 			return cmn.NewErrorBucketDoesNotExist(b.Bck, name)
 		}
 		return cmn.NewErrorRemoteBucketDoesNotExist(b.Bck, name)
@@ -206,8 +225,8 @@ func (b *Bck) allow(oper string, bits uint64) (err error) {
 // lock/unlock
 //
 
-func (bck *Bck) GetNameLockPair() (nlp NameLockPair) {
-	nlp.uname = bck.MakeUname("")
+func (b *Bck) GetNameLockPair() (nlp NameLockPair) {
+	nlp.uname = b.MakeUname("")
 	hash := xxhash.ChecksumString64S(nlp.uname, cmn.MLCG32)
 	idx := int(hash & (cmn.MultiSyncMapCount - 1))
 	nlp.nlc = &bckLocker[idx]

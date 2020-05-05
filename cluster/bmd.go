@@ -106,6 +106,7 @@ func (m *BMD) Set(bck *Bck, p *cmn.BucketProps) {
 func (m *BMD) Exists(bck *Bck, bckID uint64) (exists bool) {
 	p, present := m.Get(bck)
 	if present {
+		bck.Props = p
 		if bck.IsAIS() {
 			exists = bckID != 0 && p.BID == bckID
 		} else {

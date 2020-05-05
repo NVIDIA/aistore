@@ -102,8 +102,15 @@ func (t *bckListTask) Run() {
 			t.BytesAdd(lom.Size())
 		}),
 	)
-	walk := objwalk.NewWalk(ctx, t.t, t.Bck(), t.msg)
-	if t.Bck().IsAIS() || t.msg.Cached {
+
+	bck := cluster.NewBckEmbed(t.Bck())
+	if err := bck.Init(t.t.GetBowner(), t.t.Snode()); err != nil {
+		t.UpdateResult(nil, err)
+		return
+	}
+
+	walk := objwalk.NewWalk(ctx, t.t, bck, t.msg)
+	if bck.IsAIS() || t.msg.Cached {
 		t.UpdateResult(walk.LocalObjPage())
 	} else {
 		t.UpdateResult(walk.CloudObjPage())
@@ -226,7 +233,7 @@ func (t *bckSummaryTask) Run() {
 				}
 
 				for {
-					walk := objwalk.NewWalk(context.Background(), t.t, bck.Bck, msg)
+					walk := objwalk.NewWalk(context.Background(), t.t, bck, msg)
 					if bck.IsAIS() {
 						list, err = walk.LocalObjPage()
 					} else {

@@ -780,7 +780,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if bck.IsRemoteAIS() {
+	if bck.Bck.IsRemoteAIS() {
 		p.reverseReqRemote(w, r, &msg, bck.Bck)
 		return
 	}
@@ -798,7 +798,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if bck.IsCloud(cmn.AnyCloud) {
+		if bck.Bck.IsCloud(cmn.AnyCloud) {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtErr, msg.Action, bck.Provider))
 			return
 		}

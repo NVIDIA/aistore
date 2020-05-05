@@ -110,22 +110,31 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		return nil, err
 	}
 
+	bck := cluster.NewBckEmbed(payload.Bck)
+	if err := bck.Init(t.GetBowner(), t.Snode()); err != nil {
+		return nil, err
+	}
+
+	// TODO: this "switch" should be refactored - there is too much
+	//  repetitions and inconsistencies.
 	if err = singlePayload.Validate(); err == nil {
 		if objects, err = singlePayload.ExtractPayload(); err != nil {
 			return nil, err
 		}
 		description = singlePayload.Describe()
 	} else if err = rangePayload.Validate(); err == nil {
-		// NOTE: size of objects to be downloaded by a target will be unknown
-		// So proxy won't be able to sum sizes from all targets when calculating total size
-		// This should be taken care of somehow, as total is easy to know from range template anyway
+		// NOTE: Size of objects to be downloaded by a target will be unknown.
+		//  So proxy won't be able to sum sizes from all targets when calculating total size.
+		//  This should be taken care of somehow, as total is easy to know from range template anyway.
 		var pt cmn.ParsedTemplate
 		pt, err = cmn.ParseBashTemplate(rangePayload.Template)
 		if err != nil {
 			return nil, err
 		}
 		description = rangePayload.Describe()
-		bck := cluster.NewBckEmbed(payload.Bck)
+		if !bck.IsAIS() {
+			return nil, errors.New("regular download requires ais bucket")
+		}
 		baseJob := newBaseDlJob(id, bck, payload.Timeout, description, payload.Limits)
 		return newRangeDlJob(t, baseJob, pt, rangePayload.Subdir)
 	} else if err = multiPayload.Validate(b); err == nil {
@@ -138,10 +147,6 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		}
 		description = multiPayload.Describe()
 	} else if err = cloudPayload.Validate(); err == nil {
-		bck := cluster.NewBckEmbed(cloudPayload.Bck)
-		if err := bck.Init(t.GetBowner(), t.Snode()); err != nil {
-			return nil, err
-		}
 		if !bck.IsCloud() {
 			return nil, errors.New("bucket download requires a cloud bucket")
 		}
@@ -156,12 +161,6 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		payload.Description = description
 	}
 
-	bck := cluster.NewBckEmbed(payload.Bck)
-	if err = bck.Init(t.GetBowner(), t.Snode()); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
-			return nil, err
-		}
-	}
 	if !bck.IsAIS() {
 		return nil, errors.New("regular download requires ais bucket")
 	}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -38,9 +39,16 @@ func (t *targetrunner) GetMMSA() *memsys.MMSA       { return daemon.gmm }
 func (t *targetrunner) GetSmallMMSA() *memsys.MMSA  { return daemon.smm }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
 
-func (t *targetrunner) Cloud(provider string) cluster.CloudProvider {
-	if provider == cmn.ProviderAIS {
+func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
+	if bck.Bck.IsRemoteAIS() {
 		return t.cloud.ais
+	}
+	if bck.Props != nil {
+		if t.cloud.ext.Provider() == bck.CloudBck().Provider {
+			return t.cloud.ext
+		}
+		c, _ := cloud.NewDummyCloud()
+		return c
 	}
 	return t.cloud.ext
 }
@@ -168,7 +176,7 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, bckTo *cluster.Bck, buf []by
 }
 
 // FIXME: recomputes checksum if called with a bad one (optimize)
-func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bool) (err error, errCode int) {
+func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch bool) (err error, errCode int) {
 	if prefetch {
 		if !lom.TryLock(true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
@@ -178,10 +186,9 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		lom.Lock(true) // one cold-GET at a time
 	}
 	var (
-		vchanged, crace bool
-		workFQN         = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
+		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
 	)
-	if err, errCode = t.Cloud(lom.Bck().Provider).GetObj(ct, workFQN, lom); err != nil {
+	if err, errCode = t.Cloud(lom.Bck()).GetObj(ctx, workFQN, lom); err != nil {
 		lom.Unlock(true)
 		err = fmt.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
 		return
@@ -209,19 +216,10 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	if prefetch {
 		lom.Unlock(true)
 	} else {
-		if vchanged {
-			t.statsT.AddMany(
-				stats.NamedVal64{Name: stats.GetColdCount, Value: 1},
-				stats.NamedVal64{Name: stats.GetColdSize, Value: lom.Size()},
-				stats.NamedVal64{Name: stats.VerChangeSize, Value: lom.Size()},
-				stats.NamedVal64{Name: stats.VerChangeCount, Value: 1},
-			)
-		} else if !crace {
-			t.statsT.AddMany(
-				stats.NamedVal64{Name: stats.GetColdCount, Value: 1},
-				stats.NamedVal64{Name: stats.GetColdSize, Value: lom.Size()},
-			)
-		}
+		t.statsT.AddMany(
+			stats.NamedVal64{Name: stats.GetColdCount, Value: 1},
+			stats.NamedVal64{Name: stats.GetColdSize, Value: lom.Size()},
+		)
 		lom.DowngradeLock()
 	}
 	return

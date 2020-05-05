@@ -32,13 +32,14 @@ const (
 )
 
 type CloudProvider interface {
+	Provider() string
 	GetObj(ctx context.Context, fqn string, lom *LOM) (err error, errCode int)
 	PutObj(ctx context.Context, r io.Reader, lom *LOM) (version string, err error, errCode int)
 	DeleteObj(ctx context.Context, lom *LOM) (error, int)
 	HeadObj(ctx context.Context, lom *LOM) (objMeta cmn.SimpleKVs, err error, errCode int)
 
-	HeadBucket(ctx context.Context, bck cmn.Bck) (bucketProps cmn.SimpleKVs, err error, errCode int)
-	ListObjects(ctx context.Context, bck cmn.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
+	HeadBucket(ctx context.Context, bck *Bck) (bucketProps cmn.SimpleKVs, err error, errCode int)
+	ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
 	ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int)
 }
 
@@ -78,7 +79,7 @@ type Target interface {
 	GetMMSA() *memsys.MMSA
 	GetSmallMMSA() *memsys.MMSA
 	GetFSPRG() fs.PathRunGroup
-	Cloud(provider string) CloudProvider
+	Cloud(*Bck) CloudProvider
 	RebalanceInfo() RebalanceInfo
 	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)
 	RunLRU(id string)
