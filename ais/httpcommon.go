@@ -83,7 +83,7 @@ type (
 	}
 
 	// two pieces of metadata a self-registering (joining) target wants to know right away
-	targetRegMeta struct {
+	nodeRegMeta struct {
 		Smap *smapX         `json:"smap"`
 		BMD  *bucketMD      `json:"bmd"`
 		SI   *cluster.Snode `json:"si"`
@@ -104,9 +104,10 @@ type (
 			Version int64  `json:"version,string"`
 			UUID    string `json:"uuid"`
 		} `json:"bmd"`
-		Smap           *smapX `json:"smap"`
-		VoteInProgress bool   `json:"vote_in_progress"`
-		IsRebalancing  bool   `json:"reb_in_progress"`
+		Smap struct {
+			Version int64  `json:"version,string"`
+			UUID    string `json:"uuid"`
+		} `json:"smap"`
 	}
 
 	// http server and http runner (common for proxy and target)
@@ -984,14 +985,10 @@ func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, 
 func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.Values) ([]byte, error, int) {
 	var (
 		path = cmn.URLPath(cmn.Version, cmn.Health)
+		url  = si.URL(cmn.NetworkIntraControl)
 		args = callArgs{
-			si: si,
-			req: cmn.ReqArgs{
-				Method: http.MethodGet,
-				Base:   si.URL(cmn.NetworkIntraControl),
-				Path:   path,
-				Query:  query,
-			},
+			si:      si,
+			req:     cmn.ReqArgs{Method: http.MethodGet, Base: url, Path: path, Query: query},
 			timeout: timeout,
 		}
 	)
@@ -1004,32 +1001,32 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 //
 // TODO: utilize for target startup and, for the targets, validate and return maxVerBMD
 //
-func (h *httprunner) bcastHealth(smap *smapX) (maxVerSmap *smapX) {
+func (h *httprunner) bcastHealth(smap *smapX) (smapMaxVer int64) {
 	var (
 		wg      = &sync.WaitGroup{}
 		query   = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
 		timeout = cmn.GCO.Get().Timeout.CplaneOperation
 		mu      = &sync.Mutex{}
 	)
-	maxVerSmap = smap
+	smapMaxVer = smap.version()
 	for sid, si := range smap.Pmap {
 		if sid == h.si.ID() {
 			continue
 		}
 		wg.Add(1)
 		go func(si *cluster.Snode) {
-			var usableSmap *smapX
+			var ver int64
 			defer wg.Done()
 			body, err, _ := h.Health(si, timeout, query)
 			if err != nil {
 				return
 			}
-			if usableSmap = ciiToSmap(smap, body, h.si, si); usableSmap == nil {
+			if ver = ciiToSmap(smap, body, h.si, si); ver == 0 {
 				return
 			}
 			mu.Lock()
-			if maxVerSmap.version() < usableSmap.version() {
-				maxVerSmap = usableSmap
+			if smapMaxVer < ver {
+				smapMaxVer = ver
 			}
 			mu.Unlock()
 		}(si)
@@ -1038,19 +1035,19 @@ func (h *httprunner) bcastHealth(smap *smapX) (maxVerSmap *smapX) {
 	return
 }
 
-func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) (usableSmap *smapX) {
+func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) (smapVersion int64) {
 	var cii clusterInfo
 	if err := jsoniter.Unmarshal(body, &cii); err != nil {
 		glog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
 		return
 	}
-	if !cii.VoteInProgress && smap.version() < cii.Smap.version() {
+	if smap.version() < cii.Smap.Version {
 		if smap.UUID != cii.Smap.UUID {
 			glog.Errorf("%s: Smap have different UUIDs: %s and %s from %s",
 				self, smap.UUID, cii.Smap.UUID, si)
 			return
 		}
-		usableSmap = cii.Smap
+		smapVersion = cii.Smap.Version
 	}
 	return
 }
@@ -1271,12 +1268,12 @@ func (h *httprunner) join(query url.Values) (res callResult) {
 
 func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration,
 	query url.Values, keepalive bool) (res callResult) {
-	req := targetRegMeta{SI: h.si}
+	regReq := nodeRegMeta{SI: h.si}
 	if h.si.IsTarget() && !keepalive {
-		req.BMD = h.owner.bmd.get()
-		req.Smap = h.owner.smap.get()
+		regReq.BMD = h.owner.bmd.get()
+		regReq.Smap = h.owner.smap.get()
 	}
-	info := cmn.MustMarshal(req)
+	info := cmn.MustMarshal(regReq)
 
 	path := cmn.URLPath(cmn.Version, cmn.Cluster)
 	if keepalive {

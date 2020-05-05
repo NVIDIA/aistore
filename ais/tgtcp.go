@@ -77,24 +77,26 @@ func (t *targetrunner) joinCluster() (status int, err error) {
 }
 
 func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
-	var meta targetRegMeta
-	err = jsoniter.Unmarshal(body, &meta)
-	cmn.AssertNoErr(err)
+	var regMeta nodeRegMeta
+	err = jsoniter.Unmarshal(body, &regMeta)
+	if err != nil {
+		return fmt.Errorf("unexpected: %s failed to unmarshal reg-meta, err: %v", t.si, err)
+	}
 
 	// There's a window of time between:
 	// a) target joining existing cluster and b) cluster starting to rebalance itself
-	// The latter is driven by metasync (see metasync.go) distributing updated cluster map.
+	// The latter is driven by regMetasync (see regMetasync.go) distributing updated cluster map.
 	// To handle incoming GETs within this window (which would typically take a few seconds or less)
-	// we need to have the current cluster-wide metadata and the temporary gfn state:
+	// we need to have the current cluster-wide regMetadata and the temporary gfn state:
 	t.gfn.global.activateTimed()
 
 	// BMD
-	msg := t.newAisMsgStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
-	if err = t.receiveBMD(meta.BMD, msg, bucketMDRegister, caller); err != nil {
+	msg := t.newAisMsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
+	if err = t.receiveBMD(regMeta.BMD, msg, bucketMDRegister, caller); err != nil {
 		glog.Infof("%s: %s", t.si, t.owner.bmd.get())
 	}
 	// Smap
-	if err := t.owner.smap.synchronize(meta.Smap, true /* lesserIsErr */); err != nil {
+	if err := t.owner.smap.synchronize(regMeta.Smap, true /* lesserIsErr */); err != nil {
 		glog.Errorf("%s: sync Smap err %v", t.si, err)
 	} else {
 		glog.Infof("%s: sync %s", t.si, t.owner.smap.get())

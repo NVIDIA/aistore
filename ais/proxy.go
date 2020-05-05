@@ -182,14 +182,46 @@ func (p *proxyrunner) sendKeepalive(timeout time.Duration) (status int, err erro
 
 func (p *proxyrunner) joinCluster() (status int, err error) {
 	var query url.Values
-	if smap := p.owner.smap.get(); smap != nil && smap.isPrimary(p.si) {
-		return
+	if smap := p.owner.smap.get(); smap.isPrimary(p.si) {
+		return 0, fmt.Errorf("%s should not be joining: is primary, %s", p.si, smap)
 	}
 	if cmn.GCO.Get().Proxy.NonElectable {
 		query = url.Values{cmn.URLParamNonElectable: []string{"true"}}
 	}
 	res := p.join(query)
-	return res.status, res.err
+	if res.err != nil {
+		if strings.Contains(res.err.Error(), ciePrefix) {
+			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
+		}
+		return res.status, res.err
+	}
+	// not being sent at cluster startup and keepalive
+	if len(res.outjson) == 0 {
+		return
+	}
+	err = p.applyRegMeta(res.outjson, "")
+	return
+}
+
+func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
+	var regMeta nodeRegMeta
+	err = jsoniter.Unmarshal(body, &regMeta)
+	if err != nil {
+		return fmt.Errorf("unexpected: %s failed to unmarshal reg-meta, err: %v", p.si, err)
+	}
+
+	// BMD
+	msg := p.newAisMsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
+	if err = p.receiveBMD(regMeta.BMD, msg, caller); err != nil {
+		glog.Infof("%s: %s", p.si, p.owner.bmd.get())
+	}
+	// Smap
+	if err := p.owner.smap.synchronize(regMeta.Smap, true /* lesserIsErr */); err != nil {
+		glog.Errorf("%s: sync Smap err %v", p.si, err)
+	} else {
+		glog.Infof("%s: sync %s", p.si, p.owner.smap.get())
+	}
+	return
 }
 
 func (p *proxyrunner) unregisterSelf() (int, error) {
@@ -691,9 +723,8 @@ func (cii *clusterInfo) fill(p *proxyrunner) {
 	)
 	cii.BMD.Version = bmd.version()
 	cii.BMD.UUID = bmd.UUID
-	cii.Smap = smap
-	cii.VoteInProgress = xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: cmn.ActElection})
-	cii.IsRebalancing = false // TODO v3.2 -- not yet available to proxies
+	cii.Smap.Version = smap.version()
+	cii.Smap.UUID = smap.UUID
 }
 
 // POST { action } /v1/buckets/bucket-name
@@ -2717,7 +2748,8 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		regReq                                targetRegMeta
+		regReq                                nodeRegMeta
+		tag                                   string
 		keepalive, userRegister, selfRegister bool
 		nonElectable                          bool
 	)
@@ -2726,7 +2758,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p.forwardCP(w, r, nil, "", nil) {
+	if p.forwardCP(w, r, nil, "httpclupost", nil) {
 		return
 	}
 	switch apiItems[0] {
@@ -2734,16 +2766,19 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
 		}
+		tag = "user-register"
 		userRegister = true
 	case cmn.Keepalive:
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
+		tag = "keepalive"
 		keepalive = true
 	case cmn.AutoRegister: // node self-register
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
+		tag = "join"
 		selfRegister = true
 	default:
 		p.invalmsghdlr(w, r, fmt.Sprintf("invalid URL path: %q", apiItems[0]))
@@ -2770,8 +2805,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s := fmt.Sprintf("register %s, (keepalive, user, self)=(%t, %t, %t)",
-		nsi, keepalive, userRegister, selfRegister)
+	s := fmt.Sprintf("%s: %s %s", p.si, tag, nsi)
 	msg := &cmn.ActionMsg{Action: cmn.ActRegTarget}
 	if isProxy {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
@@ -2781,7 +2815,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
-		s := fmt.Sprintf("%s: failed to register %s - invalid IP address %v", p.si, nsi, nsi.PublicNet.NodeIPAddr)
+		s := fmt.Sprintf("%s: failed to %s %s - invalid IP address %v", p.si, tag, nsi, nsi.PublicNet.NodeIPAddr)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2790,6 +2824,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	p.owner.smap.Lock()
 	smap := p.owner.smap.get()
+	if !smap.isPrimary(p.si) {
+		s := fmt.Sprintf("%s is not primary(%s, %s): cannot %s %s", p.si, smap.ProxySI, smap, tag, nsi)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
 	if isProxy {
 		osi := smap.GetProxy(nsi.ID())
 		if !p.addOrUpdateNode(nsi, osi, keepalive) {
@@ -2809,11 +2848,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 		if userRegister {
 			if glog.FastV(3, glog.SmoduleAIS) {
-				glog.Infof("%s: register %s => (%s)", p.si, nsi, smap.StringEx())
+				glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, smap.StringEx())
 			}
 			// when registration is done by user send the current BMD and Smap
 			bmd := p.owner.bmd.get()
-			meta := &targetRegMeta{smap, bmd, p.si}
+			meta := &nodeRegMeta{smap, bmd, p.si}
 			body := cmn.MustMarshal(meta)
 
 			args := callArgs{
@@ -2828,9 +2867,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			res := p.call(args)
 			if res.err != nil {
 				p.owner.smap.Unlock()
-				msg := fmt.Sprintf("failed to register %s: %v, %s", nsi, res.err, res.details)
+				msg := fmt.Sprintf("%s: failed to %s %s: %v, %s", p.si, tag, nsi, res.err, res.details)
 				if cmn.IsErrConnectionRefused(res.err) {
-					msg = fmt.Sprintf("failed to reach %s on %s:%s",
+					msg = fmt.Sprintf("failed to reach %s at %s:%s",
 						nsi, nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
 				}
 				p.invalmsghdlr(w, r, msg, res.status)
@@ -2861,9 +2900,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	// Return current metadata to registering target
 	if !isProxy && selfRegister { // case: self-registering target
-		glog.Infof("%s: joining %s (%s)", p.si, nsi, regReq.Smap)
+		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi, regReq.Smap)
 		bmd := p.owner.bmd.get()
-		meta := &targetRegMeta{smap, bmd, p.si}
+		meta := &nodeRegMeta{smap, bmd, p.si}
 		body := cmn.MustMarshal(meta)
 		p.writeJSON(w, r, body, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
@@ -2878,6 +2917,10 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 	err := p.owner.smap.modify(
 		func(clone *smapX) error {
 			smap = p.owner.smap.get()
+			if !smap.isPrimary(p.si) {
+				return fmt.Errorf("%s is not primary(%s, %s): cannot add %s",
+					p.si, smap.ProxySI, smap, nsi)
+			}
 			exists = clone.putNode(nsi, nonElectable)
 			if nsi.IsTarget() {
 				// Notify targets that they need to set up GFN
@@ -3418,15 +3461,15 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 
 func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	var (
-		mlist = make(map[string][]targetRegMeta) // uuid => list(targetRegMeta)
-		maxor = make(map[string]*bucketMD)       // uuid => max-ver BMD
+		mlist = make(map[string][]nodeRegMeta) // uuid => list(targetRegMeta)
+		maxor = make(map[string]*bucketMD)     // uuid => max-ver BMD
 	)
 	// results => (mlist, maxor)
 	for si, bmd := range bmds {
 		if bmd.Version == 0 {
 			continue
 		}
-		mlist[bmd.UUID] = append(mlist[bmd.UUID], targetRegMeta{nil, bmd, si})
+		mlist[bmd.UUID] = append(mlist[bmd.UUID], nodeRegMeta{nil, bmd, si})
 
 		if rbmd, ok := maxor[bmd.UUID]; !ok {
 			maxor[bmd.UUID] = bmd
@@ -3451,10 +3494,14 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 			return nil, &errBmdUUIDSplit{s}
 		}
 	}
-	s := fmt.Sprintf("%s: BMDs have different uuids with simple majority: %s:\n%v", ciError(70), uuid, mlist)
+	var err error
+	if len(mlist) > 1 {
+		s := fmt.Sprintf("%s: BMDs have different uuids with simple majority: %s:\n%v", ciError(70), uuid, mlist)
+		err = &errTgtBmdUUIDDiffer{s}
+	}
 	bmd := maxor[uuid]
 	cmn.Assert(bmd.UUID != "")
-	return bmd, &errTgtBmdUUIDDiffer{s}
+	return bmd, err
 }
 
 func ciError(num int) string {

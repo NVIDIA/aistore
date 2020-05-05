@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"errors"
 	"net/url"
 	"os"
 	"time"
@@ -23,9 +22,10 @@ import (
 // 	- Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
 func (p *proxyrunner) bootstrap() {
 	var (
-		smap              *smapX
-		config            = cmn.GCO.Get()
-		secondary, loaded bool
+		smap            *smapX
+		config          = cmn.GCO.Get()
+		pid             string
+		primary, loaded bool
 	)
 	// 1: load a local copy and try to utilize it for discovery
 	smap = newSmap()
@@ -37,24 +37,33 @@ func (p *proxyrunner) bootstrap() {
 			loaded = false
 		}
 	}
-	// 2. use loaded smap to discover a better one (ie., more current), if exists
-	if loaded {
-		if maxVerSmap := p.bcastHealth(smap); maxVerSmap.version() > smap.version() {
-			smap = maxVerSmap
+	// 2. make the preliminary/primary decision
+	if !loaded {
+		smap = nil
+	}
+	pid, primary = p.determineRole(smap, loaded)
+
+	// 3. primary?
+	if primary {
+		if pid != "" { // takes precedence over everything else
+			cmn.Assert(pid == p.si.ID())
+		} else if loaded {
+			// double-check
+			if smapMaxVer := p.bcastHealth(smap); smapMaxVer > smap.version() {
+				glog.Infof("%s: cannot assume the primary role with older %s < v%d", p.si, smap, smapMaxVer)
+				primary = false
+			}
 		}
 	}
 
-	// 3. make the preliminary (primary) decision
-	smap, secondary = p.determineRole(smap, loaded)
-
 	// 4.1: start as primary
-	if !secondary {
+	if primary {
 		glog.Infof("%s: assuming primary role for now, starting up...", p.si)
 		go p.primaryStartup(smap, config, daemon.cli.ntargets)
 		return
 	}
 
-	// 4.2: otherwise, join as secondary
+	// 4.2: otherwise, join as non-primary
 	glog.Infof("%s: starting up as non-primary", p.si)
 	err := p.secondaryStartup(smap)
 	if err != nil {
@@ -75,19 +84,12 @@ func (p *proxyrunner) bootstrap() {
 //   loaded Smap, if exists
 // - handle AIS_PRIMARY_ID (TODO: target)
 // - see also "change of mind"
-func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (*smapX, bool) {
-	var (
-		tag       string
-		secondary bool
-	)
+func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (pid string, primary bool) {
+	tag := "no Smap, "
 	if loaded {
 		smap.Pmap[p.si.ID()] = p.si
 		tag = smap.StringEx() + ", "
-	} else {
-		smap = nil
-		tag = "no Smap, "
 	}
-
 	// parse env
 	envP := struct {
 		pid     string
@@ -115,13 +117,14 @@ func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (*smapX, bool) {
 		}
 	}
 	if envP.pid != "" {
-		secondary = envP.pid != p.si.ID()
+		primary = envP.pid == p.si.ID()
+		pid = envP.pid
 	} else if loaded {
-		secondary = !smap.isPrimary(p.si)
+		primary = smap.isPrimary(p.si)
 	} else {
-		secondary = !envP.primary
+		primary = envP.primary
 	}
-	return smap, secondary
+	return
 }
 
 // join cluster
@@ -129,6 +132,9 @@ func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (*smapX, bool) {
 func (p *proxyrunner) secondaryStartup(smap *smapX) error {
 	if smap == nil {
 		smap = newSmap()
+	} else if smap.ProxySI.ID() == p.si.ID() {
+		glog.Infof("%s: zeroing-out primary=self in %s", p.si, smap)
+		smap.ProxySI = nil
 	}
 	p.owner.smap.put(smap)
 	if err := p.withRetry(p.joinCluster, "join", true /* backoff */); err != nil {
@@ -294,22 +300,8 @@ MainLoop:
 			if loadedSmap == nil || loadedSmap.CountTargets() == 0 {
 				break
 			}
-			q := url.Values{}
-			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
-			args := bcastArgs{
-				req:  cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Daemon), Query: q},
-				smap: loadedSmap,
-				to:   cluster.AllNodes,
-			}
-			maxVerSmap, _, _, slowp := p.bcastMaxVer(args, nil, nil)
-			if maxVerSmap != nil && !slowp {
-				if maxVerSmap.UUID == loadedSmap.UUID && maxVerSmap.version() > loadedSmap.version() {
-					if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
-						glog.Infof("%s: %s <= max-ver %s",
-							p.si, loadedSmap.StringEx(), maxVerSmap.StringEx())
-						return maxVerSmap
-					}
-				}
+			if maxVerSmap := p.bcastMaxVerBestEffort(loadedSmap); maxVerSmap != nil {
+				return maxVerSmap
 			}
 		}
 
@@ -420,9 +412,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 			if _, split := err.(*errBmdUUIDSplit); split {
 				cmn.ExitLogf("FATAL: %s (primary), err: %v", p.si, err) // cluster integrity error
 			}
-			if !errors.Is(err, errNoBMD) {
-				glog.Error(err.Error())
-			}
+			glog.Error(err.Error())
 		}
 		for si, smap := range smaps {
 			if !si.IsTarget() {
@@ -517,4 +507,26 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 		}
 	}
 	return
+}
+
+func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
+	var (
+		q    = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmapVote}}
+		args = bcastArgs{
+			req:  cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Daemon), Query: q},
+			smap: smap,
+			to:   cluster.AllNodes,
+		}
+		maxVerSmap, _, _, slowp = p.bcastMaxVer(args, nil, nil)
+	)
+	if maxVerSmap != nil && !slowp {
+		if maxVerSmap.UUID == smap.UUID && maxVerSmap.version() > smap.version() {
+			if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
+				glog.Infof("%s: my %s is older than max-ver %s",
+					p.si, smap.StringEx(), maxVerSmap.StringEx())
+				return maxVerSmap
+			}
+		}
+	}
+	return nil
 }
