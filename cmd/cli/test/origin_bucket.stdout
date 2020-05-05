@@ -1,0 +1,12 @@
+"$BUCKET" bucket created
+PROPERTY			 VALUE
+origin_bck.name
+origin_bck.provider
+Bucket props successfully updated
+PROPERTY			 VALUE
+origin_bck.name     something
+origin_bck.provider     gcp
+Bucket props successfully updated
+PROPERTY			 VALUE
+origin_bck.name
+origin_bck.provider

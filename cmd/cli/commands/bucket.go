@@ -25,6 +25,7 @@ import (
 const (
 	readonlyBucketAccess  = "ro"
 	readwriteBucketAccess = "rw"
+	emptyOrigin           = "none"
 
 	// max wait time for a function finishes before printing "Please wait"
 	longCommandTime = 10 * time.Second
@@ -277,18 +278,26 @@ func bucketDetailsSync(c *cli.Context, query cmn.QueryBcks) error {
 //     passed to API as is).
 //  * `origin_bck=gcp://bucket_name` with `origin_bck.name=bucket_name` and
 //    `origin_bck.provider=gcp` so they match the expected fields in structs.
+//  * `origin_bck=none` with `origin_bck.name=""` and `origin_bck.provider=""`.
 func reformatBucketProps(bck cmn.Bck, nvs cmn.SimpleKVs) error {
 	if v, ok := nvs[cmn.HeaderOriginBck]; ok {
 		delete(nvs, cmn.HeaderOriginBck)
-		bck, objName, err := parseBckObjectURI(v)
-		if err != nil {
-			return err
+		var originBck cmn.Bck
+		if v != emptyOrigin {
+			var (
+				objName string
+				err     error
+			)
+			originBck, objName, err = parseBckObjectURI(v)
+			if err != nil {
+				return err
+			}
+			if objName != "" {
+				return fmt.Errorf("invalid format of %q", cmn.HeaderOriginBck)
+			}
 		}
-		if objName != "" {
-			return fmt.Errorf("invalid format of %q", cmn.HeaderOriginBck)
-		}
-		nvs[cmn.HeaderOriginBckName] = bck.Name
-		nvs[cmn.HeaderOriginBckProvider] = bck.Provider
+		nvs[cmn.HeaderOriginBckName] = originBck.Name
+		nvs[cmn.HeaderOriginBckProvider] = originBck.Provider
 	}
 
 	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {

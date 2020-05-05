@@ -502,6 +502,9 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.Provider, allProviders)
 	}
 	if !bp.OriginBck.IsEmpty() {
+		if bp.OriginBck.Name == "" {
+			return fmt.Errorf("origin bucket name should not be empty")
+		}
 		if !bp.OriginBck.IsCloud() {
 			return fmt.Errorf("origin bucket should point to cloud bucket")
 		}

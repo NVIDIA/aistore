@@ -103,9 +103,8 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 		objProps.IsECCopy = md.IsCopy
 	}
 	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (error, bool) {
-		err := field.SetValue(resp.Header.Get(tag), true /*force*/)
-		return err, false
-	})
+		return field.SetValue(resp.Header.Get(tag), true /*force*/), false
+	}, cmn.IterOpts{OnlyRead: false})
 	if err != nil {
 		return nil, err
 	}

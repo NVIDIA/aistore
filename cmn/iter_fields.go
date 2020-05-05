@@ -11,13 +11,19 @@ import (
 	"strings"
 )
 
-// Represents single field in struct that was found during walking.
+const (
+	tagOmitempty = "omitempty" // the field must be omitted when empty (only for read-only walk)
+	tagOmit      = "omit"      // the field must be omitted
+	tagReadonly  = "readonly"  // the field can be only read
+)
+
 type (
+	// Represents single field in struct that was found during walking.
 	IterField interface {
 		// Value returns value of given field.
 		Value() interface{}
-		// SetValue sets given value. `force` ignores `list:"readonly"` tag and sets
-		// the value anyway - should be used with caution.
+		// SetValue sets a given value. `force` ignores `tagReadonly` and sets
+		// a given value anyway - should be used with caution.
 		SetValue(v interface{}, force ...bool) error
 	}
 
@@ -26,10 +32,15 @@ type (
 		v       reflect.Value
 		listTag string
 		dirty   bool // Determines if the value for the field was set by `SetValue`.
+		opts    IterOpts
 	}
 
 	IterOpts struct {
-		VisitAll bool // visits all the fields, not only the leafs
+		// Visits all the fields, not only the leaves.
+		VisitAll bool
+		// Determines whether this is only a read-only or write walk.
+		// Read-only walk takes into consideration `tagOmitempty`.
+		OnlyRead bool
 	}
 )
 
@@ -38,8 +49,10 @@ func (f *field) Value() interface{} {
 }
 
 func (f *field) SetValue(src interface{}, force ...bool) error {
+	Assert(!f.opts.OnlyRead)
+
 	dst := f.v
-	if f.listTag == "readonly" && (len(force) == 0 || !force[0]) {
+	if f.listTag == tagReadonly && (len(force) == 0 || !force[0]) {
 		return fmt.Errorf("property %q is readonly", f.name)
 	}
 
@@ -114,7 +127,7 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 
 		// Check if we need to skip given field.
 		listTag := srcTyField.Tag.Get("list")
-		if listTag == "omit" {
+		if listTag == tagOmit {
 			continue
 		}
 
@@ -140,6 +153,11 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 			srcValField = srcValField.Elem()
 		}
 
+		// Read-only walk skips empty (zero) fields.
+		if opts.OnlyRead && listTag == tagOmitempty && srcValField.IsZero() {
+			continue
+		}
+
 		var dirtyField bool
 		if srcValField.Kind() != reflect.Struct {
 			// We require that not-omitted fields have JSON tag.
@@ -147,7 +165,7 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 
 			// Set value for the field
 			name := prefix + fieldName
-			field := &field{name: name, v: srcValField, listTag: listTag}
+			field := &field{name: name, v: srcValField, listTag: listTag, opts: opts}
 			err, stop = f(name, field)
 			dirtyField = field.dirty
 		} else {
@@ -165,7 +183,7 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 			}
 
 			if opts.VisitAll {
-				field := &field{name: p, v: srcValField, listTag: listTag}
+				field := &field{name: p, v: srcValField, listTag: listTag, opts: opts}
 				err, stop = f(p, field)
 				dirtyField = field.dirty
 			}
@@ -201,15 +219,16 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 
 // IterFields walks the struct and calls `f` callback at every leaf field that it
 // encounters. The (nested) names are created by joining the json tag with dot.
-// Iteration supports reading another, custom tag `list`. Thanks to this tag
-// it is possible to tell that we need to `omit` (`list:"omit"`) a given field
-// or tell that it is only `readonly` (`list:"readonly"`) (examples of these can
-// be seen in `BucketProps` or `Config` structs).
+// Iteration supports reading another, custom tag `list` with values:
+//   * `tagOmitempty` - omit empty fields (only for read run)
+//   * `tagOmit` - omit field
+//   * `tagReadonly` - field cannot be updated (returns error on `SetValue`)
+// Examples of usages for tags can be found in `BucketProps` or `Config` structs.
 //
 // Passing additional options with `IterOpts` can for example call callback
 // also at the non-leaf structures.
 func IterFields(v interface{}, f func(uniqueTag string, field IterField) (error, bool), opts ...IterOpts) error {
-	var o IterOpts
+	o := IterOpts{OnlyRead: true} // by default it's read run
 	if len(opts) > 0 {
 		o = opts[0]
 	}
@@ -227,7 +246,7 @@ func UpdateFieldValue(s interface{}, name string, value interface{}) error {
 			return field.SetValue(value), true
 		}
 		return nil, false
-	})
+	}, IterOpts{OnlyRead: false})
 	if err != nil {
 		return err
 	}

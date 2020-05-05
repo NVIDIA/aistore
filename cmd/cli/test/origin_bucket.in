@@ -1,0 +1,11 @@
+ais create bucket $BUCKET
+
+ais set props ais://$BUCKET origin_bck=ais://something // FAIL "origin bucket should point to cloud bucket"
+ais set props ais://$BUCKET origin_bck=cloud://something // FAIL "origin bucket should point to cloud bucket"
+ais set props ais://$BUCKET origin_bck=gcp:// // FAIL "origin bucket name should not be empty"
+
+ais show props ais://$BUCKET origin_bck -v
+ais set props ais://$BUCKET origin_bck=gcp://something
+ais show props ais://$BUCKET origin_bck -v
+ais set props ais://$BUCKET origin_bck=none
+ais show props ais://$BUCKET origin_bck -v

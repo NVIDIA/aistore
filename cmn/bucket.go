@@ -43,7 +43,7 @@ type (
 	Bck struct {
 		Name     string `json:"name"`
 		Provider string `json:"provider"`
-		Ns       Ns     `json:"namespace"`
+		Ns       Ns     `json:"namespace" list:"omitempty"`
 	}
 	QueryBcks Bck
 

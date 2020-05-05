@@ -57,9 +57,6 @@ var _ = Describe("IterFields", func() {
 
 					"origin_bck.name":     "name",
 					"origin_bck.provider": cmn.ProviderGoogle,
-					// TODO: these should not be shown
-					"origin_bck.namespace.name": "",
-					"origin_bck.namespace.uuid": "",
 
 					"mirror.enabled":      false,
 					"mirror.copies":       int64(0),

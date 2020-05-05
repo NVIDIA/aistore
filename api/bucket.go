@@ -71,7 +71,7 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p cmn.
 
 	err = cmn.IterFields(&p, func(tag string, field cmn.IterField) (error, bool) {
 		return field.SetValue(resp.Header.Get(tag), true /*force*/), false
-	})
+	}, cmn.IterOpts{OnlyRead: false})
 	if err != nil {
 		return p, err
 	}

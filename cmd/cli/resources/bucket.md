@@ -390,11 +390,11 @@ When `--jsonspec` is not used, some properties support user-friendly aliases:
 
 #### Enable mirroring for a bucket
 
-Set the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively, for the bucket `mybucket`
+Set the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively, for the bucket `bucket_name`
 
 ```console
 $ ais set props bucket_name 'mirror.enabled=true' 'mirror.copies=2'
-Bucket props have been successfully updated.
+Bucket props successfully updated
 ```
 
 #### Make a bucket read-only
@@ -404,7 +404,7 @@ All PUT and DELETE requests will fail.
 
 ```console
 $ ais set props bucket_name 'access=ro'
-Bucket props have been successfully updated.
+Bucket props successfully updated
 ```
 
 #### Reset properties for the bucket
@@ -413,7 +413,26 @@ Reset properties for the bucket `bucket_name`.
 
 ```console
 $ ais set props --reset bucket_name
-Bucket props have been reset successfully.
+Bucket props successfully reset
+```
+
+#### Connect/Disconnect AIS bucket to/from cloud bucket
+
+Set origin bucket for AIS bucket `bucket_name` to the GCP cloud bucket `cloud_bucket`.
+Once the origin bucket is set, operations (get, put, list, etc.) with `ais://bucket_name` will be exactly as we would do with `gcp://cloud_bucket`.
+It's like a symlink to a cloud bucket.
+The only difference is that all objects will be cached into `ais://bucket_name` (and reflected in the cloud as well) instead of `gcp://cloud_bucket`.
+
+```console
+$ ais set props bucket_name origin_bck=gcp://cloud_bucket
+Bucket props successfully updated
+```
+
+To disconnect cloud bucket do:
+
+```console
+$ ais set props bucket_name origin_bck=none
+Bucket props successfully updated
 ```
 
 #### Set bucket properties with JSON
@@ -457,7 +476,7 @@ $ ais set props bucket_name --jsonspec '{
     },
     "access": "255"
 }'
-Bucket props have been successfully updated.
+Bucket props successfully updated
 ```
 
 ```console
@@ -477,7 +496,7 @@ If not all properties are mentioned in the JSON, the missing ones are set to zer
 
 ```bash
 $ ais set props --reset bucket_name
-Bucket props have been reset successfully.
+Bucket props successfully reset
 $ ais set props bucket_name --jsonspec '{
   "mirror": {
     "enabled": true,
@@ -488,7 +507,7 @@ $ ais set props bucket_name --jsonspec '{
     "validate_warm_get": true
   }
 }'
-Bucket props have been successfully updated.
+Bucket props successfully updated
 $ ais show props bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
