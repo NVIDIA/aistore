@@ -83,19 +83,27 @@ func normalizeObjName(objName string) (string, error) {
 }
 
 func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, t cluster.Target) (DlJob, error) {
+	const (
+		dlTypeSingle = iota + 1
+		dlTypeRange
+		dlTypeMulti
+		dlTypeCloud
+	)
+
 	var (
 		// link -> objName
 		objects cmn.SimpleKVs
 		query   = r.URL.Query()
 
-		payload        = &DlBase{}
-		singlePayload  = &DlSingleBody{}
-		rangePayload   = &DlRangeBody{}
-		multiPayload   = &DlMultiBody{}
-		cloudPayload   = &DlCloudBody{}
-		objectsPayload interface{}
+		payload       = &DlBase{}
+		singlePayload = &DlSingleBody{}
+		rangePayload  = &DlRangeBody{}
+		multiPayload  = &DlMultiBody{}
+		cloudPayload  = &DlCloudBody{}
 
+		pt          cmn.ParsedTemplate
 		description string
+		dlType      int
 	)
 
 	payload.InitWithQuery(query)
@@ -115,44 +123,33 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		return nil, err
 	}
 
-	// TODO: this "switch" should be refactored - there is too much
-	//  repetitions and inconsistencies.
 	if err = singlePayload.Validate(); err == nil {
 		if objects, err = singlePayload.ExtractPayload(); err != nil {
 			return nil, err
 		}
 		description = singlePayload.Describe()
+		dlType = dlTypeSingle
 	} else if err = rangePayload.Validate(); err == nil {
 		// NOTE: Size of objects to be downloaded by a target will be unknown.
 		//  So proxy won't be able to sum sizes from all targets when calculating total size.
 		//  This should be taken care of somehow, as total is easy to know from range template anyway.
-		var pt cmn.ParsedTemplate
-		pt, err = cmn.ParseBashTemplate(rangePayload.Template)
-		if err != nil {
+		if pt, err = cmn.ParseBashTemplate(rangePayload.Template); err != nil {
 			return nil, err
 		}
 		description = rangePayload.Describe()
-		if !bck.IsAIS() {
-			return nil, errors.New("regular download requires ais bucket")
-		}
-		baseJob := newBaseDlJob(id, bck, payload.Timeout, description, payload.Limits)
-		return newRangeDlJob(t, baseJob, pt, rangePayload.Subdir)
+		dlType = dlTypeRange
 	} else if err = multiPayload.Validate(b); err == nil {
+		var objectsPayload interface{}
 		if err := jsoniter.Unmarshal(b, &objectsPayload); err != nil {
 			return nil, err
 		}
-
 		if objects, err = multiPayload.ExtractPayload(objectsPayload); err != nil {
 			return nil, err
 		}
 		description = multiPayload.Describe()
+		dlType = dlTypeMulti
 	} else if err = cloudPayload.Validate(); err == nil {
-		if !bck.IsCloud() {
-			return nil, errors.New("bucket download requires a cloud bucket")
-		}
-
-		baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description, payload.Limits)
-		return newCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
+		dlType = dlTypeCloud
 	} else {
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
 	}
@@ -161,16 +158,31 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		payload.Description = description
 	}
 
-	if !bck.IsAIS() {
-		return nil, errors.New("regular download requires ais bucket")
-	}
-	objs, err := buildDlObjs(t, bck, objects)
-	if err != nil {
-		return nil, err
-	}
-
 	baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description, payload.Limits)
-	return newSliceDlJob(baseJob, objs), nil
+	switch dlType {
+	case dlTypeCloud:
+		if !bck.IsCloud() {
+			return nil, errors.New("bucket download requires a cloud bucket")
+		}
+		return newCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
+	case dlTypeRange:
+		if !bck.IsAIS() {
+			return nil, errors.New("range download requires ais bucket")
+		}
+		return newRangeDlJob(t, baseJob, pt, rangePayload.Subdir)
+	case dlTypeSingle, dlTypeMulti:
+		if !bck.IsAIS() {
+			return nil, errors.New("regular download requires ais bucket")
+		}
+		objs, err := buildDlObjs(t, bck, objects)
+		if err != nil {
+			return nil, err
+		}
+		return newSliceDlJob(baseJob, objs), nil
+	default:
+		cmn.Assert(false)
+		return nil, nil
+	}
 }
 
 //
