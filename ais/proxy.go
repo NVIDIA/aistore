@@ -785,8 +785,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	config := cmn.GCO.Get()
-
 	if msg.Action != cmn.ActListObjects && guestAccess {
 		p.invalmsghdlr(w, r, guestError, http.StatusUnauthorized)
 		return
@@ -858,12 +856,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		s := fmt.Sprintf("%s bucket %s => %s", msg.Action, bckFrom, bucketTo)
-		if !config.Rebalance.Enabled {
-			p.invalmsghdlr(w, r, fmt.Sprintf("cannot %s - global rebalancing disabled", s))
-			return
-		}
-		glog.Infoln(s)
+		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bucketTo)
 		if err := p.renameBucket(bckFrom, bckTo, &msg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -3179,6 +3172,10 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if msg.Action == cmn.ActXactStart && xactMsg.Kind == cmn.ActRebalance {
+			if err := p.canStartRebalance(); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
 			clone := p.owner.rmd.modify(func(clone *rebMD) {
 				clone.inc()
 			})
@@ -3421,18 +3418,25 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	p.owner.bmd.Unlock()
 }
 
-func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
+func (p *proxyrunner) canStartRebalance() error {
 	cfg := cmn.GCO.Get().Rebalance
 	if !cfg.Enabled {
-		return false
+		return fmt.Errorf("rebalance is not enabled in the configuration")
 	}
 	if dontRun := cfg.DontRunTime; dontRun > 0 {
 		if !p.NodeStarted() {
-			return false
+			return fmt.Errorf("primary is not yet ready to start rebalance")
 		}
 		if time.Since(p.NodeStartedTime()) < dontRun {
-			return false
+			return fmt.Errorf("rebalance cannot be started before: %v", p.NodeStartedTime().Add(dontRun))
 		}
+	}
+	return nil
+}
+
+func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
+	if err := p.canStartRebalance(); err != nil {
+		return false
 	}
 	if cur.CountTargets() > prev.CountTargets() {
 		return true

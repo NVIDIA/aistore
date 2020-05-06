@@ -6,6 +6,7 @@ package ais
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -286,6 +287,9 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		nmsg    = &cmn.ActionMsg{} // + bckTo
 		pname   = p.si.String()
 	)
+	if err := p.canStartRebalance(); err != nil {
+		return fmt.Errorf("bucket cannot be renamed: %w", err)
+	}
 	if !nlpFrom.TryLock() {
 		return cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
 	}

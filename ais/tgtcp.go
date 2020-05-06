@@ -778,17 +778,15 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (
 }
 
 func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
-	var (
-		s, from string
-	)
+	var s string
 	if caller != "" {
-		from = " from " + caller
+		s += "; from: " + caller
 	}
 	// proxy => target control protocol (see p.httpclupost)
 	if msg.Action != "" {
-		s = ", action " + msg.Action
+		s += "; action: " + msg.Action
 	}
-	glog.Infof("%s: receive %s%s%s", t.si, newRMD.String(), from, s)
+	glog.Infof("%s: receive %s%s", t.si, newRMD.String(), s)
 
 	t.owner.rmd.Lock()
 	defer t.owner.rmd.Unlock()
@@ -801,17 +799,16 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 	}
 
 	smap := t.owner.smap.Get()
-	if msg.Action == cmn.ActRebalance { // manual
+	if msg.Action == cmn.ActRebalance { // manual (triggered by user)
+		glog.Infof("%s: manual rebalance (version: %d)", t.si, newRMD.version())
 		go t.rebManager.RunRebalance(smap, newRMD.Version)
 		return
 	}
 
-	if !cmn.GCO.Get().Rebalance.Enabled {
-		glog.Infoln("auto-rebalancing disabled")
-		return
-	}
-
-	glog.Infof("%s receiveSmap: go rebalance(newTargetIDs=%v)", t.si, newRMD.TargetIDs)
+	glog.Infof(
+		"%s: rebalance (version: %d; new_targets: %v; resilver: %t)",
+		t.si, newRMD.version(), newRMD.TargetIDs, newRMD.Resilver,
+	)
 	go t.rebManager.RunRebalance(smap, newRMD.Version)
 	if newRMD.Resilver {
 		go t.rebManager.RunResilver("", true /*skipGlobMisplaced*/)
