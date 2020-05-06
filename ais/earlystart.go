@@ -24,7 +24,7 @@ func (p *proxyrunner) bootstrap() {
 	var (
 		smap            *smapX
 		config          = cmn.GCO.Get()
-		pid             string
+		pid, primaryURL string
 		primary, loaded bool
 	)
 	// 1: load a local copy and try to utilize it for discovery
@@ -32,7 +32,6 @@ func (p *proxyrunner) bootstrap() {
 	if err := p.owner.smap.load(smap, config); err == nil {
 		loaded = true
 		if err := p.checkPresenceNetChange(smap); err != nil {
-			// proxy only: local copy of Smap cannot be relied upon
 			glog.Error(err)
 			loaded = false
 		}
@@ -48,8 +47,9 @@ func (p *proxyrunner) bootstrap() {
 		if pid != "" { // takes precedence over everything else
 			cmn.Assert(pid == p.si.ID())
 		} else if loaded {
+			var smapMaxVer int64
 			// double-check
-			if smapMaxVer := p.bcastHealth(smap); smapMaxVer > smap.version() {
+			if smapMaxVer, primaryURL = p.bcastHealth(smap); smapMaxVer > smap.version() {
 				glog.Infof("%s: cannot assume the primary role with older %s < v%d", p.si, smap, smapMaxVer)
 				primary = false
 			}
@@ -65,7 +65,7 @@ func (p *proxyrunner) bootstrap() {
 
 	// 4.2: otherwise, join as non-primary
 	glog.Infof("%s: starting up as non-primary", p.si)
-	err := p.secondaryStartup(smap)
+	err := p.secondaryStartup(smap, primaryURL)
 	if err != nil {
 		if loaded {
 			maxVerSmap, _ := p.uncoverMeta(smap)
@@ -129,7 +129,7 @@ func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (pid string, prima
 
 // join cluster
 // no change of mind when on the "secondary" track
-func (p *proxyrunner) secondaryStartup(smap *smapX) error {
+func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 	if smap == nil {
 		smap = newSmap()
 	} else if smap.ProxySI.ID() == p.si.ID() {
@@ -137,7 +137,7 @@ func (p *proxyrunner) secondaryStartup(smap *smapX) error {
 		smap.ProxySI = nil
 	}
 	p.owner.smap.put(smap)
-	if err := p.withRetry(p.joinCluster, "join", true /* backoff */); err != nil {
+	if err := p.withRetry(p.joinCluster, "join", true /* backoff */, primaryURLs...); err != nil {
 		glog.Errorf("%s failed to join, err: %v", p.si, err)
 		return err
 	}

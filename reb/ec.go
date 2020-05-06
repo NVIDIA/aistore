@@ -1548,7 +1548,7 @@ func (reb *Manager) rerequestObj(md *rebArgs, obj *rebObject) error {
 	reb.updateRebuildInfo(obj)
 	state := obj.ready.Load()
 	if state == objWaiting {
-		return fmt.Errorf("failed to restore %s/%s - insuffient number of slices", obj.bck, obj.objName)
+		return fmt.Errorf("failed to restore %s/%s - insufficient number of slices", obj.bck, obj.objName)
 	}
 	return nil
 }

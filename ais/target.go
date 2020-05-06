@@ -186,11 +186,13 @@ func (t *targetrunner) Run() error {
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
 	// init meta-owners and load local instances
-	t.owner.bmd.init() // BMD
-	smap := newSmap()  // Smap
+	t.owner.bmd.init()               // BMD
+	smap, loaded := newSmap(), false // Smap
 	if err := t.owner.smap.load(smap, config); err == nil {
 		if errSmap := t.checkPresenceNetChange(smap); errSmap != nil {
 			glog.Errorf("%s - proceeding anyway...", errSmap)
+		} else {
+			loaded = true
 		}
 	} else if !os.IsNotExist(err) {
 		glog.Errorf("%s: failed to load Smap (corruption?), err: %v", t.si, err)
@@ -203,10 +205,24 @@ func (t *targetrunner) Run() error {
 	// join cluster
 	//
 	t.owner.smap.put(smap)
+
 	if err := t.withRetry(t.joinCluster, "join", true /* backoff */); err != nil {
-		glog.Errorf("%s failed to register, err: %v", t.si, err)
-		glog.Errorf("%s is terminating", t.si)
-		return err
+		if loaded {
+			var (
+				smapMaxVer int64
+				primaryURL string
+			)
+			if smapMaxVer, primaryURL = t.bcastHealth(smap); smapMaxVer > smap.version() {
+				glog.Infof("%s: local copy of %s is older than v%d - retrying via %s",
+					t.si, smap, smapMaxVer, primaryURL)
+				err = t.withRetry(t.joinCluster, "join", true, primaryURL)
+			}
+		}
+		if err != nil {
+			glog.Errorf("%s failed to join cluster, err: %v", t.si, err)
+			glog.Errorf("%s is terminating", t.si)
+			return err
+		}
 	}
 
 	t.markNodeStarted()

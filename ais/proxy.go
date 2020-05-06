@@ -180,7 +180,7 @@ func (p *proxyrunner) sendKeepalive(timeout time.Duration) (status int, err erro
 	return p.httprunner.sendKeepalive(timeout)
 }
 
-func (p *proxyrunner) joinCluster() (status int, err error) {
+func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error) {
 	var query url.Values
 	if smap := p.owner.smap.get(); smap.isPrimary(p.si) {
 		return 0, fmt.Errorf("%s should not be joining: is primary, %s", p.si, smap)
@@ -188,7 +188,7 @@ func (p *proxyrunner) joinCluster() (status int, err error) {
 	if cmn.GCO.Get().Proxy.NonElectable {
 		query = url.Values{cmn.URLParamNonElectable: []string{"true"}}
 	}
-	res := p.join(query)
+	res := p.join(query, primaryURLs...)
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
 			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
@@ -725,6 +725,7 @@ func (cii *clusterInfo) fill(p *proxyrunner) {
 	cii.BMD.UUID = bmd.UUID
 	cii.Smap.Version = smap.version()
 	cii.Smap.UUID = smap.UUID
+	cii.Smap.PrimaryURL = smap.ProxySI.IntraControlNet.DirectURL
 }
 
 // POST { action } /v1/buckets/bucket-name

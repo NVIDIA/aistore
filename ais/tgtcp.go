@@ -60,8 +60,8 @@ func (t *targetrunner) initHostIP() {
 	glog.Infof("AIS_HOSTIP[Public Network]: %s[%s]", hostIP, t.si.URL(cmn.NetworkPublic))
 }
 
-func (t *targetrunner) joinCluster() (status int, err error) {
-	res := t.join(nil)
+func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error) {
+	res := t.join(nil, primaryURLs...)
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
 			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
@@ -104,7 +104,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	return
 }
 
-func (t *targetrunner) unregister() (int, error) {
+func (t *targetrunner) unregister(_ ...string) (int, error) {
 	smap := t.owner.smap.get()
 	if smap == nil || !smap.isValid() {
 		return 0, nil

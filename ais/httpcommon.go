@@ -105,8 +105,9 @@ type (
 			UUID    string `json:"uuid"`
 		} `json:"bmd"`
 		Smap struct {
-			Version int64  `json:"version,string"`
-			UUID    string `json:"uuid"`
+			Version    int64  `json:"version,string"`
+			UUID       string `json:"uuid"`
+			PrimaryURL string `json:"primary_url"`
 		} `json:"smap"`
 	}
 
@@ -1001,7 +1002,7 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 //
 // TODO: utilize for target startup and, for the targets, validate and return maxVerBMD
 //
-func (h *httprunner) bcastHealth(smap *smapX) (smapMaxVer int64) {
+func (h *httprunner) bcastHealth(smap *smapX) (smapMaxVer int64, primaryURL string) {
 	var (
 		wg      = &sync.WaitGroup{}
 		query   = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
@@ -1015,18 +1016,22 @@ func (h *httprunner) bcastHealth(smap *smapX) (smapMaxVer int64) {
 		}
 		wg.Add(1)
 		go func(si *cluster.Snode) {
-			var ver int64
+			var (
+				ver int64
+				url string
+			)
 			defer wg.Done()
 			body, err, _ := h.Health(si, timeout, query)
 			if err != nil {
 				return
 			}
-			if ver = ciiToSmap(smap, body, h.si, si); ver == 0 {
+			if ver, url = ciiToSmap(smap, body, h.si, si); ver == 0 {
 				return
 			}
 			mu.Lock()
 			if smapMaxVer < ver {
 				smapMaxVer = ver
+				primaryURL = url
 			}
 			mu.Unlock()
 		}(si)
@@ -1035,7 +1040,7 @@ func (h *httprunner) bcastHealth(smap *smapX) (smapMaxVer int64) {
 	return
 }
 
-func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) (smapVersion int64) {
+func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) (smapVersion int64, primaryURL string) {
 	var cii clusterInfo
 	if err := jsoniter.Unmarshal(body, &cii); err != nil {
 		glog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
@@ -1048,6 +1053,7 @@ func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) (smapVersion i
 			return
 		}
 		smapVersion = cii.Smap.Version
+		primaryURL = cii.Smap.PrimaryURL
 	}
 	return
 }
@@ -1236,32 +1242,44 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, err
 // - but only if those are defined and different from the previously tried.
 //
 // ================================== Background =========================================
-func (h *httprunner) join(query url.Values) (res callResult) {
+func (h *httprunner) join(query url.Values, primaryURLs ...string) (res callResult) {
 	var (
-		primaryURL string
-		url, psi   = h.getPrimaryURLAndSI()
+		pool   = make([]string, 0, 4)
+		config = cmn.GCO.Get()
+		f      = func(url string) {
+			if url == "" {
+				return
+			}
+			for _, u := range pool {
+				if u == url {
+					return
+				}
+			}
+			pool = append(pool, url)
+		}
 	)
-	res = h.registerToURL(url, psi, cmn.DefaultTimeout, query, false)
-	if res.err == nil {
-		return
+	// make a pool of unique "join" URLs
+	for _, u := range primaryURLs {
+		f(u)
 	}
-	config := cmn.GCO.Get()
-	if config.Proxy.DiscoveryURL != "" && config.Proxy.DiscoveryURL != url {
-		primaryURL = config.Proxy.DiscoveryURL
-		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, primaryURL)
-		res = h.registerToURL(primaryURL, psi, cmn.DefaultTimeout, query, false)
-		if res.err == nil {
-			return
+	url, _ := h.getPrimaryURLAndSI()
+	f(url)
+	f(config.Proxy.DiscoveryURL)
+	f(config.Proxy.OriginalURL)
+
+	// up to 2 attempts
+	for i := 0; i < 2; i++ {
+		for _, url := range pool {
+			res = h.registerToURL(url, nil, cmn.DefaultTimeout, query, false)
+			if res.err == nil {
+				glog.Infof("%s: joined cluster via %s", h.si, url)
+				return
+			}
+			if i > 0 {
+				glog.Errorf("%s: failing to join cluster via %s, err %v(%d)", h.si, url, res.err, res.status)
+			}
 		}
-	}
-	if config.Proxy.OriginalURL != "" && config.Proxy.OriginalURL != url &&
-		config.Proxy.OriginalURL != config.Proxy.DiscoveryURL {
-		primaryURL = config.Proxy.OriginalURL
-		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, primaryURL)
-		res = h.registerToURL(primaryURL, psi, cmn.DefaultTimeout, query, false)
-		if res.err == nil {
-			return
-		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	return
 }
@@ -1274,42 +1292,18 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 		regReq.Smap = h.owner.smap.get()
 	}
 	info := cmn.MustMarshal(regReq)
-
 	path := cmn.URLPath(cmn.Version, cmn.Cluster)
 	if keepalive {
 		path += cmn.URLPath(cmn.Keepalive)
 	} else {
 		path += cmn.URLPath(cmn.AutoRegister)
 	}
-
 	callArgs := callArgs{
-		si: psi,
-		req: cmn.ReqArgs{
-			Method: http.MethodPost,
-			Base:   url,
-			Path:   path,
-			Query:  query,
-			Body:   info,
-		},
+		si:      psi,
+		req:     cmn.ReqArgs{Method: http.MethodPost, Base: url, Path: path, Query: query, Body: info},
 		timeout: tout,
 	}
-	var err error
-	for rcount := 0; rcount < 2; rcount++ {
-		res = h.call(callArgs)
-		if res.err == nil {
-			if !keepalive {
-				glog.Infof("%s: registered => %s[%s]", h.si, url, path)
-			}
-			return
-		}
-		if cmn.IsErrConnectionRefused(res.err) {
-			err = errors.New("connection refused")
-		} else {
-			err = res.err
-		}
-	}
-	glog.Errorf("%s: (%s: %v)", h.si, psi, err)
-	return
+	return h.call(callArgs)
 }
 
 func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error) {
@@ -1332,44 +1326,42 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 }
 
 // NOTE: default retry policy for ops like join-cluster et al.
-func (h *httprunner) withRetry(call func() (int, error), action string, backoff bool) (err error) {
+func (h *httprunner) withRetry(call func(arg ...string) (int, error), action string, backoff bool, arg ...string) (err error) {
 	var (
 		sleep       time.Duration
 		config      = cmn.GCO.Get()
 		retryPolicy = struct {
 			sleep   time.Duration
-			timeout int
+			anyerr  int
 			refused int
 			backoff bool
 		}{backoff: backoff}
 	)
 	if backoff {
 		retryPolicy.sleep = config.Timeout.CplaneOperation / 2
-		retryPolicy.timeout = 2
+		retryPolicy.anyerr = 2
 		retryPolicy.refused = 4
 	} else {
 		retryPolicy.sleep = config.Timeout.CplaneOperation / 4
-		retryPolicy.timeout = 1
+		retryPolicy.anyerr = 1
 		retryPolicy.refused = 2
 	}
 	sleep = retryPolicy.sleep
-	for i, j, k := 0, 0, 1; i < retryPolicy.timeout && j < retryPolicy.refused; k++ {
+	for i, j, k := 0, 0, 1; i < retryPolicy.anyerr && j < retryPolicy.refused; k++ {
 		var status int
-		if status, err = call(); err == nil {
+		if status, err = call(arg...); err == nil {
 			return
 		}
 		glog.Errorf("%s: failed to %s, err: %v(%d)", h.si, action, err, status)
 		if cmn.IsErrConnectionRefused(err) {
 			j++
-		} else if cmn.IsUnreachable(err, status) {
-			i++
 		} else {
-			break
+			i++
 		}
 		if retryPolicy.backoff && k > 1 {
 			sleep = cmn.MinDuration(sleep+retryPolicy.sleep, config.Timeout.MaxKeepalive)
 		}
-		if i < retryPolicy.timeout && j < retryPolicy.refused {
+		if i < retryPolicy.anyerr && j < retryPolicy.refused {
 			time.Sleep(sleep)
 			glog.Errorf("%s: retrying(%d)...", h.si, k)
 		}
