@@ -8,7 +8,7 @@
 
 AIS cluster provides an AWS S3 compatibility layer for client to assess AIS buckets as regular S3 ones.
 
-As of version 3.1, the S3 support is base and includes the following API:
+S3 supports the following API requests:
 
 - Create and delete a bucket
 - HEAD bucket
@@ -51,7 +51,7 @@ $
 
 ## TensorFlow Demo
 
-Set up `S3_ENDPOINT` and `S3_USE_HTTPS` environment variables prior to running a TensorFlow job. `S3_ENDPOINT` must be primary proxy hostname:port and URL path `/s3`(e.g., `S3_ENDPOINT=10.0.0.20:8080/s3`). As of version 3.1, secure HTTP is disabled by default. so `S3_USE_HTTPS` must be `0`.
+Set up `S3_ENDPOINT` and `S3_USE_HTTPS` environment variables prior to running a TensorFlow job. `S3_ENDPOINT` must be primary proxy hostname:port and URL path `/s3`(e.g., `S3_ENDPOINT=10.0.0.20:8080/s3`). Secure HTTP is disabled by default. so `S3_USE_HTTPS` must be `0`.
 
 Example of running a training task:
 

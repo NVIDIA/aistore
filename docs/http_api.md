@@ -29,7 +29,7 @@ This command queries one of the AIS nodes (denoted as `G-or-T`) for its configur
 
 Notice the 4 (four) ubiquitous elements in the `curl` command line above:
 
-1. HTTP verb aka method, one of: `PUT`, `GET`, `HEAD`, `POST`, or `DELETE`.
+1. HTTP verb aka method, one of: `PUT`, `GET`, `HEAD`, `POST`, `DELETE`, or `PATCH`.
 
 In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief summary of the standard HTTP verbs and their CRUD semantics, see, for instance, this [REST API tutorial](http://www.restapitutorial.com/lessons/httpmethods.html).
 
@@ -77,7 +77,6 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Create ais [bucket](bucket.md) (proxy) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' 'http://G/v1/buckets/abc'` |
 | Destroy ais [bucket](bucket.md) (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' 'http://G/v1/buckets/abc'` |
 | Rename ais [bucket](bucket.md) (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' 'http://G/v1/buckets/oldname'` |
-| Recover buckets [bucket](bucket.md) (proxy) | POST {"action": "recoverbck"} /v1/buckets?force=true | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' 'http://G/v1/buckets'` |
 | Rename/move object (ais buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mybucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> |
 | Check if an object *is cached*  | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` |
 | Get object (proxy) | GET /v1/objects/bucket-name/object-name | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject' -o myobject` <sup id="a1">[1](#ft1)</sup> |
@@ -131,7 +130,7 @@ Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in an
 
 * [Cloud Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
-> Cloud provider (aka "bucket provider") is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. Supported providers, on the other hand, are enumerated and documented: `ais` - for AIS buckets, `aws`, or `gcp` - for S3 and Google Cloud buckets, respectively.
+> Cloud provider (aka "bucket provider") is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. Supported providers, on the other hand, are enumerated and documented: `ais` - for AIS buckets, `aws`, `gcp` or `azure` - for S3, Google Cloud buckets or Microsoft Azure, respectively.
 
 In all those cases users can add an optional `?provider=ais` or `?provider=aws` or `?provider=gcp` query to the GET (PUT, DELETE, List/Range) request.
 

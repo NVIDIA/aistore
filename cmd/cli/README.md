@@ -78,6 +78,10 @@ List of available CLI resources
 
 * [DSort](resources/dsort.md)
 
+* [Mountpath](resources/mpath.md)
+
+* [Remote cluster](resources/remote.md)
+
 * [Auth](resources/users.md)
 
 ## Info For Developers
@@ -108,5 +112,5 @@ Provider syntax `[provider://]BUCKET_NAME` is valid CLI-wide, meaning that every
 also supports provider syntax. For more details refer to each command's documentation.
 
 Allowed values: `''` (autodetect provider), `ais` (local cluster), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform),
-`azure` (Microsoft Azure), `cloud` (anonymous - cloud provider determined automatically). 
+`azure` (Microsoft Azure), `cloud` (anonymous - cloud provider determined automatically).
 Additionally `provider://` syntax supports aliases `s3` (for `aws`), `gs` (for `gcp`) and `az` (for `azure`).

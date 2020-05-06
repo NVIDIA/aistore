@@ -262,7 +262,7 @@ To achieve that, use the option `-bprops`. For example:
 $ aisloader -bucket=abc -pctput=0 -cleanup=false -duration 10s -bprops='{"mirror": {"copies": 2, "enabled": false, "util_thresh": 5}, "ec": {"enabled": false, "data_slices": 2, "parity_slices": 2}}'
 ```
 
-The above example shows the values that are globally default as of the AIS version 2.0. You can omit the defaults and specify only those values that you'd want to change. For instance, to enable erasure coding on the bucket "abc":
+The above example shows the values that are globally default. You can omit the defaults and specify only those values that you'd want to change. For instance, to enable erasure coding on the bucket "abc":
 
 ```console
 $ aisloader -bucket=abc -duration 10s -bprops='{"ec": {"enabled": true}}'
@@ -270,7 +270,7 @@ $ aisloader -bucket=abc -duration 10s -bprops='{"ec": {"enabled": true}}'
 
 This example sets the number of data and parity slices to 2 which, in turn, requires the cluster to have at least 5 target nodes: 2 for data slices, 2 for parity slices and one for the original object.
 
-> As of v2.0, once erasure coding is enabled, its properties `data_slices` and `parity_slices` cannot be changed on the fly.
+> Once erasure coding is enabled, its properties `data_slices` and `parity_slices` cannot be changed on the fly.
 
 The following sequence populates a bucket configured for both local mirroring and erasure coding, and then reads from it for 1h:
 
