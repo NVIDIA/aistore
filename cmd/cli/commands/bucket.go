@@ -276,12 +276,12 @@ func bucketDetailsSync(c *cli.Context, query cmn.QueryBcks) error {
 // Replace user-friendly properties like:
 //  * `access=ro` with real values `access = GET | HEAD` (all numbers are
 //     passed to API as is).
-//  * `origin_bck=gcp://bucket_name` with `origin_bck.name=bucket_name` and
-//    `origin_bck.provider=gcp` so they match the expected fields in structs.
-//  * `origin_bck=none` with `origin_bck.name=""` and `origin_bck.provider=""`.
+//  * `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
+//    `backend_bck.provider=gcp` so they match the expected fields in structs.
+//  * `backend_bck=none` with `backend_bck.name=""` and `backend_bck.provider=""`.
 func reformatBucketProps(bck cmn.Bck, nvs cmn.SimpleKVs) error {
-	if v, ok := nvs[cmn.HeaderOriginBck]; ok {
-		delete(nvs, cmn.HeaderOriginBck)
+	if v, ok := nvs[cmn.HeaderBackendBck]; ok {
+		delete(nvs, cmn.HeaderBackendBck)
 		var originBck cmn.Bck
 		if v != emptyOrigin {
 			var (
@@ -293,11 +293,11 @@ func reformatBucketProps(bck cmn.Bck, nvs cmn.SimpleKVs) error {
 				return err
 			}
 			if objName != "" {
-				return fmt.Errorf("invalid format of %q", cmn.HeaderOriginBck)
+				return fmt.Errorf("invalid format of %q", cmn.HeaderBackendBck)
 			}
 		}
-		nvs[cmn.HeaderOriginBckName] = originBck.Name
-		nvs[cmn.HeaderOriginBckProvider] = originBck.Provider
+		nvs[cmn.HeaderBackendBckName] = originBck.Name
+		nvs[cmn.HeaderBackendBckProvider] = originBck.Provider
 	}
 
 	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {

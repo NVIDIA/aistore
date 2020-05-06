@@ -142,9 +142,9 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 	if b.IsAIS() && other.IsAIS() {
 		return true
 	}
-	if (b.HasOriginBck() && !other.HasOriginBck()) || (!b.HasOriginBck() && other.HasOriginBck()) {
-		// Case when either bck has origin bucket - we say it's a match since
-		// origin bucket was either connected or disconnected.
+	if (b.HasBackendBck() && !other.HasBackendBck()) || (!b.HasBackendBck() && other.HasBackendBck()) {
+		// Case when either bck has backend bucket - we say it's a match since
+		// backend bucket was either connected or disconnected.
 		return true
 	}
 	if b.IsCloud() && other.IsCloud() {
@@ -153,15 +153,17 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 	return b.IsRemoteAIS() && other.IsRemoteAIS()
 }
 
-func (b *Bck) IsAIS() bool                     { return b.Bck.IsAIS() && !b.HasOriginBck() }
-func (b *Bck) IsCloud(anyCloud ...string) bool { return b.Bck.IsCloud(anyCloud...) || b.HasOriginBck() }
-func (b *Bck) IsRemote() bool                  { return b.Bck.IsRemote() || b.HasOriginBck() }
-func (b *Bck) HasOriginBck() bool              { return !b.Props.OriginBck.IsEmpty() }
+func (b *Bck) IsAIS() bool { return b.Bck.IsAIS() && !b.HasBackendBck() }
+func (b *Bck) IsCloud(anyCloud ...string) bool {
+	return b.Bck.IsCloud(anyCloud...) || b.HasBackendBck()
+}
+func (b *Bck) IsRemote() bool      { return b.Bck.IsRemote() || b.HasBackendBck() }
+func (b *Bck) HasBackendBck() bool { return !b.Props.BackendBck.IsEmpty() }
 func (b *Bck) CloudBck() cmn.Bck {
 	// NOTE: It's required that props are initialized for AIS bucket. It
 	//  might not be the case for cloud buckets (see: `HeadBucket`).
-	if b.Provider == cmn.ProviderAIS && b.HasOriginBck() {
-		return b.Props.OriginBck
+	if b.Provider == cmn.ProviderAIS && b.HasBackendBck() {
+		return b.Props.BackendBck
 	}
 	cmn.Assert(b.Bck.IsCloud())
 	return b.Bck

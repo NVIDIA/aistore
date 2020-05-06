@@ -1844,7 +1844,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	}
 }
 
-func TestOriginBucket(t *testing.T) {
+func TestBackendBucket(t *testing.T) {
 	var (
 		cloudBck = cmn.Bck{
 			Name:     clibucket,
@@ -1883,7 +1883,7 @@ func TestOriginBucket(t *testing.T) {
 	tassert.Fatalf(t, len(cloudObjList.Entries) > 0, "empty object list")
 
 	err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
-		OriginBck: &cmn.BckToUpdate{
+		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(cloudBck.Name),
 			Provider: api.String(cloudBck.Provider),
 		},
@@ -1893,9 +1893,9 @@ func TestOriginBucket(t *testing.T) {
 	p, err = api.HeadBucket(baseParams, aisBck)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
-		t, p.OriginBck.Equal(cloudBck),
-		"origin bucket wasn't set correctly (got: %s, expected: %s)",
-		p.OriginBck, cloudBck,
+		t, p.BackendBck.Equal(cloudBck),
+		"backend bucket wasn't set correctly (got: %s, expected: %s)",
+		p.BackendBck, cloudBck,
 	)
 
 	// Try to cache object.
@@ -1903,7 +1903,7 @@ func TestOriginBucket(t *testing.T) {
 	_, err = api.GetObject(baseParams, aisBck, cachedObjName)
 	tassert.CheckFatal(t, err)
 
-	// Check if listing objects will result in listing origin bucket objects.
+	// Check if listing objects will result in listing backend bucket objects.
 	aisObjList, err := api.ListObjects(baseParams, aisBck, nil, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
@@ -1921,9 +1921,9 @@ func TestOriginBucket(t *testing.T) {
 		aisObjList.Entries, cachedObjName,
 	)
 
-	// Disconnect origin bucket.
+	// Disconnect backend bucket.
 	err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
-		OriginBck: &cmn.BckToUpdate{
+		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(""),
 			Provider: api.String(""),
 		},
@@ -1931,7 +1931,7 @@ func TestOriginBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	p, err = api.HeadBucket(baseParams, aisBck)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, p.OriginBck.IsEmpty(), "origin bucket isn't empty")
+	tassert.Fatalf(t, p.BackendBck.IsEmpty(), "backend bucket isn't empty")
 
 	// Check if we can still get object and list objects.
 	_, err = api.GetObject(baseParams, aisBck, cachedObjName)

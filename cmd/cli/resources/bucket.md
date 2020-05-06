@@ -418,20 +418,20 @@ Bucket props successfully reset
 
 #### Connect/Disconnect AIS bucket to/from cloud bucket
 
-Set origin bucket for AIS bucket `bucket_name` to the GCP cloud bucket `cloud_bucket`.
-Once the origin bucket is set, operations (get, put, list, etc.) with `ais://bucket_name` will be exactly as we would do with `gcp://cloud_bucket`.
+Set backend bucket for AIS bucket `bucket_name` to the GCP cloud bucket `cloud_bucket`.
+Once the backend bucket is set, operations (get, put, list, etc.) with `ais://bucket_name` will be exactly as we would do with `gcp://cloud_bucket`.
 It's like a symlink to a cloud bucket.
 The only difference is that all objects will be cached into `ais://bucket_name` (and reflected in the cloud as well) instead of `gcp://cloud_bucket`.
 
 ```console
-$ ais set props bucket_name origin_bck=gcp://cloud_bucket
+$ ais set props bucket_name backend_bck=gcp://cloud_bucket
 Bucket props successfully updated
 ```
 
 To disconnect cloud bucket do:
 
 ```console
-$ ais set props bucket_name origin_bck=none
+$ ais set props bucket_name backend_bck=none
 Bucket props successfully updated
 ```
 

@@ -100,9 +100,9 @@ const (
 // - if a property is a root one, then the constant is just a lowercased property name
 // - if a property is nested, then its value is property's parent and property name separated with a dot
 const (
-	HeaderOriginBck         = "origin_bck"
-	HeaderOriginBckName     = HeaderOriginBck + ".name"
-	HeaderOriginBckProvider = HeaderOriginBck + "." + HeaderCloudProvider
+	HeaderBackendBck         = "backend_bck"
+	HeaderBackendBckName     = HeaderBackendBck + ".name"
+	HeaderBackendBckProvider = HeaderBackendBck + "." + HeaderCloudProvider
 
 	HeaderCloudProvider    = "provider"           // ProviderAmazon et al. - see cmn/bucket.go
 	HeaderCloudOffline     = "cloud.offline"      // when accessing cached cloud bucket with no Cloud connectivity

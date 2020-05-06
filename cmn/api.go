@@ -246,8 +246,8 @@ type BucketProps struct {
 	// meaning that `` or `cloud` values are forbidden.
 	Provider string `json:"provider" list:"readonly"`
 
-	// OriginBck if set it contains cloud bucket to which AIS bucket points to.
-	OriginBck Bck `json:"origin_bck,omitempty"`
+	// BackendBck if set it contains cloud bucket to which AIS bucket points to.
+	BackendBck Bck `json:"backend_bck,omitempty"`
 
 	// Versioning can be enabled or disabled on a per-bucket basis
 	Versioning VersionConf `json:"versioning"`
@@ -278,7 +278,7 @@ type BucketProps struct {
 }
 
 type BucketPropsToUpdate struct {
-	OriginBck   *BckToUpdate         `json:"origin_bck"`
+	BackendBck  *BckToUpdate         `json:"backend_bck"`
 	Versioning  *VersionConfToUpdate `json:"versioning"`
 	Cksum       *CksumConfToUpdate   `json:"checksum"`
 	LRU         *LRUConfToUpdate     `json:"lru"`
@@ -501,15 +501,15 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 	if !IsValidProvider(bp.Provider) {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.Provider, allProviders)
 	}
-	if !bp.OriginBck.IsEmpty() {
-		if bp.OriginBck.Name == "" {
-			return fmt.Errorf("origin bucket name should not be empty")
+	if !bp.BackendBck.IsEmpty() {
+		if bp.BackendBck.Name == "" {
+			return fmt.Errorf("backend bucket name should not be empty")
 		}
-		if !bp.OriginBck.IsCloud() {
-			return fmt.Errorf("origin bucket should point to cloud bucket")
+		if !bp.BackendBck.IsCloud() {
+			return fmt.Errorf("backend bucket should point to cloud bucket")
 		}
 		if bp.Provider != ProviderAIS {
-			return fmt.Errorf("origin bucket can only be set for AIS buckets")
+			return fmt.Errorf("backend bucket can only be set for AIS buckets")
 		}
 	}
 
