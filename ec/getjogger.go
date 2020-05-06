@@ -717,12 +717,12 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 
 		if sl == nil {
 			// The number of empty nodes is larger than non-empty slices
-			// There's nothing to be done for next nodes, safe to break a loop
-			glog.Errorf("Numbers of restored slices is smaller than numer of empty targets")
+			// There's nothing to be done for next nodes, safe to break out of the loop
+			glog.Errorf("%s: the number of restored slices is smaller than the number of \"empty\" target nodes", req.LOM)
 			break
 		}
 
-		// every slice's SGL must be freed on transfer completion
+		// every slice's SGL must be freed upon transfer completion
 		cb := func(daemonID string, s *slice) transport.SendCallback {
 			return func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 				if err != nil {

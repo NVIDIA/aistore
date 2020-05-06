@@ -589,8 +589,12 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 	close(ch)
 
 	if err, ok := <-ch; ok {
-		glog.Errorf("Error while copying %d slices (with %d parity) for %q: %v",
-			ecConf.DataSlices, ecConf.ParitySlices, req.LOM.FQN, err)
+		var s string
+		if ecConf.DataSlices > 1 {
+			s = "s"
+		}
+		glog.Errorf("Error while copying %d slice%s (with parity=%d) for %q: %v",
+			ecConf.DataSlices, s, ecConf.ParitySlices, req.LOM.FQN, err)
 	} else if glog.V(4) {
 		glog.Infof("EC created %d slices (with %d parity) for %q: %v",
 			ecConf.DataSlices, ecConf.ParitySlices, req.LOM.FQN, err)
