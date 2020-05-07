@@ -251,7 +251,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if notFound == len(responses) && notFound > 0 {
-		msg := fmt.Sprintf("%s job with id %q has not been found", cmn.DSortName, managerUUID)
+		msg := fmt.Sprintf("%s job %q not found", cmn.DSortName, managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
 		return
 	}
@@ -292,7 +292,7 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if allNotFound {
-		msg := fmt.Sprintf("%s job with id %q has not been found", cmn.DSortName, managerUUID)
+		msg := fmt.Sprintf("%s job %q not found", cmn.DSortName, managerUUID)
 		cmn.InvalidHandlerDetailed(w, r, msg, http.StatusNotFound)
 		return
 	}

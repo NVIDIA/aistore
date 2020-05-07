@@ -155,7 +155,10 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 	var (
 		payload = &downloader.DlAdminBody{}
 	)
-
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	payload.InitWithQuery(r.URL.Query())
 	if err := payload.Validate(r.Method == http.MethodDelete); err != nil {
 		p.invalmsghdlr(w, r, err.Error())

@@ -5,6 +5,7 @@
 package integration
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -35,7 +36,16 @@ func generateDownloadDesc() string {
 }
 
 func clearDownloadList(t *testing.T) {
+	var (
+		httpErr = &cmn.HTTPError{}
+	)
+while503:
 	listDownload, err := api.DownloadGetList(tutils.BaseAPIParams(), downloadDescAllRegex)
+	if err != nil && errors.As(err, &httpErr) && httpErr.Status == http.StatusServiceUnavailable {
+		tutils.Logln("waiting for the cluster to start up...")
+		time.Sleep(time.Second)
+		goto while503
+	}
 	tassert.CheckFatal(t, err)
 
 	for _, v := range listDownload {
