@@ -157,13 +157,13 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 	}
 	nsiname := caller
 	if nsi != nil {
-		nsiname = nsi.Name()
+		nsiname = nsi.String()
 	} else if nsiname == "" {
 		nsiname = "???"
 	}
 	hname := si.Name()
 	// FATAL: cluster integrity error (cie)
-	s := fmt.Sprintf("%s: BMDs have different uuids: [%s: %s] vs [%s: %s]",
+	s := fmt.Sprintf("%s: BMDs have different uuids: (%s, %s) vs (%s, %s)",
 		ciError(40), hname, m.StringEx(), nsiname, nbmd.StringEx())
 	err = &errPrxBmdUUIDDiffer{s}
 	return

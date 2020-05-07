@@ -190,9 +190,6 @@ func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error)
 	}
 	res := p.join(query, primaryURLs...)
 	if res.err != nil {
-		if strings.Contains(res.err.Error(), ciePrefix) {
-			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
-		}
 		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive

@@ -40,31 +40,19 @@ func (m *BMD) String() string {
 	return "BMD v" + strconv.FormatInt(m.Version, 10)
 }
 
-// nsQuery == nil: all namespaces
-
-func (m *BMD) NumAIS(nsQuery *string) (na int) {
-	if namespaces, ok := m.Providers[cmn.ProviderAIS]; ok {
-		for ns, buckets := range namespaces {
-			if nsQuery != nil && ns != *nsQuery {
-				continue
-			}
-			na += len(buckets)
-		}
-	}
-	return
-}
-
-func (m *BMD) NumCloud(nsQuery *string) (nc int) {
+func (m *BMD) numBuckets() (na, nc, nr int) {
 	for provider, namespaces := range m.Providers {
 		for nsUname, buckets := range namespaces {
-			bck := cmn.Bck{Provider: provider, Ns: cmn.ParseNsUname(nsUname)}
-			if bck.IsAIS() {
-				continue
+			ns := cmn.ParseNsUname(nsUname)
+			if provider == cmn.ProviderAIS {
+				if ns.IsRemote() {
+					nr += len(buckets)
+				} else {
+					na += len(buckets)
+				}
+			} else {
+				nc += len(buckets)
 			}
-			if nsQuery != nil && nsUname != *nsQuery {
-				continue
-			}
-			nc += len(buckets)
 		}
 	}
 	return
@@ -74,8 +62,20 @@ func (m *BMD) StringEx() string {
 	if m == nil {
 		return "BMD <nil>"
 	}
-	na, nc := m.NumAIS(nil), m.NumCloud(nil)
-	return fmt.Sprintf("BMD v%d[%s, ais=%d, cloud=%d]", m.Version, m.UUID, na, nc)
+	var (
+		sna, snc, snr string
+		na, nc, nr    = m.numBuckets()
+	)
+	if na > 0 {
+		sna = fmt.Sprintf(", num ais=%d", na)
+	}
+	if nc > 0 {
+		snc = fmt.Sprintf(", num cloud=%d", nc)
+	}
+	if nr > 0 {
+		snr = fmt.Sprintf(", num remote=%d", nr)
+	}
+	return fmt.Sprintf("BMD v%d[%s%s%s%s]", m.Version, m.UUID, sna, snc, snr)
 }
 
 func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {

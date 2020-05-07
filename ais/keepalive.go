@@ -305,7 +305,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 		return true, false, delta
 	}
 
-	glog.Warningf("initial keepalive failed, err: %v(%d), retrying...", err, status)
+	glog.Warningf("initial keepalive failed, err: %v(%d) - retrying...", err, status)
 	ok, stopped = pkr.retry(to)
 	return ok, stopped, cmn.DefaultTimeout
 }
@@ -331,13 +331,15 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode) (ok, stopped bool) {
 			}
 			i++
 			if i == kaNumRetries {
-				glog.Warningf("keepalive failed after %d attempts, removing %s from Smap", i, si)
+				smap := pkr.p.owner.smap.get()
+				glog.Warningf("%s: keepalive failed after %d attempts, removing %s from %s",
+					pkr.p.si, i, si, smap)
 				return false, false
 			}
 			if cmn.IsUnreachable(err, status) {
 				continue
 			}
-			glog.Warningf("keepalive: unexpected error %v(%d) from %s", err, status, si)
+			glog.Warningf("%s: keepalive: unexpected error %v(%d) from %s", pkr.p.si, err, status, si)
 		case sig := <-pkr.controlCh:
 			if sig.msg == kaStopMsg {
 				return false, true

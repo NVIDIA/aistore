@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	revsSmapTag   = "smap"
-	revsRMDTag    = "rmd"
-	revsBMDTag    = "bmd"
+	revsSmapTag = "Smap"
+	revsRMDTag  = "RMD"
+	revsBMDTag  = "BMD"
+
 	revsTokenTag  = "token"
 	revsActionTag = "-action" // to make a pair (revs, action)
 )
@@ -103,8 +104,8 @@ type (
 	revsReq struct {
 		pairs     []revsPair
 		wg        *sync.WaitGroup
-		failedCnt *atomic.Int32 // TODO: add cluster.NodeMap to identify the failed ones
-		reqType   int           // enum: revsReqSync, etc.
+		failedCnt *atomic.Int32
+		reqType   int // enum: revsReqSync, etc.
 	}
 	nodeRevs struct {
 		versions map[string]int64 // used to track daemon, tag => (versions) info
@@ -319,7 +320,7 @@ outer:
 		if msg.Action != "" {
 			s = ", action " + msg.Action
 		}
-		glog.Infof("%s: sync %s v%d%s", y.p.si, tag[:2], revs.version(), s)
+		glog.Infof("%s: sync %s v%d%s", y.p.si, tag, revs.version(), s)
 
 		y.lastSynced[tag] = revs
 		revsBody := revs.marshal()

@@ -63,9 +63,6 @@ func (t *targetrunner) initHostIP() {
 func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error) {
 	res := t.join(nil, primaryURLs...)
 	if res.err != nil {
-		if strings.Contains(res.err.Error(), ciePrefix) {
-			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
-		}
 		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive
@@ -662,8 +659,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	bmd = t.owner.bmd.get()
 	curVer = bmd.version()
 	var (
-		na           = bmd.NumAIS(nil /*all namespaces*/)
-		bcksToDelete = make([]*cluster.Bck, 0, na)
+		bcksToDelete = make([]*cluster.Bck, 0, 4)
 		_, psi       = t.getPrimaryURLAndSI()
 	)
 	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {

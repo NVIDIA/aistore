@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -1257,6 +1258,7 @@ func (h *httprunner) join(query url.Values, primaryURLs ...string) (res callResu
 			}
 			pool = append(pool, url)
 		}
+		sleep = 125 * time.Millisecond
 	)
 	// make a pool of unique "join" URLs
 	for _, u := range primaryURLs {
@@ -1275,11 +1277,9 @@ func (h *httprunner) join(query url.Values, primaryURLs ...string) (res callResu
 				glog.Infof("%s: joined cluster via %s", h.si, url)
 				return
 			}
-			if i > 0 {
-				glog.Errorf("%s: failing to join cluster via %s, err %v(%d)", h.si, url, res.err, res.status)
-			}
+			extra := rand.Int63n(int64(sleep))
+			time.Sleep(sleep + time.Duration(extra))
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
 	return
 }
@@ -1350,6 +1350,10 @@ func (h *httprunner) withRetry(call func(arg ...string) (int, error), action str
 	for i, j, k := 0, 0, 1; i < retryPolicy.anyerr && j < retryPolicy.refused; k++ {
 		var status int
 		if status, err = call(arg...); err == nil {
+			return
+		}
+		if strings.Contains(err.Error(), ciePrefix) {
+			glog.Error(err)
 			return
 		}
 		glog.Errorf("%s: failed to %s, err: %v(%d)", h.si, action, err, status)
