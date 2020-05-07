@@ -189,9 +189,12 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 
 	// NOTE: Total size of the records metadata can sometimes be large
 	// and so this is why we need such a long timeout.
+	config := cmn.GCO.Get()
 	m.client = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: 5 * time.Minute,
 		Timeout:     30 * time.Minute,
+		UseHTTPS:    config.Net.HTTP.UseHTTPS,
+		SkipVerify:  config.Net.HTTP.SkipVerify,
 	})
 
 	m.fileExtension = rs.Extension

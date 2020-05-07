@@ -502,6 +502,7 @@ type HTTPConf struct {
 	RevProxyCache   bool   `json:"rproxy_cache"`       // RevProxy caches or work as transparent proxy
 	UseHTTPS        bool   `json:"use_https"`          // use HTTPS instead of HTTP
 	Chunked         bool   `json:"chunked_transfer"`   // https://tools.ietf.org/html/rfc7230#page-36
+	SkipVerify      bool   `json:"skip_verify"`        // skip certificate verification for HTTPS (e.g, used with self-signed certificates)
 }
 
 type FSHCConf struct {

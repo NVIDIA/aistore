@@ -24,8 +24,9 @@ var (
 		Timeout:          600 * time.Second,
 		IdleConnsPerHost: 100,
 		UseHTTPProxyEnv:  true,
+		SkipVerify:       true, // TODO: trust all servers for now
 	}
-	httpClient = cmn.NewClient(transportArgs)
+	httpClient *http.Client
 )
 
 type (

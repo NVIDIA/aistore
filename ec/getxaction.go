@@ -93,9 +93,16 @@ func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, 
 }
 
 func (r *XactGet) newGetJogger(mpath string) *getJogger {
+	config := cmn.GCO.Get()
+	client := cmn.NewClient(cmn.TransportArgs{
+		Timeout:    config.Client.Timeout,
+		UseHTTPS:   config.Net.HTTP.UseHTTPS,
+		SkipVerify: config.Net.HTTP.SkipVerify,
+	})
 	return &getJogger{
 		parent: r,
 		mpath:  mpath,
+		client: client,
 		workCh: make(chan *Request, requestBufSizeFS),
 		stopCh: make(chan struct{}, 1),
 		jobs:   make(map[uint64]bgProcess, 4),

@@ -308,9 +308,8 @@ func freeSlices(slices []*slice) {
 	}
 }
 
-// RequestECMeta returns an EC metadata found on a remote target.
-// TODO: replace with better alternative (e.g, targetrunner.call)
-func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode) (md *Metadata, err error) {
+// requestECMeta returns an EC metadata found on a remote target.
+func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName)
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
@@ -322,7 +321,7 @@ func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode) (md *Metadata
 		return nil, err
 	}
 	rq.URL.RawQuery = query.Encode()
-	resp, err := http.DefaultClient.Do(rq)
+	resp, err := client.Do(rq)
 	if err != nil {
 		return nil, err
 	}

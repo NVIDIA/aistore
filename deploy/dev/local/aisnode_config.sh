@@ -105,15 +105,16 @@ cat > $CONFFILE <<EOL
 			"sndrcv_buf_size":	${SNDRCV_BUF_SIZE:-131072}
 		},
 		"http": {
-			"proto":		"http",
+			"proto":		"${AIS_PROTO:-http}",
 			"rproxy":		"",
-			"server_certificate":	"server.crt",
-			"server_key":		"server.key",
+			"server_certificate":	"${AIS_HTTPS_CERT:-server.crt}",
+			"server_key":		"${AIS_HTTPS_KEY:-server.key}",
 			"write_buffer_size":	${HTTP_WRITE_BUFFER_SIZE:-0},
 			"read_buffer_size":	${HTTP_READ_BUFFER_SIZE:-0},
 			"rproxy_cache":		true,
 			"use_https":		${USE_HTTPS:-false},
-			"chunked_transfer":	${CHUNKED_TRANSFER:-true}
+			"chunked_transfer":	${CHUNKED_TRANSFER:-true},
+			"skip_verify": ${AIS_SKIP_VERIFY:-false}
 		}
 	},
 	"fshc": {

@@ -33,6 +33,8 @@ func initClusterParams() {
 	defaultHTTPClient = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: cfg.Timeout.TCPTimeout,
 		Timeout:     cfg.Timeout.HTTPTimeout,
+		UseHTTPS:    cmn.IsHTTPS(clusterURL),
+		SkipVerify:  true, // TODO: trust all servers for now
 
 		IdleConnsPerHost: 100,
 		MaxIdleConns:     100,

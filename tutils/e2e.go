@@ -48,7 +48,7 @@ func destroyMatchingBuckets(subName string) (err error) {
 }
 
 func randomTarget() string {
-	smap, err := api.GetClusterMap(BaseAPIParams(proxyURL))
+	smap, err := api.GetClusterMap(BaseAPIParams(proxyURLReadOnly))
 	cmn.AssertNoErr(err)
 	si, err := smap.GetRandTarget()
 	cmn.AssertNoErr(err)
@@ -128,7 +128,6 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 			fileName := strings.ReplaceAll(scmd, "$PRINT_SIZE ", "")
 			scmd = fmt.Sprintf("wc -c %s | awk '{print $1}'", fileName)
 		}
-
 		cmd := exec.Command("bash", "-c", scmd)
 		b, err := cmd.Output()
 		if expectFail {

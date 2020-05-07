@@ -112,8 +112,7 @@ func (m *AisCloudProvider) Apply(v interface{}, action string) error {
 
 func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudInfoAIS) {
 	var (
-		cfg    = cmn.GCO.Get()
-		client = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout})
+		cfg = cmn.GCO.Get()
 	)
 	cia = make(cmn.CloudInfoAIS, len(m.remote))
 	m.mu.RLock()
@@ -123,6 +122,8 @@ func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudI
 			aliases []string
 			info    = &cmn.RemoteAISInfo{}
 		)
+		trArgs := remTransportArgs([]string{remAis.url}, cfg)
+		client := cmn.NewClient(trArgs)
 		info.URL = remAis.url
 		for a, u := range m.alias {
 			if uuid == u {
@@ -164,11 +165,24 @@ func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudI
 	return
 }
 
+func remTransportArgs(confURLs []string, cfg *cmn.Config) cmn.TransportArgs {
+	anyHTTPS := false
+	for _, u := range confURLs {
+		anyHTTPS = anyHTTPS || cmn.IsHTTPS(u)
+	}
+	return cmn.TransportArgs{
+		Timeout:    cfg.Client.Timeout,
+		UseHTTPS:   anyHTTPS,
+		SkipVerify: cfg.Net.HTTP.UseHTTPS,
+	}
+}
+
 func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (offline bool, err error) {
 	var (
 		url           string
 		remSmap, smap *cluster.Smap
-		client        = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout})
+		trArgs        = remTransportArgs(confURLs, cfg)
+		client        = cmn.NewClient(trArgs)
 	)
 	for _, u := range confURLs {
 		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u}); err != nil {
@@ -195,7 +209,7 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (of
 		return
 	}
 	r.smap, r.url = remSmap, url
-	r.bp = api.BaseParams{Client: cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout}), URL: url}
+	r.bp = api.BaseParams{Client: cmn.NewClient(trArgs), URL: url}
 	r.uuid = remSmap.UUID
 	return
 }

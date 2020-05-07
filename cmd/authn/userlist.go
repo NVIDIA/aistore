@@ -60,7 +60,9 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 		bytes []byte
 	)
 	client := cmn.NewClient(cmn.TransportArgs{
-		Timeout: conf.Timeout.Default,
+		Timeout:    conf.Timeout.Default,
+		UseHTTPS:   cmn.IsHTTPS(proxy.URL),
+		SkipVerify: true, // TODO: trust all servers at this moment
 	})
 	mgr := &userManager{
 		Path:   dbPath,

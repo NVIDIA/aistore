@@ -715,7 +715,12 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func broadcast(method, path string, urlParams url.Values, body []byte, nodes cluster.NodeMap, ignore ...*cluster.Snode) []response {
-	client := http.DefaultClient
+	config := cmn.GCO.Get()
+	client := cmn.NewClient(cmn.TransportArgs{
+		Timeout:    config.Client.Timeout,
+		UseHTTPS:   config.Net.HTTP.UseHTTPS,
+		SkipVerify: config.Net.HTTP.SkipVerify,
+	})
 	responses := make([]response, len(nodes))
 
 	wg := &sync.WaitGroup{}

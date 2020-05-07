@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 // a mountpath getJogger: processes GET requests to one mountpath
 type getJogger struct {
 	parent *XactGet
+	client *http.Client
 	mpath  string // mountpath that the jogger manages
 
 	workCh chan *Request // channel to request TOP priority operation (restore)
@@ -886,7 +888,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		wg.Add(1)
 		go func(si *cluster.Snode) {
 			defer wg.Done()
-			md, err := RequestECMeta(req.LOM.Bck().Bck, req.LOM.ObjName, si)
+			md, err := requestECMeta(req.LOM.Bck().Bck, req.LOM.ObjName, si, c.client)
 			if err != nil {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("No EC meta %s from %s: %v", req.LOM.ObjName, si, err)

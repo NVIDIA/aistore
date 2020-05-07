@@ -63,6 +63,7 @@ type (
 		t          cluster.Target
 		statRunner *stats.Trunner
 		filterGFN  *filter.Filter
+		client     *http.Client
 		netd, netc string
 		smap       atomic.Pointer // new smap which will be soon live
 		streams    *transport.StreamBundle
@@ -209,6 +210,11 @@ func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *
 		netc:       netc,
 		statRunner: strunner,
 		stages:     newNodeStages(),
+		client: cmn.NewClient(cmn.TransportArgs{
+			Timeout:    config.Client.Timeout,
+			UseHTTPS:   config.Net.HTTP.UseHTTPS,
+			SkipVerify: config.Net.HTTP.SkipVerify,
+		}),
 	}
 	reb.ec = newECData()
 	reb.initStreams()

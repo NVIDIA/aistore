@@ -356,3 +356,7 @@ func copyHeaders(src http.Header, dst *http.Header) {
 func MakeHeaderAuthnToken(token string) string {
 	return HeaderBearer + " " + token
 }
+
+func IsHTTPS(urlPath string) bool {
+	return strings.HasPrefix(urlPath, "https://")
+}

@@ -30,6 +30,8 @@ func NewIntraDataClient() *http.Client {
 		SndRcvBufSize:   config.Net.L4.SndRcvBufSize,
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
+		UseHTTPS:        config.Net.HTTP.UseHTTPS,
+		SkipVerify:      config.Net.HTTP.SkipVerify,
 	})
 }
 

@@ -7,6 +7,7 @@ package tutils
 import (
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -49,6 +50,9 @@ var (
 
 func init() {
 	MMSA = memsys.DefaultPageMM()
+	envURL := os.Getenv(cmn.AISURLEnvVar)
+	transportArgs.UseHTTPS = cmn.IsHTTPS(envURL)
+	transportArgs.SkipVerify = cmn.IsParseBool(os.Getenv(cmn.AISSkipVerifyEnvVar))
 	HTTPClient = cmn.NewClient(transportArgs)
 
 	transportArgs.WriteBufferSize, transportArgs.ReadBufferSize = 65536, 65536
@@ -85,9 +89,11 @@ func initProxyURL() {
 
 	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'
 	// Many of the other packages do not accept the 'url' flag
-	cliAISURL := os.Getenv("AISURL")
-	if cliAISURL != "" {
-		proxyURLReadOnly = "http://" + cliAISURL
+	if cliAISURL := os.Getenv(cmn.AISURLEnvVar); cliAISURL != "" {
+		if !strings.HasPrefix(cliAISURL, "http") {
+			cliAISURL = "http://" + cliAISURL
+		}
+		proxyURLReadOnly = cliAISURL
 	}
 
 	// Primary proxy can change if proxy tests are run and

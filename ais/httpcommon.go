@@ -252,7 +252,7 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 		Handler:  httpHandler,
 		ErrorLog: logger,
 	}
-	if server.sndRcvBufSize > 0 {
+	if server.sndRcvBufSize > 0 && !config.Net.HTTP.UseHTTPS {
 		server.s.ConnState = server.connStateListener // setsockopt; see also cmn.NewTransport
 	}
 	if config.Net.HTTP.UseHTTPS {
@@ -370,14 +370,16 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	h.statsT = s
 	h.httpclient = cmn.NewClient(cmn.TransportArgs{
-		Timeout:  config.Client.Timeout,
-		UseHTTPS: config.Net.HTTP.UseHTTPS,
+		Timeout:    config.Client.Timeout,
+		UseHTTPS:   config.Net.HTTP.UseHTTPS,
+		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
 	h.httpclientGetPut = cmn.NewClient(cmn.TransportArgs{
 		Timeout:         config.Client.TimeoutLong,
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
-		UseHTTPS:        false, // always plain intra-cluster http for data
+		UseHTTPS:        config.Net.HTTP.UseHTTPS,
+		SkipVerify:      config.Net.HTTP.SkipVerify,
 	})
 
 	bufsize := config.Net.L4.SndRcvBufSize

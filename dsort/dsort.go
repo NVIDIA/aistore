@@ -642,7 +642,11 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		return nil, errors.New("invalid max size of shard was specified when using external key map")
 	}
 
-	resp, err := http.Get(m.rs.OrderFileURL)
+	req, err := http.NewRequest(http.MethodGet, m.rs.OrderFileURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := m.client.Do(req)
 	if err != nil {
 		return nil, err
 	}

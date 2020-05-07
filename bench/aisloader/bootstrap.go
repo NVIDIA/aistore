@@ -183,8 +183,9 @@ var (
 	flagUsage   bool
 	flagVersion bool
 
-	ip   string
-	port string
+	ip       string
+	port     string
+	useHTTPS bool
 
 	useRandomObjName bool
 	objNameCnt       atomic.Uint64
@@ -236,6 +237,7 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&flagVersion, "version", false, "Show aisloader version")
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
+	f.BoolVar(&useHTTPS, "use-https", false, "Enable HTTPS")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bck.Name, "bucket", "nvais", "Bucket name")
 	f.StringVar(&p.bck.Provider, "provider", cmn.ProviderAIS, "ais - for AIS bucket, cloud - for Cloud bucket; other supported values include \"gcp\" and \"aws\", for Amazon and Google clouds, respectively")
@@ -491,7 +493,13 @@ func parseCmdLine() (params, error) {
 
 	traceHTTPSig.Store(p.traceHTTP)
 
-	p.proxyURL = "http://" + ip + ":" + port
+	if useHTTPS {
+		p.proxyURL = "https://" + ip + ":" + port
+	} else {
+		p.proxyURL = "http://" + ip + ":" + port
+	}
+	transportArgs.UseHTTPS = useHTTPS
+	httpClient = cmn.NewClient(transportArgs)
 	p.bp = api.BaseParams{
 		Client: httpClient,
 		URL:    p.proxyURL,

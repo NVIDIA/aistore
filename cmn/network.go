@@ -35,6 +35,7 @@ type (
 		ReadBufferSize   int
 		UseHTTPS         bool
 		UseHTTPProxyEnv  bool
+		SkipVerify       bool
 	}
 )
 
@@ -83,7 +84,7 @@ func NewTransport(args TransportArgs) *http.Transport {
 		MaxIdleConns:          args.MaxIdleConns,
 	}
 	if args.UseHTTPS {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: args.SkipVerify}
 	}
 	if args.UseHTTPProxyEnv {
 		transport.Proxy = defaultTransport.Proxy

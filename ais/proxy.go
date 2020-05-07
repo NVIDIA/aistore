@@ -78,7 +78,8 @@ func (rp *reverseProxy) init() {
 		rp.cloud = &httputil.ReverseProxy{
 			Director: func(r *http.Request) {},
 			Transport: cmn.NewTransport(cmn.TransportArgs{
-				UseHTTPS: cfg.Net.HTTP.UseHTTPS,
+				UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
+				SkipVerify: cfg.Net.HTTP.SkipVerify,
 			}),
 		}
 	}
@@ -1289,8 +1290,10 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		uparsed, err := url.Parse(smap.ProxySI.PublicNet.DirectURL)
 		cmn.AssertNoErr(err)
 		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
+		cfg := cmn.GCO.Get()
 		primary.rp.Transport = cmn.NewTransport(cmn.TransportArgs{
-			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
+			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
+			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})
 	}
 	primary.Unlock()
@@ -1324,8 +1327,10 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 		rproxy = val.(*httputil.ReverseProxy)
 	} else {
 		rproxy = httputil.NewSingleHostReverseProxy(parsedURL)
+		cfg := cmn.GCO.Get()
 		rproxy.Transport = cmn.NewTransport(cmn.TransportArgs{
-			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
+			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
+			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})
 		p.rproxy.nodes.Store(nodeID, rproxy)
 	}

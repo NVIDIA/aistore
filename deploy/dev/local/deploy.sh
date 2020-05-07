@@ -45,7 +45,7 @@ then
 	export GOOGLE_CLOUD_PROJECT="random-word-123456"
 fi
 
-USE_HTTPS=false
+USE_HTTPS=${USE_HTTPS:-false}
 CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
 HTTP_READ_BUFFER_SIZE=65536
@@ -61,7 +61,9 @@ else
   NEXT_TIER="_next"
 fi
 PROXYURL="http://localhost:$PORT"
+AIS_PROTO="http"
 if $USE_HTTPS; then
+  AIS_PROTO="https"
   PROXYURL="https://localhost:$PORT"
 fi
 LOGROOT="${LOGROOT:-/tmp/ais}${NEXT_TIER}"

@@ -1457,7 +1457,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 		return
 	}
 	rq.URL.RawQuery = qMeta.Encode()
-	if resp, slice.err = http.DefaultClient.Do(rq); slice.err != nil {
+	if resp, slice.err = reb.client.Do(rq); slice.err != nil {
 		return
 	}
 	resp.Body.Close()
@@ -1486,7 +1486,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 		return
 	}
 	rq.URL.RawQuery = qMeta.Encode()
-	if resp, slice.err = http.DefaultClient.Do(rq); slice.err != nil {
+	if resp, slice.err = reb.client.Do(rq); slice.err != nil {
 		return
 	}
 	defer resp.Body.Close()

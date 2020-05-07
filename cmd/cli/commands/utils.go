@@ -653,6 +653,9 @@ func canReachBucket(bck cmn.Bck) error {
 // 3. Docker default; if not present:
 // 4. Default as cfg.Cluster.DefaultAISHost
 func determineClusterURL(cfg *config.Config) string {
+	if envURL := os.Getenv(cmn.AISURLEnvVar); envURL != "" {
+		return envURL
+	}
 	if cfg.Cluster.URL != "" {
 		return cfg.Cluster.URL
 	}

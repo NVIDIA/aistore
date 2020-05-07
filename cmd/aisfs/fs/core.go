@@ -109,6 +109,8 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 	httpClient := cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: cfg.TCPTimeout,
 		Timeout:     cfg.HTTPTimeout,
+		UseHTTPS:    cmn.IsHTTPS(cfg.AISURL),
+		SkipVerify:  true, // TODO: trust all servers for now
 
 		IdleConnsPerHost: 100,
 		MaxIdleConns:     100,

@@ -8,6 +8,7 @@
 package transport
 
 import (
+	"crypto/tls"
 	"io"
 	"io/ioutil"
 	"net"
@@ -34,10 +35,18 @@ func dialTimeout(addr string) (net.Conn, error) {
 // intra-cluster networking: fasthttp client
 func NewIntraDataClient() Client {
 	config := cmn.GCO.Get()
+	if !config.Net.HTTP.UseHTTPS {
+		return &fasthttp.Client{
+			Dial:            dialTimeout,
+			ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
+			WriteBufferSize: config.Net.HTTP.WriteBufferSize,
+		}
+	}
 	return &fasthttp.Client{
 		Dial:            dialTimeout,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
+		TLSConfig:       &tls.Config{InsecureSkipVerify: config.Net.HTTP.SkipVerify},
 	}
 }
 
