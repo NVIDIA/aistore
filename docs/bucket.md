@@ -1,4 +1,5 @@
 ## Table of Contents
+
 - [Bucket](#bucket)
   - [Cloud Provider](#cloud-provider)
 - [AIS Bucket](#ais-bucket)
@@ -151,6 +152,49 @@ For example, to evict the `abc` cloud bucket from the AIS cluster, run:
 ```console
 $ ais evict aws://myS3bucket
 ```
+
+## Backend bucket
+
+We have covered AIS and cloud buckets.
+These abstractions are sufficient for almost all use-cases.
+But there are times when we would like to download objects from a cloud bucket and benefit from the features available only for the AIS.
+The hard way of doing that would be, prefetching cloud objects, creating AIS bucket, and try to copy over the objects from the cloud bucket to the newly created AIS bucket.
+However, this wouldn't be feasible for large buckets or large objects as it could take forever to download and copy all the objects.
+To help this and other cases, when we want to have some connection between AIS bucket and cloud bucket, we've created *backend bucket* abstraction.
+
+With backend bucket it's possible to connect cloud bucket to AIS, just type:
+
+```console
+$ ais create bucket abc
+"abc" bucket created
+$ ais set props ais://abc backend_bck=gcp://xyz
+Bucket props successfully updated
+```
+
+After that you can access all objects from `gcp://xyz` using `ais://abc`:
+
+```console
+$ ais ls gcp://xyz
+NAME		 SIZE		 VERSION
+shard-0.tar	 2.50KiB	 1
+shard-1.tar	 2.50KiB	 1
+$ ais ls ais://abc
+NAME		 SIZE		 VERSION
+shard-0.tar	 2.50KiB	 1
+shard-1.tar	 2.50KiB	 1
+$ ais get ais://abc/shard-0.tar /dev/null # cache/prefetch cloud object
+"shard-0.tar" has the size 2.50KiB (2560 B)
+$ ais ls ais://abc --cached
+NAME		 SIZE		 VERSION
+shard-0.tar	 2.50KiB	 1
+$ ais set props ais://abc backend_bck=none # disconnect backend bucket
+Bucket props successfully updated
+$ ais ls ais://abc
+NAME		 SIZE		 VERSION
+shard-0.tar	 2.50KiB	 1
+```
+
+For more examples please refer to [CLI docs](/cmd/cli/resources/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
 
 ## Bucket Access Attributes
 
