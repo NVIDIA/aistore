@@ -111,7 +111,8 @@ type (
 		Capacity    map[string]*fscapacity `json:"capacity"`
 		SysInfo     cmn.SysInfo            `json:"sys_info"`
 		SmapVersion int64                  `json:"smap_version,string"`
-		TStatus     *TargetStatus          `json:"target,omitempty"`
+		TStatus     *TargetStatus          `json:"target_status,omitempty"`
+		Status      string                 `json:"status"`
 	}
 )
 

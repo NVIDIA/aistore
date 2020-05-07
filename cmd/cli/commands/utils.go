@@ -179,38 +179,25 @@ func fillMap() (*cluster.Smap, error) {
 
 	proxyCount := smapPrimary.CountProxies()
 	targetCount := smapPrimary.CountTargets()
-	errCh := make(chan error, proxyCount+targetCount)
 
 	wg.Add(proxyCount + targetCount)
-	retrieveStatus(smapPrimary.Pmap, proxy, wg, errCh)
-	retrieveStatus(smapPrimary.Tmap, target, wg, errCh)
+	retrieveStatus(smapPrimary.Pmap, proxy, wg)
+	retrieveStatus(smapPrimary.Tmap, target, wg)
 	wg.Wait()
-	close(errCh)
-
-	for err := range errCh {
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return smapPrimary, nil
 }
 
-func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup, errCh chan error) {
-	fill := func(dae *cluster.Snode) error {
-		obj, err := api.GetDaemonStatus(defaultAPIParams, dae.ID())
-		if err != nil {
-			return err
-		}
+func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup) {
+	fill := func(node *cluster.Snode) {
+		obj, _ := api.GetDaemonStatus(defaultAPIParams, node)
 		mu.Lock()
-		daeMap[dae.ID()] = obj
+		daeMap[node.ID()] = obj
 		mu.Unlock()
-		return nil
 	}
 
 	for _, si := range nodeMap {
 		go func(si *cluster.Snode) {
-			errCh <- fill(si)
+			fill(si)
 			wg.Done()
 		}(si)
 	}

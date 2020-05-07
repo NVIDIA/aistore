@@ -5,6 +5,9 @@
 package api
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -116,14 +119,27 @@ func GetDaemonSysInfo(baseParams BaseParams, nodeID string) (sysInfo *cmn.TSysIn
 // GetDaemonInfo API
 //
 // Returns the info of a specific Daemon in the cluster
-func GetDaemonStatus(baseParams BaseParams, nodeID string) (daeInfo *stats.DaemonStatus, err error) {
+func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonStatus, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon),
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDaemonStatus}},
-		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
+		Header:     http.Header{cmn.HeaderNodeID: []string{node.ID()}},
 	}, &daeInfo)
+	if err == nil {
+		daeInfo.Status = "healthy"
+	} else {
+		var (
+			httpErr = &cmn.HTTPError{}
+		)
+		daeInfo = &stats.DaemonStatus{Snode: node, Status: "offline"}
+		if errors.Is(err, context.DeadlineExceeded) {
+			daeInfo.Status = "timed out"
+		} else if errors.As(err, &httpErr) {
+			daeInfo.Status = fmt.Sprintf("error: %d", httpErr.Status)
+		}
+	}
 	return daeInfo, err
 }
 

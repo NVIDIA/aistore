@@ -41,10 +41,11 @@ const (
 		"PrimaryProxy: {{.Smap.ProxySI.ID}}\t Proxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
 
 	// Proxy Info
-	ProxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t CPU USED %\t UPTIME\n"
+	ProxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t CPU USED %\t UPTIME\t STATUS\n"
 	ProxyInfoBody   = "{{$value.Snode.ID}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
+		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
+		"{{$value.Status}}\n"
 
 	ProxyInfoBodyTmpl       = "{{ range $key, $value := . }}" + ProxyInfoBody + "{{end}}"
 	ProxyInfoTmpl           = ProxyInfoHeader + ProxyInfoBodyTmpl
@@ -53,17 +54,19 @@ const (
 
 	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
+		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
+		"{{$value.Status}}\n"
 	AllProxyInfoBodyTmpl = "{{ range $key, $value := .Status }}" + AllProxyInfoBody + "{{end}}"
 	AllProxyInfoTmpl     = ProxyInfoHeader + AllProxyInfoBodyTmpl
 
 	// Target Info
-	TargetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\n"
+	TargetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t STATUS\n"
 	TargetInfoBody   = "{{$value.Snode.ID}}\t " +
 		"{{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
 		"{{CalcCap $value `percent` | printf `%d`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
 		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
-		"{{FormatXactStatus $value.TStatus }}\n"
+		"{{FormatXactStatus $value.TStatus }}\t " +
+		"{{$value.Status}}\n"
 
 	TargetInfoBodyTmpl       = "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}"
 	TargetInfoTmpl           = TargetInfoHeader + TargetInfoBodyTmpl
@@ -71,39 +74,6 @@ const (
 	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
 
 	ClusterSummary = "Summary:\n Proxies:\t{{len .Pmap}} ({{len .NonElects}} - unelectable)\n Targets:\t{{len .Tmap}}\n Primary Proxy:\t{{.ProxySI.ID}}\n Smap Version:\t{{.Version}}\n"
-
-	// Stats
-	StatsHeader = "{{$obj := . }}Daemon:\t{{ .Snode.DaemonID }}\nType:\t{{ .Snode.DaemonType }}\n\nStats\n-----\n"
-	StatsBody   = "{{range $key, $val := $obj.Stats.Tracker }}" +
-		"{{$statVal := ExtractStat $obj.Stats $key}}" +
-		"{{if (eq $statVal 0)}}{{else}}{{$key}}\t{{$statVal}}\n{{end}}" +
-		"{{end}}"
-
-	ProxyStatsTmpl  = StatsHeader + StatsBody
-	TargetStatsTmpl = StatsHeader + StatsBody +
-		"\nMountpaths\t %CapacityUsed\t CapacityAvail\n" +
-		"----------\t -------------\t -------------\n" +
-		"{{range $key, $val := $obj.Capacity}}" +
-		"{{$key}}\t {{$val.Usedpct | printf `%0.2d`}}\t {{FormatBytesUnsigned $val.Avail 5}}\n" +
-		"{{end}}"
-
-	StatsTmpl = "{{$obj := .Proxy }}===========\nProxy Stats\n===========\n" +
-		"{{range $key, $ := $obj.Tracker }}" +
-		"{{$statVal := ExtractStat $obj $key}}" +
-		"{{if (eq $statVal 0)}}{{else}}\t{{$key}}\t{{$statVal}}\n{{end}}" +
-		"{{end}}\n" +
-		"{{range $key, $val := .Target }}" +
-		"====================\nTarget: {{$key}}\n====================\n" +
-		"{{range $statKey, $ := $val.Core.Tracker}}" +
-		"{{$statVal := ExtractStat $val.Core $statKey}}" +
-		"{{if (eq $statVal 0)}}{{else}}\t{{$statKey}}\t{{$statVal}}\n{{end}}" +
-		"{{end}}\n" +
-		"\tMountpaths\t %CapacityUsed\t CapacityAvail\n" +
-		"\t----------\t -------------\t -------------\n" +
-		"{{range $mount, $capa := $val.Capacity}}" +
-		"\t{{$mount}}\t {{$capa.Usedpct | printf `%0.2d`}}\t {{FormatBytesUnsigned $capa.Avail 5}}\n" +
-		"{{end}}\n" +
-		"{{end}}"
 
 	// Disk Stats
 	DiskStatsHeader = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
@@ -396,6 +366,9 @@ func (sth SmapTemplateHelper) forMarshal() interface{} {
 
 // Gets the associated value from CoreStats
 func extractStat(daemon *stats.CoreStats, statName string) int64 {
+	if daemon == nil {
+		return 0
+	}
 	return daemon.Tracker[statName].Value
 }
 
@@ -413,6 +386,9 @@ func calcCap(daemon *stats.DaemonStatus, option string) (total uint64) {
 	case "capacity":
 		return total
 	case "percent":
+		if len(daemon.Capacity) == 0 {
+			return 0
+		}
 		return total / uint64(len(daemon.Capacity))
 	}
 
