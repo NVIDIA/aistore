@@ -2045,6 +2045,8 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpdaeget(w, r)
 	case http.MethodPut:
 		p.httpdaeput(w, r)
+	case http.MethodDelete:
+		p.httpdaedelete(w, r)
 	default:
 		p.invalmsghdlr(w, r, "invalid method for /daemon path", http.StatusBadRequest)
 	}
@@ -2226,6 +2228,28 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		p.invalmsghdlr(w, r, s)
+	}
+}
+
+// unregister
+func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Daemon)
+	if err != nil {
+		return
+	}
+
+	switch apiItems[0] {
+	case cmn.Unregister:
+		if glog.V(3) {
+			glog.Infoln("sending unregister on proxy keepalive control channel")
+		}
+
+		// Stop keepaliving
+		getproxykeepalive().keepalive.send(kaUnregisterMsg)
+		return
+	default:
+		p.invalmsghdlr(w, r, fmt.Sprintf("unrecognized path: %q in /daemon DELETE", apiItems[0]))
+		return
 	}
 }
 
@@ -3046,28 +3070,31 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 	if node == nil {
 		return http.StatusNotFound, fmt.Errorf("unknown node %s", sid)
 	}
-	// Synchronously call the target to inform it that it no longer is part of
-	// the cluster. The target should stop sending keepalive messages (that could
+
+	// Synchronously call the node to inform it that it no longer is part of
+	// the cluster. The node should stop sending keepalive messages (that could
 	// potentially reregister it back into the cluster).
-	if node.IsTarget() {
-		args := callArgs{
+	var (
+		timeoutCfg = cmn.GCO.Get().Timeout
+		args       = callArgs{
 			si: node,
 			req: cmn.ReqArgs{
 				Method: http.MethodDelete,
 				Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
 			},
-			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+			timeout: timeoutCfg.CplaneOperation,
 		}
-		for i := 0; i < 3; /*retries*/ i++ {
-			res := p.call(args)
-			if res.err == nil {
-				break
-			}
-			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s",
-				node, res.err, res.details)
-			time.Sleep(time.Second / 2)
+	)
+	for i := 0; i < 3; /*retries*/ i++ {
+		res := p.call(args)
+		if res.err == nil {
+			break
 		}
+		glog.Warningf("%s that is being unregistered failed to respond back: %v, %s",
+			node, res.err, res.details)
+		time.Sleep(timeoutCfg.CplaneOperation / 2)
 	}
+
 	// NOTE: "failure to respond back" may have legitimate reasons - proceeeding even when all retries fail
 	node = clone.GetNode(sid)
 	if node == nil {

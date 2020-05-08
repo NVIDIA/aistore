@@ -472,7 +472,7 @@ func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
 
 func (t *targetrunner) handleUnregisterReq() {
 	if glog.V(3) {
-		glog.Infoln("Sending unregister on target keepalive control channel")
+		glog.Infoln("sending unregister on target keepalive control channel")
 	}
 
 	// Stop keepaliving

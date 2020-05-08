@@ -524,7 +524,7 @@ func (k *keepalive) Stop(err error) {
 
 func (k *keepalive) send(msg string) {
 	glog.Infof("Sending message: %s", msg)
-	gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: msg}
+	k.controlCh <- controlSignal{msg: msg}
 }
 
 //
