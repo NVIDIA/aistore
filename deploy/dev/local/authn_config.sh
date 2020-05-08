@@ -10,10 +10,10 @@ cat > $CONFFILE <<EOL
 	},
 	"net": {
 		"http": {
-			"port": ${AUTHN_PORT:-52001},
-			"use_https": false,
-			"server_cert": "server.pem",
-			"server_key": "server.key"
+			"port":	${AUTHN_PORT:-52001},
+			"use_https": ${USE_HTTPS:-false},
+			"server_certificate": "${AIS_HTTPS_CERT:-server.crt}",
+			"server_key": "${AIS_HTTPS_KEY:-server.key}",
 		}
 	},
 	"auth": {

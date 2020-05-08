@@ -5,6 +5,7 @@
 package tutils
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -62,7 +63,7 @@ func init() {
 
 	aisInfo, err := api.GetRemoteAIS(BaseAPIParams(proxyURLReadOnly))
 	if err != nil {
-		Logf("failed to get remote cluster information: %v", err)
+		fmt.Fprintf(os.Stderr, "failed to get remote cluster information: %v", err)
 	} else {
 		for _, clusterInfo := range aisInfo {
 			if !clusterInfo.Online {

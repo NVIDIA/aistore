@@ -260,7 +260,7 @@ func headLink(link string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := httpClient.Do(req)
+	resp, err := clientForURL(link).Do(req)
 	if err != nil {
 		return nil, err
 	}

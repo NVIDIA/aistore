@@ -119,7 +119,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time,
 		req.Header.Add("User-Agent", cmn.GcsUA)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := clientForURL(t.obj.link).Do(req)
 	if err != nil {
 		return err
 	}

@@ -115,7 +115,11 @@ const (
 )
 
 var (
-	httpClient = &http.Client{}
+	httpClient  = &http.Client{}
+	httpsClient = cmn.NewClient(cmn.TransportArgs{
+		UseHTTPS:   true,
+		SkipVerify: true,
+	})
 )
 
 // public types
@@ -167,6 +171,13 @@ type (
 		reporter func(n int64)
 	}
 )
+
+func clientForURL(u string) *http.Client {
+	if cmn.IsHTTPS(u) {
+		return httpsClient
+	}
+	return httpClient
+}
 
 //==================================== Requests ===========================================
 
