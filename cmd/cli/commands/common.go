@@ -212,9 +212,10 @@ var (
 	countFlag = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
 
 	// Download
-	descriptionFlag  = cli.StringFlag{Name: "description,desc", Usage: "description of the job - can be useful when listing all downloads"}
-	timeoutFlag      = cli.StringFlag{Name: "timeout", Usage: "timeout for request to external resource, eg. '30m'"}
-	limitConnections = cli.IntFlag{Name: "limit-connections,conns", Usage: "number of connections each target can make concurrently (each target can handle at most #mountpaths connections)"}
+	descriptionFlag      = cli.StringFlag{Name: "description,desc", Usage: "description of the job - can be useful when listing all downloads"}
+	timeoutFlag          = cli.StringFlag{Name: "timeout", Usage: "timeout for request to external resource, eg. '30m'"}
+	limitConnectionsFlag = cli.IntFlag{Name: "limit-connections,conns", Usage: "number of connections each target can make concurrently (each target can handle at most #mountpaths connections)"}
+	objectsListFlag      = cli.StringFlag{Name: "object-list,from", Usage: "path to file containing JSON array of strings with object names to download"}
 
 	// dSort
 	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: cmn.DSortNameLowercase + "-testing", Usage: "bucket where shards will be put"}

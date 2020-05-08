@@ -78,7 +78,7 @@ func (d downloadingResult) String() string {
 	if len(d.downloadingErrors) > 0 {
 		sb.WriteString("\nFollowing files caused downloading errors:")
 		for file, err := range d.downloadingErrors {
-			sb.WriteString(fmt.Sprintf("\n%s: %s", file, err))
+			sb.WriteString(fmt.Sprintf("\n\t%s: %s", file, err))
 		}
 	}
 

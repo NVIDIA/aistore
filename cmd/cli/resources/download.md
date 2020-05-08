@@ -28,6 +28,7 @@ As for `DESTINATION` location, the only supported schema is `ais://` and the lin
 | `--description, --desc` | `string` | Description of the download job | `""` |
 | `--timeout` | `string` | Timeout for request to external resource | `""` |
 | `--limit-connections,--conns` | `int` | Number of connections each target can make concurrently (each target can handle at most #mountpaths connections) | `0` (unlimited - at most #mountpaths connections) |
+| `--object-list,--from` | `string` | Path to file containing JSON array of strings with object names to download | `""` |
 
 ### Examples
 
@@ -142,6 +143,25 @@ imagenet_train-000040.tgz 181.9MiB/946.7MiB [===========>-----------------------
 imagenet_train-000059.tgz 215.3MiB/945.7MiB [=============>------------------------------------------------| 00:06:21 ]   1.6 MiB/s
 imagenet_train-000123.tgz  51.8MiB/945.9MiB [==>-----------------------------------------------------------| 00:22:05 ] 645.0 KiB/s
 imagenet_train-000076.tgz  36.6MiB/946.1MiB [=>------------------------------------------------------------| 00:30:02 ] 527.0 KiB/s
+```
+
+
+#### Download multiple objects from GCP
+
+Download all objects contained in `objects.txt` file.
+The source and each object name from the file are concatenated (with `/`) to get full link to the external object.
+
+```bash
+$ cat objects.txt
+["imagenet/imagenet_train-000013.tgz", "imagenet/imagenet_train-000024.tgz"]
+$ ais start download gs://lpr-vision ais://local-lpr --object-list=objects.txt
+QdwOYMAqg
+Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
+$ # `gs://lpr-vision/imagenet/imagenet_train-000013.tgz` and `gs://lpr-vision/imagenet/imagenet_train-000024.tgz` have been requested
+$ ais show download QdwOYMAqg --progress --refresh 500ms
+Files downloaded:                       0/2 [--------------------------------------------------------------] 0 %
+imagenet_train-000013.tgz  31.2MiB/946.5MiB [=>------------------------------------------------------------| 00:24:35 ] 703.1 KiB/s
+imagenet_train-000023.tgz  38.5MiB/945.9MiB [==>-----------------------------------------------------------| 00:12:50 ]   1.1 MiB/s
 ```
 
 ## Stop download job

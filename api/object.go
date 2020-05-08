@@ -458,6 +458,18 @@ func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, msg i
 	})
 }
 
+func DownloadMultiWithParam(baseParams BaseParams, dlBody downloader.DlMultiBody, msg interface{}) (string, error) {
+	query := dlBody.AsQuery()
+
+	baseParams.Method = http.MethodPost
+	return doDlDownloadRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Download),
+		Body:       cmn.MustMarshal(msg),
+		Query:      query,
+	})
+}
+
 func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefix, suffix string) (string, error) {
 	dlBody := downloader.DlCloudBody{
 		Prefix: prefix,

@@ -28,7 +28,8 @@ var (
 		subcmdStartDownload: {
 			timeoutFlag,
 			descriptionFlag,
-			limitConnections,
+			limitConnectionsFlag,
+			objectsListFlag,
 		},
 		subcmdStartDsort: {
 			specFileFlag,
@@ -164,9 +165,10 @@ func stopXactionHandler(c *cli.Context) (err error) {
 
 func startDownloadHandler(c *cli.Context) error {
 	var (
-		description = parseStrFlag(c, descriptionFlag)
-		timeout     = parseStrFlag(c, timeoutFlag)
-		id          string
+		description     = parseStrFlag(c, descriptionFlag)
+		timeout         = parseStrFlag(c, timeoutFlag)
+		objectsListPath = parseStrFlag(c, objectsListFlag)
+		id              string
 	)
 
 	if c.NArg() == 0 {
@@ -205,11 +207,29 @@ func startDownloadHandler(c *cli.Context) error {
 		Timeout:     timeout,
 		Description: description,
 		Limits: downloader.DlLimits{
-			Connections: int64(parseIntFlag(c, limitConnections)),
+			Connections: int64(parseIntFlag(c, limitConnectionsFlag)),
 		},
 	}
 
-	if strings.Contains(source, "{") && strings.Contains(source, "}") {
+	if objectsListPath != "" {
+		var objects []string
+		{
+			file, err := os.Open(objectsListPath)
+			if err != nil {
+				return err
+			}
+			if err := jsoniter.NewDecoder(file).Decode(&objects); err != nil {
+				return fmt.Errorf("%q file doesn't seem to contain JSON array of strings: %v", objectsListPath, err)
+			}
+		}
+		for i, object := range objects {
+			objects[i] = link + "/" + object
+		}
+		payload := downloader.DlMultiBody{
+			DlBase: basePayload,
+		}
+		id, err = api.DownloadMultiWithParam(defaultAPIParams, payload, objects)
+	} else if strings.Contains(source, "{") && strings.Contains(source, "}") {
 		// Range
 		payload := downloader.DlRangeBody{
 			DlBase:   basePayload,
@@ -217,9 +237,6 @@ func startDownloadHandler(c *cli.Context) error {
 			Template: link,
 		}
 		id, err = api.DownloadRangeWithParam(defaultAPIParams, payload)
-		if err != nil {
-			return err
-		}
 	} else {
 		// Single
 		payload := downloader.DlSingleBody{
@@ -230,9 +247,10 @@ func startDownloadHandler(c *cli.Context) error {
 			},
 		}
 		id, err = api.DownloadSingleWithParam(defaultAPIParams, payload)
-		if err != nil {
-			return err
-		}
+	}
+
+	if err != nil {
+		return err
 	}
 
 	fmt.Fprintln(c.App.Writer, id)
