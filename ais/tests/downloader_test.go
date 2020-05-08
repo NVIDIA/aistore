@@ -105,6 +105,27 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 	}
 }
 
+func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []string) {
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+	resp, err := api.DownloadStatus(baseParams, id)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(
+		t, resp.FinishedCnt == len(objects),
+		"finished task mismatch (got: %d, expected: %d)",
+		resp.FinishedCnt, len(objects),
+	)
+
+	objs, err := tutils.ListObjects(proxyURL, bck, "", 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(
+		t, reflect.DeepEqual(objs, objects),
+		"objects mismatch (got: %+v, expected: %+v)", objs, objects,
+	)
+}
+
 func downloaderCompleted(t *testing.T, targetID string, targetsStats api.NodesXactStats) bool {
 	downloaderStat, exists := targetsStats[targetID]
 	for _, xaction := range downloaderStat {
@@ -180,7 +201,7 @@ func TestDownloadSingle(t *testing.T) {
 
 		// links below don't contain protocols to test that no error occurs
 		// in case they are missing.
-		link      = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
+		link      = "storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-000001.tgz"
 		linkSmall = "github.com/NVIDIA/aistore"
 	)
 
@@ -233,14 +254,7 @@ func TestDownloadSingle(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	waitForDownload(t, id, 30*time.Second)
-
-	objs, err := tutils.ListObjects(proxyURL, bck, "", 0)
-	tassert.CheckError(t, err)
-	if len(objs) != 1 || objs[0] != objName {
-		t.Errorf("expected single object (%s), got: %s", objName, objs)
-	}
-
-	// If the file was successfully downloaded, it means that its checksum was correct
+	checkDownloadedObjects(t, id, bck, []string{objName})
 
 	checkDownloadList(t, 2)
 }
@@ -254,7 +268,14 @@ func TestDownloadRange(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		template = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000000..000007}.tgz"
+		template        = "storage.googleapis.com/minikube/iso/minikube-v0.23.{0..4}.iso.sha256"
+		expectedObjects = []string{
+			"minikube-v0.23.0.iso.sha256",
+			"minikube-v0.23.1.iso.sha256",
+			"minikube-v0.23.2.iso.sha256",
+			"minikube-v0.23.3.iso.sha256",
+			"minikube-v0.23.4.iso.sha256",
+		}
 	)
 
 	clearDownloadList(t)
@@ -266,10 +287,8 @@ func TestDownloadRange(t *testing.T) {
 	id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
 
-	time.Sleep(3 * time.Second)
-
-	err = api.DownloadAbort(baseParams, id)
-	tassert.CheckFatal(t, err)
+	waitForDownload(t, id, 10*time.Second)
+	checkDownloadedObjects(t, id, bck, expectedObjects)
 
 	checkDownloadList(t)
 }
@@ -283,7 +302,13 @@ func TestDownloadMultiRange(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		template = "storage.googleapis.com/lpr-imagenet-augmented/imagenet_train-{0000..0007}-{001..009}.tgz"
+		template        = "storage.googleapis.com/minikube/iso/minikube-v0.{23..25..2}.{0..1}.iso.sha256"
+		expectedObjects = []string{
+			"minikube-v0.23.0.iso.sha256",
+			"minikube-v0.23.1.iso.sha256",
+			"minikube-v0.25.0.iso.sha256",
+			"minikube-v0.25.1.iso.sha256",
+		}
 	)
 
 	clearDownloadList(t)
@@ -295,10 +320,8 @@ func TestDownloadMultiRange(t *testing.T) {
 	id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
 
-	time.Sleep(3 * time.Second)
-
-	err = api.DownloadAbort(baseParams, id)
-	tassert.CheckFatal(t, err)
+	waitForDownload(t, id, 10*time.Second)
+	checkDownloadedObjects(t, id, bck, expectedObjects)
 
 	checkDownloadList(t)
 }
@@ -313,7 +336,8 @@ func TestDownloadMultiMap(t *testing.T) {
 			"ais": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
 			"k8s": "https://raw.githubusercontent.com/kubernetes/kubernetes/master/README.md",
 		}
-		proxyURL = tutils.RandomProxyURL()
+		expectedObjects = []string{"ais", "k8s"}
+		proxyURL        = tutils.RandomProxyURL()
 	)
 
 	clearDownloadList(t)
@@ -326,12 +350,7 @@ func TestDownloadMultiMap(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, 10*time.Second)
-
-	objs, err := tutils.ListObjects(proxyURL, bck, "", 0)
-	tassert.CheckFatal(t, err)
-	if len(objs) != len(m) {
-		t.Errorf("expected objects (%s), got: %s", m, objs)
-	}
+	checkDownloadedObjects(t, id, bck, expectedObjects)
 
 	checkDownloadList(t)
 }
@@ -361,12 +380,7 @@ func TestDownloadMultiList(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, 10*time.Second)
-
-	objs, err := tutils.ListObjects(proxyURL, bck, "", 0)
-	tassert.CheckFatal(t, err)
-	if !reflect.DeepEqual(objs, expectedObjs) {
-		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
-	}
+	checkDownloadedObjects(t, id, bck, expectedObjs)
 
 	checkDownloadList(t)
 }
@@ -378,7 +392,7 @@ func TestDownloadTimeout(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		objName    = "object"
-		link       = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
+		link       = "https://storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-000001.tgz"
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
@@ -412,11 +426,7 @@ func TestDownloadTimeout(t *testing.T) {
 		tutils.Logf("%v\n", err)
 	}
 
-	objs, err := tutils.ListObjects(proxyURL, bck, "", 0)
-	tassert.CheckFatal(t, err)
-	if len(objs) != 0 {
-		t.Errorf("expected 0 objects, got: %s", objs)
-	}
+	checkDownloadedObjects(t, id, bck, []string{})
 
 	checkDownloadList(t)
 }
@@ -521,7 +531,7 @@ func TestDownloadStatus(t *testing.T) {
 
 	files := map[string]string{
 		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
-		longFileName:  "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz",
+		longFileName:  "https://storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-000001.tgz",
 	}
 
 	clearDownloadList(t)
@@ -623,7 +633,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		objNameFirst  = "object-first"
 		objNameSecond = "object-second"
 
-		linkFirst  = "https://storage.googleapis.com/lpr-vision/cifar10_test.tgz"
+		linkFirst  = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
 		linkSecond = "github.com/NVIDIA/aistore"
 
 		expectedObjects = []string{objNameFirst, objNameSecond}
@@ -642,7 +652,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	id2, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objNameSecond, linkSecond)
 	tassert.CheckError(t, err)
 
-	waitForDownload(t, id, 20*time.Second)
+	waitForDownload(t, id, 5*time.Second)
 	waitForDownload(t, id2, 5*time.Second)
 
 	// If the file was successfully downloaded, it means that the external checksum was correct. Also because of the
@@ -666,7 +676,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 		objNameSecond = "linkSecond"
 
 		m = map[string]string{
-			"linkFirst":  "https://storage.googleapis.com/lpr-vision/cifar10_test.tgz",
+			"linkFirst":  "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
 			"linkSecond": "github.com/NVIDIA/aistore",
 		}
 
@@ -685,10 +695,8 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, 30*time.Second)
+	checkDownloadedObjects(t, id, bck, expectedObjects)
 
-	// If the file was successfully downloaded, it means that the external checksum was correct. Also because of the
-	// ValidateWarmGet property being set to True, if it was downloaded without errors then the internal checksum was
-	// also set properly
 	tutils.EnsureObjectsExist(t, baseParams, bck, expectedObjects...)
 }
 
@@ -703,9 +711,13 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		template = "storage.googleapis.com/lpr-vision/cifar{10..100..90}_test.tgz"
 
-		expectedObjects = []string{"cifar10_test.tgz", "cifar100_test.tgz"}
+		template        = "storage.googleapis.com/minikube/iso/minikube-v0.{21..25..2}.0.iso.sha256"
+		expectedObjects = []string{
+			"minikube-v0.21.0.iso.sha256",
+			"minikube-v0.23.0.iso.sha256",
+			"minikube-v0.25.0.iso.sha256",
+		}
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -719,11 +731,9 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
 
-	waitForDownload(t, id, time.Minute)
+	waitForDownload(t, id, 10*time.Second)
+	checkDownloadedObjects(t, id, bck, expectedObjects)
 
-	// If the file was successfully downloaded, it means that the external checksum was correct. Also because of the
-	// ValidateWarmGet property being set to True, if it was downloaded without errors then the internal checksum was
-	// also set properly
 	tutils.EnsureObjectsExist(t, baseParams, bck, expectedObjects...)
 }
 
@@ -731,7 +741,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		objName    = "object"
-		obj        = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
+		obj        = "storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-000001.tgz"
 	)
 
 	bucket, err := tutils.GenerateNonexistentBucketName("download", baseParams)
@@ -764,7 +774,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 		}
 		objsCnt = 100
 
-		template = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000000..000050}.tgz"
+		template = "storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-{000000..000050}.tgz"
 		m        = make(map[string]string, objsCnt)
 	)
 
@@ -905,7 +915,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 
-		template = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000001..0000140}.tgz"
+		template = "https://storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-{000001..0000140}.tgz"
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -952,7 +962,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 
-		template = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000001..0000140}.tgz"
+		template = "https://storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-{000001..0000140}.tgz"
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
