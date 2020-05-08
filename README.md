@@ -28,7 +28,8 @@ Also, AIStore:
 * provides unified global namespace across (ad-hoc) connected AIS clusters;
 * can be used as a fast tier or a cache for GCS and S3; can be populated on-demand and/or via separate `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;
-* includes MapReduce extension for massively parallel resharding of very large datasets.
+* includes MapReduce extension for massively parallel resharding of very large datasets;
+* easily integrates with existing TensorFlow training scripts.
 
 Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
@@ -42,6 +43,7 @@ For AIStore **white paper** and design philosophy, and for the most recently add
 - [Performance Monitoring](#performance-monitoring)
 - [Configuration](#configuration)
 - [Amazon S3 compatibility](docs/s3compat.md)
+- [TensorFlow integration](docs/tensorflow.md)
 - [Guides and References](#guides-and-references)
 - [Assorted Tips](#assorted-tips)
 - [Selected Package READMEs](#selected-package-readmes)
