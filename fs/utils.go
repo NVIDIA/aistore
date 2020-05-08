@@ -91,29 +91,38 @@ func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 		return nil, false, err
 	}
 	defer f.Close()
-	names, err = f.Readdirnames(-1)
-	if err == io.EOF {
-		return nil, true, nil
-	}
-	if err != nil {
-		return
-	}
-	l := len(names)
-	empty = true
-	if l == 0 {
-		return
-	}
-	for _, sub := range names {
-		subdir := filepath.Join(dir, sub)
-		if finfo, erc := os.Stat(subdir); erc == nil {
-			if !finfo.IsDir() {
-				empty = false
-				break
-			}
-			if _, empty, _ = IsDirEmpty(subdir); !empty { // recurs
-				break
+
+	// Try listing small number of files/dirs to do a quick emptiness check.
+	// If seems empty try a bigger sample to determine if it actually is.
+	for _, limit := range []int{10, 100, 1000, -1} {
+		names, err = f.Readdirnames(limit)
+		if err == io.EOF {
+			return nil, true, nil
+		}
+		if err != nil {
+			return
+		}
+		empty = true
+		if len(names) == 0 {
+			return
+		}
+		for _, sub := range names {
+			subdir := filepath.Join(dir, sub)
+			if finfo, erc := os.Stat(subdir); erc == nil {
+				if !finfo.IsDir() {
+					empty = false
+					break
+				}
+				if nestedNames, empty, err := IsDirEmpty(subdir); err != nil {
+					return nil, false, err
+				} else if !empty {
+					return nestedNames, false, nil
+				}
 			}
 		}
+		if !empty || len(names) < limit {
+			break
+		}
 	}
-	return names[:cmn.Min(8, l)], empty, nil
+	return names[:cmn.Min(8, len(names))], empty, nil
 }
