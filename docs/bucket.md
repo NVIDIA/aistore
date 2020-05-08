@@ -8,6 +8,7 @@
 - [Cloud Bucket](#cloud-bucket)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Cloud Bucket](#evict-cloud-bucket)
+- [Backend Bucket](#backend-bucket)
 - [Bucket Access Attributes](#bucket-access-attributes)
 - [List Objects](#list-objects)
   - [Properties and Options](#properties-and-options)
@@ -153,16 +154,21 @@ For example, to evict the `abc` cloud bucket from the AIS cluster, run:
 $ ais evict aws://myS3bucket
 ```
 
-## Backend bucket
+## Backend Bucket
 
-We have covered AIS and cloud buckets.
-These abstractions are sufficient for almost all use-cases.
-But there are times when we would like to download objects from a cloud bucket and benefit from the features available only for the AIS.
-The hard way of doing that would be, prefetching cloud objects, creating AIS bucket, and try to copy over the objects from the cloud bucket to the newly created AIS bucket.
-However, this wouldn't be feasible for large buckets or large objects as it could take forever to download and copy all the objects.
-To help this and other cases, when we want to have some connection between AIS bucket and cloud bucket, we've created *backend bucket* abstraction.
+So far, we have covered AIS and cloud buckets. These abstractions are sufficient for almost all use cases.  But there are times when we would like to download objects from an existing cloud bucket and then make use of the features available only for AIS buckets.
 
-With backend bucket it's possible to connect cloud bucket to AIS, just type:
+One way of accomplishing that could be:
+
+* prefetch cloud objects
+* create AIS bucket
+* and then use the bucket-copying [API](http_api.md) or [CLI](/cmd/cli/resources/bucket.md) to copy over the objects from the cloud bucket to the newly created AIS bucket.
+
+However, the extra-copying involved may prove to be time and/or space consuming. Hence, AIS-supported capability to establish an **ad-hoc** 1-to-1 relationship between a given AIS bucket and an existing cloud (*backend*).
+
+> As aside, the term "backend" - something that is on the back, usually far (or farther) away - is often used for data redundancy, data caching, and/or data sharing. AIS *backend bucket* allows to achieve all of the above.
+
+For example:
 
 ```console
 $ ais create bucket abc
@@ -171,7 +177,9 @@ $ ais set props ais://abc backend_bck=gcp://xyz
 Bucket props successfully updated
 ```
 
-After that you can access all objects from `gcp://xyz` using `ais://abc`:
+After that, you can access all objects from `gcp://xyz` via `ais://abc`. **On-demand persistent caching** (from the `gcp://xyz`) becomes then automatically available, as well as **all other AIS-supported storage services** configurable on a per-bucket basis.
+
+For example:
 
 ```console
 $ ais ls gcp://xyz
