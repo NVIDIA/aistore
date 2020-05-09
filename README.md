@@ -3,13 +3,13 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
-AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. At its version 2.x, AIS consistently shows balanced I/O distribution across arbitrary numbers of clustered servers and hard drives (consistently) producing performance charts that look as follows:
+AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered servers, producing performance charts that look as follows:
 
 <img src="docs/images/ais-disk-throughput-flat.png" alt="I/O distribution" width="600">
 
 > The picture above *comprises* 120 HDDs.
 
-> The capability to linearly scale-out for millions of stored objects (often also referred to as *shards*) was, and remains, one of the main incentives to build AIStore. But not the only one.
+The ability to scale linearly with each added disk was, and remains, one of the main incentives behind AIStore. But not the only one: much of the development is driven by the ideas to offload I/O intensive stages of the ETL pipelines and deploy AIS clusters easily/anywhere.
 
 ## Features
 
@@ -32,7 +32,7 @@ Also, AIStore:
 
 Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, please see the [overview document](docs/overview.md) (where you can also find 5 alternative ways to populate AIStore with existing datasets).
+For AIStore **white paper** and design philosophy, and for the most recently added features, please see the [overview document](docs/overview.md) (where you can also find **6** alternative ways to populate AIStore with existing datasets).
 
 **Table of Contents**
 - [Prerequisites](#prerequisites)
