@@ -5,7 +5,9 @@
 package tutils
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -80,8 +82,17 @@ func ExtractProxyNodes(smap *cluster.Smap) cluster.Nodes {
 }
 
 func RandomProxyURL() string {
-	baseParams := BaseAPIParams(proxyURLReadOnly)
+	var (
+		httpErr    = &cmn.HTTPError{}
+		baseParams = BaseAPIParams(proxyURLReadOnly)
+	)
+while503:
 	smap, err := api.GetClusterMap(baseParams)
+	if err != nil && errors.As(err, &httpErr) && httpErr.Status == http.StatusServiceUnavailable {
+		Logln("waiting for the cluster to start up...")
+		time.Sleep(waitClusterStartup)
+		goto while503
+	}
 	if err != nil {
 		return ""
 	}

@@ -2,10 +2,6 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-//
-//  FIXME -- FIXME: split and transform it into the: a) client API and b) test utilities
-//  FIXME -- FIXME: the client API must then move into the api package
-//
 package tutils
 
 import (
@@ -39,6 +35,8 @@ const (
 	MockDaemonID       = "MOCK"
 	proxyChangeLatency = 2 * time.Minute
 	dsortFinishTimeout = 6 * time.Minute
+
+	waitClusterStartup = 20 * time.Second
 )
 
 const (
@@ -511,7 +509,7 @@ while503:
 	smap, err = api.GetClusterMap(baseParams)
 	if err != nil && errors.As(err, &httpErr) && httpErr.Status == http.StatusServiceUnavailable {
 		t.Log("waiting for the cluster to start up...")
-		time.Sleep(time.Second)
+		time.Sleep(waitClusterStartup)
 		goto while503
 	}
 	tassert.CheckFatal(t, err)
