@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -45,6 +47,7 @@ var (
 		Alias string
 		URL   string
 	}
+	AuthToken string
 
 	MMSA *memsys.MMSA
 )
@@ -63,23 +66,8 @@ func init() {
 	HTTPClientGetPut = cmn.NewClient(transportArgs)
 
 	initProxyURL()
-
-	aisInfo, err := api.GetRemoteAIS(BaseAPIParams(proxyURLReadOnly))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to get remote cluster information: %v", err)
-	} else {
-		for _, clusterInfo := range aisInfo {
-			if !clusterInfo.Online {
-				continue
-			}
-			// TODO: use actual UUID (for now it doesn't work correctly as
-			//  proxy may not have full information about the remote cluster)
-			RemoteCluster.UUID = clusterInfo.Alias
-			RemoteCluster.Alias = clusterInfo.Alias
-			RemoteCluster.URL = clusterInfo.URL
-			break
-		}
-	}
+	initRemoteCluster()
+	initAuthToken()
 }
 
 func initProxyURL() {
@@ -108,4 +96,34 @@ func initProxyURL() {
 		cmn.ExitInfof("Failed to get primary proxy, err = %v", err)
 	}
 	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
+}
+
+func initRemoteCluster() {
+	aisInfo, err := api.GetRemoteAIS(BaseAPIParams(proxyURLReadOnly))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get remote cluster information: %v", err)
+	} else {
+		for _, clusterInfo := range aisInfo {
+			if !clusterInfo.Online {
+				continue
+			}
+			// TODO: use actual UUID (for now it doesn't work correctly as
+			//  proxy may not have full information about the remote cluster)
+			RemoteCluster.UUID = clusterInfo.Alias
+			RemoteCluster.Alias = clusterInfo.Alias
+			RemoteCluster.URL = clusterInfo.URL
+			break
+		}
+	}
+}
+
+func initAuthToken() {
+	home, err := os.UserHomeDir()
+	cmn.AssertNoErr(err)
+	tokenPath := filepath.Join(home, ".ais/token")
+
+	var token api.AuthCreds
+	jsp.Load(tokenPath, &token, jsp.Plain())
+
+	AuthToken = token.Token
 }

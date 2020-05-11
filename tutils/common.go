@@ -91,6 +91,7 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 
 type SkipTestArgs struct {
 	RequiresRemote bool
+	RequiresAuth   bool
 	Long           bool
 	Cloud          bool
 	Bck            cmn.Bck
@@ -99,6 +100,9 @@ type SkipTestArgs struct {
 func CheckSkip(t *testing.T, args SkipTestArgs) {
 	if args.RequiresRemote && RemoteCluster.UUID == "" {
 		t.Skip("test requires a remote cluster")
+	}
+	if args.RequiresAuth && AuthToken == "" {
+		t.Skip("test requires auth token")
 	}
 	if args.Long && testing.Short() {
 		t.Skip("skipping test in short mode")

@@ -61,6 +61,26 @@ test:short:
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
     - BUCKET="test" make test-short
 
+test:authn:
+  stage: test-short
+  only:
+    - schedules
+  variables:
+    AUTHENABLED: "true"
+    CREDDIR: "/tmp/cred"
+    AUTHN_URL: "http://localhost:52001"
+    AUTHN_SU_NAME: "admin"
+    AUTHN_SU_PASS: "admin"
+  script:
+    - mkdir -p $CREDDIR
+    - make cli
+    - make deploy <<< $'5\n5\n3\n0'
+    - ais auth add test test
+    - ais auth login test test
+    - BUCKET="test" RE="TestAuth" make test-run
+    - ais auth logout
+    - ais auth rm test
+
 test:long:
   <<: *test_long_def
   script:

@@ -13,7 +13,7 @@ cat > $CONFFILE <<EOL
 			"port":	${AUTHN_PORT:-52001},
 			"use_https": ${USE_HTTPS:-false},
 			"server_certificate": "${AIS_HTTPS_CERT:-server.crt}",
-			"server_key": "${AIS_HTTPS_KEY:-server.key}",
+			"server_key": "${AIS_HTTPS_KEY:-server.key}"
 		}
 	},
 	"auth": {

@@ -20,14 +20,14 @@ Environment variables used by the deployment script to setup AuthN server:
 
 | Variable | Default value | Description |
 |---|---|---|
-| PROXYURL | "" | Primary proxy URL for AuthN to notify the cluster about events like a token is revoked |
-| AUTHENABLED | false | Set it to `true` to enable authn server and token-based access in AIStore proxy |
-| AUTHN_SU_NAME | admin | Super user name (see `A super user` section for details) |
-| AUTHN_SU_PASS | admin | Super user password (see `A super user` section for details) |
-| SECRETKEY| aBitLongSecretKey | A secret key to encrypt and decrypt tokens |
-| CREDDIR | empty value | A path to directory to keep Google Storage user credentials |
-| AUTHN_PORT | 52001 | Port on which AuthN listens to requests |
-| AUTHN_TTL | 24h | A token expiration time. Can be set to 0 that means "no expiration time" |
+| PROXYURL | `""` | Primary proxy URL for AuthN to notify the cluster about events like a token is revoked |
+| AUTHENABLED | `false` | Set it to `true` to enable authn server and token-based access in AIStore proxy |
+| AUTHN_SU_NAME | `admin` | Super user name (see `A super user` section for details) |
+| AUTHN_SU_PASS | `admin` | Super user password (see `A super user` section for details) |
+| SECRETKEY| `aBitLongSecretKey` | A secret key to encrypt and decrypt tokens |
+| CREDDIR | `""` | A path to directory to keep Google Storage user credentials |
+| AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
+| AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 that means "no expiration time" |
 
 All variables can be set at AIStore launch. Example of starting AuthN with the default configuration:
 
