@@ -136,7 +136,7 @@ func rwPutLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, t
 		prc        int
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
-	errCh := make(chan error, 10)
+	errCh := make(chan error, numops)
 	fileCount := len(fileNames)
 	if taskGrp != nil {
 		defer taskGrp.Done()
@@ -147,36 +147,32 @@ func rwPutLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, t
 	filesPut := 0
 	for i := 0; i < numLoops; i++ {
 		for idx := 0; idx < fileCount; idx++ {
-			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
-
-			// Note: This test depends on the files it creates, so ignore reader type, always use file reader
-			r, err := readers.NewFileReader(baseDir, keyname, fileSize, true /* withHash */)
-			if err != nil {
-				tutils.Logf("PUT write FAIL: %v\n", err)
-				t.Error(err)
-				if errCh != nil {
-					errCh <- err
-				}
-				tassert.CheckFatal(t, r.Close())
-				return
-			}
+			objName := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 
 			if ok := tryLockFile(idx); ok {
+				// NOTE: This test depends on the files it creates, so ignore reader type, always use file reader
+				r, err := readers.NewFileReader(baseDir, objName, fileSize, true /*withHash*/)
+				if err != nil {
+					t.Error(err)
+					tassert.CheckFatal(t, r.Close())
+					unlockFile(idx, rwFileCreated)
+					return
+				}
+
 				n := putCounter.Load()
 				if rwCanRunAsync(n, numops) {
 					putCounter.Inc()
 					wg.Add(1)
-					localIdx := idx
-					go func() {
-						tutils.PutAsync(&wg, proxyURL, bck, keyname, r, errCh)
-						unlockFile(localIdx, rwFileCreated)
+					go func(idx int) {
+						tutils.PutAsync(&wg, proxyURL, bck, objName, r, errCh)
+						unlockFile(idx, rwFileCreated)
 						putCounter.Dec()
-					}()
+					}(idx)
 				} else {
 					putArgs := api.PutObjectArgs{
 						BaseParams: baseParams,
 						Bck:        bck,
-						Object:     keyname,
+						Object:     objName,
 						Hash:       r.XXHash(),
 						Reader:     r,
 					}
@@ -187,8 +183,6 @@ func rwPutLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, t
 					unlockFile(idx, rwFileCreated)
 				}
 				totalOps++
-			} else {
-				tassert.CheckFatal(t, r.Close())
 			}
 			filesPut++
 			newPrc := 100 * filesPut / totalCount
@@ -329,11 +323,6 @@ func rwGetLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, t
 
 func rwstress(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
-		if bck.IsRemoteAIS() {
-			// TODO: tests fails
-			t.Skip("TODO: does not work correctly")
-		}
-
 		err := cmn.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir))
 		tassert.CheckFatal(t, err)
 		defer func() {
