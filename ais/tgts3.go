@@ -59,10 +59,6 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if err := bckSrc.AllowGET(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
 	lom := &cluster.LOM{T: t, ObjName: objSrc}
 	if err := lom.Init(bckSrc.Bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
@@ -93,10 +89,6 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		smap = t.owner.smap.get()
 		err  error
 	)
-	if err = bckDst.AllowPUT(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
 	objName := path.Join(items[1:]...)
 	si, err = cluster.HrwTarget(bckDst.MakeUname(objName), &smap.Smap)
 	if err != nil {
@@ -212,10 +204,6 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 	var (
 		err error
 	)
-	if err = bck.AllowPUT(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
 	objName := path.Join(items[1:]...)
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
@@ -265,15 +253,15 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		offset, length, objSize int64
 		objName, tag            string
 	)
-	if err = bck.AllowGET(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
+	// TODO: remove
 	if objName, tag = cmn.S3ObjNameTag(path.Join(items[1:]...)); tag != "" {
-		cmn.Assert(tag == cmn.TF)
+		if tag != cmn.TF {
+			t.invalmsghdlr(w, r, fmt.Sprintf("invalid tag=%q (expecting %q)", tag, cmn.TF))
+			return
+		}
 		if !cmn.HasTarExtension(objName) {
-			t.invalmsghdlr(w, r, fmt.Sprintf("expected one of (%s, %s, %s) extensions", cmn.ExtTar, cmn.ExtTarTgz, cmn.ExtTarTgz))
+			a := []string{cmn.ExtTar, cmn.ExtTarTgz, cmn.ExtTarTgz}
+			t.invalmsghdlr(w, r, fmt.Sprintf("invalid name %s: expecting one of %v extensions", objName, a))
 			return
 		}
 	}
@@ -349,21 +337,17 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 
 // HEAD s3/bckName/objName
 func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+	var (
+		err    error
+		config = cmn.GCO.Get()
+	)
 	if len(items) < 2 {
 		t.invalmsghdlr(w, r, "object name is undefined")
 		return
 	}
-	config := cmn.GCO.Get()
 	bucket, objName := items[0], path.Join(items[1:]...)
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(t.owner.bmd, nil); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	var (
-		err error
-	)
-	if err = bck.AllowHEAD(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -397,18 +381,16 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 
 // DEL s3/bckName/objName
 func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	config := cmn.GCO.Get()
-	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+	var (
+		config = cmn.GCO.Get()
+		bck    = cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+	)
 	if err := bck.Init(t.owner.bmd, nil); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if len(items) < 2 {
 		t.invalmsghdlr(w, r, "object name is undefined")
-		return
-	}
-	if err := bck.AllowDELETE(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	objName := path.Join(items[1:]...)

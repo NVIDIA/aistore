@@ -117,7 +117,7 @@ func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 		lctx.misplaced = append(lctx.misplaced, lom)
 		return nil
 	}
-	if err = lom.AllowDELETE(); err != nil {
+	if err = lom.Bck().Allow(cmn.AccessObjDELETE); err != nil {
 		return nil
 	}
 

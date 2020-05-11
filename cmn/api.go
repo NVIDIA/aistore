@@ -357,41 +357,6 @@ func (c *LRUConf) String() string {
 		c.LowWM, c.HighWM, c.DontEvictTimeStr, c.OOS)
 }
 
-func (c *BucketProps) AccessToStr() string {
-	aattrs := c.AccessAttrs
-	if aattrs == 0 {
-		return "No access"
-	}
-	accList := make([]string, 0, 8)
-	if aattrs&AccessGET == AccessGET {
-		accList = append(accList, "GET")
-	}
-	if aattrs&AccessPUT == AccessPUT {
-		accList = append(accList, "PUT")
-	}
-	if aattrs&AccessDELETE == AccessDELETE {
-		accList = append(accList, "DELETE")
-	}
-	if aattrs&AccessHEAD == AccessHEAD {
-		accList = append(accList, "HEAD")
-	}
-	if aattrs&AccessColdGET == AccessColdGET {
-		accList = append(accList, "ColdGET")
-	}
-	return strings.Join(accList, ",")
-}
-
-func MakeAccess(aattr uint64, action string, bits uint64) uint64 {
-	if aattr == AllowAnyAccess {
-		aattr = AllowAllAccess
-	}
-	if action == AllowAccess {
-		return aattr | bits
-	}
-	Assert(action == DenyAccess)
-	return aattr & (AllowAllAccess ^ bits)
-}
-
 func (c *MirrorConf) String() string {
 	if !c.Enabled {
 		return "Disabled"
@@ -452,7 +417,7 @@ func DefaultBucketProps() *BucketProps {
 		LRU:         c.LRU,
 		Mirror:      c.Mirror,
 		Versioning:  c.Versioning,
-		AccessAttrs: AllowAllAccess,
+		AccessAttrs: allowAllAccess,
 		EC:          c.EC,
 	}
 }

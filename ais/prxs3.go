@@ -157,8 +157,8 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
-	if err := bck.AllowDELETE(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err := bck.Allow(cmn.AccessBckDELETE); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	if p.forwardCP(w, r, &msg, bucket, nil) {
@@ -183,8 +183,8 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
-	if err := bck.AllowDELETE(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err := bck.Allow(cmn.AccessObjDELETE); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)
@@ -222,8 +222,8 @@ func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket s
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
-	if err := bck.AllowHEAD(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err := bck.Allow(cmn.AccessBckHEAD); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	// From AWS docs:
@@ -295,8 +295,8 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if err := bckSrc.AllowGET(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err := bckSrc.Allow(cmn.AccessGET); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	bckDst := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
@@ -313,8 +313,8 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 		smap = p.owner.smap.get()
 		err  error
 	)
-	if err = bckDst.AllowPUT(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err = bckDst.Allow(cmn.AccessPUT); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	objName := strings.Trim(parts[1], "/")
@@ -356,8 +356,8 @@ func (p *proxyrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, ite
 		smap = p.owner.smap.get()
 		err  error
 	)
-	if err = bck.AllowPUT(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err = bck.Allow(cmn.AccessPUT); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	objName := path.Join(items[1:]...)
@@ -399,8 +399,8 @@ func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []s
 		smap = p.owner.smap.get()
 		err  error
 	)
-	if err = bck.AllowGET(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err = bck.Allow(cmn.AccessGET); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	objName, _ := cmn.S3ObjNameTag(path.Join(items[1:]...))
@@ -429,8 +429,8 @@ func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if err := bck.AllowHEAD(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err := bck.Allow(cmn.AccessObjHEAD); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	smap := p.owner.smap.get()
@@ -463,8 +463,8 @@ func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []s
 		smap = p.owner.smap.get()
 		err  error
 	)
-	if err = bck.AllowDELETE(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err = bck.Allow(cmn.AccessObjDELETE); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	objName := path.Join(items[1:]...)

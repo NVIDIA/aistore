@@ -23,9 +23,13 @@ import (
 )
 
 const (
-	readonlyBucketAccess  = "ro"
+	allBucketAccess       = "su"
 	readwriteBucketAccess = "rw"
-	emptyOrigin           = "none"
+	readonlyBucketAccess  = "ro"
+
+	readonlypatchBucketAccess = "rop" // TODO: remove
+
+	emptyOrigin = "none"
 
 	// max wait time for a function finishes before printing "Please wait"
 	longCommandTime = 10 * time.Second
@@ -279,7 +283,10 @@ func bucketDetailsSync(c *cli.Context, query cmn.QueryBcks) error {
 //  * `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
 //    `backend_bck.provider=gcp` so they match the expected fields in structs.
 //  * `backend_bck=none` with `backend_bck.name=""` and `backend_bck.provider=""`.
-func reformatBucketProps(bck cmn.Bck, nvs cmn.SimpleKVs) error {
+
+// TODO: support `allow` and `deny` verbs/operations on existing access permissions
+
+func reformatBucketProps(nvs cmn.SimpleKVs) error {
 	if v, ok := nvs[cmn.HeaderBackendBck]; ok {
 		delete(nvs, cmn.HeaderBackendBck)
 		var originBck cmn.Bck
@@ -301,23 +308,20 @@ func reformatBucketProps(bck cmn.Bck, nvs cmn.SimpleKVs) error {
 	}
 
 	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {
-		props, err := api.HeadBucket(defaultAPIParams, bck)
-		if err != nil {
-			return err
-		}
-
-		writeAccess := uint64(cmn.AccessPUT | cmn.AccessDELETE | cmn.AccessColdGET)
 		switch v {
+		case allBucketAccess:
+			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.AllAccess(), 10)
 		case readwriteBucketAccess:
-			aattrs := cmn.MakeAccess(props.AccessAttrs, cmn.AllowAccess, writeAccess)
-			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(aattrs, 10)
+			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.ReadWriteAccess(), 10)
 		case readonlyBucketAccess:
-			aattrs := cmn.MakeAccess(props.AccessAttrs, cmn.DenyAccess, writeAccess)
-			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(aattrs, 10)
+			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.ReadOnlyAccess(), 10)
+		case readonlypatchBucketAccess:
+			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.ReadOnlyPatchAccess(), 10)
 		default:
+			// arbitrary access-flags permutation - TODO validate vs cmn/api_access.go
 			if _, err := strconv.ParseUint(v, 10, 64); err != nil {
-				return fmt.Errorf("invalid bucket access %q, must be an integer, %q or %q",
-					v, readonlyBucketAccess, readwriteBucketAccess)
+				return fmt.Errorf("invalid bucket access %q, expecting uint64 or [%q, %q, %q]",
+					v, readonlyBucketAccess, readwriteBucketAccess, allBucketAccess)
 			}
 		}
 	}
@@ -345,7 +349,7 @@ func setBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 		return
 	}
 
-	if err = reformatBucketProps(bck, nvs); err != nil {
+	if err = reformatBucketProps(nvs); err != nil {
 		return
 	}
 

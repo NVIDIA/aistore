@@ -87,13 +87,22 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
+	if err := bck.Allow(cmn.AccessObjLIST); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusForbidden)
+		return
+	}
+	if err := bck.Allow(cmn.AccessGET); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusForbidden)
+		return
+	}
+
 	bck = cluster.NewBck(parsedRS.OutputBucket, parsedRS.OutputProvider, cmn.NsGlobal)
 	if err = bck.Init(ctx.bmdOwner, nil); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
-	if err = bck.AllowPUT(); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+	if err = bck.Allow(cmn.AccessPUT); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 

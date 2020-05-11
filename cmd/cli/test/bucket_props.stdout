@@ -2,7 +2,7 @@
 Bucket props successfully updated
 Bucket props successfully updated
 PROPERTY	 VALUE
-access		 GET,HEAD
+access		 GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS,PATCH
 checksum	 Type: xxhash | Validate: ColdGET
 ^created.*$
 ec		 Disabled
@@ -13,7 +13,7 @@ versioning	 Enabled | Validate on WarmGET: no
 Bucket props successfully reset
 Bucket props successfully updated
 PROPERTY	 VALUE
-access		 GET,PUT,DELETE,HEAD,ColdGET
+access		 GET,HEAD-OBJECT,PUT,APPEND,COLD-GET,DELETE-OBJECT,RENAME-OBJECT,PROMOTE,HEAD-BUCKET,LIST-OBJECTS,RENAME-BUCKET,PATCH,MAKE-NCOPIES,SYNC-BUCKET,DELETE-BUCKET
 checksum	 Type: xxhash | Validate: ColdGET
 ^created.*$
 ec		 Disabled

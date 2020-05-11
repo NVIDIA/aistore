@@ -99,17 +99,6 @@ func (lom *LOM) Bprops() *cmn.BucketProps   { return lom.bck.Props }
 func (lom *LOM) GetFQN() string             { return lom.FQN }
 func (lom *LOM) GetParsedFQN() fs.ParsedFQN { return lom.ParsedFQN }
 
-//
-// access perms
-//
-func (lom *LOM) AllowGET() error     { return lom.bck.AllowGET() }
-func (lom *LOM) AllowHEAD() error    { return lom.bck.AllowHEAD() }
-func (lom *LOM) AllowPUT() error     { return lom.bck.AllowPUT() }
-func (lom *LOM) AllowAPPEND() error  { return lom.bck.AllowAPPEND() }
-func (lom *LOM) AllowColdGET() error { return lom.bck.AllowColdGET() }
-func (lom *LOM) AllowDELETE() error  { return lom.bck.AllowDELETE() }
-func (lom *LOM) AllowRENAME() error  { return lom.bck.AllowRENAME() }
-
 func (lom *LOM) Config() *cmn.Config {
 	if lom.config == nil {
 		lom.config = cmn.GCO.Get()

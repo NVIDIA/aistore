@@ -404,8 +404,8 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := bck.AllowGET(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err := bck.Allow(cmn.AccessGET); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	smap := p.owner.smap.get()
@@ -459,14 +459,14 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		nodeID   string
 	)
 	if appendTy == "" {
-		err = bck.AllowPUT()
+		err = bck.Allow(cmn.AccessPUT)
 	} else {
 		nodeID, _ = parseAppendHandle(query.Get(cmn.URLParamAppendHandle))
-		err = bck.AllowAPPEND()
+		err = bck.Allow(cmn.AccessAPPEND)
 	}
 
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 
@@ -515,8 +515,8 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err = bck.AllowDELETE(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err = bck.Allow(cmn.AccessObjDELETE); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	smap := p.owner.smap.get()
@@ -554,8 +554,8 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
-	if err = bck.AllowDELETE(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err = bck.Allow(cmn.AccessBckDELETE); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	switch msg.Action {
@@ -764,6 +764,13 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 				return
 			}
+			// bck might be a query bck..
+			if err = bck.Init(p.owner.bmd, p.si); err == nil {
+				if err = bck.Allow(cmn.AccessBckHEAD); err != nil {
+					p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+					return
+				}
+			}
 			p.bucketSummary(w, r, bck, msg)
 		default:
 			p.invalmsghdlr(w, r, "URL path is too short: expecting bucket name")
@@ -839,6 +846,10 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtErr, msg.Action, bck.Provider))
 			return
 		}
+		if err = bck.Allow(cmn.AccessBckRENAME); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
 		bckFrom, bucketTo := bck, msg.Name
 		if bucket == bucketTo {
 			p.invalmsghdlr(w, r, fmt.Sprintf("cannot rename bucket %q as %q", bucket, bucket))
@@ -870,8 +881,19 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bucketTo)
+
 		// NOTE: destination MUST be AIS; TODO: support destination namespace via API
 		bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
+		bmd := p.owner.bmd.get()
+		if _, present := bmd.Get(bckTo); present {
+			if err = bckTo.Init(p.owner.bmd, p.si); err == nil {
+				if err = bckTo.Allow(cmn.AccessSYNC); err != nil {
+					p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+					return
+				}
+			}
+		}
+
 		if err := p.copyBucket(bckFrom, bckTo, &msg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -893,21 +915,41 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 			return
 		}
+		if err = bck.Allow(cmn.AccessSYNC); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
 		if err = p.doListRange(http.MethodPost, bucket, &msg, r.URL.Query()); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActListObjects:
 		started := time.Now()
+		if err = bck.Allow(cmn.AccessObjLIST); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
 		p.listObjectsAndCollectStats(w, r, bck, msg, started, false /* fast listing */)
 	case cmn.ActSummaryBucket:
+		if err = bck.Allow(cmn.AccessBckHEAD); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
 		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
+		if err = bck.Allow(cmn.AccessMAKENCOPIES); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
 		if err = p.makeNCopies(&msg, bck); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActECEncode:
 		if !bck.Props.EC.Enabled {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Could not start: bucket %q has EC disabled", bck.Name))
+			return
+		}
+		if err = bck.Allow(cmn.AccessEC); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
 		if err := p.ecEncode(bck, &msg); err != nil {
@@ -1122,9 +1164,22 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("%q is not supported for Cloud buckets: %s", msg.Action, bck))
 			return
 		}
+		if err = bck.Allow(cmn.AccessObjRENAME); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
+		if bck.Props.EC.Enabled {
+			p.invalmsghdlr(w, r, fmt.Sprintf("%q is not supported for erasure-coded buckets: %s",
+				msg.Action, bck))
+			return
+		}
 		p.objRename(w, r, bck)
 		return
 	case cmn.ActPromote:
+		if err = bck.Allow(cmn.AccessPROMOTE); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
 		p.promoteFQN(w, r, bck, &msg)
 		return
 	default:
@@ -1197,6 +1252,10 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if err := bck.Allow(cmn.AccessPATCH); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+		return
+	}
 	msg = &cmn.ActionMsg{Value: &propsToUpdate}
 	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -1232,8 +1291,8 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := bck.AllowHEAD(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err := bck.Allow(cmn.AccessObjHEAD); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	smap := p.owner.smap.get()

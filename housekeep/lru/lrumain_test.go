@@ -72,7 +72,10 @@ func newTargetLRUMock() *cluster.TargetMock {
 	// Bucket owner mock, required for LOM
 	bmdMock := cluster.NewBaseBownerMock()
 	tMock := cluster.NewTargetMock(bmdMock)
-	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}, LRU: cmn.LRUConf{Enabled: true}}
+	props := &cmn.BucketProps{
+		Cksum:       cmn.CksumConf{Type: cmn.ChecksumNone},
+		LRU:         cmn.LRUConf{Enabled: true},
+		AccessAttrs: cmn.AllAccess()}
 	bmdMock.Add(cluster.NewBck(bucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 	return tMock
 }

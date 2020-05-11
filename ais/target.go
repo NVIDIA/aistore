@@ -570,11 +570,6 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err = lom.AllowGET(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
 	goi := &getObjInfo{
 		started: started,
 		t:       t,
@@ -655,13 +650,8 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if appendTy == "" {
-		err = lom.AllowPUT()
-	} else {
-		err = lom.AllowAPPEND()
-	}
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 	if lom.Bck().IsAIS() && lom.VerConf().Enabled {
@@ -708,10 +698,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-	}
-	if err := bck.AllowDELETE(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
 	}
 	b, err := ioutil.ReadAll(r.Body)
 	if err == nil && len(b) > 0 {
@@ -793,10 +779,6 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if err = lom.AllowDELETE(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1407,9 +1389,8 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename object from remote bucket", lom))
 		return
 	}
-	// TODO -- FIXME: cannot rename erasure-coded
-	if err = lom.AllowRENAME(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+	if lom.Bck().Props.EC.Enabled {
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename erasure-coded object", lom))
 		return
 	}
 

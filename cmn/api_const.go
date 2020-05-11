@@ -315,24 +315,6 @@ const (
 	GetTargetObjects = "objects"
 )
 
-// bucket and object access attrs and [TODO] some of their popular combinations
-const (
-	AccessGET = 1 << iota
-	AccessHEAD
-	AccessPUT
-	AccessColdGET
-	AccessDELETE
-	AccessRENAME
-	AccessAPPEND
-	AccessPATCH
-
-	AllowAnyAccess = 0
-	AllowAllAccess = ^uint64(0)
-
-	AllowAccess = "allow"
-	DenyAccess  = "deny"
-)
-
 // enum: compression
 const (
 	CompressAlways = "always"

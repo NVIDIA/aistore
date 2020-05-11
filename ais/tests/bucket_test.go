@@ -1199,7 +1199,8 @@ func TestBucketReadOnly(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// make bucket read-only
-	aattrs := cmn.MakeAccess(p.AccessAttrs, cmn.DenyAccess, cmn.AccessPUT|cmn.AccessDELETE)
+	// NOTE: must allow PATCH - otherwise api.SetBucketProps a few lines down below won't work
+	aattrs := cmn.ReadOnlyAccess() | cmn.AccessPATCH
 	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{AccessAttrs: api.Uint64(aattrs)})
 	tassert.CheckFatal(t, err)
 

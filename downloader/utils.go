@@ -122,6 +122,10 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 	if err := bck.Init(t.GetBowner(), t.Snode()); err != nil {
 		return nil, err
 	}
+	if err := bck.Allow(cmn.AccessSYNC); err != nil {
+		// TODO: return nil, err, 403
+		return nil, err
+	}
 
 	if err = singlePayload.Validate(); err == nil {
 		if objects, err = singlePayload.ExtractPayload(); err != nil {

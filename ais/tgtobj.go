@@ -463,9 +463,6 @@ do:
 			// no space left to prefetch object
 			return capInfo.Err, http.StatusBadRequest
 		}
-		if err := goi.lom.AllowColdGET(); err != nil {
-			return err, http.StatusBadRequest
-		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
 		if err, errCode := goi.t.GetCold(goi.ctx, goi.lom, false /*prefetch*/); err != nil {
 			return err, errCode

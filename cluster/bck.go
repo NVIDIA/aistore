@@ -202,24 +202,14 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 //
 // access perms
 //
+func (b *Bck) Allow(bit int) error { return b.checkAccess(bit) }
 
-func (b *Bck) AllowGET() error     { return b.allow("GET", cmn.AccessGET) }
-func (b *Bck) AllowHEAD() error    { return b.allow("HEAD", cmn.AccessHEAD) }
-func (b *Bck) AllowPUT() error     { return b.allow("PUT", cmn.AccessPUT) }
-func (b *Bck) AllowPATCH() error   { return b.allow("PATCH", cmn.AccessPATCH) }
-func (b *Bck) AllowAPPEND() error  { return b.allow("APPEND", cmn.AccessAPPEND) }
-func (b *Bck) AllowColdGET() error { return b.allow("cold-GET", cmn.AccessColdGET) }
-func (b *Bck) AllowDELETE() error  { return b.allow("DELETE", cmn.AccessDELETE) }
-func (b *Bck) AllowRENAME() error  { return b.allow("RENAME", cmn.AccessRENAME) }
-
-func (b *Bck) allow(oper string, bits uint64) (err error) {
-	if b.Props.AccessAttrs == cmn.AllowAnyAccess {
+func (b *Bck) checkAccess(bit int) (err error) {
+	if (b.Props.AccessAttrs & uint64(bit)) != 0 {
 		return
 	}
-	if (b.Props.AccessAttrs & bits) != 0 {
-		return
-	}
-	err = cmn.NewBucketAccessDenied(b.String(), oper, b.Props.AccessAttrs)
+	op := cmn.AccessOp(bit)
+	err = cmn.NewBucketAccessDenied(b.String(), op, b.Props.AccessAttrs)
 	return
 }
 
