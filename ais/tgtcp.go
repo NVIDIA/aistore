@@ -20,9 +20,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/ais/cloud"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"

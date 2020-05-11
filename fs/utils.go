@@ -99,30 +99,32 @@ func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 		if err == io.EOF {
 			return nil, true, nil
 		}
-		if err != nil {
-			return
+		if err != nil || len(names) == 0 {
+			return nil, true, err
 		}
-		empty = true
-		if len(names) == 0 {
-			return
-		}
+		// Firstly, check if there is any file at this level.
+		dirs := names[:0]
 		for _, sub := range names {
-			subdir := filepath.Join(dir, sub)
-			if finfo, erc := os.Stat(subdir); erc == nil {
+			subDir := filepath.Join(dir, sub)
+			if finfo, erc := os.Stat(subDir); erc == nil {
 				if !finfo.IsDir() {
-					empty = false
-					break
+					return names[:cmn.Min(8, len(names))], false, nil
 				}
-				if nestedNames, empty, err := IsDirEmpty(subdir); err != nil {
-					return nil, false, err
-				} else if !empty {
-					return nestedNames, false, nil
-				}
+				dirs = append(dirs, subDir)
 			}
 		}
-		if !empty || len(names) < limit {
+		// If not, then try to recurse into each directory.
+		for _, subDir := range dirs {
+			if nestedNames, empty, err := IsDirEmpty(subDir); err != nil {
+				return nil, false, err
+			} else if !empty {
+				return nestedNames, false, nil
+			}
+		}
+		// If we've just listed all the files/dirs then exit.
+		if len(names) < limit {
 			break
 		}
 	}
-	return names[:cmn.Min(8, len(names))], empty, nil
+	return nil, true, nil
 }

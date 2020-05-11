@@ -9,40 +9,40 @@ import (
 	"testing"
 )
 
-func CheckFatal(t *testing.T, err error) {
+func CheckFatal(tb testing.TB, err error) {
 	if err != nil {
 		debug.PrintStack()
-		t.Fatalf(err.Error())
+		tb.Fatalf(err.Error())
 	}
 }
 
-func CheckError(t *testing.T, err error) {
+func CheckError(tb testing.TB, err error) {
 	if err != nil {
 		debug.PrintStack()
-		t.Errorf(err.Error())
+		tb.Errorf(err.Error())
 	}
 }
 
-func Fatalf(t *testing.T, cond bool, msg string, args ...interface{}) {
+func Fatalf(tb testing.TB, cond bool, msg string, args ...interface{}) {
 	if !cond {
 		debug.PrintStack()
-		t.Fatalf(msg, args...)
+		tb.Fatalf(msg, args...)
 	}
 }
 
-func Errorf(t *testing.T, cond bool, msg string, args ...interface{}) {
+func Errorf(tb testing.TB, cond bool, msg string, args ...interface{}) {
 	if !cond {
 		debug.PrintStack()
-		t.Errorf(msg, args...)
+		tb.Errorf(msg, args...)
 	}
 }
 
-func SelectErr(t *testing.T, errCh chan error, verb string, errIsFatal bool) {
+func SelectErr(tb testing.TB, errCh chan error, verb string, errIsFatal bool) {
 	if num := len(errCh); num > 0 {
 		err := <-errCh
-		f := t.Errorf
+		f := tb.Errorf
 		if errIsFatal {
-			f = t.Fatalf
+			f = tb.Fatalf
 		}
 		if num > 1 {
 			f("Failed to %s %d objects, e.g. error:\n%v", verb, num, err)

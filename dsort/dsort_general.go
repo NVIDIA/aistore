@@ -16,21 +16,17 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/fs"
-
-	"github.com/NVIDIA/aistore/sys"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
-
-	"github.com/NVIDIA/aistore/dsort/extract"
 	"golang.org/x/sync/errgroup"
 )
 

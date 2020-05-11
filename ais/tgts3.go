@@ -12,14 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/tar2tf"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tar2tf"
 )
 
 // PUT s3/bckName/objName
