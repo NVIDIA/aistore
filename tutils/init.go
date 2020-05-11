@@ -52,6 +52,9 @@ var (
 func init() {
 	MMSA = memsys.DefaultPageMM()
 	envURL := os.Getenv(cmn.AISURLEnvVar)
+	// Since tests do not have access to cluster configuration, the tests
+	// detect client type by the primary proxy URL passed by a user.
+	// Certificate check is always disabled.
 	transportArgs.UseHTTPS = cmn.IsHTTPS(envURL)
 	transportArgs.SkipVerify = cmn.IsParseBool(os.Getenv(cmn.AISSkipVerifyEnvVar))
 	HTTPClient = cmn.NewClient(transportArgs)

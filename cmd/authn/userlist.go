@@ -59,10 +59,12 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 		err   error
 		bytes []byte
 	)
+	// Create an HTTP client compatible with cluster server and disable
+	// certificate check for HTTPS.
 	client := cmn.NewClient(cmn.TransportArgs{
 		Timeout:    conf.Timeout.Default,
 		UseHTTPS:   cmn.IsHTTPS(proxy.URL),
-		SkipVerify: true, // TODO: trust all servers at this moment
+		SkipVerify: true,
 	})
 	mgr := &userManager{
 		Path:   dbPath,

@@ -499,6 +499,8 @@ func parseCmdLine() (params, error) {
 		p.proxyURL = "http://" + ip + ":" + port
 	}
 	transportArgs.UseHTTPS = useHTTPS
+	// if the primary proxy uses HTTPS, create a secure HTTP client with
+	// disabled certificate check.
 	httpClient = cmn.NewClient(transportArgs)
 	p.bp = api.BaseParams{
 		Client: httpClient,

@@ -25,6 +25,7 @@ var (
 )
 
 type (
+	// Options to create a transport for HTTP client
 	TransportArgs struct {
 		DialTimeout      time.Duration
 		Timeout          time.Duration
@@ -35,7 +36,9 @@ type (
 		ReadBufferSize   int
 		UseHTTPS         bool
 		UseHTTPProxyEnv  bool
-		SkipVerify       bool
+		// For HTTPS mode only: if true, the client does not verify server's
+		// certificate. It is useful for clusters with self-signed certificates.
+		SkipVerify bool
 	}
 )
 

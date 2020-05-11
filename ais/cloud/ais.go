@@ -110,6 +110,9 @@ func (m *AisCloudProvider) Apply(v interface{}, action string) error {
 	return nil
 }
 
+// At the same time a cluster may have registered both types of remote AIS
+// clusters(HTTP and HTTPS). So, the method must use both kind of clients and
+// select the correct one at the moment it sends a request.
 func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudInfoAIS) {
 	var (
 		cfg         = cmn.GCO.Get()
@@ -173,6 +176,10 @@ func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudI
 	return
 }
 
+// A list of remote AIS URLs can contains both HTTP and HTTPS links at the
+// same time. So, the method must use both kind of clients and select the
+// correct one at the moment it sends a request. First successful request
+// saves the good client for the future usage.
 func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (offline bool, err error) {
 	var (
 		url           string

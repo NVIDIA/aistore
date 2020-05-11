@@ -115,6 +115,10 @@ const (
 )
 
 var (
+	// Downloader cannot use global HTTP client because it must work with
+	// arbitrary server. The downloader chooses the correct client by
+	// server's URL. Certification check is disabled always for now and
+	// does not depend on cluster settings.
 	httpClient  = &http.Client{}
 	httpsClient = cmn.NewClient(cmn.TransportArgs{
 		UseHTTPS:   true,
