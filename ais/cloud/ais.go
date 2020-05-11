@@ -112,7 +112,13 @@ func (m *AisCloudProvider) Apply(v interface{}, action string) error {
 
 func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudInfoAIS) {
 	var (
-		cfg = cmn.GCO.Get()
+		cfg         = cmn.GCO.Get()
+		httpClient  = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout})
+		httpsClient = cmn.NewClient(cmn.TransportArgs{
+			Timeout:    cfg.Client.Timeout,
+			UseHTTPS:   true,
+			SkipVerify: cfg.Net.HTTP.SkipVerify,
+		})
 	)
 	cia = make(cmn.CloudInfoAIS, len(m.remote))
 	m.mu.RLock()
@@ -122,8 +128,10 @@ func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudI
 			aliases []string
 			info    = &cmn.RemoteAISInfo{}
 		)
-		trArgs := remTransportArgs([]string{remAis.url}, cfg)
-		client := cmn.NewClient(trArgs)
+		client := httpClient
+		if cmn.IsHTTPS(remAis.url) {
+			client = httpsClient
+		}
 		info.URL = remAis.url
 		for a, u := range m.alias {
 			if uuid == u {
@@ -165,26 +173,22 @@ func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudI
 	return
 }
 
-func remTransportArgs(confURLs []string, cfg *cmn.Config) cmn.TransportArgs {
-	anyHTTPS := false
-	for _, u := range confURLs {
-		anyHTTPS = anyHTTPS || cmn.IsHTTPS(u)
-	}
-	return cmn.TransportArgs{
-		Timeout:    cfg.Client.Timeout,
-		UseHTTPS:   anyHTTPS,
-		SkipVerify: cfg.Net.HTTP.UseHTTPS,
-	}
-}
-
 func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (offline bool, err error) {
 	var (
 		url           string
 		remSmap, smap *cluster.Smap
-		trArgs        = remTransportArgs(confURLs, cfg)
-		client        = cmn.NewClient(trArgs)
+		httpClient    = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout})
+		httpsClient   = cmn.NewClient(cmn.TransportArgs{
+			Timeout:    cfg.Client.Timeout,
+			UseHTTPS:   true,
+			SkipVerify: cfg.Net.HTTP.SkipVerify,
+		})
 	)
 	for _, u := range confURLs {
+		client := httpClient
+		if cmn.IsHTTPS(u) {
+			client = httpsClient
+		}
 		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u}); err != nil {
 			glog.Warningf("%s: failing to reach %q via %s: %v", aisCloudPrefix, alias, u, err)
 			continue
@@ -209,7 +213,11 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (of
 		return
 	}
 	r.smap, r.url = remSmap, url
-	r.bp = api.BaseParams{Client: cmn.NewClient(trArgs), URL: url}
+	if cmn.IsHTTPS(url) {
+		r.bp = api.BaseParams{Client: httpsClient, URL: url}
+	} else {
+		r.bp = api.BaseParams{Client: httpClient, URL: url}
+	}
 	r.uuid = remSmap.UUID
 	return
 }
