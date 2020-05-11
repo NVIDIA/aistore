@@ -7,7 +7,14 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
+)
+
+const (
+	suNameEnvVar    = "AUTHN_SU_NAME"
+	suPassEnvVar    = "AUTHN_SU_PASS"
+	secretKeyEnvVar = "SECRETKEY"
 )
 
 type config struct {
@@ -44,6 +51,22 @@ type authConfig struct {
 type timeoutConfig struct {
 	DefaultStr string        `json:"default_timeout"`
 	Default    time.Duration `json:"-"` // omitempty
+}
+
+// Replaces super user name and password, and secret key used to en(de)code
+// tokens with values from environment variables is they are set.
+// Useful for deploying AuthN in k8s with k8s feature 'secrets' to avoid
+// having those setings in configuration file.
+func (c *config) applySecrets() {
+	if val := os.Getenv(suNameEnvVar); val != "" {
+		c.Auth.Username = val
+	}
+	if val := os.Getenv(suPassEnvVar); val != "" {
+		c.Auth.Password = val
+	}
+	if val := os.Getenv(secretKeyEnvVar); val != "" {
+		c.Auth.Secret = val
+	}
 }
 
 func (c *config) validate() (err error) {

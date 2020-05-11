@@ -66,6 +66,7 @@ func main() {
 	if err = jsp.Load(configPath, conf, jsp.Plain()); err != nil {
 		glog.Fatalf("Failed to load configuration: %v", err)
 	}
+	conf.applySecrets()
 	if err = conf.validate(); err != nil {
 		glog.Fatalf("Invalid configuration: %v", err)
 	}
