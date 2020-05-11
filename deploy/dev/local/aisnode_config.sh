@@ -94,27 +94,26 @@ cat > $CONFFILE <<EOL
 		"instance": ${INSTANCE:-0}
 	},
 	"net": {
-		"ipv4":			"${IPV4LIST}",
-		"ipv4_intra_control":	"${IPV4LIST_INTRA_CONTROL}",
-		"ipv4_intra_data":	"${IPV4LIST_INTRA_DATA}",
+		"ipv4":                 "${IPV4LIST}",
+		"ipv4_intra_control":   "${IPV4LIST_INTRA_CONTROL}",
+		"ipv4_intra_data":      "${IPV4LIST_INTRA_DATA}",
 		"l4": {
-			"proto":		"tcp",
-			"port":			"${PORT:-8080}",
-			"port_intra_control":	"${PORT_INTRA_CONTROL:-9080}",
-			"port_intra_data":	"${PORT_INTRA_DATA:-10080}",
-			"sndrcv_buf_size":	${SNDRCV_BUF_SIZE:-131072}
+			"proto":              "tcp",
+			"port":               "${PORT:-8080}",
+			"port_intra_control": "${PORT_INTRA_CONTROL:-9080}",
+			"port_intra_data":    "${PORT_INTRA_DATA:-10080}",
+			"sndrcv_buf_size":    ${SNDRCV_BUF_SIZE:-131072}
 		},
 		"http": {
-			"proto":		"${AIS_PROTO:-http}",
-			"rproxy":		"",
-			"server_certificate":	"${AIS_HTTPS_CERT:-server.crt}",
-			"server_key":		"${AIS_HTTPS_KEY:-server.key}",
-			"write_buffer_size":	${HTTP_WRITE_BUFFER_SIZE:-0},
-			"read_buffer_size":	${HTTP_READ_BUFFER_SIZE:-0},
-			"rproxy_cache":		true,
-			"use_https":		${USE_HTTPS:-false},
-			"chunked_transfer":	${CHUNKED_TRANSFER:-true},
-			"skip_verify": ${AIS_SKIP_VERIFY:-false}
+			"use_https":          ${USE_HTTPS:-false},
+			"server_certificate": "${AIS_HTTPS_CERT:-server.crt}",
+			"server_key":         "${AIS_HTTPS_KEY:-server.key}",
+			"write_buffer_size":  ${HTTP_WRITE_BUFFER_SIZE:-0},
+			"read_buffer_size":   ${HTTP_READ_BUFFER_SIZE:-0},
+			"chunked_transfer":   ${CHUNKED_TRANSFER:-true},
+			"skip_verify":        ${AIS_SKIP_VERIFY:-false},
+			"rproxy":             "",
+			"rproxy_cache":       true
 		}
 	},
 	"fshc": {
@@ -152,7 +151,7 @@ cat > $CONFFILE <<EOL
 		"ekm_missing_key":       "abort",
 		"default_max_mem_usage": "80%",
 		"dsorter_mem_threshold": "100GB",
-		"compression":		"${COMPRESSION:-never}",
+		"compression":           "${COMPRESSION:-never}",
 		"call_timeout":          "10m"
 	}
 }

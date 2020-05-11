@@ -21,11 +21,22 @@ const (
 
 var (
 	configFilePath string
-	defaultConfig  = Config{
+	defaultConfig  Config
+)
+
+func init() {
+	configDirPath := cmn.AppConfigPath(configDirName)
+	configFilePath = filepath.Join(configDirPath, configFileName)
+
+	proto := "http"
+	if value := os.Getenv(cmn.AISUseHTTPSEnvVar); cmn.IsParseBool(value) {
+		proto = "https"
+	}
+	defaultConfig = Config{
 		Cluster: ClusterConfig{
-			URL:               "http://127.0.0.1:8080",
-			DefaultAISHost:    "http://127.0.0.1:8080",
-			DefaultDockerHost: "http://172.50.0.2:8080",
+			URL:               proto + "://127.0.0.1:8080",
+			DefaultAISHost:    proto + "://127.0.0.1:8080",
+			DefaultDockerHost: proto + "://172.50.0.2:8080",
 		},
 		Timeout: TimeoutConfig{
 			TCPTimeoutStr:  "60s",
@@ -34,11 +45,6 @@ var (
 			HTTPTimeout:    300 * time.Second,
 		},
 	}
-)
-
-func init() {
-	configDirPath := cmn.AppConfigPath(configDirName)
-	configFilePath = filepath.Join(configDirPath, configFileName)
 }
 
 type Config struct {

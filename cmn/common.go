@@ -86,6 +86,7 @@ const (
 
 	AISURLEnvVar        = "AISURL"
 	AISSkipVerifyEnvVar = "AIS_SKIP_VERIFY"
+	AISUseHTTPSEnvVar   = "USE_HTTPS"
 )
 
 type (

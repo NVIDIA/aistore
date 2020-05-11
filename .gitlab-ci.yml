@@ -22,7 +22,7 @@ variables:
 before_script:
   - export PATH="$PATH:$GOPATH/bin"
   - apt-get update -yq
-  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse python3-pip python3-setuptools
+  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse python3-pip python3-setuptools coreutils
 
 stages:
   - build
@@ -81,6 +81,25 @@ test:authn:
     - ais auth logout
     - ais auth rm test
 
+test:https:
+  stage: test-short
+  only:
+    - schedules
+  variables:
+    USE_HTTPS: "true"
+    AIS_SKIP_VERIFY: "true"
+    AIS_HTTPS_CERT: "$CI_PROJECT_DIR/localhost.crt"
+    AIS_HTTPS_KEY: "$CI_PROJECT_DIR/localhost.key"
+    AISURL: "https://localhost:8080"
+  script:
+    - openssl req -x509 -out $AIS_HTTPS_CERT -keyout $AIS_HTTPS_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
+    - make aisfs cli
+    - make deploy <<< $'5\n5\n3\n0'
+    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\n0'
+    - sleep 3
+    - ais attach remote alias=https://127.0.0.1:11080 # attach to remote cluster
+    - BUCKET="test" make test-short
+
 test:long:
   <<: *test_long_def
   script:
@@ -91,7 +110,7 @@ test:long:
 test:cloud:
   <<: *test_long_def
   variables:
-    AWS_REGION: us-west-2
+    AWS_REGION: "us-west-2"
   script:
     - make deploy <<< $'6\n5\n3\n1'
     - BUCKET="ci-aistore" make test-long

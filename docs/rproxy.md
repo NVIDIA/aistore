@@ -21,9 +21,9 @@ $ export http_proxy=<AIS PROXY URL>
 
 ```json
     "http": {
-        "proto":                "http",
-        "rproxy":               "cloud",
-        "rproxy_cache":         true,
+        "use_https":    false,
+        "rproxy":       "cloud",
+        "rproxy_cache": true,
         ...
     }
 ```
@@ -89,9 +89,9 @@ AIS supports a second (and special) mode whereby an AIS gateway serves as a **re
 The corresponding use case entails [configuring `rproxy=target`](/deploy/dev/local/aisnode_config.sh) and is intended to support (kernel-based) clients with a preference for a single (or a few) persistent storage connection(s).
 ```json
     "http": {
-        "proto":                "http",
-        "rproxy":               "target",
-        "rproxy_cache":         true,
+        "use_https":    false,
+        "rproxy":       "target",
+        "rproxy_cache": true,
         ...
     }
 ```

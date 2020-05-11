@@ -205,7 +205,6 @@ func (gco *globalConfigOwner) Subscribe(cl ConfigListener) {
 var (
 	SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
 	supportedL4Protos  = []string{tcpProto}
-	supportedL7Protos  = []string{httpProto, httpsProto}
 
 	// NOTE: new validators must be run via Config.Validate() - see below
 
@@ -493,16 +492,16 @@ type L4Conf struct {
 }
 
 type HTTPConf struct {
-	Proto           string `json:"proto"`              // http or https
-	RevProxy        string `json:"rproxy"`             // RevProxy* enum
+	Proto           string `json:"-"`                  // http or https (set depending on `UseHTTPS`)
 	Certificate     string `json:"server_certificate"` // HTTPS: openssl certificate
 	Key             string `json:"server_key"`         // HTTPS: openssl key
+	RevProxy        string `json:"rproxy"`             // RevProxy* enum
 	WriteBufferSize int    `json:"write_buffer_size"`  // http.Transport.WriteBufferSize; if zero, a default (currently 4KB) is used
 	ReadBufferSize  int    `json:"read_buffer_size"`   // http.Transport.ReadBufferSize; if zero, a default (currently 4KB) is used
-	RevProxyCache   bool   `json:"rproxy_cache"`       // RevProxy caches or work as transparent proxy
 	UseHTTPS        bool   `json:"use_https"`          // use HTTPS instead of HTTP
-	Chunked         bool   `json:"chunked_transfer"`   // https://tools.ietf.org/html/rfc7230#page-36
 	SkipVerify      bool   `json:"skip_verify"`        // skip certificate verification for HTTPS (e.g, used with self-signed certificates)
+	RevProxyCache   bool   `json:"rproxy_cache"`       // RevProxy caches or work as transparent proxy
+	Chunked         bool   `json:"chunked_transfer"`   // https://tools.ietf.org/html/rfc7230#page-36
 }
 
 type FSHCConf struct {
@@ -922,8 +921,9 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 		return fmt.Errorf("l4 proto is not recognized %s, expected one of: %s", c.L4.Proto, supportedL4Protos)
 	}
 
-	if !StringInSlice(c.HTTP.Proto, supportedL7Protos) {
-		return fmt.Errorf("http proto is not recognized %s, expected one of: %s", c.HTTP.Proto, supportedL7Protos)
+	c.HTTP.Proto = httpProto // not validating: read-only, and can take only two values
+	if c.HTTP.UseHTTPS {
+		c.HTTP.Proto = httpsProto
 	}
 
 	// Parse ports

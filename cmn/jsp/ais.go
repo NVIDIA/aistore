@@ -67,11 +67,6 @@ func _loadConfig(clivars *ConfigCLI) (config *cmn.Config, changed bool, err erro
 		glog.MaxSize = cmn.MiB
 	}
 
-	config.Net.HTTP.Proto = "http" // not validating: read-only, and can take only two values
-	if config.Net.HTTP.UseHTTPS {
-		config.Net.HTTP.Proto = "https"
-	}
-
 	differentIPs := config.Net.IPv4 != config.Net.IPv4IntraControl
 	differentPorts := config.Net.L4.Port != config.Net.L4.PortIntraControl
 	config.Net.UseIntraControl = false
