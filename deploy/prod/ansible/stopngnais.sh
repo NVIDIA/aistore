@@ -1,3 +1,5 @@
+#!/bin/bash
+
 parallel-ssh -h inventory/targets.txt -i "sudo systemctl stop ais_proxy"
 parallel-ssh -h inventory/targets.txt -i "sudo systemctl stop ais_target"
 parallel-ssh -h inventory/clients.txt -i "sudo systemctl stop ais_proxy"
