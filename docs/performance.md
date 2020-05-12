@@ -17,9 +17,7 @@ Below you will find some tips and tricks to ensure that AIStore does deliver.
 
 ## Performance tuning
 
-### General
-
-A couple of articles that we think you may find useful or helpful:
+Articles you may find useful:
 
 * https://wiki.mikejung.biz/Ubuntu_Performance_Tuning <- good guide about general optimizations (some of them are described below)
 * https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf <- detailed view on how to tune the RHEL lot of the tips and tricks apply for other Linux distributions

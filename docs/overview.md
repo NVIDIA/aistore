@@ -7,6 +7,10 @@ In this [white paper](https://arxiv.org/abs/2001.01858) we describe AIStore and 
 * AIStore [white paper](https://arxiv.org/abs/2001.01858).
 * IEEE BigData 2019 [poster](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf)
 
+Also, for insights and specific requirements from a deep-learning perspective, please watch:
+
+* [Introduction to Large Scale Deep Learning](https://www.youtube.com/watch?v=kNuA2wflygM&list=PL0dsKxFNMcX4XcB0w1Wm-pvSfQu-eWM26)
+
 The rest of this document is structured as follows:
 
 - [New in 3.1](#new-in-3.1)

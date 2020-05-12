@@ -9,27 +9,28 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 
 > The picture above *comprises* 120 HDDs.
 
-The ability to scale linearly with each added disk was, and remains, one of the main incentives behind AIStore. But not the only one: much of the development is driven by the ideas to offload I/O intensive stages of the ETL pipelines and deploy AIS clusters easily/anywhere.
+The ability to scale linearly with each added disk was, and remains, one of the main incentives behind AIStore. Much of the development is also driven by the ideas to offload dataset transformation and other I/O intensive stages of the ETL pipelines.
 
 ## Features
 
 * scale-out with no downtime and no limitation;
-* HTTP REST API to GET/PUT objects, create, destroy, list and configure buckets;
+* comprehensive HTTP REST API to GET and PUT objects, create, destroy, list and configure buckets, and more;
+* [Amazon S3 API](https://docs.aws.amazon.com/s3/index.html) to run unmodified S3 apps;
 * FUSE client (`aisfs`) to access AIS objects as files;
-* arbitrary number of (extremely lightweight) access points;
+* arbitrary number of extremely lightweight access points;
 * easy-to-use CLI that supports [TAB auto-completions](cmd/cli/README.md);
-* automated rebalancing upon changes in cluster membership, drive failures, bucket renames;
+* automated cluster rebalancing upon: changes in cluster membership, drive failures and attachments, bucket renames;
 * N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
 
 Also, AIStore:
 
 * can be deployed on any commodity hardware;
-* supports Amazon S3, Google Cloud, and Microsoft Azure Blob Storage backends (and all S3, GCS, and Azure-compliant object storages);
+* supports Amazon S3, Google Cloud, and Microsoft Azure backends (and all S3, GCS, and Azure-compliant object storages);
 * provides unified global namespace across (ad-hoc) connected AIS clusters;
-* can be used as a fast tier or a cache for GCS and S3; can be populated on-demand and/or via separate `prefetch` and `download` APIs;
+* can be used as a fast cache for GCS and S3; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;
 * includes MapReduce extension for massively parallel resharding of very large datasets;
-* easily integrates with existing TensorFlow training scripts.
+* supports existing [PyTorch](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf) and [TensorFlow](https://www.youtube.com/watch?v=r9uw1BNt2x8&feature=youtu.be)-based training models.
 
 Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
@@ -146,17 +147,21 @@ In particular, the `make` provides a growing number of developer-friendly comman
 
 ## Deployment
 
-As previously stated, AIStore can be deployed in a vast variety of [ways](deploy). This section focuses on a single Linux machine; as such, it is intended for developers and development, *or* for a quick trial.
+AIStore can be deployed in a vast variety of [ways](deploy), ad-hoc, on any bare-metal or virtualized hardware. For production deployments on Kubernetes, please refer to:
+
+* [Deploying AIS on k8s](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md)
+
+The rest of this section talks about a single Linux machine and, as such, is intended for developers and development, *or* for a quick trial.
 
 ### Local Docker-Compose
 
-The 2nd option to run AIS on your local machine requires [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It also allows for multi-clusters deployment with multiple separate networks. You can deploy a simple AIS cluster within seconds or deploy a multi-container cluster for development.
+[Local Playground](#local-playground) is probably the speadiest option to run AIS clusters. However, to take advantage of containerization (which includes, for instance, multiple logically-isolated configurable networks), you can also run AIStore as described here:
 
-To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md).
+* [Getting started with Docker](docs/docker_main.md).
 
 ### Local Kubernetes
 
-The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/k8s).
+Yet another local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/k8s).
 
 ## Containerized Deployments: Host Resource Sharing
 
