@@ -120,5 +120,6 @@ test:soak:
   only:
     - schedules
   script:
+    - make aisloader
     - make deploy <<< $'5\n5\n3\n0'
     - FLAGS="--short --rec-cycles=1" make test-soak

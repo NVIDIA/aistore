@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -46,19 +47,21 @@ type (
 
 const (
 	soaktestDirname = "/tmp/ais-soak"
-	aisloaderFolder = soaktestDirname + "/aisloaderexec"
-	aisloaderTarget = aisloaderFolder + "/aisloader"
+)
+
+var (
+	aisloaderPath string
 )
 
 func init() {
-	os.RemoveAll(aisloaderFolder)
 	os.MkdirAll(soaktestDirname, 0755)
-	os.MkdirAll(aisloaderFolder, 0755)
-	cmd := exec.Command("make", "aisloader")
-	cmd.Dir = path.Join(os.Getenv("GOPATH"), "src/github.com/NVIDIA/aistore")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s", aisloaderFolder))
-	err := cmd.Run()
-	cmn.AssertNoErr(err)
+
+	// We expect the `aisloader` binary to be present in `$GOPATH/bin` directory.
+	aisloaderPath = filepath.Join(os.Getenv("GOPATH"), "bin", "aisloader")
+	_, err := os.Stat(aisloaderPath)
+	if err != nil {
+		cmn.ExitLogf("'aisloader' binary is not present in %q (err: %v)", aisloaderPath, err)
+	}
 }
 
 func AISExec(ch chan *stats.PrimitiveStat, opType string, bck cmn.Bck, numWorkers int, params *AISLoaderExecParams) {
@@ -71,11 +74,10 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bck cmn.Bck, numWorker
 		getConfig = true
 	}
 
-	spf := fmt.Sprintf
-
 	// Using the default readertype sgl for now. If later we decided to use file, need to also set aisloader tmpdir to be a unique folder per call.
-
-	cmd := exec.Command(aisloaderTarget, spf("-ip=%s", primaryIP), spf("-port=%s", primaryPort),
+	spf := fmt.Sprintf
+	cmd := exec.Command(aisloaderPath,
+		spf("-ip=%s", primaryIP), spf("-port=%s", primaryPort),
 		spf("-bucket=%s", bck.Name),
 		spf("-provider=%s", bck.Provider),
 		spf("-numworkers=%v", numWorkers),
