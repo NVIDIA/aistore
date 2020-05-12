@@ -69,3 +69,9 @@ func TestCeilAlign(t *testing.T) {
 	tassert.Fatalf(t, cmn.CeilAlign(10, 3) == 12, "got %d, expected 12", cmn.CeilAlign(10, 3))
 	tassert.Fatalf(t, cmn.CeilAlign(10, 1) == 10, "got %d, expected 10", cmn.CeilAlign(10, 1))
 }
+
+func TestMin(t *testing.T) {
+	tassert.Errorf(t, cmn.Min(0, 1, 2, 3, 4, 5, 1) == 0, "expected 0 to be the smallest, got %d", cmn.Min(0, 1, 2, 3, 4, 5, 1))
+	tassert.Errorf(t, cmn.Min(10, 100, -2) == -2, "expected -2 to be the smallest, got %d", cmn.Min(10, 100, -2))
+	tassert.Errorf(t, cmn.Min(1, 0) == 0, "expected 0 to be the smallest, got %d", cmn.Min(1, 0))
+}

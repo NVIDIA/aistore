@@ -86,12 +86,17 @@ func MaxDuration(a, b time.Duration) time.Duration {
 	return b
 }
 
-// Min returns min value of a and b for int types
-func Min(a, b int) int {
-	if a < b {
-		return a
+// Min returns min value from given ints
+func Min(ints ...int) int {
+	Assert(len(ints) >= 2)
+	if len(ints) == 2 {
+		if ints[0] < ints[1] {
+			return ints[0]
+		}
+		return ints[1]
 	}
-	return b
+
+	return Min(ints[0], Min(ints[1:]...))
 }
 
 // Max returns max value of a and b for int types

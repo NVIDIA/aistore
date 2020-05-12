@@ -1,0 +1,5 @@
+ais copy bucket b // FAIL "Did you mean: "ais cp bucket b"?"
+ais list // FAIL "Did you mean: "ais ls"?"
+
+ais star xaction rebalance --flag1 --flag2 // FAIL "Did you mean: "ais start xaction rebalance --flag1 --flag2"?"
+ais start xaticon rebalance --flag1 v1 --flag2 v2 // FAIL "Did you mean: "ais start xaction rebalance --flag1 v1 --flag2 v2"?"

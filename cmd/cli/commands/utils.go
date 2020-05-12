@@ -53,6 +53,8 @@ const (
 
 	sizeArg  = "SIZE"
 	unitsArg = "UNITS"
+
+	incorrectCmdDistance = 3
 )
 
 var (
@@ -138,12 +140,48 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 }
 
 func commandNotFoundError(c *cli.Context, cmd string) error {
+	message := notFoundMessage(c, cmd)
+
 	return &usageError{
 		context:      c,
-		message:      fmt.Sprintf("unknown command %q", cmd),
+		message:      message,
 		helpData:     c.App,
 		helpTemplate: cli.SubcommandHelpTemplate,
 	}
+}
+
+func notFoundMessage(c *cli.Context, cmd string) string {
+	closestCommand, distance := findClosestCommand(cmd, c.App.VisibleCommands())
+
+	if distance >= cmn.Max(incorrectCmdDistance, len(cmd)/2) {
+		return fmt.Sprintf("unknown command %q", cmd)
+	}
+
+	sb := &strings.Builder{}
+	sb.WriteString(c.App.Name)
+	sb.WriteString(" " + closestCommand)
+	for _, a := range c.Args()[1:] { // skip first arg - it is the wrong command
+		sb.WriteString(" " + a)
+	}
+	for _, f := range c.FlagNames() {
+		sb.WriteString(" --" + f)
+	}
+	return fmt.Sprintf("unknown command %q. Did you mean: %q?", cmd, sb.String())
+}
+
+func findClosestCommand(cmd string, candidates []cli.Command) (result string, distance int) {
+	var (
+		minDist     = math.MaxInt64
+		closestName string
+	)
+	for i := 0; i < len(candidates); i++ {
+		dist := cmn.DamerauLevenstheinDistance(cmd, candidates[i].Name)
+		if dist < minDist {
+			minDist = dist
+			closestName = candidates[i].Name
+		}
+	}
+	return closestName, minDist
 }
 
 func (e *additionalInfoError) Error() string {
