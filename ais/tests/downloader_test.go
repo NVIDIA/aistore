@@ -1006,8 +1006,8 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	// If downloader didn't start jobs concurrently the number of current
 	// tasks would be 0 (as the previous download would clog the downloader).
 	tassert.Errorf(
-		t, len(resp2.CurrentTasks) > smap.CountTargets(),
+		t, len(resp2.CurrentTasks) >= smap.CountTargets(),
 		"number of tasks mismatch (expected at least: %d, got: %d)",
-		smap.CountTargets()+1, len(resp2.CurrentTasks),
+		smap.CountTargets(), len(resp2.CurrentTasks),
 	)
 }
