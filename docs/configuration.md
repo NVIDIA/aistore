@@ -56,7 +56,7 @@ First, some basic facts:
 * To get the node's up-to-date configuration, execute:
 
 ```console
-$ curl -X GET 'http://G-or-T/v1/daemon?what=config'
+$ ais show config <daemon-ID>
 ```
 
 where `G-or-T` denotes a **(hostname:port)** pair of **any AIS node** member of the cluster.
@@ -67,14 +67,14 @@ Most configuration options can be updated - on an individual (target or proxy) d
 
 * Set `periodic.stats_time` = 1 minute, `periodic.iostat_time_long` = 4 seconds (scope of the operation: entire **cluster**)
 ```console
-$ curl -i -X PUT 'http://G/v1/cluster/setconfig?periodic.stats_time=1m&periodic.iostat_time_long=4s'
+$ ais set config periodic.stats_time=1m disk.iostat_time_long=4s
 ```
 
-> As of v2.1, AIS configuration includes a section called `disk`. The `disk` in turn contains several knobs - one of those knobs is `disk.iostat_time_long`, another - `disk.disk_util_low_wm`. To update one or both of those named variables on all or one of the clustered nodes, you could:
+> AIS configuration includes a section called `disk`. The `disk` in turn contains several knobs - one of those knobs is `disk.iostat_time_long`, another - `disk.disk_util_low_wm`. To update one or both of those named variables on all or one of the clustered nodes, you could:
 
 * Set `disk.iostat_time_long` = 3 seconds, `disk.disk_util_low_wm` = 40 percent (scope of the operation: **one AIS node**)
 ```console
-$ curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?disk.iostat_time_long=3s&disk.disk_util_low_wm=40'
+$ ais set config <daemon-ID> periodic.stats_time=1m disk.iostat_time_long=4s
 ```
 
 For more examples and for alternative ways to format configuration-updating requests, please see [examples below](#examples).
@@ -96,6 +96,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `disk.iostat_time_long` | `2s` | The interval that disk utilization is checked when disk utilization is below `disk_util_low_wm`. |
 | `disk.iostat_time_short` | `100ms` | Used instead of `iostat_time_long` when disk utilization reaches `disk_util_high_wm`. If disk utilization is between `disk_util_high_wm` and `disk_util_low_wm`, a proportional value between `iostat_time_short` and `iostat_time_long` is used. |
 | `rebalance.enabled` | `true` | Enables and disables automatic rebalance after a target receives the updated cluster map. If the (automated rebalancing) option is disabled, you can still use the REST API (`PUT {"action": "start", "value": {"kind": "rebalance"}} v1/cluster`) to initiate cluster-wide rebalancing operation |
+| `rebalance.dont_run_time` | `0m` | Period after start during which we should **not** start rebalance on new target registration |
 | `rebalance.dest_retry_time` | `2m` | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | `rebalance.multiplier` | `4` | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
 | `rebalance.quiescent` | `20s` | Rebalace moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
@@ -130,20 +131,6 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `ec.objsize_limit` | `262144` | Indicated the minimum size of an object in bytes that is erasure encoded. Smaller objects are replicated |
 | `ec.compression` | `"never"` | LZ4 compression parameters used when EC sends its fragments and replicas over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
 | `compression.block_size` | `262144` | Maximum data block size used by LZ4, greater values may increase compression ration but requires more memory. Value is one of 64KB, 256KB(AIS default), 1MB, and 4MB |
-
-## Configuration persistence
-
-By default, configuration updates are transient. To persist the configuration across restarts, use a special knob named `persist`, for instance:
-
-```console
-$ curl -i -X PUT 'http://G/v1/cluster/setconfig?periodic.stats_time=1m&persist=true'
-```
-
-This (above) does two things: updates `periodic.stats_time` to 1 minute and stores the updated configuration into local respective locations of all AIS nodes. To *scope* the same request to one specific AIS node, run:
-
-```console
-$ curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?periodic.stats_time=1m&persist=true'
-```
 
 ## Startup override
 

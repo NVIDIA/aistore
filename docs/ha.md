@@ -34,7 +34,13 @@ The proxy's bootstrap sequence initiates by executing the following three main s
 
 - step 1: load a local copy of the cluster map and try to use it for the discovery of the current one;
 - step 2: use the local configuration and the local Smap to perform the discovery of the cluster-level metadata;
-- step 3: use all of the above _and_ the environment setting "AIS_PRIMARYPROXY" to figure out whether this proxy must keep starting up as a primary (otherwise, join as a non-primary).
+- step 3: use all of the above _and_ two environment settings - `AIS_PRIMARY_ID` and `AIS_IS_PRIMARY` - to figure out whether this proxy must keep starting up as a primary (otherwise, join as a non-primary).
+
+The rules to decide whether a given starting-up proxy is the primary one are very simple:
+
+- `AIS_PRIMARY_ID` is considered first. If non-empty, this environment variable unambiguously and directly specifies the unique ID of the primary gateway. As such, it takes precedence over local copy of the cluster map (Smap);
+- if `AIS_PRIMARY_ID` is empty or not available, then it is the local copy of Smap that makes the determination.
+- if both `AIS_PRIMARY_ID` and Smap are empty or not available, then it is the `AIS_IS_PRIMARY` environment - if true, then the starting up proxy will start as a primary
 
 Further, the (potentially) primary proxy executes more steps:
 

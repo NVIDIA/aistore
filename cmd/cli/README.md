@@ -22,23 +22,39 @@ You can also install [shell autocompletions](#ais-cli-shell-autocomplete) for AI
 
 ## Using AIS CLI
 
-AIS CLI makes requests to AIStore cluster. It resolves cluster address in the following order:
-1. `AIS_URL` environment variable (eg. `http://<YOUR_CLUSTER_IP>:<PORT>`); if not present:
-2. Discovers IP address of proxy kubernetes pod; if kubernetes runs multiple clusters, set an environment variable `AIS_NAMESPACE` to select a proxy from the given namespace
-3. Discovers IP address of proxy docker container; if multiple docker clusters running, picks the IP address of one of them and prints relevant message;
-if not successful or local non-containerized deployment:
-4. Default `http://172.50.0.2:8080` and `http://127.0.0.1:8080` for local containerized and non-containerized deployments respectively
+### Config
 
-This command returns the list of commands for the CLI.
+On first use, CLI will create `config.json` file in `$XDG_CONFIG_HOME/ais` (or if `XDG_CONFIG_HOME` is not set, in `~/.config/ais`) directory.
+The content of the file presents as follows:
+
+```json
+{
+  "cluster": {
+    "url": "http://127.0.0.1:8080",
+    "default_ais_host": "http://127.0.0.1:8080",
+    "default_docker_host": "http://172.50.0.2:8080"
+  },
+  "timeout": {
+    "tcp_timeout": "60s",
+    "http_timeout": "300s"
+  }
+}
+```
+
+Simply change config file so next time CLI will use updated values.
+
+### First steps
+
+To get the list of commands run following command:
 
 ```console
 $ ais --help
 ```
 
-This command returns the status of the cluster; if successful, the cluster address was resolved correctly.
+To check if the CLI can correctly contact the cluster and to get cluster status run following command:
 
 ```console
-$ ais status
+$ ais show cluster
 ```
 
 ## AIS CLI Shell Autocomplete
@@ -70,6 +86,10 @@ List of available CLI resources
 
 * [DSort](resources/dsort.md)
 
+* [Mountpath](resources/mpath.md)
+
+* [Remote cluster](resources/remote.md)
+
 * [Auth](resources/users.md)
 
 ## Info For Developers
@@ -100,5 +120,5 @@ Provider syntax `[provider://]BUCKET_NAME` is valid CLI-wide, meaning that every
 also supports provider syntax. For more details refer to each command's documentation.
 
 Allowed values: `''` (autodetect provider), `ais` (local cluster), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform),
-`azure` (Microsoft Azure), `cloud` (anonymous - cloud provider determined automatically). 
+`azure` (Microsoft Azure), `cloud` (anonymous - cloud provider determined automatically).
 Additionally `provider://` syntax supports aliases `s3` (for `aws`), `gs` (for `gcp`) and `az` (for `azure`).

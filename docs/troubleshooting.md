@@ -8,7 +8,50 @@ redirect_from:
 
 ## Introduction
 
-This text is intended to help troubleshooting AIStore operation.
+This text is intended to help troubleshooting AIStore operation. Easy-to-use TAB-completion based [CLI](../cmd/cli/README.md) is one of the first tools to consider, and of the first commands would be the one that shows the state of the cluster:
+
+```console
+# ais show cluster <TAB>-<TAB>
+...  proxy         smap          target
+```
+
+Meaning, you can run `ais show cluster` (the short version), and you can also run it with any of the additional completions listed above.
+
+For example:
+
+```console
+$ ais show cluster
+PROXY            MEM USED %      MEM AVAIL       CPU USED %      UPTIME
+202446p8082        0.06          31.28GiB          0.00          19m0s
+279128p8080        0.07          31.28GiB          0.00          19m0s
+928059p8081[P]     0.08          31.28GiB          0.00          19m0s
+
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE
+147665t8084        0.07          31.28GiB        14              2.511TiB          0.00          not started
+165274t8087        0.07          31.28GiB        14              2.511TiB          0.00          not started
+198815t8088        0.08          31.28GiB        14              2.511TiB          0.00          not started
+247389t8085        0.07          31.28GiB        14              2.511TiB          0.00          not started
+426988t8086        0.07          31.28GiB        14              2.511TiB          0.00          not started
+968103t8083        0.07          31.28GiB        14              2.511TiB          0.00          not started
+```
+
+Since at any given time there's only one primary gateway, you may also find it useful to be able to designate a different one administratively. This is easy - example:
+
+```console
+$ ais set primary <TAB>-<TAB>
+202446p8082  279128p8080  928059p8081
+
+$ ais set primary 279128p8080
+279128p8080 has been set as a new primary proxy
+
+ $ ais show cluster
+PROXY            MEM USED %      MEM AVAIL       CPU USED %      UPTIME
+202446p8082        0.08          31.28GiB          0.06          46m0s
+279128p8080[P]     0.08          31.28GiB          0.11          46m0s
+928059p8081        0.08          31.28GiB          0.06          46m10s
+
+...
+```
 
 ## Cluster Integrity Errors
 

@@ -35,6 +35,8 @@ As for `DESTINATION` location, the only supported schema is `ais://` and the lin
 | --- | --- | --- | --- |
 | `--description, --desc` | `string` | Description of the download job | `""` |
 | `--timeout` | `string` | Timeout for request to external resource | `""` |
+| `--limit-connections,--conns` | `int` | Number of connections each target can make concurrently (each target can handle at most #mountpaths connections) | `0` (unlimited - at most #mountpaths connections) |
+| `--object-list,--from` | `string` | Path to file containing JSON array of strings with object names to download | `""` |
 
 ### Examples
 
@@ -47,6 +49,7 @@ $ ais create bucket ubuntu
 ubuntu bucket created
 $ ais start download http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/ubuntu-18.04.1.iso
 cudIYMAqg
+Run `ais show download cudIYMAqg` to monitor the progress of downloading.
 $ ais show download cudIYMAqg --progress
 Files downloaded:              0/1 [---------------------------------------------------------]  0 %
 ubuntu-18.04.1.iso 431.7MiB/1.8GiB [============>--------------------------------------------] 23 %
@@ -61,26 +64,74 @@ ubuntu-18.04.1.iso	1.82GiB	1
 Download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-000000.tgz` to `gs://lpr-vision/imagenet/imagenet_train-000140.tgz` and saves them in `local-lpr` bucket, inside `imagenet` subdirectory.
 
 ```bash
-$ ais create local-lpr
-local-lpr bucket created
+$ ais create bucket local-lpr
+"local-lpr" bucket created
 $ ais start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/
 QdwOYMAqg
+Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
+$ ais show download QdwOYMAqg
+Download progress: 0/141 (0.00%)
 $ ais show download QdwOYMAqg --progress --refresh 500ms
+Files downloaded:                              0/141 [--------------------------------------------------------------] 0 %
+imagenet/imagenet_train-000006.tgz 192.7MiB/947.0MiB [============>-------------------------------------------------| 00:08:52 ]   1.4 MiB/s
+imagenet/imagenet_train-000015.tgz 238.8MiB/946.3MiB [===============>----------------------------------------------| 00:05:42 ]   2.1 MiB/s
+imagenet/imagenet_train-000022.tgz  31.2MiB/946.5MiB [=>------------------------------------------------------------| 00:24:35 ] 703.1 KiB/s
+imagenet/imagenet_train-000043.tgz  38.5MiB/945.9MiB [==>-----------------------------------------------------------| 00:12:50 ]   1.1 MiB/s
+imagenet/imagenet_train-000009.tgz  47.9MiB/946.9MiB [==>-----------------------------------------------------------| 00:23:36 ] 632.9 KiB/s
+imagenet/imagenet_train-000013.tgz 181.9MiB/946.7MiB [===========>--------------------------------------------------| 00:15:40 ] 681.5 KiB/s
+imagenet/imagenet_train-000014.tgz 215.3MiB/945.7MiB [=============>------------------------------------------------| 00:06:21 ]   1.6 MiB/s
+imagenet/imagenet_train-000018.tgz  51.8MiB/945.9MiB [==>-----------------------------------------------------------| 00:22:05 ] 645.0 KiB/s
+imagenet/imagenet_train-000000.tgz  36.6MiB/946.1MiB [=>------------------------------------------------------------| 00:30:02 ] 527.0 KiB/s
+```
+
+Errors may happen during the download.
+Downloader logs and persists all errors, so they can be easily accessed during and after the run.
+
+```console
+$ ais show download QdwOYMAqg
+Download progress: 64/141 (45.39%)
+Errors (10) occurred during the download. To see detailed info run `ais show download QdwOYMAqg -v`
+$ ais show download QdwOYMAqg -v
+Download progress: 64/141 (45.39%)
+Progress of files that are currently being downloaded:
+	imagenet/imagenet_train-000002.tgz: 16.39MiB/946.91MiB (1.73%)
+	imagenet/imagenet_train-000023.tgz: 113.81MiB/946.35MiB (12.03%)
+	...
+Errors:
+	imagenet/imagenet_train-000049.tgz: request failed with 404 status code (Not Found)
+	imagenet/imagenet_train-000123.tgz: request failed with 404 status code (Not Found)
+	...
+```
+
+The job details are also accessible after the job finishes (or when it has been aborted).
+
+```console
+$ ais show download QdwOYMAqg
+Done: 120 files downloaded, 21 errors
+$ ais show download QdwOYMAqg -v
+Done: 120 files downloaded, 21 errors
+Errors:
+	imagenet/imagenet_train-000049.tgz: request failed with 404 status code (Not Found)
+	imagenet/imagenet_train-000123.tgz: request failed with 404 status code (Not Found)
+	...
+```
+
+#### Download range of files from GCP with limited connections
+
+Download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-000000.tgz` to `gs://lpr-vision/imagenet/imagenet_train-000140.tgz` and saves them in `local-lpr` bucket, inside `imagenet` subdirectory.
+Since each target can make only 1 concurrent connection we only see 4 files being downloaded (started on a cluster with 4 targets).
+
+```bash
+$ ais create local-lpr
+local-lpr bucket created
+$ ais start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/ --conns=1
+QdwOYMAqg
+$ ais show download QdwOYMAqg --progress
 Files downloaded:                              0/141 [-------------------------------------------------------------]  0 %
 imagenet/imagenet_train-000003.tgz 474.6MiB/945.6MiB [==============================>------------------------------] 50 %
 imagenet/imagenet_train-000011.tgz 240.4MiB/946.4MiB [==============>----------------------------------------------] 25 %
 imagenet/imagenet_train-000025.tgz   2.0MiB/946.3MiB [-------------------------------------------------------------]  0 %
 imagenet/imagenet_train-000013.tgz   1.0MiB/946.7MiB [-------------------------------------------------------------]  0 %
-imagenet/imagenet_train-000014.tgz 248.2MiB/945.7MiB [===============>---------------------------------------------] 26 %
-imagenet/imagenet_train-000017.tgz 222.8KiB/946.1MiB [-------------------------------------------------------------]  0 %
-imagenet/imagenet_train-000024.tgz 468.8MiB/946.0MiB [=============================>-------------------------------] 50 %
-imagenet/imagenet_train-000005.tgz 450.0MiB/945.8MiB [============================>--------------------------------] 48 %
-imagenet/imagenet_train-000007.tgz 211.5MiB/946.2MiB [=============>-----------------------------------------------] 22 %
-imagenet/imagenet_train-000008.tgz 814.8KiB/946.8MiB [-------------------------------------------------------------]  0 %
-imagenet/imagenet_train-000023.tgz  94.8KiB/946.9MiB [-------------------------------------------------------------]  0 %
-imagenet/imagenet_train-000000.tgz 194.4MiB/946.1MiB [============>------------------------------------------------] 21 %
-imagenet/imagenet_train-000001.tgz 393.2MiB/945.8MiB [========================>------------------------------------] 42 %
-imagenet/imagenet_train-000002.tgz   1.7MiB/946.7MiB [-------------------------------------------------------------]  0 %
 ```
 
 #### Download range of files from another AIS cluster
@@ -89,23 +140,36 @@ Download all objects from another AIS cluster (`172.100.10.10:8080`), from bucke
 
 ```bash
 $ ais start download "ais://172.100.10.10:8080/imagenet/imagenet_train-{0022..0140}.tgz" ais://local-lpr/set_1/
-QdwOYMAqg 
+QdwOYMAqg
+Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
 $ ais show download QdwOYMAqg --progress --refresh 500ms
-Files downloaded:                     0/141 [-------------------------------------------------------------]  0 %
-imagenet_train-000003.tgz 474.6MiB/945.6MiB [==============================>------------------------------] 50 %
-imagenet_train-000011.tgz 240.4MiB/946.4MiB [==============>----------------------------------------------] 25 %
-imagenet_train-000025.tgz   2.0MiB/946.3MiB [-------------------------------------------------------------]  0 %
-imagenet_train-000013.tgz   1.0MiB/946.7MiB [-------------------------------------------------------------]  0 %
-imagenet_train-000014.tgz 248.2MiB/945.7MiB [===============>---------------------------------------------] 26 %
-imagenet_train-000017.tgz 222.8KiB/946.1MiB [-------------------------------------------------------------]  0 %
-imagenet_train-000024.tgz 468.8MiB/946.0MiB [=============================>-------------------------------] 50 %
-imagenet_train-000005.tgz 450.0MiB/945.8MiB [============================>--------------------------------] 48 %
-imagenet_train-000007.tgz 211.5MiB/946.2MiB [=============>-----------------------------------------------] 22 %
-imagenet_train-000008.tgz 814.8KiB/946.8MiB [-------------------------------------------------------------]  0 %
-imagenet_train-000023.tgz  94.8KiB/946.9MiB [-------------------------------------------------------------]  0 %
-imagenet_train-000000.tgz 194.4MiB/946.1MiB [============>------------------------------------------------] 21 %
-imagenet_train-000001.tgz 393.2MiB/945.8MiB [========================>------------------------------------] 42 %
-imagenet_train-000002.tgz   1.7MiB/946.7MiB [-------------------------------------------------------------]  0 %
+Files downloaded:                     0/120 [--------------------------------------------------------------] 0 %
+imagenet_train-000022.tgz  31.2MiB/946.5MiB [=>------------------------------------------------------------| 00:24:35 ] 703.1 KiB/s
+imagenet_train-000043.tgz  38.5MiB/945.9MiB [==>-----------------------------------------------------------| 00:12:50 ]   1.1 MiB/s
+imagenet_train-000093.tgz  47.9MiB/946.9MiB [==>-----------------------------------------------------------| 00:23:36 ] 632.9 KiB/s
+imagenet_train-000040.tgz 181.9MiB/946.7MiB [===========>--------------------------------------------------| 00:15:40 ] 681.5 KiB/s
+imagenet_train-000059.tgz 215.3MiB/945.7MiB [=============>------------------------------------------------| 00:06:21 ]   1.6 MiB/s
+imagenet_train-000123.tgz  51.8MiB/945.9MiB [==>-----------------------------------------------------------| 00:22:05 ] 645.0 KiB/s
+imagenet_train-000076.tgz  36.6MiB/946.1MiB [=>------------------------------------------------------------| 00:30:02 ] 527.0 KiB/s
+```
+
+
+#### Download multiple objects from GCP
+
+Download all objects contained in `objects.txt` file.
+The source and each object name from the file are concatenated (with `/`) to get full link to the external object.
+
+```bash
+$ cat objects.txt
+["imagenet/imagenet_train-000013.tgz", "imagenet/imagenet_train-000024.tgz"]
+$ ais start download gs://lpr-vision ais://local-lpr --object-list=objects.txt
+QdwOYMAqg
+Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
+$ # `gs://lpr-vision/imagenet/imagenet_train-000013.tgz` and `gs://lpr-vision/imagenet/imagenet_train-000024.tgz` have been requested
+$ ais show download QdwOYMAqg --progress --refresh 500ms
+Files downloaded:                       0/2 [--------------------------------------------------------------] 0 %
+imagenet_train-000013.tgz  31.2MiB/946.5MiB [=>------------------------------------------------------------| 00:24:35 ] 703.1 KiB/s
+imagenet_train-000023.tgz  38.5MiB/945.9MiB [==>-----------------------------------------------------------| 00:12:50 ]   1.1 MiB/s
 ```
 
 ## Stop download job
@@ -143,12 +207,11 @@ Show progress bars for each currently downloading file with refresh rate of 500 
 
 ```console
 $ ais show download 5JjIuGemR --progress --refresh 500ms
-Files downloaded:                              0/141 [-------------------------------------------------------------]  0 %
-imagenet/imagenet_train-000003.tgz 474.6MiB/945.6MiB [==============================>------------------------------] 50 %
-imagenet/imagenet_train-000011.tgz 240.4MiB/946.4MiB [==============>----------------------------------------------] 25 %
-imagenet/imagenet_train-000025.tgz   2.0MiB/946.3MiB [-------------------------------------------------------------]  0 %
-imagenet/imagenet_train-000013.tgz   1.0MiB/946.7MiB [-------------------------------------------------------------]  0 %
-imagenet/imagenet_train-000014.tgz 248.2MiB/945.7MiB [===============>---------------------------------------------] 26 %
+Files downloaded:                              0/141 [--------------------------------------------------------------] 0 %
+imagenet/imagenet_train-000006.tgz 192.7MiB/947.0MiB [============>-------------------------------------------------| 00:08:52 ]   1.4 MiB/s
+imagenet/imagenet_train-000015.tgz 238.8MiB/946.3MiB [===============>----------------------------------------------| 00:05:42 ]   2.1 MiB/s
+imagenet/imagenet_train-000022.tgz  31.2MiB/946.5MiB [=>------------------------------------------------------------| 00:24:35 ] 703.1 KiB/s
+imagenet/imagenet_train-000043.tgz  38.5MiB/945.9MiB [==>-----------------------------------------------------------| 00:12:50 ]   1.1 MiB/s
 ```
 
 #### Show download job which description match given regex

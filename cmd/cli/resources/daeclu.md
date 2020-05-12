@@ -11,9 +11,10 @@ A daemon is either proxy or target.
 
 ## Cluster or Daemon status
 
-`ais status [DAEMON_TYPE]|[DAEMON_ID]`
+`ais show cluster [DAEMON_TYPE|DAEMON_ID]`
 
-Return the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either `proxy` or `target`. If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the AIS cluster.
+Return the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either `proxy` or `target`.
+If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the AIS cluster.
 
 ### Options
 
@@ -26,9 +27,10 @@ Return the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either `
 
 ## Show cluster map
 
-`ais show smap [DAEMON_ID]`
+`ais show cluster smap [DAEMON_ID]`
 
-Show a copy of the cluster map (smap) present on `DAEMON_ID`. If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_URL` points at.
+Show a copy of the cluster map (smap) present on `DAEMON_ID`.
+If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_URL` points at.
 
 ### Options
 
@@ -43,7 +45,7 @@ Show a copy of the cluster map (smap) present on `DAEMON_ID`. If `DAEMON_ID` isn
 Show smap copy of daemon with ID `26830p8083`.
 
 ```console
-$ ais show smap 26830p8083
+$ ais show cluster smap 26830p8083
 DaemonID	 Type	 PublicURL
 26830p8083	 proxy	 http://192.168.0.178:8083
 638285p8080[P]	 proxy	 http://192.168.0.178:8080
@@ -62,20 +64,6 @@ Non-Electable:
 
 PrimaryProxy: 638285p8080	 Proxies: 5	 Targets: 5	 Smap Version: 10
 ```
-
-## Node details
-
-`ais show node [DAEMON_ID]`
-
-Show details about `DAEMON_ID`. If `DAEMON_ID` is omitted, shows details about the current primary proxy and all targets in the cluster.
-
-### Options
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json, -j` | `bool` | Output in JSON format | `false` |
-| `--count` | `int` | Total number of generated reports | `1` |
-| `--refresh` | `string` | Time duration between reports | `1s` |
 
 ## Show disk stats
 
@@ -115,25 +103,25 @@ Target		Disk	Read		Write		%Util
 164472t8087	sda	1.00KiB/s	4.26MiB/s	96
 ```
 
-## Register a node
+## Join a node
 
-`ais register proxy IP:PORT [DAEMON_ID]`
+`ais join proxy IP:PORT [DAEMON_ID]`
 
-Register a proxy in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+Join a proxy in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
 
-`ais register target IP:PORT [DAEMON_ID]`
+`ais join target IP:PORT [DAEMON_ID]`
 
-Register a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+Join a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
 
 ### Examples
 
-#### Register node
+#### Join node
 
-Register a proxy node with ID `23kfa10f` and socket address `192.168.0.185:8086`
+Join a proxy node with ID `23kfa10f` and socket address `192.168.0.185:8086`
 
 ```console
-$ ais register proxy 192.168.0.185:8086 23kfa10f
-Node with ID "23kfa10f" has been successfully added to the cluster.
+$ ais join proxy 192.168.0.185:8086 23kfa10f
+Proxy with ID "23kfa10f" successfully joined the cluster.
 ```
 
 ## Remove a node

@@ -17,7 +17,7 @@ Most of this README describes the first mode of operation that can be further re
 
 ## AIS as HTTP(S) proxy vis-à-vis 3rd party object storages
 
-AIS can be designated as HTTP(S) proxy vis-à-vis 3rd party object storages. As of the v2.0, this mode of operation is limited to Google Cloud Storage (GCS) and requires two settings:
+AIS can be designated as HTTP(S) proxy vis-à-vis 3rd party object storages. This mode of operation is limited to Google Cloud Storage (GCS) and requires two settings:
 
 1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment:
 
@@ -29,9 +29,9 @@ $ export http_proxy=<AIS PROXY URL>
 
 ```json
     "http": {
-        "proto":                "http",
-        "rproxy":               "cloud",
-        "rproxy_cache":         true,
+        "use_https":    false,
+        "rproxy":       "cloud",
+        "rproxy_cache": true,
         ...
     }
 ```
@@ -85,9 +85,9 @@ Example JSON API:
 $ curl -L -X GET http://www.googleapis.com/storage/v1/b/gcp-public/o/LT08%2FPRE%2fB10.TIF
 ```
 
-### v2.0 caching limitations
+### Caching limitations
 
-* HTTPS: AIStore handles HTTPS requests transparently and without caching. In other words, as of the AIS v2.0, every HTTPS GET will be a *cold* GET.
+* HTTPS: AIStore handles HTTPS requests transparently and without caching. In other words, every HTTPS GET will be a *cold* GET.
 * GCS: As far as transparent caching, AIStore currently supports only Google Cloud Storage.
 
 ## AIS as HTTP(S) proxy vis-à-vis AIS targets
@@ -97,9 +97,9 @@ AIS supports a second (and special) mode whereby an AIS gateway serves as a **re
 The corresponding use case entails [configuring `rproxy=target`](/aistore/deploy/dev/local/aisnode_config.sh) and is intended to support (kernel-based) clients with a preference for a single (or a few) persistent storage connection(s).
 ```json
     "http": {
-        "proto":                "http",
-        "rproxy":               "target",
-        "rproxy_cache":         true,
+        "use_https":    false,
+        "rproxy":       "target",
+        "rproxy_cache": true,
         ...
     }
 ```

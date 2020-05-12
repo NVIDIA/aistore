@@ -12,49 +12,57 @@ redirect_from:
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
-AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. At its version 2.x, AIS consistently shows balanced I/O distribution across arbitrary numbers of clustered servers and hard drives (consistently) producing performance charts that look as follows:
+AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered servers, producing performance charts that look as follows:
 
 <img src="docs/images/ais-disk-throughput-flat.png" alt="I/O distribution" width="600">
 
 > The picture above *comprises* 120 HDDs.
 
-> The capability to linearly scale-out for millions of stored objects (often also referred to as *shards*) was, and remains, one of the main incentives to build AIStore. But not the only one.
+The ability to scale linearly with each added disk was, and remains, one of the main incentives behind AIStore. Much of the development is also driven by the ideas to offload dataset transformation and other I/O intensive stages of the ETL pipelines.
 
 ## Features
 
 * scale-out with no downtime and no limitation;
-* HTTP REST API to GET/PUT objects, create, destroy, list and configure buckets;
+* comprehensive HTTP REST API to GET and PUT objects, create, destroy, list and configure buckets, and more;
+* [Amazon S3 API](https://docs.aws.amazon.com/s3/index.html) to run unmodified S3 apps;
 * FUSE client (`aisfs`) to access AIS objects as files;
-* arbitrary number of (extremely lightweight) access points;
+* arbitrary number of extremely lightweight access points;
 * easy-to-use CLI that supports [TAB auto-completions](cmd/cli/README.md);
-* automated rebalancing upon changes in cluster membership, drive failures, bucket renames;
+* automated cluster rebalancing upon: changes in cluster membership, drive failures and attachments, bucket renames;
 * N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
 
 Also, AIStore:
 
 * can be deployed on any commodity hardware;
-* supports Amazon S3 and Google Cloud Storage backends (and all GCS and S3-compliant object storages);
-* can be used as a fast tier or a cache for GCS and S3; can be populated on-demand and/or via separate `prefetch` and `download` APIs;
+* supports Amazon S3, Google Cloud, and Microsoft Azure backends (and all S3, GCS, and Azure-compliant object storages);
+* provides unified global namespace across (ad-hoc) connected AIS clusters;
+* can be used as a fast cache for GCS and S3; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;
-* includes MapReduce extension for massively parallel resharding of very large datasets.
+* includes MapReduce extension for massively parallel resharding of very large datasets;
+* supports existing [PyTorch](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf) and [TensorFlow](https://www.youtube.com/watch?v=r9uw1BNt2x8&feature=youtu.be)-based training models.
 
 Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, please see the [overview document](docs/overview.md) (where you can also find 5 alternative ways to populate AIStore with existing datasets).
+For AIStore **white paper** and design philosophy, and for the most recently added features, please see the [overview document](docs/overview.md) (where you can also find **6** alternative ways to populate AIStore with existing datasets).
 
 **Table of Contents**
 - [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
 - [Build, Make, and Development Tools](#build-make-and-development-tools)
 - [Deployment](#deployment)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
 - [Performance Monitoring](#performance-monitoring)
 - [Configuration](#configuration)
+- [Amazon S3 compatibility](docs/s3compat.md)
+- [TensorFlow integration](docs/tensorflow.md)
 - [Guides and References](#guides-and-references)
 - [Assorted Tips](#assorted-tips)
 - [Selected Package READMEs](#selected-package-readmes)
 
 ## Prerequisites
+
+AIStore runs on commodity Linux machines with no special hardware requirements whatsoever. Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
+
+> It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.
 
 * [Linux](#Linux) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) or [MacOS](#MacOS)
 * [Go 1.13 or later](https://golang.org/dl/)
@@ -73,13 +81,11 @@ The capability called [extended attributes](https://en.wikipedia.org/wiki/Extend
 
 MacOS/Darwin is also supported, albeit for development only. Certain capabilities related to querying the state-and-status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
 
-## Getting Started
+## Local Playground
 
-AIStore runs on commodity Linux machines with no special hardware requirements whatsoever. Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
+For production deployments, please refer to [this folder](deploy/prod) and, in particular, its [Kubernetes](deploy/prod/k8s) subfolder.
 
-> It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.
-
-Assuming that [Go](https://golang.org/dl/) is already installed, the remaining getting-started steps are:
+Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single (development) machine:
 
 ```console
 $ cd $GOPATH/src
@@ -102,12 +108,10 @@ Enter number of proxies (gateways):
 Number of local cache directories (enter 0 to use preconfigured filesystems):
 2
 Select:
- 0: No cloud provider
- 1: Amazon Cloud
- 2: Google Cloud
- 3: AIS Cloud - remote cluster
- 4: Azure Cloud
-Select cloud provider (0, 1, 2, 3, or 4):
+ 0: No 3rd party Cloud
+ 1: Amazon S3
+ 2: Google Cloud Storage
+ 3: Azure Cloud
 0
 ```
 
@@ -117,7 +121,7 @@ Or, you can run all of the above non-interactively:
 $ make kill; make deploy <<< $'10\n3\n2\n0'
 ```
 
->  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud Provider" prompt above and the fact that access to Cloud storage is specified at the deployment time.
+>  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
 > `make kill` will terminate local AIStore if it's already running.
 
@@ -152,17 +156,21 @@ In particular, the `make` provides a growing number of developer-friendly comman
 
 ## Deployment
 
-As previously stated, AIStore can be deployed in a vast variety of [ways](deploy). This section focuses on a single Linux machine; as such, it is intended for developers and development, *or* for a quick trial.
+AIStore can be deployed in a vast variety of [ways](deploy), ad-hoc, on any bare-metal or virtualized hardware. For production deployments on Kubernetes, please refer to:
+
+* [Deploying AIS on k8s](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md)
+
+The rest of this section talks about a single Linux machine and, as such, is intended for developers and development, *or* for a quick trial.
 
 ### Local Docker-Compose
 
-The 2nd option to run AIS on your local machine requires [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It also allows for multi-clusters deployment with multiple separate networks. You can deploy a simple AIS cluster within seconds or deploy a multi-container cluster for development.
+[Local Playground](#local-playground) is probably the speediest option to run AIS clusters. However, to take advantage of containerization (which includes, for instance, multiple logically-isolated configurable networks), you can also run AIStore as described here:
 
-To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md).
+* [Getting started with Docker](docs/docker_main.md).
 
 ### Local Kubernetes
 
-The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/k8s).
+Yet another local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/k8s).
 
 ## Containerized Deployments: Host Resource Sharing
 
@@ -236,7 +244,7 @@ with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh)
 
 * To enable an optional AIStore authentication server, execute `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](cmd/authn/README.md).
 * In addition to AIStore - the storage cluster, you can also deploy [aisfs](cmd/aisfs/README.md) - to access AIS objects as files, and [AIS CLI](cmd/cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
-* AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais status` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cmd/cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
+* AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais show cluster` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cmd/cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
 * For more testing commands and options, please refer to the [testing README](ais/tests/README.md).
 * For `aisnode` command-line options, see: [command-line options](docs/command_line.md).
 * For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful-links.md).

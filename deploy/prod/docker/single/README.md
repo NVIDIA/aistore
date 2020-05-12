@@ -26,7 +26,7 @@ $ ./upload_image.sh <REGISTRY_URL>
 
 Docker image supports running with different cloud providers.
 Cloud provider can be passed as a first argument.
-Currently supported cloud providers are: `""` (no provider), `"aws"` (Amazon), `"gcp"` (Google).
+Currently, supported cloud providers are: `""` (no provider), `"aws"` (Amazon), `"gcp"` (Google) and `"azure"` (Azure).
 
 **Important**: Currently assuming that all volumes will be mounted in `/ais/*` directory.
 

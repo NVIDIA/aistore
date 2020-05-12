@@ -7,17 +7,19 @@ redirect_from:
 ---
 
 ## Table of Contents
+
 - [Bucket](#bucket)
   - [Cloud Provider](#cloud-provider)
 - [AIS Bucket](#ais-bucket)
-  - [Curl examples: create, rename and, destroy ais bucket](#curl-examples-create-rename-and-destroy-ais-bucket)
+  - [CLI examples: create, rename and, destroy ais bucket](#cli-examples-create-rename-and-destroy-ais-bucket)
+  - [CLI example: working with remote AIS bucket](#cli-example-working-with-remote-ais-bucket)
 - [Cloud Bucket](#cloud-bucket)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Cloud Bucket](#evict-cloud-bucket)
+- [Backend Bucket](#backend-bucket)
 - [Bucket Access Attributes](#bucket-access-attributes)
 - [List Objects](#list-objects)
   - [Properties and Options](#properties-and-options)
-  - [Curl example: listing ais and Cloud buckets](#curl-example-listing-ais-and-cloud-buckets)
   - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
 - [Recover Buckets](#recover-buckets)
   - [Example: recovering buckets](#example-recovering-buckets)
@@ -32,20 +34,18 @@ AIS supports two kinds of buckets: **ais buckets** and **3rd party Cloud-based b
 
 All the [supported storage services](storage_svcs.md) equally apply to both kinds of buckets, with only a few exceptions. The following table summarizes them.
 
-| Kind | Description | Supported Storage Services (as of v2.0) |
+| Kind | Description | Supported Storage Services |
 | --- | --- | --- |
 | ais buckets | buckets that are **not** 3rd party Cloud-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). Unlike cloud buckets, ais buckets can be created through the [RESTful API](http_api.md). Similar to cloud buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 | cloud buckets | When AIS is deployed as [fast tier](/aistore/docs/overview.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as ais buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **Cloud-based buckets** (or **cloud buckets** for short). | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Erasure Coding](storage_svcs.md#erasure-coding), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 
 Cloud-based and ais buckets support the same API with minor exceptions. Cloud buckets can be *evicted* from AIS. AIS buckets are the only buckets that can be created, renamed, and deleted via the [RESTful API](http_api.md).
 
-> Most of the examples below are `curl` based; it is possible, however, and often even preferable, to execute the same operations using [AIS CLI](../cmd/cli/README.md). In particular, for the commands that operate on buckets, please refer to [this CLI resource](../cmd/cli/resources/bucket.md).
-
 ### Cloud Provider
 
 [Cloud Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. For complete definition and details, plase refer to the [Cloud Provider](./providers.md) document.
 
-> Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` for ais buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
+> Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` for ais buckets, and `cloud`, `aws`, `gcp`, `azure` for cloud buckets.
 
 For API reference, please refer [to the RESTful API and examples](http_api.md). The rest of this document serves to further explain features and concepts specific to storage buckets.
 
@@ -56,19 +56,75 @@ The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy a
 
 New ais buckets must be given a unique name that does not duplicate any existing ais or cloud bucket.
 
-### Curl examples: create, rename and, destroy ais bucket
+### CLI examples: create, rename and, destroy ais bucket
 
 To create an ais bucket with the name 'myBucket', rename it to 'myBucket2' and delete it, run:
 
 ```console
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://localhost:8080/v1/buckets/myBucket
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "renamelb",  "name": "myBucket2"}' http://localhost:8080/v1/buckets/myBucket
-$ curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://localhost:8080/v1/buckets/myBucket2
+$ ais create bucket myBucket
+$ ais rename bucket ais://myBucket ais://myBucket2
+$ ais rm bucket ais://myBucket2
+```
+
+Please note that rename bucket is not an instant operation, especially if the bucket contains data. Follow the `rename` command tips to monitor when the operation completes.
+
+### CLI example: working with remote AIS bucket
+
+AIS clusters can be attached to each other, thus forming a global (and globally accessible) namespace of all individually hosted datasets. For background and details on AIS multi-clustering, please refer to this [document](providers.md).
+
+The following example creates an attachment between two clusters, lists all remote buckets, and then list objects in one of those remote buckets (see comments inline):
+
+```console
+
+# attach remote AIS cluster and assign it an alias `teamZ` (for convenience and for future reference):
+$ ais attach remote teamZ=http://cluster.ais.org:51080
+Remote cluster (teamZ=http://cluster.ais.org:51080) successfully attached
+
+# the cluster at http://cluster.ais.org:51080 is now persistently attached:
+$ ais show remote
+UUID      URL                            Alias     Primary      Smap   Targets  Online
+MCBgkFqp  http://cluster.ais.org:51080   teamZ     p[primary]   v317   10       yes
+
+# list all buckets in all remote clusters
+# notice the syntax: by convention, we use `@` to prefix remote cluster UUIDs, and so
+# `ais://@` translates as "AIS cloud provider, any remote cluster"
+
+$ ais ls ais://@
+AIS Buckets (4)
+	  ais://@MCBgkFqp/imagenet
+	  ais://@MCBgkFqp/coco
+	  ais://@MCBgkFqp/imagenet-augmented
+	  ais://@MCBgkFqp/imagenet-inflated
+
+# list all buckets in the remote cluster with UUID = MCBgkFqp
+# notice again the syntax: `ais://@some-string` translates as "remote AIS cluster with alias or UUID equal some-string"
+
+$ ais ls ais://@MCBgkFqp
+AIS Buckets (4)
+	  ais://@MCBgkFqp/imagenet
+	  ais://@MCBgkFqp/coco
+	  ais://@MCBgkFqp/imagenet-augmented
+	  ais://@MCBgkFqp/imagenet-inflated
+
+# we can conveniently keep using our previously selected alias for the remote cluster -
+# the following lists selected remote bucket using the cluster's alias:
+$ ais ls ais://@teamZ/imagenet-augmented
+NAME              SIZE
+train-001.tgz     153.52KiB
+train-002.tgz     136.44KiB
+...
+
+# the same, but this time using the cluster's UUID:
+$ ais ls ais://@MCBgkFqp/imagenet-augmented
+NAME              SIZE
+train-001.tgz     153.52KiB
+train-002.tgz     136.44KiB
+...
 ```
 
 ## Cloud Bucket
 
-Cloud buckets are existing buckets in the cloud storage when AIS is deployed as [fast tier](/aistore/README.md#fast-tier).
+Cloud buckets are existing buckets in the 3rd party Cloud storage when AIS is deployed as [fast tier](/aistore/docs/overview.md#fast-tier).
 
 > By default, AIS does not keep track of the cloud buckets in its configuration map. However, if users modify the properties of the cloud bucket, AIS will then keep track.
 
@@ -80,16 +136,16 @@ The [RESTful API](docs/http_api.md) can be used to manually fetch a group of obj
 
 Objects are prefetched or evicted using [List/Range Operations](batch.md#listrange-operations).
 
-For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from the cloud bucket `abc`, run:
+For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from Amazon S3 cloud bucket `abc`, run:
 
 ```console
-$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"]}}' http://localhost:8080/v1/buckets/abc
+$ ais prefetch aws://abc --list o1,o2,o3
 ```
 
 To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the cloud bucket `abc` from AIS, which names begin with the prefix `__tst/test-`, run:
 
 ```console
-$ curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobjects", "value":{"template":"__tst/test-{1000..2000}"}}' http://localhost:8080/v1/buckets/abc
+$ ais evict aws://abc --template "__tst/test-{1000..2000}"
 ```
 
 ### Evict Cloud Bucket
@@ -103,8 +159,58 @@ In an evict bucket operation, AIS will remove all traces of the cloud bucket wit
 For example, to evict the `abc` cloud bucket from the AIS cluster, run:
 
 ```console
-$ curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evictcb"}' http://localhost:8080/v1/buckets/myS3bucket
+$ ais evict aws://myS3bucket
 ```
+
+## Backend Bucket
+
+So far, we have covered AIS and cloud buckets. These abstractions are sufficient for almost all use cases.  But there are times when we would like to download objects from an existing cloud bucket and then make use of the features available only for AIS buckets.
+
+One way of accomplishing that could be:
+
+* prefetch cloud objects
+* create AIS bucket
+* and then use the bucket-copying [API](http_api.md) or [CLI](/aistore/cmd/cli/resources/bucket.md) to copy over the objects from the cloud bucket to the newly created AIS bucket.
+
+However, the extra-copying involved may prove to be time and/or space consuming. Hence, AIS-supported capability to establish an **ad-hoc** 1-to-1 relationship between a given AIS bucket and an existing cloud (*backend*).
+
+> As aside, the term "backend" - something that is on the back, usually far (or farther) away - is often used for data redundancy, data caching, and/or data sharing. AIS *backend bucket* allows to achieve all of the above.
+
+For example:
+
+```console
+$ ais create bucket abc
+"abc" bucket created
+$ ais set props ais://abc backend_bck=gcp://xyz
+Bucket props successfully updated
+```
+
+After that, you can access all objects from `gcp://xyz` via `ais://abc`. **On-demand persistent caching** (from the `gcp://xyz`) becomes then automatically available, as well as **all other AIS-supported storage services** configurable on a per-bucket basis.
+
+For example:
+
+```console
+$ ais ls gcp://xyz
+NAME		 SIZE		 VERSION
+shard-0.tar	 2.50KiB	 1
+shard-1.tar	 2.50KiB	 1
+$ ais ls ais://abc
+NAME		 SIZE		 VERSION
+shard-0.tar	 2.50KiB	 1
+shard-1.tar	 2.50KiB	 1
+$ ais get ais://abc/shard-0.tar /dev/null # cache/prefetch cloud object
+"shard-0.tar" has the size 2.50KiB (2560 B)
+$ ais ls ais://abc --cached
+NAME		 SIZE		 VERSION
+shard-0.tar	 2.50KiB	 1
+$ ais set props ais://abc backend_bck=none # disconnect backend bucket
+Bucket props successfully updated
+$ ais ls ais://abc
+NAME		 SIZE		 VERSION
+shard-0.tar	 2.50KiB	 1
+```
+
+For more examples please refer to [CLI docs](/aistore/cmd/cli/resources/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
 
 ## Bucket Access Attributes
 
@@ -142,7 +248,7 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 
 | Property/Option | Description | Value |
 | --- | --- | --- |
-| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","version","targetURL","copies","status". <sup id="a6">[6](#ft6)</sup> |
+| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","version","target_url","copies","status". <sup id="a1">[1](#ft1)</sup> |
 | time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
 | prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
 | pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
@@ -163,6 +269,7 @@ The full list of bucket properties are:
 | Versioning | `versioning` | Configuration for object versioning support. `enabled` represents if object versioning is enabled for a bucket. For Cloud-based bucket, its versioning must be enabled in the cloud prior to enabling on AIS side. `validate_warm_get`: determines if the object's version is checked(if in Cloud-based bucket) | `"versioning": { "enabled": true, "validate_warm_get": false }`|
 | AccessAttrs | `access` | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"access": "0" ` |
 | BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
+| Created | `created` | Readonly property: bucket creation date, in nanoseconds(Unix time) | `"created": "1546300800000000000"` |
 
 `SetBucketProps` allows the following configurations to be changed:
 
@@ -177,87 +284,11 @@ The full list of bucket properties are:
 | `mirror.copies` | int | number of local copies |
 | `mirror.util_thresh` | int | threshold when utilizations are considered equivalent |
 
-
-
- <a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a6)
-
-### Curl example: listing ais and Cloud buckets
-
-Example of listing objects in the smoke/ subdirectory of a given bucket called 'myBucket', the result must include object respective sizes and checksums.
-
-Bucket list API is asynchronous, so it cannot be executed as one cURL command. The first request starts the task that enumerates objects in a background and returns the task ID to watch it:
-
-```console
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size,checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBucket
-5315610902768416055
-```
-
-Watch the task status, until it returns the list of objects. The requests is the same, except a field `taskid` that now contains the value returned by previous request(if `taskid` is zero or omitted, API starts a new task). If the task is still running, the request keeps responding with `taskid`. When the task completes, it returns the page content:
-
-```console
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size,checksum", "prefix": "smoke/", "taskid": "5315610902768416055"}}' http://localhost:8080/v1/buckets/myBucket
-{
-  "entries": [
-    {
-      "name": "zbIvfYiZlweQRORFBGGjOENsPigguamh",
-      "size": 8388608,
-      "checksum": "983bfada723b7fa1",
-      "copies": 1,
-      "flags": 64
-    },
-    {
-      "name": "zqlvXFpMkEzZyezafixTXvHUHDHGzWGp",
-      "size": 8388608,
-      "checksum": "cb9a3c208f0bab01",
-      "copies": 1,
-      "flags": 64
-    }
-  ],
-  "pagemarker": ""
-}
-```
-
-The listing can be truncated: API returns at most 1000 objects per request. If a bucket contains more objects, one has to requests the list page by page. Please, note the field `pagemarker`: empty `pagemarker` in response means that there are no more objects left, it is the last page. Non-empty `pagemarker` should be used to request the next page. Example of requesting two pages:
-
-Start listing bucket from the first object (`taskid` is 0, and `pagemarker` is empty):
-
-```console
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBigBucket
-7315610902768416055
-
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "taskid": "7315610902768416055"}}' http://localhost:8080/v1/buckets/myBigBucket
-{
-  "entries": [
-    {
-      "name": "zbIvfYiZlweQRORFBGGjOENsPigguamh",
-      "size": 8388608,
-	  # many lines skipped
-      "copies": 1,
-      "flags": 64
-    }
-  ],
-  "pagemarker": "PLqOWWuiCXATlSkhTXbnXlFCNWVhCUGR"
-}
-```
-
-Request the next page (`pagemarker` is copied from the previous response - it is the only difference from the first request; do not forget to set `taskid` to `0` or remove it):
-
-```console
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "pagemarker": "PLqOWWuiCXATlSkhTXbnXlFCNWVhCUGR"}}' http://localhost:8080/v1/buckets/myBigBucket
-4910019837373721
-```
-
-For many more examples, please refer to the [test sources](/aistore/ais/tests/) in the repository.
+ <a name="ft1">1</a>: The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a1)
 
 ### CLI examples: listing and setting bucket properties
 
 1. List bucket properties:
-
-```console
-$ ais show props mybucket
-```
-
-or, same via command argument (and without the environment variable):
 
 ```console
 $ ais show props mybucket
@@ -280,24 +311,4 @@ $ ais set props mybucket ec.enabled=true
 ```console
 $ ais set props mybucket ver.enabled=true
 $ ais show props mybucket
-```
-
-## Recover Buckets
-
-After rebuilding a cluster and redeploying proxies, the primary proxy does not have information about buckets used in a previous session. But targets still contain the old data. The primary proxy can retrieve bucket metadata from all targets and then recreate the buckets.
-
-Bucket recovering comes in two flavors: safe and forced. In safe mode the primary proxy requests bucket metadata from all targets in the cluster. If all the targets have the same metadata version, the primary proxy applies received metadata and then synchronize the new information across the cluster. Otherwise, API returns an error. When force mode is enabled, the primary does not require all the targets to have the same version. The primary chooses the metadata with the highest version and proceeds with it.
-
-### Example: recovering buckets
-
-To recover buckets *safely*, run:
-
-```console
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' http://localhost:8080/v1/buckets
-```
-
-To force recovering buckets:
-
-```console
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' http://localhost:8080/v1/buckets?force=true
 ```

@@ -32,7 +32,7 @@ very similar if not identical:
    input that, in addition to the same `(bucket, object)` pair includes all currently active/enabled mountpaths.
 5. Once the highest-randomly-weighted `mountpath` is selected, the target then forms a fully-qualified name
    to perform the local read/write operation. For instance, given a `mountpath`  `/a/b/c`, the fully-qualified
-   name may look as `/a/b/c/<content_type>/<provider>/<bucket_name>/<object_name>`.
+   name may look as `/a/b/c/@<provider>/<bucket_name>/%<content_type>/<object_name>`.
 
 Beyond these 5 (five) common steps the similarity between `GET` and `PUT` request handling ends, and the remaining steps include:
 

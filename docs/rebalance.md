@@ -8,10 +8,11 @@ redirect_from:
 
 ## Table of Contents
 
-- [Rebalance](#rebalance)
+- [Global Rebalance](#global-rebalance)
+- [CLI: usage examples](#cli-usage-examples)
 - [Resilver](#resilver)
 
-## Rebalance
+## Global Rebalance
 
 To maintain [consistent distribution of user data at all times](https://en.wikipedia.org/wiki/Consistent_hashing#Examples_of_use), AIStore rebalances itself based on *new* versions of its [cluster map](/aistore/cluster/map.go).
 
@@ -26,6 +27,86 @@ More exactly:
 Thus, cluster-wide rebalancing is totally and completely decentralized. When a single server joins (or goes down in a) cluster of N servers, approximately 1/Nth of the entire namespace will get rebalanced via direct target-to-target transfers.
 
 Further, cluster-wide rebalancing does not require any downtime. Incoming GET requests for the objects that haven't yet migrated (or are being moved) are handled internally via the mechanism that we call "get-from-neighbor". The (rebalancing) target that must (according to the new cluster map) have the object but doesn't will locate its "neighbor", get the object, and satisfy the original GET request transparently from the user.
+
+Similar to all other AIS modules and sub-systems, global rebalance is controlled and monitored via the documented [RESTful API](http_api.md).
+It might be easier and faster, though, to use [AIS CLI](../cmd/cli/README.md) - see next section.
+
+## CLI: usage examples
+
+1. Disable automated global rebalance (for instance, to perform maintenance or upgrade operations) and show resulting config in JSON on a randomly selected target:
+
+```console
+# ais set config rebalance.enabled = false
+config successfully updated
+
+# ais show config 361179t8088 --json | grep -A 6  rebalance
+
+    "rebalance": {
+        "dest_retry_time": "2m",
+        "quiescent": "20s",
+        "compression": "never",
+        "multiplier": 4,
+        "enabled": false
+    },
+
+```
+
+2. Re-enable automated global rebalance and show resulting config section as a simple `name/value` list:
+
+```console
+# ais set config rebalance.enabled = true
+config successfully updated
+
+# ais show config <TAB-TAB>
+125210p8082   181883t8089   249630t8087   361179t8088   477343p8081   675515t8084   70681p8080    782227p8083   840083t8086   911875t8085
+
+# ais show config 840083t8086 rebalance
+Rebalance Config
+ Destination Retry Time:        2m
+ Enabled:                       true
+ Multiplier:                    4
+ Compression:                   never
+```
+
+3. Monitoring: notice per-target statistics and the `EndTime` column
+
+```console
+# ais show rebalance
+DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime          Aborted
+======       ======  ======  ======   ======   ======    ======          ======           ======
+181883t8089  1       0       0B       1058     1.27MiB   04-28 16:05:35  <not completed>  false
+249630t8087  1       0       0B       988      1.18MiB   04-28 16:05:35  <not completed>  false
+361179t8088  1       5029    6.02MiB  0        0B        04-28 16:05:35  <not completed>  false
+675515t8084  1       0       0B       989      1.18MiB   04-28 16:05:35  <not completed>  false
+840083t8086  1       0       0B       974      1.17MiB   04-28 16:05:35  <not completed>  false
+911875t8085  1       0       0B       1020     1.22MiB   04-28 16:05:35  <not completed>  false
+
+# ais show rebalance
+DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime         Aborted
+======       ======  ======  ======   ======   ======    ======          ======          ======
+181883t8089  1       0       0B       1058     1.27MiB   04-28 16:05:35  04-28 16:05:53  false
+249630t8087  1       0       0B       988      1.18MiB   04-28 16:05:35  04-28 16:05:53  false
+361179t8088  1       5029    6.02MiB  0        0B        04-28 16:05:35  04-28 16:05:53  false
+675515t8084  1       0       0B       989      1.18MiB   04-28 16:05:35  04-28 16:05:53  false
+840083t8086  1       0       0B       974      1.17MiB   04-28 16:05:35  04-28 16:05:53  false
+911875t8085  1       0       0B       1020     1.22MiB   04-28 16:05:35  04-28 16:05:53  false
+```
+
+4. Since global rebalance is an [extended action (xaction)](/aistore/xaction/README.md), it can be also monitored via generic `show xaction` API:
+
+```console
+# ais show xaction rebalance
+DAEMON ID        ID      KIND            BUCKET  OBJECTS         BYTES           START           END     ABORTED
+181883t8089      g2      rebalance       -       1058            1.27MiB         04-28 16:10:14  -       false
+...
+```
+
+5. Finally, you can always start and stop global rebalance administratively, for instance:
+
+
+```console
+# ais start xaction rebalance
+```
 
 ## Resilver
 

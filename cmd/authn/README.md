@@ -6,12 +6,27 @@ redirect_from:
  - cmd/authn/README.md/
 ---
 
-AIStore Authentication Server (AuthN)
------------------------------------------
+## Table of Contents
+
+- [Overview](#overview)
+- [Getting started](#getting-started)
+	- [Notation](#notation)
+	- [AuthN configuration and log](#authn-configuration-and-log)
+	- [How to enable AuthN server after deployment](#how-to-enable-authn-server-after-deployment)
+	- [Using Kubernetes secrets](#using-kubernetes-secrets)
+- [User management](#user-management)
+	- [Superuser](#superuser)
+	- [REST operations](#rest-operations)
+- [Token management](#token-management)
+	- [REST operations](#rest-operations-1)
+- [Interaction with AIStore proxy/gateway](#interaction-with-aistore-proxygateway)
+	- [Calling AIStore proxy API](#calling-aistore-proxy-api)
+	- [AuthN server typical workflow](#authn-server-typical-workflow)
+- [Known limitations](#known-limitations)
 
 ## Overview
 
-AIStore Authentication Server (AuthN) provides a token-based secure access to AIStore. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details.
+AIStore Authentication Server (AuthN) provides a token-based secure access to AIStore. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details. Currently, we only support hash-based message authentification (HMAC) using SHA256 hash.
 
 AuthN is a standalone process that manages users and their tokens. It reports to the primary AIStore proxy all changes on the fly and immediately after each user login or logout. The result is that the AIStore primary proxy (aka AIStore gateway) always has an updated set of valid tokens that grant access to the AIStore and Cloud resources.
 
@@ -28,14 +43,14 @@ Environment variables used by the deployment script to setup AuthN server:
 
 | Variable | Default value | Description |
 |---|---|---|
-| PROXYURL | "" | Primary proxy URL for AuthN to notify the cluster about events like a token is revoked |
-| AUTHENABLED | false | Set it to `true` to enable authn server and token-based access in AIStore proxy |
-| AUTHN_SU_NAME | admin | Super user name (see `A super user` section for details) |
-| AUTHN_SU_PASS | admin | Super user password (see `A super user` section for details) |
-| SECRETKEY| aBitLongSecretKey | A secret key to encrypt and decrypt tokens |
-| CREDDIR | empty value | A path to directory to keep Google Storage user credentials |
-| AUTHN_PORT | 52001 | Port on which AuthN listens to requests |
-| AUTHN_TTL | 24h | A token expiration time. Can be set to 0 that means "no expiration time" |
+| PROXYURL | `""` | Primary proxy URL for AuthN to notify the cluster about events like a token is revoked |
+| AUTHENABLED | `false` | Set it to `true` to enable authn server and token-based access in AIStore proxy |
+| AUTHN_SU_NAME | `admin` | Super user name (see `A super user` section for details) |
+| AUTHN_SU_PASS | `admin` | Super user password (see `A super user` section for details) |
+| SECRETKEY| `aBitLongSecretKey` | A secret key to encrypt and decrypt tokens |
+| CREDDIR | `""` | A path to directory to keep Google Storage user credentials |
+| AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
+| AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 that means "no expiration time" |
 
 All variables can be set at AIStore launch. Example of starting AuthN with the default configuration:
 
@@ -69,6 +84,50 @@ By default, AIStore deployment currently won't launch the AuthN server. To start
 
 - Change AIStore proxy configuration to enable token-based access: look for `{"auth": { "enabled": false } }` in proxy configuration file and replace `false` with `true`. Restart the proxy to apply changes
 - Start authn server: <path_to_ais_binaries>/authn -config=<path_to_config_dir>/authn.json. Path to config directory is set at the time of cluster deployment and it is the same as the directory for AIStore proxies and targets
+
+### Using Kubernetes secrets
+
+To increase security, super user credentials and secret key for token generation can
+be put to [Kubernetes secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
+instead of keeping them in an AuthN configuration file. When secrets are used, AuthN
+overrides configuration values with environment variables set by Kubernetes.
+
+Add secrets to AuthN pod description:
+
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secret-env-pod
+spec:
+  containers:
+  - name: container-name
+        image: image-name
+        env:
+          - name: AUTHN_SU_NAME
+            valueFrom:
+              secretKeyRef:
+                name: mysecret
+                key: su-name
+          - name: AUTHN_SU_PASS
+            valueFrom:
+              secretKeyRef:
+                name: mysecret
+                key: su-pass
+          - name: SECRETKEY
+            valueFrom:
+              secretKeyRef:
+                name: mysecret
+                key: secret-key
+```
+
+In the example above the values in all-capitals are the names of the environment
+variables that AuthN looks for. All other values are arbitrary.
+
+When AuthN pod starts, it loads its configuration from local file, and then
+overrides secret values with ones from the pod's description. Pod's description
+does not have to include all three variables: add only those that you do
+want to expose in configuration file.
 
 ## User management
 

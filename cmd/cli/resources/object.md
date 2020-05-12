@@ -110,12 +110,11 @@ $ ais cat texts/list.txt --offset 1024 --length 1024
 
 Get object detailed information.
 `PROP_LIST` is a comma-separated list of properties to display.
-If `PROP_LIST` is omitted default properties are shown (all except `provider` property).
+If `PROP_LIST` is omitted default properties are shown.
 
 Supported properties:
 
-- `provider` - provider of the object's bucket, `ais` returned if local bucket
-- `iscached` - is the object cached on local drives (always `true` for AIS buckets)
+- `cached` - is the object cached on local drives (always `true` for AIS buckets)
 - `size` - object size
 - `version` - object version (it is empty if versioning is disabled for the bucket)
 - `atime` - object's last access time
@@ -125,14 +124,24 @@ Supported properties:
 
 ### Examples
 
+#### Show default object properties
+
+Display default properties of object `list.txt` from bucket `texts`.
+
+```console
+$ ais show object texts/list.txt
+CHECKSUM                SIZE    ATIME                   VERSION
+2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     1      
+```
+
 #### Show all object properties
 
 Display all properties of object `list.txt` from bucket `texts`.
 
 ```console
-$ ais show object texts/list.txt
-CHECKSUM                SIZE    ATIME                   ISCACHED        VERSION COPIES  EC
-2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     true            1       1       2:2[encoded]
+$ ais show object texts/list.txt --props=all
+CHECKSUM		 SIZE		 ATIME			 VERSION	 CACHED	 COPIES	 EC
+2d61e9b8b299c41f         7.63MiB	 06 Jan 20 14:55 PST	 2		 yes	 1	 1:1[replicated]  
 ```
 
 #### Show selected object properties 
@@ -380,7 +389,7 @@ Try to promote a file that does not exist.
 ```console
 $ ais create bucket testbucket
 testbucket bucket created
-$ ais status
+$ ais show cluster
 TARGET		 MEM USED %	 MEM AVAIL	 CAP USED %	 CAP AVAIL	 CPU USED %	 REBALANCE
 1014646t8081	   0.00		 4.00GiB	 59		 375.026GiB	   0.00		 finished; 1 objs moved (2.5KiB)
 ...
@@ -476,13 +485,13 @@ Put `file.txt` object to `cloudbucket` bucket and evict it locally.
 $ ais put file.txt cloudbucket/file.txt
 PUT file.txt into bucket cloudbucket
 $ ais show bucket cloudbucket --cached # show only cloudbucket objects present in the AIS cluster
-NAME	     OBJECTS	 SIZE    USED %  PROVIDER
-cloudbucket  1           702B    0%      aws
+NAME	           OBJECTS	 SIZE    USED %
+aws://cloudbucket  1             702B    0%
 $ ais evict cloudbucket/file.txt
 file.txt evicted from cloudbucket bucket
 $ ais show bucket cloudbucket --cached
-NAME	     OBJECTS	 SIZE    USED %  PROVIDER
-cloudbucket  0           0B      0%      aws
+NAME	           OBJECTS	 SIZE    USED %
+aws://cloudbucket  0             0B      0%
 ```
 
 ## Prefetch objects

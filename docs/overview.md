@@ -15,8 +15,13 @@ In this [white paper](https://arxiv.org/abs/2001.01858) we describe AIStore and 
 * AIStore [white paper](https://arxiv.org/abs/2001.01858).
 * IEEE BigData 2019 [poster](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf)
 
+Also, for insights and specific requirements from a deep-learning perspective, please watch:
+
+* [Introduction to Large Scale Deep Learning](https://www.youtube.com/watch?v=kNuA2wflygM&list=PL0dsKxFNMcX4XcB0w1Wm-pvSfQu-eWM26)
+
 The rest of this document is structured as follows:
 
+- [New in 3.1](#new-in-3.1)
 - [Design Philosophy](#design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
 - [Datapath](#datapath)
@@ -31,6 +36,19 @@ The rest of this document is structured as follows:
 - [Python Client](#python-client)
 - [AIS Limitations](#ais-limitations)
 
+
+## New in 3.1
+
+AIStore v3.1 is a significant upgrade in multiple directions, including TensorFlow integration, performance optimizations, CLI usability improvements, erasure coding optimizations, automated no-downtime rebalancing for erasure-coded buckets, refactoring, cleanup, and stability fixes across the board, and K8s integration/automation.
+
+In addition to AIS (native) REST API, we are also now supporting Amazon S3, thus providing immediate compatibility for existing S3 applications and clients. Azure (aka Microsoft Azure Blob Storage) is now the 3rd supported Cloud provider that you can transparently and optimally access (cache on demand, store persistently at a given configurable redundancy, etc.) via AIStore.
+
+The block diagram below highlights some of what's been added.
+
+<img src="images/ais-v3.1.png" alt="New in 3.1" width="700">
+
+Each specific capability is separately documented elsewhere. In particular, supported cloud providers and *unified global namespace* are described [here](providers.md).
+
 ## Design Philosophy
 
 It is often more optimal to let applications control how and whether the stored content is stored in chunks. That's the simple truth that holds, in particular, for AI datasets that are often pre-sharded with content and boundaries of those shards based on application-specific optimization criteria. More exactly, the datasets could be pre-sharded, post-sharded, and otherwise transformed to facilitate training, inference, and simulation by the AI apps.
@@ -38,7 +56,9 @@ It is often more optimal to let applications control how and whether the stored 
 The corollary of this statement is two-fold:
 
 - Breaking objects into pieces (often called chunks but also slices, segments, fragments, and blocks) and the related functionality does not necessarily belong to an AI-optimized storage system per se;
-- Instead of breaking the objects in pieces (and then reassembling them with the help of a carefully maintained metadata), the storage system must better focus on providing assistance to simplify and accelerate dataset transformations.
+- Instead of chunking the objects and then reassembling them with the help of cluster-wide metadata (that must be maintained with extreme care), the storage system could alternatively focus on providing assistance to simplify and accelerate dataset transformations.
+
+Notice that the same exact approach works for the other side of the spectrum - the proverbial [small-file problem](https://www.quora.com/What-is-the-small-file-problem-in-Hadoop). Here again, instead of optimizing small-size IOPS, we focus on application-specific (re)sharding, whereby each shard would have a desirable size, contain a batch of the original (small) files, and where the files (aka samples) would be sorted to optimizes subsequent computation.
 
 ## Key Concepts and Diagrams
 
@@ -67,6 +87,8 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 ## Terminology
 
 * [Cloud Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+
+* [Unified Global Namespace](./providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
 
 * [Mountpath](./configuration.md) - a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
 
@@ -97,13 +119,14 @@ Notwithstanding, AIS stores and then maintains object replicas, erasure-coded sl
 
 ## Existing Datasets
 
-One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets. To this end, AIS provides 5 (five) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
+One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets. To this end, AIS provides 6 (six) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
 
 1. [Cold GET](#existing-datasets-cold-get)
 2. [Prefetch](#existing-datasets-batch-prefetch)
 3. [Internet Downloader](#existing-datasets-integrated-downloader)
 4. [Reverse Proxy](#existing-datasets-reverse-proxy)
 5. [Promote (API and CLI)](#existing-datasets-promote-api-and-cli)
+6. [Backend Bucket](bucket.md#backend-bucket)
 
 In particular:
 
