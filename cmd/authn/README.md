@@ -66,8 +66,8 @@ In this README:
 
 | File | Location |
 |---|---|
-| Server configuration | `$CONF_DIR/authn.json` |
-| User list | `$CONF_DIR/users.json` |
+| Server configuration | `$AUTHN_CONF_DIR/authn.json` |
+| User list | `$AUTHN_CONF_DIR/users.json` |
 | Log directory | `$AIS_LOG_DIR/authn/log/` |
 
 ### How to enable AuthN server after deployment
@@ -127,7 +127,7 @@ want to expose in configuration file.
 
 After deploying the cluster, a superuser account is created automatically - a special account that cannot be deleted and only this account can manage users and their credentials.
 
-Superuser's credentials can be set at cluster deployment time(please, see [Getting started](#getting-started)), or changed later by modifying AuthN configuration file `authn.json`. It is located in $CONF_DIR, default value is $HOME/.ais.
+Superuser's credentials can be set at cluster deployment time(please, see [Getting started](#getting-started)), or changed later by modifying AuthN configuration file `authn.json`. It is located in `$AUTHN_CONF_DIR`, default value is $HOME/.ais.
 
 Adding and deleting usernames requires superuser authentication. Super user credentials are sent in the request header via `Authorization` field (for curl it is `curl -u<username>:<password ...`, for HTTP requests it is header option `Authorization: Basic <base64-encoded-username:password>`).
 

@@ -5,8 +5,8 @@ function whinge {
     exit 1
 }
 
-[[ -n "$STATSDCONF" ]] || whinge "STATSDCONF not set"
-cp -fv $STATSDCONF /opt/statsd/statsd.conf || whinge "failed to copy $STATSDCONF"
+[[ -n "$STATSD_CONF_FILE" ]] || whinge "$STATSD_CONF_FILE not set"
+cp -fv $STATSD_CONF_FILE /opt/statsd/statsd.conf || whinge "failed to copy $STATSD_CONF_FILE"
 
 #
 # Somewhere to dump anything of interest that will be picked up but the

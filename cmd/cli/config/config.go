@@ -29,7 +29,7 @@ func init() {
 	configFilePath = filepath.Join(configDirPath, configFileName)
 
 	proto := "http"
-	if value := os.Getenv(cmn.AISUseHTTPSEnvVar); cmn.IsParseBool(value) {
+	if value := os.Getenv(cmn.EnvVars.UseHTTPS); cmn.IsParseBool(value) {
 		proto = "https"
 	}
 	defaultConfig = Config{

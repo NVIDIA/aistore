@@ -33,7 +33,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP 
-            - name: STATSDCONF
+            - name: STATSD_CONF_FILE
               value: "/var/statsd_config/statsd.json"
             - name: RUNSCRIPTSOURCE
               value: "/var/aisloader_script/aisnode_config.sh"

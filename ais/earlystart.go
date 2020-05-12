@@ -97,24 +97,31 @@ func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (pid string, prima
 		pid     string
 		primary bool
 	}{
-		pid:     os.Getenv("AIS_PRIMARY_ID"),
-		primary: cmn.IsParseBool(os.Getenv("AIS_IS_PRIMARY")),
+		pid:     os.Getenv(cmn.EnvVars.PrimaryID),
+		primary: cmn.IsParseBool(os.Getenv(cmn.EnvVars.IsPrimary)),
 	}
 
 	if envP.pid != "" && envP.primary && p.si.ID() != envP.pid {
-		cmn.ExitLogf("FATAL: %s: invalid combination of AIS_IS_PRIMARY=true & AIS_PRIMARY_ID=%s",
-			p.si, envP.pid)
+		cmn.ExitLogf(
+			"FATAL: %s: invalid combination of %s=true & %s=%s",
+			p.si, cmn.EnvVars.IsPrimary, cmn.EnvVars.PrimaryID, envP.pid,
+		)
 	}
 	glog.Infof("%s: %sprimary-env=%+v", p.si, tag, envP)
 
 	if loaded && envP.pid != "" {
 		primary := smap.GetProxy(envP.pid)
 		if primary == nil {
-			glog.Errorf("%s: ignoring AIS_PRIMARY_ID=%s - not found in the loaded %s",
-				p.si, envP.pid, smap)
+			glog.Errorf(
+				"%s: ignoring %s=%s - not found in the loaded %s",
+				p.si, cmn.EnvVars.IsPrimary, envP.pid, smap,
+			)
 			envP.pid = ""
 		} else if smap.ProxySI.ID() != envP.pid {
-			glog.Warningf("%s: new AIS_PRIMARY_ID=%s, previous %s", p.si, envP.pid, smap.ProxySI)
+			glog.Warningf(
+				"%s: new %s=%s, previous %s",
+				p.si, cmn.EnvVars.PrimaryID, envP.pid, smap.ProxySI,
+			)
 			smap.ProxySI = primary
 		}
 	}

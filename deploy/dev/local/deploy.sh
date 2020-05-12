@@ -76,7 +76,7 @@ AUTH_SU_PASS="${AUTH_SU_PASS:-admin}"
 # existence of each fspath is checked at runtime
 #
 ###################################
-CONF_DIR="$HOME/.ais$NEXT_TIER"
+AIS_CONF_DIR="$HOME/.ais$NEXT_TIER"
 TEST_FSPATH_COUNT=1
 
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
@@ -164,13 +164,13 @@ if ! AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER} make --no-print-directory -C ${AISTORE
   printError "failed to compile 'aisnode' binary"
 fi
 
-mkdir -p $CONF_DIR
+mkdir -p $AIS_CONF_DIR
 
 # Not really used for local testing but to keep aisnode_config.sh quiet
 GRAPHITE_PORT=2003
 GRAPHITE_SERVER="127.0.0.1"
-CONF_FILE_COLLECTD=$CONF_DIR/collectd.conf
-CONF_FILE_STATSD=$CONF_DIR/statsd.conf
+COLLECTD_CONF_FILE=$AIS_CONF_DIR/collectd.conf
+STATSD_CONF_FILE=$AIS_CONF_DIR/statsd.conf
 
 #
 # generate conf file(s) based on the settings/selections above

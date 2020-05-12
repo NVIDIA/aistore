@@ -916,7 +916,7 @@ func restore(cmd string, args []string, asPrimary bool, tag string) error {
 	if asPrimary {
 		// Sets the environment variable to start as primary proxy to true
 		env := os.Environ()
-		env = append(env, "AIS_IS_PRIMARY=TRUE")
+		env = append(env, fmt.Sprintf("%s=true", cmn.EnvVars.IsPrimary))
 		ncmd.Env = env
 	}
 

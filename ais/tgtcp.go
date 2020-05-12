@@ -46,13 +46,10 @@ func (t *targetrunner) initHostIP() {
 		extAddr = net.ParseIP(hostIP)
 		extPort = port
 	)
-	if portStr := os.Getenv("AIS_TARGET_HOST_PORT"); portStr != "" {
-		portNum, err := strconv.Atoi(portStr)
+	if portStr := os.Getenv("AIS_HOST_PORT"); portStr != "" {
+		portNum, err := cmn.ParsePort(portStr)
 		cmn.AssertNoErr(err)
-		cmn.Assert(portNum >= 0)
-		if portNum > 0 {
-			extPort = portNum
-		}
+		extPort = portNum
 	}
 	t.si.PublicNet.NodeIPAddr = extAddr.String()
 	t.si.PublicNet.DaemonPort = strconv.Itoa(extPort)

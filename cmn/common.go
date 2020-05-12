@@ -83,10 +83,26 @@ const (
 
 	S3TagSepa = "!"
 	TF        = "tf"
+)
 
-	AISURLEnvVar        = "AIS_ENDPOINT"
-	AISSkipVerifyEnvVar = "AIS_SKIP_VERIFY_CRT"
-	AISUseHTTPSEnvVar   = "AIS_USE_HTTPS"
+var (
+	EnvVars = struct {
+		Endpoint string
+
+		IsPrimary string
+		PrimaryID string
+
+		SkipVerifyCrt string
+		UseHTTPS      string
+	}{
+		Endpoint: "AIS_ENDPOINT",
+
+		IsPrimary: "AIS_IS_PRIMARY",
+		PrimaryID: "AIS_PRIMARY_ID",
+
+		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
+		UseHTTPS:      "AIS_USE_HTTPS",
+	}
 )
 
 type (

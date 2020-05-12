@@ -72,12 +72,6 @@ create_local_repo() {
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd -P)"
 
-AISCONF_DIR=/aisconfig
-if [ ! -d "$AISCONF_DIR" ]; then
-    mkdir /aisconfig
-    chmod 771 /aisconfig
-fi
-
 HOST="aisprimaryservice.default.svc.cluster.local"
 PORT=8080
 AIS_LOG_DIR="/tmp/ais/log"
