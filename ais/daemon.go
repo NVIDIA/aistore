@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -127,16 +128,24 @@ func init() {
 	flag.StringVar(&daemon.cli.role, "role", "", "role of this AIS daemon: proxy | target")
 
 	// config itself and its command line overrides
-	flag.StringVar(&daemon.cli.config.ConfFile, "config", "", "config filename: local file that stores this daemon's configuration")
-	flag.StringVar(&daemon.cli.config.LogLevel, "loglevel", "", "log verbosity level (2 - minimal, 3 - default, 4 - super-verbose)")
+	flag.StringVar(&daemon.cli.config.ConfFile, "config", "",
+		"config filename: local file that stores this daemon's configuration")
+	flag.StringVar(&daemon.cli.config.LogLevel, "loglevel", "",
+		"log verbosity level (2 - minimal, 3 - default, 4 - super-verbose)")
 	flag.DurationVar(&daemon.cli.config.StatsTime, "stats_time", 0, "stats reporting (logging) interval")
-	flag.StringVar(&daemon.cli.config.ProxyURL, "proxyurl", "", "primary proxy/gateway URL to override local configuration")
-	flag.StringVar(&daemon.cli.confjson, "confjson", "", "JSON formatted \"{name: value, ...}\" string to override selected knob(s)")
+	flag.StringVar(&daemon.cli.config.ProxyURL, "proxyurl", "",
+		"primary proxy/gateway URL to override local configuration")
+	flag.StringVar(&daemon.cli.confjson, "confjson", "",
+		"JSON formatted \"{name: value, ...}\" string to override selected knob(s)")
+
+	// FIXME: #732
 	flag.BoolVar(&daemon.cli.persist, "persist", false,
 		"true: apply command-line args to the configuration and save the latter to disk\nfalse: keep it transient (for this run only)")
+
 	flag.BoolVar(&daemon.cli.skipStartup, "skipstartup", false,
 		"determines if primary proxy should skip waiting for target registrations when starting up")
 	flag.IntVar(&daemon.cli.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
+
 	// dry-run
 	flag.BoolVar(&daemon.dryRun.disk, "nodiskio", false, "dry-run: if true, no disk operations for GET and PUT")
 	flag.StringVar(&daemon.dryRun.sizeStr, "dryobjsize", "8m", "dry-run: in-memory random content")
@@ -226,57 +235,9 @@ func initDaemon(version, build string) {
 	daemon.gmm.Sibling, daemon.smm.Sibling = daemon.smm, daemon.gmm
 
 	if daemon.cli.role == cmn.Proxy {
-		p := &proxyrunner{}
-		p.initSI(cmn.Proxy)
-		p.initClusterCIDR()
-		daemon.rg.add(p, cmn.Proxy)
-
-		ps := &stats.Prunner{}
-		psStartedUp := ps.Init(p)
-		daemon.rg.add(ps, xproxystats)
-
-		daemon.rg.add(newProxyKeepaliveRunner(p, ps, psStartedUp), xproxykeepalive)
-		daemon.rg.add(newMetasyncer(p), xmetasyncer)
+		initProxy()
 	} else {
-		t := &targetrunner{}
-		t.initSI(cmn.Target)
-		t.initHostIP()
-		daemon.rg.add(t, cmn.Target)
-
-		ts := &stats.Trunner{T: t} // iostat below
-		tsStartedUp := ts.Init(t)
-		daemon.rg.add(ts, xstorstats)
-
-		daemon.rg.add(newTargetKeepaliveRunner(t, ts, tsStartedUp), xtargetkeepalive)
-
-		t.fsprg.init(t) // subgroup of the daemon.rg rungroup
-
-		// Stream Collector - a singleton object with responsibilities that include:
-		sc := transport.Init()
-		daemon.rg.add(sc, xstreamc)
-
-		// fs.Mountpaths must be inited prior to all runners that utilize them
-		// for mountpath definition, see fs/mountfs.go
-		if cmn.GCO.Get().TestingEnv() {
-			glog.Infof("Warning: configuring %d fspaths for testing", config.TestFSP.Count)
-			fs.Mountpaths.DisableFsIDCheck()
-			t.testCachepathMounts()
-		} else {
-			fsPaths := make([]string, 0, len(config.FSpaths.Paths))
-			for path := range config.FSpaths.Paths {
-				fsPaths = append(fsPaths, path)
-			}
-			if err := fs.Mountpaths.Init(fsPaths); err != nil {
-				cmn.ExitLogf("%s", err)
-			}
-		}
-
-		fshc := health.NewFSHC(t, fs.Mountpaths, daemon.gmm, fs.CSM)
-		daemon.rg.add(fshc, xfshc)
-
-		housekeep, initialInterval := cluster.LomCacheHousekeep(daemon.gmm, t)
-		hk.Housekeeper.Register("lom-cache", housekeep, initialInterval)
-		_ = ts.UpdateCapacityOOS(nil) // goes after fs.Mountpaths.Init
+		initTarget(config)
 	}
 	daemon.rg.add(&sigrunner{}, xsignal)
 
@@ -293,14 +254,67 @@ func initDaemon(version, build string) {
 	}
 }
 
+func initProxy() {
+	p := &proxyrunner{}
+	p.initSI(cmn.Proxy)
+	p.initClusterCIDR()
+	daemon.rg.add(p, cmn.Proxy)
+
+	ps := &stats.Prunner{}
+	startedUp := ps.Init(p)
+	daemon.rg.add(ps, xproxystats)
+
+	daemon.rg.add(newProxyKeepaliveRunner(p, ps, startedUp), xproxykeepalive)
+	daemon.rg.add(newMetasyncer(p), xmetasyncer)
+}
+
+func initTarget(config *cmn.Config) {
+	t := &targetrunner{}
+	t.initSI(cmn.Target)
+	t.initHostIP()
+	daemon.rg.add(t, cmn.Target)
+
+	ts := &stats.Trunner{T: t} // iostat below
+	startedUp := ts.Init(t)
+	daemon.rg.add(ts, xstorstats)
+
+	daemon.rg.add(newTargetKeepaliveRunner(t, ts, startedUp), xtargetkeepalive)
+
+	t.fsprg.init(t) // subgroup of the daemon.rg rungroup
+
+	// Stream Collector - a singleton object with responsibilities that include:
+	sc := transport.Init()
+	daemon.rg.add(sc, xstreamc)
+
+	// fs.Mountpaths must be inited prior to all runners that utilize them
+	// for mountpath definition, see fs/mountfs.go
+	if cmn.GCO.Get().TestingEnv() {
+		glog.Infof("Warning: configuring %d fspaths for testing", config.TestFSP.Count)
+		fs.Mountpaths.DisableFsIDCheck()
+		t.testCachepathMounts()
+	} else {
+		fsPaths := make([]string, 0, len(config.FSpaths.Paths))
+		for path := range config.FSpaths.Paths {
+			fsPaths = append(fsPaths, path)
+		}
+		if err := fs.Mountpaths.Init(fsPaths); err != nil {
+			cmn.ExitLogf("%s", err)
+		}
+	}
+
+	fshc := health.NewFSHC(t, fs.Mountpaths, daemon.gmm, fs.CSM)
+	daemon.rg.add(fshc, xfshc)
+
+	housekeep, initialInterval := cluster.LomCacheHousekeep(daemon.gmm, t)
+	hk.Housekeeper.Register("lom-cache", housekeep, initialInterval)
+	_ = ts.UpdateCapacityOOS(nil) // goes after fs.Mountpaths.Init
+}
+
 // Run is the 'main' where everything gets started
 func Run(version, build string) {
-	// Always flush the logger (even in case of panic).
-	defer glog.Flush()
+	defer glog.Flush() // always flush
 
 	initDaemon(version, build)
-
-	// Start all the runners
 	err := daemon.rg.run()
 	if err == nil {
 		glog.Infoln("Terminated OK")
@@ -311,6 +325,13 @@ func Run(version, build string) {
 		exitCode := 128 + int(e.signal) // see: https://tldp.org/LDP/abs/html/exitcodes.html
 		cmn.ExitWithCode(exitCode)
 		return
+	}
+	if errors.Is(err, cmn.ErrStartupTimeout) {
+		// NOTE:
+		// stats and keepalive runners wait for the ClusterStarted() - i.e., for primary
+		// to reach the corresponding stage. There must be an external "restarter" (e.g. K8s)
+		// to restart the daemon if the primary gets killed or panics prior (to reaching that state)
+		glog.Errorln("Timed-out while starting up")
 	}
 	cmn.ExitLogf("Terminated with err: %s", err)
 }

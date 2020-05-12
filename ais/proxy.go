@@ -2177,7 +2177,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(sleep)
 		}
 		if !smap.isValid() {
-			glog.Errorf("%s: waiting unexpectedly long time for valid %s", p.si, smap)
+			glog.Errorf("%s: startup is taking unusually long time, %s", p.si, smap) // cluster
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}

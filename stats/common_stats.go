@@ -31,7 +31,11 @@ import (
 //
 //==============================
 
-const logsMaxSizeCheckTime = 48 * time.Minute // how often do we check the logs for max accumulated size
+const (
+	logsMaxSizeCheckTime      = 48 * time.Minute       // periodically check the logs for max accumulated size
+	startupSleep              = 300 * time.Millisecond // periodically poll ClusterStarted()
+	startupDeadlineMultiplier = 2                      // deadline = startupDeadlineMultiplier * config.Timeout.Startup
+)
 
 const (
 	KindCounter    = "counter"
@@ -403,16 +407,19 @@ var (
 )
 
 func (r *statsRunner) runcommon(logger statslogger) error {
-	const sleep = 300 * time.Millisecond
-	config := cmn.GCO.Get()
+	var (
+		i, j   time.Duration
+		ticker = time.NewTicker(startupSleep)
 
-	// drain workCh until the daemon (proxy or target) starts up
-	var i time.Duration
-	ticker := time.NewTicker(sleep)
+		// NOTE: the maximum time we agree to wait for r.daemon.ClusterStarted()
+		config   = cmn.GCO.Get()
+		deadline = startupDeadlineMultiplier * config.Timeout.Startup
+	)
 dummy:
 	for {
 		select {
 		case <-r.workCh:
+			// drain workCh until the daemon (proxy or target) starts up
 		case <-r.stopCh:
 			ticker.Stop()
 			return nil
@@ -420,9 +427,14 @@ dummy:
 			if r.daemon.ClusterStarted() {
 				break dummy
 			}
-			i++
-			if i*sleep > config.Timeout.Startup {
-				glog.Errorf("initializing unusually long time...")
+			j += startupSleep
+			if j > deadline {
+				ticker.Stop()
+				return cmn.ErrStartupTimeout
+			}
+			i += startupSleep
+			if i > config.Timeout.Startup {
+				glog.Errorln("startup is taking unusually long time...")
 				i = 0
 			}
 		}

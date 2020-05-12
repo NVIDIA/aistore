@@ -12,7 +12,10 @@ import (
 	"syscall"
 )
 
-var ErrSkip = errors.New("skip")
+var (
+	ErrSkip           = errors.New("skip")
+	ErrStartupTimeout = errors.New("startup timeout")
+)
 
 ///////////////////////////////////////////
 // common error helpers and constructors //

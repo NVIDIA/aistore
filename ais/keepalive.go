@@ -369,7 +369,7 @@ func (k *keepalive) waitStatsRunner() (stopped bool) {
 
 			i += waitStartupSleep
 			if i > cmn.GCO.Get().Timeout.Startup {
-				glog.Errorf("waiting unusually long time...")
+				glog.Errorln("startup is taking unusually long time...")
 				i = 0
 			}
 		case sig := <-k.controlCh:
