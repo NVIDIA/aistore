@@ -73,13 +73,13 @@ else
 fi
 
 #
-# It's tempting to default CLDPROVIDER if not set, but that then requires a reasonably
+# It's tempting to default AIS_CLD_PROVIDER if not set, but that then requires a reasonably
 # complete config for that cloud service (e.g., from aws configure) which may not be
 # what you want if just working with aisloader. So we require explicit choice of cloud
 # provider in building the ais binary (and then go on to include that binary in a Docker
 # image that is then also cloud-specific).
 #
-echo "Cloud provider set to: ${CLDPROVIDER}"
+echo "Cloud provider set to: ${AIS_CLD_PROVIDER}"
 cd "${GOPATH}/src/${AISTORE_SRC}" && MODE=$2 GOBIN=$1 make node cli xmeta
 [[ $? -eq 0 ]] || whinge "failed to compile one of 'node', 'cli', or 'xmeta'"
 

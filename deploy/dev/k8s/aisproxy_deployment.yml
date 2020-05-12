@@ -25,7 +25,7 @@ spec:
           initialDelaySeconds: 20
           periodSeconds: 10
         env:
-         - name: ROLE
+         - name: AIS_NODE_ROLE
            value: "proxy"
         volumeMounts:
          - name: ais-config

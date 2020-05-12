@@ -1,15 +1,15 @@
 #!/bin/bash
 set -e
 
-export LOGDIR=/var/log/ais
-export CONFDIR=/ais
-export CONFFILE=$HOME/ais.json
-export CONFFILE_STATSD=$HOME/statsd.json
-export CONFFILE_COLLECTD=$HOME/collectd.json
+export AIS_LOG_DIR=/var/log/ais
+export AIS_CONF_DIR=/ais
+export AIS_CONF_FILE=$AIS_CONF_DIR/ais.json
+export STATSD_CONF_FILE=$AIS_CONF_DIR/statsd.json
+export COLLECTD_CONF_FILE=$AIS_CONF_DIR/collectd.json
 
 export PORT=8081
 export PROXY=`cat ./inventory/proxy.txt`
-export PROXYURL='http://'$PROXY':8081'
+export AIS_PRIMARY_URL='http://'$PROXY':8081'
 export GRAPHITE_SERVER=`cat ./inventory/graphana.txt`
 
 export IOSTAT_TIME_LONG=1s
@@ -23,9 +23,9 @@ for disk in "$@"; do
         FSP=$FSP', "/ais/'$disk'": " "'
     fi
 done
-echo FSPATHS are $FSP
-#export FSPATHS='"/ais/xvdb": " ", "/ais/xvdc": " ", "/ais/xvdd": " ", "/ais/xvde": " "'
-export FSPATHS=$FSP
+echo AIS_FS_PATHS are $FSP
+#export AIS_FS_PATHS='"/ais/xvdb": " ", "/ais/xvdc": " ", "/ais/xvdd": " ", "/ais/xvde": " "'
+export AIS_FS_PATHS=$FSP
 export IPV4LIST=$(awk -vORS=, '{ print $1 }' ./inventory/cluster.txt | sed 's/,$//')
 sudo rm -rf aisproxy.json || true
 sudo rm -rf ais.json || true

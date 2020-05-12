@@ -29,7 +29,7 @@ ENV PATH $PATH:/usr/local/go/bin
 COPY . $GOPATH/src/github.com/NVIDIA/aistore/
 WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
 
-RUN CLDPROVIDER="" make node
+RUN AIS_CLD_PROVIDER="" make node
 RUN make cli
 ARG AIS_VERSION=unknown
 RUN echo $AIS_VERSION > /repo.HEAD-rev

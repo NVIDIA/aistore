@@ -39,13 +39,13 @@ runCmd() {
 AISTORE_DIR=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
 
 # Used to determine ProjectID field for *your* Google Cloud project.
-# Must be set iff CLDPROVIDER (see below) is Google (aka GCP or "gcp").
+# Must be set iff AIS_CLD_PROVIDER (see below) is Google (aka GCP or "gcp").
 if [ -z "$GOOGLE_CLOUD_PROJECT" ]
 then
 	export GOOGLE_CLOUD_PROJECT="random-word-123456"
 fi
 
-USE_HTTPS=${USE_HTTPS:-false}
+AIS_USE_HTTPS=${AIS_USE_HTTPS:-false}
 CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
 HTTP_READ_BUFFER_SIZE=65536
@@ -60,16 +60,14 @@ else
   PORT_INTRA_DATA=${PORT_INTRA_DATA:-13080}
   NEXT_TIER="_next"
 fi
-PROXYURL="http://localhost:$PORT"
-AIS_PROTO="http"
-if $USE_HTTPS; then
-  AIS_PROTO="https"
-  PROXYURL="https://localhost:$PORT"
+AIS_PRIMARY_URL="http://localhost:$PORT"
+if $AIS_USE_HTTPS; then
+  AIS_PRIMARY_URL="https://localhost:$PORT"
 fi
 LOGROOT="${LOGROOT:-/tmp/ais}${NEXT_TIER}"
 #### Authentication setup #########
-SECRETKEY="${SECRETKEY:-aBitLongSecretKey}"
-AUTHENABLED="${AUTHENABLED:-false}"
+AIS_SECRET_KEY="${AIS_SECRET_KEY:-aBitLongSecretKey}"
+AUTH_ENABLED="${AUTH_ENABLED:-false}"
 AUTH_SU_NAME="${AUTH_SU_NAME:-admin}"
 AUTH_SU_PASS="${AUTH_SU_PASS:-admin}"
 ###################################
@@ -78,7 +76,7 @@ AUTH_SU_PASS="${AUTH_SU_PASS:-admin}"
 # existence of each fspath is checked at runtime
 #
 ###################################
-CONFDIR="$HOME/.ais$NEXT_TIER"
+CONF_DIR="$HOME/.ais$NEXT_TIER"
 TEST_FSPATH_COUNT=1
 
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
@@ -123,10 +121,10 @@ if  [[ ${PROXY_CNT} -lt 1 ]] ; then
   printError "${PROXY_CNT} must be at least 1"
 fi
 if [[ ${PROXY_CNT} -gt 1 ]] ; then
-  DISCOVERYPORT=$((PORT + 1))
-  DISCOVERYURL="http://localhost:$DISCOVERYPORT"
-  if $USE_HTTPS; then
-    DISCOVERYURL="https://localhost:$DISCOVERYPORT"
+  AIS_DISCOVERY_PORT=$((PORT + 1))
+  AIS_DISCOVERY_URL="http://localhost:$AIS_DISCOVERY_PORT"
+  if $AIS_USE_HTTPS; then
+    AIS_DISCOVERY_URL="https://localhost:$AIS_DISCOVERY_PORT"
   fi
 fi
 
@@ -138,10 +136,10 @@ read test_fspath_cnt
 is_number ${test_fspath_cnt}
 TEST_FSPATH_COUNT=${test_fspath_cnt}
 
-# If not specified, CLDPROVIDER will remain empty (or `0`) and
+# If not specified, AIS_CLD_PROVIDER will remain empty (or `0`) and
 # aisnode build will include neither AWS ("aws") nor GCP ("gcp").
 
-CLDPROVIDER=""
+AIS_CLD_PROVIDER=""
 echo "Select:"
 echo " 0: No 3rd party Cloud"
 echo " 1: Amazon S3"
@@ -151,38 +149,38 @@ read -r cld_provider
 is_number ${cld_provider}
 
 if [[ ${cld_provider} -eq 0 ]]; then
-  CLDPROVIDER=""
+  AIS_CLD_PROVIDER=""
 elif [[ ${cld_provider} -eq 1 ]]; then
-  CLDPROVIDER="aws"
+  AIS_CLD_PROVIDER="aws"
 elif [[ ${cld_provider} -eq 2 ]]; then
-  CLDPROVIDER="gcp"
+  AIS_CLD_PROVIDER="gcp"
 elif [[ ${cld_provider} -eq 3 ]]; then
-  CLDPROVIDER="azure"
+  AIS_CLD_PROVIDER="azure"
 else
   printError "${cld_provider} is not a valid entry - expecting 0, 1, 2, or 3"
 fi
 
-if ! CLDPROVIDER=${CLDPROVIDER} make --no-print-directory -C ${AISTORE_DIR} node; then
+if ! AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER} make --no-print-directory -C ${AISTORE_DIR} node; then
   printError "failed to compile 'aisnode' binary"
 fi
 
-mkdir -p $CONFDIR
+mkdir -p $CONF_DIR
 
 # Not really used for local testing but to keep aisnode_config.sh quiet
 GRAPHITE_PORT=2003
 GRAPHITE_SERVER="127.0.0.1"
-CONFFILE_COLLECTD=$CONFDIR/collectd.conf
-CONFFILE_STATSD=$CONFDIR/statsd.conf
+CONF_FILE_COLLECTD=$CONF_DIR/collectd.conf
+CONF_FILE_STATSD=$CONF_DIR/statsd.conf
 
 #
 # generate conf file(s) based on the settings/selections above
 #
 for (( c=START; c<=END; c++ )); do
-  CONFDIR="$HOME/.ais$NEXT_TIER$c"
+  AIS_CONF_DIR="$HOME/.ais$NEXT_TIER$c"
   INSTANCE=$c
-  mkdir -p $CONFDIR
-  CONFFILE="$CONFDIR/ais.json"
-  LOGDIR="$LOGROOT/$c/log"
+  mkdir -p "$AIS_CONF_DIR"
+  AIS_CONF_FILE="$AIS_CONF_DIR/ais.json"
+  AIS_LOG_DIR="$AIS_LOG_DIR/$c/log"
   source "${AISTORE_DIR}/deploy/dev/local/aisnode_config.sh"
 
   ((PORT++))
@@ -193,11 +191,11 @@ done
 # run proxy and storage targets
 CMD="${GOPATH}/bin/aisnode"
 for (( c=START; c<=END; c++ )); do
-  CONFDIR="$HOME/.ais${NEXT_TIER}$c"
-  CONFFILE="$CONFDIR/ais.json"
+  AIS_CONF_DIR="$HOME/.ais${NEXT_TIER}$c"
+  AIS_CONF_FILE="$AIS_CONF_DIR/ais.json"
 
-  PROXY_PARAM="${AISNODE_FLAGS} -config=${CONFFILE} -role=proxy -ntargets=${TARGET_CNT} $1 $2"
-  TARGET_PARAM="${AISNODE_FLAGS} -config=${CONFFILE} -role=target $1 $2"
+  PROXY_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -role=proxy -ntargets=${TARGET_CNT} $1 $2"
+  TARGET_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -role=target $1 $2"
 
   if [[ $c -eq 0 ]]; then
     export AIS_IS_PRIMARY="true"
@@ -209,22 +207,22 @@ for (( c=START; c<=END; c++ )); do
   elif [[ $c -lt ${PROXY_CNT} ]]; then
     runCmd "${CMD} ${PROXY_PARAM}"
   else
-    runCmd "${CMD} ${TARGET_PARAM} ${PROFILE}"
+    runCmd "${CMD} ${TARGET_PARAM}"
   fi
 done
 
-if [[ $AUTHENABLED = "true" ]]; then
+if [[ -n $AUTH_ENABLED ]]; then
   # conf file for authn
-  CONFDIR="$HOME/.authn"
-  mkdir -p $CONFDIR
-  CONFFILE="$CONFDIR/authn.json"
-  LOGDIR="$LOGROOT/authn/log"
+  AUTHN_CONF_DIR="$HOME/.authn"
+  mkdir -p "$AUTHN_CONF_DIR"
+  AUTHN_CONF_FILE="$AUTHN_CONF_DIR/authn.json"
+  AUTHN_LOG_DIR="$AUTHN_LOG_DIR/authn/log"
   source "${AISTORE_DIR}/deploy/dev/local/authn_config.sh"
 
   if ! make --no-print-directory -C ${AISTORE_DIR} authn; then
     printError "failed to compile 'authn' binary"
   fi
-  runCmd "${GOPATH}/bin/authn -config=${CONFFILE}"
+  runCmd "${GOPATH}/bin/authn -config=${AUTHN_CONF_FILE}"
 fi
 
 sleep 0.1

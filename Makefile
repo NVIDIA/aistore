@@ -16,20 +16,20 @@ ifdef GOBIN
 	BUILD_DEST = $(GOBIN)
 endif
 ifdef TAGS
-	BUILD_TAGS = "$(CLDPROVIDER) $(TAGS)"
+	BUILD_TAGS = "$(AIS_CLD_PROVIDER) $(TAGS)"
 else
-	BUILD_TAGS = $(CLDPROVIDER)
+	BUILD_TAGS = $(AIS_CLD_PROVIDER)
 endif
 
 # Profiling
-# Example usage: MEMPROFILE=/tmp/mem make kill clean deploy <<< $'5\n5\n4\n0'
-# Note that MEMPROFILE (memprofile) option requires graceful shutdown (see `kill:`)
-ifdef MEMPROFILE
-	export PROFILE = -memprofile=$(MEMPROFILE)
+# Example usage: MEM_PROFILE=/tmp/mem make kill clean deploy <<< $'5\n5\n4\n0'
+# Note that MEM_PROFILE (memprofile) option requires graceful shutdown (see `kill:`)
+ifdef MEM_PROFILE
+	AIS_NODE_FLAGS += -memprofile=$(MEM_PROFILE)
 	BUILD_SRC = $(BUILD_DIR)/aisnodeprofile/main.go
 endif
-ifdef CPUPROFILE
-	export PROFILE += -cpuprofile=$(CPUPROFILE)
+ifdef CPU_PROFILE
+	AIS_NODE_FLAGS += -cpuprofile=$(CPU_PROFILE)
 	BUILD_SRC = $(BUILD_DIR)/aisnodeprofile/main.go
 endif
 
@@ -62,7 +62,7 @@ $(call make-lazy,term-reset)
 all: node cli aisfs authn ## Build all main binaries
 
 node: ## Build 'aisnode' binary
-	@echo "Building aisnode: version=$(VERSION) provider=$(CLDPROVIDER)"
+	@echo "Building aisnode: version=$(VERSION) provider=$(AIS_CLD_PROVIDER)"
 ifneq ($(strip $(GORACE)),)
 ifneq ($(findstring log_path,$(GORACE)),log_path)
 	@echo
@@ -177,16 +177,16 @@ test-envcheck:
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-env
 
 test-short: test-envcheck ## Run short tests (requires BUCKET variable to be set)
-	@BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
+	@BUCKET=$(BUCKET) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
 
 test-long: test-envcheck ## Run all (long) tests (requires BUCKET variable to be set)
-	@BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
+	@BUCKET=$(BUCKET) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
 
 test-run: test-envcheck # runs tests matching a specific regex
 ifeq ($(RE),)
 	$(error missing environment variable: RE="testnameregex")
 endif
-	@RE=$(RE) BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-run
+	@RE=$(RE) BUCKET=$(BUCKET) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-run
 
 test-docker: ## Run tests inside docker
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-docker
@@ -266,6 +266,6 @@ help:
 		"BUCKET=tmp make test-short" "Run all short tests" \
 		"BUCKET=<existing-cloud-bucket> make test-long" "Run all tests" \
 		"BUCKET=tmp make ci" "Run style, lint, and spell checks, as well as all short tests" \
-		"MEMPROFILE=/tmp/mem make deploy" "Deploy cluster with memory profiling enabled, write reports to /tmp/mem.<PID> (and make sure to stop gracefully)" \
-		"CPUPROFILE=/tmp/cpu make deploy" "Build and deploy cluster instrumented for CPU profiling, write reports to /tmp/cpu.<PID>" \
+		"MEM_PROFILE=/tmp/mem make deploy" "Deploy cluster with memory profiling enabled, write reports to /tmp/mem.<PID> (and make sure to stop gracefully)" \
+		"CPU_PROFILE=/tmp/cpu make deploy" "Build and deploy cluster instrumented for CPU profiling, write reports to /tmp/cpu.<PID>" \
 		"TAGS=nethttp make deploy" "Build 'transport' package with net/http (see transport/README.md) and deploy cluster locally"

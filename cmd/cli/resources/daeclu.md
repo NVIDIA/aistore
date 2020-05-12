@@ -22,7 +22,7 @@ If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the
 `ais show cluster smap [DAEMON_ID]`
 
 Show a copy of the cluster map (smap) present on `DAEMON_ID`.
-If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_URL` points at.
+If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_ENDPOINT` points at.
 
 ### Options
 

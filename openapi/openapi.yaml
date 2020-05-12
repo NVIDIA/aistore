@@ -1785,13 +1785,11 @@ components:
               properties:
                 use_https:
                   type: boolean
-                proto:
-                  type: string
                 rproxy:
                   type: string
                 rproxy_cache:
                   type: boolean
-                server_certificate:
+                server_crt:
                   type: string
                 server_key:
                   type: string
@@ -1809,12 +1807,14 @@ components:
         auth:
           type: object
           properties:
-            secret:
-              type: string
             enabled:
               type: boolean
-            creddir:
+            secret:
               type: string
+            cred_dir:
+              type: string
+            allow_guest:
+              type: boolean
         keepalivetracker:
           type: object
           properties:

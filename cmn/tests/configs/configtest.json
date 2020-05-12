@@ -99,7 +99,7 @@
     "http": {
       "rproxy":		"",
       "rproxy_cache":		true,
-      "server_certificate":	"server.crt",
+      "server_crt":	"server.crt",
       "server_key":		"server.key",
       "use_https":		false
     }
@@ -112,7 +112,7 @@
   "auth": {
     "secret":  "FAKESECRETKEY",
     "enabled": false,
-    "creddir": "/fake/cred/dir"
+    "cred_dir": "/fake/cred/dir"
   },
   "keepalivetracker": {
     "proxy": {

@@ -84,9 +84,9 @@ const (
 	S3TagSepa = "!"
 	TF        = "tf"
 
-	AISURLEnvVar        = "AISURL"
-	AISSkipVerifyEnvVar = "AIS_SKIP_VERIFY"
-	AISUseHTTPSEnvVar   = "USE_HTTPS"
+	AISURLEnvVar        = "AIS_ENDPOINT"
+	AISSkipVerifyEnvVar = "AIS_SKIP_VERIFY_CRT"
+	AISUseHTTPSEnvVar   = "AIS_USE_HTTPS"
 )
 
 type (

@@ -208,12 +208,13 @@ $ cd ../../../cmd/cli
 $ ./install.sh
 ```
 
-This will create a binary named `ais` that can be used to interact with the cluster. Configure the CLI tool to point to the Kubernetes cluster by assigning the `AIS_URL` environment variable to the URL of the primary proxy. 
+This will create a binary named `ais` that can be used to interact with the cluster.
+Configure the CLI tool to point to the Kubernetes cluster by assigning the `AIS_ENDPOINT` environment variable to the URL of the primary proxy. 
 
 Example:
 
 ```console
-$ export AIS_URL=http://10.244.0.4:8080
+$ export AIS_ENDPOINT=http://10.244.0.4:8080
 ```
 
 For the list of available commands, see [here](../../../cmd/cli/README.md).

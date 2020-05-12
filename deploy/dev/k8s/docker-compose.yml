@@ -18,6 +18,6 @@ services:
       args:
         - GOBASE=${GOPATH-/go}
         - TARGETS=${TARGET_CNT-1000}
-        - CLDPROVIDER=${CLDPROVIDER-}
+        - AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER-}
         - NODISKIO=${NODISKIO-false}
         - DRYOBJSIZE=${DRYOBJSIZE-8MB}

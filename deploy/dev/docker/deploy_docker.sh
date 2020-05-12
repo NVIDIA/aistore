@@ -57,9 +57,9 @@ save_env() {
     echo "" > ${TMP_ENV}
     echo "QUICK=${QUICK}" >> ${TMP_ENV}
     echo "TARGET_CNT=${TARGET_CNT:-1000}" >> ${TMP_ENV}
-    echo "CLDPROVIDER=${CLDPROVIDER-}" >> ${TMP_ENV}
+    echo "AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER-}" >> ${TMP_ENV}
     echo "TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT}" >> ${TMP_ENV}
-    echo "FSPATHS=${FSPATHS}" >> ${TMP_ENV}
+    echo "AIS_FS_PATHS=${AIS_FS_PATHS}" >> ${TMP_ENV}
 
     echo "NODISKIO=${NODISKIO-false}" >> ${TMP_ENV}
     echo "DRYOBJSIZE=${DRYOBJSIZE-8m}" >> ${TMP_ENV}
@@ -67,7 +67,7 @@ save_env() {
     echo "GRAPHITE_PORT=${GRAPHITE_PORT}" >> ${TMP_ENV}
     echo "GRAPHITE_SERVER=${GRAPHITE_SERVER}" >> ${TMP_ENV}
 
-    echo "PROXYURL=http://${PUB_NET}.2:${PORT}" >> ${TMP_ENV}
+    echo "AIS_PRIMARY_URL=http://${PUB_NET}.2:${PORT}" >> ${TMP_ENV}
     echo "PUB_SUBNET=${PUB_SUBNET}" >> ${TMP_ENV}
     echo "INT_CONTROL_SUBNET=${INT_CONTROL_SUBNET}" >> ${TMP_ENV}
     echo "INT_DATA_SUBNET=${INT_DATA_SUBNET}" >> ${TMP_ENV}
@@ -92,7 +92,7 @@ save_setup() {
 
     echo "FS_LIST=$FS_LIST" >> ${SETUP_FILE}
     echo "TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT}" >> ${SETUP_FILE}
-    echo "FSPATHS=$FSPATHS" >> ${SETUP_FILE}
+    echo "AIS_FS_PATHS=$AIS_FS_PATHS" >> ${SETUP_FILE}
 
     echo "PRIMARY_HOST_IP=${PRIMARY_HOST_IP}" >> ${SETUP_FILE}
     echo "NEXT_TIER_HOST_IP=${NEXT_TIER_HOST_IP}" >> ${SETUP_FILE}
@@ -315,7 +315,7 @@ if [ $CLOUD -eq 1 ]; then
         echo -a is a required parameter. Provide the path for aws.env file
         usage
     fi
-    CLDPROVIDER="aws"
+    AIS_CLD_PROVIDER="aws"
     # to get proper tilde expansion
     AWS_ENV="${AWS_ENV/#\~/$HOME}"
     temp_file="${AWS_ENV}/credentials"
@@ -344,13 +344,13 @@ if [ $CLOUD -eq 1 ]; then
     sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${LOCAL_AWS}
     sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
 elif [ $CLOUD -eq 2 ]; then
-    CLDPROVIDER="gcp"
+    AIS_CLD_PROVIDER="gcp"
     touch $LOCAL_AWS
 elif [ $CLOUD -eq 3 ]; then
-    CLDPROVIDER="azure"
+    AIS_CLD_PROVIDER="azure"
     touch $LOCAL_AWS
 else
-    CLDPROVIDER=""
+    AIS_CLD_PROVIDER=""
     touch $LOCAL_AWS
 fi
 
@@ -391,7 +391,7 @@ if [ "$PROXY_CNT" -eq 0 ]; then
     fi
 fi
 
-FSPATHS="\"\":\"\""
+AIS_FS_PATHS="\"\":\"\""
 if [ "$FS_LIST" = "" ] && [ "$TEST_FSPATH_COUNT" -eq 0 ]; then
     echo Select
     echo  1: Local cache directories
@@ -413,13 +413,13 @@ if [ "$FS_LIST" = "" ] && [ "$TEST_FSPATH_COUNT" -eq 0 ]; then
 fi
 
 if [ "$FS_LIST" != "" ] && [ "$TEST_FSPATH_COUNT" -eq 0 ]; then
-    FSPATHS=""
+    AIS_FS_PATHS=""
     IFS=',' read -r -a array <<< "$FS_LIST"
     for element in "${array[@]}"
     do
-        FSPATHS="$FSPATHS,\"$element\" : \"\" "
+        AIS_FS_PATHS="$AIS_FS_PATHS,\"$element\" : \"\" "
     done
-    FSPATHS=${FSPATHS#","}
+    AIS_FS_PATHS=${AIS_FS_PATHS#","}
 fi
 
 composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml"

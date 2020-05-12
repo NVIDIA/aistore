@@ -476,7 +476,7 @@ func (h *httprunner) initSI(daemonType string) {
 		Port: config.Net.L4.PortIntraData,
 	}
 
-	daemonID := os.Getenv("AIS_DAEMONID")
+	daemonID := os.Getenv("AIS_DAEMON_ID")
 	if daemonID == "" {
 		cs := xxhash.ChecksumString32S(publicAddr.String(), cmn.MLCG32)
 		if config.TestingEnv() {

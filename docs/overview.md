@@ -212,7 +212,7 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](../cmd/cli/README.md). Once [installed](../cmd/cli/README.md#getting-started), to start using it, simply execute:
 
  ```console
-$ export AIS_URL=http://G
+$ export AIS_ENDPOINT=http://G
 $ ais --help
 ```
 

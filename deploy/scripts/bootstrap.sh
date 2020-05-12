@@ -116,8 +116,8 @@ test-env)
   fi
   if [[ -n ${KUBERNETES_SERVICE_HOST} ]]; then
     echo "AIStore running on Kubernetes..." >&2
-    if [[ "${AISURL}" != "" ]]; then
-      ip=${AISURL%:*} # extract IP from format IP:PORT
+    if [[ "${AIS_ENDPOINT}" != "" ]]; then
+      ip=${AIS_ENDPOINT%:*} # extract IP from format IP:PORT
       if [[ $(ping -c 1 ${ip} | grep '1 received') ]]; then
         echo "AIStore connection to ${ip} is working..." >&2
         exit 0
@@ -126,7 +126,7 @@ test-env)
         exit 1
       fi
     else
-      echo "Error missing environment variable: 'AISURL=<IP>:<PORT>'" >&2
+      echo "Error missing environment variable: 'AIS_ENDPOINT=<IP>:<PORT>'" >&2
       exit 1
     fi
   fi
@@ -143,7 +143,7 @@ test-env)
 test-short)
   echo "Running short tests..." >&2
   SECONDS=0
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 30m -short "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL")
+  errs=$(BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test -v -p 1 -parallel 4 -count 1 -timeout 30m -short "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL")
   err_count=$(echo "${errs}" | wc -l)
   echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
   if [[ -n ${errs} ]]; then
@@ -157,7 +157,7 @@ test-short)
 test-long)
   echo "Running long tests..." >&2
   SECONDS=0
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 2h "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL")
+  errs=$(BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test -v -p 1 -parallel 4 -count 1 -timeout 2h "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL")
   err_count=$(echo "${errs}" | wc -l)
   echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
   if [[ -n ${errs} ]]; then
@@ -170,7 +170,7 @@ test-long)
 
 test-run)
   echo "Running test with regex..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -parallel 4 -count 1 -timeout 2h  -run="${RE}" "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test -v -p 1 -parallel 4 -count 1 -timeout 2h  -run="${RE}" "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
   if [[ -n ${errs} ]]; then
     echo "${errs}" >&2

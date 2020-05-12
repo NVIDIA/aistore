@@ -35,18 +35,19 @@ Environment variables used by the deployment script to setup AuthN server:
 
 | Variable | Default value | Description |
 |---|---|---|
-| PROXYURL | `""` | Primary proxy URL for AuthN to notify the cluster about events like a token is revoked |
-| AUTHENABLED | `false` | Set it to `true` to enable authn server and token-based access in AIStore proxy |
+| AIS_ENDPOINT | `""` | Primary proxy URL for AuthN to notify the cluster about events like a token is revoked |
+| AIS_SECRET_KEY | `aBitLongSecretKey` | A secret key to encrypt and decrypt tokens |
+| AUTH_ENABLED | `false` | Set it to `true` to enable authn server and token-based access in AIStore proxy |
+| AUTHN_ALLOW_GUEST | `false` | Enabling guest allows doing basic requests (like listing buckets or object get) without authentication | 
 | AUTHN_SU_NAME | `admin` | Super user name (see `A super user` section for details) |
 | AUTHN_SU_PASS | `admin` | Super user password (see `A super user` section for details) |
-| SECRETKEY| `aBitLongSecretKey` | A secret key to encrypt and decrypt tokens |
 | AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
 | AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 that means "no expiration time" |
 
 All variables can be set at AIStore launch. Example of starting AuthN with the default configuration:
 
 ```console
-$ AUTHENABLED=true make deploy
+$ AUTH_ENABLED=true make deploy
 ```
 
 Note: don't forget to change the default secret key used to encrypt and decrypt tokens before starting the deployment process.
@@ -65,9 +66,9 @@ In this README:
 
 | File | Location |
 |---|---|
-| Server configuration | $CONFDIR/authn.json |
-| User list | $CONFDIR/users.json |
-| Log directory | $LOGDIR/authn/log/ |
+| Server configuration | `$CONF_DIR/authn.json` |
+| User list | `$CONF_DIR/users.json` |
+| Log directory | `$AIS_LOG_DIR/authn/log/` |
 
 ### How to enable AuthN server after deployment
 
@@ -126,7 +127,7 @@ want to expose in configuration file.
 
 After deploying the cluster, a superuser account is created automatically - a special account that cannot be deleted and only this account can manage users and their credentials.
 
-Superuser's credentials can be set at cluster deployment time(please, see [Getting started](#getting-started)), or changed later by modifying AuthN configuration file `authn.json`. It is located in $CONFDIR, default value is $HOME/.ais.
+Superuser's credentials can be set at cluster deployment time(please, see [Getting started](#getting-started)), or changed later by modifying AuthN configuration file `authn.json`. It is located in $CONF_DIR, default value is $HOME/.ais.
 
 Adding and deleting usernames requires superuser authentication. Super user credentials are sent in the request header via `Authorization` field (for curl it is `curl -u<username>:<password ...`, for HTTP requests it is header option `Authorization: Basic <base64-encoded-username:password>`).
 

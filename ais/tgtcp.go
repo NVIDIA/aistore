@@ -37,7 +37,7 @@ import (
 
 func (t *targetrunner) initHostIP() {
 	var hostIP string
-	if hostIP = os.Getenv("AIS_HOSTIP"); hostIP == "" {
+	if hostIP = os.Getenv("AIS_HOST_IP"); hostIP == "" {
 		return
 	}
 	var (
@@ -46,7 +46,7 @@ func (t *targetrunner) initHostIP() {
 		extAddr = net.ParseIP(hostIP)
 		extPort = port
 	)
-	if portStr := os.Getenv("AIS_TARGET_HOSTPORT"); portStr != "" {
+	if portStr := os.Getenv("AIS_TARGET_HOST_PORT"); portStr != "" {
 		portNum, err := strconv.Atoi(portStr)
 		cmn.AssertNoErr(err)
 		cmn.Assert(portNum >= 0)
@@ -57,7 +57,7 @@ func (t *targetrunner) initHostIP() {
 	t.si.PublicNet.NodeIPAddr = extAddr.String()
 	t.si.PublicNet.DaemonPort = strconv.Itoa(extPort)
 	t.si.PublicNet.DirectURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
-	glog.Infof("AIS_HOSTIP[Public Network]: %s[%s]", hostIP, t.si.URL(cmn.NetworkPublic))
+	glog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetworkPublic))
 }
 
 func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error) {

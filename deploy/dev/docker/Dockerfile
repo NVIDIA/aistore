@@ -43,10 +43,10 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
 # Install statsd
 RUN git clone https://github.com/etsy/statsd.git
 
-ENV CONFDIR /tmp/.conf
-ENV CONFFILE ${CONFDIR}/ais.json
-ENV CONFFILE_COLLECTD ${CONFDIR}/collectd.conf
-ENV CONFFILE_STATSD ${CONFDIR}/statsd.conf
+ENV AIS_CONF_DIR /tmp/.conf
+ENV AIS_CONF_FILE ${AIS_CONF_DIR}/ais.json
+ENV COLLECTD_CONF_FILE ${AIS_CONF_DIR}/collectd.conf
+ENV STATSD_CONF_FILE ${AIS_CONF_DIR}/statsd.conf
 
 ENV MOUNTPATH /tmp/ais
 

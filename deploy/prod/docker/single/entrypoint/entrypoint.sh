@@ -1,30 +1,30 @@
 #!/bin/bash
 
-export CLDPROVIDER=$1
-if ! [[ $CLDPROVIDER =~ ^(|aws|gcp)$ ]]; then
-  echo "Invalid cloud provider ('$CLDPROVIDER'), expected one of ('', 'aws', 'gcp')"
+export AIS_CLD_PROVIDER=$1
+if ! [[ $AIS_CLD_PROVIDER =~ ^(|aws|gcp|azure)$ ]]; then
+  echo "Invalid cloud provider ('$AIS_CLD_PROVIDER'), expected one of ('', 'aws', 'gcp', 'azure')"
   exit 1
 fi
 
-export FSPATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": \"\""; done | paste -sd ",")
+export AIS_FS_PATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": \"\""; done | paste -sd ",")
 
 function start_node {
   # Required for `aisnode_config.sh`.
-  export CONFDIR=/etc/aisnode/$1
-  export CONFFILE=${CONFDIR}/ais.json
-  export CONFFILE_COLLECTD=${CONFDIR}/collectd.conf
-  export CONFFILE_STATSD=${CONFDIR}/statsd.conf
+  export AIS_CONF_DIR=/etc/aisnode/$1
+  export AIS_CONF_FILE=${AIS_CONF_DIR}/ais.json
+  export COLLECTD_CONF_FILE=${AIS_CONF_DIR}/collectd.conf
+  export STATSD_CONF_FILE=${AIS_CONF_DIR}/statsd.conf
   
   export PORT=$2
-  export PROXYURL="http://172.17.0.2:51080"
-  export LOGDIR=/var/log/aisnode/$1
-  mkdir -p ${CONFDIR}
-  mkdir -p ${LOGDIR}
+  export AIS_PRIMARY_URL="http://172.17.0.2:51080"
+  export AIS_LOG_DIR=/var/log/aisnode/$1
+  mkdir -p ${AIS_CONF_DIR}
+  mkdir -p ${AIS_LOG_DIR}
   
   source aisnode_config.sh
 
-  AIS_DAEMONID="$1-${HOSTNAME}" AIS_IS_PRIMARY="true" bin/aisnode_${CLDPROVIDER} \
-    -config=${CONFFILE} \
+  AIS_DAEMON_ID="$1-${HOSTNAME}" AIS_IS_PRIMARY="true" bin/aisnode_${AIS_CLD_PROVIDER} \
+    -config=${AIS_CONF_FILE} \
     -role=$1 \
     -ntargets=1 \
     &

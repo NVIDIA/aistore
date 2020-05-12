@@ -2,12 +2,12 @@
 
 # required for `source /aisnode_config.sh`
 export TEST_FSPATH_ROOT=${MOUNTPATH}/${HOSTNAME}
-export LOGDIR=${TEST_FSPATH_ROOT}/log
-mkdir -p ${CONFDIR}
+export AIS_LOG_DIR=${TEST_FSPATH_ROOT}/log
+mkdir -p ${AIS_CONF_DIR}
 mkdir -p ${TEST_FSPATH_ROOT}
-mkdir -p ${LOGDIR}
+mkdir -p ${AIS_LOG_DIR}
 export GOCACHE=/tmp/.gocache
-touch ${LOGDIR}/statsd.log
+touch ${AIS_LOG_DIR}/statsd.log
 
 if [ -n "${QUICK}" ]; then
   go get -u -v github.com/NVIDIA/aistore && /bin/bash
@@ -15,14 +15,14 @@ else
   cd ${GOPATH}/src/github.com/NVIDIA/aistore
   source /aisnode_config.sh
 
-  exec node /statsd/stats.js ${CONFFILE_STATSD} 2>&1 | tee -a ${LOGDIR}/statsd.log &
+  exec node /statsd/stats.js ${STATSD_CONF_FILE} 2>&1 | tee -a ${AIS_LOG_DIR}/statsd.log &
 
   make node
-  AIS_DAEMONID=$(echo ${HOSTNAME}) ${GOBIN}/aisnode \
-      -config=${CONFFILE} \
-      -role=${ROLE} \
+  AIS_DAEMON_ID=$(echo ${HOSTNAME}) ${GOBIN}/aisnode \
+      -config=${AIS_CONF_FILE} \
+      -role=${AIS_NODE_ROLE} \
       -ntargets=${TARGET_CNT} \
-      -nodiskio=${NODISKIO} \
-      -dryobjsize=${DRYOBJSIZE} \
+      -nodiskio=${AIS_NO_DISK_IO} \
+      -dryobjsize=${AIS_DRY_OBJ_SIZE} \
       -alsologtostderr=true
 fi

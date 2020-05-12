@@ -173,7 +173,7 @@ To make sure that AIStore does not utilize xattrs, configure `checksum`=`none` a
 
 ## Enabling HTTPS
 
-To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_certificate` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).
+To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_crt` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).
 
 ## Filesystem Health Checker
 

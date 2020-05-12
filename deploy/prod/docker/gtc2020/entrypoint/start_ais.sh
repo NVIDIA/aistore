@@ -36,18 +36,18 @@ EOM
 # Demo container creates a single directory under /ais and we don't pass volume mounts to it -
 # so the data disk is ephemeral!
 #
-export FSPATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": \"\""; done | paste -sd ",")
+export AIS_FS_PATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": \"\""; done | paste -sd ",")
 
 #
 # Start a proxy or target node, using a pre-baked config under /etc/ais.
 #
 function start_node {
-  CONFFILE=/etc/ais/$1/ais.json
-  LOGDIR=/var/log/aisnode/$1
-  mkdir -p ${LOGDIR}
+  AIS_CONF_FILE=/etc/ais/$1/ais.json
+  AIS_LOG_DIR=/var/log/aisnode/$1
+  mkdir -p ${AIS_LOG_DIR}
 
-  AIS_DAEMONID="$1-${HOSTNAME}" AIS_IS_PRIMARY="true" ${GOBIN}/aisnode \
-    -config=${CONFFILE} \
+  AIS_DAEMON_ID="$1-${HOSTNAME}" AIS_IS_PRIMARY="true" ${GOBIN}/aisnode \
+    -config=${AIS_CONF_FILE} \
     -role=$1 \
     -ntargets=1
 }

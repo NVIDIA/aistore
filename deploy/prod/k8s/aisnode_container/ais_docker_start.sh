@@ -1,12 +1,12 @@
 #!/bin/bash
 
 echo "---------------------------------------------------"
-echo "aisnode $ROLE container startup at $(date)"
+echo "aisnode $AIS_NODE_ROLE container startup at $(date)"
 echo "---------------------------------------------------"
 
 [[ -f /git-showbranch.out ]] && cat /git-showbranch.out 
 
-cp -fv $CONFFILE /etc/ais || exit 1 
+cp -fv $CONF_FILE /etc/ais || exit 1
 cp -fv $STATSDCONF /opt/statsd/statsd.conf || exit 1
 
 node /opt/statsd/stats.js /opt/statsd/statsd.conf &
@@ -24,7 +24,7 @@ mkdir /var/log/aismisc
 #  - that the current node is labeled as initial primary proxy
 # We'll pass a hint on to the aisnode instance that it is likely the (initial) primary.
 #
-if [[ "${ROLE}" != "target" && -f /var/ais_env/env ]]; then
+if [[ "${AIS_NODE_ROLE}" != "target" && -f /var/ais_env/env ]]; then
     echo "Running on node labeled as initial primary proxy during initial cluster deployment"
     export AIS_IS_PRIMARY=True
     is_primary=true
@@ -42,23 +42,23 @@ fi
 
 #
 # An initcontainer runs to create a hash of the system uuid. If such a hash was found, we
-# use it as the base of the AIS_DAEMONID
+# use it as the base of the AIS_DAEMON_ID
 #
-# If no uuid was found, we'll fallback to AIS_HOSTIP - the node IP provided in the pod
+# If no uuid was found, we'll fallback to AIS_HOST_IP - the node IP provided in the pod
 # environment.
 #
-# In both cases, we prefix the daemon id with the first letter of the ROLE - targets
+# In both cases, we prefix the daemon id with the first letter of the AIS_NODE_ROLE - targets
 # and proxies can run on the same node, so this disambiguates their daemon ids. This
 # would fail if electable and non-electable proxies run on the same node - we could
 # pass more detail on the role type in the environment if required.
 #
 if [[ -f /var/ais_env/uuid_env ]]; then
    UUID=$(cat /var/ais_env/uuid_env)
-   export AIS_DAEMONID="${ROLE::1}$UUID"
+   export AIS_DAEMON_ID="${AIS_NODE_ROLE::1}$UUID"
 else
-   export AIS_DAEMONID="${ROLE::1}$AIS_HOSTIP"
+   export AIS_DAEMON_ID="${AIS_NODE_ROLE::1}$AIS_HOST_IP"
 fi
-echo "Our ais daemon id will be $AIS_DAEMONID"
+echo "Our ais daemon id will be $AIS_DAEMON_ID"
 
 #
 # Informational
@@ -159,7 +159,7 @@ fi
 # token effort to allow StatsD to set up shop before ais tries to connect
 [[ $total_wait -le 2 ]] && sleep 2
 
-ARGS="-config=/etc/ais/$(basename -- $CONFFILE) -role=$ROLE -alsologtostderr=true -stderrthreshold=1"
+ARGS="-config=/etc/ais/$(basename -- $AIS_CONF_FILE) -role=$AIS_NODE_ROLE -alsologtostderr=true -stderrthreshold=1"
 
 $is_primary && ARGS+=" -ntargets=$TARGETS"
 echo "aisnode args: $ARGS"

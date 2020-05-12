@@ -23,7 +23,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py &&\
 
 # Setting ENV variables
 ENV GOLANG_VERSION 1.13
-ENV CONFFILE /etc/ais/ais.json
+ENV AIS_CONF_FILE /etc/ais/ais.json
 
 # Reassign arguments to environment variables so run.sh can use them
 ARG GOBASE
@@ -43,27 +43,27 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
   tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 
-ARG CLDPROVIDER
-ENV CLD $CLDPROVIDER
+ARG AIS_CLD_PROVIDER
+ENV CLD $AIS_CLD_PROVIDER
 
 # Dry Run
-ARG NODISKIO
-ENV NODISK $NODISKIO
+ARG AIS_NO_DISK_IO
+ENV NO_DISK $AIS_NO_DISK_IO
 
-ARG DRYOBJSIZE
-ENV OBJSIZE $DRYOBJSIZE
+ARG AIS_DRY_OBJ_SIZE
+ENV OBJ_SIZE $AIS_DRY_OBJ_SIZE
 
 ARG TARGETS
-ENV TARGETCNT $TARGETS
-COPY ais.json $CONFFILE
+ENV TARGET_CNT $TARGETS
+COPY ais.json $AIS_CONF_FILE
 
 EXPOSE 8080
 
 RUN cd $GOPATH/src/github.com/NVIDIA && git clone https://github.com/NVIDIA/aistore.git && cd $WORKDIR
 
 RUN echo "\
-cd $WORKDIR && CLDPROVIDER=${CLD} make node \n \
+cd $WORKDIR && AIS_CLD_PROVIDER=${CLD} make node \n \
 cd $GOBIN && $GOBIN/aisnode -config=\$1 -role=\$2 -ntargets=\$3 -nodiskio=\$4 -nonetio=\$5 -dryobjsize=\$6 -alsologtostderr=true  \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
-CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETCNT $NODISK $OBJSIZE"]
+CMD ["sh","-c", "AIS_DAEMON_ID=`echo $HOSTNAME` /run/run.sh $AIS_CONF_FILE $AIS_NODE_ROLE $TARGET_CNT $NO_DISK $OBJ_SIZE"]

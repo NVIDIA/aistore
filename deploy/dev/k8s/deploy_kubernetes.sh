@@ -72,19 +72,16 @@ create_local_repo() {
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd -P)"
 
-AISCONFDIR=/aisconfig
-if [ ! -d "$AISCONFDIR" ]; then
+AISCONF_DIR=/aisconfig
+if [ ! -d "$AISCONF_DIR" ]; then
     mkdir /aisconfig
     chmod 771 /aisconfig
 fi
 
 HOST="aisprimaryservice.default.svc.cluster.local"
-PROXYID="ORIGINAL_PRIMARY"
 PORT=8080
-SERVICENAME="ais"
-LOGDIR="/tmp/ais/log"
-LOGLEVEL="3"
-CONFDIR="/usr/nvidia"
+AIS_LOG_DIR="/tmp/ais/log"
+AIS_CONF_DIR="/usr/nvidia"
 DOCKER_HOST_IP=""
 CLUSTER_CONFIG=""
 ###################################
@@ -121,9 +118,9 @@ END=$TARGET_CNT
 
 echo "Enter number of proxy servers:"
 read PROXY_CNT
-if ! [[ "$PROXY_CNT" =~ ^[0-9]+$ ]] ; then
+if ! [[ "$PROXY_CNT" =~ ^[0-9]+$ ]]; then
   echo "Error: '$PROXY_CNT' must be at least 1"; exit 1
-elif [ $PROXY_CNT -lt 1 ] ; then
+elif [[ $PROXY_CNT -lt 1 ]]; then
   echo "Error: $PROXY_CNT is less than 1"; exit 1
 fi
 START=0
@@ -158,10 +155,10 @@ then
    fspath=${fspath#","}
 fi
 
-FSPATHS=$fspath
+AIS_FS_PATHS=$fspath
 TEST_FSPATH_COUNT=$testfspathcnt
 LOCAL_AWS="/aisconfig/aws.env"
-CLDPROVIDER="" # See deploy.sh for more informations about empty CLDPROVIDER
+AIS_CLD_PROVIDER="" # See deploy.sh for more informations about empty AIS_CLD_PROVIDER
 echo "Select:"
 echo " 0: No 3rd party Cloud"
 echo " 1: Amazon S3"
@@ -169,7 +166,7 @@ echo " 2: Google Cloud Storage"
 echo " 3: Azure Cloud"
 read cldprovider
 if [ $cldprovider -eq 1 ]; then
-    CLDPROVIDER="aws"
+    AIS_CLD_PROVIDER="aws"
 
     echo "Enter the location of your AWS configuration and credentials files:"
     echo "Note: No input will result in using the default AWS dir (~/.aws/)"
@@ -206,12 +203,12 @@ if [ $cldprovider -eq 1 ]; then
     sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${LOCAL_AWS}
     sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
 
-elif [ $cldprovider -eq 2 ]; then
-  CLDPROVIDER="gcp"
+elif [[ $cldprovider -eq 2 ]]; then
+  AIS_CLD_PROVIDER="gcp"
   echo "" > ${LOCAL_AWS}
 
-elif [ $cldprovider -eq 3 ]; then
-  CLDPROVIDER="azure"
+elif [[ $cldprovider -eq 3 ]]; then
+  AIS_CLD_PROVIDER="azure"
   echo "" > ${LOCAL_AWS}
 fi
 
@@ -231,12 +228,12 @@ if kubectl get secrets | grep aws > /dev/null 2>&1; then
 fi
 kubectl create secret generic aws-credentials --from-file=$LOCAL_AWS
 
-CONFFILE="ais.json"
-CONFFILE_STATSD="statsd.conf"
-CONFFILE_COLLECTD="collectd.conf"
+AIS_CONF_FILE="ais.json"
+STATSD_CONF_FILE="statsd.conf"
+COLLECTD_CONF_FILE="collectd.conf"
 
-export CONFDIR=/aisconfig
-export PROXYURL="http://${HOST}:${PORT}"
+export AIS_CONF_DIR=/aisconfig
+export AIS_PRIMARY_URL="http://${HOST}:${PORT}"
 export DOCKER_HOST_IP=$DOCKER_HOST_IP
 export PROXY_LABEL=$PROXY_LABEL
 export TARGET_LABEL=$TARGET_LABEL
@@ -244,15 +241,15 @@ export TARGET_LABEL=$TARGET_LABEL
 echo $DIR
 source $DIR/../local/aisnode_config.sh
 
-create_local_repo $TARGET_CNT $CLDPROVIDER
+create_local_repo $TARGET_CNT $AIS_CLD_PROVIDER
 
 # Deploying kubernetes cluster
 echo Starting kubernetes deployment ..
 #Create AIStore configmap to attach during runtime
 echo Creating AIStore configMap
-kubectl create configmap ais-config --from-file=./$CONFFILE
-kubectl create configmap statsd-config --from-file=./$CONFFILE_STATSD
-kubectl create configmap collectd-config --from-file=./$CONFFILE_COLLECTD
+kubectl create configmap ais-config --from-file=./$AIS_CONF_FILE
+kubectl create configmap statsd-config --from-file=./$STATSD_CONF_FILE
+kubectl create configmap collectd-config --from-file=./$COLLECTD_CONF_FILE
 
 
 echo "Starting Primary Proxy Deployment ..."
@@ -262,7 +259,7 @@ envsubst < aisprimaryproxy_deployment.yml | kubectl apply -f -
 echo "Waiting for primary proxy to start ..."
 sleep 70
 
-if (( $PROXY_CNT > 1 )); then
+if (( PROXY_CNT > 1 )); then
   echo "Starting Proxy Deployment"
   envsubst < aisproxy_deployment.yml | kubectl apply -f -
   PROXY_CNT=$((PROXY_CNT - 1))
@@ -274,10 +271,10 @@ echo "Starting Target Deployment"
 envsubst < aistarget_deployment.yml | kubectl create -f -
 
 echo "Scaling targets"
-kubectl scale --replicas=$TARGET_CNT -f aistarget_deployment.yml
+kubectl scale --replicas="$TARGET_CNT" -f aistarget_deployment.yml
 
 echo "List of running pods"
 kubectl get pods -o wide
 
-rm $CONFFILE $CONFFILE_STATSD $CONFFILE_COLLECTD
+rm $AIS_CONF_FILE $STATSD_CONF_FILE $COLLECTD_CONF_FILE
 echo "Done"

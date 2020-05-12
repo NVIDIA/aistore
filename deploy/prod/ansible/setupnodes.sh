@@ -33,5 +33,5 @@ fi
 echo "Getting AIStore source..."
 go get -v github.com/NVIDIA/aistore
 
-echo "Cloud provider set to: ${CLDPROVIDER}"
+echo "Cloud provider set to: ${AIS_CLD_PROVIDER}"
 cd ${AISTORE_SRC} && make node

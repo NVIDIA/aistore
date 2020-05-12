@@ -1,8 +1,8 @@
-cat > $CONFFILE <<EOL
+cat > $AIS_CONF_FILE <<EOL
 {
-	"confdir": "${CONFDIR}",
+	"confdir": "${AIS_CONF_DIR}",
 	"cloud": {
-		"${CLDPROVIDER}": {}
+		"${AIS_CLD_PROVIDER}": {}
 	},
 	"mirror": {
 		"copies":       2,
@@ -12,16 +12,16 @@ cat > $CONFFILE <<EOL
 		"enabled":      ${MIRROR_ENABLED:-false}
 	},
 	"ec": {
-		"objsize_limit":	${OBJSIZE_LIMIT:-262144},
-		"data_slices":		${DATA_SLICES:-1},
-		"parity_slices":	${PARITY_SLICES:-1},
-		"compression":		"${COMPRESSION:-never}",
-		"enabled":		${EC_ENABLED:-false},
-		"batch_size":	${EC_BATCH_SIZE:-64}
+		"objsize_limit": ${OBJ_SIZE_LIMIT:-262144},
+		"data_slices":   ${DATA_SLICES:-1},
+		"parity_slices": ${PARITY_SLICES:-1},
+		"compression":   "${COMPRESSION:-never}",
+		"enabled":       ${EC_ENABLED:-false},
+		"batch_size":    ${EC_BATCH_SIZE:-64}
 	},
 	"log": {
-		"dir":       "${LOGDIR:-/tmp/ais$NEXT_TIER/log}",
-		"level":     "${LOGLEVEL:-3}",
+		"dir":       "${AIS_LOG_DIR:-/tmp/ais$NEXT_TIER/log}",
+		"level":     "${AIS_LOG_LEVEL:-3}",
 		"max_size":  4194304,
 		"max_total": 67108864
 	},
@@ -42,9 +42,9 @@ cat > $CONFFILE <<EOL
 		"list_timeout":        "2m"
 	},
 	"proxy": {
-		"primary_url":   "${PROXYURL}",
-		"original_url":  "${PROXYURL}",
-		"discovery_url": "${DISCOVERYURL}",
+		"primary_url":   "${AIS_PRIMARY_URL}",
+		"original_url":  "${AIS_PRIMARY_URL}",
+		"discovery_url": "${AIS_DISCOVERY_URL}",
 		"non_electable": ${NON_ELECTABLE:-false}
 	},
 	"lru": {
@@ -86,7 +86,7 @@ cat > $CONFFILE <<EOL
 		"validate_warm_get": false
 	},
 	"fspaths": {
-		$FSPATHS
+		$AIS_FS_PATHS
 	},
 	"test_fspaths": {
 		"root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",
@@ -105,15 +105,15 @@ cat > $CONFFILE <<EOL
 			"sndrcv_buf_size":    ${SNDRCV_BUF_SIZE:-131072}
 		},
 		"http": {
-			"use_https":          ${USE_HTTPS:-false},
-			"server_certificate": "${AIS_HTTPS_CERT:-server.crt}",
-			"server_key":         "${AIS_HTTPS_KEY:-server.key}",
-			"write_buffer_size":  ${HTTP_WRITE_BUFFER_SIZE:-0},
-			"read_buffer_size":   ${HTTP_READ_BUFFER_SIZE:-0},
-			"chunked_transfer":   ${CHUNKED_TRANSFER:-true},
-			"skip_verify":        ${AIS_SKIP_VERIFY:-false},
-			"rproxy":             "",
-			"rproxy_cache":       true
+			"use_https":         ${AIS_USE_HTTPS:-false},
+			"server_crt":        "${AIS_SERVER_CRT:-server.crt}",
+			"server_key":        "${AIS_SERVER_KEY:-server.key}",
+			"write_buffer_size": ${HTTP_WRITE_BUFFER_SIZE:-0},
+			"read_buffer_size":  ${HTTP_READ_BUFFER_SIZE:-0},
+			"chunked_transfer":  ${CHUNKED_TRANSFER:-true},
+			"skip_verify":       ${AIS_SKIP_VERIFY_CRT:-false},
+			"rproxy":            "",
+			"rproxy_cache":      true
 		}
 	},
 	"fshc": {
@@ -122,9 +122,9 @@ cat > $CONFFILE <<EOL
 		"error_limit": 2
 	},
 	"auth": {
-		"secret":  "$SECRETKEY",
-		"enabled": ${AUTHENABLED:-false},
-		"allow_guest": ${ALLOW_GUEST:-false}
+		"secret":      "$AIS_SECRET_KEY",
+		"enabled":     ${AUTH_ENABLED:-false},
+		"allow_guest": ${AUTHN_ALLOW_GUEST:-false}
 	},
 	"keepalivetracker": {
 		"proxy": {
@@ -156,14 +156,14 @@ cat > $CONFFILE <<EOL
 }
 EOL
 
-cat > $CONFFILE_STATSD <<EOL
+cat > $STATSD_CONF_FILE <<EOL
 {
 	graphitePort: ${GRAPHITE_PORT:-2003},
 	graphiteHost: "${GRAPHITE_SERVER:-localhost}"
 }
 EOL
 
-cat > $CONFFILE_COLLECTD <<EOL
+cat > $COLLECTD_CONF_FILE <<EOL
 LoadPlugin df
 LoadPlugin cpu
 LoadPlugin disk

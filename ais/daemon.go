@@ -48,9 +48,9 @@ type (
 	// - the values can be set via clivars or environment (environment will override clivars).
 	// - for details see README, section "Performance testing"
 	dryRunConfig struct {
-		sizeStr string // random content size used when disk IO is disabled (-dryobjsize/AIS_DRYOBJSIZE)
+		sizeStr string // random content size used when disk IO is disabled (-dryobjsize/AIS_DRY_OBJ_SIZE)
 		size    int64  // as above converted to bytes from a string like '8m'
-		disk    bool   // dry-run disk (-nodiskio/AIS_NODISKIO)
+		disk    bool   // dry-run disk (-nodiskio/AIS_NO_DISK_IO)
 	}
 
 	cliFlags struct {
@@ -150,11 +150,11 @@ func init() {
 
 // dry-run environment overrides dry-run clivars
 func dryRunInit() {
-	str := os.Getenv("AIS_NODISKIO")
+	str := os.Getenv("AIS_NO_DISK_IO")
 	if b, err := cmn.ParseBool(str); err == nil {
 		daemon.dryRun.disk = b
 	}
-	str = os.Getenv("AIS_DRYOBJSIZE")
+	str = os.Getenv("AIS_DRY_OBJ_SIZE")
 	if str != "" {
 		if size, err := cmn.S2B(str); size > 0 && err == nil {
 			daemon.dryRun.size = size
