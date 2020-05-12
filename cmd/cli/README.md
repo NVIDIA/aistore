@@ -46,7 +46,7 @@ $ ais --help
 To check if the CLI can correctly contact the cluster and to get cluster status run following command:
 
 ```console
-$ ais status
+$ ais show cluster
 ```
 
 ## AIS CLI Shell Autocomplete

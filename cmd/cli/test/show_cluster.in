@@ -1,0 +1,3 @@
+ais show cluster // IGNORE
+ais show cluster --json // IGNORE
+ais show cluster $RANDOM_TARGET // IGNORE

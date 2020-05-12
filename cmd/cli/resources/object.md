@@ -381,7 +381,7 @@ Try to promote a file that does not exist.
 ```console
 $ ais create bucket testbucket
 testbucket bucket created
-$ ais status
+$ ais show cluster
 TARGET		 MEM USED %	 MEM AVAIL	 CAP USED %	 CAP AVAIL	 CPU USED %	 REBALANCE
 1014646t8081	   0.00		 4.00GiB	 59		 375.026GiB	   0.00		 finished; 1 objs moved (2.5KiB)
 ...

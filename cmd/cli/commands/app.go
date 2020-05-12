@@ -200,6 +200,7 @@ func commandNotFoundHandler(c *cli.Context, cmd string) {
 	err := commandNotFoundError(c, cmd)
 	// The function has no return value (can't return an error), so it has to print the error here
 	fmt.Fprint(c.App.ErrWriter, err.Error())
+	os.Exit(1)
 }
 
 func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {

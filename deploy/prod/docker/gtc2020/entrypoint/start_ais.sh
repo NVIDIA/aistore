@@ -58,7 +58,7 @@ start_node "target" 51081 &
 
 echo "AIS cluster started"
 sleep 5
-/usr/bin/ais status
+/usr/bin/ais show cluster
 
 wait -n # Waits for first process to exit (hopefully it will never happen).
 pkill -P $$ # If some process finished we must kill the remaining one, container will exit.
