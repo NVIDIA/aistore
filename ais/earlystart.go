@@ -31,7 +31,9 @@ func (p *proxyrunner) bootstrap() {
 	smap = newSmap()
 	if err := p.owner.smap.load(smap, config); err == nil {
 		loaded = true
-		if err := p.checkPresenceNetChange(smap); err != nil {
+		if smap.CountTargets() == 0 {
+			loaded = false
+		} else if err := p.checkPresenceNetChange(smap); err != nil {
 			glog.Error(err)
 			loaded = false
 		}
@@ -238,6 +240,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// 5:  persist and finalize w/ sync + BMD
 	if smap.UUID == "" {
+		if !daemon.cli.skipStartup && smap.CountTargets() == 0 {
+			cmn.ExitLogf("FATAL: %s cannot create a new cluster with no targets, %s", p.si, smap)
+		}
 		clone := smap.clone()
 		clone.UUID, clone.CreationTime = newClusterUUID() // new uuid
 		clone.Version++
