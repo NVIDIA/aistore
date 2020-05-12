@@ -111,6 +111,11 @@ type bckCompletionsOpts struct {
 	multiple              bool
 	separator             bool
 	provider              string
+
+	// Index in args array where first bucket name is.
+	// For command "ais ls bck1 bck2" value should be set to 0
+	// For command "ais put file bck1" value should be set to 1
+	firstBucketIdx int
 }
 
 // The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
@@ -121,6 +126,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		var (
 			multiple, separator, withProviders bool
 			argsProvider                       string
+			firstBucketIdx                     int
 			additionalCompletions              []cli.BashCompleteFunc
 
 			bucketNames []string
@@ -131,9 +137,10 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 			multiple, separator, withProviders = args[0].multiple, args[0].separator, args[0].withProviders
 			argsProvider = args[0].provider
 			additionalCompletions = args[0].additionalCompletions
+			firstBucketIdx = args[0].firstBucketIdx
 		}
 
-		if c.NArg() >= 1 && !multiple {
+		if c.NArg() > firstBucketIdx && !multiple {
 			for _, f := range additionalCompletions {
 				f(c)
 			}
@@ -262,7 +269,7 @@ func putPromoteObjectCompletions(c *cli.Context) {
 		return
 	}
 	if c.NArg() == 1 {
-		bucketCompletions(bckCompletionsOpts{separator: true})(c)
+		bucketCompletions(bckCompletionsOpts{separator: true, firstBucketIdx: 1 /* bucket arg after file arg*/})(c)
 		return
 	}
 }

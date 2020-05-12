@@ -8,12 +8,16 @@ _cli_bash_autocomplete() {
     local cur opts base
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
-    if [[ "$cur" == "-"* ]]; then
-      opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} ${cur} --generate-bash-completion )
+    if [[ $COMP_CWORD -gt 0 && ${COMP_WORDS[COMP_CWORD]} == "put" ]]; then
+      COMPREPLY=( $(compgen -A filename) )
     else
-      opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} --generate-bash-completion )
+      if [[ "$cur" == "-"* ]]; then
+        opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} ${cur} --generate-bash-completion )
+      else
+        opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} --generate-bash-completion )
+      fi
+      COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
     fi
-    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
 
     # append single space after a suggestion if it doesn't end with a /
     local i=${#COMPREPLY[*]}
