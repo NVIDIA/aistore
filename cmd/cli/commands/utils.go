@@ -69,10 +69,11 @@ var (
 //
 
 type usageError struct {
-	context      *cli.Context
-	message      string
-	helpData     interface{}
-	helpTemplate string
+	context       *cli.Context
+	message       string
+	bottomMessage string
+	helpData      interface{}
+	helpTemplate  string
 }
 
 type additionalInfoError struct {
@@ -89,6 +90,9 @@ type progressBarArgs struct {
 
 func (e *usageError) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
+	if e.bottomMessage != "" {
+		msg += fmt.Sprintf("%s\n", e.bottomMessage)
+	}
 	if e.context.Command.Name != "" {
 		return fmt.Sprintf("Incorrect usage of \"%s %s\": %s.\n\n%s", e.context.App.Name, e.context.Command.Name, e.message, msg)
 	}
@@ -140,21 +144,19 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 }
 
 func commandNotFoundError(c *cli.Context, cmd string) error {
-	message := notFoundMessage(c, cmd)
-
 	return &usageError{
-		context:      c,
-		message:      message,
-		helpData:     c.App,
-		helpTemplate: cli.SubcommandHelpTemplate,
+		context:       c,
+		message:       fmt.Sprintf("unknown command %q", cmd),
+		helpData:      c.App,
+		helpTemplate:  cli.SubcommandHelpTemplate,
+		bottomMessage: didYouMeanMessage(c, cmd),
 	}
 }
 
-func notFoundMessage(c *cli.Context, cmd string) string {
+func didYouMeanMessage(c *cli.Context, cmd string) string {
 	closestCommand, distance := findClosestCommand(cmd, c.App.VisibleCommands())
-
 	if distance >= cmn.Max(incorrectCmdDistance, len(cmd)/2) {
-		return fmt.Sprintf("unknown command %q", cmd)
+		return ""
 	}
 
 	sb := &strings.Builder{}
@@ -166,7 +168,7 @@ func notFoundMessage(c *cli.Context, cmd string) string {
 	for _, f := range c.FlagNames() {
 		sb.WriteString(" --" + f)
 	}
-	return fmt.Sprintf("unknown command %q. Did you mean: %q?", cmd, sb.String())
+	return fmt.Sprintf("Did you mean: %q?", sb.String())
 }
 
 func findClosestCommand(cmd string, candidates []cli.Command) (result string, distance int) {
