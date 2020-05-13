@@ -7,6 +7,7 @@ package templates
 import (
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
 	"text/template"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
 )
 
@@ -283,6 +285,20 @@ const (
 		"{{$k}}\t {{$v.Cnt}}\t {{FormatBytesSigned $v.Size 2}}\n" +
 		"{{end}}" +
 		"TOTAL\t"
+
+	ShortUsageTmpl = "{{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}} - {{.Usage}}\n" +
+		"\n\tCOMMANDS:\t" +
+		"{{range .VisibleCategories}}" +
+		"{{ range $index, $element := .VisibleCommands}}" +
+		"{{if $index}}, {{end}}" +
+		"{{if and ( eq ( Mod $index 13 ) 0 ) ( ne $index 0 ) }}\n\t\t{{end}}" + // don't print everything in a single line
+		"{{$element.Name}}" +
+		"{{end}}{{end}}\n" +
+		"{{if .VisibleFlags}}\tOPTIONS:\t" +
+		"{{ range $index, $flag := .VisibleFlags}}" +
+		"{{if $index}}, {{end}}" +
+		"--{{FlagName $flag }}" +
+		"{{end}}{{end}}\n"
 )
 
 var (
@@ -326,6 +342,11 @@ var (
 		"FormatDaemonID":      fmtDaemonID,
 		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":          fmtBool,
+	}
+
+	HelpTemplateFuncMap = template.FuncMap{
+		"FlagName": func(f cli.Flag) string { return strings.SplitN(f.GetName(), ",", 2)[0] },
+		"Mod":      func(a, mod int) int { return a % mod },
 	}
 )
 

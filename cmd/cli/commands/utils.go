@@ -20,16 +20,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/urfave/cli"
-	"github.com/vbauerster/mpb/v4"
-	"github.com/vbauerster/mpb/v4/decor"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
+	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/urfave/cli"
+	"github.com/vbauerster/mpb/v4"
+	"github.com/vbauerster/mpb/v4/decor"
 )
 
 const (
@@ -91,7 +91,7 @@ type progressBarArgs struct {
 func (e *usageError) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
 	if e.bottomMessage != "" {
-		msg += fmt.Sprintf("%s\n", e.bottomMessage)
+		msg += fmt.Sprintf("\n%s\n", e.bottomMessage)
 	}
 	if e.context.Command.Name != "" {
 		return fmt.Sprintf("Incorrect usage of \"%s %s\": %s.\n\n%s", e.context.App.Name, e.context.Command.Name, e.message, msg)
@@ -104,7 +104,7 @@ func helpMessage(template string, data interface{}) string {
 	w := bufio.NewWriter(&buf)
 
 	// Execute the template that generates command usage text
-	cli.HelpPrinter(w, template, data)
+	cli.HelpPrinterCustom(w, template, data, templates.HelpTemplateFuncMap)
 	_ = w.Flush()
 
 	return buf.String()
@@ -116,7 +116,7 @@ func incorrectUsageError(c *cli.Context, err error) error {
 		context:      c,
 		message:      err.Error(),
 		helpData:     c.Command,
-		helpTemplate: cli.CommandHelpTemplate,
+		helpTemplate: templates.ShortUsageTmpl,
 	}
 }
 
@@ -125,7 +125,7 @@ func incorrectUsageMsg(c *cli.Context, fmtString string, args ...interface{}) er
 		context:      c,
 		message:      fmt.Sprintf(fmtString, args...),
 		helpData:     c.Command,
-		helpTemplate: cli.CommandHelpTemplate,
+		helpTemplate: templates.ShortUsageTmpl,
 	}
 }
 
@@ -148,7 +148,7 @@ func commandNotFoundError(c *cli.Context, cmd string) error {
 		context:       c,
 		message:       fmt.Sprintf("unknown command %q", cmd),
 		helpData:      c.App,
-		helpTemplate:  cli.SubcommandHelpTemplate,
+		helpTemplate:  templates.ShortUsageTmpl,
 		bottomMessage: didYouMeanMessage(c, cmd),
 	}
 }
