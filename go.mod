@@ -22,14 +22,12 @@ require (
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lufia/iostat v0.0.0-20170605150913-9f7362b77ad3
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
 	github.com/pierrec/lz4/v3 v3.1.0
 	github.com/pkg/errors v0.8.1
 	github.com/sdomino/scribble v0.0.0-20191024200645-4116320640ba
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
-	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
 	github.com/urfave/cli v1.22.4
 	github.com/valyala/fasthttp v1.11.0
@@ -38,5 +36,6 @@ require (
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e
 	google.golang.org/api v0.14.0
-	gopkg.in/yaml.v2 v2.2.4
+	gopkg.in/yaml.v2 v2.2.8
+	k8s.io/apimachinery v0.18.2
 )

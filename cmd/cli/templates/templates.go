@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
+	"k8s.io/apimachinery/pkg/util/duration"
 )
 
 // Templates for output
@@ -42,8 +43,8 @@ const (
 
 	// Proxy Info
 	ProxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t CPU USED %\t UPTIME\t STATUS\n"
-	ProxyInfoBody   = "{{$value.Snode.ID}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
-		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
+	ProxyInfoBody   = "{{$value.Snode.ID}}\t {{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t " +
+		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
 		"{{$value.Status}}\n"
 
@@ -52,20 +53,21 @@ const (
 	ProxyInfoSingleBodyTmpl = "{{$value := . }}" + ProxyInfoBody
 	ProxyInfoSingleTmpl     = ProxyInfoHeader + ProxyInfoSingleBodyTmpl
 
-	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
-		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
+	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t " +
+		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
 		"{{$value.Status}}\n"
 	AllProxyInfoBodyTmpl = "{{ range $key, $value := .Status }}" + AllProxyInfoBody + "{{end}}"
 	AllProxyInfoTmpl     = ProxyInfoHeader + AllProxyInfoBodyTmpl
 
 	// Target Info
-	TargetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t STATUS\n"
+	TargetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t UPTIME\t STATUS\n"
 	TargetInfoBody   = "{{$value.Snode.ID}}\t " +
-		"{{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
+		"{{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
 		"{{CalcCap $value `percent` | printf `%d`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
-		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
+		"{{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
 		"{{FormatXactStatus $value.TStatus }}\t " +
+		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
 		"{{$value.Status}}\n"
 
 	TargetInfoBodyTmpl       = "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}"
@@ -402,12 +404,12 @@ func fmtXactStatus(tStatus *stats.TargetStatus) string {
 
 	tStats := tStatus.RebalanceStats
 	if tStats.Aborted() {
-		return fmt.Sprintf("aborted; %d objs moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
+		return fmt.Sprintf("aborted; %d moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
 	}
 	if tStats.EndTime().IsZero() {
-		return fmt.Sprintf("running; %d objs moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
+		return fmt.Sprintf("running; %d moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
 	}
-	return fmt.Sprintf("finished; %d objs moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
+	return fmt.Sprintf("finished; %d moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
 }
 
 func fmtObjStatus(obj *cmn.BucketEntry) string {
@@ -476,7 +478,7 @@ func fmtEC(data, parity int, isCopy bool) string {
 
 func fmtDuration(d int64) string {
 	dNano := time.Duration(d * int64(time.Microsecond))
-	return dNano.Round(time.Second).String()
+	return duration.HumanDuration(dNano)
 }
 
 func fmtDaemonID(id string, smap cluster.Smap) string {
