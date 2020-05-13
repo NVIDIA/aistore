@@ -26,7 +26,7 @@ For a client, a typical workflow looks as follows:
 
 <img src="images/authn_flow.gif" alt="Authn workflow">
 
-AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as HTTP server listening on port 8203. If you enable HTTPS access make sure that the configuration file options `server_cert` and `server_key` point to the correct SSL certificate and key.
+AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as HTTP server listening on port 52001. If you enable HTTPS access make sure that the configuration file options `server_cert` and `server_key` point to the correct SSL certificate and key.
 
 
 ## Getting started
@@ -40,14 +40,13 @@ Environment variables used by the deployment script to setup AuthN server:
 | AUTHN_SU_NAME | `admin` | Super user name (see `A super user` section for details) |
 | AUTHN_SU_PASS | `admin` | Super user password (see `A super user` section for details) |
 | SECRETKEY| `aBitLongSecretKey` | A secret key to encrypt and decrypt tokens |
-| CREDDIR | `""` | A path to directory to keep Google Storage user credentials |
 | AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
 | AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 that means "no expiration time" |
 
 All variables can be set at AIStore launch. Example of starting AuthN with the default configuration:
 
 ```console
-$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
+$ AUTHENABLED=true make deploy
 ```
 
 Note: don't forget to change the default secret key used to encrypt and decrypt tokens before starting the deployment process.
@@ -137,8 +136,6 @@ Adding and deleting usernames requires superuser authentication. Super user cred
 |---|---|---|
 | Add a user| POST {"name": "username", "password": "pass"} /v1/users | curl -X POST http://AUTHSRV/v1/users -d '{"name": "username","password":"pass"}' -H 'Content-Type: application/json' -uadmin:admin |
 | Delete a user | DELETE /v1/users/username | curl -X DELETE http://AUTHSRV/v1/users/username -uadmin:admin |
-| Add a cloud credentials for a user | PUT /v1/users/username/cloud-provider {data} | curl -X PUT -L -H 'Content-Type: application/json' http://AUTHSRV/v1/users/username/aws -uadmin:admin -T ~/.aws/credentials |
-| Remove user's cloud credentials | DELETE /v1/users/username/cloud-provider | curl -X DELETE -L http://AUTHSRV/v1/users/username/aws -uadmin:admin |
 
 ## Token management
 
@@ -162,7 +159,6 @@ AIStore proxies and targets require a valid token in a request header - but only
 - UserID (username)
 - Time when the token was generated
 - Time when the token expires
-- User's AWS/GCP credentials
 
 A token is validated by a target. The token must not be expired and it must not be in the blacklist. The blacklist is a list of revoked tokens: tokens that are revoked with REST API or belong to deleted users. The list of revoked tokens is broadcast over the cluster on change. Periodically the list is cleaned up by removing expired tokens.
 
@@ -186,15 +182,7 @@ $ curl -X POST http://AUTHSRV/v1/users \
   -H 'Content-Type: application/json' -uadmin:admin
 ```
 
-2. If the user needs access to user's private buckets on  AWS or GCP, the superuser may add user's credentials (example of adding AWS credentials from file)
-
-```console
-$ curl -X PUT -L -H 'Content-Type: application/json' \
-  http://AUTHSRV/v1/users/username/aws \
-  -uadmin:admin -T ~/.aws/credentials
-```
-
-3. The user requests a token
+2. The user requests a token
 
 ```console
 $ curl -X POST http://AUTHSRV/v1/users/username \
@@ -202,7 +190,7 @@ $ curl -X POST http://AUTHSRV/v1/users/username \
 
 {"token": "eyJhbGciOiJI.eyJjcmVkcyI.T6r6790"}
 ```
-4. The user adds the token for every AIStore request (list buckets names example)
+3. The user adds the token for every AIStore request (list buckets names example)
 
 ```console
 $ curl -L  http://PROXY/v1/buckets/* -X GET \
@@ -218,4 +206,3 @@ $ curl -L  http://PROXY/v1/buckets/* -X GET \
 ## Known limitations
 
 - **Per-bucket authentication**. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users log in, they have full access to all the data;
-- **Token refresh**. There is no automatic token refreshing. By default, a token expires in 24 hours. So, if you are going to run something for a longer time you should either add manual token refresh on getting 'No authorized' error or increase expiration time in settings.

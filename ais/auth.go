@@ -14,16 +14,6 @@
 //         a user should have logged at least once to GCP before running any AIStore operation
 // 2. AuthN server is enabled and everything is set up
 //    - AIS reads userID from HTTP request header: 'Authorization: Bearer <token>'.
-//    - A user credentials is loaded for the userID
-//      AWS: credentials are loaded from INI-file in memory. File must include the following lines:
-//       region = AWSREGION
-//       aws_access_key_id = USERACCESSKEY
-//       aws_secret_access_key = USERSECRETKEY
-//      GCP: credentials from memory saved to file <config.Auth.CredDir>/<ProvideGoogle>/<UserID>.json.
-//	    Then GCP session is intialized with the file content (GCP API does
-//          not have a way to load credentials from memory)
-// 3. If anything goes wrong: no user credentials found, invalid credentials
-//    format etc then default session is created (as if AuthN is disabled)
 package ais
 
 import (
@@ -47,7 +37,6 @@ type (
 		userID  string
 		issued  time.Time
 		expires time.Time
-		creds   cmn.SimpleKVs
 		isGuest bool
 	}
 
@@ -112,18 +101,6 @@ func decryptToken(tokenStr string) (*authRec, error) {
 	}
 	if rec.expires, err = time.Parse(time.RFC822, expireStr); err != nil {
 		return nil, invalTokenErr
-	}
-	rec.creds = make(cmn.SimpleKVs, 10)
-	if cc, ok := claims["creds"].(map[string]interface{}); ok {
-		for key, value := range cc {
-			if asStr, ok := value.(string); ok {
-				rec.creds[key] = asStr
-			} else {
-				glog.Warningf("Value is not string: %v [%T]", value, value)
-			}
-		}
-	} else if glog.V(4) {
-		glog.Infof("Token for %s does not contain credentials", rec.userID)
 	}
 
 	return rec, nil

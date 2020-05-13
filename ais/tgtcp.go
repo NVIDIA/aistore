@@ -454,7 +454,7 @@ func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
 	ct := context.Background()
 	config := cmn.GCO.Get()
 
-	if config.Auth.CredDir == "" || !config.Auth.Enabled {
+	if !config.Auth.Enabled {
 		return ct
 	}
 
@@ -466,8 +466,6 @@ func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
 
 	if user != nil {
 		ct = context.WithValue(ct, cloud.CtxUserID, user.userID)
-		ct = context.WithValue(ct, cloud.CtxCredsDir, config.Auth.CredDir)
-		ct = context.WithValue(ct, cloud.CtxUserCreds, user.creds)
 	}
 
 	return ct

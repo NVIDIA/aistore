@@ -6,17 +6,13 @@ package cloud
 
 import (
 	"context"
-
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 // Declare a new type for Context field names
 type contextID string
 
 const (
-	CtxUserID    contextID = "userID"    // a field name of a context that contains userID
-	CtxCredsDir  contextID = "credDir"   // a field of a context that contains path to directory with credentials
-	CtxUserCreds contextID = "userCreds" // a field of a context that contains user credentials
+	CtxUserID contextID = "userID" // a field name of a context that contains userID
 )
 
 const (
@@ -40,20 +36,4 @@ func getStringFromContext(ct context.Context, fieldName contextID) string {
 	}
 
 	return strVal
-}
-
-// Retreives a userCreds from context or nil if nothing found
-//
-// nolint:unused,deadcode // used by `aws` and `gcp` but needs to compiled by tags
-func userCredsFromContext(ct context.Context) cmn.SimpleKVs {
-	userIf := ct.Value(CtxUserCreds)
-	if userIf == nil {
-		return nil
-	}
-
-	if userCreds, ok := userIf.(cmn.SimpleKVs); ok {
-		return userCreds
-	}
-
-	return nil
 }

@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -32,12 +31,6 @@ const (
 )
 
 type (
-	awsCreds struct {
-		region string
-		key    string
-		secret string
-	}
-
 	awsProvider struct {
 		t cluster.Target
 	}
@@ -49,94 +42,17 @@ var (
 
 func NewAWS(t cluster.Target) (cluster.CloudProvider, error) { return &awsProvider{t: t}, nil }
 
-// If extractAWSCreds returns no error and awsCreds is nil then the default
-//   AWS client is used (that loads credentials from ~/.aws/credentials)
-func extractAWSCreds(credsList map[string]string) *awsCreds {
-	if len(credsList) == 0 {
-		return nil
-	}
-	raw, ok := credsList[cmn.ProviderAmazon]
-	if raw == "" || !ok {
-		return nil
-	}
-
-	// TODO: maybe authn should make JSON from INI before creating a token
-	// Now just parse AWS file in original INI-format
-	parts := strings.Split(raw, "\n")
-	creds := &awsCreds{}
-
-	for _, s := range parts {
-		if strings.HasPrefix(s, "region") {
-			values := strings.SplitN(s, "=", 2)
-			if len(values) == 2 {
-				creds.region = strings.TrimSpace(values[1])
-			}
-		} else if strings.HasPrefix(s, "aws_access_key_id") {
-			values := strings.SplitN(s, "=", 2)
-			if len(values) == 2 {
-				creds.key = strings.TrimSpace(values[1])
-			}
-		} else if strings.HasPrefix(s, "aws_secret_access_key") {
-			values := strings.SplitN(s, "=", 2)
-			if len(values) == 2 {
-				creds.secret = strings.TrimSpace(values[1])
-			}
-		}
-		if creds.region != "" && creds.key != "" && creds.secret != "" {
-			return creds
-		}
-	}
-
-	glog.Errorf("Invalid credentials: %#v\nUsing default AWS session", creds)
-	return nil
-}
-
 //======
 //
 // session FIXME: optimize
 //
 //======
-// A new session is created in two ways:
-// 1. Authn is disabled or directory with credentials is not defined
-//    In this case a session is created using default credentials from
-//    configuration file in ~/.aws/credentials and environment variables
-// 2. Authn is enabled and directory with credential files is set
-//    The function looks for 'credentials' file in the directory.
-//    A userID is retrieved from token. The userID section must exist
-//    in credential file located in the given directory.
-//    A userID section should look like this:
-//    [userID]
-//    region = us-east-1
-//    aws_access_key_id = USERKEY
-//    aws_secret_access_key = USERSECRET
-// If creation of a session with provided directory and userID fails, it
-// tries to create a session with default parameters
+// A session is created using default credentials from
+// configuration file in ~/.aws/credentials and environment variables
 func createSession(ctx context.Context) *session.Session {
 	// TODO: avoid creating sessions for each request
-	userID := getStringFromContext(ctx, CtxUserID)
-	userCreds := userCredsFromContext(ctx)
-	if userID == "" || userCreds == nil {
-		if glog.V(5) {
-			glog.Info("No user ID or empty credentials: opening default session")
-		}
-		// default session
-		return session.Must(session.NewSessionWithOptions(session.Options{
-			SharedConfigState: session.SharedConfigEnable}))
-	}
-
-	creds := extractAWSCreds(userCreds)
-	if creds == nil {
-		glog.Errorf("Failed to retrieve %s credentials %s", cmn.ProviderAmazon, userID)
-		return session.Must(session.NewSessionWithOptions(session.Options{
-			SharedConfigState: session.SharedConfigEnable}))
-	}
-
-	awsCreds := credentials.NewStaticCredentials(creds.key, creds.secret, "")
-	conf := aws.Config{
-		Region:      aws.String(creds.region),
-		Credentials: awsCreds,
-	}
-	return session.Must(session.NewSessionWithOptions(session.Options{Config: conf}))
+	return session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable}))
 }
 
 func awsErrorToAISError(awsError error, bck cmn.Bck, node string) (error, int) {

@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (
@@ -142,143 +140,6 @@ func testUserDelete(mgr *userManager, t *testing.T) {
 	}
 }
 
-func addRemoveCreds(mgr *userManager, t *testing.T) {
-	const (
-		AWS01 = "aws-01"
-		GCP01 = "gcp-01"
-		AWS02 = "aws-02"
-	)
-	userID := users[0]
-
-	// add valid credentials
-	changed, err := mgr.updateCredentials(userID, cmn.ProviderAmazon, AWS01)
-	if err != nil {
-		t.Errorf("Failed to update credentials")
-	}
-	if !changed {
-		t.Error("Credentials were not updated")
-	}
-	changed, err = mgr.updateCredentials(userID, cmn.ProviderGoogle, GCP01)
-	if err != nil {
-		t.Errorf("Failed to update credentials")
-	}
-	if !changed {
-		t.Error("Credentials were not updated")
-	}
-	userInfo, ok := mgr.Users[userID]
-	if !ok {
-		t.Errorf("User %s not found", userID)
-	}
-	userAws, ok := userInfo.Creds[cmn.ProviderAmazon]
-	if !ok || userAws != AWS01 {
-		t.Errorf("User %s AWS credentials are invalid: %s (expected %s)", userID, userAws, AWS01)
-	}
-	userGcp, ok := userInfo.Creds[cmn.ProviderGoogle]
-	if !ok || userGcp != GCP01 {
-		t.Errorf("User %s GCP credentials are invalid: %s (expected %s)", userID, userGcp, GCP01)
-	}
-	userAIS, ok := userInfo.Creds[cmn.ProviderAIS]
-	if ok || userAIS != "" {
-		t.Errorf("AIStore credentials must be empty (current: %s)", userAIS)
-	}
-
-	// update credentials
-	changed, err = mgr.updateCredentials(userID, cmn.ProviderAmazon, AWS02)
-	if err != nil {
-		t.Errorf("Failed to update credentials")
-	}
-	if !changed {
-		t.Error("Credentials were not updated")
-	}
-	userInfo = mgr.Users[userID]
-	userAws, ok = userInfo.Creds[cmn.ProviderAmazon]
-	if !ok || userAws != AWS02 {
-		t.Errorf("User %s AWS credentials are invalid: %s (expected %s)", userID, userAws, AWS02)
-	}
-
-	// update invalid provider
-	changed, err = mgr.updateCredentials(userID, "Provider", "0123")
-	if changed {
-		t.Error("Credentials were updated")
-	}
-	userInfo = mgr.Users[userID]
-	userAws = userInfo.Creds[cmn.ProviderAmazon]
-	userGcp = userInfo.Creds[cmn.ProviderGoogle]
-	if userAws != AWS02 || userGcp != GCP01 {
-		t.Errorf("Credentials changed: AWS %s -> %s, GCP: %s -> %s",
-			AWS02, userAws, GCP01, userGcp)
-	}
-	if err == nil || !strings.Contains(err.Error(), "cloud provider") {
-		t.Errorf("Invalid error: %v", err)
-	}
-
-	// update invalid user
-	changed, err = mgr.updateCredentials(userID+userID, cmn.ProviderAmazon, "0123")
-	if changed {
-		t.Errorf("Credentials were updated for %s", userID+userID)
-	}
-	if err == nil || !strings.Contains(err.Error(), cmn.DoesNotExist) {
-		t.Errorf("Invalid error: %v", err)
-	}
-
-	// delete invalid user credentials
-	changed, err = mgr.deleteCredentials(userID+userID, cmn.ProviderAmazon)
-	if changed {
-		t.Errorf("Credentials were deleted for %s", userID+userID)
-	}
-	if err == nil || !strings.Contains(err.Error(), cmn.DoesNotExist) {
-		t.Errorf("Invalid error: %v", err)
-	}
-
-	// delete invalid provider credentials
-	changed, err = mgr.deleteCredentials(userID, "Provider")
-	if changed {
-		t.Errorf("Credentials were deleted for %s", userID)
-	}
-	if err == nil || !strings.Contains(err.Error(), "cloud provider") {
-		t.Errorf("Invalid error: %v", err)
-	}
-
-	// delete valid credentials
-	changed, err = mgr.deleteCredentials(userID, cmn.ProviderAmazon)
-	if !changed {
-		t.Errorf("Credentials were not deleted for %s", userID)
-	}
-	if err != nil {
-		t.Errorf("Failed to delete credentials: %v", err)
-	}
-	userInfo = mgr.Users[userID]
-	if len(userInfo.Creds) != 1 {
-		t.Errorf("Invalid number of credentials: %d(expected 1)\n%v", len(userInfo.Creds), userInfo.Creds)
-	}
-
-	// delete the same once more
-	changed, err = mgr.deleteCredentials(userID, cmn.ProviderAmazon)
-	if changed {
-		t.Errorf("Credentials were changed for %s", userID)
-	}
-	if err != nil {
-		t.Errorf("Failed to delete credentials: %v", err)
-	}
-	userInfo = mgr.Users[userID]
-	if len(userInfo.Creds) != 1 {
-		t.Errorf("Invalid number of credentials: %d(expected 1)\n%v", len(userInfo.Creds), userInfo.Creds)
-	}
-
-	// delete the last credentials
-	changed, err = mgr.deleteCredentials(userID, cmn.ProviderGoogle)
-	if !changed {
-		t.Errorf("Credentials were not changed for %s", userID)
-	}
-	if err != nil {
-		t.Errorf("Failed to delete credentials: %v", err)
-	}
-	userInfo = mgr.Users[userID]
-	if len(userInfo.Creds) != 0 {
-		t.Errorf("Invalid number of credentials: %d(expected empty)\n%v", len(userInfo.Creds), userInfo.Creds)
-	}
-}
-
 func TestManager(t *testing.T) {
 	proxy := &proxy{}
 	mgr := newUserManager(dbPath, proxy)
@@ -287,7 +148,6 @@ func TestManager(t *testing.T) {
 	}
 	createUsers(mgr, t)
 	testInvalidUser(mgr, t)
-	addRemoveCreds(mgr, t)
 	testUserDelete(mgr, t)
 	reloadFromFile(mgr, t)
 	deleteUsers(mgr, false, t)

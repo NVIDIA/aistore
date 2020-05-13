@@ -12,10 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -23,9 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
 )
 
 const (
@@ -42,11 +38,6 @@ type gcpAuthRec struct {
 }
 
 type (
-	gcpCreds struct {
-		projectID string
-		creds     string
-	}
-
 	gcpProvider struct {
 		t cluster.Target
 	}
@@ -62,103 +53,23 @@ func getProjID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")
 }
 
-// If extractGCPCreds returns no error and gcpCreds is nil then the default
-//   GCP client is used (that loads credentials from dir ~/.config/gcloud/ -
-//   the directory is created after the first successful login with gsutil)
-func extractGCPCreds(credsList map[string]string) (*gcpCreds, error) {
-	if len(credsList) == 0 {
-		return nil, nil
-	}
-	raw, ok := credsList[cmn.ProviderGoogle]
-	if raw == "" || !ok {
-		return nil, nil
-	}
-	rec := &gcpAuthRec{}
-	if err := jsoniter.Unmarshal([]byte(raw), rec); err != nil {
-		return nil, err
-	}
+// GCP settings are read from environment variables.
+// The function returns:
+//   connection to the cloud, GCP context, project_id, error_string
+// project_id is used only by listBuckets function
 
-	return &gcpCreds{rec.ProjectID, raw}, nil
-}
-
-func defaultClient(gctx context.Context) (*storage.Client, context.Context, string, error) {
+func createClient(ctx context.Context) (*storage.Client, context.Context, string, error) {
 	if glog.V(5) {
 		glog.Info("Creating default google cloud session")
 	}
 	if getProjID() == "" {
 		return nil, nil, "", errors.New("failed to get ProjectID from GCP")
 	}
-	client, err := storage.NewClient(gctx)
+	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create client, err: %v", err)
 	}
-	return client, gctx, getProjID(), nil
-}
-
-func saveCredentialsToFile(baseDir, userID, userCreds string) (string, error) {
-	dir := filepath.Join(baseDir, cmn.ProviderGoogle)
-	filePath := filepath.Join(dir, userID+".json")
-
-	if _, err := os.Stat(filePath); err == nil {
-		// credentials already saved, no need to do anything
-		// TODO: keep the list of stored creds in-memory instead of calling os functions
-		return "", nil
-	}
-
-	if err := cmn.CreateDir(dir); err != nil {
-		return "", fmt.Errorf("failed to create directory %s: %v", dir, err)
-	}
-
-	if err := ioutil.WriteFile(filePath, []byte(userCreds), 0644); err != nil {
-		return "", fmt.Errorf("failed to save to file: %v", err)
-	}
-
-	return filePath, nil
-}
-
-// createClient support two ways of creating a connection to cloud:
-// 1. With Authn server disabled (old way):
-//    In this case all are read from environment variables and a user
-//    should be logged in to the cloud
-// 2. If Authn is enabled and directory with user credentials is set:
-//    The directory contains credentials for every user who want to connect
-//    storage. A file per a user.  A userID is retrieved from a token - it the
-//    file name with the user's credentials. Full path to user credentials is
-//    CredDir + userID + ".json"
-//    The file is standard GCP credentials file (e.g, check ~/gcp_creds.json
-//    for details). If the file does not include project_id, the function reads
-//    it from environment variable GOOGLE_CLOUD_PROJECT
-// The function returns:
-//   connection to the cloud, GCP context, project_id, error_string
-// project_id is used only by listBuckets function
-
-func createClient(ctx context.Context) (*storage.Client, context.Context, string, error) {
-	userID := getStringFromContext(ctx, CtxUserID)
-	userCreds := userCredsFromContext(ctx)
-	credsDir := getStringFromContext(ctx, CtxCredsDir)
-	if userID == "" || userCreds == nil || credsDir == "" {
-		return defaultClient(ctx)
-	}
-
-	creds, err := extractGCPCreds(userCreds)
-	if err != nil || creds == nil {
-		glog.Errorf("Failed to retrieve %s credentials %s: %v", cmn.ProviderGoogle, userID, err)
-		return defaultClient(ctx)
-	}
-
-	filePath, err := saveCredentialsToFile(credsDir, userID, creds.creds)
-	if err != nil {
-		glog.Errorf("Failed to save credentials: %v", err)
-		return defaultClient(ctx)
-	}
-
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(filePath))
-	if err != nil {
-		glog.Errorf("Failed to create storage client for %s: %v", userID, err)
-		return defaultClient(ctx)
-	}
-
-	return client, ctx, creds.projectID, nil
+	return client, ctx, getProjID(), nil
 }
 
 func gcpErrorToAISError(gcpError error, bck cmn.Bck, node string) (error, int) {

@@ -15,6 +15,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
+// TODO: replace this module content with another one: do not get smap and
+//   keep it internally. Just use user-defined list or URLs and send new
+//   token list to the first that respondes
+
 type (
 	// Manages the current primary proxy URL and runs autodetection in case
 	// of primary proxy does not response

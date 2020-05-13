@@ -512,7 +512,6 @@ type FSHCConf struct {
 
 type AuthConf struct {
 	Secret     string `json:"secret"`
-	CredDir    string `json:"creddir"`
 	Enabled    bool   `json:"enabled"`
 	AllowGuest bool   `json:"allow_guest"`
 }

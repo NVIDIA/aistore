@@ -175,13 +175,13 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(apiItems) == 1 {
-		if err := a.users.delUser(apiItems[0]); err != nil {
-			glog.Errorf("Failed to delete user: %v\n", err)
-			cmn.InvalidHandlerWithMsg(w, r, "Failed to delete user")
-		}
-	} else {
-		a.userRemoveCredentials(w, r)
+	if len(apiItems) == 0 {
+		cmn.InvalidHandlerWithMsg(w, r, "User name is not defined")
+		return
+	}
+	if err := a.users.delUser(apiItems[0]); err != nil {
+		glog.Errorf("Failed to delete user: %v\n", err)
+		cmn.InvalidHandlerWithMsg(w, r, "Failed to delete user")
 	}
 }
 
@@ -196,8 +196,6 @@ func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // Updates user credentials
-// If user did not have credentials before updating or the credentials changes
-//   then new user list is saved and sent to the proxy to update the cluster
 func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 2, cmn.Version, pathUsers)
 	if err != nil {
@@ -209,8 +207,8 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := apiItems[0]
-	provider := apiItems[1]
-
+	// TODO: update user password if changed
+	// TODO: update user's ACL (e.g, bucket permissions)
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil || len(b) == 0 {
 		cmn.InvalidHandlerWithMsg(w, r, "Invalid request")
@@ -219,11 +217,6 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 
 	if glog.V(4) {
 		glog.Infof("Received credentials for %s\n", userID)
-	}
-
-	if _, err := a.users.updateCredentials(userID, provider, string(b)); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to update credentials: %v", err), http.StatusInternalServerError)
-		return
 	}
 
 	a.writeJSON(w, r, []byte("Credentials updated successfully"), "update credentials")
@@ -338,33 +331,4 @@ func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []b
 	}
 	msg := fmt.Sprintf("%s: failed to write json, err: %v", tag, err)
 	cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusInternalServerError)
-}
-
-// Removes user credentials
-// On successful update the function sends new credentials list to primary
-//   proxy to update the cluster
-func (a *authServ) userRemoveCredentials(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 2, cmn.Version, pathUsers)
-	if err != nil {
-		return
-	}
-
-	userID := apiItems[0]
-	provider := apiItems[1]
-	if !cmn.IsValidProvider(provider) {
-		errmsg := fmt.Sprintf("Invalid cloud provider: %s", provider)
-		cmn.InvalidHandlerWithMsg(w, r, errmsg, http.StatusBadRequest)
-		return
-	}
-
-	if glog.V(4) {
-		glog.Infof("Removing %s credentials for %s\n", provider, userID)
-	}
-
-	if _, err = a.users.deleteCredentials(userID, provider); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to delete credentials: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	a.writeJSON(w, r, []byte("Credentials updated successfully"), "update credentials")
 }

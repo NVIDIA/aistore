@@ -124,7 +124,6 @@ cat > $CONFFILE <<EOL
 	"auth": {
 		"secret":  "$SECRETKEY",
 		"enabled": ${AUTHENABLED:-false},
-		"creddir": "$CREDDIR",
 		"allow_guest": ${ALLOW_GUEST:-false}
 	},
 	"keepalivetracker": {

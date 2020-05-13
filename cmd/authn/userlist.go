@@ -31,9 +31,8 @@ const (
 
 type (
 	userInfo struct {
-		UserID          string            `json:"name"`
-		Password        string            `json:"password,omitempty"`
-		Creds           map[string]string `json:"creds,omitempty"`
+		UserID          string `json:"name"`
+		Password        string `json:"password,omitempty"`
 		passwordDecoded string
 	}
 	tokenInfo struct {
@@ -82,13 +81,6 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 
 	if err = jsp.Load(dbPath, &mgr.Users, jsp.Plain()); err != nil {
 		glog.Fatalf("Failed to load user list: %v\n", err)
-	}
-
-	// update loaded list: create empty map for users who do not have credentials in saved file
-	for _, uinfo := range mgr.Users {
-		if uinfo.Creds == nil {
-			uinfo.Creds = make(map[string]string, 10)
-		}
 	}
 
 	for _, info := range mgr.Users {
@@ -141,7 +133,6 @@ func (m *userManager) addUser(userID, userPass string) error {
 		UserID:          userID,
 		passwordDecoded: userPass,
 		Password:        base64.StdEncoding.EncodeToString([]byte(userPass)),
-		Creds:           make(map[string]string, 10),
 	}
 
 	return m.saveUsers()
@@ -190,7 +181,6 @@ func (m *userManager) issueToken(userID, pwd string) (string, error) {
 		return "", fmt.Errorf("invalid credentials")
 	}
 	passwordDecoded := user.passwordDecoded
-	creds := user.Creds
 
 	if passwordDecoded != pwd {
 		return "", fmt.Errorf("invalid username or password")
@@ -219,7 +209,6 @@ func (m *userManager) issueToken(userID, pwd string) (string, error) {
 		"issued":   issued.Format(time.RFC822),
 		"expires":  expires.Format(time.RFC822),
 		"username": userID,
-		"creds":    creds,
 	})
 	tokenString, err := t.SignedString([]byte(conf.Auth.Secret))
 	if err != nil {
@@ -333,59 +322,4 @@ func (m *userManager) proxyRequest(method, path string, injson []byte) error {
 
 		time.Sleep(proxyRetryTime)
 	}
-}
-
-func (m *userManager) updateCredentials(userID, provider, userCreds string) (bool, error) {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-
-	if !cmn.IsValidProvider(provider) {
-		return false, fmt.Errorf("invalid cloud provider: %s", provider)
-	}
-
-	user, ok := m.Users[userID]
-	if !ok {
-		err := fmt.Errorf("user %s %s", userID, cmn.DoesNotExist)
-		return false, err
-	}
-
-	changed := user.Creds[provider] != userCreds
-	if changed {
-		user.Creds[provider] = userCreds
-		if token, ok := m.tokens[userID]; ok {
-			delete(m.tokens, userID)
-			go m.sendRevokedTokensToProxy(token.Token)
-		}
-	}
-
-	if changed {
-		if err := m.saveUsers(); err != nil {
-			glog.Errorf("Delete credentials failed to save user list: %v", err)
-		}
-	}
-
-	return changed, nil
-}
-
-func (m *userManager) deleteCredentials(userID, provider string) (bool, error) {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-
-	if !cmn.IsValidProvider(provider) {
-		return false, fmt.Errorf("invalid cloud provider: %s", provider)
-	}
-
-	user, ok := m.Users[userID]
-	if !ok {
-		return false, fmt.Errorf("user %s %s", userID, cmn.DoesNotExist)
-	}
-	if _, ok = user.Creds[provider]; ok {
-		delete(user.Creds, provider)
-		if err := m.saveUsers(); err != nil {
-			glog.Errorf("Delete credentials failed to save user list: %v", err)
-		}
-		return true, nil
-	}
-
-	return false, nil
 }

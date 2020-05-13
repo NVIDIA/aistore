@@ -182,8 +182,7 @@ const (
 		" Error Limit:\t{{$obj.ErrorLimit}}\n"
 	AuthConfTmpl = "\n{{$obj := .Auth}}Authentication Config\n" +
 		" Enabled:\t{{$obj.Enabled}}\n" +
-		" Allow Guest Access:\t{{$obj.AllowGuest}}\n" +
-		" Credential Dir:\t{{$obj.CredDir}}\n"
+		" Allow Guest Access:\t{{$obj.AllowGuest}}\n"
 	KeepaliveConfTmpl = "\n{{$obj := .KeepaliveTracker}}Keep Alive Tracker Config\n" +
 		" Retry Factor:{{$obj.RetryFactor}}\t  Timeout Factor:{{$obj.TimeoutFactor}}\n" +
 		" \tProxy\t \tTarget\n" +
