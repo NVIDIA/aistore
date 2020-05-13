@@ -20,7 +20,7 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 * arbitrary number of extremely lightweight access points;
 * easy-to-use CLI that supports [TAB auto-completions](cmd/cli/README.md);
 * automated cluster rebalancing upon: changes in cluster membership, drive failures and attachments, bucket renames;
-* N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
+* N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection.
 
 Also, AIStore:
 
@@ -34,7 +34,7 @@ Also, AIStore:
 
 Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, and for the most recently added features, please see the [overview document](docs/overview.md) (where you can also find **6** alternative ways to populate AIStore with existing datasets).
+For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets).
 
 **Table of Contents**
 - [Prerequisites](#prerequisites)
