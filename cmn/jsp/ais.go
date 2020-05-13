@@ -7,9 +7,7 @@ package jsp
 
 import (
 	"errors"
-	"flag"
 	"fmt"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,45 +17,30 @@ import (
 // ais config //
 ////////////////
 
-// selected config overrides via command line
-type ConfigCLI struct {
-	ConfFile  string        // config filename
-	LogLevel  string        // takes precedence over config.Log.Level
-	StatsTime time.Duration // overrides config.Periodic.StatsTime
-	ProxyURL  string        // primary proxy URL to override config.Proxy.PrimaryURL
-}
-
-func LoadConfig(clivars *ConfigCLI) (*cmn.Config, bool) {
-	config, changed, err := _loadConfig(clivars)
+func LoadConfig(confPath string) *cmn.Config {
+	config, err := loadConfig(confPath)
 	if err != nil {
-		cmn.ExitLogf(err.Error())
+		cmn.ExitLogf("%v", err)
 	}
-	return config, changed
+	return config
 }
 
-func _loadConfig(clivars *ConfigCLI) (config *cmn.Config, changed bool, err error) {
-	cmn.GCO.SetConfigFile(clivars.ConfFile)
+func loadConfig(confPath string) (config *cmn.Config, err error) {
+	cmn.GCO.SetConfigFile(confPath)
 
 	config = cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
 
-	err = Load(clivars.ConfFile, &config, Options{})
-
-	// NOTE: glog.Errorf + os.Exit is used instead of glog.Fatalf to not crash
-	// with dozens of backtraces on screen - this is user error not some
-	// internal error.
-
+	err = Load(confPath, &config, Options{})
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to load config %q, err: %s", clivars.ConfFile, err)
-	}
-	if err = flag.Lookup("log_dir").Value.Set(config.Log.Dir); err != nil {
-		return nil, false, fmt.Errorf("failed to flag-set log directory %q, err: %s", config.Log.Dir, err)
+		return nil, fmt.Errorf("failed to load config %q, err: %v", confPath, err)
 	}
 	if err = cmn.CreateDir(config.Log.Dir); err != nil {
-		return nil, false, fmt.Errorf("failed to create log dir %q, err: %s", config.Log.Dir, err)
+		return nil, fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 	}
+	glog.SetLogDir(config.Log.Dir)
 	if err := config.Validate(); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	// glog rotate
@@ -81,27 +64,12 @@ func _loadConfig(clivars *ConfigCLI) (config *cmn.Config, changed bool, err erro
 		config.Net.UseIntraData = true
 	}
 
-	// CLI override
-	if clivars.StatsTime != 0 {
-		config.Periodic.StatsTime = clivars.StatsTime
-		changed = true
-	}
-	if clivars.ProxyURL != "" {
-		config.Proxy.PrimaryURL = clivars.ProxyURL
-		changed = true
-	}
-	if clivars.LogLevel != "" {
-		if err = cmn.SetLogLevel(config, clivars.LogLevel); err != nil {
-			return nil, false, fmt.Errorf("failed to set log level = %s, err: %s", clivars.LogLevel, err)
-		}
-		config.Log.Level = clivars.LogLevel
-		changed = true
-	} else if err = cmn.SetLogLevel(config, config.Log.Level); err != nil {
-		return nil, false, fmt.Errorf("failed to set log level = %s, err: %s", config.Log.Level, err)
+	if err = cmn.SetLogLevel(config, config.Log.Level); err != nil {
+		return nil, fmt.Errorf("failed to set log level = %s, err: %s", config.Log.Level, err)
 	}
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
 		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)
-	glog.Infof("config_file: %q periodic.stats_time: %v", clivars.ConfFile, config.Periodic.StatsTime)
+	glog.Infof("config_file: %q periodic.stats_time: %v", confPath, config.Periodic.StatsTime)
 	return
 }
 

@@ -21,11 +21,8 @@ func TestConfigTestEnv(t *testing.T) {
 		cmn.GCO.CommitUpdate(oldConfig)
 	}()
 
-	mockVars := &jsp.ConfigCLI{
-		ConfFile: filepath.Join(thisFileDir(t), "configs", "configtest.json"),
-	}
-
-	jsp.LoadConfig(mockVars)
+	confPath := filepath.Join(thisFileDir(t), "configs", "configtest.json")
+	jsp.LoadConfig(confPath)
 }
 
 func TestConfigFSPaths(t *testing.T) {
@@ -35,11 +32,8 @@ func TestConfigFSPaths(t *testing.T) {
 		cmn.GCO.CommitUpdate(oldConfig)
 	}()
 
-	mockVars := &jsp.ConfigCLI{
-		ConfFile: filepath.Join(thisFileDir(t), "configs", "configfspaths.json"),
-	}
-
-	jsp.LoadConfig(mockVars)
+	confPath := filepath.Join(thisFileDir(t), "configs", "configfspaths.json")
+	jsp.LoadConfig(confPath)
 }
 
 func thisFileDir(t *testing.T) string {

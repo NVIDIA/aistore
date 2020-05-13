@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -54,12 +55,12 @@ type (
 	}
 
 	cliFlags struct {
-		role        string        // proxy | target
-		config      jsp.ConfigCLI // selected config overrides
-		confjson    string        // JSON formatted "{name: value, ...}" string to override selected knob(s)
-		transient   bool          // false: make cmn.ConfigCLI settings permanent, true: leave them transient
-		skipStartup bool          // determines if the proxy should skip waiting for targets
-		ntargets    int           // expected number of targets in a starting-up cluster (proxy only)
+		role        string // proxy | target
+		confPath    string // path to config
+		confCustom  string // "key1=value1,key2=value2" formatted string to override selected entries in config
+		transient   bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
+		skipStartup bool   // determines if the proxy should skip waiting for targets
+		ntargets    int    // expected number of targets in a starting-up cluster (proxy only)
 	}
 
 	// daemon instance: proxy or storage target
@@ -126,20 +127,15 @@ func init() {
 	flag.StringVar(&daemon.cli.role, "role", "", "role of this AIS daemon: proxy | target")
 
 	// config itself and its command line overrides
-	flag.StringVar(&daemon.cli.config.ConfFile, "config", "",
+	flag.StringVar(&daemon.cli.confPath, "config", "",
 		"config filename: local file that stores this daemon's configuration")
-	flag.StringVar(&daemon.cli.config.LogLevel, "loglevel", "",
-		"log verbosity level (2 - minimal, 3 - default, 4 - super-verbose)")
-	flag.DurationVar(&daemon.cli.config.StatsTime, "stats_time", 0, "stats reporting (logging) interval")
-	flag.StringVar(&daemon.cli.config.ProxyURL, "proxyurl", "",
-		"primary proxy/gateway URL to override local configuration")
-	flag.StringVar(&daemon.cli.confjson, "confjson", "",
-		"JSON formatted \"{name: value, ...}\" string to override selected knob(s)")
+	flag.StringVar(&daemon.cli.confCustom, "config_custom", "",
+		"\"key1=value1,key2=value2\" formatted string to override selected entries in config")
 
 	flag.BoolVar(&daemon.cli.transient, "transient", false,
 		"false: apply command-line args to the configuration and save the latter to disk\ntrue: keep it transient (for this run only)")
 
-	flag.BoolVar(&daemon.cli.skipStartup, "skipstartup", false,
+	flag.BoolVar(&daemon.cli.skipStartup, "skip_startup", false,
 		"determines if primary proxy should skip waiting for target registrations when starting up")
 	flag.IntVar(&daemon.cli.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
 
@@ -185,17 +181,35 @@ func initDaemon(version, build string) {
 			cmn.ExitLogf("Invalid object size: %d [%s]\n", daemon.dryRun.size, daemon.dryRun.sizeStr)
 		}
 	}
-	if daemon.cli.config.ConfFile == "" {
+	if daemon.cli.confPath == "" {
 		str := "Missing `config` flag pointing to configuration file (must be provided via command line)\n"
-		str += "Usage: ... -role=<proxy|target> -config=<conf.json> ..."
+		str += "Usage: aisnode -role=<proxy|target> -config=</dir/config.json> ..."
 		cmn.ExitLogf(str)
 	}
-	config, confChanged := jsp.LoadConfig(&daemon.cli.config)
-	if confChanged {
-		if err := jsp.Save(cmn.GCO.GetConfigFile(), config, jsp.Plain()); err != nil {
-			cmn.ExitLogf("CLI %s: failed to write, err: %s", cmn.ActSetConfig, err)
+	config := jsp.LoadConfig(daemon.cli.confPath)
+
+	// even more config changes, e.g:
+	// -config=/etc/ais.json -role=target -persist=true -config_custom="client.timeout=13s, proxy.primary_url=https://localhost:10080"
+	if daemon.cli.confCustom != "" {
+		var (
+			nvmap = make(cmn.SimpleKVs, 10)
+			kvs   = strings.Split(daemon.cli.confCustom, ",")
+		)
+		for _, kv := range kvs {
+			entry := strings.SplitN(kv, "=", 1)
+			if len(entry) != 2 {
+				cmn.ExitLogf("Failed to parse `-config_custom` flag (invalid entry: %s)", kv)
+			}
+			nvmap[entry[0]] = entry[1]
 		}
-		glog.Infof("CLI %s: stored", cmn.ActSetConfig)
+		if err := jsp.SetConfigMany(nvmap); err != nil {
+			cmn.ExitLogf("Failed to set config: %s", err)
+		}
+	}
+	if !daemon.cli.transient {
+		if err := jsp.SaveConfig(cmn.ActTransient); err != nil {
+			cmn.ExitLogf("Failed to save config: %v", err)
+		}
 	}
 
 	glog.Infof("git: %s | build-time: %s\n", version, build)
@@ -231,23 +245,6 @@ func initDaemon(version, build string) {
 		initTarget(config)
 	}
 	daemon.rg.add(&sigrunner{}, xsignal)
-
-	// even more config changes, e.g:
-	// -config=/etc/ais.json -role=target -transient=false -confjson="{\"client_timeout\": \"13s\" }"
-	if daemon.cli.confjson != "" {
-		var nvmap cmn.SimpleKVs
-		if err = jsoniter.Unmarshal([]byte(daemon.cli.confjson), &nvmap); err != nil {
-			cmn.ExitLogf("Failed to unmarshal JSON [%s], err: %v", daemon.cli.confjson, err)
-		}
-		if err := jsp.SetConfigMany(nvmap); err != nil {
-			cmn.ExitLogf("Failed to set config: %v", err)
-		}
-	}
-	if !daemon.cli.transient {
-		if err := jsp.SaveConfig(cmn.ActTransient); err != nil {
-			cmn.ExitLogf("Failed to save config: %v", err)
-		}
-	}
 }
 
 func initProxy() {

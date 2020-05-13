@@ -23,20 +23,17 @@ var (
 
 // Set up glog with options from configuration file
 func updateLogOptions() error {
-	err := flag.Lookup("log_dir").Value.Set(conf.Log.Dir)
-	if err != nil {
-		return fmt.Errorf("failed to flag-set glog dir %q, err: %v", conf.Log.Dir, err)
-	}
-	if err = cmn.CreateDir(conf.Log.Dir); err != nil {
+	if err := cmn.CreateDir(conf.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", conf.Log.Dir, err)
 	}
+	glog.SetLogDir(conf.Log.Dir)
 
 	if conf.Log.Level != "" {
 		v := flag.Lookup("v").Value
 		if v == nil {
 			return fmt.Errorf("nil -v Value")
 		}
-		if err = v.Set(conf.Log.Level); err != nil {
+		if err := v.Set(conf.Log.Level); err != nil {
 			return fmt.Errorf("failed to set log level = %s, err: %v", conf.Log.Level, err)
 		}
 	}

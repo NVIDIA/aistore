@@ -898,10 +898,10 @@ func restore(cmd string, args []string, asPrimary bool, tag string) error {
 		tutils.Logf("Restarting %s container %s\n", tag, cmd)
 		return containers.RestartContainer(cmd)
 	}
-	if asPrimary && !cmn.StringInSlice("-skipstartup=true", args) {
+	if asPrimary && !cmn.StringInSlice("-skip_startup=true", args) {
 		// 50-50 to apply flag or not (randomize to test different startup paths)
 		if rand.Intn(2) == 0 {
-			args = append(args, "-skipstartup=true")
+			args = append(args, "-skip_startup=true")
 		}
 	}
 	tutils.Logf("Restoring %s: %s %+v\n", tag, cmd, args)

@@ -17,7 +17,7 @@ image: golang:1.13
 
 variables:
   GOPATH: /go
-  AIS_NODE_FLAGS: "-skipstartup"
+  AIS_NODE_FLAGS: "-skip_startup"
 
 before_script:
   - export PATH="$PATH:$GOPATH/bin"

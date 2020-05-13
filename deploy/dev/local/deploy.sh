@@ -2,7 +2,7 @@
 
 ############################################
 #
-# Usage: deploy.sh [-loglevel=0|1|2|3] [-stats_time=<DURATION>] [-list_time=<DURATION>]
+# Usage: deploy.sh
 #
 # To deploy AIStore as a next tier cluster to the *already running*
 # AIStore cluster set DEPLOY_AS_NEXT_TIER=1.
