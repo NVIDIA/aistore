@@ -26,9 +26,9 @@ AIS proxy and AIS target (executables) both support the following command-line a
         dry-run: if true, no disk operations for GET and PUT
   -ntargets int
         number of storage targets to expect at startup (hint, proxy-only)
-  -persist
-        true: apply command-line args to the configuration and save the latter to disk
-        false: keep it transient (for this run only)
+  -transient
+        false: apply command-line args to the configuration and save the latter to disk
+        true: keep it transient (for this run only)
   -proxyurl string
         primary proxy/gateway URL (can be used to override local configuration)
   -stats_time duration

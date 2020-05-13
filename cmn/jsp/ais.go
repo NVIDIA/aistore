@@ -110,13 +110,22 @@ func SetConfigMany(nvmap cmn.SimpleKVs) (err error) {
 		return errors.New("setConfig: empty nvmap")
 	}
 	var (
-		conf = cmn.GCO.BeginUpdate()
+		conf      = cmn.GCO.BeginUpdate()
+		transient = false
 	)
 	for name, value := range nvmap {
-		err := update(conf, name, value)
-		if err != nil {
-			cmn.GCO.DiscardUpdate()
-			return err
+		if name == cmn.ActTransient {
+			if transient, err = cmn.ParseBool(value); err != nil {
+				err = fmt.Errorf("invalid value set for %s, err: %v", name, err)
+				cmn.GCO.DiscardUpdate()
+				return
+			}
+		} else {
+			err := update(conf, name, value)
+			if err != nil {
+				cmn.GCO.DiscardUpdate()
+				return err
+			}
 		}
 
 		glog.Infof("%s: %s=%s", cmn.ActSetConfig, name, value)
@@ -129,7 +138,9 @@ func SetConfigMany(nvmap cmn.SimpleKVs) (err error) {
 	}
 
 	cmn.GCO.CommitUpdate(conf)
-	_ = SaveConfig(cmn.ActSetConfig)
+	if !transient {
+		_ = SaveConfig(cmn.ActSetConfig)
+	}
 	return
 }
 

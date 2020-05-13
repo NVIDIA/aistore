@@ -57,7 +57,7 @@ type (
 		role        string        // proxy | target
 		config      jsp.ConfigCLI // selected config overrides
 		confjson    string        // JSON formatted "{name: value, ...}" string to override selected knob(s)
-		persist     bool          // true: make cmn.ConfigCLI settings permanent, false: leave them transient
+		transient   bool          // false: make cmn.ConfigCLI settings permanent, true: leave them transient
 		skipStartup bool          // determines if the proxy should skip waiting for targets
 		ntargets    int           // expected number of targets in a starting-up cluster (proxy only)
 	}
@@ -138,9 +138,8 @@ func init() {
 	flag.StringVar(&daemon.cli.confjson, "confjson", "",
 		"JSON formatted \"{name: value, ...}\" string to override selected knob(s)")
 
-	// FIXME: #732
-	flag.BoolVar(&daemon.cli.persist, "persist", false,
-		"true: apply command-line args to the configuration and save the latter to disk\nfalse: keep it transient (for this run only)")
+	flag.BoolVar(&daemon.cli.transient, "transient", false,
+		"false: apply command-line args to the configuration and save the latter to disk\ntrue: keep it transient (for this run only)")
 
 	flag.BoolVar(&daemon.cli.skipStartup, "skipstartup", false,
 		"determines if primary proxy should skip waiting for target registrations when starting up")
@@ -242,14 +241,19 @@ func initDaemon(version, build string) {
 	daemon.rg.add(&sigrunner{}, xsignal)
 
 	// even more config changes, e.g:
-	// -config=/etc/ais.json -role=target -persist=true -confjson="{\"client_timeout\": \"13s\" }"
+	// -config=/etc/ais.json -role=target -transient=false -confjson="{\"client_timeout\": \"13s\" }"
 	if daemon.cli.confjson != "" {
 		var nvmap cmn.SimpleKVs
 		if err = jsoniter.Unmarshal([]byte(daemon.cli.confjson), &nvmap); err != nil {
-			cmn.ExitLogf("Failed to unmarshal JSON [%s], err: %s", daemon.cli.confjson, err)
+			cmn.ExitLogf("Failed to unmarshal JSON [%s], err: %v", daemon.cli.confjson, err)
 		}
 		if err := jsp.SetConfigMany(nvmap); err != nil {
-			cmn.ExitLogf("Failed to set config: %s", err)
+			cmn.ExitLogf("Failed to set config: %v", err)
+		}
+	}
+	if !daemon.cli.transient {
+		if err := jsp.SaveConfig(cmn.ActTransient); err != nil {
+			cmn.ExitLogf("Failed to save config: %v", err)
 		}
 	}
 }

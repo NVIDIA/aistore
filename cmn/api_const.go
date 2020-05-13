@@ -86,6 +86,9 @@ const (
 	// Actions on xactions
 	ActXactStop  = "stop"
 	ActXactStart = "start"
+
+	// auxiliary
+	ActTransient = "transient" // do not save on the disk
 )
 
 // xaction begin-commit phases

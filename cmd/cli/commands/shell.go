@@ -93,7 +93,8 @@ func suggestConfigSection() {
 }
 
 func suggestUpdatableConfig(c *cli.Context) {
-	for _, prop := range cmn.ConfigPropList() {
+	props := append(cmn.ConfigPropList(), cmn.ActTransient)
+	for _, prop := range props {
 		if !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
 		}

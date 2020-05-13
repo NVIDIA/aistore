@@ -126,29 +126,33 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 
 ## Startup override
 
-AIS command-line allows to override (and, optionally, persist) configuration at AIS node's startup. For example:
+AIS command-line allows to override configuration at AIS node's startup. For example:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -persist=true -confjson="{\"timeout.client_timeout\": \"13s\" }"
+$ aisnode -config=/etc/ais.json -role=target -confjson="{\"timeout.client_timeout\": \"13s\" }"
 ```
 
-As shown above, the CLI option in-question is: `confjson`. It's value is a JSON-formatted map of string names and string values. You can *persist* the updated configuration either via `-persist` command-line option or via an additional JSON tuple:
+As shown above, the CLI option in-question is: `confjson`.
+Its value is a JSON-formatted map of string names and string values.
+By default, the config provided in `confjson` will be persisted on the disk.
+To make it transient either add `-transient=true` flag or add additional JSON entry:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -confjson="{\"timeout.client_timeout\": \"13s\", \"persist\": \"true\" }"
+$ aisnode -config=/etc/ais.json -role=target -transient=true -confjson="{\"timeout.client_timeout\": \"13s\", \"transient\": \"true\" }"
 ```
 
-Another example. To temporarily override locally-configured address of the primary proxy, run:
+Another example.
+To override locally-configured address of the primary proxy, run:
 
 ```console
 $ aisnode -config=/etc/ais.json -role=target -proxyurl=http://G
 # where G denotes the designated primary's hostname and port.
 ```
 
-To achieve the same on a more permanent basis, add `-persist=true` as follows:
+To achieve the same on temporary basis, add `-transient=true` as follows:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -proxyurl=http://G -persist=true
+$ aisnode -config=/etc/ais.json -role=target -proxyurl=http://G -transient=true
 ```
 
 > Please see [AIS command-line](command_line.md) for other command-line options and details.
