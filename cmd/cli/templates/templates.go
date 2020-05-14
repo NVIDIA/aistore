@@ -298,6 +298,11 @@ const (
 		"{{if $index}}, {{end}}" +
 		"--{{FlagName $flag }}" +
 		"{{end}}{{end}}\n"
+
+	AuthNClusterTmpl = "ClusterID\tURLs\n" +
+		"{{ range $cid, $urls := .Conf}}" +
+		"{{ $cid }}\t{{ JoinList $urls}}\n" +
+		"{{end}}"
 )
 
 var (
@@ -341,6 +346,7 @@ var (
 		"FormatDaemonID":      fmtDaemonID,
 		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":          fmtBool,
+		"JoinList":            fmtStringList,
 	}
 
 	HelpTemplateFuncMap = template.FuncMap{
@@ -542,4 +548,18 @@ func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, 
 	}
 
 	return w.Flush()
+}
+
+func fmtStringList(lst []string) string {
+	if len(lst) == 0 {
+		return "-"
+	}
+	var s strings.Builder
+	for idx, url := range lst {
+		if idx != 0 {
+			fmt.Fprint(&s, ",")
+		}
+		fmt.Fprint(&s, url)
+	}
+	return s.String()
 }

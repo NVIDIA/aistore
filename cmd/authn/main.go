@@ -18,7 +18,7 @@ import (
 var (
 	version, build string
 	configPath     string
-	conf           = &config{}
+	conf           = &config{Cluster: clusterConfig{Conf: make(map[string][]string)}}
 )
 
 // Set up glog with options from configuration file
@@ -66,6 +66,7 @@ func main() {
 	if err = jsp.Load(configPath, conf, jsp.Plain()); err != nil {
 		glog.Fatalf("Failed to load configuration: %v", err)
 	}
+	conf.path = configPath
 	conf.applySecrets()
 	if err = conf.validate(); err != nil {
 		glog.Fatalf("Invalid configuration: %v", err)
@@ -75,11 +76,8 @@ func main() {
 		glog.Fatalf("Failed to set up logger: %v", err)
 	}
 
-	smapFile := filepath.Join(conf.ConfDir, smapConfig)
-	proxy := newProxy(smapFile, conf.Proxy.URL)
-
 	dbPath := filepath.Join(conf.ConfDir, userListFile)
-	srv := newAuthServ(newUserManager(dbPath, proxy))
+	srv := newAuthServ(newUserManager(dbPath))
 	if err := srv.run(); err != nil {
 		glog.Fatalf(err.Error())
 	}

@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	pathUsers  = "users"
-	pathTokens = "tokens"
-	smapConfig = "smap.json"
+	pathUsers    = "users"
+	pathTokens   = "tokens"
+	pathClusters = "clusters"
 )
 
 // a message to generate token
@@ -125,6 +125,7 @@ func (a *authServ) registerHandler(path string, handler func(http.ResponseWriter
 func (a *authServ) registerPublicHandlers() {
 	a.registerHandler(cmn.URLPath(cmn.Version, pathUsers), a.userHandler)
 	a.registerHandler(cmn.URLPath(cmn.Version, pathTokens), a.tokenHandler)
+	a.registerHandler(cmn.URLPath(cmn.Version, pathClusters), a.clusterHandler)
 }
 
 func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +147,19 @@ func (a *authServ) tokenHandler(w http.ResponseWriter, r *http.Request) {
 		a.httpRevokeToken(w, r)
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /token handler")
+	}
+}
+
+func (a *authServ) clusterHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		a.httpSrvGet(w, r)
+	case http.MethodPost:
+		a.httpSrvPost(w, r)
+	case http.MethodDelete:
+		a.httpSrvDelete(w, r)
+	default:
+		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /cluster handler")
 	}
 }
 
@@ -329,6 +343,72 @@ func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []b
 		glog.Errorf("isSyscallWriteError: %v [%s]", err, s)
 		return
 	}
-	msg := fmt.Sprintf("%s: failed to write json, err: %v", tag, err)
-	cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusInternalServerError)
+	glog.Errorf("%s: failed to write json, err: %v", tag, err)
+}
+
+func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
+	if _, err := checkRESTItems(w, r, 0, cmn.Version, pathClusters); err != nil {
+		return
+	}
+	cluConf := &clusterConfig{}
+	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
+		glog.Errorf("Failed to read request body: %v\n", err)
+		return
+	}
+	// TODO: error if exists, and add PUT to update
+	conf.Cluster.mtx.Lock()
+	defer conf.Cluster.mtx.Unlock()
+	if err := conf.clusterUpdate(cluConf); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := conf.save(); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *authServ) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := checkRESTItems(w, r, 0, cmn.Version, pathClusters)
+	if err != nil {
+		return
+	}
+	if len(apiItems) == 0 {
+		cmn.InvalidHandlerWithMsg(w, r, "Cluster name or ID is not defined", http.StatusInternalServerError)
+		return
+	}
+	conf.Cluster.mtx.Lock()
+	defer conf.Cluster.mtx.Unlock()
+	if !conf.clusterExists(apiItems[0]) {
+		msg := fmt.Sprintf("Cluster %q not found", apiItems[0])
+		cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
+		return
+	}
+	conf.deleteCluster(apiItems[0])
+	if err := conf.save(); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := checkRESTItems(w, r, 0, cmn.Version, pathClusters)
+	if err != nil {
+		return
+	}
+	conf.Cluster.mtx.RLock()
+	defer conf.Cluster.mtx.RUnlock()
+	cluList := &conf.Cluster
+	if len(apiItems) != 0 {
+		cid := apiItems[0]
+		urls, ok := cluList.Conf[cid]
+		if !ok {
+			msg := fmt.Sprintf("Cluster %q not found", cid)
+			cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
+			return
+		}
+		cluList = &clusterConfig{Conf: map[string][]string{cid: urls}}
+	}
+	repl := cmn.MustMarshal(cluList)
+	a.writeJSON(w, r, repl, "auth")
 }

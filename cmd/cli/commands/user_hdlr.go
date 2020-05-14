@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/urfave/cli"
@@ -29,29 +30,65 @@ const (
 	authnUserPassword      = "AUTHN_USER_PASS"
 
 	// TODO: fix and move AuthN subcommands to commands/common.go
-	subcmdAuthAdd    = "add"
-	subcmdAuthRemove = commandRemove
-	subcmdAuthLogin  = "login"
-	subcmdAuthLogout = "logout"
+	subcmdAuthAdd     = "add"
+	subcmdAuthShow    = "show"
+	subcmdAuthRemove  = commandRemove
+	subcmdAuthLogin   = "login"
+	subcmdAuthLogout  = "logout"
+	subcmdAuthUser    = "user"
+	subcmdAuthCluster = "cluster"
 )
 
 var (
 	authCmds = []cli.Command{
 		{
 			Name:  commandAuth,
-			Usage: "manage users",
+			Usage: "manage AutnN server",
 			Subcommands: []cli.Command{
 				{
-					Name:      subcmdAuthAdd,
-					Usage:     "add a new user",
-					ArgsUsage: addUserArgument,
-					Action:    addUserHandler,
+					Name: subcmdAuthAdd,
+					Subcommands: []cli.Command{
+						{
+							Name:      subcmdAuthUser,
+							Usage:     "add a new user",
+							ArgsUsage: addUserArgument,
+							Action:    addUserHandler,
+						},
+						{
+							Name:      subcmdAuthCluster,
+							Usage:     "register a new cluster",
+							ArgsUsage: addAuthClusterArgument,
+							Action:    addAuthClusterHandler,
+						},
+					},
 				},
 				{
-					Name:      subcmdAuthRemove,
-					Usage:     "remove an existing user",
-					ArgsUsage: deleteUserArgument,
-					Action:    deleteUserHandler,
+					Name: subcmdAuthRemove,
+					Subcommands: []cli.Command{
+						{
+							Name:      subcmdAuthUser,
+							Usage:     "remove an existing user",
+							ArgsUsage: deleteUserArgument,
+							Action:    deleteUserHandler,
+						},
+						{
+							Name:      subcmdAuthCluster,
+							Usage:     "unregister a cluster",
+							ArgsUsage: deleteAuthClusterArgument,
+							Action:    deleteAuthClusterHandler,
+						},
+					},
+				},
+				{
+					Name: subcmdAuthShow,
+					Subcommands: []cli.Command{
+						{
+							Name:      subcmdAuthCluster,
+							Usage:     "show registered clusters",
+							ArgsUsage: showAuthClusterArgument,
+							Action:    showAuthClusterHandler,
+						},
+					},
 				},
 				{
 					Name:      subcmdAuthLogin,
@@ -128,8 +165,7 @@ func addUserHandler(c *cli.Context) (err error) {
 	if authnURL == "" {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAPIParams(authnURL)
-	baseParams.Token = "" // the request requires superuser credentials, not user's ones
+	baseParams := cliAuthParams(authnURL)
 	spec := api.AuthnSpec{
 		AdminName:     cliAuthnAdminName(c),
 		AdminPassword: cliAuthnAdminPassword(c),
@@ -144,8 +180,7 @@ func deleteUserHandler(c *cli.Context) (err error) {
 	if authnURL == "" {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAPIParams(authnURL)
-	baseParams.Token = "" // the request requires superuser credentials, not user's ones
+	baseParams := cliAuthParams(authnURL)
 	spec := api.AuthnSpec{
 		AdminName:     cliAuthnAdminName(c),
 		AdminPassword: cliAuthnAdminPassword(c),
@@ -160,7 +195,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 	if authnURL == "" {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAPIParams(authnURL)
+	baseParams := cliAuthParams(authnURL)
 	spec := api.AuthnSpec{
 		UserName:     cliAuthnUserName(c),
 		UserPassword: cliAuthnUserPassword(c),
@@ -201,4 +236,71 @@ func logoutUserHandler(c *cli.Context) (err error) {
 		return fmt.Errorf(logoutFailFmt, err)
 	}
 	return nil
+}
+
+func addAuthClusterHandler(c *cli.Context) (err error) {
+	authnURL := cliAuthnURL()
+	if authnURL == "" {
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+	}
+	baseParams := cliAuthParams(authnURL)
+	baseParams.Token = "" // the request requires superuser credentials, not user's ones
+	cid := c.Args().Get(0)
+	if cid == "" {
+		return missingArgumentsError(c, "cluster id")
+	}
+	urls := c.Args().Get(1)
+	if strings.Contains(cid, "=") {
+		parts := strings.SplitN(cid, "=", 2)
+		cid = parts[0]
+		urls = parts[1]
+	} else if urls == "" {
+		return missingArgumentsError(c, "cluster URL list")
+	}
+	urlList := strings.Split(urls, ",")
+
+	spec := api.ClusterSpec{
+		AdminName:     cliAuthnAdminName(c),
+		AdminPassword: cliAuthnAdminPassword(c),
+		ClusterID:     cid,
+		URLs:          urlList,
+	}
+	return api.RegisterClusterAuthN(baseParams, spec)
+}
+
+func deleteAuthClusterHandler(c *cli.Context) (err error) {
+	authnURL := cliAuthnURL()
+	if authnURL == "" {
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+	}
+	baseParams := cliAuthParams(authnURL)
+	baseParams.Token = "" // the request requires superuser credentials, not user's ones
+	cid := c.Args().Get(0)
+	if cid == "" {
+		return missingArgumentsError(c, "cluster id")
+	}
+	spec := api.ClusterSpec{
+		AdminName:     cliAuthnAdminName(c),
+		AdminPassword: cliAuthnAdminPassword(c),
+		ClusterID:     cid,
+	}
+	return api.UnregisterClusterAuthN(baseParams, spec)
+}
+
+func showAuthClusterHandler(c *cli.Context) (err error) {
+	authnURL := cliAuthnURL()
+	if authnURL == "" {
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+	}
+	baseParams := cliAuthParams(authnURL)
+	baseParams.Token = "" // the request requires superuser credentials, not user's ones
+	spec := api.ClusterSpec{
+		ClusterID: c.Args().Get(0),
+	}
+	list, err := api.GetClusterAuthN(baseParams, spec)
+	if err != nil {
+		return err
+	}
+
+	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNClusterTmpl)
 }

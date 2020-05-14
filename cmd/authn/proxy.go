@@ -5,127 +5,92 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/ais"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
-// TODO: replace this module content with another one: do not get smap and
-//   keep it internally. Just use user-defined list or URLs and send new
-//   token list to the first that respondes
-
-type (
-	// Manages the current primary proxy URL and runs autodetection in case
-	// of primary proxy does not response
-	proxy struct {
-		URL        string        `json:"url"`
-		Smap       *cluster.Smap `json:"smap"`
-		configPath string
+// update list of revoked token on all clusters
+func (m *userManager) broadcastRevoked(token string) {
+	conf.Cluster.mtx.RLock()
+	if len(conf.Cluster.Conf) == 0 {
+		conf.Cluster.mtx.RUnlock()
+		glog.Warning("primary proxy is not defined")
+		return
 	}
-)
+	conf.Cluster.mtx.RUnlock()
 
-var (
-	HTTPClient = &http.Client{
-		Timeout: 600 * time.Second,
+	tokenList := ais.TokenList{Tokens: []string{token}}
+	body := cmn.MustMarshal(tokenList)
+
+	m.broadcast(http.MethodDelete, cmn.Tokens, body)
+}
+
+// broadcast the request to all clusters. If a cluster has a few URLS,
+// it sends to the first working one. Clusters are processed in parallel.
+func (m *userManager) broadcast(method, path string, body []byte) {
+	conf.Cluster.mtx.RLock()
+	defer conf.Cluster.mtx.RUnlock()
+	wg := &sync.WaitGroup{}
+	for cid, urls := range conf.Cluster.Conf {
+		wg.Add(1)
+		go func(cid string, urls []string) {
+			defer wg.Done()
+			var err error
+			for _, u := range urls {
+				if err = m.proxyRequest(method, u, path, body); err == nil {
+					break
+				}
+			}
+			if err != nil {
+				glog.Errorf("Failed to sync revoked tokens with %q: %v", cid, err)
+			}
+		}(cid, urls)
 	}
-)
+	wg.Wait()
+}
 
-// Gets path to last working Smap and URL from authn configuration and
-//   returns a real primary proxy URL
-// First, it tries to load last working Smap from configPath. If there is no
-//   file then the current Smap requested from defaultURL (that comes from
-//   authn configuration file
-// Next step is to choose the current primary proxy
-// If primary proxy change is detected then the current Smap is saved
-func newProxy(configPath, defaultURL string) *proxy {
-	p := &proxy{}
-	err := jsp.Load(configPath, p, jsp.Plain())
-	if err != nil {
-		// first run: read the current Smap and save to local file
-		baseParams := api.BaseParams{
-			Client: HTTPClient,
-			URL:    defaultURL,
-		}
-		smap, err := api.GetClusterMap(baseParams)
+// Generic function to send everything to a proxy
+func (m *userManager) proxyRequest(method, proxyURL, path string, injson []byte) error {
+	startRequest := time.Now()
+	for {
+		url := proxyURL + cmn.URLPath(cmn.Version, path)
+		request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
 		if err != nil {
-			glog.Errorf("Failed to get cluster map: %v", err)
-			return &proxy{configPath: configPath, URL: defaultURL}
+			return err
 		}
-		p.configPath = configPath
-		p.Smap = smap
-		p.saveSmap()
-	}
 
-	err = p.detectPrimary()
-	if err != nil {
-		glog.Errorf("Failed to detect primary proxy: %v", err)
-		return &proxy{configPath: configPath, URL: defaultURL}
-	}
-	p.configPath = configPath
-
-	return p
-}
-
-func (p *proxy) saveSmap() {
-	err := jsp.Save(p.configPath, p, jsp.Plain())
-	if err != nil {
-		glog.Errorf("Failed to save configuration: %v", err)
-	}
-}
-
-// Requests Smap from a remote proxy or target
-// If the node has responded then the function compares the current primary
-//   URL with the URL in Smap. In case of they differ, Authn updates its
-//   config and saves new valid Smap
-// Returns error if the node failed to respond
-func (p *proxy) comparePrimaryURL(url string) error {
-	baseParams := api.BaseParams{
-		Client: HTTPClient,
-		URL:    url,
-	}
-	smap, err := api.GetClusterMap(baseParams)
-	if err != nil {
-		return err
-	}
-
-	if smap.ProxySI.PublicNet.DirectURL != p.URL {
-		p.URL = smap.ProxySI.PublicNet.DirectURL
-		p.Smap = smap
-		p.saveSmap()
-	}
-
-	return nil
-}
-
-// Uses the last known Smap to detect the real primary proxy URL if the current
-//   primary proxy does not respond
-// It traverses all proxies and targets until the first of of them responses with
-//   new Smap that contains primary URL
-func (p *proxy) detectPrimary() error {
-	if p.Smap == nil || len(p.Smap.Pmap)+len(p.Smap.Tmap) == 0 {
-		return fmt.Errorf("cluster map is empty")
-	}
-
-	for _, pinfo := range p.Smap.Pmap {
-		err := p.comparePrimaryURL(pinfo.PublicNet.DirectURL)
-		if err == nil {
+		client := m.clientHTTP
+		if cmn.IsHTTPS(proxyURL) {
+			client = m.clientHTTPS
+		}
+		request.Header.Set("Content-Type", "application/json")
+		response, err := client.Do(request)
+		var respCode int
+		if response != nil {
+			respCode = response.StatusCode
+			if response.Body != nil {
+				response.Body.Close()
+			}
+		}
+		if err == nil && respCode < http.StatusBadRequest {
 			return nil
 		}
-		glog.Errorf("Failed to get cluster map from [%s]: %v", pinfo.PublicNet.DirectURL, err)
-	}
 
-	for _, tinfo := range p.Smap.Tmap {
-		err := p.comparePrimaryURL(tinfo.PublicNet.DirectURL)
-		if err == nil {
-			return nil
+		if !cmn.IsErrConnectionRefused(err) {
+			return err
 		}
-		glog.Errorf("Failed to get cluster map from [%s]: %v", tinfo.PublicNet.DirectURL, err)
-	}
+		if time.Since(startRequest) > proxyTimeout {
+			return fmt.Errorf("sending data to primary proxy timed out")
+		}
 
-	return fmt.Errorf("no node has responded. Using primary URL from the config")
+		glog.Errorf("failed to http-call %s %s: error %v", method, url, err)
+		time.Sleep(proxyRetryTime)
+	}
 }

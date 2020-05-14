@@ -5,9 +5,7 @@ cat > $AUTHN_CONF_FILE <<EOL
 		"dir":   "$AUTHN_LOG_DIR",
 		"level": "${AUTHN_LOG_LEVEL:-3}"
 	},
-	"proxy": {
-		"url": "$AIS_PRIMARY_URL"
-	},
+	"cluster": { },
 	"net": {
 		"http": {
 			"port":	${AUTHN_PORT:-52001},

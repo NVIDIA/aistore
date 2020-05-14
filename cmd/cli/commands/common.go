@@ -174,9 +174,12 @@ const (
 	listCommandArgument = "[PROVIDER://][BUCKET_NAME]"
 
 	// Auth
-	addUserArgument    = "USER_NAME USER_PASSWORD"
-	deleteUserArgument = "USER_NAME"
-	userLoginArgument  = "USER_NAME USER_PASSWORD"
+	addUserArgument           = "USER_NAME USER_PASSWORD"
+	deleteUserArgument        = "USER_NAME"
+	userLoginArgument         = "USER_NAME USER_PASSWORD"
+	addAuthClusterArgument    = "CLUSTER_ID URL[,URL...]"
+	deleteAuthClusterArgument = "CLUSTER_ID"
+	showAuthClusterArgument   = "[CLUSTER_ID]"
 )
 
 // Flags

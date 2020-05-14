@@ -284,7 +284,8 @@ const (
 	Txn       = "txn" // 2PC
 	Xactions  = "xactions"
 	Tar2Tf    = "tar2tf"
-	Users     = "users" // AuthN
+	Users     = "users"    // AuthN
+	Clusters  = "clusters" // AuthN
 
 	// l3
 	SyncSmap     = "syncsmap"

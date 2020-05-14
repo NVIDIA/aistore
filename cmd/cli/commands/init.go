@@ -29,7 +29,6 @@ func initClusterParams() {
 	initAuthParams()
 
 	clusterURL = determineClusterURL(cfg)
-
 	defaultHTTPClient = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: cfg.Timeout.TCPTimeout,
 		Timeout:     cfg.Timeout.HTTPTimeout,
@@ -39,6 +38,15 @@ func initClusterParams() {
 		IdleConnsPerHost: 100,
 		MaxIdleConns:     100,
 	})
+
+	if authnURL := cliAuthnURL(); authnURL != "" {
+		authnHTTPClient = cmn.NewClient(cmn.TransportArgs{
+			DialTimeout: cfg.Timeout.TCPTimeout,
+			Timeout:     cfg.Timeout.HTTPTimeout,
+			UseHTTPS:    cmn.IsHTTPS(authnURL),
+			SkipVerify:  true, // TODO: trust all servers for now
+		})
+	}
 
 	defaultAPIParams = api.BaseParams{
 		Client: defaultHTTPClient,

@@ -6,7 +6,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -16,7 +15,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jwt "github.com/dgrijalva/jwt-go"
@@ -42,35 +40,34 @@ type (
 		Token   string    `json:"token"`
 	}
 	userManager struct {
-		mtx    sync.Mutex
-		Path   string               `json:"-"`
-		Users  map[string]*userInfo `json:"users"`
-		tokens map[string]*tokenInfo
-		client *http.Client
-		proxy  *proxy
+		mtx         sync.Mutex
+		Path        string               `json:"-"`
+		Users       map[string]*userInfo `json:"users"`
+		tokens      map[string]*tokenInfo
+		clientHTTP  *http.Client
+		clientHTTPS *http.Client
 	}
 )
 
 // Creates a new user manager. If user DB exists, it loads the data from the
 // file and decrypts passwords
-func newUserManager(dbPath string, proxy *proxy) *userManager {
+func newUserManager(dbPath string) *userManager {
 	var (
 		err   error
 		bytes []byte
 	)
-	// Create an HTTP client compatible with cluster server and disable
-	// certificate check for HTTPS.
-	client := cmn.NewClient(cmn.TransportArgs{
+	clientHTTP := cmn.NewClient(cmn.TransportArgs{Timeout: conf.Timeout.Default})
+	clientHTTPS := cmn.NewClient(cmn.TransportArgs{
 		Timeout:    conf.Timeout.Default,
-		UseHTTPS:   cmn.IsHTTPS(proxy.URL),
+		UseHTTPS:   true,
 		SkipVerify: true,
 	})
 	mgr := &userManager{
-		Path:   dbPath,
-		Users:  make(map[string]*userInfo, 10),
-		tokens: make(map[string]*tokenInfo, 10),
-		client: client,
-		proxy:  proxy,
+		Path:        dbPath,
+		Users:       make(map[string]*userInfo, 10),
+		tokens:      make(map[string]*tokenInfo, 10),
+		clientHTTP:  clientHTTP,
+		clientHTTPS: clientHTTPS,
 	}
 	if _, err = os.Stat(dbPath); err != nil {
 		if !os.IsNotExist(err) {
@@ -155,7 +152,7 @@ func (m *userManager) delUser(userID string) error {
 	m.mtx.Unlock()
 
 	if ok {
-		go m.sendRevokedTokensToProxy(token.Token)
+		go m.broadcastRevoked(token.Token)
 	}
 
 	return err
@@ -240,24 +237,7 @@ func (m *userManager) revokeToken(token string) {
 
 	// send the token in all case to allow an admin to revoke
 	// an existing token even after cluster restart
-	go m.sendRevokedTokensToProxy(token)
-}
-
-// update list of valid token on a proxy
-func (m *userManager) sendRevokedTokensToProxy(tokens ...string) {
-	if len(tokens) == 0 {
-		return
-	}
-	if m.proxy.URL == "" {
-		glog.Warning("primary proxy is not defined")
-		return
-	}
-
-	tokenList := ais.TokenList{Tokens: tokens}
-	body := cmn.MustMarshal(tokenList)
-	if err := m.proxyRequest(http.MethodDelete, cmn.Tokens, body); err != nil {
-		glog.Errorf("failed to send token list: %v", err)
-	}
+	go m.broadcastRevoked(token)
 }
 
 func (m *userManager) userByToken(token string) (*userInfo, error) {
@@ -281,45 +261,4 @@ func (m *userManager) userByToken(token string) (*userInfo, error) {
 	}
 
 	return nil, fmt.Errorf("token not found")
-}
-
-// Generic function to send everything to primary proxy
-// It can detect primary proxy change and sent to the new one on the fly
-func (m *userManager) proxyRequest(method, path string, injson []byte) error {
-	startRequest := time.Now()
-	for {
-		url := m.proxy.URL + cmn.URLPath(cmn.Version, path)
-		request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
-		if err != nil {
-			// Fatal - interrupt the loop
-			return err
-		}
-
-		request.Header.Set("Content-Type", "application/json")
-		response, err := m.client.Do(request)
-		var respCode int
-		if response != nil {
-			respCode = response.StatusCode
-			if response.Body != nil {
-				response.Body.Close()
-			}
-		}
-		if err == nil && respCode < http.StatusBadRequest {
-			return nil
-		}
-
-		glog.Errorf("failed to http-call %s %s: error %v", method, url, err)
-
-		err = m.proxy.detectPrimary()
-		if err != nil {
-			// primary change is not detected or failed - interrupt the loop
-			return err
-		}
-
-		if time.Since(startRequest) > proxyTimeout {
-			return fmt.Errorf("sending data to primary proxy timed out")
-		}
-
-		time.Sleep(proxyRetryTime)
-	}
 }

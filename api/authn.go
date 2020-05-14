@@ -19,6 +19,13 @@ type AuthnSpec struct {
 	UserPassword  string
 }
 
+type ClusterSpec struct {
+	AdminName     string
+	AdminPassword string
+	ClusterID     string
+	URLs          []string
+}
+
 type userRec struct {
 	Name     string `json:"name"`
 	Password string `json:"password"`
@@ -30,6 +37,10 @@ type loginRec struct {
 
 type AuthCreds struct {
 	Token string `json:"token"`
+}
+
+type ClusterRec struct {
+	Conf map[string][]string `json:"conf"`
 }
 
 func AddUser(baseParams BaseParams, spec AuthnSpec) error {
@@ -77,4 +88,46 @@ func LoginUser(baseParams BaseParams, spec AuthnSpec) (token *AuthCreds, err err
 		return nil, errors.New("login failed: empty response from AuthN server")
 	}
 	return token, nil
+}
+
+func RegisterClusterAuthN(baseParams BaseParams, spec ClusterSpec) error {
+	req := ClusterRec{Conf: make(map[string][]string, 1)}
+	req.Conf[spec.ClusterID] = spec.URLs
+	msg, err := jsoniter.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	baseParams.Method = http.MethodPost
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Clusters),
+		Body:       msg,
+		User:       spec.AdminName,
+		Password:   spec.AdminPassword,
+	})
+}
+
+func UnregisterClusterAuthN(baseParams BaseParams, spec ClusterSpec) error {
+	baseParams.Method = http.MethodDelete
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Clusters, spec.ClusterID),
+		User:       spec.AdminName,
+		Password:   spec.AdminPassword,
+	})
+}
+
+func GetClusterAuthN(baseParams BaseParams, spec ClusterSpec) (*ClusterRec, error) {
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Clusters)
+	if spec.ClusterID != "" {
+		path = cmn.URLPath(path, spec.ClusterID)
+	}
+	clusters := &ClusterRec{}
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       path,
+	}, clusters)
+	return clusters, err
 }
