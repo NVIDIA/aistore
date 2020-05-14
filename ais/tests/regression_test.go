@@ -861,12 +861,11 @@ func TestDeleteList(t *testing.T) {
 func TestPrefetchRange(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
-		err            error
-		rmin, rmax     int64
-		proxyURL       = tutils.RandomProxyURL()
-		baseParams     = tutils.BaseAPIParams(proxyURL)
-		prefetchPrefix = "regressionList/obj"
-		bck            = cmn.Bck{
+		rangeMin, rangeMax int
+		proxyURL           = tutils.RandomProxyURL()
+		baseParams         = tutils.BaseAPIParams(proxyURL)
+		prefetchPrefix     = "regressionList/obj"
+		bck                = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
@@ -876,14 +875,9 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 1. Parse arguments
 	if prefetchRange != "" {
-		trimmed := strings.Trim(prefetchRange, "{}")
-		ranges := strings.Split(trimmed, "..")
-		if rmin, err = strconv.ParseInt(ranges[0], 10, 64); err != nil {
-			t.Errorf("Error parsing range min: %v", err)
-		}
-		if rmax, err = strconv.ParseInt(ranges[1], 10, 64); err != nil {
-			t.Errorf("Error parsing range max: %v", err)
-		}
+		pt, err := cmn.ParseBashTemplate(prefetchRange)
+		tassert.CheckFatal(t, err)
+		rangeMin, rangeMax = pt.Ranges[0].Start, pt.Ranges[0].End
 	}
 
 	// 2. Discover the number of items we expect to be prefetched
@@ -898,7 +892,7 @@ func TestPrefetchRange(t *testing.T) {
 			}
 			if i, err := strconv.ParseInt(oname, 10, 64); err != nil {
 				continue
-			} else if (rmin == 0 && rmax == 0) || (i >= rmin && i <= rmax) {
+			} else if (rangeMin == 0 && rangeMax == 0) || (int(i) >= rangeMin && int(i) <= rangeMax) {
 				files = append(files, be.Name)
 			}
 		}
@@ -907,7 +901,7 @@ func TestPrefetchRange(t *testing.T) {
 	// 3. Evict those objects from the cache, and then prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
 	rng := fmt.Sprintf("%s%s", prefetchPrefix, prefetchRange)
-	err = api.EvictRange(baseParams, bck, rng)
+	err := api.EvictRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: bck, Timeout: rebalanceTimeout}
 	err = api.WaitForXaction(baseParams, xactArgs)
