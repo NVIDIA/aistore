@@ -60,11 +60,12 @@ func TestMain(m *testing.M) {
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
-	// memory
-	daemon.gmm = memsys.DefaultPageMM()
-
 	// target
-	t = &targetrunner{}
+	t = &targetrunner{
+		// memory
+		gmm: memsys.DefaultPageMM(),
+		smm: memsys.DefaultSmallMM(),
+	}
 	t.initSI(cmn.Target)
 	t.init(nil, cmn.GCO.Get())
 	t.owner.bmd = newBMDOwnerTgt()

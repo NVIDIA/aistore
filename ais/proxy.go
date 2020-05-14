@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -2156,7 +2157,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		body := pst.GetWhatStats()
 		p.writeJSON(w, r, body, what)
 	case cmn.GetWhatSysInfo:
-		body := cmn.MustMarshal(daemon.gmm.FetchSysInfo())
+		body := cmn.MustMarshal(sys.FetchSysInfo())
 		p.writeJSON(w, r, body, what)
 	case cmn.GetWhatSmap:
 		var (
@@ -2188,7 +2189,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := &stats.DaemonStatus{
 			Snode:       p.httprunner.si,
 			SmapVersion: p.owner.smap.get().Version,
-			SysInfo:     daemon.gmm.FetchSysInfo(),
+			SysInfo:     sys.FetchSysInfo(),
 			Stats:       pst.Core,
 		}
 		body := cmn.MustMarshal(msg)

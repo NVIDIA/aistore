@@ -66,8 +66,6 @@ type (
 	daemonCtx struct {
 		cli    cliFlags
 		dryRun dryRunConfig
-		gmm    *memsys.MMSA // system pagesize-based memory manager and slab allocator
-		smm    *memsys.MMSA // system MMSA for small-size allocations
 		rg     *rungroup
 	}
 
@@ -220,18 +218,12 @@ func initDaemon(version, build string) {
 	// Initialize filesystem/mountpaths manager.
 	fs.InitMountedFS()
 
-	// NOTE: proxy and, respectively, target terminations are executed in the same
-	//       exact order as the initializations below
+	// NOTE: Proxy and, respectively, target terminations are executed in
+	//  the same exact order as the initializations below
 	daemon.rg = &rungroup{
 		runarr: make([]cmn.Runner, 0, 8),
 		runmap: make(map[string]cmn.Runner, 8),
 	}
-	// system MMSAs
-	daemon.gmm = &memsys.MMSA{Name: gmmName}
-	_ = daemon.gmm.Init(true /*panic on error*/)
-	daemon.smm = &memsys.MMSA{Name: smmName, Small: true}
-	_ = daemon.smm.Init(true /* ditto */)
-	daemon.gmm.Sibling, daemon.smm.Sibling = daemon.smm, daemon.gmm
 
 	if daemon.cli.role == cmn.Proxy {
 		initProxy()
@@ -273,7 +265,14 @@ func initProxy() {
 }
 
 func initTarget(config *cmn.Config) {
-	t := &targetrunner{}
+	t := &targetrunner{
+		gmm: &memsys.MMSA{Name: gmmName},
+		smm: &memsys.MMSA{Name: smmName, Small: true},
+	}
+	_ = t.gmm.Init(true /*panicOnErr*/)
+	_ = t.smm.Init(true /*panicOnErr*/)
+	t.gmm.Sibling, t.smm.Sibling = t.smm, t.gmm
+
 	t.initSI(cmn.Target)
 	t.initHostIP()
 	daemon.rg.add(t, cmn.Target)
@@ -306,10 +305,10 @@ func initTarget(config *cmn.Config) {
 		}
 	}
 
-	fshc := health.NewFSHC(t, fs.Mountpaths, daemon.gmm, fs.CSM)
+	fshc := health.NewFSHC(t, fs.Mountpaths, t.gmm, fs.CSM)
 	daemon.rg.add(fshc, xfshc)
 
-	housekeep, initialInterval := cluster.LomCacheHousekeep(daemon.gmm, t)
+	housekeep, initialInterval := cluster.LomCacheHousekeep(t.gmm, t)
 	hk.Housekeeper.Register("lom-cache", housekeep, initialInterval)
 	_ = ts.UpdateCapacityOOS(nil) // goes after fs.Mountpaths.Init
 }

@@ -35,8 +35,8 @@ var _ cluster.Target = &targetrunner{}
 func (t *targetrunner) GetBowner() cluster.Bowner   { return t.owner.bmd }
 func (t *targetrunner) GetSowner() cluster.Sowner   { return t.owner.smap }
 func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
-func (t *targetrunner) GetMMSA() *memsys.MMSA       { return daemon.gmm }
-func (t *targetrunner) GetSmallMMSA() *memsys.MMSA  { return daemon.smm }
+func (t *targetrunner) GetMMSA() *memsys.MMSA       { return t.gmm }
+func (t *targetrunner) GetSmallMMSA() *memsys.MMSA  { return t.smm }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
 
 func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
@@ -243,7 +243,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		if verbose {
 			glog.Infof("promote/PUT %s => %s @ %s", srcFQN, lom, si.ID())
 		}
-		buf, slab := daemon.gmm.Alloc()
+		buf, slab := t.gmm.Alloc()
 		lom.FQN = srcFQN
 		ri := &replicInfo{smap: smap, t: t, bckTo: lom.Bck(), buf: buf, localOnly: false}
 
@@ -276,7 +276,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 	if safe {
 		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
-		buf, slab := daemon.gmm.Alloc()
+		buf, slab := t.gmm.Alloc()
 		written, cksum, err = cmn.CopyFile(srcFQN, workFQN, buf, true)
 		slab.Free(buf)
 		if err != nil {

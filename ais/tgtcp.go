@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -291,7 +292,10 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
-		body := cmn.MustMarshal(cmn.TSysInfo{SysInfo: daemon.gmm.FetchSysInfo(), FSInfo: fs.Mountpaths.FetchFSInfo()})
+		body := cmn.MustMarshal(cmn.TSysInfo{
+			SysInfo: sys.FetchSysInfo(),
+			FSInfo:  fs.Mountpaths.FetchFSInfo(),
+		})
 		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatStats:
 		rst := getstorstatsrunner()
@@ -329,7 +333,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := &stats.DaemonStatus{
 			Snode:       t.httprunner.si,
 			SmapVersion: t.owner.smap.get().Version,
-			SysInfo:     daemon.gmm.FetchSysInfo(),
+			SysInfo:     sys.FetchSysInfo(),
 			Stats:       tstats.Core,
 			Capacity:    tstats.Capacity,
 			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},

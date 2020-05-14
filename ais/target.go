@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
@@ -84,6 +85,9 @@ type (
 			global globalGFN
 		}
 		regstate regstate // the state of being registered with the primary, can be (en/dis)abled via API
+
+		gmm *memsys.MMSA // system pagesize-based memory manager and slab allocator
+		smm *memsys.MMSA // system MMSA for small-size allocations
 	}
 )
 
@@ -269,7 +273,7 @@ func (t *targetrunner) Run() error {
 		}()
 	}
 
-	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, daemon.gmm, t, t.statsT)
+	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t.gmm, t, t.statsT)
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}
@@ -520,7 +524,7 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	buf, slab := daemon.gmm.Alloc(finfo.Size())
+	buf, slab := t.gmm.Alloc(finfo.Size())
 	w.Header().Set("Content-Length", strconv.FormatInt(finfo.Size(), 10))
 	_, err = io.CopyBuffer(w, file, buf)
 	slab.Free(buf)
@@ -1394,7 +1398,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		return
 	}
 
-	buf, slab := daemon.gmm.Alloc()
+	buf, slab := t.gmm.Alloc()
 	ri := &replicInfo{smap: t.owner.smap.get(), t: t, bckTo: lom.Bck(), buf: buf, localOnly: false, finalize: true}
 	copied, err := ri.copyObject(lom, msg.Name /* new object name */)
 	slab.Free(buf)
