@@ -7,6 +7,7 @@ package integration
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -897,8 +898,11 @@ func restore(cmd string, args []string, asPrimary bool, tag string) error {
 		tutils.Logf("Restarting %s container %s\n", tag, cmd)
 		return containers.RestartContainer(cmd)
 	}
-	if !cmn.StringInSlice("-skipstartup=true", args) {
-		args = append(args, "-skipstartup=true")
+	if asPrimary && !cmn.StringInSlice("-skipstartup=true", args) {
+		// 50-50 to apply flag or not (randomize to test different startup paths)
+		if rand.Intn(2) == 0 {
+			args = append(args, "-skipstartup=true")
+		}
 	}
 	tutils.Logf("Restoring %s: %s %+v\n", tag, cmd, args)
 
