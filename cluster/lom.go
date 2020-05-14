@@ -369,7 +369,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 
 	if srcCksum != nil && srcCksum.Type() != cmn.ChecksumNone {
-		if !cmn.EqCksum(dstCksum, lom.Cksum()) {
+		if !dstCksum.Equal(lom.Cksum()) {
 			return nil, cmn.NewBadDataCksumError(dstCksum, lom.Cksum())
 		}
 	}
@@ -492,7 +492,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	}
 	// different versions may have different checksums
 	if (cksumFromFS != nil || lom.md.cksum != nil) && md.version == lom.md.version {
-		if !cmn.EqCksum(lom.md.cksum, cksumFromFS) {
+		if !lom.md.cksum.Equal(cksumFromFS) {
 			err = cmn.NewBadDataCksumError(lom.md.cksum, cksumFromFS, lom.String())
 			lom.Uncache()
 		}
@@ -531,12 +531,12 @@ func (lom *LOM) ValidateContentChecksum() (err error) {
 		lom.ReCache()
 		return
 	}
-	if cmn.EqCksum(lom.md.cksum, computedCksum) {
+	if lom.md.cksum.Equal(computedCksum) {
 		return
 	}
 	// reload meta and check again
 	if _, err = lom.lmfs(true); err == nil {
-		if cmn.EqCksum(lom.md.cksum, computedCksum) {
+		if lom.md.cksum.Equal(computedCksum) {
 			return
 		}
 	}

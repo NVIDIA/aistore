@@ -6,10 +6,8 @@ package ais
 
 import (
 	"context"
-	"crypto/md5"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"net/http"
 	"net/url"
@@ -25,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -91,9 +88,8 @@ type (
 		filePath string
 	}
 
-	writerOnly struct {
-		io.Writer
-	}
+	writerOnly  struct{ io.Writer }
+	writerMulti struct{ writers []io.Writer }
 )
 
 ////////////////
@@ -103,8 +99,8 @@ type (
 func (poi *putObjInfo) putObject() (err error, errCode int) {
 	lom := poi.lom
 	// optimize out if the checksums do match
-	if poi.cksumToCheck != nil {
-		if cmn.EqCksum(lom.Cksum(), poi.cksumToCheck) {
+	if poi.cksumToCheck != nil && lom.Cksum() != nil {
+		if lom.Cksum().Equal(poi.cksumToCheck) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToCheck)
 			}
@@ -253,10 +249,19 @@ func (poi *putObjInfo) putRemoteAIS() (ver string, err error, errCode int) {
 // NOTE: `roi.r` is closed on the end of the call.
 func (poi *putObjInfo) writeToFile() (err error) {
 	var (
-		file   *os.File
-		buf    []byte
-		slab   *memsys.Slab
-		reader = poi.r
+		written int64
+		file    *os.File
+		buf     []byte
+		slab    *memsys.Slab
+		reader  = poi.r
+		writer  io.Writer
+		writers = make([]io.Writer, 0, 4)
+		cksums  = struct {
+			store *cmn.CksumHash // store with LOM
+			given *cmn.CksumHash // compute additionally
+			expct *cmn.Cksum     // and validate against `expct` if required/available
+		}{}
+		conf = poi.lom.CksumConf()
 	)
 	if daemon.dryRun.disk {
 		return
@@ -264,12 +269,13 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	if file, err = poi.lom.CreateFile(poi.workFQN); err != nil {
 		return
 	}
-
+	writer = file
 	if poi.size == 0 {
 		buf, slab = poi.t.gmm.Alloc()
 	} else {
 		buf, slab = poi.t.gmm.Alloc(poi.size)
 	}
+	// cleanup
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
 		reader.Close()
@@ -283,67 +289,54 @@ func (poi *putObjInfo) writeToFile() (err error) {
 			}
 		}
 	}()
-
-	// receive and checksum
-	var (
-		written int64
-
-		checkCksumType      string
-		expectedCksum       *cmn.Cksum
-		saveHash, checkHash hash.Hash
-		hashes              []hash.Hash
-	)
-
-	poiCkConf := poi.lom.CksumConf()
-	if !poi.cold && poiCkConf.Type != cmn.ChecksumNone {
-		checkCksumType = poiCkConf.Type
-		cmn.AssertMsg(checkCksumType == cmn.ChecksumXXHash, checkCksumType)
-
-		if !poi.migrated || poiCkConf.ValidateObjMove {
-			saveHash = xxhash.New64()
-			hashes = []hash.Hash{saveHash}
-
-			// if sender provided checksum we need to ensure that it is correct
-			if expectedCksum = poi.cksumToCheck; expectedCksum != nil {
-				checkHash = saveHash
+	// checksums
+	if conf.Type == cmn.ChecksumNone {
+		goto write
+	}
+	if poi.cold {
+		// compute checksum and save it as part of the object metadata
+		cksums.store = cmn.NewCksumHash(conf.Type)
+		writers = append(writers, cksums.store.H)
+		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
+		if conf.ValidateColdGet && poi.cksumToCheck != nil {
+			cksums.expct = poi.cksumToCheck
+			cksums.given = cmn.NewCksumHash(poi.cksumToCheck.Type())
+			writers = append(writers, cksums.given.H)
+		}
+	} else {
+		if !poi.migrated || conf.ValidateObjMove {
+			cksums.store = cmn.NewCksumHash(conf.Type)
+			writers = append(writers, cksums.store.H)
+			if poi.cksumToCheck != nil {
+				cksums.expct = poi.cksumToCheck
+				cksums.given = cmn.NewCksumHash(poi.cksumToCheck.Type())
+				writers = append(writers, cksums.given.H)
 			}
 		} else {
 			// if migration validation is not configured we can just take
 			// the checksum that has arrived with the object (and compute it if not present)
 			poi.lom.SetCksum(poi.cksumToCheck)
 			if poi.cksumToCheck == nil {
-				saveHash = xxhash.New64()
-				hashes = []hash.Hash{saveHash}
+				cksums.store = cmn.NewCksumHash(conf.Type)
+				writers = append(writers, cksums.store.H)
 			}
-		}
-	} else if poi.cold {
-		// compute xxhash (the default checksum) and save it as part of the object metadata
-		saveHash = xxhash.New64()
-		hashes = []hash.Hash{saveHash}
-
-		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
-		if poiCkConf.ValidateColdGet && poi.cksumToCheck != nil {
-			expectedCksum = poi.cksumToCheck
-			checkCksumType, _ = expectedCksum.Get()
-			cmn.AssertMsg(checkCksumType == cmn.ChecksumMD5 || checkCksumType == cmn.ChecksumCRC32C, checkCksumType)
-
-			checkHash = md5.New()
-			if checkCksumType == cmn.ChecksumCRC32C {
-				checkHash = cmn.NewCRC32C()
-			}
-
-			hashes = append(hashes, checkHash)
 		}
 	}
-
-	if written, err = cmn.ReceiveAndChecksum(file, reader, buf, hashes...); err != nil {
+write:
+	if len(writers) == 0 {
+		written, err = io.CopyBuffer(writer, reader, buf)
+	} else {
+		writers = append(writers, writer)
+		written, err = io.CopyBuffer(&writerMulti{writers}, reader, buf)
+	}
+	if err != nil {
 		return
 	}
-
-	if checkHash != nil {
-		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
-		if !cmn.EqCksum(expectedCksum, computedCksum) {
-			err = cmn.NewBadDataCksumError(expectedCksum, computedCksum, poi.lom.String())
+	// validate
+	if cksums.given != nil {
+		cksums.given.Finalize()
+		if !cksums.given.Equal(cksums.expct) {
+			err = cmn.NewBadDataCksumError(cksums.expct, &cksums.given.Cksum, poi.lom.String())
 			poi.t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
 				stats.NamedVal64{Name: stats.ErrCksumSize, Value: written},
@@ -351,9 +344,11 @@ func (poi *putObjInfo) writeToFile() (err error) {
 			return
 		}
 	}
+	// ok
 	poi.lom.SetSize(written)
-	if saveHash != nil {
-		poi.lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(saveHash)))
+	if cksums.store != nil {
+		cksums.store.Finalize()
+		poi.lom.SetCksum(&cksums.store.Cksum)
 	}
 	if err = file.Close(); err != nil {
 		return fmt.Errorf("failed to close received file %s, err: %w", poi.workFQN, err)
@@ -810,8 +805,8 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 			err = errors.New("handle not provided")
 			return "", err, http.StatusBadRequest
 		}
-
-		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName, true /*overwrite*/, false /*safe*/, false /*verbose*/); err != nil {
+		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName,
+			true /*overwrite*/, false /*safe*/, false /*verbose*/); err != nil {
 			return "", err, 0
 		}
 	default:
@@ -826,5 +821,25 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("PUT %s: %d µs", aoi.lom, int64(delta/time.Microsecond))
 	}
+	return
+}
+
+/////////////////
+// writerMulti //
+/////////////////
+
+func (mw *writerMulti) Write(b []byte) (n int, err error) {
+	l := len(b)
+	for _, w := range mw.writers {
+		n, err = w.Write(b)
+		if err == nil && n == l {
+			continue
+		}
+		if err == nil {
+			err = io.ErrShortWrite
+		}
+		return
+	}
+	n = l
 	return
 }

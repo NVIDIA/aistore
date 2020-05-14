@@ -454,7 +454,7 @@ func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGrou
 		return
 	}
 
-	if !cmn.EqCksum(cmn.NewCksum(cmn.ChecksumXXHash, actualCksm), recvCksm) {
+	if !recvCksm.Equal(cmn.NewCksum(cmn.ChecksumXXHash, actualCksm)) {
 		glog.Errorf("Checksum of slice does not match. Got: %s, expected: %s", recvCksm.String(), cmn.NewCksum(cmn.ChecksumXXHash, actualCksm).String())
 		errCh <- i
 	}

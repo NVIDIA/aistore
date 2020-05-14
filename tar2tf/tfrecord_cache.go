@@ -75,7 +75,7 @@ func (c *tfrecordsRangesCache) GetSize(sourceTar *cluster.LOM) (int64, error) {
 	uname = sourceTar.Uname()
 	if val, ok := c.M.Load(uname); ok {
 		entry := val.(*tfrecordCacheEntry)
-		if cmn.EqCksum(sourceTar.Cksum(), entry.cksum) {
+		if sourceTar.Cksum().Equal(entry.cksum) {
 			return entry.totalSize, nil
 		}
 		if glog.V(4) {

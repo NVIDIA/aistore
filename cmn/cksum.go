@@ -5,10 +5,13 @@
 package cmn
 
 import (
+	"crypto/md5"
 	"encoding/hex"
 	"fmt"
 	"hash"
 	"hash/crc32"
+
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -23,7 +26,89 @@ type (
 		a, b    interface{}
 		context string
 	}
+	Cksum struct {
+		ty    string
+		value string
+	}
+	CksumHash struct {
+		Cksum
+		H hash.Hash
+	}
 )
+
+var (
+	checksums = map[string]struct{}{
+		ChecksumNone:   {},
+		ChecksumXXHash: {},
+		ChecksumMD5:    {},
+		ChecksumCRC32C: {},
+	}
+)
+
+///////////
+// Cksum //
+///////////
+
+func NewCksum(ty, value string) *Cksum {
+	if ty == "" || value == "" {
+		return nil
+	}
+	if _, ok := checksums[ty]; !ok {
+		AssertMsg(false, "invalid checksum type: '"+ty+"'")
+	}
+	return &Cksum{ty, value}
+}
+
+func NewCksumHash(ty string) *CksumHash {
+	switch ty {
+	case ChecksumNone:
+		return nil
+	case ChecksumXXHash:
+		return &CksumHash{Cksum{ty: ty}, xxhash.New64()}
+	case ChecksumMD5:
+		return &CksumHash{Cksum{ty: ty}, md5.New()}
+	case ChecksumCRC32C:
+		return &CksumHash{Cksum{ty: ty}, NewCRC32C()}
+	default:
+		AssertMsg(false, "invalid checksum type: '"+ty+"'")
+	}
+	return nil
+}
+
+func (ck *Cksum) Equal(to *Cksum) bool {
+	if ck == nil {
+		return to == nil
+	}
+	t1, v1 := ck.Get()
+	t2, v2 := to.Get()
+	return t1 == t2 && v1 == v2
+}
+
+func (ck *Cksum) Get() (string, string) { return ck.ty, ck.value }
+func (ck *Cksum) Type() string          { return ck.ty }
+func (ck *Cksum) Value() string         { return ck.value }
+func (ck *Cksum) String() string {
+	return fmt.Sprintf("(%s,%s...)", ck.ty, ck.value[:Min(10, len(ck.value))])
+}
+
+func (ck *CksumHash) Equal(to *Cksum) bool { return ck.Cksum.Equal(to) }
+func (ck *CksumHash) Finalize()            { ck.value = HashToStr(ck.H) }
+
+/////////////
+// helpers //
+/////////////
+
+func NewCRC32C() hash.Hash {
+	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
+}
+
+func HashToStr(h hash.Hash) string {
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+////////////
+// errors //
+////////////
 
 func NewBadDataCksumError(a, b *Cksum, context ...string) error {
 	ctx := ""
@@ -32,6 +117,7 @@ func NewBadDataCksumError(a, b *Cksum, context ...string) error {
 	}
 	return &BadCksumError{prefix: badDataCksumPrefix, a: a, b: b, context: ctx}
 }
+
 func NewBadMetaCksumError(a, b uint64, context ...string) error {
 	ctx := ""
 	if len(context) > 0 {
@@ -67,45 +153,4 @@ func (e *BadCksumError) Error() string {
 func (e *BadCksumError) Is(target error) bool {
 	_, ok := target.(*BadCksumError)
 	return ok
-}
-
-func NewCRC32C() hash.Hash {
-	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
-}
-
-type (
-	Cksum struct {
-		ty    string
-		value string
-	}
-)
-
-func NewCksum(ty, value string) *Cksum {
-	if ty == "" || value == "" {
-		return nil
-	}
-	if ty != ChecksumXXHash && ty != ChecksumMD5 && ty != ChecksumCRC32C {
-		AssertMsg(false, fmt.Sprintf("invalid checksum type: %s (with value of: %s)", ty, value))
-	}
-	return &Cksum{ty, value}
-}
-
-func HashToStr(h hash.Hash) string {
-	return hex.EncodeToString(h.Sum(nil))
-}
-
-func EqCksum(a, b *Cksum) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	t1, v1 := a.Get()
-	t2, v2 := b.Get()
-	return t1 == t2 && v1 == v2
-}
-
-func (v *Cksum) Get() (string, string) { return v.ty, v.value }
-func (v *Cksum) Type() string          { return v.ty }
-func (v *Cksum) Value() string         { return v.value }
-func (v *Cksum) String() string {
-	return fmt.Sprintf("(%s,%s...)", v.ty, v.value[:Min(10, len(v.value))])
 }

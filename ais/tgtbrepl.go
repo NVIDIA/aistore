@@ -88,7 +88,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied boo
 	}
 
 	if err = dst.Load(false); err == nil {
-		if dst.Size() == lom.Size() && cmn.EqCksum(lom.Cksum(), dst.Cksum()) {
+		if dst.Size() == lom.Size() && lom.Cksum().Equal(dst.Cksum()) {
 			copied = true
 			return
 		}
