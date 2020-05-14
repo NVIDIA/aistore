@@ -398,17 +398,7 @@ func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
 	for _, j := range d.dispatcher.joggers {
 		task := j.getTask()
 		if task != nil && task.id() == reqID {
-			info := TaskDlInfo{
-				Name:       task.obj.objName,
-				Downloaded: task.currentSize.Load(),
-				Total:      task.totalSize.Load(),
-
-				StartTime: task.started,
-				EndTime:   task.ended,
-
-				Running: true,
-			}
-			currentTasks = append(currentTasks, info)
+			currentTasks = append(currentTasks, task.ToTaskDlInfo())
 		}
 	}
 	d.dispatcher.RUnlock()

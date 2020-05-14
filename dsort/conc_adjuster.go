@@ -67,7 +67,7 @@ type (
 	concAdjuster struct {
 		mu sync.RWMutex
 
-		stopCh cmn.StopCh
+		stopCh *cmn.StopCh
 
 		defaultLimit int // default limit for new mpath adjusters
 		adjusters    map[string]*mpathAdjuster

@@ -5,12 +5,13 @@
 package integration
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
+
+// NOTE: TestDownload* can fail if link, content, version changes - should be super rare!
 
 const (
 	downloadDescAllPrefix = "downloader-test-integration"
@@ -36,16 +39,7 @@ func generateDownloadDesc() string {
 }
 
 func clearDownloadList(t *testing.T) {
-	var (
-		httpErr = &cmn.HTTPError{}
-	)
-while503:
 	listDownload, err := api.DownloadGetList(tutils.BaseAPIParams(), downloadDescAllRegex)
-	if err != nil && errors.As(err, &httpErr) && httpErr.Status == http.StatusServiceUnavailable {
-		tutils.Logln("waiting for the cluster to start up...")
-		time.Sleep(time.Second)
-		goto while503
-	}
 	tassert.CheckFatal(t, err)
 
 	for _, v := range listDownload {
@@ -173,6 +167,20 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string) { // nolint
 	waitForDownload(t, id, 20*time.Second)
 }
 
+func abortDownload(t *testing.T, id string) {
+	baseParams := tutils.BaseAPIParams()
+
+	err := api.DownloadAbort(baseParams, id)
+	tassert.CheckFatal(t, err)
+
+	time.Sleep(time.Second)
+
+	status, err := api.DownloadStatus(baseParams, id)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, status.Aborted, "download was not marked aborted")
+	tassert.Fatalf(t, len(status.CurrentTasks) == 0, "current tasks should be empty")
+}
+
 func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version string) *cmn.ObjectProps {
 	objProps, err := api.HeadObject(tutils.BaseAPIParams(), bck, objName)
 	tassert.CheckError(t, err)
@@ -202,12 +210,11 @@ func TestDownloadSingle(t *testing.T) {
 		// links below don't contain protocols to test that no error occurs
 		// in case they are missing.
 		link      = "storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-000001.tgz"
-		linkSmall = "github.com/NVIDIA/aistore"
+		linkSmall = "storage.googleapis.com/minikube/iso/minikube-v0.23.0.iso.sha256"
 	)
 
 	clearDownloadList(t)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
@@ -224,31 +231,26 @@ func TestDownloadSingle(t *testing.T) {
 	err = api.DownloadAbort(baseParams, idSecond)
 	tassert.CheckError(t, err)
 
-	resp, err := api.DownloadStatus(baseParams, id)
-	tassert.CheckError(t, err)
-
-	err = api.DownloadAbort(baseParams, id)
-	tassert.CheckError(t, err)
+	// Cancel first object
+	abortDownload(t, id)
 
 	time.Sleep(time.Second)
 
-	if resp, err = api.DownloadStatus(baseParams, id); err != nil {
+	// Check if the status is still available after some time
+	if resp, err := api.DownloadStatus(baseParams, id); err != nil {
 		t.Errorf("got error when getting status for link that is not being downloaded: %v", err)
 	} else if !resp.Aborted {
 		t.Errorf("canceled link not marked: %v", resp)
 	}
 
-	if err = api.DownloadAbort(baseParams, id); err != nil {
-		t.Errorf("got error when canceling second time: %v", err)
-	}
+	err = api.DownloadAbort(baseParams, id)
+	tassert.CheckError(t, err)
 
-	if err = api.DownloadRemove(baseParams, id); err != nil {
-		t.Errorf("got error when removing task: %v", err)
-	}
+	err = api.DownloadRemove(baseParams, id)
+	tassert.CheckError(t, err)
 
-	if err = api.DownloadRemove(baseParams, id); err == nil {
-		t.Errorf("expected error when removing non-existent task")
-	}
+	err = api.DownloadRemove(baseParams, id)
+	tassert.Errorf(t, err != nil, "expected error when removing non-existent task")
 
 	id, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, linkSmall)
 	tassert.CheckError(t, err)
@@ -342,7 +344,6 @@ func TestDownloadMultiMap(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
@@ -372,7 +373,6 @@ func TestDownloadMultiList(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
@@ -399,7 +399,6 @@ func TestDownloadTimeout(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
@@ -418,13 +417,19 @@ func TestDownloadTimeout(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	if _, err := api.DownloadStatus(baseParams, id); err == nil {
-		// TODO: we should get response that some files has been canceled or not finished.
-		// For now we cannot do that since we don't collect information about
-		// task being canceled.
-		// t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
-		tutils.Logf("%v\n", err)
-	}
+	status, err := api.DownloadStatus(baseParams, id)
+	tassert.CheckFatal(t, err)
+
+	objErr := status.Errs[0]
+	tassert.Fatalf(t, status.ErrorCnt == 1, "expected task to be marked as an error")
+	tassert.Errorf(
+		t, objErr.Name == objName,
+		"unexpected name for the object (expected: %q, got: %q)", objName, objErr.Name,
+	)
+	tassert.Errorf(
+		t, strings.Contains(objErr.Err, "deadline exceeded"),
+		"error mismatch (expected: %q, got: %q)", context.DeadlineExceeded, objErr.Err,
+	)
 
 	checkDownloadedObjects(t, id, bck, []string{})
 
@@ -454,7 +459,7 @@ func TestDownloadCloud(t *testing.T) {
 
 	expectedObjs := make([]string, 0, fileCnt)
 	for i := 0; i < fileCnt; i++ {
-		reader, err := readers.NewRandReader(cmn.MiB, false /* withHash */)
+		reader, err := readers.NewRandReader(cmn.MiB, false /*withHash*/)
 		tassert.CheckFatal(t, err)
 
 		objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)
@@ -483,9 +488,7 @@ func TestDownloadCloud(t *testing.T) {
 
 	objs, err := tutils.ListObjects(proxyURL, bck, prefix, 0)
 	tassert.CheckFatal(t, err)
-	if !reflect.DeepEqual(objs, expectedObjs) {
-		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
-	}
+	tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
 
 	// Test cancellation
 	err = api.EvictList(baseParams, bck, expectedObjs)
@@ -550,18 +553,14 @@ func TestDownloadStatus(t *testing.T) {
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
 
-	if resp.Total != 2 {
-		t.Errorf("expected %d objects, got %d", 2, resp.Total)
-	}
-	if resp.FinishedCnt != 1 {
-		t.Errorf("expected the short file to be downloaded")
-	}
-	if len(resp.CurrentTasks) != 1 {
-		t.Fatal("did not expect the long file to be already downloaded")
-	}
-	if resp.CurrentTasks[0].Name != longFileName {
-		t.Errorf("invalid file name in status message, expected: %s, got: %s", longFileName, resp.CurrentTasks[0].Name)
-	}
+	tassert.Errorf(t, resp.Total == 2, "expected %d objects, got %d", 2, resp.Total)
+	tassert.Errorf(t, resp.FinishedCnt == 1, "expected the short file to be downloaded")
+	tassert.Fatalf(t, len(resp.CurrentTasks) == 1, "did not expect the long file to be already downloaded")
+	tassert.Fatalf(
+		t, resp.CurrentTasks[0].Name == longFileName,
+		"invalid file name in status message, expected: %s, got: %s",
+		longFileName, resp.CurrentTasks[0].Name,
+	)
 
 	checkDownloadList(t)
 }
@@ -598,15 +597,12 @@ func TestDownloadStatusError(t *testing.T) {
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
 
-	if resp.Total != len(files) {
-		t.Errorf("expected %d objects, got %d", len(files), resp.Total)
-	}
-	if resp.FinishedCnt != 0 {
-		t.Errorf("expected 0 files to be finished")
-	}
-	if resp.ErrorCnt != len(files) {
-		t.Fatalf("expected 2 downloading errors, but got: %d errors: %v", len(resp.Errs), resp.Errs)
-	}
+	tassert.Errorf(t, resp.Total == len(files), "expected %d objects, got %d", len(files), resp.Total)
+	tassert.Errorf(t, resp.FinishedCnt == 0, "expected 0 files to be finished")
+	tassert.Fatalf(
+		t, resp.ErrorCnt == len(files),
+		"expected 2 downloading errors, but got: %d errors: %v", len(resp.Errs), resp.Errs,
+	)
 
 	invalidAddressCausedError := resp.Errs[0].Name == "invalidURL" || resp.Errs[1].Name == "invalidURL"
 	notFoundFileCausedError := resp.Errs[0].Name == "notFoundFile" || resp.Errs[1].Name == "notFoundFile"
@@ -752,16 +748,14 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 		Provider: cmn.ProviderAIS,
 	}
 	_, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, obj)
-	if err == nil {
-		t.Fatalf("Expected an error, but go no errors.")
-	}
+	tassert.Fatalf(t, err != nil, "expected an error, but got none")
+
 	httpErr, ok := err.(*cmn.HTTPError)
-	if !ok {
-		t.Fatalf("Expected an error of type *cmn.HTTPError, but got: %T.", err)
-	}
-	if httpErr.Status != http.StatusNotFound {
-		t.Errorf("Expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status)
-	}
+	tassert.Fatalf(t, ok, "expected an error of type *cmn.HTTPError, but got: %T.", err)
+	tassert.Errorf(
+		t, httpErr.Status == http.StatusNotFound,
+		"expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status,
+	)
 }
 
 func TestDownloadMpathEvents(t *testing.T) {
@@ -816,6 +810,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	// downloader finished on required target, safe to abort the rest
 	tutils.Logf("Aborting download job %s\n", id)
 	err = api.DownloadAbort(baseParams, id)
+	tassert.CheckFatal(t, err)
 
 	objs, err := tutils.ListObjects(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
@@ -831,7 +826,6 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs)) // 21: from cifar10.tgz to cifar30.tgz
 }
 
-// NOTE: Test may fail if the content (or version) of the link changes
 func TestDownloadOverrideObject(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL()
@@ -870,11 +864,10 @@ func TestDownloadOverrideObject(t *testing.T) {
 	newProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
 	tassert.Errorf(
 		t, oldProps.Atime != newProps.Atime,
-		"atime mismatch (%v vs %v)", oldProps.Atime, newProps.Atime,
+		"atime match (%v == %v)", oldProps.Atime, newProps.Atime,
 	)
 }
 
-// NOTE: Test may fail if the content (or version) of the link changes
 func TestDownloadSkipObject(t *testing.T) {
 	var (
 		proxyURL = tutils.RandomProxyURL()
@@ -933,8 +926,8 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		},
 		Template: template,
 	})
-	tassert.CheckError(t, err)
-	defer api.DownloadAbort(baseParams, id)
+	tassert.CheckFatal(t, err)
+	defer abortDownload(t, id)
 
 	time.Sleep(2 * time.Second) // wait for downloader to pick up the job
 
@@ -980,16 +973,16 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		},
 		Template: template,
 	})
-	tassert.CheckError(t, err)
-	defer api.DownloadAbort(baseParams, id1)
+	tassert.CheckFatal(t, err)
+	defer abortDownload(t, id1)
 
 	time.Sleep(time.Second) // wait for downloader to pick up the first job
 
 	id2, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
-	tassert.CheckError(t, err)
-	defer api.DownloadAbort(baseParams, id2)
+	tassert.CheckFatal(t, err)
+	defer abortDownload(t, id2)
 
-	time.Sleep(2 * time.Second) // wait for downloader to pick up the second job
+	time.Sleep(4 * time.Second) // wait for downloader to pick up the second job
 
 	resp1, err := api.DownloadStatus(baseParams, id1)
 	tassert.CheckFatal(t, err)

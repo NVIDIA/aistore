@@ -29,7 +29,7 @@ type (
 	// are dlTasks.
 	jogger struct {
 		mpath       string
-		terminateCh cmn.StopCh // synchronizes termination
+		terminateCh *cmn.StopCh // synchronizes termination
 		parent      *dispatcher
 
 		q *queue
@@ -86,7 +86,6 @@ func (j *jogger) jog() {
 // Stop terminates the jogger
 func (j *jogger) stop() {
 	glog.Infof("Stopping jogger for mpath: %s", j.mpath)
-	j.q.stop()
 
 	j.mtx.Lock()
 	j.stopAgent = true
@@ -116,13 +115,15 @@ func (j *jogger) getTask() *singleObjectTask {
 func (j *jogger) abortJob(id string) {
 	j.mtx.RLock()
 	defer j.mtx.RUnlock()
+
+	// Remove pending jobs in queue.
+	cnt := j.q.removeJob(id)
+	j.parent.parent.SubPending(int64(cnt))
+
 	// Abort currently running task, if belongs to a given job.
 	if j.task != nil && j.task.id() == id {
 		j.task.cancel()
 	}
-	// Remove pending jobs in queue.
-	cnt := j.q.removeJob(id)
-	j.parent.parent.SubPending(int64(cnt))
 }
 
 func newQueue() *queue {
@@ -177,14 +178,6 @@ func (q *queue) delete(t *singleObjectTask) bool {
 	q.removeFromSet(t.id(), t.uid())
 	q.Unlock()
 	return exists
-}
-
-func (q *queue) stop() {
-	q.RLock()
-	if q.ch != nil {
-		close(q.ch)
-	}
-	q.RUnlock()
 }
 
 func (q *queue) cleanup() {

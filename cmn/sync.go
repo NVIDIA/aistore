@@ -111,8 +111,8 @@ func (tg *TimeoutGroup) Done() {
 	}
 }
 
-func NewStopCh() StopCh {
-	return StopCh{
+func NewStopCh() *StopCh {
+	return &StopCh{
 		ch: make(chan struct{}, 1),
 	}
 }

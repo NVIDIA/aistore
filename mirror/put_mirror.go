@@ -33,7 +33,7 @@ type (
 		parent    *XactPutLRepl
 		mpathInfo *fs.MountpathInfo
 		workCh    chan *cluster.LOM
-		stopCh    cmn.StopCh
+		stopCh    *cmn.StopCh
 	}
 )
 

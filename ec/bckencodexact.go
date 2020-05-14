@@ -30,7 +30,7 @@ type (
 		parent    *XactBckEncode
 		mpathInfo *fs.MountpathInfo
 		config    *cmn.Config
-		stopCh    cmn.StopCh
+		stopCh    *cmn.StopCh
 
 		// to cache some info for quick access
 		smap     *cluster.Smap

@@ -42,7 +42,7 @@ type (
 		mpathInfo *fs.MountpathInfo
 		config    *cmn.Config
 		num, size int64
-		stopCh    cmn.StopCh
+		stopCh    *cmn.StopCh
 		callback  func(lom *cluster.LOM) error
 		skipLoad  bool // true: skip lom.Load() and further checks (e.g. done in callback under lock)
 	}

@@ -24,7 +24,7 @@ const (
 type singleMemoryWatcher struct {
 	wg     *sync.WaitGroup
 	ticker *time.Ticker
-	stopCh cmn.StopCh
+	stopCh *cmn.StopCh
 }
 
 // memoryWatcher is responsible for monitoring memory changes and decide

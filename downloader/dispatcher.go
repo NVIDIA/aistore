@@ -27,12 +27,12 @@ type (
 	dispatcher struct {
 		parent *Downloader
 
-		joggers  map[string]*jogger       // mpath -> jogger
-		abortJob map[string]chan struct{} // jobID -> abort job chan
+		joggers  map[string]*jogger     // mpath -> jogger
+		abortJob map[string]*cmn.StopCh // jobID -> abort job chan
 
 		dispatchDownloadCh chan DlJob
 
-		stopCh cmn.StopCh
+		stopCh *cmn.StopCh
 		sync.RWMutex
 	}
 )
@@ -45,7 +45,7 @@ func newDispatcher(parent *Downloader) *dispatcher {
 
 		dispatchDownloadCh: make(chan DlJob, jobsChSize),
 		stopCh:             cmn.NewStopCh(),
-		abortJob:           make(map[string]chan struct{}, jobsChSize),
+		abortJob:           make(map[string]*cmn.StopCh, jobsChSize),
 	}
 }
 
@@ -119,13 +119,16 @@ func (d *dispatcher) addJogger(mpath string) {
 
 func (d *dispatcher) cleanUpAborted(jobID string) {
 	d.Lock()
-	delete(d.abortJob, jobID)
+	if ch, exists := d.abortJob[jobID]; exists {
+		ch.Close()
+		delete(d.abortJob, jobID)
+	}
 	d.Unlock()
 }
 
 func (d *dispatcher) ScheduleForDownload(job DlJob) {
 	d.Lock()
-	d.abortJob[job.ID()] = make(chan struct{}, 1)
+	d.abortJob[job.ID()] = cmn.NewStopCh()
 	d.Unlock()
 
 	d.dispatchDownloadCh <- job
@@ -175,23 +178,22 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	}
 }
 
-func (d *dispatcher) jobAbortedCh(jobID string) <-chan struct{} {
+func (d *dispatcher) jobAbortedCh(jobID string) *cmn.StopCh {
 	d.RLock()
 	defer d.RUnlock()
 	if abCh, ok := d.abortJob[jobID]; ok {
 		return abCh
 	}
 
-	// chanel always sending something
-	// if entry in the map is missing
-	abCh := make(chan struct{})
-	close(abCh)
+	// Channel always sending something if entry in the map is missing.
+	abCh := cmn.NewStopCh()
+	abCh.Close()
 	return abCh
 }
 
 func (d *dispatcher) checkAbortedJob(job DlJob) bool {
 	select {
-	case <-d.jobAbortedCh(job.ID()):
+	case <-d.jobAbortedCh(job.ID()).Listen():
 		return true
 	default:
 		return false
@@ -283,12 +285,18 @@ func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj dlObj) (err e
 	//  jogger as other tasks from other jobs can be already ready to download.
 	job.throttler().acquire()
 
+	// Firstly, check if the job was aborted when we were sleeping.
+	if d.checkAbortedJob(job) {
+		return nil, true
+	}
+
+	// Secondly, try to push the new task into queue.
 	select {
 	// FIXME: if this particular jogger is full, but others are available, dispatcher
 	//  will wait with dispatching all of the requests anyway
 	case jogger.putCh(task) <- task:
 		return nil, true
-	case <-d.jobAbortedCh(job.ID()):
+	case <-d.jobAbortedCh(job.ID()).Listen():
 		return nil, true
 	case <-d.stopCh.Listen():
 		return nil, false
@@ -317,6 +325,8 @@ func (d *dispatcher) dispatchAbort(req *request) {
 	if err != nil {
 		return
 	}
+
+	d.jobAbortedCh(req.id).Close()
 
 	for _, j := range d.joggers {
 		j.abortJob(req.id)

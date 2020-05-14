@@ -48,8 +48,8 @@ type (
 		job    DlJob
 		obj    dlObj
 
-		started time.Time
-		ended   time.Time
+		started atomic.Time
+		ended   atomic.Time
 
 		currentSize atomic.Int64 // the current size of the file (updated as the download progresses)
 		totalSize   atomic.Int64 // the total size of the file (nonzero only if Content-Length header was provided by the source of the file)
@@ -74,14 +74,14 @@ func (t *singleObjectTask) download() {
 		glog.Infof("Starting download for %v", t)
 	}
 
-	t.started = time.Now()
-	lom.SetAtimeUnix(t.started.UnixNano())
+	t.started.Store(time.Now())
+	lom.SetAtimeUnix(t.started.Load().UnixNano())
 	if t.obj.fromCloud {
 		err = t.downloadCloud(lom)
 	} else {
-		err = t.downloadLocal(lom, t.started)
+		err = t.downloadLocal(lom)
 	}
-	t.ended = time.Now()
+	t.ended.Store(time.Now())
 
 	if err != nil {
 		t.markFailed(err.Error())
@@ -94,13 +94,13 @@ func (t *singleObjectTask) download() {
 
 	t.parent.statsT.AddMany(
 		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
-		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(time.Since(t.started))},
+		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(t.started.Load().Sub(t.ended.Load()))},
 	)
 	t.parent.ObjectsInc()
 	t.parent.BytesAdd(t.currentSize.Load())
 }
 
-func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time, timeout time.Duration) error {
+func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration) error {
 	var (
 		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 	)
@@ -147,7 +147,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time,
 		RecvType:     cluster.ColdGet,
 		Cksum:        roi.cksum,
 		Version:      roi.version,
-		Started:      started,
+		Started:      t.started.Load(),
 		WithFinalize: true,
 	})
 	if err != nil {
@@ -159,15 +159,18 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, started time.Time,
 	return nil
 }
 
-func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (err error) {
+func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {
 	var (
 		httpErr = &cmn.HTTPError{}
 		timeout = t.initialTimeout()
 	)
 	for i := 0; i < retryCnt; i++ {
-		err = t.tryDownloadLocal(lom, started, timeout)
+		err = t.tryDownloadLocal(lom, timeout)
 		if err == nil {
 			return nil
+		} else if errors.Is(err, context.Canceled) {
+			// Download was canceled, so just return.
+			return err
 		} else if errors.Is(err, context.DeadlineExceeded) {
 			glog.Warningf("%s [retries: %d/%d]: context exceeded with timeout (%v), increasing and retrying...", t, i, retryCnt, timeout)
 			timeout = time.Duration(float64(timeout) * reqTimeoutFactor)
@@ -233,21 +236,26 @@ func (t *singleObjectTask) markFailed(statusMsg string) {
 }
 
 func (t *singleObjectTask) persist() {
-	_ = dlStore.persistTaskInfo(t.id(), TaskDlInfo{
-		Name:       t.obj.objName,
-		Downloaded: t.currentSize.Load(),
-		Total:      t.totalSize.Load(),
-
-		StartTime: t.started,
-		EndTime:   t.ended,
-
-		Running: false,
-	})
+	_ = dlStore.persistTaskInfo(t.id(), t.ToTaskDlInfo())
 }
 
 func (t *singleObjectTask) id() string { return t.job.ID() }
 func (t *singleObjectTask) uid() string {
 	return fmt.Sprintf("%s|%s|%s|%v", t.obj.link, t.job.Bck(), t.obj.objName, t.obj.fromCloud)
+}
+
+func (t *singleObjectTask) ToTaskDlInfo() TaskDlInfo {
+	ended := t.ended.Load()
+	return TaskDlInfo{
+		Name:       t.obj.objName,
+		Downloaded: t.currentSize.Load(),
+		Total:      t.totalSize.Load(),
+
+		StartTime: t.started.Load(),
+		EndTime:   ended,
+
+		Running: ended.IsZero(),
+	}
 }
 
 func (t *singleObjectTask) String() (str string) {

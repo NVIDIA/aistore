@@ -67,8 +67,8 @@ type (
 		lid      string        // log prefix
 		workCh   chan Obj      // aka SQ: next object to stream
 		cmplCh   chan cmpl     // aka SCQ; note that SQ and SCQ together form a FIFO
-		lastCh   cmn.StopCh    // end of stream
-		stopCh   cmn.StopCh    // stop/abort stream
+		lastCh   *cmn.StopCh   // end of stream
+		stopCh   *cmn.StopCh   // stop/abort stream
 		postCh   chan struct{} // to indicate that workCh has work
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
@@ -170,7 +170,7 @@ type (
 		streams map[string]*Stream
 		heap    []*Stream
 		ticker  *time.Ticker
-		stopCh  cmn.StopCh
+		stopCh  *cmn.StopCh
 		ctrlCh  chan ctrl
 	}
 	ctrl struct { // add/del channel to/from collector
