@@ -396,9 +396,7 @@ func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
 	d.dispatcher.RLock()
 	currentTasks := make([]TaskDlInfo, 0, len(d.dispatcher.joggers))
 	for _, j := range d.dispatcher.joggers {
-		j.Lock()
-
-		task := j.task
+		task := j.getTask()
 		if task != nil && task.id() == reqID {
 			info := TaskDlInfo{
 				Name:       task.obj.objName,
@@ -412,8 +410,6 @@ func (d *Downloader) activeTasks(reqID string) []TaskDlInfo {
 			}
 			currentTasks = append(currentTasks, info)
 		}
-
-		j.Unlock()
 	}
 	d.dispatcher.RUnlock()
 

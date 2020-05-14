@@ -319,21 +319,7 @@ func (d *dispatcher) dispatchAbort(req *request) {
 	}
 
 	for _, j := range d.joggers {
-		j.Lock()
-
-		// Abort currently running task, if belongs to a given job
-		if j.task != nil && j.task.id() == req.id {
-			// Task is running
-			j.task.cancel()
-		}
-
-		// Remove all pending tasks from queue
-		if m, ok := j.q.m[req.id]; ok {
-			d.parent.SubPending(int64(len(m)))
-			delete(j.q.m, req.id)
-		}
-
-		j.Unlock()
+		j.abortJob(req.id)
 	}
 
 	err = dlStore.setAborted(req.id)

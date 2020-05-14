@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const queueChSize = 1000
@@ -28,12 +29,12 @@ type (
 	// are dlTasks.
 	jogger struct {
 		mpath       string
-		terminateCh chan struct{} // synchronizes termination TODO: replace with std one?
+		terminateCh cmn.StopCh // synchronizes termination
 		parent      *dispatcher
 
 		q *queue
 
-		sync.Mutex
+		mtx sync.RWMutex
 		// lock protected
 		task      *singleObjectTask // currently running download task
 		stopAgent bool
@@ -45,7 +46,7 @@ func newJogger(d *dispatcher, mpath string) *jogger {
 		mpath:       mpath,
 		parent:      d,
 		q:           newQueue(),
-		terminateCh: make(chan struct{}, 1),
+		terminateCh: cmn.NewStopCh(),
 	}
 }
 
@@ -57,29 +58,29 @@ func (j *jogger) jog() {
 			break
 		}
 
-		j.Lock()
+		j.mtx.Lock()
 		if j.stopAgent {
-			j.Unlock()
+			j.mtx.Unlock()
 			break
 		}
 
 		j.task = t
-		j.Unlock()
+		j.mtx.Unlock()
 
 		t.download()
 		t.job.throttler().release()
 
-		j.Lock()
+		j.mtx.Lock()
 		j.task.persist()
 		j.task = nil
-		j.Unlock()
+		j.mtx.Unlock()
 		if exists := j.q.delete(t); exists {
 			j.parent.parent.DecPending()
 		}
 	}
 
 	j.q.cleanup()
-	j.terminateCh <- struct{}{}
+	j.terminateCh.Close()
 }
 
 // Stop terminates the jogger
@@ -87,23 +88,41 @@ func (j *jogger) stop() {
 	glog.Infof("Stopping jogger for mpath: %s", j.mpath)
 	j.q.stop()
 
-	j.Lock()
+	j.mtx.Lock()
 	j.stopAgent = true
 	if j.task != nil {
 		j.task.markFailed(internalErrorMsg)
 	}
-	j.Unlock()
+	j.mtx.Unlock()
 
-	<-j.terminateCh
+	<-j.terminateCh.Listen()
 }
 
-// returns chanel which task should be put into
+// Returns chanel which task should be put into.
 func (j *jogger) putCh(t *singleObjectTask) chan<- *singleObjectTask {
 	ok, ch := j.q.putCh(t)
 	if ok {
 		j.parent.parent.IncPending()
 	}
 	return ch
+}
+
+func (j *jogger) getTask() *singleObjectTask {
+	j.mtx.RLock()
+	defer j.mtx.RUnlock()
+	return j.task
+}
+
+func (j *jogger) abortJob(id string) {
+	j.mtx.RLock()
+	defer j.mtx.RUnlock()
+	// Abort currently running task, if belongs to a given job.
+	if j.task != nil && j.task.id() == id {
+		j.task.cancel()
+	}
+	// Remove pending jobs in queue.
+	cnt := j.q.removeJob(id)
+	j.parent.parent.SubPending(int64(cnt))
 }
 
 func newQueue() *queue {
@@ -115,8 +134,8 @@ func newQueue() *queue {
 
 func (q *queue) putCh(t *singleObjectTask) (ok bool, ch chan<- *singleObjectTask) {
 	q.Lock()
-	if q.exists(t.id(), t.uid()) {
-		// If task already exists we should just omit it
+	if q.stopped() || q.exists(t.id(), t.uid()) {
+		// If task already exists or the queue was stopped we should just omit it
 		// hence return chanel which immediately accepts and omits the task
 		q.Unlock()
 		return false, make(chan *singleObjectTask, 1)
@@ -139,8 +158,8 @@ func (q *queue) get() (foundTask *singleObjectTask) {
 		q.RLock()
 		if q.exists(t.id(), t.uid()) {
 			// NOTE: We do not delete task here but postpone it until the task
-			// has Finished to prevent situation where we put task which is being
-			// downloaded.
+			//  has `Finished` to prevent situation where we put task which is
+			//  being downloaded.
 			foundTask = t
 		}
 		q.RUnlock()
@@ -173,6 +192,11 @@ func (q *queue) cleanup() {
 	q.ch = nil
 	q.m = nil
 	q.Unlock()
+}
+
+// NOTE: Should be called under `RLock()`.
+func (q *queue) stopped() bool {
+	return q.m == nil || q.ch == nil
 }
 
 // exists should be called under RLock()
@@ -210,4 +234,18 @@ func (q *queue) removeFromSet(jobID, requestUID string) {
 			delete(q.m, jobID)
 		}
 	}
+}
+
+func (q *queue) removeJob(id string) int {
+	q.Lock()
+	defer q.Unlock()
+	if q.stopped() {
+		return 0
+	}
+	jobM, ok := q.m[id]
+	if !ok {
+		return 0
+	}
+	delete(q.m, id)
+	return len(jobM)
 }
