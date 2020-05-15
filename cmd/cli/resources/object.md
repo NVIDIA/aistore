@@ -148,9 +148,11 @@ SIZE    VERSION EC
 
 ## Put object
 
-`ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
+`ais put -|FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
-Put an object or entire directory (of objects) into the specified bucket. If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty, then shows all gathered info to the user and asks for confirmation to continue. Confirmation request can be disabled with the option `--yes` for use in scripts.
+Put a file, entire directory (of files) or content from STDIN (`-`) into the specified bucket.
+If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty, then shows all gathered info to the user and asks for confirmation to continue.
+Confirmation request can be disabled with the option `--yes` for use in scripts.
 
 ### Options
 
@@ -168,7 +170,8 @@ Put an object or entire directory (of objects) into the specified bucket. If CLI
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
  This makes shell wildcards like `**` redundant, and the following patterns won't work in `ais`: `/home/user/img-set-*/*.tar` or `/home/user/bck/**/*.tar.gz`
 
-`FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
+`FILE` must point to an existing file.
+File masks and directory uploading are not supported in single-file upload mode.
 
 
 ### Object names
@@ -203,7 +206,7 @@ The current user HOME directory is `/home/user`.
 
 #### Put single file
 
-Put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`
+Put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`.
 
 ```bash
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
@@ -212,12 +215,23 @@ $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 
 #### Put single file without explicit name
 
-Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name
+Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name.
 
 ```bash
 $ ais put "~/bck/img1.tar" mybucket/
 # PUT /home/user/bck/img1.tar => mybucket/img-set-1.tar
 ```
+
+#### Put content from STDIN
+
+Read unpacked content from STDIN and put it into local bucket `mybucket` with name `img-unpacked`.
+Note that content is put in chunks what can have a slight overhead.
+
+```bash
+$ tar -xOzf ~/bck/img1.tar | ais put - ais://mybucket/img1-unpacked
+# PUT /home/user/bck/img1.tar (as stdin) => ais://mybucket/img-unpacked
+```
+
 
 #### Put directory into bucket
 

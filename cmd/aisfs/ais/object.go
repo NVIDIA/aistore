@@ -76,7 +76,6 @@ func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (
 		Reader:     r,
 		Size:       size,
 	}
-
 	handle, err = api.AppendObject(appendArgs)
 	if err != nil {
 		return handle, newObjectIOError(err, "Append", obj.Name)
@@ -85,13 +84,13 @@ func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (
 }
 
 func (obj *Object) Flush(handle string) (err error) {
-	appendArgs := api.AppendArgs{
+	flushArgs := api.FlushArgs{
 		BaseParams: obj.apiParams,
 		Bck:        obj.bck,
 		Object:     obj.Name,
 		Handle:     handle,
 	}
-	if err = api.FlushObject(appendArgs); err != nil {
+	if err = api.FlushObject(flushArgs); err != nil {
 		return newObjectIOError(err, "Flush", obj.Name)
 	}
 	return nil

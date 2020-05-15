@@ -137,7 +137,6 @@ func TestAppendObject(t *testing.T) {
 		Bck:        bck,
 		Object:     objName,
 		Reader:     cmn.NewByteHandle([]byte(objHead)),
-		Size:       int64(objSize),
 	}
 	// First call with empty `handle` to start writing the object
 	handle, err := api.AppendObject(args)
@@ -151,12 +150,16 @@ func TestAppendObject(t *testing.T) {
 	_, err = api.AppendObject(args)
 	tassert.CheckFatal(t, err)
 	// Flush object to make it persistent one in the bucket
-	err = api.FlushObject(args)
+	err = api.FlushObject(api.FlushArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     objName,
+		Handle:     handle,
+	})
 	tassert.CheckFatal(t, err)
 
 	// Read the object from the bucket
-	buf := make([]byte, 0, objSize*2)
-	writer := bytes.NewBuffer(buf)
+	writer := bytes.NewBuffer(make([]byte, 0, objSize*2))
 	getArgs := api.GetObjectInput{Writer: writer}
 	n, err := api.GetObject(baseParams, bck, objName, getArgs)
 	tassert.CheckFatal(t, err)

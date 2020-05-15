@@ -80,7 +80,7 @@ func newWriteBuffer() *writeBuffer {
 	}
 }
 
-func (b *writeBuffer) reader() cmn.ReadOpenCloser  { return b.sgl }
+func (b *writeBuffer) reader() cmn.ReadOpenCloser  { return memsys.NewReader(b.sgl) }
 func (b *writeBuffer) size() int64                 { return b.sgl.Size() }
 func (b *writeBuffer) reset()                      { b.sgl.Reset() }
 func (b *writeBuffer) write(p []byte) (int, error) { return b.sgl.Write(p) }

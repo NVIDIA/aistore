@@ -181,12 +181,13 @@ type (
 	FileSectionHandle struct {
 		s         *io.SectionReader
 		padding   int64 // padding size
-		padOffset int64 // offset iniside padding when reading a file
+		padOffset int64 // offset inside padding when reading a file
 	}
 
 	// ByteHandle is a byte buffer(made from []byte) that implements
 	// ReadOpenCloser interface
 	ByteHandle struct {
+		b []byte
 		*bytes.Reader
 	}
 
@@ -686,17 +687,14 @@ func FreeMemToOS(d ...time.Duration) {
 /////////////////////
 
 func NewByteHandle(bt []byte) *ByteHandle {
-	return &ByteHandle{
-		bytes.NewReader(bt),
-	}
+	return &ByteHandle{bt, bytes.NewReader(bt)}
 }
 
 func (b *ByteHandle) Close() error {
 	return nil
 }
 func (b *ByteHandle) Open() (io.ReadCloser, error) {
-	b.Seek(0, io.SeekStart)
-	return b, nil
+	return ioutil.NopCloser(bytes.NewReader(b.b)), nil
 }
 
 func NopOpener(r io.ReadCloser) ReadOpenCloser {

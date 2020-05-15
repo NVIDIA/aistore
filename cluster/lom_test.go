@@ -322,7 +322,7 @@ var _ = Describe("LOM", func() {
 			localFQN := mis[0].MakePathFQN(localBckB, fs.ObjectType, testObjectName)
 			dummyCksm := cmn.NewCksum(cmn.ChecksumXXHash, "dummycksm")
 
-			Describe("CksumComputeIfMissing", func() {
+			Describe("ComputeCksumIfMissing", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
 					noneFQN := mis[0].MakePathFQN(localBckA, fs.ObjectType, testObject)

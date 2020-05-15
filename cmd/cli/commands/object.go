@@ -6,8 +6,10 @@
 package commands
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -168,6 +170,49 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 	return err
 }
 
+// TODO: missing progress bar feature
+func putSingleObjectChunked(bck cmn.Bck, objName string, r io.Reader) (err error) {
+	const (
+		// TODO: this should be controlled by flag: --chunked=1MB
+		chunkSize = 10 * cmn.MiB
+	)
+
+	var (
+		hash   = cmn.NewCksumHash(cmn.ChecksumXXHash)
+		handle string
+	)
+	for {
+		b := bytes.NewBuffer(nil)
+		n, err := io.CopyN(io.MultiWriter(b, hash.H), r, chunkSize)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if n == 0 {
+			break
+		}
+
+		handle, err = api.AppendObject(api.AppendArgs{
+			BaseParams: defaultAPIParams,
+			Bck:        bck,
+			Object:     objName,
+			Handle:     handle,
+			Reader:     cmn.NewByteHandle(b.Bytes()),
+			Size:       n,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	hash.Finalize()
+	return api.FlushObject(api.FlushArgs{
+		BaseParams: defaultAPIParams,
+		Bck:        bck,
+		Object:     objName,
+		Handle:     handle,
+		Hash:       hash.Value(),
+	})
+}
+
 func putRangeObjects(c *cli.Context, pt cmn.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
 	getNext := pt.Iter()
 	allFiles := make([]fileToObj, 0, pt.Count())
@@ -252,6 +297,23 @@ func rangeTrimPrefix(pt cmn.ParsedTemplate) string {
 func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error) {
 	printDryRunHeader(c)
 
+	if fileName == "-" {
+		if objName == "" {
+			return fmt.Errorf("object name is required when reading from stdin")
+		}
+
+		if flagIsSet(c, dryRunFlag) {
+			fmt.Fprintf(c.App.Writer, "PUT (stdin) => \"%s/%s\"\n", bck.Name, objName)
+			return nil
+		}
+
+		if err := putSingleObjectChunked(bck, objName, os.Stdin); err != nil {
+			return err
+		}
+		fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
+		return nil
+	}
+
 	path, err := getPathFromFileName(fileName)
 	if err != nil {
 		return err
@@ -274,10 +336,11 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s\"\n", path, bck.Name, objName)
 			return nil
 		}
-		if err = putSingleObject(c, bck, objName, path); err == nil {
-			fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
+		if err := putSingleObject(c, bck, objName, path); err != nil {
+			return err
 		}
-		return err
+		fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
+		return nil
 	}
 
 	files, err := generateFileList(path, "", objName, flagIsSet(c, recursiveFlag))
@@ -346,7 +409,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		p.Wait()
 	}
 
-	err = api.FlushObject(api.AppendArgs{
+	err = api.FlushObject(api.FlushArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
 		Object:     objName,

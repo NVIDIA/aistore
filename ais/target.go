@@ -1242,19 +1242,30 @@ func (t *targetrunner) _listBcks(r *http.Request, query cmn.QueryBcks, cfg *cmn.
 }
 
 func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (filePath string, err error, errCode int) {
-	_, userFilePath := parseAppendHandle(r.URL.Query().Get(cmn.URLParamAppendHandle))
-	aoi := &appendObjInfo{
-		started:  started,
-		t:        t,
-		lom:      lom,
-		r:        r.Body,
-		op:       r.URL.Query().Get(cmn.URLParamAppendType),
-		filePath: userFilePath,
-	}
-	if sizeStr := r.Header.Get("Content-Length"); sizeStr != "" {
-		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
+	var (
+		cksumValue    = r.Header.Get(cmn.HeaderObjCksumVal)
+		cksumType     = r.Header.Get(cmn.HeaderObjCksumType)
+		contentLength = r.Header.Get("Content-Length")
+		handle        = r.URL.Query().Get(cmn.URLParamAppendHandle)
+
+		_, userFilePath = parseAppendHandle(handle)
+
+		aoi = &appendObjInfo{
+			started:  started,
+			t:        t,
+			lom:      lom,
+			r:        r.Body,
+			op:       r.URL.Query().Get(cmn.URLParamAppendType),
+			filePath: userFilePath,
+		}
+	)
+	if contentLength != "" {
+		if size, ers := strconv.ParseInt(contentLength, 10, 64); ers == nil {
 			aoi.size = size
 		}
+	}
+	if cksumValue != "" {
+		aoi.cksum = cmn.NewCksum(cksumType, cksumValue)
 	}
 	return aoi.appendObject()
 }
@@ -1484,7 +1495,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	if objName == "" {
 		objName = filepath.Base(srcFQN)
 	}
-	if err = t.PromoteFile(srcFQN, bck, objName, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
+	if err = t.PromoteFile(srcFQN, bck, objName, nil /*expectedCksum*/, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
 		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
 	}

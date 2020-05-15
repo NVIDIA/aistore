@@ -225,7 +225,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch b
 	return
 }
 
-func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string, overwrite, safe, verbose bool) (err error) {
+func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string, expectedCksum *cmn.Cksum, overwrite, safe, verbose bool) (err error) {
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck); err != nil {
 		return
@@ -291,12 +291,19 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		}
 		written = fi.Size()
 		clone := lom.Clone(srcFQN)
-		cksum, err := clone.ComputeCksumIfMissing()
+		cksum, err = clone.ComputeCksum(cmn.ChecksumXXHash)
 		if err != nil {
 			return err
 		}
 		lom.SetCksum(cksum)
 	}
+
+	if expectedCksum != nil {
+		if !cksum.Equal(expectedCksum) {
+			return cmn.NewBadDataCksumError(cksum, expectedCksum)
+		}
+	}
+
 	cmn.Assert(workFQN != "")
 	poi.workFQN = workFQN
 

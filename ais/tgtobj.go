@@ -86,6 +86,8 @@ type (
 		// Append/Flush operation.
 		op       string
 		filePath string
+		// Expected checksum of the final object.
+		cksum *cmn.Cksum
 	}
 
 	writerOnly  struct{ io.Writer }
@@ -768,6 +770,8 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 	filePath = aoi.filePath
 	switch aoi.op {
 	case cmn.AppendOp:
+		// TODO: we should maintain running checksum (compare at the flush)
+
 		var f *os.File
 		if filePath == "" {
 			filePath = fs.CSM.GenContentParsedFQN(aoi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfileAppend)
@@ -782,7 +786,6 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 			}
 		}
 
-		// append
 		var (
 			buf  []byte
 			slab *memsys.Slab
@@ -792,9 +795,9 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 		} else {
 			buf, slab = aoi.t.gmm.Alloc(aoi.size)
 		}
+
 		_, err = io.CopyBuffer(f, aoi.r, buf)
 
-		// cleanup
 		slab.Free(buf)
 		f.Close()
 		if err != nil {
@@ -805,7 +808,7 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 			err = errors.New("handle not provided")
 			return "", err, http.StatusBadRequest
 		}
-		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName,
+		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName, aoi.cksum,
 			true /*overwrite*/, false /*safe*/, false /*verbose*/); err != nil {
 			return "", err, 0
 		}

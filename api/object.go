@@ -67,6 +67,14 @@ type AppendArgs struct {
 	Size       int64
 }
 
+type FlushArgs struct {
+	BaseParams BaseParams
+	Bck        cmn.Bck
+	Object     string
+	Handle     string
+	Hash       string
+}
+
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
@@ -261,17 +269,10 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	query.Add(cmn.URLParamAppendHandle, args.Handle)
 	query = cmn.AddBckToQuery(query, args.Bck)
 
-	var header http.Header
-	if args.Size > 0 {
-		header = make(http.Header)
-		header.Add("Content-Length", strconv.FormatInt(args.Size, 10))
-	}
-
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, args.Bck.Name, args.Object),
-		Header: header,
 		Query:  query,
 		BodyR:  args.Reader,
 	}
@@ -285,6 +286,10 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
 		// If it wasn't set, we would need to deal with the redirect manually.
 		req.GetBody = args.Reader.Open
+		if args.Size != 0 {
+			req.ContentLength = args.Size // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
+		}
+
 		setAuthToken(req, args.BaseParams)
 		return req, nil
 	}
@@ -347,17 +352,25 @@ func shouldRetryHTTP(err error) bool {
 //
 // Flushing should occur once all appends have finished successfully.
 // This call will create a fully operational object and requires handle to be set.
-func FlushObject(args AppendArgs) (err error) {
+func FlushObject(args FlushArgs) (err error) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamAppendType, cmn.FlushOp)
 	query.Add(cmn.URLParamAppendHandle, args.Handle)
 	query = cmn.AddBckToQuery(query, args.Bck)
+
+	var header http.Header
+	if args.Hash != "" {
+		header = make(http.Header)
+		header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
+		header.Set(cmn.HeaderObjCksumVal, args.Hash)
+	}
 
 	args.BaseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: args.BaseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Objects, args.Bck.Name, args.Object),
 		Query:      query,
+		Header:     header,
 	})
 }
 
