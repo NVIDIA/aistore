@@ -18,7 +18,7 @@ func FetchSysInfo() cmn.SysInfo {
 	return cmn.SysInfo{
 		MemAvail:   osMem.Total,
 		MemUsed:    proc.Mem.Resident,
-		PctMemUsed: float64(osMem.Total) * 100 / float64(proc.Mem.Resident),
+		PctMemUsed: float64(proc.Mem.Resident) * 100 / float64(osMem.Total),
 		PctCPUUsed: proc.CPU.Percent,
 	}
 }

@@ -64,7 +64,7 @@ AIS_PRIMARY_URL="http://localhost:$PORT"
 if $AIS_USE_HTTPS; then
   AIS_PRIMARY_URL="https://localhost:$PORT"
 fi
-LOGROOT="${LOGROOT:-/tmp/ais}${NEXT_TIER}"
+LOG_ROOT="${LOG_ROOT:-/tmp/ais}${NEXT_TIER}"
 #### Authentication setup #########
 AIS_SECRET_KEY="${AIS_SECRET_KEY:-aBitLongSecretKey}"
 AUTH_ENABLED="${AUTH_ENABLED:-false}"
@@ -180,7 +180,7 @@ for (( c=START; c<=END; c++ )); do
   INSTANCE=$c
   mkdir -p "$AIS_CONF_DIR"
   AIS_CONF_FILE="$AIS_CONF_DIR/ais.json"
-  AIS_LOG_DIR="$AIS_LOG_DIR/$c/log"
+  AIS_LOG_DIR="$LOG_ROOT/$c/log"
   source "${AISTORE_DIR}/deploy/dev/local/aisnode_config.sh"
 
   ((PORT++))
@@ -211,12 +211,12 @@ for (( c=START; c<=END; c++ )); do
   fi
 done
 
-if [[ -n $AUTH_ENABLED ]]; then
+if [[ $AUTH_ENABLED == "true" ]]; then
   # conf file for authn
   AUTHN_CONF_DIR="$HOME/.authn"
   mkdir -p "$AUTHN_CONF_DIR"
   AUTHN_CONF_FILE="$AUTHN_CONF_DIR/authn.json"
-  AUTHN_LOG_DIR="$AUTHN_LOG_DIR/authn/log"
+  AUTHN_LOG_DIR="$LOG_ROOT/authn/log"
   source "${AISTORE_DIR}/deploy/dev/local/authn_config.sh"
 
   if ! make --no-print-directory -C ${AISTORE_DIR} authn; then
