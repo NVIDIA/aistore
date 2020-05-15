@@ -300,8 +300,8 @@ const (
 		"{{end}}{{end}}\n"
 
 	AuthNClusterTmpl = "ClusterID\tURLs\n" +
-		"{{ range $cid, $urls := .Conf}}" +
-		"{{ $cid }}\t{{ JoinList $urls}}\n" +
+		"{{ range $clu := . }}" +
+		"{{ $clu.ID }}\t{{ JoinList $clu.URLs }}\n" +
 		"{{end}}"
 )
 

@@ -32,6 +32,7 @@ const (
 	// TODO: fix and move AuthN subcommands to commands/common.go
 	subcmdAuthAdd     = "add"
 	subcmdAuthShow    = "show"
+	subcmdAuthUpdate  = "update"
 	subcmdAuthRemove  = commandRemove
 	subcmdAuthLogin   = "login"
 	subcmdAuthLogout  = "logout"
@@ -78,6 +79,17 @@ var (
 							Usage:     "unregister a cluster",
 							ArgsUsage: deleteAuthClusterArgument,
 							Action:    deleteAuthClusterHandler,
+						},
+					},
+				},
+				{
+					Name: subcmdAuthUpdate,
+					Subcommands: []cli.Command{
+						{
+							Name:      subcmdAuthCluster,
+							Usage:     "update registered cluster config",
+							ArgsUsage: addAuthClusterArgument,
+							Action:    updateAuthClusterHandler,
 						},
 					},
 				},
@@ -263,12 +275,38 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 	urlList := strings.Split(urls, ",")
 
 	spec := api.ClusterSpec{
-		AdminName:     cliAuthnAdminName(c),
-		AdminPassword: cliAuthnAdminPassword(c),
-		ClusterID:     cid,
-		URLs:          urlList,
+		ClusterID: cid,
+		URLs:      urlList,
 	}
 	return api.RegisterClusterAuthN(baseParams, spec)
+}
+
+func updateAuthClusterHandler(c *cli.Context) (err error) {
+	authnURL := cliAuthnURL()
+	if authnURL == "" {
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+	}
+	baseParams := cliAuthParams(authnURL)
+	baseParams.Token = "" // the request requires superuser credentials, not user's ones
+	cid := c.Args().Get(0)
+	if cid == "" {
+		return missingArgumentsError(c, "cluster id")
+	}
+	urls := c.Args().Get(1)
+	if strings.Contains(cid, "=") {
+		parts := strings.SplitN(cid, "=", 2)
+		cid = parts[0]
+		urls = parts[1]
+	} else if urls == "" {
+		return missingArgumentsError(c, "cluster URL list")
+	}
+	urlList := strings.Split(urls, ",")
+
+	spec := api.ClusterSpec{
+		ClusterID: cid,
+		URLs:      urlList,
+	}
+	return api.UpdateClusterAuthN(baseParams, spec)
 }
 
 func deleteAuthClusterHandler(c *cli.Context) (err error) {
@@ -283,9 +321,7 @@ func deleteAuthClusterHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "cluster id")
 	}
 	spec := api.ClusterSpec{
-		AdminName:     cliAuthnAdminName(c),
-		AdminPassword: cliAuthnAdminPassword(c),
-		ClusterID:     cid,
+		ClusterID: cid,
 	}
 	return api.UnregisterClusterAuthN(baseParams, spec)
 }

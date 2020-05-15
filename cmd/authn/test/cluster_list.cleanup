@@ -1,0 +1,3 @@
+ais auth rm cluster srv1
+ais auth rm cluster srv0
+ais auth rm cluster srv2

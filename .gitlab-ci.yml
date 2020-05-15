@@ -66,6 +66,7 @@ test:authn:
   only:
     - schedules
   variables:
+    AUTHN_ALLOW_GUEST: "true"
     AUTH_ENABLED: "true"
     AUTHN_URL: "http://localhost:52001"
     AUTHN_SU_NAME: "admin"

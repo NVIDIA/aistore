@@ -156,6 +156,8 @@ func (a *authServ) clusterHandler(w http.ResponseWriter, r *http.Request) {
 		a.httpSrvGet(w, r)
 	case http.MethodPost:
 		a.httpSrvPost(w, r)
+	case http.MethodPut:
+		a.httpSrvPut(w, r)
 	case http.MethodDelete:
 		a.httpSrvDelete(w, r)
 	default:
@@ -355,10 +357,52 @@ func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 		glog.Errorf("Failed to read request body: %v\n", err)
 		return
 	}
-	// TODO: error if exists, and add PUT to update
+	if len(cluConf.Conf) == 0 {
+		cmn.InvalidHandlerWithMsg(w, r, "Empty cluster list", http.StatusBadRequest)
+		return
+	}
 	conf.Cluster.mtx.Lock()
 	defer conf.Cluster.mtx.Unlock()
-	if err := conf.clusterUpdate(cluConf); err != nil {
+	for cid := range cluConf.Conf {
+		if conf.clusterExists(cid) {
+			msg := fmt.Sprintf("Cluster %q already registered", cid)
+			cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusConflict)
+			return
+		}
+	}
+	if err := conf.updateClusters(cluConf); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := conf.save(); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
+	if _, err := checkRESTItems(w, r, 0, cmn.Version, pathClusters); err != nil {
+		return
+	}
+	cluConf := &clusterConfig{}
+	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
+		glog.Errorf("Failed to read request body: %v\n", err)
+		return
+	}
+	if len(cluConf.Conf) == 0 {
+		cmn.InvalidHandlerWithMsg(w, r, "Empty cluster list", http.StatusBadRequest)
+		return
+	}
+	conf.Cluster.mtx.Lock()
+	defer conf.Cluster.mtx.Unlock()
+	for cid := range cluConf.Conf {
+		if !conf.clusterExists(cid) {
+			msg := fmt.Sprintf("Cluster %q not found", cid)
+			cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
+			return
+		}
+	}
+	if err := conf.updateClusters(cluConf); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -7,41 +7,49 @@ package api
 import (
 	"errors"
 	"net/http"
+	"sort"
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
 
-type AuthnSpec struct {
-	AdminName     string
-	AdminPassword string
-	UserName      string
-	UserPassword  string
-}
+type (
+	AuthnSpec struct {
+		AdminName     string
+		AdminPassword string
+		UserName      string
+		UserPassword  string
+	}
 
-type ClusterSpec struct {
-	AdminName     string
-	AdminPassword string
-	ClusterID     string
-	URLs          []string
-}
+	ClusterSpec struct {
+		AdminName     string
+		AdminPassword string
+		ClusterID     string
+		URLs          []string
+	}
 
-type userRec struct {
-	Name     string `json:"name"`
-	Password string `json:"password"`
-}
+	userRec struct {
+		Name     string `json:"name"`
+		Password string `json:"password"`
+	}
 
-type loginRec struct {
-	Password string `json:"password"`
-}
+	loginRec struct {
+		Password string `json:"password"`
+	}
 
-type AuthCreds struct {
-	Token string `json:"token"`
-}
+	AuthCreds struct {
+		Token string `json:"token"`
+	}
 
-type ClusterRec struct {
-	Conf map[string][]string `json:"conf"`
-}
+	authClusterReg struct {
+		Conf map[string][]string `json:"conf"`
+	}
+
+	AuthClusterRec struct {
+		ID   string
+		URLs []string
+	}
+)
 
 func AddUser(baseParams BaseParams, spec AuthnSpec) error {
 	req := userRec{Name: spec.UserName, Password: spec.UserPassword}
@@ -91,7 +99,7 @@ func LoginUser(baseParams BaseParams, spec AuthnSpec) (token *AuthCreds, err err
 }
 
 func RegisterClusterAuthN(baseParams BaseParams, spec ClusterSpec) error {
-	req := ClusterRec{Conf: make(map[string][]string, 1)}
+	req := authClusterReg{Conf: make(map[string][]string, 1)}
 	req.Conf[spec.ClusterID] = spec.URLs
 	msg, err := jsoniter.Marshal(req)
 	if err != nil {
@@ -99,6 +107,24 @@ func RegisterClusterAuthN(baseParams BaseParams, spec ClusterSpec) error {
 	}
 
 	baseParams.Method = http.MethodPost
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Clusters),
+		Body:       msg,
+		User:       spec.AdminName,
+		Password:   spec.AdminPassword,
+	})
+}
+
+func UpdateClusterAuthN(baseParams BaseParams, spec ClusterSpec) error {
+	req := authClusterReg{Conf: make(map[string][]string, 1)}
+	req.Conf[spec.ClusterID] = spec.URLs
+	msg, err := jsoniter.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Clusters),
@@ -118,16 +144,23 @@ func UnregisterClusterAuthN(baseParams BaseParams, spec ClusterSpec) error {
 	})
 }
 
-func GetClusterAuthN(baseParams BaseParams, spec ClusterSpec) (*ClusterRec, error) {
+func GetClusterAuthN(baseParams BaseParams, spec ClusterSpec) ([]*AuthClusterRec, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Clusters)
 	if spec.ClusterID != "" {
 		path = cmn.URLPath(path, spec.ClusterID)
 	}
-	clusters := &ClusterRec{}
+	clusters := &authClusterReg{}
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       path,
 	}, clusters)
-	return clusters, err
+	rec := make([]*AuthClusterRec, 0, len(clusters.Conf))
+	for cid, urls := range clusters.Conf {
+		clu := &AuthClusterRec{ID: cid, URLs: urls}
+		rec = append(rec, clu)
+	}
+	less := func(i, j int) bool { return rec[i].ID < rec[j].ID }
+	sort.Slice(rec, less)
+	return rec, err
 }

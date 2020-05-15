@@ -84,7 +84,7 @@ func (c *config) validate() (err error) {
 	return nil
 }
 
-func (c *config) clusterUpdate(cluConf *clusterConfig) error {
+func (c *config) updateClusters(cluConf *clusterConfig) error {
 	if len(cluConf.Conf) == 0 {
 		return nil
 	}
