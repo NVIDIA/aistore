@@ -73,11 +73,11 @@ test:authn:
   script:
     - make cli
     - make deploy <<< $'5\n5\n3\n0'
-    - ais auth add test test
-    - ais auth login test test
+    - ais auth add user TEST_USER TEST_PASS
+    - ais auth login TEST_USER TEST_PASS
     - BUCKET="test" RE="TestAuth" make test-run
     - ais auth logout
-    - ais auth rm test
+    - ais auth rm user TEST_USER
 
 test:https:
   stage: test-short

@@ -46,7 +46,8 @@ var (
 			Usage: "manage AutnN server",
 			Subcommands: []cli.Command{
 				{
-					Name: subcmdAuthAdd,
+					Name:  subcmdAuthAdd,
+					Usage: "add entity from auth",
 					Subcommands: []cli.Command{
 						{
 							Name:      subcmdAuthUser,
@@ -63,7 +64,8 @@ var (
 					},
 				},
 				{
-					Name: subcmdAuthRemove,
+					Name:  subcmdAuthRemove,
+					Usage: "remove entity from auth",
 					Subcommands: []cli.Command{
 						{
 							Name:      subcmdAuthUser,
@@ -80,7 +82,8 @@ var (
 					},
 				},
 				{
-					Name: subcmdAuthShow,
+					Name:  subcmdAuthShow,
+					Usage: "show entity in authn",
 					Subcommands: []cli.Command{
 						{
 							Name:      subcmdAuthCluster,
