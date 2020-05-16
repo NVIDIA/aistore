@@ -39,7 +39,7 @@ var _ = Describe("E2E AWS Compatibility Tests", func() {
 
 	for _, fileName := range files {
 		fileName = fileName[:len(fileName)-len(filepath.Ext(fileName))]
-		entries = append(entries, Entry(fileName, fileName+".in", fileName+".stdout"))
+		entries = append(entries, Entry(fileName, fileName))
 	}
 
 	DescribeTable(

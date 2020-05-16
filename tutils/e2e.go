@@ -7,6 +7,7 @@ package tutils
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -55,30 +56,41 @@ func randomTarget() string {
 	return si.DaemonID
 }
 
-func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
+func readContent(r io.Reader, ignoreEmpty bool) []string {
+	var (
+		scanner = bufio.NewScanner(r)
+		lines   = make([]string, 0, 4)
+	)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" && ignoreEmpty {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	gomega.Expect(scanner.Err()).NotTo(gomega.HaveOccurred())
+	return lines
+}
+
+func (f *E2EFramework) RunE2ETest(fileName string) {
 	var (
 		outs []string
 
 		bucket   = GenRandomString(10)
 		space    = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
 		targetID = randomTarget()
+
+		inputFileName   = fileName + ".in"
+		outputFileName  = fileName + ".stdout"
+		cleanupFileName = fileName + ".cleanup"
 	)
 
-	defer func() {
-		if err := destroyMatchingBuckets(bucket); err != nil {
-			Logf("failed to remove buckets: %v", err)
-		}
-	}()
-
+	// Create random file
 	tmpFile, err := ioutil.TempFile("", "e2e-")
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	object := tmpFile.Name()
 	tmpFile.Close()
 	defer os.RemoveAll(object)
-
-	inFile, err := os.Open(inputFileName)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	defer inFile.Close()
 
 	substituteVariables := func(s string) string {
 		s = strings.ReplaceAll(s, "$BUCKET", bucket)
@@ -88,14 +100,27 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		return s
 	}
 
-	scanner := bufio.NewScanner(inFile)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
+	defer func() {
+		if err := destroyMatchingBuckets(bucket); err != nil {
+			Logf("failed to remove buckets: %v", err)
 		}
-		scmd := line
 
+		f, err := os.Open(cleanupFileName)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		for _, line := range readContent(f, true /*ignoreEmpty*/) {
+			scmd := substituteVariables(line)
+			_ = exec.Command("bash", "-c", scmd).Run()
+		}
+	}()
+
+	inFile, err := os.Open(inputFileName)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	defer inFile.Close()
+
+	for _, scmd := range readContent(inFile, true /*ignoreEmpty*/) {
 		var (
 			ignoreOutput  = false
 			expectFail    = false
@@ -155,21 +180,18 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 			outs = append(outs, out...)
 		}
 	}
-	gomega.Expect(scanner.Err()).NotTo(gomega.HaveOccurred())
 
 	outFile, err := os.Open(outputFileName)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	defer outFile.Close()
 
-	scanner = bufio.NewScanner(outFile)
-	var idx = 0
-	for ; scanner.Scan(); idx++ {
+	outLines := readContent(outFile, false /*ignoreEmpty*/)
+	for idx, line := range outLines {
 		gomega.Expect(idx).To(
 			gomega.BeNumerically("<", len(outs)),
 			"output file has more lines that were produced",
 		)
-		expectedOut := scanner.Text()
-		expectedOut = space.ReplaceAllString(expectedOut, "")
+		expectedOut := space.ReplaceAllString(line, "")
 		expectedOut = substituteVariables(expectedOut)
 
 		out := strings.TrimSpace(outs[idx])
@@ -184,10 +206,8 @@ func (f *E2EFramework) RunE2ETest(inputFileName, outputFileName string) {
 		}
 	}
 
-	gomega.Expect(idx).To(
+	gomega.Expect(len(outLines)).To(
 		gomega.Equal(len(outs)),
 		"more lines were produced than were in output file",
 	)
-
-	gomega.Expect(scanner.Err()).NotTo(gomega.HaveOccurred())
 }

@@ -51,7 +51,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 
 	for _, fileName := range files {
 		fileName = fileName[:len(fileName)-len(filepath.Ext(fileName))]
-		entries = append(entries, Entry(fileName, fileName+".in", fileName+".stdout"))
+		entries = append(entries, Entry(fileName, fileName))
 	}
 
 	BeforeEach(func() {
@@ -100,9 +100,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 
 	DescribeTable(
 		"end-to-end tests",
-		func(inputFileName, outputFileName string) {
-			f.RunE2ETest(inputFileName, outputFileName)
-		},
+		func(fileName string) { f.RunE2ETest(fileName) },
 		entries...,
 	)
 })
