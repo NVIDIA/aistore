@@ -27,7 +27,7 @@ cat >$RCFILE <<-EOM
     },
     "timeout": {
       "tcp_timeout": "60s",
-      "http_timeout": "300s"
+      "http_timeout": "0s"
     }
   }
 EOM

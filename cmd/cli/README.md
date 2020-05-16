@@ -28,7 +28,7 @@ The content of the file presents as follows:
   },
   "timeout": {
     "tcp_timeout": "60s",
-    "http_timeout": "300s"
+    "http_timeout": "0s"
   }
 }
 ```

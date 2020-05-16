@@ -24,8 +24,8 @@ var defaultConfig = Config{
 	Timeout: TimeoutConfig{
 		TCPTimeoutStr:  "60s",
 		TCPTimeout:     60 * time.Second,
-		HTTPTimeoutStr: "300s",
-		HTTPTimeout:    300 * time.Second,
+		HTTPTimeoutStr: "0s",
+		HTTPTimeout:    0,
 	},
 	Periodic: PeriodicConfig{
 		SyncIntervalStr: "20m",
