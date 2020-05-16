@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 func TestMain(m *testing.M) {
@@ -38,7 +39,8 @@ func TestMain(m *testing.M) {
 
 	clibucket = os.Getenv("BUCKET")
 	if clibucket == "" {
-		cmn.ExitInfof("Bucket name is empty")
+		clibucket = cmn.RandString(7)
+		tutils.Logf("Using BUCKET=%q\n", clibucket)
 	}
 
 	rand.Seed(time.Now().UnixNano())
