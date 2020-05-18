@@ -44,7 +44,7 @@ func createLogDirs() {
 	if *logDir != "" {
 		logDirs = append(logDirs, *logDir)
 	}
-	logDirs = append(logDirs, os.TempDir())
+	logDirs = append(logDirs, filepath.Join(os.TempDir(), "aislogs"))
 }
 
 var (
@@ -110,15 +110,21 @@ func create(tag string, t time.Time) (f *os.File, filename string, err error) {
 	name, link := logName(tag, t)
 	var lastErr error
 	for _, dir := range logDirs {
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			lastErr = nil
+			continue
+		}
+
 		fname := filepath.Join(dir, name)
 		f, err := os.Create(fname)
-		if err == nil {
-			symlink := filepath.Join(dir, link)
-			os.Remove(symlink)        // ignore err
-			os.Symlink(name, symlink) // ignore err
-			return f, fname, nil
+		if err != nil {
+			lastErr = err
+			continue
 		}
-		lastErr = err
+		symlink := filepath.Join(dir, link)
+		os.Remove(symlink)        // ignore err
+		os.Symlink(name, symlink) // ignore err
+		return f, fname, nil
 	}
 	return nil, "", fmt.Errorf("log: cannot create log: %v", lastErr)
 }
