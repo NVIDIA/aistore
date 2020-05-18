@@ -171,16 +171,15 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 }
 
 // TODO: missing progress bar feature
-func putSingleObjectChunked(bck cmn.Bck, objName string, r io.Reader) (err error) {
-	const (
-		// TODO: this should be controlled by flag: --chunked=1MB
-		chunkSize = 10 * cmn.MiB
-	)
-
+func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader) (err error) {
 	var (
-		hash   = cmn.NewCksumHash(cmn.ChecksumXXHash)
 		handle string
+		hash   = cmn.NewCksumHash(cmn.ChecksumXXHash)
 	)
+	chunkSize, err := parseByteFlagToInt(c, chunkSizeFlag)
+	if err != nil {
+		return err
+	}
 	for {
 		b := bytes.NewBuffer(nil)
 		n, err := io.CopyN(io.MultiWriter(b, hash.H), r, chunkSize)
@@ -307,7 +306,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 			return nil
 		}
 
-		if err := putSingleObjectChunked(bck, objName, os.Stdin); err != nil {
+		if err := putSingleObjectChunked(c, bck, objName, os.Stdin); err != nil {
 			return err
 		}
 		fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)

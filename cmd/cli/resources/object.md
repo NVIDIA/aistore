@@ -158,13 +158,14 @@ Confirmation request can be disabled with the option `--yes` for use in scripts.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--verbose` or `-v` | `bool` | Enable printing the result of every PUT | `false` |
-| `--yes` or `-y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
+| `--verbose, -v` | `bool` | Enable printing the result of every PUT | `false` |
+| `--yes, -y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
 | `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
-| `--recursive` or `-r` | `bool` | Enable recursive directory upload | `false` |
+| `--recursive, -r` | `bool` | Enable recursive directory upload | `false` |
 | `--refresh` | `string` | Frequency of the reporting the progress (in milliseconds), may contain multiplicative suffix `s`(second) or `m`(minute). Zero value disables periodical refresh | `0` if verbose mode is on, `5s` otherwise |
 | `--dry-run` | `bool` | Do not actually perform PUT. Shows a few files to be uploaded and corresponding object names for used arguments |
 | `--progress` | `bool` | Displays progress bar. Together with `--verbose` shows upload progress for every single file | `false` |
+| `--chunk-size` | `string` | Chunk size used for each request, can contain prefix 'b', 'KiB', 'MB' (only applicable when reading from STDIN) | `10MB` |
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
@@ -225,7 +226,9 @@ $ ais put "~/bck/img1.tar" mybucket/
 #### Put content from STDIN
 
 Read unpacked content from STDIN and put it into local bucket `mybucket` with name `img-unpacked`.
+
 Note that content is put in chunks what can have a slight overhead.
+`--chunk-size` allows for controlling the chunk size - the bigger the chunk size the better performance (but also higher memory usage).
 
 ```bash
 $ tar -xOzf ~/bck/img1.tar | ais put - ais://mybucket/img1-unpacked

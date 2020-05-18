@@ -30,13 +30,14 @@ var (
 			isCachedFlag,
 		},
 		commandPut: {
-			recursiveFlag,
+			chunkSizeFlag,
 			concurrencyFlag,
+			dryRunFlag,
+			progressBarFlag,
+			recursiveFlag,
 			refreshFlag,
 			verboseFlag,
 			yesFlag,
-			dryRunFlag,
-			progressBarFlag,
 		},
 		commandPromote: {
 			recursiveFlag,

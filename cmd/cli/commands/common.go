@@ -243,6 +243,7 @@ var (
 	overwriteFlag = cli.BoolFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
 	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
+	chunkSizeFlag = cli.StringFlag{Name: "chunk-size", Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 
