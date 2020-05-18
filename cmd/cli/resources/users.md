@@ -2,6 +2,8 @@ An AIS cluster can be deployed with [AuthN](/cmd/authn/README.md) - AIS authoriz
 
 If the AIS cluster does not have guest access enabled, every user that needs access to the cluster data must be registered. Guest access allows unregistered users to use the AIS cluster in read-only mode.
 
+When a token is revoked or a user with valid issued tokens is removed, AuthN notifies registered clusters, so they update their blacklists.
+
 ## Command List
 
 All commands (except logout) require AuthN URL that can be either passed in command line `AUTHN_URL=http://AUTHNSRV ais auth add ...` or export environment variable `export AUTHN_URL=http://AUTNSRV`. Where `AUTHNSRV` is hostname:port of AuthN server.
@@ -27,12 +29,12 @@ In the last case, the CLI detects that there is not enough information and promp
 ```console
 $ export AUTHN_SU_NAME=admin
 $ ais auth add ...
-Superuser login:
+Superuser password:
 ```
 
 ## Register new user
 
-`ais auth add USER_NAME USER_PASS`
+`ais auth add user USER_NAME USER_PASS`
 
 Register the user if a user with the same name does not exist yet and grants full access permissions to cluster data.
 For security reasons, user's password can be omitted (and user's name as well).
@@ -48,14 +50,14 @@ AuthN URL and superuser's name are already exported.
 Short command:
 
 ```console
-$ ais auth add username
+$ ais auth add user username
 Superuser password: admin
 User password: password
 ```
 
 ## Unregister existing user
 
-`ais auth rm USER_NAME`
+`ais auth rm user USER_NAME`
 
 Remove an existing user and revokes all tokens issued for the user.
 
@@ -75,3 +77,35 @@ Please see [AuthN documentation](/cmd/authn/README.md) to read how to use AuthN 
 Erase user's token from a local machine, so the CLI switches to read-only mode (if guest access is enabled for AIS cluster).
 But other applications still can use the issued token.
 To forbid using the token from any application, the token must be revoked in addition to logging out.
+
+## Register new cluster
+
+`ais auth add cluster CLUSTER_ID=URL[,URL..]`
+
+Register the cluster by its ID or alias and assign the list URLs for sending notifications.
+AuthN sends only one notification per cluster.
+
+## Update existing cluster URL list
+
+`ais auth update cluster CLUSTER_ID=URL[,URL..]`
+
+Replaces the list of URLs for an existing cluster.
+
+## Unregister existing cluster
+
+`ais auth rm cluster CLUSTER_ID`
+
+Remove the existing cluster from notification list.
+
+## List registered clusters
+
+`ais auth show cluster`
+
+Display the list of the cluster that subscribe to AuthN notifications.
+
+```console
+$ ais auth add cluster srv0=http://172.0.10.10,http://10.0.10.10
+$ ais auth show cluster
+ClusterID       URLs
+srv0            http://172.0.10.10,http://10.0.10.10
+```
