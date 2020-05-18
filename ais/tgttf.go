@@ -69,7 +69,7 @@ func (t *targetrunner) httptar2tfget(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if err == nil {
-			_, err = xaction.Registry.RenewTar2TfXact(job, t, bck)
+			_, err = xaction.Registry.NewTar2TfXact(job, t, bck)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())

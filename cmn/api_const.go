@@ -71,6 +71,7 @@ const (
 	ActTar2Tf        = "tar2tf"
 	ActAttach        = "attach"
 	ActDetach        = "detach"
+	ActQuery         = "query"
 
 	// Actions to manipulate mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"

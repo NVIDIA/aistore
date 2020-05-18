@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
+	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tar2tf"
 )
@@ -579,7 +580,7 @@ func (e *tar2TfEntry) Start(bck cmn.Bck) error {
 func (e *tar2TfEntry) Kind() string  { return cmn.ActTar2Tf }
 func (e *tar2TfEntry) Get() cmn.Xact { return e.xact }
 
-func (r *registry) RenewTar2TfXact(job *tar2tf.SamplesStreamJob, t cluster.Target, bck *cluster.Bck) (*tar2tf.Xact, error) {
+func (r *registry) NewTar2TfXact(job *tar2tf.SamplesStreamJob, t cluster.Target, bck *cluster.Bck) (*tar2tf.Xact, error) {
 	id := cmn.GenUserID()
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
@@ -601,6 +602,61 @@ func (r *registry) RenewTar2TfXact(job *tar2tf.SamplesStreamJob, t cluster.Targe
 func (e *tar2TfEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 	// always create new tar2tf xaction
 	return false, nil
+}
+
+//
+// Objects query
+//
+
+type queryEntry struct {
+	baseBckEntry
+	t    cluster.Target
+	xact *query.ResultSetXact
+
+	query *query.ObjectsQuery
+
+	handle string
+	id     string
+}
+
+func (e *queryEntry) Start(_ cmn.Bck) error {
+	xact := query.NewResultSet(e.t, e.query)
+	e.xact = xact
+	if query.Registry.Get(e.handle) != nil {
+		return fmt.Errorf("result set with handle %s already exists", e.handle)
+	}
+	go xact.StartWithHandle(e.handle)
+	return nil
+}
+
+func (e *queryEntry) Kind() string  { return cmn.ActQuery }
+func (e *queryEntry) Get() cmn.Xact { return e.xact }
+
+func (r *registry) RenewQueryXact(t cluster.Target, q *query.ObjectsQuery, handle string) (*query.ResultSetXact, error) {
+	if xact := query.Registry.Get(handle); xact != nil {
+		return xact, nil
+	}
+
+	id := cmn.GenUserID()
+	if err := r.removeFinishedByID(id); err != nil {
+		return nil, err
+	}
+	e := &queryEntry{
+		id:     id,
+		t:      t,
+		query:  q,
+		handle: handle,
+	}
+
+	ee, err := r.renewBucketXaction(e, cluster.NewBckEmbed(*q.BckSource.Bck))
+	if err == nil {
+		return ee.Get().(*query.ResultSetXact), nil
+	}
+	return nil, err
+}
+
+func (e *queryEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
+	return query.Registry.Get(e.handle) != nil, nil
 }
 
 //

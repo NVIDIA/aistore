@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/go-tfdata/tfdata/transform"
 )
 
@@ -25,14 +26,27 @@ type (
 )
 
 func (t *Xact) IsMountpathXact() bool { return false }
+
 func (t *Xact) Run() {
 	defer func() {
 		t.EndTime(time.Now())
 		t.Job.Wg.Done()
 	}()
 
-	streamer := newSamplesStreamer(t)
-	err := cluster.HrwIterMatchingObjects(t.T, cluster.NewBckEmbed(t.Bck()), t.Job.Template, func(lom *cluster.LOM) error {
+	var (
+		streamer = newSamplesStreamer(t)
+		objSrc   = query.TemplateObjSource(&t.Job.Template)
+		bckSrc   = query.BckSource(t.Bck())
+
+		// doesn't use xaction registry, but it's not necessary as this xaction's life span
+		// is the same as tar2tf request life span. If request get's canceled,
+		// the xaction will terminate as well
+		q         = query.NewQuery(objSrc, bckSrc, nil)
+		resultSet = query.NewResultSet(t.T, q)
+	)
+	go resultSet.Start()
+
+	err := resultSet.ForEach(func(lom *cluster.LOM) error {
 		tarReader, err := newTarSamplesReader(lom)
 		if err != nil {
 			return err
@@ -45,6 +59,6 @@ func (t *Xact) Run() {
 	})
 
 	if err != nil {
-		glog.Errorf("error %s", err.Error())
+		glog.Error(err)
 	}
 }
