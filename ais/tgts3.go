@@ -298,6 +298,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 			return
 		}
 	}
+
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("S3 HEADER Range: %s [from %d for %d]", val, offset, length)
 	}

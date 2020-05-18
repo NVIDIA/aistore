@@ -118,6 +118,13 @@ func transformTarToTFRecord(goi *getObjInfo) (written int64, err error) {
 		n int
 	)
 
+	if goi.length == 0 {
+		goi.length, err = tar2tf.Cache.GetSize(goi.lom)
+		if err != nil {
+			return 0, nil
+		}
+		goi.offset = 0
+	}
 	b, err = tar2tf.Cache.Get(goi.lom, goi.offset, goi.length)
 	if err != nil {
 		return 0, err
