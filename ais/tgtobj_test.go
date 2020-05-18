@@ -149,30 +149,34 @@ func BenchmarkObjAppend(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			var filePath string
+			var hi handleInfo
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
 				r, _ := readers.NewRandReader(bench.fileSize, cmn.ChecksumNone)
 				aoi := &appendObjInfo{
-					started:  time.Now(),
-					t:        t,
-					lom:      lom,
-					r:        r,
-					op:       cmn.AppendOp,
-					filePath: filePath,
+					started: time.Now(),
+					t:       t,
+					lom:     lom,
+					r:       r,
+					op:      cmn.AppendOp,
+					hi:      hi,
 				}
 				os.Remove(lom.FQN)
 				b.StartTimer()
 
-				filePath, err, _ = aoi.appendObject()
+				newHandle, err, _ := aoi.appendObject()
+				if err != nil {
+					b.Fatal(err)
+				}
+				hi, err = parseAppendHandle(newHandle)
 				if err != nil {
 					b.Fatal(err)
 				}
 			}
 			b.StopTimer()
 			os.Remove(lom.FQN)
-			os.Remove(filePath)
+			os.Remove(hi.filePath)
 		})
 	}
 }

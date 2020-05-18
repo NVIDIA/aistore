@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.8.0
 	github.com/Azure/go-autorest/autorest/adal v0.8.2 // indirect
 	github.com/NVIDIA/go-tfdata v0.0.0-20200507111544-07609cc6c32e
-	github.com/OneOfOne/xxhash v1.2.7
+	github.com/OneOfOne/xxhash v1.2.8
 	github.com/aws/aws-sdk-go v1.26.5
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc // indirect

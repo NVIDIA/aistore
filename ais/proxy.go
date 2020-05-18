@@ -449,7 +449,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	bucket, objName := apiItems[0], apiItems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
@@ -460,14 +460,20 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		si       *cluster.Snode
+		nodeID   string
 		smap     = p.owner.smap.get()
 		appendTy = query.Get(cmn.URLParamAppendType)
-		nodeID   string
 	)
 	if appendTy == "" {
 		err = bck.Allow(cmn.AccessPUT)
 	} else {
-		nodeID, _ = parseAppendHandle(query.Get(cmn.URLParamAppendHandle))
+		var hi handleInfo
+		hi, err = parseAppendHandle(query.Get(cmn.URLParamAppendHandle))
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		nodeID = hi.nodeID
 		err = bck.Allow(cmn.AccessAPPEND)
 	}
 

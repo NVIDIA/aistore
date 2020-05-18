@@ -6,6 +6,8 @@ package ais
 
 import (
 	"context"
+	"encoding"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -71,6 +74,13 @@ type (
 		chunked bool
 	}
 
+	// Contains information packed in append handle.
+	handleInfo struct {
+		nodeID       string
+		filePath     string
+		partialCksum *cmn.CksumHash
+	}
+
 	appendObjInfo struct {
 		started time.Time // started time of receiving - used to calculate the recv duration
 		t       *targetrunner
@@ -81,10 +91,10 @@ type (
 		// Object size aka Content-Length.
 		size int64
 		// Append/Flush operation.
-		op       string
-		filePath string
-		// Expected checksum of the final object.
-		cksum *cmn.Cksum
+		op string
+		hi handleInfo // Information contained in handle.
+
+		cksum *cmn.Cksum // Expected checksum of the final object.
 	}
 
 	writerOnly struct{ io.Writer }
@@ -801,24 +811,26 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 // APPEND OBJECT //
 ///////////////////
 
-func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode int) {
-	filePath = aoi.filePath
+func (aoi *appendObjInfo) appendObject() (newHandle string, err error, errCode int) {
+	filePath := aoi.hi.filePath
 	switch aoi.op {
 	case cmn.AppendOp:
-		// TODO: we should maintain running checksum (compare at the flush)
-
 		var f *os.File
 		if filePath == "" {
 			filePath = fs.CSM.GenContentParsedFQN(aoi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfileAppend)
 			f, err = aoi.lom.CreateFile(filePath)
 			if err != nil {
-				return "", err, http.StatusInternalServerError
+				errCode = http.StatusInternalServerError
+				return
 			}
+			aoi.hi.partialCksum = cmn.NewCksumHash(aoi.lom.CksumConf().Type)
 		} else {
 			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
 			if err != nil {
-				return "", err, http.StatusInternalServerError
+				errCode = http.StatusInternalServerError
+				return
 			}
+			cmn.Assert(aoi.hi.partialCksum != nil)
 		}
 
 		var (
@@ -831,19 +843,32 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 			buf, slab = aoi.t.gmm.Alloc(aoi.size)
 		}
 
-		_, err = io.CopyBuffer(f, aoi.r, buf)
+		w := cmn.NewWriterMulti(f, aoi.hi.partialCksum.H)
+		_, err = io.CopyBuffer(w, aoi.r, buf)
 
 		slab.Free(buf)
 		f.Close()
 		if err != nil {
-			return "", err, http.StatusInternalServerError
+			errCode = http.StatusInternalServerError
+			return
 		}
+
+		newHandle = combineAppendHandle(aoi.t.si.ID(), filePath, aoi.hi.partialCksum)
 	case cmn.FlushOp:
 		if filePath == "" {
 			err = errors.New("handle not provided")
-			return "", err, http.StatusBadRequest
+			errCode = http.StatusBadRequest
+			return
 		}
-		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName, aoi.cksum,
+		cmn.Assert(aoi.hi.partialCksum != nil)
+		aoi.hi.partialCksum.Finalize()
+		partialCksum := aoi.hi.partialCksum.Clone()
+		if aoi.cksum != nil && !partialCksum.Equal(aoi.cksum) {
+			err = cmn.NewBadDataCksumError(partialCksum, aoi.cksum)
+			errCode = http.StatusInternalServerError
+			return
+		}
+		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName, partialCksum,
 			true /*overwrite*/, false /*safe*/, false /*verbose*/); err != nil {
 			return "", err, 0
 		}
@@ -860,4 +885,34 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 		glog.Infof("PUT %s: %d µs", aoi.lom, int64(delta/time.Microsecond))
 	}
 	return
+}
+
+func parseAppendHandle(handle string) (hi handleInfo, err error) {
+	if handle == "" {
+		return
+	}
+	p := strings.SplitN(handle, "|", 4)
+	if len(p) != 4 {
+		return hi, fmt.Errorf("invalid handle provided: %q", handle)
+	}
+	hi.partialCksum = cmn.NewCksumHash(p[2])
+	buf, err := base64.StdEncoding.DecodeString(p[3])
+	if err != nil {
+		return hi, err
+	}
+	err = hi.partialCksum.H.(encoding.BinaryUnmarshaler).UnmarshalBinary(buf)
+	if err != nil {
+		return hi, err
+	}
+	hi.nodeID = p[0]
+	hi.filePath = p[1]
+	return
+}
+
+func combineAppendHandle(nodeID, filePath string, partialCksum *cmn.CksumHash) string {
+	buf, err := partialCksum.H.(encoding.BinaryMarshaler).MarshalBinary()
+	cmn.AssertNoErr(err)
+	cksumTy := partialCksum.Type()
+	cksumBinary := base64.StdEncoding.EncodeToString(buf)
+	return nodeID + "|" + filePath + "|" + cksumTy + "|" + cksumBinary
 }

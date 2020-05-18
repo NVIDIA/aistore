@@ -648,10 +648,9 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 	} else {
-		if filePath, err, errCode := t.doAppend(r, lom, started); err != nil {
+		if handle, err, errCode := t.doAppend(r, lom, started); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		} else {
-			handle := combineAppendHandle(t.si.ID(), filePath)
 			w.Header().Set(cmn.HeaderAppendHandle, handle)
 		}
 	}
@@ -1219,24 +1218,27 @@ func (t *targetrunner) _listBcks(r *http.Request, query cmn.QueryBcks, cfg *cmn.
 	return
 }
 
-func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (filePath string, err error, errCode int) {
+func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (newHandle string, err error, errCode int) {
 	var (
 		cksumValue    = r.Header.Get(cmn.HeaderObjCksumVal)
 		cksumType     = r.Header.Get(cmn.HeaderObjCksumType)
 		contentLength = r.Header.Get("Content-Length")
 		handle        = r.URL.Query().Get(cmn.URLParamAppendHandle)
-
-		_, userFilePath = parseAppendHandle(handle)
-
-		aoi = &appendObjInfo{
-			started:  started,
-			t:        t,
-			lom:      lom,
-			r:        r.Body,
-			op:       r.URL.Query().Get(cmn.URLParamAppendType),
-			filePath: userFilePath,
-		}
 	)
+
+	hi, err := parseAppendHandle(handle)
+	if err != nil {
+		return "", err, http.StatusBadRequest
+	}
+
+	aoi := &appendObjInfo{
+		started: started,
+		t:       t,
+		lom:     lom,
+		r:       r.Body,
+		op:      r.URL.Query().Get(cmn.URLParamAppendType),
+		hi:      hi,
+	}
 	if contentLength != "" {
 		if size, ers := strconv.ParseInt(contentLength, 10, 64); ers == nil {
 			aoi.size = size

@@ -162,18 +162,3 @@ func isSyscallWriteError(err error) bool {
 		return false
 	}
 }
-
-func parseAppendHandle(handle string) (nodeID, filePath string) {
-	if handle == "" {
-		return
-	}
-	p := strings.Split(handle, "|")
-	if len(p) != 2 {
-		return
-	}
-	return p[0], p[1]
-}
-
-func combineAppendHandle(nodeID, filePath string) string {
-	return nodeID + "|" + filePath
-}
