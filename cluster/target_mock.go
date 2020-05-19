@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -48,6 +49,7 @@ func (*TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte, _ bool) (bool, error) { 
 func (*TargetMock) PromoteFile(_ string, _ *Bck, _ string, _ *cmn.Cksum, _, _, _ bool) error {
 	return nil
 }
+func (*TargetMock) GetDB() dbdriver.Driver                                          { return nil }
 func (*TargetMock) GetFSPRG() fs.PathRunGroup                                       { return nil }
 func (*TargetMock) Cloud(_ *Bck) CloudProvider                                      { return nil }
 func (*TargetMock) StartTime() time.Time                                            { return time.Now() }

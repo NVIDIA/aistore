@@ -39,7 +39,7 @@ type (
 )
 
 func newDispatcher(parent *Downloader) *dispatcher {
-	initInfoStore() // it will be initialized only once
+	initInfoStore(parent.t.GetDB()) // it will be initialized only once
 	return &dispatcher{
 		parent:  parent,
 		joggers: make(map[string]*jogger, 8),

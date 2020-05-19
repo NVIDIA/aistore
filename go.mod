@@ -29,6 +29,7 @@ require (
 	github.com/sdomino/scribble v0.0.0-20191024200645-4116320640ba
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
+	github.com/tidwall/buntdb v1.1.2
 	github.com/urfave/cli v1.22.4
 	github.com/valyala/fasthttp v1.11.0
 	github.com/vbauerster/mpb/v4 v4.10.1

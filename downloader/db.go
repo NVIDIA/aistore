@@ -6,19 +6,17 @@ package downloader
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
+	"path"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
-	"github.com/sdomino/scribble"
+	"github.com/NVIDIA/aistore/dbdriver"
 )
 
 const (
-	persistDownloaderJobsPath = "downloader_jobs.db" // base name to persist downloader jobs' file
-	downloaderErrors          = "errors"
-	downloaderTasks           = "tasks"
+	downloaderErrors     = "errors"
+	downloaderTasks      = "tasks"
+	downloaderCollection = "downloads"
 
 	// Number of errors stored in memory. When the number of errors exceeds
 	// this number, then all errors will be flushed to disk
@@ -35,29 +33,24 @@ var (
 
 type downloaderDB struct {
 	mtx    sync.RWMutex
-	driver *scribble.Driver
+	driver dbdriver.Driver
 
 	errCache      map[string][]TaskErrInfo // memory cache for errors, see: errCacheSize
 	taskInfoCache map[string][]TaskDlInfo  // memory cache for tasks, see: taskInfoCacheSize
 }
 
-func newDownloadDB() (*downloaderDB, error) {
-	config := cmn.GCO.Get()
-	driver, err := scribble.New(filepath.Join(config.Confdir, persistDownloaderJobsPath), nil)
-	if err != nil {
-		return nil, err
-	}
-
+func newDownloadDB(driver dbdriver.Driver) *downloaderDB {
 	return &downloaderDB{
 		driver:        driver,
 		errCache:      make(map[string][]TaskErrInfo, 10),
 		taskInfoCache: make(map[string][]TaskDlInfo, 10),
-	}, nil
+	}
 }
 
 func (db *downloaderDB) errors(id string) (errors []TaskErrInfo, err error) {
-	if err := db.driver.Read(downloaderErrors, id, &errors); err != nil {
-		if !os.IsNotExist(err) {
+	key := path.Join(downloaderErrors, id)
+	if err := db.driver.Get(downloaderCollection, key, &errors); err != nil {
+		if !dbdriver.IsErrNotFound(err) {
 			glog.Error(err)
 			return nil, err
 		}
@@ -92,7 +85,8 @@ func (db *downloaderDB) persistError(id, objName, errMsg string) {
 	}
 	errMsgs = append(errMsgs, errInfo)
 
-	if err := db.driver.Write(downloaderErrors, id, errMsgs); err != nil {
+	key := path.Join(downloaderErrors, id)
+	if err := db.driver.Set(downloaderCollection, key, errMsgs); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -101,8 +95,9 @@ func (db *downloaderDB) persistError(id, objName, errMsg string) {
 }
 
 func (db *downloaderDB) tasks(id string) (tasks []TaskDlInfo, err error) {
-	if err := db.driver.Read(downloaderTasks, id, &tasks); err != nil {
-		if !os.IsNotExist(err) {
+	key := path.Join(downloaderTasks, id)
+	if err := db.driver.Get(downloaderCollection, key, &tasks); err != nil {
+		if !dbdriver.IsErrNotFound(err) {
 			glog.Error(err)
 			return nil, err
 		}
@@ -128,7 +123,8 @@ func (db *downloaderDB) persistTaskInfo(id string, task TaskDlInfo) error {
 	}
 	persistedTasks = append(persistedTasks, task)
 
-	if err := db.driver.Write(downloaderTasks, id, persistedTasks); err != nil {
+	key := path.Join(downloaderTasks, id)
+	if err := db.driver.Set(downloaderCollection, key, persistedTasks); err != nil {
 		glog.Error(err)
 		return err
 	}
@@ -154,7 +150,8 @@ func (db *downloaderDB) flush(id string) error {
 			return err
 		}
 
-		if err := db.driver.Write(downloaderErrors, id, errMsgs); err != nil {
+		key := path.Join(downloaderErrors, id)
+		if err := db.driver.Set(downloaderCollection, key, errMsgs); err != nil {
 			glog.Error(err)
 			return err
 		}
@@ -168,7 +165,8 @@ func (db *downloaderDB) flush(id string) error {
 			return err
 		}
 
-		if err := db.driver.Write(downloaderTasks, id, persistedTasks); err != nil {
+		key := path.Join(downloaderTasks, id)
+		if err := db.driver.Set(downloaderCollection, key, persistedTasks); err != nil {
 			glog.Error(err)
 			return err
 		}
@@ -180,7 +178,9 @@ func (db *downloaderDB) flush(id string) error {
 
 func (db *downloaderDB) delete(id string) {
 	db.mtx.Lock()
-	db.driver.Delete(downloaderErrors, id)
-	db.driver.Delete(downloaderTasks, id)
+	key := path.Join(downloaderErrors, id)
+	db.driver.Delete(downloaderCollection, key)
+	key = path.Join(downloaderTasks, id)
+	db.driver.Delete(downloaderCollection, key)
 	db.mtx.Unlock()
 }

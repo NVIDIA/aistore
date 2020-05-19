@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -79,6 +80,7 @@ type Target interface {
 	GetMMSA() *memsys.MMSA
 	GetSmallMMSA() *memsys.MMSA
 	GetFSPRG() fs.PathRunGroup
+	GetDB() dbdriver.Driver
 	Cloud(*Bck) CloudProvider
 	RebalanceInfo() RebalanceInfo
 	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)

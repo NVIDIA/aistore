@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 )
 
@@ -31,28 +31,20 @@ type (
 	}
 )
 
-func initInfoStore() {
+func initInfoStore(db dbdriver.Driver) {
 	dlStoreOnce.Do(func() {
-		var err error
-		dlStore, err = newInfoStore()
-		if err != nil {
-			cmn.ExitLogf("%v", err)
-		}
+		dlStore = newInfoStore(db)
 	})
 }
 
-func newInfoStore() (*infoStore, error) {
-	db, err := newDownloadDB()
-	if err != nil {
-		return nil, err
-	}
-
+func newInfoStore(driver dbdriver.Driver) *infoStore {
+	db := newDownloadDB(driver)
 	is := &infoStore{
 		downloaderDB: db,
 		jobInfo:      make(map[string]*downloadJobInfo),
 	}
 	hk.Housekeeper.Register("downloader", is.housekeep, hk.DayInterval)
-	return is, nil
+	return is
 }
 
 func (is *infoStore) getJob(id string) (*downloadJobInfo, error) {

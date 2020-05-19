@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
@@ -39,6 +40,7 @@ const (
 	bucketMDFixup    = "fixup"
 	bucketMDReceive  = "receive"
 	bucketMDRegister = "register"
+	dbName           = "ais.db"
 )
 
 type (
@@ -78,6 +80,7 @@ type (
 		authn        *authManager
 		fsprg        fsprungroup
 		rebManager   *reb.Manager
+		dbDriver     dbdriver.Driver
 		capUsed      capUsed
 		transactions transactions
 		gfn          struct {
@@ -246,6 +249,13 @@ func (t *targetrunner) Run() error {
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}
+	driver, err := dbdriver.NewBuntDB(filepath.Join(config.Confdir, dbName))
+	if err != nil {
+		glog.Errorf("Failed to initialize DB: %v", err)
+		return err
+	}
+	t.dbDriver = driver
+	defer driver.Close()
 
 	// transactions
 	t.transactions.init(t)

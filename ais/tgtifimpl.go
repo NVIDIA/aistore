@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/housekeep/lru"
 	"github.com/NVIDIA/aistore/ios"
@@ -38,6 +39,7 @@ func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
 func (t *targetrunner) GetMMSA() *memsys.MMSA       { return t.gmm }
 func (t *targetrunner) GetSmallMMSA() *memsys.MMSA  { return t.smm }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
+func (t *targetrunner) GetDB() dbdriver.Driver      { return t.dbDriver }
 
 func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 	if bck.Bck.IsRemoteAIS() {
