@@ -807,7 +807,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		}
 
 		matchSMap := func(a, b *smapX) {
-			sameUUID, sameVersion, eq := a.Compare(&b.Smap)
+			_, sameUUID, sameVersion, eq := a.Compare(&b.Smap)
 			if !sameUUID || !sameVersion || !eq {
 				t.Fatal("Smap mismatch", a.StringEx(), b.StringEx())
 			}

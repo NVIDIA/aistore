@@ -361,7 +361,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		return
 	}
 	glog.Infof("%s: local %s max-ver %s", p.si, smap.StringEx(), maxVerSmap.StringEx())
-	sameUUID, sameVersion, eq := smap.Compare(&maxVerSmap.Smap)
+	smapUUID, sameUUID, sameVersion, eq := smap.Compare(&maxVerSmap.Smap)
 	if !sameUUID {
 		// FATAL: cluster integrity error (cie)
 		cmn.ExitLogf("%s: split-brain uuid [%s %s] vs [%s %s]",
@@ -388,6 +388,8 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		if err != nil {
 			cmn.ExitLogf("%s: %v vs [%s: %s]", p.si, err, maxVerSmap.ProxySI, maxVerSmap.StringEx())
 		}
+	} else {
+		clone.UUID = smapUUID
 	}
 	clone.Version = cmn.MaxI64(clone.version(), maxVerSmap.version()) + 1
 	p.owner.smap.put(clone)

@@ -1113,7 +1113,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	}
 
 	glog.Infof("%s: receive %s (local %s)%s", h.si, newSmap.StringEx(), smap.StringEx(), s)
-	sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
+	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	cmn.Assert(sameOrigin)
 	if newSmap.version() < curVer {
 		if !eq {

@@ -247,10 +247,15 @@ func (m *Smap) IsDuplicateURL(nsi *Snode) (osi *Snode, err error) {
 	return
 }
 
-func (a *Smap) Compare(b *Smap) (sameOrigin, sameVersion, eq bool) {
+func (a *Smap) Compare(b *Smap) (uuid string, sameOrigin, sameVersion, eq bool) {
 	sameOrigin, sameVersion, eq = true, true, true
 	if a.UUID != "" && b.UUID != "" && a.UUID != b.UUID {
 		sameOrigin = false
+	} else {
+		uuid = a.UUID
+		if uuid == "" {
+			uuid = b.UUID
+		}
 	}
 	if a.Version != b.Version {
 		sameVersion = false
