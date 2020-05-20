@@ -32,7 +32,8 @@ type (
 	}
 	CksumHash struct {
 		Cksum
-		H hash.Hash
+		H   hash.Hash
+		sum []byte
 	}
 )
 
@@ -64,11 +65,11 @@ func NewCksumHash(ty string) *CksumHash {
 	case ChecksumNone:
 		return nil
 	case ChecksumXXHash:
-		return &CksumHash{Cksum{ty: ty}, xxhash.New64()}
+		return &CksumHash{Cksum{ty: ty}, xxhash.New64(), nil}
 	case ChecksumMD5:
-		return &CksumHash{Cksum{ty: ty}, md5.New()}
+		return &CksumHash{Cksum{ty: ty}, md5.New(), nil}
 	case ChecksumCRC32C:
-		return &CksumHash{Cksum{ty: ty}, NewCRC32C()}
+		return &CksumHash{Cksum{ty: ty}, NewCRC32C(), nil}
 	default:
 		AssertMsg(false, "invalid checksum type: '"+ty+"'")
 	}
@@ -87,12 +88,20 @@ func (ck *Cksum) Equal(to *Cksum) bool {
 func (ck *Cksum) Get() (string, string) { return ck.ty, ck.value }
 func (ck *Cksum) Type() string          { return ck.ty }
 func (ck *Cksum) Value() string         { return ck.value }
+func (ck *Cksum) Clone() *Cksum         { return &Cksum{ty: ck.ty, value: ck.value} }
 func (ck *Cksum) String() string {
+	if ck == nil {
+		return "checksum <nil>"
+	}
 	return fmt.Sprintf("(%s,%s...)", ck.ty, ck.value[:Min(10, len(ck.value))])
 }
 
 func (ck *CksumHash) Equal(to *Cksum) bool { return ck.Cksum.Equal(to) }
-func (ck *CksumHash) Finalize()            { ck.value = HashToStr(ck.H) }
+func (ck *CksumHash) Sum() []byte          { return ck.sum }
+func (ck *CksumHash) Finalize() {
+	ck.sum = ck.H.Sum(nil)
+	ck.value = hex.EncodeToString(ck.sum)
+}
 
 /////////////
 // helpers //

@@ -75,6 +75,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		cksumType  = cmn.DefaultBucketProps().Cksum.Type
 	)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountTargets() == 1 {
@@ -83,7 +84,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tutils.PutRandObjs(proxyURL, bck, SmokeStr, filesize, num, errCh, filenameCh, true)
+	tutils.PutRandObjs(proxyURL, bck, SmokeStr, filesize, num, errCh, filenameCh, cksumType, true)
 	tassert.SelectErr(t, errCh, "put", true)
 	close(filenameCh)
 	close(errCh)
@@ -156,8 +157,11 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	if smap.CountTargets() == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
+	p, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+	cksumType := p.Cksum.Type
 
-	tutils.PutRandObjs(proxyURL, bck, prefix, fileSize, numberOfFiles, errCh, fileNameCh, true)
+	tutils.PutRandObjs(proxyURL, bck, prefix, fileSize, numberOfFiles, errCh, fileNameCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", true)
 	close(fileNameCh)
 	close(errCh)
@@ -236,6 +240,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		cksumType  = cmn.DefaultBucketProps().Cksum.Type
 	)
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
@@ -244,7 +249,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tutils.PutRandObjs(proxyURL, bck, SmokeStr, filesize, num, errCh, filenameCh)
+	tutils.PutRandObjs(proxyURL, bck, SmokeStr, filesize, num, errCh, filenameCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filenameCh)
 	close(errCh)
@@ -269,11 +274,12 @@ func TestRegressionBuckets(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL  = tutils.RandomProxyURL()
+		cksumType = cmn.DefaultBucketProps().Cksum.Type
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
-	doBucketRegressionTest(t, proxyURL, regressionTestData{bck: bck})
+	doBucketRegressionTest(t, proxyURL, regressionTestData{bck: bck}, cksumType)
 }
 
 func TestRenameBucket(t *testing.T) {
@@ -291,6 +297,7 @@ func TestRenameBucket(t *testing.T) {
 			Name:     bck.Name + "_" + guid,
 			Provider: cmn.ProviderAIS,
 		}
+		cksumType = cmn.DefaultBucketProps().Cksum.Type
 	)
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
@@ -302,9 +309,8 @@ func TestRenameBucket(t *testing.T) {
 			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
 			tassert.CheckFatal(t, err)
 
-			doBucketRegressionTest(t, proxyURL, regressionTestData{
-				bck: bck, renamedBck: renamedBck, numBuckets: len(bcks), rename: true, wait: wait,
-			})
+			regData := regressionTestData{bck: bck, renamedBck: renamedBck, numBuckets: len(bcks), rename: true, wait: wait}
+			doBucketRegressionTest(t, proxyURL, regData, cksumType)
 		})
 	}
 }
@@ -313,7 +319,7 @@ func TestRenameBucket(t *testing.T) {
 // doBucketRe*
 //
 
-func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
+func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, cksumType string) {
 	const filesize = 1024
 	var (
 		numPuts    = 2036
@@ -323,7 +329,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.PutRandObjs(proxyURL, rtd.bck, SmokeStr, filesize, numPuts, errCh, filesPutCh)
+	tutils.PutRandObjs(proxyURL, rtd.bck, SmokeStr, filesize, numPuts, errCh, filesPutCh, cksumType)
 	close(filesPutCh)
 	filesPut := make([]string, 0, len(filesPutCh))
 	for fname := range filesPutCh {
@@ -423,12 +429,13 @@ func TestRenameObjects(t *testing.T) {
 			Name:     t.Name(),
 			Provider: cmn.ProviderAIS,
 		}
+		cksumType = cmn.DefaultBucketProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tutils.PutRandObjs(proxyURL, bck, "", 0, numPuts, errCh, objsPutCh)
+	tutils.PutRandObjs(proxyURL, bck, "", 0, numPuts, errCh, objsPutCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(objsPutCh)
 	i := 0
@@ -455,13 +462,13 @@ func TestRenameObjects(t *testing.T) {
 }
 
 func TestObjectPrefix(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		var (
 			proxyURL = tutils.RandomProxyURL()
 		)
 
 		prefixFileNumber = numfiles
-		fileNames := prefixCreateFiles(t, proxyURL, bck)
+		fileNames := prefixCreateFiles(t, proxyURL, bck, cksumType)
 		prefixLookup(t, proxyURL, bck, fileNames)
 		prefixCleanup(t, proxyURL, bck, fileNames)
 	})
@@ -814,7 +821,7 @@ func TestPrefetchList(t *testing.T) {
 }
 
 func TestDeleteList(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		var (
 			err        error
 			prefix     = ListRangeStr + "/tstf-"
@@ -827,7 +834,7 @@ func TestDeleteList(t *testing.T) {
 
 		// 1. Put files to delete
 		for i := 0; i < numfiles; i++ {
-			r, err := readers.NewRandReader(fileSize, true /* withHash */)
+			r, err := readers.NewRandReader(fileSize, cksumType)
 			tassert.CheckFatal(t, err)
 
 			keyname := fmt.Sprintf("%s%d", prefix, i)
@@ -926,7 +933,7 @@ func TestPrefetchRange(t *testing.T) {
 }
 
 func TestDeleteRange(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		var (
 			err            error
 			quarter        = numfiles / 4
@@ -943,7 +950,7 @@ func TestDeleteRange(t *testing.T) {
 
 		// 1. Put files to delete
 		for i := 0; i < numfiles; i++ {
-			r, err := readers.NewRandReader(fileSize, true /* withHash */)
+			r, err := readers.NewRandReader(fileSize, cksumType)
 			tassert.CheckFatal(t, err)
 
 			wg.Add(1)
@@ -1021,6 +1028,7 @@ func TestStressDeleteRange(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
+		cksumType = cmn.DefaultBucketProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -1031,7 +1039,7 @@ func TestStressDeleteRange(t *testing.T) {
 	for i := 0; i < numReaders; i++ {
 		size := rand.Int63n(cmn.KiB*128) + cmn.KiB/3
 		tassert.CheckFatal(t, err)
-		reader, err := readers.NewRandReader(size, true /* withHash */)
+		reader, err := readers.NewRandReader(size, cksumType)
 		tassert.CheckFatal(t, err)
 
 		wg.Add(1)
@@ -1044,7 +1052,7 @@ func TestStressDeleteRange(t *testing.T) {
 					BaseParams: baseParams,
 					Bck:        bck,
 					Object:     objName,
-					Hash:       reader.XXHash(),
+					Cksum:      reader.Cksum(),
 					Reader:     reader,
 				}
 				err = api.PutObject(putArgs)

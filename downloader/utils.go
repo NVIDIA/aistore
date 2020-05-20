@@ -294,7 +294,7 @@ func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
 	}
 	if roi.cksum != nil {
 		computedCksum, err := lom.ComputeCksum(roi.cksum.Type())
-		if err != nil || !roi.cksum.Equal(computedCksum) {
+		if err != nil || !computedCksum.Equal(roi.cksum) {
 			return false, err
 		}
 	}

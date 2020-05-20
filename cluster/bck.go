@@ -199,6 +199,8 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	return
 }
 
+func (bck *Bck) CksumConf() (conf *cmn.CksumConf) { return &bck.Props.Cksum }
+
 //
 // access perms
 //

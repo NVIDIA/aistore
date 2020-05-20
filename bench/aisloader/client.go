@@ -156,7 +156,8 @@ func newTraceCtx() *traceCtx {
 }
 
 // PUT with HTTP trace
-func putWithTrace(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.ReadOpenCloser) (httpLatencies, error) { // nolint:interfacer // we use `reader.Open` method
+func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum,
+	reader cmn.ReadOpenCloser) (httpLatencies, error) { // nolint:interfacer // we use `reader.Open` method
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   proxyURL,
@@ -175,9 +176,9 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
 		// If it wasn't set, we would need to deal with the redirect manually.
 		req.GetBody = reader.Open
-		if hash != "" {
-			req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
-			req.Header.Set(cmn.HeaderObjCksumVal, hash)
+		if cksum != nil {
+			req.Header.Set(cmn.HeaderObjCksumType, cksum.Type())
+			req.Header.Set(cmn.HeaderObjCksumVal, cksum.Value())
 		}
 
 		request = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
@@ -209,7 +210,7 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.
 //
 // Put executes PUT
 //
-func put(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.ReadOpenCloser) error {
+func put(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum, reader cmn.ReadOpenCloser) error {
 	var (
 		baseParams = api.BaseParams{
 			Client: httpClient,
@@ -220,7 +221,7 @@ func put(proxyURL string, bck cmn.Bck, object, hash string, reader cmn.ReadOpenC
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     object,
-			Hash:       hash,
+			Cksum:      cksum,
 			Reader:     reader,
 		}
 	)
@@ -386,9 +387,9 @@ func discardResponse(r *http.Response, src string) (int64, error) {
 
 func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, string, error) {
 	var (
-		n        int64
-		cksumVal string
-		err      error
+		n     int64
+		cksum *cmn.CksumHash
+		err   error
 	)
 
 	if r.StatusCode >= http.StatusBadRequest {
@@ -403,7 +404,7 @@ func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, 
 	defer slab.Free(buf)
 
 	if cksumType != "" {
-		n, cksumVal, err = cmn.WriteWithHash(w, r.Body, buf, cksumType)
+		n, cksum, err = cmn.CopyAndChecksum(w, r.Body, buf, cksumType)
 		if err != nil {
 			return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 		}
@@ -411,5 +412,5 @@ func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, 
 		return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 	}
 
-	return n, cksumVal, nil
+	return n, cksum.Value(), nil
 }

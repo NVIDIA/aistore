@@ -84,7 +84,7 @@ func PutAsync(wg *sync.WaitGroup, proxyURL string, bck cmn.Bck, object string, r
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     object,
-		Hash:       reader.XXHash(),
+		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}
 	err := api.PutObject(putArgs)
@@ -208,7 +208,8 @@ func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck cmn.Bck, object
 	}
 }
 
-func putObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, errCh chan error, objCh, objsPutCh chan string) {
+func putObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64,
+	errCh chan error, objCh chan string, cksumType string, objsPutCh chan string) {
 	var (
 		size   = objSize
 		reader readers.Reader
@@ -224,7 +225,7 @@ func putObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, errCh
 		}
 
 		sgl := MMSA.NewSGL(int64(size))
-		reader, err = readers.NewSGReader(sgl, int64(size), true /* with Hash */)
+		reader, err = readers.NewSGReader(sgl, int64(size), cksumType)
 		cmn.AssertNoErr(err)
 
 		fullObjName := path.Join(objPath, objName)
@@ -236,7 +237,7 @@ func putObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, errCh
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     fullObjName,
-			Hash:       reader.XXHash(),
+			Cksum:      reader.Cksum(),
 			Reader:     reader,
 			Size:       size,
 		}
@@ -264,7 +265,7 @@ func putObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, errCh
 }
 
 func PutObjsFromList(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, objList []string,
-	errCh chan error, objsPutCh chan string, fixedSize ...bool) {
+	errCh chan error, objsPutCh chan string, cksumType string, fixedSize ...bool) {
 	var (
 		wg        = &sync.WaitGroup{}
 		objCh     = make(chan string, len(objList))
@@ -283,7 +284,7 @@ func PutObjsFromList(proxyURL string, bck cmn.Bck, objPath string, objSize uint6
 			if len(fixedSize) == 0 || !fixedSize[0] {
 				size = objSize + uint64(rand.Int63n(512))
 			}
-			putObjs(proxyURL, bck, objPath, size, errCh, objCh, objsPutCh)
+			putObjs(proxyURL, bck, objPath, size, errCh, objCh, cksumType, objsPutCh)
 		}()
 	}
 
@@ -294,7 +295,8 @@ func PutObjsFromList(proxyURL string, bck cmn.Bck, objPath string, objSize uint6
 	wg.Wait()
 }
 
-func PutRandObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, numPuts int, errCh chan error, objsPutCh chan string, fixedSize ...bool) {
+func PutRandObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, numPuts int, errCh chan error,
+	objsPutCh chan string, cksumType string, fixedSize ...bool) {
 	var (
 		fNameLen = 16
 		objList  = make([]string, 0, numPuts)
@@ -303,7 +305,7 @@ func PutRandObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, n
 		fname := GenRandomString(fNameLen)
 		objList = append(objList, fname)
 	}
-	PutObjsFromList(proxyURL, bck, objPath, objSize, objList, errCh, objsPutCh, fixedSize...)
+	PutObjsFromList(proxyURL, bck, objPath, objSize, objList, errCh, objsPutCh, cksumType, fixedSize...)
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET

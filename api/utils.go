@@ -14,12 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
-)
-
-var (
-	MMSA *memsys.MMSA
 )
 
 type BaseParams struct {
@@ -132,12 +127,13 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 			wresp.n = n
 		} else {
 			hdrCksumType := resp.Header.Get(cmn.HeaderObjCksumType)
-			n, cksumValue, err := cmn.WriteWithHash(w, resp.Body, nil, hdrCksumType)
+			// TODO: use MMSA
+			n, cksum, err := cmn.CopyAndChecksum(w, resp.Body, nil, hdrCksumType)
 			if err != nil {
 				return nil, err
 			}
 			wresp.n = n
-			wresp.cksumValue = cksumValue
+			wresp.cksumValue = cksum.Value()
 		}
 	} else {
 		var err error

@@ -26,6 +26,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		proxyURL             = tutils.RandomProxyURL()
 		baseParams           = tutils.BaseAPIParams(proxyURL)
 		wg                   = &sync.WaitGroup{}
+		cksumType            = cmn.DefaultBucketProps().Cksum.Type
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
@@ -45,7 +46,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			reader, err := readers.NewRandReader(objSize, true)
+			reader, err := readers.NewRandReader(objSize, cksumType)
 			tassert.CheckFatal(t, err)
 			objDir := tutils.RandomObjDir(10, 5)
 			putRR(t, baseParams, reader, bck, objDir, objectCountPerWorker)
@@ -65,6 +66,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		bck             = cmn.Bck{Name: t.Name() + "Bucket", Provider: cmn.ProviderAIS}
 		proxyURL        = tutils.RandomProxyURL()
 		baseParams      = tutils.BaseAPIParams(proxyURL)
+		cksumType       = cmn.DefaultBucketProps().Cksum.Type
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
@@ -83,7 +85,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 			go func() {
 				defer wg.Done()
 
-				reader, err := readers.NewRandReader(objSize, true)
+				reader, err := readers.NewRandReader(objSize, cksumType)
 				tassert.CheckFatal(t, err)
 				objDir := tutils.RandomObjDir(10, 5)
 				putRR(t, baseParams, reader, bck, objDir, numObjs)

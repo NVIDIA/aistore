@@ -502,7 +502,7 @@ func (reb *Manager) transportECCB(hdr transport.Header, reader io.ReadCloser, _ 
 // fixed prior to sending.
 // Use the function to send only slices (not for replicas/full object)
 func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
-	ct *rebCT, sliceID int, xxhash string, target *cluster.Snode, rt *retransmitCT) error {
+	ct *rebCT, sliceID int, cksum *cmn.CksumHash, target *cluster.Snode, rt *retransmitCT) error {
 	cmn.AssertMsg(ct.meta != nil, ct.ObjName)
 	cmn.AssertMsg(ct.ObjSize != 0, ct.ObjName)
 	cmn.Assert(rt != nil)
@@ -523,9 +523,9 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	)
 	newMeta.SliceID = sliceID
 	hdr.Opaque = req.NewPack(nil)
-	if xxhash != "" {
-		hdr.ObjAttrs.CksumValue = xxhash
-		hdr.ObjAttrs.CksumType = cmn.ChecksumXXHash
+	if cksum != nil {
+		hdr.ObjAttrs.CksumValue = cksum.Value()
+		hdr.ObjAttrs.CksumType = cksum.Type()
 	}
 
 	rt.daemonID = target.ID()
@@ -533,7 +533,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	reb.ec.ackCTs.add(rt)
 
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("sending slice %d(%d)[%s] of %s/%s to %s", sliceID, size, xxhash, ct.Bck.Name, ct.ObjName, target)
+		glog.Infof("sending slice %d(%d)%s of %s/%s to %s", sliceID, size, cksum, ct.Bck.Name, ct.ObjName, target)
 	}
 	reb.ec.onAir.Inc()
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
@@ -565,6 +565,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 		return err
 	}
 	uname := bck.MakeUname(hdr.ObjName)
+	conf := bck.CksumConf()
 	if !needSave {
 		// slice is saved only if this target is not "main" one.
 		// Main one receives slices as well but it uses them only to rebuild "full"
@@ -608,15 +609,16 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 	buffer, slab := reb.t.GetMMSA().Alloc()
 	metaFQN := mpath.MakePathFQN(hdr.Bck, ec.MetaType, hdr.ObjName)
 	metaBytes := req.md.Marshal()
-	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBytes), buffer, false, int64(len(metaBytes)), bdir)
+	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBytes), buffer, cmn.ChecksumNone, int64(len(metaBytes)), bdir)
 	if err != nil {
 		slab.Free(buffer)
 		return err
 	}
 	tmpFQN := mpath.MakePathFQN(hdr.Bck, fs.WorkfileType, hdr.ObjName)
-	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, data, buffer, true, hdr.ObjAttrs.Size, bdir)
+	cksum, err := cmn.SaveReaderSafe(tmpFQN, ctFQN, data, buffer, conf.Type, hdr.ObjAttrs.Size, bdir)
 	if err == nil {
-		if req.md.SliceID == 0 && hdr.ObjAttrs.CksumType == cmn.ChecksumXXHash && hdr.ObjAttrs.CksumValue != cksum.Value() {
+		cksumHdr := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
+		if req.md.SliceID == 0 && cksumHdr != nil && !cksum.Equal(cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)) {
 			err = fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/header %s/md %s",
 				hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Version, cksum.Value(), hdr.ObjAttrs.CksumValue, req.md.ObjCksum)
 		}
@@ -706,12 +708,15 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 		stats.NamedVal64{Name: stats.RxRebSize, Value: n},
 	)
 	if hdr.ObjAttrs.CksumValue != "" {
-		ckval, _ := cksumForSlice(memsys.NewReader(ct.sgl), ct.sgl.Size(), reb.t.GetMMSA())
-		if hdr.ObjAttrs.CksumValue != ckval {
+		cksum, err := checksumSlice(memsys.NewReader(ct.sgl), ct.sgl.Size(), hdr.ObjAttrs.CksumType, reb.t.GetMMSA())
+		if err != nil {
+			return fmt.Errorf("failed to checksum slice %d for %s/%s: %v", sliceID, hdr.Bck, hdr.ObjName, err)
+		}
+		if hdr.ObjAttrs.CksumValue != cksum.Value() {
 			reb.statRunner.AddMany(stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1})
 			return cmn.NewBadDataCksumError(
-				cmn.NewCksum(cmn.ChecksumXXHash, ckval),
 				cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+				&cksum.Cksum,
 				"rebalance")
 		}
 	}
@@ -1141,7 +1146,7 @@ func (reb *Manager) exchange(md *rebArgs) error {
 }
 
 func (reb *Manager) resilverSlice(fromFQN, toFQN string, buf []byte) error {
-	if _, _, err := cmn.CopyFile(fromFQN, toFQN, buf, false); err != nil {
+	if _, _, err := cmn.CopyFile(fromFQN, toFQN, buf, cmn.ChecksumNone); err != nil {
 		reb.t.FSHC(err, fromFQN)
 		reb.t.FSHC(err, toFQN)
 		return err
@@ -1197,7 +1202,7 @@ func (reb *Manager) resilverCT() error {
 
 		metaSrcFQN := mpathSrc.MpathInfo.MakePathFQN(mpathSrc.Bck, ec.MetaType, mpathSrc.ObjName)
 		metaDstFQN := mpathDst.MpathInfo.MakePathFQN(mpathDst.Bck, ec.MetaType, mpathDst.ObjName)
-		_, _, err = cmn.CopyFile(metaSrcFQN, metaDstFQN, buf, false)
+		_, _, err = cmn.CopyFile(metaSrcFQN, metaDstFQN, buf, cmn.ChecksumNone)
 		if err != nil {
 			return err
 		}
@@ -1849,22 +1854,21 @@ func (reb *Manager) releaseSGLs(md *rebArgs, objList []*rebObject) {
 
 // Object is missing (and maybe a few slices as well). Default target receives all
 // existing slices into SGLs, restores the object, rebuilds slices, and finally
-// send missing slices to other targets
-func (reb *Manager) rebuildFromSlices(obj *rebObject) (err error) {
+// sends missing slices to other targets
+func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err error) {
+	var (
+		meta     *ec.Metadata
+		sliceCnt = obj.dataSlices + obj.paritySlices
+		readers  = make([]io.Reader, sliceCnt)
+
+		// since io.Reader cannot be reopened, we need to have a copy for saving object
+		rereaders   = make([]io.Reader, sliceCnt)
+		writers     = make([]io.Writer, sliceCnt)
+		slicesFound = int16(0)
+	)
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s rebuilding slices (mem) of %s and send them", reb.t.Snode(), obj.objName)
 	}
-
-	var (
-		meta *ec.Metadata
-
-		slicesFound = int16(0)
-		sliceCnt    = obj.dataSlices + obj.paritySlices
-		readers     = make([]io.Reader, sliceCnt)
-		// since io.Reader cannot be reopened, we need to have a copy for saving object
-		rereaders = make([]io.Reader, sliceCnt)
-		writers   = make([]io.Writer, sliceCnt)
-	)
 	obj.rebuildSGLs = make([]*memsys.SGL, sliceCnt)
 
 	// put existing slices to readers list, and create SGL as writers for missing ones
@@ -1939,9 +1943,9 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject) (err error) {
 		if len(freeTargets) == 0 {
 			return fmt.Errorf("failed to send slice %d of %s - no free target", sliceID, obj.uid)
 		}
-		cksumVal, err := cksumForSlice(memsys.NewReader(obj.rebuildSGLs[i]), obj.sliceSize, reb.t.GetMMSA())
+		cksum, err := checksumSlice(memsys.NewReader(obj.rebuildSGLs[i]), obj.sliceSize, conf.Type, reb.t.GetMMSA())
 		if err != nil {
-			return fmt.Errorf("failed to calculate checksum of %s: %v", obj.objName, err)
+			return fmt.Errorf("failed to checksum %s: %v", obj.objName, err)
 		}
 		reader := memsys.NewReader(obj.rebuildSGLs[i])
 		si := freeTargets[0]
@@ -1963,7 +1967,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject) (err error) {
 		// TODO: mark this retransmition as non-vital and just add it to LOG
 		// if we do not receive ACK back
 		dest := &retransmitCT{sliceID: int16(i + 1)}
-		if err := reb.sendFromReader(reader, sl, i+1, cksumVal, si, dest); err != nil {
+		if err := reb.sendFromReader(reader, sl, i+1, cksum, si, dest); err != nil {
 			return fmt.Errorf("failed to send slice %d of %s to %s: %v", i, obj.uid, si, err)
 		}
 	}
@@ -1973,7 +1977,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject) (err error) {
 
 func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Reader) (err error) {
 	var (
-		cksum *cmn.Cksum
+		cksum *cmn.CksumHash
 		lom   = &cluster.LOM{T: reb.t, ObjName: obj.objName}
 	)
 
@@ -1989,7 +1993,8 @@ func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Read
 	buffer, slab := reb.t.GetMMSA().Alloc()
 	mi := lom.ParsedFQN.MpathInfo
 	bdir := mi.MakePathBck(lom.Bck().Bck)
-	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, true, obj.objSize, bdir); err != nil {
+	conf := lom.CksumConf()
+	if cksum, err = cmn.SaveReaderSafe(tmpFQN, lom.FQN, src, buffer, conf.Type, obj.objSize, bdir); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
 		reb.t.FSHC(err, lom.FQN)
@@ -1997,10 +2002,10 @@ func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Read
 	}
 
 	lom.SetSize(obj.objSize)
-	lom.SetCksum(cksum)
+	lom.SetCksum(cksum.Clone())
 	metaFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(obj.bck, ec.MetaType, obj.objName)
 	metaBuf := cmn.MustMarshal(&objMD)
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false, -1, bdir); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, cmn.ChecksumNone, -1, bdir); err != nil {
 		glog.Error(err)
 		slab.Free(buffer)
 		if rmErr := os.Remove(lom.FQN); rmErr != nil {
@@ -2050,14 +2055,19 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 		return nil
 	}
 
-	return reb.rebuildFromSlices(obj)
+	bck := cluster.NewBckEmbed(obj.bck)
+	if err := bck.Init(reb.t.GetBowner(), reb.t.Snode()); err != nil {
+		return err
+	}
+	conf := bck.CksumConf()
+	return reb.rebuildFromSlices(obj, conf)
 }
 
-// Returns XXHash calculated for the reader
-func cksumForSlice(reader io.Reader, sliceSize int64, mem *memsys.MMSA) (string, error) {
+func checksumSlice(reader io.Reader, sliceSize int64, cksumType string, mem *memsys.MMSA) (cksum *cmn.CksumHash, err error) {
 	buf, slab := mem.Alloc(sliceSize)
-	defer slab.Free(buf)
-	return cmn.ComputeXXHash(reader, buf)
+	_, cksum, err = cmn.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
+	slab.Free(buf)
+	return
 }
 
 // Returns an object within the current batch by its UID.

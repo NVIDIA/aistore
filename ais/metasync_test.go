@@ -179,22 +179,22 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 	bmd := newBucketMD()
 	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.PropInherit,
+			Type: cmn.ChecksumXXHash,
 		},
 	})
 	bmd.add(cluster.NewBck("bucket2", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.PropInherit,
+			Type: cmn.ChecksumXXHash,
 		},
 	})
 	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.PropInherit,
+			Type: cmn.ChecksumXXHash,
 		},
 	})
 	bmd.add(cluster.NewBck("bucket4", cmn.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.PropInherit,
+			Type: cmn.ChecksumXXHash,
 		},
 	})
 
@@ -642,12 +642,12 @@ func TestMetaSyncData(t *testing.T) {
 	// sync bucketmd, fail target and retry
 	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.PropInherit,
+			Type: cmn.ChecksumXXHash,
 		},
 	})
 	bmd.add(cluster.NewBck("bucket2", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.PropInherit,
+			Type: cmn.ChecksumXXHash,
 		},
 	})
 	bmdBody := bmd.marshal()
@@ -665,7 +665,7 @@ func TestMetaSyncData(t *testing.T) {
 	// after rejecting a few sync requests
 	bmd = bmd.clone()
 	bprops := &cmn.BucketProps{
-		Cksum: cmn.CksumConf{Type: cmn.PropInherit},
+		Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
 		LRU:   cmn.GCO.Get().LRU,
 	}
 	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAIS, cmn.NsGlobal), bprops)

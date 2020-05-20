@@ -50,7 +50,7 @@ func TestAuthObj(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}()
 
-	r, _ := readers.NewRandReader(fileSize, false /*withHash*/)
+	r, _ := readers.NewRandReader(fileSize, cmn.ChecksumNone)
 	err = api.PutObject(api.PutObjectArgs{
 		BaseParams: unAuthBP,
 		Bck:        bck,

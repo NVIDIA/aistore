@@ -106,14 +106,8 @@ func (lom *LOM) Config() *cmn.Config {
 	return lom.config
 }
 func (lom *LOM) MirrorConf() *cmn.MirrorConf { return &lom.Bprops().Mirror }
-func (lom *LOM) CksumConf() *cmn.CksumConf {
-	conf := &lom.Bprops().Cksum
-	if conf.Type == cmn.PropInherit {
-		conf = &lom.Config().Cksum
-	}
-	return conf
-}
-func (lom *LOM) VerConf() *cmn.VersionConf { return &lom.Bprops().Versioning }
+func (lom *LOM) CksumConf() *cmn.CksumConf   { return lom.bck.CksumConf() }
+func (lom *LOM) VerConf() *cmn.VersionConf   { return &lom.Bprops().Versioning }
 
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil
@@ -345,11 +339,15 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 // NOTE: caller is responsible for locking
 func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	var (
-		dstCksum *cmn.Cksum
-		workFQN  = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
-		srcCksum = lom.Cksum()
+		dstCksum  *cmn.CksumHash
+		workFQN   = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+		srcCksum  = lom.Cksum()
+		cksumType = cmn.ChecksumNone
 	)
-	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, true /* always checksum */)
+	if srcCksum != nil {
+		cksumType = srcCksum.Type()
+	}
+	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, cksumType)
 	if err != nil {
 		return
 	}
@@ -359,7 +357,6 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		return
 	}
 	dst.CopyMetadata(lom)
-	dst.SetCksum(dstCksum)
 
 	if err = cmn.Rename(workFQN, dstFQN); err != nil {
 		if errRemove := cmn.RemoveFile(workFQN); errRemove != nil {
@@ -368,19 +365,18 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		return
 	}
 
-	if srcCksum != nil && srcCksum.Type() != cmn.ChecksumNone {
+	if cksumType != cmn.ChecksumNone {
 		if !dstCksum.Equal(lom.Cksum()) {
-			return nil, cmn.NewBadDataCksumError(dstCksum, lom.Cksum())
+			return nil, cmn.NewBadDataCksumError(&dstCksum.Cksum, lom.Cksum())
 		}
+		dst.SetCksum(dstCksum.Clone())
 	}
-
 	if err = dst.Persist(); err != nil {
 		if errRemove := os.Remove(dst.FQN); errRemove != nil {
 			glog.Errorf("nested err: %v", errRemove)
 		}
 		return
 	}
-
 	if lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck(), true /* must have same BID*/) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			return
@@ -505,73 +501,78 @@ func (lom *LOM) ValidateMetaChecksum() error {
 // Use lom.ValidateMetaChecksum() to check lom's checksum vs on-disk metadata.
 func (lom *LOM) ValidateContentChecksum() (err error) {
 	var (
-		storedCksum string
-		cksumType   = lom.CksumConf().Type
+		cksums = struct {
+			stor *cmn.Cksum     // stored with LOM
+			comp *cmn.CksumHash // computed
+		}{stor: lom.md.cksum}
+		cksumType = lom.CksumConf().Type
 	)
 	if cksumType == cmn.ChecksumNone {
 		return
 	}
-	cmn.Assert(cksumType == cmn.ChecksumXXHash) // sha256 et al. not implemented yet
-
-	if lom.md.cksum != nil {
-		_, storedCksum = lom.md.cksum.Get()
-	}
-	// compute
-	computedCksum, err := lom.ComputeCksum(cksumType)
+	cksums.comp, err = lom.ComputeCksum()
 	if err != nil {
-		return err
+		return
 	}
-	if storedCksum == "" { // store with lom meta on disk
-		oldCksm := lom.md.cksum
-		lom.md.cksum = computedCksum
-		if err := lom.Persist(); err != nil {
-			lom.md.cksum = oldCksm
-			return err
+	if cksums.stor == nil { // store with lom meta on disk
+		lom.md.cksum = cksums.comp.Clone()
+		if err = lom.Persist(); err != nil {
+			lom.md.cksum = cksums.stor
+			return
 		}
 		lom.ReCache()
 		return
 	}
-	if lom.md.cksum.Equal(computedCksum) {
+	if cksums.comp.Equal(lom.md.cksum) {
 		return
 	}
 	// reload meta and check again
-	if _, err = lom.lmfs(true); err == nil {
-		if lom.md.cksum.Equal(computedCksum) {
+	if _, err = lom.lmfs(true); err == nil && lom.md.cksum != nil {
+		if cksums.comp.Equal(lom.md.cksum) {
 			return
 		}
 	}
-	err = cmn.NewBadDataCksumError(lom.md.cksum, computedCksum)
+	err = cmn.NewBadDataCksumError(&cksums.comp.Cksum, cksums.stor, lom.String())
 	lom.Uncache()
 	return
 }
 
 func (lom *LOM) ComputeCksumIfMissing() (cksum *cmn.Cksum, err error) {
-	cksumType := lom.CksumConf().Type
-	if cksumType == cmn.ChecksumNone {
-		return
-	}
+	var cksumHash *cmn.CksumHash
 	if lom.md.cksum != nil {
 		cksum = lom.md.cksum
 		return
 	}
-	cmn.Assert(cksumType == cmn.ChecksumXXHash) // sha256 et al. not implemented yet
-	return lom.ComputeCksum(cmn.ChecksumXXHash)
+	cksumHash, err = lom.ComputeCksum()
+	if cksumHash != nil && err == nil {
+		cksum = cksumHash.Clone()
+	}
+	return
 }
 
-func (lom *LOM) ComputeCksum(cksumType string) (cksum *cmn.Cksum, err error) {
-	file, err := os.Open(lom.FQN)
-	if err != nil {
-		err = fmt.Errorf("%s, err: %w", lom.FQN, err)
+func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cmn.CksumHash, err error) {
+	var (
+		file      *os.File
+		cksumType string
+	)
+	if len(cksumTypes) > 0 {
+		cksumType = cksumTypes[0]
+	} else {
+		cksumType = lom.CksumConf().Type
+	}
+	if cksumType == cmn.ChecksumNone {
+		return
+	}
+	if file, err = os.Open(lom.FQN); err != nil {
 		return
 	}
 	buf, slab := lom.T.GetMMSA().Alloc(lom.Size())
-	_, cksumValue, err := cmn.WriteWithHash(ioutil.Discard, file, buf, cksumType)
+	_, cksum, err = cmn.CopyAndChecksum(ioutil.Discard, file, buf, cksumType)
 	file.Close()
 	slab.Free(buf)
 	if err != nil {
 		return nil, err
 	}
-	cksum = cmn.NewCksum(cksumType, cksumValue)
 	return
 }
 

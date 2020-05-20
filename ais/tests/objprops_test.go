@@ -32,10 +32,10 @@ func propsStats(t *testing.T, proxyURL string) (objChanged, bytesChanged int64) 
 }
 
 func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions map[string]string,
-	msg *cmn.SelectMsg, versionEnabled bool) (newVersions map[string]string) {
+	msg *cmn.SelectMsg, versionEnabled bool, cksumType string) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
-	r, err := readers.NewRandReader(int64(fileSize), true /* withHash */)
+	r, err := readers.NewRandReader(int64(fileSize), cksumType)
 	if err != nil {
 		t.Errorf("Failed to create reader: %v", err)
 		t.Fail()
@@ -46,7 +46,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     fname,
-			Hash:       r.XXHash(),
+			Cksum:      r.Cksum(),
 			Reader:     r,
 		}
 		err = api.PutObject(putArgs)
@@ -225,7 +225,8 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 	}
 }
 
-func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
+func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *cmn.SelectMsg,
+	versionEnabled bool, cksumType string) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bck, objects)
 
@@ -252,7 +253,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	tutils.Logf("Target %s [%s] is removed\n", removeTarget.ID(), removeTarget.URL(cmn.NetworkPublic))
 
 	// rewrite objects and compare versions - they should change
-	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled)
+	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled, cksumType)
 
 	tutils.Logf("Reregistering target...\n")
 	err = tutils.RegisterNode(proxyURL, removeTarget, smap)
@@ -322,7 +323,7 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 	close(errCh)
 }
 
-func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool) {
+func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType string) {
 	const (
 		objCountToTest = 15
 		fileSize       = cmn.KiB
@@ -338,7 +339,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool) {
 
 	// Create a few objects
 	tutils.Logf("Creating %d objects...\n", numPuts)
-	tutils.PutRandObjs(proxyURL, bck, versionDir, fileSize, numPuts, errCh, filesPutCh)
+	tutils.PutRandObjs(proxyURL, bck, versionDir, fileSize, numPuts, errCh, filesPutCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh)
 	close(errCh)
@@ -385,7 +386,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool) {
 	}
 
 	// rewrite objects and compare versions - they should change
-	newVersions := propsUpdateObjects(t, proxyURL, bck, filesList, msg, versionEnabled)
+	newVersions := propsUpdateObjects(t, proxyURL, bck, filesList, msg, versionEnabled, cksumType)
 	if len(newVersions) != len(filesList) {
 		t.Errorf("Number of objects mismatch. Expected: %d objects, after update: %d", len(filesList), len(newVersions))
 	}
@@ -403,14 +404,14 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool) {
 	}
 
 	// test rebalance should keep object versions
-	propsRebalance(t, proxyURL, bck, newVersions, msg, versionEnabled)
+	propsRebalance(t, proxyURL, bck, newVersions, msg, versionEnabled, cksumType)
 
 	// cleanup
 	propsCleanupObjects(t, proxyURL, bck, newVersions)
 }
 
 func propsMainTest(t *testing.T, versioning bool) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		var (
 			config = tutils.GetClusterConfig(t)
 		)
@@ -450,7 +451,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 			t.Fatalf("Could not execute HeadBucket Request: %v", err)
 		}
 		versionEnabled := props.Versioning.Enabled
-		propsTestCore(t, bck, versionEnabled)
+		propsTestCore(t, bck, versionEnabled, cksumType)
 	})
 }
 

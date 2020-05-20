@@ -460,7 +460,7 @@ func TestDownloadCloud(t *testing.T) {
 
 	expectedObjs := make([]string, 0, fileCnt)
 	for i := 0; i < fileCnt; i++ {
-		reader, err := readers.NewRandReader(cmn.MiB, false /*withHash*/)
+		reader, err := readers.NewRandReader(cmn.MiB, cmn.ChecksumNone)
 		tassert.CheckFatal(t, err)
 
 		objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)
@@ -835,6 +835,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
+		p = cmn.DefaultBucketProps()
 
 		objName = cmn.RandString(10)
 		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
@@ -850,12 +851,12 @@ func TestDownloadOverrideObject(t *testing.T) {
 	oldProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
 
 	// Update the file
-	r, _ := readers.NewRandReader(10, true)
+	r, _ := readers.NewRandReader(10, p.Cksum.Type)
 	err := api.PutObject(api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objName,
-		Hash:       r.XXHash(),
+		Cksum:      r.Cksum(),
 		Reader:     r,
 	})
 	tassert.CheckFatal(t, err)

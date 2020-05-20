@@ -1407,15 +1407,11 @@ func (h *httprunner) pollClusterStarted(timeout time.Duration) {
 	}
 }
 
-func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header, config *cmn.Config) {
+func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	if bck.Props == nil {
 		bck.Props = cmn.CloudBucketProps(hdr)
 	}
 	finalProps := bck.Props.Clone()
-	cksumConf := config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
-	if finalProps.Cksum.Type == cmn.PropInherit {
-		finalProps.Cksum = cksumConf
-	}
 	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
 		if fieldName == cmn.HeaderBucketVerEnabled {
 			// For Cloud buckets, `versioning.enabled` is a combination of local

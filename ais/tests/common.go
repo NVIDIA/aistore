@@ -174,10 +174,14 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	filenameCh := make(chan string, m.num)
 	errCh := make(chan error, m.num)
 
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	p, err := api.HeadBucket(baseParams, m.bck)
+	tassert.CheckFatal(m.t, err)
+
 	if !m.silent {
 		tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
 	}
-	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeStr, m.fileSize, m.num, errCh, filenameCh, m.fixedSize)
+	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeStr, m.fileSize, m.num, errCh, filenameCh, p.Cksum.Type, m.fixedSize)
 	if len(dontFail) == 0 {
 		tassert.SelectErr(m.t, errCh, "put", false)
 	}
@@ -200,6 +204,9 @@ func (m *ioContext) cloudPuts(evict bool) {
 		tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bck)
 	}
 
+	p, err := api.HeadBucket(baseParams, m.bck)
+	tassert.CheckFatal(m.t, err)
+
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
@@ -217,7 +224,7 @@ func (m *ioContext) cloudPuts(evict bool) {
 	)
 	m.objNames = m.objNames[:0]
 	for i := 0; i < leftToFill; i++ {
-		r, err := readers.NewRandReader(int64(m.fileSize), true /*withHash*/)
+		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
 		objName := fmt.Sprintf("%s%s%d", "copy/cloud_", cmn.RandString(4), i)
 		wg.Add(1)
@@ -484,7 +491,7 @@ func (m *ioContext) setRandBucketProps() {
 	tassert.CheckFatal(m.t, err)
 }
 
-func runProviderTests(t *testing.T, f func(*testing.T, cmn.Bck)) {
+func runProviderTests(t *testing.T, f func(*testing.T, cmn.Bck, string)) {
 	tests := []struct {
 		name     string
 		bck      cmn.Bck
@@ -512,19 +519,25 @@ func runProviderTests(t *testing.T, f func(*testing.T, cmn.Bck)) {
 	}
 	for _, test := range tests { // nolint:gocritic // no performance critical code
 		t.Run(test.name, func(t *testing.T) {
+			var cksumType string
 			test.skipArgs.Bck = test.bck
 			tutils.CheckSkip(t, test.skipArgs)
 
+			baseParams := tutils.BaseAPIParams()
 			if test.bck.IsAIS() || test.bck.IsRemoteAIS() {
-				baseParams := tutils.BaseAPIParams()
 				err := api.CreateBucket(baseParams, test.bck)
 				tassert.CheckFatal(t, err)
 				defer func() {
 					api.DestroyBucket(baseParams, test.bck)
 				}()
+				cksumType = cmn.DefaultBucketProps().Cksum.Type
+			} else {
+				p, err := api.HeadBucket(baseParams, test.bck)
+				tassert.CheckFatal(t, err)
+				cksumType = p.Cksum.Type
 			}
 
-			f(t, test.bck)
+			f(t, test.bck, cksumType)
 		})
 	}
 }
@@ -542,16 +555,14 @@ func numberOfFilesWithPrefix(fileNames []string, namePrefix, commonDir string) i
 	return numFiles
 }
 
-func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck) []string {
+func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType string) []string {
 	const (
 		fileSize = cmn.KiB
 	)
-
-	fileNames := make([]string, 0, prefixFileNumber)
-
 	var (
-		wg    = &sync.WaitGroup{}
-		errCh = make(chan error, numfiles)
+		fileNames = make([]string, 0, prefixFileNumber)
+		wg        = &sync.WaitGroup{}
+		errCh     = make(chan error, numfiles)
 	)
 
 	for i := 0; i < prefixFileNumber; i++ {
@@ -559,7 +570,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck) []string {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
-		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		r, err := readers.NewRandReader(fileSize, cksumType)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -574,7 +585,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck) []string {
 	for _, fName := range extraNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
-		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		r, err := readers.NewRandReader(fileSize, cksumType)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -112,13 +112,16 @@ func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath st
 	repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
 }
 
-func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, objList []string, suffix string) {
+func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList,
+	objList []string, suffix string) {
 	breakMountpath(md.t, mpath, suffix)
 	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
 
 	switch method {
 	case http.MethodPut:
-		tutils.PutObjsFromList(md.proxyURL, md.bck, fshcDir, uint64(md.fileSize), objList, nil, nil)
+		p, err := api.HeadBucket(md.baseParams, md.bck)
+		tassert.CheckFatal(md.t, err)
+		tutils.PutObjsFromList(md.proxyURL, md.bck, fshcDir, uint64(md.fileSize), objList, nil, nil, p.Cksum.Type)
 	case http.MethodGet:
 		for _, objName := range objList {
 			// GetObject must fail - so no error checking
@@ -242,7 +245,8 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	}
 }
 
-func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, suffix string) {
+func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail,
+	chstop chan struct{}, suffix string) {
 	defer wg.Done()
 
 	const fileSize = 64 * cmn.KiB
@@ -253,6 +257,9 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 
 	tutils.Logf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
+
+	p, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
 
 	for stopTime.After(time.Now()) {
 		errCh := make(chan error, len(filelist))
@@ -271,7 +278,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 			switch op {
 			case "PUT":
 				fileList := []string{fname}
-				tutils.PutObjsFromList(proxyURL, bck, fshcDir, fileSize, fileList, errCh, objsPutCh)
+				tutils.PutObjsFromList(proxyURL, bck, fshcDir, fileSize, fileList, errCh, objsPutCh, p.Cksum.Type)
 			case "GET":
 				api.GetObject(baseParams, bck, path.Join(fshcDir, fname))
 				time.Sleep(time.Millisecond * 10)

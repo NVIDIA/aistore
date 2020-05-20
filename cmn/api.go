@@ -411,7 +411,9 @@ type ObjectCksumProps struct {
 
 func DefaultBucketProps() *BucketProps {
 	c := GCO.Clone()
-	c.Cksum.Type = PropInherit
+	if c.Cksum.Type == "" {
+		c.Cksum.Type = ChecksumXXHash
+	}
 	return &BucketProps{
 		Cksum:       c.Cksum,
 		LRU:         c.LRU,

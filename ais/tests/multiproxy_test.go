@@ -566,7 +566,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently
 func concurrentPutGetDel(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		proxyURL := tutils.RandomProxyURL()
 		smap := tutils.GetClusterMap(t, proxyURL)
 
@@ -583,7 +583,7 @@ func concurrentPutGetDel(t *testing.T) {
 			wg.Add(1)
 			go func(url string) {
 				defer wg.Done()
-				errCh <- proxyPutGetDelete(100, url, bck)
+				errCh <- proxyPutGetDelete(100, url, bck, cksumType)
 			}(v.PublicNet.DirectURL)
 		}
 
@@ -597,10 +597,10 @@ func concurrentPutGetDel(t *testing.T) {
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
-func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck) error {
+func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string) error {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for i := 0; i < count; i++ {
-		reader, err := readers.NewRandReader(fileSize, true /* withHash */)
+		reader, err := readers.NewRandReader(fileSize, cksumType)
 		if err != nil {
 			return fmt.Errorf("error creating reader: %v", err)
 		}
@@ -610,7 +610,7 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck) error {
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     keyname,
-			Hash:       reader.XXHash(),
+			Cksum:      reader.Cksum(),
 			Reader:     reader,
 		}
 		if err = api.PutObject(putArgs); err != nil {
@@ -641,6 +641,7 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 		Name:     TestBucketName,
 		Provider: cmn.ProviderAIS,
 	}
+	cksumType := cmn.DefaultBucketProps().Cksum.Type
 loop:
 	for {
 		select {
@@ -667,7 +668,7 @@ loop:
 		default:
 		}
 
-		reader, err := readers.NewRandReader(fileSize, true /* withHash */)
+		reader, err := readers.NewRandReader(fileSize, cksumType)
 		if err != nil {
 			errCh <- err
 			continue
@@ -679,7 +680,7 @@ loop:
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     objName,
-			Hash:       reader.XXHash(),
+			Cksum:      reader.Cksum(),
 			Reader:     reader,
 		}
 		err = api.PutObject(putArgs)

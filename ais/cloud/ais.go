@@ -448,12 +448,11 @@ func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 	fh, ok := r.(*cmn.FileHandle)
 	cmn.Assert(ok) // http redirect requires Open()
 	err = m.try(remoteBck, func(bck cmn.Bck) error {
-		cksumValue := lom.Cksum().Value()
 		args := api.PutObjectArgs{
 			BaseParams: aisCluster.bp,
 			Bck:        bck,
 			Object:     lom.ObjName,
-			Hash:       cksumValue,
+			Cksum:      lom.Cksum(),
 			Reader:     fh,
 			Size:       uint64(lom.Size()),
 		}

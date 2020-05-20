@@ -69,7 +69,7 @@ func putSpecificFiles(fileSize uint64, numPuts int, bck cmn.Bck, pool chan func(
 	cmn.CreateDir(smokeDir)
 
 	for i := 1; i < numPuts+1; i++ {
-		r, err := readers.NewRandReader(int64(fileSize), true /* withHash */)
+		r, err := readers.NewRandReader(int64(fileSize), cmn.ChecksumXXHash)
 		if err != nil {
 			return err
 		}

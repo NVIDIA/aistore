@@ -963,9 +963,8 @@ func createTestFile(fqn string, size int) {
 }
 
 func getTestFileHash(fqn string) (hash string) {
-	hashReader, _ := os.Open(fqn)
-	var err error
-	hash, err = cmn.ComputeXXHash(hashReader, nil)
+	reader, _ := os.Open(fqn)
+	_, cksum, err := cmn.CopyAndChecksum(ioutil.Discard, reader, nil, cmn.ChecksumXXHash)
 	Expect(err).NotTo(HaveOccurred())
-	return
+	return cksum.Value()
 }

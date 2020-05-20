@@ -24,7 +24,7 @@ var (
 func TestSmoke(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		var (
 			fp       = make(chan string, len(objSizes)*len(ratios)*numops*numworkers)
 			proxyURL = tutils.GetPrimaryURL()
@@ -32,7 +32,7 @@ func TestSmoke(t *testing.T) {
 		for _, fs := range objSizes {
 			for _, r := range ratios {
 				s := fmt.Sprintf("size:%s,GET/PUT:%.0f%%", cmn.B2S(fs, 0), r*100)
-				t.Run(s, func(t *testing.T) { oneSmoke(t, proxyURL, bck, fs, r, fp) })
+				t.Run(s, func(t *testing.T) { oneSmoke(t, proxyURL, bck, fs, r, cksumType, fp) })
 			}
 		}
 
@@ -54,7 +54,7 @@ func TestSmoke(t *testing.T) {
 	})
 }
 
-func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objSize int64, ratio float32, filesPutCh chan string) {
+func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objSize int64, ratio float32, cksumType string, filesPutCh chan string) {
 	var (
 		nGet  = int(float32(numworkers) * ratio)
 		nPut  = numworkers - nGet
@@ -67,7 +67,7 @@ func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objSize int64, ratio f
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				tutils.PutRandObjs(proxyURL, bck, SmokeStr, uint64(objSize), numops, errCh, filesPutCh)
+				tutils.PutRandObjs(proxyURL, bck, SmokeStr, uint64(objSize), numops, errCh, filesPutCh, cksumType)
 			}()
 			nPut--
 		} else {

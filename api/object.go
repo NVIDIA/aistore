@@ -42,7 +42,7 @@ type PutObjectArgs struct {
 	BaseParams BaseParams
 	Bck        cmn.Bck
 	Object     string
-	Hash       string
+	Cksum      *cmn.Cksum
 	Reader     cmn.ReadOpenCloser
 	Size       uint64 // optional
 }
@@ -72,7 +72,7 @@ type FlushArgs struct {
 	Bck        cmn.Bck
 	Object     string
 	Handle     string
-	Hash       string
+	Cksum      *cmn.Cksum
 }
 
 // HeadObject API
@@ -237,9 +237,9 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) (err e
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
 		// If it wasn't set, we would need to deal with the redirect manually.
 		req.GetBody = args.Reader.Open
-		if args.Hash != "" {
-			req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
-			req.Header.Set(cmn.HeaderObjCksumVal, args.Hash)
+		if args.Cksum != nil {
+			req.Header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
+			req.Header.Set(cmn.HeaderObjCksumVal, args.Cksum.Value())
 		}
 		if len(replicateOpts) > 0 {
 			req.Header.Set(cmn.HeaderObjReplicSrc, replicateOpts[0].SourceURL)
@@ -359,10 +359,10 @@ func FlushObject(args FlushArgs) (err error) {
 	query = cmn.AddBckToQuery(query, args.Bck)
 
 	var header http.Header
-	if args.Hash != "" {
+	if args.Cksum != nil {
 		header = make(http.Header)
-		header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
-		header.Set(cmn.HeaderObjCksumVal, args.Hash)
+		header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
+		header.Set(cmn.HeaderObjCksumVal, args.Cksum.Value())
 	}
 
 	args.BaseParams.Method = http.MethodPut

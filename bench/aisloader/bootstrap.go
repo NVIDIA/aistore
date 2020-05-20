@@ -89,6 +89,7 @@ type (
 		start     time.Time
 		end       time.Time
 		latencies httpLatencies
+		cksumType string
 	}
 
 	// nolint:maligned // no performance critical code
@@ -853,11 +854,12 @@ func newPutWorkOrder() (*workOrder, error) {
 
 	putPending++
 	return &workOrder{
-		proxyURL: runParams.proxyURL,
-		bck:      runParams.bck,
-		op:       opPut,
-		objName:  objName,
-		size:     size,
+		proxyURL:  runParams.proxyURL,
+		bck:       runParams.bck,
+		op:        opPut,
+		objName:   objName,
+		size:      size,
+		cksumType: cmn.ChecksumXXHash, // TODO: allow flag-override
 	}, nil
 }
 

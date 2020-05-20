@@ -129,7 +129,7 @@ func (rj *resilverJogger) moveSlice(fqn string, ct *cluster.CT) {
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("resilver moving %q -> %q", fqn, destFQN)
 	}
-	if _, _, err = cmn.CopyFile(fqn, destFQN, rj.buf, false); err != nil {
+	if _, _, err = cmn.CopyFile(fqn, destFQN, rj.buf, cmn.ChecksumNone); err != nil {
 		glog.Errorf("failed to copy %q -> %q: %v. Rolling back", fqn, destFQN, err)
 		if err = os.Remove(destMetaFQN); err != nil {
 			glog.Warningf("failed to cleanup metafile copy %q: %v", destMetaFQN, err)
@@ -155,7 +155,7 @@ func (rj *resilverJogger) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.Moun
 		return "", "", nil
 	}
 	dst := dstMpath.MakePathFQN(ct.Bck().Bck, ec.MetaType, ct.ObjName())
-	_, _, err := cmn.CopyFile(src, dst, rj.buf, false)
+	_, _, err := cmn.CopyFile(src, dst, rj.buf, cmn.ChecksumNone)
 	if err == nil {
 		return src, dst, err
 	}

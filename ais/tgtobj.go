@@ -90,8 +90,7 @@ type (
 		cksum *cmn.Cksum
 	}
 
-	writerOnly  struct{ io.Writer }
-	writerMulti struct{ writers []io.Writer }
+	writerOnly struct{ io.Writer }
 )
 
 ////////////////
@@ -329,7 +328,7 @@ write:
 		written, err = io.CopyBuffer(writer, reader, buf)
 	} else {
 		writers = append(writers, writer)
-		written, err = io.CopyBuffer(&writerMulti{writers}, reader, buf)
+		written, err = io.CopyBuffer(cmn.NewWriterMulti(writers...), reader, buf)
 	}
 	if err != nil {
 		return
@@ -707,12 +706,12 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 			buf, slab = goi.t.gmm.Alloc(goi.length)
 			reader = io.NewSectionReader(file, goi.offset, goi.length)
 			if cksumRange {
-				var cksumValue string
+				var cksum *cmn.CksumHash
 				sgl = slab.MMSA().NewSGL(goi.length, slab.Size())
-				if _, cksumValue, err = cmn.WriteWithHash(sgl, reader, buf, cksumConf.Type); err != nil {
+				if _, cksum, err = cmn.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
 					return
 				}
-				hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
+				hdr.Set(cmn.HeaderObjCksumVal, cksum.Value())
 				hdr.Set(cmn.HeaderObjCksumType, cksumConf.Type)
 				reader = io.NewSectionReader(file, goi.offset, goi.length)
 			}
@@ -824,25 +823,5 @@ func (aoi *appendObjInfo) appendObject() (filePath string, err error, errCode in
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("PUT %s: %d µs", aoi.lom, int64(delta/time.Microsecond))
 	}
-	return
-}
-
-/////////////////
-// writerMulti //
-/////////////////
-
-func (mw *writerMulti) Write(b []byte) (n int, err error) {
-	l := len(b)
-	for _, w := range mw.writers {
-		n, err = w.Write(b)
-		if err == nil && n == l {
-			continue
-		}
-		if err == nil {
-			err = io.ErrShortWrite
-		}
-		return
-	}
-	n = l
 	return
 }

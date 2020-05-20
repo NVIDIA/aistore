@@ -106,7 +106,7 @@ func BenchmarkObjPut(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				r, _ := readers.NewRandReader(bench.fileSize, false)
+				r, _ := readers.NewRandReader(bench.fileSize, cmn.ChecksumNone)
 				poi := &putObjInfo{
 					started: time.Now(),
 					t:       t,
@@ -153,7 +153,7 @@ func BenchmarkObjAppend(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				r, _ := readers.NewRandReader(bench.fileSize, false)
+				r, _ := readers.NewRandReader(bench.fileSize, cmn.ChecksumNone)
 				aoi := &appendObjInfo{
 					started:  time.Now(),
 					t:        t,
@@ -209,7 +209,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			r, _ := readers.NewRandReader(bench.fileSize, false)
+			r, _ := readers.NewRandReader(bench.fileSize, cmn.ChecksumNone)
 			poi := &putObjInfo{
 				started: time.Now(),
 				t:       t,

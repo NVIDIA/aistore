@@ -68,7 +68,7 @@ func TestCloudBucketObject(t *testing.T) {
 				bck.Name = clibucket
 			}
 
-			reader, err := readers.NewRandReader(cmn.KiB, false /* withHash */)
+			reader, err := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
 			tassert.CheckFatal(t, err)
 
 			defer api.DeleteObject(baseParams, bck, object)
@@ -177,13 +177,13 @@ func Test_putdelete(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 	)
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		var (
 			errCh      = make(chan error, numfiles)
 			filesPutCh = make(chan string, numfiles)
 		)
 
-		tutils.PutRandObjs(proxyURL, bck, DeleteStr, fileSize, numfiles, errCh, filesPutCh)
+		tutils.PutRandObjs(proxyURL, bck, DeleteStr, fileSize, numfiles, errCh, filesPutCh, cksumType)
 		close(filesPutCh)
 		tassert.SelectErr(t, errCh, "put", true)
 
@@ -243,7 +243,7 @@ func Test_matchdelete(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 	)
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		// Declare one channel per worker to pass the keyname
 		keynameChans := make([]chan string, numworkers)
 		for i := 0; i < numworkers; i++ {
@@ -312,7 +312,7 @@ func Test_putdeleteRange(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 	)
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		errCh := make(chan error, numfiles*5)
 		objsPutCh := make(chan string, numfiles)
 
@@ -323,7 +323,7 @@ func Test_putdeleteRange(t *testing.T) {
 			fname = fmt.Sprintf("b-%04d", i)
 			objList = append(objList, fname)
 		}
-		tutils.PutObjsFromList(proxyURL, bck, commonPrefix, objSize, objList, errCh, objsPutCh)
+		tutils.PutObjsFromList(proxyURL, bck, commonPrefix, objSize, objList, errCh, objsPutCh, cksumType)
 		tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
 		close(objsPutCh)
 
@@ -738,16 +738,19 @@ func Test_coldgetmd5(t *testing.T) {
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
-		totalSize = int64(numPuts * largeFileSize)
-		proxyURL  = tutils.RandomProxyURL()
+		totalSize     = int64(numPuts * largeFileSize)
+		proxyURL      = tutils.RandomProxyURL()
+		propsToUpdate cmn.BucketPropsToUpdate
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
-	config := tutils.GetClusterConfig(t)
-	bcoldget := config.Cksum.ValidateColdGet
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	p, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+	cksumType := p.Cksum.Type
 
-	tutils.PutRandObjs(proxyURL, bck, ColdValidStr, largeFileSize, numPuts, errCh, filesPutCh)
+	tutils.PutRandObjs(proxyURL, bck, ColdValidStr, largeFileSize, numPuts, errCh, filesPutCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
@@ -755,8 +758,14 @@ func Test_coldgetmd5(t *testing.T) {
 	}
 	tutils.EvictObjects(t, proxyURL, bck, filesList)
 	// Disable Cold Get Validation
-	if bcoldget {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": "false"})
+	if p.Cksum.ValidateColdGet {
+		propsToUpdate = cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				ValidateColdGet: api.Bool(false),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
 	}
 	start := time.Now()
 	getFromObjList(proxyURL, bck, errCh, filesList, false)
@@ -768,8 +777,16 @@ func Test_coldgetmd5(t *testing.T) {
 	tutils.Logf("GET %s without MD5 validation: %v\n", cmn.B2S(totalSize, 0), duration)
 	tassert.SelectErr(t, errCh, "get", false)
 	tutils.EvictObjects(t, proxyURL, bck, filesList)
+
 	// Enable Cold Get Validation
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": "true"})
+	propsToUpdate = cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			ValidateColdGet: api.Bool(true),
+		},
+	}
+	err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	tassert.CheckFatal(t, err)
+
 	if t.Failed() {
 		goto cleanup
 	}
@@ -780,7 +797,14 @@ func Test_coldgetmd5(t *testing.T) {
 	tutils.Logf("GET %s with MD5 validation:    %v\n", cmn.B2S(totalSize, 0), duration)
 	tassert.SelectErr(t, errCh, "get", false)
 cleanup:
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": fmt.Sprintf("%v", bcoldget)})
+	propsToUpdate = cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
+		},
+	}
+	err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+
+	tassert.CheckFatal(t, err)
 	for _, fn := range filesList {
 		wg.Add(1)
 		go tutils.Del(proxyURL, bck, fn, wg, errCh, !testing.Verbose())
@@ -964,23 +988,31 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 
+	p, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+	cksumType := p.Cksum.Type
+
 	tutils.Logf("Creating %d objects\n", numFiles)
-	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh)
+	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
 
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
-	// Fetch the file from cloud bucket.
-	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
+
+	// GET
+	_, err = api.GetObjectWithValidation(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
-		t.Errorf("Failed while fetching the file from the cloud bucket. Error: [%v]", err)
+		t.Errorf("GET(cloud bucket). Error: [%v]", err)
 	}
 
-	config := tutils.GetClusterConfig(t)
-	oldWarmGet := config.Cksum.ValidateWarmGet
-	oldChecksum := config.Cksum.Type
-	if !oldWarmGet {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_warm_get": "true"})
+	if !p.Cksum.ValidateWarmGet {
+		propsToUpdate := cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				ValidateWarmGet: api.Bool(true),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
 	}
 
 	objName := filepath.Join(ChecksumWarmValidateStr, fileName)
@@ -1010,7 +1042,17 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	fqn = findObjOnDisk(bck, objName)
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.type": cmn.ChecksumNone})
+
+	if p.Cksum.Type != cmn.ChecksumNone {
+		propsToUpdate := cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				Type: api.String(cmn.ChecksumNone),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
+	}
+
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
@@ -1019,10 +1061,14 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	tassert.Errorf(t, err == nil, "A GET on an object when checksum algo is none should pass. Error: %v", err)
 
 	// Restore old config
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{
-		"checksum.type":              oldChecksum,
-		"checksum.validate_warm_get": fmt.Sprintf("%v", oldWarmGet),
-	})
+	propsToUpdate := cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			Type:            api.String(p.Cksum.Type),
+			ValidateWarmGet: api.Bool(p.Cksum.ValidateWarmGet),
+		},
+	}
+	err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	tassert.CheckFatal(t, err)
 
 	wg := &sync.WaitGroup{}
 	for _, fn := range filesList {
@@ -1067,7 +1113,11 @@ func Test_evictCloudBucket(t *testing.T) {
 		resetBucketProps(proxyURL, bck, t)
 	}()
 
-	tutils.PutRandObjs(proxyURL, bck, EvictCBStr, largeFileSize, numPuts, errCh, filesPutCh)
+	p, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+	cksumType := p.Cksum.Type
+
+	tutils.PutRandObjs(proxyURL, bck, EvictCBStr, largeFileSize, numPuts, errCh, filesPutCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
@@ -1148,7 +1198,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		bmdMock    = cluster.NewBaseBownerMock()
 		tMock      = cluster.NewTargetMock(bmdMock)
 		bck        = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     tutils.GenRandomString(15),
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -1156,20 +1206,24 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	bmdMock.Add(cluster.NewBck(TestBucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 
 	if containers.DockerRunning() {
-		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
+		t.Skip(fmt.Sprintf("test %q requires write access to xattrs, doesn't work with docker", t.Name()))
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+	conf := cmn.DefaultBucketProps().Cksum
+
+	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, conf.Type)
 	tassert.SelectErr(t, errCh, "put", false)
 
-	// Get Current Config
-	config := tutils.GetClusterConfig(t)
-	oldWarmGet := config.Cksum.ValidateWarmGet
-	oldChecksum := config.Cksum.Type
-
-	if !oldWarmGet {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_warm_get": "true"})
+	if !conf.ValidateWarmGet {
+		propsToUpdate := cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				ValidateWarmGet: api.Bool(true),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
 	}
 
 	// Test changing the file content
@@ -1191,7 +1245,17 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	// Test for none checksum algo
 	objName = filepath.Join(ChecksumWarmValidateStr, <-fileNameCh)
 	fqn = findObjOnDisk(bck, objName)
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.type": cmn.ChecksumNone})
+
+	if conf.Type != cmn.ChecksumNone {
+		propsToUpdate := cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				Type: api.String(cmn.ChecksumNone),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
+	}
+
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
@@ -1200,12 +1264,6 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		t.Error("A GET on an object when checksum algo is none should pass")
 	}
 
-	// Restore old config
-	tutils.DestroyBucket(t, proxyURL, bck)
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{
-		"checksum.type":              oldChecksum,
-		"checksum.validate_warm_get": fmt.Sprintf("%v", oldWarmGet),
-	})
 	close(errCh)
 	close(fileNameCh)
 }
@@ -1233,7 +1291,7 @@ func TestRangeRead(t *testing.T) {
 		fileSize = 1024
 	)
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		var (
 			fileName   string
 			fileNameCh = make(chan string, numFiles)
@@ -1242,41 +1300,59 @@ func TestRangeRead(t *testing.T) {
 			baseParams = tutils.BaseAPIParams(proxyURL)
 		)
 
-		tutils.PutRandObjs(proxyURL, bck, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, true)
+		tutils.PutRandObjs(proxyURL, bck, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, cksumType, true)
 		tassert.SelectErr(t, errCh, "put", false)
 
 		// Get Current Config
-		config := tutils.GetClusterConfig(t)
-		oldEnableReadRangeChecksum := config.Cksum.EnableReadRange
+		p, err := api.HeadBucket(baseParams, bck)
+		tassert.CheckFatal(t, err)
 
 		defer func() {
 			tutils.Logln("Cleaning up...")
 			err := api.DeleteObject(baseParams, bck, filepath.Join(RangeGetStr, fileName))
 			tassert.CheckError(t, err)
-			tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": fmt.Sprintf("%v", oldEnableReadRangeChecksum)})
+			propsToUpdate := cmn.BucketPropsToUpdate{
+				Cksum: &cmn.CksumConfToUpdate{
+					EnableReadRange: api.Bool(p.Cksum.EnableReadRange),
+				},
+			}
+			err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 			close(errCh)
 			close(fileNameCh)
+			tassert.CheckFatal(t, err)
 		}()
 
 		fileName = <-fileNameCh
 		tutils.Logln("Testing valid cases.")
 		// Validate entire object checksum is being returned
-		if oldEnableReadRangeChecksum {
-			tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": "false"})
+		if p.Cksum.EnableReadRange {
+			propsToUpdate := cmn.BucketPropsToUpdate{
+				Cksum: &cmn.CksumConfToUpdate{
+					EnableReadRange: api.Bool(false),
+				},
+			}
+			err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+			tassert.CheckFatal(t, err)
 			if t.Failed() {
 				t.FailNow()
 			}
 		}
-		testValidCases(t, proxyURL, bck, fileSize, fileName, true, RangeGetStr)
+		testValidCases(t, proxyURL, bck, cksumType, fileSize, fileName, true, RangeGetStr)
 
 		// Validate only range checksum is being returned
-		if !oldEnableReadRangeChecksum {
-			tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.enable_read_range": "true"})
+		if !p.Cksum.EnableReadRange {
+			propsToUpdate := cmn.BucketPropsToUpdate{
+				Cksum: &cmn.CksumConfToUpdate{
+					EnableReadRange: api.Bool(true),
+				},
+			}
+			err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+			tassert.CheckFatal(t, err)
 			if t.Failed() {
 				t.FailNow()
 			}
 		}
-		testValidCases(t, proxyURL, bck, fileSize, fileName, false, RangeGetStr)
+		testValidCases(t, proxyURL, bck, cksumType, fileSize, fileName, false, RangeGetStr)
 
 		tutils.Logln("Testing invalid cases.")
 		verifyInvalidParams(t, proxyURL, bck, fileName, "", "1")
@@ -1288,20 +1364,25 @@ func TestRangeRead(t *testing.T) {
 	})
 }
 
-func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, fileSize uint64, fileName string, checkEntireObjCkSum bool, checkDir string) {
+func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, cksumType string, fileSize uint64, fileName string,
+	checkEntireObjCkSum bool, checkDir string) {
 	// Read the entire file range by range
 	// Read in ranges of 500 to test covered, partially covered and completely
 	// uncovered ranges
 	byteRange := int64(500)
 	iterations := int64(fileSize) / byteRange
 	for i := int64(0); i < iterations; i += byteRange {
-		verifyValidRanges(t, proxyURL, bck, fileName, i, byteRange, byteRange, checkEntireObjCkSum, checkDir)
+		verifyValidRanges(t, proxyURL, bck, cksumType, fileName, i, byteRange, byteRange, checkEntireObjCkSum, checkDir)
 	}
-	verifyValidRanges(t, proxyURL, bck, fileName, byteRange*iterations, byteRange, int64(fileSize)%byteRange, checkEntireObjCkSum, checkDir)
-	verifyValidRanges(t, proxyURL, bck, fileName, int64(fileSize)+100, byteRange, 0, checkEntireObjCkSum, checkDir)
+
+	verifyValidRanges(t, proxyURL, bck, cksumType, fileName, byteRange*iterations, byteRange,
+		int64(fileSize)%byteRange, checkEntireObjCkSum, checkDir)
+
+	verifyValidRanges(t, proxyURL, bck, cksumType, fileName,
+		int64(fileSize)+100, byteRange, 0, checkEntireObjCkSum, checkDir)
 }
 
-func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, fileName string,
+func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, fileName string,
 	offset, length, expectedLength int64, checkEntireObjCksum bool, checkDir string) {
 	fqn := findObjOnDisk(bck, filepath.Join(checkDir, fileName))
 
@@ -1323,13 +1404,13 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, fileName stri
 					t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
 				}
 				defer file.Close()
-				hash, err := cmn.ComputeXXHash(file, nil)
+				_, cksum, err := cmn.CopyAndChecksum(ioutil.Discard, file, nil, cksumType)
 				if err != nil {
 					t.Errorf("Unable to compute cksum of file: %s. Error:  %s", fqn, err)
 				}
-				if hash != ckErr.Expected() {
+				if cksum.Value() != ckErr.Expected() {
 					t.Errorf("Expected entire object checksum [%s], checksum returned in response [%s]",
-						ckErr.Expected(), hash)
+						ckErr.Expected(), cksum)
 				}
 			} else {
 				t.Errorf("Unexpected error returned [%v].", err)
@@ -1396,16 +1477,16 @@ func Test_checksum(t *testing.T) {
 		errCh      = make(chan error, numPuts*2)
 		totalSize  = int64(numPuts * largeFileSize)
 		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
 
 	// Get Current Config
-	config := tutils.GetClusterConfig(t)
-	ocoldget := config.Cksum.ValidateColdGet
-	ochksum := config.Cksum.Type
+	p, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
 
-	tutils.PutRandObjs(proxyURL, bck, ChksumValidStr, largeFileSize, numPuts, errCh, filesPutCh)
+	tutils.PutRandObjs(proxyURL, bck, ChksumValidStr, largeFileSize, numPuts, errCh, filesPutCh, p.Cksum.Type)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
@@ -1416,15 +1497,27 @@ func Test_checksum(t *testing.T) {
 	// Delete it from cache.
 	tutils.EvictObjects(t, proxyURL, bck, filesList)
 	// Disable checkum
-	if ochksum != cmn.ChecksumNone {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.type": cmn.ChecksumNone})
+	if p.Cksum.Type != cmn.ChecksumNone {
+		propsToUpdate := cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				Type: api.String(cmn.ChecksumNone),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
 	}
 	if t.Failed() {
 		goto cleanup
 	}
 	// Disable Cold Get Validation
-	if ocoldget {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": "false"})
+	if p.Cksum.ValidateColdGet {
+		propsToUpdate := cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				ValidateColdGet: api.Bool(false),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
 	}
 	if t.Failed() {
 		goto cleanup
@@ -1441,20 +1534,36 @@ func Test_checksum(t *testing.T) {
 	tutils.EvictObjects(t, proxyURL, bck, filesList)
 	switch clichecksum {
 	case "all":
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{
-			"checksum.type":              cmn.ChecksumXXHash,
-			"checksum.validate_cold_get": "true",
-		})
+		propsToUpdate := cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				Type:            api.String(cmn.ChecksumXXHash),
+				ValidateColdGet: api.Bool(true),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
 		if t.Failed() {
 			goto cleanup
 		}
 	case cmn.ChecksumXXHash:
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.type": cmn.ChecksumXXHash})
+		propsToUpdate := cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				Type: api.String(cmn.ChecksumXXHash),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
 		if t.Failed() {
 			goto cleanup
 		}
 	case ColdMD5str:
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"checksum.validate_cold_get": "true"})
+		propsToUpdate := cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				ValidateColdGet: api.Bool(true),
+			},
+		}
+		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		tassert.CheckFatal(t, err)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1477,10 +1586,14 @@ cleanup:
 	tassert.SelectErr(t, errCh, "delete", false)
 	close(errCh)
 	// restore old config
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{
-		"checksum.type":              ochksum,
-		"checksum.validate_cold_get": fmt.Sprintf("%v", ocoldget),
-	})
+	propsToUpdate := cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			Type:            api.String(p.Cksum.Type),
+			ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
+		},
+	}
+	err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	tassert.CheckFatal(t, err)
 }
 
 // deleteFromFileList requires that errCh be twice the size of len(filesList) as each

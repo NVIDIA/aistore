@@ -422,9 +422,7 @@ type ReplicationConf struct {
 }
 
 type CksumConf struct {
-	// Type of hashing algorithm used to check for object corruption.
-	// Values: "none", "xxhash", "md5", "inherit".
-	// Value "none" disables hash checking.
+	// Object checksum; ChecksumNone ("none") disables checksumming.
 	Type string `json:"type"`
 
 	// ValidateColdGet determines whether or not the checksum of received object
@@ -769,9 +767,8 @@ func (c *CksumConf) Validate(_ *Config) error {
 }
 
 func (c *CksumConf) ValidateAsProps(args *ValidationArgs) error {
-	if c.Type != PropInherit && c.Type != ChecksumNone && c.Type != ChecksumXXHash {
-		return fmt.Errorf("invalid checksum.type: %s (expected one of: [%s, %s, %s])",
-			c.Type, ChecksumXXHash, ChecksumNone, PropInherit)
+	if _, ok := checksums[c.Type]; !ok {
+		return fmt.Errorf("invalid checksum.type %q (expecting keys(%v))", c.Type, checksums)
 	}
 	return nil
 }

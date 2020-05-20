@@ -48,7 +48,7 @@ func doPut(wo *workOrder) {
 		Path: runParams.tmpDir,
 		Name: wo.objName,
 		Size: wo.size,
-	})
+	}, wo.cksumType)
 
 	if runParams.readerType == readers.ReaderTypeFile {
 		defer os.Remove(path.Join(runParams.tmpDir, wo.objName))
@@ -59,9 +59,9 @@ func doPut(wo *workOrder) {
 		return
 	}
 	if !traceHTTPSig.Load() {
-		wo.err = put(wo.proxyURL, wo.bck, wo.objName, r.XXHash(), r)
+		wo.err = put(wo.proxyURL, wo.bck, wo.objName, r.Cksum(), r)
 	} else {
-		wo.latencies, wo.err = putWithTrace(wo.proxyURL, wo.bck, wo.objName, r.XXHash(), r)
+		wo.latencies, wo.err = putWithTrace(wo.proxyURL, wo.bck, wo.objName, r.Cksum(), r)
 	}
 }
 

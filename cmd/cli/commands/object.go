@@ -174,7 +174,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader) (err error) {
 	var (
 		handle string
-		hash   = cmn.NewCksumHash(cmn.ChecksumXXHash)
+		cksum  = cmn.NewCksumHash(cmn.ChecksumXXHash) // TODO -- FIXME: is defined by bucket props
 	)
 	chunkSize, err := parseByteFlagToInt(c, chunkSizeFlag)
 	if err != nil {
@@ -182,7 +182,7 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 	}
 	for {
 		b := bytes.NewBuffer(nil)
-		n, err := io.CopyN(io.MultiWriter(b, hash.H), r, chunkSize)
+		n, err := io.CopyN(cmn.NewWriterMulti(cksum.H, b), r, chunkSize)
 		if err != nil && err != io.EOF {
 			return err
 		}
@@ -202,13 +202,13 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 			return err
 		}
 	}
-	hash.Finalize()
+	cksum.Finalize()
 	return api.FlushObject(api.FlushArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
 		Object:     objName,
 		Handle:     handle,
-		Hash:       hash.Value(),
+		Cksum:      cksum.Clone(),
 	})
 }
 

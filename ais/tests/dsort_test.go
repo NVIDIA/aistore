@@ -255,7 +255,7 @@ func (df *dsortFramework) createInputShards() {
 			fqn := path + df.extension
 			defer os.Remove(fqn)
 
-			reader, err := readers.NewFileReaderFromFile(fqn, false)
+			reader, err := readers.NewFileReaderFromFile(fqn, cmn.ChecksumNone)
 			tassert.CheckFatal(df.m.t, err)
 
 			tutils.PutAsync(wg, df.m.proxyURL, df.m.bck, filepath.Base(fqn), reader, errCh)

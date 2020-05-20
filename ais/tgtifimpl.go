@@ -267,22 +267,23 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		glog.Infof("promote%s %s => %s", s, srcFQN, lom)
 	}
 	var (
-		cksum   *cmn.Cksum
+		cksum   *cmn.CksumHash
 		written int64
 		workFQN string
 		poi     = &putObjInfo{t: t, lom: lom}
+		conf    = lom.CksumConf()
 	)
 
 	if safe {
 		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
 		buf, slab := t.gmm.Alloc()
-		written, cksum, err = cmn.CopyFile(srcFQN, workFQN, buf, true)
+		written, cksum, err = cmn.CopyFile(srcFQN, workFQN, buf, conf.Type)
 		slab.Free(buf)
 		if err != nil {
 			return
 		}
-		lom.SetCksum(cksum)
+		lom.SetCksum(cksum.Clone())
 	} else {
 		workFQN = srcFQN // use the file as it would be intermediate (work) file
 		fi, err := os.Stat(srcFQN)
@@ -291,16 +292,16 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		}
 		written = fi.Size()
 		clone := lom.Clone(srcFQN)
-		cksum, err = clone.ComputeCksum(cmn.ChecksumXXHash)
+		cksum, err = clone.ComputeCksum()
 		if err != nil {
 			return err
 		}
-		lom.SetCksum(cksum)
+		lom.SetCksum(cksum.Clone())
 	}
 
 	if expectedCksum != nil {
 		if !cksum.Equal(expectedCksum) {
-			return cmn.NewBadDataCksumError(cksum, expectedCksum)
+			return cmn.NewBadDataCksumError(&cksum.Cksum, expectedCksum, srcFQN+" => "+lom.String())
 		}
 	}
 

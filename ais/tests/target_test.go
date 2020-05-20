@@ -40,7 +40,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objName,
-		Hash:       reader.XXHash(),
+		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}
 	if err := api.PutObject(putArgs); err == nil {

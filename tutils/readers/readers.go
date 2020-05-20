@@ -17,7 +17,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -34,7 +33,7 @@ type Reader interface {
 	io.ReadCloser
 	io.Seeker
 	Open() (io.ReadCloser, error)
-	XXHash() string
+	Cksum() *cmn.Cksum
 }
 
 // randReader implements Reader.
@@ -44,7 +43,7 @@ type randReader struct {
 	rnd    *rand.Rand
 	size   int64
 	offset int64
-	xxHash string
+	cksum  *cmn.Cksum
 }
 
 var (
@@ -76,10 +75,10 @@ func (r *randReader) Read(buf []byte) (int, error) {
 // Returns a new rand reader using the same seed.
 func (r *randReader) Open() (io.ReadCloser, error) {
 	return &randReader{
-		seed:   r.seed,
-		rnd:    rand.New(rand.NewSource(r.seed)),
-		size:   r.size,
-		xxHash: r.xxHash,
+		seed:  r.seed,
+		rnd:   rand.New(rand.NewSource(r.seed)),
+		size:  r.size,
+		cksum: r.cksum,
 	}, nil
 }
 
@@ -120,23 +119,24 @@ func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 	}
 
 	if actual != abs {
-		return 0, fmt.Errorf("RandReader.Seek: failed to seek to %d, seeked to %d instead", offset, actual) // nolint:golint // name of the method
+		err := fmt.Errorf("failed to seek to %d, seeked to %d instead", offset, actual) // nolint:golint // name of the method
+		return 0, err
 	}
 
 	return abs, nil
 }
 
 // XXHash implements the Reader interface.
-func (r *randReader) XXHash() string {
-	return r.xxHash
+func (r *randReader) Cksum() *cmn.Cksum {
+	return r.cksum
 }
 
 // NewRandReader returns a new randReader
-func NewRandReader(size int64, withHash bool) (Reader, error) {
+func NewRandReader(size int64, cksumType string) (Reader, error) {
 	var (
-		hash string
-		err  error
-		seed = time.Now().UnixNano()
+		cksum *cmn.Cksum
+		err   error
+		seed  = time.Now().UnixNano()
 	)
 	slab, err := mmsa.GetSlab(cmn.KiB * 32)
 	if err != nil {
@@ -146,18 +146,19 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 	defer slab.Free(buf)
 	rand1 := rand.New(rand.NewSource(seed))
 	rr := &rrLimited{rand1, size, 0}
-	if withHash {
-		_, hash, err = cmn.WriteWithHash(ioutil.Discard, rr, buf, cmn.ChecksumXXHash)
+	if cksumType != cmn.ChecksumNone {
+		_, cksumHash, err := cmn.CopyAndChecksum(ioutil.Discard, rr, buf, cksumType)
 		if err != nil {
 			return nil, err
 		}
+		cksum = cksumHash.Clone()
 	}
 	rand1dup := rand.New(rand.NewSource(seed))
 	return &randReader{
-		seed:   seed,
-		rnd:    rand1dup,
-		size:   size,
-		xxHash: hash,
+		seed:  seed,
+		rnd:   rand1dup,
+		size:  size,
+		cksum: cksum,
 	}, nil
 }
 
@@ -181,7 +182,7 @@ type fileReader struct {
 	*os.File
 	fullName string // Example: "/dir/ais/smoke/bGzhWKWoxHDSePnELftx"
 	name     string // Example: smoke/bGzhWKWoxHDSePnELftx
-	xxHash   string
+	cksum    *cmn.Cksum
 }
 
 var _ Reader = &fileReader{}
@@ -192,21 +193,23 @@ func (r *fileReader) Open() (io.ReadCloser, error) {
 }
 
 // XXHash implements the Reader interface.
-func (r *fileReader) XXHash() string {
-	return r.xxHash
+func (r *fileReader) Cksum() *cmn.Cksum {
+	return r.cksum
 }
 
 // NewFileReader creates/opens the file, populates it with random data, and returns a new fileReader
 // Caller is responsible for closing
-func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, error) {
-	fn := path.Join(filepath, name)
-
-	f, err := os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0666) // wr-wr-wr-
+func NewFileReader(filepath, name string, size int64, cksumType string) (Reader, error) {
+	var (
+		cksum  *cmn.Cksum
+		fn     = path.Join(filepath, name)
+		f, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0666) // wr-wr-wr-
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	hash, err := copyRandWithHash(f, size, withHash, cmn.NowRand())
+	cksumHash, err := copyRandWithHash(f, size, cksumType, cmn.NowRand())
 	if err != nil {
 		f.Close()
 		return nil, err
@@ -215,61 +218,65 @@ func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, er
 		f.Close()
 		return nil, err
 	}
-
+	if cksumType != cmn.ChecksumNone {
+		cksum = cksumHash.Clone()
+	}
 	// FIXME: No need to have 'f' in fileReader?
-	return &fileReader{f, fn, name, hash}, nil
+	return &fileReader{f, fn, name, cksum}, nil
 }
 
 // NewFileReaderFromFile opens an existing file, reads it to compute checksum,
 // and returns a new reader.
 // See also (and note the difference from): NewFileReader
 // Caller responsible for closing
-func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
-	f, err := os.Open(fn)
+func NewFileReaderFromFile(fn, cksumType string) (Reader, error) {
+	var (
+		cksum  *cmn.Cksum
+		f, err = os.Open(fn)
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	var hash string
-	if withHash {
+	if cksumType != cmn.ChecksumNone {
 		buf, slab := mmsa.Alloc()
-		_, hash, err = cmn.WriteWithHash(ioutil.Discard, f, buf, cmn.ChecksumXXHash)
+		_, cksumHash, err := cmn.CopyAndChecksum(ioutil.Discard, f, buf, cksumType)
 		if err != nil {
 			return nil, err
 		}
 		slab.Free(buf)
+		cksum = cksumHash.Clone()
 	}
 
-	return &fileReader{f, fn, "" /* ais prefix */, hash}, nil
+	return &fileReader{f, fn, "" /* ais prefix */, cksum}, nil
 }
 
 type sgReader struct {
 	memsys.Reader
-	xxHash string
+	cksum *cmn.Cksum
 }
 
 var _ Reader = &sgReader{}
 
 // XXHash implements the Reader interface.
-func (r *sgReader) XXHash() string {
-	return r.xxHash
+func (r *sgReader) Cksum() *cmn.Cksum {
+	return r.cksum
 }
 
 // NewSGReader returns a new sgReader
-func NewSGReader(sgl *memsys.SGL, size int64, withHash bool) (Reader, error) {
+func NewSGReader(sgl *memsys.SGL, size int64, cksumType string) (Reader, error) {
 	var (
-		hash string
-		err  error
+		cksum *cmn.CksumHash
+		err   error
 	)
 	if size > 0 {
-		hash, err = copyRandWithHash(sgl, size, withHash, cmn.NowRand())
+		cksum, err = copyRandWithHash(sgl, size, cksumType, cmn.NowRand())
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	r := memsys.NewReader(sgl)
-	return &sgReader{*r, hash}, nil
+	return &sgReader{*r, cksum.Clone()}, nil
 }
 
 type bytesReader struct {
@@ -287,9 +294,8 @@ func (r *bytesReader) Close() error {
 	return nil
 }
 
-// XXHash implements the Reader interface.
-func (r *bytesReader) XXHash() string {
-	return "not implemented"
+func (r *bytesReader) Cksum() *cmn.Cksum {
+	return nil // niy
 }
 
 func (r *bytesReader) Seek(offset int64, whence int) (int64, error) {
@@ -310,17 +316,17 @@ type ParamReader struct {
 }
 
 // NewReader returns a data reader; type of reader returned is based on the parameters provided
-func NewReader(p ParamReader) (Reader, error) {
+func NewReader(p ParamReader, cksumType string) (Reader, error) {
 	switch p.Type {
 	case ReaderTypeSG:
 		if p.SGL == nil {
 			return nil, fmt.Errorf("SGL is empty while reader type is SGL")
 		}
-		return NewSGReader(p.SGL, p.Size, true /* withHash */)
+		return NewSGReader(p.SGL, p.Size, cksumType)
 	case ReaderTypeRand:
-		return NewRandReader(p.Size, true /* withHash */)
+		return NewRandReader(p.Size, cksumType)
 	case ReaderTypeFile:
-		return NewFileReader(p.Path, p.Name, p.Size, true /* withHash */)
+		return NewFileReader(p.Path, p.Name, p.Size, cksumType)
 	default:
 		return nil, fmt.Errorf("unknown memory type for creating inmem reader")
 	}
@@ -329,35 +335,33 @@ func NewReader(p ParamReader) (Reader, error) {
 // copyRandWithHash reads data from random source and writes it to a writer while
 // optionally computing xxhash
 // See related: memsys_test.copyRand
-func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (string, error) {
+func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand) (*cmn.CksumHash, error) {
 	var (
-		rem   = size
-		shash string
-		h     *xxhash.XXHash64
+		cksum   *cmn.CksumHash
+		rem     = size
+		buf, s  = mmsa.Alloc()
+		blkSize = int64(len(buf))
 	)
-	buf, s := mmsa.Alloc()
-	blkSize := int64(len(buf))
 	defer s.Free(buf)
 
-	if withHash {
-		h = xxhash.New64()
+	if cksumType != cmn.ChecksumNone {
+		cksum = cmn.NewCksumHash(cksumType)
 	}
 	for i := int64(0); i <= size/blkSize; i++ {
 		n := int(cmn.MinI64(blkSize, rem))
 		rnd.Read(buf[:n])
 		m, err := w.Write(buf[:n])
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-
-		if withHash {
-			h.Write(buf[:m])
+		if cksumType != cmn.ChecksumNone {
+			cksum.H.Write(buf[:m])
 		}
 		cmn.Assert(m == n)
 		rem -= int64(m)
 	}
-	if withHash {
-		shash = cmn.HashToStr(h)
+	if cksumType != cmn.ChecksumNone {
+		cksum.Finalize()
 	}
-	return shash, nil
+	return cksum, nil
 }

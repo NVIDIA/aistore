@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"sync"
@@ -21,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/OneOfOne/xxhash"
 	"github.com/klauspost/reedsolomon"
 )
 
@@ -231,7 +231,8 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
 	mi := req.LOM.ParsedFQN.MpathInfo
 	bdir := mi.MakePathBck(req.LOM.Bck().Bck)
-	if _, err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer), buffer, false, writer.Size(), bdir); err != nil {
+	if _, err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer),
+		buffer, cmn.ChecksumNone, writer.Size(), bdir); err != nil {
 		writer.Free()
 		return err
 	}
@@ -243,7 +244,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 
 	b := cmn.MustMarshal(meta)
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false, -1, bdir); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, cmn.ChecksumNone, -1, bdir); err != nil {
 		writer.Free()
 		<-c.diskCh
 		return err
@@ -309,7 +310,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
 	bdir := req.LOM.ParsedFQN.MpathInfo.MakePathBck(req.LOM.Bck().Bck)
 
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false, -1, bdir); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, cmn.ChecksumNone, -1, bdir); err != nil {
 		<-c.diskCh
 		return err
 	}
@@ -410,9 +411,8 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	return slices, idToNode, nil
 }
 
-func noSliceWriter(req *Request, writers []io.Writer, restored []*slice,
-	hashes []*xxhash.XXHash64, idToNode map[int]string, toDisk bool,
-	id int, sliceSize int64) error {
+func noSliceWriter(req *Request, writers []io.Writer, restored []*slice, cksums []*cmn.CksumHash,
+	cksumType string, idToNode map[int]string, toDisk bool, id int, sliceSize int64) error {
 	if toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", id)
 		fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
@@ -420,14 +420,14 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice,
 		if err != nil {
 			return err
 		}
-		hashes[id] = xxhash.New64()
-		writers[id] = io.MultiWriter(file, hashes[id])
+		cksums[id] = cmn.NewCksumHash(cksumType)
+		writers[id] = cmn.NewWriterMulti(cksums[id].H, file)
 		restored[id] = &slice{workFQN: fqn, n: sliceSize}
 	} else {
 		sgl := mm.NewSGL(sliceSize)
 		restored[id] = &slice{obj: sgl, n: sliceSize}
-		hashes[id] = xxhash.New64()
-		writers[id] = io.MultiWriter(sgl, hashes[id])
+		cksums[id] = cmn.NewCksumHash(cksumType)
+		writers[id] = cmn.NewWriterMulti(sgl, cksums[id].H)
 	}
 
 	// id from slices object differs from id of idToNode object
@@ -439,23 +439,25 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice,
 func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGroup, errCh chan int, i int, sliceSize int64) {
 	defer wg.Done()
 
-	if kind, _ := recvCksm.Get(); kind == cmn.ChecksumNone {
-		glog.Errorf("Checksum of a slice is of type %s", cmn.ChecksumNone)
+	cksumType := recvCksm.Type()
+	if cksumType == cmn.ChecksumNone {
+		glog.Errorf("slice %d is not checksummed", i)
 		return
 	}
 
 	buf, slab := mm.Alloc(sliceSize)
-	actualCksm, err := cmn.ComputeXXHash(reader, buf)
+	_, actualCksm, err := cmn.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
 	slab.Free(buf)
 
 	if err != nil {
-		glog.Errorf("Couldn't compute hash of a slice: %s", err)
+		glog.Errorf("Couldn't compute checksum of a slice %d: %v", i, err)
 		errCh <- i
 		return
 	}
 
-	if !recvCksm.Equal(cmn.NewCksum(cmn.ChecksumXXHash, actualCksm)) {
-		glog.Errorf("Checksum of slice does not match. Got: %s, expected: %s", recvCksm.String(), cmn.NewCksum(cmn.ChecksumXXHash, actualCksm).String())
+	if !actualCksm.Equal(recvCksm) {
+		err := cmn.NewBadDataCksumError(recvCksm, &actualCksm.Cksum, fmt.Sprintf("slice %d", i))
+		glog.Error(err)
 		errCh <- i
 	}
 }
@@ -469,14 +471,16 @@ func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGrou
 // * list of created SGLs to be freed later
 func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string,
 	toDisk bool, buffer []byte) ([]*slice, error) {
-	var err error
-	sliceCnt := meta.Data + meta.Parity
-	sliceSize := SliceSize(meta.Size, meta.Data)
-	readers := make([]io.Reader, sliceCnt)
-	writers := make([]io.Writer, sliceCnt)
-	restored := make([]*slice, sliceCnt)
-	hashes := make([]*xxhash.XXHash64, sliceCnt)
-
+	var (
+		err       error
+		sliceCnt  = meta.Data + meta.Parity
+		sliceSize = SliceSize(meta.Size, meta.Data)
+		readers   = make([]io.Reader, sliceCnt)
+		writers   = make([]io.Writer, sliceCnt)
+		restored  = make([]*slice, sliceCnt)
+		cksums    = make([]*cmn.CksumHash, sliceCnt)
+		conf      = req.LOM.CksumConf()
+	)
 	cksmWg := &sync.WaitGroup{}
 	cksmErrCh := make(chan int, sliceCnt)
 
@@ -497,7 +501,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 			}
 		}
 		if sl == nil || sl.writer == nil {
-			if err = noSliceWriter(req, writers, restored, hashes, idToNode, toDisk, i, sliceSize); err != nil {
+			if err = noSliceWriter(req, writers, restored, cksums, conf.Type, idToNode, toDisk, i, sliceSize); err != nil {
 				break
 			}
 		} else {
@@ -541,7 +545,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	for i := range cksmErrCh {
 		// slice's checksum did not match, however we might be able to restore object anyway
 		glog.Warningf("Slice checksum mismatch for %s", req.LOM.ObjName)
-		if err := noSliceWriter(req, writers, restored, hashes, idToNode, toDisk, i, sliceSize); err != nil {
+		if err := noSliceWriter(req, writers, restored, cksums, conf.Type, idToNode, toDisk, i, sliceSize); err != nil {
 			return restored, err
 		}
 		readers[i] = nil
@@ -556,8 +560,8 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		if rst == nil {
 			continue
 		}
-		if hashes[idx] != nil {
-			rst.cksum = cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(hashes[idx]))
+		if cksums[idx] != nil {
+			rst.cksum = cksums[idx].Clone()
 		}
 		if version == "" && rst.version != "" {
 			version = rst.version
@@ -603,18 +607,19 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	if version != "" {
 		req.LOM.SetVersion(version)
 	}
-	tmpFQN := fs.CSM.GenContentFQN(mainFQN, fs.WorkfileType, "ec")
-	// recalculate hash for the main object before saving the object's xattrs
-	// otherwise the main object gets hash from one of slices
-	mi := req.LOM.ParsedFQN.MpathInfo
-	bdir := mi.MakePathBck(req.LOM.Bck().Bck)
-	cksum, err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, true, meta.Size, bdir)
+	// recompute checksum of the full replica
+	var (
+		tmpFQN = fs.CSM.GenContentFQN(mainFQN, fs.WorkfileType, "ec")
+		mi     = req.LOM.ParsedFQN.MpathInfo
+		bdir   = mi.MakePathBck(req.LOM.Bck().Bck)
+	)
+	cksum, err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, conf.Type, meta.Size, bdir)
 	if err != nil {
 		<-c.diskCh
 		return restored, err
 	}
 	<-c.diskCh
-	req.LOM.SetCksum(cksum)
+	req.LOM.SetCksum(cksum.Clone())
 	// Persist called without a lock. It's not a problem, as the LOM should not be used as the object is missing
 	if err := req.LOM.Persist(); err != nil {
 		return restored, err
@@ -631,7 +636,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		glog.Infof("Saving main meta %s/%s to %q", req.LOM.Bck(), req.LOM.ObjName, metaFQN)
 	}
 
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false, -1, bdir); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, cmn.ChecksumNone, -1, bdir); err != nil {
 		return restored, err
 	}
 

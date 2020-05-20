@@ -22,11 +22,6 @@ const (
 	DSortNameLowercase = "dsort"
 )
 
-// bucket property type (used by cksum, versioning)
-const (
-	PropInherit = "inherit" // inherit bucket property from global config
-)
-
 const (
 	AppendOp = "append"
 	FlushOp  = "flush"

@@ -119,7 +119,7 @@ var _ = Describe("Common file", func() {
 			const bytesToRead = 1000
 			byteBuffer := make([]byte, bytesToRead)
 
-			_, err := cmn.SaveReader(nonExistingFile, rand.Reader, byteBuffer, false, bytesToRead, "")
+			_, err := cmn.SaveReader(nonExistingFile, rand.Reader, byteBuffer, cmn.ChecksumNone, bytesToRead, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			validateSaveReaderOutput(nonExistingFile, byteBuffer)
@@ -130,7 +130,7 @@ var _ = Describe("Common file", func() {
 			byteBuffer := make([]byte, bytesLimit*2)
 			reader := &io.LimitedReader{R: rand.Reader, N: bytesLimit}
 
-			_, err := cmn.SaveReader(nonExistingFile, reader, byteBuffer, false, -1, "")
+			_, err := cmn.SaveReader(nonExistingFile, reader, byteBuffer, cmn.ChecksumNone, -1, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			validateSaveReaderOutput(nonExistingFile, byteBuffer[:bytesLimit])
@@ -178,9 +178,9 @@ var _ = Describe("Common file", func() {
 		)
 
 		It("should copy file and preserve the content", func() {
-			_, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), false, 1000, "")
+			_, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cmn.ChecksumNone, 1000, "")
 			Expect(err).NotTo(HaveOccurred())
-			_, _, err = cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), false)
+			_, _, err = cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cmn.ChecksumNone)
 			Expect(err).NotTo(HaveOccurred())
 
 			srcData, err := ioutil.ReadFile(srcFilename)
@@ -193,10 +193,10 @@ var _ = Describe("Common file", func() {
 		})
 
 		It("should copy a object and compute its checksum", func() {
-			expectedCksum, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), true, 1000, "")
+			expectedCksum, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cmn.ChecksumXXHash, 1000, "")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, cksum, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), true)
+			_, cksum, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cmn.ChecksumXXHash)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cksum).To(Equal(expectedCksum))
 

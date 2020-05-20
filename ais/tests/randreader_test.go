@@ -29,13 +29,14 @@ func TestRandomReaderPutStress(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		wg         = &sync.WaitGroup{}
 		dir        = t.Name()
+		cksumType  = cmn.DefaultBucketProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	for i := 0; i < numworkers; i++ {
-		reader, err := readers.NewRandReader(fileSize, true)
+		reader, err := readers.NewRandReader(fileSize, cksumType)
 		tassert.CheckFatal(t, err)
 		wg.Add(1)
 		go func() {
@@ -57,7 +58,7 @@ func putRR(t *testing.T, baseParams api.BaseParams, reader readers.Reader, bck c
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     objName,
-			Hash:       reader.XXHash(),
+			Cksum:      reader.Cksum(),
 			Reader:     reader,
 		}
 		err := api.PutObject(putArgs)

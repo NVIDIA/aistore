@@ -98,7 +98,6 @@ var ecTests = []ecTest{
 
 func defaultECBckProps(o *ecOptions) cmn.BucketPropsToUpdate {
 	return cmn.BucketPropsToUpdate{
-		Cksum: &cmn.CksumConfToUpdate{Type: api.String(cmn.PropInherit)},
 		EC: &cmn.ECConfToUpdate{
 			Enabled:      api.Bool(true),
 			ObjSizeLimit: api.Int64(ecObjLimit),
@@ -400,7 +399,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 				}
 			}
 
-			r, err := readers.NewRandReader(objSize, false)
+			r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 			defer func() {
 				r.Close()
 				o.sema.Release()
@@ -515,7 +514,7 @@ func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
 }
 
 func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath string, size int) {
-	r, err := readers.NewRandReader(int64(size), false)
+	r, err := readers.NewRandReader(int64(size), cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
 
@@ -626,9 +625,6 @@ func TestECChange(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	bucketProps := cmn.BucketPropsToUpdate{
-		Cksum: &cmn.CksumConfToUpdate{
-			Type: api.String(cmn.PropInherit),
-		},
 		EC: &cmn.ECConfToUpdate{
 			Enabled:      api.Bool(true),
 			ObjSizeLimit: api.Int64(ecObjLimit),
@@ -690,7 +686,7 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objN
 	objPath := ecTestDir + objName
 
 	tutils.Logf("Creating %s, size %8d\n", objPath, objSize)
-	r, err := readers.NewRandReader(objSize, false)
+	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
 
@@ -722,7 +718,7 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objNam
 	if !o.silent {
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 	}
-	r, err := readers.NewRandReader(objSize, false)
+	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
 
@@ -769,7 +765,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		delStr = "obj+slice"
 	}
 	tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
-	r, err := readers.NewRandReader(objSize, false)
+	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
 
@@ -951,7 +947,7 @@ func putECFile(baseParams api.BaseParams, bck cmn.Bck, objName string) error {
 	objSize := int64(ecMinBigSize * 2)
 	objPath := ecTestDir + objName
 
-	r, err := readers.NewRandReader(objSize, false)
+	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 	if err != nil {
 		return err
 	}
@@ -1451,7 +1447,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			} else {
 				tutils.Logf("Object %s, size %9d[%9s]\n", objName, objSize, "-")
 			}
-			r, err := readers.NewRandReader(objSize, false)
+			r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 			tassert.Errorf(t, err == nil, "Failed to create reader: %v", err)
 			putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
 			err = api.PutObject(putArgs)
@@ -1546,7 +1542,7 @@ func TestECXattrs(t *testing.T) {
 			ecStr = "EC"
 		}
 		tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
-		r, err := readers.NewRandReader(objSize, false)
+		r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		defer r.Close()
 		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
@@ -1763,7 +1759,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 			ecStr = "EC"
 		}
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
-		r, err := readers.NewRandReader(objSize, false)
+		r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		defer r.Close()
 		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
@@ -2013,7 +2009,7 @@ func TestECEmergencyMpath(t *testing.T) {
 			ecStr = "EC"
 		}
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
-		r, err := readers.NewRandReader(objSize, false)
+		r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		defer r.Close()
 		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
@@ -2306,9 +2302,6 @@ func TestECBucketEncode(t *testing.T) {
 
 	tutils.Logf("Enabling EC\n")
 	bckPropsToUpate := cmn.BucketPropsToUpdate{
-		Cksum: &cmn.CksumConfToUpdate{
-			Type: api.String(cmn.PropInherit),
-		},
 		EC: &cmn.ECConfToUpdate{
 			Enabled:      api.Bool(true),
 			ObjSizeLimit: api.Int64(ecObjLimit),
@@ -2424,6 +2417,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	)
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		cksumType  = cmn.DefaultBucketProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckReg)
@@ -2472,7 +2466,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	}
 	errCh := make(chan error, len(fileList))
 	objsPutCh := make(chan string, len(fileList))
-	tutils.PutObjsFromList(proxyURL, bckReg, ecTestDir, fileSize, fileList, errCh, objsPutCh)
+	tutils.PutObjsFromList(proxyURL, bckReg, ecTestDir, fileSize, fileList, errCh, objsPutCh, cksumType)
 
 	msg := &cmn.SelectMsg{}
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)

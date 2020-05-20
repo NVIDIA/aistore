@@ -130,7 +130,8 @@ func rwCanRunAsync(currAsyncOps int64, maxAsycOps int) bool {
 	return currAsyncOps+1 < int64(maxAsycOps)
 }
 
-func rwPutLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
+func rwPutLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string,
+	taskGrp *sync.WaitGroup, cksumType string, doneCh chan int) {
 	var (
 		totalOps   int
 		prc        int
@@ -151,7 +152,7 @@ func rwPutLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, t
 
 			if ok := tryLockFile(idx); ok {
 				// NOTE: This test depends on the files it creates, so ignore reader type, always use file reader
-				r, err := readers.NewFileReader(baseDir, objName, fileSize, true /*withHash*/)
+				r, err := readers.NewFileReader(baseDir, objName, fileSize, cksumType)
 				if err != nil {
 					t.Error(err)
 					tassert.CheckFatal(t, r.Close())
@@ -173,7 +174,7 @@ func rwPutLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, t
 						BaseParams: baseParams,
 						Bck:        bck,
 						Object:     objName,
-						Hash:       r.XXHash(),
+						Cksum:      r.Cksum(),
 						Reader:     r,
 					}
 					err = api.PutObject(putArgs)
@@ -322,7 +323,7 @@ func rwGetLoop(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string, t
 }
 
 func rwstress(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck) {
+	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
 		err := cmn.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir))
 		tassert.CheckFatal(t, err)
 		defer func() {
@@ -340,7 +341,7 @@ func rwstress(t *testing.T) {
 		var wg sync.WaitGroup
 		doneCh := make(chan int, 2)
 		wg.Add(1)
-		go rwPutLoop(t, proxyURL, bck, fileNames, &wg, doneCh)
+		go rwPutLoop(t, proxyURL, bck, fileNames, &wg, cksumType, doneCh)
 		wg.Add(1)
 		go rwGetLoop(t, proxyURL, bck, fileNames, &wg, doneCh)
 		if !skipdel {

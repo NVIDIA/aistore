@@ -49,7 +49,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
-						Type: cmn.PropInherit,
+						Type: cmn.ChecksumXXHash,
 					},
 				},
 				map[string]interface{}{
@@ -74,7 +74,7 @@ var _ = Describe("IterFields", func() {
 					"versioning.enabled":           false,
 					"versioning.validate_warm_get": false,
 
-					"checksum.type":              cmn.PropInherit,
+					"checksum.type":              cmn.ChecksumXXHash,
 					"checksum.validate_warm_get": false,
 					"checksum.validate_cold_get": false,
 					"checksum.validate_obj_move": false,
@@ -99,7 +99,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: &cmn.LRUConfToUpdate{},
 					Cksum: &cmn.CksumConfToUpdate{
-						Type: api.String(cmn.PropInherit),
+						Type: api.String(cmn.ChecksumXXHash),
 					},
 					AccessAttrs: api.Uint64(1024),
 				},
@@ -122,7 +122,7 @@ var _ = Describe("IterFields", func() {
 					"versioning.enabled":           (*bool)(nil),
 					"versioning.validate_warm_get": (*bool)(nil),
 
-					"checksum.type":              api.String(cmn.PropInherit),
+					"checksum.type":              api.String(cmn.ChecksumXXHash),
 					"checksum.validate_warm_get": (*bool)(nil),
 					"checksum.validate_cold_get": (*bool)(nil),
 					"checksum.validate_obj_move": (*bool)(nil),
@@ -191,7 +191,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"checksum.type": cmn.PropInherit,
+					"checksum.type": cmn.ChecksumXXHash,
 
 					"access": "12", // type == uint64
 				},
@@ -207,7 +207,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
-						Type: cmn.PropInherit,
+						Type: cmn.ChecksumXXHash,
 					},
 					Versioning: cmn.VersionConf{
 						Enabled:         false,
@@ -234,7 +234,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"checksum.type": cmn.PropInherit,
+					"checksum.type": cmn.ChecksumXXHash,
 
 					"access": "12", // type == uint64
 				},
@@ -254,7 +254,7 @@ var _ = Describe("IterFields", func() {
 						Compression:  api.String(""),
 					},
 					Cksum: &cmn.CksumConfToUpdate{
-						Type:            api.String(cmn.PropInherit),
+						Type:            api.String(cmn.ChecksumXXHash),
 						ValidateWarmGet: api.Bool(true),
 					},
 					AccessAttrs: api.Uint64(12),

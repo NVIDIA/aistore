@@ -311,9 +311,12 @@ func TestCloudListObjectVersions(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
 
-	// Enable local versioning management
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	p, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+
+	// Enable local versioning management
+	err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		Versioning: &cmn.VersionConfToUpdate{Enabled: api.Bool(true)},
 	})
 	if err != nil {
@@ -339,7 +342,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		wg.Add(1)
 		go func(wid int) {
 			defer wg.Done()
-			reader, err := readers.NewRandReader(int64(objectSize), true)
+			reader, err := readers.NewRandReader(int64(objectSize), p.Cksum.Type)
 			tassert.CheckFatal(t, err)
 			objectsToPut := objectCount / workerCount
 			if wid == workerCount-1 { // last worker puts leftovers
@@ -433,6 +436,8 @@ func TestListObjects(t *testing.T) {
 			tutils.CreateFreshBucket(t, proxyURL, bck)
 			defer tutils.DestroyBucket(t, proxyURL, bck)
 
+			p := cmn.DefaultBucketProps()
+
 			totalObjects := 0
 			for iter := 1; iter <= iterations; iter++ {
 				tutils.Logf("listing iteration: %d/%d (total_objs: %d)\n", iter, iterations, totalObjects)
@@ -444,7 +449,7 @@ func TestListObjects(t *testing.T) {
 						defer wg.Done()
 
 						objectSize := int64(rand.Intn(256) + 20)
-						reader, err := readers.NewRandReader(objectSize, true)
+						reader, err := readers.NewRandReader(objectSize, p.Cksum.Type)
 						tassert.CheckFatal(t, err)
 						objDir := tutils.RandomObjDir(dirLen, 5)
 						objectsToPut := objectCount / workerCount
@@ -584,6 +589,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				bck        cmn.Bck
 				errCh      = make(chan error, numFiles*5)
 				filesPutCh = make(chan string, numfiles)
+				cksumType  string
 				customPage = true
 			)
 			bckTest := cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
@@ -597,6 +603,7 @@ func TestListObjectsPrefix(t *testing.T) {
 
 				bckProp, err := api.HeadBucket(baseParams, bck)
 				tassert.CheckFatal(t, err)
+				cksumType = bckProp.Cksum.Type
 				customPage = bckProp.Provider != cmn.ProviderAzure
 
 				tutils.Logf("Cleaning up the cloud bucket %s\n", bck)
@@ -614,6 +621,9 @@ func TestListObjectsPrefix(t *testing.T) {
 				}
 				tutils.CreateFreshBucket(t, proxyURL, bck)
 				defer tutils.DestroyBucket(t, proxyURL, bck)
+
+				p := cmn.DefaultBucketProps()
+				cksumType = p.Cksum.Type
 			}
 
 			tutils.Logf("Create a list of %d objects\n", numFiles)
@@ -624,7 +634,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				fileList = append(fileList, fname)
 			}
 
-			tutils.PutObjsFromList(proxyURL, bck, prefix, fileSize, fileList, errCh, filesPutCh)
+			tutils.PutObjsFromList(proxyURL, bck, prefix, fileSize, fileList, errCh, filesPutCh, cksumType)
 			defer func() {
 				// Cleanup objects created by the test
 				for _, fname := range fileList {

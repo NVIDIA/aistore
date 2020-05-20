@@ -138,7 +138,7 @@ func (t *targetrunner) sendObj(src *cluster.LOM, si *cluster.Snode, bck cmn.Bck,
 		return cmn.NewFailedToCreateHTTPRequest(err)
 	}
 	if cksum := src.Cksum(); cksum != nil {
-		req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
+		req.Header.Set(cmn.HeaderObjCksumType, cksum.Type())
 		req.Header.Set(cmn.HeaderObjCksumVal, cksum.Value())
 	}
 	req.Header.Set(cmn.HeaderObjVersion, src.Version())

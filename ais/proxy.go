@@ -1213,7 +1213,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if bck.IsAIS() {
-		p.bucketPropsToHdr(bck, w.Header(), cmn.GCO.Get())
+		p.bucketPropsToHdr(bck, w.Header())
 		return
 	}
 	si, err := p.owner.smap.get().GetRandTarget()

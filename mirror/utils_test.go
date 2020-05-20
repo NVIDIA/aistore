@@ -117,7 +117,7 @@ func createTestFile(filePath, objName string, size int64) {
 	err := cmn.CreateDir(filePath)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	r, err := readers.NewFileReader(filePath, objName, size, false)
+	r, err := readers.NewFileReader(filePath, objName, size, cmn.ChecksumNone)
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(r.Close()).ShouldNot(HaveOccurred())
 }

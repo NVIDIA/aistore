@@ -23,7 +23,7 @@ var (
 )
 
 func TestFileReader(t *testing.T) {
-	r, err := readers.NewFileReader("/tmp", "seek", 10240, false /* withHash */)
+	r, err := readers.NewFileReader("/tmp", "seek", 10240, cmn.ChecksumNone)
 	if err != nil {
 		t.Fatal("Failed to create file reader", err)
 	}
@@ -234,7 +234,7 @@ func testReaderAdv(t *testing.T, r readers.Reader, size int64) {
 
 func TestRandReader(t *testing.T) {
 	size := int64(1024)
-	r, err := readers.NewRandReader(size, true /* withHash */)
+	r, err := readers.NewRandReader(size, cmn.ChecksumXXHash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestSGReader(t *testing.T) {
 		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := readers.NewSGReader(sgl, size, true /* withHash */)
+		r, err := readers.NewSGReader(sgl, size, cmn.ChecksumXXHash)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -282,7 +282,7 @@ func TestSGReader(t *testing.T) {
 		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := readers.NewSGReader(sgl, size, true /* withHash */)
+		r, err := readers.NewSGReader(sgl, size, cmn.ChecksumXXHash)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -296,7 +296,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := readers.NewFileReader(filepath, fn, cmn.MiB, true /* withHash */)
+		r, err := readers.NewFileReader(filepath, fn, cmn.MiB, cmn.ChecksumXXHash)
 		if err != nil {
 			os.Remove(path.Join(filepath, fn))
 			b.Fatal(err)
@@ -311,7 +311,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := readers.NewRandReader(cmn.MiB, true /* withHash */)
+		r, err := readers.NewRandReader(cmn.MiB, cmn.ChecksumXXHash)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -325,7 +325,7 @@ func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()
-		r, err := readers.NewSGReader(sgl, cmn.MiB, true /* withHash */)
+		r, err := readers.NewSGReader(sgl, cmn.MiB, cmn.ChecksumXXHash)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -338,7 +338,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := readers.NewFileReader(filepath, fn, cmn.MiB, false /* withHash */)
+		r, err := readers.NewFileReader(filepath, fn, cmn.MiB, cmn.ChecksumNone)
 		if err != nil {
 			os.Remove(path.Join(filepath, fn))
 			b.Fatal(err)
@@ -353,7 +353,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := readers.NewRandReader(cmn.MiB, false /* withHash */)
+		r, err := readers.NewRandReader(cmn.MiB, cmn.ChecksumNone)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -367,7 +367,7 @@ func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()
-		r, err := readers.NewSGReader(sgl, cmn.MiB, false /* withHash */)
+		r, err := readers.NewSGReader(sgl, cmn.MiB, cmn.ChecksumNone)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)

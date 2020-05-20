@@ -217,7 +217,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 		// save slice/object
 		tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
 		buf, slab := mm.Alloc()
-		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false, objAttrs.Size, bdir)
+		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, cmn.ChecksumNone, objAttrs.Size, bdir)
 		// save xattrs only for object replicas (slices have xattrs empty)
 		if err == nil && !iReq.isSlice {
 			lom.SetVersion(objAttrs.Version)
@@ -239,7 +239,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 		// save its metadata
 		metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
 		metaBuf := meta.Marshal()
-		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false, -1, bdir)
+		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, cmn.ChecksumNone, -1, bdir)
 
 		slab.Free(buf)
 		if err != nil {

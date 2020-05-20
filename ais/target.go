@@ -952,7 +952,6 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketProps cmn.SimpleKVs
 		hdr         = w.Header()
 		query       = r.URL.Query()
-		config      = cmn.GCO.Get()
 		code        int
 		inBMD       = true
 	)
@@ -978,7 +977,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, bck, pid)
 	}
 	if bck.IsAIS() {
-		t.bucketPropsToHdr(bck, hdr, config)
+		t.bucketPropsToHdr(bck, hdr)
 		return
 	}
 	// + cloud
@@ -1003,7 +1002,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	for k, v := range bucketProps {
 		hdr.Set(k, v)
 	}
-	t.bucketPropsToHdr(bck, hdr, config)
+	t.bucketPropsToHdr(bck, hdr)
 }
 
 // HEAD /v1/objects/bucket-name/object-name

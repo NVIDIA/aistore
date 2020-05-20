@@ -18,6 +18,8 @@ import (
 	"github.com/pierrec/lz4/v3"
 )
 
+const sizeXXHash64 = cmn.SizeofI64
+
 func EncodeBuf(v interface{}, opts Options) []byte {
 	buf := &bytes.Buffer{}
 	err := Encode(buf, v, opts)
@@ -97,9 +99,8 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 		decoder *jsoniter.Decoder
 		zr      *lz4.Reader
 		h       hash.Hash
-		hsum    [8]byte
+		hsum    [sizeXXHash64]byte
 		prefix  [prefLen]byte
-		hsize   int
 		err     error
 	)
 	defer reader.Close()
@@ -120,25 +121,25 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 	}
 	var b io.Reader
 	if opts.Checksum {
-		var n int
-		buf := &bytes.Buffer{}
-		h = xxhash.New64()
-		hsize = h.Size()
-		cmn.Assert(hsize <= len(hsum))
-		if n, err = reader.Read(hsum[:hsize]); err == nil && n != hsize {
+		var (
+			cksum  *cmn.CksumHash
+			buffer = &bytes.Buffer{}
+			n      int
+		)
+		if n, err = reader.Read(hsum[:]); err == nil && n != sizeXXHash64 {
 			err = fmt.Errorf("failed reading checksum %q (%d, %d)", tag, n, h.Size())
 		}
 		if err != nil {
 			return err
 		}
-		if _, err = cmn.ReceiveAndChecksum(buf, reader, nil, h); err != nil {
+		if _, cksum, err = cmn.CopyAndChecksum(buffer, reader, nil, cmn.ChecksumXXHash); err != nil {
 			return err
 		}
-		expected, actual := binary.BigEndian.Uint64(hsum[:]), binary.BigEndian.Uint64(h.Sum(nil))
+		expected, actual := binary.BigEndian.Uint64(hsum[:]), binary.BigEndian.Uint64(cksum.Sum())
 		if expected != actual {
 			return cmn.NewBadMetaCksumError(expected, actual, tag)
 		}
-		b = bytes.NewReader(buf.Bytes())
+		b = bytes.NewReader(buffer.Bytes())
 	} else {
 		b = reader
 	}
