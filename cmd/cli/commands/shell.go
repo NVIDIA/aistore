@@ -141,6 +141,15 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		}
 
 		if c.NArg() > firstBucketIdx && !multiple {
+			if c.Args()[c.NArg()-1] == cmn.HeaderObjCksumType {
+				checksums := cmn.SupportedChecksums()
+				for _, tag := range checksums {
+					if !cmn.AnyHasPrefixInSlice(tag, c.Args()) {
+						fmt.Println(tag)
+					}
+				}
+				return
+			}
 			for _, f := range additionalCompletions {
 				f(c)
 			}

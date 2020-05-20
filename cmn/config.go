@@ -758,19 +758,12 @@ func (c *LRUConf) ValidateAsProps(args *ValidationArgs) (err error) {
 	return c.Validate(nil)
 }
 
-func (c *CksumConf) Validate(_ *Config) error {
-	if c.Type != ChecksumXXHash && c.Type != ChecksumNone {
-		return fmt.Errorf("invalid checksum.type: %s (expected one of [%s, %s])",
-			c.Type, ChecksumXXHash, ChecksumNone)
-	}
-	return nil
+func (c *CksumConf) Validate(_ *Config) (err error) {
+	return ValidateCksumType(c.Type)
 }
 
-func (c *CksumConf) ValidateAsProps(args *ValidationArgs) error {
-	if _, ok := checksums[c.Type]; !ok {
-		return fmt.Errorf("invalid checksum.type %q (expecting keys(%v))", c.Type, checksums)
-	}
-	return nil
+func (c *CksumConf) ValidateAsProps(args *ValidationArgs) (err error) {
+	return ValidateCksumType(c.Type)
 }
 
 func (c *VersionConf) Validate(_ *Config) error {

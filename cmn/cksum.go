@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash"
 	"hash/crc32"
+	"sort"
 
 	"github.com/OneOfOne/xxhash"
 )
@@ -38,13 +39,38 @@ type (
 )
 
 var (
-	checksums = map[string]struct{}{
+	checksums = StringSet{
 		ChecksumNone:   {},
 		ChecksumXXHash: {},
 		ChecksumMD5:    {},
 		ChecksumCRC32C: {},
 	}
 )
+
+/////////////
+// helpers //
+/////////////
+func SupportedChecksums() (types []string) {
+	types = make([]string, 0, len(checksums))
+	for ty := range checksums {
+		types = append(types, ty)
+	}
+	sort.Strings(types)
+	for i := range types {
+		if types[i] == ChecksumNone {
+			copy(types[i:], types[i+1:])
+			types[len(types)-1] = ChecksumNone
+		}
+	}
+	return
+}
+
+func ValidateCksumType(ty string) (err error) {
+	if !checksums.Contains(ty) {
+		err = fmt.Errorf("invalid checksum type %q (expecting %v)", ty, SupportedChecksums())
+	}
+	return
+}
 
 ///////////
 // Cksum //
@@ -54,8 +80,8 @@ func NewCksum(ty, value string) *Cksum {
 	if ty == "" || value == "" {
 		return nil
 	}
-	if _, ok := checksums[ty]; !ok {
-		AssertMsg(false, "invalid checksum type: '"+ty+"'")
+	if err := ValidateCksumType(ty); err != nil {
+		AssertMsg(false, err.Error())
 	}
 	return &Cksum{ty, value}
 }
@@ -71,7 +97,7 @@ func NewCksumHash(ty string) *CksumHash {
 	case ChecksumCRC32C:
 		return &CksumHash{Cksum{ty: ty}, NewCRC32C(), nil}
 	default:
-		AssertMsg(false, "invalid checksum type: '"+ty+"'")
+		AssertMsg(false, ValidateCksumType(ty).Error())
 	}
 	return nil
 }

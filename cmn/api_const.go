@@ -114,7 +114,7 @@ const (
 	HeaderBucketCreated         = "created"                      // Bucket creation time
 
 	// object meta
-	HeaderObjCksumType = "checksum.type"  // Checksum Type (xxhash, md5, none)
+	HeaderObjCksumType = "checksum.type"  // Checksum Type, one of SupportedChecksums()
 	HeaderObjCksumVal  = "checksum.value" // Checksum Value
 	HeaderObjAtime     = "atime"          // Object access time
 	HeaderObjReplicSrc = "replica_src"    // In replication PUT request specifies the source target

@@ -82,7 +82,9 @@ aisfs: aisfs-pre build-aisfs ## Build 'aisfs' binary
 cli: ## Build CLI ('ais' binary)
 	@echo "Building ais (CLI)..."
 	@go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/cli/*.go
-	@echo "done."
+	@echo "*** To enable autocompletions in your current shell, run:"
+	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/bash or"
+	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/zsh"
 
 cli-autocompletions: ## Add CLI autocompletions
 	@echo "Adding CLI autocomplete..."

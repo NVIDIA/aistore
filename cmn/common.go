@@ -285,6 +285,17 @@ func (kv SimpleKVs) Compare(other SimpleKVs) bool {
 	return true
 }
 
+func (ss StringSet) String() string {
+	keys := make([]string, len(ss))
+	idx := 0
+	for key := range ss {
+		keys[idx] = key
+		idx++
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
+}
+
 func (ss StringSet) Add(key string) {
 	ss[key] = struct{}{}
 }
@@ -346,17 +357,6 @@ func B2S(b int64, digits int) string {
 
 func UnsignedB2S(b uint64, digits int) string {
 	return B2S(int64(b), digits)
-}
-
-func (ss StringSet) String() string {
-	keys := make([]string, len(ss))
-	idx := 0
-	for key := range ss {
-		keys[idx] = key
-		idx++
-	}
-	sort.Strings(keys)
-	return strings.Join(keys, ",")
 }
 
 func TimeDelta(time1, time2 time.Time) time.Duration {
