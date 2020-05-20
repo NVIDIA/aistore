@@ -161,7 +161,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	cksumType := p.Cksum.Type
 
-	tutils.PutRandObjs(proxyURL, bck, prefix, fileSize, numberOfFiles, errCh, fileNameCh, cksumType)
+	tutils.PutRandObjs(proxyURL, bck, prefix, fileSize, numberOfFiles, errCh, fileNameCh, cksumType, true)
 	tassert.SelectErr(t, errCh, "put", true)
 	close(fileNameCh)
 	close(errCh)
