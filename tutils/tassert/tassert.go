@@ -12,14 +12,14 @@ import (
 func CheckFatal(tb testing.TB, err error) {
 	if err != nil {
 		debug.PrintStack()
-		tb.Fatalf(err.Error())
+		tb.Fatal(err.Error())
 	}
 }
 
 func CheckError(tb testing.TB, err error) {
 	if err != nil {
 		debug.PrintStack()
-		tb.Errorf(err.Error())
+		tb.Error(err.Error())
 	}
 }
 
