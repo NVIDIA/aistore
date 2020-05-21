@@ -991,33 +991,25 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	resp1, err := api.DownloadStatus(baseParams, id1)
 	tassert.CheckFatal(t, err)
 
-	// TODO: better check
 	// Now, when a jogger finishes a task it saves it and sets task to nil,
 	// So, if downloading is fast, it is possible that tasks are finished and
 	// cleaned up by the moment of requesting task list.
-	// FIXME: replace Errorf with Logf for now.
-	// tassert.Errorf(
-	// 	t, len(resp1.CurrentTasks) <= smap.CountTargets(),
-	// 	"number of tasks mismatch (expected at most: %d, got: %d)",
-	// 	smap.CountTargets(), len(resp1.CurrentTasks),
-	// )
-	tutils.Logf("Number of tasks %d, expected %d\n",
-		len(resp1.CurrentTasks), smap.CountTargets())
+	tassert.Errorf(
+		t, len(resp1.CurrentTasks) <= smap.CountTargets(),
+		"number of tasks mismatch (expected at most: %d, got: %d)",
+		smap.CountTargets(), len(resp1.CurrentTasks),
+	)
 
 	resp2, err := api.DownloadStatus(baseParams, id2)
 	tassert.CheckFatal(t, err)
 
 	// If downloader didn't start jobs concurrently the number of current
 	// tasks would be 0 (as the previous download would clog the downloader).
-	// TODO: why commented - see the previous TODO.
-	// FIXME: replace Errorf with Logf for now.
-	// tassert.Errorf(
-	// 	t, len(resp2.CurrentTasks) >= smap.CountTargets(),
-	// 	"number of tasks mismatch (expected at least: %d, got: %d)",
-	// 	smap.CountTargets(), len(resp2.CurrentTasks),
-	// )
-	tutils.Logf("Number of tasks %d, expected %d\n",
-		len(resp2.CurrentTasks), smap.CountTargets())
+	tassert.Errorf(
+		t, len(resp2.CurrentTasks) > 0,
+		"number of tasks mismatch (expected at least: 0, got: %d)",
+		len(resp2.CurrentTasks),
+	)
 }
 
 // NOTE: Test may fail if the network is slow!!
