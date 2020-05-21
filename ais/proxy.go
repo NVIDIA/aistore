@@ -123,13 +123,6 @@ func (p *proxyrunner) Run() error {
 	// REST API: register proxy handlers and start listening
 	//
 
-	// Public network
-	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
-		p.registerPublicNetHandler("/", p.reverseProxyHandler)
-	} else {
-		p.registerPublicNetHandler("/", cmn.InvalidHandler)
-	}
-
 	bucketHandler, objectHandler := p.bucketHandler, p.objectHandler
 	dsortHandler, downloadHandler := dsort.ProxySortHandler, p.downloadHandler
 	if config.Auth.Enabled {
@@ -154,9 +147,21 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
-
-		{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 	}
+
+	// Public network
+	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
+		networkHandlers = append(networkHandlers, networkHandler{
+			r: "/", h: p.reverseProxyHandler,
+			net: []string{cmn.NetworkPublic},
+		})
+	} else {
+		networkHandlers = append(networkHandlers, networkHandler{
+			r: "/", h: cmn.InvalidHandler,
+			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData},
+		})
+	}
+
 	p.registerNetworkHandlers(networkHandlers)
 
 	glog.Infof("%s: [public net] listening on: %s", p.si, p.si.PublicNet.DirectURL)

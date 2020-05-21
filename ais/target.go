@@ -321,9 +321,8 @@ func (c *clouds) init(t *targetrunner, config *cmn.Config) {
 
 func (t *targetrunner) initRecvHandlers() {
 	var (
-		allNets         = []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}
 		networkHandlers = []networkHandler{
-			{r: cmn.Buckets, h: t.bucketHandler, net: allNets},
+			{r: cmn.Buckets, h: t.bucketHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 			{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 			{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 			{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
@@ -342,7 +341,7 @@ func (t *targetrunner) initRecvHandlers() {
 			{r: cmn.Tar2Tf, h: t.tar2tfHandler, net: []string{cmn.NetworkPublic}},
 			{r: "/" + cmn.S3, h: t.s3Handler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 
-			{r: "/", h: cmn.InvalidHandler, net: allNets},
+			{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 		}
 	)
 	t.registerNetworkHandlers(networkHandlers)

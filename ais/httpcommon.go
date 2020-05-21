@@ -312,19 +312,6 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	config := cmn.GCO.Get()
 
 	for _, nh := range networkHandlers {
-		if nh.r == "/" {
-			if cmn.StringInSlice(cmn.NetworkPublic, nh.net) {
-				h.registerPublicNetHandler("/", cmn.InvalidHandler)
-			}
-			if config.Net.UseIntraControl {
-				h.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
-			}
-			if config.Net.UseIntraData {
-				h.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
-			}
-			continue
-		}
-
 		path := cmn.URLPath(cmn.Version, nh.r)
 		if nh.r[0] == '/' { // Check if it's an absolute path.
 			path = nh.r
