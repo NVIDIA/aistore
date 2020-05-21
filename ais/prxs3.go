@@ -25,7 +25,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("S3Request: %s - %s", r.Method, r.URL)
 	}
-	apitems, err := p.checkRESTItems(w, r, 0, true, s3compat.Root)
+	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.S3)
 	if err != nil {
 		return
 	}

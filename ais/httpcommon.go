@@ -325,23 +325,28 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 			continue
 		}
 
+		path := cmn.URLPath(cmn.Version, nh.r)
+		if nh.r[0] == '/' { // Check if it's an absolute path.
+			path = nh.r
+		}
+
 		if cmn.StringInSlice(cmn.NetworkPublic, nh.net) {
-			h.registerPublicNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+			h.registerPublicNetHandler(path, nh.h)
 
 			if config.Net.UseIntraControl && cmn.StringInSlice(cmn.NetworkIntraControl, nh.net) {
-				h.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+				h.registerIntraControlNetHandler(path, nh.h)
 			}
 			if config.Net.UseIntraData && cmn.StringInSlice(cmn.NetworkIntraData, nh.net) {
-				h.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+				h.registerIntraDataNetHandler(path, nh.h)
 			}
 		} else if cmn.StringInSlice(cmn.NetworkIntraControl, nh.net) {
-			h.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+			h.registerIntraControlNetHandler(path, nh.h)
 
 			if config.Net.UseIntraData && cmn.StringInSlice(cmn.NetworkIntraData, nh.net) {
-				h.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+				h.registerIntraDataNetHandler(path, nh.h)
 			}
 		} else if cmn.StringInSlice(cmn.NetworkIntraData, nh.net) {
-			h.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+			h.registerIntraDataNetHandler(path, nh.h)
 		}
 	}
 }

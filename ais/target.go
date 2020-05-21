@@ -336,20 +336,16 @@ func (t *targetrunner) initRecvHandlers() {
 
 			{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
 
-			{r: cmn.Tar2Tf, h: t.tar2tfHandler, net: []string{cmn.NetworkPublic}},
 			{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
 			{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+
+			{r: cmn.Tar2Tf, h: t.tar2tfHandler, net: []string{cmn.NetworkPublic}},
+			{r: "/" + cmn.S3, h: t.s3Handler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 
 			{r: "/", h: cmn.InvalidHandler, net: allNets},
 		}
 	)
 	t.registerNetworkHandlers(networkHandlers)
-
-	// S3 compatibility layer
-	t.registerPublicNetHandler("/s3", t.s3Handler)
-	if cmn.GCO.Get().Net.UseIntraData {
-		t.registerIntraDataNetHandler("/s3", t.s3Handler)
-	}
 }
 
 // target-only stats

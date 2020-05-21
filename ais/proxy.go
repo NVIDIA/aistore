@@ -153,11 +153,11 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
 
+		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
+
 		{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 	}
 	p.registerNetworkHandlers(networkHandlers)
-
-	p.registerPublicNetHandler("/s3", p.s3Handler)
 
 	glog.Infof("%s: [public net] listening on: %s", p.si, p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {

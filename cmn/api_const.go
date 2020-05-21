@@ -280,6 +280,7 @@ const (
 	Txn       = "txn" // 2PC
 	Xactions  = "xactions"
 	Tar2Tf    = "tar2tf"
+	S3        = "s3"
 	Users     = "users"    // AuthN
 	Clusters  = "clusters" // AuthN
 

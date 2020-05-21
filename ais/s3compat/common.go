@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (
-	Root           = "s3"
 	ContentType    = "application/xml"
 	GetContentType = "binary/octet-stream"
 	AcceptRanges   = "bytes"
@@ -110,7 +111,7 @@ func ParseS3Range(r string, objSize int64) (int64, int64, error) {
 // is `localhost:8080/s3`
 func ExtractEndpoint(path string) string {
 	ep := path
-	if idx := strings.Index(ep, "/s3"); idx > 0 {
+	if idx := strings.Index(ep, "/"+cmn.S3); idx > 0 {
 		ep = ep[:idx+3]
 	}
 	ep = strings.TrimPrefix(ep, "http://")

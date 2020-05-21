@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -26,7 +25,7 @@ func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options 
 	baseParams.Method = http.MethodGet
 	resp, err := doHTTPRequestGetResp(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(s3compat.Root, bck.Name, objectName),
+		Path:       cmn.URLPath(cmn.S3, bck.Name, objectName),
 		Query:      q,
 	}, w)
 	if err != nil {
