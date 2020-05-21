@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
@@ -143,7 +144,9 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 		DSorterType: DSorterGeneralType,
 	}
 
-	dsortManagers := NewManagerGroup()
+	db := dbdriver.NewDBMock()
+	InitManagers(db) // TODO: remove it after `ManagerGroup` stops using global variable
+	dsortManagers := NewManagerGroup(db)
 	dsortManager, err := dsortManagers.Add(globalManagerUUID)
 	Expect(err).ShouldNot(HaveOccurred())
 	ctx.node = smap.Get().Tmap[daemonID]

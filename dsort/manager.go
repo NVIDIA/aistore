@@ -375,6 +375,7 @@ func (m *Manager) finalCleanup() {
 	m.state.cleanWait.Signal() // if there is another `finalCleanup` waiting it should be woken up to check the state and exit
 	m.unlock()
 
+	// TODO: remove dependency on global variable that can be unitialized
 	Managers.persist(m.ManagerUUID)
 	glog.Infof("%s %s final cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
 }

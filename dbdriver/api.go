@@ -41,6 +41,8 @@ type (
 		// Pattern is an arbitrary string and may contain '*' and '?' wildcards.
 		// If a pattern does not include wildcards, the pattern is uses as a prefix.
 		List(collection, pattern string) ([]string, error)
+		// Return subkeys with their values: map[key]value
+		GetAll(collection, pattern string) (map[string]string, error)
 	}
 
 	ErrNotFound struct {

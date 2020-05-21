@@ -128,8 +128,6 @@ github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f h1:X+tnaqoCcBgAw
 github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f/go.mod h1:Ip4fOwzCrnDVuluHBd7FXIMb7SHOKfkt9/UDrYSZvqI=
 github.com/jacobsa/fuse v0.0.0-20190923155423-081e9f4bc7d4 h1:eDSIm6ulR+w2iC3rM3i4FsYdyt4ChkTViJ3Sv0FXeiA=
 github.com/jacobsa/fuse v0.0.0-20190923155423-081e9f4bc7d4/go.mod h1:9Aml1MG17JVeXrN4D2mtJvYHtHklJH5bESjCKNzVjFU=
-github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 h1:EFT6MH3igZK/dIVqgGbTqWVvkZ7wJ5iGN03SVtvvdd8=
-github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25/go.mod h1:sWkGw/wsaHtRsT9zGQ/WyJCotGWG/Anow/9hsAcBWRw=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af h1:pmfjZENx5imkbgOkpRUYLnmbU7UEFbjtDA2hxJ1ichM=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/json-iterator/go v1.1.6/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=
@@ -195,8 +193,6 @@ github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFR
 github.com/russross/blackfriday/v2 v2.0.1 h1:lPqVAte+HuHNfhJ/0LC98ESWRz8afy9tM/0RK8m9o+Q=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/schollz/progressbar/v2 v2.13.2/go.mod h1:6YZjqdthH6SCZKv2rqGryrxPtfmRB/DWZxSMfCXPyD8=
-github.com/sdomino/scribble v0.0.0-20191024200645-4116320640ba h1:8QAc9wFAf2b/9cAXskm0wBylObZ0bTpRcaP7ThjLPVQ=
-github.com/sdomino/scribble v0.0.0-20191024200645-4116320640ba/go.mod h1:W6zxGUBCXRR5QugSd/nFcFVmwoGnvpjiNY/JwT03Wew=
 github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b h1:SGOmZdowDRBneehO5PnMaUEWyFgqfQaveiT2mLd6fp4=
 github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b/go.mod h1:ET5mVvNjwaGXRgZxO9UZr7X+8eAf87AfIYNwRSp9s4Y=
 github.com/shurcooL/sanitized_anchor_name v1.0.0 h1:PdmoCO6wvbs+7yrJyMORt4/BmY5IYyJwS/kOiWx8mHo=

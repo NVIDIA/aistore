@@ -147,3 +147,22 @@ func (bd *BuntDriver) DeleteCollection(collection string) error {
 		return nil
 	})
 }
+
+func (bd *BuntDriver) GetAll(collection, pattern string) (map[string]string, error) {
+	var (
+		values = make(map[string]string)
+		filter string
+	)
+	if !strings.Contains(pattern, "*") && !strings.Contains(pattern, "?") {
+		pattern += "*"
+	}
+	filter = makePath(collection, pattern)
+	err := bd.driver.View(func(tx *buntdb.Tx) error {
+		tx.AscendKeys(filter, func(key, val string) bool {
+			values[key] = val
+			return true
+		})
+		return nil
+	})
+	return values, buntToCommonErr(err, collection, "")
+}

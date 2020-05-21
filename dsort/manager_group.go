@@ -7,38 +7,45 @@ package dsort
 
 import (
 	"os"
-	"path/filepath"
+	"path"
 	"regexp"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
-	"github.com/sdomino/scribble"
 )
 
 const (
-	persistManagersPath = cmn.DSortNameLowercase + "_managers.db" // base name to persist managers' file
-	managersCollection  = "managers"
+	dsortCollection = "dsort"
+	managersKey     = "managers"
 )
 
 var (
-	Managers = NewManagerGroup()
+	Managers *ManagerGroup
 )
 
 // ManagerGroup abstracts multiple dsort managers into single struct.
 type ManagerGroup struct {
 	mtx      sync.Mutex // Synchronizes reading managers field and db access
 	managers map[string]*Manager
+	db       dbdriver.Driver
+}
+
+func InitManagers(db dbdriver.Driver) {
+	Managers = NewManagerGroup(db)
 }
 
 // NewManagerGroup returns new, initialized manager group.
-func NewManagerGroup() *ManagerGroup {
+func NewManagerGroup(db dbdriver.Driver) *ManagerGroup {
 	mg := &ManagerGroup{
 		managers: make(map[string]*Manager, 1),
+		db:       db,
 	}
 	hk.Housekeeper.Register(cmn.DSortNameLowercase, mg.housekeep, hk.DayInterval)
 	return mg
@@ -73,22 +80,14 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) []JobInfo {
 	}
 
 	// Always check persistent db for now
-	config := cmn.GCO.Get()
-	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
+	records, err := mg.db.GetAll(dsortCollection, managersKey)
 	if err != nil {
 		glog.Error(err)
 		return jobsInfos
 	}
-	records, err := db.ReadAll(managersCollection)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			glog.Error(err)
-		}
-		return jobsInfos
-	}
 	for _, r := range records {
 		var m Manager
-		if err := jsoniter.Unmarshal(r, &m); err != nil {
+		if err := jsoniter.Unmarshal([]byte(r), &m); err != nil {
 			glog.Error(err)
 			continue
 		}
@@ -96,6 +95,9 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) []JobInfo {
 			jobsInfos = append(jobsInfos, m.Metrics.ToJobInfo(m.ManagerUUID))
 		}
 	}
+	sort.Slice(jobsInfos, func(i, j int) bool {
+		return jobsInfos[i].ID < jobsInfos[j].ID
+	})
 
 	return jobsInfos
 }
@@ -115,13 +117,8 @@ func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {
 
 	manager, exists := mg.managers[managerUUID]
 	if !exists && allowPersisted {
-		config := cmn.GCO.Get()
-		db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
-		if err != nil {
-			glog.Error(err)
-			return nil, false
-		}
-		if err := db.Read(managersCollection, managerUUID, &manager); err != nil {
+		key := path.Join(managersKey, managerUUID)
+		if err := mg.db.Get(dsortCollection, key, &manager); err != nil {
 			if !os.IsNotExist(err) {
 				glog.Error(err)
 			}
@@ -143,13 +140,8 @@ func (mg *ManagerGroup) Remove(managerUUID string) error {
 		delete(mg.managers, managerUUID)
 	}
 
-	config := cmn.GCO.Get()
-	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
-	if err != nil {
-		glog.Error(err)
-		return err
-	}
-	_ = db.Delete(managersCollection, managerUUID) // Delete only returns err when record does not exist, which should be ignored
+	key := path.Join(managersKey, managerUUID)
+	_ = mg.db.Delete(dsortCollection, key) // Delete only returns err when record does not exist, which should be ignored
 	return nil
 }
 
@@ -168,13 +160,8 @@ func (mg *ManagerGroup) persist(managerUUID string) {
 	}
 
 	manager.Metrics.Archived.Store(true)
-	config := cmn.GCO.Get()
-	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-	if err = db.Write(managersCollection, managerUUID, manager); err != nil {
+	key := path.Join(managersKey, managerUUID)
+	if err := mg.db.Set(dsortCollection, key, manager); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -199,16 +186,9 @@ func (mg *ManagerGroup) housekeep() time.Duration {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 
-	config := cmn.GCO.Get()
-	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
+	records, err := mg.db.GetAll(dsortCollection, managersKey)
 	if err != nil {
-		glog.Error(err)
-		return retryInterval
-	}
-
-	records, err := db.ReadAll(managersCollection)
-	if err != nil {
-		if os.IsNotExist(err) {
+		if dbdriver.IsErrNotFound(err) {
 			return regularInterval
 		}
 
@@ -218,12 +198,13 @@ func (mg *ManagerGroup) housekeep() time.Duration {
 
 	for _, r := range records {
 		var m Manager
-		if err := jsoniter.Unmarshal(r, &m); err != nil {
+		if err := jsoniter.Unmarshal([]byte(r), &m); err != nil {
 			glog.Error(err)
 			return retryInterval
 		}
 		if time.Since(m.Metrics.Extraction.End) > regularInterval {
-			_ = db.Delete(managersCollection, m.ManagerUUID)
+			key := path.Join(managersKey, m.ManagerUUID)
+			_ = mg.db.Delete(dsortCollection, key)
 		}
 	}
 

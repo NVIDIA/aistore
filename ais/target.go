@@ -283,6 +283,7 @@ func (t *targetrunner) Run() error {
 		}()
 	}
 
+	dsort.InitManagers(driver)
 	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t.gmm, t, t.statsT)
 	if err := t.httprunner.run(); err != nil {
 		return err

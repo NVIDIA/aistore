@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	. "github.com/onsi/ginkgo"
@@ -35,7 +36,9 @@ var _ = Describe("ManagerGroup", func() {
 		config := cmn.GCO.BeginUpdate()
 		config.Confdir = testingConfigDir
 		cmn.GCO.CommitUpdate(config)
-		mgrp = NewManagerGroup()
+		db := dbdriver.NewDBMock()
+		InitManagers(db) // TODO: remove it after `ManagerGroup` stops using global variable
+		mgrp = NewManagerGroup(db)
 
 		fs.InitMountedFS()
 		fs.Mountpaths.Add(testingConfigDir)
