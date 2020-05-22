@@ -30,6 +30,8 @@ type GetObjectInput struct {
 	Writer io.Writer
 	// Map of strings as keys and string slices as values used for url formulation
 	Query url.Values
+	// Custom header values passed with GET request
+	Header http.Header
 }
 
 // ReplicateObjectInput is used to hold optional parameters for PutObject when it is used for replication
@@ -154,11 +156,12 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
 func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
-		w = ioutil.Discard
-		q url.Values
+		w   = ioutil.Discard
+		q   url.Values
+		hdr http.Header
 	)
 	if len(options) != 0 {
-		w, q = getObjectOptParams(options[0])
+		w, q, hdr = getObjectOptParams(options[0])
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
@@ -166,6 +169,7 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object),
 		Query:      q,
+		Header:     hdr,
 	}, w)
 	if err != nil {
 		return 0, err
@@ -185,11 +189,12 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 // Returns InvalidCksumError when the expected and actual checksum values are different.
 func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
-		w = ioutil.Discard
-		q url.Values
+		w   = ioutil.Discard
+		q   url.Values
+		hdr http.Header
 	)
 	if len(options) != 0 {
-		w, q = getObjectOptParams(options[0])
+		w, q, hdr = getObjectOptParams(options[0])
 	}
 	baseParams.Method = http.MethodGet
 
@@ -197,6 +202,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object),
 		Query:      q,
+		Header:     hdr,
 		Validate:   true,
 	}, w)
 	if err != nil {
@@ -208,6 +214,38 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 		return 0, cmn.NewInvalidCksumError(hdrCksumValue, resp.cksumValue)
 	}
 	return resp.n, nil
+}
+
+// GetObjectWithResp API
+//
+// Returns the response of the request and length of the object. Does not
+// validate checksum of the object in the response.
+//
+// Writes the response body to a writer if one is specified in the optional
+// GetObjectInput.Writer. Otherwise, it discards the response body read.
+//
+// `io.Copy` is used internally to copy response bytes from the request to the writer.
+func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (*http.Response, int64, error) {
+	var (
+		w   = ioutil.Discard
+		q   url.Values
+		hdr http.Header
+	)
+	if len(options) != 0 {
+		w, q, hdr = getObjectOptParams(options[0])
+	}
+	q = cmn.AddBckToQuery(q, bck)
+	baseParams.Method = http.MethodGet
+	resp, err := doHTTPRequestGetResp(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, object),
+		Query:      q,
+		Header:     hdr,
+	}, w)
+	if err != nil {
+		return nil, 0, err
+	}
+	return resp.Response, resp.n, nil
 }
 
 // PutObject API

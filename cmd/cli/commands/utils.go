@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -388,19 +387,6 @@ func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
 		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)", flag.GetName(), flagValue)
 	}
 	return b, nil
-}
-
-// Returns a string containing the value of the `flag` in bytes, used for `offset` and `length` flags
-func getByteFlagValue(c *cli.Context, flag cli.Flag) (string, error) {
-	if flagIsSet(c, flag) {
-		offsetInt, err := parseByteFlagToInt(c, flag)
-		if err != nil {
-			return "", err
-		}
-		return strconv.FormatInt(offsetInt, 10), nil
-	}
-
-	return "", nil
 }
 
 func calcRefreshRate(c *cli.Context) time.Duration {

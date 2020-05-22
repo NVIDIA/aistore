@@ -6,8 +6,6 @@ package ais
 
 import (
 	"io"
-	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -52,12 +50,10 @@ func (obj *Object) Put(r cmn.ReadOpenCloser) (err error) {
 }
 
 func (obj *Object) GetChunk(w io.Writer, offset, length int64) (n int64, err error) {
-	query := url.Values{}
-	query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
-	query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
+	hdr := cmn.AddRangeToHdr(nil, offset, length)
 	objArgs := api.GetObjectInput{
 		Writer: w,
-		Query:  query,
+		Header: hdr,
 	}
 
 	n, err = api.GetObject(obj.apiParams, obj.bck, obj.Name, objArgs)

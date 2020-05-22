@@ -7,6 +7,7 @@ package cmn
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,9 +29,31 @@ import (
 var (
 	// It is used to Marshal/Unmarshal API json messages and is initialized in init function.
 	jsonAPI jsoniter.API
+
+	// ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
+	// all of the byte-range-spec values is greater than the content size.
+	ErrNoOverlap = errors.New("invalid range: failed to overlap")
+)
+
+const (
+	HeaderRange         = "Range"
+	HeaderContentRange  = "Content-Range"
+	HeaderAcceptRanges  = "Accept-Ranges"
+	HeaderContentType   = "Content-Type"
+	HeaderContentLength = "Content-Length"
 )
 
 type (
+	// HTTPRange specifies the byte range to be sent to the client.
+	HTTPRange struct {
+		Start, Length int64
+	}
+
+	RangesQuery struct {
+		Range string
+		Size  int64
+	}
+
 	// Error structure for HTTP errors
 	HTTPError struct {
 		Status     int    `json:"status"`
@@ -359,4 +383,95 @@ func MakeHeaderAuthnToken(token string) string {
 
 func IsHTTPS(urlPath string) bool {
 	return strings.HasPrefix(urlPath, "https://")
+}
+
+func (r HTTPRange) ContentRange(size int64) string {
+	return fmt.Sprintf("bytes %d-%d/%d", r.Start, r.Start+r.Length-1, size)
+}
+
+func ParseRange(s string, size int64) (ranges []HTTPRange, err error) {
+	if s == "" {
+		return nil, nil // header not present
+	}
+
+	const b = "bytes="
+	if !strings.HasPrefix(s, b) {
+		return nil, errors.New("invalid range")
+	}
+
+	noOverlap := false
+	for _, ra := range strings.Split(s[len(b):], ",") {
+		ra = strings.TrimSpace(ra)
+		if ra == "" {
+			continue
+		}
+
+		i := strings.Index(ra, "-")
+		if i < 0 {
+			return nil, errors.New("invalid range")
+		}
+
+		start, end := strings.TrimSpace(ra[:i]), strings.TrimSpace(ra[i+1:])
+
+		var r HTTPRange
+		if start == "" {
+			// If no start is specified, end specifies the
+			// range start relative to the end of the file.
+			i, err := strconv.ParseInt(end, 10, 64)
+			if err != nil {
+				return nil, errors.New("invalid range")
+			}
+
+			if i > size {
+				i = size
+			}
+			r.Start = size - i
+			r.Length = size - r.Start
+		} else {
+			i, err := strconv.ParseInt(start, 10, 64)
+			if err != nil || i < 0 {
+				return nil, errors.New("invalid range")
+			}
+
+			if i >= size {
+				// If the range begins after the size of the content,
+				// then it does not overlap.
+				noOverlap = true
+				continue
+			}
+
+			r.Start = i
+			if end == "" {
+				// If no end is specified, range extends to end of the file.
+				r.Length = size - r.Start
+			} else {
+				i, err := strconv.ParseInt(end, 10, 64)
+				if err != nil || r.Start > i {
+					return nil, errors.New("invalid range")
+				}
+				if i >= size {
+					i = size - 1
+				}
+				r.Length = i - r.Start + 1
+			}
+		}
+		ranges = append(ranges, r)
+	}
+
+	if noOverlap && len(ranges) == 0 {
+		// The specified ranges did not overlap with the content.
+		return nil, ErrNoOverlap
+	}
+	return ranges, nil
+}
+
+func AddRangeToHdr(hdr http.Header, start, length int64) http.Header {
+	if start == 0 && length == 0 {
+		return hdr
+	}
+	if hdr == nil {
+		hdr = make(http.Header, 1)
+	}
+	hdr.Add(HeaderRange, fmt.Sprintf("bytes=%d-%d", start, start+length-1))
+	return hdr
 }

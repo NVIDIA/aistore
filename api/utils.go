@@ -169,13 +169,16 @@ func setRequestOptParams(req *http.Request, reqParams ReqParams) {
 	}
 }
 
-func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values) {
+func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr http.Header) {
 	w = ioutil.Discard
 	if options.Writer != nil {
 		w = options.Writer
 	}
 	if len(options.Query) != 0 {
 		q = options.Query
+	}
+	if len(options.Header) != 0 {
+		hdr = options.Header
 	}
 	return
 }

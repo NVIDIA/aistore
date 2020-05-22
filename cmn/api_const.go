@@ -149,8 +149,6 @@ const (
 	URLParamWhat        = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
 	URLParamProps       = "props"        // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 	URLParamCheckExists = "check_cached" // true: check if object exists
-	URLParamOffset      = "offset"       // Offset from where the object should be read
-	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
 	URLParamProvider    = "provider"     // cloud provider
 	URLParamNamespace   = "namespace"
 	URLParamPrefix      = "prefix" // prefix for list objects in a bucket

@@ -6,7 +6,6 @@ package s3compat
 
 import (
 	"encoding/xml"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -98,35 +97,14 @@ func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.BucketList) {
 	}
 }
 
-func SetHeaderFromSizeVersion(header http.Header, size int64, version string) {
-	header.Set(HeaderSize, strconv.FormatInt(size, 10))
-	header.Set(HeaderContentType, GetContentType)
-	header.Set(headerVersion, version)
-}
-
-func SetHeaderFromLOM(header http.Header, lom *cluster.LOM) {
+func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
 	if cksum := lom.Cksum(); cksum != nil {
 		header.Set(headerETag, cksum.Value())
 	}
 	header.Set(headerAtime, lom.Atime().UTC().Format(time.RFC3339))
-	SetHeaderFromSizeVersion(header, lom.Size(), lom.Version())
-}
-
-func SetHeaderRangeSizeVersion(header http.Header, offset, length, size int64, version string) {
-	header.Set(HeaderSize, strconv.FormatInt(length, 10))
-	header.Set(HeaderContentType, GetContentType)
-	header.Set(headerVersion, version)
-	header.Set(HeaderAcceptRanges, AcceptRanges)
-	rng := fmt.Sprintf("bytes %d-%d/%d", offset, offset+length, size)
-	header.Set(HeaderContentRange, rng)
-}
-
-func SetHeaderRange(header http.Header, offset, length int64, lom *cluster.LOM) {
-	SetHeaderFromLOM(header, lom)
-	header.Set(HeaderSize, strconv.FormatInt(length, 10))
-	header.Set(HeaderAcceptRanges, AcceptRanges)
-	rng := fmt.Sprintf("bytes %d-%d/%d", offset, offset+length, lom.Size())
-	header.Set(HeaderContentRange, rng)
+	header.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
+	header.Set(cmn.HeaderContentType, GetContentType)
+	header.Set(headerVersion, lom.Version())
 }
 
 func (r *CopyObjectResult) MustMarshal() []byte {

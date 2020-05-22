@@ -5,13 +5,11 @@
 package integration
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1288,7 +1286,7 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 func TestRangeRead(t *testing.T) {
 	const (
 		numFiles = 1
-		fileSize = 1024
+		fileSize = 5271
 	)
 
 	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
@@ -1354,13 +1352,24 @@ func TestRangeRead(t *testing.T) {
 		}
 		testValidCases(t, proxyURL, bck, cksumType, fileSize, fileName, false, RangeGetStr)
 
-		tutils.Logln("Testing invalid cases.")
-		verifyInvalidParams(t, proxyURL, bck, fileName, "", "1")
-		verifyInvalidParams(t, proxyURL, bck, fileName, "1", "")
-		verifyInvalidParams(t, proxyURL, bck, fileName, "-1", "-1")
-		verifyInvalidParams(t, proxyURL, bck, fileName, "1", "-1")
-		verifyInvalidParams(t, proxyURL, bck, fileName, "-1", "1")
-		verifyInvalidParams(t, proxyURL, bck, fileName, "1", "0")
+		tutils.Logln("Testing valid cases (query).")
+		verifyValidRangesQuery(t, proxyURL, bck, fileName, "bytes=-1", 1)
+		verifyValidRangesQuery(t, proxyURL, bck, fileName, "bytes=0-", fileSize)
+		verifyValidRangesQuery(t, proxyURL, bck, fileName, "bytes=10-", fileSize-10)
+		verifyValidRangesQuery(t, proxyURL, bck, fileName, fmt.Sprintf("bytes=-%d", fileSize), fileSize)
+		verifyValidRangesQuery(t, proxyURL, bck, fileName, fmt.Sprintf("bytes=-%d", fileSize+2), fileSize)
+
+		tutils.Logln("Testing invalid cases (query).")
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "potatoes=0-1")
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes")
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, fmt.Sprintf("bytes=%d-", fileSize+1))
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, fmt.Sprintf("bytes=%d-%d", fileSize+1, fileSize+2))
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=0--1")
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=1-0")
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=-1-0")
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=-1-2")
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=10--1")
+		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=1-2,4-6")
 	})
 }
 
@@ -1377,23 +1386,18 @@ func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, cksumType string
 
 	verifyValidRanges(t, proxyURL, bck, cksumType, fileName, byteRange*iterations, byteRange,
 		int64(fileSize)%byteRange, checkEntireObjCkSum, checkDir)
-
-	verifyValidRanges(t, proxyURL, bck, cksumType, fileName,
-		int64(fileSize)+100, byteRange, 0, checkEntireObjCkSum, checkDir)
 }
 
 func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, fileName string,
 	offset, length, expectedLength int64, checkEntireObjCksum bool, checkDir string) {
-	fqn := findObjOnDisk(bck, filepath.Join(checkDir, fileName))
-
-	q := url.Values{}
-	q.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
-	q.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
-	var b bytes.Buffer
-	w := bufio.NewWriter(&b)
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	options := api.GetObjectInput{Writer: w, Query: q}
-	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(RangeGetStr, fileName), options)
+	var (
+		w          = bytes.NewBuffer(nil)
+		hdr        = cmn.AddRangeToHdr(nil, offset, length)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		fqn        = findObjOnDisk(bck, filepath.Join(checkDir, fileName))
+		options    = api.GetObjectInput{Writer: w, Header: hdr}
+	)
+	n, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(RangeGetStr, fileName), options)
 	if err != nil {
 		if !checkEntireObjCksum {
 			t.Errorf("Failed to get object %s/%s! Error: %v", bck, fileName, err)
@@ -1416,10 +1420,8 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, fi
 				t.Errorf("Unexpected error returned [%v].", err)
 			}
 		}
-	}
-	err = w.Flush()
-	if err != nil {
-		t.Errorf("Unable to flush read bytes to buffer. Error:  %v", err)
+	} else if n != expectedLength {
+		t.Errorf("number of bytes received is different than expected (expected: %d, got: %d)", expectedLength, n)
 	}
 
 	file, err := os.Open(fqn)
@@ -1427,9 +1429,9 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, fi
 		t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
 	}
 	defer file.Close()
-	outputBytes := b.Bytes()
+	outputBytes := w.Bytes()
 	sectionReader := io.NewSectionReader(file, offset, length)
-	expectedBytesBuffer := new(bytes.Buffer)
+	expectedBytesBuffer := bytes.NewBuffer(nil)
 	_, err = expectedBytesBuffer.ReadFrom(sectionReader)
 	if err != nil {
 		t.Errorf("Unable to read the file %s, from offset: %d and length: %d. Error: %v", fqn, offset, length, err)
@@ -1449,16 +1451,41 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, fi
 	}
 }
 
-func verifyInvalidParams(t *testing.T, proxyURL string, bck cmn.Bck, fileName, offset, length string) {
-	q := url.Values{}
-	q.Add(cmn.URLParamOffset, offset)
-	q.Add(cmn.URLParamLength, length)
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	options := api.GetObjectInput{Query: q}
+func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, fileName, rangeQuery string, expectedLength int64) {
+	var (
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		hdr        = http.Header{cmn.HeaderRange: {rangeQuery}}
+		options    = api.GetObjectInput{Header: hdr}
+	)
+	resp, n, err := api.GetObjectWithResp(baseParams, bck, filepath.Join(RangeGetStr, fileName), options) // nolint:bodyclose // it's closed inside
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(
+		t, resp.ContentLength == expectedLength,
+		"number of bytes received is different than expected (expected: %d, got: %d)",
+		expectedLength, resp.ContentLength,
+	)
+	tassert.Errorf(
+		t, n == expectedLength,
+		"number of bytes received is different than expected (expected: %d, got: %d)",
+		expectedLength, n,
+	)
+	acceptRanges := resp.Header.Get(cmn.HeaderAcceptRanges)
+	tassert.Errorf(
+		t, acceptRanges == "bytes",
+		"%q header is not set correctly: %s", cmn.HeaderAcceptRanges, acceptRanges,
+	)
+	contentRange := resp.Header.Get(cmn.HeaderContentRange)
+	tassert.Errorf(t, contentRange != "", "%q header should be set", cmn.HeaderContentRange)
+}
+
+func verifyInvalidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, fileName, rangeQuery string) {
+	var (
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		hdr        = http.Header{cmn.HeaderRange: {rangeQuery}}
+		options    = api.GetObjectInput{Header: hdr}
+	)
 	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(RangeGetStr, fileName), options)
-	if err == nil {
-		t.Errorf("Must fail for invalid offset %s and length %s combination.", offset, length)
-	}
+	tassert.Errorf(t, err != nil, "must fail for %q combination", rangeQuery)
 }
 
 func Test_checksum(t *testing.T) {

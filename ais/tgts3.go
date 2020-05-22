@@ -248,9 +248,9 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 	var (
-		err                     error
-		offset, length, objSize int64
-		objName, tag            string
+		err          error
+		objSize      int64
+		objName, tag string
 	)
 	// TODO: remove
 	if objName, tag = cmn.S3ObjNameTag(path.Join(items[1:]...)); tag != "" {
@@ -289,43 +289,16 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 			return
 		}
 	}
-
-	val := r.Header.Get(s3compat.HeaderRange)
-	if val != "" {
-		offset, length, err = s3compat.ParseS3Range(val, objSize)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusRequestedRangeNotSatisfiable)
-			return
-		}
-	}
-
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("S3 HEADER Range: %s [from %d for %d]", val, offset, length)
-	}
 	goi := &getObjInfo{
 		started: started,
 		t:       t,
 		lom:     lom,
 		w:       w,
 		ctx:     t.contextWithAuth(r.Header),
-		offset:  offset,
-		length:  length,
+		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: objSize},
 		tag:     tag,
 	}
-
-	if val == "" {
-		if tag == "" {
-			s3compat.SetHeaderFromLOM(w.Header(), lom)
-		} else {
-			s3compat.SetHeaderFromSizeVersion(w.Header(), objSize, lom.Version())
-		}
-	} else {
-		if tag == "" {
-			s3compat.SetHeaderRange(w.Header(), offset, length, lom)
-		} else {
-			s3compat.SetHeaderRangeSizeVersion(w.Header(), offset, length, objSize, lom.Version())
-		}
-	}
+	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)
 	if err, errCode := goi.getObject(); err != nil {
 		if cmn.IsErrConnectionReset(err) {
 			glog.Errorf("GET %s: %v", lom, err)
@@ -376,7 +349,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
 		return
 	}
-	s3compat.SetHeaderFromLOM(w.Header(), lom)
+	s3compat.SetHeaderFromLOM(w.Header(), lom, lom.Size())
 }
 
 // DEL s3/bckName/objName

@@ -559,11 +559,6 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsT.Add(stats.GetRedirLatency, redirDelta)
 	}
-	rangeOff, rangeLen, err := t.offsetAndLength(query)
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -586,8 +581,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		lom:     lom,
 		w:       w,
 		ctx:     t.contextWithAuth(r.Header),
-		offset:  rangeOff,
-		length:  rangeLen,
+		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: 0},
 		isGFN:   isGFNRequest,
 		chunked: config.Net.HTTP.Chunked,
 	}
@@ -598,26 +592,6 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 	}
-}
-
-func (t *targetrunner) offsetAndLength(query url.Values) (offset, length int64, err error) {
-	offsetStr := query.Get(cmn.URLParamOffset)
-	lengthStr := query.Get(cmn.URLParamLength)
-	if offsetStr == "" && lengthStr == "" {
-		return
-	}
-	if offsetStr == "" || lengthStr == "" {
-		err = fmt.Errorf("invalid offset [%s] and/or length [%s]", offsetStr, lengthStr)
-		return
-	}
-	o, err1 := strconv.ParseInt(url.QueryEscape(offsetStr), 10, 64)
-	l, err2 := strconv.ParseInt(url.QueryEscape(lengthStr), 10, 64)
-	if err1 != nil || err2 != nil || o < 0 || l <= 0 {
-		err = fmt.Errorf("invalid offset [%s] and/or length [%s]", offsetStr, lengthStr)
-		return
-	}
-	offset, length = o, l
-	return
 }
 
 // PUT /v1/objects/bucket-name/object-name

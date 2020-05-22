@@ -63,11 +63,8 @@ type (
 		ctx context.Context
 		// tag from object name, from s3://bucket/object!tf
 		tag string
-		// Offset of the object from where the reading should start.
-		offset int64
-		// Length determines how many bytes should be read from the file,
-		// starting from provided offset.
-		length int64
+		// Contains object range query
+		ranges cmn.RangesQuery
 		// Determines if it is GFN request
 		isGFN bool
 		// true: chunked transfer (en)coding as per https://tools.ietf.org/html/rfc7230#page-36
@@ -634,23 +631,6 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		}
 	}()
 
-	cksumConf := goi.lom.CksumConf()
-	cksumRange := cksumConf.Type != cmn.ChecksumNone && goi.length > 0 && cksumConf.EnableReadRange
-
-	if rw, ok := goi.w.(http.ResponseWriter); ok && goi.tag == "" {
-		hdr = rw.Header()
-		if goi.lom.Cksum() != nil && !cksumRange {
-			cksumType, cksumValue := goi.lom.Cksum().Get()
-			hdr.Set(cmn.HeaderObjCksumType, cksumType)
-			hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
-		}
-		if goi.lom.Version() != "" {
-			hdr.Set(cmn.HeaderObjVersion, goi.lom.Version())
-		}
-		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(goi.lom.Size(), 10))
-		hdr.Set(cmn.HeaderObjAtime, cmn.UnixNano2S(goi.lom.AtimeUnix()))
-	}
-
 	// loopback if disk IO is disabled
 	if daemon.dryRun.disk {
 		rd := newDryReader(daemon.dryRun.size)
@@ -673,6 +653,10 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		return
 	}
 
+	if rw, ok := goi.w.(http.ResponseWriter); ok {
+		hdr = rw.Header()
+	}
+
 	fqn := goi.lom.FQN
 	if !coldGet && !goi.isGFN {
 		// best-effort GET load balancing (see also mirror.findLeastUtilized())
@@ -692,33 +676,83 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		return
 	}
 
+	var (
+		r    *cmn.HTTPRange
+		size = goi.lom.Size()
+	)
+	if goi.ranges.Size > 0 {
+		size = goi.ranges.Size
+	}
+
+	if hdr != nil {
+		ranges, err := cmn.ParseRange(goi.ranges.Range, size)
+		if err != nil {
+			if err == cmn.ErrNoOverlap {
+				hdr.Set(cmn.HeaderContentRange, fmt.Sprintf("bytes */%d", size))
+			}
+			return false, err, http.StatusRequestedRangeNotSatisfiable
+		}
+
+		if len(ranges) > 0 {
+			if len(ranges) > 1 {
+				err = fmt.Errorf("multi-range is not supported")
+				errCode = http.StatusRequestedRangeNotSatisfiable
+				return false, err, errCode
+			}
+			r = &ranges[0]
+
+			hdr.Set(cmn.HeaderAcceptRanges, "bytes")
+			hdr.Set(cmn.HeaderContentRange, r.ContentRange(size))
+		}
+	}
+
+	cksumConf := goi.lom.CksumConf()
+	cksumRange := cksumConf.Type != cmn.ChecksumNone && r != nil && cksumConf.EnableReadRange
+
+	if hdr != nil {
+		if goi.lom.Cksum() != nil && !cksumRange {
+			cksumType, cksumValue := goi.lom.Cksum().Get()
+			hdr.Set(cmn.HeaderObjCksumType, cksumType)
+			hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
+		}
+		if goi.lom.Version() != "" {
+			hdr.Set(cmn.HeaderObjVersion, goi.lom.Version())
+		}
+		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(goi.lom.Size(), 10))
+		hdr.Set(cmn.HeaderObjAtime, cmn.UnixNano2S(goi.lom.AtimeUnix()))
+
+		if r != nil {
+			hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(r.Length, 10))
+		} else {
+			hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
+		}
+	}
+
 	w := goi.w
 	if goi.tag == "" {
-		if goi.length == 0 {
+		if r == nil {
 			reader = file
 			if goi.chunked {
 				w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
 				buf, slab = goi.t.gmm.Alloc(goi.lom.Size())
-			} else {
-				hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
 			}
 		} else {
-			buf, slab = goi.t.gmm.Alloc(goi.length)
-			reader = io.NewSectionReader(file, goi.offset, goi.length)
+			buf, slab = goi.t.gmm.Alloc(r.Length)
+			reader = io.NewSectionReader(file, r.Start, r.Length)
 			if cksumRange {
 				var cksum *cmn.CksumHash
-				sgl = slab.MMSA().NewSGL(goi.length, slab.Size())
+				sgl = slab.MMSA().NewSGL(r.Length, slab.Size())
 				if _, cksum, err = cmn.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
 					return
 				}
 				hdr.Set(cmn.HeaderObjCksumVal, cksum.Value())
 				hdr.Set(cmn.HeaderObjCksumType, cksumConf.Type)
-				reader = io.NewSectionReader(file, goi.offset, goi.length)
+				reader = io.NewSectionReader(file, r.Start, r.Length)
 			}
 		}
 		written, err = io.CopyBuffer(w, reader, buf)
 	} else {
-		written, err = transformTarToTFRecord(goi)
+		written, err = transformTarToTFRecord(goi, r)
 	}
 
 	if err != nil {

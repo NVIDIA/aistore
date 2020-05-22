@@ -15,11 +15,12 @@ import (
 // s3/bckName/objName[!tf]
 func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options ...GetObjectInput) (n int64, err error) {
 	var (
-		w = ioutil.Discard
-		q url.Values
+		w   = ioutil.Discard
+		q   url.Values
+		hdr http.Header
 	)
 	if len(options) != 0 {
-		w, q = getObjectOptParams(options[0])
+		w, q, hdr = getObjectOptParams(options[0])
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
@@ -27,6 +28,7 @@ func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options 
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.S3, bck.Name, objectName),
 		Query:      q,
+		Header:     hdr,
 	}, w)
 	if err != nil {
 		return 0, err

@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -232,19 +231,20 @@ func put(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum, reader c
 func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool,
 	offset, length int64) (int64, httpLatencies, error) {
 	var (
+		hdr                         http.Header
 		hdrCksumValue, hdrCksumType string
 	)
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
 	if length > 0 {
-		query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
-		query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
+		hdr = cmn.AddRangeToHdr(nil, offset, length)
 	}
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   proxyURL,
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
 		Query:  query,
+		Header: hdr,
 	}
 	req, err := reqArgs.Req()
 	if err != nil {
@@ -294,19 +294,20 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 // getDiscard sends a GET request and discards returned data
 func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, error) {
 	var (
-		hdrCksumValue, hdrCksumType string
 		query                       url.Values
+		hdr                         http.Header
+		hdrCksumValue, hdrCksumType string
 	)
 	query = cmn.AddBckToQuery(query, bck)
 	if length > 0 {
-		query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
-		query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
+		hdr = cmn.AddRangeToHdr(hdr, offset, length)
 	}
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   proxyURL,
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
 		Query:  query,
+		Header: hdr,
 	}
 	req, err := reqArgs.Req()
 	if err != nil {

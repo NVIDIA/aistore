@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -50,36 +49,30 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 	}
 
 	var (
-		query   = url.Values{}
-		objArgs api.GetObjectInput
-		objLen  int64
-		offset  string
-		length  string
+		objArgs                api.GetObjectInput
+		objLen, offset, length int64
 	)
 
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
 		return incorrectUsageMsg(c, "%q and %q flags both need to be set", lengthFlag.Name, offsetFlag.Name)
 	}
-	if offset, err = getByteFlagValue(c, offsetFlag); err != nil {
+	if offset, err = parseByteFlagToInt(c, offsetFlag); err != nil {
 		return
 	}
-	if length, err = getByteFlagValue(c, lengthFlag); err != nil {
+	if length, err = parseByteFlagToInt(c, lengthFlag); err != nil {
 		return
 	}
-
-	query = cmn.AddBckToQuery(query, bck)
-	query.Add(cmn.URLParamOffset, offset)
-	query.Add(cmn.URLParamLength, length)
+	hdr := cmn.AddRangeToHdr(nil, offset, length)
 
 	if outFile == fileStdIO {
-		objArgs = api.GetObjectInput{Writer: os.Stdout, Query: query}
+		objArgs = api.GetObjectInput{Writer: os.Stdout, Header: hdr}
 	} else {
 		var file *os.File
 		if file, err = os.Create(outFile); err != nil {
 			return
 		}
 		defer file.Close()
-		objArgs = api.GetObjectInput{Writer: file, Query: query}
+		objArgs = api.GetObjectInput{Writer: file, Header: hdr}
 	}
 
 	if flagIsSet(c, checksumFlag) {
