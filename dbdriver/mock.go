@@ -25,7 +25,7 @@ func NewDBMock() Driver {
 }
 
 func (bd *DBMock) makePath(collection, key string) string {
-	return collection + "##" + key
+	return collection + collectionSepa + key
 }
 
 func (bd *DBMock) Close() error {
@@ -78,7 +78,10 @@ func (bd *DBMock) List(collection, pattern string) ([]string, error) {
 	filter = bd.makePath(collection, pattern)
 	for k := range bd.values {
 		if strings.HasPrefix(k, filter) {
-			keys = append(keys, k)
+			_, key := parsePath(k)
+			if key != "" {
+				keys = append(keys, k)
+			}
 		}
 	}
 	sort.Strings(keys)
@@ -104,7 +107,10 @@ func (bd *DBMock) GetAll(collection, pattern string) (map[string]string, error) 
 	filter = bd.makePath(collection, pattern)
 	for k, v := range bd.values {
 		if strings.HasPrefix(k, filter) {
-			values[k] = v
+			_, key := parsePath(k)
+			if key != "" {
+				values[key] = v
+			}
 		}
 	}
 	return values, nil

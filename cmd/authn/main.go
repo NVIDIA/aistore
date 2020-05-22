@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/dbdriver"
 )
 
 var (
@@ -73,8 +74,20 @@ func main() {
 		glog.Fatalf("Failed to set up logger: %v", err)
 	}
 
-	dbPath := filepath.Join(conf.ConfDir, userListFile)
-	srv := newAuthServ(newUserManager(dbPath))
+	dbPath := filepath.Join(conf.ConfDir, authDB)
+	driver, err := dbdriver.NewBuntDB(dbPath)
+	if err != nil {
+		glog.Fatal(err)
+	}
+	mgr, err := newUserManager(driver)
+	if err != nil {
+		glog.Fatal(err)
+	}
+
+	srv := newAuthServ(mgr)
+	if err != nil {
+		glog.Fatal(err)
+	}
 	if err := srv.run(); err != nil {
 		glog.Fatalf(err.Error())
 	}

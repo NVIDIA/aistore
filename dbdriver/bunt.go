@@ -68,6 +68,15 @@ func makePath(collection, key string) string {
 	return collection + collectionSepa + key
 }
 
+// Extract collection and key names from full key path
+func parsePath(path string) (string, string) { // nolint:unparam // unused now but will be used later
+	pos := strings.Index(path, collectionSepa)
+	if pos < 0 {
+		return path, ""
+	}
+	return path[:pos], path[pos+len(collectionSepa):]
+}
+
 func (bd *BuntDriver) Close() error {
 	return bd.driver.Close()
 }
@@ -123,8 +132,11 @@ func (bd *BuntDriver) List(collection, pattern string) ([]string, error) {
 	}
 	filter = makePath(collection, pattern)
 	err := bd.driver.View(func(tx *buntdb.Tx) error {
-		tx.AscendKeys(filter, func(key, _ string) bool {
-			keys = append(keys, key)
+		tx.AscendKeys(filter, func(path, _ string) bool {
+			_, key := parsePath(path)
+			if key != "" {
+				keys = append(keys, key)
+			}
 			return true
 		})
 		return nil
@@ -158,8 +170,11 @@ func (bd *BuntDriver) GetAll(collection, pattern string) (map[string]string, err
 	}
 	filter = makePath(collection, pattern)
 	err := bd.driver.View(func(tx *buntdb.Tx) error {
-		tx.AscendKeys(filter, func(key, val string) bool {
-			values[key] = val
+		tx.AscendKeys(filter, func(path, val string) bool {
+			_, key := parsePath(path)
+			if key != "" {
+				values[key] = val
+			}
 			return true
 		})
 		return nil
