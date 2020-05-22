@@ -5,6 +5,8 @@
 package sys
 
 import (
+	"errors"
+
 	"github.com/lufia/iostat"
 )
 
@@ -16,7 +18,7 @@ func Containerized() bool {
 
 // ContainerNumCPU returns the approximate number of CPUs allocated for the container.
 func ContainerNumCPU() (int, error) {
-	return 0, nil
+	return 0, errors.New("cannot get container cpu stats")
 }
 
 // LoadAverage returns the system load average.

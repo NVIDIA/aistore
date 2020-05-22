@@ -13,10 +13,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
+func checkSkipOS(t *testing.T, os ...string) {
+	if cmn.StringInSlice(runtime.GOOS, os) {
+		t.Skipf("skipping test for %s platform", runtime.GOOS)
+	}
+}
+
 func TestNumCPU(t *testing.T) {
+	checkSkipOS(t, "darwin")
+
 	numReal := runtime.NumCPU()
 	numVirt, _ := NumCPU()
 	numCont, err := ContainerNumCPU()
@@ -61,8 +70,12 @@ func TestMemoryStats(t *testing.T) {
 		"All items must be greater than zero: %+v", mem)
 	tassert.Errorf(t, mem.Total > mem.Free, "Free is greater than Total memory: %+v", mem)
 	tassert.Errorf(t, mem.Total > mem.Used, "Used is greater than Total memory: %+v", mem)
+	tassert.Errorf(t, mem.Total > mem.ActualUsed, "ActualUsed is greater than Total memory: %+v", mem)
+	tassert.Errorf(t, mem.Total > mem.ActualFree, "ActualFree is greater than Total memory: %+v", mem)
 	tassert.Errorf(t, mem.Total == mem.Free+mem.Used, "Total must be = Free + Used: %+v", mem)
 	t.Logf("Memory stats: %+v", mem)
+
+	checkSkipOS(t, "darwin")
 
 	memOS, err := HostMem()
 	tassert.CheckFatal(t, err)
@@ -71,12 +84,14 @@ func TestMemoryStats(t *testing.T) {
 	tassert.Errorf(t, memOS.Total >= memCont.Total,
 		"Container's memory stats are greater than host's ones.\nOS: %+v\nContainer: %+v", memOS, memCont)
 	if memOS.SwapTotal == 0 && memOS.SwapFree == 0 {
-		// not a error(e.g, Jenkins VM has swap off) - just a warining
+		// Not an error(e.g, Jenkins VM has swap off) - just a warning
 		t.Logf("Either swap is off or failed to read its stats")
 	}
 }
 
 func TestProc(t *testing.T) {
+	checkSkipOS(t, "darwin")
+
 	pid := os.Getpid()
 	stats, err := ProcessStats(pid)
 	tassert.CheckFatal(t, err)
