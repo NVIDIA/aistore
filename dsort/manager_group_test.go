@@ -1,10 +1,7 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package dsort provides APIs for distributed archive file shuffling.
 package dsort
 
 import (
@@ -37,7 +34,6 @@ var _ = Describe("ManagerGroup", func() {
 		config.Confdir = testingConfigDir
 		cmn.GCO.CommitUpdate(config)
 		db := dbdriver.NewDBMock()
-		InitManagers(db) // TODO: remove it after `ManagerGroup` stops using global variable
 		mgrp = NewManagerGroup(db)
 
 		fs.InitMountedFS()

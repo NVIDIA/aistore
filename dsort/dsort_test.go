@@ -145,7 +145,6 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 	}
 
 	db := dbdriver.NewDBMock()
-	InitManagers(db) // TODO: remove it after `ManagerGroup` stops using global variable
 	dsortManagers := NewManagerGroup(db)
 	dsortManager, err := dsortManagers.Add(globalManagerUUID)
 	Expect(err).ShouldNot(HaveOccurred())

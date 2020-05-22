@@ -1,7 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
 package dsort
 
@@ -62,6 +61,7 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 	}
 	manager := &Manager{
 		ManagerUUID: managerUUID,
+		mg:          mg,
 	}
 	mg.managers[managerUUID] = manager
 	manager.lock()
