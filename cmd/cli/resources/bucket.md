@@ -109,6 +109,10 @@ Removing cloud buckets (cloud://bucket_name) is not supported
 
 List all bucket names.
 
+`ais ls --regex "ngn*"`
+
+List all bucket names matching the `ngn*` regex expression.
+
 `ais ls cloud://` or `ais ls ais://`
 
 List all bucket names for the specific provider.

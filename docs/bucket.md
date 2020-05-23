@@ -98,6 +98,13 @@ AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet-augmented
 	  ais://@MCBgkFqp/imagenet-inflated
 
+# list all buckets with name matching the regex pattern "tes*"
+$ ais ls --regex "tes*"
+AWS Buckets (3)
+  aws://test1
+  aws://test2
+  aws://test2
+
 # we can conveniently keep using our previously selected alias for the remote cluster -
 # the following lists selected remote bucket using the cluster's alias:
 $ ais ls ais://@teamZ/imagenet-augmented

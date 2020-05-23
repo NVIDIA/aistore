@@ -134,13 +134,30 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	return
 }
 
+type (
+	bucketFilter func(cmn.Bck) bool
+)
+
 // List bucket names
 func listBucketNames(c *cli.Context, query cmn.QueryBcks) (err error) {
+	// TODO: Think if there is a need to make generic filter for buckets as well ?
+	var (
+		filter = func(_ cmn.Bck) bool { return true }
+		regex  *regexp.Regexp
+	)
+	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {
+		regex, err = regexp.Compile(regexStr)
+		if err != nil {
+			return
+		}
+		filter = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
+	}
+
 	bucketNames, err := api.ListBuckets(defaultAPIParams, query)
 	if err != nil {
 		return
 	}
-	printBucketNames(c, bucketNames, !flagIsSet(c, noHeaderFlag))
+	printBucketNames(c, bucketNames, !flagIsSet(c, noHeaderFlag), filter)
 	return
 }
 
@@ -506,17 +523,28 @@ func getOldNewBucketName(c *cli.Context) (bucket, newBucket string, err error) {
 	return
 }
 
-func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders bool) {
+func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders bool, matches bucketFilter) {
+	providerList := make([]string, 0, len(cmn.Providers))
 	for provider := range cmn.Providers {
+		providerList = append(providerList, provider)
+	}
+	sort.Strings(providerList)
+	for _, provider := range providerList {
 		query := cmn.QueryBcks{Provider: provider}
 		bcks := bucketNames.Select(query)
 		if len(bcks) == 0 {
 			continue
 		}
-		if showHeaders {
-			fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(provider), len(bcks))
-		}
+		filtered := bcks[:0]
 		for _, bck := range bcks {
+			if matches(bck) {
+				filtered = append(filtered, bck)
+			}
+		}
+		if showHeaders {
+			fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(provider), len(filtered))
+		}
+		for _, bck := range filtered {
 			fmt.Fprintf(c.App.Writer, "  %s\n", bck)
 		}
 	}
