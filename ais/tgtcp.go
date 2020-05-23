@@ -417,7 +417,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 
 // Decrypts token and retrieves userID from request header
 // Returns empty userID in case of token is invalid
-func (t *targetrunner) userFromRequest(header http.Header) (*authRec, error) {
+func (t *targetrunner) userFromRequest(header http.Header) (*cmn.AuthToken, error) {
 	token := ""
 	tokenParts := strings.SplitN(header.Get(cmn.HeaderAuthorization), " ", 2)
 	if len(tokenParts) == 2 && tokenParts[0] == cmn.HeaderBearer {
@@ -458,7 +458,7 @@ func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
 	}
 
 	if user != nil {
-		ct = context.WithValue(ct, cmn.CtxUserID, user.userID)
+		ct = context.WithValue(ct, cmn.CtxUserID, user.UserID)
 	}
 
 	return ct

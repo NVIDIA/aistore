@@ -9,9 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
+
+// NOTE: when a fresh user manager is created, it initailized users DB and
+// adds a default user with role Guest, so all length checks must add 1
 
 var (
 	users = []string{"user1", "user2", "user3"}
@@ -27,7 +31,8 @@ func init() {
 
 func createUsers(mgr *userManager, t *testing.T) {
 	for idx := range users {
-		err := mgr.addUser(users[idx], passs[idx])
+		user := &cmn.AuthUser{UserID: users[idx], Password: passs[idx], Role: cmn.AuthGuestRole}
+		err := mgr.addUser(user)
 		if err != nil {
 			t.Errorf("Failed to create a user %s: %v", users[idx], err)
 		}
@@ -35,8 +40,8 @@ func createUsers(mgr *userManager, t *testing.T) {
 
 	srvUsers, err := mgr.userList()
 	tassert.CheckFatal(t, err)
-	if len(srvUsers) != len(users) {
-		t.Errorf("User count mismatch. Found %d users instead of %d", len(srvUsers), len(users))
+	if len(srvUsers) != len(users)+1 {
+		t.Errorf("User count mismatch. Found %d users instead of %d", len(srvUsers), len(users)+1)
 	}
 	for _, username := range users {
 		_, ok := srvUsers[username]
@@ -59,7 +64,8 @@ func deleteUsers(mgr *userManager, skipNotExist bool, t *testing.T) {
 }
 
 func testInvalidUser(mgr *userManager, t *testing.T) {
-	err := mgr.addUser(users[0], passs[1])
+	user := &cmn.AuthUser{UserID: users[0], Password: passs[1], Role: cmn.AuthGuestRole}
+	err := mgr.addUser(user)
 	if err == nil {
 		t.Errorf("User with the existing name %s was created: %v", users[0], err)
 	}
@@ -76,14 +82,15 @@ func testUserDelete(mgr *userManager, t *testing.T) {
 		username = "newuser"
 		userpass = "newpass"
 	)
-	err := mgr.addUser(username, userpass)
+	user := &cmn.AuthUser{UserID: username, Password: userpass, Role: cmn.AuthGuestRole}
+	err := mgr.addUser(user)
 	if err != nil {
 		t.Errorf("Failed to create a user %s: %v", username, err)
 	}
 	srvUsers, err := mgr.userList()
 	tassert.CheckFatal(t, err)
-	if len(srvUsers) != len(users)+1 {
-		t.Errorf("Expected %d users but found %d", len(users)+1, len(srvUsers))
+	if len(srvUsers) != len(users)+2 {
+		t.Errorf("Expected %d users but found %d", len(users)+2, len(srvUsers))
 	}
 
 	token, err := mgr.issueToken(username, userpass)
@@ -97,8 +104,8 @@ func testUserDelete(mgr *userManager, t *testing.T) {
 	}
 	srvUsers, err = mgr.userList()
 	tassert.CheckFatal(t, err)
-	if len(srvUsers) != len(users) {
-		t.Errorf("Expected %d users but found %d", len(users), len(srvUsers))
+	if len(srvUsers) != len(users)+1 {
+		t.Errorf("Expected %d users but found %d", len(users)+1, len(srvUsers))
 	}
 	token, err = mgr.issueToken(username, userpass)
 	if err == nil {
@@ -162,7 +169,7 @@ func TestToken(t *testing.T) {
 	}
 	info, err = mgr.userByToken(token)
 	if info != nil || err == nil {
-		t.Errorf("Token %s expected to be expired[%x]: %v", token, info, err)
+		t.Errorf("Token %s expected to be expired[%p]: %v", token, info, err)
 	} else if err != errTokenExpired {
 		t.Errorf("Invalid error(must be 'token expired'): %v", err)
 	}

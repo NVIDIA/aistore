@@ -118,6 +118,17 @@ const (
 	subcmdWaitDownload = subcmdDownload
 	subcmdWaitDSort    = subcmdDsort
 
+	// AuthN subcommands
+	subcmdAuthAdd     = "add"
+	subcmdAuthShow    = "show"
+	subcmdAuthUpdate  = "update"
+	subcmdAuthRemove  = commandRemove
+	subcmdAuthLogin   = "login"
+	subcmdAuthLogout  = "logout"
+	subcmdAuthUser    = "user"
+	subcmdAuthRole    = "role"
+	subcmdAuthCluster = "cluster"
+
 	// Default values for long running operations
 	refreshRateDefault = time.Second
 	countDefault       = 1
@@ -181,6 +192,7 @@ const (
 	addAuthClusterArgument    = "CLUSTER_ID URL[,URL...]"
 	deleteAuthClusterArgument = "CLUSTER_ID"
 	showAuthClusterArgument   = "[CLUSTER_ID]"
+	showAuthRoleArgument      = "[ROLE]"
 )
 
 // Flags
@@ -246,6 +258,9 @@ var (
 	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 	chunkSizeFlag = cli.StringFlag{Name: "chunk-size", Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB"}
+
+	// AuthN
+	roleFlag = cli.StringFlag{Name: "role", Usage: "a user role, eg., 'guest'(default), 'developer' or 'admin'"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 

@@ -128,6 +128,7 @@ rmcache: ## Delete AIS related caches
 clean: ## Remove all AIS related files and binaries
 	@echo -n "Cleaning... "
 	@rm -rf ~/.ais* && \
+		rm -r ~/.authn && \
 		rm -rf /tmp/ais* && \
 		rm -f $(BUILD_DEST)/ais* # cleans 'ais' (CLI), 'aisnode' (TARGET/PROXY), 'aisfs' (FUSE), 'aisloader' && \
 		rm -f $(BUILD_DEST)/authn && \

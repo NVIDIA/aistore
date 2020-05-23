@@ -17,8 +17,6 @@ type (
 	AuthnSpec struct {
 		AdminName     string
 		AdminPassword string
-		UserName      string
-		UserPassword  string
 	}
 
 	ClusterSpec struct {
@@ -26,11 +24,6 @@ type (
 		AdminPassword string
 		ClusterID     string
 		URLs          []string
-	}
-
-	userRec struct {
-		Name     string `json:"name"`
-		Password string `json:"password"`
 	}
 
 	loginRec struct {
@@ -51,9 +44,8 @@ type (
 	}
 )
 
-func AddUser(baseParams BaseParams, spec AuthnSpec) error {
-	req := userRec{Name: spec.UserName, Password: spec.UserPassword}
-	msg, err := jsoniter.Marshal(req)
+func AddUser(baseParams BaseParams, spec AuthnSpec, newUser *cmn.AuthUser) error {
+	msg, err := jsoniter.Marshal(newUser)
 	if err != nil {
 		return err
 	}
@@ -68,25 +60,23 @@ func AddUser(baseParams BaseParams, spec AuthnSpec) error {
 	})
 }
 
-func DeleteUser(baseParams BaseParams, spec AuthnSpec) error {
+func DeleteUser(baseParams BaseParams, spec AuthnSpec, userID string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Users, spec.UserName),
+		Path:       cmn.URLPath(cmn.Version, cmn.Users, userID),
 		User:       spec.AdminName,
 		Password:   spec.AdminPassword,
 	})
 }
 
-func LoginUser(baseParams BaseParams, spec AuthnSpec) (token *AuthCreds, err error) {
+func LoginUser(baseParams BaseParams, userID, pass string) (token *AuthCreds, err error) {
 	baseParams.Method = http.MethodPost
 
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Users, spec.UserName),
-		Body:       cmn.MustMarshal(loginRec{Password: spec.UserPassword}),
-		User:       spec.AdminName,
-		Password:   spec.AdminPassword,
+		Path:       cmn.URLPath(cmn.Version, cmn.Users, userID),
+		Body:       cmn.MustMarshal(loginRec{Password: pass}),
 	}, &token)
 	if err != nil {
 		return nil, err
@@ -163,4 +153,53 @@ func GetClusterAuthN(baseParams BaseParams, spec ClusterSpec) ([]*AuthClusterRec
 	less := func(i, j int) bool { return rec[i].ID < rec[j].ID }
 	sort.Slice(rec, less)
 	return rec, err
+}
+
+func GetRolesAuthN(baseParams BaseParams, spec ClusterSpec) ([]*cmn.AuthRole, error) {
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Roles)
+	if spec.ClusterID != "" {
+		path = cmn.URLPath(path, spec.ClusterID)
+	}
+	roles := make([]*cmn.AuthRole, 0)
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       path,
+	}, &roles)
+	return roles, err
+}
+
+func GetUsersAuthN(baseParams BaseParams) ([]*cmn.AuthUser, error) {
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Users)
+	users := make(map[string]*cmn.AuthUser, 4)
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       path,
+	}, &users)
+
+	list := make([]*cmn.AuthUser, 0, len(users))
+	for _, info := range users {
+		list = append(list, info)
+	}
+
+	// Sort users by name but Powerusers goes first, and guests last
+	less := func(i, j int) bool {
+		if list[i].Role == cmn.AuthPowerUserRole && list[j].Role != cmn.AuthPowerUserRole {
+			return true
+		}
+		if list[i].Role != cmn.AuthPowerUserRole && list[j].Role == cmn.AuthPowerUserRole {
+			return false
+		}
+		if list[i].Role == cmn.AuthGuestRole && list[j].Role != cmn.AuthGuestRole {
+			return false
+		}
+		if list[i].Role != cmn.AuthGuestRole && list[j].Role == cmn.AuthGuestRole {
+			return true
+		}
+		return list[i].UserID < list[j].UserID
+	}
+	sort.Slice(list, less)
+
+	return list, err
 }

@@ -286,6 +286,7 @@ const (
 	S3        = "s3"
 	Users     = "users"    // AuthN
 	Clusters  = "clusters" // AuthN
+	Roles     = "roles"    // AuthN
 
 	// l3
 	SyncSmap     = "syncsmap"

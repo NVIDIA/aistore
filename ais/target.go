@@ -252,7 +252,7 @@ func (t *targetrunner) Run() error {
 	t.cloud.init(t, config)
 
 	t.authn = &authManager{
-		tokens:        make(map[string]*authRec),
+		tokens:        make(map[string]*cmn.AuthToken),
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}

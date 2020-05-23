@@ -303,6 +303,16 @@ const (
 		"{{ range $clu := . }}" +
 		"{{ $clu.ID }}\t{{ JoinList $clu.URLs }}\n" +
 		"{{end}}"
+
+	AuthNRoleTmpl = "Role\tDescription\n" +
+		"{{ range $role := . }}" +
+		"{{ $role.Name }}\t{{ $role.Desc }}\n" +
+		"{{end}}"
+
+	AuthNUserTmpl = "Name\tRole\tPermissions\n" +
+		"{{ range $user := . }}" +
+		"{{ $user.UserID }}\t{{ $user.Role }}\t{{ $user.Access }}\n" +
+		"{{end}}"
 )
 
 var (

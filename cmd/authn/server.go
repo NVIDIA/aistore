@@ -7,11 +7,7 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
-	"net"
 	"net/http"
-	"net/url"
-	"os"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -20,6 +16,7 @@ import (
 )
 
 const (
+	pathRoles    = "roles"
 	pathUsers    = "users"
 	pathTokens   = "tokens"
 	pathClusters = "clusters"
@@ -40,22 +37,6 @@ type loginMsg struct {
 //		Body: <tokenMsg>
 type tokenMsg struct {
 	Token string `json:"token"`
-}
-
-//-------------------------------------
-// global functions (borrowed from ais)
-//-------------------------------------
-func isSyscallWriteError(err error) bool {
-	switch e := err.(type) {
-	case *url.Error:
-		return isSyscallWriteError(e.Err)
-	case *net.OpError:
-		return e.Op == "write" && isSyscallWriteError(e.Err)
-	case *os.SyscallError:
-		return e.Syscall == "write"
-	default:
-		return false
-	}
 }
 
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items ...string) ([]string, error) {
@@ -127,6 +108,7 @@ func (a *authServ) registerPublicHandlers() {
 	a.registerHandler(cmn.URLPath(cmn.Version, pathUsers), a.userHandler)
 	a.registerHandler(cmn.URLPath(cmn.Version, pathTokens), a.tokenHandler)
 	a.registerHandler(cmn.URLPath(cmn.Version, pathClusters), a.clusterHandler)
+	a.registerHandler(cmn.URLPath(cmn.Version, pathRoles), a.roleHandler)
 }
 
 func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -137,6 +119,8 @@ func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
 		a.httpUserPost(w, r)
 	case http.MethodPut:
 		a.httpUserPut(w, r)
+	case http.MethodGet:
+		a.httpUserGet(w, r)
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /users handler")
 	}
@@ -198,7 +182,7 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.users.delUser(apiItems[0]); err != nil {
 		glog.Errorf("Failed to delete user: %v\n", err)
-		cmn.InvalidHandlerWithMsg(w, r, "Failed to delete user")
+		cmn.InvalidHandlerWithMsg(w, r, "Failed to delete user: "+err.Error())
 	}
 }
 
@@ -224,16 +208,19 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := apiItems[0]
-	// TODO: update user password if changed
-	// TODO: update user's ACL (e.g, bucket permissions)
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil || len(b) == 0 {
+	updateReq := &cmn.AuthUser{}
+	err = jsoniter.NewDecoder(r.Body).Decode(updateReq)
+	if err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, "Invalid request")
 		return
 	}
 
 	if glog.V(4) {
 		glog.Infof("Received credentials for %s\n", userID)
+	}
+	if err := a.users.updateUser(userID, updateReq); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
 	}
 }
 
@@ -244,19 +231,35 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info := &userInfo{}
+	info := &cmn.AuthUser{}
 	if err := cmn.ReadJSON(w, r, info); err != nil {
 		glog.Errorf("Failed to read credentials: %v\n", err)
 		return
 	}
 
-	if err := a.users.addUser(info.UserID, info.Password); err != nil {
+	if err := a.users.addUser(info); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to add user: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if glog.V(4) {
 		glog.Infof("Added a user %s\n", info.UserID)
 	}
+}
+
+// Returns list of users (without superusers)
+func (a *authServ) httpUserGet(w http.ResponseWriter, r *http.Request) {
+	_, err := checkRESTItems(w, r, 0, cmn.Version, pathUsers)
+	if err != nil {
+		return
+	}
+
+	var users map[string]*cmn.AuthUser
+	if users, err = a.users.userList(); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+
+	a.writeJSON(w, users, "list users")
 }
 
 // Checks if the request header contains super-user credentials and they are
@@ -325,32 +328,26 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repl := fmt.Sprintf(`{"token": "%s"}`, tokenString)
-	a.writeBytes(w, r, []byte(repl), "auth")
+	a.writeBytes(w, []byte(repl), "auth")
 }
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
-func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, val interface{}, tag string) {
+func (a *authServ) writeJSON(w http.ResponseWriter, val interface{}, tag string) {
 	w.Header().Set("Content-Type", "application/json")
 	err := jsoniter.NewEncoder(w).Encode(val)
-	a.processError(r, tag, err)
+	a.processError(tag, err)
 }
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
-func (a *authServ) writeBytes(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) {
+func (a *authServ) writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
 	w.Header().Set("Content-Type", "application/json")
 	var err error
 	if _, err = w.Write(jsbytes); err == nil {
 		return
 	}
-	a.processError(r, tag, err)
+	a.processError(tag, err)
 }
-func (a *authServ) processError(r *http.Request, tag string, err error) {
-	if isSyscallWriteError(err) {
-		// apparently, cannot write to this w: broken-pipe and similar
-		s := "isSyscallWriteError: " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
-		glog.Errorf("isSyscallWriteError: %v [%s]", err, s)
-		return
-	}
+func (a *authServ) processError(tag string, err error) {
 	glog.Errorf("%s: failed to write json, err: %v", tag, err)
 }
 
@@ -459,5 +456,23 @@ func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 		}
 		cluList = &clusterConfig{Conf: map[string][]string{cid: urls}}
 	}
-	a.writeJSON(w, r, cluList, "auth")
+	a.writeJSON(w, cluList, "auth")
+}
+
+func (a *authServ) roleHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		a.httpRoleList(w, r)
+	default:
+		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /users handler")
+	}
+}
+
+func (a *authServ) httpRoleList(w http.ResponseWriter, r *http.Request) {
+	roles, err := a.users.roleList()
+	if err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+	a.writeJSON(w, roles, "rolelist")
 }

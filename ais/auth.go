@@ -33,14 +33,7 @@ type (
 		Version int64    `json:"version,string"`
 	}
 
-	authRec struct {
-		userID  string
-		issued  time.Time
-		expires time.Time
-		isGuest bool
-	}
-
-	authList map[string]*authRec
+	authList map[string]*cmn.AuthToken
 
 	authManager struct {
 		sync.Mutex
@@ -58,20 +51,15 @@ var (
 	_ revs = &TokenList{}
 )
 
-var guestAcc = &authRec{
-	userID:  "guest",
-	isGuest: true,
-}
+var guestAcc = &cmn.AuthToken{UserID: cmn.AuthGuestRole}
 
 // Decrypts JWT token and returns all encrypted information.
 // Used by proxy - to check a user access and token validity(e.g, expiration),
 // and by target - only to get a user name for AWS/GCP access
-func decryptToken(tokenStr string) (*authRec, error) {
+func decryptToken(tokenStr string) (*cmn.AuthToken, error) {
 	var (
-		issueStr, expireStr string
-		invalTokenErr       = fmt.Errorf("invalid token")
+		invalTokenErr = fmt.Errorf("invalid token")
 	)
-	rec := &authRec{}
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -87,23 +75,11 @@ func decryptToken(tokenStr string) (*authRec, error) {
 	if !ok || !token.Valid {
 		return nil, invalTokenErr
 	}
-	if rec.userID, ok = claims["username"].(string); !ok {
+	tInfo := &cmn.AuthToken{}
+	if err := cmn.TryUnmarshal(claims, tInfo); err != nil {
 		return nil, invalTokenErr
 	}
-	if issueStr, ok = claims["issued"].(string); !ok {
-		return nil, invalTokenErr
-	}
-	if rec.issued, err = time.Parse(time.RFC822, issueStr); err != nil {
-		return nil, invalTokenErr
-	}
-	if expireStr, ok = claims["expires"].(string); !ok {
-		return nil, invalTokenErr
-	}
-	if rec.expires, err = time.Parse(time.RFC822, expireStr); err != nil {
-		return nil, invalTokenErr
-	}
-
-	return rec, nil
+	return tInfo, nil
 }
 
 // Add tokens to list of invalid ones. After that it cleans up the list
@@ -133,7 +109,7 @@ func (a *authManager) updateRevokedList(tokens *TokenList) {
 	// clean up the list from obsolete data
 	for token := range a.revokedTokens {
 		rec, err := a.extractTokenData(token)
-		if err == nil && rec.expires.Before(time.Now()) {
+		if err == nil && rec.Expires.Before(time.Now()) {
 			delete(a.revokedTokens, token)
 		}
 	}
@@ -145,7 +121,7 @@ func (a *authManager) updateRevokedList(tokens *TokenList) {
 //   - must not be expired
 //   - must have all mandatory fields: userID, creds, issued, expires
 // Returns decrypted token information if it is valid
-func (a *authManager) validateToken(token string) (ar *authRec, err error) {
+func (a *authManager) validateToken(token string) (ar *cmn.AuthToken, err error) {
 	a.Lock()
 
 	if _, ok := a.revokedTokens[token]; ok {
@@ -163,7 +139,7 @@ func (a *authManager) validateToken(token string) (ar *authRec, err error) {
 // was issued. Return error is the token expired or does not include all
 // mandatory fields
 // It is internal service function, so it does not lock anything
-func (a *authManager) extractTokenData(token string) (*authRec, error) {
+func (a *authManager) extractTokenData(token string) (*cmn.AuthToken, error) {
 	var err error
 
 	auth, ok := a.tokens[token]
@@ -179,7 +155,7 @@ func (a *authManager) extractTokenData(token string) (*authRec, error) {
 		return nil, fmt.Errorf("invalid token")
 	}
 
-	if auth.expires.Before(time.Now()) {
+	if auth.Expires.Before(time.Now()) {
 		glog.Errorf("Expired token was used: %s", token)
 		delete(a.tokens, token)
 		return nil, fmt.Errorf("token expired")

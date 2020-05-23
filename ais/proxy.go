@@ -112,7 +112,7 @@ func (p *proxyrunner) Run() error {
 	p.bootstrap()
 
 	p.authn = &authManager{
-		tokens:        make(map[string]*authRec),
+		tokens:        make(map[string]*cmn.AuthToken),
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}
@@ -2001,7 +2001,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 // Read a token from request header and validates it
 // Header format:
 //		'Authorization: Bearer <token>'
-func (p *proxyrunner) validateToken(r *http.Request) (*authRec, error) {
+func (p *proxyrunner) validateToken(r *http.Request) (*cmn.AuthToken, error) {
 	authToken := r.Header.Get(cmn.HeaderAuthorization)
 	if authToken == "" && cmn.GCO.Get().Auth.AllowGuest {
 		return guestAcc, nil
@@ -2032,7 +2032,7 @@ func (p *proxyrunner) validateToken(r *http.Request) (*authRec, error) {
 func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
 	wrappedFunc := func(w http.ResponseWriter, r *http.Request) {
 		var (
-			auth *authRec
+			auth *cmn.AuthToken
 			err  error
 		)
 
@@ -2042,20 +2042,20 @@ func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
 				p.invalmsghdlr(w, r, "Not authorized", http.StatusUnauthorized)
 				return
 			}
-			if auth.isGuest && r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/"+cmn.Buckets+"/") {
+			if auth.UserID == cmn.AuthGuestRole && r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/"+cmn.Buckets+"/") {
 				// get bucket objects is POST request, it cannot check the action
 				// here because it "emties" payload and httpbckpost gets nothing.
 				// So, we just set flag 'Guest' for httpbckpost to use
 				r.Header.Set(cmn.HeaderGuestAccess, "1")
-			} else if auth.isGuest && r.Method != http.MethodGet && r.Method != http.MethodHead {
+			} else if auth.UserID == cmn.AuthGuestRole && r.Method != http.MethodGet && r.Method != http.MethodHead {
 				p.invalmsghdlr(w, r, guestError, http.StatusUnauthorized)
 				return
 			}
 			if glog.FastV(4, glog.SmoduleAIS) {
-				if auth.isGuest {
+				if auth.UserID == cmn.AuthGuestRole {
 					glog.Info("Guest access granted")
 				} else {
-					glog.Infof("Logged as %s", auth.userID)
+					glog.Infof("Logged as %s", auth.UserID)
 				}
 			}
 		}

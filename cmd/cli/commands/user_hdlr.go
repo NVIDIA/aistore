@@ -29,18 +29,13 @@ const (
 	authnUserName          = "AUTHN_USER_NAME"
 	authnUserPassword      = "AUTHN_USER_PASS"
 
-	// TODO: fix and move AuthN subcommands to commands/common.go
-	subcmdAuthAdd     = "add"
-	subcmdAuthShow    = "show"
-	subcmdAuthUpdate  = "update"
-	subcmdAuthRemove  = commandRemove
-	subcmdAuthLogin   = "login"
-	subcmdAuthLogout  = "logout"
-	subcmdAuthUser    = "user"
-	subcmdAuthCluster = "cluster"
+	flagsAuthUserAdd = "user_add"
 )
 
 var (
+	authFlags = map[string][]cli.Flag{
+		flagsAuthUserAdd: {roleFlag},
+	}
 	authCmds = []cli.Command{
 		{
 			Name:  commandAuth,
@@ -54,6 +49,7 @@ var (
 							Name:      subcmdAuthUser,
 							Usage:     "add a new user",
 							ArgsUsage: addUserArgument,
+							Flags:     authFlags[flagsAuthUserAdd],
 							Action:    addUserHandler,
 						},
 						{
@@ -102,6 +98,17 @@ var (
 							Usage:     "show registered clusters",
 							ArgsUsage: showAuthClusterArgument,
 							Action:    showAuthClusterHandler,
+						},
+						{
+							Name:      subcmdAuthRole,
+							Usage:     "show existing user roles",
+							ArgsUsage: showAuthRoleArgument,
+							Action:    showAuthRoleHandler,
+						},
+						{
+							Name:   subcmdAuthUser,
+							Usage:  "show user list",
+							Action: showUserHandler,
 						},
 					},
 				},
@@ -184,10 +191,17 @@ func addUserHandler(c *cli.Context) (err error) {
 	spec := api.AuthnSpec{
 		AdminName:     cliAuthnAdminName(c),
 		AdminPassword: cliAuthnAdminPassword(c),
-		UserName:      cliAuthnUserName(c),
-		UserPassword:  cliAuthnUserPassword(c),
 	}
-	return api.AddUser(baseParams, spec)
+	role := parseStrFlag(c, roleFlag)
+	if role == "" {
+		role = cmn.AuthGuestRole
+	}
+	user := &cmn.AuthUser{
+		UserID:   cliAuthnUserName(c),
+		Password: cliAuthnUserPassword(c),
+		Role:     role,
+	}
+	return api.AddUser(baseParams, spec, user)
 }
 
 func deleteUserHandler(c *cli.Context) (err error) {
@@ -199,9 +213,9 @@ func deleteUserHandler(c *cli.Context) (err error) {
 	spec := api.AuthnSpec{
 		AdminName:     cliAuthnAdminName(c),
 		AdminPassword: cliAuthnAdminPassword(c),
-		UserName:      cliAuthnUserName(c),
 	}
-	return api.DeleteUser(baseParams, spec)
+	userName := cliAuthnUserName(c)
+	return api.DeleteUser(baseParams, spec, userName)
 }
 
 func loginUserHandler(c *cli.Context) (err error) {
@@ -211,11 +225,9 @@ func loginUserHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
 	baseParams := cliAuthParams(authnURL)
-	spec := api.AuthnSpec{
-		UserName:     cliAuthnUserName(c),
-		UserPassword: cliAuthnUserPassword(c),
-	}
-	token, err := api.LoginUser(baseParams, spec)
+	name := cliAuthnUserName(c)
+	password := cliAuthnUserPassword(c)
+	token, err := api.LoginUser(baseParams, name, password)
 	if err != nil {
 		return err
 	}
@@ -342,4 +354,37 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 	}
 
 	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNClusterTmpl)
+}
+
+func showAuthRoleHandler(c *cli.Context) (err error) {
+	authnURL := cliAuthnURL()
+	if authnURL == "" {
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+	}
+	baseParams := cliAuthParams(authnURL)
+	baseParams.Token = "" // the request requires superuser credentials, not user's ones
+	spec := api.ClusterSpec{
+		ClusterID: c.Args().Get(0),
+	}
+	list, err := api.GetRolesAuthN(baseParams, spec)
+	if err != nil {
+		return err
+	}
+
+	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl)
+}
+
+func showUserHandler(c *cli.Context) (err error) {
+	authnURL := cliAuthnURL()
+	if authnURL == "" {
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+	}
+	baseParams := cliAuthParams(authnURL)
+	baseParams.Token = "" // the request requires superuser credentials, not user's ones
+	list, err := api.GetUsersAuthN(baseParams)
+	if err != nil {
+		return err
+	}
+
+	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl)
 }

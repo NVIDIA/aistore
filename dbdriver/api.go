@@ -4,6 +4,8 @@
  */
 package dbdriver
 
+import "fmt"
+
 // General info:
 // ## Collection ##
 //   For some databases(e.g., 'buntdb' or 'pudge') the collection is a pure
@@ -56,10 +58,7 @@ func NewErrNotFound(collection, key string) *ErrNotFound {
 }
 
 func (e *ErrNotFound) Error() string {
-	if e.key == "" {
-		return "Collection '" + e.collection + "' not found"
-	}
-	return "Key '" + e.key + "' not found in collection '" + e.collection + "'"
+	return fmt.Sprintf("%s %q not found", e.collection, e.key)
 }
 
 func IsErrNotFound(err error) bool {
