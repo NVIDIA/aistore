@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -97,11 +98,16 @@ func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.BucketList) {
 	}
 }
 
+func FormatTime(t time.Time) string {
+	s := t.UTC().Format(time.RFC1123)
+	return strings.Replace(s, "UTC", "GMT", 1) // expects: "%a, %d %b %Y %H:%M:%S GMT"
+}
+
 func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
-	if cksum := lom.Cksum(); cksum != nil {
+	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cmn.ChecksumMD5 {
 		header.Set(headerETag, cksum.Value())
 	}
-	header.Set(headerAtime, lom.Atime().UTC().Format(time.RFC3339))
+	header.Set(headerAtime, FormatTime(lom.Atime()))
 	header.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
 	header.Set(cmn.HeaderContentType, GetContentType)
 	header.Set(headerVersion, lom.Version())

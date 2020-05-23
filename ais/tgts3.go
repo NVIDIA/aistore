@@ -7,7 +7,6 @@ package ais
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 	"time"
@@ -106,9 +105,13 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	result := s3compat.CopyObjectResult{LastModified: lom.Atime().Format(time.RFC3339)}
-	if cksum := lom.Cksum(); cksum != nil {
-		result.ETag = cksum.Value()
+	var cksumValue string
+	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cmn.ChecksumMD5 {
+		cksumValue = cksum.Value()
+	}
+	result := s3compat.CopyObjectResult{
+		LastModified: s3compat.FormatTime(lom.Atime()),
+		ETag:         cksumValue,
 	}
 	w.Write(result.MustMarshal())
 }
@@ -117,21 +120,22 @@ func (t *targetrunner) sendObj(src *cluster.LOM, si *cluster.Snode, bck cmn.Bck,
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("AISS3 COPY OBJECT: %s/%s => %s [%s/%s]", src.Bck().Bck, src.ObjName, si, bck, objName)
 	}
-	file, err := os.Open(src.FQN)
+	fh, err := cmn.NewFileHandle(src.FQN)
 	if err != nil {
-		t.fshc(err, src.FQN)
+		t.FSHC(err, src.FQN)
 		return err
 	}
-	defer file.Close()
+	defer fh.Close()
 
+	// TODO: there should be generic way to send objects to another target (rebalance?)
 	query := cmn.AddBckToQuery(nil, bck)
-	query.Set(cmn.URLParamProxyID, t.owner.smap.Get().ProxySI.ID())
+	query.Set(cmn.URLParamProxyID, t.GetSowner().Get().ProxySI.ID())
 	args := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   si.URL(cmn.NetworkIntraData),
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
 		Query:  query,
-		BodyR:  file,
+		BodyR:  fh,
 	}
 	req, err := args.Req()
 	if err != nil {
@@ -166,17 +170,17 @@ func (t *targetrunner) localObjCopy(src *cluster.LOM, bck cmn.Bck, objName strin
 	}
 
 	dstLom.SetAtimeUnix(started.UnixNano())
-	file, err := os.Open(src.FQN)
+	fh, err := cmn.NewFileHandle(src.FQN)
 	if err != nil {
-		t.fshc(err, src.FQN)
+		t.FSHC(err, src.FQN)
 		return err
 	}
-	defer file.Close()
+
 	poi := &putObjInfo{
 		started: started,
 		t:       t,
 		lom:     dstLom,
-		r:       file,
+		r:       fh,
 		version: src.Version(),
 		workFQN: fs.CSM.GenContentParsedFQN(dstLom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
@@ -207,21 +211,23 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r, cmn.Bck{}, true /*sleep*/)
 			err = lom.Init(bck.Bck, config)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
+			return
 		}
-		return
 	}
 	if lom.Bck().IsAIS() && lom.VerConf().Enabled {
 		lom.Load() // need to know the current version if versioning enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
+
 	if err, errCode := t.doPut(r, lom, started); err != nil {
 		t.fshc(err, lom.FQN)
 		t.invalmsghdlr(w, r, err.Error(), errCode)
+		return
 	}
 }
 
