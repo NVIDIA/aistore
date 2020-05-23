@@ -71,15 +71,19 @@ func setPropsHandler(c *cli.Context) (err error) {
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}
-	if bck, err = validateBucket(c, bck, "", false); err != nil {
+	if bck, _, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
 
 	if flagIsSet(c, resetFlag) { // ignores all arguments, just resets bucket props
 		return resetBucketProps(c, bck)
 	}
+
+	// TODO: handle new vs existing props (returned by validateBucket() above)
+
 	if err = setBucketProps(c, bck); err != nil {
-		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET_NAME -v\"", cliName, commandShow, subcmdShowBckProps)
+		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET_NAME -v\"",
+			cliName, commandShow, subcmdShowBckProps)
 		return newAdditionalInfoError(err, helpMsg)
 	}
 	return

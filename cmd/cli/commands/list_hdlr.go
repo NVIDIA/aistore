@@ -54,7 +54,7 @@ func defaultListHandler(c *cli.Context) (err error) {
 		return objectNameArgumentNotSupported(c, objName)
 	}
 
-	if bck, err = validateBucket(c, bck, "ls", true); err != nil {
+	if bck, _, err = validateBucket(c, bck, "ls", true); err != nil {
 		return
 	}
 

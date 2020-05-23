@@ -136,7 +136,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 	if bck.IsAIS() {
 		return fmt.Errorf("prefetch command doesn't support local buckets")
 	}
-	if bck, err = validateBucket(c, bck, "", false); err != nil {
+	if bck, _, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
 	//FIXME: it can be easily handled
@@ -168,7 +168,7 @@ func evictHandler(c *cli.Context) error {
 			return fmt.Errorf("evict command doesn't support local buckets")
 		}
 
-		if bck, err = validateBucket(c, bck, "", false); err != nil {
+		if bck, _, err = validateBucket(c, bck, "", false); err != nil {
 			return err
 		}
 
@@ -214,7 +214,7 @@ func getHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
+	if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 	if objName == "" {
@@ -226,6 +226,7 @@ func getHandler(c *cli.Context) (err error) {
 func putHandler(c *cli.Context) (err error) {
 	var (
 		bck         cmn.Bck
+		p           *cmn.BucketProps
 		objName     string
 		fileName    = c.Args().Get(0)
 		fullObjName = c.Args().Get(1)
@@ -241,11 +242,11 @@ func putHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
+	if bck, p, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 
-	return putObject(c, bck, objName, fileName)
+	return putObject(c, bck, objName, fileName, p.Cksum.Type)
 }
 
 func concatHandler(c *cli.Context) (err error) {
@@ -273,7 +274,7 @@ func concatHandler(c *cli.Context) (err error) {
 	if objName == "" {
 		return fmt.Errorf("object name is required")
 	}
-	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
+	if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 
@@ -298,7 +299,7 @@ func promoteHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
-	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
+	if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 	return promoteFileOrDir(c, bck, objName, fqn)
@@ -321,7 +322,7 @@ func catHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
-	if bck, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
+	if bck, _, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
 		return
 	}
 	if objName == "" {

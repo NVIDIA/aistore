@@ -206,9 +206,12 @@ func showBucketHandler(c *cli.Context) (err error) {
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}
-	if bck, err = validateBucket(c, bck, "", true); err != nil {
+	if bck, _, err = validateBucket(c, bck, "", true); err != nil {
 		return
 	}
+
+	// TODO: show as well some of the bucket properties returned by validateBucket()
+
 	return bucketDetails(c, cmn.QueryBcks(bck))
 }
 
@@ -336,7 +339,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
-	if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
+	if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
 		return
 	}
 	if object == "" {

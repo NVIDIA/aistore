@@ -35,22 +35,25 @@ const (
 	longCommandTime = 10 * time.Second
 )
 
-func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn.Bck, error) {
-	var err error
+func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn.Bck, *cmn.BucketProps, error) {
+	var (
+		p   *cmn.BucketProps
+		err error
+	)
 	bck.Name = cleanBucketName(bck.Name)
 	if bck.Name == "" {
 		if optional {
-			return bck, nil
+			return bck, nil, nil
 		}
 		if tag != "" {
 			err = incorrectUsageMsg(c, "%q: missing bucket name", tag)
 		} else {
 			err = incorrectUsageMsg(c, "missing bucket name")
 		}
-		return bck, err
+		return bck, nil, err
 	}
-	err = canReachBucket(bck)
-	return bck, err
+	p, err = headBucket(bck)
+	return bck, p, err
 }
 
 // Creates new ais buckets
@@ -95,7 +98,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 
 // Rename ais bucket
 func renameBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
-	if err = canReachBucket(fromBck); err != nil {
+	if _, err = headBucket(fromBck); err != nil {
 		return
 	}
 	if err = api.RenameBucket(defaultAPIParams, fromBck, toBck); err != nil {
@@ -143,11 +146,6 @@ func listBucketNames(c *cli.Context, query cmn.QueryBcks) (err error) {
 
 // Lists objects in bucket
 func listBucketObj(c *cli.Context, bck cmn.Bck) error {
-	err := canReachBucket(bck)
-	if err != nil {
-		return err
-	}
-
 	objectListFilter, err := newObjectListFilter(c)
 	if err != nil {
 		return err
@@ -382,10 +380,6 @@ func setBucketPropsJSON(c *cli.Context, bck cmn.Bck) (err error) {
 
 // Resets bucket props
 func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
-	if err = canReachBucket(bck); err != nil {
-		return
-	}
-
 	if err = api.ResetBucketProps(defaultAPIParams, bck); err != nil {
 		return
 	}
@@ -397,9 +391,9 @@ func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 // Get bucket props
 func showBucketProps(c *cli.Context) (err error) {
 	var (
-		bck      cmn.Bck
-		bckProps cmn.BucketProps
-		objName  string
+		bck     cmn.Bck
+		p       *cmn.BucketProps
+		objName string
 	)
 
 	if c.NArg() > 2 {
@@ -413,21 +407,17 @@ func showBucketProps(c *cli.Context) (err error) {
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}
-	if bck, err = validateBucket(c, bck, "", false); err != nil {
+	if _, p, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
-	if bckProps, err = api.HeadBucket(defaultAPIParams, bck); err != nil {
-		return
-	}
-
 	if flagIsSet(c, jsonFlag) {
-		return templates.DisplayOutput(bckProps, c.App.Writer, "", true)
+		return templates.DisplayOutput(p, c.App.Writer, "", true)
 	}
 
-	return printBckHeadTable(c, bckProps, section)
+	return printBckHeadTable(c, p, section)
 }
 
-func printBckHeadTable(c *cli.Context, props cmn.BucketProps, section string) error {
+func printBckHeadTable(c *cli.Context, props *cmn.BucketProps, section string) error {
 	type prop struct {
 		Name  string
 		Value string
@@ -438,7 +428,7 @@ func printBckHeadTable(c *cli.Context, props cmn.BucketProps, section string) er
 	var propList []prop
 
 	if flagIsSet(c, verboseFlag) {
-		err := cmn.IterFields(&props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
+		err := cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
 			value := fmt.Sprintf("%v", field.Value())
 			if uniqueTag == cmn.HeaderBucketAccessAttrs {
 				value = props.AccessToStr()
@@ -480,11 +470,7 @@ func printBckHeadTable(c *cli.Context, props cmn.BucketProps, section string) er
 }
 
 // Configure bucket as n-way mirror
-func configureNCopies(c *cli.Context, bck cmn.Bck) (err error) {
-	if err = canReachBucket(bck); err != nil {
-		return
-	}
-	copies := c.Int(copiesFlag.Name)
+func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	if err = api.MakeNCopies(defaultAPIParams, bck, copies); err != nil {
 		return
 	}
@@ -496,11 +482,8 @@ func configureNCopies(c *cli.Context, bck cmn.Bck) (err error) {
 	return
 }
 
-// Makes every object in a bucket erasure coded
+// erasure code the entire bucket
 func ecEncode(c *cli.Context, bck cmn.Bck) (err error) {
-	if err = canReachBucket(bck); err != nil {
-		return
-	}
 	if err = api.ECEncodeBucket(defaultAPIParams, bck); err != nil {
 		return
 	}

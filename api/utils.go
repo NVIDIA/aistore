@@ -133,7 +133,9 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 				return nil, err
 			}
 			wresp.n = n
-			wresp.cksumValue = cksum.Value()
+			if cksum != nil {
+				wresp.cksumValue = cksum.Value()
+			}
 		}
 	} else {
 		var err error

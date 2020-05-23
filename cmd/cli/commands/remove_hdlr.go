@@ -96,7 +96,7 @@ func removeObjectHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		if bck, err = validateBucket(c, bck, "", false); err != nil {
+		if bck, _, err = validateBucket(c, bck, "", false); err != nil {
 			return err
 		}
 

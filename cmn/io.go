@@ -472,7 +472,7 @@ func ReadLines(filename string, cb func(string) error) error {
 
 // CopyAndChecksum reads io.Reader and writes io.Writer; returns bytes written, checksum, and error
 func CopyAndChecksum(w io.Writer, r io.Reader, buf []byte, cksumType string) (n int64, cksum *CksumHash, err error) {
-	if cksumType == ChecksumNone {
+	if cksumType == ChecksumNone || cksumType == "" {
 		n, err = io.CopyBuffer(w, r, buf)
 		return
 	}

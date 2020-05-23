@@ -1659,10 +1659,10 @@ func getFromObjList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []
 	getsGroup.Wait()
 }
 
-func validateBucketProps(t *testing.T, expected cmn.BucketPropsToUpdate, actual cmn.BucketProps) {
+func validateBucketProps(t *testing.T, expected cmn.BucketPropsToUpdate, actual *cmn.BucketProps) {
 	// Apply changes on props that we have received. If after applying anything
 	// has changed it means that the props were not applied.
-	tmpProps := *actual.Clone()
+	tmpProps := actual.Clone()
 	tmpProps.Apply(expected)
 	if !reflect.DeepEqual(tmpProps, actual) {
 		t.Errorf("bucket props are not equal, expected: %+v, got: %+v", tmpProps, actual)

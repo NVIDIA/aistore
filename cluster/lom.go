@@ -389,7 +389,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 // lom.String() and helpers
 //
 
-func (lom *LOM) String() string { return lom._string(lom.bck.String()) }
+func (lom *LOM) String() string { return lom._string(lom.bck.Name) }
 
 func (lom *LOM) _string(b string) string {
 	var (
@@ -472,9 +472,8 @@ func (lom *LOM) LoadBalanceGET(now time.Time) (fqn string) {
 // Use lom.ValidateContentChecksum() to recompute and check object's content checksum.
 func (lom *LOM) ValidateMetaChecksum() error {
 	var (
-		cksumFromFS *cmn.Cksum
-		md          *lmeta
-		err         error
+		md  *lmeta
+		err error
 	)
 	if lom.CksumConf().Type == cmn.ChecksumNone {
 		return nil
@@ -483,15 +482,17 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	if err != nil {
 		return err
 	}
-	if md != nil {
-		cksumFromFS = md.cksum
+	if md == nil {
+		return fmt.Errorf("%s: no meta", lom)
+	}
+	if lom.md.cksum == nil {
+		lom.SetCksum(md.cksum)
+		return nil
 	}
 	// different versions may have different checksums
-	if (cksumFromFS != nil || lom.md.cksum != nil) && md.version == lom.md.version {
-		if !lom.md.cksum.Equal(cksumFromFS) {
-			err = cmn.NewBadDataCksumError(lom.md.cksum, cksumFromFS, lom.String())
-			lom.Uncache()
-		}
+	if md.version == lom.md.version && !lom.md.cksum.Equal(md.cksum) {
+		err = cmn.NewBadDataCksumError(lom.md.cksum, md.cksum, lom.String())
+		lom.Uncache()
 	}
 	return err
 }
@@ -501,20 +502,26 @@ func (lom *LOM) ValidateMetaChecksum() error {
 // Use lom.ValidateMetaChecksum() to check lom's checksum vs on-disk metadata.
 func (lom *LOM) ValidateContentChecksum() (err error) {
 	var (
+		cksumType = lom.CksumConf().Type
+
 		cksums = struct {
 			stor *cmn.Cksum     // stored with LOM
 			comp *cmn.CksumHash // computed
 		}{stor: lom.md.cksum}
-		cksumType = lom.CksumConf().Type
+
+		reloaded bool
 	)
-	if cksumType == cmn.ChecksumNone {
+recomp:
+	if cksumType == cmn.ChecksumNone { // as far as do-no-checksum-checking bucket rules
 		return
 	}
-	cksums.comp, err = lom.ComputeCksum()
-	if err != nil {
+	if lom.md.cksum != nil && lom.md.cksum.Type() != cmn.ChecksumNone {
+		cksumType = lom.md.cksum.Type() // takes precedence on the other hand
+	}
+	if cksums.comp, err = lom.ComputeCksum(cksumType); err != nil {
 		return
 	}
-	if cksums.stor == nil { // store with lom meta on disk
+	if lom.md.cksum == nil || lom.md.cksum.Type() == cmn.ChecksumNone { // store computed
 		lom.md.cksum = cksums.comp.Clone()
 		if err = lom.Persist(); err != nil {
 			lom.md.cksum = cksums.stor
@@ -526,12 +533,23 @@ func (lom *LOM) ValidateContentChecksum() (err error) {
 	if cksums.comp.Equal(lom.md.cksum) {
 		return
 	}
-	// reload meta and check again
+	if reloaded {
+		goto ex
+	}
+	// retry: load from disk and check again
+	reloaded = true
 	if _, err = lom.lmfs(true); err == nil && lom.md.cksum != nil {
-		if cksums.comp.Equal(lom.md.cksum) {
-			return
+		if cksumType == lom.md.cksum.Type() {
+			if cksums.comp.Equal(lom.md.cksum) {
+				return
+			}
+		} else { // type changed
+			cksums.stor = lom.md.cksum
+			cksumType = lom.CksumConf().Type
+			goto recomp
 		}
 	}
+ex:
 	err = cmn.NewBadDataCksumError(&cksums.comp.Cksum, cksums.stor, lom.String())
 	lom.Uncache()
 	return

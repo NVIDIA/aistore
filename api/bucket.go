@@ -53,11 +53,12 @@ func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...
 // Returns the properties of a bucket specified by its name.
 // Converts the string type fields returned from the HEAD request to their
 // corresponding counterparts in the BucketProps struct
-func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p cmn.BucketProps, err error) {
+func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn.BucketProps, err error) {
 	var (
 		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 		q    url.Values
 	)
+	p = &cmn.BucketProps{}
 	baseParams.Method = http.MethodHead
 	if len(query) > 0 {
 		q = query[0]
@@ -69,12 +70,9 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p cmn.
 		return
 	}
 
-	err = cmn.IterFields(&p, func(tag string, field cmn.IterField) (error, bool) {
+	err = cmn.IterFields(p, func(tag string, field cmn.IterField) (error, bool) {
 		return field.SetValue(resp.Header.Get(tag), true /*force*/), false
 	}, cmn.IterOpts{OnlyRead: false})
-	if err != nil {
-		return p, err
-	}
 	return
 }
 

@@ -264,19 +264,19 @@ func (r *sgReader) Cksum() *cmn.Cksum {
 
 // NewSGReader returns a new sgReader
 func NewSGReader(sgl *memsys.SGL, size int64, cksumType string) (Reader, error) {
-	var (
-		cksum *cmn.CksumHash
-		err   error
-	)
+	var cksum *cmn.Cksum
 	if size > 0 {
-		cksum, err = copyRandWithHash(sgl, size, cksumType, cmn.NowRand())
+		cksumHash, err := copyRandWithHash(sgl, size, cksumType, cmn.NowRand())
 		if err != nil {
 			return nil, err
+		}
+		if cksumType != cmn.ChecksumNone {
+			cksum = cksumHash.Clone()
 		}
 	}
 
 	r := memsys.NewReader(sgl)
-	return &sgReader{*r, cksum.Clone()}, nil
+	return &sgReader{*r, cksum}, nil
 }
 
 type bytesReader struct {

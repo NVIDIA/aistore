@@ -603,7 +603,7 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 			if objName != "" {
 				return "", "", bck, objectNameArgumentNotSupported(c, objName)
 			}
-			if bck, err = validateBucket(c, bck, "", true); err != nil {
+			if bck, _, err = validateBucket(c, bck, "", true); err != nil {
 				return "", "", bck, err
 			}
 		case cmn.XactTypeTask:
@@ -665,16 +665,16 @@ func cliAuthParams(authnURL string) api.BaseParams {
 	}
 }
 
-func canReachBucket(bck cmn.Bck) error {
-	if _, err := api.HeadBucket(defaultAPIParams, bck); err != nil {
-		if httpErr, ok := err.(*cmn.HTTPError); ok {
-			if httpErr.Status == http.StatusNotFound {
-				return fmt.Errorf("bucket %q does not exist", bck)
-			}
-		}
-		return fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)
+func headBucket(bck cmn.Bck) (p *cmn.BucketProps, err error) {
+	if p, err = api.HeadBucket(defaultAPIParams, bck); err == nil {
+		return
 	}
-	return nil
+	if httpErr, ok := err.(*cmn.HTTPError); ok && httpErr.Status == http.StatusNotFound {
+		err = fmt.Errorf("bucket %q does not exist", bck)
+	} else {
+		err = fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)
+	}
+	return
 }
 
 //

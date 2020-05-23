@@ -125,9 +125,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.
 		return
 	}
 	defer file.Close()
-	if lom.Cksum() != nil {
-		cksumType, cksumValue = lom.Cksum().Get()
-	}
+	cksumType, cksumValue = lom.Cksum().Get()
 
 	// PUT object into different target
 	query := url.Values{}

@@ -66,7 +66,7 @@ func SupportedChecksums() (types []string) {
 }
 
 func ValidateCksumType(ty string) (err error) {
-	if !checksums.Contains(ty) {
+	if ty != "" && !checksums.Contains(ty) {
 		err = fmt.Errorf("invalid checksum type %q (expecting %v)", ty, SupportedChecksums())
 	}
 	return
@@ -77,19 +77,20 @@ func ValidateCksumType(ty string) (err error) {
 ///////////
 
 func NewCksum(ty, value string) *Cksum {
-	if ty == "" || value == "" {
-		return nil
-	}
 	if err := ValidateCksumType(ty); err != nil {
 		AssertMsg(false, err.Error())
+	}
+	if ty == "" {
+		AssertMsg(value == "", "type='' & value="+value)
+		ty = ChecksumNone
 	}
 	return &Cksum{ty, value}
 }
 
 func NewCksumHash(ty string) *CksumHash {
 	switch ty {
-	case ChecksumNone:
-		return nil
+	case ChecksumNone, "":
+		return &CksumHash{Cksum{ty: ChecksumNone}, nil, nil}
 	case ChecksumXXHash:
 		return &CksumHash{Cksum{ty: ty}, xxhash.New64(), nil}
 	case ChecksumMD5:
@@ -166,18 +167,18 @@ func (e *BadCksumError) Error() string {
 	if e.context != "" {
 		context = " (context: " + e.context + ")"
 	}
-	_, ok1 := e.a.(*Cksum)
-	_, ok2 := e.b.(*Cksum)
+	cka, ok1 := e.a.(*Cksum)
+	ckb, ok2 := e.b.(*Cksum)
 	if ok1 && ok2 {
-		if e.a != nil && e.b == nil {
-			return fmt.Sprintf("%s (%s != %v)%s", e.prefix, e.a, e.b, context)
-		} else if e.a == nil && e.b != nil {
-			return fmt.Sprintf("%s (%v != %s)%s", e.prefix, e.a, e.b, context)
-		} else if e.a == nil && e.b == nil {
+		if cka != nil && ckb == nil {
+			return fmt.Sprintf("%s (%s != %v)%s", e.prefix, cka, ckb, context)
+		} else if cka == nil && ckb != nil {
+			return fmt.Sprintf("%s (%v != %s)%s", e.prefix, cka, ckb, context)
+		} else if cka == nil && ckb == nil {
 			return fmt.Sprintf("%s (nil != nil)%s", e.prefix, context)
 		}
-		t1, v1 := e.a.(*Cksum).Get()
-		t2, v2 := e.b.(*Cksum).Get()
+		t1, v1 := cka.Get()
+		t2, v2 := ckb.Get()
 		if t1 == t2 {
 			return fmt.Sprintf("%s %s(%s != %s)%s", e.prefix, t1, v1, v2, context)
 		}

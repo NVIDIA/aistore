@@ -358,7 +358,8 @@ var _ = Describe("LOM", func() {
 					newLom := NewBasicLom(lom.FQN, tMock)
 					err = newLom.Load(false)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(newLom.Cksum()).To(BeNil())
+					cksumType, _ = newLom.Cksum().Get()
+					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumNone))
 				})
 			})
 
@@ -380,7 +381,9 @@ var _ = Describe("LOM", func() {
 					fsLOM := NewBasicLom(localFQN, tMock)
 					err := fsLOM.Load(false)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(fsLOM.Cksum()).To(BeNil())
+
+					cksumType, _ := fsLOM.Cksum().Get()
+					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumNone))
 
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 					lom.Uncache()
@@ -410,6 +413,7 @@ var _ = Describe("LOM", func() {
 					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 
 					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
+					lom.Persist()
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 				})
 
@@ -459,7 +463,9 @@ var _ = Describe("LOM", func() {
 					fsLOM := NewBasicLom(localFQN, tMock)
 					err := fsLOM.Load(false)
 					Expect(err).ShouldNot(HaveOccurred())
-					Expect(fsLOM.Cksum()).To(BeNil())
+
+					cksumType, _ := fsLOM.Cksum().Get()
+					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumNone))
 
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 					lom.Uncache()
@@ -596,7 +602,9 @@ var _ = Describe("LOM", func() {
 			// Prepares a basic lom with a copy
 			createTestFile(fqn, testFileSize)
 			lom = &cluster.LOM{T: tMock, FQN: fqn}
+
 			err := lom.Init(cmn.Bck{})
+
 			lom.SetSize(int64(testFileSize))
 			lom.SetVersion(desiredVersion)
 			Expect(lom.Persist()).NotTo(HaveOccurred())
@@ -966,5 +974,7 @@ func getTestFileHash(fqn string) (hash string) {
 	reader, _ := os.Open(fqn)
 	_, cksum, err := cmn.CopyAndChecksum(ioutil.Discard, reader, nil, cmn.ChecksumXXHash)
 	Expect(err).NotTo(HaveOccurred())
-	return cksum.Value()
+	hash = cksum.Value()
+	reader.Close()
+	return
 }

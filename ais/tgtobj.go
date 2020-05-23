@@ -97,7 +97,7 @@ type (
 func (poi *putObjInfo) putObject() (err error, errCode int) {
 	lom := poi.lom
 	// optimize out if the checksums do match
-	if poi.cksumToCheck != nil && lom.Cksum() != nil {
+	if poi.cksumToCheck != nil {
 		if lom.Cksum().Equal(poi.cksumToCheck) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToCheck)
@@ -111,7 +111,6 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 		if err := poi.writeToFile(); err != nil {
 			return err, http.StatusInternalServerError
 		}
-
 		if err, errCode := poi.finalize(); err != nil {
 			return err, errCode
 		}
@@ -159,7 +158,6 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		bck = lom.Bck()
 	)
 	if bck.IsRemote() && !poi.migrated {
-		cmn.Assert(lom.Cksum() != nil)
 		var version string
 		if bck.IsCloud() {
 			version, err, errCode = poi.putCloud()
@@ -296,7 +294,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		cksums.store = cmn.NewCksumHash(conf.Type)
 		writers = append(writers, cksums.store.H)
 		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
-		if conf.ValidateColdGet && poi.cksumToCheck != nil {
+		if conf.ValidateColdGet && poi.cksumToCheck != nil && poi.cksumToCheck.Type() != cmn.ChecksumNone {
 			cksums.expct = poi.cksumToCheck
 			cksums.given = cmn.NewCksumHash(poi.cksumToCheck.Type())
 			writers = append(writers, cksums.given.H)
@@ -305,7 +303,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		if !poi.migrated || conf.ValidateObjMove {
 			cksums.store = cmn.NewCksumHash(conf.Type)
 			writers = append(writers, cksums.store.H)
-			if poi.cksumToCheck != nil {
+			if poi.cksumToCheck != nil && poi.cksumToCheck.Type() != cmn.ChecksumNone {
 				cksums.expct = poi.cksumToCheck
 				cksums.given = cmn.NewCksumHash(poi.cksumToCheck.Type())
 				writers = append(writers, cksums.given.H)
@@ -314,7 +312,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 			// if migration validation is not configured we can just take
 			// the checksum that has arrived with the object (and compute it if not present)
 			poi.lom.SetCksum(poi.cksumToCheck)
-			if poi.cksumToCheck == nil {
+			if poi.cksumToCheck == nil || poi.cksumToCheck.Type() == cmn.ChecksumNone {
 				cksums.store = cmn.NewCksumHash(conf.Type)
 				writers = append(writers, cksums.store.H)
 			}
@@ -347,6 +345,8 @@ write:
 	if cksums.store != nil {
 		cksums.store.Finalize()
 		poi.lom.SetCksum(&cksums.store.Cksum)
+	} else {
+		poi.lom.SetCksum(cmn.NewCksum(cmn.ChecksumNone, ""))
 	}
 	if err = file.Close(); err != nil {
 		return fmt.Errorf("failed to close received file %s, err: %w", poi.workFQN, err)
@@ -712,8 +712,10 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	if hdr != nil {
 		if goi.lom.Cksum() != nil && !cksumRange {
 			cksumType, cksumValue := goi.lom.Cksum().Get()
-			hdr.Set(cmn.HeaderObjCksumType, cksumType)
-			hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
+			if cksumType != cmn.ChecksumNone {
+				hdr.Set(cmn.HeaderObjCksumType, cksumType)
+				hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
+			}
 		}
 		if goi.lom.Version() != "" {
 			hdr.Set(cmn.HeaderObjVersion, goi.lom.Version())

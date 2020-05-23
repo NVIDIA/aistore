@@ -1103,9 +1103,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		objProps.Size = lom.Size()
 		objProps.Version = lom.Version()
 		objProps.Atime = lom.AtimeUnix()
-		if cksum := lom.Cksum(); cksum != nil {
-			objProps.Checksum.Type = cksum.Type()
-			objProps.Checksum.Value = cksum.Value()
+		if ty, val := lom.Cksum().Get(); ty != cmn.ChecksumNone {
+			objProps.Checksum.Type, objProps.Checksum.Value = ty, val
 		}
 		objProps.NumCopies = lom.NumCopies()
 		if lom.Bck().Props.EC.Enabled {

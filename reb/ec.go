@@ -2040,13 +2040,18 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 		}
 		cmn.AssertMsg(s.meta != nil, obj.uid)
 		req := &pushReq{md: s.meta}
+		cksumType, cksumValue := s.meta.CksumType, s.meta.ObjCksum
+		if cksumType == "" && cksumValue != "" {
+			glog.Errorf("%s/%s missing checksum type", obj.bck.Name, obj.objName)
+			cksumValue = "" // TODO -- FIXME
+		}
 		hdr := transport.Header{
 			Bck:     obj.bck,
 			ObjName: obj.objName,
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       obj.objSize,
-				CksumType:  s.meta.CksumType,
-				CksumValue: s.meta.ObjCksum,
+				CksumType:  cksumType,
+				CksumValue: cksumValue,
 				Version:    s.meta.ObjVersion,
 			},
 		}

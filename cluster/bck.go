@@ -122,7 +122,7 @@ func (b *Bck) String() string {
 	if bid == 0 {
 		return b.Bck.String()
 	}
-	return fmt.Sprintf("%s%#x", b.Bck.String(), bid)
+	return fmt.Sprintf("%s(%#x)", b.Bck.String(), bid)
 }
 
 func (b *Bck) Equal(other *Bck, sameID bool) bool {

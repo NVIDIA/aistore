@@ -163,19 +163,28 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 	return err
 }
 
-// TODO: missing progress bar feature
-func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader) (err error) {
+// TODO: support progress bar
+func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) (err error) {
 	var (
 		handle string
-		cksum  = cmn.NewCksumHash(cmn.ChecksumXXHash) // TODO -- FIXME: is defined by bucket props
+		cksum  = cmn.NewCksumHash(cksumType)
 	)
 	chunkSize, err := parseByteFlagToInt(c, chunkSizeFlag)
 	if err != nil {
 		return err
 	}
 	for {
-		b := bytes.NewBuffer(nil)
-		n, err := io.CopyN(cmn.NewWriterMulti(cksum.H, b), r, chunkSize)
+		var (
+			// TODO: use MMSA
+			b   = bytes.NewBuffer(nil)
+			n   int64
+			err error
+		)
+		if cksumType != cmn.ChecksumNone {
+			n, err = io.CopyN(cmn.NewWriterMulti(cksum.H, b), r, chunkSize)
+		} else {
+			n, err = io.CopyN(b, r, chunkSize)
+		}
 		if err != nil && err != io.EOF {
 			return err
 		}
@@ -195,7 +204,9 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 			return err
 		}
 	}
-	cksum.Finalize()
+	if cksumType != cmn.ChecksumNone {
+		cksum.Finalize()
+	}
 	return api.FlushObject(api.FlushArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
@@ -286,7 +297,7 @@ func rangeTrimPrefix(pt cmn.ParsedTemplate) string {
 	return pt.Prefix[:sepaIndex+1]
 }
 
-func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error) {
+func putObject(c *cli.Context, bck cmn.Bck, objName, fileName, cksumType string) (err error) {
 	printDryRunHeader(c)
 
 	if fileName == "-" {
@@ -299,7 +310,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) (err error
 			return nil
 		}
 
-		if err := putSingleObjectChunked(c, bck, objName, os.Stdin); err != nil {
+		if err := putSingleObjectChunked(c, bck, objName, os.Stdin, cksumType); err != nil {
 			return err
 		}
 		fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
@@ -630,9 +641,6 @@ func handleObjHeadError(err error, bck cmn.Bck, object string) error {
 }
 
 func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
-	if err = canReachBucket(bck); err != nil {
-		return
-	}
 	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
 		return incorrectUsageMsg(c, "flags %q and %q cannot be both set", listFlag.Name, templateFlag.Name)
 	}
@@ -733,7 +741,7 @@ func multiObjOp(c *cli.Context, command string) error {
 		if err != nil {
 			return err
 		}
-		if bck, err = validateBucket(c, bck, fullObjName, false); err != nil {
+		if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
 			return err
 		}
 		if objectName == "" {

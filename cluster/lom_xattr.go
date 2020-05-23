@@ -266,8 +266,9 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 
 func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 	var (
-		cksumType, cksumValue string
-		b8                    [cmn.SizeofI64]byte
+		cksumType  = cmn.ChecksumNone
+		cksumValue string
+		b8         [cmn.SizeofI64]byte
 	)
 	buf, _ = mm.Alloc(mdSize)
 	buf = buf[:prefLen] // hold it for md-xattr checksum (below)
@@ -275,9 +276,9 @@ func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 	// serialize
 	if md.cksum != nil {
 		cksumType, cksumValue = md.cksum.Get()
-		buf = _marshRecord(mm, buf, lomCksumType, cksumType, true)
-		buf = _marshRecord(mm, buf, lomCksumValue, cksumValue, true)
 	}
+	buf = _marshRecord(mm, buf, lomCksumType, cksumType, true)
+	buf = _marshRecord(mm, buf, lomCksumValue, cksumValue, true)
 	if md.version != "" {
 		buf = _marshRecord(mm, buf, lomObjVersion, md.version, true)
 	}

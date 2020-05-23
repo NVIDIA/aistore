@@ -420,14 +420,22 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice, cksums 
 		if err != nil {
 			return err
 		}
-		cksums[id] = cmn.NewCksumHash(cksumType)
-		writers[id] = cmn.NewWriterMulti(cksums[id].H, file)
+		if cksumType != cmn.ChecksumNone {
+			cksums[id] = cmn.NewCksumHash(cksumType)
+			writers[id] = cmn.NewWriterMulti(cksums[id].H, file)
+		} else {
+			writers[id] = file
+		}
 		restored[id] = &slice{workFQN: fqn, n: sliceSize}
 	} else {
 		sgl := mm.NewSGL(sliceSize)
 		restored[id] = &slice{obj: sgl, n: sliceSize}
-		cksums[id] = cmn.NewCksumHash(cksumType)
-		writers[id] = cmn.NewWriterMulti(sgl, cksums[id].H)
+		if cksumType != cmn.ChecksumNone {
+			cksums[id] = cmn.NewCksumHash(cksumType)
+			writers[id] = cmn.NewWriterMulti(cksums[id].H, sgl)
+		} else {
+			writers[id] = sgl
+		}
 	}
 
 	// id from slices object differs from id of idToNode object
@@ -441,7 +449,6 @@ func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGrou
 
 	cksumType := recvCksm.Type()
 	if cksumType == cmn.ChecksumNone {
-		glog.Errorf("slice %d is not checksummed", i)
 		return
 	}
 

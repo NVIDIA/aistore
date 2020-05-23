@@ -6,6 +6,8 @@
 package commands
 
 import (
+	"fmt"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -41,6 +43,7 @@ var (
 func setCopiesHandler(c *cli.Context) (err error) {
 	var (
 		bck        cmn.Bck
+		p          *cmn.BucketProps
 		objectName string
 	)
 	if bck, objectName, err = parseBckObjectURI(c.Args().First()); err != nil {
@@ -49,15 +52,25 @@ func setCopiesHandler(c *cli.Context) (err error) {
 	if objectName != "" {
 		return objectNameArgumentNotSupported(c, objectName)
 	}
-	if bck, err = validateBucket(c, bck, "", false); err != nil {
+	if bck, p, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
-	return configureNCopies(c, bck)
+	copies := c.Int(copiesFlag.Name)
+	if p.Mirror.Copies == int64(copies) {
+		if copies > 1 {
+			fmt.Fprintf(c.App.Writer, "Bucket %q is already %d-way mirror, nothing to do\n", bck, copies)
+		} else {
+			fmt.Fprintf(c.App.Writer, "Bucket %q is already configured with no redundancy, nothing to do\n", bck)
+		}
+		return
+	}
+	return configureNCopies(c, bck, copies)
 }
 
 func ecEncodeHandler(c *cli.Context) (err error) {
 	var (
 		bck        cmn.Bck
+		p          *cmn.BucketProps
 		objectName string
 	)
 	if bck, objectName, err = parseBckObjectURI(c.Args().First()); err != nil {
@@ -66,7 +79,12 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 	if objectName != "" {
 		return objectNameArgumentNotSupported(c, objectName)
 	}
-	if bck, err = validateBucket(c, bck, "", false); err != nil {
+	if bck, p, err = validateBucket(c, bck, "", false); err != nil {
+		return
+	}
+	if !p.EC.Enabled {
+		fmt.Fprintf(c.App.Writer, "Bucket %q: erasure-coding is currently disabled (%+v)\n", bck, p.EC)
+		fmt.Fprintln(c.App.Writer, "(use `set props` command to enable)")
 		return
 	}
 	return ecEncode(c, bck)
