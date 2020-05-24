@@ -108,6 +108,9 @@ func (ck *Cksum) Equal(to *Cksum) bool {
 		return false
 	}
 	t1, v1 := ck.Get()
+	if t1 == ChecksumNone || t1 == "" || v1 == "" {
+		return false
+	}
 	t2, v2 := to.Get()
 	return t1 == t2 && v1 == v2
 }
