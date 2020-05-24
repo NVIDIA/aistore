@@ -163,6 +163,10 @@ func listBucketNames(c *cli.Context, query cmn.QueryBcks) (err error) {
 
 // Lists objects in bucket
 func listBucketObj(c *cli.Context, bck cmn.Bck) error {
+	var (
+		props string
+	)
+
 	objectListFilter, err := newObjectListFilter(c)
 	if err != nil {
 		return err
@@ -170,10 +174,10 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 
 	prefix := parseStrFlag(c, prefixFlag)
 	showUnmatched := flagIsSet(c, showUnmatchedFlag)
-	props := "name,"
 	if parseStrFlag(c, objPropsFlag) == "all" {
-		props += strings.Join(cmn.GetPropsAll, ",")
+		props = strings.Join(cmn.GetPropsAll, ",")
 	} else {
+		props = "name,"
 		props += parseStrFlag(c, objPropsFlag)
 		if flagIsSet(c, allItemsFlag) && !strings.Contains(props, "status") {
 			// If `all` flag is set print status of the file so that the output is easier to understand -

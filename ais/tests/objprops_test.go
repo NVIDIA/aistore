@@ -561,8 +561,8 @@ func TestObjProps(t *testing.T) {
 				tassert.CheckFatal(t, err)
 
 				tassert.Errorf(
-					t, props.Provider == bckProps.Provider,
-					"expected provider (%s) to be %s", props.Provider, bckProps.Provider,
+					t, props.Bck.Provider == bckProps.Provider,
+					"expected provider (%s) to be %s", props.Bck.Provider, bckProps.Provider,
 				)
 				tassert.Errorf(
 					t, uint64(props.Size) == m.fileSize,

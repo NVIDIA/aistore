@@ -321,6 +321,7 @@ var (
 	}
 
 	ObjStatMap = map[string]string{
+		"name":     "{{.Bck.String}}/{{.Name}}",
 		"cached":   "{{FormatBool .Present}}",
 		"size":     "{{FormatBytesSigned .Size 2}}",
 		"version":  "{{.Version}}",

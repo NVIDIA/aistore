@@ -227,6 +227,7 @@ const (
 
 // SelectMsg.Props enum
 const (
+	GetPropsName     = "name"
 	GetPropsChecksum = "checksum"
 	GetPropsSize     = "size"
 	GetPropsAtime    = "atime"

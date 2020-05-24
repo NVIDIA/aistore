@@ -1072,8 +1072,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	objProps := cmn.ObjectProps{
-		Provider: lom.Bck().Provider,
-		Present:  exists,
+		Name:    objName,
+		Bck:     lom.Bck().Bck,
+		Present: exists,
 	}
 	if exists {
 		objProps.Size = lom.Size()

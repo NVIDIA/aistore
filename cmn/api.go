@@ -112,7 +112,7 @@ type XactionMsg struct {
 
 // GetPropsDefault is a list of default (most relevant) GetProps* options
 var GetPropsDefault = []string{
-	GetPropsChecksum, GetPropsSize, GetPropsAtime, GetPropsVersion,
+	GetPropsName, GetPropsChecksum, GetPropsSize, GetPropsAtime, GetPropsVersion,
 }
 
 // GetPropsAll is a list of all GetProps* options
@@ -392,11 +392,12 @@ func (c *ECConf) RequiredRestoreTargets() int {
 
 // ObjectProps
 type ObjectProps struct {
+	Name         string           `json:"name"`
+	Bck          Bck              `json:"bucket"`
 	Size         int64            `json:"size"`
 	Version      string           `json:"version"`
 	Atime        int64            `json:"atime"`
 	Checksum     ObjectCksumProps `json:"checksum"`
-	Provider     string           `json:"provider"`
 	NumCopies    int              `json:"copies"`
 	DataSlices   int              `list:"omit"`
 	ParitySlices int              `list:"omit"`
