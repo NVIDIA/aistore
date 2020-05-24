@@ -104,8 +104,8 @@ func NewCksumHash(ty string) *CksumHash {
 }
 
 func (ck *Cksum) Equal(to *Cksum) bool {
-	if ck == nil {
-		return to == nil
+	if ck == nil || to == nil {
+		return false
 	}
 	t1, v1 := ck.Get()
 	t2, v2 := to.Get()
