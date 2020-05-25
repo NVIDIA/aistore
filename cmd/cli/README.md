@@ -1,5 +1,6 @@
-AIS Command Line Interface is a tool used to interact with resources of AIStore. It gives users the ability to query information from specific daemons,
-create or delete resources or download files to buckets directly from the command line.
+AIS CLI (command-line interface) is intented to easily control and monitor every aspect of AIS cluster lifecycle. In addition, CLI provides dataset management commands, commands to read and write data, and more.
+
+**TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list CLI resources with numerous examples and usage guides that we constantly keep updating.
 
 <img src="/docs/images/ais2.13.gif" alt="CLI-playback" width="900">
 
@@ -62,27 +63,17 @@ To install them manually, run `bash autocomplete/install.sh`.
 
 To uninstall autocompletions run `bash autocomplete/uninstall.sh`.
 
-## Supported Resources
+## CLI reference
 
-List of available CLI resources
-
-* [Bucket](resources/bucket.md)
-
-* [Object](resources/object.md)
-
-* [Daemon/Cluster](resources/daeclu.md)
-
-* [Xaction](resources/xaction.md)
-
-* [Downloader](resources/download.md)
-
-* [DSort](resources/dsort.md)
-
-* [Mountpath](resources/mpath.md)
-
-* [Remote cluster](resources/remote.md)
-
-* [Auth](resources/users.md)
+- [Create, destroy, list, and other operations on buckets](resources/bucket.md)
+- [GET, PUT, APPEND, PROMOTE, and other operations on objects](resources/object.md)
+- [Cluster and Node management](resources/daeclu.md)
+- [Mountpath (Disk) management](resources/mpath.md)
+- [Attach, Detach, and monitor remote clusters](resources/remote.md)
+- [Start, Stop, and monitor downloads](resources/download.md)
+- [Distributed Sort](resources/dsort.md)
+- [User account and access management](resources/users.md)
+- [Xaction (Job) management](resources/xaction.md)
 
 ## Info For Developers
 

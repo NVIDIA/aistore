@@ -1,5 +1,4 @@
-The CLI allows users to interact with AIS daemons or cluster.
-A daemon is either proxy or target. 
+# Cluster and Node (Daemon) management
 
 ## Cluster or Daemon status
 

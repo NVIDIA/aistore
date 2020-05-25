@@ -1,5 +1,6 @@
-The CLI allows users to view and manage [AIS Downloader](/downloader/README.md) jobs.
-It is used for downloading files and datasets from internet to AIS cluster.
+# Start, Stop, and monitor downloads
+
+AIS Downloader is intended for downloading massive numbers of files (objects) and datasets from both Cloud Storage (buckets) and Internet. For details and background, please see the [downloader's own readme](/downloader/README.md).
 
 ## Start download job
 

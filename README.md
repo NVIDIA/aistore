@@ -37,6 +37,7 @@ Last but not least, AIS runs natively on Kubernetes and features open format and
 For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets).
 
 **Table of Contents**
+
 - [Prerequisites](#prerequisites)
 - [Build, Make, and Development Tools](#build-make-and-development-tools)
 - [Deployment](#deployment)
@@ -245,6 +246,15 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 
 - [AIS Overview](docs/overview.md)
 - [CLI](cmd/cli/README.md)
+  - [Create, destroy, list, and other operations on buckets](cmd/cli/resources/bucket.md)
+  - [GET, PUT, APPEND, PROMOTE, and other operations on objects](cmd/cli/resources/object.md)
+  - [Cluster and Node management](cmd/cli/resources/daeclu.md)
+  - [Mountpath (Disk) management](cmd/cli/resources/mpath.md)
+  - [Attach, Detach, and monitor remote clusters](cmd/cli/resources/remote.md)
+  - [Start, Stop, and monitor downloads](cmd/cli/resources/download.md)
+  - [Distributed Sort](cmd/cli/resources/dsort.md)
+  - [User account and access management](cmd/cli/resources/users.md)
+  - [Xaction (Job) management](cmd/cli/resources/xaction.md)
 - [On-Disk Layout](docs/on-disk-layout.md)
 - [Command line parameters](docs/command_line.md)
 - [AIS Load Generator: integrated benchmark tool](bench/aisloader/README.md)

@@ -1,4 +1,4 @@
-The CLI allows users to interact with [buckets](../../../docs/bucket.md) in the AIS cluster.
+This section lists operations on *buckets*. For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please refer to [buckets in-depth overview](/docs/bucket.md).
 
 ## Create bucket
 

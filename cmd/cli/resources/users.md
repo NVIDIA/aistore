@@ -1,4 +1,8 @@
-An AIS cluster can be deployed with [AuthN](/cmd/authn/README.md) - AIS authorization server. The CLI provides an easy way to manage users and to grant and revoke access permissions.
+# User Account and Access management
+
+[AuthN](/cmd/authn/README.md) is AIS authorization server that can be deployed to manage user access to one or more AIS clusters.
+
+The CLI provides an easy way to manage users and to grant and revoke access permissions.
 
 If the AIS cluster does not have guest access enabled, every user that needs access to the cluster data must be registered. Guest access allows unregistered users to use the AIS cluster in read-only mode.
 

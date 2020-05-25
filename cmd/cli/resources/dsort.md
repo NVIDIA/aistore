@@ -1,4 +1,6 @@
-The CLI allows users to manage [AIS DSort](/dsort/README.md) jobs.
+# Start, Stop, and monitor distributed parallel sorting (dSort)
+
+For background and in-depth presentation, please see this [document](/dsort/README.md).
 
 ## Generate shards
 
