@@ -1,4 +1,5 @@
-AIS CLI (command-line interface) is intented to easily control and monitor every aspect of AIS cluster lifecycle. In addition, CLI provides dataset management commands, commands to read and write data, and more.
+AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster lifecycle.
+In addition, CLI provides dataset management commands, commands to read and write data, and more.
 
 **TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list CLI resources with numerous examples and usage guides that we constantly keep updating.
 
