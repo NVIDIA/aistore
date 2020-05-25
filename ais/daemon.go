@@ -316,6 +316,13 @@ func Run(version, build string) {
 
 	initDaemon(version, build)
 	err := daemon.rg.run()
+
+	defer func() {
+		// NOTE: This must be done *after* `rg.run()` so we don't remove
+		//  marker on panic (which can happen in `rg.run()`).
+		fs.RemoveMarker(nodeRestartedMarker)
+	}()
+
 	if err == nil {
 		glog.Infoln("Terminated OK")
 		return

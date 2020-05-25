@@ -32,7 +32,7 @@ type (
 func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()
-		err               = putMarker(cmn.ActResilver)
+		err               = fs.PutMarker(getMarkerName(cmn.ActResilver))
 	)
 	if err != nil {
 		glog.Errorln("failed to create resilver marker", err)
@@ -61,7 +61,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
 	wg.Wait()
 
 	if !xreb.Aborted() {
-		if err := removeMarker(cmn.ActResilver); err != nil {
+		if err := fs.RemoveMarker(getMarkerName(cmn.ActResilver)); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode(), err)
 		}
 	}

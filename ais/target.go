@@ -41,6 +41,8 @@ const (
 	bucketMDReceive  = "receive"
 	bucketMDRegister = "register"
 	dbName           = "ais.db"
+
+	nodeRestartedMarker = ".noderestarted"
 )
 
 type (
@@ -180,6 +182,8 @@ func (t *targetrunner) Run() error {
 
 	t.statsT.RegisterAll()
 	t.httprunner.keepalive = gettargetkeepalive()
+
+	t.checkRestarted()
 
 	// register object type and workfile type
 	if err := fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
@@ -357,6 +361,14 @@ func (t *targetrunner) Stop(err error) {
 	}
 
 	t.httprunner.stop(err)
+}
+
+func (t *targetrunner) checkRestarted() {
+	if fs.MarkerExists(nodeRestartedMarker) {
+		t.statsT.Add(stats.RestartCount, 1)
+	} else {
+		fs.PutMarker(nodeRestartedMarker)
+	}
 }
 
 //

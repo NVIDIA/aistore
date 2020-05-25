@@ -94,7 +94,7 @@ func (reb *Manager) rebInit(md *rebArgs) bool {
 	}
 
 	// 4. create persistent mark
-	err := putMarker(cmn.ActRebalance)
+	err := fs.PutMarker(getMarkerName(cmn.ActRebalance))
 	if err != nil {
 		glog.Errorf("Failed to create marker: %v", err)
 	}
@@ -403,7 +403,7 @@ func (reb *Manager) rebFini(md *rebArgs) {
 	maxWait := md.config.Rebalance.Quiesce
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
-		if err := removeMarker(cmn.ActRebalance); err != nil {
+		if err := fs.RemoveMarker(getMarkerName(cmn.ActRebalance)); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.logHdr(md), err)
 		}
 	}
