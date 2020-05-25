@@ -78,20 +78,20 @@ type RebalanceTargetStats struct {
 }
 
 type ExtRebalanceStats struct {
-	TxRebCount int64 `json:"tx.reb.n,string"`
-	TxRebSize  int64 `json:"tx.reb.size,string"`
-	RxRebCount int64 `json:"rx.reb.n,string"`
-	RxRebSize  int64 `json:"rx.reb.size,string"`
+	RebTxCount int64 `json:"reb.tx.n,string"`
+	RebTxSize  int64 `json:"reb.tx.size,string"`
+	RebRxCount int64 `json:"reb.rx.n,string"`
+	RebRxSize  int64 `json:"reb.rx.size,string"`
 	RebID      int64 `json:"glob.id,string"`
 }
 
 func (s *RebalanceTargetStats) FillFromTrunner(r *Trunner) {
-	s.Ext.RxRebSize = r.Core.get(RxRebSize)
-	s.Ext.RxRebCount = r.Core.get(RxRebCount)
-	s.Ext.TxRebSize = r.Core.get(TxRebSize)
-	s.Ext.TxRebCount = r.Core.get(TxRebCount)
+	s.Ext.RebTxCount = r.Core.get(RebTxCount)
+	s.Ext.RebTxSize = r.Core.get(RebTxSize)
+	s.Ext.RebRxCount = r.Core.get(RebRxCount)
+	s.Ext.RebRxSize = r.Core.get(RebRxSize)
 	s.Ext.RebID = r.T.RebalanceInfo().RebID
 
-	s.ObjCountX = s.Ext.RxRebCount + s.Ext.TxRebCount
-	s.BytesCountX = s.Ext.RxRebSize + s.Ext.TxRebSize
+	s.ObjCountX = s.Ext.RebTxCount + s.Ext.RebRxCount
+	s.BytesCountX = s.Ext.RebTxSize + s.Ext.RebRxSize
 }

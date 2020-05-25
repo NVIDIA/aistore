@@ -311,8 +311,8 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 			fmt.Fprintf(tw,
 				"%s\t%d\t%d\t%s\t%d\t%s\t%s\t%s\t%t\n",
 				daemonID, extRebStats.RebID,
-				extRebStats.RxRebCount, cmn.B2S(extRebStats.RxRebSize, 2),
-				extRebStats.TxRebCount, cmn.B2S(extRebStats.TxRebSize, 2),
+				extRebStats.RebTxCount, cmn.B2S(extRebStats.RebTxSize, 2),
+				extRebStats.RebRxCount, cmn.B2S(extRebStats.RebRxSize, 2),
 				startTime, endTime, st.AbortedX,
 			)
 		}

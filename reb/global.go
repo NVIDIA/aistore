@@ -561,8 +561,8 @@ func (rj *rebalanceJogger) objSentCallback(hdr transport.Header, r io.ReadCloser
 		return
 	}
 	rj.m.statRunner.AddMany(
-		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
-		stats.NamedVal64{Name: stats.TxRebSize, Value: hdr.ObjAttrs.Size})
+		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
+		stats.NamedVal64{Name: stats.RebTxSize, Value: hdr.ObjAttrs.Size})
 }
 
 // the walking callback is executed by the LRU xaction

@@ -70,10 +70,10 @@ func (reb *Manager) RebStatus(status *Status) {
 		return
 	}
 	curStats := reb.getStats()
-	status.StatsDelta.TxRebCount = curStats.TxRebCount - beginStats.TxRebCount
-	status.StatsDelta.RxRebCount = curStats.RxRebCount - beginStats.RxRebCount
-	status.StatsDelta.TxRebSize = curStats.TxRebSize - beginStats.TxRebSize
-	status.StatsDelta.RxRebSize = curStats.RxRebSize - beginStats.RxRebSize
+	status.StatsDelta.RebTxCount = curStats.RebTxCount - beginStats.RebTxCount
+	status.StatsDelta.RebTxSize = curStats.RebTxSize - beginStats.RebTxSize
+	status.StatsDelta.RebRxCount = curStats.RebRxCount - beginStats.RebRxCount
+	status.StatsDelta.RebRxSize = curStats.RebRxSize - beginStats.RebRxSize
 
 	// wack info
 	if status.Stage != rebStageWaitAck {

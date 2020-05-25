@@ -508,10 +508,10 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	// Step 0: Collect rebalance stats
 	clusterStats := tutils.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.TxRebCount)
-		filesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.RxRebCount)
-		bytesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.TxRebSize)
-		bytesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.RxRebSize)
+		filesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.RebTxCount)
+		filesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.RebRxCount)
+		bytesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.RebTxSize)
+		bytesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.RebRxSize)
 	}
 
 	// Step 1: Unregister multiple targets
@@ -556,10 +556,10 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 	clusterStats = tutils.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSent += tutils.GetNamedTargetStats(targetStats, stats.TxRebCount) - filesSentOrig[targetID]
-		filesRecv += tutils.GetNamedTargetStats(targetStats, stats.RxRebCount) - filesRecvOrig[targetID]
-		bytesSent += tutils.GetNamedTargetStats(targetStats, stats.TxRebSize) - bytesSentOrig[targetID]
-		bytesRecv += tutils.GetNamedTargetStats(targetStats, stats.RxRebSize) - bytesRecvOrig[targetID]
+		filesSent += tutils.GetNamedTargetStats(targetStats, stats.RebTxCount) - filesSentOrig[targetID]
+		filesRecv += tutils.GetNamedTargetStats(targetStats, stats.RebRxCount) - filesRecvOrig[targetID]
+		bytesSent += tutils.GetNamedTargetStats(targetStats, stats.RebTxSize) - bytesSentOrig[targetID]
+		bytesRecv += tutils.GetNamedTargetStats(targetStats, stats.RebRxSize) - bytesRecvOrig[targetID]
 	}
 
 	// Step 5: Log rebalance stats

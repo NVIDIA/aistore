@@ -486,8 +486,8 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
 	reb.statRunner.AddMany(
-		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
-		stats.NamedVal64{Name: stats.TxRebSize, Value: hdr.ObjAttrs.Size},
+		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
+		stats.NamedVal64{Name: stats.RebTxSize, Value: hdr.ObjAttrs.Size},
 	)
 	return nil
 }
@@ -542,8 +542,8 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 		return fmt.Errorf("failed to send slices to node %s: %v", target, err)
 	}
 	reb.statRunner.AddMany(
-		stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
-		stats.NamedVal64{Name: stats.TxRebSize, Value: size},
+		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
+		stats.NamedVal64{Name: stats.RebTxSize, Value: size},
 	)
 	return nil
 }
@@ -704,8 +704,8 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	}
 
 	reb.statRunner.AddMany(
-		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
-		stats.NamedVal64{Name: stats.RxRebSize, Value: n},
+		stats.NamedVal64{Name: stats.RebRxCount, Value: 1},
+		stats.NamedVal64{Name: stats.RebRxSize, Value: n},
 	)
 	if hdr.ObjAttrs.CksumValue != "" {
 		cksum, err := checksumSlice(memsys.NewReader(ct.sgl), ct.sgl.Size(), hdr.ObjAttrs.CksumType, reb.t.GetMMSA())
@@ -1131,8 +1131,8 @@ func (reb *Manager) exchange(md *rebArgs) error {
 				failed = append(failed, node)
 			}
 			reb.statRunner.AddMany(
-				stats.NamedVal64{Name: stats.TxRebCount, Value: 1},
-				stats.NamedVal64{Name: stats.TxRebSize, Value: int64(len(body))},
+				stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
+				stats.NamedVal64{Name: stats.RebTxSize, Value: int64(len(body))},
 			)
 		}
 		if len(failed) == 0 {

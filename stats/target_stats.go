@@ -24,21 +24,24 @@ import (
 //
 const (
 	// KindCounter - QPS and byte counts (always incremented, never reset)
-	GetColdCount     = "get.cold.n"
-	GetColdSize      = "get.cold.size"
-	LruEvictSize     = "lru.evict.size"
-	LruEvictCount    = "lru.evict.n"
-	TxRebCount       = "tx.reb.n"
-	TxRebSize        = "tx.reb.size"
-	RxRebCount       = "rx.reb.n"
-	RxRebSize        = "rx.reb.size"
-	VerChangeCount   = "vchange.n"
-	VerChangeSize    = "vchange.size"
+	GetColdCount   = "get.cold.n"
+	GetColdSize    = "get.cold.size"
+	LruEvictSize   = "lru.evict.size"
+	LruEvictCount  = "lru.evict.n"
+	VerChangeCount = "vchange.n"
+	VerChangeSize  = "vchange.size"
+	// rebalance
+	RebTxCount = "reb.tx.n"
+	RebTxSize  = "reb.tx.size"
+	RebRxCount = "reb.tx.n"
+	RebRxSize  = "reb.tx.size"
+	// errors
 	ErrCksumCount    = "err.cksum.n"
 	ErrCksumSize     = "err.cksum.size"
 	ErrMetadataCount = "err.md.n"
 	ErrIOCount       = "err.io.n"
-	DownloadSize     = "dl.size"
+	// special
+	RestartCount = "restart.n"
 
 	// KindLatency
 	PutLatency      = "put.µs"
@@ -47,16 +50,17 @@ const (
 	PutRedirLatency = "put.redir.µs"
 	DownloadLatency = "dl.µs"
 
+	// DSort
 	DSortCreationReqCount    = "dsort.creation.req.n"
 	DSortCreationReqLatency  = "dsort.creation.req.µs"
 	DSortCreationRespCount   = "dsort.creation.resp.n"
 	DSortCreationRespLatency = "dsort.creation.resp.µs"
 
+	// Downloader
+	DownloadSize = "dl.size"
+
 	// KindThroughput
 	GetThroughput = "get.bps" // bytes per second
-
-	// KindID
-	RebGlobID = "reb.glob.id"
 )
 
 //
@@ -121,6 +125,45 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool { // nolint:interfacer // 
 	// subscribe to config changes
 	cmn.GCO.Subscribe(r)
 	return &r.statsRunner.startedUp
+}
+
+func (r *Trunner) RegisterAll() {
+	r.Register(PutLatency, KindLatency)
+	r.Register(AppendLatency, KindLatency)
+	r.Register(GetColdCount, KindCounter)
+	r.Register(GetColdSize, KindCounter)
+	r.Register(GetThroughput, KindThroughput)
+	r.Register(LruEvictSize, KindCounter)
+	r.Register(LruEvictCount, KindCounter)
+	r.Register(VerChangeCount, KindCounter)
+	r.Register(VerChangeSize, KindCounter)
+	r.Register(GetRedirLatency, KindLatency)
+	r.Register(PutRedirLatency, KindLatency)
+
+	// errors
+	r.Register(ErrCksumCount, KindCounter)
+	r.Register(ErrCksumSize, KindCounter)
+	r.Register(ErrMetadataCount, KindCounter)
+	r.Register(ErrIOCount, KindCounter)
+
+	// rebalance
+	r.Register(RebTxCount, KindCounter)
+	r.Register(RebTxSize, KindCounter)
+	r.Register(RebRxCount, KindCounter)
+	r.Register(RebRxSize, KindCounter)
+
+	// special
+	r.Register(RestartCount, KindCounter)
+
+	// download
+	r.Register(DownloadSize, KindCounter)
+	r.Register(DownloadLatency, KindLatency)
+
+	// dsort
+	r.Register(DSortCreationReqCount, KindCounter)
+	r.Register(DSortCreationReqLatency, KindLatency)
+	r.Register(DSortCreationRespCount, KindCounter)
+	r.Register(DSortCreationRespLatency, KindLatency)
 }
 
 func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {

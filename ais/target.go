@@ -178,7 +178,7 @@ func (t *targetrunner) Run() error {
 	t.httprunner.init(getstorstatsrunner(), config)
 	t.owner.bmd = newBMDOwnerTgt()
 
-	t.registerStats()
+	t.statsT.RegisterAll()
 	t.httprunner.keepalive = gettargetkeepalive()
 
 	// register object type and workfile type
@@ -346,37 +346,6 @@ func (t *targetrunner) initRecvHandlers() {
 		}
 	)
 	t.registerNetworkHandlers(networkHandlers)
-}
-
-// target-only stats
-func (t *targetrunner) registerStats() {
-	t.statsT.Register(stats.PutLatency, stats.KindLatency)
-	t.statsT.Register(stats.AppendLatency, stats.KindLatency)
-	t.statsT.Register(stats.GetColdCount, stats.KindCounter)
-	t.statsT.Register(stats.GetColdSize, stats.KindCounter)
-	t.statsT.Register(stats.GetThroughput, stats.KindThroughput)
-	t.statsT.Register(stats.LruEvictSize, stats.KindCounter)
-	t.statsT.Register(stats.LruEvictCount, stats.KindCounter)
-	t.statsT.Register(stats.TxRebCount, stats.KindCounter)
-	t.statsT.Register(stats.TxRebSize, stats.KindCounter)
-	t.statsT.Register(stats.RxRebCount, stats.KindCounter)
-	t.statsT.Register(stats.RxRebSize, stats.KindCounter)
-	t.statsT.Register(stats.VerChangeCount, stats.KindCounter)
-	t.statsT.Register(stats.VerChangeSize, stats.KindCounter)
-	t.statsT.Register(stats.ErrCksumCount, stats.KindCounter)
-	t.statsT.Register(stats.ErrCksumSize, stats.KindCounter)
-	t.statsT.Register(stats.ErrMetadataCount, stats.KindCounter)
-	t.statsT.Register(stats.ErrIOCount, stats.KindCounter)
-	t.statsT.Register(stats.GetRedirLatency, stats.KindLatency)
-	t.statsT.Register(stats.PutRedirLatency, stats.KindLatency)
-	// download
-	t.statsT.Register(stats.DownloadSize, stats.KindCounter)
-	t.statsT.Register(stats.DownloadLatency, stats.KindLatency)
-	// dsort
-	t.statsT.Register(stats.DSortCreationReqCount, stats.KindCounter)
-	t.statsT.Register(stats.DSortCreationReqLatency, stats.KindLatency)
-	t.statsT.Register(stats.DSortCreationRespCount, stats.KindCounter)
-	t.statsT.Register(stats.DSortCreationRespLatency, stats.KindLatency)
 }
 
 // stop gracefully

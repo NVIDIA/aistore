@@ -322,10 +322,10 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 func (reb *Manager) getStats() (s *stats.ExtRebalanceStats) {
 	s = &stats.ExtRebalanceStats{}
 	statsRunner := reb.statRunner
-	s.TxRebCount = statsRunner.Get(stats.TxRebCount)
-	s.RxRebCount = statsRunner.Get(stats.RxRebCount)
-	s.TxRebSize = statsRunner.Get(stats.TxRebSize)
-	s.RxRebSize = statsRunner.Get(stats.RxRebSize)
+	s.RebTxCount = statsRunner.Get(stats.RebTxCount)
+	s.RebTxSize = statsRunner.Get(stats.RebTxSize)
+	s.RebRxCount = statsRunner.Get(stats.RebRxCount)
+	s.RebRxSize = statsRunner.Get(stats.RebRxSize)
 	s.RebID = reb.rebID.Load()
 	return
 }
@@ -439,8 +439,8 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 		glog.Infof("%s: from %s %s", reb.t.Snode(), tsid, lom)
 	}
 	reb.statRunner.AddMany(
-		stats.NamedVal64{Name: stats.RxRebCount, Value: 1},
-		stats.NamedVal64{Name: stats.RxRebSize, Value: hdr.ObjAttrs.Size},
+		stats.NamedVal64{Name: stats.RebRxCount, Value: 1},
+		stats.NamedVal64{Name: stats.RebRxSize, Value: hdr.ObjAttrs.Size},
 	)
 	// ACK
 	tsi := smap.GetTarget(tsid)
