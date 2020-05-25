@@ -615,10 +615,6 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
-		return
-	}
 	if lom.Bck().IsAIS() && lom.VerConf().Enabled {
 		lom.Load() // need to know the current version if versioning enabled
 	}
