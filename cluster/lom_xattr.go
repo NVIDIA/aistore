@@ -49,16 +49,37 @@ const (
 	lomObjVersion
 	lomObjSize
 	lomObjCopies
+	lomCustomMD
 )
 
 // packing format separators
 const (
-	copyFQNSepa = "\x00"
-	recordSepa  = "\xe3/\xbd"
-	lenRecSepa  = len(recordSepa)
+	copyFQNSepa  = "\x00"
+	customMDSepa = "\x01"
+	recordSepa   = "\xe3/\xbd"
+	lenRecSepa   = len(recordSepa)
 )
 
 const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
+
+// Custom metadata stored under `lomCustomMD` key.
+const (
+	SourceObjMD       = "source"
+	SourceAmazonObjMD = cmn.ProviderAmazon
+	SourceGoogleObjMD = cmn.ProviderGoogle
+	SourceAzureObjMD  = cmn.ProviderAzure
+	SourceWebObjMD    = "web"
+
+	GoogleVersionObjMD = cmn.ProviderGoogle + ".v"
+	GoogleCRC32CObjMD  = cmn.ProviderGoogle + "." + cmn.ChecksumCRC32C
+	GoogleMD5ObjMD     = cmn.ProviderGoogle + "." + cmn.ChecksumMD5
+
+	AmazonVersionObjMD = cmn.ProviderAmazon + ".v"
+	AmazonMD5ObjMD     = cmn.ProviderAmazon + "." + cmn.ChecksumMD5
+
+	AzureVersionObjMD = cmn.ProviderAzure + ".v"
+	AzureMD5ObjMD     = cmn.ProviderAzure + "." + cmn.ChecksumMD5
+)
 
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
@@ -250,6 +271,12 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 				}
 				md.copies[copyFQN] = mpathInfo
 			}
+		case lomCustomMD:
+			entries := strings.Split(val, customMDSepa)
+			md.customMD = make(cmn.SimpleKVs, len(entries)/2)
+			for i := 0; i < len(entries); i += 2 {
+				md.customMD[entries[i]] = entries[i+1]
+			}
 		default:
 			return errors.New(invalid + " #6")
 		}
@@ -289,6 +316,11 @@ func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 		buf = _marshRecord(mm, buf, lomObjCopies, "", false)
 		buf = _marshCopies(mm, buf, md.copies)
 	}
+	if len(md.customMD) > 0 {
+		buf = mm.Append(buf, recordSepa)
+		buf = _marshRecord(mm, buf, lomCustomMD, "", false)
+		buf = _marshCustomMD(mm, buf, md.customMD)
+	}
 
 	// checksum, prepend, and return
 	buf[0] = mdVersion
@@ -320,6 +352,24 @@ func _marshCopies(mm *memsys.MMSA, buf []byte, copies fs.MPI) []byte {
 		buf = mm.Append(buf, copyFQN)
 		if i < num {
 			buf = mm.Append(buf, copyFQNSepa)
+		}
+	}
+	return buf
+}
+
+func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cmn.SimpleKVs) []byte {
+	var (
+		i   int
+		num = len(md) * 2
+	)
+	for k, v := range md {
+		cmn.Assert(k != "" && v != "")
+		i++
+		buf = mm.Append(buf, k)
+		buf = mm.Append(buf, customMDSepa)
+		buf = mm.Append(buf, v)
+		if i < num {
+			buf = mm.Append(buf, customMDSepa)
 		}
 	}
 	return buf

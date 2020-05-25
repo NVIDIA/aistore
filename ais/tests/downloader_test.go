@@ -896,15 +896,14 @@ func TestDownloadOverrideObject(t *testing.T) {
 		objName = cmn.RandString(10)
 		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
 
-		expectedSize    int64 = 65
-		expectedVersion       = "1503349750687573"
+		expectedSize int64 = 65
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	downloadObject(t, bck, objName, link)
-	oldProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
+	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
 
 	// Update the file
 	r, _ := readers.NewRandReader(10, p.Cksum.Type)
@@ -916,10 +915,10 @@ func TestDownloadOverrideObject(t *testing.T) {
 		Reader:     r,
 	})
 	tassert.CheckFatal(t, err)
-	verifyProps(t, bck, objName, 10, "1503349750687574")
+	verifyProps(t, bck, objName, 10, "2")
 
 	downloadObject(t, bck, objName, link)
-	newProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
+	newProps := verifyProps(t, bck, objName, expectedSize, "3")
 	tassert.Errorf(
 		t, oldProps.Atime != newProps.Atime,
 		"atime match (%v == %v)", oldProps.Atime, newProps.Atime,
@@ -938,7 +937,7 @@ func TestDownloadSkipObject(t *testing.T) {
 		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
 
 		expectedSize    int64 = 65
-		expectedVersion       = "1503349750687573"
+		expectedVersion       = "1"
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)

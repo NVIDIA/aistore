@@ -37,16 +37,17 @@ const fmtNestedErr = "nested err: %v"
 const lomInitialVersion = "1"
 
 type (
-	// NOTE: sizeof(lmeta) = 72 as of 4/16
+	// NOTE: sizeof(lmeta) = 88 as of 5/26
 	lmeta struct {
-		uname   string
-		version string
-		size    int64
-		atime   int64
-		atimefs int64
-		bckID   uint64
-		cksum   *cmn.Cksum // ReCache(ref)
-		copies  fs.MPI     // ditto
+		uname    string
+		version  string
+		size     int64
+		atime    int64
+		atimefs  int64
+		bckID    uint64
+		cksum    *cmn.Cksum // ReCache(ref)
+		copies   fs.MPI     // ditto
+		customMD cmn.SimpleKVs
 	}
 	LOM struct {
 		md      lmeta  // local meta
@@ -80,16 +81,21 @@ func InitTarget() {
 // LOM public methods
 //
 
-func (lom *LOM) Uname() string              { return lom.md.uname }
-func (lom *LOM) Size() int64                { return lom.md.size }
-func (lom *LOM) SetSize(size int64)         { lom.md.size = size }
-func (lom *LOM) Version() string            { return lom.md.version }
-func (lom *LOM) SetVersion(ver string)      { lom.md.version = ver }
-func (lom *LOM) Cksum() *cmn.Cksum          { return lom.md.cksum }
-func (lom *LOM) SetCksum(cksum *cmn.Cksum)  { lom.md.cksum = cksum }
-func (lom *LOM) Atime() time.Time           { return time.Unix(0, lom.md.atime) }
-func (lom *LOM) AtimeUnix() int64           { return lom.md.atime }
-func (lom *LOM) SetAtimeUnix(tu int64)      { lom.md.atime = tu }
+func (lom *LOM) Uname() string                { return lom.md.uname }
+func (lom *LOM) Size() int64                  { return lom.md.size }
+func (lom *LOM) SetSize(size int64)           { lom.md.size = size }
+func (lom *LOM) Version() string              { return lom.md.version }
+func (lom *LOM) SetVersion(ver string)        { lom.md.version = ver }
+func (lom *LOM) Cksum() *cmn.Cksum            { return lom.md.cksum }
+func (lom *LOM) SetCksum(cksum *cmn.Cksum)    { lom.md.cksum = cksum }
+func (lom *LOM) Atime() time.Time             { return time.Unix(0, lom.md.atime) }
+func (lom *LOM) AtimeUnix() int64             { return lom.md.atime }
+func (lom *LOM) SetAtimeUnix(tu int64)        { lom.md.atime = tu }
+func (lom *LOM) SetCustomMD(md cmn.SimpleKVs) { lom.md.customMD = md }
+func (lom *LOM) GetCustomMD(key string) (string, bool) {
+	value, exists := lom.md.customMD[key]
+	return value, exists
+}
 func (lom *LOM) ECEnabled() bool            { return lom.Bprops().EC.Enabled }
 func (lom *LOM) LRUEnabled() bool           { return lom.Bprops().LRU.Enabled }
 func (lom *LOM) IsHRW() bool                { return lom.HrwFQN == lom.FQN } // subj to resilvering

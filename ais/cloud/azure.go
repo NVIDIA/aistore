@@ -356,6 +356,11 @@ func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		return fmt.Errorf("failed to GET object %s/%s", cloudBck, lom.ObjName), resp.StatusCode()
 	}
 
+	customMD := cmn.SimpleKVs{
+		cluster.SourceObjMD:   cluster.SourceAzureObjMD,
+		cluster.AzureMD5ObjMD: hex.EncodeToString(respProps.ContentMD5()),
+	}
+
 	retryOpts := azblob.RetryReaderOptions{MaxRetryRequests: 3}
 	err = ap.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
@@ -363,6 +368,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
+		CustomMD:     customMD,
 		WithFinalize: false,
 	})
 	if err != nil {

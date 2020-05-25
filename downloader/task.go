@@ -148,8 +148,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 		Reader:       r,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
-		Cksum:        roi.cksum,
-		Version:      roi.version,
+		CustomMD:     roi.md,
 		Started:      t.started.Load(),
 		WithFinalize: true,
 	})

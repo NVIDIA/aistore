@@ -176,12 +176,12 @@ func (t *targetrunner) localObjCopy(src *cluster.LOM, bck cmn.Bck, objName strin
 		return err
 	}
 
+	dstLom.SetVersion(src.Version())
 	poi := &putObjInfo{
 		started: started,
 		t:       t,
 		lom:     dstLom,
 		r:       fh,
-		version: src.Version(),
 		workFQN: fs.CSM.GenContentParsedFQN(dstLom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
 	err, _ = poi.putObject()
@@ -223,6 +223,8 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 		lom.Load() // need to know the current version if versioning enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
+
+	// TODO: lom.SetCustomMD(cluster.AmazonMD5ObjMD, checksum)
 
 	if err, errCode := t.doPut(r, lom, started); err != nil {
 		t.fshc(err, lom.FQN)

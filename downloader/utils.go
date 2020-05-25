@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
@@ -204,10 +205,8 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 
 const (
 	// https://cloud.google.com/storage/docs/xml-api/reference-headers
-	gsCksumHeader               = "x-goog-hash"
-	gsCksumHeaderValuePrefix    = "crc32c="
-	gsCksumHeaderValueSeparator = ","
-	gsVersionHeader             = "x-goog-generation"
+	gsCksumHeader   = "x-goog-hash"
+	gsVersionHeader = "x-goog-generation"
 
 	// https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonResponseHeaders.html
@@ -218,9 +217,8 @@ const (
 
 type (
 	remoteObjInfo struct {
-		size    int64
-		cksum   *cmn.Cksum
-		version string
+		size int64
+		md   cmn.SimpleKVs
 	}
 )
 
@@ -230,40 +228,54 @@ func getRemoteObjInfo(link string, resp *http.Response) (roi remoteObjInfo) {
 	cmn.AssertNoErr(err)
 
 	if cmn.IsGoogleStorageURL(u) || cmn.IsGoogleAPIURL(u) {
-		if hdr := resp.Header.Get(gsCksumHeader); hdr != "" {
-			hs := strings.Split(hdr, gsCksumHeaderValueSeparator)
-			cksumValue := getChecksumFromGoogleFormat(hs)
-			if cksumValue != "" {
-				roi.cksum = cmn.NewCksum(cmn.ChecksumCRC32C, cksumValue)
+		roi.md = make(cmn.SimpleKVs, 3)
+		roi.md[cluster.SourceObjMD] = cluster.SourceGoogleObjMD
+		if hdr := resp.Header.Values(gsCksumHeader); len(hdr) > 0 {
+			for cksumType, cksumValue := range parseGoogleCksumHeader(hdr) {
+				switch cksumType {
+				case cmn.ChecksumMD5:
+					roi.md[cluster.GoogleMD5ObjMD] = cksumValue
+				case cmn.ChecksumCRC32C:
+					roi.md[cluster.GoogleCRC32CObjMD] = cksumValue
+				default:
+					glog.Errorf("unimplemented cksum type for custom metadata: %s", cksumType)
+				}
 			}
 		}
 		if hdr := resp.Header.Get(gsVersionHeader); hdr != "" {
-			roi.version = hdr
+			roi.md[cluster.GoogleVersionObjMD] = hdr
 		}
 	} else if cmn.IsS3URL(link) {
+		roi.md = make(cmn.SimpleKVs, 3)
+		roi.md[cluster.SourceObjMD] = cluster.SourceAmazonObjMD
 		if hdr := resp.Header.Get(s3CksumHeader); hdr != "" && !strings.Contains(hdr, s3CksumHeaderIllegalChar) {
-			roi.cksum = cmn.NewCksum(cmn.ChecksumMD5, hdr)
+			roi.md[cluster.AmazonMD5ObjMD] = hdr
 		}
 		if hdr := resp.Header.Get(s3VersionHeader); hdr != "" && hdr != "null" {
-			roi.version = hdr
+			roi.md[cluster.AmazonVersionObjMD] = hdr
 		}
+	} else {
+		// TODO: implement Azure links
+		roi.md = make(cmn.SimpleKVs, 1)
+		roi.md[cluster.SourceObjMD] = cluster.SourceWebObjMD
 	}
 	roi.size = resp.ContentLength
 	return
 }
 
-func getChecksumFromGoogleFormat(hs []string) string {
-	for _, h := range hs {
-		if strings.HasPrefix(h, gsCksumHeaderValuePrefix) {
-			encoded := strings.TrimPrefix(h, gsCksumHeaderValuePrefix)
-			decoded, err := base64.StdEncoding.DecodeString(encoded)
-			if err != nil {
-				return ""
-			}
-			return hex.EncodeToString(decoded)
-		}
+func parseGoogleCksumHeader(hdr []string) cmn.SimpleKVs {
+	var (
+		cksums = make(cmn.SimpleKVs, 2)
+	)
+	for _, v := range hdr {
+		entry := strings.SplitN(v, "=", 2)
+		cmn.Assert(len(entry) == 2)
+		cmn.AssertNoErr(cmn.ValidateCksumType(entry[0]))
+		decoded, err := base64.StdEncoding.DecodeString(entry[1])
+		cmn.AssertNoErr(err)
+		cksums[entry[0]] = hex.EncodeToString(decoded)
 	}
-	return ""
+	return cksums
 }
 
 func headLink(link string) (*http.Response, error) {
@@ -290,15 +302,35 @@ func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
 		return false, nil
 	}
 	roi := getRemoteObjInfo(obj.link, resp)
-	if roi.version != "" {
-		if roi.version != lom.Version() {
-			return false, nil
+
+	_, localMDPresent := lom.GetCustomMD(cluster.SourceObjMD)
+	remoteSource := roi.md[cluster.SourceObjMD]
+	if !localMDPresent {
+		// Source is present for remote object. Therefore, for backward
+		// compatibility, we must check if at least the version matches.
+		switch remoteSource {
+		case cluster.SourceGoogleObjMD:
+			if lom.Version() == roi.md[cluster.GoogleVersionObjMD] {
+				return true, nil
+			}
+		case cluster.SourceAmazonObjMD:
+			if lom.Version() == roi.md[cluster.AmazonVersionObjMD] {
+				return true, nil
+			}
+		case cluster.SourceWebObjMD:
+			// In case it is web we just assume the objects are equal since the
+			// name and size matches.
+			return true, nil
 		}
+		return false, nil
 	}
-	if roi.cksum != nil {
-		computedCksum, err := lom.ComputeCksum(roi.cksum.Type())
-		if err != nil || !computedCksum.Equal(roi.cksum) {
-			return false, err
+	for k, v := range roi.md {
+		if objValue, ok := lom.GetCustomMD(k); !ok {
+			// Just skip check if `lom` doesn't have some metadata.
+			continue
+		} else if v != objValue {
+			// Metadata does not match - objects are different.
+			return false, nil
 		}
 	}
 	// Cannot prove that the objects are different so assume they are equal.

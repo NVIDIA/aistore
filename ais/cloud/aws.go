@@ -308,21 +308,29 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		}
 	}
 
+	customMD := cmn.SimpleKVs{
+		cluster.SourceObjMD: cluster.SourceAmazonObjMD,
+	}
+
 	md5, _ := strconv.Unquote(*obj.ETag)
 	// FIXME: multipart
 	if !strings.Contains(md5, awsMultipartDelim) {
 		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, md5)
+		customMD[cluster.AmazonMD5ObjMD] = md5
 	}
 	lom.SetCksum(cksum)
 	if obj.VersionId != nil {
 		lom.SetVersion(*obj.VersionId)
+		customMD[cluster.AmazonVersionObjMD] = *obj.VersionId
 	}
+
 	err = awsp.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       obj.Body,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
+		CustomMD:     customMD,
 		WithFinalize: false,
 	})
 	if err != nil {

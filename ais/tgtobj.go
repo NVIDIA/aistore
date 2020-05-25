@@ -38,8 +38,8 @@ type (
 		// Checksum which needs to be checked on receive. It is only checked
 		// on specific occasions: see `writeToFile` method.
 		cksumToCheck *cmn.Cksum
-		// Custom version that should be set after object is successfully put.
-		version string
+		// Custom metadata which should be preserved with the object in `xattr`.
+		customMD cmn.SimpleKVs
 		// object size aka Content-Length
 		size int64
 		// Context used when putting the object which should be contained in
@@ -179,7 +179,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 			return
 		}
 		if lom.VerConf().Enabled {
-			poi.version = version
+			lom.SetVersion(version)
 		}
 	}
 
@@ -197,13 +197,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	if poi.version != "" {
-		// TODO: currently we set the version to opaque string. It can possibly
-		//  break the default incrementation if the opaque string is not an
-		//  number. See: #722. To fix this we should probably maintain different
-		//  versions or the origin of the object.
-		lom.SetVersion(poi.version)
-	} else if bck.IsAIS() && lom.VerConf().Enabled && !poi.migrated {
+	if bck.IsAIS() && lom.VerConf().Enabled && !poi.migrated {
 		if err = lom.IncVersion(); err != nil {
 			return
 		}
@@ -212,6 +206,8 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
 		return fmt.Errorf("rename failed => %s: %w", lom, err), 0
 	}
+
+	lom.SetCustomMD(poi.customMD)
 
 	if err = lom.DelAllCopies(); err != nil {
 		return
@@ -603,11 +599,11 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	}
 	lom.SetAtimeUnix(atime)
 	lom.SetCksum(cksum)
+	lom.SetVersion(version)
 	poi := &putObjInfo{
 		t:        goi.t,
 		lom:      lom,
 		r:        resp.Body,
-		version:  version,
 		migrated: true,
 		workFQN:  workFQN,
 	}

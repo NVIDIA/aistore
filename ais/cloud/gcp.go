@@ -8,6 +8,7 @@ package cloud
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -92,6 +93,13 @@ func handleObjectError(objErr error, lom *cluster.LOM, gcpBucket *storage.Bucket
 	}
 
 	return objErr, http.StatusBadRequest
+}
+
+// Encode a uint32 as Base64 in big-endian byte order.
+// See: https://cloud.google.com/storage/docs/xml-api/reference-headers#xgooghash.
+func encodeUint32(u uint32) string {
+	b := []byte{byte(u >> 24), byte(u >> 16), byte(u >> 8), byte(u)}
+	return base64.StdEncoding.EncodeToString(b)
 }
 
 func (gcpp *gcpProvider) Provider() string {
@@ -274,12 +282,21 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	}
 	lom.SetCksum(cksum)
 	lom.SetVersion(strconv.FormatInt(attrs.Generation, 10))
+
+	customMD := cmn.SimpleKVs{
+		cluster.SourceObjMD:        cluster.SourceGoogleObjMD,
+		cluster.GoogleVersionObjMD: strconv.FormatInt(attrs.Generation, 10),
+		cluster.GoogleCRC32CObjMD:  encodeUint32(attrs.CRC32C),
+		cluster.GoogleMD5ObjMD:     hex.EncodeToString(attrs.MD5),
+	}
+
 	err = gcpp.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       rc,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
+		CustomMD:     customMD,
 		WithFinalize: false,
 	})
 	if err != nil {
