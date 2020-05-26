@@ -156,7 +156,6 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if err := payload.Validate(r.Method == http.MethodDelete); err != nil {

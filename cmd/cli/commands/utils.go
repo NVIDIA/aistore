@@ -247,37 +247,56 @@ func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStat
 // Scheme
 //
 
+type dlSource struct {
+	link string
+	bck  cmn.Bck
+}
+
 // Replace protocol (gs://, s3://) with proper google cloud / s3 URL
-func parseSource(rawURL string) (link string, err error) {
+func parseSource(rawURL string) (source dlSource, err error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return
 	}
 
-	scheme := u.Scheme
-	host := u.Host
-	fullPath := u.Path
+	var (
+		bck      cmn.Bck
+		scheme   = u.Scheme
+		host     = u.Host
+		fullPath = u.Path
+	)
 
-	// if rawURL is using gs or s3 scheme ({gs/s3}://<bucket>/...) then <bucket> is considered a host by `url.Parse`
+	// TODO: Maybe at this point we shouldn't translate the URI into URL because
+	//  we may want to download an object via SDK (which can have credentials).
+	//
+	// If `rawURL` is using `gs` or `s3` scheme ({gs/s3}://<bucket>/...)
+	// then <bucket> is considered a `Host` by `url.Parse`.
 	switch u.Scheme {
-	case gsScheme:
+	case gsScheme, cmn.ProviderGoogle:
+		if fullPath == "" {
+			bck = cmn.Bck{Name: host, Provider: cmn.ProviderGoogle}
+		}
 		scheme = "https"
 		host = gsHost
 		fullPath = path.Join(u.Host, fullPath)
-	case s3Scheme:
+	case s3Scheme, cmn.ProviderAmazon:
+		if fullPath == "" {
+			bck = cmn.Bck{Name: host, Provider: cmn.ProviderAmazon}
+		}
 		scheme = "http"
 		host = s3Host
 		fullPath = path.Join(u.Host, fullPath)
+	case aisScheme:
+		// TODO: add support for the remote cluster
+		scheme = "http" // TODO: How about `https://`?
+		if !strings.Contains(host, ":") {
+			host += ":8080" // TODO: What if host is listening on `:80` so we don't need port?
+		}
+		fullPath = path.Join(cmn.Version, cmn.Objects, fullPath)
 	case "":
 		scheme = defaultScheme
 	case "https", "http":
 		break
-	case aisScheme:
-		scheme = "http"
-		if !strings.Contains(host, ":") {
-			host += ":8080"
-		}
-		fullPath = path.Join(cmn.Version, cmn.Objects, fullPath)
 	default:
 		err = fmt.Errorf("invalid scheme: %s", scheme)
 		return
@@ -291,7 +310,11 @@ func parseSource(rawURL string) (link string, err error) {
 		RawQuery: u.RawQuery,
 		Fragment: u.Fragment,
 	}
-	return url.QueryUnescape(normalizedURL.String())
+	link, err := url.QueryUnescape(normalizedURL.String())
+	return dlSource{
+		bck:  bck,
+		link: link,
+	}, err
 }
 
 func parseDest(rawURL string) (bucket, pathSuffix string, err error) {

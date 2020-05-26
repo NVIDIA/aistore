@@ -32,7 +32,7 @@ func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cmn.SimpleKVs) ([]d
 
 	objs := make([]dlObj, 0, len(objects))
 	for name, link := range objects {
-		job, err := jobForObject(smap, sid, bck, name, link)
+		job, err := jobForObject(smap, sid, bck, false /*fromCloud*/, name, link)
 		if err != nil {
 			if err == errInvalidTarget {
 				continue
@@ -44,7 +44,7 @@ func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cmn.SimpleKVs) ([]d
 	return objs, nil
 }
 
-func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, link string) (dlObj, error) {
+func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, fromCloud bool, objName, link string) (dlObj, error) {
 	objName, err := normalizeObjName(objName)
 	if err != nil {
 		return dlObj{}, err
@@ -63,7 +63,7 @@ func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, lin
 	return dlObj{
 		objName:   objName,
 		link:      link,
-		fromCloud: bck.IsCloud(cmn.AnyCloud),
+		fromCloud: fromCloud,
 	}, nil
 }
 
@@ -149,6 +149,14 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		dlType = dlTypeMulti
 	} else if err = cloudPayload.Validate(); err == nil {
 		dlType = dlTypeCloud
+		if cloudPayload.SourceBck.IsEmpty() {
+			cloudPayload.SourceBck = cloudPayload.Bck
+		}
+
+		sourceBck = cluster.NewBckEmbed(cloudPayload.SourceBck)
+		if err := sourceBck.Init(t.GetBowner(), t.Snode()); err != nil {
+			return nil, err
+		}
 	} else {
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
 	}
@@ -166,10 +174,10 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 	baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description, payload.Limits)
 	switch dlType {
 	case dlTypeCloud:
-		if !bck.IsCloud() {
+		if !sourceBck.IsCloud() {
 			return nil, errors.New("bucket download requires a cloud bucket")
 		}
-		return newCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
+		return newCloudBucketDlJob(ctx, t, baseJob, sourceBck, cloudPayload.Prefix, cloudPayload.Suffix)
 	case dlTypeRange:
 		if !bck.IsAIS() {
 			return nil, errors.New("range download requires ais bucket")

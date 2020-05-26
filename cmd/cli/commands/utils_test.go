@@ -13,44 +13,116 @@ import (
 
 func TestParseSourceValidURIs(t *testing.T) {
 	var parseSourceTests = []struct {
-		url      string
-		expected string
+		input    string
+		expected dlSource
 	}{
-		{"http://www.googleapis.com/storage/v1/b/bucket?query=key#key", "http://www.googleapis.com/storage/v1/b/bucket?query=key#key"},
-		{"http://www.googleapis.com/storage/v1/b/bucket?query=key", "http://www.googleapis.com/storage/v1/b/bucket?query=key"},
-		{"http://www.googleapis.com/storage/v1/b/bucket", "http://www.googleapis.com/storage/v1/b/bucket"},
+		{
+			input:    "http://www.googleapis.com/storage/v1/b/bucket?query=key#key",
+			expected: dlSource{link: "http://www.googleapis.com/storage/v1/b/bucket?query=key#key"},
+		},
+		{
+			input:    "http://www.googleapis.com/storage/v1/b/bucket?query=key",
+			expected: dlSource{link: "http://www.googleapis.com/storage/v1/b/bucket?query=key"},
+		},
+		{
+			input:    "http://www.googleapis.com/storage/v1/b/bucket",
+			expected: dlSource{link: "http://www.googleapis.com/storage/v1/b/bucket"},
+		},
 
-		{"gs://bucket", "https://storage.googleapis.com/bucket"},
-		{"gs://bucket/objname.tar", "https://storage.googleapis.com/bucket/objname.tar"},
-		{"gs://bucket/subfolder/objname.tar", "https://storage.googleapis.com/bucket/subfolder/objname.tar"},
+		{
+			input: "gs://bucket",
+			expected: dlSource{
+				link: "https://storage.googleapis.com/bucket",
+				bck:  cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
+			},
+		},
+		{
+			input: "gcp://bucket",
+			expected: dlSource{
+				link: "https://storage.googleapis.com/bucket",
+				bck:  cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
+			},
+		},
+		{
+			input:    "gs://bucket/objname.tar",
+			expected: dlSource{link: "https://storage.googleapis.com/bucket/objname.tar"},
+		},
+		{
+			input:    "gs://bucket/subfolder/objname.tar",
+			expected: dlSource{link: "https://storage.googleapis.com/bucket/subfolder/objname.tar"},
+		},
 
-		{"https://s3.amazonaws.com/bucket", "https://s3.amazonaws.com/bucket"},
-		{"http://s3.amazonaws.com/bucket/objname.tar", "http://s3.amazonaws.com/bucket/objname.tar"},
-		{"http://s3.amazonaws.com/bucket/subfolder/objname.tar", "http://s3.amazonaws.com/bucket/subfolder/objname.tar"},
+		{
+			input:    "https://s3.amazonaws.com/bucket",
+			expected: dlSource{link: "https://s3.amazonaws.com/bucket"},
+		},
+		{
+			input:    "http://s3.amazonaws.com/bucket/objname.tar",
+			expected: dlSource{link: "http://s3.amazonaws.com/bucket/objname.tar"},
+		},
+		{
+			input:    "http://s3.amazonaws.com/bucket/subfolder/objname.tar",
+			expected: dlSource{link: "http://s3.amazonaws.com/bucket/subfolder/objname.tar"},
+		},
 
-		{"s3.amazonaws.com/bucket", "https://s3.amazonaws.com/bucket"},
-		{"s3://bucket", "http://s3.amazonaws.com/bucket"},
-		{"s3://bucket/objname.tar", "http://s3.amazonaws.com/bucket/objname.tar"},
-		{"s3://bucket/subfolder/objname.tar", "http://s3.amazonaws.com/bucket/subfolder/objname.tar"},
+		{
+			input:    "s3.amazonaws.com/bucket",
+			expected: dlSource{link: "https://s3.amazonaws.com/bucket"},
+		},
+		{
+			input: "s3://bucket",
+			expected: dlSource{
+				link: "http://s3.amazonaws.com/bucket",
+				bck:  cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
+			},
+		},
+		{
+			input: "aws://bucket",
+			expected: dlSource{
+				link: "http://s3.amazonaws.com/bucket",
+				bck:  cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
+			},
+		},
+		{
+			input:    "s3://bucket/objname.tar",
+			expected: dlSource{link: "http://s3.amazonaws.com/bucket/objname.tar"},
+		},
+		{
+			input:    "s3://bucket/subfolder/objname.tar",
+			expected: dlSource{link: "http://s3.amazonaws.com/bucket/subfolder/objname.tar"},
+		},
 
-		{"src.com/image001.tar.gz", "https://src.com/image001.tar.gz"},
+		{
+			input:    "src.com/image001.tar.gz",
+			expected: dlSource{link: "https://src.com/image001.tar.gz"},
+		},
 
-		{"https://www.googleapis.com/storage/v1/b/nvdata-openimages/o/imagenet%2Fimagenet_train-{000000..000002}.tgz?alt=media",
-			"https://www.googleapis.com/storage/v1/b/nvdata-openimages/o/imagenet/imagenet_train-{000000..000002}.tgz?alt=media"},
-		{"gs://bucket/obj{00..10}.tgz", "https://storage.googleapis.com/bucket/obj{00..10}.tgz"},
-		{"ais://172.10.10.10/bucket", "http://172.10.10.10:8080/v1/objects/bucket"},
-		{"ais://172.10.10.10:4444/bucket", "http://172.10.10.10:4444/v1/objects/bucket"},
+		{
+			input:    "https://www.googleapis.com/storage/v1/b/nvdata-openimages/o/imagenet%2Fimagenet_train-{000000..000002}.tgz?alt=media",
+			expected: dlSource{link: "https://www.googleapis.com/storage/v1/b/nvdata-openimages/o/imagenet/imagenet_train-{000000..000002}.tgz?alt=media"},
+		},
+		{
+			input:    "gs://bucket/obj{00..10}.tgz",
+			expected: dlSource{link: "https://storage.googleapis.com/bucket/obj{00..10}.tgz"},
+		},
+		{
+			input:    "ais://172.10.10.10/bucket",
+			expected: dlSource{link: "http://172.10.10.10:8080/v1/objects/bucket"},
+		},
+		{
+			input:    "ais://172.10.10.10:4444/bucket",
+			expected: dlSource{link: "http://172.10.10.10:4444/v1/objects/bucket"},
+		},
 	}
 
 	for _, test := range parseSourceTests {
-		actual, err := parseSource(test.url)
-
+		source, err := parseSource(test.input)
 		if err != nil {
-			t.Errorf("unexpected error while parsing source URI %s: %v", test.url, err)
+			t.Errorf("unexpected error while parsing source URI %s: %v", test.input, err)
 		}
 
-		if actual != test.expected {
-			t.Errorf("parseSource(%s) expected: %s, got: %s", test.url, test.expected, actual)
+		if source != test.expected {
+			t.Errorf("parseSource(%s) expected: %v, got: %v", test.input, test.expected, source)
 		}
 	}
 }

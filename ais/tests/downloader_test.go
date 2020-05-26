@@ -441,77 +441,133 @@ func TestDownloadCloud(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
 
 		fileCnt = 5
 		prefix  = "imagenet/imagenet_train-"
 		suffix  = ".tgz"
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
+	tests := []struct {
+		name   string
+		srcBck cmn.Bck
+		dstBck cmn.Bck
+	}{
+		{
+			name: "src==dst",
+			srcBck: cmn.Bck{
+				Name:     clibucket,
+				Provider: cmn.AnyCloud,
+			},
+			dstBck: cmn.Bck{
+				Name:     clibucket,
+				Provider: cmn.AnyCloud,
+			},
+		},
+		{
+			name: "src!=dst",
+			srcBck: cmn.Bck{
+				Name:     clibucket,
+				Provider: cmn.AnyCloud,
+			},
+			dstBck: cmn.Bck{
+				Name:     cmn.RandString(5),
+				Provider: cmn.ProviderAIS,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: test.srcBck})
 
-	clearDownloadList(t)
+			clearDownloadList(t)
 
-	tutils.CleanCloudBucket(t, proxyURL, bck, prefix)
-	defer tutils.CleanCloudBucket(t, proxyURL, bck, prefix)
+			if test.dstBck.IsAIS() {
+				tutils.CreateFreshBucket(t, proxyURL, test.dstBck)
+				defer tutils.DestroyBucket(t, proxyURL, test.dstBck)
+			}
 
-	expectedObjs := make([]string, 0, fileCnt)
-	for i := 0; i < fileCnt; i++ {
-		reader, err := readers.NewRandReader(cmn.MiB, cmn.ChecksumNone)
-		tassert.CheckFatal(t, err)
+			tutils.CleanCloudBucket(t, proxyURL, test.srcBck, prefix)
+			defer tutils.CleanCloudBucket(t, proxyURL, test.srcBck, prefix)
 
-		objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)
-		err = api.PutObject(api.PutObjectArgs{
-			BaseParams: baseParams,
-			Bck:        bck,
-			Object:     objName,
-			Reader:     reader,
+			tutils.Logln("putting objects into cloud bucket...")
+
+			expectedObjs := make([]string, 0, fileCnt)
+			for i := 0; i < fileCnt; i++ {
+				reader, err := readers.NewRandReader(256, cmn.ChecksumNone)
+				tassert.CheckFatal(t, err)
+
+				objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)
+				err = api.PutObject(api.PutObjectArgs{
+					BaseParams: baseParams,
+					Bck:        test.srcBck,
+					Object:     objName,
+					Reader:     reader,
+				})
+				tassert.CheckFatal(t, err)
+
+				expectedObjs = append(expectedObjs, objName)
+			}
+
+			tutils.Logln("evicting cloud bucket...")
+			err := api.EvictList(baseParams, test.srcBck, expectedObjs)
+			tassert.CheckFatal(t, err)
+			xactArgs := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: test.srcBck, Timeout: rebalanceTimeout}
+			err = api.WaitForXaction(baseParams, xactArgs)
+			tassert.CheckFatal(t, err)
+
+			tutils.Logln("starting cloud download...")
+			id, err := api.DownloadCloudWithParam(baseParams, downloader.DlCloudBody{
+				DlBase: downloader.DlBase{
+					Bck:         test.dstBck,
+					Description: generateDownloadDesc(),
+				},
+				SourceBck: test.srcBck,
+				Prefix:    prefix,
+				Suffix:    suffix,
+			})
+			tassert.CheckFatal(t, err)
+
+			tutils.Logln("wait for cloud download...")
+			waitForDownload(t, id, time.Minute)
+
+			objs, err := tutils.ListObjects(proxyURL, test.dstBck, prefix, 0)
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
+
+			// Test cancellation
+			tutils.Logln("evicting cloud bucket...")
+			err = api.EvictList(baseParams, test.srcBck, expectedObjs)
+			tassert.CheckFatal(t, err)
+			err = api.WaitForXaction(baseParams, xactArgs)
+			tassert.CheckFatal(t, err)
+
+			tutils.Logln("starting cloud download...")
+			id, err = api.DownloadCloudWithParam(baseParams, downloader.DlCloudBody{
+				DlBase: downloader.DlBase{
+					Bck:         test.dstBck,
+					Description: generateDownloadDesc(),
+				},
+				SourceBck: test.srcBck,
+				Prefix:    prefix,
+				Suffix:    suffix,
+			})
+			tassert.CheckFatal(t, err)
+
+			time.Sleep(500 * time.Millisecond)
+
+			tutils.Logln("aborting cloud download...")
+			err = api.DownloadAbort(baseParams, id)
+			tassert.CheckFatal(t, err)
+
+			resp, err := api.DownloadStatus(baseParams, id)
+			tassert.CheckFatal(t, err)
+			if !resp.Aborted {
+				t.Errorf("canceled cloud download %v not marked", id)
+			}
+
+			checkDownloadList(t, 2)
 		})
-		tassert.CheckFatal(t, err)
-
-		expectedObjs = append(expectedObjs, objName)
 	}
-
-	// Test download
-	err := api.EvictList(baseParams, bck, expectedObjs)
-	tassert.CheckFatal(t, err)
-	xactArgs := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: bck, Timeout: rebalanceTimeout}
-	err = api.WaitForXaction(baseParams, xactArgs)
-	tassert.CheckFatal(t, err)
-
-	id, err := api.DownloadCloud(baseParams, generateDownloadDesc(), bck, prefix, suffix)
-	tassert.CheckFatal(t, err)
-
-	waitForDownload(t, id, time.Minute)
-
-	objs, err := tutils.ListObjects(proxyURL, bck, prefix, 0)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
-
-	// Test cancellation
-	err = api.EvictList(baseParams, bck, expectedObjs)
-	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgs)
-	tassert.CheckFatal(t, err)
-
-	id, err = api.DownloadCloud(baseParams, generateDownloadDesc(), bck, prefix, suffix)
-	tassert.CheckFatal(t, err)
-
-	time.Sleep(200 * time.Millisecond)
-
-	err = api.DownloadAbort(baseParams, id)
-	tassert.CheckFatal(t, err)
-
-	resp, err := api.DownloadStatus(baseParams, id)
-	tassert.CheckFatal(t, err)
-	if !resp.Aborted {
-		t.Errorf("canceled cloud download %v not marked", id)
-	}
-
-	checkDownloadList(t, 2)
 }
 
 func TestDownloadStatus(t *testing.T) {

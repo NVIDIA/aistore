@@ -188,12 +188,12 @@ func startDownloadHandler(c *cli.Context) error {
 		}
 	}
 
-	source, dest := c.Args().Get(0), c.Args().Get(1)
-	link, err := parseSource(source)
+	src, dst := c.Args().Get(0), c.Args().Get(1)
+	source, err := parseSource(src)
 	if err != nil {
 		return err
 	}
-	bucket, pathSuffix, err := parseDest(dest)
+	bucket, pathSuffix, err := parseDest(dst)
 	if err != nil {
 		return err
 	}
@@ -228,18 +228,26 @@ func startDownloadHandler(c *cli.Context) error {
 			}
 		}
 		for i, object := range objects {
-			objects[i] = link + "/" + object
+			objects[i] = source.link + "/" + object
 		}
 		payload := downloader.DlMultiBody{
-			DlBase: basePayload,
+			DlBase:         basePayload,
+			ObjectsPayload: objects,
 		}
-		id, err = api.DownloadMultiWithParam(defaultAPIParams, payload, objects)
-	} else if strings.Contains(source, "{") && strings.Contains(source, "}") {
+		id, err = api.DownloadMultiWithParam(defaultAPIParams, payload)
+	} else if !source.bck.IsEmpty() {
+		// Cloud
+		payload := downloader.DlCloudBody{
+			DlBase:    basePayload,
+			SourceBck: source.bck,
+		}
+		id, err = api.DownloadCloudWithParam(defaultAPIParams, payload)
+	} else if strings.Contains(source.link, "{") && strings.Contains(source.link, "}") {
 		// Range
 		payload := downloader.DlRangeBody{
 			DlBase:   basePayload,
 			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
-			Template: link,
+			Template: source.link,
 		}
 		id, err = api.DownloadRangeWithParam(defaultAPIParams, payload)
 	} else {
@@ -247,7 +255,7 @@ func startDownloadHandler(c *cli.Context) error {
 		payload := downloader.DlSingleBody{
 			DlBase: basePayload,
 			DlSingleObj: downloader.DlSingleObj{
-				Link:    link,
+				Link:    source.link,
 				ObjName: pathSuffix, // in this case pathSuffix is a full name of the object
 			},
 		}

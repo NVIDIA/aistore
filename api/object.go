@@ -504,7 +504,7 @@ func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, msg i
 	})
 }
 
-func DownloadMultiWithParam(baseParams BaseParams, dlBody downloader.DlMultiBody, msg interface{}) (string, error) {
+func DownloadMultiWithParam(baseParams BaseParams, dlBody downloader.DlMultiBody) (string, error) {
 	baseParams.Method = http.MethodPost
 	return doDlDownloadRequest(ReqParams{
 		BaseParams: baseParams,

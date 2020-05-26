@@ -34,7 +34,8 @@ type (
 
 	DlJob interface {
 		ID() string
-		Bck() cmn.Bck
+		SrcBck() cmn.Bck
+		DstBck() cmn.Bck
 		Description() string
 		Timeout() time.Duration
 
@@ -79,10 +80,12 @@ type (
 		t   cluster.Target
 		ctx context.Context // context for the request, user etc...
 
+		sourceBck *cluster.Bck
+		prefix    string
+		suffix    string
+
 		objs       []dlObj // objects' metas which are ready to be downloaded
 		pageMarker string
-		prefix     string
-		suffix     string
 		mtx        sync.Mutex
 		pagesCnt   int
 	}
@@ -105,7 +108,7 @@ type (
 )
 
 func (j *baseDlJob) ID() string             { return j.id }
-func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
+func (j *baseDlJob) DstBck() cmn.Bck        { return j.bck.Bck }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
 func (j *baseDlJob) throttler() *throttler  { return j.t }
@@ -128,7 +131,8 @@ func newBaseDlJob(id string, bck *cluster.Bck, timeout, desc string, limits DlLi
 	}
 }
 
-func (j *sliceDlJob) Len() int { return len(j.objs) }
+func (j *sliceDlJob) SrcBck() cmn.Bck { return j.bck.Bck }
+func (j *sliceDlJob) Len() int        { return len(j.objs) }
 func (j *sliceDlJob) genNext() (objs []dlObj, ok bool) {
 	if j.current == len(j.objs) {
 		return []dlObj{}, false
@@ -152,7 +156,8 @@ func newSliceDlJob(base *baseDlJob, objs []dlObj) *sliceDlJob {
 	}
 }
 
-func (j *cloudBucketDlJob) Len() int { return -1 }
+func (j *cloudBucketDlJob) SrcBck() cmn.Bck { return j.sourceBck.Bck }
+func (j *cloudBucketDlJob) Len() int        { return -1 }
 func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
@@ -192,7 +197,7 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 			Fast:       true,
 		}
 
-		bckList, err, _ := j.t.Cloud(j.bck).ListObjects(j.ctx, j.bck, msg)
+		bckList, err, _ := j.t.Cloud(j.sourceBck).ListObjects(j.ctx, j.sourceBck, msg)
 		if err != nil {
 			return err
 		}
@@ -202,7 +207,7 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 			if !strings.HasSuffix(entry.Name, j.suffix) {
 				continue
 			}
-			job, err := jobForObject(smap, sid, j.bck, entry.Name, "")
+			job, err := jobForObject(smap, sid, j.bck, true /*fromCloud*/, entry.Name, "")
 			if err != nil {
 				if err == errInvalidTarget {
 					continue
@@ -219,8 +224,8 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 	return nil
 }
 
-func (j *rangeDlJob) Len() int { return j.count }
-
+func (j *rangeDlJob) SrcBck() cmn.Bck { return j.bck.Bck }
+func (j *rangeDlJob) Len() int        { return j.count }
 func (j *rangeDlJob) genNext() ([]dlObj, bool) {
 	readyToDownloadObjs := j.objs
 	if j.done {
@@ -248,7 +253,7 @@ func (j *rangeDlJob) getNextObjs() error {
 			break
 		}
 		name := path.Join(j.dir, path.Base(link))
-		dlJob, err := jobForObject(smap, sid, j.bck, name, link)
+		dlJob, err := jobForObject(smap, sid, j.bck, false /*fromCloud*/, name, link)
 		if err != nil {
 			if err == errInvalidTarget {
 				continue
@@ -261,12 +266,13 @@ func (j *rangeDlJob) getNextObjs() error {
 	return nil
 }
 
-func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *baseDlJob, prefix, suffix string) (*cloudBucketDlJob, error) {
+func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *baseDlJob, sourceBck *cluster.Bck, prefix, suffix string) (*cloudBucketDlJob, error) {
 	job := &cloudBucketDlJob{
 		baseDlJob:  *base,
 		pageMarker: "",
 		t:          t,
 		ctx:        ctx,
+		sourceBck:  sourceBck,
 		prefix:     prefix,
 		suffix:     suffix,
 	}
