@@ -360,24 +360,16 @@ func getConfig(server string) (httpLatencies, error) {
 
 // listObjectsFast returns a slice of object names of all objects that match the prefix in a bucket
 func listObjectsFast(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]string, error) {
-	query := url.Values{}
-	if prefix != "" {
-		query.Add(cmn.URLParamPrefix, prefix)
-	}
-
-	data, err := api.ListObjectsFast(baseParams, bck, nil, query)
+	msg := &cmn.SelectMsg{Prefix: prefix}
+	data, err := api.ListObjectsFast(baseParams, bck, msg)
 	if err != nil {
 		return nil, err
 	}
 
 	objs := make([]string, 0, len(data.Entries))
 	for _, obj := range data.Entries {
-		// Skip directories
-		if obj.Name[len(obj.Name)-1] != '/' {
-			objs = append(objs, obj.Name)
-		}
+		objs = append(objs, obj.Name)
 	}
-
 	return objs, nil
 }
 
