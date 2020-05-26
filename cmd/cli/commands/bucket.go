@@ -58,14 +58,15 @@ func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn
 
 // Creates new ais buckets
 func createBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
-	// TODO: on "soft" error (bucket already exists) we will
-	// emit zero exit code - this may be problematic when using
-	// in scripts.
 	for _, bck := range buckets {
 		if err = api.CreateBucket(defaultAPIParams, bck); err != nil {
 			if herr, ok := err.(*cmn.HTTPError); ok {
 				if herr.Status == http.StatusConflict {
-					fmt.Fprintf(c.App.Writer, "Bucket %q already exists\n", bck)
+					desc := fmt.Sprintf("Bucket %q already exists", bck)
+					if !flagIsSet(c, ignoreErrorFlag) {
+						return fmt.Errorf(desc)
+					}
+					fmt.Fprint(c.App.Writer, desc)
 					continue
 				}
 			}
@@ -78,20 +79,21 @@ func createBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 
 // Destroy ais buckets
 func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
-	// TODO: on "soft" error (bucket does not exist) we will
-	// emit zero exit code - this may be problematic when using
-	// in scripts.
 	for _, bck := range buckets {
 		if err = api.DestroyBucket(defaultAPIParams, bck); err != nil {
 			if herr, ok := err.(*cmn.HTTPError); ok {
 				if herr.Status == http.StatusNotFound {
-					fmt.Fprintf(c.App.Writer, "Bucket %q does not exist\n", bck)
+					desc := fmt.Sprintf("Bucket %q does not exist", bck)
+					if !flagIsSet(c, ignoreErrorFlag) {
+						return fmt.Errorf(desc)
+					}
+					fmt.Fprint(c.App.Writer, desc)
 					continue
 				}
 			}
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "%q bucket destroyed\n", bck)
+		fmt.Fprintf(c.App.Writer, "%q bucket destroyed", bck)
 	}
 	return nil
 }

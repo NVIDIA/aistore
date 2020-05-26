@@ -195,6 +195,7 @@ var (
 	resetFlag       = cli.BoolFlag{Name: "reset", Usage: "reset to original state"}
 	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the action without really doing it"}
 	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
+	ignoreErrorFlag = cli.BoolFlag{Name: "ignore-error", Usage: "ignore error on soft failures like bucket already exists, bucket does not exist etc."}
 
 	// Bucket
 	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}

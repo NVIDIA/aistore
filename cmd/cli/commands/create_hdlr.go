@@ -11,7 +11,9 @@ import (
 
 var (
 	createCmdsFlags = map[string][]cli.Flag{
-		subcmdCreateBucket: {},
+		subcmdCreateBucket: {
+			ignoreErrorFlag,
+		},
 	}
 
 	createCmds = []cli.Command{

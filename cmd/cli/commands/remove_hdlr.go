@@ -16,7 +16,9 @@ import (
 
 var (
 	removeCmdsFlags = map[string][]cli.Flag{
-		subcmdRemoveBucket:   {},
+		subcmdRemoveBucket: {
+			ignoreErrorFlag,
+		},
 		subcmdRemoveObject:   baseLstRngFlags,
 		subcmdRemoveNode:     {},
 		subcmdRemoveDownload: {},
