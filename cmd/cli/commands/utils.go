@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
@@ -839,4 +840,27 @@ func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
 	}
 
 	return progress, bars
+}
+
+// TODO: integrate this with simpleProgressBar
+type progIndicator struct {
+	objName         string
+	sizeTransferred *atomic.Int64
+}
+
+func (pi *progIndicator) start() {
+	fmt.Print("\033[s")
+}
+
+func (pi *progIndicator) stop() {
+	fmt.Println("")
+}
+
+func (pi *progIndicator) printProgress(incr int64) {
+	fmt.Print("\033[u\033[K")
+	fmt.Printf("Uploaded %s: %s", pi.objName, cmn.B2S(pi.sizeTransferred.Add(incr), 2))
+}
+
+func newProgIndicator(objName string) *progIndicator {
+	return &progIndicator{objName, atomic.NewInt64(0)}
 }

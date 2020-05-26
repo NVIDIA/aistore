@@ -163,22 +163,27 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 	return err
 }
 
-// TODO: support progress bar
 func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) (err error) {
 	var (
 		handle string
 		cksum  = cmn.NewCksumHash(cksumType)
+		pi     = newProgIndicator(objName)
 	)
 	chunkSize, err := parseByteFlagToInt(c, chunkSizeFlag)
 	if err != nil {
 		return err
 	}
+
+	if flagIsSet(c, progressBarFlag) {
+		pi.start()
+	}
 	for {
 		var (
 			// TODO: use MMSA
-			b   = bytes.NewBuffer(nil)
-			n   int64
-			err error
+			b      = bytes.NewBuffer(nil)
+			n      int64
+			err    error
+			reader cmn.ReadOpenCloser
 		)
 		if cksumType != cmn.ChecksumNone {
 			n, err = io.CopyN(cmn.NewWriterMulti(cksum.H, b), r, chunkSize)
@@ -191,22 +196,44 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 		if n == 0 {
 			break
 		}
-
+		reader = cmn.NewByteHandle(b.Bytes())
+		if flagIsSet(c, progressBarFlag) {
+			actualChunkOffset := atomic.NewInt64(0)
+			reader = cmn.NewCallbackReadOpenCloser(reader, func(n int, _ error) {
+				if n == 0 {
+					return
+				}
+				newChunkOffset := actualChunkOffset.Add(int64(n))
+				// `actualChunkOffset` is needed to not count the bytes read more than
+				// once upon redirection
+				if newChunkOffset > chunkSize {
+					// This part of the file was already read, so don't read it again
+					pi.printProgress(chunkSize - newChunkOffset + int64(n))
+					return
+				}
+				pi.printProgress(int64(n))
+			})
+		}
 		handle, err = api.AppendObject(api.AppendArgs{
 			BaseParams: defaultAPIParams,
 			Bck:        bck,
 			Object:     objName,
 			Handle:     handle,
-			Reader:     cmn.NewByteHandle(b.Bytes()),
+			Reader:     reader,
 			Size:       n,
 		})
 		if err != nil {
 			return err
 		}
 	}
+
+	if flagIsSet(c, progressBarFlag) {
+		pi.stop()
+	}
 	if cksumType != cmn.ChecksumNone {
 		cksum.Finalize()
 	}
+
 	return api.FlushObject(api.FlushArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
