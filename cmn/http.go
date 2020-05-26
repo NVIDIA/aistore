@@ -336,7 +336,6 @@ func (u *ReqArgs) Req() (*http.Request, error) {
 	if u.Header != nil {
 		copyHeaders(u.Header, &req.Header)
 	}
-
 	return req, nil
 }
 

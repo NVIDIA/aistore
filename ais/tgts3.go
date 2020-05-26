@@ -127,25 +127,23 @@ func (t *targetrunner) sendObj(src *cluster.LOM, si *cluster.Snode, bck cmn.Bck,
 	}
 	defer fh.Close()
 
-	// TODO: there should be generic way to send objects to another target (rebalance?)
-	query := cmn.AddBckToQuery(nil, bck)
+	var (
+		query  = cmn.AddBckToQuery(nil, bck)
+		header = src.PopulateHdr(nil)
+	)
 	query.Set(cmn.URLParamProxyID, t.GetSowner().Get().ProxySI.ID())
 	args := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   si.URL(cmn.NetworkIntraData),
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
 		Query:  query,
+		Header: header,
 		BodyR:  fh,
 	}
 	req, err := args.Req()
 	if err != nil {
 		return cmn.NewFailedToCreateHTTPRequest(err)
 	}
-	if cksum := src.Cksum(); cksum != nil {
-		req.Header.Set(cmn.HeaderObjCksumType, cksum.Type())
-		req.Header.Set(cmn.HeaderObjCksumVal, cksum.Value())
-	}
-	req.Header.Set(cmn.HeaderObjVersion, src.Version())
 	req.ContentLength = src.Size()
 	resp, err := t.httpclientGetPut.Do(req)
 	if err != nil {

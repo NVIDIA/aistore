@@ -550,6 +550,25 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Version()).To(BeEquivalentTo(desiredVersion))
 			})
 		})
+
+		Describe("CustomMD", func() {
+			testObject := "foldr/test-obj.ext"
+			localFQN := mis[0].MakePathFQN(localBckA, fs.ObjectType, testObject)
+
+			It("should correctly set and get custom metadata", func() {
+				lom := filePut(localFQN, 0, tMock)
+				lom.SetCustomMD(cmn.SimpleKVs{
+					cluster.SourceObjMD:        cluster.SourceGoogleObjMD,
+					cluster.GoogleVersionObjMD: "version",
+					cluster.GoogleCRC32CObjMD:  "crc32",
+				})
+				value, exists := lom.GetCustomMD(cluster.SourceObjMD)
+				Expect(exists).To(BeTrue())
+				Expect(value).To(Equal(cluster.SourceGoogleObjMD))
+				_, exists = lom.GetCustomMD("unknown")
+				Expect(exists).To(BeFalse())
+			})
+		})
 	})
 
 	Describe("copy object methods", func() {

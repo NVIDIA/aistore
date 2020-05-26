@@ -143,12 +143,12 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	roi := getRemoteObjInfo(t.obj.link, resp)
 	t.setTotalSize(roi)
 
+	lom.SetCustomMD(roi.md)
 	err = t.parent.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       r,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
-		CustomMD:     roi.md,
 		Started:      t.started.Load(),
 		WithFinalize: true,
 	})

@@ -116,19 +116,18 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied boo
 // TODO: introduce namespace refs and then reuse rebalancing logic and streams instead of PUT
 //
 func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.Snode) (copied bool, err error) {
-	var (
-		file                  *cmn.FileHandle
-		cksumType, cksumValue string
-	)
+	var file *cmn.FileHandle
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		err = fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
 		return
 	}
 	defer file.Close()
-	cksumType, cksumValue = lom.Cksum().Get()
 
 	// PUT object into different target
-	query := url.Values{}
+	var (
+		query  = url.Values{}
+		header = lom.PopulateHdr(nil)
+	)
 	query = cmn.AddBckToQuery(query, ri.bckTo.Bck)
 	query.Add(cmn.URLParamProxyID, ri.smap.ProxySI.ID())
 	reqArgs := cmn.ReqArgs{
@@ -136,6 +135,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.
 		Base:   si.URL(cmn.NetworkIntraData),
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, ri.bckTo.Name, objNameTo),
 		Query:  query,
+		Header: header,
 		BodyR:  file,
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
@@ -144,11 +144,6 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.
 		return
 	}
 	defer cancel()
-	req.Header.Set(cmn.HeaderObjCksumType, cksumType)
-	req.Header.Set(cmn.HeaderObjCksumVal, cksumValue)
-	req.Header.Set(cmn.HeaderObjVersion, lom.Version())
-	req.Header.Set(cmn.HeaderObjAtime, cmn.UnixNano2S(lom.AtimeUnix()))
-
 	resp, err1 := ri.t.httpclientGetPut.Do(req)
 	if err1 != nil {
 		err = fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err1)

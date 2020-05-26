@@ -140,13 +140,12 @@ func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Tim
 // slight variation vs t.doPut() above
 func (t *targetrunner) PutObject(params cluster.PutObjectParams) error {
 	poi := &putObjInfo{
-		t:        t,
-		lom:      params.LOM,
-		r:        params.Reader,
-		workFQN:  params.WorkFQN,
-		ctx:      context.Background(),
-		customMD: params.CustomMD,
-		started:  params.Started,
+		t:       t,
+		lom:     params.LOM,
+		r:       params.Reader,
+		workFQN: params.WorkFQN,
+		ctx:     context.Background(),
+		started: params.Started,
 	}
 	if params.RecvType == cluster.Migrated {
 		poi.cksumToCheck = params.Cksum

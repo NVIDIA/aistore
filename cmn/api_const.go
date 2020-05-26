@@ -120,6 +120,7 @@ const (
 	HeaderObjCksumType = "checksum.type"  // Checksum Type, one of SupportedChecksums()
 	HeaderObjCksumVal  = "checksum.value" // Checksum Value
 	HeaderObjAtime     = "atime"          // Object access time
+	HeaderObjCustomMD  = "custom_md"      // Object custom metadata
 	HeaderObjReplicSrc = "replica_src"    // In replication PUT request specifies the source target
 	HeaderObjSize      = "size"           // Object size (bytes)
 	HeaderObjVersion   = "version"        // Object version/generation - ais or Cloud

@@ -38,8 +38,6 @@ type (
 		// Checksum which needs to be checked on receive. It is only checked
 		// on specific occasions: see `writeToFile` method.
 		cksumToCheck *cmn.Cksum
-		// Custom metadata which should be preserved with the object in `xattr`.
-		customMD cmn.SimpleKVs
 		// object size aka Content-Length
 		size int64
 		// Context used when putting the object which should be contained in
@@ -206,8 +204,6 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
 		return fmt.Errorf("rename failed => %s: %w", lom, err), 0
 	}
-
-	lom.SetCustomMD(poi.customMD)
 
 	if err = lom.DelAllCopies(); err != nil {
 		return
@@ -586,20 +582,9 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		return
 	}
 	var (
-		atime      int64
-		cksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
-		cksumType  = resp.Header.Get(cmn.HeaderObjCksumType)
-		cksum      = cmn.NewCksum(cksumType, cksumValue)
-		version    = resp.Header.Get(cmn.HeaderObjVersion)
-		workFQN    = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
+		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
 	)
-	if atime, err = cmn.S2UnixNano(resp.Header.Get(cmn.HeaderObjAtime)); err != nil {
-		glog.Error(err)
-		return
-	}
-	lom.SetAtimeUnix(atime)
-	lom.SetCksum(cksum)
-	lom.SetVersion(version)
+	lom.ParseHdr(resp.Header)
 	poi := &putObjInfo{
 		t:        goi.t,
 		lom:      lom,
@@ -728,7 +713,6 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		}
 		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(goi.lom.Size(), 10))
 		hdr.Set(cmn.HeaderObjAtime, cmn.UnixNano2S(goi.lom.AtimeUnix()))
-
 		if r != nil {
 			hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(r.Length, 10))
 		} else {

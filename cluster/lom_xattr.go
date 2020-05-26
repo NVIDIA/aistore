@@ -360,7 +360,7 @@ func _marshCopies(mm *memsys.MMSA, buf []byte, copies fs.MPI) []byte {
 func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cmn.SimpleKVs) []byte {
 	var (
 		i   int
-		num = len(md) * 2
+		num = len(md)
 	)
 	for k, v := range md {
 		cmn.Assert(k != "" && v != "")

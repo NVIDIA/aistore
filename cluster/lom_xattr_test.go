@@ -76,6 +76,11 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
+				lom.SetCustomMD(cmn.SimpleKVs{
+					cluster.SourceObjMD:        cluster.SourceGoogleObjMD,
+					cluster.GoogleVersionObjMD: "version",
+					cluster.GoogleCRC32CObjMD:  "crc32",
+				})
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
 
@@ -91,6 +96,8 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
 				Expect(lom.GetCopies()).To(HaveLen(3))
 				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
+				Expect(lom.CustomMD()).To(HaveLen(3))
+				Expect(lom.CustomMD()).To(BeEquivalentTo(newLom.CustomMD()))
 			})
 
 			It("should override old values", func() {

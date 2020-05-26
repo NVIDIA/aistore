@@ -58,8 +58,7 @@ type PutObjectParams struct {
 	Reader       io.ReadCloser
 	WorkFQN      string
 	RecvType     RecvType
-	Cksum        *cmn.Cksum    // checksum to check
-	CustomMD     cmn.SimpleKVs // custom metadata which should be stored with object
+	Cksum        *cmn.Cksum // checksum to check
 	Started      time.Time
 	WithFinalize bool // determines if we should also finalize the object
 }

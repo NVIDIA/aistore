@@ -1240,6 +1240,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		cksumType  = header.Get(cmn.HeaderObjCksumType)
 		cksumValue = header.Get(cmn.HeaderObjCksumVal)
 	)
+	lom.ParseHdr(header) // TODO: check that values parsed here are not coming from the user
 	poi := &putObjInfo{
 		started:      started,
 		t:            t,

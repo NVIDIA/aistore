@@ -323,14 +323,13 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		lom.SetVersion(*obj.VersionId)
 		customMD[cluster.AmazonVersionObjMD] = *obj.VersionId
 	}
-
+	lom.SetCustomMD(customMD)
 	err = awsp.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       obj.Body,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
-		CustomMD:     customMD,
 		WithFinalize: false,
 	})
 	if err != nil {

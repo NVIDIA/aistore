@@ -230,7 +230,7 @@ func getRemoteObjInfo(link string, resp *http.Response) (roi remoteObjInfo) {
 	if cmn.IsGoogleStorageURL(u) || cmn.IsGoogleAPIURL(u) {
 		roi.md = make(cmn.SimpleKVs, 3)
 		roi.md[cluster.SourceObjMD] = cluster.SourceGoogleObjMD
-		if hdr := resp.Header.Values(gsCksumHeader); len(hdr) > 0 {
+		if hdr := resp.Header[http.CanonicalHeaderKey(gsCksumHeader)]; len(hdr) > 0 {
 			for cksumType, cksumValue := range parseGoogleCksumHeader(hdr) {
 				switch cksumType {
 				case cmn.ChecksumMD5:
@@ -306,8 +306,9 @@ func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
 	_, localMDPresent := lom.GetCustomMD(cluster.SourceObjMD)
 	remoteSource := roi.md[cluster.SourceObjMD]
 	if !localMDPresent {
-		// Source is present for remote object. Therefore, for backward
-		// compatibility, we must check if at least the version matches.
+		// Source is present only on the remote object. But if it's the cloud
+		// object it will have version set to cloud version. Therefore, we can
+		// try to compare it.
 		switch remoteSource {
 		case cluster.SourceGoogleObjMD:
 			if lom.Version() == roi.md[cluster.GoogleVersionObjMD] {

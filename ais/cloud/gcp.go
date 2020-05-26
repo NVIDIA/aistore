@@ -280,23 +280,25 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	if err != nil {
 		return
 	}
+
+	var (
+		customMD = cmn.SimpleKVs{
+			cluster.SourceObjMD:        cluster.SourceGoogleObjMD,
+			cluster.GoogleVersionObjMD: strconv.FormatInt(attrs.Generation, 10),
+			cluster.GoogleCRC32CObjMD:  encodeUint32(attrs.CRC32C),
+			cluster.GoogleMD5ObjMD:     hex.EncodeToString(attrs.MD5),
+		}
+	)
+
 	lom.SetCksum(cksum)
 	lom.SetVersion(strconv.FormatInt(attrs.Generation, 10))
-
-	customMD := cmn.SimpleKVs{
-		cluster.SourceObjMD:        cluster.SourceGoogleObjMD,
-		cluster.GoogleVersionObjMD: strconv.FormatInt(attrs.Generation, 10),
-		cluster.GoogleCRC32CObjMD:  encodeUint32(attrs.CRC32C),
-		cluster.GoogleMD5ObjMD:     hex.EncodeToString(attrs.MD5),
-	}
-
+	lom.SetCustomMD(customMD)
 	err = gcpp.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       rc,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
-		CustomMD:     customMD,
 		WithFinalize: false,
 	})
 	if err != nil {

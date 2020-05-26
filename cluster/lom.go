@@ -7,9 +7,11 @@ package cluster
 import (
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -92,6 +94,7 @@ func (lom *LOM) Atime() time.Time             { return time.Unix(0, lom.md.atime
 func (lom *LOM) AtimeUnix() int64             { return lom.md.atime }
 func (lom *LOM) SetAtimeUnix(tu int64)        { lom.md.atime = tu }
 func (lom *LOM) SetCustomMD(md cmn.SimpleKVs) { lom.md.customMD = md }
+func (lom *LOM) CustomMD() cmn.SimpleKVs      { return lom.md.customMD }
 func (lom *LOM) GetCustomMD(key string) (string, bool) {
 	value, exists := lom.md.customMD[key]
 	return value, exists
@@ -141,6 +144,47 @@ func (lom *LOM) CloneCopiesMd() int {
 		lom.md.copies[fqn] = mpi
 	}
 	return num
+}
+
+func (lom *LOM) PopulateHdr(hdr http.Header) http.Header {
+	if hdr == nil {
+		hdr = make(http.Header, 4)
+	}
+	if lom.Cksum() != nil {
+		hdr.Set(cmn.HeaderObjCksumType, lom.Cksum().Type())
+		hdr.Set(cmn.HeaderObjCksumVal, lom.Cksum().Value())
+	}
+	if lom.Version() != "" {
+		hdr.Set(cmn.HeaderObjVersion, lom.Version())
+	}
+	if lom.AtimeUnix() != 0 {
+		hdr.Set(cmn.HeaderObjAtime, cmn.UnixNano2S(lom.AtimeUnix()))
+	}
+	for k, v := range lom.CustomMD() {
+		hdr.Add(cmn.HeaderObjCustomMD, strings.Join([]string{k, v}, "="))
+	}
+	return hdr
+}
+func (lom *LOM) ParseHdr(hdr http.Header) {
+	// NOTE: We never set the `Cksum` from the header
+	//  (although we send it) - it should be computed.
+
+	if versionEntry := hdr.Get(cmn.HeaderObjVersion); versionEntry != "" {
+		lom.SetVersion(versionEntry)
+	}
+	if atimeEntry := hdr.Get(cmn.HeaderObjAtime); atimeEntry != "" {
+		atime, _ := cmn.S2UnixNano(atimeEntry)
+		lom.SetAtimeUnix(atime)
+	}
+	if customMD := hdr[http.CanonicalHeaderKey(cmn.HeaderObjCustomMD)]; len(customMD) > 0 {
+		md := make(cmn.SimpleKVs, len(customMD)*2)
+		for _, v := range customMD {
+			entry := strings.SplitN(v, "=", 2)
+			cmn.Assert(len(entry) == 2)
+			md[entry[0]] = entry[1]
+		}
+		lom.SetCustomMD(md)
+	}
 }
 
 ////////////////////////////
