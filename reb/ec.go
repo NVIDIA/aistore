@@ -2042,8 +2042,7 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 		req := &pushReq{md: s.meta}
 		cksumType, cksumValue := s.meta.CksumType, s.meta.ObjCksum
 		if cksumType == "" && cksumValue != "" {
-			glog.Errorf("%s/%s missing checksum type", obj.bck.Name, obj.objName)
-			cksumValue = "" // TODO -- FIXME
+			glog.Errorf("%s/%s[%d] missing checksum type", obj.bck.Name, obj.objName, s.SliceID)
 		}
 		hdr := transport.Header{
 			Bck:     obj.bck,

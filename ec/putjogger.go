@@ -119,18 +119,19 @@ func (c *putJogger) encode(req *Request) error {
 		glog.Infof("Encoding %q...", req.LOM.FQN)
 	}
 	var (
-		cksumValue string
-		ecConf     = req.LOM.Bprops().EC
+		cksumValue, cksumType string
+		ecConf                = req.LOM.Bprops().EC
 	)
 	if req.LOM.Cksum() != nil {
-		_, cksumValue = req.LOM.Cksum().Get()
+		cksumType, cksumValue = req.LOM.Cksum().Get()
 	}
 	meta := &Metadata{
-		Size:     req.LOM.Size(),
-		Data:     ecConf.DataSlices,
-		Parity:   ecConf.ParitySlices,
-		IsCopy:   req.IsCopy,
-		ObjCksum: cksumValue,
+		Size:      req.LOM.Size(),
+		Data:      ecConf.DataSlices,
+		Parity:    ecConf.ParitySlices,
+		IsCopy:    req.IsCopy,
+		ObjCksum:  cksumValue,
+		CksumType: cksumType,
 	}
 
 	// calculate the number of targets required to encode the object
