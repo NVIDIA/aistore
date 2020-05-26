@@ -14,6 +14,8 @@ const (
 	ChecksumXXHash = "xxhash"
 	ChecksumMD5    = "md5"
 	ChecksumCRC32C = "crc32c"
+	ChecksumSHA256 = "sha256" // crypto.SHA512_256 (SHA-2)
+	ChecksumSHA512 = "sha512" // crypto.SHA512 (SHA-2)
 )
 
 // module names

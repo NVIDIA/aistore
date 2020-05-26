@@ -94,7 +94,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Delete a range of objects | DELETE '{"action":"delete", "value":{"template":"your-prefix{min..max}"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | Configure bucket as [n-way mirror](storage_svcs.md#n-way-mirror) (proxy) | POST {"action": "makencopies", "value": n} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"makencopies", "value": 2}' 'http://G/v1/buckets/abc'` |
 | Enable [erasure coding](storage_svcs.md#erasure-coding) protection for all objects (proxy) | POST {"action": "ecencode"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"ecencode"}' 'http://G/v1/buckets/abc'` |
-| Set [bucket properties](bucket.md#properties-and-options) (proxy) | PATCH {"action": "setbprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops", "value": {"checksum": {"type": "inherit"}, "mirror": {"enable": true}}' 'http://G/v1/buckets/abc'` |
+| Set [bucket properties](bucket.md#properties-and-options) (proxy) | PATCH {"action": "setbprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops", "value": {"checksum": {"type": "sha256"}, "mirror": {"enable": true}}' 'http://G/v1/buckets/abc'` |
 | Reset [bucket properties](bucket.md#properties-and-options) (proxy) | PATCH {"action": "resetbprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"resetbprops"}' 'http://G/v1/buckets/abc'` |
 | [Prefetch](bucket.md#prefetchevict-objects) a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"]}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | [Prefetch](bucket.md#prefetchevict-objects) a range of objects| POST '{"action":"prefetch", "value":{"template":"your-prefix{min..max}" }}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
@@ -131,13 +131,11 @@ Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in an
 
 * [Cloud Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
-> Cloud provider (aka "bucket provider") is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. Supported providers, on the other hand, are enumerated and documented: `ais` - for AIS buckets, `aws`, `gcp` or `azure` - for S3, Google Cloud buckets or Microsoft Azure, respectively.
-
-In all those cases users can add an optional `?provider=ais` or `?provider=aws` or `?provider=gcp` query to the GET (PUT, DELETE, List/Range) request.
+> Cloud provider is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. For supported Cloud providers, please refer to the [Cloud Providers](./providers.md) and/or [Buckets: introduction and detailed overview](bucket.md) documents.
 
 Curl example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=ais'`
 
-For more information, CLI examples, and the most recent updates, please see:
+For even more information, CLI examples, and the most recent updates, please see:
 - [Cloud Providers](./providers.md)
 - [CLI: operations on buckets](/cmd/cli/resources/bucket.md)
 - [CLI: operations on objects](/cmd/cli/resources/object.md)

@@ -20,7 +20,11 @@
 
 AIS uses the popular-and-well-known bucket abstraction. In a flat storage hierarchy, bucket is a named container of user dataset(s) (represented as objects) and, simultaneously, a point of applying storage management policies: erasure coding, mirroring, etc.
 
-Each object is assigned to and stored in a basic container called bucket. AIS buckets are similar to the buckets in [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html) and [Google Cloud (GCP)](https://cloud.google.com/storage/docs/key-terms#buckets).
+Each object is assigned to (and stored in) a basic container called *bucket*. AIS buckets *contain* user data; in that sense they are very similar to:
+
+* [Amazon S3 buckets](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html)
+* [Google Cloud (GCP) buckets](https://cloud.google.com/storage/docs/key-terms#buckets)
+* [Microsoft Azure Blob containers](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction)
 
 AIS supports two kinds of buckets: **ais buckets** and **3rd party Cloud-based buckets** (or simply **cloud buckets**).
 
@@ -37,7 +41,14 @@ Cloud-based and ais buckets support the same API with minor exceptions. Cloud bu
 
 [Cloud Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. For complete definition and details, plase refer to the [Cloud Provider](./providers.md) document.
 
-> Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` for ais buckets, and `cloud`, `aws`, `gcp`, `azure` for cloud buckets.
+Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values that include:
+
+* `ais` for ais buckets
+* `aws` or `s3` - for Amazon S3 buckets
+* `gcp` or `gs` - for Google Cloud
+* `azure` - for Microsoft Blob Storage
+
+* and finally, you can simple say `cloud` to designate any one of the 3 (three) Cloud providers listed above.
 
 For API reference, please refer [to the RESTful API and examples](http_api.md). The rest of this document serves to further explain features and concepts specific to storage buckets.
 
@@ -261,10 +272,10 @@ The full list of bucket properties are:
 | Bucket Property | JSON | Description | Fields |
 | --- | --- | --- | --- |
 | Provider | `provider` | "aws", "gcp" or "ais" | `"provider": "aws"/"gcp"/"ais"` |
-| Cksum | `checksum` | Configuration for [Checksum](docs/checksum.md). `validate_cold_get` determines whether or not the checksum of received object is checked after downloading it from the cloud. `validate_warm_get`: determines if the object's version (if in Cloud-based bucket) and checksum are checked. If either value fail to match, the object is removed from local storage. `validate_cluster_migration` determines if the migrated objects across single cluster should have their checksum validated. `enable_read_range` returns the read range checksum otherwise return the entire object checksum.  | `"checksum": { "type": "none"/"xxhash"/"md5"/"inherit", "validate_cold_get": bool,  "validate_warm_get": bool,  "validate_cluster_migration": bool, "enable_read_range": bool }` |
-| LRU | `lru` | Configuration for [LRU](docs/storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }` |
-| Mirror | `mirror` | Configuration for [Mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size.  `util_thresh` represents the threshold when utilizations are considered equivalent. `optimize_put` represents the optimization objective. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "util_thresh": int64, "optimize_put": bool, "enabled": bool }` |
-| EC | `ec` | Configuration for [erasure coding](docs/storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
+| Cksum | `checksum` | Please refer to [Supported Checksums and Brief Theory of Operations](checksum.md) | |
+| LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }` |
+| Mirror | `mirror` | Configuration for [Mirroring](storage_svcs.md#local-mirroring-and-load-balancing). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size.  `util_thresh` represents the threshold when utilizations are considered equivalent. `optimize_put` represents the optimization objective. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "util_thresh": int64, "optimize_put": bool, "enabled": bool }` |
+| EC | `ec` | Configuration for [erasure coding](storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
 | Versioning | `versioning` | Configuration for object versioning support. `enabled` represents if object versioning is enabled for a bucket. For Cloud-based bucket, its versioning must be enabled in the cloud prior to enabling on AIS side. `validate_warm_get`: determines if the object's version is checked(if in Cloud-based bucket) | `"versioning": { "enabled": true, "validate_warm_get": false }`|
 | AccessAttrs | `access` | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"access": "0" ` |
 | BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |

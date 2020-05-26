@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"crypto/md5"
+	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -14,6 +15,10 @@ import (
 
 	"github.com/OneOfOne/xxhash"
 )
+
+// NOTE: not supporting SHA-3 family is its current golang.org/x/crypto/sha3 source
+//       doesn't implement BinaryMarshaler & BinaryUnmarshaler interfaces
+//       (see also https://golang.org/pkg/encoding)
 
 const (
 	badDataCksumPrefix = "BAD DATA CHECKSUM:"
@@ -44,6 +49,8 @@ var (
 		ChecksumXXHash: {},
 		ChecksumMD5:    {},
 		ChecksumCRC32C: {},
+		ChecksumSHA256: {},
+		ChecksumSHA512: {},
 	}
 )
 
@@ -97,6 +104,10 @@ func NewCksumHash(ty string) *CksumHash {
 		return &CksumHash{Cksum{ty: ty}, md5.New(), nil}
 	case ChecksumCRC32C:
 		return &CksumHash{Cksum{ty: ty}, NewCRC32C(), nil}
+	case ChecksumSHA256:
+		return &CksumHash{Cksum{ty: ty}, sha512.New512_256(), nil}
+	case ChecksumSHA512:
+		return &CksumHash{Cksum{ty: ty}, sha512.New(), nil}
 	default:
 		AssertMsg(false, ValidateCksumType(ty).Error())
 	}

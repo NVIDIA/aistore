@@ -97,10 +97,10 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `client.client_timeout` | `10s` | Default client timeout |
 | `client.client_long_timeout` | `30m` | Default _long_ client timeout |
 | `client.list_timeout` | `2m` | Client list objects timeout |
-| `checksum.type` | `xxhash` | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
-| `checksum.validate_cold_get` | `true` | Enables and disables checking the hash of received object after downloading it from the cloud |
-| `checksum.validate_warm_get` | `false` | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |
-| `checksum.enable_read_range` | `false` | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
+| `checksum.type` | `xxhash` | Checksum type. Please see [Supported Checksums and Brief Theory of Operations](checksum.md)  |
+| `checksum.validate_cold_get` | `true` | Please see [Supported Checksums and Brief Theory of Operations](checksum.md) |
+| `checksum.validate_warm_get` | `false` | See [Supported Checksums and Brief Theory of Operations](checksum.md) |
+| `checksum.enable_read_range` | `false` | See [Supported Checksums and Brief Theory of Operations](checksum.md) |
 | `versioning.enabled` | `true` | Enables and disables versioning. For Cloud-based buckets, versioning is on only when it is enabled in both places: in the Cloud for the bucket and in the AIS configuration |
 | `versioning.validate_warm_get` | `false` | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |
 | `fshc.enabled` | `true` | Enables and disables filesystem health checker (FSHC) |

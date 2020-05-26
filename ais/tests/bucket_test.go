@@ -1119,6 +1119,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		}
 	}
 
+	// wait for all GETs to complete
 	wg.Wait()
 
 	m.ensureNumCopies(numCopies[len(numCopies)-1])
@@ -1959,4 +1960,85 @@ func TestBackendBucket(t *testing.T) {
 	// Check that we cannot do cold gets anymore.
 	_, err = api.GetObject(baseParams, aisBck, cloudObjList.Entries[1].Name)
 	tassert.Fatalf(t, err != nil, "expected error (object should not exist)")
+}
+
+//
+// even more checksum tests
+//
+
+func TestAllChecksums(t *testing.T) {
+	checksums := cmn.SupportedChecksums()
+	for _, cksumType := range checksums {
+		t.Run(cksumType, func(t *testing.T) {
+			started := time.Now()
+			testWarmValidation(t, cksumType)
+			tutils.Logf("Time: %v\n", time.Since(started))
+		})
+	}
+}
+func testWarmValidation(t *testing.T, cksumType string) {
+	var (
+		m = ioContext{
+			t:               t,
+			num:             5000,
+			numGetsEachFile: 2,
+			fileSize:        uint64(100*cmn.KiB + rand.Int63n(cmn.MiB)),
+		}
+		sema = cmn.NewDynSemaphore(40) // throttle GET
+	)
+
+	if testing.Short() {
+		m.num /= 10
+		m.fileSize /= 16
+	}
+	m.init()
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+	{
+		err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				Type:            api.String(cksumType),
+				ValidateWarmGet: api.Bool(true),
+			},
+		})
+		tassert.CheckFatal(t, err)
+
+		p, err := api.HeadBucket(baseParams, m.bck)
+		tassert.CheckFatal(t, err)
+		if p.Cksum.Type != cksumType {
+			t.Fatalf("failed to set checksum: %q != %q", p.Cksum.Type, cksumType)
+		}
+		if !p.Cksum.ValidateWarmGet {
+			t.Fatal("failed to set checksum: validate_warm_get not enabled")
+		}
+	}
+
+	m.puts()
+
+	tutils.Logf("Reading %q objects with checksum validation by AIS targets\n", m.bck)
+	m.gets()
+
+	msg := &cmn.SelectMsg{}
+	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	tassert.CheckFatal(t, err)
+
+	tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n",
+		len(bckObjs.Entries), m.bck, cksumType)
+
+	wg := &sync.WaitGroup{}
+	for _, entry := range bckObjs.Entries {
+		wg.Add(1)
+		sema.Acquire()
+		go func(name string) {
+			sema.Release()
+			_, err = api.GetObjectWithValidation(baseParams, m.bck, name)
+			wg.Done()
+			tassert.CheckError(t, err)
+		}(entry.Name)
+	}
+
+	wg.Wait()
 }
