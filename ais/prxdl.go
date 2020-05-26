@@ -111,11 +111,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 	}
 }
 
-func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string) (err error, errCode int) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return err, http.StatusInternalServerError
-	}
+func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (err error, errCode int) {
 	query := r.URL.Query()
 	query.Set(cmn.URLParamID, id)
 
@@ -159,7 +155,10 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	payload.InitWithQuery(r.URL.Query())
+	if err := cmn.ReadJSON(w, r, &payload); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
 	if err := payload.Validate(r.Method == http.MethodDelete); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -204,12 +203,19 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if ok := p.validateStartDownloadRequest(w, r); !ok {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		msg := fmt.Sprintf("Error starting download: %v.", err.Error())
+		p.invalmsghdlr(w, r, msg, http.StatusInternalServerError)
+		return
+	}
+
+	if ok := p.validateStartDownloadRequest(w, r, body); !ok {
 		return
 	}
 
 	id := cmn.GenUserID()
-	if err, errCode := p.broadcastStartDownloadRequest(r, id); err != nil {
+	if err, errCode := p.broadcastStartDownloadRequest(r, id, body); err != nil {
 		p.invalmsghdlr(w, r, fmt.Sprintf("Error starting download: %v.", err.Error()), errCode)
 		return
 	}
@@ -219,12 +225,14 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 
 // Helper methods
 
-func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request) (ok bool) {
+func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request, body []byte) (ok bool) {
 	var (
-		query   = r.URL.Query()
 		payload = &downloader.DlBase{}
 	)
-	payload.InitWithQuery(query)
+	if err := jsoniter.Unmarshal(body, &payload); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
 	bck := cluster.NewBckEmbed(payload.Bck)
 	if err := bck.Init(p.owner.bmd, p.si); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bck, err); err != nil {

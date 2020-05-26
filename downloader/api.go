@@ -7,10 +7,8 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"path"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -151,47 +149,6 @@ type DlBase struct {
 	Limits      DlLimits `json:"limits"`
 }
 
-func (b *DlBase) InitWithQuery(query url.Values) {
-	if b.Bck.Name == "" {
-		b.Bck.Name = query.Get(cmn.URLParamBucket)
-	}
-	b.Bck.Provider = query.Get(cmn.URLParamProvider)
-	b.Bck.Ns = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
-	b.Timeout = query.Get(cmn.URLParamTimeout)
-	b.Description = query.Get(cmn.URLParamDescription)
-
-	x, _ := cmn.S2B(query.Get(cmn.URLParamLimitConnections))
-	b.Limits.Connections = int(x)
-	x, _ = cmn.S2B(query.Get(cmn.URLParamLimitBytesPerHour))
-	b.Limits.BytesPerHour = int(x)
-}
-
-func (b *DlBase) AsQuery() url.Values {
-	query := url.Values{}
-	if b.Bck.Name != "" {
-		query.Add(cmn.URLParamBucket, b.Bck.Name)
-	}
-	if b.Bck.Provider != "" {
-		query.Add(cmn.URLParamProvider, b.Bck.Provider)
-	}
-	if !b.Bck.Ns.IsGlobal() {
-		query.Add(cmn.URLParamNamespace, b.Bck.Ns.Uname())
-	}
-	if b.Timeout != "" {
-		query.Add(cmn.URLParamTimeout, b.Timeout)
-	}
-	if b.Description != "" {
-		query.Add(cmn.URLParamDescription, b.Description)
-	}
-	if b.Limits.Connections > 0 {
-		query.Add(cmn.URLParamLimitConnections, strconv.FormatInt(int64(b.Limits.Connections), 10))
-	}
-	if b.Limits.BytesPerHour > 0 {
-		query.Add(cmn.URLParamLimitBytesPerHour, strconv.FormatInt(int64(b.Limits.BytesPerHour), 10))
-	}
-	return query
-}
-
 func (b *DlBase) Validate() error {
 	if b.Bck.Name == "" {
 		return fmt.Errorf("missing the %q", cmn.URLParamBucket)
@@ -237,22 +194,6 @@ func (b *DlSingleObj) Validate() error {
 type DlAdminBody struct {
 	ID    string `json:"id"`
 	Regex string `json:"regex"`
-}
-
-func (b *DlAdminBody) InitWithQuery(query url.Values) {
-	b.ID = query.Get(cmn.URLParamID)
-	b.Regex = query.Get(cmn.URLParamRegex)
-}
-
-func (b *DlAdminBody) AsQuery() url.Values {
-	query := url.Values{}
-	if b.ID != "" {
-		query.Add(cmn.URLParamID, b.ID)
-	}
-	if b.Regex != "" {
-		query.Add(cmn.URLParamRegex, b.Regex)
-	}
-	return query
 }
 
 func (b *DlAdminBody) Validate(requireID bool) error {
@@ -301,19 +242,6 @@ type DlSingleBody struct {
 	DlSingleObj
 }
 
-func (b *DlSingleBody) InitWithQuery(query url.Values) {
-	b.DlBase.InitWithQuery(query)
-	b.Link = query.Get(cmn.URLParamLink)
-	b.ObjName = query.Get(cmn.URLParamObjName)
-}
-
-func (b *DlSingleBody) AsQuery() url.Values {
-	query := b.DlBase.AsQuery()
-	query.Add(cmn.URLParamLink, b.Link)
-	query.Add(cmn.URLParamObjName, b.ObjName)
-	return query
-}
-
 func (b *DlSingleBody) Validate() error {
 	if err := b.DlBase.Validate(); err != nil {
 		return err
@@ -345,21 +273,6 @@ type DlRangeBody struct {
 	Subdir   string `json:"subdir"`
 }
 
-func (b *DlRangeBody) InitWithQuery(query url.Values) {
-	b.DlBase.InitWithQuery(query)
-	b.Template = query.Get(cmn.URLParamTemplate)
-	b.Subdir = query.Get(cmn.URLParamSubdir)
-}
-
-func (b *DlRangeBody) AsQuery() url.Values {
-	query := b.DlBase.AsQuery()
-	query.Add(cmn.URLParamTemplate, b.Template)
-	if b.Subdir != "" {
-		query.Add(cmn.URLParamSubdir, b.Subdir)
-	}
-	return query
-}
-
 func (b *DlRangeBody) Validate() error {
 	if err := b.DlBase.Validate(); err != nil {
 		return err
@@ -384,26 +297,22 @@ func (b *DlRangeBody) String() string {
 // Multi request
 type DlMultiBody struct {
 	DlBase
+	ObjectsPayload interface{} `json:"objects"`
 }
 
-func (b *DlMultiBody) InitWithQuery(query url.Values) {
-	b.DlBase.InitWithQuery(query)
-}
-
-func (b *DlMultiBody) Validate(body []byte) error {
-	if len(body) == 0 {
+func (b *DlMultiBody) Validate() error {
+	if b.ObjectsPayload == nil {
 		return errors.New("body should not be empty")
 	}
-
 	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (b *DlMultiBody) ExtractPayload(objectsPayload interface{}) (cmn.SimpleKVs, error) {
+func (b *DlMultiBody) ExtractPayload() (cmn.SimpleKVs, error) {
 	objects := make(cmn.SimpleKVs, 10)
-	switch ty := objectsPayload.(type) {
+	switch ty := b.ObjectsPayload.(type) {
 	case map[string]interface{}:
 		for key, val := range ty {
 			switch v := val.(type) {
@@ -445,14 +354,8 @@ func (b *DlMultiBody) String() string {
 // Cloud request
 type DlCloudBody struct {
 	DlBase
-	Prefix string `json:"prefix"`
-	Suffix string `json:"suffix"`
-}
-
-func (b *DlCloudBody) InitWithQuery(query url.Values) {
-	b.DlBase.InitWithQuery(query)
-	b.Prefix = query.Get(cmn.URLParamPrefix)
-	b.Suffix = query.Get(cmn.URLParamSuffix)
+	Prefix    string  `json:"prefix"`
+	Suffix    string  `json:"suffix"`
 }
 
 func (b *DlCloudBody) Validate() error {
@@ -460,13 +363,6 @@ func (b *DlCloudBody) Validate() error {
 		return err
 	}
 	return nil
-}
-
-func (b *DlCloudBody) AsQuery() url.Values {
-	query := b.DlBase.AsQuery()
-	query.Add(cmn.URLParamPrefix, b.Prefix)
-	query.Add(cmn.URLParamSuffix, b.Suffix)
-	return query
 }
 
 func (b *DlCloudBody) Describe() string {

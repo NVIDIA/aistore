@@ -93,7 +93,6 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 	var (
 		// link -> objName
 		objects cmn.SimpleKVs
-		query   = r.URL.Query()
 
 		payload       = &DlBase{}
 		singlePayload = &DlSingleBody{}
@@ -102,21 +101,21 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		cloudPayload  = &DlCloudBody{}
 
 		pt          cmn.ParsedTemplate
+		sourceBck   *cluster.Bck
 		description string
 		dlType      int
 	)
-
-	payload.InitWithQuery(query)
-
-	singlePayload.InitWithQuery(query)
-	rangePayload.InitWithQuery(query)
-	multiPayload.InitWithQuery(query)
-	cloudPayload.InitWithQuery(query)
 
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
+
+	_ = jsoniter.Unmarshal(b, payload)
+	_ = jsoniter.Unmarshal(b, singlePayload)
+	_ = jsoniter.Unmarshal(b, rangePayload)
+	_ = jsoniter.Unmarshal(b, multiPayload)
+	_ = jsoniter.Unmarshal(b, cloudPayload)
 
 	bck := cluster.NewBckEmbed(payload.Bck)
 	if err := bck.Init(t.GetBowner(), t.Snode()); err != nil {
@@ -142,12 +141,8 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		}
 		description = rangePayload.Describe()
 		dlType = dlTypeRange
-	} else if err = multiPayload.Validate(b); err == nil {
-		var objectsPayload interface{}
-		if err := jsoniter.Unmarshal(b, &objectsPayload); err != nil {
-			return nil, err
-		}
-		if objects, err = multiPayload.ExtractPayload(objectsPayload); err != nil {
+	} else if err = multiPayload.Validate(); err == nil {
+		if objects, err = multiPayload.ExtractPayload(); err != nil {
 			return nil, err
 		}
 		description = multiPayload.Describe()
