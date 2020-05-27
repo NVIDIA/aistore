@@ -151,8 +151,10 @@ func (lom *LOM) PopulateHdr(hdr http.Header) http.Header {
 		hdr = make(http.Header, 4)
 	}
 	if lom.Cksum() != nil {
-		hdr.Set(cmn.HeaderObjCksumType, lom.Cksum().Type())
-		hdr.Set(cmn.HeaderObjCksumVal, lom.Cksum().Value())
+		if ty, val := lom.Cksum().Get(); ty != cmn.ChecksumNone {
+			hdr.Set(cmn.HeaderObjCksumType, ty)
+			hdr.Set(cmn.HeaderObjCksumVal, val)
+		}
 	}
 	if lom.Version() != "" {
 		hdr.Set(cmn.HeaderObjVersion, lom.Version())

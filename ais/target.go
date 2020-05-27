@@ -970,7 +970,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		checkExists    = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
 		checkExistsAny = cmn.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
 		checkEC        = cmn.IsParseBool(query.Get(cmn.URLParamECMeta))
-		silent         = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
+		// TODO: add cmn.URLParamHeadCloudAlways  - to always resync props from the Cloud
+		silent = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
 	)
 
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
@@ -986,9 +987,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		invalidHandler = t.invalmsghdlrsilent
 	}
 
+	// do it before LOM is initialized: target may have a slice instead of an object/replica
 	if checkEC {
-		// should do it before LOM is initialized because the target may
-		// have a slice instead of object/replica
 		bck, err := newBckFromQuery(bucket, query)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -1035,42 +1035,40 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 
 	exists = err == nil
 
-	// NOTE:
 	// * checkExists and checkExistsAny establish local presence of the object by looking up all mountpaths
 	// * checkExistsAny does it *even* if the object *may* not have local copies
 	// * see also: GFN
-	// TODO -- FIXME: Bprops.Copies vs actual
-	if !exists && (checkExists && lom.Bprops().Mirror.Copies > 1 || checkExistsAny) {
-		exists = lom.RestoreObjectFromAny() // lookup and restore the object to its default location
+	if !exists {
+		// lookup and restore the object to its proper location
+		if (checkExists && lom.HasCopies()) || checkExistsAny {
+			exists = lom.RestoreObjectFromAny()
+		}
 	}
 
-	if lom.Bck().IsAIS() || checkExists {
+	if checkExists || checkExistsAny {
+		if !exists {
+			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
+		}
+		return
+	}
+	if lom.Bck().IsAIS() || exists { // && !lom.VerConf().Enabled) {
 		if !exists {
 			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
 			return
 		}
-		if checkExists {
-			return
-		}
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size(), 1), lom.Version())
-		}
+		lom.PopulateHdr(hdr)
 	} else {
 		var objMeta cmn.SimpleKVs
 		objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(t.contextWithAuth(r.Header), lom)
 		if err != nil {
-			errMsg := fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
+			errMsg := fmt.Sprintf("%s: HEAD request failed, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)
 			return
 		}
 		for k, v := range objMeta {
 			hdr.Set(k, v)
 		}
-		if !lom.VerConf().Enabled {
-			hdr.Del(cmn.HeaderObjVersion)
-		}
 	}
-
 	objProps := cmn.ObjectProps{
 		Name:    objName,
 		Bck:     lom.Bck().Bck,
@@ -1078,11 +1076,6 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	if exists {
 		objProps.Size = lom.Size()
-		objProps.Version = lom.Version()
-		objProps.Atime = lom.AtimeUnix()
-		if ty, val := lom.Cksum().Get(); ty != cmn.ChecksumNone {
-			objProps.Checksum.Type, objProps.Checksum.Value = ty, val
-		}
 		objProps.NumCopies = lom.NumCopies()
 		if lom.Bck().Props.EC.Enabled {
 			if md, err := ec.ObjectMetadata(lom.Bck(), objName); err == nil {
