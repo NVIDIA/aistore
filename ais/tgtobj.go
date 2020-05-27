@@ -423,27 +423,14 @@ do:
 
 	// checksum validation, if requested
 	if !coldGet && goi.lom.CksumConf().ValidateWarmGet {
-		err = goi.lom.ValidateMetaChecksum()
-		if err == nil {
-			err = goi.lom.ValidateContentChecksum()
-		}
+		err, errCode, coldGet = goi.tryRecoverObject()
 		if err != nil {
-			glog.Error(err)
-			if _, ok := err.(*cmn.BadCksumError); ok {
-				if goi.lom.Bck().IsAIS() {
-					// TODO: recover from copies or EC if available (scruber).
-					// Removing object and copies at this point seems too harsh.
-					if err := goi.lom.Remove(); err != nil {
-						glog.Warningf("%s - failed to remove, err: %v", err, err)
-					}
-					goi.lom.Unlock(false)
-					return err, http.StatusInternalServerError
-				}
-				coldGet = true
-			} else {
+			if !coldGet {
 				goi.lom.Unlock(false)
-				return err, http.StatusInternalServerError
+				glog.Error(err)
+				return
 			}
+			glog.Errorf("%v - proceeding to execute cold GET from %s", err, goi.lom.Bck())
 		}
 	}
 
@@ -479,6 +466,80 @@ get:
 	return
 }
 
+// validate checksum; if corrupted try to recover from other replicas or EC slices
+func (goi *getObjInfo) tryRecoverObject() (err error, code int, coldGet bool) {
+	var (
+		lom     = goi.lom
+		retried bool
+	)
+retry:
+	err = lom.ValidateMetaChecksum()
+	if err == nil {
+		err = lom.ValidateContentChecksum()
+	}
+	if err == nil {
+		return
+	}
+	code = http.StatusInternalServerError
+	if _, ok := err.(*cmn.BadCksumError); !ok {
+		return
+	}
+	if !lom.Bck().IsAIS() {
+		coldGet = true
+		return
+	}
+
+	glog.Warning(err)
+	redundant := lom.HasCopies() || lom.Bprops().EC.Enabled
+	//
+	// recover from copies, if available
+	//
+	if retried || !redundant {
+		//
+		// TODO: mark `deleted` and postpone actual deletion
+		//
+		if erl := lom.Remove(); erl != nil {
+			glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t.si, lom, erl)
+		}
+		return
+	}
+	//
+	// try to recover from BAD CHECKSUM
+	//
+	cmn.RemoveFile(lom.FQN) // TODO: ditto
+
+	if lom.HasCopies() {
+		retried = true
+		goi.lom.Unlock(false)
+		// lookup and restore the object from local replicas
+		restored := lom.RestoreObjectFromAny()
+		goi.lom.Lock(false)
+		if restored {
+			glog.Warningf("%s: recovered corrupted %s from local replica", goi.t.si, lom)
+			code = 0
+			goto retry
+		}
+	}
+	if lom.Bprops().EC.Enabled {
+		retried = true
+		goi.lom.Unlock(false)
+		cmn.RemoveFile(lom.FQN)
+		_, err, code = goi.tryRestoreObject()
+		goi.lom.Lock(false)
+		if err == nil {
+			glog.Warningf("%s: recovered corrupted %s from EC slices", goi.t.si, lom)
+			code = 0
+			goto retry
+		}
+	}
+
+	// TODO: ditto
+	if erl := lom.Remove(); erl != nil {
+		glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t.si, lom, erl)
+	}
+	return
+}
+
 // an attempt to restore an object that is missing in the ais bucket - from:
 // 1) local FS
 // 2) other FSes or targets when resilvering (rebalancing) is running (aka GFN)
@@ -507,7 +568,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 		doubleCheck = running
 	}
 
-	// FIXME: if there're not enough EC targets to restore an sliced object,
+	// FIXME: if there're not enough EC targets to restore a "sliced" object,
 	// we might be able to restore it if it was replicated. In this case even
 	// just one additional target might be sufficient. This won't succeed if
 	// an object was sliced, neither will ecmanager.RestoreObject(lom)

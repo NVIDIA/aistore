@@ -349,10 +349,9 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 
 // RestoreObjectFromAny tries to restore the object at its default location.
 // Returns true if object exists, false otherwise
+// TODO: locking vs concurrent restore: consider (read-lock object + write-lock meta) split
 func (lom *LOM) RestoreObjectFromAny() (exists bool) {
-	// locking vs concurrent restore; TODO: consider (read-lock object + write-lock meta) split
 	lom.Lock(true)
-
 	if err := lom.Load(false); err == nil {
 		lom.Unlock(true)
 		return true // nothing to do

@@ -19,6 +19,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -1968,43 +1969,99 @@ func TestBackendBucket(t *testing.T) {
 
 func TestAllChecksums(t *testing.T) {
 	checksums := cmn.SupportedChecksums()
+	for _, mirrored := range []bool{false, true} {
+		for _, cksumType := range checksums {
+			if testing.Short() && cksumType != cmn.ChecksumNone && cksumType != cmn.ChecksumXXHash {
+				continue
+			}
+			tag := cksumType
+			if mirrored {
+				tag = cksumType + "/mirrored"
+			}
+			t.Run(tag, func(t *testing.T) {
+				started := time.Now()
+				testWarmValidation(t, cksumType, mirrored, false)
+				tutils.Logf("Time: %v\n", time.Since(started))
+			})
+		}
+	}
 	for _, cksumType := range checksums {
-		t.Run(cksumType, func(t *testing.T) {
+		if testing.Short() && cksumType != cmn.ChecksumNone && cksumType != cmn.ChecksumXXHash {
+			continue
+		}
+		tag := cksumType + "/EC"
+		t.Run(tag, func(t *testing.T) {
 			started := time.Now()
-			testWarmValidation(t, cksumType)
+			testWarmValidation(t, cksumType, false, true)
 			tutils.Logf("Time: %v\n", time.Since(started))
 		})
 	}
 }
-func testWarmValidation(t *testing.T, cksumType string) {
+func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	var (
 		m = ioContext{
 			t:               t,
 			num:             5000,
-			numGetsEachFile: 2,
+			numGetsEachFile: 1,
 			fileSize:        uint64(100*cmn.KiB + rand.Int63n(cmn.MiB)),
 		}
-		sema = cmn.NewDynSemaphore(40) // throttle GET
+		sema         = cmn.NewDynSemaphore(40) // throttle GET
+		numCorrupted int
 	)
-
+	// reduce for test-short
+	cmn.Assert(m.num > 100)
+	numCorrupted = rand.Intn(m.num/100) + 2
 	if testing.Short() {
-		m.num /= 10
-		m.fileSize /= 16
+		m.num = 40
+		m.fileSize = 1024
+		numCorrupted = 13
 	}
-	m.init()
+	m.saveClusterState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	{
-		err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
-			Cksum: &cmn.CksumConfToUpdate{
-				Type:            api.String(cksumType),
-				ValidateWarmGet: api.Bool(true),
-			},
-		})
-		tassert.CheckFatal(t, err)
+		if mirrored {
+			err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+				Cksum: &cmn.CksumConfToUpdate{
+					Type:            api.String(cksumType),
+					ValidateWarmGet: api.Bool(true),
+				},
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(true),
+					Copies:  api.Int64(2),
+				},
+			})
+			tassert.CheckFatal(t, err)
+		} else if eced {
+			const parityCnt = 2
+			if m.smap.CountTargets() < parityCnt+1 {
+				t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
+			}
+			err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+				Cksum: &cmn.CksumConfToUpdate{
+					Type:            api.String(cksumType),
+					ValidateWarmGet: api.Bool(true),
+				},
+				EC: &cmn.ECConfToUpdate{
+					Enabled:      api.Bool(true),
+					ObjSizeLimit: api.Int64(cmn.GiB), // only slices
+					DataSlices:   api.Int(1),
+					ParitySlices: api.Int(parityCnt),
+				},
+			})
+			tassert.CheckFatal(t, err)
+		} else {
+			err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+				Cksum: &cmn.CksumConfToUpdate{
+					Type:            api.String(cksumType),
+					ValidateWarmGet: api.Bool(true),
+				},
+			})
+			tassert.CheckFatal(t, err)
+		}
 
 		p, err := api.HeadBucket(baseParams, m.bck)
 		tassert.CheckFatal(t, err)
@@ -2014,31 +2071,94 @@ func testWarmValidation(t *testing.T, cksumType string) {
 		if !p.Cksum.ValidateWarmGet {
 			t.Fatal("failed to set checksum: validate_warm_get not enabled")
 		}
+		if mirrored && !p.Mirror.Enabled {
+			t.Fatal("failed to mirroring")
+		}
+		if eced && !p.EC.Enabled {
+			t.Fatal("failed to enable erasure conding")
+		}
 	}
 
 	m.puts()
 
-	tutils.Logf("Reading %q objects with checksum validation by AIS targets\n", m.bck)
+	// wait for mirroring
+	if mirrored {
+		m.ensureNumCopies(2)
+	}
+	// wait for erasure-coding
+	if eced {
+		// TODO: must be able to wait for Kind = cmn.ActECPut
+		if testing.Short() {
+			time.Sleep(3 * time.Second)
+		} else {
+			time.Sleep(8 * time.Second)
+		}
+	}
+
+	// read all
+	if cksumType != cmn.ChecksumNone {
+		tutils.Logf("Reading %q objects with checksum validation by AIS targets\n", m.bck)
+	} else {
+		tutils.Logf("Reading %q objects\n", m.bck)
+	}
 	m.gets()
 
 	msg := &cmn.SelectMsg{}
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n",
-		len(bckObjs.Entries), m.bck, cksumType)
+	if cksumType != cmn.ChecksumNone {
+		tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
+		wg := &sync.WaitGroup{}
+		for _, entry := range bckObjs.Entries {
+			wg.Add(1)
+			sema.Acquire()
+			go func(name string) {
+				defer func() {
+					sema.Release()
+					wg.Done()
+				}()
+				_, err = api.GetObjectWithValidation(baseParams, m.bck, name)
+				tassert.CheckError(t, err)
+			}(entry.Name)
+		}
 
-	wg := &sync.WaitGroup{}
-	for _, entry := range bckObjs.Entries {
-		wg.Add(1)
-		sema.Acquire()
-		go func(name string) {
-			sema.Release()
-			_, err = api.GetObjectWithValidation(baseParams, m.bck, name)
-			wg.Done()
-			tassert.CheckError(t, err)
-		}(entry.Name)
+		wg.Wait()
 	}
 
-	wg.Wait()
+	if containers.DockerRunning() {
+		tutils.Logln("Skipping object corruption test in docker")
+		return
+	}
+
+	// corrupt random and read again
+	{
+		i := rand.Intn(len(bckObjs.Entries))
+		if i+numCorrupted > len(bckObjs.Entries) {
+			i -= numCorrupted
+		}
+		objCh := make(chan string, numCorrupted)
+		tutils.Logf("Corrupting %d objects\n", numCorrupted)
+		go func() {
+			for j := i; j < i+numCorrupted; j++ {
+				objName := bckObjs.Entries[j].Name
+				corruptSingleBitInFile(t, m.bck, objName)
+				objCh <- objName
+			}
+		}()
+		for j := 0; j < numCorrupted; j++ {
+			objName := <-objCh
+			_, err = api.GetObject(baseParams, m.bck, objName)
+			if mirrored || eced {
+				if err != nil && cksumType != cmn.ChecksumNone {
+					t.Errorf("%s/%s corruption detected but not resolved, mirror=%t, ec=%t\n",
+						m.bck, objName, mirrored, eced)
+				}
+			} else {
+				if err == nil && cksumType != cmn.ChecksumNone {
+					t.Errorf("%s/%s corruption undetected\n", m.bck, objName)
+				}
+			}
+		}
+	}
 }

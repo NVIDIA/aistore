@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -1686,4 +1687,27 @@ func findObjOnDisk(bck cmn.Bck, objName string) string {
 	}
 	filepath.Walk(rootDir, fsWalkFunc)
 	return fqn
+}
+
+func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {
+	var (
+		fqn     = findObjOnDisk(bck, objName)
+		fi, err = os.Stat(fqn)
+		b       = []byte{0}
+	)
+	tassert.CheckFatal(t, err)
+	off := rand.Int63n(fi.Size())
+	file, err := os.OpenFile(fqn, os.O_RDWR, 0644)
+	tassert.CheckFatal(t, err)
+	_, err = file.Seek(off, 0)
+	tassert.CheckFatal(t, err)
+	_, err = file.Read(b)
+	tassert.CheckFatal(t, err)
+	bit := rand.Intn(8)
+	b[0] ^= (1 << bit)
+	_, err = file.Seek(off, 0)
+	tassert.CheckFatal(t, err)
+	_, err = file.Write(b)
+	tassert.CheckFatal(t, err)
+	file.Close()
 }
