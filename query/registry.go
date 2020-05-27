@@ -10,7 +10,7 @@ import (
 
 type (
 	QueryRegistry struct {
-		m   map[string]*Xact
+		m   map[string]*ObjectsListingXact
 		mtx sync.RWMutex
 	}
 )
@@ -19,11 +19,11 @@ var Registry = newQueryRegistry()
 
 func newQueryRegistry() *QueryRegistry {
 	return &QueryRegistry{
-		m: make(map[string]*Xact),
+		m: make(map[string]*ObjectsListingXact),
 	}
 }
 
-func (r *QueryRegistry) Put(handle string, query *Xact) {
+func (r *QueryRegistry) Put(handle string, query *ObjectsListingXact) {
 	if handle == "" {
 		return
 	}
@@ -32,7 +32,7 @@ func (r *QueryRegistry) Put(handle string, query *Xact) {
 	r.mtx.Unlock()
 }
 
-func (r *QueryRegistry) Get(handle string) *Xact {
+func (r *QueryRegistry) Get(handle string) *ObjectsListingXact {
 	r.mtx.RLock()
 	defer r.mtx.RUnlock()
 	return r.m[handle]

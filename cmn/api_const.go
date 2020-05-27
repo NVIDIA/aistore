@@ -138,6 +138,8 @@ const (
 	// intra-cluster: streams
 	HeaderSessID   = "session.id"
 	HeaderCompress = "compress" // LZ4Compression, etc.
+
+	HeaderHandle = "handle"
 )
 
 // supported compressions (alg-s)
@@ -279,6 +281,7 @@ const (
 	Users     = "users"    // AuthN
 	Clusters  = "clusters" // AuthN
 	Roles     = "roles"    // AuthN
+	Query     = "query"
 
 	// l3
 	SyncSmap     = "syncsmap"
@@ -293,7 +296,7 @@ const (
 	Summary      = "summary"
 	AllBuckets   = "*"
 
-	// dSort and downloader
+	// dSort, downloader, query
 	Init        = "init"
 	Sort        = "sort"
 	Start       = "start"
@@ -304,6 +307,9 @@ const (
 	FinishedAck = "finished-ack"
 	List        = "list"
 	Remove      = "remove"
+	Next        = "next"
+	Peek        = "peek"
+	Discard     = "discard"
 
 	// CLI
 	Target = "target"

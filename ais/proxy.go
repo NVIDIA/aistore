@@ -140,6 +140,7 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Sort, h: p.dsortHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Query, h: p.queryHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 
 		{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
@@ -1703,6 +1704,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 
 	allEntries = cmn.ConcatObjLists(fetchResult.lists, pageSize)
 	allEntries.PersistentMarker = smsg.PersistentHandle
+
 	return allEntries, "", nil
 }
 

@@ -36,7 +36,6 @@ func (t *targetrunner) httptar2tfget(w http.ResponseWriter, r *http.Request) {
 	)
 	apiItems, err = t.checkRESTItems(w, r, 2, true, cmn.Version, cmn.Tar2Tf)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 

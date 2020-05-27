@@ -275,6 +275,10 @@ func (ss StringSet) Contains(key string) bool {
 	return ok
 }
 
+func (ss StringSet) Delete(key string) {
+	delete(ss, key)
+}
+
 func (ss StringSet) Intersection(other StringSet) StringSet {
 	result := make(StringSet)
 	for key := range ss {

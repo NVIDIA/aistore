@@ -46,6 +46,22 @@ func UnsignedB2S(b uint64, digits int) string {
 	return B2S(int64(b), digits)
 }
 
+func I2S(i int64) string {
+	return strconv.FormatInt(i, 10)
+}
+
+func StringSliceToIntSlice(strs []string) ([]int64, error) {
+	res := make([]int64, 0, len(strs))
+	for _, s := range strs {
+		i, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, i)
+	}
+	return res, nil
+}
+
 func StrToSentence(str string) string {
 	if str == "" {
 		return ""

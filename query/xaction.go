@@ -6,6 +6,7 @@ package query
 
 import (
 	"io"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -16,15 +17,19 @@ import (
 )
 
 type (
-	Xact struct {
+	ObjectsListingXact struct {
 		cmn.XactBase
-		t     cluster.Target
-		timer *time.Timer
-		wi    *walkinfo.WalkInfo
+		t            cluster.Target
+		timer        *time.Timer
+		wi           *walkinfo.WalkInfo
+		mtx          sync.Mutex
+		buff         []*cmn.BucketEntry
+		fetchingDone bool
 
-		query      *ObjectsQuery
-		resultCh   chan *Result
-		lastResult string
+		query               *ObjectsQuery
+		resultCh            chan *Result
+		lastDiscardedResult string
+		handle              string
 	}
 
 	Result struct {
@@ -37,9 +42,9 @@ const (
 	xactionTTL = 10 * time.Minute // TODO: it should be Xaction argument
 )
 
-func NewListObjects(t cluster.Target, query *ObjectsQuery, wi *walkinfo.WalkInfo, id string) *Xact {
+func NewObjectsListing(t cluster.Target, query *ObjectsQuery, wi *walkinfo.WalkInfo, id string) *ObjectsListingXact {
 	cmn.Assert(query.BckSource.Bck != nil)
-	return &Xact{
+	return &ObjectsListingXact{
 		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActQuery, *query.BckSource.Bck),
 		t:        t,
 		wi:       wi,
@@ -52,39 +57,44 @@ func NewListObjects(t cluster.Target, query *ObjectsQuery, wi *walkinfo.WalkInfo
 // Start without specified handle means that we won't be able
 // to get this specific result set if we loose a reference to it.
 // Sometimes we know that we won't and that's ok.
-func (r *Xact) Start() {
+func (r *ObjectsListingXact) Start() {
 	r.StartWithHandle("")
 }
 
-func (r *Xact) stop() {
+func (r *ObjectsListingXact) stop() {
 	close(r.resultCh)
 	r.timer.Stop()
 	r.Finish()
 }
 
-func (r *Xact) IsMountpathXact() bool { return false } // TODO -- FIXME
+func (r *ObjectsListingXact) IsMountpathXact() bool { return false } // TODO -- FIXME
 
-func (r *Xact) StartWithHandle(handle string) {
+func (r *ObjectsListingXact) StartWithHandle(handle string) {
+	defer func() {
+		r.fetchingDone = true
+	}()
+
 	cmn.Assert(r.query.ObjectsSource != nil)
 	cmn.Assert(r.query.BckSource != nil)
 	cmn.Assert(r.query.BckSource.Bck != nil)
 
 	Registry.Put(handle, r)
+	r.handle = handle
 
 	if r.query.ObjectsSource.Pt != nil {
-		r.startFromTemplate(handle)
+		r.startFromTemplate()
 		return
 	}
 
-	r.startFromBck(handle)
+	r.startFromBck()
 }
 
 // TODO: make thread-safe
-func (r *Xact) LastResult() string {
-	return r.lastResult
+func (r *ObjectsListingXact) LastDiscardedResult() string {
+	return r.lastDiscardedResult
 }
 
-func (r *Xact) putResult(res *Result) (end bool) {
+func (r *ObjectsListingXact) putResult(res *Result) (end bool) {
 	select {
 	case <-r.ChanAbort():
 		return true
@@ -96,10 +106,9 @@ func (r *Xact) putResult(res *Result) (end bool) {
 	}
 }
 
-func (r *Xact) startFromTemplate(handle string) {
+func (r *ObjectsListingXact) startFromTemplate() {
 	defer func() {
 		r.stop()
-		Registry.Delete(handle)
 	}()
 
 	var (
@@ -146,9 +155,8 @@ func (r *Xact) startFromTemplate(handle string) {
 	}
 }
 
-func (r *Xact) startFromBck(handle string) {
+func (r *ObjectsListingXact) startFromBck() {
 	defer func() {
-		Registry.Delete(handle)
 		r.stop()
 	}()
 
@@ -185,35 +193,98 @@ func (r *Xact) startFromBck(handle string) {
 	}
 }
 
-func (r *Xact) Next() (*cmn.BucketEntry, error) {
-	res, ok := <-r.resultCh
-	if !ok {
-		return nil, io.EOF
+// Should be called with lock acquired.
+func (r *ObjectsListingXact) peekN(n uint) (result []*cmn.BucketEntry, err error) {
+	if len(r.buff) >= int(n) && n != 0 {
+		return r.buff[:n], nil
 	}
-	r.lastResult = res.entry.Name
-	return res.entry, res.err
+
+	for len(r.buff) < int(n) || n == 0 {
+		res, ok := <-r.resultCh
+		if !ok {
+			err = io.EOF
+			break
+		}
+		if res.err != nil {
+			err = res.err
+			break
+		}
+		r.buff = append(r.buff, res.entry)
+	}
+
+	size := cmn.Min(int(n), len(r.buff))
+	if size == 0 {
+		size = len(r.buff)
+	}
+	return r.buff[:size], err
+}
+
+// Should be called with lock acquired.
+func (r *ObjectsListingXact) discardN(n uint) {
+	if len(r.buff) > 0 && n > 0 {
+		size := cmn.Min(int(n), len(r.buff))
+		r.lastDiscardedResult = r.buff[size-1].Name
+		r.buff = r.buff[size:]
+	}
+
+	if r.fetchingDone && len(r.buff) == 0 {
+		Registry.Delete(r.handle)
+	}
+}
+
+// PeekN returns first N objects from a query.
+// It doesn't move a cursor so subsequent Peek/Next requests will reuse the objects.
+func (r *ObjectsListingXact) PeekN(n uint) (result []*cmn.BucketEntry, err error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	return r.peekN(n)
+}
+
+// Discards all objects from buff until object > last is reached.
+func (r *ObjectsListingXact) DiscardUntil(last string) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	if len(r.buff) == 0 {
+		return
+	}
+
+	i := 0
+	for ; i < len(r.buff); i++ {
+		if !cmn.PageMarkerIncludesObject(last, r.buff[i].Name) {
+			break
+		}
+	}
+
+	r.discardN(uint(i))
+}
+
+// Should be called with lock acquired.
+func (r *ObjectsListingXact) nextN(n uint) (result []*cmn.BucketEntry, err error) {
+	result, err = r.peekN(n)
+	r.discardN(uint(len(result)))
+	return result, err
 }
 
 // NextN returns at most n next elements until error occurs from Next() call
-func (r *Xact) NextN(n uint) (result []*cmn.BucketEntry, err error) {
-	if n == 0 {
-		result = make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)
-	} else {
-		result = make([]*cmn.BucketEntry, 0, n)
-	}
-
-	for n == 0 || len(result) < int(n) {
-		entry, err := r.Next()
-		if err != nil {
-			return result, err
-		}
-		result = append(result, entry)
-	}
-
-	return result, nil
+func (r *ObjectsListingXact) NextN(n uint) (result []*cmn.BucketEntry, err error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	return r.nextN(n)
 }
 
-func (r *Xact) ForEach(apply func(entry *cmn.BucketEntry) error) error {
+// Returns single object from a query xaction. Returns io.EOF if no more results.
+// Next() moves cursor so fetched object will be forgotten by a target.
+func (r *ObjectsListingXact) Next() (entry *cmn.BucketEntry, err error) {
+	res, err := r.NextN(1)
+	if len(res) == 0 {
+		return nil, err
+	}
+	cmn.Assert(len(res) == 1)
+	return res[0], err
+}
+
+func (r *ObjectsListingXact) ForEach(apply func(entry *cmn.BucketEntry) error) error {
 	var (
 		entry *cmn.BucketEntry
 		err   error
@@ -230,45 +301,11 @@ func (r *Xact) ForEach(apply func(entry *cmn.BucketEntry) error) error {
 	return nil
 }
 
-func (r *Xact) PageMarkerFulfilled(pageMarker string) bool {
+func (r *ObjectsListingXact) PageMarkerFulfilled(pageMarker string) bool {
 	// Everything, that target has, has been already fetched.
-	return r.Finished() && !r.Aborted() && r.LastResult() != "" && cmn.PageMarkerIncludesObject(pageMarker, r.LastResult())
+	return r.Finished() && !r.Aborted() && r.LastDiscardedResult() != "" && cmn.PageMarkerIncludesObject(pageMarker, r.LastDiscardedResult())
 }
 
-func (r *Xact) PageMarkerUnsatisfiable(pageMarker string) bool {
-	return pageMarker != "" && !cmn.PageMarkerIncludesObject(pageMarker, r.LastResult())
-}
-
-func ATimeAfterFilter(time time.Time) cluster.ObjectFilter {
-	return func(lom *cluster.LOM) bool {
-		return lom.Atime().After(time)
-	}
-}
-
-func ATimeBeforeFilter(time time.Time) cluster.ObjectFilter {
-	return func(lom *cluster.LOM) bool {
-		return lom.Atime().Before(time)
-	}
-}
-
-func And(filters ...cluster.ObjectFilter) cluster.ObjectFilter {
-	return func(lom *cluster.LOM) bool {
-		for _, f := range filters {
-			if !f(lom) {
-				return false
-			}
-		}
-		return true
-	}
-}
-
-func Or(filters ...cluster.ObjectFilter) cluster.ObjectFilter {
-	return func(lom *cluster.LOM) bool {
-		for _, f := range filters {
-			if f(lom) {
-				return true
-			}
-		}
-		return false
-	}
+func (r *ObjectsListingXact) PageMarkerUnsatisfiable(pageMarker string) bool {
+	return pageMarker != "" && !cmn.PageMarkerIncludesObject(pageMarker, r.LastDiscardedResult())
 }

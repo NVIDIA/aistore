@@ -37,7 +37,7 @@ func (w *Walk) DefaultLocalObjPage(objectsCnt uint, wi *walkinfo.WalkInfo) (*cmn
 	objSrc := &query.ObjectsSource{}
 	q := query.NewQuery(objSrc, bckSrc, nil)
 
-	xact := query.NewListObjects(w.t, q, wi, "")
+	xact := query.NewObjectsListing(w.t, q, wi, "")
 	go xact.Start()
 
 	cmn.Assert(!xact.PageMarkerUnsatisfiable(wi.Marker))
@@ -45,9 +45,9 @@ func (w *Walk) DefaultLocalObjPage(objectsCnt uint, wi *walkinfo.WalkInfo) (*cmn
 }
 
 // LocalObjPage walks local filesystems and collects objects for a given
-// bucket based on query.Xact. The bucket can be local or cloud one. In latter case the
+// bucket based on query.ObjectsListingXact. The bucket can be local or cloud one. In latter case the
 // function returns the list of cloud objects cached locally
-func LocalObjPage(xact *query.Xact, objectsCnt uint) (*cmn.BucketList, error) {
+func LocalObjPage(xact *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketList, error) {
 	var (
 		err error
 	)

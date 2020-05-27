@@ -351,6 +351,7 @@ func (t *targetrunner) initRecvHandlers() {
 			{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 
 			{r: cmn.Tar2Tf, h: t.tar2tfHandler, net: []string{cmn.NetworkPublic}},
+			{r: cmn.Query, h: t.queryHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 			{r: "/" + cmn.S3, h: t.s3Handler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 
 			{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},

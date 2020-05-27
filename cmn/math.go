@@ -116,6 +116,13 @@ func Max(a, b int) int {
 	return b
 }
 
+func MaxUint(a, b uint) uint {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func MinF64(a, b float64) float64 {
 	if a < b {
 		return a

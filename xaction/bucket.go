@@ -647,7 +647,7 @@ func (e *tar2TfEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 type queryEntry struct {
 	baseBckEntry
 	t     cluster.Target
-	xact  *query.Xact
+	xact  *query.ObjectsListingXact
 	query *query.ObjectsQuery
 	wi    *walkinfo.WalkInfo
 
@@ -656,7 +656,7 @@ type queryEntry struct {
 }
 
 func (e *queryEntry) Start(_ cmn.Bck) error {
-	xact := query.NewListObjects(e.t, e.query, e.wi, e.id)
+	xact := query.NewObjectsListing(e.t, e.query, e.wi, e.id)
 	e.xact = xact
 	if query.Registry.Get(e.handle) != nil {
 		return fmt.Errorf("result set with handle %s already exists", e.handle)
@@ -669,7 +669,7 @@ func (e *queryEntry) Start(_ cmn.Bck) error {
 func (e *queryEntry) Kind() string  { return cmn.ActQuery }
 func (e *queryEntry) Get() cmn.Xact { return e.xact }
 
-func (r *registry) RenewQueryXact(t cluster.Target, q *query.ObjectsQuery, wi *walkinfo.WalkInfo, handle string) (*query.Xact, error) {
+func (r *registry) RenewObjectsListingXact(t cluster.Target, q *query.ObjectsQuery, wi *walkinfo.WalkInfo, handle string) (*query.ObjectsListingXact, error) {
 	if xact := query.Registry.Get(handle); xact != nil {
 		if xact.Aborted() {
 			query.Registry.Delete(handle)
@@ -692,7 +692,7 @@ func (r *registry) RenewQueryXact(t cluster.Target, q *query.ObjectsQuery, wi *w
 
 	ee, err := r.renewBucketXaction(e, cluster.NewBckEmbed(*q.BckSource.Bck))
 	if err == nil {
-		x := ee.Get().(*query.Xact)
+		x := ee.Get().(*query.ObjectsListingXact)
 		return x, nil
 	}
 	return nil, err
