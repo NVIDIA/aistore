@@ -40,16 +40,18 @@ var (
 
 	dsorterTypes       = []string{dsort.DSorterGeneralType, dsort.DSorterMemType}
 	dsortPhases        = []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase}
+	dsortAlgorithms    = []string{dsort.SortKindAlphanumeric, dsort.SortKindShuffle}
 	dsortSettingScopes = []string{scopeConfig, scopeSpec}
 )
 
 type (
 	dsortTestSpec struct {
-		p         bool // determines if the tests should be ran in parallel mode
-		types     []string
-		phases    []string
-		reactions []string
-		scopes    []string
+		p          bool // determines if the tests should be ran in parallel mode
+		types      []string
+		phases     []string
+		reactions  []string
+		scopes     []string
+		algorithms []string
 	}
 
 	// nolint:maligned // no performance critical code
@@ -72,6 +74,7 @@ type (
 		tarballSize           int
 		outputShardCnt        int
 		recordDuplicationsCnt int
+		recordExts            []string
 
 		extension       string
 		algorithm       *dsort.SortAlgorithm
@@ -144,6 +147,17 @@ func runDSortTest(t *testing.T, dts dsortTestSpec, f interface{}) {
 							g := f.(func(dsorterType, reaction string, t *testing.T))
 							g(dsorterType, reaction, t)
 						}
+					})
+				}
+			} else if len(dts.algorithms) > 0 {
+				g := f.(func(dsorterType, algorithm string, t *testing.T))
+				for _, algorithm := range dts.algorithms {
+					algorithm := algorithm // pin
+					t.Run(algorithm, func(t *testing.T) {
+						if dts.p {
+							t.Parallel()
+						}
+						g(dsorterType, algorithm, t)
 					})
 				}
 			} else {
@@ -242,9 +256,9 @@ func (df *dsortFramework) createInputShards() {
 			if df.algorithm.Kind == dsort.SortKindContent {
 				err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == cmn.ExtTar {
-				err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication)
+				err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts)
 			} else if df.extension == cmn.ExtTarTgz {
-				err = tutils.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication)
+				err = tutils.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil)
 			} else if df.extension == cmn.ExtZip {
 				err = tutils.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
 			} else {
@@ -280,8 +294,13 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		gzipped = true
 	}
 
-	inversions := 0
-	baseParams := tutils.BaseAPIParams(df.m.proxyURL)
+	var (
+		inversions = 0
+		baseParams = tutils.BaseAPIParams(df.m.proxyURL)
+
+		idx     = 0
+		records = make(map[string]int, 100)
+	)
 	for i := 0; i < df.outputShardCnt; i++ {
 		shardName := fmt.Sprintf("%s%0*d%s", df.outputPrefix, zeros, i, df.extension)
 		var buffer bytes.Buffer
@@ -360,8 +379,8 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			}
 
 			for _, file := range files {
-				if df.algorithm.Kind == "" {
-					if lastName > file.Name() {
+				if df.algorithm.Kind == "" || df.algorithm.Kind == dsort.SortKindAlphanumeric {
+					if lastName > file.Name() && canonicalName(lastName) != canonicalName(file.Name()) {
 						df.m.t.Fatalf("names are not in correct order (shard: %s, lastName: %s, curName: %s)", shardName, lastName, file.Name())
 					}
 				} else if df.algorithm.Kind == dsort.SortKindShuffle {
@@ -373,6 +392,29 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 					df.m.t.Fatalf("file sizes has changed (expected: %d, got: %d)", df.fileInTarballSize, file.Size())
 				}
 				lastName = file.Name()
+
+				// For each record object see if they we weren't split (they should
+				// be one after another).
+				recordCanonicalName := canonicalName(file.Name())
+				prevIdx, ok := records[recordCanonicalName]
+				if ok && prevIdx != idx-1 {
+					df.m.t.Errorf("record object %q was splitted", file.Name())
+				}
+				records[recordCanonicalName] = idx
+
+				// Check if the record objects are in the correct order.
+				if len(df.recordExts) > 0 {
+					ext := extract.Ext(file.Name())
+					expectedExt := df.recordExts[idx%len(df.recordExts)]
+					if ext != expectedExt {
+						df.m.t.Errorf(
+							"record objects %q order has been disrupted: %s != %s",
+							file.Name(), ext, expectedExt,
+						)
+					}
+				}
+
+				idx++
 			}
 		}
 	}
@@ -382,6 +424,10 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			df.m.t.Fatal("shuffle sorting did not create any inversions")
 		}
 	}
+}
+
+func canonicalName(recordName string) string {
+	return strings.TrimSuffix(recordName, extract.Ext(recordName))
 }
 
 func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsCnt int) {
@@ -2047,6 +2093,51 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 			tutils.Logln("finished distributed sort")
 
 			df.checkMetrics(false /* expectAbort */)
+		},
+	)
+}
+
+func TestDistributedSortWithLongerExt(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	runDSortTest(
+		t, dsortTestSpec{p: true, types: dsorterTypes, algorithms: dsortAlgorithms},
+		func(dsorterType, algorithm string, t *testing.T) {
+			var (
+				m = &ioContext{
+					t: t,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       200,
+					fileInTarballCnt: 10,
+					maxMemUsage:      "99%",
+					algorithm:        &dsort.SortAlgorithm{Kind: algorithm},
+					recordExts:       []string{".txt", ".json.info", ".info", ".json"},
+				}
+			)
+
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+			df.init()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort...")
+			df.start()
+
+			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /*expectAbort*/)
+			df.checkOutputShards(5)
 		},
 	)
 }

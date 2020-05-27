@@ -84,7 +84,7 @@ func addFileToZip(tw *zip.Writer, path string, fileSize int) error {
 
 // CreateTarWithRandomFiles creates tar with specified number of files. Tar
 // is also gzipped if necessary.
-func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize int, duplication bool) error {
+func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize int, duplication bool, recordExts []string) error {
 	var (
 		gzw *gzip.Writer
 		tw  *tar.Writer
@@ -116,16 +116,23 @@ func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize in
 	prevFileName := ""
 	dupIndex := rand.Intn(fileCnt-1) + 1
 
-	for i := 0; i < fileCnt; i++ {
-		fileName := fmt.Sprintf("%d.txt", rand.Int()) // generate random names
-		if dupIndex == i && duplication {
-			fileName = prevFileName
-		}
+	if len(recordExts) == 0 {
+		recordExts = []string{".txt"}
+	}
 
-		if err := addFileToTar(tw, fileName, fileSize, nil); err != nil {
-			return err
+	for i := 0; i < fileCnt; i++ {
+		randomName := rand.Int()
+		for _, ext := range recordExts {
+			fileName := fmt.Sprintf("%d%s", randomName, ext) // generate random names
+			if dupIndex == i && duplication {
+				fileName = prevFileName
+			}
+
+			if err := addFileToTar(tw, fileName, fileSize, nil); err != nil {
+				return err
+			}
+			prevFileName = fileName
 		}
-		prevFileName = fileName
 	}
 
 	return nil
@@ -266,7 +273,7 @@ func GetFilesFromTarBuffer(buffer bytes.Buffer, extension string) ([]FileContent
 		}
 
 		var buf bytes.Buffer
-		fExt := filepath.Ext(hdr.Name)
+		fExt := extract.Ext(hdr.Name)
 		if extension == fExt {
 			if _, err := io.CopyN(&buf, tr, hdr.Size); err != nil {
 				return nil, err

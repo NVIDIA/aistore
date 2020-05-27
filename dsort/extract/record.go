@@ -6,6 +6,7 @@ package extract
 
 import (
 	"encoding/json"
+	"os"
 	"sync"
 	"unsafe"
 
@@ -245,10 +246,14 @@ func (r *Records) objectCount() int {
 func (r *Records) RecordMemorySize() (size uint64) {
 	r.Lock()
 	defer r.Unlock()
+
+	var maxSize uint64
 	for _, record := range r.arr {
 		size = uint64(unsafe.Sizeof(*record))
 		size += uint64(len(record.DaemonID))
 		size += uint64(len(record.Name))
+		size += uint64(unsafe.Sizeof(record.Key))
+		maxSize = cmn.MaxU64(maxSize, size)
 
 		// If there is record which has at least 1 record object we should get
 		// the estimate of it and return the size. Some records might not have
@@ -257,11 +262,13 @@ func (r *Records) RecordMemorySize() (size uint64) {
 		if len(record.Objects) > 0 {
 			size += (uint64(unsafe.Sizeof(record.Objects)) +
 				uint64(len(record.Objects[0].Extension)) +
-				uint64(len(record.Objects[0].ContentPath))) * uint64(len(record.Objects))
+				uint64(len(record.Objects[0].ContentPath)) +
+				uint64(len(record.Objects[0].ObjectFileType)) +
+				uint64(len(record.Objects[0].StoreType))) * uint64(len(record.Objects))
 			return size
 		}
 	}
-	return
+	return maxSize
 }
 
 func (r *Records) MarshalJSON() ([]byte, error) {
@@ -270,4 +277,22 @@ func (r *Records) MarshalJSON() ([]byte, error) {
 
 func (r *Records) UnmarshalJSON(b []byte) error {
 	return jsoniter.Unmarshal(b, &r.arr)
+}
+
+// Ext returns the file name extension used by path.
+// The extension is the suffix beginning at the FIRST (not final) dot
+// in the final element of path; it is empty if there is no dot.
+//
+// NOTE: This function one should be used instead of `filepath.Ext` in dSort.
+func Ext(path string) string {
+	dotIndex := -1
+	for i := len(path) - 1; i >= 0 && !os.IsPathSeparator(path[i]); i-- {
+		if path[i] == '.' {
+			dotIndex = i
+		}
+	}
+	if dotIndex == -1 {
+		return ""
+	}
+	return path[dotIndex:]
 }

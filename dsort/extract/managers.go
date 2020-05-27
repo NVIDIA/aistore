@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -116,7 +115,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		fullContentPath string
 		mdSize          int64
 
-		ext              = filepath.Ext(args.recordName)
+		ext              = Ext(args.recordName)
 		recordUniqueName = rm.genRecordUniqueName(args.shardName, args.recordName)
 	)
 
@@ -242,7 +241,7 @@ func (rm *RecordManager) MergeEnqueuedRecords() {
 
 func (rm *RecordManager) genRecordUniqueName(shardName, recordName string) string {
 	shardWithoutExt := strings.TrimSuffix(shardName, rm.extension)
-	recordWithoutExt := strings.TrimSuffix(recordName, filepath.Ext(recordName))
+	recordWithoutExt := strings.TrimSuffix(recordName, Ext(recordName))
 	return shardWithoutExt + "|" + recordWithoutExt
 }
 
@@ -262,14 +261,14 @@ func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName strin
 		// For sgl:
 		//  * contentPath = recordUniqueName with extension (eg. shard_1-record_name.cls)
 		//  * fullContentPath = recordUniqueName with extension (eg. shard_1-record_name.cls)
-		recordExt := filepath.Ext(recordName)
+		recordExt := Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
 		return contentPath, contentPath // unique key for record
 	case DiskStoreType:
 		// For disk:
 		//  * contentPath = recordUniqueName with extension  (eg. shard_1-record_name.cls)
 		//  * fullContentPath = fqn to recordUniqueName with extension (eg. <bucket_fqn>/shard_1-record_name.cls)
-		recordExt := filepath.Ext(recordName)
+		recordExt := Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
 		ct, err := cluster.NewCTFromBO(rm.bucket, rm.provider, contentPath, nil)
 		cmn.Assert(err == nil)
@@ -308,7 +307,7 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, value interface{}, buf []byte) (n int64) {
 	sgl := value.(*memsys.SGL)
 
-	recordObjExt := filepath.Ext(fullContentPath)
+	recordObjExt := Ext(fullContentPath)
 	contentPath := strings.TrimSuffix(fullContentPath, recordObjExt)
 
 	rm.Records.Lock()

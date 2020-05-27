@@ -513,29 +513,43 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 		if i%2 == 0 {
 			m.dsorter.postRecordDistribution()
 
-			beforeSend := time.Now()
-			body, e := js.Marshal(m.recManager.Records)
-			if e != nil {
-				err = errors.Errorf("failed to marshal into JSON, err: %v", e)
-				return
-			}
-			sendTo := targetOrder[i+1]
-
-			query := url.Values{}
-			query.Add(cmn.URLParamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
-			query.Add(cmn.URLParamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
-			query.Add(cmn.URLParamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
-			reqArgs := &cmn.ReqArgs{
-				Method: http.MethodPost,
-				Base:   sendTo.URL(cmn.NetworkIntraData),
-				Path:   cmn.URLPath(cmn.Version, cmn.Sort, cmn.Records, m.ManagerUUID),
-				Query:  query,
-				Body:   body,
-			}
-
-			if e := m.doWithAbort(reqArgs); e != nil {
-				err = errors.Errorf("failed to send SortedRecords to next target (%s), err: %v", sendTo.DaemonID, e)
-				return
+			var (
+				beforeSend = time.Now()
+				group      = &errgroup.Group{}
+				r, w       = io.Pipe()
+			)
+			group.Go(func() error {
+				err := js.NewEncoder(w).Encode(m.recManager.Records)
+				w.CloseWithError(err)
+				if err != nil {
+					return errors.Errorf("failed to marshal into JSON, err: %v", err)
+				}
+				return nil
+			})
+			group.Go(func() error {
+				var (
+					query  = url.Values{}
+					sendTo = targetOrder[i+1]
+				)
+				query.Add(cmn.URLParamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
+				query.Add(cmn.URLParamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
+				query.Add(cmn.URLParamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
+				reqArgs := &cmn.ReqArgs{
+					Method: http.MethodPost,
+					Base:   sendTo.URL(cmn.NetworkIntraData),
+					Path:   cmn.URLPath(cmn.Version, cmn.Sort, cmn.Records, m.ManagerUUID),
+					Query:  query,
+					BodyR:  r,
+				}
+				err := m.doWithAbort(reqArgs)
+				r.CloseWithError(err)
+				if err != nil {
+					return errors.Errorf("failed to send SortedRecords to next target (%s), err: %v", sendTo.DaemonID, err)
+				}
+				return nil
+			})
+			if err := group.Wait(); err != nil {
+				return false, err
 			}
 
 			m.recManager.Records.Drain() // we do not need it anymore
@@ -817,24 +831,33 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		go func(si *cluster.Snode, s []*extract.Shard, order map[string]*extract.Shard) {
 			defer wg.Done()
 
-			body, err := js.Marshal(creationPhaseMetadata{
-				Shards:    s,
-				SendOrder: order,
+			var (
+				group = &errgroup.Group{}
+				r, w  = io.Pipe()
+			)
+			group.Go(func() error {
+				err := js.NewEncoder(w).Encode(creationPhaseMetadata{
+					Shards:    s,
+					SendOrder: order,
+				})
+				w.CloseWithError(err)
+				return err
 			})
-			if err != nil {
-				errCh <- err
-				return
-			}
 
-			query := cmn.AddBckToQuery(nil, cmn.Bck{Provider: m.rs.Provider, Ns: cmn.NsGlobal})
-			reqArgs := &cmn.ReqArgs{
-				Method: http.MethodPost,
-				Base:   si.URL(cmn.NetworkIntraData),
-				Path:   cmn.URLPath(cmn.Version, cmn.Sort, cmn.Shards, m.ManagerUUID),
-				Query:  query,
-				Body:   body,
-			}
-			if err := m.doWithAbort(reqArgs); err != nil {
+			group.Go(func() error {
+				query := cmn.AddBckToQuery(nil, cmn.Bck{Provider: m.rs.Provider, Ns: cmn.NsGlobal})
+				reqArgs := &cmn.ReqArgs{
+					Method: http.MethodPost,
+					Base:   si.URL(cmn.NetworkIntraData),
+					Path:   cmn.URLPath(cmn.Version, cmn.Sort, cmn.Shards, m.ManagerUUID),
+					Query:  query,
+					BodyR:  r,
+				}
+				err := m.doWithAbort(reqArgs)
+				r.CloseWithError(err)
+				return err
+			})
+			if err := group.Wait(); err != nil {
 				errCh <- err
 				return
 			}
