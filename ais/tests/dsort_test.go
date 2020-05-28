@@ -192,9 +192,16 @@ func (df *dsortFramework) init() {
 	}
 
 	df.tarballSize = df.fileInTarballCnt * df.fileInTarballSize
-	outputShardSize := int64(10 * df.fileInTarballCnt * df.fileInTarballSize)
-	df.outputShardSize = cmn.B2S(outputShardSize, 0)
-	df.outputShardCnt = (df.tarballCnt * df.tarballSize) / int(outputShardSize)
+	if df.outputShardSize == "-1" {
+		df.outputShardSize = ""
+		pt, err := cmn.ParseBashTemplate(df.outputTempl)
+		cmn.AssertNoErr(err)
+		df.outputShardCnt = int(pt.Count())
+	} else {
+		outputShardSize := int64(10 * df.fileInTarballCnt * df.fileInTarballSize)
+		df.outputShardSize = cmn.B2S(outputShardSize, 0)
+		df.outputShardCnt = (df.tarballCnt * df.tarballSize) / int(outputShardSize)
+	}
 
 	if df.algorithm == nil {
 		df.algorithm = &dsort.SortAlgorithm{}
@@ -2138,6 +2145,51 @@ func TestDistributedSortWithLongerExt(t *testing.T) {
 
 			df.checkMetrics(false /*expectAbort*/)
 			df.checkOutputShards(5)
+		},
+	)
+}
+
+func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	runDSortTest(
+		t, dsortTestSpec{p: true, types: dsorterTypes},
+		func(dsorterType string, t *testing.T) {
+			var (
+				m = &ioContext{
+					t: t,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       200,
+					fileInTarballCnt: 10,
+					maxMemUsage:      "99%",
+					outputShardSize:  "-1",
+					outputTempl:      "output-{0..10}",
+				}
+			)
+
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+			df.init()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort...")
+			df.start()
+
+			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /*expectAbort*/)
+			df.checkOutputShards(0)
 		},
 	)
 }

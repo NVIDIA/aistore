@@ -15,9 +15,9 @@ import (
 
 type (
 	TemplateRange struct {
-		Start      int
-		End        int
-		Step       int
+		Start      int64
+		End        int64
+		Step       int64
 		DigitCount int
 		Gap        string // characters after range (either to next range or end of string)
 	}
@@ -31,7 +31,7 @@ func (pt *ParsedTemplate) Count() int64 {
 	count := int64(1)
 	for _, tr := range pt.Ranges {
 		step := (tr.End-tr.Start)/tr.Step + 1
-		count *= int64(step)
+		count *= step
 	}
 	return count
 }
@@ -60,7 +60,7 @@ func (pt *ParsedTemplate) ToSlice(maxLen ...int) []string {
 
 func (pt *ParsedTemplate) Iter() func() (string, bool) {
 	rangesCount := len(pt.Ranges)
-	at := make([]int, rangesCount)
+	at := make([]int64, rangesCount)
 
 	for i, tr := range pt.Ranges {
 		at[i] = tr.Start
@@ -89,15 +89,67 @@ func (pt *ParsedTemplate) Iter() func() (string, bool) {
 	}
 }
 
+func ParseFmtTemplate(template string) (pt ParsedTemplate, err error) {
+	// "prefix-%06d-suffix"
+
+	percent := strings.IndexByte(template, '%')
+	if percent == -1 {
+		err = ErrInvalidFmtFormat
+		return
+	}
+	if idx := strings.IndexByte(template[percent+1:], '%'); idx != -1 {
+		err = ErrInvalidFmtFormat
+		return
+	}
+
+	d := strings.IndexByte(template[percent:], 'd')
+	if d == -1 {
+		err = ErrInvalidFmtFormat
+		return
+	}
+	d += percent
+
+	digitCount := 0
+	if d-percent > 1 {
+		s := template[percent+1 : d]
+		if len(s) == 1 {
+			err = ErrInvalidFmtFormat
+			return
+		}
+		if s[0] != '0' {
+			err = ErrInvalidFmtFormat
+			return
+		}
+		i, err := strconv.ParseInt(s[1:], 10, 64)
+		if err != nil {
+			return pt, ErrInvalidFmtFormat
+		} else if i < 0 {
+			return pt, ErrInvalidFmtFormat
+		}
+		digitCount = int(i)
+	}
+
+	return ParsedTemplate{
+		Prefix: template[:percent],
+		Ranges: []TemplateRange{{
+			Start:      0,
+			End:        math.MaxInt64 - 1,
+			Step:       1,
+			DigitCount: digitCount,
+			Gap:        template[d+1:],
+		}},
+	}, nil
+}
+
 func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 	// "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
 
-	left := strings.Index(template, "{")
+	left := strings.IndexByte(template, '{')
 	if left == -1 {
 		err = ErrInvalidBashFormat
 		return
 	}
-	right := strings.LastIndex(template, "}")
+	right := strings.LastIndexByte(template, '}')
 	if right == -1 {
 		err = ErrInvalidBashFormat
 		return
@@ -111,12 +163,12 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 	for {
 		tr := TemplateRange{}
 
-		left := strings.Index(template, "{")
+		left := strings.IndexByte(template, '{')
 		if left == -1 {
 			break
 		}
 
-		right := strings.Index(template, "}")
+		right := strings.IndexByte(template, '}')
 		if right == -1 {
 			err = ErrInvalidBashFormat
 			return
@@ -132,22 +184,22 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 			err = ErrInvalidBashFormat
 			return
 		} else if len(numbers) == 2 { // {0001..0999} case
-			if tr.Start, err = strconv.Atoi(numbers[0]); err != nil {
+			if tr.Start, err = strconv.ParseInt(numbers[0], 10, 64); err != nil {
 				return
 			}
-			if tr.End, err = strconv.Atoi(numbers[1]); err != nil {
+			if tr.End, err = strconv.ParseInt(numbers[1], 10, 64); err != nil {
 				return
 			}
 			tr.Step = 1
 			tr.DigitCount = Min(len(numbers[0]), len(numbers[1]))
 		} else if len(numbers) == 3 { // {0001..0999..2} case
-			if tr.Start, err = strconv.Atoi(numbers[0]); err != nil {
+			if tr.Start, err = strconv.ParseInt(numbers[0], 10, 64); err != nil {
 				return
 			}
-			if tr.End, err = strconv.Atoi(numbers[1]); err != nil {
+			if tr.End, err = strconv.ParseInt(numbers[1], 10, 64); err != nil {
 				return
 			}
-			if tr.Step, err = strconv.Atoi(numbers[2]); err != nil {
+			if tr.Step, err = strconv.ParseInt(numbers[2], 10, 64); err != nil {
 				return
 			}
 			tr.DigitCount = Min(len(numbers[0]), len(numbers[1]))
@@ -172,7 +224,8 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 
 func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
 	// "prefix-@00001-gap-@100-suffix"
-	left := strings.Index(template, "@")
+
+	left := strings.IndexByte(template, '@')
 	if left == -1 {
 		err = ErrInvalidAtFormat
 		return
@@ -182,7 +235,7 @@ func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
 	for {
 		tr := TemplateRange{}
 
-		left := strings.Index(template, "@")
+		left := strings.IndexByte(template, '@')
 		if left == -1 {
 			break
 		}
@@ -193,7 +246,7 @@ func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
 		}
 
 		tr.Start = 0
-		if tr.End, err = strconv.Atoi(number); err != nil {
+		if tr.End, err = strconv.ParseInt(number, 10, 64); err != nil {
 			return
 		}
 		tr.Step = 1
@@ -205,7 +258,7 @@ func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
 
 		// apply gap (either to next range or end of the template)
 		template = template[left:]
-		right := strings.Index(template, "@")
+		right := strings.IndexByte(template, '@')
 		if right >= 0 {
 			tr.Gap = template[:right]
 		} else {
@@ -217,7 +270,7 @@ func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
 	return
 }
 
-func validateBoundaries(start, end, step int) error {
+func validateBoundaries(start, end, step int64) error {
 	if start > end {
 		return ErrStartAfterEnd
 	}

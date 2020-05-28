@@ -10,6 +10,7 @@ package dsort
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -26,7 +27,8 @@ const (
 var (
 	errMissingBucket            = errors.New("missing field 'bucket'")
 	errInvalidExtension         = errors.New("extension must be one of '.tar', '.tar.gz', or '.tgz'")
-	errNegOutputShardSize       = errors.New("output shard size must be > 0")
+	errNegOutputShardSize       = errors.New("output shard size must be >= 0")
+	errEmptyOutputShardSize     = errors.New("output shard size must be set (cannot be 0)")
 	errNegativeConcurrencyLimit = fmt.Errorf("concurrency limit must be 0 (limits will be calculated) or > 0")
 
 	errInvalidInputTemplateFormat  = errors.New("could not parse given input format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
@@ -191,7 +193,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	if parsedRS.OutputShardSize <= 0 {
+	if parsedRS.OutputShardSize < 0 {
 		return nil, errNegOutputShardSize
 	}
 
@@ -206,7 +208,18 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		if parsedRS.OutputFormat, err = parseOutputFormat(rs.OutputFormat); err != nil {
 			return nil, err
 		}
-	} else { // valid and not empty
+		if parsedRS.OutputFormat.Template.Count() > math.MaxInt32 {
+			// If the count is not defined then the output shard size must be set.
+			if parsedRS.OutputShardSize == 0 {
+				return nil, errEmptyOutputShardSize
+			}
+		}
+	} else { // Valid and not empty.
+		// For the order file the output shard size must be set.
+		if parsedRS.OutputShardSize == 0 {
+			return nil, errEmptyOutputShardSize
+		}
+
 		parsedRS.OrderFileURL = rs.OrderFileURL
 
 		parsedRS.OrderFileSep = rs.OrderFileSep
@@ -282,11 +295,13 @@ func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) 
 	return
 }
 
-// parseOutputFormat checks if output format was specified correctly
+// parseOutputFormat checks if output format was specified correctly.
 func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err error) {
 	pot = &parsedOutputTemplate{}
 	template := strings.TrimSpace(outputFormat)
-	if pot.Template, err = cmn.ParseBashTemplate(template); err == nil {
+	if pot.Template, err = cmn.ParseFmtTemplate(template); err == nil {
+		// Pass
+	} else if pot.Template, err = cmn.ParseBashTemplate(template); err == nil {
 		// Pass
 	} else if pot.Template, err = cmn.ParseAtTemplate(template); err == nil {
 		// Pass

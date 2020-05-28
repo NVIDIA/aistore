@@ -8,6 +8,8 @@
 package dsort
 
 import (
+	"math"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
@@ -155,6 +157,30 @@ var _ = Describe("RequestSpec", func() {
 			Expect(parsed.Extension).To(Equal(cmn.ExtZip))
 		})
 
+		It("should parse spec with %06d syntax", func() {
+			rs := RequestSpec{
+				Bucket:          "test",
+				Extension:       cmn.ExtTgz,
+				InputFormat:     "prefix-{0010..0111}-suffix",
+				OutputFormat:    "prefix-%06d-suffix",
+				OutputShardSize: "10KB",
+				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+			}
+			parsed, err := rs.Parse()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(parsed.OutputFormat.Template).To(Equal(cmn.ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []cmn.TemplateRange{{
+					Start:      0,
+					End:        math.MaxInt64 - 1,
+					Step:       1,
+					DigitCount: 6,
+					Gap:        "-suffix",
+				}},
+			}))
+		})
+
 		It("should parse spec with @ syntax", func() {
 			rs := RequestSpec{
 				Bucket:          "test",
@@ -189,7 +215,6 @@ var _ = Describe("RequestSpec", func() {
 					Gap:        "-suffix",
 				}},
 			}))
-
 		})
 
 		It("should parse spec and set default conc limits", func() {
@@ -242,6 +267,28 @@ var _ = Describe("RequestSpec", func() {
 			Expect(parsed.EKMMalformedLine).To(Equal(cmn.IgnoreReaction))
 			Expect(parsed.EKMMissingKey).To(Equal(cmn.WarnReaction))
 			Expect(parsed.DSorterMemThreshold).To(Equal("80%"))
+		})
+
+		It("should pass when output shard is zero and bash or @ template is used for output format", func() {
+			rs := RequestSpec{
+				Bucket:       "test",
+				Extension:    cmn.ExtTar,
+				InputFormat:  "prefix-{0010..0111..2}-suffix",
+				OutputFormat: "prefix-{10..111}-suffix",
+				MaxMemUsage:  "80%",
+			}
+			_, err := rs.Parse()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			rs = RequestSpec{
+				Bucket:       "test",
+				Extension:    cmn.ExtTar,
+				InputFormat:  "prefix-{0010..0111..2}-suffix",
+				OutputFormat: "prefix-@111-suffix",
+				MaxMemUsage:  "80%",
+			}
+			_, err = rs.Parse()
+			Expect(err).ShouldNot(HaveOccurred())
 		})
 	})
 
@@ -398,6 +445,18 @@ var _ = Describe("RequestSpec", func() {
 				MaxMemUsage:     "80%",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 				DSortConf:       cmn.DSortConf{DuplicatedRecords: "something"},
+			}
+			_, err := rs.Parse()
+			Expect(err).Should(HaveOccurred())
+		})
+
+		It("should fail when output shard size is empty and output format is %06d", func() {
+			rs := RequestSpec{
+				Bucket:       "test",
+				Extension:    cmn.ExtTar,
+				InputFormat:  "prefix-{0010..0111..2}-suffix",
+				OutputFormat: "prefix-%06d-suffix",
+				MaxMemUsage:  "80%",
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())

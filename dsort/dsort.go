@@ -208,9 +208,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 
 		// Make sure that compression rate is updated before releasing
 		// next extractor goroutine.
-		if m.extractCreator.UsingCompression() {
-			m.addCompressionSizes(compressedSize, extractedSize)
-		}
+		m.addCompressionSizes(compressedSize, extractedSize)
 
 		phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 		lom.Unlock(false)
@@ -610,14 +608,13 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 	)
 
 	if maxSize <= 0 {
-		// Heuristic: to count desired size of shard in case when maxSize is not
-		// specified
+		// Heuristic: to count desired size of shard in case when maxSize is not specified.
 		maxSize = int64(math.Ceil(float64(m.totalUncompressedSize()) / float64(shardCount)))
 	}
 
 	for i, r := range m.recManager.Records.All() {
 		numLocalRecords[r.DaemonID]++
-		curShardSize += r.TotalSize() + m.extractCreator.MetadataSize()*int64(len(r.Objects))
+		curShardSize += r.TotalSize()
 		if curShardSize < maxSize && i < n-1 {
 			continue
 		}

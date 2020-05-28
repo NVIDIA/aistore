@@ -149,8 +149,9 @@ var (
 	nsReg     *regexp.Regexp
 )
 var (
-	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010..1}suffix'")
-	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix@00100suffix'")
+	ErrInvalidFmtFormat  = errors.New("input 'fmt' format is invalid should be 'prefix-%06d-suffix")
+	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix-{0001..0010..1}-suffix'")
+	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix-@00100-suffix'")
 
 	ErrStartAfterEnd   = errors.New("'start' cannot be greater than 'end'")
 	ErrNegativeStart   = errors.New("'start' is negative")
@@ -559,9 +560,9 @@ func AppConfigPath(appName string) (configDir string) {
 	return
 }
 
-///////////////////////
-//      parsing      //
-///////////////////////
+/////////////
+// PARSING //
+/////////////
 
 func ParseQuantity(quantity string) (ParsedQuantity, error) {
 	quantity = strings.ReplaceAll(quantity, " ", "")

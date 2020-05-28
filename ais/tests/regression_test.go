@@ -868,7 +868,7 @@ func TestDeleteList(t *testing.T) {
 func TestPrefetchRange(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
-		rangeMin, rangeMax int
+		rangeMin, rangeMax int64
 		proxyURL           = tutils.RandomProxyURL()
 		baseParams         = tutils.BaseAPIParams(proxyURL)
 		prefetchPrefix     = "regressionList/obj"
@@ -899,7 +899,7 @@ func TestPrefetchRange(t *testing.T) {
 			}
 			if i, err := strconv.ParseInt(oname, 10, 64); err != nil {
 				continue
-			} else if (rangeMin == 0 && rangeMax == 0) || (int(i) >= rangeMin && int(i) <= rangeMax) {
+			} else if (rangeMin == 0 && rangeMax == 0) || (i >= rangeMin && i <= rangeMax) {
 				files = append(files, be.Name)
 			}
 		}

@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -255,6 +256,94 @@ var _ = Describe("Common file", func() {
 			err := cmn.RemoveFile("/some/non/existing/file.txt")
 			Expect(err).NotTo(HaveOccurred())
 		})
+	})
+
+	Context("ParseFmtTemplate", func() {
+		DescribeTable("parse fmt template without error",
+			func(template string, expectedPt cmn.ParsedTemplate) {
+				pt, err := cmn.ParseFmtTemplate(template)
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(pt).To(Equal(expectedPt))
+			},
+			Entry("simple", "%d", cmn.ParsedTemplate{
+				Prefix: "",
+				Ranges: []cmn.TemplateRange{{
+					Start:      0,
+					End:        math.MaxInt64 - 1,
+					Step:       1,
+					DigitCount: 0,
+					Gap:        "",
+				}},
+			}),
+			Entry("with prefix", "prefix-%d", cmn.ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []cmn.TemplateRange{{
+					Start:      0,
+					End:        math.MaxInt64 - 1,
+					Step:       1,
+					DigitCount: 0,
+					Gap:        "",
+				}},
+			}),
+			Entry("with prefix and suffix", "prefix-%d-suffix", cmn.ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []cmn.TemplateRange{{
+					Start:      0,
+					End:        math.MaxInt64 - 1,
+					Step:       1,
+					DigitCount: 0,
+					Gap:        "-suffix",
+				}},
+			}),
+			Entry("with 0 digits", "prefix-%00d-suffix", cmn.ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []cmn.TemplateRange{{
+					Start:      0,
+					End:        math.MaxInt64 - 1,
+					Step:       1,
+					DigitCount: 0,
+					Gap:        "-suffix",
+				}},
+			}),
+			Entry("with multiple digits", "prefix-%06d-suffix", cmn.ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []cmn.TemplateRange{{
+					Start:      0,
+					End:        math.MaxInt64 - 1,
+					Step:       1,
+					DigitCount: 6,
+					Gap:        "-suffix",
+				}},
+			}),
+			Entry("with large number of digits", "prefix-%0152d-suffix", cmn.ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []cmn.TemplateRange{{
+					Start:      0,
+					End:        math.MaxInt64 - 1,
+					Step:       1,
+					DigitCount: 152,
+					Gap:        "-suffix",
+				}},
+			}),
+		)
+
+		DescribeTable("parse fmt template with error",
+			func(template string) {
+				_, err := cmn.ParseFmtTemplate(template)
+				Expect(err).Should(HaveOccurred())
+			},
+			Entry("missing %", "prefix-06d-suffix"),
+			Entry("missing d", "prefix-%06-suffix"),
+			Entry("% after d", "prefix-d%06-suffix"),
+			Entry("negative digits", "prefix-%0-6d-suffix"),
+			Entry("no digits specified", "prefix-%0d-suffix"),
+			Entry("no zero specified", "prefix-%6d-suffix"),
+			// Currently rejecting even if looks quite OK.
+			Entry("second %", "prefix-%06d-%"),
+			Entry("double %%", "prefix-%%06d-suffix"),
+			// Currently rejecting even if the second format is not used.
+			Entry("second format string", "prefix-%06d-%06d"),
+		)
 	})
 
 	Context("ParseBashTemplate", func() {
