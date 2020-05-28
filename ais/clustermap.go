@@ -78,7 +78,11 @@ func (m *smapX) isValid() bool {
 	if m.ProxySI == nil {
 		return false
 	}
-	return m.isPresent(m.ProxySI)
+	if m.isPresent(m.ProxySI) {
+		cmn.Assert(m.ProxySI.ID() != "")
+		return true
+	}
+	return false
 }
 
 func (m *smapX) isPrimary(self *cluster.Snode) bool {

@@ -44,6 +44,9 @@ const (
 
 	nodeRestartedMarker = ".noderestarted"
 )
+const (
+	clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
+)
 
 type (
 	regstate struct {
@@ -1472,6 +1475,9 @@ func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (red
 		return
 	}
 	redelta = started.UnixNano() - pts
+	if redelta < 0 && -redelta < int64(clusterClockDrift) {
+		redelta = 0
+	}
 	return
 }
 

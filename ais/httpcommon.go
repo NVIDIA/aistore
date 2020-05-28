@@ -1258,8 +1258,13 @@ func (h *httprunner) join(query url.Values, primaryURLs ...string) (res callResu
 	for _, u := range primaryURLs {
 		f(u)
 	}
-	url, _ := h.getPrimaryURLAndSI()
+	url, psi := h.getPrimaryURLAndSI()
 	f(url)
+	// NOTE: the url above is either config or the primary's IntraControlNet.DirectURL;
+	//       add its public URL as "more static" in various virtualized environments
+	if psi != nil {
+		f(psi.PublicNet.DirectURL)
+	}
 	f(config.Proxy.DiscoveryURL)
 	f(config.Proxy.OriginalURL)
 
@@ -1367,22 +1372,13 @@ func (h *httprunner) withRetry(call func(arg ...string) (int, error), action str
 	return
 }
 
-// getPrimaryURLAndSI is a helper function to return primary proxy's URL and daemon info
-// if Smap is not yet synced, use the primary proxy from the config
-// smap lock is acquired to avoid race between this function and other smap access (for example,
-// receiving smap during metasync)
-func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
-	config := cmn.GCO.Get()
+func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 	smap := h.owner.smap.get()
-	if smap == nil || smap.ProxySI == nil {
-		url, proxysi = config.Proxy.PrimaryURL, nil
+	if smap == nil || smap.version() == 0 || smap.ProxySI == nil || !smap.isValid() {
+		url, psi = cmn.GCO.Get().Proxy.PrimaryURL, nil
 		return
 	}
-	if smap.ProxySI.ID() != "" {
-		url, proxysi = smap.ProxySI.IntraControlNet.DirectURL, smap.ProxySI
-		return
-	}
-	url, proxysi = config.Proxy.PrimaryURL, smap.ProxySI
+	url, psi = smap.ProxySI.IntraControlNet.DirectURL, smap.ProxySI
 	return
 }
 
