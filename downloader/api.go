@@ -144,7 +144,7 @@ type DlLimits struct {
 
 type DlBase struct {
 	Description string   `json:"description"`
-	Bck         cmn.Bck  `json:"bck"`
+	Bck         cmn.Bck  `json:"bucket"`
 	Timeout     string   `json:"timeout"`
 	Limits      DlLimits `json:"limits"`
 }
