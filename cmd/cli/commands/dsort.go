@@ -435,14 +435,28 @@ func (b *dsortPB) result() dsortResult {
 	}
 }
 
-func printMetrics(w io.Writer, id string) (aborted, finished bool, err error) {
-	resp, err := api.MetricsDSort(defaultAPIParams, id)
+func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finished bool, err error) {
+	resp, err := api.MetricsDSort(defaultAPIParams, jobID)
 	if err != nil {
 		return false, false, err
 	}
 
 	aborted = false
 	finished = true
+	if len(daemonIds) > 0 {
+		// Check if targets exist in the metric output.
+		for _, daemonID := range daemonIds {
+			if _, ok := resp[daemonID]; !ok {
+				return false, false, fmt.Errorf("invalid daemon id %q ", daemonID)
+			}
+		}
+		// Filter metrics only for requested targets.
+		filterMap := map[string]*dsort.Metrics{}
+		for _, daemonID := range daemonIds {
+			filterMap[daemonID] = resp[daemonID]
+		}
+		resp = filterMap
+	}
 	for _, targetMetrics := range resp {
 		aborted = aborted || targetMetrics.Aborted.Load()
 		finished = finished && targetMetrics.Creation.Finished
@@ -552,6 +566,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 		verbose = flagIsSet(c, verboseFlag)
 		refresh = flagIsSet(c, refreshFlag)
 		logging = flagIsSet(c, logFlag)
+		json    = flagIsSet(c, jsonFlag)
 	)
 
 	// Show progress bar.
@@ -568,15 +583,21 @@ func dsortJobStatus(c *cli.Context, id string) error {
 
 	// Show metrics just once.
 	if !refresh && !logging {
-		if verbose {
-			if _, _, err := printMetrics(c.App.Writer, id); err != nil {
+		if json || verbose {
+			var daemonIds []string
+			if c.NArg() == 2 {
+				daemonIds = append(daemonIds, c.Args().Get(1))
+			}
+			if _, _, err := printMetrics(c.App.Writer, id, daemonIds); err != nil {
 				return err
 			}
 
 			fmt.Fprintf(c.App.Writer, "\n")
 		}
-
-		return printCondensedStats(c.App.Writer, id)
+		if !json {
+			return printCondensedStats(c.App.Writer, id)
+		}
+		return nil
 	}
 
 	// Show metrics once in a while.
@@ -599,7 +620,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 		err               error
 	)
 	for {
-		aborted, finished, err = printMetrics(w, id)
+		aborted, finished, err = printMetrics(w, id, nil)
 		if err != nil {
 			return err
 		}

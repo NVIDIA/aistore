@@ -53,6 +53,7 @@ var (
 			refreshFlag,
 			verboseFlag,
 			logFlag,
+			jsonFlag,
 		},
 		subcmdShowObject: {
 			objPropsFlag,
@@ -115,12 +116,19 @@ var (
 					BashComplete: downloadIDAllCompletions,
 				},
 				{
-					Name:         subcmdShowDsort,
-					Usage:        fmt.Sprintf("show information about %s jobs", cmn.DSortName),
-					ArgsUsage:    optionalJobIDArgument,
-					Flags:        showCmdsFlags[subcmdShowDsort],
-					Action:       showDsortHandler,
-					BashComplete: dsortIDAllCompletions,
+					Name:      subcmdShowDsort,
+					Usage:     fmt.Sprintf("show information about %s jobs", cmn.DSortName),
+					ArgsUsage: optionalJobIDDaemonIDArgument,
+					Flags:     showCmdsFlags[subcmdShowDsort],
+					Action:    showDsortHandler,
+					BashComplete: func(c *cli.Context) {
+						if c.NArg() == 0 {
+							dsortIDAllCompletions(c)
+						}
+						if c.NArg() == 1 {
+							daemonCompletions(completeTargets)(c)
+						}
+					},
 				},
 				{
 					Name:         subcmdShowObject,

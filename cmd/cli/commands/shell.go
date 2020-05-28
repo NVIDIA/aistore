@@ -32,29 +32,30 @@ const (
 
 func daemonCompletions(what daemonKindCompletion) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
-		// daemon already given as argument
-		if c.NArg() >= 1 {
-			return
+		if c.Command.Name != subcmdDsort && c.NArg() >= 1 {
+			// Daemon already given as argument
+			if c.NArg() >= 1 {
+				return
+			}
 		}
-
 		suggestDaemon(what)
 	}
 }
 
 func daemonConfigSectionCompletions(daemonOptional bool) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
-		// daemon and config already given as arguments
+		// Daemon and config already given as arguments
 		if c.NArg() >= 2 {
 			return
 		}
 
-		// daemon already given as argument
+		// Daemon already given as argument
 		if c.NArg() == 1 {
 			suggestConfigSection()
 			return
 		}
 
-		// no arguments given
+		// No arguments given
 		suggestDaemon(completeAllDaemons)
 		if daemonOptional {
 			suggestConfigSection()
@@ -274,7 +275,7 @@ func bucketAndPropsCompletions(c *cli.Context) {
 
 func putPromoteObjectCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		// waiting for file|directory as first arg
+		// Waiting for file|directory as first arg
 		return
 	}
 	if c.NArg() == 1 {

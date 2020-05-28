@@ -249,6 +249,7 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 | `--refresh` | `duration` | Refreshing rate of the progress bar refresh or metrics refresh | `1s` |
 | `--verbose, -v` | `bool` | Show detailed metrics | `false` |
 | `--log` | `string` | Path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
+| `--json, -j` | `bool` | Show only json metrics | `false` |
 
 ### Examples
 
@@ -275,6 +276,78 @@ DSort job has finished successfully in 21.948806ms:
   Longest sorting:	8.288299ms
   Longest creation:	4.553µs
 ```
+
+#### Show only json metrics
+
+```console
+$ ais show dsort 5JjIuGemR --json
+{
+  "825090t8089": {
+    "local_extraction": {
+      "started_time": "2020-05-28T09:53:42.466267891-04:00",
+      "end_time": "2020-05-28T09:53:42.50773835-04:00",
+      ....
+     },
+     ....
+  },
+  ....
+}
+```
+
+#### Show only json metrics filtered by daemon id
+
+```console
+$ ais show dsort 5JjIuGemR 766516t8087 --json
+{
+  "766516t8087": {
+    "local_extraction": {
+      "started_time": "2020-05-28T09:53:42.466267891-04:00",
+      "end_time": "2020-05-28T09:53:42.50773835-04:00",
+      ....
+     },
+     ....
+  }
+}
+```
+
+#### Using jq to filter out the json formatted metric output
+
+Show running status of meta sorting phase for all targets.
+
+```console
+$ ais show dsort 5JjIuGemR --json | jq .[].meta_sorting.running
+false
+false
+true
+false
+```
+
+Show created shards in each target alongwith the target ids.
+
+```console
+$ ais show dsort 5JjIuGemR --json | jq 'to_entries[] | [.key, .value.shard_creation.created_count]'
+[
+  "766516t8087",
+  "189"
+]
+[
+  "710650t8086",
+  "207"
+]
+[
+  "825090t8089",
+  "211"
+]
+[
+  "743838t8088",
+  "186"
+]
+[
+  "354275t8085",
+  "207"
+]
+```
+
 
 ## Stop dSort job
 

@@ -134,8 +134,9 @@ const (
 	daemonMountpathPairArgument = "DAEMON_ID=MOUNTPATH [DAEMON_ID=MOUNTPATH...]"
 
 	// Job IDs (download, dsort)
-	jobIDArgument         = "JOB_ID"
-	optionalJobIDArgument = "[JOB_ID]"
+	jobIDArgument                 = "JOB_ID"
+	optionalJobIDArgument         = "[JOB_ID]"
+	optionalJobIDDaemonIDArgument = "[JOB_ID [DAEMON_ID]]"
 
 	// Buckets
 	bucketArgument         = "BUCKET_NAME"
