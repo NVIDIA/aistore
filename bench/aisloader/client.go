@@ -23,7 +23,6 @@ var (
 	// AIS cluster timeouts. And if HTTPS is used, certificate check is
 	// always disable in AisLoader client.
 	transportArgs = cmn.TransportArgs{
-		Timeout:          600 * time.Second,
 		IdleConnsPerHost: 100,
 		UseHTTPProxyEnv:  true,
 		SkipVerify:       true,

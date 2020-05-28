@@ -18,10 +18,11 @@ Parameters in AISLoader that represent the number of bytes can be specified with
 AIS Loader allows for configurable PUT and GET tests directly from the command line
  - `-ip` -  IP address for proxy server
  - `-port` - Port number for proxy server
- - `-statsinterval` - Interval to show stats / send statsd in seconds; 0 = disabled
+ - `-statsinterval` - Interval to show stats / send statsd in seconds; `0` = disabled
+ - `-timeout` - Client HTTP timeout (default: `10m`; `0` = infinity)
  - `-bucket` - Bucket name
  - `-provider` - "ais" for AIS bucket, "cloud" for Cloud bucket; other supported values include "gcp" and "aws", for Amazon and Google clouds, respectively
- - `-duration` - How long to run the test; 0 = Unbounded
+ - `-duration` - How long to run the test; `0` = infinity
  - `-numworkers` - Number of go routines sending requests in parallel
  - `-pctput` - Percentage of put request (0% - 100%, remaining is allocated for GET)
  - `-tmpdir` - Local temporary directory used to store temporary files
