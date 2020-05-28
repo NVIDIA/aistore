@@ -16,14 +16,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-//nolint:unconvert // fsStats.Bsize is uint32 in Darwin, int64 in Linux
-func GetFSStats(path string) (blocks, bavail uint64, bsize int64, err error) {
-	fsStats := unix.Statfs_t{}
+func getFSStats(path string) (fsStats unix.Statfs_t, err error) {
 	if err = unix.Statfs(path, &fsStats); err != nil {
-		glog.Errorf("Failed to statfs %q, err: %v", path, err)
-		return
+		glog.Errorf("failed to statfs %q, err: %v", path, err)
 	}
-	return fsStats.Blocks, fsStats.Bavail, int64(fsStats.Bsize), nil
+	return
 }
 
 func GetFSUsedPercentage(path string) (usedPercentage int64, ok bool) {

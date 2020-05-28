@@ -104,7 +104,7 @@ func (r *Trunner) Register(name, kind string)  { r.Core.Tracker.register(name, k
 func (r *Trunner) Run() error                  { return r.runcommon(r) }
 func (r *Trunner) Get(name string) (val int64) { return r.Core.get(name) }
 
-func (r *Trunner) Init(t cluster.Target) *atomic.Bool { // nolint:interfacer // doesn't make sense to use cluster.Proxy
+func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.Core = &CoreStats{}
 	r.Core.init(48) // and register common stats (target's own stats are registered elsewhere via the Register() above)
 	r.Core.initStatsD(t.Snode())

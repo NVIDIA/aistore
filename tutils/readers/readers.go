@@ -99,11 +99,11 @@ func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekEnd:
 		abs = r.size + offset
 	default:
-		return 0, errors.New("RandReader.Seek: invalid whence") // nolint:golint // name of the method
+		return 0, errors.New("invalid whence")
 	}
 
 	if abs < 0 {
-		return 0, errors.New("RandReader.Seek: negative position") // nolint:golint // name of the method
+		return 0, errors.New("negative offset position")
 	}
 
 	if abs >= r.size {
@@ -119,7 +119,7 @@ func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 	}
 
 	if actual != abs {
-		err := fmt.Errorf("failed to seek to %d, seeked to %d instead", offset, actual) // nolint:golint // name of the method
+		err := fmt.Errorf("failed to seek to %d, seeked to %d instead", offset, actual)
 		return 0, err
 	}
 

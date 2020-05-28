@@ -9,7 +9,18 @@ import (
 	"os"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
+
+func GetFSStats(path string) (blocks, bavail uint64, bsize int64, err error) {
+	var fsStats unix.Statfs_t
+	fsStats, err = getFSStats(path)
+	if err != nil {
+		return
+	}
+	return fsStats.Blocks, fsStats.Bavail, fsStats.Bsize, nil
+}
 
 func GetATime(osfi os.FileInfo) time.Time {
 	stat := osfi.Sys().(*syscall.Stat_t)
