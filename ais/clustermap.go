@@ -53,16 +53,14 @@ var (
 
 func newSmap() (smap *smapX) {
 	smap = &smapX{}
-	smap.init(8, 8, 0)
+	smap.init(8, 8, 8)
 	return
 }
 
 func (m *smapX) init(tsize, psize, elsize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
 	m.Pmap = make(cluster.NodeMap, psize)
-	if elsize > 0 {
-		m.NonElects = make(cmn.SimpleKVs, elsize)
-	}
+	m.NonElects = make(cmn.SimpleKVs, elsize)
 }
 
 func (m *smapX) tag() string    { return revsSmapTag }
