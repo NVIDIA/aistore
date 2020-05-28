@@ -380,9 +380,10 @@ func discardResponse(r *http.Response, src string) (int64, error) {
 
 func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, string, error) {
 	var (
-		n     int64
-		cksum *cmn.CksumHash
-		err   error
+		n          int64
+		cksum      *cmn.CksumHash
+		err        error
+		cksumValue string
 	)
 
 	if r.StatusCode >= http.StatusBadRequest {
@@ -396,14 +397,12 @@ func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, 
 	buf, slab := mmsa.Alloc()
 	defer slab.Free(buf)
 
-	if cksumType != "" {
-		n, cksum, err = cmn.CopyAndChecksum(w, r.Body, buf, cksumType)
-		if err != nil {
-			return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
-		}
-	} else if n, err = io.CopyBuffer(w, r.Body, buf); err != nil {
+	n, cksum, err = cmn.CopyAndChecksum(w, r.Body, buf, cksumType)
+	if err != nil {
 		return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 	}
-
-	return n, cksum.Value(), nil
+	if cksum != nil {
+		cksumValue = cksum.Value()
+	}
+	return n, cksumValue, nil
 }
