@@ -520,7 +520,7 @@ func (h *httprunner) checkPresenceNetChange(smap *smapX) error {
 	}
 	if h.si.IntraControlNet.NodeIPAddr != snode.IntraControlNet.NodeIPAddr {
 		glog.Errorf("Warning: %s: INTRA-CONTROL IPv4 changed: previous %s, current %s", h.si,
-			snode.PublicNet.NodeIPAddr, h.si.PublicNet.NodeIPAddr)
+			snode.IntraControlNet.NodeIPAddr, h.si.IntraControlNet.NodeIPAddr)
 		changed = true
 	}
 	if changed {
