@@ -5,6 +5,7 @@
 package cmn
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -149,6 +150,20 @@ func (b Bck) Less(other Bck) bool {
 
 func (b Bck) Equal(other Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
+}
+
+func ValidateBckName(bucket string) (err error) {
+	const nameErr = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
+	if bucket == "" {
+		return errors.New("bucket name is empty")
+	}
+	if !bucketReg.MatchString(bucket) {
+		return fmt.Errorf("bucket name %s is invalid: %s", bucket, nameErr)
+	}
+	if strings.Contains(bucket, "..") {
+		return fmt.Errorf("bucket name %s cannot contain '..'", bucket)
+	}
+	return
 }
 
 func (b Bck) Valid() bool {

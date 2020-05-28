@@ -5,11 +5,9 @@
 package cmn
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"math/rand"
 	"net/url"
 	"os"
@@ -142,17 +140,6 @@ type (
 	ParsedQuantity struct {
 		Type  string
 		Value uint64
-	}
-	TemplateRange struct {
-		Start      int
-		End        int
-		Step       int
-		DigitCount int
-		Gap        string // characters after range (either to next range or end of string)
-	}
-	ParsedTemplate struct {
-		Prefix string
-		Ranges []TemplateRange
 	}
 )
 
@@ -323,61 +310,6 @@ func GenUserID() (uuid string) {
 	}
 }
 
-func S2B(s string) (int64, error) {
-	if s == "" {
-		return 0, nil
-	}
-	s = strings.ToUpper(s)
-	for k, v := range toBiBytes {
-		if ns := strings.TrimSuffix(s, k); ns != s {
-			f, err := strconv.ParseFloat(strings.TrimSpace(ns), 64)
-			return int64(float64(v) * f), err
-		}
-	}
-	ns := strings.TrimSuffix(s, "B")
-	f, err := strconv.ParseFloat(strings.TrimSpace(ns), 64)
-	return int64(f), err
-}
-
-func B2S(b int64, digits int) string {
-	if b >= TiB {
-		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(TiB), "TiB")
-	}
-	if b >= GiB {
-		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(GiB), "GiB")
-	}
-	if b >= MiB {
-		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(MiB), "MiB")
-	}
-	if b >= KiB {
-		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(KiB), "KiB")
-	}
-	return fmt.Sprintf("%dB", b)
-}
-
-func UnsignedB2S(b uint64, digits int) string {
-	return B2S(int64(b), digits)
-}
-
-func TimeDelta(time1, time2 time.Time) time.Duration {
-	if time1.IsZero() || time2.IsZero() {
-		return 0
-	}
-	return time1.Sub(time2)
-}
-
-func ConvertToString(value interface{}) (valstr string, err error) {
-	switch v := value.(type) {
-	case string:
-		valstr = v
-	case bool, int, int32, int64, uint32, uint64, float32, float64:
-		valstr = fmt.Sprintf("%v", v)
-	default:
-		err = fmt.Errorf("failed to assert type on param: %v (type %T)", value, value)
-	}
-	return
-}
-
 func ExitWithCode(code int) {
 	glog.Flush()
 	os.Exit(code)
@@ -417,42 +349,6 @@ func ParseBool(s string) (value bool, err error) {
 }
 
 func IsParseBool(s string) (yes bool) { yes, _ = ParseBool(s); return }
-
-func StrToSentence(str string) string {
-	if str == "" {
-		return ""
-	}
-
-	capitalized := CapitalizeString(str)
-
-	if !strings.HasSuffix(capitalized, ".") {
-		capitalized += "."
-	}
-
-	return capitalized
-}
-
-func CapitalizeString(s string) string {
-	if s == "" {
-		return ""
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
-func NounEnding(count int) string {
-	if count == 1 {
-		return ""
-	}
-	return "s"
-}
-
-// Either returns either lhs or rhs depending on which one is non-empty
-func Either(lhs, rhs string) string {
-	if lhs != "" {
-		return lhs
-	}
-	return rhs
-}
 
 // NOTE: not to be used in the datapath - consider instead one of the 3 flavors below
 func AssertFmt(cond bool, args ...interface{}) {
@@ -630,20 +526,6 @@ func ExpandPath(path string) string {
 	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
 }
 
-func ValidateBckName(bucket string) (err error) {
-	const nameErr = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
-	if bucket == "" {
-		return errors.New("bucket name is empty")
-	}
-	if !bucketReg.MatchString(bucket) {
-		return fmt.Errorf("bucket name %s is invalid: %s", bucket, nameErr)
-	}
-	if strings.Contains(bucket, "..") {
-		return fmt.Errorf("bucket name %s cannot contain '..'", bucket)
-	}
-	return
-}
-
 func CheckI64Range(v, low, high int64) (int64, error) {
 	if v < low || v > high {
 		if low == high {
@@ -678,211 +560,8 @@ func AppConfigPath(appName string) (configDir string) {
 }
 
 ///////////////////////
-// templates/parsing //
+//      parsing      //
 ///////////////////////
-
-func (pt *ParsedTemplate) Count() int64 {
-	count := int64(1)
-	for _, tr := range pt.Ranges {
-		step := (tr.End-tr.Start)/tr.Step + 1
-		count *= int64(step)
-	}
-	return count
-}
-
-// maxLen specifies maximum objects to be returned
-func (pt *ParsedTemplate) ToSlice(maxLen ...int) []string {
-	var ( // nolint:prealloc // objs is preallocated farther down
-		max  = math.MaxInt64
-		objs []string
-	)
-	if len(maxLen) > 0 && maxLen[0] >= 0 {
-		max = maxLen[0]
-		objs = make([]string, 0, max)
-	} else {
-		objs = make([]string, 0, pt.Count())
-	}
-
-	getNext := pt.Iter()
-	i := 0
-	for objName, hasNext := getNext(); hasNext && i < max; objName, hasNext = getNext() {
-		objs = append(objs, objName)
-		i++
-	}
-	return objs
-}
-
-func (pt *ParsedTemplate) Iter() func() (string, bool) {
-	rangesCount := len(pt.Ranges)
-	at := make([]int, rangesCount)
-
-	for i, tr := range pt.Ranges {
-		at[i] = tr.Start
-	}
-
-	var buf bytes.Buffer
-	return func() (string, bool) {
-		for i := rangesCount - 1; i >= 0; i-- {
-			if at[i] > pt.Ranges[i].End {
-				if i == 0 {
-					return "", false
-				}
-				at[i] = pt.Ranges[i].Start
-				at[i-1] += pt.Ranges[i-1].Step
-			}
-		}
-
-		buf.Reset()
-		buf.WriteString(pt.Prefix)
-		for i, tr := range pt.Ranges {
-			buf.WriteString(fmt.Sprintf("%0*d%s", tr.DigitCount, at[i], tr.Gap))
-		}
-
-		at[rangesCount-1] += pt.Ranges[rangesCount-1].Step
-		return buf.String(), true
-	}
-}
-
-func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
-	// "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
-
-	left := strings.Index(template, "{")
-	if left == -1 {
-		err = ErrInvalidBashFormat
-		return
-	}
-	right := strings.LastIndex(template, "}")
-	if right == -1 {
-		err = ErrInvalidBashFormat
-		return
-	}
-	if right < left {
-		err = ErrInvalidBashFormat
-		return
-	}
-	pt.Prefix = template[:left]
-
-	for {
-		tr := TemplateRange{}
-
-		left := strings.Index(template, "{")
-		if left == -1 {
-			break
-		}
-
-		right := strings.Index(template, "}")
-		if right == -1 {
-			err = ErrInvalidBashFormat
-			return
-		}
-		if right < left {
-			err = ErrInvalidBashFormat
-			return
-		}
-		inside := template[left+1 : right]
-
-		numbers := strings.Split(inside, "..")
-		if len(numbers) < 2 || len(numbers) > 3 {
-			err = ErrInvalidBashFormat
-			return
-		} else if len(numbers) == 2 { // {0001..0999} case
-			if tr.Start, err = strconv.Atoi(numbers[0]); err != nil {
-				return
-			}
-			if tr.End, err = strconv.Atoi(numbers[1]); err != nil {
-				return
-			}
-			tr.Step = 1
-			tr.DigitCount = Min(len(numbers[0]), len(numbers[1]))
-		} else if len(numbers) == 3 { // {0001..0999..2} case
-			if tr.Start, err = strconv.Atoi(numbers[0]); err != nil {
-				return
-			}
-			if tr.End, err = strconv.Atoi(numbers[1]); err != nil {
-				return
-			}
-			if tr.Step, err = strconv.Atoi(numbers[2]); err != nil {
-				return
-			}
-			tr.DigitCount = Min(len(numbers[0]), len(numbers[1]))
-		}
-		if err = validateBoundaries(tr.Start, tr.End, tr.Step); err != nil {
-			return
-		}
-
-		// apply gap (either to next range or end of the template)
-		template = template[right+1:]
-		right = strings.Index(template, "{")
-		if right >= 0 {
-			tr.Gap = template[:right]
-		} else {
-			tr.Gap = template
-		}
-
-		pt.Ranges = append(pt.Ranges, tr)
-	}
-	return
-}
-
-func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
-	// "prefix-@00001-gap-@100-suffix"
-	left := strings.Index(template, "@")
-	if left == -1 {
-		err = ErrInvalidAtFormat
-		return
-	}
-	pt.Prefix = template[:left]
-
-	for {
-		tr := TemplateRange{}
-
-		left := strings.Index(template, "@")
-		if left == -1 {
-			break
-		}
-
-		number := ""
-		for left++; len(template) > left && unicode.IsDigit(rune(template[left])); left++ {
-			number += string(template[left])
-		}
-
-		tr.Start = 0
-		if tr.End, err = strconv.Atoi(number); err != nil {
-			return
-		}
-		tr.Step = 1
-		tr.DigitCount = len(number)
-
-		if err = validateBoundaries(tr.Start, tr.End, tr.Step); err != nil {
-			return
-		}
-
-		// apply gap (either to next range or end of the template)
-		template = template[left:]
-		right := strings.Index(template, "@")
-		if right >= 0 {
-			tr.Gap = template[:right]
-		} else {
-			tr.Gap = template
-		}
-
-		pt.Ranges = append(pt.Ranges, tr)
-	}
-	return
-}
-
-func validateBoundaries(start, end, step int) error {
-	if start > end {
-		return ErrStartAfterEnd
-	}
-	if start < 0 {
-		return ErrNegativeStart
-	}
-	if step <= 0 {
-		return ErrNonPositiveStep
-	}
-	return nil
-}
 
 func ParseQuantity(quantity string) (ParsedQuantity, error) {
 	quantity = strings.ReplaceAll(quantity, " ", "")
@@ -960,29 +639,3 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	}
 	return m
 }
-
-/////////////////////
-// time formatting //
-/////////////////////
-
-func FormatUnixNano(unixnano int64, format string) string {
-	t := time.Unix(0, unixnano)
-	switch format {
-	case "", RFC822:
-		return t.Format(time.RFC822)
-	default:
-		return t.Format(format)
-	}
-}
-
-func FormatTimestamp(tm time.Time) string { return tm.Format(timeStampFormat) }
-
-func Duration2S(d time.Duration) string { return strconv.FormatInt(int64(d), 10) }
-func S2Duration(s string) (time.Duration, error) {
-	d, err := strconv.ParseInt(s, 0, 64)
-	return time.Duration(d), err
-}
-
-func UnixNano2S(unixnano int64) string   { return strconv.FormatInt(unixnano, 10) }
-func S2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
-func IsTimeZero(t time.Time) bool        { return t.IsZero() || t.UTC().Unix() == 0 } // https://github.com/golang/go/issues/33597

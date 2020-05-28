@@ -4,6 +4,8 @@
  */
 package cmn
 
+import "strings"
+
 // based on wikipedia article: https://en.wikipedia.org/wiki/Damerau–Levenshtein_distance
 func DamerauLevenstheinDistance(s, t string) int {
 	distances := make([][]int, len(s)+1)
@@ -37,4 +39,26 @@ func DamerauLevenstheinDistance(s, t string) int {
 		}
 	}
 	return distances[len(s)][len(t)]
+}
+
+func CapitalizeString(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func NounEnding(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// Either returns either lhs or rhs depending on which one is non-empty
+func Either(lhs, rhs string) string {
+	if lhs != "" {
+		return lhs
+	}
+	return rhs
 }
