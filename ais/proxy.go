@@ -714,8 +714,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if getCii {
 		cii := &clusterInfo{}
 		cii.fill(p)
-		body := cmn.MustMarshal(cii)
-		_ = p.writeJSON(w, r, body, "cluster-info")
+		_ = p.writeJSON(w, r, cii, "cluster-info")
 		return
 	}
 	// non-primary will keep returning 503 until cluster starts up
@@ -1028,6 +1027,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// TODO: replace cmn.Marshal with p.writeJSON
 	b := cmn.MustMarshal(bckList)
 	pageMarker := bckList.PageMarker
 	// free memory allocated for temporary slice immediately as it can take up to a few GB
@@ -1036,7 +1036,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	bckList = nil
 	go cmn.FreeMemToOS(time.Second)
 
-	if p.writeJSON(w, r, b, "list_objects") {
+	if p.writeJSONBytes(w, r, b, "list_objects") {
 		delta := time.Since(started)
 		p.statsT.AddMany(
 			stats.NamedVal64{Name: stats.ListCount, Value: 1},
@@ -1087,8 +1087,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 		return
 	}
 
-	b := cmn.MustMarshal(summaries)
-	p.writeJSON(w, r, b, "bucket_summary")
+	p.writeJSON(w, r, summaries, "bucket_summary")
 }
 
 func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, selMsg cmn.SelectMsg) (
@@ -1465,8 +1464,7 @@ func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query 
 	bmd := p.owner.bmd.get()
 	if query.IsAIS() {
 		bcks := p.selectBMDBuckets(bmd, query)
-		body := cmn.MustMarshal(bcks)
-		p.writeJSON(w, r, body, listBuckets)
+		p.writeJSON(w, r, bcks, listBuckets)
 		return
 	}
 	si, err := p.owner.smap.get().GetRandTarget()
@@ -2165,11 +2163,10 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		pst := getproxystatsrunner()
-		body := pst.GetWhatStats()
-		p.writeJSON(w, r, body, what)
+		ws := pst.GetWhatStats()
+		p.writeJSON(w, r, ws, what)
 	case cmn.GetWhatSysInfo:
-		body := cmn.MustMarshal(sys.FetchSysInfo())
-		p.writeJSON(w, r, body, what)
+		p.writeJSON(w, r, sys.FetchSysInfo(), what)
 	case cmn.GetWhatSmap:
 		var (
 			smap  = p.owner.smap.get()
@@ -2193,8 +2190,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		body := cmn.MustMarshal(smap)
-		p.writeJSON(w, r, body, what)
+		p.writeJSON(w, r, smap, what)
 	case cmn.GetWhatDaemonStatus:
 		pst := getproxystatsrunner()
 		msg := &stats.DaemonStatus{
@@ -2203,8 +2199,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			SysInfo:     sys.FetchSysInfo(),
 			Stats:       pst.Core,
 		}
-		body := cmn.MustMarshal(msg)
-		p.writeJSON(w, r, body, what)
+		p.writeJSON(w, r, msg, what)
 	default:
 		p.httprunner.httpdaeget(w, r)
 	}
@@ -2701,7 +2696,8 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, res.err.Error())
 				return
 			}
-			p.writeJSON(w, r, res.outjson, what)
+			// TODO: figure out a way to switch to writeJSON
+			p.writeJSONBytes(w, r, res.outjson, what)
 			break
 		}
 	default:
@@ -2725,7 +2721,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 	})
 	targetResults := p._queryResults(w, r, results)
 	if targetResults != nil {
-		p.writeJSON(w, r, cmn.MustMarshal(targetResults), what)
+		p.writeJSON(w, r, targetResults, what)
 	}
 }
 
@@ -2765,8 +2761,7 @@ func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request
 	}
 
 	out.Target = targetResults
-	body := cmn.MustMarshal(out)
-	_ = p.writeJSON(w, r, body, what)
+	_ = p.writeJSON(w, r, out, what)
 }
 
 func (p *proxyrunner) queryClusterStats(w http.ResponseWriter, r *http.Request, what string) {
@@ -2778,8 +2773,7 @@ func (p *proxyrunner) queryClusterStats(w http.ResponseWriter, r *http.Request, 
 	out.Target = targetStats
 	rr := getproxystatsrunner()
 	out.Proxy = rr.Core
-	body := cmn.MustMarshal(out)
-	_ = p.writeJSON(w, r, body, what)
+	_ = p.writeJSON(w, r, out, what)
 }
 
 func (p *proxyrunner) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, what string) {
@@ -2789,8 +2783,7 @@ func (p *proxyrunner) queryClusterMountpaths(w http.ResponseWriter, r *http.Requ
 	}
 	out := &ClusterMountpathsRaw{}
 	out.Targets = targetMountpaths
-	body := cmn.MustMarshal(out)
-	_ = p.writeJSON(w, r, body, what)
+	_ = p.writeJSON(w, r, out, what)
 }
 
 // helper methods for querying targets
@@ -2994,8 +2987,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi, regReq.Smap)
 		bmd := p.owner.bmd.get()
 		meta := &nodeRegMeta{smap, bmd, p.si}
-		body := cmn.MustMarshal(meta)
-		p.writeJSON(w, r, body, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
+		p.writeJSON(w, r, meta, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
 	go p.updateAndDistribute(nsi, msg, nonElectable)
 }

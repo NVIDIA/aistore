@@ -177,12 +177,13 @@ func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	}
 }
 
-func (r *Trunner) GetWhatStats() []byte {
+// TODO: fix the scope of the return type
+func (r *Trunner) GetWhatStats() interface{} {
 	ctracker := make(copyTracker, 48)
 	r.Core.copyCumulative(ctracker)
 
 	crunner := &copyRunner{Tracker: ctracker, Capacity: r.Capacity}
-	return cmn.MustMarshal(crunner)
+	return crunner
 }
 
 func (r *Trunner) log(uptime time.Duration) {

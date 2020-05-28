@@ -490,7 +490,8 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64) {
 	reb.rebFini(md)
 }
 
-func (reb *Manager) RebECDataStatus() (body []byte, status int) {
+// TODO: fix the scope of the return type
+func (reb *Manager) RebECDataStatus() (slices interface{}, status int) {
 	rebStatus := &Status{}
 	reb.RebStatus(rebStatus)
 
@@ -506,8 +507,7 @@ func (reb *Manager) RebECDataStatus() (body []byte, status int) {
 		return nil, http.StatusNoContent
 	}
 
-	body = cmn.MustMarshal(slices)
-	return body, http.StatusOK
+	return slices, http.StatusOK
 }
 
 //

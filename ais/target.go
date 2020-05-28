@@ -434,8 +434,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		what := query.Get(cmn.URLParamWhat)
 		if what == cmn.GetWhatBMD {
-			body := cmn.MustMarshal(t.owner.bmd.get())
-			t.writeJSON(w, r, body, "get-what-bmd")
+			t.writeJSON(w, r, t.owner.bmd.get(), "get-what-bmd")
 		} else {
 			bck, err := newBckFromQuery("", r.URL.Query())
 			if err != nil {
@@ -1113,13 +1112,13 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	body, status := t.rebManager.RebECDataStatus()
+	data, status := t.rebManager.RebECDataStatus()
 	if status != http.StatusOK {
 		w.WriteHeader(status)
 		return
 	}
 
-	if ok := t.writeJSON(w, r, body, "rebalance-data"); !ok {
+	if ok := t.writeJSON(w, r, data, "rebalance-data"); !ok {
 		glog.Errorf("Failed to send data to %s", caller)
 	}
 }
@@ -1177,7 +1176,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 		}
 	}
 	sort.Sort(bucketNames)
-	t.writeJSON(w, r, cmn.MustMarshal(bucketNames), listBuckets)
+	t.writeJSON(w, r, bucketNames, listBuckets)
 }
 
 func (t *targetrunner) _listBcks(r *http.Request, query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {

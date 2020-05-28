@@ -289,15 +289,15 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
-		body := cmn.MustMarshal(cmn.TSysInfo{
+		tsysinfo := cmn.TSysInfo{
 			SysInfo: sys.FetchSysInfo(),
 			FSInfo:  fs.Mountpaths.FetchFSInfo(),
-		})
-		t.writeJSON(w, r, body, httpdaeWhat)
+		}
+		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
 	case cmn.GetWhatStats:
 		rst := getstorstatsrunner()
-		body := rst.GetWhatStats()
-		t.writeJSON(w, r, body, httpdaeWhat)
+		ws := rst.GetWhatStats()
+		t.writeJSON(w, r, ws, httpdaeWhat)
 	case cmn.GetWhatMountpaths:
 		mpList := cmn.MountpathList{}
 		availablePaths, disabledPaths := fs.Mountpaths.Get()
@@ -314,8 +314,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			mpList.Disabled[idx] = mpath
 			idx++
 		}
-		body := cmn.MustMarshal(&mpList)
-		t.writeJSON(w, r, body, httpdaeWhat)
+		t.writeJSON(w, r, &mpList, httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
 		tstats := getstorstatsrunner()
 
@@ -335,24 +334,20 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Capacity:    tstats.Capacity,
 			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},
 		}
-		body := cmn.MustMarshal(msg)
-		t.writeJSON(w, r, body, httpdaeWhat)
+		t.writeJSON(w, r, msg, httpdaeWhat)
 	case cmn.GetWhatDiskStats:
 		diskStats := fs.Mountpaths.GetSelectedDiskStats()
-		body := cmn.MustMarshal(diskStats)
-		t.writeJSON(w, r, body, httpdaeWhat)
+		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case cmn.GetWhatRemoteAIS:
 		conf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
 		if !ok {
-			body := cmn.MustMarshal(cmn.CloudInfoAIS{})
-			t.writeJSON(w, r, body, httpdaeWhat)
+			t.writeJSON(w, r, cmn.CloudInfoAIS{}, httpdaeWhat)
 			return
 		}
 		clusterConf, ok := conf.(cmn.CloudConfAIS)
 		cmn.Assert(ok)
 		aisCloudInfo := t.cloud.ais.GetInfo(clusterConf)
-		body := cmn.MustMarshal(aisCloudInfo)
-		t.writeJSON(w, r, body, httpdaeWhat)
+		t.writeJSON(w, r, aisCloudInfo, httpdaeWhat)
 	default:
 		t.httprunner.httpdaeget(w, r)
 	}
@@ -1118,8 +1113,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if getRebStatus {
 		status := &reb.Status{}
 		t.rebManager.RebStatus(status)
-		body := cmn.MustMarshal(status)
-		if ok := t.writeJSON(w, r, body, "rebalance-status"); !ok {
+		if ok := t.writeJSON(w, r, status, "rebalance-status"); !ok {
 			return
 		}
 	}

@@ -874,18 +874,39 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 	return items, nil
 }
 
+func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
+	w.Header().Set("Content-Type", "application/json")
+	_, isByteArray := v.([]byte)
+	cmn.Assert(!isByteArray)
+	var err error
+	if err = jsoniter.NewEncoder(w).Encode(v); err == nil {
+		return true
+	}
+	h.writeErrorStatus(w, r, tag, err)
+	return
+}
+
 // NOTE: must be the last error-generating-and-handling call in the http handler
 //       writes http body and header
 //       calls invalmsghdlr() on err
-func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) (ok bool) {
-	w.Header().Set("Content-Type", "application/json")
+func (h *httprunner) writeBytes(w http.ResponseWriter, r *http.Request, bytes []byte, tag string) (ok bool) {
 	var err error
-	if _, err = w.Write(jsbytes); err == nil {
+	if _, err = w.Write(bytes); err == nil {
 		ok = true
 		return
 	}
+	h.writeErrorStatus(w, r, tag, err)
+	return
+}
+
+func (h *httprunner) writeJSONBytes(w http.ResponseWriter, r *http.Request, bytes []byte, tag string) (ok bool) {
+	w.Header().Set("Content-Type", "application/json")
+	return h.writeBytes(w, r, bytes, tag)
+}
+
+func (h *httprunner) writeErrorStatus(w http.ResponseWriter, r *http.Request, tag string, err error) {
 	if isSyscallWriteError(err) {
-		// apparently, cannot write to this w: broken-pipe and similar
+		// Apparently, cannot write to this w: broken-pipe and similar
 		glog.Errorf("isSyscallWriteError: %v", err)
 		s := "isSyscallWriteError: " + r.Method + " " + r.URL.Path
 		if _, file, line, ok2 := runtime.Caller(1); ok2 {
@@ -896,13 +917,12 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 		h.statsT.AddErrorHTTP(r.Method, 1)
 		return
 	}
-	msg := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
+	msg := fmt.Sprintf("%s: failed to write bytes, err: %v", tag, err)
 	if _, file, line, ok := runtime.Caller(1); ok {
 		f := filepath.Base(file)
 		msg += fmt.Sprintf("(%s, #%d)", f, line)
 	}
 	h.invalmsghdlr(w, r, msg)
-	return
 }
 
 func (h *httprunner) parseNCopies(value interface{}) (copies int64, err error) {
@@ -934,22 +954,22 @@ func (h *httprunner) checkAction(msg *cmn.ActionMsg, expectedActions ...string) 
 
 func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
-		body    []byte
+		body    interface{}
 		getWhat = r.URL.Query().Get(cmn.URLParamWhat)
 	)
 	switch getWhat {
 	case cmn.GetWhatConfig:
-		body = cmn.MustMarshal(cmn.GCO.Get())
+		body = cmn.GCO.Get()
 	case cmn.GetWhatSmap:
-		body = cmn.MustMarshal(h.owner.smap.get())
+		body = h.owner.smap.get()
 	case cmn.GetWhatBMD:
-		body = cmn.MustMarshal(h.owner.bmd.get())
+		body = h.owner.bmd.get()
 	case cmn.GetWhatSmapVote:
 		voteInProgress := xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: cmn.ActElection})
 		msg := SmapVoteMsg{VoteInProgress: voteInProgress, Smap: h.owner.smap.get(), BucketMD: h.owner.bmd.get()}
-		body = cmn.MustMarshal(msg)
+		body = msg
 	case cmn.GetWhatSnode:
-		body = cmn.MustMarshal(h.si)
+		body = h.si
 	default:
 		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", getWhat)
 		h.invalmsghdlr(w, r, s)

@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -234,8 +235,6 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("Received credentials for %s\n", userID)
 	}
-
-	a.writeJSON(w, r, []byte("Credentials updated successfully"), "update credentials")
 }
 
 // Adds a new user to user list
@@ -258,9 +257,6 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("Added a user %s\n", info.UserID)
 	}
-
-	msg := []byte("User created successfully")
-	a.writeJSON(w, r, msg, "create user")
 }
 
 // Checks if the request header contains super-user credentials and they are
@@ -329,16 +325,26 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repl := fmt.Sprintf(`{"token": "%s"}`, tokenString)
-	a.writeJSON(w, r, []byte(repl), "auth")
+	a.writeBytes(w, r, []byte(repl), "auth")
 }
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
-func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) {
+func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, val interface{}, tag string) {
+	w.Header().Set("Content-Type", "application/json")
+	err := jsoniter.NewEncoder(w).Encode(val)
+	a.processError(r, tag, err)
+}
+
+// Borrowed from ais (modified cmn.InvalidHandler calls)
+func (a *authServ) writeBytes(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) {
 	w.Header().Set("Content-Type", "application/json")
 	var err error
 	if _, err = w.Write(jsbytes); err == nil {
 		return
 	}
+	a.processError(r, tag, err)
+}
+func (a *authServ) processError(r *http.Request, tag string, err error) {
 	if isSyscallWriteError(err) {
 		// apparently, cannot write to this w: broken-pipe and similar
 		s := "isSyscallWriteError: " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
@@ -453,6 +459,5 @@ func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 		}
 		cluList = &clusterConfig{Conf: map[string][]string{cid: urls}}
 	}
-	repl := cmn.MustMarshal(cluList)
-	a.writeJSON(w, r, repl, "auth")
+	a.writeJSON(w, r, cluList, "auth")
 }

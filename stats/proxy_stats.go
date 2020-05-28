@@ -62,10 +62,11 @@ func (r *Prunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	r.Core.statsTime = newConf.Periodic.StatsTime
 }
 
-func (r *Prunner) GetWhatStats() []byte {
+// TODO: fix the scope of the return type
+func (r *Prunner) GetWhatStats() interface{} {
 	ctracker := make(copyTracker, 24)
 	r.Core.copyCumulative(ctracker)
-	return cmn.MustMarshal(ctracker)
+	return ctracker
 }
 
 // statslogger interface impl

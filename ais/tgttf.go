@@ -33,7 +33,6 @@ func (t *targetrunner) httptar2tfget(w http.ResponseWriter, r *http.Request) {
 		bck      *cluster.Bck
 		err      error
 		apiItems []string
-		body     []byte
 	)
 	apiItems, err = t.checkRESTItems(w, r, 2, true, cmn.Version, cmn.Tar2Tf)
 	if err != nil {
@@ -79,9 +78,9 @@ func (t *targetrunner) httptar2tfget(w http.ResponseWriter, r *http.Request) {
 		job.Wg.Wait()
 	case cmn.GetTargetObjects:
 		var (
-			pt           cmn.ParsedTemplate
-			template     string
-			objectsNames []string
+			pt          cmn.ParsedTemplate
+			template    string
+			objectNames []string
 		)
 		if len(apiItems) < 3 {
 			err = fmt.Errorf("expected at least 3 api items for get target objects")
@@ -91,21 +90,18 @@ func (t *targetrunner) httptar2tfget(w http.ResponseWriter, r *http.Request) {
 			pt, err = cmn.ParseBashTemplate(template)
 		}
 		if err == nil {
-			objectsNames = make([]string, 0, cmn.Min(int(pt.Count()), 1000))
+			objectNames = make([]string, 0, cmn.Min(int(pt.Count()), 1000))
 			err = cluster.HrwIterMatchingObjects(t, bck, pt, func(lom *cluster.LOM) error {
-				objectsNames = append(objectsNames, lom.ObjName)
+				objectNames = append(objectNames, lom.ObjName)
 				return nil
 			})
-		}
-		if err == nil {
-			body = cmn.MustMarshal(objectsNames)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 
-		t.writeJSON(w, r, body, cmn.GetTargetObjects)
+		t.writeJSON(w, r, objectNames, cmn.GetTargetObjects)
 	default:
 		s := fmt.Sprintf("Invalid route /tar2tf/%s", apiItems[0])
 		t.invalmsghdlr(w, r, s)

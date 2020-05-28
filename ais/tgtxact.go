@@ -42,7 +42,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		xactQuery := xaction.XactQuery{ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRunning: !xactMsg.All, Finished: xactMsg.Finished}
 		switch what {
 		case cmn.GetWhatXactStats:
-			body, err := t.queryXactStats(xactQuery)
+			xactStats, err := xaction.Registry.GetStats(xactQuery)
 			if err != nil {
 				if _, ok := err.(cmn.XactionNotFoundError); ok {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
@@ -51,14 +51,14 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				return
 			}
-			t.writeJSON(w, r, body, what)
+			t.writeJSON(w, r, xactStats, what)
 		case cmn.GetWhatXactRunStatus:
 			running := xaction.Registry.IsXactRunning(xactQuery)
 			status := &cmn.XactRunningStatus{ID: xactQuery.ID, Kind: xactQuery.Kind, Running: running}
 			if bck != nil {
 				status.Bck = bck.Bck
 			}
-			t.writeJSON(w, r, cmn.MustMarshal(status), what)
+			t.writeJSON(w, r, status, what)
 		default:
 			t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
 		}
@@ -98,14 +98,6 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /xactions path")
 	}
-}
-
-func (t *targetrunner) queryXactStats(query xaction.XactQuery) ([]byte, error) {
-	xactStats, err := xaction.Registry.GetStats(query)
-	if err != nil {
-		return nil, err
-	}
-	return cmn.MustMarshal(xactStats), nil
 }
 
 func (t *targetrunner) cmdXactStart(r *http.Request, xactMsg cmn.XactionMsg, bck *cluster.Bck) error {

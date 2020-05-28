@@ -155,8 +155,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 	if taskAction == cmn.TaskResult {
 		// return the final result only if it is requested explicitly
-		body := cmn.MustMarshal(result)
-		return t.writeJSON(w, r, body, "")
+		return t.writeJSON(w, r, result, "")
 	}
 
 	return true
