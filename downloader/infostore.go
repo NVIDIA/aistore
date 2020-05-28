@@ -5,7 +5,6 @@
 package downloader
 
 import (
-	"fmt"
 	"regexp"
 	"sync"
 	"time"
@@ -54,8 +53,7 @@ func (is *infoStore) getJob(id string) (*downloadJobInfo, error) {
 	if ji, ok := is.jobInfo[id]; ok {
 		return ji, nil
 	}
-
-	return nil, fmt.Errorf("download job %q not found", id)
+	return nil, errJobNotFound
 }
 
 func (is *infoStore) getList(descRegex *regexp.Regexp) []*downloadJobInfo {

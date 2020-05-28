@@ -83,23 +83,25 @@ func (bd *BuntDriver) Close() error {
 
 func (bd *BuntDriver) Set(collection, key string, object interface{}) error {
 	b := cmn.MustMarshal(object)
-	return bd.SetString(collection, key, string(b))
+	err := bd.SetString(collection, key, string(b))
+	return buntToCommonErr(err, collection, key)
 }
 
 func (bd *BuntDriver) Get(collection, key string, object interface{}) error {
 	s, err := bd.GetString(collection, key)
 	if err != nil {
-		return err
+		return buntToCommonErr(err, collection, key)
 	}
 	return jsoniter.Unmarshal([]byte(s), object)
 }
 
 func (bd *BuntDriver) SetString(collection, key, data string) error {
 	name := makePath(collection, key)
-	return bd.driver.Update(func(tx *buntdb.Tx) error {
+	err := bd.driver.Update(func(tx *buntdb.Tx) error {
 		_, _, err := tx.Set(name, data, nil)
 		return err
 	})
+	return buntToCommonErr(err, collection, key)
 }
 
 func (bd *BuntDriver) GetString(collection, key string) (string, error) {
