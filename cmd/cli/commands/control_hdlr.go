@@ -22,6 +22,13 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	singleDlType = iota
+	multiDlType
+	rangeDlType
+	cloudDlType
+)
+
 var (
 	startCmdsFlags = map[string][]cli.Flag{
 		subcmdStartXaction: {},
@@ -216,7 +223,45 @@ func startDownloadHandler(c *cli.Context) error {
 		},
 	}
 
+	// Heuristics to determine the download type.
+	var dlType int
 	if objectsListPath != "" {
+		dlType = multiDlType
+	} else if strings.Contains(source.link, "{") && strings.Contains(source.link, "}") {
+		dlType = rangeDlType
+	} else if source.cloud.bck.IsEmpty() {
+		dlType = singleDlType
+	} else {
+		cfg, err := getClusterConfig()
+		if err != nil {
+			return err
+		}
+		if cfg.Cloud.Provider == source.cloud.bck.Provider {
+			// Cloud is configured to requested bucket provider.
+			dlType = cloudDlType
+		} else if source.cloud.prefix == "" {
+			return fmt.Errorf(
+				"cluster is not configured with %q provider: cannot download whole cloud bucket",
+				source.cloud.bck.Provider,
+			)
+		} else {
+			// If `prefix` is not empty then possibly it is just a single object
+			// which we can download without cloud to be configured (web link).
+			dlType = singleDlType
+		}
+	}
+
+	switch dlType {
+	case singleDlType:
+		payload := downloader.DlSingleBody{
+			DlBase: basePayload,
+			DlSingleObj: downloader.DlSingleObj{
+				Link:    source.link,
+				ObjName: pathSuffix, // in this case pathSuffix is a full name of the object
+			},
+		}
+		id, err = api.DownloadSingleWithParam(defaultAPIParams, payload)
+	case multiDlType:
 		var objects []string
 		{
 			file, err := os.Open(objectsListPath)
@@ -235,31 +280,22 @@ func startDownloadHandler(c *cli.Context) error {
 			ObjectsPayload: objects,
 		}
 		id, err = api.DownloadMultiWithParam(defaultAPIParams, payload)
-	} else if !source.bck.IsEmpty() {
-		// Cloud
-		payload := downloader.DlCloudBody{
-			DlBase:    basePayload,
-			SourceBck: source.bck,
-		}
-		id, err = api.DownloadCloudWithParam(defaultAPIParams, payload)
-	} else if strings.Contains(source.link, "{") && strings.Contains(source.link, "}") {
-		// Range
+	case rangeDlType:
 		payload := downloader.DlRangeBody{
 			DlBase:   basePayload,
 			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
 			Template: source.link,
 		}
 		id, err = api.DownloadRangeWithParam(defaultAPIParams, payload)
-	} else {
-		// Single
-		payload := downloader.DlSingleBody{
-			DlBase: basePayload,
-			DlSingleObj: downloader.DlSingleObj{
-				Link:    source.link,
-				ObjName: pathSuffix, // in this case pathSuffix is a full name of the object
-			},
+	case cloudDlType:
+		payload := downloader.DlCloudBody{
+			DlBase:    basePayload,
+			SourceBck: source.cloud.bck,
+			Prefix:    source.cloud.prefix,
 		}
-		id, err = api.DownloadSingleWithParam(defaultAPIParams, payload)
+		id, err = api.DownloadCloudWithParam(defaultAPIParams, payload)
+	default:
+		cmn.Assert(false)
 	}
 
 	if err != nil {

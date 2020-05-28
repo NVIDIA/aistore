@@ -30,26 +30,44 @@ func TestParseSourceValidURIs(t *testing.T) {
 		},
 
 		{
-			input: "gs://bucket",
+			input: "gs://bucket/very/long/prefix-",
 			expected: dlSource{
-				link: "https://storage.googleapis.com/bucket",
-				bck:  cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
+				link: "https://storage.googleapis.com/bucket/very/long/prefix-",
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
+					prefix: "very/long/prefix-",
+				},
 			},
 		},
 		{
 			input: "gcp://bucket",
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket",
-				bck:  cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
+					prefix: "",
+				},
 			},
 		},
 		{
-			input:    "gs://bucket/objname.tar",
-			expected: dlSource{link: "https://storage.googleapis.com/bucket/objname.tar"},
+			input: "gs://bucket/objname.tar",
+			expected: dlSource{
+				link: "https://storage.googleapis.com/bucket/objname.tar",
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
+					prefix: "objname.tar",
+				},
+			},
 		},
 		{
-			input:    "gs://bucket/subfolder/objname.tar",
-			expected: dlSource{link: "https://storage.googleapis.com/bucket/subfolder/objname.tar"},
+			input: "gs://bucket/subfolder/objname.tar",
+			expected: dlSource{
+				link: "https://storage.googleapis.com/bucket/subfolder/objname.tar",
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
+					prefix: "subfolder/objname.tar",
+				},
+			},
 		},
 
 		{
@@ -70,26 +88,44 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{link: "https://s3.amazonaws.com/bucket"},
 		},
 		{
-			input: "s3://bucket",
+			input: "s3://bucket/very/long/prefix-",
 			expected: dlSource{
-				link: "http://s3.amazonaws.com/bucket",
-				bck:  cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
+				link: "http://s3.amazonaws.com/bucket/very/long/prefix-",
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
+					prefix: "very/long/prefix-",
+				},
 			},
 		},
 		{
 			input: "aws://bucket",
 			expected: dlSource{
 				link: "http://s3.amazonaws.com/bucket",
-				bck:  cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
+					prefix: "",
+				},
 			},
 		},
 		{
-			input:    "s3://bucket/objname.tar",
-			expected: dlSource{link: "http://s3.amazonaws.com/bucket/objname.tar"},
+			input: "s3://bucket/objname.tar",
+			expected: dlSource{
+				link: "http://s3.amazonaws.com/bucket/objname.tar",
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
+					prefix: "objname.tar",
+				},
+			},
 		},
 		{
-			input:    "s3://bucket/subfolder/objname.tar",
-			expected: dlSource{link: "http://s3.amazonaws.com/bucket/subfolder/objname.tar"},
+			input: "s3://bucket/subfolder/objname.tar",
+			expected: dlSource{
+				link: "http://s3.amazonaws.com/bucket/subfolder/objname.tar",
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
+					prefix: "subfolder/objname.tar",
+				},
+			},
 		},
 
 		{
@@ -102,8 +138,14 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{link: "https://www.googleapis.com/storage/v1/b/nvdata-openimages/o/imagenet/imagenet_train-{000000..000002}.tgz?alt=media"},
 		},
 		{
-			input:    "gs://bucket/obj{00..10}.tgz",
-			expected: dlSource{link: "https://storage.googleapis.com/bucket/obj{00..10}.tgz"},
+			input: "gs://bucket/obj{00..10}.tgz",
+			expected: dlSource{
+				link: "https://storage.googleapis.com/bucket/obj{00..10}.tgz",
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
+					prefix: "obj{00..10}.tgz",
+				},
+			},
 		},
 		{
 			input:    "ais://172.10.10.10/bucket",

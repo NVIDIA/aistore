@@ -83,9 +83,9 @@ func DisableMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 	})
 }
 
-// GetConfig API
+// GetDaemonConfig API
 //
-// Returns the configuration of a specific daemon in a cluster
+// Returns the configuration of a specific daemon in a cluster.
 func GetDaemonConfig(baseParams BaseParams, nodeID string) (config *cmn.Config, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
@@ -103,8 +103,8 @@ func GetDaemonConfig(baseParams BaseParams, nodeID string) (config *cmn.Config, 
 
 // GetDaemonSysInfo API
 //
-// Returns the system info of a specific daemon in the cluster
-// Note that FSCapacity will be zero if proxy
+// Returns the system info of a specific daemon in the cluster.
+// NOTE: `FSCapacity` will be zero if proxy.
 func GetDaemonSysInfo(baseParams BaseParams, nodeID string) (sysInfo *cmn.TSysInfo, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{

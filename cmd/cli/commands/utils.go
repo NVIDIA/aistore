@@ -243,13 +243,35 @@ func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStat
 	}
 }
 
+// Get config from random target.
+func getClusterConfig() (*cmn.Config, error) {
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return nil, err
+	}
+	si, err := smap.GetRandTarget()
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := api.GetDaemonConfig(defaultAPIParams, si.DaemonID)
+	if err != nil {
+		return nil, err
+	}
+	return cfg, err
+}
+
 //
 // Scheme
 //
 
+type dlSourceCloud struct {
+	bck    cmn.Bck
+	prefix string
+}
+
 type dlSource struct {
-	link string
-	bck  cmn.Bck
+	link  string
+	cloud dlSourceCloud
 }
 
 // Replace protocol (gs://, s3://) with proper google cloud / s3 URL
@@ -260,29 +282,30 @@ func parseSource(rawURL string) (source dlSource, err error) {
 	}
 
 	var (
-		bck      cmn.Bck
-		scheme   = u.Scheme
-		host     = u.Host
-		fullPath = u.Path
+		cloudSource dlSourceCloud
+		scheme      = u.Scheme
+		host        = u.Host
+		fullPath    = u.Path
 	)
 
-	// TODO: Maybe at this point we shouldn't translate the URI into URL because
-	//  we may want to download an object via SDK (which can have credentials).
-	//
 	// If `rawURL` is using `gs` or `s3` scheme ({gs/s3}://<bucket>/...)
 	// then <bucket> is considered a `Host` by `url.Parse`.
 	switch u.Scheme {
 	case gsScheme, cmn.ProviderGoogle:
-		if fullPath == "" {
-			bck = cmn.Bck{Name: host, Provider: cmn.ProviderGoogle}
+		cloudSource = dlSourceCloud{
+			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderGoogle},
+			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
+
 		scheme = "https"
 		host = gsHost
 		fullPath = path.Join(u.Host, fullPath)
 	case s3Scheme, cmn.ProviderAmazon:
-		if fullPath == "" {
-			bck = cmn.Bck{Name: host, Provider: cmn.ProviderAmazon}
+		cloudSource = dlSourceCloud{
+			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAmazon},
+			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
+
 		scheme = "http"
 		host = s3Host
 		fullPath = path.Join(u.Host, fullPath)
@@ -312,8 +335,8 @@ func parseSource(rawURL string) (source dlSource, err error) {
 	}
 	link, err := url.QueryUnescape(normalizedURL.String())
 	return dlSource{
-		bck:  bck,
-		link: link,
+		link:  link,
+		cloud: cloudSource,
 	}, err
 }
 
