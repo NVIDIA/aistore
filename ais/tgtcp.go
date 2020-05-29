@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -442,6 +441,8 @@ func (t *targetrunner) userFromRequest(header http.Header) (*authRec, error) {
 // (at this moment userID is enough) from HTTP request header: looks for
 // 'Authorization' header and decrypts it.
 // Extracted user information is put to context that is passed to all consumers
+//
+// TODO: This function seems to be noop!
 func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
 	ct := context.Background()
 	config := cmn.GCO.Get()
@@ -457,7 +458,7 @@ func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
 	}
 
 	if user != nil {
-		ct = context.WithValue(ct, cloud.CtxUserID, user.userID)
+		ct = context.WithValue(ct, cmn.CtxUserID, user.userID)
 	}
 
 	return ct

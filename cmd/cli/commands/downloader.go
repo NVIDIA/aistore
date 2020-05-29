@@ -26,6 +26,7 @@ type (
 		totalFiles        int
 		finishedFiles     int
 		downloadingErrors map[string]string
+		finished          bool
 		aborted           bool
 	}
 
@@ -68,13 +69,17 @@ func (d downloadingResult) String() string {
 		return "Download was aborted."
 	}
 
-	if d.finishedFiles == d.totalFiles {
+	if d.finished {
 		return "All files successfully downloaded."
 	}
 
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Downloaded %d out of %d files.", d.finishedFiles, d.totalFiles))
+	if d.totalFiles > 0 {
+		sb.WriteString(fmt.Sprintf("Downloaded %d out of %d files.", d.finishedFiles, d.totalFiles))
+	} else {
+		sb.WriteString(fmt.Sprintf("Downloaded %d files.", d.finishedFiles))
+	}
 	if len(d.downloadingErrors) > 0 {
 		sb.WriteString("\nFollowing files caused downloading errors:")
 		for file, err := range d.downloadingErrors {
@@ -284,7 +289,13 @@ func (b *downloaderPB) cleanBars() {
 }
 
 func (b *downloaderPB) result() downloadingResult {
-	return downloadingResult{totalFiles: b.totalFiles, finishedFiles: b.finishedFiles, downloadingErrors: b.errors, aborted: b.aborted}
+	return downloadingResult{
+		totalFiles:        b.totalFiles,
+		finishedFiles:     b.finishedFiles,
+		downloadingErrors: b.errors,
+		finished:          b.jobFinished(),
+		aborted:           b.aborted,
+	}
 }
 
 func (b *downloaderPB) jobFinished() bool {
@@ -306,7 +317,6 @@ func downloadJobsList(c *cli.Context, regex string) error {
 	if err != nil {
 		return err
 	}
-
 	return templates.DisplayOutput(list, c.App.Writer, templates.DownloadListTmpl)
 }
 

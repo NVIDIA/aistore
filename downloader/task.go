@@ -130,18 +130,12 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 		return fmt.Errorf("request failed with %d status code (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
-	// Create a custom reader to monitor progress every time we read from response body stream
-	var r io.ReadCloser = &progressReader{
-		r: resp.Body,
-		reporter: func(n int64) {
-			t.currentSize.Add(n)
-		},
-	}
-	// Wrap around throttler reader (noop if throttling is disabled)
-	r = t.job.throttler().wrapReader(ctx, r)
+	var (
+		r   = t.wrapReader(ctx, resp.Body)
+		roi = getRemoteObjInfo(t.obj.link, resp)
+	)
 
-	roi := getRemoteObjInfo(t.obj.link, resp)
-	t.setTotalSize(roi)
+	t.setTotalSize(roi.size)
 
 	lom.SetCustomMD(roi.md)
 	err = t.parent.t.PutObject(cluster.PutObjectParams{
@@ -194,9 +188,22 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {
 	return
 }
 
-func (t *singleObjectTask) setTotalSize(roi remoteObjInfo) {
-	if roi.size > 0 {
-		t.totalSize.Store(roi.size)
+func (t *singleObjectTask) wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {
+	// Create a custom reader to monitor progress every time we read from response body stream.
+	r = &progressReader{
+		r: r,
+		reporter: func(n int64) {
+			t.currentSize.Add(n)
+		},
+	}
+	// Wrap around throttler reader (noop if throttling is disabled).
+	r = t.job.throttler().wrapReader(ctx, r)
+	return r
+}
+
+func (t *singleObjectTask) setTotalSize(size int64) {
+	if size > 0 {
+		t.totalSize.Store(size)
 	}
 }
 
@@ -206,13 +213,20 @@ func (t *singleObjectTask) reset() {
 }
 
 func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) error {
+	// Set custom context values (used by `ais/cloud/*`).
 	ctx, cancel := context.WithTimeout(t.downloadCtx, t.initialTimeout())
 	defer cancel()
+	wrapReader := func(r io.ReadCloser) io.ReadCloser { return t.wrapReader(ctx, r) }
+	ctx = context.WithValue(ctx, cmn.CtxReadWrapper, cmn.ReadWrapperFunc(wrapReader))
+	ctx = context.WithValue(ctx, cmn.CtxSetSize, cmn.SetSizeFunc(t.setTotalSize))
+
 	// Temporary set backend bucket to the source bucket - a little bit hackish.
 	props := lom.Bck().Props.Clone()
 	props.BackendBck = t.job.SrcBck()
 	lom.Bck().Props = props
-	err, _ := t.parent.t.GetCold(ctx, lom, true /* prefetch */)
+
+	// Do final GET (prefetch) request.
+	err, _ := t.parent.t.GetCold(ctx, lom, true /*prefetch*/)
 	return err
 }
 

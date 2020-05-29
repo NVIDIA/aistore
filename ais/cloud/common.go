@@ -6,34 +6,24 @@ package cloud
 
 import (
 	"context"
-)
+	"io"
 
-// Declare a new type for Context field names
-type contextID string
-
-const (
-	CtxUserID contextID = "userID" // a field name of a context that contains userID
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (
-	// nolint:unused,varcheck,deadcode // used by `aws` and `gcp` but needs to compiled by tags
 	initialBucketListSize = 128
 )
 
-// Retrieves a string from context field or empty string if nothing found or
-// the field is not of string type.
-//
-// nolint:unused,deadcode // used by `aws` and `gcp` but needs to compiled by tags
-func getStringFromContext(ct context.Context, fieldName contextID) string {
-	fieldIf := ct.Value(fieldName)
-	if fieldIf == nil {
-		return ""
+func wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {
+	if v := ctx.Value(cmn.CtxReadWrapper); v != nil {
+		return v.(cmn.ReadWrapperFunc)(r)
 	}
+	return r
+}
 
-	strVal, ok := fieldIf.(string)
-	if !ok {
-		return ""
+func setSize(ctx context.Context, size int64) {
+	if v := ctx.Value(cmn.CtxSetSize); v != nil {
+		v.(cmn.SetSizeFunc)(size)
 	}
-
-	return strVal
 }

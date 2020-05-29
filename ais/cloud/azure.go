@@ -364,9 +364,10 @@ func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		}
 	)
 	lom.SetCustomMD(customMD)
+	setSize(ctx, resp.ContentLength())
 	err = ap.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
-		Reader:       resp.Body(retryOpts),
+		Reader:       wrapReader(ctx, resp.Body(retryOpts)),
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,

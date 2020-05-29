@@ -111,7 +111,7 @@ run:
   tests: true # enable linting test files
 
   build-tags:
-    - hrw # build hrw so that staticcheck doesn't complain about unused export functions
+    - hrw aws # build hrw and aws so that staticcheck doesn't complain about unused export functions
 
   concurrency: 4
   deadline: 5m

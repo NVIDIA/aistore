@@ -47,12 +47,14 @@ func NewAWS(t cluster.Target) (cluster.CloudProvider, error) { return &awsProvid
 // session FIXME: optimize
 //
 //======
+
 // A session is created using default credentials from
 // configuration file in ~/.aws/credentials and environment variables
-func createSession(ctx context.Context) *session.Session {
+func createSession() *session.Session {
 	// TODO: avoid creating sessions for each request
 	return session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable}))
+		SharedConfigState: session.SharedConfigEnable,
+	}))
 }
 
 func awsErrorToAISError(awsError error, bck cmn.Bck, node string) (error, int) {
@@ -85,7 +87,7 @@ func (awsp *awsProvider) Provider() string {
 func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	var (
 		cloudBck = bck.CloudBck()
-		svc      = s3.New(createSession(ctx))
+		svc      = s3.New(createSession())
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("list_objects %s", cloudBck.Name)
@@ -198,7 +200,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	var (
 		cloudBck = bck.CloudBck()
-		svc      = s3.New(createSession(ctx))
+		svc      = s3.New(createSession())
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[head_bucket] %s", cloudBck.Name)
@@ -232,7 +234,7 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 
 func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
 	var (
-		svc = s3.New(createSession(ctx))
+		svc = s3.New(createSession())
 	)
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
@@ -260,7 +262,7 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
 		cloudBck = lom.Bck().CloudBck()
-		svc      = s3.New(createSession(ctx))
+		svc      = s3.New(createSession())
 		input    = &s3.HeadObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(lom.ObjName)}
 	)
 
@@ -291,7 +293,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		cksumToCheck *cmn.Cksum
 		bck          = lom.Bck().CloudBck()
 	)
-	sess := createSession(ctx)
+	sess := createSession()
 	svc := s3.New(sess)
 	obj, err := svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bck.Name),
@@ -324,9 +326,12 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		customMD[cluster.AmazonVersionObjMD] = *obj.VersionId
 	}
 	lom.SetCustomMD(customMD)
+	if obj.ContentLength != nil {
+		setSize(ctx, *obj.ContentLength)
+	}
 	err = awsp.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
-		Reader:       obj.Body,
+		Reader:       wrapReader(ctx, obj.Body),
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
@@ -355,7 +360,7 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	md[awsChecksumType] = aws.String(cksumType)
 	md[awsChecksumVal] = aws.String(cksumValue)
 
-	uploader := s3manager.NewUploader(createSession(ctx))
+	uploader := s3manager.NewUploader(createSession())
 	uploadOutput, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket:   aws.String(cloudBck.Name),
 		Key:      aws.String(lom.ObjName),
@@ -384,7 +389,7 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 func (awsp *awsProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	var (
 		cloudBck = lom.Bck().CloudBck()
-		svc      = s3.New(createSession(ctx))
+		svc      = s3.New(createSession())
 	)
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(lom.ObjName)})
 	if err != nil {

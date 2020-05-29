@@ -293,9 +293,10 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	lom.SetCksum(cksum)
 	lom.SetVersion(strconv.FormatInt(attrs.Generation, 10))
 	lom.SetCustomMD(customMD)
+	setSize(ctx, rc.Attrs.Size)
 	err = gcpp.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
-		Reader:       rc,
+		Reader:       wrapReader(ctx, rc),
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
