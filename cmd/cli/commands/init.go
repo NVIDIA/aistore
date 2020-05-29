@@ -39,13 +39,19 @@ func initClusterParams() {
 		MaxIdleConns:     100,
 	})
 
-	if authnURL := cliAuthnURL(); authnURL != "" {
+	if authnURL := cliAuthnURL(cfg); authnURL != "" {
 		authnHTTPClient = cmn.NewClient(cmn.TransportArgs{
 			DialTimeout: cfg.Timeout.TCPTimeout,
 			Timeout:     cfg.Timeout.HTTPTimeout,
 			UseHTTPS:    cmn.IsHTTPS(authnURL),
 			SkipVerify:  true, // TODO: trust all servers for now
 		})
+
+		authParams = api.BaseParams{
+			Client: authnHTTPClient,
+			URL:    authnURL,
+			Token:  loggedUserToken.Token,
+		}
 	}
 
 	defaultAPIParams = api.BaseParams{

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -140,8 +141,12 @@ func readValue(c *cli.Context, prompt string) string {
 	return strings.TrimSuffix(line, "\n")
 }
 
-func cliAuthnURL() string {
-	return os.Getenv(authnServerURL)
+func cliAuthnURL(cfg *config.Config) string {
+	authURL := os.Getenv(authnServerURL)
+	if authURL == "" {
+		authURL = cfg.Auth.URL
+	}
+	return authURL
 }
 
 func cliAuthnAdminName(c *cli.Context) string {
@@ -183,11 +188,9 @@ func cliAuthnUserPassword(c *cli.Context) string {
 }
 
 func addUserHandler(c *cli.Context) (err error) {
-	authnURL := cliAuthnURL()
-	if authnURL == "" {
+	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAuthParams(authnURL)
 	spec := api.AuthnSpec{
 		AdminName:     cliAuthnAdminName(c),
 		AdminPassword: cliAuthnAdminPassword(c),
@@ -201,33 +204,29 @@ func addUserHandler(c *cli.Context) (err error) {
 		Password: cliAuthnUserPassword(c),
 		Role:     role,
 	}
-	return api.AddUser(baseParams, spec, user)
+	return api.AddUser(authParams, spec, user)
 }
 
 func deleteUserHandler(c *cli.Context) (err error) {
-	authnURL := cliAuthnURL()
-	if authnURL == "" {
+	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAuthParams(authnURL)
 	spec := api.AuthnSpec{
 		AdminName:     cliAuthnAdminName(c),
 		AdminPassword: cliAuthnAdminPassword(c),
 	}
 	userName := cliAuthnUserName(c)
-	return api.DeleteUser(baseParams, spec, userName)
+	return api.DeleteUser(authParams, spec, userName)
 }
 
 func loginUserHandler(c *cli.Context) (err error) {
 	const tokenSaveFailFmt = "successfully logged in, but failed to save token: %v"
-	authnURL := cliAuthnURL()
-	if authnURL == "" {
+	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAuthParams(authnURL)
 	name := cliAuthnUserName(c)
 	password := cliAuthnUserPassword(c)
-	token, err := api.LoginUser(baseParams, name, password)
+	token, err := api.LoginUser(authParams, name, password)
 	if err != nil {
 		return err
 	}
@@ -266,12 +265,9 @@ func logoutUserHandler(c *cli.Context) (err error) {
 }
 
 func addAuthClusterHandler(c *cli.Context) (err error) {
-	authnURL := cliAuthnURL()
-	if authnURL == "" {
+	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAuthParams(authnURL)
-	baseParams.Token = "" // the request requires superuser credentials, not user's ones
 	cid := c.Args().Get(0)
 	if cid == "" {
 		return missingArgumentsError(c, "cluster id")
@@ -290,16 +286,13 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 		ClusterID: cid,
 		URLs:      urlList,
 	}
-	return api.RegisterClusterAuthN(baseParams, spec)
+	return api.RegisterClusterAuthN(authParams, spec)
 }
 
 func updateAuthClusterHandler(c *cli.Context) (err error) {
-	authnURL := cliAuthnURL()
-	if authnURL == "" {
+	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAuthParams(authnURL)
-	baseParams.Token = "" // the request requires superuser credentials, not user's ones
 	cid := c.Args().Get(0)
 	if cid == "" {
 		return missingArgumentsError(c, "cluster id")
@@ -318,16 +311,13 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 		ClusterID: cid,
 		URLs:      urlList,
 	}
-	return api.UpdateClusterAuthN(baseParams, spec)
+	return api.UpdateClusterAuthN(authParams, spec)
 }
 
 func deleteAuthClusterHandler(c *cli.Context) (err error) {
-	authnURL := cliAuthnURL()
-	if authnURL == "" {
+	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAuthParams(authnURL)
-	baseParams.Token = "" // the request requires superuser credentials, not user's ones
 	cid := c.Args().Get(0)
 	if cid == "" {
 		return missingArgumentsError(c, "cluster id")
@@ -335,20 +325,17 @@ func deleteAuthClusterHandler(c *cli.Context) (err error) {
 	spec := api.ClusterSpec{
 		ClusterID: cid,
 	}
-	return api.UnregisterClusterAuthN(baseParams, spec)
+	return api.UnregisterClusterAuthN(authParams, spec)
 }
 
 func showAuthClusterHandler(c *cli.Context) (err error) {
-	authnURL := cliAuthnURL()
-	if authnURL == "" {
+	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAuthParams(authnURL)
-	baseParams.Token = "" // the request requires superuser credentials, not user's ones
 	spec := api.ClusterSpec{
 		ClusterID: c.Args().Get(0),
 	}
-	list, err := api.GetClusterAuthN(baseParams, spec)
+	list, err := api.GetClusterAuthN(authParams, spec)
 	if err != nil {
 		return err
 	}
@@ -357,16 +344,13 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 }
 
 func showAuthRoleHandler(c *cli.Context) (err error) {
-	authnURL := cliAuthnURL()
-	if authnURL == "" {
+	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAuthParams(authnURL)
-	baseParams.Token = "" // the request requires superuser credentials, not user's ones
 	spec := api.ClusterSpec{
 		ClusterID: c.Args().Get(0),
 	}
-	list, err := api.GetRolesAuthN(baseParams, spec)
+	list, err := api.GetRolesAuthN(authParams, spec)
 	if err != nil {
 		return err
 	}
@@ -375,13 +359,10 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 }
 
 func showUserHandler(c *cli.Context) (err error) {
-	authnURL := cliAuthnURL()
-	if authnURL == "" {
+	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	baseParams := cliAuthParams(authnURL)
-	baseParams.Token = "" // the request requires superuser credentials, not user's ones
-	list, err := api.GetUsersAuthN(baseParams)
+	list, err := api.GetUsersAuthN(authParams)
 	if err != nil {
 		return err
 	}

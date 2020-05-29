@@ -62,6 +62,7 @@ var (
 	defaultHTTPClient *http.Client
 	authnHTTPClient   *http.Client
 	defaultAPIParams  api.BaseParams
+	authParams        api.BaseParams
 	mu                sync.Mutex
 )
 
@@ -712,13 +713,6 @@ func cliAPIParams(proxyURL string) api.BaseParams {
 		Client: defaultHTTPClient,
 		URL:    proxyURL,
 		Token:  loggedUserToken.Token,
-	}
-}
-
-func cliAuthParams(authnURL string) api.BaseParams {
-	return api.BaseParams{
-		Client: authnHTTPClient,
-		URL:    authnURL,
 	}
 }
 

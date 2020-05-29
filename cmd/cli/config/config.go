@@ -17,6 +17,12 @@ import (
 const (
 	configDirName  = "ais"
 	configFileName = "config.json"
+
+	urlFmt           = "%s://%s:%d"
+	defaultAISIP     = "127.0.0.1"
+	defaultAISPort   = 8080
+	defaultAuthNPort = 52001
+	defaultDockerIP  = "172.50.0.2"
 )
 
 var (
@@ -32,11 +38,12 @@ func init() {
 	if value := os.Getenv(cmn.EnvVars.UseHTTPS); cmn.IsParseBool(value) {
 		proto = "https"
 	}
+	aisURL := fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAISPort)
 	defaultConfig = Config{
 		Cluster: ClusterConfig{
-			URL:               proto + "://127.0.0.1:8080",
-			DefaultAISHost:    proto + "://127.0.0.1:8080",
-			DefaultDockerHost: proto + "://172.50.0.2:8080",
+			URL:               aisURL,
+			DefaultAISHost:    aisURL,
+			DefaultDockerHost: fmt.Sprintf(urlFmt, proto, defaultDockerIP, defaultAISPort),
 		},
 		Timeout: TimeoutConfig{
 			TCPTimeoutStr:  "60s",
@@ -44,12 +51,16 @@ func init() {
 			HTTPTimeoutStr: "0s",
 			HTTPTimeout:    0,
 		},
+		Auth: AuthConfig{
+			URL: fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAuthNPort),
+		},
 	}
 }
 
 type Config struct {
 	Cluster ClusterConfig `json:"cluster"`
 	Timeout TimeoutConfig `json:"timeout"`
+	Auth    AuthConfig    `json:"auth"`
 }
 
 type ClusterConfig struct {
@@ -63,6 +74,10 @@ type TimeoutConfig struct {
 	TCPTimeout     time.Duration `json:"-"`
 	HTTPTimeoutStr string        `json:"http_timeout"`
 	HTTPTimeout    time.Duration `json:"-"`
+}
+
+type AuthConfig struct {
+	URL string `json:"url"`
 }
 
 func (c *Config) validate() (err error) {
