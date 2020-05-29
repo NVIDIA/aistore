@@ -10,6 +10,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/hex"
+	jsonStd "encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -24,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	mpb "github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -461,8 +461,9 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 		aborted = aborted || targetMetrics.Aborted.Load()
 		finished = finished && targetMetrics.Creation.Finished
 	}
-
-	b, err := jsoniter.MarshalIndent(resp, "", "  ")
+	// Here we use encoding/json inplace of jsoniter because of indentation issues,
+	// https://github.com/json-iterator/go/issues/331
+	b, err := jsonStd.MarshalIndent(resp, "", "  ")
 	if err != nil {
 		return false, false, err
 	}
