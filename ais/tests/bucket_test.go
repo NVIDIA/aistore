@@ -2083,7 +2083,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	// wait for mirroring
 	if mirrored {
-		m.ensureNumCopies(2)
+		m.ensureNumCopies(2, cmn.ActPutCopies)
 	}
 	// wait for erasure-coding
 	if eced {

@@ -16,7 +16,7 @@ import (
 
 type mpather interface {
 	mountpathInfo() *fs.MountpathInfo
-	stop()
+	stop() int
 	post(lom *cluster.LOM)
 }
 
@@ -156,4 +156,16 @@ func checkInsufficientMpaths(xact cmn.Xact, mpathCount int) error {
 		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", xact, mpathCount)
 	}
 	return nil
+}
+
+func drainWorkCh(workCh chan *cluster.LOM, tag string) (n int) {
+	for {
+		select {
+		case lom := <-workCh:
+			glog.Errorf("%s: %s", tag, lom)
+			n++
+		default:
+			return
+		}
+	}
 }

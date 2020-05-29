@@ -386,14 +386,17 @@ func (m *ioContext) stopGets() {
 	m.stopCh <- struct{}{}
 }
 
-func (m *ioContext) ensureNumCopies(expectedCopies int) {
+func (m *ioContext) ensureNumCopies(expectedCopies int, kinds ...string) {
 	var (
-		total      int
 		baseParams = tutils.BaseAPIParams()
+		kind       = cmn.ActMakeNCopies
+		total      int
 	)
-
-	time.Sleep(3 * time.Second)
-	xactArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
+	time.Sleep(time.Second)
+	if len(kinds) > 0 {
+		kind = kinds[0]
+	}
+	xactArgs := api.XactReqArgs{Kind: kind, Bck: m.bck, Timeout: rebalanceTimeout}
 	err := api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(m.t, err)
 

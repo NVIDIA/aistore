@@ -492,7 +492,7 @@ retry:
 	glog.Warning(err)
 	redundant := lom.HasCopies() || lom.Bprops().EC.Enabled
 	//
-	// recover from copies, if available
+	// return err if there's no redundancy OR already recovered once (and failed)
 	//
 	if retried || !redundant {
 		//

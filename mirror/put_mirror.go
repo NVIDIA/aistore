@@ -5,6 +5,7 @@
 package mirror
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -14,6 +15,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
+
+const idleTime = 5 * time.Second // TODO: overrides cmn/xaction.go very long timeout; need to make it configurable
 
 type (
 	XactPutLRepl struct {
@@ -47,7 +50,7 @@ func RunXactPutLRepl(lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err 
 		mpathCount        = len(availablePaths)
 	)
 	r = &XactPutLRepl{
-		XactDemandBase: *cmn.NewXactDemandBase(cmn.ActPutCopies, lom.Bck().Bck),
+		XactDemandBase: *cmn.NewXactDemandBase(cmn.ActPutCopies, lom.Bck().Bck, idleTime),
 		slab:           slab,
 		mirror:         *lom.MirrorConf(),
 	}
@@ -89,11 +92,12 @@ func (r *XactPutLRepl) Run() error {
 			}
 		case <-r.ChanCheckTimeout():
 			if r.Timeout() {
-				r.stop()
-				return nil
+				return r.stop()
 			}
 		case <-r.ChanAbort():
-			r.stop()
+			if err := r.stop(); err != nil {
+				return cmn.NewAbortedError(err.Error())
+			}
 			return cmn.NewAbortedError(r.String())
 		}
 	}
@@ -154,20 +158,25 @@ func (r *XactPutLRepl) Stop(error) { r.Abort() } // call base method
 // serve GETs are even less available for other extended actions than otherwise, etc.
 // =================== load balancing and self-throttling ========================
 
-func (r *XactPutLRepl) stop() {
+func (r *XactPutLRepl) stop() (err error) {
+	var n int
 	if r.Finished() {
 		glog.Warningf("%s is (already) not running", r)
 		return
 	}
 	r.XactDemandBase.Stop()
 	for _, mpather := range r.mpathers {
-		mpather.stop()
+		n += mpather.stop()
 	}
 	r.EndTime(time.Now())
-	for lom := range r.workCh {
-		glog.Infof("Stopping, not copying %s", lom)
-		r.DecPending()
+	if nn := drainWorkCh(r.workCh, r.String()+" drop"); nn > 0 {
+		n += nn
+		r.SubPending(nn)
 	}
+	if n > 0 {
+		err = fmt.Errorf("%s: dropped %d object(s)", r, n)
+	}
+	return
 }
 
 //
@@ -215,10 +224,12 @@ func (j *xputJogger) jog() {
 func (j *xputJogger) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
 func (j *xputJogger) post(lom *cluster.LOM)            { j.workCh <- lom }
 
-func (j *xputJogger) stop() {
-	for lom := range j.workCh {
-		glog.Infof("Stopping, not copying %s", lom)
-		j.parent.DecPending()
+func (j *xputJogger) stop() (n int) {
+	tag := fmt.Sprintf("%s/%s drop", j.parent, j.mpathInfo)
+	n = drainWorkCh(j.workCh, tag)
+	if n > 0 {
+		j.parent.SubPending(n)
 	}
 	j.stopCh.Close()
+	return
 }

@@ -86,15 +86,20 @@ func (r *xactBckBase) run(mpathersCount int) error {
 	}
 }
 
-func (r *xactBckBase) stop() {
+func (r *xactBckBase) stop() (err error) {
+	var n int
 	if r.Finished() {
 		glog.Warningf("%s is (already) not running", r)
 		return
 	}
 	for _, mpather := range r.mpathers {
-		mpather.stop()
+		n += mpather.stop()
 	}
 	r.EndTime(time.Now())
+	if n > 0 {
+		err = fmt.Errorf("%s: dropped %d object(s)", r, n)
+	}
+	return
 }
 
 //
@@ -164,4 +169,4 @@ func (j *joggerBckBase) yieldTerm() error {
 
 func (j *joggerBckBase) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
 func (j *joggerBckBase) post(*cluster.LOM)                { cmn.Assert(false) }
-func (j *joggerBckBase) stop()                            { j.stopCh.Close() }
+func (j *joggerBckBase) stop() int                        { j.stopCh.Close(); return 0 }

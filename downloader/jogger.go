@@ -118,7 +118,7 @@ func (j *jogger) abortJob(id string) {
 
 	// Remove pending jobs in queue.
 	cnt := j.q.removeJob(id)
-	j.parent.parent.SubPending(int64(cnt))
+	j.parent.parent.SubPending(cnt)
 
 	// Abort currently running task, if belongs to a given job.
 	if j.task != nil && j.task.id() == id {
