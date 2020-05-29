@@ -65,25 +65,25 @@ func TestCompareObject(t *testing.T) {
 	lom.SetSize(10)
 	lom.SetCustomMD(customMD)
 
-	equal, err := compareObjects(obj, lom)
+	equal, err := compareObjects(nil, obj, lom)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that objects are still not equal after size update.
 	lom.SetSize(65)
-	equal, err = compareObjects(obj, lom)
+	equal, err = compareObjects(nil, obj, lom)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that objects are still not equal after version update.
 	customMD[cluster.GoogleVersionObjMD] = "1503349750687573"
-	equal, err = compareObjects(obj, lom)
+	equal, err = compareObjects(nil, obj, lom)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Finally, check if the objects are equal once we set all the metadata correctly.
 	customMD[cluster.GoogleCRC32CObjMD] = "30a991bd"
-	equal, err = compareObjects(obj, lom)
+	equal, err = compareObjects(nil, obj, lom)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, equal, "expected the objects to be equal")
 }

@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	retryCnt         = 10              // number of retries to external resource
-	reqTimeoutFactor = 1.2             // newTimeout = prevTimeout * reqTimeoutFactor
-	headReqTimeout   = 5 * time.Second // timeout for HEAD request to get the Content-Length
+	retryCnt         = 10               // number of retries to external resource
+	reqTimeoutFactor = 1.2              // newTimeout = prevTimeout * reqTimeoutFactor
+	headReqTimeout   = 15 * time.Second // timeout for HEAD request to get the Content-Length
 	internalErrorMsg = "internal server error"
 )
 
@@ -132,7 +132,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 
 	var (
 		r   = t.wrapReader(ctx, resp.Body)
-		roi = getRemoteObjInfo(t.obj.link, resp)
+		roi = roiFromLink(t.obj.link, resp)
 	)
 
 	t.setTotalSize(roi.size)
@@ -239,10 +239,11 @@ func (t *singleObjectTask) initialTimeout() time.Duration {
 }
 
 func (t *singleObjectTask) cancel() {
-	t.cancelFunc()
+	if t.cancelFunc != nil {
+		t.cancelFunc()
+	}
 }
 
-// TODO: this should also inform somehow downloader status about being Aborted/canceled
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
 func (t *singleObjectTask) markFailed(statusMsg string) {

@@ -354,7 +354,7 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 		fmt.Fprintf(w, "Done: %d file%s downloaded, %d error%s\n",
 			d.FinishedCnt, cmn.NounEnding(d.FinishedCnt), d.ErrorCnt, cmn.NounEnding(d.ErrorCnt))
 
-		if verbose {
+		if verbose && len(d.Errs) > 0 {
 			fmt.Fprintln(w, "Errors:")
 			for _, e := range d.Errs {
 				fmt.Fprintf(w, "\t%s: %s\n", e.Name, e.Err)

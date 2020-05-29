@@ -49,7 +49,7 @@ func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 		if t.cloud.ext.Provider() == bck.CloudBck().Provider {
 			return t.cloud.ext
 		}
-		c, _ := cloud.NewDummyCloud()
+		c, _ := cloud.NewDummyCloud(t)
 		return c
 	}
 	return t.cloud.ext

@@ -318,7 +318,7 @@ func (c *clouds) init(t *targetrunner, config *cmn.Config) {
 	case cmn.ProviderAzure:
 		c.ext, err = cloud.NewAzure(t)
 	case "":
-		c.ext, err = cloud.NewDummyCloud()
+		c.ext, err = cloud.NewDummyCloud(t)
 	default:
 		err = fmt.Errorf("unknown cloud provider: %q", config.Cloud.Provider)
 	}
@@ -1061,7 +1061,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		lom.PopulateHdr(hdr)
 	} else {
 		var objMeta cmn.SimpleKVs
-		objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(t.contextWithAuth(r.Header), lom)
+		objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(t.contextWithAuth(r.Header), lom.Bck(), lom.ObjName)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: HEAD request failed, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)
@@ -1131,7 +1131,7 @@ func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) 
 // should be called only if the local copy exists
 func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
 	var objMeta cmn.SimpleKVs
-	objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(ctx, lom)
+	objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(ctx, lom.Bck(), lom.ObjName)
 	if err != nil {
 		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
 		return

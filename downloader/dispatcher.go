@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -218,7 +217,7 @@ func (d *dispatcher) createTasksLom(job DlJob, obj dlObj) (*cluster.LOM, error) 
 		return nil, err
 	}
 	if err == nil {
-		equal, err := compareObjects(obj, lom)
+		equal, err := compareObjects(job, obj, lom)
 		if err != nil {
 			return nil, err
 		}
@@ -248,10 +247,7 @@ func (d *dispatcher) prepareTask(job DlJob, obj dlObj) (*singleObjectTask, *jogg
 
 	lom, err := d.createTasksLom(job, obj)
 	if err != nil {
-		glog.Warningf("error in handling downloader request: %v", err)
-		d.parent.statsT.Add(stats.ErrDownloadCount, 1)
-
-		dlStore.persistError(job.ID(), obj.objName, err.Error())
+		t.markFailed(err.Error())
 		// NOTE: do not propagate single task errors
 		return nil, nil, nil
 	}

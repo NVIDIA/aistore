@@ -259,16 +259,16 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 // HEAD OBJECT //
 ////////////////
 
-func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = bck.CloudBck()
 		svc      = s3.New(createSession())
-		input    = &s3.HeadObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(lom.ObjName)}
+		input    = &s3.HeadObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(objName)}
 	)
 
 	headOutput, err := svc.HeadObject(input)
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cloudBck, lom.T.Snode().Name())
+		err, errCode = awsErrorToAISError(err, cloudBck, awsp.t.Snode().Name())
 		return
 	}
 	objMeta = make(cmn.SimpleKVs, 3)
@@ -278,7 +278,7 @@ func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		objMeta[cmn.HeaderObjVersion] = *headOutput.VersionId
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[head_object] %s", lom)
+		glog.Infof("[head_object] %s/%s", bck, objName)
 	}
 	return
 }

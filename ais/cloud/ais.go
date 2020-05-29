@@ -375,16 +375,16 @@ func (m *AisCloudProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks)
 	return
 }
 
-func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (m *AisCloudProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
-		remoteBck = lom.Bck().Bck
+		remoteBck = bck.Bck
 	)
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return nil, err, errCode
 	}
 	err = m.try(remoteBck, func(bck cmn.Bck) error {
-		p, err := api.HeadObject(aisCluster.bp, bck, lom.ObjName)
+		p, err := api.HeadObject(aisCluster.bp, bck, objName)
 		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 			objMeta[uniqueTag] = fmt.Sprintf("%v", field.Value())
 			return nil, false

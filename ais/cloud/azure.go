@@ -303,20 +303,20 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	return
 }
 
-func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (ap *azureProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	objMeta = make(cmn.SimpleKVs)
 	var (
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = bck.CloudBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
-		blobURL  = cntURL.NewBlobURL(lom.ObjName)
+		blobURL  = cntURL.NewBlobURL(objName)
 	)
 	resp, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{})
 	if err != nil {
-		err, status := ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
+		err, status := ap.azureErrorToAISError(err, cloudBck, objName)
 		return objMeta, err, status
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return objMeta, fmt.Errorf("failed to get object props %s/%s", cloudBck, lom.ObjName), resp.StatusCode()
+		return objMeta, fmt.Errorf("failed to get object props %s/%s", cloudBck, objName), resp.StatusCode()
 	}
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength(), 10)
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAzure
@@ -324,7 +324,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	// Azure provider does not have real versioning, but it has ETag.
 	objMeta[cmn.HeaderObjVersion] = strings.Trim(string(resp.ETag()), "\"")
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[head_object] %s", lom)
+		glog.Infof("[head_object] %s/%s", bck, objName)
 	}
 	return
 }

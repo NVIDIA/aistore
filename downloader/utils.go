@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -227,7 +228,7 @@ type (
 )
 
 // Get file info if link points to GCP, S3 or Azure.
-func getRemoteObjInfo(link string, resp *http.Response) (roi remoteObjInfo) {
+func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
 	u, err := url.Parse(link)
 	cmn.AssertNoErr(err)
 
@@ -305,15 +306,53 @@ func headLink(link string) (*http.Response, error) {
 	return resp, nil
 }
 
-func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
-	resp, err := headLink(obj.link)
-	if err != nil {
-		return false, err
+func roiFromObjMeta(objMeta cmn.SimpleKVs) (roi remoteObjInfo) {
+	roi.md = make(cmn.SimpleKVs, 2)
+	switch objMeta[cmn.HeaderCloudProvider] {
+	case cmn.ProviderGoogle:
+		roi.md[cluster.SourceObjMD] = cluster.SourceGoogleObjMD
+		roi.md[cluster.SourceGoogleObjMD] = objMeta[cmn.HeaderObjVersion]
+	case cmn.ProviderAmazon:
+		roi.md[cluster.SourceObjMD] = cluster.SourceAmazonObjMD
+		roi.md[cluster.SourceAmazonObjMD] = objMeta[cmn.HeaderObjVersion]
+	case cmn.ProviderAzure:
+		roi.md[cluster.SourceObjMD] = cluster.SourceAzureObjMD
+		roi.md[cluster.SourceAzureObjMD] = objMeta[cmn.HeaderObjVersion]
+	default:
+		return
 	}
-	if resp.ContentLength != 0 && resp.ContentLength != lom.Size() {
+	if v := objMeta[cmn.HeaderObjSize]; v != "" {
+		roi.size, _ = strconv.ParseInt(v, 10, 64)
+	}
+	return
+}
+
+func compareObjects(job DlJob, obj dlObj, lom *cluster.LOM) (equal bool, err error) {
+	var roi remoteObjInfo
+	if !obj.fromCloud {
+		resp, err := headLink(obj.link)
+		if err != nil {
+			return false, err
+		}
+		roi = roiFromLink(obj.link, resp)
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
+		defer cancel()
+		// This should succeed since we check if the bucket exists beforehand.
+		srcBck := cluster.NewBckEmbed(job.SrcBck())
+		if err := srcBck.Init(lom.T.GetBowner(), lom.T.Snode()); err != nil {
+			return false, err
+		}
+		objMeta, err, _ := lom.T.Cloud(srcBck).HeadObj(ctx, srcBck, lom.ObjName)
+		if err != nil {
+			return false, err
+		}
+		roi = roiFromObjMeta(objMeta)
+	}
+
+	if roi.size != 0 && roi.size != lom.Size() {
 		return false, nil
 	}
-	roi := getRemoteObjInfo(obj.link, resp)
 
 	_, localMDPresent := lom.GetCustomMD(cluster.SourceObjMD)
 	remoteSource := roi.md[cluster.SourceObjMD]
