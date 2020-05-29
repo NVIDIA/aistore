@@ -108,11 +108,11 @@ func (d *Snode) URL(network string) string {
 	}
 }
 
-func (a *Snode) Equals(b *Snode) bool {
-	return a.ID() == b.ID() && a.DaemonType == b.DaemonType &&
-		reflect.DeepEqual(a.PublicNet, b.PublicNet) &&
-		reflect.DeepEqual(a.IntraControlNet, b.IntraControlNet) &&
-		reflect.DeepEqual(a.IntraDataNet, b.IntraDataNet)
+func (d *Snode) Equals(other *Snode) bool {
+	return d.ID() == other.ID() && d.DaemonType == other.DaemonType &&
+		reflect.DeepEqual(d.PublicNet, other.PublicNet) &&
+		reflect.DeepEqual(d.IntraControlNet, other.IntraControlNet) &&
+		reflect.DeepEqual(d.IntraDataNet, other.IntraDataNet)
 }
 
 func (d *Snode) Validate() error {
@@ -247,28 +247,28 @@ func (m *Smap) IsDuplicateURL(nsi *Snode) (osi *Snode, err error) {
 	return
 }
 
-func (a *Smap) Compare(b *Smap) (uuid string, sameOrigin, sameVersion, eq bool) {
+func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bool) {
 	sameOrigin, sameVersion, eq = true, true, true
-	if a.UUID != "" && b.UUID != "" && a.UUID != b.UUID {
+	if m.UUID != "" && other.UUID != "" && m.UUID != other.UUID {
 		sameOrigin = false
 	} else {
-		uuid = a.UUID
+		uuid = m.UUID
 		if uuid == "" {
-			uuid = b.UUID
+			uuid = other.UUID
 		}
 	}
-	if a.Version != b.Version {
+	if m.Version != other.Version {
 		sameVersion = false
 	}
-	if a.ProxySI == nil || b.ProxySI == nil || !a.ProxySI.Equals(b.ProxySI) {
+	if m.ProxySI == nil || other.ProxySI == nil || !m.ProxySI.Equals(other.ProxySI) {
 		eq = false
 		return
 	}
-	if !a.NonElects.Compare(b.NonElects) {
+	if !m.NonElects.Compare(other.NonElects) {
 		eq = false
 		return
 	}
-	eq = mapsEq(a.Tmap, b.Tmap) && mapsEq(a.Pmap, b.Pmap)
+	eq = mapsEq(m.Tmap, other.Tmap) && mapsEq(m.Pmap, other.Pmap)
 	return
 }
 

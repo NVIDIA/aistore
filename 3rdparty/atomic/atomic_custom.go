@@ -57,27 +57,3 @@ func (p *Pointer) Load() unsafe.Pointer {
 func (p *Pointer) Store(v unsafe.Pointer) {
 	atomic.StorePointer(&p.p, v)
 }
-
-type PairF32 struct {
-	noCopy noCopy
-	Min    Float32
-	Max    Float32
-}
-
-func NewPairF32() *PairF32 {
-	return &PairF32{}
-}
-
-func (src *PairF32) CopyTo(dst *PairF32) {
-	dst.Min.Store(src.Min.Load())
-	dst.Max.Store(src.Max.Load())
-}
-
-func (upair *PairF32) Init(f float32) {
-	upair.Min.Store(f)
-	upair.Max.Store(f)
-}
-
-func (p *PairF32) Load() (float32, float32) {
-	return p.Min.Load(), p.Max.Load()
-}

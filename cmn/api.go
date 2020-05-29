@@ -439,29 +439,29 @@ func CloudBucketProps(header http.Header) (props *BucketProps) {
 	return props
 }
 
-func (to *BucketProps) CopyFrom(from *BucketProps) {
+func (bp *BucketProps) CopyFrom(from *BucketProps) {
 	src, err := jsoniter.Marshal(from)
 	AssertNoErr(err)
-	err = jsoniter.Unmarshal(src, to)
+	err = jsoniter.Unmarshal(src, bp)
 	AssertNoErr(err)
 }
 
-func (from *BucketProps) Clone() *BucketProps {
+func (bp *BucketProps) Clone() *BucketProps {
 	to := &BucketProps{}
-	to.CopyFrom(from)
+	to.CopyFrom(bp)
 	return to
 }
 
-func (p1 *BucketProps) Equal(p2 *BucketProps) bool {
+func (bp *BucketProps) Equal(other *BucketProps) bool {
 	var (
 		jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
-		p11        = p1.Clone()
+		clone      = bp.Clone()
 	)
-	p11.BID = p2.BID
-	p11.Created = p2.Created
+	clone.BID = other.BID
+	clone.Created = other.Created
 
-	s1, _ := jsonCompat.Marshal(p11)
-	s2, _ := jsonCompat.Marshal(p2)
+	s1, _ := jsonCompat.Marshal(clone)
+	s2, _ := jsonCompat.Marshal(other)
 	return string(s1) == string(s2)
 }
 

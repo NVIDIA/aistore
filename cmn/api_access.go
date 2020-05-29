@@ -80,8 +80,8 @@ func AccessOp(access int) string {
 	return "<unknown access>"
 }
 
-func (c *BucketProps) AccessToStr() string {
-	aattrs := c.AccessAttrs
+func (bp *BucketProps) AccessToStr() string {
+	aattrs := bp.AccessAttrs
 	if aattrs == 0 {
 		return "No access"
 	}
