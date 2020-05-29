@@ -11,6 +11,24 @@ What happens if it is large enough to require a cluster of storage servers?
 Meet **Internet Downloader** - an integrated part of the AIStore.
 AIS cluster can be easily deployed on any commodity hardware, and AIS **downloader** can then be used to quickly populate AIS buckets with any contents from a given location.
 
+## Features
+
+> By way of background, AIStore supports a number of [3rd party Cloud providers](/docs/providers.md) and utilizes the providers' SDKs to access the corresponding Clouds. For Amazon S3, that would be `aws-sdk-go` SDK, for Azure - `azure-storage-blob-go`, and so on. Each SDK can be **conditionally linked** into AIS executable - the decision (to link or not to link) is made prior to deployment.
+
+This has a certain implication for the Downloader. Namely:
+
+Downloadable source can be both an Internet link (or links) or a Cloud bucket accessible via the corresponding Cloud SDK. You can, for instance, download a Google Cloud bucket via its Internet location that would look something like: `https://www.googleapis.com/storage/.../bucket-name/...`.
+
+However. When downloading a Cloud bucket (**any** Cloud bucket), it is always **preferable** to have the corresponding SDK linked-in. AIS Downloader will then detect the SDK "presence" at runtime and use a wider range of options available via this SDK.
+
+Other supported features include:
+
+* can download a single file (object), a `range`, an entire bucket, **and** a virtual directory in a given Cloud bucket
+* easy to use [command line interface](/cmd/cli/resources/download.md)
+* versioning and checksum support that allows to optimally download the same source location multiple times to *incrementally* update AIS destination with source changes (if any).
+
+The rest of this document describes these and other capabilities in greater detail and illustrates them with examples.
+
 ## Example
 
 Downloading jobs run asynchronously; you can monitor the progress of each specific job.
