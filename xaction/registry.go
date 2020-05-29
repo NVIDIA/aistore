@@ -396,8 +396,6 @@ func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 	} else if query.Bck == nil && query.Kind != "" {
 		if !cmn.IsValidXaction(query.Kind) {
 			return nil, cmn.NewXactionNotFoundError(query.Kind)
-		} else if cmn.IsXactTypeBck(query.Kind) {
-			return nil, fmt.Errorf("bucket xaction %q requires a bucket", query.Kind)
 		}
 
 		if query.OnlyRunning {

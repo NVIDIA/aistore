@@ -3,3 +3,4 @@
 Copying bucket "$BUCKET_1" to "$BUCKET_2" in progress.
 To check the status, run: ais show xaction copybck $BUCKET_2
 DAEMON ID	 ID	 KIND	 BUCKET	 OBJECTS	 BYTES	 START	 END	 ABORTED
+DAEMON ID	 ID	 KIND	 BUCKET	 OBJECTS	 BYTES	 START	 END	 ABORTED
