@@ -245,6 +245,12 @@ func startDownloadHandler(c *cli.Context) error {
 				source.cloud.bck.Provider,
 			)
 		} else {
+			if source.link == "" {
+				return fmt.Errorf(
+					"cluster is not configured with %q provider: cannot download bucket's objects",
+					source.cloud.bck.Provider,
+				)
+			}
 			// If `prefix` is not empty then possibly it is just a single object
 			// which we can download without cloud to be configured (web link).
 			dlType = singleDlType

@@ -129,6 +129,27 @@ func TestParseSourceValidURIs(t *testing.T) {
 		},
 
 		{
+			input: "az://bucket",
+			expected: dlSource{
+				link: "",
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAzure},
+					prefix: "",
+				},
+			},
+		},
+		{
+			input: "azure://bucket/subfolder/objname.tar",
+			expected: dlSource{
+				link: "",
+				cloud: dlSourceCloud{
+					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAzure},
+					prefix: "subfolder/objname.tar",
+				},
+			},
+		},
+
+		{
 			input:    "src.com/image001.tar.gz",
 			expected: dlSource{link: "https://src.com/image001.tar.gz"},
 		},

@@ -275,7 +275,7 @@ type dlSource struct {
 	cloud dlSourceCloud
 }
 
-// Replace protocol (gs://, s3://) with proper google cloud / s3 URL
+// Replace protocol (gs://, s3://, az://) with proper GCP/AWS/Azure URL
 func parseSource(rawURL string) (source dlSource, err error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -310,6 +310,16 @@ func parseSource(rawURL string) (source dlSource, err error) {
 		scheme = "http"
 		host = s3Host
 		fullPath = path.Join(u.Host, fullPath)
+	case azScheme, cmn.ProviderAzure:
+		// NOTE: We don't set the link here because there is no way to translate
+		//  `az://bucket/object` into Azure link without account name.
+		return dlSource{
+			link: "",
+			cloud: dlSourceCloud{
+				bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAzure},
+				prefix: strings.TrimPrefix(fullPath, "/"),
+			},
+		}, nil
 	case aisScheme:
 		// TODO: add support for the remote cluster
 		scheme = "http" // TODO: How about `https://`?

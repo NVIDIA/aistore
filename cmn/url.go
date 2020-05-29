@@ -16,6 +16,8 @@ const (
 	gsAPIPathPrefix = "/storage/v1"
 
 	s3UrlRegex = `(s3-|s3\.)?(.*)\.amazonaws\.com`
+
+	azBlobURL = ".blob.core.windows.net"
 )
 
 func IsGoogleStorageURL(u *url.URL) bool {
@@ -29,4 +31,8 @@ func IsGoogleAPIURL(u *url.URL) bool {
 func IsS3URL(link string) bool {
 	re := regexp.MustCompile(s3UrlRegex)
 	return re.MatchString(link)
+}
+
+func IsAzureURL(u *url.URL) bool {
+	return strings.Contains(u.Host, azBlobURL)
 }

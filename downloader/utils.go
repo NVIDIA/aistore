@@ -213,6 +213,10 @@ const (
 	s3CksumHeader            = "ETag"
 	s3CksumHeaderIllegalChar = "-"
 	s3VersionHeader          = "x-amz-version-id"
+
+	// https://docs.microsoft.com/en-us/rest/api/storageservices/get-blob-properties#response-headers
+	azCksumHeader   = "Content-MD5"
+	azVersionHeader = "ETag"
 )
 
 type (
@@ -222,7 +226,7 @@ type (
 	}
 )
 
-// Get file info if link points to Google storage or s3
+// Get file info if link points to GCP, S3 or Azure.
 func getRemoteObjInfo(link string, resp *http.Response) (roi remoteObjInfo) {
 	u, err := url.Parse(link)
 	cmn.AssertNoErr(err)
@@ -254,8 +258,16 @@ func getRemoteObjInfo(link string, resp *http.Response) (roi remoteObjInfo) {
 		if hdr := resp.Header.Get(s3VersionHeader); hdr != "" && hdr != "null" {
 			roi.md[cluster.AmazonVersionObjMD] = hdr
 		}
+	} else if cmn.IsAzureURL(u) {
+		roi.md = make(cmn.SimpleKVs, 1)
+		roi.md[cluster.SourceObjMD] = cluster.SourceAzureObjMD
+		if hdr := resp.Header.Get(azCksumHeader); hdr != "" {
+			roi.md[cluster.AzureMD5ObjMD] = hdr
+		}
+		if hdr := resp.Header.Get(azVersionHeader); hdr != "" {
+			roi.md[cluster.AzureVersionObjMD] = strings.Trim(hdr, "\"")
+		}
 	} else {
-		// TODO: implement Azure links
 		roi.md = make(cmn.SimpleKVs, 1)
 		roi.md[cluster.SourceObjMD] = cluster.SourceWebObjMD
 	}
@@ -316,6 +328,10 @@ func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
 			}
 		case cluster.SourceAmazonObjMD:
 			if lom.Version() == roi.md[cluster.AmazonVersionObjMD] {
+				return true, nil
+			}
+		case cluster.SourceAzureObjMD:
+			if lom.Version() == roi.md[cluster.AzureVersionObjMD] {
 				return true, nil
 			}
 		case cluster.SourceWebObjMD:
