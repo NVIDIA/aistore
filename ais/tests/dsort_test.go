@@ -914,7 +914,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					outputTempl:      "output-{0..1000}",
+					outputTempl:      "output-%d",
 					tarballCnt:       100,
 					fileInTarballCnt: 10,
 					maxMemUsage:      "1KB",
@@ -2117,6 +2117,7 @@ func TestDistributedSortWithLongerExt(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
+					outputTempl:      "output-%05d",
 					tarballCnt:       200,
 					fileInTarballCnt: 10,
 					maxMemUsage:      "99%",
