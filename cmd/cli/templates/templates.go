@@ -304,12 +304,12 @@ const (
 		"{{ $clu.ID }}\t{{ JoinList $clu.URLs }}\n" +
 		"{{end}}"
 
-	AuthNRoleTmpl = "Role\tDescription\n" +
+	AuthNRoleTmpl = "ROLE\tDESCRIPTION\n" +
 		"{{ range $role := . }}" +
 		"{{ $role.Name }}\t{{ $role.Desc }}\n" +
 		"{{end}}"
 
-	AuthNUserTmpl = "Name\tRole\tPermissions\n" +
+	AuthNUserTmpl = "Name\tROLE\tPERMISSIONS\n" +
 		"{{ range $user := . }}" +
 		"{{ $user.UserID }}\t{{ $user.Role }}\t{{ $user.Access }}\n" +
 		"{{end}}"

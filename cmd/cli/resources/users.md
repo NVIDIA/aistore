@@ -10,7 +10,7 @@ When a token is revoked or a user with valid issued tokens is removed, AuthN not
 
 ## Command List
 
-All commands (except logout) require AuthN URL that can be either passed in command line `AUTHN_URL=http://AUTHNSRV ais auth add ...` or export environment variable `export AUTHN_URL=http://AUTNSRV`. Where `AUTHNSRV` is hostname:port of AuthN server.
+All commands (except logout) send requests to AuthN URL defined in AIS CLI configuration file. Configuration can be overridden with environment variable `AUTHN_URL`, e.g., `AUTHN_URL=http://10.0.0.20:52001 ais auth add ...`.
 
 Adding and removing a user requires superuser permissions. Superuser login and password can be provided in command line:
 
@@ -28,7 +28,7 @@ or just run:
 
 `ais auth add..`
 
-In the last case, the CLI detects that there is not enough information and prompts for missing data in interactive mode. E.g, you can keep superuser name in an environment variable and `ais` will prompt for superuser\'s password:
+In the last case, the CLI prompts for missing data in interactive mode. E.g, you can keep superuser name in an environment variable and `ais` will prompt for superuser's password:
 
 ```console
 $ export AUTHN_SU_NAME=admin
@@ -38,25 +38,29 @@ Superuser password:
 
 ## Register new user
 
-`ais auth add user USER_NAME USER_PASS`
+`ais auth add user [USER_NAME USER_PASS] [--role ROLE]`
 
-Register the user if a user with the same name does not exist yet and grants full access permissions to cluster data.
+Register the user and grant `role` permissions to the user.
 For security reasons, user's password can be omitted (and user's name as well).
 In this case, the CLI prompts for every missing argument in interactive mode.
 
+Option `--role` sets the user's default permissions to access the cluster.
+If the option it omitted, the user gets role `Guest` that allows only read-only access.
+
 **Examples:**
 
-Everything is set in command line:
-
-`AUTHN_URL=http://AUTHNSRV AUTHN_SU_NAME=admin AUTHN_SU_PASS=admin ais auth add username password`
-
-AuthN URL and superuser's name are already exported.
-Short command:
-
 ```console
-$ ais auth add user username
+$ ais auth add user user1 password
 Superuser password: admin
 User password: password
+$ ais auth add user user2 password --role PowerUser
+Superuser password: admin
+User password: password
+$ ais auth show user
+NAME    ROLE       PERMISSIONS
+user2   PowerUser  18446744073709551615
+guest   Guest      771
+user1   Guest      771
 ```
 
 ## Unregister existing user
@@ -64,6 +68,39 @@ User password: password
 `ais auth rm user USER_NAME`
 
 Remove an existing user and revokes all tokens issued for the user.
+
+## List registered users
+
+`ais auth show user`
+
+Displays the list of registered users. The list is alphabetically sorted and
+divided into three groups:
+
+- First group is PowerUser group
+- Seconds group is a list of users that have restricted write access
+- The last group are Guest group - list of read-only users
+
+```console
+$ ais auth show user
+NAME    ROLE       PERMISSIONS
+user2   PowerUser  18446744073709551615
+guest   Guest      771
+user1   Guest      771
+```
+
+## List existing roles
+
+`ais auth show role`
+
+Displays existing roles in alphabetical order.
+
+```console
+$ ais auth show role
+ROLE            DESCRIPTION
+BucketOwner     Full access to buckets
+Guest           Read-only access to buckets
+PowerUser       Full access to cluster
+```
 
 ## Log in to AIS cluster
 

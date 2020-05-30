@@ -31,6 +31,9 @@ The content of the file presents as follows:
   "timeout": {
     "tcp_timeout": "60s",
     "http_timeout": "0s"
+  },
+  "auth": {
+    "url": "http://127.0.0.1:52001"
   }
 }
 ```
