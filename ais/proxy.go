@@ -64,6 +64,14 @@ type (
 		metasyncer *metasyncer
 		rproxy     reverseProxy
 	}
+	remBckAddArgs struct {
+		p        *proxyrunner
+		w        http.ResponseWriter
+		r        *http.Request
+		queryBck *cluster.Bck
+		err      error
+		msg      *cmn.ActionMsg
+	}
 )
 
 func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
@@ -358,7 +366,8 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		if _, err = p.syncCBmeta(w, r, bck, err); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
+		if _, err = args.try(); err != nil {
 			return
 		}
 	}
@@ -406,7 +415,8 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		if bck, err = p.syncCBmeta(w, r, bck, err); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
+		if bck, err = args.try(); err != nil {
 			return
 		}
 	}
@@ -453,7 +463,8 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		if bck, err = p.syncCBmeta(w, r, bck, err); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
+		if bck, err = args.try(); err != nil {
 			return
 		}
 	}
@@ -523,7 +534,8 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		if bck, err = p.syncCBmeta(w, r, bck, err); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
+		if bck, err = args.try(); err != nil {
 			return
 		}
 	}
@@ -845,7 +857,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, errMsg, http.StatusNotFound)
 			return
 		}
-		if bck, err = p.syncCBmeta(w, r, bck, err); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: &msg}
+		if bck, err = args.try(); err != nil {
 			return
 		}
 	}
@@ -1217,8 +1230,8 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 			return
 		}
-
-		if _, err = p.syncCBmeta(w, r, bck, err); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
+		if _, err = args.try(); err != nil {
 			return
 		}
 	}
@@ -1258,17 +1271,18 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, "httpbckpatch", nil) {
 		return
 	}
+	msg = &cmn.ActionMsg{Value: &propsToUpdate}
+	if err = cmn.ReadJSON(w, r, msg); err != nil {
+		return
+	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		if bck, err = p.syncCBmeta(w, r, bck, err); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: msg}
+		if bck, err = args.try(); err != nil {
 			return
 		}
 	}
 	if err := bck.Allow(cmn.AccessPATCH); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
-		return
-	}
-	msg = &cmn.ActionMsg{Value: &propsToUpdate}
-	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
 	if err = p.checkAction(msg, cmn.ActSetBprops, cmn.ActResetBprops); err != nil {
@@ -1298,7 +1312,8 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		if bck, err = p.syncCBmeta(w, r, bck, err); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
+		if bck, err = args.try(); err != nil {
 			return
 		}
 	}
@@ -1505,89 +1520,6 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	query.Add(cmn.URLParamProxyID, p.si.ID())
 	query.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(ts.UnixNano()))
 	redirect += query.Encode()
-	return
-}
-
-// for 3rd party cloud and remote ais buckets - check existence and update BMD
-func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request,
-	queryBck *cluster.Bck, erc error) (bck *cluster.Bck, err error) {
-	if _, ok := erc.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
-		err = erc
-		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
-			p.invalmsghdlr(w, r, erc.Error(), http.StatusNotFound)
-			return
-		}
-		p.invalmsghdlr(w, r, erc.Error())
-		return
-	}
-	if !cmn.IsValidProvider(queryBck.Provider) {
-		err = cmn.NewErrorBucketDoesNotExist(queryBck.Bck, p.si.Name())
-		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
-		return
-	}
-	msg := &cmn.ActionMsg{Action: cmn.ActRegisterCB}
-	if p.forwardCP(w, r, msg, "syncCBmeta", nil) {
-		err = errors.New("forwarded")
-		return
-	}
-	var cloudProps http.Header
-	if cloudProps, err = p.cbExists(queryBck); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
-			p.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
-		} else {
-			p.invalmsghdlr(w, r, err.Error())
-		}
-		return
-	}
-
-	// TODO -- FIXME
-
-	if queryBck.Provider == cmn.ProviderAIS {
-		bck = queryBck
-	} else {
-		cloudConf := cmn.GCO.Get().Cloud
-		bck = cluster.NewBck(queryBck.Name, cloudConf.Provider, cloudConf.Ns)
-	}
-	if err = p.createBucket(msg, bck, cloudProps); err != nil {
-		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusConflict)
-			return
-		}
-	}
-	err = bck.Init(p.owner.bmd, p.si)
-	cmn.AssertNoErr(err)
-	return
-}
-
-func (p *proxyrunner) cbExists(queryBck *cluster.Bck) (header http.Header, err error) {
-	var (
-		tsi   *cluster.Snode
-		pname = p.si.String()
-	)
-	if tsi, err = p.owner.smap.get().GetRandTarget(); err != nil {
-		return
-	}
-	q := cmn.AddBckToQuery(nil, queryBck.Bck)
-	args := callArgs{
-		si: tsi,
-		req: cmn.ReqArgs{
-			Method: http.MethodHead,
-			Base:   tsi.URL(cmn.NetworkIntraData),
-			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, queryBck.Name),
-			Query:  q,
-		},
-		timeout: cmn.DefaultTimeout,
-	}
-	res := p.call(args)
-	if res.status == http.StatusNotFound {
-		err = cmn.NewErrorRemoteBucketDoesNotExist(queryBck.Bck, pname)
-	} else if res.status == http.StatusGone {
-		err = cmn.NewErrorCloudBucketOffline(queryBck.Bck, pname)
-	} else if res.err != nil {
-		err = fmt.Errorf("%s: bucket %s, target %s, err: %v", pname, queryBck, tsi, res.err)
-	} else {
-		header = res.header
-	}
 	return
 }
 
@@ -3550,6 +3482,84 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 	}
 
 	return false
+}
+
+/////////////////////////////////////////////
+// lookup and add remote bucket on the fly //
+/////////////////////////////////////////////
+
+func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
+	var cloudProps http.Header
+	if _, ok := args.err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
+		err = args.err
+		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
+			args.p.invalmsghdlr(args.w, args.r, args.err.Error(), http.StatusNotFound)
+			return
+		}
+		args.p.invalmsghdlr(args.w, args.r, args.err.Error())
+		return
+	}
+	if !cmn.IsValidProvider(args.queryBck.Provider) {
+		err = cmn.NewErrorBucketDoesNotExist(args.queryBck.Bck, args.p.si.Name())
+		args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusNotFound)
+		return
+	}
+	if args.p.forwardCP(args.w, args.r, args.msg, "add-remote-bucket", nil) {
+		err = errors.New("forwarded")
+		return
+	}
+	//
+	// from this point on, its the primary - lookup via random target and more checks
+	//
+	if cloudProps, err = args.lookup(); err != nil {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+			args.p.invalmsghdlrsilent(args.w, args.r, err.Error(), http.StatusNotFound)
+		} else {
+			args.p.invalmsghdlr(args.w, args.r, err.Error())
+		}
+		return
+	}
+	if args.queryBck.Provider == cmn.ProviderAIS {
+		bck = args.queryBck
+	} else {
+		cloudConf := cmn.GCO.Get().Cloud
+		bck = cluster.NewBck(args.queryBck.Name, cloudConf.Provider, cloudConf.Ns)
+	}
+	if err = args.p.createBucket(&cmn.ActionMsg{Action: cmn.ActRegisterCB}, bck, cloudProps); err != nil {
+		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
+			args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusConflict)
+			return
+		}
+	}
+	err = bck.Init(args.p.owner.bmd, args.p.si)
+	if err != nil {
+		glog.Errorf("%s: unexpected failure to add remote %s, err: %v", args.p.si, bck, err)
+	}
+	return
+}
+
+func (args *remBckAddArgs) lookup() (header http.Header, err error) {
+	var (
+		tsi   *cluster.Snode
+		pname = args.p.si.String()
+		path  = cmn.URLPath(cmn.Version, cmn.Buckets, args.queryBck.Name)
+	)
+	if tsi, err = args.p.owner.smap.get().GetRandTarget(); err != nil {
+		return
+	}
+	q := cmn.AddBckToQuery(nil, args.queryBck.Bck)
+	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
+	res := args.p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
+	if res.status == http.StatusNotFound {
+		err = cmn.NewErrorRemoteBucketDoesNotExist(args.queryBck.Bck, pname)
+	} else if res.status == http.StatusGone {
+		err = cmn.NewErrorCloudBucketOffline(args.queryBck.Bck, pname)
+	} else if res.err != nil {
+		err = fmt.Errorf("%s: %s, target %s, err: %v", pname, args.queryBck, tsi, res.err)
+	} else {
+		header = res.header
+	}
+	return
 }
 
 ////////////////
