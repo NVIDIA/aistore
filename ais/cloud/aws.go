@@ -24,10 +24,9 @@ import (
 )
 
 const (
-	awsChecksumType   = "x-amz-meta-ais-cksum-type"
-	awsChecksumVal    = "x-amz-meta-ais-cksum-val"
-	awsMultipartDelim = "-"
-	awsMaxPageSize    = 1000 // AWS limitation, see also cmn.DefaultListPageSize
+	awsChecksumType = "x-amz-meta-ais-cksum-type"
+	awsChecksumVal  = "x-amz-meta-ais-cksum-val"
+	awsMaxPageSize  = 1000 // AWS limitation, see also cmn.DefaultListPageSize
 )
 
 type (
@@ -72,10 +71,6 @@ func awsErrorToAISError(awsError error, bck cmn.Bck, node string) (error, int) {
 	return awsError, http.StatusInternalServerError
 }
 
-func awsIsVersionSet(version *string) bool {
-	return version != nil && *version != "null" && *version != ""
-}
-
 func (awsp *awsProvider) Provider() string {
 	return cmn.ProviderAmazon
 }
@@ -86,6 +81,7 @@ func (awsp *awsProvider) Provider() string {
 
 func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	var (
+		h        = cmn.CloudHelpers.Amazon
 		cloudBck = bck.CloudBck()
 		svc      = s3.New(createSession())
 	)
@@ -148,7 +144,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	// greater than object page marker
 	// Page is limited with 500+ items, so reading them is slow
 	if strings.Contains(msg.Props, cmn.GetPropsVersion) {
-		versions := make(map[string]*string, initialBucketListSize)
+		versions := make(map[string]string, initialBucketListSize)
 		keyMarker := msg.PageMarker
 
 		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bck.Name)}
@@ -168,8 +164,10 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 			}
 
 			for _, vers := range verResp.Versions {
-				if *(vers.IsLatest) && awsIsVersionSet(vers.VersionId) {
-					versions[*(vers.Key)] = vers.VersionId
+				if *(vers.IsLatest) {
+					if v, ok := h.EncodeVersion(vers.VersionId); ok {
+						versions[*(vers.Key)] = v
+					}
 				}
 			}
 
@@ -185,7 +183,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 
 		for _, entry := range bckList.Entries {
 			if version, ok := versions[entry.Name]; ok {
-				entry.Version = *version
+				entry.Version = version
 			}
 		}
 	}
@@ -261,6 +259,7 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 
 func (awsp *awsProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
+		h        = cmn.CloudHelpers.Amazon
 		cloudBck = bck.CloudBck()
 		svc      = s3.New(createSession())
 		input    = &s3.HeadObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(objName)}
@@ -274,9 +273,13 @@ func (awsp *awsProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName 
 	objMeta = make(cmn.SimpleKVs, 3)
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(*headOutput.ContentLength, 10)
-	if awsIsVersionSet(headOutput.VersionId) {
-		objMeta[cmn.HeaderObjVersion] = *headOutput.VersionId
+	if v, ok := h.EncodeVersion(headOutput.VersionId); ok {
+		objMeta[cmn.HeaderObjVersion] = v
 	}
+	if v, ok := h.EncodeCksum(headOutput.ETag); ok {
+		objMeta[cluster.MD5ObjMD] = v
+	}
+
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[head_object] %s/%s", bck, objName)
 	}
@@ -291,6 +294,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	var (
 		cksum        *cmn.Cksum
 		cksumToCheck *cmn.Cksum
+		h            = cmn.CloudHelpers.Amazon
 		bck          = lom.Bck().CloudBck()
 	)
 	sess := createSession()
@@ -314,21 +318,17 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		cluster.SourceObjMD: cluster.SourceAmazonObjMD,
 	}
 
-	md5, _ := strconv.Unquote(*obj.ETag)
-	// FIXME: multipart
-	if !strings.Contains(md5, awsMultipartDelim) {
-		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, md5)
-		customMD[cluster.AmazonMD5ObjMD] = md5
+	if v, ok := h.EncodeVersion(obj.VersionId); ok {
+		lom.SetVersion(v)
+		customMD[cluster.VersionObjMD] = v
+	}
+	if v, ok := h.EncodeCksum(obj.ETag); ok {
+		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, v)
+		customMD[cluster.MD5ObjMD] = v
 	}
 	lom.SetCksum(cksum)
-	if obj.VersionId != nil {
-		lom.SetVersion(*obj.VersionId)
-		customMD[cluster.AmazonVersionObjMD] = *obj.VersionId
-	}
 	lom.SetCustomMD(customMD)
-	if obj.ContentLength != nil {
-		setSize(ctx, *obj.ContentLength)
-	}
+	setSize(ctx, *obj.ContentLength)
 	err = awsp.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       wrapReader(ctx, obj.Body),
@@ -353,6 +353,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var (
 		uploadOutput          *s3manager.UploadOutput
+		h                     = cmn.CloudHelpers.Amazon
 		cksumType, cksumValue = lom.Cksum().Get()
 		cloudBck              = lom.Bck().CloudBck()
 		md                    = make(map[string]*string, 2)
@@ -371,8 +372,8 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 		err, errCode = awsErrorToAISError(err, cloudBck, lom.T.Snode().Name())
 		return
 	}
-	if uploadOutput.VersionID != nil {
-		version = *uploadOutput.VersionID
+	if v, ok := h.EncodeVersion(uploadOutput.VersionID); ok {
+		version = v
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[put_object] %s, version %s", lom, version)

@@ -951,8 +951,6 @@ func TestDownloadOverrideObject(t *testing.T) {
 }
 
 func TestDownloadOverrideObjectCloud(t *testing.T) {
-	t.Skip("TODO: does not work!")
-
 	var (
 		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{

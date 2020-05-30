@@ -558,9 +558,9 @@ var _ = Describe("LOM", func() {
 			It("should correctly set and get custom metadata", func() {
 				lom := filePut(localFQN, 0, tMock)
 				lom.SetCustomMD(cmn.SimpleKVs{
-					cluster.SourceObjMD:        cluster.SourceGoogleObjMD,
-					cluster.GoogleVersionObjMD: "version",
-					cluster.GoogleCRC32CObjMD:  "crc32",
+					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
+					cluster.VersionObjMD: "version",
+					cluster.CRC32CObjMD:  "crc32",
 				})
 				value, exists := lom.GetCustomMD(cluster.SourceObjMD)
 				Expect(exists).To(BeTrue())

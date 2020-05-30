@@ -255,7 +255,7 @@ func (m *ioContext) cloudPuts(evict bool) {
 }
 
 // Override the previously put cloud objects with new ones (to change version and checksum).
-func (m *ioContext) cloudRePuts(evict bool) { // nolint:unused // used but the test for now is always skipped
+func (m *ioContext) cloudRePuts(evict bool) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{}

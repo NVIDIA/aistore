@@ -70,15 +70,9 @@ const (
 	SourceAzureObjMD  = cmn.ProviderAzure
 	SourceWebObjMD    = "web"
 
-	GoogleVersionObjMD = cmn.ProviderGoogle + ".v"
-	GoogleCRC32CObjMD  = cmn.ProviderGoogle + "." + cmn.ChecksumCRC32C
-	GoogleMD5ObjMD     = cmn.ProviderGoogle + "." + cmn.ChecksumMD5
-
-	AmazonVersionObjMD = cmn.ProviderAmazon + ".v"
-	AmazonMD5ObjMD     = cmn.ProviderAmazon + "." + cmn.ChecksumMD5
-
-	AzureVersionObjMD = cmn.ProviderAzure + ".v"
-	AzureMD5ObjMD     = cmn.ProviderAzure + "." + cmn.ChecksumMD5
+	VersionObjMD = "v"
+	CRC32CObjMD  = cmn.ChecksumCRC32C
+	MD5ObjMD     = cmn.ChecksumMD5
 )
 
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }

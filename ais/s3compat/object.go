@@ -104,8 +104,10 @@ func FormatTime(t time.Time) string {
 }
 
 func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
-	if v, exists := lom.GetCustomMD(cluster.AmazonMD5ObjMD); exists {
-		header.Set(headerETag, v)
+	if v, exists := lom.GetCustomMD(cluster.SourceObjMD); exists && v == cluster.SourceAmazonObjMD {
+		if v, exists := lom.GetCustomMD(cluster.MD5ObjMD); exists {
+			header.Set(headerETag, v)
+		}
 	}
 	header.Set(headerAtime, FormatTime(lom.Atime()))
 	header.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))

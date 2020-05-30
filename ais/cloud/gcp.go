@@ -8,14 +8,11 @@ package cloud
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -31,12 +28,6 @@ const (
 
 	gcpPageSize = cmn.DefaultListPageSize
 )
-
-// To get projectID from gcp auth json file, to get rid of reading projectID
-// from environment variable
-type gcpAuthRec struct {
-	ProjectID string `json:"project_id"`
-}
 
 type (
 	gcpProvider struct {
@@ -80,13 +71,6 @@ func gcpErrorToAISError(gcpError error, bck cmn.Bck, node string) (error, int) {
 	return gcpError, http.StatusBadRequest
 }
 
-// Encode a uint32 as Base64 in big-endian byte order.
-// See: https://cloud.google.com/storage/docs/xml-api/reference-headers#xgooghash.
-func encodeUint32(u uint32) string {
-	b := []byte{byte(u >> 24), byte(u >> 16), byte(u >> 8), byte(u)}
-	return base64.StdEncoding.EncodeToString(b)
-}
-
 func (gcpp *gcpProvider) handleObjectError(objErr error, bck *cluster.Bck, gcpBucket *storage.BucketHandle, gctx context.Context) (error, int) {
 	if objErr != storage.ErrObjectNotExist {
 		return objErr, http.StatusBadRequest
@@ -118,6 +102,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	var (
 		query     *storage.Query
 		pageToken string
+		h         = cmn.CloudHelpers.Google
 		cloudBck  = bck.CloudBck()
 	)
 
@@ -150,10 +135,14 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 			entry.Size = attrs.Size
 		}
 		if strings.Contains(msg.Props, cmn.GetPropsChecksum) {
-			entry.Checksum = hex.EncodeToString(attrs.MD5)
+			if v, ok := h.EncodeCksum(attrs.MD5); ok {
+				entry.Checksum = v
+			}
 		}
 		if strings.Contains(msg.Props, cmn.GetPropsVersion) {
-			entry.Version = fmt.Sprintf("%d", attrs.Generation)
+			if v, ok := h.EncodeVersion(attrs.Generation); ok {
+				entry.Version = v
+			}
 		}
 		// TODO: other cmn.SelectMsg props TBD
 		bckList.Entries = append(bckList.Entries, entry)
@@ -230,12 +219,12 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 /////////////////
 
 func (gcpp *gcpProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
-	objMeta = make(cmn.SimpleKVs)
 	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
 	}
 	var (
+		h        = cmn.CloudHelpers.Google
 		cloudBck = bck.CloudBck()
 	)
 	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(objName).Attrs(gctx)
@@ -243,8 +232,17 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName 
 		err, errCode = gcpp.handleObjectError(err, bck, gcpClient.Bucket(cloudBck.Name), gctx)
 		return
 	}
+	objMeta = make(cmn.SimpleKVs)
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
-	objMeta[cmn.HeaderObjVersion] = fmt.Sprintf("%d", attrs.Generation)
+	if v, ok := h.EncodeVersion(attrs.Generation); ok {
+		objMeta[cmn.HeaderObjVersion] = v
+	}
+	if v, ok := h.EncodeCksum(attrs.MD5); ok {
+		objMeta[cluster.MD5ObjMD] = v
+	}
+	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
+		objMeta[cluster.CRC32CObjMD] = v
+	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[head_object] %s/%s", bck, objName)
 	}
@@ -261,6 +259,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		return
 	}
 	var (
+		h        = cmn.CloudHelpers.Google
 		cloudBck = lom.Bck().CloudBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
@@ -271,24 +270,31 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	}
 
 	cksum := cmn.NewCksum(attrs.Metadata[gcpChecksumType], attrs.Metadata[gcpChecksumVal])
-	cksumToCheck := cmn.NewCksum(cmn.ChecksumMD5, hex.EncodeToString(attrs.MD5))
-
 	rc, err := o.NewReader(gctx)
 	if err != nil {
 		return
 	}
 
 	var (
-		customMD = cmn.SimpleKVs{
-			cluster.SourceObjMD:        cluster.SourceGoogleObjMD,
-			cluster.GoogleVersionObjMD: strconv.FormatInt(attrs.Generation, 10),
-			cluster.GoogleCRC32CObjMD:  encodeUint32(attrs.CRC32C),
-			cluster.GoogleMD5ObjMD:     hex.EncodeToString(attrs.MD5),
+		cksumToCheck *cmn.Cksum
+		customMD     = cmn.SimpleKVs{
+			cluster.SourceObjMD: cluster.SourceGoogleObjMD,
 		}
 	)
 
+	if v, ok := h.EncodeVersion(attrs.Generation); ok {
+		lom.SetVersion(v)
+		customMD[cluster.VersionObjMD] = v
+	}
+	if v, ok := h.EncodeCksum(attrs.MD5); ok {
+		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, v)
+		customMD[cluster.MD5ObjMD] = v
+	}
+	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
+		customMD[cluster.CRC32CObjMD] = v
+	}
+
 	lom.SetCksum(cksum)
-	lom.SetVersion(strconv.FormatInt(attrs.Generation, 10))
 	lom.SetCustomMD(customMD)
 	setSize(ctx, rc.Attrs.Size)
 	err = gcpp.t.PutObject(cluster.PutObjectParams{
@@ -319,6 +325,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	}
 
 	var (
+		h        = cmn.CloudHelpers.Google
 		cloudBck = lom.Bck().CloudBck()
 		md       = make(cmn.SimpleKVs, 2)
 		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
@@ -343,7 +350,9 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 		err, errCode = gcpp.handleObjectError(err, lom.Bck(), gcpClient.Bucket(cloudBck.Name), gctx)
 		return
 	}
-	version = fmt.Sprintf("%d", attr.Generation)
+	if v, ok := h.EncodeVersion(attr.Generation); ok {
+		version = v
+	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[put_object] %s, size %d, version %s", lom, written, version)
 	}

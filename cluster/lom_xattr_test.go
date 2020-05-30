@@ -77,9 +77,9 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
 				lom.SetCustomMD(cmn.SimpleKVs{
-					cluster.SourceObjMD:        cluster.SourceGoogleObjMD,
-					cluster.GoogleVersionObjMD: "version",
-					cluster.GoogleCRC32CObjMD:  "crc32",
+					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
+					cluster.VersionObjMD: "version",
+					cluster.CRC32CObjMD:  "crc32",
 				})
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())

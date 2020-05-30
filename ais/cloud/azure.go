@@ -8,13 +8,11 @@ package cloud
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 
@@ -57,20 +55,6 @@ const (
 var (
 	_ cluster.CloudProvider = &azureProvider{}
 )
-
-// Simple path.Join does not work, because it removes duplicated
-// separators making the URL invalid
-func urlJoin(parts ...string) (*url.URL, error) {
-	cmn.Assert(len(parts) != 0)
-	u, err := url.Parse(parts[0])
-	if err != nil {
-		return nil, err
-	}
-	// Replace full URI with its path: http:://a.com/obj -> a.com/obj
-	parts[0] = u.Path
-	u.Path = path.Join(parts...)
-	return u, nil
-}
 
 func azureProto() string {
 	proto := os.Getenv(azureProtoEnvVar)
@@ -255,6 +239,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (buck
 // Default page size for Azure is 5000 blobs a page.
 func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	var (
+		h        = cmn.CloudHelpers.Azure
 		marker   = azblob.Marker{}
 		cloudBck = bck.CloudBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
@@ -284,10 +269,14 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 			entry.Size = *blob.Properties.ContentLength
 		}
 		if strings.Contains(msg.Props, cmn.GetPropsVersion) {
-			entry.Version = strings.Trim(string(blob.Properties.Etag), "\"")
+			if v, ok := h.EncodeVersion(string(blob.Properties.Etag)); ok {
+				entry.Version = v
+			}
 		}
 		if strings.Contains(msg.Props, cmn.GetPropsChecksum) {
-			entry.Checksum = hex.EncodeToString(blob.Properties.ContentMD5)
+			if v, ok := h.EncodeCksum(blob.Properties.ContentMD5); ok {
+				entry.Checksum = v
+			}
 		}
 
 		bckList.Entries = append(bckList.Entries, entry)
@@ -299,13 +288,13 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[list_bucket] count %d(marker: %s)", len(bckList.Entries), bckList.PageMarker)
 	}
-
 	return
 }
 
 func (ap *azureProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	objMeta = make(cmn.SimpleKVs)
 	var (
+		h        = cmn.CloudHelpers.Azure
 		cloudBck = bck.CloudBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(objName)
@@ -322,7 +311,12 @@ func (ap *azureProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName 
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAzure
 	// Simulate object versioning:
 	// Azure provider does not have real versioning, but it has ETag.
-	objMeta[cmn.HeaderObjVersion] = strings.Trim(string(resp.ETag()), "\"")
+	if v, ok := h.EncodeVersion(string(resp.ETag())); ok {
+		objMeta[cmn.HeaderObjVersion] = v
+	}
+	if v, ok := h.EncodeCksum(resp.ContentMD5()); ok {
+		objMeta[cluster.MD5ObjMD] = v
+	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[head_object] %s/%s", bck, objName)
 	}
@@ -331,6 +325,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName 
 
 func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	var (
+		h        = cmn.CloudHelpers.Azure
 		cloudBck = lom.Bck().CloudBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
@@ -345,8 +340,6 @@ func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	if respProps.StatusCode() >= http.StatusBadRequest {
 		return fmt.Errorf("failed to get object props %s/%s", cloudBck, lom.ObjName), respProps.StatusCode()
 	}
-	cksumToCheck := cmn.NewCksum(cmn.ChecksumMD5, hex.EncodeToString(respProps.ContentMD5()))
-
 	// 0, 0 = read range: the whole object
 	resp, err := blobURL.Download(ctx, 0, 0, azblob.BlobAccessConditions{}, false)
 	if err != nil {
@@ -357,12 +350,21 @@ func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	}
 
 	var (
-		retryOpts = azblob.RetryReaderOptions{MaxRetryRequests: 3}
-		customMD  = cmn.SimpleKVs{
-			cluster.SourceObjMD:   cluster.SourceAzureObjMD,
-			cluster.AzureMD5ObjMD: hex.EncodeToString(respProps.ContentMD5()),
+		cksumToCheck *cmn.Cksum
+		retryOpts    = azblob.RetryReaderOptions{MaxRetryRequests: 3}
+		customMD     = cmn.SimpleKVs{
+			cluster.SourceObjMD: cluster.SourceAzureObjMD,
 		}
 	)
+	if v, ok := h.EncodeVersion(string(respProps.ETag())); ok {
+		lom.SetVersion(v)
+		customMD[cluster.VersionObjMD] = v
+	}
+	if v, ok := h.EncodeCksum(respProps.ContentMD5()); ok {
+		customMD[cluster.MD5ObjMD] = v
+		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, v)
+	}
+
 	lom.SetCustomMD(customMD)
 	setSize(ctx, resp.ContentLength())
 	err = ap.t.PutObject(cluster.PutObjectParams{
@@ -385,6 +387,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var (
 		leaseID  string
+		h        = cmn.CloudHelpers.Azure
 		cloudBck = lom.Bck().CloudBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlockBlobURL(lom.ObjName)
@@ -420,9 +423,11 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	if putResp.Response().StatusCode >= http.StatusBadRequest {
 		return "", fmt.Errorf("failed to put object %s/%s", cloudBck, lom.ObjName), putResp.Response().StatusCode
 	}
-	version = strings.Trim(string(putResp.ETag()), "\"")
+	if v, ok := h.EncodeVersion(string(putResp.ETag())); ok {
+		version = v
+	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[put_object] %s, version %s", lom, version)
+		glog.Infof("[put_object] %s, version: %s", lom, version)
 	}
 	return version, nil, http.StatusOK
 }

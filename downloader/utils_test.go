@@ -58,9 +58,9 @@ func TestCompareObject(t *testing.T) {
 
 	// Modify local object to contain invalid (meta)data.
 	customMD := cmn.SimpleKVs{
-		cluster.SourceObjMD:        cluster.SourceGoogleObjMD,
-		cluster.GoogleCRC32CObjMD:  "bad",
-		cluster.GoogleVersionObjMD: "version",
+		cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
+		cluster.CRC32CObjMD:  "bad",
+		cluster.VersionObjMD: "version",
 	}
 	lom.SetSize(10)
 	lom.SetCustomMD(customMD)
@@ -76,13 +76,13 @@ func TestCompareObject(t *testing.T) {
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that objects are still not equal after version update.
-	customMD[cluster.GoogleVersionObjMD] = "1503349750687573"
+	customMD[cluster.VersionObjMD] = "1503349750687573"
 	equal, err = compareObjects(nil, obj, lom)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Finally, check if the objects are equal once we set all the metadata correctly.
-	customMD[cluster.GoogleCRC32CObjMD] = "30a991bd"
+	customMD[cluster.CRC32CObjMD] = "30a991bd"
 	equal, err = compareObjects(nil, obj, lom)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, equal, "expected the objects to be equal")
