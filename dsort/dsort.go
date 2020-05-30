@@ -760,7 +760,9 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 
 	for _, d := range m.smap.Tmap {
 		shardsToTarget[d] = nil
-		sendOrder[d.DaemonID] = make(map[string]*extract.Shard, 100)
+		if m.dsorter.name() == DSorterMemType {
+			sendOrder[d.DaemonID] = make(map[string]*extract.Shard, 100)
+		}
 	}
 
 	if m.rs.OrderFileURL != "" {
@@ -803,21 +805,23 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		}
 		shardsToTarget[si] = append(shardsToTarget[si], s)
 
-		singleSendOrder := make(map[string]*extract.Shard)
-		for _, record := range s.Records.All() {
-			shard, ok := singleSendOrder[record.DaemonID]
-			if !ok {
-				shard = &extract.Shard{
-					Name:    s.Name,
-					Records: extract.NewRecords(100),
+		if m.dsorter.name() == DSorterMemType {
+			singleSendOrder := make(map[string]*extract.Shard)
+			for _, record := range s.Records.All() {
+				shard, ok := singleSendOrder[record.DaemonID]
+				if !ok {
+					shard = &extract.Shard{
+						Name:    s.Name,
+						Records: extract.NewRecords(100),
+					}
+					singleSendOrder[record.DaemonID] = shard
 				}
-				singleSendOrder[record.DaemonID] = shard
+				shard.Records.Insert(record)
 			}
-			shard.Records.Insert(record)
-		}
 
-		for daemonID, shard := range singleSendOrder {
-			sendOrder[daemonID][shard.Name] = shard
+			for daemonID, shard := range singleSendOrder {
+				sendOrder[daemonID][shard.Name] = shard
+			}
 		}
 	}
 
