@@ -74,13 +74,6 @@ type (
 	}
 )
 
-func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
-	for _, w := range wraps {
-		h = w(h)
-	}
-	return h
-}
-
 func (rp *reverseProxy) init() {
 	cfg := cmn.GCO.Get()
 	if cfg.Net.HTTP.RevProxy == cmn.RevProxyCloud {
@@ -131,24 +124,16 @@ func (p *proxyrunner) Run() error {
 	// REST API: register proxy handlers and start listening
 	//
 
-	bucketHandler, objectHandler := p.bucketHandler, p.objectHandler
-	dsortHandler, downloadHandler := dsort.ProxySortHandler, p.downloadHandler
-	if config.Auth.Enabled {
-		bucketHandler, objectHandler = wrapHandler(p.bucketHandler, p.checkHTTPAuth),
-			wrapHandler(p.objectHandler, p.checkHTTPAuth)
-		dsortHandler, downloadHandler = wrapHandler(dsort.ProxySortHandler, p.checkHTTPAuth),
-			wrapHandler(p.downloadHandler, p.checkHTTPAuth)
-	}
 	networkHandlers := []networkHandler{
 		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
-		{r: cmn.Buckets, h: bucketHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Objects, h: objectHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Download, h: downloadHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Buckets, h: p.bucketHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Sort, h: dsortHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Sort, h: dsort.ProxySortHandler, net: []string{cmn.NetworkPublic}},
 
 		{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
@@ -335,6 +320,11 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
+		return
+	}
+
+	if err := p.checkPermissions(r, nil, cmn.AccessBckLIST, nil); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
@@ -1900,96 +1890,6 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 		}
 	}
 	return nil
-}
-
-//============
-//
-// AuthN stuff
-//
-//============
-func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
-	tokenList := &TokenList{}
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Tokens); err != nil {
-		return
-	}
-	if p.forwardCP(w, r, &cmn.ActionMsg{Action: cmn.ActRevokeToken}, "revoke token", nil) {
-		return
-	}
-	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
-		return
-	}
-	p.authn.updateRevokedList(tokenList)
-	if p.owner.smap.get().isPrimary(p.si) {
-		msg := p.newAisMsgStr(cmn.ActNewPrimary, nil, nil)
-		_ = p.metasyncer.sync(revsPair{p.authn.revokedTokenList(), msg})
-	}
-}
-
-// Read a token from request header and validates it
-// Header format:
-//		'Authorization: Bearer <token>'
-func (p *proxyrunner) validateToken(r *http.Request) (*cmn.AuthToken, error) {
-	authToken := r.Header.Get(cmn.HeaderAuthorization)
-	if authToken == "" && cmn.GCO.Get().Auth.AllowGuest {
-		return guestAcc, nil
-	}
-
-	s := strings.SplitN(authToken, " ", 2)
-	if len(s) != 2 || s[0] != cmn.HeaderBearer {
-		return nil, fmt.Errorf("invalid request")
-	}
-
-	if p.authn == nil {
-		return nil, fmt.Errorf("invalid credentials")
-	}
-
-	auth, err := p.authn.validateToken(s[1])
-	if err != nil {
-		glog.Errorf("Invalid token: %v", err)
-		return nil, fmt.Errorf("invalid token")
-	}
-
-	return auth, nil
-}
-
-// A wrapper to check any request before delegating the request to real handler
-// If authentication is disabled, it does nothing.
-// If authentication is enabled, it looks for token in request header and
-// makes sure that it is valid
-func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
-	wrappedFunc := func(w http.ResponseWriter, r *http.Request) {
-		var (
-			auth *cmn.AuthToken
-			err  error
-		)
-
-		if cmn.GCO.Get().Auth.Enabled {
-			if auth, err = p.validateToken(r); err != nil {
-				glog.Error(err)
-				p.invalmsghdlr(w, r, "Not authorized", http.StatusUnauthorized)
-				return
-			}
-			if auth.UserID == cmn.AuthGuestRole && r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/"+cmn.Buckets+"/") {
-				// get bucket objects is POST request, it cannot check the action
-				// here because it "emties" payload and httpbckpost gets nothing.
-				// So, we just set flag 'Guest' for httpbckpost to use
-				r.Header.Set(cmn.HeaderGuestAccess, "1")
-			} else if auth.UserID == cmn.AuthGuestRole && r.Method != http.MethodGet && r.Method != http.MethodHead {
-				p.invalmsghdlr(w, r, guestError, http.StatusUnauthorized)
-				return
-			}
-			if glog.FastV(4, glog.SmoduleAIS) {
-				if auth.UserID == cmn.AuthGuestRole {
-					glog.Info("Guest access granted")
-				} else {
-					glog.Infof("Logged as %s", auth.UserID)
-				}
-			}
-		}
-
-		h.ServeHTTP(w, r)
-	}
-	return wrappedFunc
 }
 
 func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {

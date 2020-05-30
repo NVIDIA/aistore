@@ -51,8 +51,6 @@ var (
 	_ revs = &TokenList{}
 )
 
-var guestAcc = &cmn.AuthToken{UserID: cmn.AuthGuestRole}
-
 // Decrypts JWT token and returns all encrypted information.
 // Used by proxy - to check a user access and token validity(e.g, expiration),
 // and by target - only to get a user name for AWS/GCP access

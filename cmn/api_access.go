@@ -15,7 +15,7 @@ const (
 	AccessObjHEAD
 	AccessPUT
 	AccessAPPEND
-	AccessColdGET
+	AccessDownload
 	AccessObjDELETE
 	AccessObjRENAME
 	AccessPROMOTE
@@ -30,13 +30,17 @@ const (
 	AccessBckDELETE
 	// cluster
 	AccessBckCreate
+	AccessBckLIST
 	AccessADMIN
+	// must be the last one
+	AccessMax
 
 	// Permissions
 	allowAllAccess       = ^uint64(0)
 	allowReadOnlyAccess  = AccessGET | AccessObjHEAD | AccessBckHEAD | AccessObjLIST
 	allowReadWriteAccess = allowReadOnlyAccess |
-		AccessPUT | AccessAPPEND | AccessColdGET | AccessObjDELETE | AccessObjRENAME
+		AccessPUT | AccessAPPEND | AccessDownload | AccessObjDELETE | AccessObjRENAME
+	allowClusterAccess = ^uint64(0) & (AccessBckCreate - 1)
 
 	// Permission Operations
 	AllowAccess = "allow"
@@ -50,7 +54,7 @@ var accessOp = map[int]string{
 	AccessObjHEAD:   "HEAD-OBJECT",
 	AccessPUT:       "PUT",
 	AccessAPPEND:    "APPEND",
-	AccessColdGET:   "COLD-GET",
+	AccessDownload:  "DOWNLOAD",
 	AccessObjDELETE: "DELETE-OBJECT",
 	AccessObjRENAME: "RENAME-OBJECT",
 	AccessPROMOTE:   "PROMOTE",
@@ -68,6 +72,7 @@ var accessOp = map[int]string{
 	AccessADMIN:     "ADMIN",
 }
 
+func NoAccess() uint64        { return 0 }
 func AllAccess() uint64       { return allowAllAccess }
 func ReadOnlyAccess() uint64  { return allowReadOnlyAccess }
 func ReadWriteAccess() uint64 { return allowReadWriteAccess }
@@ -81,10 +86,6 @@ func AccessOp(access int) string {
 
 func (bp *BucketProps) AccessToStr() string {
 	return accessToStr(bp.AccessAttrs)
-}
-
-func (au *AuthUser) AccessToStr() string {
-	return accessToStr(au.Access)
 }
 
 func accessToStr(aattrs uint64) string {
@@ -104,8 +105,8 @@ func accessToStr(aattrs uint64) string {
 	if aattrs&AccessAPPEND == AccessAPPEND {
 		accList = append(accList, accessOp[AccessAPPEND])
 	}
-	if aattrs&AccessColdGET == AccessColdGET {
-		accList = append(accList, accessOp[AccessColdGET])
+	if aattrs&AccessDownload == AccessDownload {
+		accList = append(accList, accessOp[AccessDownload])
 	}
 	if aattrs&AccessObjDELETE == AccessObjDELETE {
 		accList = append(accList, accessOp[AccessObjDELETE])

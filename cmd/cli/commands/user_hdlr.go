@@ -195,14 +195,14 @@ func addUserHandler(c *cli.Context) (err error) {
 		AdminName:     cliAuthnAdminName(c),
 		AdminPassword: cliAuthnAdminPassword(c),
 	}
-	role := parseStrFlag(c, roleFlag)
-	if role == "" {
-		role = cmn.AuthGuestRole
+	roles := []string{}
+	if role := parseStrFlag(c, roleFlag); role != "" {
+		roles = strings.Split(role, ",")
 	}
 	user := &cmn.AuthUser{
-		UserID:   cliAuthnUserName(c),
+		ID:       cliAuthnUserName(c),
 		Password: cliAuthnUserPassword(c),
-		Role:     role,
+		Roles:    roles,
 	}
 	return api.AddUser(authParams, spec, user)
 }

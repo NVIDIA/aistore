@@ -31,7 +31,7 @@ require (
 	github.com/urfave/cli v1.22.4
 	github.com/valyala/fasthttp v1.11.0
 	github.com/vbauerster/mpb/v4 v4.10.1
-	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37 // indirect
+	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
 	golang.org/x/image v0.0.0-20200119044424-58c23975cae1 // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e

@@ -183,22 +183,8 @@ func GetUsersAuthN(baseParams BaseParams) ([]*cmn.AuthUser, error) {
 		list = append(list, info)
 	}
 
-	// Sort users by name but Powerusers goes first, and guests last
-	less := func(i, j int) bool {
-		if list[i].Role == cmn.AuthPowerUserRole && list[j].Role != cmn.AuthPowerUserRole {
-			return true
-		}
-		if list[i].Role != cmn.AuthPowerUserRole && list[j].Role == cmn.AuthPowerUserRole {
-			return false
-		}
-		if list[i].Role == cmn.AuthGuestRole && list[j].Role != cmn.AuthGuestRole {
-			return false
-		}
-		if list[i].Role != cmn.AuthGuestRole && list[j].Role == cmn.AuthGuestRole {
-			return true
-		}
-		return list[i].UserID < list[j].UserID
-	}
+	// TODO: better sorting
+	less := func(i, j int) bool { return list[i].ID < list[j].ID }
 	sort.Slice(list, less)
 
 	return list, err

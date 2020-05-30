@@ -242,7 +242,7 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("Added a user %s\n", info.UserID)
+		glog.Infof("Added a user %s\n", info.ID)
 	}
 }
 
@@ -284,7 +284,12 @@ func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) er
 		return fmt.Errorf("invalid header authorization")
 	}
 
-	if pair[0] != conf.Auth.Username || pair[1] != conf.Auth.Password {
+	uInfo, err := a.users.getUser(pair[0])
+	if err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		return fmt.Errorf("invalid credentials")
+	}
+	if !isSamePassword(pair[1], uInfo.Password) {
 		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("invalid credentials")
 	}
@@ -381,6 +386,7 @@ func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.users.createRolesForClusters(cluConf.Conf)
 }
 
 func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {

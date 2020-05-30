@@ -16,8 +16,6 @@ cat > $AUTHN_CONF_FILE <<EOL
 	},
 	"auth": {
 		"secret": "$AIS_SECRET_KEY",
-		"username": "${AUTHN_SU_NAME:-admin}",
-		"password": "${AUTHN_SU_PASS:-admin}",
 		"expiration_time": "${AUTHN_TTL:-24h}"
 	},
 	"timeout": {

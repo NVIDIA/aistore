@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	suNameEnvVar    = "AUTHN_SU_NAME"
-	suPassEnvVar    = "AUTHN_SU_PASS"
 	secretKeyEnvVar = "SECRETKEY"
 )
 
@@ -45,8 +43,6 @@ type (
 	}
 	authConfig struct {
 		Secret          string        `json:"secret"`
-		Username        string        `json:"username"`
-		Password        string        `json:"password"`
 		ExpirePeriodStr string        `json:"expiration_time"`
 		ExpirePeriod    time.Duration `json:"-"`
 	}
@@ -65,12 +61,6 @@ type (
 // Useful for deploying AuthN in k8s with k8s feature 'secrets' to avoid
 // having those setings in configuration file.
 func (c *config) applySecrets() {
-	if val := os.Getenv(suNameEnvVar); val != "" {
-		c.Auth.Username = val
-	}
-	if val := os.Getenv(suPassEnvVar); val != "" {
-		c.Auth.Password = val
-	}
 	if val := os.Getenv(secretKeyEnvVar); val != "" {
 		c.Auth.Secret = val
 	}

@@ -31,7 +31,7 @@ func init() {
 
 func createUsers(mgr *userManager, t *testing.T) {
 	for idx := range users {
-		user := &cmn.AuthUser{UserID: users[idx], Password: passs[idx], Role: cmn.AuthGuestRole}
+		user := &cmn.AuthUser{ID: users[idx], Password: passs[idx], Roles: []string{cmn.AuthGuestRole}}
 		err := mgr.addUser(user)
 		if err != nil {
 			t.Errorf("Failed to create a user %s: %v", users[idx], err)
@@ -64,7 +64,7 @@ func deleteUsers(mgr *userManager, skipNotExist bool, t *testing.T) {
 }
 
 func testInvalidUser(mgr *userManager, t *testing.T) {
-	user := &cmn.AuthUser{UserID: users[0], Password: passs[1], Role: cmn.AuthGuestRole}
+	user := &cmn.AuthUser{ID: users[0], Password: passs[1], Roles: []string{cmn.AuthGuestRole}}
 	err := mgr.addUser(user)
 	if err == nil {
 		t.Errorf("User with the existing name %s was created: %v", users[0], err)
@@ -82,7 +82,7 @@ func testUserDelete(mgr *userManager, t *testing.T) {
 		username = "newuser"
 		userpass = "newpass"
 	)
-	user := &cmn.AuthUser{UserID: username, Password: userpass, Role: cmn.AuthGuestRole}
+	user := &cmn.AuthUser{ID: username, Password: userpass, Roles: []string{cmn.AuthGuestRole}}
 	err := mgr.addUser(user)
 	if err != nil {
 		t.Errorf("Failed to create a user %s: %v", username, err)
@@ -147,11 +147,11 @@ func TestToken(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get user by token %v: %v", token, err)
 	}
-	if info == nil || info.UserID != users[1] {
+	if info == nil || info.ID != users[1] {
 		if info == nil {
 			t.Errorf("No user returned for token %v", token)
 		} else {
-			t.Errorf("Invalid user %s returned for token %v", info.UserID, token)
+			t.Errorf("Invalid user %s returned for token %v", info.ID, token)
 		}
 	}
 
@@ -185,7 +185,7 @@ func TestToken(t *testing.T) {
 		mgr.revokeToken(token)
 		info, err = mgr.userByToken(token)
 		if info != nil {
-			t.Errorf("Some user returned by revoken token %s: %s", token, info.UserID)
+			t.Errorf("Some user returned by revoken token %s: %s", token, info.ID)
 		} else if err == nil {
 			t.Error("No error for revoked token")
 		} else if err != errTokenNotFound {

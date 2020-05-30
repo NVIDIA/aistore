@@ -239,7 +239,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 			return
 		}
 	}
-	if err := bck.Allow(cmn.AccessColdGET); err != nil {
+	if err := bck.Allow(cmn.AccessDownload); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}

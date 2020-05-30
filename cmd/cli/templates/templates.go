@@ -309,9 +309,9 @@ const (
 		"{{ $role.Name }}\t{{ $role.Desc }}\n" +
 		"{{end}}"
 
-	AuthNUserTmpl = "Name\tROLE\tPERMISSIONS\n" +
+	AuthNUserTmpl = "NAME\tROLES\n" +
 		"{{ range $user := . }}" +
-		"{{ $user.UserID }}\t{{ $user.Role }}\t{{$user.AccessToStr}}\n" +
+		"{{ $user.ID }}\t{{ JoinList $user.Roles }}\n" +
 		"{{end}}"
 )
 
