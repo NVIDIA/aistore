@@ -334,8 +334,11 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 // Borrowed from ais (modified cmn.InvalidHandler calls)
 func (a *authServ) writeJSON(w http.ResponseWriter, val interface{}, tag string) {
 	w.Header().Set("Content-Type", "application/json")
-	err := jsoniter.NewEncoder(w).Encode(val)
-	a.processError(tag, err)
+	var err error
+	if err = jsoniter.NewEncoder(w).Encode(val); err == nil {
+		return
+	}
+	glog.Errorf("%s: failed to write json, err: %v", tag, err)
 }
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
@@ -345,9 +348,6 @@ func (a *authServ) writeBytes(w http.ResponseWriter, jsbytes []byte, tag string)
 	if _, err = w.Write(jsbytes); err == nil {
 		return
 	}
-	a.processError(tag, err)
-}
-func (a *authServ) processError(tag string, err error) {
 	glog.Errorf("%s: failed to write json, err: %v", tag, err)
 }
 
