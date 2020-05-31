@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -40,8 +41,6 @@ import (
 
 const (
 	DSorterGeneralType = "dsort_general"
-
-	pkgName = "dsort"
 )
 
 type (
@@ -353,7 +352,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				cmn.Assert(false)
 			}
 
-			cmn.Dassert(n > 0, pkgName)
+			debug.Assert(n > 0)
 			written += n
 			return
 		}

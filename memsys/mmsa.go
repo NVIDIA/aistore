@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/sys"
 )
@@ -612,7 +613,7 @@ func (s *Slab) _allocSlow() (buf []byte) {
 		curMinDepth = 1
 	}
 
-	cmn.Dassert(len(s.get) == s.pos, pkgName)
+	debug.Assert(len(s.get) == s.pos)
 
 	s.muput.Lock()
 	lput := len(s.put)
@@ -621,8 +622,8 @@ func (s *Slab) _allocSlow() (buf []byte) {
 	}
 	s.get, s.put = s.put, s.get
 
-	cmn.Dassert(len(s.put) == s.pos, pkgName)
-	cmn.Dassert(len(s.get) >= int(curMinDepth), pkgName)
+	debug.Assert(len(s.put) == s.pos)
+	debug.Assert(len(s.get) >= int(curMinDepth))
 
 	s.put = s.put[:0]
 	s.muput.Unlock()
@@ -708,7 +709,7 @@ func (s *Slab) cleanup() (freed int64) {
 	s.put = s.put[:0]
 	s.pos = 0
 
-	cmn.Dassert(len(s.get) == 0 && len(s.put) == 0, pkgName)
+	debug.Assert(len(s.get) == 0 && len(s.put) == 0)
 	s.muput.Unlock()
 	s.muget.Unlock()
 	return

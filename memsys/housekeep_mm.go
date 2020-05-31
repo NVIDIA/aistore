@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -105,7 +106,7 @@ func (r *MMSA) garbageCollect() time.Duration {
 	} else { // in-between hysteresis
 		x := uint64(maxDepth-minDepth) * (mem.ActualFree - r.MinFree)
 		depth = minDepth + int(x/(r.lowWM-r.MinFree)) // Heu #2
-		cmn.Dassert(depth >= minDepth && depth <= maxDepth, pkgName)
+		debug.Assert(depth >= minDepth && depth <= maxDepth)
 		r.minDepth.Store(minDepth / 4)
 	}
 	for _, s := range r.sorted { // idle first

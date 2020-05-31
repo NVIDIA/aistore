@@ -45,10 +45,16 @@ ifeq ($(MODE),debug)
 	# Debug mode
 	GCFLAGS = -gcflags="all=-N -l"
 	LDFLAGS = -ldflags "-X 'main.version=$(VERSION)' -X 'main.build=$(BUILD)'"
+	BUILD_TAGS += debug
 else
 	# Production mode
 	GCFLAGS =
 	LDFLAGS = -ldflags "-w -s -X 'main.version=$(VERSION)' -X 'main.build=$(BUILD)'"
+endif
+
+ifdef AIS_DEBUG
+	# Enable `debug` tag also when `AIS_DEBUG` is set.
+	BUILD_TAGS += debug
 endif
 
 # Colors
@@ -72,7 +78,7 @@ endif
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
 	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
-		go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags=$(BUILD_TAGS) $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+		go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
 	@echo "done."
 
 aisfs-pre:
@@ -265,7 +271,7 @@ help:
 		"make kill clean" "Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)" \
 		"make kill deploy <<< $'7\n2\n4\n1'"  "Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies" \
 		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster with race detector, write reports to /tmp/race.<PID>" \
-		"MODE=debug make deploy" "Deploy cluster with aisnode (AIS target and proxy) executable built with debug info" \
+		"MODE=debug make deploy" "Deploy cluster with aisnode (AIS target and proxy) executable built with debug symbols and debug asserts enabled" \
 		"BUCKET=tmp make test-short" "Run all short tests" \
 		"BUCKET=<existing-cloud-bucket> make test-long" "Run all tests" \
 		"BUCKET=tmp make ci" "Run style, lint, and spell checks, as well as all short tests" \

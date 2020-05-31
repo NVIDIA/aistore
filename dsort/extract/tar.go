@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -113,13 +114,13 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 	if remainingMetadataSize > 0 {
 		writeN := int64(len(p))
 		if writeN < remainingMetadataSize {
-			cmn.Dassert(int64(len(rd.metadataBuf))-rd.written >= writeN, pkgName)
+			debug.Assert(int64(len(rd.metadataBuf))-rd.written >= writeN)
 			copy(rd.metadataBuf[rd.written:], p)
 			rd.written += writeN
 			return len(p), nil
 		}
 
-		cmn.Dassert(int64(len(rd.metadataBuf))-rd.written >= remainingMetadataSize, pkgName)
+		debug.Assert(int64(len(rd.metadataBuf))-rd.written >= remainingMetadataSize)
 		copy(rd.metadataBuf[rd.written:], p[:remainingMetadataSize])
 		rd.written += remainingMetadataSize
 		p = p[remainingMetadataSize:]
@@ -251,7 +252,7 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 					}
 					n += diff
 				}
-				cmn.Dassert(diff >= 0 && diff < 512, pkgName)
+				debug.Assert(diff >= 0 && diff < 512)
 			case SGLStoreType, DiskStoreType:
 				rdReader.reinit(tw, obj.Size, obj.MetadataSize)
 				if n, err = loadContent(rdReader, rec, obj); err != nil {

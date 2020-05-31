@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -67,12 +68,12 @@ func (rd *zipRecordDataReader) Write(p []byte) (int, error) {
 	if remainingMetadataSize > 0 {
 		writeN := int64(len(p))
 		if writeN < remainingMetadataSize {
-			cmn.Dassert(int64(len(rd.metadataBuf))-rd.written >= writeN, pkgName)
+			debug.Assert(int64(len(rd.metadataBuf))-rd.written >= writeN)
 			copy(rd.metadataBuf[rd.written:], p)
 			rd.written += writeN
 			return len(p), nil
 		}
-		cmn.Dassert(int64(len(rd.metadataBuf))-rd.written >= remainingMetadataSize, pkgName)
+		debug.Assert(int64(len(rd.metadataBuf))-rd.written >= remainingMetadataSize)
 
 		copy(rd.metadataBuf[rd.written:], p[:remainingMetadataSize])
 		rd.written += remainingMetadataSize

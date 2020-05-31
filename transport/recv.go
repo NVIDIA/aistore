@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
@@ -320,7 +321,7 @@ nextchunk:
 read:
 	n, _ = it.fbuf.Read(p)
 	if err == nil && n < len(p) {
-		cmn.Dassert(it.fbuf.Len() == 0, pkgName)
+		debug.Assert(it.fbuf.Len() == 0)
 		p = p[n:]
 		goto nextchunk
 	}
@@ -353,7 +354,7 @@ func (it *iterator) next() (obj *objReader, hl64 int64, err error) {
 		err = fmt.Errorf("%s: sbrk #2: header length %d checksum %x != %x", it.trname, hlen, checksum, chc)
 		return
 	}
-	cmn.Dassert(hlen < len(it.headerBuf), pkgName)
+	debug.Assert(hlen < len(it.headerBuf))
 	hl64 += int64(cmn.SizeofI64) * 2 // to account for hlen and its checksum
 	n, err = it.Read(it.headerBuf[:hlen])
 	if n == 0 {
@@ -398,7 +399,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	case nil:
 		if obj.off >= obj.hdr.ObjAttrs.Size {
 			err = io.EOF
-			cmn.Dassert(obj.off == obj.hdr.ObjAttrs.Size, pkgName)
+			debug.Assert(obj.off == obj.hdr.ObjAttrs.Size)
 		}
 	case io.EOF:
 		if obj.off != obj.hdr.ObjAttrs.Size {

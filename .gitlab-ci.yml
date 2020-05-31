@@ -36,7 +36,7 @@ build:linux:
     - AIS_CLD_PROVIDER="gcp" make node
     - AIS_CLD_PROVIDER="ais" make node
     - AIS_CLD_PROVIDER="azure" make node
-    - AIS_CLD_PROVIDER="" make node
+    - AIS_CLD_PROVIDER="" MODE="debug" make node
     - make authn
     - make aisfs
     - make cli

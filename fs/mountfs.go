@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/OneOfOne/xxhash"
 )
@@ -310,7 +311,7 @@ func (mfs *MountedFS) LoadBalanceGET(objfqn, objmpath string, copies MPI, now ti
 	)
 	fqn = objfqn
 	if !ok {
-		cmn.DassertMsg(false, objmpath, pkgName)
+		debug.AssertMsg(false, objmpath)
 		return
 	}
 	for copyfqn, copympi := range copies {

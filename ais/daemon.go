@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
@@ -213,6 +214,10 @@ func initDaemon(version, build string) {
 	}
 
 	glog.Infof("git: %s | build-time: %s\n", version, build)
+
+	if debug.Enabled {
+		debug.Logf("starting with debug asserts/logs")
+	}
 
 	containerized := sys.Containerized()
 	cpus, limited := sys.NumCPU()

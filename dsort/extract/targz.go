@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -161,7 +162,7 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 					}
 					n += diff
 				}
-				cmn.Dassert(diff >= 0 && diff < 512, pkgName)
+				debug.Assert(diff >= 0 && diff < 512)
 			case SGLStoreType, DiskStoreType:
 				rdReader.reinit(tw, obj.Size, obj.MetadataSize)
 				if n, err = loadContent(rdReader, rec, obj); err != nil {

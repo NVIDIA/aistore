@@ -22,10 +22,6 @@ import (
 )
 
 const (
-	pkgName = "dsort"
-)
-
-const (
 	// Extract methods
 	ExtractToMem cmn.Bits = 1 << iota
 	ExtractToDisk

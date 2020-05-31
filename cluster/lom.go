@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/ios"
@@ -201,7 +202,7 @@ func (lom *LOM) _whingeCopy() (yes bool) {
 		return
 	}
 	msg := fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %+v)", lom, lom.FQN, lom.HrwFQN, lom.md.copies)
-	cmn.DassertMsg(false, msg, pkgName)
+	debug.AssertMsg(false, msg)
 	glog.Error(msg)
 	return true
 }
@@ -671,7 +672,7 @@ func (lom *LOM) Clone(fqn string) *LOM {
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 // =======================================================================================
 func (lom *LOM) Hkey() (string, int) {
-	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName)
+	debug.Assert(lom.ParsedFQN.Digest != 0)
 	return lom.md.uname, int(lom.ParsedFQN.Digest & (cmn.MultiSyncMapCount - 1))
 }
 
@@ -765,7 +766,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 }
 
 func (lom *LOM) checkBucket() error {
-	cmn.Dassert(lom.loaded, pkgName) // cannot check bucket without first calling lom.Load()
+	debug.Assert(lom.loaded) // cannot check bucket without first calling lom.Load()
 	var (
 		bmd             = lom.T.GetBowner().Get()
 		bprops, present = bmd.Get(lom.bck)
@@ -785,7 +786,7 @@ func (lom *LOM) checkBucket() error {
 }
 
 func (lom *LOM) ReCache() {
-	cmn.Dassert(!lom.IsCopy(), pkgName) // not caching copies
+	debug.Assert(!lom.IsCopy()) // not caching copies
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
@@ -799,7 +800,7 @@ func (lom *LOM) ReCache() {
 }
 
 func (lom *LOM) Uncache() {
-	cmn.Dassert(!lom.IsCopy(), pkgName) // not caching copies
+	debug.Assert(!lom.IsCopy()) // not caching copies
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
