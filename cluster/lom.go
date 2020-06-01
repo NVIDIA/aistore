@@ -260,17 +260,10 @@ func (lom *LOM) delCopyMd(copyFQN string) {
 
 func (lom *LOM) AddCopy(copyFQN string, mpi *fs.MountpathInfo) error {
 	lom.addCopyMd(copyFQN, mpi)
-	if err := lom.syncMetaWithCopies(); err != nil {
-		return err // Hard error which probably removed the main object
-	}
-	return lom.Persist()
+	return lom.syncMetaWithCopies()
 }
 
 func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
-	if lom._whingeCopy() || !lom.IsHRW() || !lom.HasCopies() {
-		return lom.Persist()
-	}
-
 	numCopies := lom.NumCopies()
 	// 1. Delete all copies from metadata
 	for _, copyFQN := range copiesFQN {
@@ -295,8 +288,7 @@ func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 			continue
 		}
 	}
-
-	return lom.Persist()
+	return
 }
 
 func (lom *LOM) DelAllCopies() (err error) {
@@ -433,6 +425,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			return
 		}
+		err = lom.Persist()
 	}
 	return
 }

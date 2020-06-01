@@ -420,8 +420,9 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	if putResp.Response().StatusCode >= http.StatusBadRequest {
 		return "", fmt.Errorf("failed to put object %s/%s", cloudBck, lom.ObjName), putResp.Response().StatusCode
 	}
+	version = strings.Trim(string(putResp.ETag()), "\"")
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[put_object] %s", lom)
+		glog.Infof("[put_object] %s, version %s", lom, version)
 	}
-	return strings.Trim(string(putResp.ETag()), "\""), nil, http.StatusOK
+	return version, nil, http.StatusOK
 }

@@ -48,10 +48,13 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 	}
 
 	size = int64(len(copiesFQN)) * lom.Size()
-	if err = lom.DelCopies(copiesFQN...); err == nil {
-		lom.ReCache()
+	if err = lom.DelCopies(copiesFQN...); err != nil {
+		return
 	}
-
+	if err = lom.Persist(); err != nil {
+		return
+	}
+	lom.ReCache()
 	return
 }
 

@@ -371,13 +371,11 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 		err, errCode = awsErrorToAISError(err, cloudBck, lom.T.Snode().Name())
 		return
 	}
+	if uploadOutput.VersionID != nil {
+		version = *uploadOutput.VersionID
+	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		if uploadOutput.VersionID != nil {
-			version = *uploadOutput.VersionID
-			glog.Infof("[put_object] %s, version %s", lom, version)
-		} else {
-			glog.Infof("[put_object] %s", lom)
-		}
+		glog.Infof("[put_object] %s, version %s", lom, version)
 	}
 	return
 }

@@ -817,6 +817,7 @@ var _ = Describe("LOM", func() {
 
 				// Delete copy and check if it's gone.
 				Expect(lom.DelCopies(mirrorFQNs[1])).ToNot(HaveOccurred())
+				Expect(lom.Persist()).ToNot(HaveOccurred())
 				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 
 				// Reload default object and check if the lom was correctly updated.
@@ -842,6 +843,7 @@ var _ = Describe("LOM", func() {
 
 				// Delete copy and check if it's gone.
 				Expect(lom.DelCopies(mirrorFQNs[1])).ToNot(HaveOccurred())
+				Expect(lom.Persist()).ToNot(HaveOccurred())
 				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 
 				// Reload default object and check if the lom was correctly updated.
@@ -881,6 +883,7 @@ var _ = Describe("LOM", func() {
 
 				// Delete all copies and check if they are gone.
 				Expect(lom.DelAllCopies()).NotTo(HaveOccurred())
+				Expect(lom.Persist()).ToNot(HaveOccurred())
 				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 				Expect(mirrorFQNs[2]).NotTo(BeAnExistingFile())
 

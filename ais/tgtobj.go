@@ -200,12 +200,15 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 			return
 		}
 	}
-
 	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
 		return fmt.Errorf("rename failed => %s: %w", lom, err), 0
 	}
-
-	if err = lom.DelAllCopies(); err != nil {
+	if lom.HasCopies() {
+		if err = lom.DelAllCopies(); err != nil {
+			return
+		}
+	}
+	if err = lom.Persist(); err != nil {
 		return
 	}
 	lom.ReCache()
