@@ -34,8 +34,7 @@ type (
 
 	DlJob interface {
 		ID() string
-		SrcBck() cmn.Bck
-		DstBck() cmn.Bck
+		Bck() cmn.Bck
 		Description() string
 		Timeout() time.Duration
 
@@ -80,9 +79,8 @@ type (
 		t   cluster.Target
 		ctx context.Context // context for the request, user etc...
 
-		sourceBck *cluster.Bck
-		prefix    string
-		suffix    string
+		prefix string
+		suffix string
 
 		objs       []dlObj // objects' metas which are ready to be downloaded
 		pageMarker string
@@ -109,7 +107,7 @@ type (
 )
 
 func (j *baseDlJob) ID() string             { return j.id }
-func (j *baseDlJob) DstBck() cmn.Bck        { return j.bck.Bck }
+func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
 func (j *baseDlJob) throttler() *throttler  { return j.t }
@@ -132,8 +130,7 @@ func newBaseDlJob(id string, bck *cluster.Bck, timeout, desc string, limits DlLi
 	}
 }
 
-func (j *sliceDlJob) SrcBck() cmn.Bck { return j.bck.Bck }
-func (j *sliceDlJob) Len() int        { return len(j.objs) }
+func (j *sliceDlJob) Len() int { return len(j.objs) }
 func (j *sliceDlJob) genNext() (objs []dlObj, ok bool) {
 	if j.current == len(j.objs) {
 		return []dlObj{}, false
@@ -157,8 +154,7 @@ func newSliceDlJob(base *baseDlJob, objs []dlObj) *sliceDlJob {
 	}
 }
 
-func (j *cloudBucketDlJob) SrcBck() cmn.Bck { return j.sourceBck.Bck }
-func (j *cloudBucketDlJob) Len() int        { return -1 }
+func (j *cloudBucketDlJob) Len() int { return -1 }
 func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
@@ -198,7 +194,7 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 			Fast:       true,
 		}
 
-		bckList, err, _ := j.t.Cloud(j.sourceBck).ListObjects(j.ctx, j.sourceBck, msg)
+		bckList, err, _ := j.t.Cloud(j.bck).ListObjects(j.ctx, j.bck, msg)
 		if err != nil {
 			return err
 		}
@@ -267,13 +263,12 @@ func (j *rangeDlJob) getNextObjs() error {
 	return nil
 }
 
-func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *baseDlJob, sourceBck *cluster.Bck, prefix, suffix string) (*cloudBucketDlJob, error) {
+func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *baseDlJob, prefix, suffix string) (*cloudBucketDlJob, error) {
 	job := &cloudBucketDlJob{
 		baseDlJob:  *base,
 		pageMarker: "",
 		t:          t,
 		ctx:        ctx,
-		sourceBck:  sourceBck,
 		prefix:     prefix,
 		suffix:     suffix,
 	}

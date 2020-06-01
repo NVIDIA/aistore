@@ -34,12 +34,10 @@ const (
 
 type CloudProvider interface {
 	Provider() string
-	// TODO: We should transition into just `bck *cluster.Bck` and `objName string`
-	//  instead of `lom *LOM` as it will be easier to implement some of the features.
 	GetObj(ctx context.Context, fqn string, lom *LOM) (err error, errCode int)
 	PutObj(ctx context.Context, r io.Reader, lom *LOM) (version string, err error, errCode int)
 	DeleteObj(ctx context.Context, lom *LOM) (error, int)
-	HeadObj(ctx context.Context, bck *Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int)
+	HeadObj(ctx context.Context, lom *LOM) (objMeta cmn.SimpleKVs, err error, errCode int)
 
 	HeadBucket(ctx context.Context, bck *Bck) (bucketProps cmn.SimpleKVs, err error, errCode int)
 	ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)

@@ -218,18 +218,18 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 // HEAD OBJECT //
 /////////////////
 
-func (gcpp *gcpProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
 	}
 	var (
 		h        = cmn.CloudHelpers.Google
-		cloudBck = bck.CloudBck()
+		cloudBck = lom.Bck().CloudBck()
 	)
-	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(objName).Attrs(gctx)
+	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(gctx)
 	if err != nil {
-		err, errCode = gcpp.handleObjectError(err, bck, gcpClient.Bucket(cloudBck.Name), gctx)
+		err, errCode = gcpp.handleObjectError(err, lom.Bck(), gcpClient.Bucket(cloudBck.Name), gctx)
 		return
 	}
 	objMeta = make(cmn.SimpleKVs)
@@ -244,7 +244,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName 
 		objMeta[cluster.CRC32CObjMD] = v
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[head_object] %s/%s", bck, objName)
+		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
 	}
 	return
 }

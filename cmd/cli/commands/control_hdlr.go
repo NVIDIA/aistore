@@ -239,6 +239,17 @@ func startDownloadHandler(c *cli.Context) error {
 		if cfg.Cloud.Provider == source.cloud.bck.Provider {
 			// Cloud is configured to requested bucket provider.
 			dlType = cloudDlType
+
+			p, err := api.HeadBucket(defaultAPIParams, basePayload.Bck)
+			if err != nil {
+				return err
+			}
+			if !p.BackendBck.Equal(source.cloud.bck) {
+				return fmt.Errorf(
+					"%q AIS bucket must be connected to backend cloud bucket %q",
+					basePayload.Bck, source.cloud.bck,
+				)
+			}
 		} else if source.cloud.prefix == "" {
 			return fmt.Errorf(
 				"cluster is not configured with %q provider: cannot download whole cloud bucket",
@@ -295,9 +306,8 @@ func startDownloadHandler(c *cli.Context) error {
 		id, err = api.DownloadRangeWithParam(defaultAPIParams, payload)
 	case cloudDlType:
 		payload := downloader.DlCloudBody{
-			DlBase:    basePayload,
-			SourceBck: source.cloud.bck,
-			Prefix:    source.cloud.prefix,
+			DlBase: basePayload,
+			Prefix: source.cloud.prefix,
 		}
 		id, err = api.DownloadCloudWithParam(defaultAPIParams, payload)
 	default:

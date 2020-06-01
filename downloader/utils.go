@@ -101,7 +101,6 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		cloudPayload  = &DlCloudBody{}
 
 		pt          cmn.ParsedTemplate
-		sourceBck   *cluster.Bck
 		description string
 		dlType      int
 	)
@@ -149,14 +148,6 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		dlType = dlTypeMulti
 	} else if err = cloudPayload.Validate(); err == nil {
 		dlType = dlTypeCloud
-		if cloudPayload.SourceBck.IsEmpty() {
-			cloudPayload.SourceBck = cloudPayload.Bck
-		}
-
-		sourceBck = cluster.NewBckEmbed(cloudPayload.SourceBck)
-		if err := sourceBck.Init(t.GetBowner(), t.Snode()); err != nil {
-			return nil, err
-		}
 	} else {
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
 	}
@@ -174,10 +165,10 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 	baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description, payload.Limits)
 	switch dlType {
 	case dlTypeCloud:
-		if !sourceBck.IsCloud() {
+		if !bck.IsCloud() {
 			return nil, errors.New("bucket download requires a cloud bucket")
 		}
-		return newCloudBucketDlJob(ctx, t, baseJob, sourceBck, cloudPayload.Prefix, cloudPayload.Suffix)
+		return newCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
 	case dlTypeRange:
 		if !bck.IsAIS() {
 			return nil, errors.New("range download requires ais bucket")
@@ -334,7 +325,7 @@ func roiFromObjMeta(objMeta cmn.SimpleKVs) (roi remoteObjInfo) {
 	return
 }
 
-func compareObjects(job DlJob, obj dlObj, lom *cluster.LOM) (equal bool, err error) {
+func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
 	var roi remoteObjInfo
 	if !obj.fromCloud {
 		resp, err := headLink(obj.link)
@@ -346,11 +337,7 @@ func compareObjects(job DlJob, obj dlObj, lom *cluster.LOM) (equal bool, err err
 		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 		defer cancel()
 		// This should succeed since we check if the bucket exists beforehand.
-		srcBck := cluster.NewBckEmbed(job.SrcBck())
-		if err := srcBck.Init(lom.T.GetBowner(), lom.T.Snode()); err != nil {
-			return false, err
-		}
-		objMeta, err, _ := lom.T.Cloud(srcBck).HeadObj(ctx, srcBck, lom.ObjName)
+		objMeta, err, _ := lom.T.Cloud(lom.Bck()).HeadObj(ctx, lom)
 		if err != nil {
 			return false, err
 		}

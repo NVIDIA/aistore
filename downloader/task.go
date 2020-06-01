@@ -62,7 +62,7 @@ type (
 
 func (t *singleObjectTask) download() {
 	lom := &cluster.LOM{T: t.parent.t, ObjName: t.obj.objName}
-	err := lom.Init(t.job.DstBck())
+	err := lom.Init(t.job.Bck())
 	if err == nil {
 		err = lom.Load()
 	}
@@ -220,11 +220,6 @@ func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) error {
 	ctx = context.WithValue(ctx, cmn.CtxReadWrapper, cmn.ReadWrapperFunc(wrapReader))
 	ctx = context.WithValue(ctx, cmn.CtxSetSize, cmn.SetSizeFunc(t.setTotalSize))
 
-	// Temporary set backend bucket to the source bucket - a little bit hackish.
-	props := lom.Bck().Props.Clone()
-	props.BackendBck = t.job.SrcBck()
-	lom.Bck().Props = props
-
 	// Do final GET (prefetch) request.
 	err, _ := t.parent.t.GetCold(ctx, lom, true /*prefetch*/)
 	return err
@@ -262,7 +257,7 @@ func (t *singleObjectTask) persist() {
 
 func (t *singleObjectTask) id() string { return t.job.ID() }
 func (t *singleObjectTask) uid() string {
-	return fmt.Sprintf("%s|%s|%s|%s|%v", t.obj.link, t.job.DstBck(), t.job.SrcBck(), t.obj.objName, t.obj.fromCloud)
+	return fmt.Sprintf("%s|%s|%s|%v", t.obj.link, t.job.Bck(), t.obj.objName, t.obj.fromCloud)
 }
 
 func (t *singleObjectTask) ToTaskDlInfo() TaskDlInfo {
@@ -281,7 +276,7 @@ func (t *singleObjectTask) ToTaskDlInfo() TaskDlInfo {
 
 func (t *singleObjectTask) String() (str string) {
 	return fmt.Sprintf(
-		"{id: %q, obj_name: %q, link: %q, from_cloud: %v, dst_bucket: %q, src_bucket: %q}",
-		t.id(), t.obj.objName, t.obj.link, t.obj.fromCloud, t.job.DstBck(), t.job.SrcBck(),
+		"{id: %q, obj_name: %q, link: %q, from_cloud: %v, bucket: %q}",
+		t.id(), t.obj.objName, t.obj.link, t.obj.fromCloud, t.job.Bck(),
 	)
 }

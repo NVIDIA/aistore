@@ -291,21 +291,21 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	return
 }
 
-func (ap *azureProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	objMeta = make(cmn.SimpleKVs)
 	var (
 		h        = cmn.CloudHelpers.Azure
-		cloudBck = bck.CloudBck()
+		cloudBck = lom.Bck().CloudBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
-		blobURL  = cntURL.NewBlobURL(objName)
+		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 	)
 	resp, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{})
 	if err != nil {
-		err, status := ap.azureErrorToAISError(err, cloudBck, objName)
+		err, status := ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return objMeta, err, status
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return objMeta, fmt.Errorf("failed to get object props %s/%s", cloudBck, objName), resp.StatusCode()
+		return objMeta, fmt.Errorf("failed to get object props %s/%s", cloudBck, lom.ObjName), resp.StatusCode()
 	}
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength(), 10)
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAzure
@@ -318,7 +318,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName 
 		objMeta[cluster.MD5ObjMD] = v
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[head_object] %s/%s", bck, objName)
+		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
 	}
 	return
 }

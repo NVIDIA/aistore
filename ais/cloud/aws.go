@@ -257,12 +257,12 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 // HEAD OBJECT //
 ////////////////
 
-func (awsp *awsProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
 		h        = cmn.CloudHelpers.Amazon
-		cloudBck = bck.CloudBck()
+		cloudBck = lom.Bck().CloudBck()
 		svc      = s3.New(createSession())
-		input    = &s3.HeadObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(objName)}
+		input    = &s3.HeadObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(lom.ObjName)}
 	)
 
 	headOutput, err := svc.HeadObject(input)
@@ -281,7 +281,7 @@ func (awsp *awsProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName 
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[head_object] %s/%s", bck, objName)
+		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
 	}
 	return
 }

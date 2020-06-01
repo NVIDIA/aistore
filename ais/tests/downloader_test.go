@@ -170,7 +170,7 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSki
 	tassert.Errorf(t, (status.SkippedCnt == 1) == shouldBeSkipped, "expected object to be [skipped: %t]", shouldBeSkipped)
 }
 
-func downloadObjectCloud(t *testing.T, dstBck, srcBck cmn.Bck, expectedFinished, expectedSkipped int) {
+func downloadObjectCloud(t *testing.T, dstBck cmn.Bck, expectedFinished, expectedSkipped int) {
 	var (
 		baseParams  = tutils.BaseAPIParams()
 		dlCloudBody = downloader.DlCloudBody{
@@ -178,7 +178,6 @@ func downloadObjectCloud(t *testing.T, dstBck, srcBck cmn.Bck, expectedFinished,
 				Bck:         dstBck,
 				Description: generateDownloadDesc(),
 			},
-			SourceBck: srcBck,
 		}
 	)
 	id, err := api.DownloadCloudWithParam(baseParams, dlCloudBody)
@@ -540,15 +539,18 @@ func TestDownloadCloud(t *testing.T) {
 			err = api.WaitForXaction(baseParams, xactArgs)
 			tassert.CheckFatal(t, err)
 
+			if test.dstBck.IsAIS() {
+				tutils.SetBackendBck(t, baseParams, test.dstBck, test.srcBck)
+			}
+
 			tutils.Logln("starting cloud download...")
 			id, err := api.DownloadCloudWithParam(baseParams, downloader.DlCloudBody{
 				DlBase: downloader.DlBase{
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
 				},
-				SourceBck: test.srcBck,
-				Prefix:    prefix,
-				Suffix:    suffix,
+				Prefix: prefix,
+				Suffix: suffix,
 			})
 			tassert.CheckFatal(t, err)
 
@@ -572,9 +574,8 @@ func TestDownloadCloud(t *testing.T) {
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
 				},
-				SourceBck: test.srcBck,
-				Prefix:    prefix,
-				Suffix:    suffix,
+				Prefix: prefix,
+				Suffix: suffix,
 			})
 			tassert.CheckFatal(t, err)
 
@@ -952,8 +953,9 @@ func TestDownloadOverrideObject(t *testing.T) {
 
 func TestDownloadOverrideObjectCloud(t *testing.T) {
 	var (
-		proxyURL = tutils.RandomProxyURL()
-		bck      = cmn.Bck{
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
@@ -976,9 +978,11 @@ func TestDownloadOverrideObjectCloud(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	downloadObjectCloud(t, bck, m.bck, m.num, 0)
+	tutils.SetBackendBck(t, baseParams, bck, m.bck)
+
+	downloadObjectCloud(t, bck, m.num, 0)
 	m.cloudRePuts(false /*evict*/)
-	downloadObjectCloud(t, bck, m.bck, m.num, 0)
+	downloadObjectCloud(t, bck, m.num, 0)
 }
 
 func TestDownloadSkipObject(t *testing.T) {
@@ -1012,8 +1016,9 @@ func TestDownloadSkipObject(t *testing.T) {
 
 func TestDownloadSkipObjectCloud(t *testing.T) {
 	var (
-		proxyURL = tutils.RandomProxyURL()
-		bck      = cmn.Bck{
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
@@ -1036,14 +1041,16 @@ func TestDownloadSkipObjectCloud(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	downloadObjectCloud(t, bck, m.bck, m.num, 0)
-	downloadObjectCloud(t, bck, m.bck, m.num, m.num)
+	tutils.SetBackendBck(t, baseParams, bck, m.bck)
+
+	downloadObjectCloud(t, bck, m.num, 0)
+	downloadObjectCloud(t, bck, m.num, m.num)
 
 	// Put some more cloud objects (we expect that only the new ones will be downloaded)
 	m.num += 10
 	m.cloudPuts(false /*evict*/)
 
-	downloadObjectCloud(t, bck, m.bck, m.num, m.num-10)
+	downloadObjectCloud(t, bck, m.num, m.num-10)
 }
 
 func TestDownloadJobLimitConnections(t *testing.T) {

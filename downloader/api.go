@@ -356,9 +356,8 @@ func (b *DlMultiBody) String() string {
 // Cloud request
 type DlCloudBody struct {
 	DlBase
-	SourceBck cmn.Bck `json:"source_bucket"`
-	Prefix    string  `json:"prefix"`
-	Suffix    string  `json:"suffix"`
+	Prefix string `json:"prefix"`
+	Suffix string `json:"suffix"`
 }
 
 func (b *DlCloudBody) Validate() error {

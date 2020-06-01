@@ -160,6 +160,19 @@ func CleanCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string)
 	tassert.CheckFatal(t, err)
 }
 
+func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.Bck) {
+	p, err := api.HeadBucket(baseParams, dstBck) // We need to know real provider of the bucket
+	tassert.CheckFatal(t, err)
+
+	err = api.SetBucketProps(baseParams, srcBck, cmn.BucketPropsToUpdate{
+		BackendBck: &cmn.BckToUpdate{
+			Name:     api.String(dstBck.Name),
+			Provider: api.String(p.Provider),
+		},
+	})
+	tassert.CheckFatal(t, err)
+}
+
 func UnregisterNode(proxyURL, sid string) error {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)

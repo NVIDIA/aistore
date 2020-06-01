@@ -150,11 +150,11 @@ imagenet_train-000076.tgz  36.6MiB/946.1MiB [=>---------------------------------
 #### Download whole GCP bucket
 
 Download all objects contained in `gcp://lpr-vision` bucket and save them into the `lpr-vision-copy` AIS bucket.
-Note that this feature is only available when GCP is configured as a cloud provider for the AIS.
+Note that this feature is only available when `ais://lpr-vision-copy` is connected to backend cloud bucket `gcp://lpr-vision`.
 
 ```console
-$ ais show config 634992t8087 --json | jq '.cloud | has("gcp")'
-true
+$ ais set props ais://lpr-vision-copy backend_bck=gcp://lpr-vision
+Bucket props successfully updated
 $ ais start download gs://lpr-vision ais://lpr-vision-copy
 QdwOYMAqg
 Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
@@ -163,11 +163,11 @@ Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
 #### Download GCP bucket objects with prefix
 
 Download objects contained in `gcp://lpr-vision` bucket which start with `dir/prefix-` and save them into the `lpr-vision-copy` AIS bucket.
-Note that this feature is only available when GCP is configured as a cloud provider for the AIS.
+Note that this feature is only available when `ais://lpr-vision-copy` is connected to backend cloud bucket `gcp://lpr-vision`.
 
 ```console
-$ ais show config 634992t8087 --json | jq '.cloud | has("gcp")'
-true
+$ ais set props ais://lpr-vision-copy backend_bck=gcp://lpr-vision
+Bucket props successfully updated
 $ ais start download gs://lpr-vision/dir/prefix- ais://lpr-vision-copy
 QdwOYMAqg
 Run `ais show download QdwOYMAqg` to monitor the progress of downloading.

@@ -209,7 +209,7 @@ func (d *dispatcher) checkAborted() bool {
 
 func (d *dispatcher) createTasksLom(job DlJob, obj dlObj) (*cluster.LOM, error) {
 	lom := &cluster.LOM{T: d.parent.t, ObjName: obj.objName}
-	err := lom.Init(job.DstBck())
+	err := lom.Init(job.Bck())
 	if err == nil {
 		err = lom.Load()
 	}
@@ -217,7 +217,7 @@ func (d *dispatcher) createTasksLom(job DlJob, obj dlObj) (*cluster.LOM, error) 
 		return nil, err
 	}
 	if err == nil {
-		equal, err := compareObjects(job, obj, lom)
+		equal, err := compareObjects(obj, lom)
 		if err != nil {
 			return nil, err
 		}

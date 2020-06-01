@@ -47,9 +47,9 @@ func (m *dummyCloudProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (
 func (m *dummyCloudProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
 	return cmn.BucketNames{}, nil, 0
 }
-func (m *dummyCloudProvider) HeadObj(ctx context.Context, bck *cluster.Bck, objName string) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (m *dummyCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	node := m._dummyNode()
-	return cmn.SimpleKVs{}, cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, node), http.StatusNotFound
+	return cmn.SimpleKVs{}, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bck().Bck, node), http.StatusNotFound
 }
 func (m *dummyCloudProvider) GetObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int) {
 	bck, node := lom.Bck().Bck, m._dummyNode()
