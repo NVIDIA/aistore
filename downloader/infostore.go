@@ -88,7 +88,16 @@ func (is *infoStore) incFinished(id string) error {
 	if err != nil {
 		return err
 	}
+	jInfo.FinishedCnt.Inc()
+	return nil
+}
 
+func (is *infoStore) incSkipped(id string) error {
+	jInfo, err := is.getJob(id)
+	if err != nil {
+		return err
+	}
+	jInfo.SkippedCnt.Inc()
 	jInfo.FinishedCnt.Inc()
 	return nil
 }
@@ -98,7 +107,6 @@ func (is *infoStore) incScheduled(id string) error {
 	if err != nil {
 		return err
 	}
-
 	jInfo.ScheduledCnt.Inc()
 	return nil
 }
@@ -108,7 +116,6 @@ func (is *infoStore) incErrorCnt(id string) error {
 	if err != nil {
 		return err
 	}
-
 	jInfo.ErrorCnt.Inc()
 	return nil
 }
@@ -118,7 +125,6 @@ func (is *infoStore) setAllDispatched(id string, dispatched bool) error {
 	if err != nil {
 		return err
 	}
-
 	jInfo.AllDispatched.Store(dispatched)
 	return nil
 }
@@ -128,7 +134,6 @@ func (is *infoStore) markFinished(id string) error {
 	if err != nil {
 		return err
 	}
-
 	jInfo.FinishedTime.Store(time.Now())
 	return nil
 }
@@ -138,7 +143,6 @@ func (is *infoStore) setAborted(id string) error {
 	if err != nil {
 		return err
 	}
-
 	jInfo.Aborted.Store(true)
 	return nil
 }

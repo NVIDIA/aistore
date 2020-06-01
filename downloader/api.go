@@ -27,6 +27,7 @@ type (
 		Description   string    `json:"description"`
 		FinishedCnt   int       `json:"finished_cnt"`
 		ScheduledCnt  int       `json:"scheduled_cnt"` // tasks being processed or already processed by dispatched
+		SkippedCnt    int       `json:"skipped_cnt"`   // number of tasks skipped
 		ErrorCnt      int       `json:"error_cnt"`
 		Total         int       `json:"total"`          // total number of tasks, negative if unknown
 		AllDispatched bool      `json:"all_dispatched"` // if true, dispatcher has already scheduled all tasks for given job
@@ -35,7 +36,7 @@ type (
 		FinishedTime  time.Time `json:"finished_time"`
 	}
 
-	DlJobInfos []DlJobInfo
+	DlJobInfos []*DlJobInfo
 
 	DlStatusResp struct {
 		DlJobInfo
@@ -45,9 +46,10 @@ type (
 	}
 )
 
-func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
+func (j *DlJobInfo) Aggregate(rhs *DlJobInfo) {
 	j.FinishedCnt += rhs.FinishedCnt
 	j.ScheduledCnt += rhs.ScheduledCnt
+	j.SkippedCnt += rhs.SkippedCnt
 	j.ErrorCnt += rhs.ErrorCnt
 	j.Total += rhs.Total
 	j.AllDispatched = j.AllDispatched && rhs.AllDispatched
@@ -131,7 +133,7 @@ func (d DlJobInfos) Swap(i, j int) {
 }
 
 func (d *DlStatusResp) Aggregate(rhs DlStatusResp) {
-	d.DlJobInfo.Aggregate(rhs.DlJobInfo)
+	d.DlJobInfo.Aggregate(&rhs.DlJobInfo)
 	d.CurrentTasks = append(d.CurrentTasks, rhs.CurrentTasks...)
 	d.FinishedTasks = append(d.FinishedTasks, rhs.FinishedTasks...)
 	d.Errs = append(d.Errs, rhs.Errs...)

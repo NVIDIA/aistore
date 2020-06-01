@@ -254,7 +254,7 @@ func (d *dispatcher) prepareTask(job DlJob, obj dlObj) (*singleObjectTask, *jogg
 
 	if lom == nil {
 		// object already exists
-		err = dlStore.incFinished(job.ID())
+		err = dlStore.incSkipped(job.ID())
 		return nil, nil, err
 	}
 

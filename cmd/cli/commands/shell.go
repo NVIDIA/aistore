@@ -341,7 +341,7 @@ func suggestDownloadID(c *cli.Context, filter func(*downloader.DlJobInfo) bool) 
 
 	list, _ := api.DownloadGetList(defaultAPIParams, "")
 	for _, job := range list {
-		if filter(&job) {
+		if filter(job) {
 			fmt.Println(job.ID)
 		}
 	}

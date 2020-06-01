@@ -210,6 +210,11 @@ func (m *ioContext) cloudPuts(evict bool) {
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
+	m.objNames = m.objNames[:0]
+	for _, obj := range objList.Entries {
+		m.objNames = append(m.objNames, obj.Name)
+	}
+
 	leftToFill := m.num - len(objList.Entries)
 	if leftToFill <= 0 {
 		tutils.Logf("cloud PUT %d (%d) objects already in bucket %s...\n", m.num, len(objList.Entries), m.bck)
@@ -222,7 +227,6 @@ func (m *ioContext) cloudPuts(evict bool) {
 		errCh = make(chan error, leftToFill)
 		wg    = &sync.WaitGroup{}
 	)
-	m.objNames = m.objNames[:0]
 	for i := 0; i < leftToFill; i++ {
 		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
@@ -242,6 +246,51 @@ func (m *ioContext) cloudPuts(evict bool) {
 	}
 
 	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
+
+	if evict {
+		tutils.Logln("evicting cloud bucket...")
+		err := api.EvictCloudBucket(baseParams, m.bck)
+		tassert.CheckFatal(m.t, err)
+	}
+}
+
+// Override the previously put cloud objects with new ones (to change version and checksum).
+func (m *ioContext) cloudRePuts(evict bool) { // nolint:unused // used but the test for now is always skipped
+	var (
+		baseParams = tutils.BaseAPIParams()
+		msg        = &cmn.SelectMsg{}
+	)
+
+	if !m.silent {
+		tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bck)
+	}
+
+	p, err := api.HeadBucket(baseParams, m.bck)
+	tassert.CheckFatal(m.t, err)
+
+	var (
+		errCh = make(chan error, m.num)
+		wg    = &sync.WaitGroup{}
+	)
+	for i := 0; i < m.num; i++ {
+		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
+		tassert.CheckFatal(m.t, err)
+		wg.Add(1)
+		go tutils.PutAsync(wg, m.proxyURL, m.bck, m.objNames[i], r, errCh)
+	}
+	wg.Wait()
+	tassert.SelectErr(m.t, errCh, "put", true)
+	tutils.Logln("cloud (re)PUT done")
+
+	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	tassert.CheckFatal(m.t, err)
+	if len(objList.Entries) != m.num {
+		m.t.Fatalf("list_objects err: %d != %d", len(objList.Entries), m.num)
+	}
+
+	if !m.silent {
+		tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
+	}
 
 	if evict {
 		tutils.Logln("evicting cloud bucket...")

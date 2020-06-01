@@ -94,10 +94,11 @@ type (
 		ID          string `json:"id"`
 		Description string `json:"description"`
 
-		FinishedCnt  atomic.Int32 `json:"finished"`
+		FinishedCnt  atomic.Int32 `json:"finished"` // also includes skipped
 		ScheduledCnt atomic.Int32 `json:"scheduled"`
-		Total        int          `json:"total"`
+		SkippedCnt   atomic.Int32 `json:"skipped"`
 		ErrorCnt     atomic.Int32 `json:"errors"`
+		Total        int          `json:"total"`
 
 		Aborted       atomic.Bool `json:"aborted"`
 		AllDispatched atomic.Bool `json:"all_dispatched"`
@@ -329,6 +330,7 @@ func (d *downloadJobInfo) ToDlJobInfo() DlJobInfo {
 		Description:   d.Description,
 		FinishedCnt:   int(d.FinishedCnt.Load()),
 		ScheduledCnt:  int(d.ScheduledCnt.Load()),
+		SkippedCnt:    int(d.SkippedCnt.Load()),
 		ErrorCnt:      int(d.ErrorCnt.Load()),
 		Total:         d.Total,
 		AllDispatched: d.AllDispatched.Load(),

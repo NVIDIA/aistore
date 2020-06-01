@@ -11,7 +11,7 @@ ais wait download $(ais show download --regex="minikube-range" | awk 'NR==2 {pri
 ais show download --regex="minikube"
 ais show download $(ais show download --regex="minikube-range" | awk 'NR==2 {print $1}')
 
-echo "[\"iso/minikube-v0.23.2.iso.sha256\", \"iso/minikube-v0.23.3.iso.sha256\"]" > /tmp/ais_test_dl_list.txt
+echo "[\"iso/minikube-v0.25.0.iso.sha256\", \"iso/minikube-v0.25.1.iso.sha256\"]" > /tmp/ais_test_dl_list.txt
 ais start download gs://minikube ais://$BUCKET --object-list=/tmp/ais_test_dl_list.txt --desc="minikube-multi" // IGNORE
 ais wait download $(ais show download --regex="minikube-multi" | awk 'NR==2 {print $1}')
 ais show download --regex="minikube"

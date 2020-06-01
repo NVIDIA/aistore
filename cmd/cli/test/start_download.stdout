@@ -5,7 +5,7 @@ Done: 1 file downloaded, 0 errors
 JOB ID		 STATUS		 ERRORS	 DESCRIPTION
 ^(.*)	 Finished	 0	 minikube(.*)$
 ^(.*)	 Finished	 0	 minikube(.*)$
-Done: 3 files downloaded, 0 errors
+Done: 3 files downloaded (skipped: 1), 0 errors
 JOB ID		 STATUS		 ERRORS	 DESCRIPTION
 ^(.*)	 Finished	 0	 minikube(.*)$
 ^(.*)	 Finished	 0	 minikube(.*)$

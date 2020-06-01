@@ -351,8 +351,13 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 	}
 
 	if d.JobFinished() {
-		fmt.Fprintf(w, "Done: %d file%s downloaded, %d error%s\n",
-			d.FinishedCnt, cmn.NounEnding(d.FinishedCnt), d.ErrorCnt, cmn.NounEnding(d.ErrorCnt))
+		if d.SkippedCnt > 0 {
+			fmt.Fprintf(w, "Done: %d file%s downloaded (skipped: %d), %d error%s\n",
+				d.FinishedCnt, cmn.NounEnding(d.FinishedCnt), d.SkippedCnt, d.ErrorCnt, cmn.NounEnding(d.ErrorCnt))
+		} else {
+			fmt.Fprintf(w, "Done: %d file%s downloaded, %d error%s\n",
+				d.FinishedCnt, cmn.NounEnding(d.FinishedCnt), d.ErrorCnt, cmn.NounEnding(d.ErrorCnt))
+		}
 
 		if verbose && len(d.Errs) > 0 {
 			fmt.Fprintln(w, "Errors:")
