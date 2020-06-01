@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -97,28 +99,51 @@ type SkipTestArgs struct {
 	Bck            cmn.Bck
 }
 
-func CheckSkip(t *testing.T, args SkipTestArgs) {
+func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	if args.RequiresRemote && RemoteCluster.UUID == "" {
-		t.Skip("test requires a remote cluster")
+		tb.Skip("test requires a remote cluster")
 	}
 	if args.RequiresAuth && AuthToken == "" {
-		t.Skip("test requires auth token")
+		tb.Skip("test requires auth token")
 	}
 	if args.Long && testing.Short() {
-		t.Skip("skipping test in short mode")
+		tb.Skip("skipping test in short mode")
 	}
 	if args.Cloud {
 		proxyURL := GetPrimaryURL()
-		if !IsCloudBucket(t, proxyURL, args.Bck) {
-			t.Skip("test requires a cloud bucket")
+		if !IsCloudBucket(tb, proxyURL, args.Bck) {
+			tb.Skip("test requires a cloud bucket")
 		}
 	}
 }
 
-func IsCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck) bool {
+func IsCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 	bck.Provider = cmn.AnyCloud
 	baseParams := BaseAPIParams(proxyURL)
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
-	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(tb, err)
 	return bcks.Contains(cmn.QueryBcks(bck))
+}
+
+func PutRR(tb testing.TB, baseParams api.BaseParams, reader readers.Reader, bck cmn.Bck, dir string, objCount, fnlen int) []string {
+	var (
+		objNames = make([]string, objCount)
+	)
+	for i := 0; i < objCount; i++ {
+		fname := GenRandomString(fnlen)
+		objName := filepath.Join(dir, fname)
+		putArgs := api.PutObjectArgs{
+			BaseParams: baseParams,
+			Bck:        bck,
+			Object:     objName,
+			Cksum:      reader.Cksum(),
+			Reader:     reader,
+		}
+		err := api.PutObject(putArgs)
+		tassert.CheckFatal(tb, err)
+
+		objNames[i] = objName
+	}
+
+	return objNames
 }

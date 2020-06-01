@@ -349,35 +349,35 @@ func TestCloudListObjectVersions(t *testing.T) {
 			if wid == workerCount-1 { // last worker puts leftovers
 				objectsToPut += objectCount % workerCount
 			}
-			putRR(t, baseParams, reader, bck, objectDir, objectsToPut)
+			tutils.PutRR(t, baseParams, reader, bck, objectDir, objectsToPut, fnlen)
 		}(wid)
-	}
-	wg.Wait()
 
-	tutils.Logf("Reading %q objects\n", bck)
-	msg := &cmn.SelectMsg{Prefix: objectDir, Props: cmn.GetPropsVersion}
-	bckObjs, err := api.ListObjects(baseParams, bck, msg, 0)
-	tassert.CheckFatal(t, err)
+		wg.Wait()
 
-	tutils.Logf("Checking %q object versions[total: %d]\n", bck, len(bckObjs.Entries))
-	for _, entry := range bckObjs.Entries {
-		if entry.Version == "" {
-			t.Errorf("Object %s does not have version", entry.Name)
+		tutils.Logf("Reading %q objects\n", bck)
+		msg := &cmn.SelectMsg{Prefix: objectDir, Props: cmn.GetPropsVersion}
+		bckObjs, err := api.ListObjects(baseParams, bck, msg, 0)
+		tassert.CheckFatal(t, err)
+
+		tutils.Logf("Checking %q object versions[total: %d]\n", bck, len(bckObjs.Entries))
+		for _, entry := range bckObjs.Entries {
+			if entry.Version == "" {
+				t.Errorf("Object %s does not have version", entry.Name)
+			}
+			wg.Add(1)
+			sema.Acquire()
+			go func(name string) {
+				defer func() {
+					sema.Release()
+					wg.Done()
+				}()
+				err := api.DeleteObject(baseParams, bck, name)
+				tassert.CheckError(t, err)
+			}(entry.Name)
 		}
-		wg.Add(1)
-		sema.Acquire()
-		go func(name string) {
-			defer func() {
-				sema.Release()
-				wg.Done()
-			}()
-			err := api.DeleteObject(baseParams, bck, name)
-			tassert.CheckError(t, err)
-		}(entry.Name)
+		wg.Wait()
 	}
-	wg.Wait()
 }
-
 func TestListObjects(t *testing.T) {
 	type objEntry struct {
 		name string
@@ -459,7 +459,7 @@ func TestListObjects(t *testing.T) {
 						if wid == workerCount-1 { // last worker puts leftovers
 							objectsToPut += objectCount % workerCount
 						}
-						objNames := putRR(t, baseParams, reader, bck, objDir, objectsToPut)
+						objNames := tutils.PutRR(t, baseParams, reader, bck, objDir, objectsToPut, fnlen)
 						for _, objName := range objNames {
 							objs.Store(objName, objEntry{
 								name: objName,

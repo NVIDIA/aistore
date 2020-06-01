@@ -134,20 +134,20 @@ func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
 	return smap.ProxySI, err
 }
 
-func CreateFreshBucket(t *testing.T, proxyURL string, bck cmn.Bck) {
-	DestroyBucket(t, proxyURL, bck)
+func CreateFreshBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
+	DestroyBucket(tb, proxyURL, bck)
 	baseParams := BaseAPIParams(proxyURL)
 	err := api.CreateBucket(baseParams, bck)
-	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(tb, err)
 }
 
-func DestroyBucket(t *testing.T, proxyURL string, bck cmn.Bck) {
+func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	baseParams := BaseAPIParams(proxyURL)
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(bck))
-	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(tb, err)
 	if exists {
 		err = api.DestroyBucket(baseParams, bck)
-		tassert.CheckFatal(t, err)
+		tassert.CheckFatal(tb, err)
 	}
 }
 
