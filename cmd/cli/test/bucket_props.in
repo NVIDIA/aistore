@@ -1,6 +1,5 @@
 ais create bucket $BUCKET_1
 ais set props $BUCKET_1 'mirror.enabled=true' 'mirror.copies=2'
-ais set props $BUCKET_1 'access=rop'
 
 ais set props $BUCKET_1 'unknown.field' // FAIL "no value for"
 ais set props $BUCKET_1 'unknown.field=true' // FAIL "unknown property "unknown.field""

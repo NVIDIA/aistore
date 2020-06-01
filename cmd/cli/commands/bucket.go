@@ -27,8 +27,6 @@ const (
 	readwriteBucketAccess = "rw"
 	readonlyBucketAccess  = "ro"
 
-	readonlypatchBucketAccess = "rop" // TODO: remove
-
 	emptyOrigin = "none"
 
 	// max wait time for a function finishes before printing "Please wait"
@@ -336,8 +334,6 @@ func reformatBucketProps(nvs cmn.SimpleKVs) error {
 			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.ReadWriteAccess(), 10)
 		case readonlyBucketAccess:
 			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.ReadOnlyAccess(), 10)
-		case readonlypatchBucketAccess:
-			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.ReadOnlyPatchAccess(), 10)
 		default:
 			// arbitrary access-flags permutation - TODO validate vs cmn/api_access.go
 			if _, err := strconv.ParseUint(v, 10, 64); err != nil {

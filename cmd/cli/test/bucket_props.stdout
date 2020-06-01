@@ -1,8 +1,7 @@
 "$BUCKET_1" bucket created
 Bucket props successfully updated
-Bucket props successfully updated
 PROPERTY	 VALUE
-access		 GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS,PATCH
+access		 GET,HEAD-OBJECT,PUT,APPEND,COLD-GET,DELETE-OBJECT,RENAME-OBJECT,PROMOTE,HEAD-BUCKET,LIST-OBJECTS,RENAME-BUCKET,PATCH,MAKE-NCOPIES,SYNC-BUCKET,DELETE-BUCKET
 checksum	 Type: xxhash | Validate: ColdGET
 ^created.*$
 ec		 Disabled

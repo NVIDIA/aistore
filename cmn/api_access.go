@@ -37,8 +37,6 @@ const (
 	allowReadWriteAccess = allowReadOnlyAccess |
 		AccessPUT | AccessAPPEND | AccessColdGET | AccessObjDELETE | AccessObjRENAME
 
-	allowReadOnlyPatchAccess = allowReadOnlyAccess | AccessPATCH // TODO: remove
-
 	AllowAccess = "allow"
 	DenyAccess  = "deny"
 )
@@ -68,10 +66,9 @@ var accessOp = map[int]string{
 	AccessADMIN:     "ADMIN",
 }
 
-func AllAccess() uint64           { return allowAllAccess }
-func ReadOnlyAccess() uint64      { return allowReadOnlyAccess }
-func ReadOnlyPatchAccess() uint64 { return allowReadOnlyPatchAccess }
-func ReadWriteAccess() uint64     { return allowReadWriteAccess }
+func AllAccess() uint64       { return allowAllAccess }
+func ReadOnlyAccess() uint64  { return allowReadOnlyAccess }
+func ReadWriteAccess() uint64 { return allowReadWriteAccess }
 
 func AccessOp(access int) string {
 	if s, ok := accessOp[access]; ok {
