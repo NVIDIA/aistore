@@ -307,7 +307,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		}
 		proxyURL = tutils.RandomProxyURL()
 		wg       = &sync.WaitGroup{}
-		sema     = make(chan struct{}, 40) // throttle DELETE
+		sema     = cmn.NewDynSemaphore(40) // throttle DELETE
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
@@ -365,12 +365,14 @@ func TestCloudListObjectVersions(t *testing.T) {
 			t.Errorf("Object %s does not have version", entry.Name)
 		}
 		wg.Add(1)
+		sema.Acquire()
 		go func(name string) {
-			sema <- struct{}{}
+			defer func() {
+				sema.Release()
+				wg.Done()
+			}()
 			err := api.DeleteObject(baseParams, bck, name)
-			<-sema
 			tassert.CheckError(t, err)
-			wg.Done()
 		}(entry.Name)
 	}
 	wg.Wait()

@@ -330,7 +330,7 @@ func (m *ioContext) cloudDelete() {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{}
-		sema       = make(chan struct{}, 40)
+		sema       = cmn.NewDynSemaphore(40)
 	)
 
 	cmn.Assert(m.bck.Provider == cmn.AnyCloud)
@@ -342,14 +342,14 @@ func (m *ioContext) cloudDelete() {
 	wg := &sync.WaitGroup{}
 	for _, obj := range objList.Entries {
 		wg.Add(1)
+		sema.Acquire()
 		go func(obj *cmn.BucketEntry) {
-			sema <- struct{}{}
 			defer func() {
-				<-sema
+				sema.Release()
+				wg.Done()
 			}()
 			err := api.DeleteObject(baseParams, m.bck, obj.Name)
 			tassert.CheckError(m.t, err)
-			wg.Done()
 		}(obj)
 	}
 	wg.Wait()

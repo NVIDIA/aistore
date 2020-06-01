@@ -345,16 +345,16 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		}
 		bck = rtd.renamedBck
 	}
-	sema := make(chan struct{}, 16)
+	sema := cmn.NewDynSemaphore(16)
 	del := func() {
 		tutils.Logf("Deleting %d objects from %s\n", len(filesPut), bck)
 		wg := &sync.WaitGroup{}
 		for _, fname := range filesPut {
 			wg.Add(1)
-			sema <- struct{}{}
+			sema.Acquire()
 			go func(fn string) {
+				defer sema.Release()
 				tutils.Del(proxyURL, bck, "smoke/"+fn, wg, errCh, true /* silent */)
-				<-sema
 			}(fname)
 		}
 		wg.Wait()
