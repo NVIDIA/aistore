@@ -301,30 +301,32 @@ func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) s
 // MountedFS
 //
 
-func (mfs *MountedFS) LoadBalanceGET(objfqn, objmpath string, copies MPI, now time.Time) (fqn string) {
+func (mfs *MountedFS) LoadBalanceGET(objFQN, objMpath string, copies MPI, now time.Time) (fqn string) {
 	var (
 		mpathUtils, mpathRRs = mfs.ios.GetAllMpathUtils(now)
-		objutil, ok          = mpathUtils[objmpath]
-		rr, _                = mpathRRs[objmpath] // GET round-robin counter (zeros out every iostats refresh i-val)
-		util                 = objutil
+		objUtil, ok          = mpathUtils[objMpath]
+		rr, _                = mpathRRs[objMpath] // GET round-robin counter (zeros out every iostats refresh i-val)
+		util                 = objUtil
 		r                    = rr
 	)
-	fqn = objfqn
+	fqn = objFQN
 	if !ok {
-		debug.AssertMsg(false, objmpath)
+		// Only assert when `mpathUtils` is non-empty. If it's empty it means
+		// that `fs2disks` returned empty response so there is no way to get utils.
+		debug.AssertMsg(len(mpathUtils) == 0, objMpath)
 		return
 	}
-	for copyfqn, copympi := range copies {
+	for copyFQN, copyMPI := range copies {
 		var (
 			u        int64
 			c, rrcnt int32
 		)
-		if u, ok = mpathUtils[copympi.Path]; !ok {
+		if u, ok = mpathUtils[copyMPI.Path]; !ok {
 			continue
 		}
-		if r, ok = mpathRRs[copympi.Path]; !ok {
+		if r, ok = mpathRRs[copyMPI.Path]; !ok {
 			if u < util {
-				fqn, util, rr = copyfqn, u, r
+				fqn, util, rr = copyFQN, u, r
 			}
 			continue
 		}
@@ -333,11 +335,11 @@ func (mfs *MountedFS) LoadBalanceGET(objfqn, objmpath string, copies MPI, now ti
 			rrcnt = rr.Load()
 		}
 		if u < util && c <= rrcnt { // the obvious choice
-			fqn, util, rr = copyfqn, u, r
+			fqn, util, rr = copyFQN, u, r
 			continue
 		}
 		if u+int64(c)*uQuantum < util+int64(rrcnt)*uQuantum { // heuristics - make uQuantum configurable?
-			fqn, util, rr = copyfqn, u, r
+			fqn, util, rr = copyFQN, u, r
 		}
 	}
 	// NOTE: the counter could've been already inc-ed

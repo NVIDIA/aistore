@@ -5,10 +5,21 @@
  */
 package ios
 
+import (
+	"github.com/lufia/iostat"
+)
+
 // fs2disks is used when a mountpath is added to
 // retrieve the disk(s) associated with a filesystem.
 // This returns multiple disks only if the filesystem is RAID.
 // TODO: implementation
 func fs2disks(fs string) (disks fsDisks) {
-	return
+	driveStats, err := iostat.ReadDriveStats()
+	if err != nil || len(driveStats) == 0 {
+		return
+	}
+	drive := driveStats[0]
+	return map[string]int64{
+		drive.Name: drive.BlockSize,
+	}
 }

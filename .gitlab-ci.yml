@@ -18,6 +18,7 @@ image: golang:1.13
 variables:
   GOPATH: /go
   AIS_NODE_FLAGS: "-skip_startup"
+  MODE: debug # run tests with debug asserts
 
 before_script:
   - export PATH="$PATH:$GOPATH/bin"
@@ -32,11 +33,11 @@ stages:
 build:linux:
   stage: build
   script:
+    - AIS_CLD_PROVIDER="ais" make node
     - AIS_CLD_PROVIDER="aws" make node
     - AIS_CLD_PROVIDER="gcp" make node
-    - AIS_CLD_PROVIDER="ais" make node
     - AIS_CLD_PROVIDER="azure" make node
-    - AIS_CLD_PROVIDER="" MODE="debug" make node
+    - AIS_CLD_PROVIDER="" MODE="" make node # build one node without debug assert (to see if it compiles)
     - make authn
     - make aisfs
     - make cli

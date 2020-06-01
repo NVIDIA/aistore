@@ -106,6 +106,7 @@ func (ctx *IostatContext) AddMpath(mpath, fs string) {
 	config := cmn.GCO.Get()
 	fsdisks := fs2disks(fs)
 	if len(fsdisks) == 0 {
+		glog.Errorf("no disks associated with (mountpath: %q, fs: %q)", mpath, fs)
 		return
 	}
 	if dd, ok := ctx.mpath2disks[mpath]; ok {
