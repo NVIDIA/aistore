@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
@@ -688,7 +689,9 @@ func (m *Manager) doWithAbort(reqArgs *cmn.ReqArgs) error {
 			errCh <- err
 			return
 		}
-		defer resp.Body.Close()
+		defer func() {
+			debug.AssertNoErr(resp.Body.Close())
+		}()
 
 		if resp.StatusCode >= http.StatusBadRequest {
 			b, err := ioutil.ReadAll(resp.Body)

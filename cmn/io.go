@@ -15,6 +15,7 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type (
@@ -338,15 +339,15 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 	}
 	if dstFile, err = CreateFile(dst); err != nil {
 		glog.Errorf("Failed to create %s: %v", dst, err)
-		srcFile.Close()
+		debug.AssertNoErr(srcFile.Close())
 		return
 	}
 	written, cksum, err = CopyAndChecksum(dstFile, srcFile, buf, cksumType)
 	if err != nil {
 		glog.Errorf("Failed to copy %s -> %s: %v", src, dst, err)
 	}
-	dstFile.Close()
-	srcFile.Close()
+	debug.AssertNoErr(dstFile.Close())
+	debug.AssertNoErr(srcFile.Close())
 	return
 }
 

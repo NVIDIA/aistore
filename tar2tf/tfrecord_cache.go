@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/go-tfdata/tfdata/pipeline"
 )
@@ -142,7 +143,9 @@ func (c *tfrecordsRangesCache) Get(sourceTar *cluster.LOM, offset, length int64)
 	if err != nil {
 		return nil, err
 	}
-	defer tfrecordFile.Close()
+	defer func() {
+		debug.AssertNoErr(tfrecordFile.Close())
+	}()
 
 	stat, err = tfrecordFile.Stat()
 	if err != nil {
@@ -195,13 +198,17 @@ func (*tfrecordsRangesCache) generateTFRecordToDisk(tar *cluster.LOM, destFQN st
 
 	tarFile, err = os.Open(tar.GetFQN())
 	if err == nil {
-		defer tarFile.Close()
+		defer func() {
+			debug.AssertNoErr(tarFile.Close())
+		}()
 		tfrecordFile, err = os.Create(destFQN)
 	}
 	if err != nil {
 		return err
 	}
-	defer tfrecordFile.Close()
+	defer func() {
+		debug.AssertNoErr(tfrecordFile.Close())
+	}()
 
 	p := pipeline.NewPipeline()
 	p.FromTar(tarFile).SampleToTFExample().ToTFRecord(tfrecordFile).Do()
@@ -237,7 +244,9 @@ func (c *tfrecordsRangesCache) prefetchNextChunk(tar *cluster.LOM, offset, lengt
 	if err != nil {
 		return err
 	}
-	defer tfrecordFile.Close()
+	defer func() {
+		debug.AssertNoErr(tfrecordFile.Close())
+	}()
 
 	stat, err = tfrecordFile.Stat()
 	if err != nil {

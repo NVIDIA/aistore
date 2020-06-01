@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -226,7 +227,7 @@ func (poi *putObjInfo) putCloud() (ver string, err error, errCode int) {
 		return
 	}
 	ver, err, errCode = poi.t.Cloud(bck).PutObj(poi.ctx, file, lom)
-	file.Close()
+	debug.AssertNoErr(file.Close())
 	return
 }
 
@@ -236,13 +237,12 @@ func (poi *putObjInfo) putRemoteAIS() (ver string, err error, errCode int) {
 		bck = lom.Bck()
 	)
 	cmn.Assert(bck.IsRemoteAIS())
-	fh, errOpen := cmn.NewFileHandle(poi.workFQN)
+	fh, errOpen := cmn.NewFileHandle(poi.workFQN) // Closed by `PutObj`.
 	if errOpen != nil {
 		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
 		return
 	}
 	ver, err, errCode = poi.t.Cloud(bck).PutObj(poi.ctx, fh, lom)
-	fh.Close()
 	return
 }
 
@@ -279,7 +279,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	// cleanup
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
-		reader.Close()
+		debug.AssertNoErr(reader.Close())
 
 		if err != nil {
 			if nestedErr := file.Close(); nestedErr != nil {
@@ -676,7 +676,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	)
 	defer func() {
 		if file != nil {
-			file.Close()
+			debug.AssertNoErr(file.Close())
 		}
 		if buf != nil {
 			slab.Free(buf)
@@ -891,7 +891,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, err error, errCode i
 		_, err = io.CopyBuffer(w, aoi.r, buf)
 
 		slab.Free(buf)
-		f.Close()
+		debug.AssertNoErr(f.Close())
 		if err != nil {
 			errCode = http.StatusInternalServerError
 			return

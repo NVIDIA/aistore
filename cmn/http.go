@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -269,13 +270,15 @@ func ReadBytes(r *http.Request) (b []byte, err error) {
 			}
 		}
 	}
-	r.Body.Close()
+	debug.AssertNoErr(r.Body.Close())
 
 	return b, err
 }
 
 func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional ...bool) error {
-	defer r.Body.Close()
+	defer func() {
+		debug.AssertNoErr(r.Body.Close())
+	}()
 	if err := jsoniter.NewDecoder(r.Body).Decode(out); err != nil {
 		if len(optional) > 0 && optional[0] && err == io.EOF {
 			return nil

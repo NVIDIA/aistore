@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -538,11 +539,11 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		hdr.ObjAttrs.Size = obj.MetadataSize + obj.Size
 		r, err := cmn.NewFileSectionHandle(f, obj.Offset-obj.MetadataSize, hdr.ObjAttrs.Size, 0)
 		if err != nil {
-			f.Close()
+			debug.AssertNoErr(f.Close())
 			return err
 		}
 		if err := send(r); err != nil {
-			f.Close()
+			debug.AssertNoErr(f.Close())
 			return err
 		}
 	case extract.DiskStoreType:
@@ -552,12 +553,12 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		}
 		fi, err := f.Stat()
 		if err != nil {
-			f.Close()
+			debug.AssertNoErr(f.Close())
 			return err
 		}
 		hdr.ObjAttrs.Size = fi.Size()
 		if err := send(f); err != nil {
-			f.Close()
+			debug.AssertNoErr(f.Close())
 			return err
 		}
 	default:

@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type replicInfo struct {
@@ -116,12 +117,11 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied boo
 // TODO: introduce namespace refs and then reuse rebalancing logic and streams instead of PUT
 //
 func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.Snode) (copied bool, err error) {
-	var file *cmn.FileHandle
+	var file *cmn.FileHandle // Closed by `.Do()`
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		err = fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
 		return
 	}
-	defer file.Close()
 
 	// PUT object into different target
 	var (
@@ -140,6 +140,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
 	if err != nil {
+		debug.AssertNoErr(file.Close())
 		err = fmt.Errorf("unexpected failure to create request, err: %v", err)
 		return
 	}
@@ -150,6 +151,6 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.
 	} else {
 		copied = true
 	}
-	resp.Body.Close()
+	debug.AssertNoErr(resp.Body.Close())
 	return
 }

@@ -445,8 +445,8 @@ func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 	if err != nil {
 		return "", err, errCode
 	}
-	fh, ok := r.(*cmn.FileHandle)
-	cmn.Assert(ok) // http redirect requires Open()
+	fh, ok := r.(*cmn.FileHandle) // `PutObject` closes file handle.
+	cmn.Assert(ok)                // HTTP redirect requires Open().
 	err = m.try(remoteBck, func(bck cmn.Bck) error {
 		args := api.PutObjectArgs{
 			BaseParams: aisCluster.bp,

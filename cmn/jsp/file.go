@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -43,12 +44,12 @@ func Save(path string, v interface{}, opts Options) (err error) {
 		return
 	}
 	defer func() {
-		_ = file.Close()
 		if err != nil {
-			os.Remove(tmp)
+			debug.AssertNoErr(os.Remove(tmp))
 		}
 	}()
 	if err = Encode(file, v, opts); err != nil {
+		debug.AssertNoErr(file.Close())
 		return
 	}
 	if err = file.Close(); err != nil {
@@ -59,12 +60,9 @@ func Save(path string, v interface{}, opts Options) (err error) {
 }
 
 func Load(path string, v interface{}, opts Options) error {
-	var (
-		file, err = os.Open(path)
-	)
+	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 	return Decode(file, v, opts, path)
 }

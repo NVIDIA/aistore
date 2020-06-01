@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -446,7 +447,7 @@ func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transpor
 	buf, slab := mm.Alloc()
 	writer.n, err = io.CopyBuffer(writer.writer, reader, buf)
 	if file, ok := writer.writer.(*os.File); ok {
-		file.Close()
+		debug.AssertNoErr(file.Close())
 	}
 
 	writer.cksum = cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)

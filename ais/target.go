@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
@@ -262,7 +263,9 @@ func (t *targetrunner) Run() error {
 		return err
 	}
 	t.dbDriver = driver
-	defer driver.Close()
+	defer func() {
+		debug.AssertNoErr(driver.Close())
+	}()
 
 	// transactions
 	t.transactions.init(t)
@@ -511,13 +514,15 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer file.Close()
+	defer func() {
+		debug.AssertNoErr(file.Close())
+	}()
 
 	buf, slab := t.gmm.Alloc(finfo.Size())
 	w.Header().Set("Content-Length", strconv.FormatInt(finfo.Size(), 10))
 	_, err = io.CopyBuffer(w, file, buf)
 	slab.Free(buf)
-	file.Close()
+	debug.AssertNoErr(file.Close())
 	if err != nil {
 		glog.Errorf("Failed to send slice %s/%s: %v", bck, objName, err)
 	}

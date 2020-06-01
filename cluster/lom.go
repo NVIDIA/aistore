@@ -631,7 +631,7 @@ func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cmn.CksumHash, err er
 	}
 	buf, slab := lom.T.GetMMSA().Alloc(lom.Size())
 	_, cksum, err = cmn.CopyAndChecksum(ioutil.Discard, file, buf, cksumType)
-	file.Close()
+	debug.AssertNoErr(file.Close())
 	slab.Free(buf)
 	if err != nil {
 		return nil, err

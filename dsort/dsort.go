@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
@@ -215,10 +216,10 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 
 		m.dsorter.postShardExtraction(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
 		if err != nil {
-			f.Close()
+			debug.AssertNoErr(f.Close())
 			return errors.Errorf("error in ExtractShard, file: %s, err: %v", f.Name(), err)
 		}
-		f.Close()
+		debug.AssertNoErr(f.Close())
 
 		metrics.Lock()
 		metrics.ExtractedRecordCnt += int64(extractedCount)
@@ -661,7 +662,9 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		debug.AssertNoErr(resp.Body.Close())
+	}()
 
 	// TODO: handle very large files > GB - in case the file is very big we
 	// need to save file to the disk and operate on the file directly rather

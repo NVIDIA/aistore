@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pkg/errors"
@@ -179,10 +180,10 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 			return size, errors.WithStack(err)
 		}
 		if size, err = copyMetadataAndData(f, r, args.metadata, args.buf); err != nil {
-			f.Close()
+			debug.AssertNoErr(f.Close())
 			return size, errors.WithStack(err)
 		}
-		f.Close()
+		debug.AssertNoErr(f.Close())
 		rm.extractionPaths.Store(fullContentPath, struct{}{})
 	} else {
 		cmn.AssertMsg(false, fmt.Sprintf("%d %d", args.extractMethod, args.extractMethod&ExtractToDisk))

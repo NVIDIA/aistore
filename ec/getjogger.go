@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -279,7 +280,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		req.LOM.FQN = tmpFQN
 		n, err = c.parent.readRemote(req.LOM, node, uname, iReqBuf, w)
 		mm.Free(iReqBuf)
-		w.Close()
+		debug.AssertNoErr(w.Close())
 
 		if err == nil && n != 0 {
 			// a valid replica is found - break and do not free SGL
@@ -288,7 +289,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 			break
 		}
 
-		os.RemoveAll(tmpFQN)
+		debug.AssertNoErr(os.RemoveAll(tmpFQN))
 	}
 	if glog.V(4) {
 		glog.Infof("Found meta -> obj get %s/%s, writer found: %v", req.LOM.Bck(), req.LOM.ObjName, writer != nil)

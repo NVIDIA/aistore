@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
@@ -105,7 +106,9 @@ func extractRecords(target cluster.Target, lom *cluster.LOM) (*extract.RecordMan
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		debug.AssertNoErr(f.Close())
+	}()
 	reader := io.NewSectionReader(f, 0, lom.Size())
 	_, _, err = extractCreator.ExtractShard(lom, reader, recordManager, false)
 

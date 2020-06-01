@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
 	lz4 "github.com/pierrec/lz4/v3"
@@ -468,7 +469,7 @@ func (s *Stream) objDone(obj *Obj, err error) {
 		}
 	}
 	if obj.Reader != nil {
-		obj.Reader.Close() // NOTE: always closing
+		debug.AssertNoErr(obj.Reader.Close()) // NOTE: always closing
 	}
 }
 

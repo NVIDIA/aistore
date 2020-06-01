@@ -13,6 +13,7 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pierrec/lz4/v3"
@@ -61,7 +62,7 @@ func Encode(writer io.Writer, v interface{}, opts Options) (err error) {
 		return
 	}
 	if opts.Compression {
-		_ = zw.Close()
+		debug.AssertNoErr(zw.Close())
 	}
 	if opts.Signature {
 		// 1st 64-bit word
@@ -103,7 +104,9 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 		prefix  [prefLen]byte
 		err     error
 	)
-	defer reader.Close()
+	defer func() {
+		debug.AssertNoErr(reader.Close())
+	}()
 	if opts.Signature {
 		if _, err = reader.Read(prefix[:]); err != nil {
 			return err

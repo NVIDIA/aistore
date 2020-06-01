@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ios"
 )
 
@@ -90,7 +91,9 @@ func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	defer f.Close()
+	defer func() {
+		debug.AssertNoErr(f.Close())
+	}()
 
 	// Try listing small number of files/dirs to do a quick emptiness check.
 	// If seems empty try a bigger sample to determine if it actually is.

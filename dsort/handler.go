@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -763,7 +764,7 @@ func broadcast(method, path string, urlParams url.Values, body []byte, nodes clu
 			return
 		}
 		out, err := ioutil.ReadAll(resp.Body)
-		resp.Body.Close()
+		debug.AssertNoErr(resp.Body.Close())
 
 		responses[idx] = response{
 			si:         node,

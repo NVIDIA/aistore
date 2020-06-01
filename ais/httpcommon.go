@@ -18,7 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"runtime/debug"
+	rdebug "runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -172,7 +172,7 @@ func (r *glogWriter) Write(p []byte) (int, error) {
 	s := string(p[:n])
 	glog.Errorln(s)
 
-	stacktrace := debug.Stack()
+	stacktrace := rdebug.Stack()
 	n1 := len(stacktrace)
 	s1 := string(stacktrace[:n1])
 	glog.Errorln(s1)

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tar2tf"
@@ -125,7 +126,9 @@ func (t *targetrunner) sendObj(src *cluster.LOM, si *cluster.Snode, bck cmn.Bck,
 		t.FSHC(err, src.FQN)
 		return err
 	}
-	defer fh.Close()
+	defer func() {
+		debug.AssertNoErr(fh.Close())
+	}()
 
 	var (
 		query  = cmn.AddBckToQuery(nil, bck)
@@ -149,7 +152,7 @@ func (t *targetrunner) sendObj(src *cluster.LOM, si *cluster.Snode, bck cmn.Bck,
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	debug.AssertNoErr(resp.Body.Close())
 	return nil
 }
 

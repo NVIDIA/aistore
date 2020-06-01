@@ -318,36 +318,36 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				if err != nil {
 					return written, errors.WithMessage(err, "(offset) open local content failed")
 				}
+				defer func() {
+					debug.AssertNoErr(f.Close())
+				}()
 				_, err = f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart)
 				if err != nil {
-					f.Close()
 					return written, errors.WithMessage(err, "(offset) seek local content failed")
 				}
 				if n, err = io.CopyBuffer(w, io.LimitReader(f, obj.MetadataSize+obj.Size), buf); err != nil {
-					f.Close()
 					return written, errors.WithMessage(err, "(offset) copy local content failed")
 				}
-				f.Close()
 			case extract.SGLStoreType:
 				v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
 				cmn.AssertMsg(ok, fullContentPath)
 				ds.m.recManager.RecordContents().Delete(fullContentPath)
 				sgl := v.(*memsys.SGL)
+				defer sgl.Free()
 				if n, err = io.CopyBuffer(w, sgl, buf); err != nil {
-					sgl.Free()
 					return written, errors.WithMessage(err, "(sgl) copy local content failed")
 				}
-				sgl.Free()
 			case extract.DiskStoreType:
 				f, err := os.Open(fullContentPath)
 				if err != nil {
 					return written, errors.WithMessage(err, "(disk) open local content failed")
 				}
+				defer func() {
+					debug.AssertNoErr(f.Close())
+				}()
 				if n, err = io.CopyBuffer(w, f, buf); err != nil {
-					f.Close()
 					return written, errors.WithMessage(err, "(disk) copy local content failed")
 				}
-				f.Close()
 			default:
 				cmn.Assert(false)
 			}
@@ -548,13 +548,13 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			r, err := cmn.NewFileSectionHandle(f, req.RecordObj.Offset-req.RecordObj.MetadataSize,
 				respHdr.ObjAttrs.Size, 0)
 			if err != nil {
-				f.Close()
+				debug.AssertNoErr(f.Close())
 				errHandler(err, respHdr, fromNode)
 				return
 			}
 			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
-				f.Close()
+				debug.AssertNoErr(f.Close())
 				ds.m.abort(err)
 			}
 		case extract.SGLStoreType:
@@ -576,14 +576,14 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			}
 			fi, err := f.Stat()
 			if err != nil {
-				f.Close()
+				debug.AssertNoErr(f.Close())
 				errHandler(err, respHdr, fromNode)
 				return
 			}
 			respHdr.ObjAttrs.Size = fi.Size()
 			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, f, fromNode); err != nil {
-				f.Close()
+				debug.AssertNoErr(f.Close())
 				ds.m.abort(err)
 			}
 		default:

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -188,10 +189,10 @@ func (s *slice) free() {
 	freeObject(s.obj)
 	s.obj = nil
 	if s.reader != nil {
-		s.reader.Close()
+		debug.AssertNoErr(s.reader.Close())
 	}
 	if s.workFQN != "" {
-		os.RemoveAll(s.workFQN)
+		debug.AssertNoErr(os.RemoveAll(s.workFQN))
 	}
 }
 
@@ -251,7 +252,7 @@ func readFile(lom *cluster.LOM) (sgl *memsys.SGL, err error) {
 	sgl = mm.NewSGL(lom.Size())
 	buf, slab := mm.Alloc()
 	_, err = io.CopyBuffer(sgl, f, buf)
-	f.Close()
+	debug.AssertNoErr(f.Close())
 	slab.Free(buf)
 
 	if err != nil {
@@ -292,7 +293,7 @@ func freeObject(r interface{}) {
 	}
 	if f, ok := r.(*cmn.FileHandle); ok {
 		if f != nil {
-			f.Close()
+			debug.AssertNoErr(f.Close())
 		}
 		return
 	}
@@ -325,7 +326,7 @@ func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 	if err != nil {
 		return nil, err
 	}
-	resp.Body.Close()
+	debug.AssertNoErr(resp.Body.Close())
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("%s/%s not found on %s", bck, objName, si.ID())
 	} else if resp.StatusCode != http.StatusOK {

@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -482,7 +483,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, target); err != nil {
 		reb.ec.onAir.Dec()
-		fh.Close()
+		debug.AssertNoErr(fh.Close())
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
 	reb.statRunner.AddMany(
@@ -1465,7 +1466,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if resp, slice.err = reb.client.Do(rq); slice.err != nil {
 		return
 	}
-	resp.Body.Close()
+	debug.AssertNoErr(resp.Body.Close())
 	if resp.StatusCode != http.StatusOK {
 		slice.err = fmt.Errorf("failed to read metadata, HTTP status: %d", resp.StatusCode)
 		return
@@ -1494,7 +1495,9 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if resp, slice.err = reb.client.Do(rq); slice.err != nil {
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		debug.AssertNoErr(resp.Body.Close())
+	}()
 	if resp.StatusCode != http.StatusOK {
 		cmn.DrainReader(resp.Body)
 		slice.err = fmt.Errorf("failed to read slice, HTTP status: %d", resp.StatusCode)
@@ -1840,7 +1843,7 @@ func (reb *Manager) releaseSGLs(md *rebArgs, objList []*rebObject) {
 			}
 			obj.rebuildSGLs = nil
 			if obj.fh != nil {
-				obj.fh.Close()
+				debug.AssertNoErr(obj.fh.Close())
 				obj.fh = nil
 			}
 			for _, ct := range obj.locCT {
