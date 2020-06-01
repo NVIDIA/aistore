@@ -311,7 +311,7 @@ const (
 
 	AuthNUserTmpl = "Name\tROLE\tPERMISSIONS\n" +
 		"{{ range $user := . }}" +
-		"{{ $user.UserID }}\t{{ $user.Role }}\t{{ $user.Access }}\n" +
+		"{{ $user.UserID }}\t{{ $user.Role }}\t{{$user.AccessToStr}}\n" +
 		"{{end}}"
 )
 

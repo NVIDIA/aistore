@@ -32,11 +32,13 @@ const (
 	AccessBckCreate
 	AccessADMIN
 
+	// Permissions
 	allowAllAccess       = ^uint64(0)
 	allowReadOnlyAccess  = AccessGET | AccessObjHEAD | AccessBckHEAD | AccessObjLIST
 	allowReadWriteAccess = allowReadOnlyAccess |
 		AccessPUT | AccessAPPEND | AccessColdGET | AccessObjDELETE | AccessObjRENAME
 
+	// Permission Operations
 	AllowAccess = "allow"
 	DenyAccess  = "deny"
 )
@@ -78,7 +80,14 @@ func AccessOp(access int) string {
 }
 
 func (bp *BucketProps) AccessToStr() string {
-	aattrs := bp.AccessAttrs
+	return accessToStr(bp.AccessAttrs)
+}
+
+func (au *AuthUser) AccessToStr() string {
+	return accessToStr(au.Access)
+}
+
+func accessToStr(aattrs uint64) string {
 	if aattrs == 0 {
 		return "No access"
 	}
