@@ -57,12 +57,10 @@ func ConcatObjLists(lists []*cmn.BucketList, maxSize uint) (objs *cmn.BucketList
 		return &cmn.BucketList{}
 	}
 
-	for _, l := range lists {
-		if objs == nil {
-			objs = l
-			continue
-		}
+	objs = &cmn.BucketList{}
+	objs.Entries = make([]*cmn.BucketEntry, 0)
 
+	for _, l := range lists {
 		objs.Entries = append(objs.Entries, l.Entries...)
 	}
 
@@ -77,6 +75,7 @@ func ConcatObjLists(lists []*cmn.BucketList, maxSize uint) (objs *cmn.BucketList
 
 	// Remove duplicates
 	objs.Entries, objs.PageMarker = deduplicateBckEntries(objs.Entries, maxSize)
+
 	return
 }
 

@@ -7,7 +7,6 @@ package integration
 import (
 	"fmt"
 	"math/rand"
-	"net/url"
 	"path"
 	"strings"
 	"sync"
@@ -450,10 +449,9 @@ func (m *ioContext) ensureNumCopies(expectedCopies int, kinds ...string) {
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
-	query := make(url.Values)
 	msg := &cmn.SelectMsg{Cached: true}
 	msg.AddProps(cmn.GetPropsCopies, cmn.GetPropsAtime, cmn.GetPropsStatus)
-	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0, query)
+	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
 	copiesToNumObjects := make(map[int]int)

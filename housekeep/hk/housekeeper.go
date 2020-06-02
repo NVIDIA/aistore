@@ -32,6 +32,7 @@ type (
 	}
 
 	housekeeper struct {
+		stopCh   *cmn.StopCh
 		cleanups []timedCleanup
 		timer    *time.Timer
 		workCh   chan request
@@ -51,6 +52,7 @@ func init() {
 func initCleaner() {
 	Housekeeper = &housekeeper{
 		workCh: make(chan request, 10),
+		stopCh: cmn.NewStopCh(),
 	}
 	go Housekeeper.run()
 }
@@ -81,6 +83,8 @@ func (hk *housekeeper) run() {
 
 	for {
 		select {
+		case <-hk.stopCh.Listen():
+			return
 		case <-hk.timer.C:
 			if len(hk.cleanups) == 0 {
 				break
@@ -129,4 +133,8 @@ func (hk *housekeeper) updateTimer() {
 		return hk.cleanups[i].updateTime.Before(hk.cleanups[j].updateTime)
 	})
 	hk.timer.Reset(time.Until(hk.cleanups[0].updateTime))
+}
+
+func (hk *housekeeper) Abort() {
+	hk.stopCh.Close()
 }

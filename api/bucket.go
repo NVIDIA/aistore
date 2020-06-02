@@ -328,14 +328,14 @@ func handleAsyncReqAccepted(uuid, action string, smsg *cmn.SelectMsg, reqParams 
 }
 
 // ListObjects API
-//
+
 // ListObjects returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListObjects (0 - return all objects in a bucket)
-func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg,
-	numObjects uint, query ...url.Values) (*cmn.BucketList, error) {
+func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint, invalidateCache ...bool) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	var (
-		q       = url.Values{}
+		err     error
+		q       = cmn.AddBckToQuery(url.Values{}, bck)
 		path    = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 		bckList = &cmn.BucketList{
 			Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize),
@@ -344,11 +344,6 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg,
 		// Temporary page for intermediate results
 		tmpPage = &cmn.BucketList{}
 	)
-
-	if len(query) > 0 {
-		q = query[0]
-	}
-	q = cmn.AddBckToQuery(q, bck)
 
 	if smsg == nil {
 		smsg = &cmn.SelectMsg{}
@@ -394,6 +389,9 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg,
 		}
 
 		if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &page); err != nil {
+			if len(invalidateCache) == 0 || invalidateCache[0] {
+				ListObjectsInvalidateCache(baseParams, bck, smsg)
+			}
 			return nil, err
 		}
 
@@ -420,21 +418,19 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg,
 		smsg.PageMarker = page.PageMarker
 	}
 
-	return bckList, nil
+	if len(invalidateCache) == 0 || invalidateCache[0] {
+		err = ListObjectsInvalidateCache(baseParams, bck, smsg)
+	}
+	return bckList, err
 }
 
 // ListObjectsPage returns the first page of bucket objects
 // On success the function updates msg.PageMarker, so a client can reuse
 // the message to fetch the next page
-func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
+func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	if smsg == nil {
 		smsg = &cmn.SelectMsg{}
-	}
-
-	q := url.Values{}
-	if len(query) > 0 {
-		q = query[0]
 	}
 
 	reqParams := ReqParams{
@@ -443,7 +439,7 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, qu
 		Header: http.Header{
 			"Content-Type": []string{"application/json"},
 		},
-		Query: cmn.AddBckToQuery(q, bck),
+		Query: cmn.AddBckToQuery(url.Values{}, bck),
 	}
 
 	page := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
@@ -458,7 +454,7 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, qu
 // Build an object list with minimal set of properties: name and size.
 // All SelectMsg fields except prefix do not work and are skipped.
 // Function always returns the whole list of objects without paging
-func ListObjectsFast(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
+func ListObjectsFast(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, invalidateCache ...bool) (bckList *cmn.BucketList, err error) {
 	if smsg == nil {
 		smsg = &cmn.SelectMsg{}
 	}
@@ -471,22 +467,43 @@ func ListObjectsFast(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, qu
 	smsg.Fast = true
 	smsg.Cached = true
 
-	var q url.Values
-	if len(query) > 0 {
-		q = query[0]
-	}
 	baseParams.Method = http.MethodPost
 	reqParams := ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Query:      cmn.AddBckToQuery(q, bck),
+		Query:      cmn.AddBckToQuery(url.Values{}, bck),
 	}
-	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
-	if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &bckList); err != nil {
+	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
+	if err = waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &bckList); err != nil {
+		if len(invalidateCache) == 0 || invalidateCache[0] {
+			ListObjectsInvalidateCache(baseParams, bck, smsg)
+		}
 		return nil, err
 	}
-	return bckList, nil
+
+	if len(invalidateCache) == 0 || invalidateCache[0] {
+		err = ListObjectsInvalidateCache(baseParams, bck, smsg)
+	}
+	return bckList, err
+}
+
+// TODO: remove this function after introducing mechanism detecting bucket changes.
+func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck, selMsg *cmn.SelectMsg) error {
+	params.Method = http.MethodPost
+	var (
+		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		q    = url.Values{}
+	)
+
+	q = cmn.AddBckToQuery(q, bck)
+	actMsg := cmn.ActionMsg{Action: cmn.ActInvalListCache, Value: selMsg}
+	return DoHTTPRequest(ReqParams{
+		Query:      q,
+		BaseParams: params,
+		Path:       path,
+		Body:       cmn.MustMarshal(actMsg),
+	})
 }
 
 // Handles the List/Range operations (delete, prefetch)

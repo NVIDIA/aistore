@@ -8,7 +8,6 @@ package commands
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -184,13 +183,10 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	}
 
 	msg := &cmn.SelectMsg{Props: props, Prefix: prefix, Cached: flagIsSet(c, cachedFlag)}
-	query := url.Values{}
-	query = cmn.AddBckToQuery(query, bck)
-	query.Add(cmn.URLParamPrefix, prefix)
 
 	if flagIsSet(c, fastFlag) {
 		msg.Fast = true
-		objList, err := api.ListObjectsFast(defaultAPIParams, bck, msg, query)
+		objList, err := api.ListObjectsFast(defaultAPIParams, bck, msg)
 		if err != nil {
 			return err
 		}
@@ -218,7 +214,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	if flagIsSet(c, pagedFlag) {
 		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), limit
 		for {
-			objList, err := api.ListObjectsPage(defaultAPIParams, bck, msg, query)
+			objList, err := api.ListObjectsPage(defaultAPIParams, bck, msg)
 			if err != nil {
 				return err
 			}
@@ -257,7 +253,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	}
 
 	// retrieve the entire bucket list and print it
-	objList, err := api.ListObjects(defaultAPIParams, bck, msg, uint(limit), query)
+	objList, err := api.ListObjects(defaultAPIParams, bck, msg, uint(limit))
 	if err != nil {
 		return err
 	}

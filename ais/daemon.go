@@ -256,7 +256,10 @@ func initDaemon(version, build string) {
 }
 
 func initProxy() {
-	p := &proxyrunner{}
+	p := &proxyrunner{
+		gmm: &memsys.MMSA{Name: gmmName, Small: true, MinFree: 100 * cmn.MiB},
+	}
+	_ = p.gmm.Init(true /*panicOnErr*/)
 	p.initSI(cmn.Proxy)
 	p.initClusterCIDR()
 	daemon.rg.add(p, cmn.Proxy)

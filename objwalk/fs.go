@@ -76,7 +76,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 	if ci.prefix != "" && !strings.HasPrefix(objName, ci.prefix) {
 		return nil
 	}
-	if ci.marker != "" && objName <= ci.marker {
+	if ci.marker != "" && cmn.PageMarkerIncludesObject(ci.marker, objName) {
 		return nil
 	}
 
@@ -129,7 +129,7 @@ func (ci *allfinfos) listwalkfFast(fqn string, de fs.DirEntry) error {
 	if ci.prefix != "" && !strings.HasPrefix(ct.ObjName(), ci.prefix) {
 		return nil
 	}
-	if ci.marker != "" && ct.ObjName() <= ci.marker {
+	if ci.marker != "" && cmn.PageMarkerIncludesObject(ci.marker, ct.ObjName()) {
 		return nil
 	}
 	ci.fileCount++

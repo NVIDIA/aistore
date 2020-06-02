@@ -431,7 +431,6 @@ func TestListObjects(t *testing.T) {
 		pageSize uint
 	}{
 		{fast: false, withSize: true, pageSize: 0},
-
 		{fast: true, withSize: false, pageSize: 0},
 		{fast: true, withSize: true, pageSize: 0},
 		{fast: true, withSize: false, pageSize: 2000},
@@ -500,6 +499,7 @@ func TestListObjects(t *testing.T) {
 				if test.withSize {
 					msg.AddProps(cmn.GetPropsSize)
 				}
+				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, msg))
 				bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
@@ -590,6 +590,16 @@ func TestListObjects(t *testing.T) {
 					return true
 				})
 			}
+
+			prefixes.Range(func(key, value interface{}) bool {
+				msg := &cmn.SelectMsg{
+					Prefix: key.(string),
+					Fast:   test.fast,
+				}
+				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, msg))
+				return true
+			})
+			tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, &cmn.SelectMsg{Fast: test.fast}))
 		})
 	}
 }

@@ -82,6 +82,8 @@ type SelectMsg struct {
 	Cached     bool   `json:"cached"`      // for cloud buckets - list only cached objects
 }
 
+type PageMarker string
+
 // ListMsg contains a list of files and a duration within which to get them
 type ListMsg struct {
 	ObjNames []string `json:"objnames"`
@@ -146,6 +148,31 @@ func (msg *SelectMsg) AddProps(propNames ...string) {
 	}
 
 	msg.Props = props.String()
+}
+
+func (msg *SelectMsg) PropsSet() (s StringSet) {
+	props := strings.Split(msg.Props, ",")
+	s = make(StringSet, len(props))
+	for _, p := range props {
+		s.Add(p)
+	}
+	return s
+}
+
+// nolint:interfacer // the bucket is expected
+func (msg *SelectMsg) ListObjectsCacheID(bck Bck) string {
+	f := 0
+	if msg.Fast {
+		f = 1
+	}
+	return fmt.Sprintf("%s/%s/%d", bck.String(), msg.Prefix, f)
+}
+
+// Returns true if given pageMarker includes given object name.
+// PageMarker includes an object name iff the object name would
+// be included in response having given page marker.
+func PageMarkerIncludesObject(pageMarker, objName string) bool {
+	return strings.Compare(pageMarker, objName) >= 0
 }
 
 // BucketEntry corresponds to a single entry in the BucketList and
