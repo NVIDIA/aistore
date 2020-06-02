@@ -20,10 +20,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 const (

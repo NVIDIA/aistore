@@ -10,14 +10,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
-	"github.com/NVIDIA/aistore/cmn"
-
-	"github.com/NVIDIA/aistore/tutils"
-
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 const (

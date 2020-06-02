@@ -19,14 +19,13 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/NVIDIA/aistore/containers"
-
 	"github.com/NVIDIA/aistore/bench/soaktest/recipes"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/scheduler"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
 )
 

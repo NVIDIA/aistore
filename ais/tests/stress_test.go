@@ -9,11 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/tutils/readers"
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func TestStressDeleteBucketSingle(t *testing.T) {

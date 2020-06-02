@@ -14,13 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
-
-	"github.com/NVIDIA/aistore/cmn"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
 

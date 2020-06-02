@@ -60,22 +60,22 @@ func (p *pck) Unpack(rd *cmn.ByteUnpack) error {
 	if err != nil {
 		return err
 	}
-	// read inner struct only of the marker is `true`
+	// Read inner struct only of the marker is `true`.
 	if exists != 0 {
-		// do not forget to initialize inner field otherwise it may panic
-		// if it is `nil` at this point
+		// Do not forget to initialize inner field otherwise it may panic
+		// if it is `nil` at this point.
 		p.parent = &pck{}
 		rd.ReadAny(p.parent)
 	}
 	return nil
 }
 func (p *pck) PackedSize() int {
-	//    id              length of name&data
+	//    id              name&data len
 	sz := cmn.SizeofI64 + cmn.SizeofLen*2 +
-		//group         name len      data len      inner pointer marker
+		// group        name len      data len      inner pointer marker
 		cmn.SizeofI16 + len(p.name) + len(p.data) + 1
 	if p.parent != nil {
-		// if inner struct is not `nil`, add its size to the total
+		// If inner struct is not `nil`, add its size to the total.
 		sz += p.parent.PackedSize()
 	}
 	return sz

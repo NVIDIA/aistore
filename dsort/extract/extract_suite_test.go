@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

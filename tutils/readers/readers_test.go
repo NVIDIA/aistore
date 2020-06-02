@@ -11,10 +11,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils/readers"
-
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 

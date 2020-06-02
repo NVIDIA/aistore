@@ -27,10 +27,15 @@ linters:
     - whitespace
     - asciicheck
     - nolintlint
-    # following linters produce a lot false positives, enable only when needed:
+    # TODO: Add when available (and working):
+    # - exportloopref
+    # - goerr113
+    #
+    # Following linters produce a lot false positives, enable only when needed:
     # - gosec
+    # - nestif
     # - scopelint
-    # not using structcheck since it doesn't handle embedded structs
+    # not using `structcheck` since it doesn't handle embedded structs
 
 linters-settings:
   govet:
@@ -45,6 +50,7 @@ linters-settings:
           - (github.com/NVIDIA/aistore/3rdparty/glog).Fatalf
           - (github.com/NVIDIA/tutils/tassert).Errorf
           - (github.com/NVIDIA/tutils/tassert).Fatalf
+          - (github.com/NVIDIA/cmn/debug).Assertf
   golint:
     min-confidence: 0
   errcheck:
@@ -58,7 +64,6 @@ linters-settings:
     disabled-checks:
       - ifElseChain
       - hugeParam # produces a lot of false-positives (TODO: see if some errors are possible improvements)
-      - commentFormatting
       - unnamedResult
   prealloc:
     simple: true # Report preallocation suggestions only on simple loops that have no returns/breaks/continues/gotos in them
@@ -96,6 +101,12 @@ issues:
 
     - linters: gocritic
       text: "builtinShadow: shadowing of predeclared identifier: new"
+
+    - linters: gocritic
+      source: "///" # commentFormatting
+
+    - linters: gocritic
+      source: "//==" # commentFormatting
 
     - linters: staticcheck
       text: "SA5011:" # produces a lot of false-positives; hopefully in the future we could enable it!

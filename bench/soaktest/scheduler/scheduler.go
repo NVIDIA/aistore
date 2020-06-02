@@ -7,10 +7,9 @@ package scheduler
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
-
 	"github.com/NVIDIA/aistore/bench/soaktest/recipes"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 )
 
