@@ -56,8 +56,9 @@ func createSession() *session.Session {
 	}))
 }
 
-func awsErrorToAISError(awsError error, bck cmn.Bck, node string) (error, int) {
+func (awsp *awsProvider) awsErrorToAISError(awsError error, bck cmn.Bck) (error, int) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
+		node := awsp.t.Snode().Name()
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
 			return cmn.NewErrorRemoteBucketDoesNotExist(bck, node), reqErr.StatusCode()
 		}
@@ -107,7 +108,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 
 	resp, err := svc.ListObjects(params)
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cloudBck, "")
+		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 
@@ -159,7 +160,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 
 			verResp, err := svc.ListObjectVersions(verParams)
 			if err != nil {
-				err, errCode := awsErrorToAISError(err, cloudBck, "")
+				err, errCode := awsp.awsErrorToAISError(err, cloudBck)
 				return nil, err, errCode
 			}
 
@@ -207,14 +208,14 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		Bucket: aws.String(cloudBck.Name),
 	})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cloudBck, "")
+		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 
 	inputVersion := &s3.GetBucketVersioningInput{Bucket: aws.String(cloudBck.Name)}
 	result, err := svc.GetBucketVersioning(inputVersion)
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cloudBck, "")
+		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 
@@ -236,7 +237,7 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 	)
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cmn.Bck{Provider: cmn.ProviderAmazon}, "")
+		err, errCode = awsp.awsErrorToAISError(err, cmn.Bck{Provider: cmn.ProviderAmazon})
 		return
 	}
 
@@ -267,7 +268,7 @@ func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 
 	headOutput, err := svc.HeadObject(input)
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cloudBck, awsp.t.Snode().Name())
+		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 	objMeta = make(cmn.SimpleKVs, 3)
@@ -304,7 +305,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, bck, lom.T.Snode().Name())
+		err, errCode = awsp.awsErrorToAISError(err, bck)
 		return
 	}
 	// may not have ais metadata
@@ -369,7 +370,7 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 		Metadata: md,
 	})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cloudBck, lom.T.Snode().Name())
+		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 	if v, ok := h.EncodeVersion(uploadOutput.VersionID); ok {
@@ -392,7 +393,7 @@ func (awsp *awsProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err e
 	)
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(lom.ObjName)})
 	if err != nil {
-		err, errCode = awsErrorToAISError(err, cloudBck, lom.T.Snode().Name())
+		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
