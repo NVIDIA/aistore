@@ -107,16 +107,19 @@ func (g *rungroup) run() error {
 	for _, r := range g.runarr {
 		go func(r cmn.Runner) {
 			err := r.Run()
-			glog.Warningf("runner [%s] exited with err [%v]", r.GetRunName(), err)
+			if err != nil {
+				glog.Warningf("runner [%s] exited with err [%v]", r.GetRunName(), err)
+			}
 			g.errCh <- err
 		}(r)
 	}
 
-	// wait here for (any/first) runner termination
+	// Wait here for (any/first) runner termination.
 	err := <-g.errCh
 	for _, r := range g.runarr {
 		r.Stop(err)
 	}
+	// Wait for all terminations.
 	for i := 0; i < len(g.runarr)-1; i++ {
 		<-g.errCh
 	}
