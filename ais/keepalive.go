@@ -451,7 +451,7 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 				glog.Infof("%s: keepalive OK after %d attempt(s)", hname, i)
 				return
 			}
-			if i == 3 {
+			if i == kaNumRetries {
 				glog.Warningf("%s: keepalive failed after %d attempts, removing from Smap", hname, i)
 				return true
 			}

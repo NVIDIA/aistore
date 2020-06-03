@@ -2400,7 +2400,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 			}
 			// FIXME: may be premature at this point
 			if proxyIDToRemove != "" {
-				glog.Infof("Removing failed primary proxy %s", proxyIDToRemove)
+				glog.Infof("%s: removing failed primary %s", p.si, proxyIDToRemove)
 				clone.delProxy(proxyIDToRemove)
 			}
 
@@ -2839,89 +2839,94 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	p.statsT.Add(stats.PostCount, 1)
 
 	p.owner.smap.Lock()
-	smap := p.owner.smap.get()
-	if !smap.isPrimary(p.si) {
-		s := fmt.Sprintf("%s is not primary(%s, %s): cannot %s %s", p.si, smap.ProxySI, smap, tag, nsi)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
-	if isProxy {
-		osi := smap.GetProxy(nsi.ID())
-		if !p.addOrUpdateNode(nsi, osi, keepalive) {
-			p.owner.smap.Unlock()
-			return
-		}
-	} else {
-		osi := smap.GetTarget(nsi.ID())
-
-		// FIXME: If !keepalive then update Smap anyway - either: new target,
-		// updated target or target has powercycled. Except 'updated target' case,
-		// rebalance needs to be triggered and updating smap is the easiest.
-		if keepalive && !p.addOrUpdateNode(nsi, osi, keepalive) {
-			p.owner.smap.Unlock()
-			return
-		}
-
-		if userRegister {
-			if glog.FastV(3, glog.SmoduleAIS) {
-				glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, smap.StringEx())
-			}
-			// when registration is done by user send the current BMD and Smap
-			bmd := p.owner.bmd.get()
-			meta := &nodeRegMeta{smap, bmd, p.si}
-			body := cmn.MustMarshal(meta)
-
-			args := callArgs{
-				si: nsi,
-				req: cmn.ReqArgs{
-					Method: http.MethodPost,
-					Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.UserRegister),
-					Body:   body,
-				},
-				timeout: cmn.GCO.Get().Timeout.CplaneOperation,
-			}
-			res := p.call(args)
-			if res.err != nil {
-				p.owner.smap.Unlock()
-				msg := fmt.Sprintf("%s: failed to %s %s: %v, %s", p.si, tag, nsi, res.err, res.details)
-				if cmn.IsErrConnectionRefused(res.err) {
-					msg = fmt.Sprintf("failed to reach %s at %s:%s",
-						nsi, nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
-				}
-				p.invalmsghdlr(w, r, msg, res.status)
-				return
-			}
-		}
-	}
-	// check for cluster integrity errors (cie)
-	if err = smap.validateUUID(regReq.Smap, p.si, nsi, ""); err != nil {
-		p.owner.smap.Unlock()
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	// no-further-checks join when cluster's starting up
-	if !p.ClusterStarted() {
-		clone := smap.clone()
-		clone.putNode(nsi, nonElectable)
-		p.owner.smap.put(clone)
-		p.owner.smap.Unlock()
-		return
-	}
-	if _, err = smap.IsDuplicateURL(nsi); err != nil {
-		p.owner.smap.Unlock()
-		p.invalmsghdlr(w, r, p.si.String()+": "+err.Error())
-		return
-	}
+	smap, err, code, update := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, userRegister, nonElectable)
 	p.owner.smap.Unlock()
 
-	// Return current metadata to registering target
-	if !isProxy && selfRegister { // case: self-registering target
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), code)
+		return
+	}
+	if !update {
+		return
+	}
+
+	// send the current Smap and BMD to self-registering target
+	if !isProxy && selfRegister {
 		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi, regReq.Smap)
 		bmd := p.owner.bmd.get()
 		meta := &nodeRegMeta{smap, bmd, p.si}
 		p.writeJSON(w, r, meta, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
 	go p.updateAndDistribute(nsi, msg, nonElectable)
+}
+
+// NOTE: under lock
+func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
+	tag string, keepalive, userRegister, nonElectable bool) (smap *smapX, err error, code int, update bool) {
+	code = http.StatusBadRequest
+	smap = p.owner.smap.get()
+
+	if !smap.isPrimary(p.si) {
+		err = fmt.Errorf("%s is not the primary(%s, %s): cannot %s %s", p.si, smap.ProxySI, smap, tag, nsi)
+		return
+	}
+
+	if nsi.IsProxy() {
+		osi := smap.GetProxy(nsi.ID())
+		if !p.addOrUpdateNode(nsi, osi, keepalive) {
+			return
+		}
+	} else {
+		osi := smap.GetTarget(nsi.ID())
+		if keepalive && !p.addOrUpdateNode(nsi, osi, keepalive) {
+			return
+		}
+		if userRegister {
+			//
+			// join(node) => cluster via API
+			//
+			if glog.FastV(3, glog.SmoduleAIS) {
+				glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, smap.StringEx())
+			}
+			// send the joining node the current BMD and Smap as well
+			bmd := p.owner.bmd.get()
+			meta := &nodeRegMeta{smap, bmd, p.si}
+			body := cmn.MustMarshal(meta)
+			path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.UserRegister)
+			args := callArgs{
+				si:      nsi,
+				req:     cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: body},
+				timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+			}
+			res := p.call(args)
+			if res.err != nil {
+				if cmn.IsErrConnectionRefused(res.err) {
+					err = fmt.Errorf("failed to reach %s at %s:%s",
+						nsi, nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
+				} else {
+					err = fmt.Errorf("%s: failed to %s %s: %v, %s", p.si, tag, nsi, res.err, res.details)
+				}
+				code = res.status
+				return
+			}
+		}
+	}
+	// check for cluster integrity errors (cie)
+	if err = smap.validateUUID(regSmap, p.si, nsi, ""); err != nil {
+		return
+	}
+	// no further checks join when cluster's starting up
+	if !p.ClusterStarted() {
+		clone := smap.clone()
+		clone.putNode(nsi, nonElectable)
+		p.owner.smap.put(clone)
+		return
+	}
+	if _, err = smap.IsDuplicateURL(nsi); err != nil {
+		err = errors.New(p.si.String() + ": " + err.Error())
+	}
+	update = err == nil
+	return
 }
 
 func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, nonElectable bool) {

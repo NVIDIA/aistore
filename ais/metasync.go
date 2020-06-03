@@ -241,7 +241,7 @@ func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
 // become non-primary (to serialize cleanup of the internal state and stop the timer)
 func (y *metasyncer) becomeNonPrimary() {
 	y.workCh <- revsReq{}
-	glog.Infof("becoming non-primary")
+	glog.Infof("%s: becoming non-primary", y.p.si)
 }
 
 //
@@ -418,9 +418,10 @@ func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused 
 		if r.err == nil {
 			delete(refused, r.si.ID())
 			y.syncDone(r.si.ID(), pairs)
-			glog.Infof("handle-refused: sync-ed %s", r.si)
+			glog.Infof("%s: handle-refused: sync-ed %s", y.p.si, r.si)
 		} else {
-			glog.Warningf("handle-refused: failing to sync %s, err: %v (%d)", r.si, r.err, r.status)
+			glog.Warningf("%s: handle-refused: failing to sync %s, err: %v (%d)",
+				y.p.si, r.si, r.err, r.status)
 		}
 	}
 }
@@ -497,10 +498,10 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	for r := range res {
 		if r.err == nil {
 			y.syncDone(r.si.ID(), pairs)
-			glog.Infof("handle-pending: sync-ed %s", r.si)
+			glog.Infof("%s: handle-pending: sync-ed %s", y.p.si, r.si)
 		} else {
 			failedCnt++
-			glog.Warningf("handle-pending: failing to sync %s, err: %v (%d)", r.si, r.err, r.status)
+			glog.Warningf("%s: handle-pending: failing to sync %s, err: %v (%d)", y.p.si, r.si, r.err, r.status)
 		}
 	}
 	return
