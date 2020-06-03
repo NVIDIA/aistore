@@ -622,7 +622,7 @@ func Start() {
 
 	runParams, err = parseCmdLine()
 	if err != nil {
-		cmn.ExitInfof("%s", err)
+		cmn.Exitf("%s", err)
 	}
 
 	if runParams.getLoaderID {
@@ -657,7 +657,7 @@ func Start() {
 	}
 
 	if err := setupBucket(&runParams); err != nil {
-		cmn.ExitInfof("%s", err)
+		cmn.Exitf("%s", err)
 	}
 
 	if !runParams.getConfig {
@@ -694,7 +694,7 @@ func Start() {
 	if err != nil {
 		fmt.Printf("%s", "Failed to connect to StatsD server")
 		if runParams.statsdRequired {
-			cmn.ExitInfof("... aborting")
+			cmn.Exitf("... aborting")
 		} else {
 			fmt.Println("... proceeding anyway")
 		}

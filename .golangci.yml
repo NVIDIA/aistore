@@ -53,6 +53,9 @@ linters-settings:
           - (github.com/NVIDIA/cmn/debug).Assertf
           - (github.com/NVIDIA/cmn/debug).Errorf
           - (github.com/NVIDIA/cmn/debug).Infof
+          - (github.com/NVIDIA/cmn).Exitf
+          - (github.com/NVIDIA/cmn).ExitLogf
+
   golint:
     min-confidence: 0
   errcheck:

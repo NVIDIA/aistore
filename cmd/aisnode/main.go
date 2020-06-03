@@ -5,6 +5,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/NVIDIA/aistore/ais"
 )
 
@@ -15,5 +17,5 @@ var (
 )
 
 func main() {
-	ais.Run(version, build)
+	os.Exit(ais.Run(version, build))
 }

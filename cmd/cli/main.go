@@ -40,6 +40,6 @@ func main() {
 
 	aisCLI := commands.New(build, version)
 	if err := aisCLI.Run(os.Args); err != nil {
-		cmn.ExitInfof("%s", err.Error())
+		cmn.Exitf("%s", err.Error())
 	}
 }

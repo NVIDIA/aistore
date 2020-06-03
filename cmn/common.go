@@ -311,22 +311,20 @@ func GenUserID() (uuid string) {
 	}
 }
 
-func ExitWithCode(code int) {
-	glog.Flush()
-	os.Exit(code)
-}
-
-func ExitInfof(f string, a ...interface{}) {
+// Exitf writes formatted message to STDOUT and exits with non-zero status code.
+func Exitf(f string, a ...interface{}) {
 	fmt.Fprintf(os.Stderr, f, a...)
 	fmt.Fprintln(os.Stderr)
 	os.Exit(1)
 }
 
+// ExitLogf is wrapper around `Exitf` with `glog` logging. It should be used
+// instead `Exitf` if the `glog` was initialized.
 func ExitLogf(f string, a ...interface{}) {
 	glog.Errorln("Terminating...")
 	glog.Errorf(f, a...)
 	glog.Flush()
-	ExitInfof(f, a...)
+	Exitf(f, a...)
 }
 
 // ParseBool converts string to bool (case-insensitive):

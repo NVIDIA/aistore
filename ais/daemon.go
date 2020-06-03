@@ -173,7 +173,7 @@ func initDaemon(version, build string) {
 	)
 	flag.Parse()
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
-		cmn.ExitInfof(
+		cmn.ExitLogf(
 			"Invalid value of flag `role`: %q, expected %q or %q",
 			daemon.cli.role, cmn.Proxy, cmn.Target,
 		)
@@ -319,7 +319,7 @@ func initTarget(config *cmn.Config) {
 }
 
 // Run is the 'main' where everything gets started
-func Run(version, build string) {
+func Run(version, build string) int {
 	defer glog.Flush() // always flush
 
 	initDaemon(version, build)
@@ -333,13 +333,12 @@ func Run(version, build string) {
 
 	if err == nil {
 		glog.Infoln("Terminated OK")
-		return
+		return 0
 	}
 	if e, ok := err.(*signalError); ok {
 		glog.Infof("Terminated OK (via signal: %s)\n", e.signal.String())
 		exitCode := 128 + int(e.signal) // see: https://tldp.org/LDP/abs/html/exitcodes.html
-		cmn.ExitWithCode(exitCode)
-		return
+		return exitCode
 	}
 	if errors.Is(err, cmn.ErrStartupTimeout) {
 		// NOTE:
@@ -348,7 +347,8 @@ func Run(version, build string) {
 		// to restart the daemon if the primary gets killed or panics prior (to reaching that state)
 		glog.Errorln("Timed-out while starting up")
 	}
-	cmn.ExitLogf("Terminated with err: %s", err)
+	glog.Errorf("Terminated with err: %s", err)
+	return 1
 }
 
 //==================

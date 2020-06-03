@@ -73,7 +73,7 @@ func TestMain(t *testing.M) {
 	flag.StringVar(&d, "duration", "30s", "test duration")
 	flag.Parse()
 	if duration, err = time.ParseDuration(d); err != nil {
-		cmn.ExitInfof("Invalid duration %q", d)
+		cmn.Exitf("Invalid duration %q", d)
 	}
 	MMSA = memsys.DefaultPageMM()
 

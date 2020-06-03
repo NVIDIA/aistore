@@ -26,6 +26,10 @@ var (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	if s := *cpuProfile; s != "" {
 		*cpuProfile = s + "." + strconv.Itoa(syscall.Getpid())
 		f, err := os.Create(*cpuProfile)
@@ -39,7 +43,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	ais.Run(version, build)
+	exitCode := ais.Run(version, build)
 
 	if s := *memProfile; s != "" {
 		*memProfile = s + "." + strconv.Itoa(syscall.Getpid())
@@ -53,4 +57,6 @@ func main() {
 			glog.Fatal("could not write memory profile: ", err)
 		}
 	}
+
+	return exitCode
 }

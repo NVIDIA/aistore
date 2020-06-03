@@ -93,7 +93,7 @@ func initProxyURL() {
 	// Finds who is the current primary proxy.
 	primary, err := GetPrimaryProxy(proxyURLReadOnly)
 	if err != nil {
-		cmn.ExitInfof("Failed to get primary proxy, err = %v", err)
+		cmn.Exitf("Failed to get primary proxy, err = %v", err)
 	}
 	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
 }

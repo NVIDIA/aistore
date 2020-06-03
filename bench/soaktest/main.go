@@ -174,17 +174,17 @@ func main() {
 			if x != "" {
 				newID, err := strconv.Atoi(x)
 				if err != nil {
-					cmn.ExitInfof("Cannot parse RecipeID list: %v", recipeListStr)
+					cmn.Exitf("Cannot parse RecipeID list: %v", recipeListStr)
 				}
 				if _, ok := valid[newID]; !ok {
-					cmn.ExitInfof("Invalid RecipeID: %v", newID)
+					cmn.Exitf("Invalid RecipeID: %v", newID)
 				}
 				recipeList = append(recipeList, newID)
 			}
 		}
 
 		if len(recipeList) == 0 {
-			cmn.ExitInfof("RecipeID list empty")
+			cmn.Exitf("RecipeID list empty")
 		}
 
 		// de-dup
@@ -201,11 +201,11 @@ func main() {
 		} else {
 			var err error
 			if *outp, err = cmn.S2B(inp); err != nil {
-				cmn.ExitInfof("%v is not a size", inp)
+				cmn.Exitf("%v is not a size", inp)
 			}
 		}
 		if *outp <= 0 {
-			cmn.ExitInfof("%v must be positive number", inp)
+			cmn.Exitf("%v must be positive number", inp)
 		}
 	}
 
@@ -213,25 +213,25 @@ func main() {
 	checkFilesize(recMinFilesizeStr, recMinFilesizeDefault, &soakcmn.Params.RecMinFilesize)
 	checkFilesize(recMaxFilesizeStr, recMaxFilesizeDefault, &soakcmn.Params.RecMaxFilesize)
 	if soakcmn.Params.RecMaxFilesize < soakcmn.Params.RecMinFilesize {
-		cmn.ExitInfof("Recipe filesize: max %v must be at least min %v", recMaxFilesizeStr, recMinFilesizeStr)
+		cmn.Exitf("Recipe filesize: max %v must be at least min %v", recMaxFilesizeStr, recMinFilesizeStr)
 	}
 
 	// Sanity check filesizes for regression
 	checkFilesize(regMinFilesizeStr, regMinFilesizeDefault, &soakcmn.Params.RegMinFilesize)
 	checkFilesize(regMaxFilesizeStr, regMaxFilesizeDefault, &soakcmn.Params.RegMaxFilesize)
 	if soakcmn.Params.RegMaxFilesize < soakcmn.Params.RegMinFilesize {
-		cmn.ExitInfof("Regression filesize: max %v must be at least min %v", regMaxFilesizeStr, regMinFilesizeStr)
+		cmn.Exitf("Regression filesize: max %v must be at least min %v", regMaxFilesizeStr, regMinFilesizeStr)
 	}
 
 	// Sanity check for number of workers
 	if soakcmn.Params.RecPrimWorkers < 1 {
-		cmn.ExitInfof("rec-primworkers must be at least 1")
+		cmn.Exitf("rec-primworkers must be at least 1")
 	}
 	if soakcmn.Params.RegSetupWorkers < 1 {
-		cmn.ExitInfof("reg-setupworkers must be at least 1")
+		cmn.Exitf("reg-setupworkers must be at least 1")
 	}
 	if soakcmn.Params.RegWorkers < 1 {
-		cmn.ExitInfof("reg-workers must be at least 1")
+		cmn.Exitf("reg-workers must be at least 1")
 	}
 
 	// Sanity check for ip and port
@@ -246,12 +246,12 @@ func main() {
 			soakcmn.Params.Port = "8080"
 		}
 	} else if soakcmn.Params.IP == "" {
-		cmn.ExitInfof("Port specified without IP")
+		cmn.Exitf("Port specified without IP")
 	} else if soakcmn.Params.Port == "" {
-		cmn.ExitInfof("IP specified without port")
+		cmn.Exitf("IP specified without port")
 	}
 	if err := tutils.PingURL(soakcmn.Params.IP + ":" + soakcmn.Params.Port); err != nil {
-		cmn.ExitInfof("Cannot connect to %s:%s, reason: %s", soakcmn.Params.IP, soakcmn.Params.Port, err)
+		cmn.Exitf("Cannot connect to %s:%s, reason: %s", soakcmn.Params.IP, soakcmn.Params.Port, err)
 	}
 	soakprim.SetPrimaryURL()
 
