@@ -18,7 +18,7 @@ import (
 )
 
 type testConfig struct {
-	numObjectsPerBucket int
+	numObjectsPerBucket uint
 	numBuckets          int
 	objSize             int64
 	cksumType           string
@@ -33,15 +33,15 @@ func (tc testConfig) name() string {
 	)
 }
 
-func createAndFillBucket(b *testing.B, bckName string, objCnt int, objSize int64, cksumType string) (string, cmn.Bck) {
+func createAndFillBucket(b *testing.B, bckName string, objCnt uint, objSize int64, cksumType string) (string, cmn.Bck) {
+	const workerCount = 10
 	var (
-		workerCount = 10
-		bck         = cmn.Bck{Name: bckName, Provider: cmn.ProviderAIS}
-		proxyURL    = tutils.RandomProxyURL()
-		baseParams  = tutils.BaseAPIParams(proxyURL)
-		wg          = &sync.WaitGroup{}
+		bck        = cmn.Bck{Name: bckName, Provider: cmn.ProviderAIS}
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		wg         = &sync.WaitGroup{}
 	)
-	objCntPerWorker := objCnt / workerCount
+	objCntPerWorker := int(objCnt) / workerCount
 	totalObjs := objCntPerWorker * workerCount
 
 	tutils.CreateFreshBucket(b, proxyURL, bck)
@@ -49,7 +49,7 @@ func createAndFillBucket(b *testing.B, bckName string, objCnt int, objSize int64
 	// Iterations of PUT
 	startPut := time.Now()
 	tutils.Logf("%d workers each performing PUT of %d objects of size %d\n", workerCount, objCntPerWorker, objSize)
-	for wid := 0; wid < workerCount; wid++ {
+	for wid := uint(0); wid < workerCount; wid++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -106,7 +106,7 @@ func runner(b *testing.B, tc testConfig) {
 				go func() {
 					objs, err := tutils.ListObjects(proxyURL, bck, "", numObjectsPerBucket)
 					tassert.CheckFatal(b, err)
-					tassert.Fatalf(b, len(objs) == numObjectsPerBucket,
+					tassert.Fatalf(b, len(objs) == int(numObjectsPerBucket),
 						"expected %d objects got % objects", numObjectsPerBucket, len(objs))
 				}()
 			}

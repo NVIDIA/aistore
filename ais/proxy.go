@@ -1638,7 +1638,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, selMsg cmn.SelectMsg) (all
 		bckLists = append(bckLists, bucketList)
 	}
 
-	var pageSize int
+	var pageSize uint
 	if selMsg.PageSize != 0 {
 		// When `PageSize` is set, then regardless of the listing type (slow/fast)
 		// we need respect it.

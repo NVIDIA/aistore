@@ -217,7 +217,7 @@ func Test_putdelete(t *testing.T) {
 	})
 }
 
-func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, objLimit int) (*cmn.BucketList, error) {
+func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, objLimit uint) (*cmn.BucketList, error) {
 	resList := testListObjects(t, proxyURL, bck, msg, objLimit)
 	if resList == nil {
 		return nil, fmt.Errorf("failed to list_objects %s", bck)
@@ -259,7 +259,7 @@ func Test_matchdelete(t *testing.T) {
 		}
 
 		// list the bucket
-		var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
+		var msg = &cmn.SelectMsg{PageSize: pagesize}
 		baseParams := tutils.BaseAPIParams(proxyURL)
 		reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 		if err != nil {
@@ -596,7 +596,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		fileName   = "mytestobj1.txt"
 		dataLocal  = []byte("im local")
 		dataCloud  = []byte("I'm from the cloud!")
-		msg        = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status", Prefix: "my"}
+		msg        = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status", Prefix: "my"}
 		found      = false
 	)
 
@@ -909,7 +909,7 @@ func deleteFiles(proxyURL string, bck cmn.Bck, keynames <-chan string, wg *sync.
 
 func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch string,
 	keynameChans []chan string, outputChan chan string) int {
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
+	var msg = &cmn.SelectMsg{PageSize: pagesize}
 	reslist := testListObjects(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		return 0
@@ -941,7 +941,7 @@ func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch stri
 	return num
 }
 
-func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, limit int) *cmn.BucketList {
+func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, limit uint) *cmn.BucketList {
 	tutils.Logf("LIST objects %s [fast: %v, prefix: %q, page_size: %d, marker: %q]\n",
 		bck, msg.Fast, msg.Prefix, msg.PageSize, msg.PageMarker)
 	baseParams := tutils.BaseAPIParams(proxyURL)

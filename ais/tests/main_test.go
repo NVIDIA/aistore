@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 	flag.StringVar(&match, "match", ".*", "object name regex")
-	flag.Int64Var(&pagesize, "pagesize", 0, "The maximum number of objects returned in one page")
+	flag.UintVar(&pagesize, "pagesize", 0, "The maximum number of objects returned in one page")
 	flag.StringVar(&prefix, "prefix", "", "Object name prefix")
 	flag.BoolVar(&abortonerr, "abortonerr", abortonerr, "abort on error")
 	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")

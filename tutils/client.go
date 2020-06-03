@@ -98,7 +98,7 @@ func PutAsync(wg *sync.WaitGroup, proxyURL string, bck cmn.Bck, object string, r
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjects(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit int) ([]string, error) {
+func ListObjects(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint) ([]string, error) {
 	var (
 		baseParams = BaseAPIParams(proxyURL)
 		msg        = &cmn.SelectMsg{Cached: true, Prefix: prefix}

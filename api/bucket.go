@@ -325,7 +325,7 @@ func handleAsyncReqAccepted(id, action string, origMsg *cmn.SelectMsg, reqParams
 //
 // ListObjects returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListObjects (0 - return all objects in a bucket)
-func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
+func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjects uint, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	var (
 		q       = url.Values{}
@@ -401,10 +401,12 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObje
 			break
 		}
 
-		if toRead != 0 {
-			toRead -= len(page.Entries)
-			if toRead <= 0 {
+		// NOTE: toRead == 0 means reading all objects with no limit
+		if toRead > 0 {
+			if n := int(toRead) - len(page.Entries); n <= 0 {
 				break
+			} else {
+				toRead = uint(n)
 			}
 		}
 

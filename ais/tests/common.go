@@ -48,7 +48,7 @@ var (
 	numfiles               int
 	numworkers             int
 	match                  = ".*"
-	pagesize               int64
+	pagesize               uint
 	fnlen                  int
 	prefix                 string
 	abortonerr             = false

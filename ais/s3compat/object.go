@@ -45,8 +45,8 @@ type (
 
 func FillMsgFromS3Query(query url.Values, msg *cmn.SelectMsg) {
 	mxStr := query.Get("max-keys")
-	if pageSize, err := strconv.Atoi(mxStr); err != nil && pageSize != 0 {
-		msg.PageSize = pageSize
+	if pageSize, err := strconv.Atoi(mxStr); err == nil && pageSize > 0 {
+		msg.PageSize = uint(pageSize)
 	}
 	if prefix := query.Get("prefix"); prefix != "" {
 		msg.Prefix = prefix

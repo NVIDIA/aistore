@@ -76,8 +76,8 @@ type SelectMsg struct {
 	TimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
 	Prefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
 	PageMarker string `json:"pagemarker"`  // marker - the last object in previous page
-	PageSize   int    `json:"pagesize"`    // maximum number of entries returned by list objects call
 	TaskID     string `json:"taskid"`      // task ID for long running requests
+	PageSize   uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
 	Fast       bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
 	Cached     bool   `json:"cached"`      // for cloud buckets - list only cached objects
 }

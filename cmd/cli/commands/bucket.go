@@ -214,10 +214,16 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	}
 	pageSize := parseIntFlag(c, pageSizeFlag)
 	limit := parseIntFlag(c, objLimitFlag)
+	if pageSize < 0 {
+		return fmt.Errorf("page size (%d) cannot be negative", pageSize)
+	}
+	if limit < 0 {
+		return fmt.Errorf("max object count (%d) cannot be negative", limit)
+	}
 	// set page size to limit if limit is less than page size
-	msg.PageSize = pageSize
+	msg.PageSize = uint(pageSize)
 	if limit > 0 && (limit < pageSize || (limit < 1000 && pageSize == 0)) {
-		msg.PageSize = limit
+		msg.PageSize = uint(limit)
 	}
 
 	// retrieve the bucket content page by page and print on the fly
@@ -263,7 +269,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	}
 
 	// retrieve the entire bucket list and print it
-	objList, err := api.ListObjects(defaultAPIParams, bck, msg, limit, query)
+	objList, err := api.ListObjects(defaultAPIParams, bck, msg, uint(limit), query)
 	if err != nil {
 		return err
 	}

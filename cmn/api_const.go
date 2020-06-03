@@ -259,7 +259,7 @@ const (
 
 // List objects default page size
 const (
-	DefaultListPageSize = 1000
+	DefaultListPageSize = uint(1000)
 )
 
 // RESTful URL path: l1/l2/l3

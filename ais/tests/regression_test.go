@@ -89,7 +89,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	close(filenameCh)
 	close(errCh)
 
-	msg := &cmn.SelectMsg{PageSize: int(pagesize), Props: cmn.GetTargetURL}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: cmn.GetTargetURL}
 	bl, err := api.ListObjects(baseParams, bck, msg, num)
 	tassert.CheckFatal(t, err)
 
@@ -179,7 +179,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}()
 
-	listObjectsMsg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize), Props: cmn.GetTargetURL}
+	listObjectsMsg := &cmn.SelectMsg{Prefix: prefix, PageSize: pagesize, Props: cmn.GetTargetURL}
 	bucketList, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -856,7 +856,7 @@ func TestDeleteList(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that all the files have been deleted
-		msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
+		msg := &cmn.SelectMsg{Prefix: prefix, PageSize: pagesize}
 		bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
@@ -888,7 +888,7 @@ func TestPrefetchRange(t *testing.T) {
 	}
 
 	// 2. Discover the number of items we expect to be prefetched
-	msg := &cmn.SelectMsg{Prefix: prefetchPrefix, PageSize: int(pagesize)}
+	msg := &cmn.SelectMsg{Prefix: prefetchPrefix, PageSize: pagesize}
 	objsToFilter := testListObjects(t, proxyURL, bck, msg, 0)
 	files := make([]string, 0)
 	if objsToFilter != nil {
@@ -969,7 +969,7 @@ func TestDeleteRange(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that the correct files have been deleted
-		msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
+		msg := &cmn.SelectMsg{Prefix: prefix, PageSize: pagesize}
 		bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != numfiles-smallrangesize {
@@ -1076,7 +1076,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
-	msg := &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: int(pagesize)}
+	msg := &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: pagesize}
 	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bckList.Entries) != expectedRemaining {
@@ -1105,7 +1105,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// 5. Check to see that all files have been deleted
-	msg = &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: int(pagesize)}
+	msg = &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: pagesize}
 	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bckList.Entries) != 0 {

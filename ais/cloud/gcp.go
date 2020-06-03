@@ -118,7 +118,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	if msg.PageSize != 0 {
 		pageSize = msg.PageSize
 	}
-	pager := iterator.NewPager(it, pageSize, pageToken)
+	pager := iterator.NewPager(it, int(pageSize), pageToken)
 	objs := make([]*storage.ObjectAttrs, 0)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {

@@ -406,7 +406,7 @@ func TestListObjects(t *testing.T) {
 	tests := []struct {
 		fast     bool
 		withSize bool
-		pageSize int
+		pageSize uint
 	}{
 		{fast: false, withSize: true, pageSize: 0},
 
@@ -653,8 +653,8 @@ func TestListObjectsPrefix(t *testing.T) {
 			tests := []struct {
 				name     string
 				prefix   string
-				pageSize int
-				limit    int
+				pageSize uint
+				limit    uint
 				expected int
 			}{
 				{

@@ -19,7 +19,7 @@ type (
 		APIParams() api.BaseParams
 		Bck() cmn.Bck
 		HeadObject(objName string) (obj *Object, exists bool, err error)
-		ListObjects(prefix, pageMarker string, pageSize int) (objs []*Object, newPageMarker string, err error)
+		ListObjects(prefix, pageMarker string, pageSize uint) (objs []*Object, newPageMarker string, err error)
 		DeleteObject(objName string) (err error)
 	}
 
@@ -59,7 +59,7 @@ func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err 
 	}, true, nil
 }
 
-func (bck *bucketAPI) ListObjects(prefix, pageMarker string, pageSize int) (objs []*Object, newPageMarker string, err error) {
+func (bck *bucketAPI) ListObjects(prefix, pageMarker string, pageSize uint) (objs []*Object, newPageMarker string, err error) {
 	selectMsg := &cmn.SelectMsg{
 		Prefix:     prefix,
 		Props:      cmn.GetPropsSize,

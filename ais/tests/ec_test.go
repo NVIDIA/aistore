@@ -505,7 +505,7 @@ func assertBucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objC
 }
 
 func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
+	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -1288,7 +1288,7 @@ func TestECStress(t *testing.T) {
 
 			doECPutsAndCheck(t, baseParams, bck, o)
 
-			var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
+			var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 			reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 			tassert.CheckFatal(t, err)
 			reslist.Entries = filterObjListOK(reslist.Entries)
@@ -1351,14 +1351,14 @@ func TestECStressManyBuckets(t *testing.T) {
 	}()
 	wg.Wait()
 
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
+	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck1, msg, 0)
 	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
 	tassert.Fatalf(t, len(reslist.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1, len(reslist.Entries), o1.objCount)
 
-	msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
+	msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err = api.ListObjects(baseParams, bck2, msg, 0)
 	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -1487,7 +1487,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	delta := time.Since(started)
 	t.Logf("Total test time %v\n", delta)
 
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
+	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -1598,7 +1598,7 @@ func TestECXattrs(t *testing.T) {
 		}
 	}
 
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
+	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -1694,7 +1694,7 @@ func TestECDestroyBucket(t *testing.T) {
 	doECPutsAndCheck(t, baseParams, bck, o)
 
 	// check if get requests are successful
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
+	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 
@@ -1806,7 +1806,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	// 4. Check that ListObjects returns correct number of items
 	tutils.Logln("DONE\nReading bucket list...")
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
+	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 
@@ -2053,7 +2053,7 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	// 4. Check that ListObjects returns correct number of items
 	tutils.Logf("DONE\nReading bucket list...\n")
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
+	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -2589,7 +2589,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tutils.Logf("Wait for resilver to complete...\n")
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size"}
+	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size"}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	newECList := filterObjListOK(resEC.Entries)

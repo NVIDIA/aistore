@@ -40,14 +40,14 @@ func (bm *bucketMock) HeadObject(objName string) (obj *ais.Object, exists bool, 
 	_, ok := bm.objs[objName]
 	return nil, ok, nil
 }
-func (bm *bucketMock) ListObjects(prefix, pageMarker string, pageSize int) (objs []*ais.Object, newPageMarker string, err error) {
+func (bm *bucketMock) ListObjects(prefix, pageMarker string, pageSize uint) (objs []*ais.Object, newPageMarker string, err error) {
 	for obj := range bm.objs {
 		if !strings.HasPrefix(obj, prefix) {
 			continue
 		}
 
 		objs = append(objs, ais.NewObject(obj, bm, 1024))
-		if len(objs) == pageSize {
+		if len(objs) == int(pageSize) {
 			break
 		}
 	}

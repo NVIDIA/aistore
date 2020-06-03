@@ -92,7 +92,7 @@ func getRandomFiles(proxyURL string, bck cmn.Bck, numGets int, prefix string, t 
 		src        = rand.NewSource(time.Now().UnixNano())
 		random     = rand.New(src)
 		getsGroup  = &sync.WaitGroup{}
-		msg        = &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
+		msg        = &cmn.SelectMsg{Prefix: prefix, PageSize: pagesize}
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 

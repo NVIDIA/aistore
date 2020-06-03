@@ -20,8 +20,8 @@ func sortBckEntries(bckEntries []*cmn.BucketEntry) {
 	sort.Slice(bckEntries, entryLess)
 }
 
-func deduplicateBckEntries(bckEntries []*cmn.BucketEntry, maxSize int) ([]*cmn.BucketEntry, string) {
-	objCount := len(bckEntries)
+func deduplicateBckEntries(bckEntries []*cmn.BucketEntry, maxSize uint) ([]*cmn.BucketEntry, string) {
+	objCount := uint(len(bckEntries))
 
 	j := 0
 	pageMarker := ""
@@ -32,14 +32,14 @@ func deduplicateBckEntries(bckEntries []*cmn.BucketEntry, maxSize int) ([]*cmn.B
 		bckEntries[j] = obj
 		j++
 
-		if maxSize > 0 && j == maxSize {
+		if maxSize > 0 && j == int(maxSize) {
 			break
 		}
 	}
 
 	// Set extra infos to nil to avoid memory leaks
 	// see NOTE on https://github.com/golang/go/wiki/SliceTricks
-	for i := j; i < objCount; i++ {
+	for i := j; i < int(objCount); i++ {
 		bckEntries[i] = nil
 	}
 	if maxSize > 0 && objCount > maxSize {
@@ -52,7 +52,7 @@ func deduplicateBckEntries(bckEntries []*cmn.BucketEntry, maxSize int) ([]*cmn.B
 // are appended to the first one.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func ConcatObjLists(lists []*cmn.BucketList, maxSize int) (objs *cmn.BucketList) {
+func ConcatObjLists(lists []*cmn.BucketList, maxSize uint) (objs *cmn.BucketList) {
 	if len(lists) == 0 {
 		return &cmn.BucketList{}
 	}
@@ -88,7 +88,7 @@ func ConcatObjLists(lists []*cmn.BucketList, maxSize int) (objs *cmn.BucketList)
 // them to get single list with merged information for each object.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func MergeObjLists(lists []*cmn.BucketList, maxSize int) (objs *cmn.BucketList) {
+func MergeObjLists(lists []*cmn.BucketList, maxSize uint) (objs *cmn.BucketList) {
 	if len(lists) == 0 {
 		return &cmn.BucketList{}
 	}

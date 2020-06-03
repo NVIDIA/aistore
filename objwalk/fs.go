@@ -28,7 +28,7 @@ type (
 		lastFilePath string
 		bucket       string
 		fileCount    int
-		limit        int
+		limit        uint
 
 		needSize    bool
 		needAtime   bool
@@ -114,7 +114,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 // Returns all objects if the `msg.PageSize` was not specified. But the result
 // may have 'ghost' or duplicated  objects.
 func (ci *allfinfos) listwalkfFast(fqn string, de fs.DirEntry) error {
-	if ci.fileCount >= ci.limit {
+	if ci.fileCount >= int(ci.limit) {
 		return filepath.SkipDir
 	}
 	if de.IsDir() {
@@ -149,7 +149,7 @@ func (ci *allfinfos) listwalkfFast(fqn string, de fs.DirEntry) error {
 }
 
 func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
-	if ci.fileCount >= ci.limit {
+	if ci.fileCount >= int(ci.limit) {
 		return filepath.SkipDir
 	}
 	if de.IsDir() {
