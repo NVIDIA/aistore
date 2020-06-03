@@ -514,9 +514,6 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer func() {
-		debug.AssertNoErr(file.Close())
-	}()
 
 	buf, slab := t.gmm.Alloc(finfo.Size())
 	w.Header().Set("Content-Length", strconv.FormatInt(finfo.Size(), 10))
