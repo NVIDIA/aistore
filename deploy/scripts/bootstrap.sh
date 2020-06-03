@@ -1,7 +1,7 @@
 #!/bin/bash
 export AISTORE_DIR="$(cd "$(dirname "$0")/../../"; pwd -P)"
-export ${AIS_ENDPOINT}
-export ${BUCKET}
+export AIS_ENDPOINT=${AIS_ENDPOINT}
+export BUCKET=${BUCKET}
 YAPF_STYLE="$(dirname ${0})/config/.style.yapf"
 PYLINT_STYLE="$(dirname ${0})/config/.pylintrc"
 EXTERNAL_SRC_REGEX=".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"
