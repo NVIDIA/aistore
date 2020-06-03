@@ -6,9 +6,17 @@
 package dsort
 
 import (
+	"bytes"
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"testing"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
+	jsoniter "github.com/json-iterator/go"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -48,3 +56,199 @@ var _ = Describe("Init", func() {
 		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
 	})
 })
+
+func BenchmarkRecordsMarshal(b *testing.B) {
+	benches := []struct {
+		recordCnt    int
+		recordObjCnt int
+	}{
+		{recordCnt: 100, recordObjCnt: 1},
+		{recordCnt: 100, recordObjCnt: 3},
+		{recordCnt: 100, recordObjCnt: 5},
+
+		{recordCnt: 1_000, recordObjCnt: 1},
+		{recordCnt: 1_000, recordObjCnt: 3},
+		{recordCnt: 1_000, recordObjCnt: 5},
+
+		{recordCnt: 10_000, recordObjCnt: 1},
+		{recordCnt: 10_000, recordObjCnt: 3},
+		{recordCnt: 10_000, recordObjCnt: 5},
+
+		{recordCnt: 100_000, recordObjCnt: 1},
+		{recordCnt: 100_000, recordObjCnt: 3},
+		{recordCnt: 100_000, recordObjCnt: 5},
+	}
+
+	for _, bench := range benches {
+		name := fmt.Sprintf("r:%d_o:%d", bench.recordCnt, bench.recordObjCnt)
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			records := generateRecords(bench.recordCnt, bench.recordObjCnt)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				w := ioutil.Discard
+				err := js.NewEncoder(w).Encode(records)
+				cmn.AssertNoErr(err)
+			}
+		})
+	}
+}
+
+func BenchmarkRecordsUnmarshal(b *testing.B) {
+	benches := []struct {
+		recordCnt    int
+		recordObjCnt int
+	}{
+		{recordCnt: 100, recordObjCnt: 1},
+		{recordCnt: 100, recordObjCnt: 3},
+		{recordCnt: 100, recordObjCnt: 5},
+
+		{recordCnt: 1_000, recordObjCnt: 1},
+		{recordCnt: 1_000, recordObjCnt: 3},
+		{recordCnt: 1_000, recordObjCnt: 5},
+
+		{recordCnt: 10_000, recordObjCnt: 1},
+		{recordCnt: 10_000, recordObjCnt: 3},
+		{recordCnt: 10_000, recordObjCnt: 5},
+
+		{recordCnt: 100_000, recordObjCnt: 1},
+		{recordCnt: 100_000, recordObjCnt: 3},
+		{recordCnt: 100_000, recordObjCnt: 5},
+	}
+
+	for _, bench := range benches {
+		name := fmt.Sprintf("r:%d_o:%d", bench.recordCnt, bench.recordObjCnt)
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			records := generateRecords(bench.recordCnt, bench.recordObjCnt)
+			bts, err := jsoniter.Marshal(records)
+			cmn.AssertNoErr(err)
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				r := bytes.NewReader(bts)
+				newRecords := extract.NewRecords(bench.recordCnt)
+				b.StartTimer()
+
+				err := js.NewDecoder(r).Decode(&newRecords)
+				cmn.AssertNoErr(err)
+			}
+		})
+	}
+}
+
+func BenchmarkCreationPhaseMetadataMarshal(b *testing.B) {
+	benches := []struct {
+		shardCnt     int
+		recordCnt    int
+		recordObjCnt int
+	}{
+		{shardCnt: 10, recordCnt: 100, recordObjCnt: 1},
+		{shardCnt: 10, recordCnt: 100, recordObjCnt: 3},
+		{shardCnt: 1_0000, recordCnt: 100, recordObjCnt: 1},
+		{shardCnt: 1_0000, recordCnt: 100, recordObjCnt: 3},
+
+		{shardCnt: 10, recordCnt: 10_000, recordObjCnt: 1},
+		{shardCnt: 10, recordCnt: 10_000, recordObjCnt: 3},
+		{shardCnt: 1_000, recordCnt: 1_000, recordObjCnt: 1},
+		{shardCnt: 1_000, recordCnt: 1_000, recordObjCnt: 3},
+	}
+
+	for _, bench := range benches {
+		name := fmt.Sprintf("s:%d_r:%d_o:%d", bench.shardCnt, bench.recordCnt, bench.recordObjCnt)
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+
+			md := creationPhaseMetadata{
+				Shards: generateShards(bench.shardCnt, bench.recordCnt, bench.recordObjCnt),
+			}
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				w := ioutil.Discard
+				err := js.NewEncoder(w).Encode(md)
+				cmn.AssertNoErr(err)
+			}
+		})
+	}
+}
+
+func BenchmarkCreationPhaseMetadataUnmarshal(b *testing.B) {
+	benches := []struct {
+		shardCnt     int
+		recordCnt    int
+		recordObjCnt int
+	}{
+		{shardCnt: 10, recordCnt: 100, recordObjCnt: 1},
+		{shardCnt: 10, recordCnt: 100, recordObjCnt: 3},
+		{shardCnt: 1_0000, recordCnt: 100, recordObjCnt: 1},
+		{shardCnt: 1_0000, recordCnt: 100, recordObjCnt: 3},
+
+		{shardCnt: 10, recordCnt: 10_000, recordObjCnt: 1},
+		{shardCnt: 10, recordCnt: 10_000, recordObjCnt: 3},
+		{shardCnt: 1_000, recordCnt: 1_000, recordObjCnt: 1},
+		{shardCnt: 1_000, recordCnt: 1_000, recordObjCnt: 3},
+	}
+
+	for _, bench := range benches {
+		name := fmt.Sprintf("s:%d_r:%d_o:%d", bench.shardCnt, bench.recordCnt, bench.recordObjCnt)
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+
+			md := creationPhaseMetadata{
+				Shards: generateShards(bench.shardCnt, bench.recordCnt, bench.recordObjCnt),
+			}
+			bts, err := jsoniter.Marshal(md)
+			cmn.AssertNoErr(err)
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				r := bytes.NewReader(bts)
+				newMD := creationPhaseMetadata{}
+				b.StartTimer()
+
+				err := js.NewDecoder(r).Decode(&newMD)
+				cmn.AssertNoErr(err)
+			}
+		})
+	}
+}
+
+func generateShards(shardCnt, recordCnt, recordObjCnt int) []*extract.Shard {
+	shards := make([]*extract.Shard, 0, shardCnt)
+	for i := 0; i < shardCnt; i++ {
+		s := &extract.Shard{
+			Name:    fmt.Sprintf("shard-%d", i),
+			Size:    rand.Int63(),
+			Records: generateRecords(recordCnt, recordObjCnt),
+		}
+		shards = append(shards, s)
+	}
+	return shards
+}
+
+func generateRecords(recordCnt, recordObjCnt int) *extract.Records {
+	records := extract.NewRecords(recordCnt)
+	for i := 0; i < recordCnt; i++ {
+		r := &extract.Record{
+			Key:      cmn.RandString(20),
+			Name:     cmn.RandString(30),
+			DaemonID: cmn.RandString(10),
+		}
+		for j := 0; j < recordObjCnt; j++ {
+			r.Objects = append(r.Objects, &extract.RecordObj{
+				ContentPath:    cmn.RandString(50),
+				ObjectFileType: "abc",
+				StoreType:      "ab",
+				Offset:         rand.Int63(),
+				MetadataSize:   512,
+				Size:           rand.Int63(),
+				Extension:      "." + cmn.RandString(4),
+			})
+		}
+		records.Insert(r)
+	}
+	return records
+}
