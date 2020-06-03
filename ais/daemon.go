@@ -216,7 +216,7 @@ func initDaemon(version, build string) {
 	glog.Infof("git: %s | build-time: %s\n", version, build)
 
 	if debug.Enabled {
-		debug.Logf("starting with debug asserts/logs")
+		debug.Errorf("starting with debug asserts/logs")
 	}
 
 	containerized := sys.Containerized()

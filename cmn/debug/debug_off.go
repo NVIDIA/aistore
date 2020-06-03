@@ -10,7 +10,8 @@ const (
 	Enabled = false
 )
 
-func Logf(f string, a ...interface{}) {}
+func Errorf(f string, a ...interface{}) {}
+func Infof(f string, a ...interface{})  {}
 
 func Assert(cond bool)                              {}
 func AssertMsg(cond bool, msg string)               {}

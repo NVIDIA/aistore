@@ -51,6 +51,8 @@ linters-settings:
           - (github.com/NVIDIA/tutils/tassert).Errorf
           - (github.com/NVIDIA/tutils/tassert).Fatalf
           - (github.com/NVIDIA/cmn/debug).Assertf
+          - (github.com/NVIDIA/cmn/debug).Errorf
+          - (github.com/NVIDIA/cmn/debug).Infof
   golint:
     min-confidence: 0
   errcheck:

@@ -16,9 +16,12 @@ const (
 	Enabled = true
 )
 
-func Logf(a ...interface{}) {
-	a = append([]interface{}{"[DEBUG] "}, a...)
-	glog.ErrorDepth(1, a...)
+func Errorf(f string, a ...interface{}) {
+	glog.ErrorDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
+}
+
+func Infof(f string, a ...interface{}) {
+	glog.InfoDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
 }
 
 func Assert(cond bool) {
