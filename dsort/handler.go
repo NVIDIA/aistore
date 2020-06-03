@@ -591,8 +591,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		records := extract.NewRecords(int(d))
-		decoder := js.NewDecoder(r.Body)
-		if err := decoder.Decode(records); err != nil {
+		if err := js.NewDecoder(r.Body).Decode(records); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
 			return
 		}

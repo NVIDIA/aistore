@@ -123,7 +123,7 @@ func (r *Record) MakeUniqueName(obj *RecordObj) string {
 func NewRecords(n int) *Records {
 	return &Records{
 		arr:  make([]*Record, 0, n),
-		m:    make(map[string]*Record, n),
+		m:    make(map[string]*Record, 100),
 		dups: make(map[string]struct{}, 10),
 	}
 }
@@ -272,11 +272,11 @@ func (r *Records) RecordMemorySize() (size uint64) {
 }
 
 func (r *Records) MarshalJSON() ([]byte, error) {
-	return jsoniter.Marshal(r.arr)
+	return jsoniter.ConfigFastest.Marshal(r.arr)
 }
 
 func (r *Records) UnmarshalJSON(b []byte) error {
-	return jsoniter.Unmarshal(b, &r.arr)
+	return jsoniter.ConfigFastest.Unmarshal(b, &r.arr)
 }
 
 // Ext returns the file name extension used by path.

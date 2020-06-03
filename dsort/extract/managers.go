@@ -229,11 +229,13 @@ func (rm *RecordManager) MergeEnqueuedRecords() {
 			break
 		}
 		records := rm.enqueued.records[lastIdx]
+		rm.enqueued.records[lastIdx] = nil
 		rm.enqueued.records = rm.enqueued.records[:lastIdx]
 		rm.enqueued.mu.Unlock()
 
 		rm.Records.merge(records)
 	}
+	cmn.FreeMemToOS()
 }
 
 func (rm *RecordManager) genRecordUniqueName(shardName, recordName string) string {
