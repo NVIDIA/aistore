@@ -1,7 +1,5 @@
 #!/bin/bash
-export AISTORE_DIR="$(cd "$(dirname "$0")/../../"; pwd -P)"
-export AIS_ENDPOINT=${AIS_ENDPOINT}
-export BUCKET=${BUCKET}
+AISTORE_DIR="$(cd "$(dirname "$0")/../../"; pwd -P)"
 YAPF_STYLE="$(dirname ${0})/config/.style.yapf"
 PYLINT_STYLE="$(dirname ${0})/config/.pylintrc"
 EXTERNAL_SRC_REGEX=".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"
@@ -155,9 +153,7 @@ test-docker)
 
 test-bench)
   echo "Running benchmark tests..." >&2
-  errs=$("${AISTORE_DIR}/deploy/scripts/bench.sh" 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL: Bench\|^--- FAIL: Test" )
-  # TODO: MJ: Replace wherever possible with perror if this works
-  perror $1 "${errs}"
+  . ${AISTORE_DIR}/deploy/scripts/bench.sh
   ;;
 
 
