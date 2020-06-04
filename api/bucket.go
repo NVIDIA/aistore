@@ -122,12 +122,19 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.Se
 // CreateBucket API
 //
 // CreateBucket sends a HTTP request to a proxy to create an ais bucket with the given name
-func CreateBucket(baseParams BaseParams, bck cmn.Bck) error {
+func CreateBucket(baseParams BaseParams, bck cmn.Bck, ops ...cmn.BucketPropsToUpdate) error {
+	if len(ops) > 1 {
+		return fmt.Errorf("only a single BucketPropsToUpdate parameter can be accepted")
+	}
+	var value interface{}
+	if len(ops) == 1 {
+		value = ops[0]
+	}
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateLB}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateLB, Value: value}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }

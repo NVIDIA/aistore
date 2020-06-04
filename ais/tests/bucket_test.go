@@ -112,6 +112,31 @@ func TestDefaultBucketProps(t *testing.T) {
 	}
 }
 
+func TestCreateWithBucketProps(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		}
+	)
+	propsToSet := cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			Type:            api.String(cmn.ChecksumMD5),
+			ValidateWarmGet: api.Bool(true),
+			EnableReadRange: api.Bool(true),
+			ValidateColdGet: api.Bool(false),
+			ValidateObjMove: api.Bool(true),
+		},
+	}
+	tutils.CreateFreshBucket(t, proxyURL, bck, propsToSet)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+	p, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+	validateBucketProps(t, propsToSet, p)
+}
+
 func TestStressCreateDestroyBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 

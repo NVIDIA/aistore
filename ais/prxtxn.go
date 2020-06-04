@@ -49,10 +49,12 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		bucketProps = cmn.DefaultBucketProps()
 		nlp         = bck.GetNameLockPair()
 	)
-	if len(cloudHeader) != 0 {
+
+	if bck.Props != nil {
+		bucketProps = bck.Props
+	} else if len(cloudHeader) != 0 {
 		bucketProps = cmn.CloudBucketProps(cloudHeader[0])
 	}
-
 	nlp.Lock()
 	defer nlp.Unlock()
 

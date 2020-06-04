@@ -822,6 +822,20 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bck.Provider = cmn.ProviderAIS
+		if msg.Value != nil {
+			propsToUpdate := cmn.BucketPropsToUpdate{}
+			if err := cmn.TryUnmarshal(msg.Value, &propsToUpdate); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			bck.Props = cmn.DefaultBucketProps()
+			bck.Props.Provider = bck.Provider
+			bck.Props, err = p.makeNprops(bck, propsToUpdate)
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+		}
 		if err := p.createBucket(&msg, bck); err != nil {
 			errCode := http.StatusInternalServerError
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
