@@ -128,8 +128,15 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 		reader   cmn.ReadOpenCloser
 		progress *mpb.Progress
 		bars     []*mpb.Bar
+		cksum    *cmn.Cksum
 	)
-
+	cksums := parseChecksumFlags(c)
+	if len(cksums) > 1 {
+		return fmt.Errorf("more than one checksum flags cannot be set")
+	}
+	if len(cksums) == 1 {
+		cksum = cksums[0]
+	}
 	fh, err := cmn.NewFileHandle(path)
 	if err != nil {
 		return err
@@ -146,12 +153,12 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 		readCallback := func(n int, _ error) { bars[0].IncrBy(n) }
 		reader = cmn.NewCallbackReadOpenCloser(fh, readCallback)
 	}
-
 	putArgs := api.PutObjectArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
 		Object:     objName,
 		Reader:     reader,
+		Cksum:      cksum,
 	}
 
 	err = api.PutObject(putArgs)

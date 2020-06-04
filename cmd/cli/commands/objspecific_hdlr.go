@@ -29,7 +29,8 @@ var (
 			checksumFlag,
 			isCachedFlag,
 		},
-		commandPut: {
+		commandPut: append(
+			checksumFlags,
 			chunkSizeFlag,
 			concurrencyFlag,
 			dryRunFlag,
@@ -38,7 +39,7 @@ var (
 			refreshFlag,
 			verboseFlag,
 			yesFlag,
-		},
+		),
 		commandPromote: {
 			recursiveFlag,
 			overwriteFlag,

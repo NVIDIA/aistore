@@ -6,6 +6,7 @@
 package commands
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -258,7 +259,7 @@ var (
 	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 	chunkSizeFlag = cli.StringFlag{Name: "chunk-size", Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB"}
-
+	checksumFlags = getCksumFlags()
 	// AuthN
 	roleFlag = cli.StringFlag{Name: "role", Usage: "a user role, eg., 'guest'(default), 'developer' or 'admin'"}
 
@@ -269,3 +270,14 @@ var (
 		templateFlag,
 	}
 )
+
+func getCksumFlags() []cli.Flag {
+	flags := []cli.Flag{}
+	for _, cks := range cmn.SupportedChecksums() {
+		flags = append(flags, cli.StringFlag{
+			Name:  cks,
+			Usage: fmt.Sprintf("hex encoded string of the %s checksum", cks),
+		})
+	}
+	return flags
+}

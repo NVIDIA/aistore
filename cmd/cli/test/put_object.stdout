@@ -1,14 +1,21 @@
 "$BUCKET_1" bucket created
 PUT "rand.txt" into bucket "ais://$BUCKET_1"
 PUT "object_1.txt" into bucket "ais://$BUCKET_1"
+PUT "cksum" into bucket "$BUCKET_1"
+PUT "cksum" into bucket "$BUCKET_1"
+PUT "cksum" into bucket "$BUCKET_1"
+PUT "cksum" into bucket "$BUCKET_1"
+PUT "cksum" into bucket "$BUCKET_1"
 PUT "object_2.txt" into bucket "$BUCKET_1"
 NAME			 SIZE	 VERSION
+cksum		 11B	 4
 object_1.txt		 11B	 1
 object_2.txt		 11B	 1
 rand.txt 30.49MiB 1
 PUT "object_1.txt" into bucket "$BUCKET_1"
 PUT "object_3.txt" into bucket "$BUCKET_1"
 NAME			 SIZE	 VERSION
+cksum		 11B	 4
 object_1.txt		 2B  2
 object_2.txt		 11B     1
 object_3.txt         11B     1

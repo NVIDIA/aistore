@@ -412,7 +412,7 @@ func flagIsSet(c *cli.Context, flag cli.Flag) bool {
 }
 
 // Returns the value of a string flag (either parent or local scope)
-func parseStrFlag(c *cli.Context, flag cli.StringFlag) string {
+func parseStrFlag(c *cli.Context, flag cli.Flag) string {
 	flagName := cleanFlag(flag.GetName())
 	if c.GlobalIsSet(flagName) {
 		return c.GlobalString(flagName)
@@ -445,6 +445,16 @@ func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
 		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)", flag.GetName(), flagValue)
 	}
 	return b, nil
+}
+
+func parseChecksumFlags(c *cli.Context) []*cmn.Cksum {
+	cksums := []*cmn.Cksum{}
+	for _, ckflag := range checksumFlags {
+		if flagIsSet(c, ckflag) {
+			cksums = append(cksums, cmn.NewCksum(ckflag.GetName(), parseStrFlag(c, ckflag)))
+		}
+	}
+	return cksums
 }
 
 func calcRefreshRate(c *cli.Context) time.Duration {

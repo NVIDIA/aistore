@@ -40,7 +40,7 @@ train-10.tgz has the size 946.8MiB (992791757 B)
 ```
 
 #### Get object and print it to standard output
- 
+
 Get `imagenet_train-000010.tgz` object from `imagenet` cloud bucket and write it to standard output.
 
 ```console
@@ -125,7 +125,7 @@ Display default properties of object `list.txt` from bucket `texts`.
 ```console
 $ ais show object texts/list.txt
 CHECKSUM                SIZE    ATIME                   VERSION
-2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     1      
+2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     1
 ```
 
 #### Show all object properties
@@ -135,10 +135,10 @@ Display all properties of object `list.txt` from bucket `texts`.
 ```console
 $ ais show object texts/list.txt --props=all
 CHECKSUM		 SIZE		 ATIME			 VERSION	 CACHED	 COPIES	 EC
-2d61e9b8b299c41f         7.63MiB	 06 Jan 20 14:55 PST	 2		 yes	 1	 1:1[replicated]  
+2d61e9b8b299c41f         7.63MiB	 06 Jan 20 14:55 PST	 2		 yes	 1	 1:1[replicated]
 ```
 
-#### Show selected object properties 
+#### Show selected object properties
 
 Show only selected (`size,version,ec`) properties.
 
@@ -213,6 +213,38 @@ Put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.ta
 
 ```bash
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+```
+
+#### Put single file with checksum
+
+Put a single file `img1.tar` into local bucket `mybucket`, with a content checksum flag
+to override the default bucket checksum performed at the server side. A hex encoded input
+is taken from the cli alongwith the checksum name.
+
+
+```bash
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --crc32c  0767345f
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+```
+
+```bash
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --md5 e91753513c7fc873467c1f3ca061fa70
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+```
+
+```bash
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha256 dc2bac3ba773b7bc52c20aa85e6ce3ae097dec870e7b9bda03671a1c434b7a5d
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+```
+
+```bash
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha512 e7da5269d4cd882deb8d7b7ca5cbf424047f56815fd7723123482e2931823a68d866627a449a55ca3a18f9c9ba7c8bb6219a028ba3ff5a5e905240907d087e40
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+```
+
+```bash
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --xxhash 05967d5390ac53b0
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
@@ -301,7 +333,7 @@ Same as above, except object names have additional prefix `test${d1}${d2}.txt`.
 
 ```bash
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
-$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket/dir/ -y 
+$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket/dir/ -y
 9 objects put into "mybucket" bucket
 # PUT /home/user/dir/test00.txt => mybucket/dir/test00.txt and 8 more
 ```
@@ -319,7 +351,7 @@ $ ais put "~/dir/test{0..2}/dir/test{0..2}.txt" mybucket --dry-run
 ```
 
 #### Put multiple directories
- 
+
 Put multiple directories into the cluster with range syntax.
 
 ```bash
@@ -359,7 +391,7 @@ PROMOTE command handles object naming if its source references directories:
 ### Examples
 
 #### Promote single file
- 
+
 Promote `/tmp/examples/example1.txt` without specified object name.
 
 ```bash
@@ -377,7 +409,7 @@ $ ais promote /tmp/examples/example1.txt mybucket/example1.txt
 ```
 
 #### Promote directory
- 
+
 Make AIS objects out of `/tmp/examples` files (**one file = one object**).
 `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes.
 
@@ -390,7 +422,7 @@ $ ais promote /tmp/examples mybucket/ -r
 Promote `/tmp/examples` files to AIS objects. Objects names will have `examples/` prefix.
 
 ```console
-$ ais promote /tmp/examples mybucket/examples/ -r 
+$ ais promote /tmp/examples mybucket/examples/ -r
 ```
 
 #### Promote invalid path
@@ -530,7 +562,7 @@ See [List/Range Operations](../../../docs/batch.md#listrange-operations) for mor
 Downloads copies of objects o1,o2,o3 from AWS bucket named `cloudbucket` and stores them in the AIS cluster
 
 ```console
-$ ais prefetch aws://cloudbucket --list 'o1,o2,o3' 
+$ ais prefetch aws://cloudbucket --list 'o1,o2,o3'
 ```
 
 ## Rename object
