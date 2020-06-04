@@ -6,6 +6,7 @@ package integration
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -1706,4 +1707,53 @@ func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {
 	_, err = file.Write(b)
 	tassert.CheckFatal(t, err)
 	file.Close()
+}
+
+func TestPutObjectWithChecksum(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bckLocal   = cmn.Bck{
+			Name:     clibucket,
+			Provider: cmn.ProviderAIS,
+		}
+		basefileName = "mytestobj.txt"
+		objData      = []byte("I am object data")
+		badCksumVal  = "badchecksum"
+	)
+	tutils.CreateFreshBucket(t, proxyURL, bckLocal)
+	defer tutils.DestroyBucket(t, proxyURL, bckLocal)
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        bckLocal,
+		Reader:     readers.NewBytesReader(objData),
+	}
+	for _, cksumType := range cmn.SupportedChecksums() {
+		if cksumType == cmn.ChecksumNone {
+			continue
+		}
+		fileName := basefileName + cksumType
+		hasher := cmn.NewCksumHash(cksumType)
+		hasher.H.Write(objData)
+		cksumValue := hex.EncodeToString(hasher.H.Sum(nil))
+		putArgs.Cksum = cmn.NewCksum(cksumType, badCksumVal)
+		putArgs.Object = fileName
+		err := api.PutObject(putArgs)
+		if err == nil {
+			t.Errorf("Bad checksum provided by the user, Expected an error")
+		}
+		_, err = api.HeadObject(baseParams, bckLocal, fileName)
+		if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
+			t.Errorf("Object %s exists despite bad checksum", fileName)
+		}
+		putArgs.Cksum = cmn.NewCksum(cksumType, cksumValue)
+		err = api.PutObject(putArgs)
+		if err != nil {
+			t.Errorf("Correct checksum provided, Err encountered %v", err)
+		}
+		_, err = api.HeadObject(baseParams, bckLocal, fileName)
+		if err != nil {
+			t.Errorf("Object %s does not exist despite correct checksum", fileName)
+		}
+	}
 }

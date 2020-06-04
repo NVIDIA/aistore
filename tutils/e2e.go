@@ -72,7 +72,7 @@ func readContent(r io.Reader, ignoreEmpty bool) []string {
 	return lines
 }
 
-func isMsgRegex(msg string) bool {
+func isLineRegex(msg string) bool {
 	return len(msg) > 2 && msg[0] == '^' && msg[len(msg)-1] == '$'
 }
 
@@ -146,7 +146,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 					lastIdx := strings.LastIndex(comment, `"`)
 					expectFailMsg = comment[firstIdx+1 : lastIdx]
 					expectFailMsg = substituteVariables(expectFailMsg)
-					if !isMsgRegex(expectFailMsg) {
+					if !isLineRegex(expectFailMsg) {
 						expectFailMsg = strings.ToLower(expectFailMsg)
 					}
 				}
@@ -205,7 +205,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		// Sometimes quotation marks are returned which are not visible on
 		// console so we just remove them.
 		out = strings.ReplaceAll(out, "&#34;", "")
-		if isMsgRegex(expectedOut) {
+		if isLineRegex(expectedOut) {
 			gomega.Expect(out).To(gomega.MatchRegexp(expectedOut))
 		} else {
 			gomega.Expect(out).To(gomega.Equal(expectedOut), "%s: %d", outputFileName, idx+1)

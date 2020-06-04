@@ -219,31 +219,22 @@ $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 #### Put single file with checksum
 
 Put a single file `img1.tar` into local bucket `mybucket`, with a content checksum flag
-to override the default bucket checksum performed at the server side. A hex encoded input
-is taken from the cli alongwith the checksum name.
+to override the default bucket checksum performed at the server side.
 
 
 ```bash
-$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --crc32c  0767345f
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --crc32c 0767345f
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
-```
 
-```bash
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --md5 e91753513c7fc873467c1f3ca061fa70
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
-```
 
-```bash
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha256 dc2bac3ba773b7bc52c20aa85e6ce3ae097dec870e7b9bda03671a1c434b7a5d
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
-```
 
-```bash
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha512 e7da5269d4cd882deb8d7b7ca5cbf424047f56815fd7723123482e2931823a68d866627a449a55ca3a18f9c9ba7c8bb6219a028ba3ff5a5e905240907d087e40
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
-```
 
-```bash
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --xxhash 05967d5390ac53b0
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```

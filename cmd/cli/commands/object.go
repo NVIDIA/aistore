@@ -132,7 +132,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 	)
 	cksums := parseChecksumFlags(c)
 	if len(cksums) > 1 {
-		return fmt.Errorf("more than one checksum flags cannot be set")
+		return fmt.Errorf("at most one checksum flags can be set (multi-checksum is not supported yet)")
 	}
 	if len(cksums) == 1 {
 		cksum = cksums[0]

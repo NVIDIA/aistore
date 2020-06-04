@@ -274,6 +274,9 @@ var (
 func getCksumFlags() []cli.Flag {
 	flags := []cli.Flag{}
 	for _, cks := range cmn.SupportedChecksums() {
+		if cks == cmn.ChecksumNone {
+			continue
+		}
 		flags = append(flags, cli.StringFlag{
 			Name:  cks,
 			Usage: fmt.Sprintf("hex encoded string of the %s checksum", cks),
