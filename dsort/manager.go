@@ -44,6 +44,11 @@ const (
 	finallyCleanedState
 )
 
+const (
+	// Size of the buffer used for serialization of the shards/records.
+	serializationBufSize = 10 * cmn.MiB
+)
+
 var (
 	ctx dsortContext
 	mm  *memsys.MMSA
@@ -63,11 +68,6 @@ type (
 		stats     stats.Tracker
 	}
 
-	creationPhaseMetadata struct {
-		Shards    []*extract.Shard          `json:"shards"`
-		SendOrder map[string]*extract.Shard `json:"send_order"`
-	}
-
 	buildingShardInfo struct {
 		shardName string
 	}
@@ -83,11 +83,6 @@ type (
 		// doneCh is closed when the job is aborted so that goroutines know when
 		// they need to stop.
 		doneCh chan struct{}
-	}
-
-	remoteResponse struct {
-		Record    *extract.Record    `json:"r"`
-		RecordObj *extract.RecordObj `json:"o"`
 	}
 
 	// Manager maintains all the state required for a single run of a distributed archive file shuffle.
@@ -128,7 +123,7 @@ type (
 			shards *transport.StreamBundle // streams for pushing streams to other targets if the fqn is non-local
 		}
 		creationPhase struct {
-			metadata creationPhaseMetadata
+			metadata CreationPhaseMetadata
 		}
 		finishedAck struct {
 			mu sync.Mutex

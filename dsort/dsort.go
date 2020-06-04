@@ -35,6 +35,7 @@ import (
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
+	"github.com/tinylib/msgp/msgp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -519,7 +520,12 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 				r, w       = io.Pipe()
 			)
 			group.Go(func() error {
-				err := js.NewEncoder(w).Encode(m.recManager.Records)
+				msgpw := msgp.NewWriterSize(w, serializationBufSize)
+				if err := m.recManager.Records.EncodeMsg(msgpw); err != nil {
+					w.CloseWithError(err)
+					return errors.Errorf("failed to marshal, err: %v", err)
+				}
+				err := msgpw.Flush()
 				w.CloseWithError(err)
 				if err != nil {
 					return errors.Errorf("failed to marshal into JSON, err: %v", err)
@@ -841,10 +847,16 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				r, w  = io.Pipe()
 			)
 			group.Go(func() error {
-				err := js.NewEncoder(w).Encode(creationPhaseMetadata{
+				msgpw := msgp.NewWriterSize(w, serializationBufSize)
+				md := &CreationPhaseMetadata{
 					Shards:    s,
 					SendOrder: order,
-				})
+				}
+				if err := md.EncodeMsg(msgpw); err != nil {
+					w.CloseWithError(err)
+					return err
+				}
+				err := msgpw.Flush()
 				w.CloseWithError(err)
 				return err
 			})

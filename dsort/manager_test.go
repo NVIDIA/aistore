@@ -16,9 +16,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
-	jsoniter "github.com/json-iterator/go"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tinylib/msgp/msgp"
 )
 
 var _ = Describe("Init", func() {
@@ -85,9 +85,10 @@ func BenchmarkRecordsMarshal(b *testing.B) {
 			b.ReportAllocs()
 			records := generateRecords(bench.recordCnt, bench.recordObjCnt)
 			b.ResetTimer()
+
 			for i := 0; i < b.N; i++ {
 				w := ioutil.Discard
-				err := js.NewEncoder(w).Encode(records)
+				err := records.EncodeMsg(msgp.NewWriterSize(w, serializationBufSize))
 				cmn.AssertNoErr(err)
 			}
 		})
@@ -121,17 +122,20 @@ func BenchmarkRecordsUnmarshal(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			b.ReportAllocs()
 			records := generateRecords(bench.recordCnt, bench.recordObjCnt)
-			bts, err := jsoniter.Marshal(records)
+			buf := bytes.NewBuffer(nil)
+			w := msgp.NewWriter(buf)
+			err := records.EncodeMsg(w)
 			cmn.AssertNoErr(err)
+			cmn.AssertNoErr(w.Flush())
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				r := bytes.NewReader(bts)
+				buf := bytes.NewReader(buf.Bytes())
 				newRecords := extract.NewRecords(bench.recordCnt)
 				b.StartTimer()
 
-				err := js.NewDecoder(r).Decode(&newRecords)
+				err := newRecords.DecodeMsg(msgp.NewReaderSize(buf, serializationBufSize))
 				cmn.AssertNoErr(err)
 			}
 		})
@@ -160,14 +164,14 @@ func BenchmarkCreationPhaseMetadataMarshal(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			b.ReportAllocs()
 
-			md := creationPhaseMetadata{
+			md := CreationPhaseMetadata{
 				Shards: generateShards(bench.shardCnt, bench.recordCnt, bench.recordObjCnt),
 			}
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				w := ioutil.Discard
-				err := js.NewEncoder(w).Encode(md)
+				err := md.EncodeMsg(msgp.NewWriterSize(w, serializationBufSize))
 				cmn.AssertNoErr(err)
 			}
 		})
@@ -196,20 +200,22 @@ func BenchmarkCreationPhaseMetadataUnmarshal(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			b.ReportAllocs()
 
-			md := creationPhaseMetadata{
+			md := CreationPhaseMetadata{
 				Shards: generateShards(bench.shardCnt, bench.recordCnt, bench.recordObjCnt),
 			}
-			bts, err := jsoniter.Marshal(md)
-			cmn.AssertNoErr(err)
+			buf := bytes.NewBuffer(nil)
+			w := msgp.NewWriter(buf)
+			cmn.AssertNoErr(md.EncodeMsg(w))
+			cmn.AssertNoErr(w.Flush())
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				r := bytes.NewReader(bts)
-				newMD := creationPhaseMetadata{}
+				buf := bytes.NewReader(buf.Bytes())
+				newMD := &CreationPhaseMetadata{}
 				b.StartTimer()
 
-				err := js.NewDecoder(r).Decode(&newMD)
+				err := newMD.DecodeMsg(msgp.NewReaderSize(buf, serializationBufSize))
 				cmn.AssertNoErr(err)
 			}
 		})

@@ -4,12 +4,27 @@
  */
 package extract
 
-// Shard represents the metadata required to construct a single shard (aka an archive file).
-type Shard struct {
-	// Size is total size of shard to be created.
-	Size int64 `json:"s"`
-	// Records contains all metadata to construct the shard.
-	Records *Records `json:"r"`
-	// Name determines the output name of the shard.
-	Name string `json:"n"`
-}
+import "encoding/json"
+
+//go:generate msgp -tests=false -marshal=false
+
+var (
+	// interface guard
+	_ json.Marshaler   = &Shard{}
+	_ json.Unmarshaler = &Shard{}
+)
+
+type (
+	// Shard represents the metadata required to construct a single shard (aka an archive file).
+	Shard struct {
+		// Size is total size of shard to be created.
+		Size int64 `msg:"s"`
+		// Records contains all metadata to construct the shard.
+		Records *Records `msg:"r"`
+		// Name determines the output name of the shard.
+		Name string `msg:"n"`
+	}
+)
+
+func (s *Shard) MarshalJSON() ([]byte, error) { panic("should not be used") }
+func (s *Shard) UnmarshalJSON(b []byte) error { panic("should not be used") }

@@ -11,11 +11,16 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 )
 
+// NOTE: Since tags for unexported fields are not supported before generation
+//  change `Records.arr` to `Records.Arr` and then rename it back.
+//
+//go:generate msgp -tests=false -marshal=false
+
 var (
+	// interface guard
 	_ json.Marshaler   = &Records{}
 	_ json.Unmarshaler = &Records{}
 )
@@ -37,37 +42,37 @@ type (
 		//  * Location (full path) on disk where extracted record has been placed.
 		//
 		// To get path for given object you need to use `FullContentPath` method.
-		ContentPath string `json:"p"`
+		ContentPath string `msg:"p"  json:"p"`
 
 		// Filesystem file type where the shard is stored - used to determine
 		// location for content path when asking filesystem.
-		ObjectFileType string `json:"ft"`
+		ObjectFileType string `msg:"ft" json:"ft"`
 
 		// Determines where the record has been stored, can be either: OffsetStoreType,
 		// SGLStoreType, DiskStoreType.
-		StoreType string `json:"st"`
+		StoreType string `msg:"st" json:"st"`
 
 		// If set, determines the offset in shard file where the record begins.
-		Offset       int64  `json:"f,string,omitempty"`
-		MetadataSize int64  `json:"ms,string"`
-		Size         int64  `json:"s,string"`
-		Extension    string `json:"e"`
+		Offset       int64  `msg:"f,omitempty" json:"f,string,omitempty"`
+		MetadataSize int64  `msg:"ms" json:"ms,string"`
+		Size         int64  `msg:"s" json:"s,string"`
+		Extension    string `msg:"e" json:"e"`
 	}
 
 	// Record represents the metadata corresponding to a single file from an archive file.
 	Record struct {
-		Key      interface{} `json:"k"` // Used to determine the sorting order.
-		Name     string      `json:"n"` // Name which uniquely identifies record across all shards.
-		DaemonID string      `json:"d"` // ID of the target which maintains the contents for this record.
+		Key      interface{} `msg:"k" json:"k"` // Used to determine the sorting order.
+		Name     string      `msg:"n" json:"n"` // Name which uniquely identifies record across all shards.
+		DaemonID string      `msg:"d" json:"d"` // ID of the target which maintains the contents for this record.
 		// All objects associated with given record. Record can be composed of
 		// multiple objects which have the same name but different extension.
-		Objects []*RecordObj `json:"o"`
+		Objects []*RecordObj `msg:"o" json:"o"`
 	}
 
 	// Records abstract array of records. It safe to be used concurrently.
 	Records struct {
-		sync.RWMutex
-		arr              []*Record
+		sync.RWMutex     `msg:"-"`
+		arr              []*Record `msg:"a"`
 		m                map[string]*Record
 		dups             map[string]struct{} // contains duplicate object names, if any
 		totalObjectCount int                 // total number of objects in all records (dups are removed so not counted)
@@ -271,13 +276,8 @@ func (r *Records) RecordMemorySize() (size uint64) {
 	return maxSize
 }
 
-func (r *Records) MarshalJSON() ([]byte, error) {
-	return jsoniter.ConfigFastest.Marshal(r.arr)
-}
-
-func (r *Records) UnmarshalJSON(b []byte) error {
-	return jsoniter.ConfigFastest.Unmarshal(b, &r.arr)
-}
+func (r *Records) MarshalJSON() ([]byte, error) { panic("should not be used") }
+func (r *Records) UnmarshalJSON(b []byte) error { panic("should not be used") }
 
 // Ext returns the file name extension used by path.
 // The extension is the suffix beginning at the FIRST (not final) dot

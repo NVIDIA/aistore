@@ -23,11 +23,13 @@ require (
 	github.com/lufia/iostat v0.0.0-20170605150913-9f7362b77ad3
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
+	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pierrec/lz4/v3 v3.1.0
 	github.com/pkg/errors v0.8.1
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
 	github.com/tidwall/buntdb v1.1.2
+	github.com/tinylib/msgp v1.1.2
 	github.com/urfave/cli v1.22.4
 	github.com/valyala/fasthttp v1.11.0
 	github.com/vbauerster/mpb/v4 v4.10.1

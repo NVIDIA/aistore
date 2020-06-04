@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tinylib/msgp/msgp"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -524,9 +526,8 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 			return
 		}
 
-		decoder := js.NewDecoder(r.Body)
-		var tmpMetadata creationPhaseMetadata
-		if err := decoder.Decode(&tmpMetadata); err != nil {
+		tmpMetadata := &CreationPhaseMetadata{}
+		if err := tmpMetadata.DecodeMsg(msgp.NewReaderSize(r.Body, serializationBufSize)); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -536,7 +537,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 			return
 		}
 
-		dsortManager.creationPhase.metadata = tmpMetadata
+		dsortManager.creationPhase.metadata = *tmpMetadata
 		dsortManager.startShardCreation <- struct{}{}
 	}
 }
@@ -591,7 +592,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		records := extract.NewRecords(int(d))
-		if err := js.NewDecoder(r.Body).Decode(records); err != nil {
+		if err := records.DecodeMsg(msgp.NewReaderSize(r.Body, serializationBufSize)); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
 			return
 		}

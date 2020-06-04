@@ -477,7 +477,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj, toNode *cluster.Snode) (err error) {
 	var (
 		local = toNode.DaemonID == ds.m.ctx.node.DaemonID
-		req   = remoteResponse{
+		req   = RemoteResponse{
 			Record:    rec,
 			RecordObj: obj,
 		}
@@ -609,7 +609,7 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.Receive {
 
 		defer cmn.DrainReader(object) // drain to prevent unnecessary stream errors
 
-		req := remoteResponse{}
+		req := RemoteResponse{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 			ds.m.abort(err)
 			return
