@@ -105,15 +105,6 @@ func (c *putJogger) ec(req *Request) error {
 	return err
 }
 
-// removes all temporary slices in case of erasure coding fails in the middle
-func (c *putJogger) freeSGL(slices []*slice) {
-	for _, s := range slices {
-		if s != nil {
-			s.free()
-		}
-	}
-}
-
 // calculates and stores data and parity slices
 func (c *putJogger) encode(req *Request) error {
 	if glog.V(4) {
@@ -172,7 +163,7 @@ func (c *putJogger) encode(req *Request) error {
 
 	// big object is erasure encoded
 	if slices, err := c.sendSlices(req, meta); err != nil {
-		c.freeSGL(slices)
+		freeSlices(slices)
 		c.cleanup(req)
 	}
 	return nil
@@ -519,7 +510,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 	if err != nil {
 		freeObject(objReader)
-		c.freeSGL(slices)
+		freeSlices(slices)
 		return nil, err
 	}
 

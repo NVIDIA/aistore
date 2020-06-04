@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -297,8 +296,6 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 		ObjName: lom.ObjName,
 		Opaque:  request,
 	}
-	var reader cmn.ReadOpenCloser
-	reader, hdr.ObjAttrs.Size = nil, 0
 
 	sw := &slice{
 		writer: writer,
@@ -312,7 +309,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	if glog.V(4) {
 		glog.Infof("Requesting object %s/%s from %s", lom.Bck(), lom.ObjName, daemonID)
 	}
-	if err := r.sendByDaemonID([]string{daemonID}, hdr, reader, nil, true); err != nil {
+	if err := r.sendByDaemonID([]string{daemonID}, hdr, nil, nil, true); err != nil {
 		r.unregWriter(uname)
 		return 0, err
 	}
@@ -346,13 +343,10 @@ func (r *xactECBase) regWriter(uname string, writer *slice) bool {
 
 // Unregisters a slice that has been waiting for the data to come from
 // a remote target
-func (r *xactECBase) unregWriter(uname string) (writer *slice, ok bool) {
+func (r *xactECBase) unregWriter(uname string) {
 	r.dOwner.mtx.Lock()
-	wr, ok := r.dOwner.slices[uname]
 	delete(r.dOwner.slices, uname)
 	r.dOwner.mtx.Unlock()
-
-	return wr, ok
 }
 
 // Used to copy replicas/slices after the object is encoded after PUT/restored
@@ -427,7 +421,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	return r.sendByDaemonID(daemonIDs, hdr, src.reader, cb, false)
 }
 
-// save data from a target response to SGL. When exists is false it
+// Save data from a target response to SGL or file. When exists is false it
 // just drains the response body and returns - because it does not contain
 // any data. On completion the function must call writer.wg.Done to notify
 // the caller that the data read is completed.
@@ -446,10 +440,6 @@ func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transpor
 
 	buf, slab := mm.Alloc()
 	writer.n, err = io.CopyBuffer(writer.writer, reader, buf)
-	if file, ok := writer.writer.(*os.File); ok {
-		debug.AssertNoErr(file.Close())
-	}
-
 	writer.cksum = cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)
 	if writer.version != "" && objAttrs.Version != "" {
 		writer.version = objAttrs.Version

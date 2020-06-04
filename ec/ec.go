@@ -191,6 +191,16 @@ func (s *slice) free() {
 	if s.reader != nil {
 		debug.AssertNoErr(s.reader.Close())
 	}
+	if s.writer != nil {
+		switch w := s.writer.(type) {
+		case *os.File:
+			debug.AssertNoErr(w.Close())
+		case *memsys.SGL:
+			w.Free()
+		default:
+			cmn.AssertFmt(false, "%T", w)
+		}
+	}
 	if s.workFQN != "" {
 		debug.AssertNoErr(os.RemoveAll(s.workFQN))
 	}
