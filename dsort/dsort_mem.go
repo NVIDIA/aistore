@@ -188,9 +188,14 @@ func (ds *dsorterMem) init() error {
 	ds.creationPhase.connector = newRWConnector(ds.m)
 	ds.creationPhase.requestedShards = make(chan string, 10000)
 
-	ds.creationPhase.adjuster.read = newConcAdjuster(ds.m.rs.CreateConcLimit, 1 /*goroutineLimitCoef*/)
-	ds.creationPhase.adjuster.write = newConcAdjuster(ds.m.rs.CreateConcLimit, 1 /*goroutineLimitCoef*/)
-
+	ds.creationPhase.adjuster.read = newConcAdjuster(
+		ds.m.rs.CreateConcMaxLimit,
+		1, /*goroutineLimitCoef*/
+	)
+	ds.creationPhase.adjuster.write = newConcAdjuster(
+		ds.m.rs.CreateConcMaxLimit,
+		1, /*goroutineLimitCoef*/
+	)
 	return nil
 }
 

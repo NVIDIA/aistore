@@ -1026,18 +1026,18 @@ components:
           type: string
           example: "10%"
           description: Limits the amount of total system memory allocated by both dSort and other running processes. Once and if this threshold is crossed, dSort will continue extracting onto local drives. Can be in format 60% or 10GB
-        extract_concurrency_limit:
+        extract_concurrency_max_limit:
           type: integer
           minimum: 0
           default: 0
           example: 3
-          description: Limits number of concurrent shards extracted per disk
-        create_concurrency_limit:
+          description: Limits maximum number of concurrent shards extracted per disk
+        create_concurrency_max_limit:
           type: integer
           minimum: 0
           default: 0
           example: 3
-          description: Limits number of concurrent shards created per disk
+          description: Limits maximum number of concurrent shards created per disk
         extended_metrics:
           type: boolean
           description: Determines if metrics should include extened statistics

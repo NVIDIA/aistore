@@ -70,8 +70,18 @@ var _ = Describe("newConcAdjuster", func() {
 
 	It("should not have more goroutines than specified", func() {
 		var (
-			adjuster      = newConcAdjuster(10, 3)
-			expectedLimit = 30 // 10 * 3 * num_paths (num_paths = 1)
+			adjuster      = newConcAdjuster(0, 3)
+			expectedLimit = defaultConcFuncLimit * 3
+		)
+
+		limit := calcSemaLimit(adjuster.acquireGoroutineSema, adjuster.releaseGoroutineSema)
+		Expect(limit).To(Equal(expectedLimit))
+	})
+
+	It("should not have more goroutines than specified max limit", func() {
+		var (
+			adjuster      = newConcAdjuster(2, 3)
+			expectedLimit = 2 * 3
 		)
 
 		limit := calcSemaLimit(adjuster.acquireGoroutineSema, adjuster.releaseGoroutineSema)
@@ -84,13 +94,11 @@ var _ = Describe("newConcAdjuster", func() {
 		var (
 			perfectLimit = 42
 			perfectUtil  = int(cfg.Disk.DiskUtilMaxWM+cfg.Disk.DiskUtilHighWM) / 2
-
-			defaultLimit = 10
 		)
 		availablePaths, _ := fs.Mountpaths.Get()
 		mpathInfo := availablePaths[testingConfigDir]
 
-		adjuster := newConcAdjuster(defaultLimit, defaultLimit)
+		adjuster := newConcAdjuster(0, 1)
 
 		adjuster.start()
 		defer adjuster.stop()

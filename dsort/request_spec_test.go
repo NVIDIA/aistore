@@ -219,20 +219,20 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should parse spec and set default conc limits", func() {
 			rs := RequestSpec{
-				Bucket:           "test",
-				Extension:        cmn.ExtTar,
-				InputFormat:      "prefix-{0010..0111}-suffix",
-				OutputFormat:     "prefix-{0010..0111}-suffix",
-				OutputShardSize:  "10KB",
-				CreateConcLimit:  0,
-				ExtractConcLimit: 0,
-				Algorithm:        SortAlgorithm{Kind: SortKindNone},
+				Bucket:              "test",
+				Extension:           cmn.ExtTar,
+				InputFormat:         "prefix-{0010..0111}-suffix",
+				OutputFormat:        "prefix-{0010..0111}-suffix",
+				OutputShardSize:     "10KB",
+				CreateConcMaxLimit:  0,
+				ExtractConcMaxLimit: 0,
+				Algorithm:           SortAlgorithm{Kind: SortKindNone},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.CreateConcLimit).To(BeEquivalentTo(0))
-			Expect(parsed.ExtractConcLimit).To(BeEquivalentTo(0))
+			Expect(parsed.CreateConcMaxLimit).To(BeEquivalentTo(0))
+			Expect(parsed.ExtractConcMaxLimit).To(BeEquivalentTo(0))
 		})
 
 		It("should parse spec and set the global config values or override them", func() {
@@ -242,14 +242,14 @@ var _ = Describe("RequestSpec", func() {
 			cmn.GCO.CommitUpdate(cfg)
 
 			rs := RequestSpec{
-				Bucket:           "test",
-				Extension:        cmn.ExtTar,
-				InputFormat:      "prefix-{0010..0111}-suffix",
-				OutputFormat:     "prefix-{0010..0111}-suffix",
-				OutputShardSize:  "10KB",
-				CreateConcLimit:  0,
-				ExtractConcLimit: 0,
-				Algorithm:        SortAlgorithm{Kind: SortKindNone},
+				Bucket:              "test",
+				Extension:           cmn.ExtTar,
+				InputFormat:         "prefix-{0010..0111}-suffix",
+				OutputFormat:        "prefix-{0010..0111}-suffix",
+				OutputShardSize:     "10KB",
+				CreateConcMaxLimit:  0,
+				ExtractConcMaxLimit: 0,
+				Algorithm:           SortAlgorithm{Kind: SortKindNone},
 
 				DSortConf: cmn.DSortConf{
 					DuplicatedRecords:   cmn.AbortReaction,
@@ -407,13 +407,13 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid extract concurrency specified", func() {
 			rs := RequestSpec{
-				Bucket:           "test",
-				Extension:        cmn.ExtTar,
-				InputFormat:      "prefix-{0010..0111}-suffix",
-				OutputFormat:     "prefix-{0010..0111}-suffix",
-				OutputShardSize:  "10KB",
-				ExtractConcLimit: -1,
-				Algorithm:        SortAlgorithm{Kind: SortKindNone},
+				Bucket:              "test",
+				Extension:           cmn.ExtTar,
+				InputFormat:         "prefix-{0010..0111}-suffix",
+				OutputFormat:        "prefix-{0010..0111}-suffix",
+				OutputShardSize:     "10KB",
+				ExtractConcMaxLimit: -1,
+				Algorithm:           SortAlgorithm{Kind: SortKindNone},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
@@ -422,13 +422,13 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid create concurrency specified", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
-				Extension:       cmn.ExtTar,
-				InputFormat:     "prefix-{0010..0111}-suffix",
-				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: "10KB",
-				CreateConcLimit: -1,
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Bucket:             "test",
+				Extension:          cmn.ExtTar,
+				InputFormat:        "prefix-{0010..0111}-suffix",
+				OutputFormat:       "prefix-{0010..0111}-suffix",
+				OutputShardSize:    "10KB",
+				CreateConcMaxLimit: -1,
+				Algorithm:          SortAlgorithm{Kind: SortKindNone},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())

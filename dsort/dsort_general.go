@@ -119,7 +119,10 @@ func (ds *dsorterGeneral) pullStreamWriter(objName string) *streamWriter {
 func (ds *dsorterGeneral) name() string { return DSorterGeneralType }
 
 func (ds *dsorterGeneral) init() error {
-	ds.creationPhase.adjuster = newConcAdjuster(ds.m.rs.CreateConcLimit, 1 /*goroutineLimitCoef*/)
+	ds.creationPhase.adjuster = newConcAdjuster(
+		ds.m.rs.CreateConcMaxLimit,
+		1, /*goroutineLimitCoef*/
+	)
 	return nil
 }
 

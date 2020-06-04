@@ -36,7 +36,15 @@ const (
 	// This value is used when user provided `0` as concurrency limit.
 	defaultConcFuncLimit = 10
 	// Determines maximal concurrency limit per disk.
-	maxConcFuncLimit = 95
+	//
+	// Setting this too high can result in big number of goroutines in the system
+	// what can put tremendous pressure on scheduler and other goroutines in the
+	// system - eg. http handlers which are spawned in new goroutines.
+	maxConcFuncPerDiskLimit = 50
+	// Determines maximal concurrency limit per dSort per node.
+	maxConcFuncPerDSortLimit = 500
+	// TODO: add global max concurrency limit - should be preserved between
+	//  all dSorts on single node.
 
 	// Batch corresponds to number of received update information per mountpath.
 	// Every time the size of the batch is reached, recalculation of limit is
@@ -59,6 +67,7 @@ type (
 		// limit update is performed.
 		tickCnt   int
 		limit     int
+		maxLimit  int
 		lastUtils []int64
 		// Semaphore for function calls. On update it is swapped with a new one.
 		funcCallsSema *cmn.DynSemaphore
@@ -78,24 +87,36 @@ type (
 	}
 )
 
-func newMpathAdjuster(limit int) *mpathAdjuster {
+func calcMaxLimit() int {
+	availablePaths, _ := fs.Mountpaths.Get()
+	maxLimitPerDisk := cmn.Min(
+		maxConcFuncPerDiskLimit,
+		maxConcFuncPerDSortLimit/cmn.Max(len(availablePaths), 1),
+	)
+	return maxLimitPerDisk
+}
+
+func newMpathAdjuster(limit, maxLimit int) *mpathAdjuster {
 	return &mpathAdjuster{
 		curBatchSize:  defaultBatchSize,
 		limit:         limit,
+		maxLimit:      maxLimit,
 		lastUtils:     make([]int64, 0, lastInfoCnt),
 		funcCallsSema: cmn.NewDynSemaphore(limit),
 	}
 }
 
-func newConcAdjuster(limit, goroutineLimitCoef int) *concAdjuster {
-	if limit == 0 {
-		limit = defaultConcFuncLimit
-	}
+func newConcAdjuster(maxLimit, goroutineLimitCoef int) *concAdjuster {
+	limit := defaultConcFuncLimit
 
 	availablePaths, _ := fs.Mountpaths.Get()
 	adjusters := make(map[string]*mpathAdjuster, len(availablePaths))
+	if maxLimit == 0 {
+		maxLimit = calcMaxLimit()
+	}
+	limit = cmn.Min(limit, maxLimit)
 	for _, mpathInfo := range availablePaths {
-		adjusters[mpathInfo.Path] = newMpathAdjuster(limit)
+		adjusters[mpathInfo.Path] = newMpathAdjuster(limit, maxLimit)
 	}
 
 	return &concAdjuster{
@@ -168,7 +189,8 @@ func (ca *concAdjuster) acquireSema(mpathInfo *fs.MountpathInfo) {
 	ca.mu.Lock()
 	adjuster, ok := ca.adjusters[mpathInfo.Path]
 	if !ok {
-		adjuster = newMpathAdjuster(ca.defaultLimit)
+		maxLimit := calcMaxLimit()
+		adjuster = newMpathAdjuster(ca.defaultLimit, maxLimit)
 		ca.adjusters[mpathInfo.Path] = adjuster
 
 		// Also we need to update goroutine semaphore size
@@ -213,8 +235,8 @@ func (adjuster *mpathAdjuster) recalc(newUtil int64, config *cmn.Config) (prevLi
 	adjuster.curBatchSize = cmn.MinF64(adjuster.curBatchSize, maxBatchSize)
 	if adjuster.limit < 1 {
 		adjuster.limit = 1
-	} else if adjuster.limit > maxConcFuncLimit {
-		adjuster.limit = maxConcFuncLimit
+	} else if adjuster.limit > adjuster.maxLimit {
+		adjuster.limit = adjuster.maxLimit
 	}
 	return prevLimit, adjuster.limit
 }

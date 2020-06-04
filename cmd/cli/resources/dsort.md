@@ -98,8 +98,8 @@ The following table describes JSON/YAML keys which can be used in the specificat
 | `order_file` | `string` | URL to the file containing external key map (it should contain lines in format: `record_key[sep]shard-%d-fmt`) | yes (only when `output_format` not provided) | `""` |
 | `order_file_sep` | `string` | separator used for splitting `record_key` and `shard-%d-fmt` in the lines in external key map | no | `\t` (TAB) |
 | `max_mem_usage` | `string` | limits the amount of total system memory allocated by both dSort and other running processes. Once and if this threshold is crossed, dSort will continue extracting onto local drives. Can be in format 60% or 10GB | no | same as in `/deploy/dev/local/aisnode_config.sh` |
-| `extract_concurrency_limit` | `string` | limits number of concurrent shards extracted per disk | no | same as in `/deploy/dev/local/aisnode_config.sh` |
-| `create_concurrency_limit` | `string` | limits number of concurrent shards created per disk | no | same as in `/deploy/dev/local/aisnode_config.sh` |
+| `extract_concurrency_max_limit` | `int` | limits maximum number of concurrent shards extracted per disk | no | (calculated based on different factors) ~50 |
+| `create_concurrency_max_limit` | `int` | limits maximum number of concurrent shards created per disk| no | (calculated based on different factors) ~50 |
 | `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no | `false` |
 
 There's also the possibility to override some of the values from global `distributed_sort` config via job specification.
@@ -134,8 +134,6 @@ Assuming that `dsort_spec.json` contains:
     "algorithm": {
         "kind": "alphanumeric"
     },
-    "extract_concurrency_limit": 3,
-    "create_concurrency_limit": 5,
     "extended_metrics": true
 }
 ```
@@ -211,9 +209,7 @@ $ ais start dsort '{
     "output_shard_size": "200KB",
     "description": "pack records into categorized shards",
     "order_file": "http://website.web/static/order_file.txt",
-    "order_file_sep": " ",
-    "extract_concurrency_limit": 3,
-    "create_concurrency_limit": 5
+    "order_file_sep": " "
 }'
 JGHEoo89gg
 ```

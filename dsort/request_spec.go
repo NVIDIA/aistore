@@ -29,7 +29,7 @@ var (
 	errInvalidExtension         = errors.New("extension must be one of '.tar', '.tar.gz', or '.tgz'")
 	errNegOutputShardSize       = errors.New("output shard size must be >= 0")
 	errEmptyOutputShardSize     = errors.New("output shard size must be set (cannot be 0)")
-	errNegativeConcurrencyLimit = fmt.Errorf("concurrency limit must be 0 (limits will be calculated) or > 0")
+	errNegativeConcurrencyLimit = fmt.Errorf("concurrency max limit must be 0 (limits will be calculated) or > 0")
 
 	errInvalidInputTemplateFormat  = errors.New("could not parse given input format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
 	errInvalidOutputTemplateFormat = errors.New("could not parse given output format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
@@ -94,10 +94,10 @@ type RequestSpec struct {
 	Provider string `json:"provider" yaml:"provider"`
 	// Default: "ais"
 	OutputProvider string `json:"output_provider" yaml:"output_provider"`
-	// Default: DefaultConcLimit
-	ExtractConcLimit int `json:"extract_concurrency_limit" yaml:"extract_concurrency_limit"`
-	// Default: DefaultConcLimit
-	CreateConcLimit int `json:"create_concurrency_limit" yaml:"create_concurrency_limit"`
+	// Default: calcMaxLimit()
+	ExtractConcMaxLimit int `json:"extract_concurrency_max_limit" yaml:"extract_concurrency_max_limit"`
+	// Default: calcMaxLimit()
+	CreateConcMaxLimit int `json:"create_concurrency_max_limit" yaml:"create_concurrency_max_limit"`
 	// Default: transport.IntraBundleMultiplier
 	StreamMultiplier int `json:"stream_multiplier" yaml:"stream_multiplier"`
 	// Default: false
@@ -112,24 +112,24 @@ type RequestSpec struct {
 
 // nolint:maligned // no performance critical code
 type ParsedRequestSpec struct {
-	Bucket           string                `json:"bucket"`
-	Description      string                `json:"description"`
-	OutputBucket     string                `json:"output_bucket"`
-	Provider         string                `json:"provider"`
-	OutputProvider   string                `json:"output_provider"`
-	Extension        string                `json:"extension"`
-	OutputShardSize  int64                 `json:"output_shard_size,string"`
-	InputFormat      *parsedInputTemplate  `json:"input_format"`
-	OutputFormat     *parsedOutputTemplate `json:"output_format"`
-	Algorithm        *SortAlgorithm        `json:"algorithm"`
-	OrderFileURL     string                `json:"order_file"`
-	OrderFileSep     string                `json:"order_file_sep"`
-	MaxMemUsage      cmn.ParsedQuantity    `json:"max_mem_usage"`
-	TargetOrderSalt  []byte                `json:"target_order_salt"`
-	ExtractConcLimit int                   `json:"extract_concurrency_limit"` // TODO: should be removed
-	CreateConcLimit  int                   `json:"create_concurrency_limit"`  // TODO: should be removed
-	StreamMultiplier int                   `json:"stream_multiplier"`         // TODO: should be removed
-	ExtendedMetrics  bool                  `json:"extended_metrics"`
+	Bucket              string                `json:"bucket"`
+	Description         string                `json:"description"`
+	OutputBucket        string                `json:"output_bucket"`
+	Provider            string                `json:"provider"`
+	OutputProvider      string                `json:"output_provider"`
+	Extension           string                `json:"extension"`
+	OutputShardSize     int64                 `json:"output_shard_size,string"`
+	InputFormat         *parsedInputTemplate  `json:"input_format"`
+	OutputFormat        *parsedOutputTemplate `json:"output_format"`
+	Algorithm           *SortAlgorithm        `json:"algorithm"`
+	OrderFileURL        string                `json:"order_file"`
+	OrderFileSep        string                `json:"order_file_sep"`
+	MaxMemUsage         cmn.ParsedQuantity    `json:"max_mem_usage"`
+	TargetOrderSalt     []byte                `json:"target_order_salt"`
+	ExtractConcMaxLimit int                   `json:"extract_concurrency_max_limit"`
+	CreateConcMaxLimit  int                   `json:"create_concurrency_max_limit"`
+	StreamMultiplier    int                   `json:"stream_multiplier"` // TODO: should be removed
+	ExtendedMetrics     bool                  `json:"extended_metrics"`
 
 	// debug
 	DSorterType string `json:"dsorter_type"`
@@ -237,15 +237,15 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return nil, err
 	}
 
-	if rs.ExtractConcLimit < 0 {
+	if rs.ExtractConcMaxLimit < 0 {
 		return nil, errNegativeConcurrencyLimit
 	}
-	if rs.CreateConcLimit < 0 {
+	if rs.CreateConcMaxLimit < 0 {
 		return nil, errNegativeConcurrencyLimit
 	}
 
-	parsedRS.ExtractConcLimit = rs.ExtractConcLimit
-	parsedRS.CreateConcLimit = rs.CreateConcLimit
+	parsedRS.ExtractConcMaxLimit = rs.ExtractConcMaxLimit
+	parsedRS.CreateConcMaxLimit = rs.CreateConcMaxLimit
 	parsedRS.StreamMultiplier = rs.StreamMultiplier
 	parsedRS.ExtendedMetrics = rs.ExtendedMetrics
 	parsedRS.DSorterType = rs.DSorterType

@@ -217,7 +217,10 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	//
 	// Coefficient for extraction should be larger and depends on target count
 	// because we will skip a lot shards (which do not belong to us).
-	m.extractionPhase.adjuster = newConcAdjuster(rs.ExtractConcLimit, 3*targetCount /*goroutineLimitCoef*/)
+	m.extractionPhase.adjuster = newConcAdjuster(
+		rs.ExtractConcMaxLimit,
+		3*targetCount, /*goroutineLimitCoef*/
+	)
 
 	// Fill ack map with current daemons. Once the finished ack is received from
 	// another daemon we will remove it from the map until len(ack) == 0 (then
@@ -236,8 +239,8 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 }
 
 // TODO: Currently we create streams for each dSort job but maybe we should
-// create streams once and have them available for all the dSort jobs so they
-// would share the resource rather than competing for it.
+//  create streams once and have them available for all the dSort jobs so they
+//  would share the resource rather than competing for it.
 func (m *Manager) initStreams() error {
 	cfg := cmn.GCO.Get()
 
