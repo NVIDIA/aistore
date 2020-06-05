@@ -18,9 +18,10 @@
 
 ## Overview
 
-AIStore Authentication Server (AuthN) provides a token-based secure access to AIStore. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details. Currently, we only support hash-based message authentification (HMAC) using SHA256 hash.
+AIStore Authentication Server (AuthN) provides a token-based secure access to AIStore. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details. Currently, we only support hash-based message authentication (HMAC) using SHA256 hash.
 
-AuthN is a standalone process that manages users and their tokens. It reports to the primary AIStore proxy all changes on the fly and immediately after each user login or logout. The result is that the AIStore primary proxy (aka AIStore gateway) always has an updated set of valid tokens that grant access to the AIStore and Cloud resources.
+AuthN is a standalone process that manages users and their tokens. It reports to registered clusters all the changes on the fly.
+It results in that the clusters always have up-to-date information, e.g., list of revoked tokens.
 
 For a client, a typical workflow looks as follows:
 
@@ -37,10 +38,7 @@ Environment variables used by the deployment script to setup AuthN server:
 |---|---|---|
 | AIS_ENDPOINT | `""` | Primary proxy URL for AuthN to notify the cluster about events like a token is revoked |
 | AIS_SECRET_KEY | `aBitLongSecretKey` | A secret key to encrypt and decrypt tokens |
-| AUTH_ENABLED | `false` | Set it to `true` to enable authn server and token-based access in AIStore proxy |
-| AUTHN_ALLOW_GUEST | `false` | Enabling guest allows doing basic requests (like listing buckets or object get) without authentication | 
-| AUTHN_SU_NAME | `admin` | Super user name (see `A super user` section for details) |
-| AUTHN_SU_PASS | `admin` | Super user password (see `A super user` section for details) |
+| AUTH_ENABLED | `false` | Set it to `true` to enable AuthN server and token-based access in AIStore proxy |
 | AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
 | AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 that means "no expiration time" |
 
@@ -54,6 +52,8 @@ Note: don't forget to change the default secret key used to encrypt and decrypt 
 
 To change AuthN settings after deployment, modify the server's configuration file and restart the server. If you change the server's secret key make sure to modify AIStore proxy configuration as well.
 
+At start AuthN checks user list. If it is empty, AuthN creates a default user that can access to everything: user ID is `admin` and password is `admin`. Do not forget to change the user's password for security reasons.
+
 ### Notation
 
 In this README:
@@ -64,11 +64,11 @@ In this README:
 
 ### AuthN configuration and log
 
-| File | Location |
-|---|---|
+| File                 | Location                     |
+|----------------------|------------------------------|
 | Server configuration | `$AUTHN_CONF_DIR/authn.json` |
-| User list | `$AUTHN_CONF_DIR/users.json` |
-| Log directory | `$AIS_LOG_DIR/authn/log/` |
+| User database        | `$AUTHN_CONF_DIR/authn.db`   |
+| Log directory        | `$AIS_LOG_DIR/authn/log/`    |
 
 ### How to enable AuthN server after deployment
 
@@ -79,8 +79,8 @@ By default, AIStore deployment currently won't launch the AuthN server. To start
 
 ### Using Kubernetes secrets
 
-To increase security, super user credentials and secret key for token generation can
-be put to [Kubernetes secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
+To increase security, secret key for token generation can be
+put to [Kubernetes secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
 instead of keeping them in an AuthN configuration file. When secrets are used, AuthN
 overrides configuration values with environment variables set by Kubernetes.
 
@@ -96,16 +96,6 @@ spec:
   - name: container-name
         image: image-name
         env:
-          - name: AUTHN_SU_NAME
-            valueFrom:
-              secretKeyRef:
-                name: mysecret
-                key: su-name
-          - name: AUTHN_SU_PASS
-            valueFrom:
-              secretKeyRef:
-                name: mysecret
-                key: su-pass
           - name: SECRETKEY
             valueFrom:
               secretKeyRef:
@@ -117,17 +107,13 @@ In the example above the values in all-capitals are the names of the environment
 variables that AuthN looks for. All other values are arbitrary.
 
 When AuthN pod starts, it loads its configuration from local file, and then
-overrides secret values with ones from the pod's description. Pod's description
-does not have to include all three variables: add only those that you do
-want to expose in configuration file.
+overrides secret values with ones from the pod's description.
 
 ## User management
 
 ### Superuser
 
 After deploying the cluster, a superuser account is created automatically - a special account that cannot be deleted and only this account can manage users and their credentials.
-
-Superuser's credentials can be set at cluster deployment time(please, see [Getting started](#getting-started)), or changed later by modifying AuthN configuration file `authn.json`. It is located in `$AUTHN_CONF_DIR`, default value is $HOME/.ais.
 
 Adding and deleting usernames requires superuser authentication. Super user credentials are sent in the request header via `Authorization` field (for curl it is `curl -u<username>:<password ...`, for HTTP requests it is header option `Authorization: Basic <base64-encoded-username:password>`).
 
@@ -158,7 +144,7 @@ A generated token is returned as a JSON formatted message. Example: `{"token": "
 AIStore proxies and targets require a valid token in a request header - but only if AuthN is enabled. Every token includes all the information needed by the target:
 
 - UserID (username)
-- Time when the token was generated
+- User ACL
 - Time when the token expires
 
 A token is validated by a target. The token must not be expired and it must not be in the blacklist. The blacklist is a list of revoked tokens: tokens that are revoked with REST API or belong to deleted users. The list of revoked tokens is broadcast over the cluster on change. Periodically the list is cleaned up by removing expired tokens.

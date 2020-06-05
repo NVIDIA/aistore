@@ -38,14 +38,15 @@ Superuser password:
 
 ## Register new user
 
-`ais auth add user [USER_NAME USER_PASS] [--role ROLE]`
+`ais auth add user [USER_NAME USER_PASS] [--role ROLES]`
 
-Register the user and grant `role` permissions to the user.
+Register the user and assign `roles` to the user. `Roles` is a comma-separated list of roles.
 For security reasons, user's password can be omitted (and user's name as well).
 In this case, the CLI prompts for every missing argument in interactive mode.
 
-Option `--role` sets the user's default permissions to access the cluster.
-If the option it omitted, the user gets role `Guest` that allows only read-only access.
+If the option it omitted, the new user does not have any permissions. It may be useful for
+case: a user needs an access to one or few buckets. Instead of creating a new role just
+for the user, register a user with empty role and grant permissions to the required buckets.
 
 **Examples:**
 
@@ -57,10 +58,9 @@ $ ais auth add user user2 password --role PowerUser
 Superuser password: admin
 User password: password
 $ ais auth show user
-NAME    ROLE       PERMISSIONS
-user2   PowerUser  18446744073709551615
-guest   Guest      771
-user1   Guest      771
+NAME    ROLES
+user2   PowerUser
+user1   -
 ```
 
 ## Unregister existing user
@@ -73,19 +73,13 @@ Remove an existing user and revokes all tokens issued for the user.
 
 `ais auth show user`
 
-Displays the list of registered users. The list is alphabetically sorted and
-divided into three groups:
-
-- First group is PowerUser group
-- Seconds group is a list of users that have restricted write access
-- The last group are Guest group - list of read-only users
+Displays the list of registered users.
 
 ```console
 $ ais auth show user
-NAME    ROLE       PERMISSIONS
-user2   PowerUser  18446744073709551615
-guest   Guest      771
-user1   Guest      771
+NAME    ROLES
+user2   PowerUser-clu1
+user1   Guest-clu1,Guest-clu2
 ```
 
 ## List existing roles
