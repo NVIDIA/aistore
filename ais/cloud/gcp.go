@@ -8,9 +8,9 @@ package cloud
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/iterator"
 )
 
@@ -27,11 +28,15 @@ const (
 	gcpChecksumVal  = "x-goog-meta-ais-cksum-val"
 
 	gcpPageSize = cmn.DefaultListPageSize
+
+	projectIDEnvVar = "GOOGLE_CLOUD_PROJECT"
+	credPathEnvVar  = "GOOGLE_APPLICATION_CREDENTIALS"
 )
 
 type (
 	gcpProvider struct {
-		t cluster.Target
+		t         cluster.Target
+		projectID string
 	}
 )
 
@@ -39,34 +44,46 @@ var (
 	_ cluster.CloudProvider = &gcpProvider{}
 )
 
-func NewGCP(t cluster.Target) (cluster.CloudProvider, error) { return &gcpProvider{t: t}, nil }
-
-func getProjID() string {
-	return os.Getenv("GOOGLE_CLOUD_PROJECT")
+func readCredFile() (projectID string) {
+	credFile, err := os.Open(os.Getenv(credPathEnvVar))
+	if err != nil {
+		return
+	}
+	b, err := ioutil.ReadAll(credFile)
+	credFile.Close()
+	if err != nil {
+		return
+	}
+	projectID, _ = jsoniter.Get(b, "project_id").GetInterface().(string)
+	return
 }
 
-// GCP settings are read from environment variables.
-// The function returns:
-//   connection to the cloud, GCP context, project_id, error_string
-// project_id is used only by listBuckets function
+func NewGCP(t cluster.Target) (cluster.CloudProvider, error) {
+	projectID := readCredFile()
+	if projectID == "" {
+		projectID = os.Getenv(projectIDEnvVar)
+	}
+	if projectID == "" {
+		return nil, fmt.Errorf("gcp: unable to determine 'project_id', %q or %q env var needs to be set", projectIDEnvVar, credPathEnvVar)
+	}
+	glog.Infof("[cloud_gcp] project_id: %q", projectID)
+	return &gcpProvider{t: t, projectID: projectID}, nil
+}
 
-func createClient(ctx context.Context) (*storage.Client, context.Context, string, error) {
+func createClient(ctx context.Context) (*storage.Client, context.Context, error) {
 	if glog.V(5) {
 		glog.Info("Creating default google cloud session")
 	}
-	if getProjID() == "" {
-		return nil, nil, "", errors.New("failed to get ProjectID from GCP")
-	}
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to create client, err: %v", err)
+		return nil, nil, fmt.Errorf("failed to create client, err: %v", err)
 	}
-	return client, ctx, getProjID(), nil
+	return client, ctx, nil
 }
 
-func gcpErrorToAISError(gcpError error, bck cmn.Bck, node string) (error, int) {
+func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck cmn.Bck) (error, int) {
 	if gcpError == storage.ErrBucketNotExist {
-		return cmn.NewErrorRemoteBucketDoesNotExist(bck, node), http.StatusNotFound
+		return cmn.NewErrorRemoteBucketDoesNotExist(bck, gcpp.t.Snode().Name()), http.StatusNotFound
 	}
 	return gcpError, http.StatusBadRequest
 }
@@ -76,9 +93,10 @@ func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *stora
 		return objErr, http.StatusBadRequest
 	}
 
-	// Object does not exist, but in gcp it doesn't mean that the bucket existed. Check if the buckets exists
+	// Object does not exist, but in GCP it doesn't mean that the bucket existed.
+	// Check if the buckets exists.
 	if _, err := gcpClient.Bucket(bck.Name).Attrs(ctx); err != nil {
-		return gcpErrorToAISError(err, bck, gcpp.t.Snode().Name())
+		return gcpp.gcpErrorToAISError(err, bck)
 	}
 	return objErr, http.StatusBadRequest
 }
@@ -95,7 +113,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("list_bucket %s", bck.Name)
 	}
-	gcpClient, gctx, _, err := createClient(ctx)
+	gcpClient, gctx, err := createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -122,7 +140,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	objs := make([]*storage.ObjectAttrs, 0)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {
-		err, errCode = gcpErrorToAISError(err, cloudBck, "")
+		err, errCode = gcpp.gcpErrorToAISError(err, cloudBck)
 		return
 	}
 
@@ -159,9 +177,8 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("head_bucket %s", bck.Name)
 	}
-	bckProps = make(cmn.SimpleKVs)
 
-	gcpClient, gctx, _, err := createClient(ctx)
+	gcpClient, gctx, err := createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -170,9 +187,10 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 	)
 	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(gctx)
 	if err != nil {
-		err, errCode = gcpErrorToAISError(err, cloudBck, "")
+		err, errCode = gcpp.gcpErrorToAISError(err, cloudBck)
 		return
 	}
+	bckProps = make(cmn.SimpleKVs)
 	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
@@ -185,12 +203,12 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 //////////////////
 
 func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
-	gcpClient, gctx, projectID, err := createClient(ctx)
+	gcpClient, gctx, err := createClient(ctx)
 	if err != nil {
 		return
 	}
 	buckets = make(cmn.BucketNames, 0, 16)
-	it := gcpClient.Buckets(gctx, projectID)
+	it := gcpClient.Buckets(gctx, gcpp.projectID)
 	for {
 		var battrs *storage.BucketAttrs
 
@@ -200,7 +218,7 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 			break
 		}
 		if err != nil {
-			err, errCode = gcpErrorToAISError(err, cmn.Bck{Provider: cmn.ProviderGoogle}, "")
+			err, errCode = gcpp.gcpErrorToAISError(err, cmn.Bck{Provider: cmn.ProviderGoogle})
 			return
 		}
 		buckets = append(buckets, cmn.Bck{
@@ -219,7 +237,7 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 /////////////////
 
 func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
-	gcpClient, gctx, _, err := createClient(ctx)
+	gcpClient, gctx, err := createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -254,7 +272,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 ////////////////
 
 func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
-	gcpClient, gctx, _, err := createClient(ctx)
+	gcpClient, gctx, err := createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -265,7 +283,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		err, errCode = gcpp.handleObjectError(gctx, gcpClient, err, cloudBck)
+		err, errCode = gcpp.gcpErrorToAISError(err, cloudBck)
 		return
 	}
 
@@ -319,7 +337,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 ////////////////
 
 func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
-	gcpClient, gctx, _, err := createClient(ctx)
+	gcpClient, gctx, err := createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -364,7 +382,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 ///////////////////
 
 func (gcpp *gcpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
-	gcpClient, gctx, _, err := createClient(ctx)
+	gcpClient, gctx, err := createClient(ctx)
 	if err != nil {
 		return
 	}

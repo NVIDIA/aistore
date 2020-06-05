@@ -38,13 +38,6 @@ runCmd() {
 
 AISTORE_DIR=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
 
-# Used to determine ProjectID field for *your* Google Cloud project.
-# Must be set iff AIS_CLD_PROVIDER (see below) is Google (aka GCP or "gcp").
-if [ -z "$GOOGLE_CLOUD_PROJECT" ]
-then
-	export GOOGLE_CLOUD_PROJECT="random-word-123456"
-fi
-
 AIS_USE_HTTPS=${AIS_USE_HTTPS:-false}
 CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
