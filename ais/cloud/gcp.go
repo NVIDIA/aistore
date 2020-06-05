@@ -98,7 +98,7 @@ func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *stora
 	if _, err := gcpClient.Bucket(bck.Name).Attrs(ctx); err != nil {
 		return gcpp.gcpErrorToAISError(err, bck)
 	}
-	return objErr, http.StatusBadRequest
+	return objErr, http.StatusNotFound
 }
 
 func (gcpp *gcpProvider) Provider() string {
