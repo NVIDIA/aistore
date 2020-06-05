@@ -148,7 +148,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 		versions := make(map[string]string, initialBucketListSize)
 		keyMarker := msg.PageMarker
 
-		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bck.Name)}
+		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
 		if msg.Prefix != "" {
 			verParams.Prefix = aws.String(msg.Prefix)
 		}

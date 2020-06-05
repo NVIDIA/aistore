@@ -190,25 +190,16 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
 	query.Add(cmn.URLParamPrefix, prefix)
-	if flagIsSet(c, cachedFlag) && bck.IsAIS() {
-		fmt.Fprintf(c.App.ErrWriter, "warning: ignoring %q flag: irrelevant for ais buckets\n", cachedFlag.Name)
-		msg.Cached = false
-	}
 
-	if flagIsSet(c, fastFlag) && (bck.IsAIS() || msg.Cached) {
+	if flagIsSet(c, fastFlag) {
 		msg.Fast = true
 		objList, err := api.ListObjectsFast(defaultAPIParams, bck, msg, query)
 		if err != nil {
 			return err
 		}
-
-		return printObjectNames(c, objList.Entries, objectListFilter, showUnmatched, !flagIsSet(c, noHeaderFlag))
+		return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 	}
 
-	if !bck.IsAIS() && flagIsSet(c, fastFlag) {
-		fmt.Fprintf(c.App.ErrWriter, "warning: %q for cloud buckets takes an effect only with %q\n",
-			fastFlag.Name, cachedFlag.Name)
-	}
 	if flagIsSet(c, markerFlag) {
 		msg.PageMarker = parseStrFlag(c, markerFlag)
 	}
@@ -599,26 +590,6 @@ func printObjectProps(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *
 		outputTemplate = "Unmatched objects:\n" + outputTemplate
 		err = templates.DisplayOutput(rest, c.App.Writer, outputTemplate)
 	}
-	return err
-}
-
-func printObjectNames(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *objectListFilter, showUnmatched, showHeaders bool) error {
-	outputTemplate := "Name\n{{range $obj := .}}{{$obj.Name}}\n{{end}}"
-	if !showHeaders {
-		outputTemplate = "{{range $obj := .}}{{$obj.Name}}\n{{end}}"
-	}
-	matchingEntries, rest := objectFilter.filter(entries)
-
-	err := templates.DisplayOutput(matchingEntries, c.App.Writer, outputTemplate)
-	if err != nil {
-		return err
-	}
-
-	if showHeaders && showUnmatched {
-		outputTemplate = "Unmatched objects:\n" + outputTemplate
-		err = templates.DisplayOutput(rest, c.App.Writer, outputTemplate)
-	}
-
 	return err
 }
 

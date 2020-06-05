@@ -1015,17 +1015,12 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	if bck.IsAIS() || smsg.Cached {
 		bckList, taskID, err = p.listAISBucket(bck, smsg)
 	} else {
-		var status int
-		//
-		// NOTE: for async tasks, user must check for StatusAccepted and use returned TaskID
-		//
-		bckList, taskID, status, err = p.listObjectsCloud(bck, smsg)
-		if status == http.StatusGone {
-			// at this point we know that this cloud bucket exists and is offline
-			smsg.Cached = true
-			smsg.TaskID = ""
-			bckList, taskID, err = p.listAISBucket(bck, smsg)
-		}
+		// NOTE: For async tasks, user must check for StatusAccepted and use returned TaskID.
+		bckList, taskID, _, err = p.listObjectsCloud(bck, smsg)
+		// TODO: `status == http.StatusGone` At this point we know that this
+		//  cloud bucket exists and is offline. We should somehow try to list
+		//  cached objects. This isn't easy as we basically need to start a new
+		//  xaction and return new `TaskID`.
 	}
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())

@@ -182,7 +182,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	if w.msg.Cached {
 		return w.LocalObjPage()
 	}
-	bucketList, err, _ := w.t.Cloud(w.bck).ListObjects(w.ctx, w.bck, w.msg)
+	objList, err, _ := w.t.Cloud(w.bck).ListObjects(w.ctx, w.bck, w.msg)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 		needCopies  = w.msg.WantProp(cmn.GetPropsCopies)
 	)
 
-	for _, e := range bucketList.Entries {
+	for _, e := range objList.Entries {
 		si, _ := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)
 		if si.ID() != localID {
 			continue
@@ -243,5 +243,5 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 		}
 	}
 
-	return bucketList, nil
+	return objList, nil
 }

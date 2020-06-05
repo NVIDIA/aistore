@@ -1919,7 +1919,9 @@ func TestBackendBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if listing objects will result in listing backend bucket objects.
-	aisObjList, err := api.ListObjects(baseParams, aisBck, nil, 0)
+	msg := &cmn.SelectMsg{}
+	msg.AddProps(cmn.GetPropsAll...)
+	aisObjList, err := api.ListObjects(baseParams, aisBck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
 		t, len(cloudObjList.Entries) == len(aisObjList.Entries),
