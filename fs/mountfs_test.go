@@ -304,3 +304,22 @@ func assertMountpathCount(t *testing.T, mfs *MountedFS, availableCount, disabled
 		)
 	}
 }
+
+func BenchmarkMakePathFQN(b *testing.B) {
+	var (
+		bck = cmn.Bck{
+			Name:     "bck",
+			Provider: cmn.ProviderAzure,
+			Ns:       cmn.Ns{Name: "name", UUID: "uuid"},
+		}
+		mi      = MountpathInfo{Path: cmn.RandString(200)}
+		objName = cmn.RandString(15)
+	)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		s := mi.MakePathFQN(bck, ObjectType, objName)
+		cmn.Assert(len(s) > 0)
+	}
+}

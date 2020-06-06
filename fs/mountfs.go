@@ -282,14 +282,14 @@ func (mi *MountpathInfo) MakePathBck(bck cmn.Bck) string {
 }
 
 func (mi *MountpathInfo) MakePathCT(bck cmn.Bck, contentType string) string {
-	cmn.AssertMsg(bck.Valid(), bck.String())
+	debug.AssertFunc(bck.Valid, bck)
 	cmn.Assert(contentType != "")
 	buf := mi.makePathBuf(bck, contentType, 0)
 	return *(*string)(unsafe.Pointer(&buf))
 }
 
 func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) string {
-	cmn.AssertMsg(bck.Valid(), bck.String())
+	debug.AssertFunc(bck.Valid, bck)
 	cmn.Assert(contentType != "" && objName != "")
 	buf := mi.makePathBuf(bck, contentType, 1+len(objName))
 	buf = append(buf, filepath.Separator)

@@ -24,12 +24,18 @@ func Infof(f string, a ...interface{}) {
 	glog.InfoDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
 }
 
-func Assert(cond bool) {
+func Assert(cond bool, a ...interface{}) {
 	if !cond {
 		glog.Flush()
-		panic("DEBUG PANIC")
+		if len(a) > 0 {
+			panic("DEBUG PANIC: " + fmt.Sprint(a...))
+		} else {
+			panic("DEBUG PANIC")
+		}
 	}
 }
+
+func AssertFunc(f func() bool, a ...interface{}) { Assert(f(), a...) }
 
 func AssertMsg(cond bool, msg string) {
 	if !cond {
