@@ -214,11 +214,9 @@ func (lom *LOM) NumCopies() int {
 	if len(lom.md.copies) == 0 {
 		return 1
 	}
-	if _, ok := cmn.CheckDebug(pkgName); ok {
-		if _, ok = lom.md.copies[lom.FQN]; !ok {
-			msg := fmt.Sprintf("md.copies does not contain itself %s, copies: %v", lom.FQN, lom.md.copies)
-			cmn.AssertMsg(false, msg)
-		}
+	if debug.Enabled {
+		_, ok := lom.md.copies[lom.FQN]
+		debug.Assertf(ok, "md.copies does not contain itself %s, copies: %v", lom.FQN, lom.md.copies)
 	}
 	return len(lom.md.copies)
 }

@@ -360,9 +360,7 @@ func (it *iterator) next() (obj *objReader, hl64 int64, err error) {
 	if n == 0 {
 		return
 	}
-	if _, ok := cmn.CheckDebug(pkgName); ok {
-		cmn.AssertMsg(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
-	}
+	debug.Assertf(n == hlen, "%d != %d", n, hlen)
 	// buf => obj header
 	hdr = ExtHeader(it.headerBuf, hlen)
 	if hdr.IsLast() {
@@ -448,9 +446,7 @@ func ExtHeader(body []byte, hlen int) (hdr Header) {
 	off, hdr.Bck.Ns.UUID = extString(off, body)
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
-	if _, ok := cmn.CheckDebug(pkgName); ok {
-		cmn.AssertMsg(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
-	}
+	debug.Assertf(off == hlen, "off %d, hlen %d", off, hlen)
 	return
 }
 

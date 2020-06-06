@@ -33,7 +33,7 @@ const (
 
 // creates 2 SGL, put some data to one of them and them copy from SGL to SGL
 func TestSGLStressN(t *testing.T) {
-	mem := &memsys.MMSA{MinPctFree: 50, Name: "cmem", Debug: verbose}
+	mem := &memsys.MMSA{MinPctFree: 50, Name: "cmem"}
 	err := mem.Init(true /*panic on error*/)
 	defer mem.Terminate()
 	if err != nil {

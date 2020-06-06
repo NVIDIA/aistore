@@ -63,7 +63,7 @@ func Test_Sleep(t *testing.T) {
 		duration = 4 * time.Second
 	}
 
-	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
+	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinFree: cmn.GiB, Name: "amem"}
 	err := mem.Init(false /*panicOnErr*/)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func Test_NoSleep(t *testing.T) {
 		duration = 4 * time.Second
 	}
 
-	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinPctTotal: 5, Name: "bmem", Debug: verbose}
+	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinPctTotal: 5, Name: "bmem"}
 	err := mem.Init(false /*panicOnErr*/)
 	if err != nil {
 		t.Fatal(err)

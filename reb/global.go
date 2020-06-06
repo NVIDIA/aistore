@@ -456,11 +456,6 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64) {
 		ecUsed: reb.t.GetBowner().Get().IsECUsed(),
 	}
 
-	// Enable MMSA debug only if rebalance is in debug mode
-	if glog.FastV(4, glog.SmoduleReb) {
-		reb.t.GetSmallMMSA().Debug = true
-	}
-
 	if !reb.rebPreInit(md) {
 		return
 	}

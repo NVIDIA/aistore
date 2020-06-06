@@ -37,7 +37,7 @@ import (
 //
 // In that sense, a typical initialization sequence includes 2 steps, e.g.:
 // 1) construct:
-// 	mm := &memsys.MMSA{TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
+// 	mm := &memsys.MMSA{TimeIval: ..., MinPctFree: ..., Name: ...}
 // 2) initialize:
 // 	err := mm.Init()
 // 	if err != nil {
@@ -199,7 +199,6 @@ type (
 		// public - aligned
 		Swapping atomic.Int32 // max = SwappingMax; halves every r.duration unless swapping
 		Small    bool         // defines the type of Slab rings (NumSmallSlabs x 128 | NumPageSlabs x 4K)
-		Debug    bool         // debug mode
 	}
 	FreeSpec struct {
 		IdleDuration time.Duration // reduce only the slabs that are idling for at least as much time
@@ -340,9 +339,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		}
 	}
 	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect, d)
-	if r.Debug {
-		cmn.Printf("mmsa '%s' started", r.Name)
-	}
+	debug.Infof("mmsa '%s' started", r.Name)
 	return
 }
 
@@ -362,9 +359,7 @@ func (r *MMSA) Terminate() {
 	if r.doGC(mem.ActualFree, sizeToGC, true, swapping) {
 		gced = ", GC ran"
 	}
-	if r.Debug {
-		glog.Infof("mmsa '%s' terminated%s", r.Name, gced)
-	}
+	debug.Infof("mmsa '%s' terminated%s", r.Name, gced)
 }
 
 // allocate SGL
@@ -472,11 +467,9 @@ func (r *MMSA) Free(buf []byte) {
 	} else if size < r.slabIncStep && !r.Small && r.Sibling != nil {
 		r.Sibling.Free(buf)
 	} else {
-		if r.Debug {
-			a, b := size/r.slabIncStep, size%r.slabIncStep
-			cmn.Assert(b == 0)
-			cmn.Assert(a <= int64(r.numSlabs))
-		}
+		debug.Assert(size%r.slabIncStep == 0)
+		debug.Assert(size/r.slabIncStep <= int64(r.numSlabs))
+
 		slab := r._selectSlab(size)
 		slab.Free(buf)
 	}
@@ -525,8 +518,8 @@ func (s *Slab) Free(bufs ...[]byte) {
 		for _, buf := range bufs {
 			size := cap(buf)
 			b := buf[:size] // NOTE: always freeing the original (full) size
-			if s.m.Debug {
-				cmn.Assert(int64(size) == s.Size())
+			if debug.Enabled {
+				debug.Assert(int64(size) == s.Size())
 				for i := 0; i < len(b); i += len(deadBEEF) {
 					copy(b[i:], deadBEEF)
 				}
@@ -591,7 +584,6 @@ func (r *MMSA) env() (err error) {
 		}
 	}
 	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
-		r.Debug = true
 		glog.SetV(glog.SmoduleMemsys, logLvl)
 	}
 	return
@@ -636,9 +628,8 @@ func (s *Slab) _allocSlow() (buf []byte) {
 }
 
 func (s *Slab) grow(cnt int) {
-	if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.m.Debug {
-		lput := len(s.put)
-		glog.Infof("%s: grow by %d => %d", s.tag, cnt, lput+cnt)
+	if glog.FastV(4, glog.SmoduleMemsys) {
+		debug.Infof("%s: grow by %d => %d", s.tag, cnt, len(s.put)+cnt)
 	}
 	for ; cnt > 0; cnt-- {
 		buf := make([]byte, s.Size())
@@ -658,9 +649,10 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.m.Debug {
-			glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isIdle, lput, lput-cnt)
+		if glog.FastV(4, glog.SmoduleMemsys) {
+			debug.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isIdle, lput, lput-cnt)
 		}
+
 		for ; cnt > 0; cnt-- {
 			lput--
 			s.put[lput] = nil
@@ -681,8 +673,8 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.m.Debug {
-			glog.Infof("%s(f=%t, i=%t): reduce lget %d => %d", s.tag, force, isIdle, lget, lget-cnt)
+		if glog.FastV(4, glog.SmoduleMemsys) {
+			debug.Infof("%s(f=%t, i=%t): reduce lget %d => %d", s.tag, force, isIdle, lget, lget-cnt)
 		}
 		for ; cnt > 0; cnt-- {
 			s.get[s.pos] = nil
