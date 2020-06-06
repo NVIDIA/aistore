@@ -130,9 +130,13 @@ test-docker)
 
 test-bench)
   echo "Running benchmark tests..." >&2
-  . ${AISTORE_DIR}/deploy/scripts/bench.sh
+  . ${AISTORE_DIR}/deploy/scripts/bench_ci.sh
   ;;
 
+bench)
+  shift
+  . ${AISTORE_DIR}/deploy/scripts/bench.sh
+  ;;
 
 dev-init)
   if [[ -z ${REMOTE} ]]; then
