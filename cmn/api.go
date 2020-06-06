@@ -265,7 +265,7 @@ type BucketProps struct {
 	EC ECConf `json:"ec"`
 
 	// Bucket access attributes - see Allow* above
-	AccessAttrs uint64 `json:"access,string"`
+	Access AccessAttrs `json:"access,string"`
 
 	// unique bucket ID
 	BID uint64 `json:"bid,string" list:"omit"`
@@ -278,13 +278,13 @@ type BucketProps struct {
 }
 
 type BucketPropsToUpdate struct {
-	BackendBck  *BckToUpdate         `json:"backend_bck"`
-	Versioning  *VersionConfToUpdate `json:"versioning"`
-	Cksum       *CksumConfToUpdate   `json:"checksum"`
-	LRU         *LRUConfToUpdate     `json:"lru"`
-	Mirror      *MirrorConfToUpdate  `json:"mirror"`
-	EC          *ECConfToUpdate      `json:"ec"`
-	AccessAttrs *uint64              `json:"access,string"`
+	BackendBck *BckToUpdate         `json:"backend_bck"`
+	Versioning *VersionConfToUpdate `json:"versioning"`
+	Cksum      *CksumConfToUpdate   `json:"checksum"`
+	LRU        *LRUConfToUpdate     `json:"lru"`
+	Mirror     *MirrorConfToUpdate  `json:"mirror"`
+	EC         *ECConfToUpdate      `json:"ec"`
+	Access     *AccessAttrs         `json:"access,string"`
 }
 
 type BckToUpdate struct {
@@ -416,12 +416,12 @@ func DefaultBucketProps() *BucketProps {
 		c.Cksum.Type = ChecksumXXHash
 	}
 	return &BucketProps{
-		Cksum:       c.Cksum,
-		LRU:         c.LRU,
-		Mirror:      c.Mirror,
-		Versioning:  c.Versioning,
-		AccessAttrs: allowAllAccess,
-		EC:          c.EC,
+		Cksum:      c.Cksum,
+		LRU:        c.LRU,
+		Mirror:     c.Mirror,
+		Versioning: c.Versioning,
+		Access:     AllAccess(),
+		EC:         c.EC,
 	}
 }
 

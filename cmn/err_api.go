@@ -37,7 +37,7 @@ type (
 	errAccessDenied    struct {
 		entity      string
 		operation   string
-		accessAttrs uint64
+		accessAttrs AccessAttrs
 	}
 
 	InvalidCksumError struct {
@@ -120,7 +120,7 @@ func (e *errAccessDenied) String() string {
 func (e *BucketAccessDenied) Error() string { return "bucket " + e.String() }
 func (e *ObjectAccessDenied) Error() string { return "object " + e.String() }
 
-func NewBucketAccessDenied(bucket, oper string, aattrs uint64) *BucketAccessDenied {
+func NewBucketAccessDenied(bucket, oper string, aattrs AccessAttrs) *BucketAccessDenied {
 	return &BucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
 }
 

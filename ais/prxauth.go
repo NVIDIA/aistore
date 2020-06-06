@@ -72,7 +72,7 @@ func (p *proxyrunner) validateToken(r *http.Request, cfg *cmn.Config) (bool, *cm
 	return true, auth, nil
 }
 
-func (p *proxyrunner) checkPermissions(r *http.Request, bck *cmn.Bck, perms uint64, cfg *cmn.Config) error {
+func (p *proxyrunner) checkPermissions(r *http.Request, bck *cmn.Bck, perms cmn.AccessAttrs, cfg *cmn.Config) error {
 	authOn, token, err := p.validateToken(r, cfg)
 	if err != nil || !authOn {
 		return nil

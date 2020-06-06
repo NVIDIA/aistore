@@ -73,9 +73,9 @@ func newTargetLRUMock() *cluster.TargetMock {
 	bmdMock := cluster.NewBaseBownerMock()
 	tMock := cluster.NewTargetMock(bmdMock)
 	props := &cmn.BucketProps{
-		Cksum:       cmn.CksumConf{Type: cmn.ChecksumNone},
-		LRU:         cmn.LRUConf{Enabled: true},
-		AccessAttrs: cmn.AllAccess()}
+		Cksum:  cmn.CksumConf{Type: cmn.ChecksumNone},
+		LRU:    cmn.LRUConf{Enabled: true},
+		Access: cmn.AllAccess()}
 	bmdMock.Add(cluster.NewBck(bucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 	return tMock
 }

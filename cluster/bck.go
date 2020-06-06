@@ -207,11 +207,11 @@ func (b *Bck) CksumConf() (conf *cmn.CksumConf) { return &b.Props.Cksum }
 func (b *Bck) Allow(bit int) error { return b.checkAccess(bit) }
 
 func (b *Bck) checkAccess(bit int) (err error) {
-	if (b.Props.AccessAttrs & uint64(bit)) != 0 {
+	if b.Props.Access.Has(cmn.AccessAttrs(bit)) {
 		return
 	}
 	op := cmn.AccessOp(bit)
-	err = cmn.NewBucketAccessDenied(b.String(), op, b.Props.AccessAttrs)
+	err = cmn.NewBucketAccessDenied(b.String(), op, b.Props.Access)
 	return
 }
 

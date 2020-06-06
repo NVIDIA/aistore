@@ -1240,7 +1240,7 @@ func TestBucketReadOnly(t *testing.T) {
 	// make bucket read-only
 	// NOTE: must allow PATCH - otherwise api.SetBucketProps a few lines down below won't work
 	aattrs := cmn.ReadOnlyAccess() | cmn.AccessPATCH
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{AccessAttrs: api.Uint64(aattrs)})
+	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)})
 	tassert.CheckFatal(t, err)
 
 	m.init()
@@ -1250,7 +1250,7 @@ func TestBucketReadOnly(t *testing.T) {
 	}
 
 	// restore write access
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{AccessAttrs: api.Uint64(p.AccessAttrs)})
+	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{Access: api.AccessAttrs(p.Access)})
 	tassert.CheckFatal(t, err)
 
 	// write some more and destroy

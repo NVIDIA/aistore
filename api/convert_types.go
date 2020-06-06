@@ -4,6 +4,10 @@
  */
 package api
 
+import (
+	"github.com/NVIDIA/aistore/cmn"
+)
+
 // String returns a pointer to the string value passed in.
 func String(v string) *string {
 	return &v
@@ -26,5 +30,10 @@ func Int64(v int64) *int64 {
 
 // Uint64 returns a pointer to the int64 value passed in.
 func Uint64(v uint64) *uint64 {
+	return &v
+}
+
+// AccessAttrs returns a pointer to the AccessAttr value passed in.
+func AccessAttrs(v cmn.AccessAttrs) *cmn.AccessAttrs {
 	return &v
 }

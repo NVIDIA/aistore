@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -40,12 +41,14 @@ const (
 	allowReadOnlyAccess  = AccessGET | AccessObjHEAD | AccessBckHEAD | AccessObjLIST
 	allowReadWriteAccess = allowReadOnlyAccess |
 		AccessPUT | AccessAPPEND | AccessDownload | AccessObjDELETE | AccessObjRENAME
-	allowClusterAccess = ^uint64(0) & (AccessBckCreate - 1)
+	allowClusterAccess = allowAllAccess & (AccessBckCreate - 1)
 
 	// Permission Operations
 	AllowAccess = "allow"
 	DenyAccess  = "deny"
 )
+
+type AccessAttrs uint64
 
 // access => operation
 var accessOp = map[int]string{
@@ -72,74 +75,71 @@ var accessOp = map[int]string{
 	AccessADMIN:     "ADMIN",
 }
 
-func NoAccess() uint64        { return 0 }
-func AllAccess() uint64       { return allowAllAccess }
-func ReadOnlyAccess() uint64  { return allowReadOnlyAccess }
-func ReadWriteAccess() uint64 { return allowReadWriteAccess }
+func NoAccess() AccessAttrs                      { return 0 }
+func AllAccess() AccessAttrs                     { return AccessAttrs(allowAllAccess) }
+func ReadOnlyAccess() AccessAttrs                { return allowReadOnlyAccess }
+func ReadWriteAccess() AccessAttrs               { return allowReadWriteAccess }
+func (a AccessAttrs) Has(perms AccessAttrs) bool { return a&perms == perms }
+func (a AccessAttrs) String() string             { return strconv.FormatUint(uint64(a), 10) }
+func (a AccessAttrs) Describe() string {
+	if a == 0 {
+		return "No access"
+	}
+	accList := make([]string, 0, 24)
+	if a.Has(AccessGET) {
+		accList = append(accList, accessOp[AccessGET])
+	}
+	if a.Has(AccessObjHEAD) {
+		accList = append(accList, accessOp[AccessObjHEAD])
+	}
+	if a.Has(AccessPUT) {
+		accList = append(accList, accessOp[AccessPUT])
+	}
+	if a.Has(AccessAPPEND) {
+		accList = append(accList, accessOp[AccessAPPEND])
+	}
+	if a.Has(AccessDownload) {
+		accList = append(accList, accessOp[AccessDownload])
+	}
+	if a.Has(AccessObjDELETE) {
+		accList = append(accList, accessOp[AccessObjDELETE])
+	}
+	if a.Has(AccessObjRENAME) {
+		accList = append(accList, accessOp[AccessObjRENAME])
+	}
+	if a.Has(AccessPROMOTE) {
+		accList = append(accList, accessOp[AccessPROMOTE])
+	}
+	//
+	if a.Has(AccessBckHEAD) {
+		accList = append(accList, accessOp[AccessBckHEAD])
+	}
+	if a.Has(AccessObjLIST) {
+		accList = append(accList, accessOp[AccessObjLIST])
+	}
+	if a.Has(AccessBckRENAME) {
+		accList = append(accList, accessOp[AccessBckRENAME])
+	}
+	if a.Has(AccessPATCH) {
+		accList = append(accList, accessOp[AccessPATCH])
+	}
+	if a.Has(AccessMAKENCOPIES) {
+		accList = append(accList, accessOp[AccessMAKENCOPIES])
+	}
+	if a.Has(AccessSYNC) {
+		accList = append(accList, accessOp[AccessSYNC])
+	}
+	if a.Has(AccessBckDELETE) {
+		accList = append(accList, accessOp[AccessBckDELETE])
+	}
+	return strings.Join(accList, ",")
+}
 
 func AccessOp(access int) string {
 	if s, ok := accessOp[access]; ok {
 		return s
 	}
 	return "<unknown access>"
-}
-
-func (bp *BucketProps) AccessToStr() string {
-	return accessToStr(bp.AccessAttrs)
-}
-
-func accessToStr(aattrs uint64) string {
-	if aattrs == 0 {
-		return "No access"
-	}
-	accList := make([]string, 0, 24)
-	if aattrs&AccessGET == AccessGET {
-		accList = append(accList, accessOp[AccessGET])
-	}
-	if aattrs&AccessObjHEAD == AccessObjHEAD {
-		accList = append(accList, accessOp[AccessObjHEAD])
-	}
-	if aattrs&AccessPUT == AccessPUT {
-		accList = append(accList, accessOp[AccessPUT])
-	}
-	if aattrs&AccessAPPEND == AccessAPPEND {
-		accList = append(accList, accessOp[AccessAPPEND])
-	}
-	if aattrs&AccessDownload == AccessDownload {
-		accList = append(accList, accessOp[AccessDownload])
-	}
-	if aattrs&AccessObjDELETE == AccessObjDELETE {
-		accList = append(accList, accessOp[AccessObjDELETE])
-	}
-	if aattrs&AccessObjRENAME == AccessObjRENAME {
-		accList = append(accList, accessOp[AccessObjRENAME])
-	}
-	if aattrs&AccessPROMOTE == AccessPROMOTE {
-		accList = append(accList, accessOp[AccessPROMOTE])
-	}
-	//
-	if aattrs&AccessBckHEAD == AccessBckHEAD {
-		accList = append(accList, accessOp[AccessBckHEAD])
-	}
-	if aattrs&AccessObjLIST == AccessObjLIST {
-		accList = append(accList, accessOp[AccessObjLIST])
-	}
-	if aattrs&AccessBckRENAME == AccessBckRENAME {
-		accList = append(accList, accessOp[AccessBckRENAME])
-	}
-	if aattrs&AccessPATCH == AccessPATCH {
-		accList = append(accList, accessOp[AccessPATCH])
-	}
-	if aattrs&AccessMAKENCOPIES == AccessMAKENCOPIES {
-		accList = append(accList, accessOp[AccessMAKENCOPIES])
-	}
-	if aattrs&AccessSYNC == AccessSYNC {
-		accList = append(accList, accessOp[AccessSYNC])
-	}
-	if aattrs&AccessBckDELETE == AccessBckDELETE {
-		accList = append(accList, accessOp[AccessBckDELETE])
-	}
-	return strings.Join(accList, ",")
 }
 
 func ModifyAccess(aattr uint64, action string, bits uint64) (uint64, error) {

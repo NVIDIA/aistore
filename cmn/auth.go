@@ -29,13 +29,13 @@ type (
 	}
 	// Default permissions for a cluster
 	AuthCluster struct {
-		ID     string `json:"id"`
-		Access uint64 `json:"perm,string"`
+		ID     string      `json:"id"`
+		Access AccessAttrs `json:"perm,string"`
 	}
 	// Permissions for a single bucket
 	AuthBucket struct {
-		Bck    Bck    `json:"bck"`
-		Access uint64 `json:"perm,string"`
+		Bck    Bck         `json:"bck"`
+		Access AccessAttrs `json:"perm,string"`
 	}
 	AuthRole struct {
 		Name     string         `json:"name"`
@@ -56,10 +56,10 @@ type (
 
 var ErrNoPermissions = errors.New("insufficient permissions")
 
-func (tk *AuthToken) HasPermissions(clusterID string, bck *Bck, perms uint64) bool {
+func (tk *AuthToken) HasPermissions(clusterID string, bck *Bck, perms AccessAttrs) bool {
 	AssertMsg(perms != 0, "Empty permissions requested")
-	cluPerms := perms & allowClusterAccess
-	objPerms := perms ^ allowClusterAccess
+	cluPerms := perms & AccessAttrs(allowClusterAccess)
+	objPerms := perms ^ AccessAttrs(allowClusterAccess)
 	// Cluster-wide permissions requested
 	hasPerms := true
 	if cluPerms != 0 {
@@ -69,7 +69,7 @@ func (tk *AuthToken) HasPermissions(clusterID string, bck *Bck, perms uint64) bo
 			if pm.ID != clusterID {
 				continue
 			}
-			hasPerms = pm.Access&cluPerms == cluPerms
+			hasPerms = pm.Access.Has(cluPerms)
 			break
 		}
 	}
@@ -81,7 +81,7 @@ func (tk *AuthToken) HasPermissions(clusterID string, bck *Bck, perms uint64) bo
 	AssertMsg(bck != nil, "Requested bucket permissions without bucket name")
 	for _, b := range tk.Buckets {
 		if b.Bck.Equal(*bck) {
-			return b.Access&perms == perms
+			return b.Access.Has(perms)
 		}
 	}
 	return false

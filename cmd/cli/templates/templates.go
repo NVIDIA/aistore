@@ -181,8 +181,7 @@ const (
 		" Test File Count:\t{{$obj.TestFileCount}}\n" +
 		" Error Limit:\t{{$obj.ErrorLimit}}\n"
 	AuthConfTmpl = "\n{{$obj := .Auth}}Authentication Config\n" +
-		" Enabled:\t{{$obj.Enabled}}\n" +
-		" Allow Guest Access:\t{{$obj.AllowGuest}}\n"
+		" Enabled:\t{{$obj.Enabled}}\n"
 	KeepaliveConfTmpl = "\n{{$obj := .KeepaliveTracker}}Keep Alive Tracker Config\n" +
 		" Retry Factor:{{$obj.RetryFactor}}\t  Timeout Factor:{{$obj.TimeoutFactor}}\n" +
 		" \tProxy\t \tTarget\n" +

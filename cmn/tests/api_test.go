@@ -22,10 +22,10 @@ var _ = Describe("API", func() {
 			Entry("non-nested field",
 				cmn.BucketProps{},
 				cmn.BucketPropsToUpdate{
-					AccessAttrs: api.Uint64(1024),
+					Access: api.AccessAttrs(1024),
 				},
 				cmn.BucketProps{
-					AccessAttrs: 1024,
+					Access: 1024,
 				},
 			),
 			Entry("non-nested field and non-empty initial struct",
@@ -33,11 +33,11 @@ var _ = Describe("API", func() {
 					Provider: cmn.ProviderAmazon,
 				},
 				cmn.BucketPropsToUpdate{
-					AccessAttrs: api.Uint64(1024),
+					Access: api.AccessAttrs(1024),
 				},
 				cmn.BucketProps{
-					Provider:    cmn.ProviderAmazon,
-					AccessAttrs: 1024,
+					Provider: cmn.ProviderAmazon,
+					Access:   1024,
 				},
 			),
 			Entry("nested field",
@@ -100,7 +100,7 @@ var _ = Describe("API", func() {
 					LRU: &cmn.LRUConfToUpdate{
 						OOS: api.Int64(100),
 					},
-					AccessAttrs: api.Uint64(10),
+					Access: api.AccessAttrs(10),
 				},
 				cmn.BucketProps{
 					Provider: cmn.ProviderAmazon,
@@ -115,7 +115,7 @@ var _ = Describe("API", func() {
 						OOS:     100,
 						Enabled: true,
 					},
-					AccessAttrs: 10,
+					Access: 10,
 				},
 			),
 			Entry("all fields",
@@ -146,7 +146,7 @@ var _ = Describe("API", func() {
 						ParitySlices: api.Int(1024),
 						Compression:  api.String("false"),
 					},
-					AccessAttrs: api.Uint64(1024),
+					Access: api.AccessAttrs(1024),
 				},
 				cmn.BucketProps{
 					Versioning: cmn.VersionConf{
@@ -174,7 +174,7 @@ var _ = Describe("API", func() {
 						ParitySlices: 1024,
 						Compression:  "false",
 					},
-					AccessAttrs: 1024,
+					Access: 1024,
 				},
 			),
 		)

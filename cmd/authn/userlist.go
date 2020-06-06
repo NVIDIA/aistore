@@ -51,7 +51,7 @@ var (
 	predefinedRoles = []struct {
 		prefix string
 		desc   string
-		perms  uint64
+		perms  cmn.AccessAttrs
 	}{
 		{cmn.AuthClusterOwnerRole, "Full access to cluster ", cmn.AllAccess()},
 		{cmn.AuthBucketOwnerRole, "Full access to buckets ", cmn.ReadWriteAccess()},

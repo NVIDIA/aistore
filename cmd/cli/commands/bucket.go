@@ -326,11 +326,11 @@ func reformatBucketProps(nvs cmn.SimpleKVs) error {
 	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {
 		switch v {
 		case allBucketAccess:
-			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.AllAccess(), 10)
+			nvs[cmn.HeaderBucketAccessAttrs] = cmn.AllAccess().String()
 		case readwriteBucketAccess:
-			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.ReadWriteAccess(), 10)
+			nvs[cmn.HeaderBucketAccessAttrs] = cmn.ReadWriteAccess().String()
 		case readonlyBucketAccess:
-			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(cmn.ReadOnlyAccess(), 10)
+			nvs[cmn.HeaderBucketAccessAttrs] = cmn.ReadOnlyAccess().String()
 		default:
 			// arbitrary access-flags permutation - TODO validate vs cmn/api_access.go
 			if _, err := strconv.ParseUint(v, 10, 64); err != nil {
@@ -447,7 +447,7 @@ func printBckHeadTable(c *cli.Context, props *cmn.BucketProps, section string) e
 		err := cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
 			value := fmt.Sprintf("%v", field.Value())
 			if uniqueTag == cmn.HeaderBucketAccessAttrs {
-				value = props.AccessToStr()
+				value = props.Access.Describe()
 			}
 			propList = append(propList, prop{
 				Name:  uniqueTag,
@@ -460,7 +460,7 @@ func printBckHeadTable(c *cli.Context, props *cmn.BucketProps, section string) e
 		propList = []prop{
 			{"created", time.Unix(0, props.Created).Format(time.RFC3339)},
 			{"provider", props.Provider},
-			{"access", props.AccessToStr()},
+			{"access", props.Access.Describe()},
 			{"checksum", props.Cksum.String()},
 			{"mirror", props.Mirror.String()},
 			{"ec", props.EC.String()},
