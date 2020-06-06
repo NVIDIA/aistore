@@ -7,7 +7,9 @@ package cmn
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
+	"unsafe"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // The module provides a way to encode/decode data as a compact binary slice.
@@ -234,27 +236,28 @@ func (bw *BytePack) WriteUint32(i uint32) {
 	bw.off += SizeofI32
 }
 
-func (bw *BytePack) WriteBytes(bytes []byte) {
-	l := len(bytes)
+func (bw *BytePack) WriteBytes(b []byte) {
+	bw.WriteString(*(*string)(unsafe.Pointer(&b)))
+}
+
+func (bw *BytePack) WriteString(s string) {
+	l := len(s)
 	bw.WriteUint32(uint32(l))
 	if l == 0 {
 		return
 	}
-	written := copy(bw.b[bw.off:], bytes)
+	written := copy(bw.b[bw.off:], s)
 	Assert(written == l)
 	bw.off += l
 }
 
-func (bw *BytePack) WriteString(s string) {
-	bw.WriteBytes([]byte(s))
-}
-
 func (bw *BytePack) WriteAny(st Packer) {
-	curr := bw.off
+	prev := bw.off
 	st.Pack(bw)
-	if bw.off-curr != st.PackedSize() {
-		AssertMsg(false, fmt.Sprintf("%T declared %d, saved %d: %+v", st, st.PackedSize(), bw.off-curr, st))
-	}
+	debug.Assertf(
+		bw.off-prev == st.PackedSize(),
+		"%T declared %d, saved %d: %+v", st, st.PackedSize(), bw.off-prev, st,
+	)
 }
 
 func (bw *BytePack) Bytes() []byte {

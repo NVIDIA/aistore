@@ -137,3 +137,19 @@ func TestBytePackStruct(t *testing.T) {
 		t.Errorf("Second inner: Read %+v mismatches original %+v", readSecond.parent, second.parent)
 	}
 }
+
+func BenchmarkPackWriteString(b *testing.B) {
+	p := cmn.NewPacker(nil, 200*b.N)
+
+	a := make([]string, 0, 1000)
+	for i := 0; i < 1000; i++ {
+		a = append(a, cmn.RandString(100))
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		p.WriteString(a[i%len(a)])
+	}
+}
