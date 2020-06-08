@@ -108,7 +108,6 @@ const (
 	HeaderCloudProvider    = "provider"           // ProviderAmazon et al. - see cmn/bucket.go
 	HeaderCloudOffline     = "cloud.offline"      // when accessing cached cloud bucket with no Cloud connectivity
 	HeaderRemoteAisOffline = "remote.ais.offline" // when accessing cached cloud bucket with no Cloud connectivity
-	HeaderGuestAccess      = "guest"              // AuthN is enabled and proxy gets a request without token
 
 	// bucket props
 	HeaderBucketVerEnabled      = "versioning.enabled"           // Enable/disable object versioning in a bucket

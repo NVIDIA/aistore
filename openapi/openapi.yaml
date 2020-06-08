@@ -1811,10 +1811,6 @@ components:
               type: boolean
             secret:
               type: string
-            cred_dir:
-              type: string
-            allow_guest:
-              type: boolean
         keepalivetracker:
           type: object
           properties:

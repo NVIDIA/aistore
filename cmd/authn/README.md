@@ -20,12 +20,24 @@
 
 AIStore Authentication Server (AuthN) provides a token-based secure access to AIStore. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details. Currently, we only support hash-based message authentication (HMAC) using SHA256 hash.
 
-AuthN is a standalone process that manages users and their tokens. It reports to registered clusters all the changes on the fly.
-It results in that the clusters always have up-to-date information, e.g., list of revoked tokens.
+AuthN is a standalone server that manages users and tokens tokens. If AuthN is enabled on a cluster,
+a client must request a token from AuthN and put it into HTTP headers of every request to the cluster.
+Requests without tokens are rejected.
 
-For a client, a typical workflow looks as follows:
+A typical workflow looks as follows:
 
-<img src="images/authn_flow.gif" alt="Authn workflow">
+<img src="images/authn_flow.png" alt="AuthN workflow">
+
+AuthN generates self-sufficient tokens: a proxy does not need access to AuthN to check permissions.
+Though, for security reasons, clusters should be registered at AuthN server.
+When a user is deleted, all user's tokens that are still valid are revoked.
+AuthN broadcasts revoked tokens to all registered clusters, so they updated their blacklists.
+The same happens when an administrator manually revokes a compromised token.
+
+A workflow for the case when a token is revoked manually and only one cluster is registered.
+"AIS Cluster 2" is unregistered and allows requests with revoked token:
+
+<img src="images/token_revoke.png" alt="Revoke token workflow">
 
 AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as HTTP server listening on port 52001. If you enable HTTPS access make sure that the configuration file options `server_cert` and `server_key` point to the correct SSL certificate and key.
 
@@ -157,7 +169,7 @@ At this moment, only requests to buckets and objects API require a token.
 
 ### AuthN server typical workflow
 
-If the AuthN server is enabled then all requests to buckets and objects should contain a valid token issued by AuthN. Requests without a token are rejected unless the AIS cluster is deployed with guest support enabled. In this case GET, HEAD, and list objects requests do not require authorization - anyone can read the data but modifications are allowed only for registered users.
+If the AuthN server is enabled then all requests to buckets and objects should contain a valid token issued by AuthN. Requests without a token are rejected.
 
 Steps to generate and use a token:
 

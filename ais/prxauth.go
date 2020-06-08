@@ -47,39 +47,34 @@ func (p *proxyrunner) isInternalReq(r *http.Request) bool {
 // Header format:
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
-func (p *proxyrunner) validateToken(r *http.Request, cfg *cmn.Config) (bool, *cmn.AuthToken, error) {
+func (p *proxyrunner) validateToken(r *http.Request) (*cmn.AuthToken, error) {
 	if p.isInternalReq(r) {
-		return false, nil, nil
-	}
-	if cfg == nil {
-		cfg = cmn.GCO.Get()
-	}
-	if !cfg.Auth.Enabled {
-		return false, nil, nil
+		return nil, nil
 	}
 	authToken := r.Header.Get(cmn.HeaderAuthorization)
 	idx := strings.Index(authToken, " ")
 	if idx == -1 || authToken[:idx] != cmn.HeaderBearer {
-		return false, nil, errInvalidToken
+		return nil, errInvalidToken
 	}
 
 	auth, err := p.authn.validateToken(authToken[idx+1:])
 	if err != nil {
 		glog.Errorf("invalid token: %v", err)
-		return false, nil, errInvalidToken
+		return nil, errInvalidToken
 	}
 
-	return true, auth, nil
+	return auth, nil
 }
 
-func (p *proxyrunner) checkPermissions(r *http.Request, bck *cmn.Bck, perms cmn.AccessAttrs, cfg *cmn.Config) error {
-	authOn, token, err := p.validateToken(r, cfg)
-	if err != nil || !authOn {
+func (p *proxyrunner) checkPermissions(r *http.Request, bck *cmn.Bck, perms cmn.AccessAttrs) error {
+	cfg := cmn.GCO.Get()
+	if !cfg.Auth.Enabled {
 		return nil
+	}
+	token, err := p.validateToken(r)
+	if err != nil {
+		return err
 	}
 	uid := p.owner.smap.Get().UUID
-	if granted := token.HasPermissions(uid, bck, perms); granted {
-		return nil
-	}
-	return cmn.ErrNoPermissions
+	return token.CheckPermissions(uid, bck, perms)
 }

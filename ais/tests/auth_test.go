@@ -56,6 +56,7 @@ func TestAuthObj(t *testing.T) {
 		Bck:        bck,
 		Reader:     r,
 		Size:       fileSize,
+		Object:     cmn.RandString(10),
 	})
 	expectUnauthorized(t, err)
 }

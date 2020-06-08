@@ -7,6 +7,8 @@ package cmn
 import (
 	"errors"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -43,6 +45,7 @@ type (
 		Roles    []string       `json:"roles"`
 		Clusters []*AuthCluster `json:"clusters"`
 		Buckets  []*AuthBucket  `json:"buckets"`
+		IsAdmin  bool           `json:"admin"`
 	}
 	AuthToken struct {
 		UserID   string         `json:"username"`
@@ -50,20 +53,26 @@ type (
 		Token    string         `json:"token"`
 		Clusters []*AuthCluster `json:"clusters"`
 		Buckets  []*AuthBucket  `json:"buckets,omitempty"`
-		IsAdmin  bool
+		IsAdmin  bool           `json:"admin"`
 	}
 )
 
-var ErrNoPermissions = errors.New("insufficient permissions")
+var (
+	ErrNoPermissions = errors.New("insufficient permissions")
+	ErrInvalidToken  = errors.New("invalid token")
+)
 
-func (tk *AuthToken) HasPermissions(clusterID string, bck *Bck, perms AccessAttrs) bool {
-	AssertMsg(perms != 0, "Empty permissions requested")
+func (tk *AuthToken) CheckPermissions(clusterID string, bck *Bck, perms AccessAttrs) error {
+	if tk.IsAdmin {
+		return nil
+	}
+	debug.AssertMsg(perms != 0, "Empty permissions requested")
 	cluPerms := perms & AccessAttrs(allowClusterAccess)
 	objPerms := perms ^ AccessAttrs(allowClusterAccess)
 	// Cluster-wide permissions requested
 	hasPerms := true
 	if cluPerms != 0 {
-		AssertMsg(clusterID != "", "Requested cluster permissions without cluster ID")
+		debug.AssertMsg(clusterID != "", "Requested cluster permissions without cluster ID")
 		hasPerms = false
 		for _, pm := range tk.Clusters {
 			if pm.ID != clusterID {
@@ -73,18 +82,30 @@ func (tk *AuthToken) HasPermissions(clusterID string, bck *Bck, perms AccessAttr
 			break
 		}
 	}
-	if !hasPerms || objPerms == 0 {
-		return hasPerms
+	if !hasPerms {
+		return ErrNoPermissions
+	}
+	if objPerms == 0 {
+		return nil
 	}
 
-	// Check only bucket specific permissions
-	AssertMsg(bck != nil, "Requested bucket permissions without bucket name")
+	// Check only bucket specific permissions.
+	// For AuthN all buckets are external, so they have UUIDs. To correctly
+	// compare with local bucket, token's bucket should be fixed.
+	debug.AssertMsg(bck != nil, "Requested bucket permissions without bucket name")
 	for _, b := range tk.Buckets {
+		tbBck := b.Bck
+		if tbBck.Ns.UUID == clusterID {
+			tbBck.Ns.UUID = ""
+		}
 		if b.Bck.Equal(*bck) {
-			return b.Access.Has(perms)
+			if b.Access.Has(perms) {
+				return nil
+			}
+			return ErrNoPermissions
 		}
 	}
-	return false
+	return ErrNoPermissions
 }
 
 func (uInfo *AuthUser) MergeBckACLs(newACLs []*AuthBucket) {

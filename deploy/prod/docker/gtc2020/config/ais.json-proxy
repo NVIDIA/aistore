@@ -119,9 +119,7 @@
   },
   "auth": {
     "secret": "",
-    "cred_dir": "",
-    "enabled": false,
-    "allow_guest": false
+    "enabled": false
   },
   "keepalivetracker": {
     "proxy": {

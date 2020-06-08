@@ -504,9 +504,8 @@ type FSHCConf struct {
 }
 
 type AuthConf struct {
-	Secret     string `json:"secret"`
-	Enabled    bool   `json:"enabled"`
-	AllowGuest bool   `json:"allow_guest"`
+	Secret  string `json:"secret"`
+	Enabled bool   `json:"enabled"`
 }
 
 // config for one keepalive tracker

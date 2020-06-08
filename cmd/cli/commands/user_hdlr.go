@@ -247,6 +247,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 		return fmt.Errorf(tokenSaveFailFmt, err)
 	}
 
+	fmt.Fprintf(c.App.Writer, "Token(%s):\n%s\n", tokenPath, token.Token)
 	return nil
 }
 
@@ -261,6 +262,7 @@ func logoutUserHandler(c *cli.Context) (err error) {
 	if err = os.Remove(tokenPath); os.IsNotExist(err) {
 		return fmt.Errorf(logoutFailFmt, err)
 	}
+	fmt.Fprintln(c.App.Writer, "Logged out")
 	return nil
 }
 

@@ -81,6 +81,15 @@ func initializeDB(driver dbdriver.Driver) error {
 		return err
 	}
 
+	role := &cmn.AuthRole{
+		Name:    cmn.AuthAdminRole,
+		Desc:    "AuthN administrator",
+		IsAdmin: true,
+	}
+	if err := driver.Set(rolesCollection, cmn.AuthAdminRole, role); err != nil {
+		return err
+	}
+
 	su := &cmn.AuthUser{
 		ID:       adminID,
 		Password: encryptPassword(adminPass),

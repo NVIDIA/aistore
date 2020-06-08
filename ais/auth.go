@@ -55,9 +55,6 @@ var (
 // Used by proxy - to check a user access and token validity(e.g, expiration),
 // and by target - only to get a user name for AWS/GCP access
 func decryptToken(tokenStr string) (*cmn.AuthToken, error) {
-	var (
-		invalTokenErr = fmt.Errorf("invalid token")
-	)
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -71,11 +68,11 @@ func decryptToken(tokenStr string) (*cmn.AuthToken, error) {
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return nil, invalTokenErr
+		return nil, cmn.ErrInvalidToken
 	}
 	tInfo := &cmn.AuthToken{}
 	if err := cmn.TryUnmarshal(claims, tInfo); err != nil {
-		return nil, invalTokenErr
+		return nil, cmn.ErrInvalidToken
 	}
 	return tInfo, nil
 }
@@ -123,7 +120,7 @@ func (a *authManager) validateToken(token string) (ar *cmn.AuthToken, err error)
 	a.Lock()
 
 	if _, ok := a.revokedTokens[token]; ok {
-		ar, err = nil, fmt.Errorf("invalid token")
+		ar, err = nil, cmn.ErrInvalidToken
 		a.Unlock()
 		return
 	}
@@ -144,13 +141,13 @@ func (a *authManager) extractTokenData(token string) (*cmn.AuthToken, error) {
 	if !ok || auth == nil {
 		if auth, err = decryptToken(token); err != nil {
 			glog.Errorf("Invalid token was received: %s", token)
-			return nil, fmt.Errorf("invalid token")
+			return nil, cmn.ErrInvalidToken
 		}
 		a.tokens[token] = auth
 	}
 
 	if auth == nil {
-		return nil, fmt.Errorf("invalid token")
+		return nil, cmn.ErrInvalidToken
 	}
 
 	if auth.Expires.Before(time.Now()) {
@@ -187,7 +184,5 @@ func (a *authManager) revokedTokenList() *TokenList {
 func (t *TokenList) tag() string    { return revsTokenTag }
 func (t *TokenList) version() int64 { return t.Version }
 func (t *TokenList) marshal() []byte {
-	b, err := jsonCompat.Marshal(t)
-	cmn.AssertNoErr(err)
-	return b
+	return cmn.MustMarshal(t)
 }

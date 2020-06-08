@@ -123,8 +123,7 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"auth": {
 		"secret":      "$AIS_SECRET_KEY",
-		"enabled":     ${AUTH_ENABLED:-false},
-		"allow_guest": ${AUTHN_ALLOW_GUEST:-false}
+		"enabled":     ${AUTH_ENABLED:-false}
 	},
 	"keepalivetracker": {
 		"proxy": {
