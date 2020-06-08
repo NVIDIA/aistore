@@ -210,9 +210,9 @@ var (
 	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the action without really doing it"}
 	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	ignoreErrorFlag = cli.BoolFlag{Name: "ignore-error", Usage: "ignore error on soft failures like bucket already exists, bucket does not exist etc."}
+	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "value represents custom properties of a bucket"}
 
 	// Bucket
-	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}
 	markerFlag        = cli.StringFlag{Name: "marker", Usage: "list objects alphabetically starting from the object after the marker"}
 	objLimitFlag      = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0}
 	pageSizeFlag      = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}

@@ -16,7 +16,6 @@ var (
 	setCmdsFlags = map[string][]cli.Flag{
 		subcmdSetConfig: {},
 		subcmdSetProps: {
-			jsonspecFlag,
 			resetFlag,
 		},
 		subcmdSetPrimary: {},

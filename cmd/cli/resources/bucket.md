@@ -43,6 +43,19 @@ Create bucket `bucket_name` in `ml` namespace of AIS remote cluster with `Bghort
 $ ais create bucket ais://@Bghort1l#ml/bucket_name
 "ais://@Bghort1l#ml/bucket_name" bucket created
 ```
+#### Create bucket with custom properties
+
+Create bucket `bucket_name` with custom properties specified.
+
+```console
+#Key-value format
+$ ais create bucket ais://@Bghort1l/bucket_name --bucket-props="mirror.enabled=true mirror.copies=2"
+"ais://@Bghort1l/bucket_name" bucket created
+
+#JSON format
+$ ais create bucket ais://@Bghort1l/bucket_name --bucket-props='{"versioning": {"enabled": true, "validate_warm_get": true}}'
+"ais://@Bghort1l/bucket_name" bucket created
+```
 
 #### Incorrect buckets creation
 

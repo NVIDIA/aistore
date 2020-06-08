@@ -6,6 +6,7 @@
 package commands
 
 import (
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -13,6 +14,7 @@ var (
 	createCmdsFlags = map[string][]cli.Flag{
 		subcmdCreateBucket: {
 			ignoreErrorFlag,
+			bucketPropsFlag,
 		},
 	}
 
@@ -34,6 +36,16 @@ var (
 )
 
 func createBucketHandler(c *cli.Context) (err error) {
+	var (
+		props *cmn.BucketPropsToUpdate
+	)
+	if flagIsSet(c, bucketPropsFlag) {
+		propSingleBck, err := parseBckPropsFromContext(c)
+		if err != nil {
+			return err
+		}
+		props = &propSingleBck
+	}
 	buckets, err := bucketsFromArgsOrEnv(c)
 	if err != nil {
 		return err
@@ -42,5 +54,15 @@ func createBucketHandler(c *cli.Context) (err error) {
 	if err := validateLocalBuckets(buckets, "creating"); err != nil {
 		return err
 	}
-	return createBuckets(c, buckets)
+	for _, bck := range buckets {
+		if props != nil {
+			err = createBucket(c, bck, *props)
+		} else {
+			err = createBucket(c, bck)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

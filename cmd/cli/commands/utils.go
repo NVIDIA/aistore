@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -577,6 +578,17 @@ func parseBckProvider(provider string) string {
 	return provider
 }
 
+func parseBck(c *cli.Context, uri string) (*cmn.Bck, error) {
+	bck, objName, err := parseBckObjectURI(uri)
+	if err != nil {
+		return nil, err
+	}
+	if objName != "" {
+		return nil, objectNameArgumentNotSupported(c, objName)
+	}
+	return &bck, nil
+}
+
 // Parses "provider://@uuid#namespace/bucketName/objectName"
 func parseBckObjectURI(objName string, query ...bool) (bck cmn.Bck, object string, err error) {
 	const (
@@ -684,6 +696,56 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 	return
 }
 
+func isJSON(args ...string) bool {
+	if len(args) == 1 {
+		possibleJSON := args[0]
+		if possibleJSON[0] == '\'' && possibleJSON[len(possibleJSON)-1] == '\'' {
+			possibleJSON = possibleJSON[1 : len(possibleJSON)-1]
+		}
+		if len(possibleJSON) >= 2 {
+			return possibleJSON[0] == '{' && possibleJSON[len(possibleJSON)-1] == '}'
+		}
+	}
+	return false
+}
+
+func parseBckPropsFromContext(c *cli.Context) (props cmn.BucketPropsToUpdate, err error) {
+	propArgs := c.Args().Tail()
+
+	if c.Command.Name == subcmdBucket {
+		inputProps := parseStrFlag(c, bucketPropsFlag)
+		if isJSON(inputProps) {
+			err = jsoniter.Unmarshal([]byte(inputProps), &props)
+			return
+		}
+		propArgs = strings.Split(inputProps, " ")
+	}
+
+	if isJSON(propArgs...) {
+		err = jsoniter.Unmarshal([]byte(propArgs[0]), &props)
+		return
+	}
+
+	// For setting bucket props via json attributes
+	if len(propArgs) == 0 {
+		err = missingArgumentsError(c, "property key-value pairs")
+		return
+	}
+
+	// For setting bucket props via URL query string
+	nvs, err := makePairs(propArgs)
+	if err != nil {
+		return
+	}
+
+	if err = reformatBucketProps(nvs); err != nil {
+		return
+	}
+
+	props, err = cmn.NewBucketPropsToUpdate(nvs)
+	return
+}
+
 func validateLocalBuckets(buckets []cmn.Bck, operation string) error {
 	for _, bck := range buckets {
 		if bck.IsCloud(cmn.AnyCloud) {
@@ -699,15 +761,12 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	bcks := make([]cmn.Bck, 0, len(bucketNames))
 
 	for _, bucket := range bucketNames {
-		bck, objName, err := parseBckObjectURI(bucket)
+		bck, err := parseBck(c, bucket)
 		if err != nil {
 			return nil, err
 		}
-		if objName != "" {
-			return nil, objectNameArgumentNotSupported(c, objName)
-		}
 		if bucket != "" {
-			bcks = append(bcks, bck)
+			bcks = append(bcks, *bck)
 		}
 	}
 

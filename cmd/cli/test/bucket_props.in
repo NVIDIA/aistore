@@ -8,6 +8,6 @@ ais set props $BUCKET_1 'provider=ais' // FAIL "property "provider" is readonly"
 ais show props $BUCKET_1
 ais set props --reset $BUCKET_1
 
-ais set props $BUCKET_1 --jsonspec '{"versioning": {"enabled": true, "validate_warm_get": true}}'
+ais set props $BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'
 ais show props $BUCKET_1
 ais show props $BUCKET_1 lru -v

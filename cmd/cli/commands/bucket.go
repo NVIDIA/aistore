@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -54,25 +53,23 @@ func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn
 	return bck, p, err
 }
 
-// Creates new ais buckets
-func createBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
-	for _, bck := range buckets {
-		if err = api.CreateBucket(defaultAPIParams, bck); err != nil {
-			if herr, ok := err.(*cmn.HTTPError); ok {
-				if herr.Status == http.StatusConflict {
-					desc := fmt.Sprintf("Bucket %q already exists", bck)
-					if !flagIsSet(c, ignoreErrorFlag) {
-						return fmt.Errorf(desc)
-					}
-					fmt.Fprintln(c.App.Writer, desc)
-					continue
+// Creates new ais bucket
+func createBucket(c *cli.Context, bck cmn.Bck, props ...cmn.BucketPropsToUpdate) (err error) {
+	if err = api.CreateBucket(defaultAPIParams, bck, props...); err != nil {
+		if herr, ok := err.(*cmn.HTTPError); ok {
+			if herr.Status == http.StatusConflict {
+				desc := fmt.Sprintf("Bucket %q already exists", bck)
+				if flagIsSet(c, ignoreErrorFlag) {
+					fmt.Fprint(c.App.Writer, desc)
+					return nil
 				}
+				return fmt.Errorf(desc)
 			}
-			return fmt.Errorf("create bucket %q failed: %s", bck, err.Error())
 		}
-		fmt.Fprintf(c.App.Writer, "%q bucket created\n", bck)
+		return fmt.Errorf("create bucket %q failed: %s", bck, err.Error())
 	}
-	return nil
+	fmt.Fprintf(c.App.Writer, "%q bucket created\n", bck)
+	return
 }
 
 // Destroy ais buckets
@@ -344,30 +341,7 @@ func reformatBucketProps(nvs cmn.SimpleKVs) error {
 
 // Sets bucket properties
 func setBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
-	var (
-		propsArgs = c.Args().Tail()
-	)
-
-	// For setting bucket props via action message
-	if flagIsSet(c, jsonspecFlag) {
-		return setBucketPropsJSON(c, bck)
-	}
-
-	if len(propsArgs) == 0 {
-		return missingArgumentsError(c, "property key-value pairs")
-	}
-
-	// For setting bucket props via URL query string
-	nvs, err := makePairs(propsArgs)
-	if err != nil {
-		return
-	}
-
-	if err = reformatBucketProps(nvs); err != nil {
-		return
-	}
-
-	props, err := cmn.NewBucketPropsToUpdate(nvs)
+	props, err := parseBckPropsFromContext(c)
 	if err != nil {
 		return
 	}
@@ -376,22 +350,6 @@ func setBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 	}
 	fmt.Fprintln(c.App.Writer, "Bucket props successfully updated")
 	return
-}
-
-func setBucketPropsJSON(c *cli.Context, bck cmn.Bck) (err error) {
-	var (
-		props      cmn.BucketPropsToUpdate
-		inputProps = parseStrFlag(c, jsonspecFlag)
-	)
-	if err := jsoniter.Unmarshal([]byte(inputProps), &props); err != nil {
-		return err
-	}
-	if err := api.SetBucketProps(defaultAPIParams, bck, props); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(c.App.Writer, "Bucket props successfully updated")
-	return nil
 }
 
 // Resets bucket props
