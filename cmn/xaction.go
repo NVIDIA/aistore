@@ -163,7 +163,7 @@ func (xact *XactBase) EndTime(e ...time.Time) time.Time {
 	}
 	etime := e[0]
 	xact.eutime.Store(etime.UnixNano())
-	if xact.Kind() != ActAsyncTask {
+	if xact.Kind() != ActAsyncTask && xact.Kind() != ActListObjects {
 		glog.Infoln(xact.String())
 	}
 	return etime

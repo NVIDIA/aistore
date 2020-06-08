@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -35,6 +36,7 @@ const (
 	logsMaxSizeCheckTime      = 48 * time.Minute       // periodically check the logs for max accumulated size
 	startupSleep              = 300 * time.Millisecond // periodically poll ClusterStarted()
 	startupDeadlineMultiplier = 2                      // deadline = startupDeadlineMultiplier * config.Timeout.Startup
+	numGorHighCheckTime       = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
 )
 
 const (
@@ -44,8 +46,15 @@ const (
 	KindSpecial    = "special"
 )
 
+// number-of-goroutines watermarks expressed as multipliers over the number of available logical CPUs (GOMAXPROCS)
+const (
+	numGorHigh    = 100
+	numGorExtreme = 1000
+)
+
 var (
-	kinds = []string{KindCounter, KindLatency, KindThroughput, KindSpecial}
+	kinds      = []string{KindCounter, KindLatency, KindThroughput, KindSpecial}
+	goMaxProcs int
 )
 
 // CoreStats stats
@@ -443,9 +452,10 @@ dummy:
 
 	// for real now
 	glog.Infof("Starting %s", r.GetRunName())
+	goMaxProcs = runtime.GOMAXPROCS(0)
 	hk.Housekeeper.Register(r.GetRunName()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
 	r.ticker = time.NewTicker(config.Periodic.StatsTime)
-	startTime := time.Now()
+	startTime, checkNumGorHigh := time.Now(), time.Time{}
 	r.startedUp.Store(true)
 	for {
 		select {
@@ -454,7 +464,24 @@ dummy:
 				logger.doAdd(nv)
 			}
 		case <-r.ticker.C:
-			logger.log(time.Since(startTime))
+			uptime := time.Since(startTime)
+			logger.log(uptime)
+			if ngr := runtime.NumGoroutine(); ngr > goMaxProcs*numGorHigh {
+				if ngr >= goMaxProcs*numGorExtreme {
+					glog.Errorf("extremely high number of goroutines: %d", ngr)
+				}
+				now := time.Now()
+				if checkNumGorHigh.IsZero() {
+					checkNumGorHigh = now
+				} else if now.Sub(checkNumGorHigh) > numGorHighCheckTime {
+					if ngr < goMaxProcs*numGorExtreme {
+						glog.Warningf("high number of goroutines: %d", ngr)
+					}
+					checkNumGorHigh = time.Time{}
+				}
+			} else {
+				checkNumGorHigh = time.Time{}
+			}
 		case <-r.stopCh:
 			r.ticker.Stop()
 			return nil
