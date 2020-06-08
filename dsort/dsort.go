@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
@@ -201,11 +202,11 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		expectedUncompressedSize := uint64(float64(lom.Size()) / m.avgCompressionRatio())
 		toDisk := m.dsorter.preShardExtraction(expectedUncompressedSize)
 
-		beforeExtraction := time.Now()
+		beforeExtraction := mono.NanoTime()
 		reader := io.NewSectionReader(f, 0, lom.Size())
 		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom, reader, m.recManager, toDisk)
 
-		dur := time.Since(beforeExtraction)
+		dur := mono.Since(beforeExtraction)
 
 		// Make sure that compression rate is updated before releasing
 		// next extractor goroutine.

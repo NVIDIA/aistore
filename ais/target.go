@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
@@ -721,10 +722,9 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg     cmn.ActionMsg
-		evict   bool
-		started = time.Now()
-		query   = r.URL.Query()
+		msg   cmn.ActionMsg
+		evict bool
+		query = r.URL.Query()
 	)
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
@@ -760,17 +760,13 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	// EC cleanup if EC is enabled
 	ec.ECM.CleanupObject(lom)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("DELETE: %s, %d µs", lom, int64(time.Since(started)/time.Microsecond))
-	}
 }
 
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucket  string
-		msg     = &aisMsg{}
-		started = time.Now()
+		bucket string
+		msg    = &aisMsg{}
 	)
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
@@ -850,11 +846,12 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		go xact.Run(args)
 	case cmn.ActListObjects:
 		// list the bucket and return
+		begin := mono.NanoTime()
 		if ok := t.listObjects(w, r, bck, msg); !ok {
 			return
 		}
 
-		delta := time.Since(started)
+		delta := mono.Since(begin)
 		t.statsT.AddMany(
 			stats.NamedVal64{Name: stats.ListCount, Value: 1},
 			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},

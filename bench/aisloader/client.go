@@ -190,17 +190,17 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum,
 
 	tctx.tr.tsHTTPEnd = time.Now()
 	l := httpLatencies{
-		ProxyConn:           cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
-		Proxy:               cmn.TimeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
-		TargetConn:          cmn.TimeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
-		Target:              cmn.TimeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
+		ProxyConn:           timeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
+		Proxy:               timeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
+		TargetConn:          timeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
+		Target:              timeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
 		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
-		ProxyWroteHeader:    cmn.TimeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
-		ProxyWroteRequest:   cmn.TimeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
-		ProxyFirstResponse:  cmn.TimeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
-		TargetWroteHeader:   cmn.TimeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
-		TargetWroteRequest:  cmn.TimeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
-		TargetFirstResponse: cmn.TimeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
+		ProxyWroteHeader:    timeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
+		ProxyWroteRequest:   timeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
+		ProxyFirstResponse:  timeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
+		TargetWroteHeader:   timeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
+		TargetWroteRequest:  timeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
+		TargetFirstResponse: timeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
 	}
 	return l, nil
 }
@@ -275,17 +275,17 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 	}
 
 	latencies := httpLatencies{
-		ProxyConn:           cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
-		Proxy:               cmn.TimeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
-		TargetConn:          cmn.TimeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
-		Target:              cmn.TimeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
+		ProxyConn:           timeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
+		Proxy:               timeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
+		TargetConn:          timeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
+		Target:              timeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
 		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
-		ProxyWroteHeader:    cmn.TimeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
-		ProxyWroteRequest:   cmn.TimeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
-		ProxyFirstResponse:  cmn.TimeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
-		TargetWroteHeader:   cmn.TimeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
-		TargetWroteRequest:  cmn.TimeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
-		TargetFirstResponse: cmn.TimeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
+		ProxyWroteHeader:    timeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
+		ProxyWroteRequest:   timeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
+		ProxyFirstResponse:  timeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
+		TargetWroteHeader:   timeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
+		TargetWroteRequest:  timeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
+		TargetFirstResponse: timeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
 	}
 	return n, latencies, err
 }
@@ -351,7 +351,7 @@ func getConfig(server string) (httpLatencies, error) {
 
 	_, err = discardResponse(resp, "GetConfig")
 	l := httpLatencies{
-		ProxyConn: cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
+		ProxyConn: timeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
 		Proxy:     time.Since(tctx.tr.tsProxyConn),
 	}
 	return l, err
@@ -404,4 +404,11 @@ func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, 
 		cksumValue = cksum.Value()
 	}
 	return n, cksumValue, nil
+}
+
+func timeDelta(time1, time2 time.Time) time.Duration {
+	if time1.IsZero() || time2.IsZero() {
+		return 0
+	}
+	return time1.Sub(time2)
 }

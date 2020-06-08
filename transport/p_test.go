@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/tutils"
@@ -66,7 +67,7 @@ func Test_CompressedOne(t *testing.T) {
 	stream := transport.NewStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAlways})
 
 	slab, _ := MMSA.GetSlab(memsys.MaxPageSlabSize)
-	random := newRand(time.Now().UnixNano())
+	random := newRand(mono.NanoTime())
 	buf := slab.Alloc()
 	_, _ = random.Read(buf)
 	hdr := genStaticHeader()
@@ -117,7 +118,7 @@ func Test_DryRun(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	stream := transport.NewStream(nil, "dummy/null", nil)
 
-	random := newRand(time.Now().UnixNano())
+	random := newRand(mono.NanoTime())
 	slab, _ := MMSA.GetSlab(cmn.KiB * 32)
 	size, num, prevsize := int64(0), 0, int64(0)
 	hdr := genStaticHeader()
@@ -171,7 +172,7 @@ func Test_CompletionCount(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
 	stream := transport.NewStream(httpclient, url, nil) // provide for sizeable queue at any point
-	random := newRand(time.Now().UnixNano())
+	random := newRand(mono.NanoTime())
 	rem := int64(0)
 	for idx := 0; idx < 10000; idx++ {
 		if idx%7 == 0 {

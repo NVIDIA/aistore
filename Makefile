@@ -57,6 +57,10 @@ ifdef AIS_DEBUG
 	BUILD_TAGS += debug
 endif
 
+# mono:  utilize go:linkname for monotonic time source
+# !mono: use standard Go runtime
+BUILD_TAGS += mono
+
 # Colors
 cyan = $(shell { tput setaf 6 || tput AF 6; } 2>/dev/null)
 term-reset = $(shell { tput sgr0 || tput me; } 2>/dev/null)

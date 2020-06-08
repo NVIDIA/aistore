@@ -26,6 +26,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/teris-io/shortid"
 )
@@ -182,7 +183,7 @@ var (
 
 func init() {
 	// General
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(mono.NanoTime())
 
 	sid := shortid.MustNew(uuidWorker /* worker */, uuidABC, uuidSeed /* seed */)
 	// NOTE: `shortid` library uses 01/2016 as starting timestamp, maybe we

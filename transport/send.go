@@ -73,7 +73,6 @@ type (
 		postCh   chan struct{} // to indicate that workCh has work
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
-			start   atomic.Int64  // to support idle(%)
 			idleOut time.Duration // idle timeout
 			inSend  atomic.Bool   // true upon Send() or Read() - info for Collector to delay cleanup
 			ticks   int           // num 1s ticks until idle timeout
@@ -260,7 +259,6 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 	s.maxheader = make([]byte, maxHeaderSize) // NOTE: must be large enough to accommodate all max-size Header
 	s.sessST.Store(inactive)                  // NOTE: initiate HTTP session upon arrival of the first object
 
-	s.time.start.Store(time.Now().UnixNano())
 	s.term.reason = new(string)
 
 	s.wg.Add(2)

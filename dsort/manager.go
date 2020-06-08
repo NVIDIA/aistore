@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
@@ -609,7 +610,7 @@ func (m *Manager) unlock() {
 
 func (m *Manager) sentCallback(hdr transport.Header, rc io.ReadCloser, x unsafe.Pointer, err error) {
 	if m.Metrics.extended {
-		dur := time.Since(*(*time.Time)(x))
+		dur := mono.Since(*(*int64)(x))
 		m.Metrics.Creation.Lock()
 		m.Metrics.Creation.LocalSendStats.updateTime(dur)
 		m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)

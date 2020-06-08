@@ -42,6 +42,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/tutils"
@@ -222,7 +223,7 @@ func Test_OneStream(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	if time.Now().UnixNano()%2 == 1 {
+	if mono.NanoTime()%2 == 1 {
 		streamWriteUntil(t, 99, nil, ts, nil, nil, true /*compress*/)
 	} else {
 		streamWriteUntil(t, 55, nil, ts, nil, nil, false)
@@ -424,7 +425,7 @@ func Test_ObjAttrs(t *testing.T) {
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url, nil)
 
-	random := newRand(time.Now().UnixNano())
+	random := newRand(mono.NanoTime())
 	for idx, attrs := range testAttrs {
 		hdr := transport.Header{
 			Bck: cmn.Bck{
@@ -480,7 +481,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	trname, sessID := stream.ID()
 	now := time.Now()
 
-	random := newRand(time.Now().UnixNano())
+	random := newRand(mono.NanoTime())
 	size, num, prevsize := int64(0), 0, int64(0)
 	runFor := duration
 	if testing.Short() {
@@ -603,7 +604,7 @@ func makeRandReader() (transport.Header, *randReader) {
 	if err != nil {
 		panic("Failed getting slab: " + err.Error())
 	}
-	random := newRand(time.Now().UnixNano())
+	random := newRand(mono.NanoTime())
 	hdr := genRandomHeader(random)
 	reader := newRandReader(random, hdr, slab)
 	return hdr, reader

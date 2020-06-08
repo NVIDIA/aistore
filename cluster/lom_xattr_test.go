@@ -1,4 +1,4 @@
-// Package cluster_test provides tests of cluster package
+// Package cluster_test provides tests for cluster package
 /*
 * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */

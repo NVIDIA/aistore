@@ -73,7 +73,7 @@ type (
 		awaiting   struct {
 			mu      sync.Mutex
 			targets cluster.NodeMap // targets for which we are waiting for
-			ts      time.Time       // last time we have recomputed
+			ts      int64           // last time we have recomputed
 		}
 		semaCh     chan struct{}
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats

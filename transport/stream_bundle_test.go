@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -118,7 +119,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		httpclient     = transport.NewIntraDataClient()
 		sowner         = &sowner{}
 		lsnode         = cluster.Snode{DaemonID: "local"}
-		random         = newRand(time.Now().UnixNano())
+		random         = newRand(mono.NanoTime())
 		wbuf           = slab.Alloc()
 		extra          = &transport.Extra{Compression: nvs["compression"], MMSA: MMSA}
 		size, prevsize int64

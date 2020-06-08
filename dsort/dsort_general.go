@@ -13,13 +13,13 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -363,8 +363,8 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 		loadRemote := func(w io.Writer, daemonID string) (int64, error) {
 			var (
 				cbErr      error
-				beforeRecv time.Time
-				beforeSend time.Time
+				beforeRecv int64
+				beforeSend int64
 
 				wg      = cmn.NewTimeoutGroup()
 				writer  = ds.newStreamWriter(rec.MakeUniqueName(obj), w)
@@ -388,7 +388,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			}
 
 			if ds.m.Metrics.extended {
-				beforeSend = time.Now()
+				beforeSend = mono.NanoTime()
 			}
 
 			cb := func(hdr transport.Header, r io.ReadCloser, _ unsafe.Pointer, err error) {
@@ -396,7 +396,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 					cbErr = err
 				}
 				if ds.m.Metrics.extended {
-					delta := time.Since(beforeSend)
+					delta := mono.Since(beforeSend)
 					metrics.Lock()
 					metrics.RequestStats.updateTime(delta)
 					metrics.Unlock()
@@ -423,7 +423,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			}
 
 			if ds.m.Metrics.extended {
-				beforeRecv = time.Now()
+				beforeRecv = mono.NanoTime()
 			}
 
 			// It may happen that the target we are trying to contact was
@@ -439,7 +439,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			}
 
 			if ds.m.Metrics.extended {
-				delta := time.Since(beforeRecv)
+				delta := mono.Since(beforeRecv)
 				metrics.Lock()
 				metrics.ResponseStats.updateTime(delta)
 				metrics.Unlock()
@@ -522,9 +522,9 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			return
 		}
 
-		var beforeSend time.Time
+		var beforeSend int64
 		if ds.m.Metrics.extended {
-			beforeSend = time.Now()
+			beforeSend = mono.NanoTime()
 		}
 
 		fullContentPath := ds.m.recManager.FullContentPath(req.RecordObj)
@@ -597,7 +597,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 
 func (ds *dsorterGeneral) responseCallback(hdr transport.Header, rc io.ReadCloser, x unsafe.Pointer, err error) {
 	if ds.m.Metrics.extended {
-		dur := time.Since(*(*time.Time)(x))
+		dur := mono.Since(*(*int64)(x))
 		ds.m.Metrics.Creation.Lock()
 		ds.m.Metrics.Creation.LocalSendStats.updateTime(dur)
 		ds.m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
@@ -638,9 +638,9 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.Receive {
 			return
 		}
 
-		var beforeSend time.Time
+		var beforeSend int64
 		if ds.m.Metrics.extended {
-			beforeSend = time.Now()
+			beforeSend = mono.NanoTime()
 		}
 
 		buf, slab := mm.Alloc(hdr.ObjAttrs.Size)
@@ -649,7 +649,7 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.Receive {
 		slab.Free(buf)
 
 		if ds.m.Metrics.extended {
-			dur := time.Since(beforeSend)
+			dur := mono.Since(beforeSend)
 			metrics.Lock()
 			metrics.LocalRecvStats.updateTime(dur)
 			metrics.LocalRecvStats.updateThroughput(writer.n, dur)

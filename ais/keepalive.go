@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -294,10 +295,10 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delta time.Duration) {
 	var (
 		timeout        = time.Duration(pkr.timeoutStatsForDaemon(to.ID()).timeout)
-		t              = time.Now()
+		t              = mono.NanoTime()
 		_, err, status = pkr.p.Health(to, timeout, nil)
 	)
-	delta = time.Since(t)
+	delta = mono.Since(t)
 	pkr.updateTimeoutForDaemon(to.ID(), delta)
 	pkr.statsT.Add(stats.KeepAliveLatency, int64(delta))
 
@@ -323,9 +324,9 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode) (ok, stopped bool) {
 		}
 		select {
 		case <-ticker.C:
-			t := time.Now()
+			t := mono.NanoTime()
 			_, err, status := pkr.p.Health(si, timeout, nil)
-			timeout = pkr.updateTimeoutForDaemon(si.ID(), time.Since(t))
+			timeout = pkr.updateTimeoutForDaemon(si.ID(), mono.Since(t))
 			if err == nil {
 				return true, false
 			}
@@ -387,15 +388,15 @@ func (k *keepalive) Run() error {
 		// Stopped during waiting - must return.
 		return nil
 	}
-
 	glog.Infof("Starting %s", k.GetRunName())
-	ticker := time.NewTicker(k.interval)
-	lastCheck := time.Time{}
-
+	var (
+		ticker    = time.NewTicker(k.interval)
+		lastCheck int64
+	)
 	for {
 		select {
 		case <-ticker.C:
-			lastCheck = time.Now()
+			lastCheck = mono.NanoTime()
 			k.k.doKeepalive()
 		case sig := <-k.controlCh:
 			switch sig.msg {
@@ -408,8 +409,8 @@ func (k *keepalive) Run() error {
 				ticker.Stop()
 				return nil
 			case kaErrorMsg:
-				if time.Since(lastCheck) >= cmn.KeepaliveRetryDuration() {
-					lastCheck = time.Now()
+				if mono.Since(lastCheck) >= cmn.KeepaliveRetryDuration() {
+					lastCheck = mono.NanoTime()
 					glog.Infof("keepalive triggered by err: %v", sig.err)
 					if stopped := k.k.doKeepalive(); stopped {
 						ticker.Stop()
@@ -425,9 +426,9 @@ func (k *keepalive) Run() error {
 func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), primaryProxyID, hname string) (stopped bool) {
 	var (
 		timeout     = time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
-		now         = time.Now()
+		now         = mono.NanoTime()
 		status, err = sendKeepalive(timeout)
-		delta       = time.Since(now)
+		delta       = mono.Since(now)
 	)
 
 	k.statsT.Add(stats.KeepAliveLatency, int64(delta))
@@ -444,9 +445,9 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 		select {
 		case <-ticker.C:
 			i++
-			now = time.Now()
+			now = mono.NanoTime()
 			status, err = sendKeepalive(timeout)
-			timeout = k.updateTimeoutForDaemon(primaryProxyID, time.Since(now))
+			timeout = k.updateTimeoutForDaemon(primaryProxyID, mono.Since(now))
 			if err == nil {
 				glog.Infof("%s: keepalive OK after %d attempt(s)", hname, i)
 				return
@@ -540,7 +541,7 @@ var (
 // Timeout: a message is not received within the interval.
 type HeartBeatTracker struct {
 	ch       chan struct{}
-	last     map[string]time.Time
+	last     map[string]int64
 	interval time.Duration // expected to hear from the server within the interval
 }
 
@@ -558,7 +559,7 @@ func newKeepaliveTracker(c cmn.KeepaliveTrackerConf) KeepaliveTracker {
 // newHeartBeatTracker returns a HeartBeatTracker.
 func newHeartBeatTracker(interval time.Duration) *HeartBeatTracker {
 	hb := &HeartBeatTracker{
-		last:     make(map[string]time.Time),
+		last:     make(map[string]int64),
 		ch:       make(chan struct{}, 1),
 		interval: interval,
 	}
@@ -578,7 +579,7 @@ func (hb *HeartBeatTracker) unlock() {
 // HeardFrom is called to indicate a keepalive message (or equivalent) has been received from a server.
 func (hb *HeartBeatTracker) HeardFrom(id string, reset bool) {
 	hb.lock()
-	hb.last[id] = time.Now()
+	hb.last[id] = mono.NanoTime()
 	hb.unlock()
 }
 
@@ -587,7 +588,7 @@ func (hb *HeartBeatTracker) TimedOut(id string) bool {
 	hb.lock()
 	t, ok := hb.last[id]
 	hb.unlock()
-	return !ok || time.Since(t) > hb.interval
+	return !ok || mono.Since(t) > hb.interval
 }
 
 // AverageTracker keeps track of the average latency of all messages.
@@ -600,7 +601,7 @@ type AverageTracker struct {
 
 type averageTrackerRecord struct {
 	count   int64
-	last    time.Time
+	last    int64
 	totalMS int64 // in ms
 }
 
@@ -634,16 +635,16 @@ func (a *AverageTracker) HeardFrom(id string, reset bool) {
 	var rec averageTrackerRecord
 	rec, ok := a.rec[id]
 	if reset || !ok {
-		a.rec[id] = averageTrackerRecord{count: 0, totalMS: 0, last: time.Now()}
+		a.rec[id] = averageTrackerRecord{count: 0, totalMS: 0, last: mono.NanoTime()}
 		a.unlock()
 		return
 	}
 
-	t := time.Now()
-	delta := t.Sub(rec.last)
+	t := mono.NanoTime()
+	delta := t - rec.last
 	rec.last = t
 	rec.count++
-	rec.totalMS += int64(delta / time.Millisecond)
+	rec.totalMS += delta / int64(time.Millisecond)
 	a.rec[id] = rec
 	a.unlock()
 }
@@ -661,5 +662,5 @@ func (a *AverageTracker) TimedOut(id string) bool {
 		return false
 	}
 
-	return int64(time.Since(rec.last)/time.Millisecond) > int64(a.factor)*rec.avg()
+	return int64(mono.Since(rec.last)/time.Millisecond) > int64(a.factor)*rec.avg()
 }

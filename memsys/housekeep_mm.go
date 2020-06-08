@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -162,7 +163,7 @@ func (r *MMSA) getNextInterval(free, total uint64, swapping bool) time.Duration 
 // 3) sort by idle < less idle < busy (taking into account idle duration and hits inc, in that order)
 func (r *MMSA) refreshStatsSortIdle() {
 	r.slabStats.Lock()
-	now := time.Now().UnixNano()
+	now := mono.NanoTime()
 	for i := 0; i < r.numSlabs; i++ {
 		hits, prev := r.slabStats.hits[i].Load(), r.slabStats.prev[i]
 		hinc := hits - prev
@@ -266,7 +267,7 @@ func (r *MMSA) snapStats(sts ...*Stats) (stats *Stats) {
 	} else {
 		stats = &Stats{}
 	}
-	now := time.Now().UnixNano()
+	now := mono.NanoTime()
 	for i := range r.rings {
 		stats.Hits[i] = r.slabStats.hits[i].Load()
 		if r.slabStats.idleTs[i] != 0 {

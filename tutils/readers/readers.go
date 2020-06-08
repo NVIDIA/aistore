@@ -13,9 +13,9 @@ import (
 	"math/rand"
 	"os"
 	"path"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -136,7 +136,7 @@ func NewRandReader(size int64, cksumType string) (Reader, error) {
 	var (
 		cksum *cmn.Cksum
 		err   error
-		seed  = time.Now().UnixNano()
+		seed  = mono.NanoTime()
 	)
 	slab, err := mmsa.GetSlab(cmn.KiB * 32)
 	if err != nil {

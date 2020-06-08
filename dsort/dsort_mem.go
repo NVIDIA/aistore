@@ -12,12 +12,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sync"
-	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -486,7 +486,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 			Opaque: opaque,
 		}
 
-		beforeSend time.Time
+		beforeSend int64
 	)
 	fullContentPath := ds.m.recManager.FullContentPath(obj)
 	ct, err := cluster.NewCTFromBO(ds.m.rs.OutputBucket, ds.m.rs.OutputProvider, fullContentPath, nil)
@@ -502,7 +502,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 	}
 
 	if ds.m.Metrics.extended {
-		beforeSend = time.Now()
+		beforeSend = mono.NanoTime()
 	}
 
 	cmn.Assert(ds.m.ctx.node.DaemonID == rec.DaemonID)
@@ -515,7 +515,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		if local {
 			err = ds.creationPhase.connector.connectReader(rec.MakeUniqueName(obj), r, hdr.ObjAttrs.Size)
 			if ds.m.Metrics.extended {
-				dur := time.Since(beforeSend)
+				dur := mono.Since(beforeSend)
 				ds.m.Metrics.Creation.Lock()
 				ds.m.Metrics.Creation.LocalSendStats.updateTime(dur)
 				ds.m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
@@ -615,9 +615,9 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.Receive {
 			return
 		}
 
-		var beforeSend time.Time
+		var beforeSend int64
 		if ds.m.Metrics.extended {
-			beforeSend = time.Now()
+			beforeSend = mono.NanoTime()
 		}
 
 		if ds.m.aborted() {
@@ -631,7 +631,7 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.Receive {
 		}
 
 		if ds.m.Metrics.extended {
-			dur := time.Since(beforeSend)
+			dur := mono.Since(beforeSend)
 			metrics.Lock()
 			metrics.LocalRecvStats.updateTime(dur)
 			metrics.LocalRecvStats.updateThroughput(hdr.ObjAttrs.Size, dur)

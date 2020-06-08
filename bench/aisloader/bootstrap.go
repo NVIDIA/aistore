@@ -56,6 +56,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/tutils/readers"
@@ -319,7 +320,7 @@ func parseCmdLine() (params, error) {
 	p.usingFile = p.readerType == readers.ReaderTypeFile
 
 	if p.seed == 0 {
-		p.seed = time.Now().UnixNano()
+		p.seed = mono.NanoTime()
 	}
 	rnd = rand.New(rand.NewSource(p.seed))
 
@@ -951,7 +952,7 @@ func validateWorkOrder(wo *workOrder, delta time.Duration) error {
 }
 
 func completeWorkOrder(wo *workOrder) {
-	delta := cmn.TimeDelta(wo.end, wo.start)
+	delta := timeDelta(wo.end, wo.start)
 
 	if wo.err == nil && traceHTTPSig.Load() {
 		var lat *statsd.MetricLatsAgg

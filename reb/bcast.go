@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -41,7 +42,6 @@ type (
 // via GET /v1/health (cmn.Health)
 func (reb *Manager) RebStatus(status *Status) {
 	var (
-		now        time.Time
 		targets    cluster.NodeMap
 		config     = cmn.GCO.Get()
 		sleepRetry = cmn.KeepaliveRetryDuration(config)
@@ -86,8 +86,8 @@ func (reb *Manager) RebStatus(status *Status) {
 
 	reb.awaiting.mu.Lock()
 	status.Tmap, targets = reb.awaiting.targets, reb.awaiting.targets
-	now = time.Now()
-	if now.Sub(reb.awaiting.ts) < sleepRetry {
+	now := mono.NanoTime()
+	if mono.Since(reb.awaiting.ts) < sleepRetry {
 		reb.awaiting.mu.Unlock()
 		return
 	}

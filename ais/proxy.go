@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
@@ -951,12 +952,12 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActListObjects:
-		started := time.Now()
+		begin := mono.NanoTime()
 		if err = bck.Allow(cmn.AccessObjLIST); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
-		p.listObjectsAndCollectStats(w, r, bck, msg, started, false /* fast listing */)
+		p.listObjectsAndCollectStats(w, r, bck, msg, begin, false /* fast listing */)
 	case cmn.ActSummaryBucket:
 		if err = bck.Allow(cmn.AccessBckHEAD); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
@@ -991,7 +992,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
-	amsg cmn.ActionMsg, started time.Time, fast bool) {
+	amsg cmn.ActionMsg, begin int64, fast bool) {
 	var (
 		taskID  string
 		err     error
@@ -1049,7 +1050,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	go cmn.FreeMemToOS(time.Second)
 
 	if p.writeJSONBytes(w, r, b, "list_objects") {
-		delta := time.Since(started)
+		delta := mono.Since(begin)
 		p.statsT.AddMany(
 			stats.NamedVal64{Name: stats.ListCount, Value: 1},
 			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},

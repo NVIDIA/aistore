@@ -20,6 +20,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 type (
@@ -161,7 +163,7 @@ ml:
 
 func newBench(fileNames []string) *bench {
 	if cliv.seed == 0 {
-		cliv.seed = time.Now().UnixNano()
+		cliv.seed = mono.NanoTime()
 	}
 	rnd := rand.New(rand.NewSource(cliv.seed))
 	return &bench{

@@ -7,6 +7,8 @@ package cmn
 import (
 	"math/rand"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 type Bits uint8
@@ -163,7 +165,7 @@ func (b *Bits) Toggle(flag Bits)   { x := *b; x ^= flag; *b = x }
 func (b *Bits) Has(flag Bits) bool { return *b&flag != 0 }
 
 func NowRand() *rand.Rand {
-	return rand.New(rand.NewSource(time.Now().UnixNano()))
+	return rand.New(rand.NewSource(mono.NanoTime()))
 }
 
 func Ratio(high, low, curr int64) float32 {

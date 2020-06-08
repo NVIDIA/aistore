@@ -30,10 +30,3 @@ func S2Duration(s string) (time.Duration, error) {
 func UnixNano2S(unixnano int64) string   { return strconv.FormatInt(unixnano, 10) }
 func S2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
 func IsTimeZero(t time.Time) bool        { return t.IsZero() || t.UTC().Unix() == 0 } // https://github.com/golang/go/issues/33597
-
-func TimeDelta(time1, time2 time.Time) time.Duration {
-	if time1.IsZero() || time2.IsZero() {
-		return 0
-	}
-	return time1.Sub(time2)
-}
