@@ -132,7 +132,7 @@ func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *Mou
 func (mi *MountpathInfo) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
 
 func (mi *MountpathInfo) evictLomCache() {
-	for idx := range mi.lomCaches.M {
+	for idx := 0; idx < cmn.MultiSyncMapCount; idx++ {
 		cache := mi.LomCache(idx)
 		cache.Range(func(key interface{}, _ interface{}) bool {
 			cache.Delete(key)
