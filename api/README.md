@@ -152,7 +152,7 @@ Error from AIStore in completing the request
 ___
 
 #### GetDaemonConfig
-Given the URL of a daemon, `GetDaemonConfig` returns the corresponding daemon's configuration settings 
+Given the URL of a daemon, `GetDaemonConfig` returns the corresponding daemon's configuration settings.
 ##### Parameters
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
@@ -379,7 +379,6 @@ Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it
 | Name          | Type                 | Description                                                                           |
 |---------------|----------------------|---------------------------------------------------------------------------------------|
 | args          | PutObjectArgs        | A field that handles the arguments for PutObject                                      |
-| replicateOpts | ReplicateObjectInput | Used to hold optional parameters for PutObject when it is used for replication        |
 
 ##### PutObjectArgs
 | Name       | Type               | Description                                                                           |
@@ -391,11 +390,6 @@ Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it
 | Object     | string             | Name of the object                                                                    |
 | Hash       | string             | Hash computed for the object                                                          |
 | Reader     | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
-
-##### ReplicateObjectInput
-| Name       | Type               | Description                                                                                          |
-|------------|--------------------|------------------------------------------------------------------------------------------------------|
-| SourceURL  | string             | Used to set the request header to determine whether PUT object request is for replication in AIStore |
 
 ##### Return
 Error from AIStore in completing the request
@@ -493,15 +487,15 @@ func demo() error {
     if err != nil {
         return Errors.New("Getting clustermap failed, %v\n", err)
     }
- 
+
     primaryProxyURL := smap.ProxySI.PublicNet.DirectURL
- 
+
     // Create ais bucket
     err = api.CreateLocalBucket(httpClient, primaryProxyURL, bucket)
     if err != nil {
         return Errors.New("Creating ais bucket failed, %v\n", err)
     }
- 
+
     newBucketName = "DemoBucketNew"
     // Rename ais bucket
     err = api.RenameLocalBucket(httpClient, primaryProxyURL, bucket, newBucketName)
