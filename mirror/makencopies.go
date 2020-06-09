@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-const pkgName = "mirror"
 const (
 	throttleNumObjects = 16                      // unit of self-throttling
 	minThrottleSize    = 256 * cmn.KiB           // throttle every 4MB (= 16K*256) or greater
@@ -39,12 +38,6 @@ type (
 		buf    []byte
 	}
 )
-
-func init() {
-	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
-		glog.SetV(glog.SmoduleMirror, logLvl)
-	}
-}
 
 //
 // public methods

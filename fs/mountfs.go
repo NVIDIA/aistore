@@ -24,7 +24,6 @@ import (
 )
 
 const (
-	pkgName  = "fs"
 	uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
 )
 

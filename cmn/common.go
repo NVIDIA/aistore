@@ -197,7 +197,6 @@ func init() {
 	// Config related
 	config := &Config{}
 	GCO.c.Store(unsafe.Pointer(config))
-	loadDebugMap()
 
 	// API related
 	jsonAPI = jsoniter.Config{

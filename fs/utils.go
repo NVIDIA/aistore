@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ios"
@@ -32,9 +31,6 @@ func init() {
 // global init
 func InitMountedFS() {
 	Mountpaths = NewMountedFS()
-	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
-		glog.SetV(glog.SmoduleFS, logLvl)
-	}
 }
 
 // new instance

@@ -9,9 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -235,9 +233,6 @@ var (
 	_ json.Unmarshaler = &CloudConf{}
 	_ json.Marshaler   = &FSPathsConf{}
 	_ json.Unmarshaler = &FSPathsConf{}
-
-	// Debugging
-	pkgDebug = make(map[string]glog.Level)
 )
 
 // Naming convention for setting/getting the particular fields is defined as
@@ -1116,37 +1111,6 @@ func ConfigPropList() []string {
 		return nil, false
 	})
 	return propList
-}
-
-// ========== Cluster Wide Config =========
-
-func CheckDebug(pkgName string) (logLvl glog.Level, ok bool) {
-	logLvl, ok = pkgDebug[pkgName]
-	return
-}
-
-// loadDebugMap sets debug verbosity for different packages based on
-// environment variables. It is to help enable asserts that were originally
-// used for testing/initial development and to set the verbosity of glog
-func loadDebugMap() {
-	var opts []string
-	// Input will be in the format of AIS_DEBUG=transport=4,memsys=3 (same as GODEBUG)
-	if val := os.Getenv("AIS_DEBUG"); val != "" {
-		opts = strings.Split(val, ",")
-	}
-
-	for _, ele := range opts {
-		pair := strings.Split(ele, "=")
-		if len(pair) != 2 {
-			ExitLogf("Failed to get name=val element: %q", ele)
-		}
-		key := pair[0]
-		logLvl, err := strconv.Atoi(pair[1])
-		if err != nil {
-			ExitLogf("Failed to convert verbosity level = %s, err: %s", pair[1], err)
-		}
-		pkgDebug[key] = glog.Level(logLvl)
-	}
 }
 
 func KeepaliveRetryDuration(cs ...*Config) time.Duration {

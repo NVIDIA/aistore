@@ -35,7 +35,6 @@ import (
 //   bucket that contains the object, etc.
 //
 
-const pkgName = "cluster"
 const fmtNestedErr = "nested err: %v"
 const lomInitialVersion = "1"
 
@@ -74,9 +73,6 @@ var (
 func InitTarget() {
 	lomLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	lomLocker.init()
-	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
-		glog.SetV(glog.SmoduleCluster, logLvl)
-	}
 	maxLmeta.Store(xattrMaxSize)
 }
 

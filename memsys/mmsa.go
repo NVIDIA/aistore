@@ -90,8 +90,7 @@ const (
 )
 
 const (
-	pkgName  = "memsys"
-	deadBEEF = "DEADBEEF" // debug mode
+	deadBEEF = "DEADBEEF"
 )
 
 // page slabs: pagesize increments up to MaxPageSlabSize
@@ -582,9 +581,6 @@ func (r *MMSA) env() (err error) {
 		if r.MinPctFree < 0 || r.MinPctFree > 100 {
 			return fmt.Errorf("invalid AIS_MINMEM_PCT_FREE '%s'", a)
 		}
-	}
-	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
-		glog.SetV(glog.SmoduleMemsys, logLvl)
 	}
 	return
 }

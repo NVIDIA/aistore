@@ -66,7 +66,6 @@ type (
 
 const (
 	cleanupInterval = time.Minute * 10
-	pkgName         = "transport"
 
 	// compressed streams perf tunables
 	slabBufferSize = 32 * cmn.KiB
@@ -87,9 +86,6 @@ func init() {
 	mu = &sync.Mutex{}
 	muxers = make(map[string]*mux.ServeMux)
 	handlers = make(map[string]map[string]*handler)
-	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
-		glog.SetV(glog.SmoduleTransport, logLvl)
-	}
 }
 
 //

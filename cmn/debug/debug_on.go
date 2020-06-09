@@ -8,6 +8,9 @@ package debug
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
@@ -15,6 +18,50 @@ import (
 const (
 	Enabled = true
 )
+
+func init() {
+	loadLogLevel()
+}
+
+// loadLogLevel sets debug verbosity for different packages based on
+// environment variables. It is to help enable asserts that were originally
+// used for testing/initial development and to set the verbosity of glog.
+func loadLogLevel() {
+	var (
+		opts    []string
+		modules = map[string]uint8{
+			"ais":       glog.SmoduleAIS,
+			"cluster":   glog.SmoduleCluster,
+			"fs":        glog.SmoduleFS,
+			"memsys":    glog.SmoduleMemsys,
+			"mirror":    glog.SmoduleMirror,
+			"reb":       glog.SmoduleReb,
+			"transport": glog.SmoduleTransport,
+		}
+	)
+
+	// Input will be in the format of AIS_DEBUG=transport=4,memsys=3 (same as GODEBUG).
+	if val := os.Getenv("AIS_DEBUG"); val != "" {
+		opts = strings.Split(val, ",")
+	}
+
+	for _, ele := range opts {
+		pair := strings.Split(ele, "=")
+		if len(pair) != 2 {
+			glog.Fatalf("failed to get module=level element: %q", ele)
+		}
+		module, level := pair[0], pair[1]
+		logModule, exists := modules[module]
+		if !exists {
+			glog.Fatalf("unknown module: %s", module)
+		}
+		logLvl, err := strconv.Atoi(level)
+		if err != nil || logLvl <= 0 {
+			glog.Fatalf("invalid verbosity level=%s, err: %s", level, err)
+		}
+		glog.SetV(logModule, glog.Level(logLvl))
+	}
+}
 
 func Errorf(f string, a ...interface{}) {
 	glog.ErrorDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))

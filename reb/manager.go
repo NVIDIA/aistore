@@ -26,8 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
-const pkgName = "rebalance"
-
 const (
 	RebalanceStreamName = "rebalance"
 	RebalanceAcksName   = "remwack" // NOTE: can become generic remote-write-acknowledgment
@@ -121,12 +119,6 @@ var stages = map[uint32]string{
 	rebStageECCleanup:   "<ec-fin>",
 	rebStageECBatch:     "<ec-batch>",
 	rebStageAbort:       "<abort>",
-}
-
-func init() {
-	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
-		glog.SetV(glog.SmoduleReb, logLvl)
-	}
 }
 
 //
