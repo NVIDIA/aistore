@@ -39,6 +39,7 @@ var (
 			refreshFlag,
 			verboseFlag,
 			yesFlag,
+			computeCksumFlag,
 		),
 		commandPromote: {
 			recursiveFlag,

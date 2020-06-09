@@ -6,6 +6,7 @@ PUT "cksum" into bucket "$BUCKET_1"
 PUT "cksum" into bucket "$BUCKET_1"
 PUT "cksum" into bucket "$BUCKET_1"
 PUT "cksum" into bucket "$BUCKET_1"
+PUT "cksum" into bucket "$BUCKET_1"
 PUT "object_2.txt" into bucket "$BUCKET_1"
 NAME			 SIZE	 VERSION
 cksum		 11B	 4

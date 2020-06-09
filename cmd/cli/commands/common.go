@@ -248,18 +248,19 @@ var (
 	specFileFlag      = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
 
 	// Object
-	listFlag      = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
-	offsetFlag    = cli.StringFlag{Name: "offset", Usage: "object read offset, can contain prefix 'b', 'KiB', 'MB'"}
-	lengthFlag    = cli.StringFlag{Name: "length", Usage: "object read length, can contain prefix 'b', 'KiB', 'MB'"}
-	isCachedFlag  = cli.BoolFlag{Name: "is-cached", Usage: "check if an object is cached"}
-	cachedFlag    = cli.BoolFlag{Name: "cached", Usage: "list only cached objects"}
-	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
-	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
-	overwriteFlag = cli.BoolFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
-	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
-	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
-	chunkSizeFlag = cli.StringFlag{Name: "chunk-size", Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB"}
-	checksumFlags = getCksumFlags()
+	listFlag         = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
+	offsetFlag       = cli.StringFlag{Name: "offset", Usage: "object read offset, can contain prefix 'b', 'KiB', 'MB'"}
+	lengthFlag       = cli.StringFlag{Name: "length", Usage: "object read length, can contain prefix 'b', 'KiB', 'MB'"}
+	isCachedFlag     = cli.BoolFlag{Name: "is-cached", Usage: "check if an object is cached"}
+	cachedFlag       = cli.BoolFlag{Name: "cached", Usage: "list only cached objects"}
+	checksumFlag     = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
+	recursiveFlag    = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
+	overwriteFlag    = cli.BoolFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
+	targetFlag       = cli.StringFlag{Name: "target", Usage: "ais target ID"}
+	yesFlag          = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
+	chunkSizeFlag    = cli.StringFlag{Name: "chunk-size", Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB"}
+	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
+	checksumFlags    = getCksumFlags()
 	// AuthN
 	roleFlag = cli.StringFlag{Name: "role", Usage: "a user role, eg., 'guest'(default), 'developer' or 'admin'"}
 

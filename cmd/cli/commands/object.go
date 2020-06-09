@@ -130,12 +130,20 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 		bars     []*mpb.Bar
 		cksum    *cmn.Cksum
 	)
-	cksums := parseChecksumFlags(c)
-	if len(cksums) > 1 {
-		return fmt.Errorf("at most one checksum flags can be set (multi-checksum is not supported yet)")
-	}
-	if len(cksums) == 1 {
-		cksum = cksums[0]
+	if flagIsSet(c, computeCksumFlag) {
+		bckProps, err := api.HeadBucket(defaultAPIParams, bck)
+		if err != nil {
+			return err
+		}
+		cksum = cmn.NewCksum(bckProps.Cksum.Type, "")
+	} else {
+		cksums := parseChecksumFlags(c)
+		if len(cksums) > 1 {
+			return fmt.Errorf("at most one checksum flags can be set (multi-checksum is not supported yet)")
+		}
+		if len(cksums) == 1 {
+			cksum = cksums[0]
+		}
 	}
 	fh, err := cmn.NewFileHandle(path)
 	if err != nil {

@@ -239,6 +239,14 @@ $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --xxhash 05967d
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
+Optionally, the user can choose to provide a `--compute-cksum` flag for the checksum flag and
+let the api take care of the computation.
+
+```bash
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --compute-cksum
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+```
+
 #### Put single file without explicit name
 
 Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name.

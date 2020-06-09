@@ -5,6 +5,7 @@
 package api
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -277,7 +278,15 @@ func PutObject(args PutObjectArgs) (err error) {
 		req.GetBody = args.Reader.Open
 		if args.Cksum != nil {
 			req.Header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
-			req.Header.Set(cmn.HeaderObjCksumVal, args.Cksum.Value())
+			ckVal := args.Cksum.Value()
+			if ckVal == "" {
+				_, ckhash, err := cmn.CopyAndChecksum(ioutil.Discard, args.Reader, nil, args.Cksum.Type())
+				if err != nil {
+					return nil, cmn.NewFailedToCreateHTTPRequest(err)
+				}
+				ckVal = hex.EncodeToString(ckhash.Sum())
+			}
+			req.Header.Set(cmn.HeaderObjCksumVal, ckVal)
 		}
 		if args.Size != 0 {
 			req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
