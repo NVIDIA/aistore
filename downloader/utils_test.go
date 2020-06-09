@@ -45,15 +45,15 @@ func TestNormalizeObjName(t *testing.T) {
 func TestCompareObject(t *testing.T) {
 	var (
 		err error
-		obj = dlObj{
-			link: "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
+		dst = &DstElement{
+			Link: "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
 		}
-		lom = &cluster.LOM{
+		src = &cluster.LOM{
 			T: cluster.NewTargetMock(nil),
 		}
 	)
 
-	lom.FQN, err = downloadObject(obj.link)
+	src.FQN, err = downloadObject(dst.Link)
 	tassert.CheckFatal(t, err)
 
 	// Modify local object to contain invalid (meta)data.
@@ -62,28 +62,28 @@ func TestCompareObject(t *testing.T) {
 		cluster.CRC32CObjMD:  "bad",
 		cluster.VersionObjMD: "version",
 	}
-	lom.SetSize(10)
-	lom.SetCustomMD(customMD)
+	src.SetSize(10)
+	src.SetCustomMD(customMD)
 
-	equal, err := compareObjects(obj, lom)
+	equal, err := compareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that objects are still not equal after size update.
-	lom.SetSize(65)
-	equal, err = compareObjects(obj, lom)
+	src.SetSize(65)
+	equal, err = compareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that objects are still not equal after version update.
 	customMD[cluster.VersionObjMD] = "1503349750687573"
-	equal, err = compareObjects(obj, lom)
+	equal, err = compareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Finally, check if the objects are equal once we set all the metadata correctly.
 	customMD[cluster.CRC32CObjMD] = "30a991bd"
-	equal, err = compareObjects(obj, lom)
+	equal, err = compareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, equal, "expected the objects to be equal")
 }

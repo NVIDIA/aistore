@@ -33,25 +33,23 @@ func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cmn.SimpleKVs) ([]d
 
 	objs := make([]dlObj, 0, len(objects))
 	for name, link := range objects {
-		job, err := jobForObject(smap, sid, bck, false /*fromCloud*/, name, link)
+		obj, err := makeDlObj(smap, sid, bck, name, link)
 		if err != nil {
 			if err == errInvalidTarget {
 				continue
 			}
 			return nil, err
 		}
-		objs = append(objs, job)
+		objs = append(objs, obj)
 	}
 	return objs, nil
 }
 
-func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, fromCloud bool, objName, link string) (dlObj, error) {
+func makeDlObj(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, link string) (dlObj, error) {
 	objName, err := normalizeObjName(objName)
 	if err != nil {
 		return dlObj{}, err
 	}
-	// Make sure that link contains protocol (absence of protocol can result in errors).
-	link = cmn.PrependProtocol(link)
 
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), smap)
 	if err != nil {
@@ -62,9 +60,10 @@ func jobForObject(smap *cluster.Smap, sid string, bck *cluster.Bck, fromCloud bo
 	}
 
 	return dlObj{
-		objName:   objName,
-		link:      link,
-		fromCloud: fromCloud,
+		objName: objName,
+		// Make sure that link contains protocol (absence of protocol can result in errors).
+		link:      cmn.PrependProtocol(link),
+		fromCloud: link == "",
 	}, nil
 }
 
@@ -326,30 +325,30 @@ func roiFromObjMeta(objMeta cmn.SimpleKVs) (roi remoteObjInfo) {
 	return
 }
 
-func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
+func compareObjects(src *cluster.LOM, dst *DstElement) (equal bool, err error) {
 	var roi remoteObjInfo
-	if !obj.fromCloud {
-		resp, err := headLink(obj.link)
+	if dst.Link != "" {
+		resp, err := headLink(dst.Link)
 		if err != nil {
 			return false, err
 		}
-		roi = roiFromLink(obj.link, resp)
+		roi = roiFromLink(dst.Link, resp)
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 		defer cancel()
 		// This should succeed since we check if the bucket exists beforehand.
-		objMeta, err, _ := lom.T.Cloud(lom.Bck()).HeadObj(ctx, lom)
+		objMeta, err, _ := src.T.Cloud(src.Bck()).HeadObj(ctx, src)
 		if err != nil {
 			return false, err
 		}
 		roi = roiFromObjMeta(objMeta)
 	}
 
-	if roi.size != 0 && roi.size != lom.Size() {
+	if roi.size != 0 && roi.size != src.Size() {
 		return false, nil
 	}
 
-	_, localMDPresent := lom.GetCustomMD(cluster.SourceObjMD)
+	_, localMDPresent := src.GetCustomMD(cluster.SourceObjMD)
 	remoteSource := roi.md[cluster.SourceObjMD]
 	if !localMDPresent {
 		// Source is present only on the remote object. But if it's the cloud
@@ -357,7 +356,7 @@ func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
 		// try to compare it.
 		switch remoteSource {
 		case cluster.SourceGoogleObjMD, cluster.SourceAmazonObjMD, cluster.SourceAzureObjMD:
-			if lom.Version() == roi.md[cluster.VersionObjMD] {
+			if src.Version() == roi.md[cluster.VersionObjMD] {
 				return true, nil
 			}
 		case cluster.SourceWebObjMD:
@@ -368,7 +367,7 @@ func compareObjects(obj dlObj, lom *cluster.LOM) (equal bool, err error) {
 		return false, nil
 	}
 	for k, v := range roi.md {
-		if objValue, ok := lom.GetCustomMD(k); !ok {
+		if objValue, ok := src.GetCustomMD(k); !ok {
 			// Just skip check if `lom` doesn't have some metadata.
 			continue
 		} else if v != objValue {

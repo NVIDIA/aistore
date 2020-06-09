@@ -90,9 +90,7 @@ func (t *singleObjectTask) download() {
 		return
 	}
 
-	if err := dlStore.incFinished(t.id()); err != nil {
-		glog.Error(err)
-	}
+	dlStore.incFinished(t.id())
 
 	t.parent.statsT.AddMany(
 		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
@@ -249,9 +247,7 @@ func (t *singleObjectTask) markFailed(statusMsg string) {
 	t.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
 	dlStore.persistError(t.id(), t.obj.objName, statusMsg)
-	if err := dlStore.incErrorCnt(t.id()); err != nil {
-		glog.Error(err)
-	}
+	dlStore.incErrorCnt(t.id())
 }
 
 func (t *singleObjectTask) persist() {

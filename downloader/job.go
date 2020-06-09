@@ -112,9 +112,7 @@ func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
 func (j *baseDlJob) throttler() *throttler  { return j.t }
 func (j *baseDlJob) cleanup() {
-	if err := dlStore.markFinished(j.ID()); err != nil {
-		glog.Error(err)
-	}
+	dlStore.markFinished(j.ID())
 	dlStore.flush(j.ID())
 	j.throttler().stop()
 }
@@ -204,14 +202,14 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 			if !strings.HasSuffix(entry.Name, j.suffix) {
 				continue
 			}
-			job, err := jobForObject(smap, sid, j.bck, true /*fromCloud*/, entry.Name, "")
+			obj, err := makeDlObj(smap, sid, j.bck, entry.Name, "")
 			if err != nil {
 				if err == errInvalidTarget {
 					continue
 				}
 				return err
 			}
-			j.objs = append(j.objs, job)
+			j.objs = append(j.objs, obj)
 		}
 		if j.pageMarker == "" || len(j.objs) != 0 {
 			break
@@ -250,14 +248,14 @@ func (j *rangeDlJob) getNextObjs() error {
 			break
 		}
 		name := path.Join(j.dir, path.Base(link))
-		dlJob, err := jobForObject(smap, sid, j.bck, false /*fromCloud*/, name, link)
+		obj, err := makeDlObj(smap, sid, j.bck, name, link)
 		if err != nil {
 			if err == errInvalidTarget {
 				continue
 			}
 			return err
 		}
-		j.objs = append(j.objs, dlJob)
+		j.objs = append(j.objs, obj)
 	}
 	j.done = !ok
 	return nil

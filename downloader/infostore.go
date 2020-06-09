@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 )
@@ -83,69 +84,48 @@ func (is *infoStore) setJob(id string, job DlJob) {
 	is.Unlock()
 }
 
-func (is *infoStore) incFinished(id string) error {
+func (is *infoStore) incFinished(id string) {
 	jInfo, err := is.getJob(id)
-	if err != nil {
-		return err
-	}
+	cmn.AssertNoErr(err)
 	jInfo.FinishedCnt.Inc()
-	return nil
 }
 
-func (is *infoStore) incSkipped(id string) error {
+func (is *infoStore) incSkipped(id string) {
 	jInfo, err := is.getJob(id)
-	if err != nil {
-		return err
-	}
+	cmn.AssertNoErr(err)
 	jInfo.SkippedCnt.Inc()
 	jInfo.FinishedCnt.Inc()
-	return nil
 }
 
-func (is *infoStore) incScheduled(id string) error {
+func (is *infoStore) incScheduled(id string) {
 	jInfo, err := is.getJob(id)
-	if err != nil {
-		return err
-	}
+	cmn.AssertNoErr(err)
 	jInfo.ScheduledCnt.Inc()
-	return nil
 }
 
-func (is *infoStore) incErrorCnt(id string) error {
+func (is *infoStore) incErrorCnt(id string) {
 	jInfo, err := is.getJob(id)
-	if err != nil {
-		return err
-	}
+	cmn.AssertNoErr(err)
 	jInfo.ErrorCnt.Inc()
-	return nil
 }
 
-func (is *infoStore) setAllDispatched(id string, dispatched bool) error {
+func (is *infoStore) setAllDispatched(id string, dispatched bool) {
 	jInfo, err := is.getJob(id)
-	if err != nil {
-		return err
-	}
+	cmn.AssertNoErr(err)
 	jInfo.AllDispatched.Store(dispatched)
-	return nil
 }
 
-func (is *infoStore) markFinished(id string) error {
+func (is *infoStore) markFinished(id string) {
 	jInfo, err := is.getJob(id)
-	if err != nil {
-		return err
-	}
+	cmn.AssertNoErr(err)
 	jInfo.FinishedTime.Store(time.Now())
-	return nil
 }
 
-func (is *infoStore) setAborted(id string) error {
+func (is *infoStore) setAborted(id string) {
 	jInfo, err := is.getJob(id)
-	if err != nil {
-		return err
-	}
+	cmn.AssertNoErr(err)
 	jInfo.Aborted.Store(true)
 	jInfo.FinishedTime.Store(time.Now())
-	return nil
 }
 
 func (is *infoStore) delJob(id string) {

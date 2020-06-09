@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -149,29 +149,147 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 		return !aborted
 	}
 
-	for {
-		objs, ok := job.genNext()
-		if !ok {
-			if err := dlStore.setAllDispatched(job.ID(), true); err != nil {
-				glog.Error(err)
+	var (
+		diffResolver = NewDiffResolver()
+		jobSync      = job.ID() == "" // non-trivial `false`, FIXME: change to `job.Sync()`
+	)
+
+	diffResolver.Start()
+
+	// In case of `!job.Sync()` we don't want to traverse the whole bucket.
+	// We just want to download requested objects so we know exactly which
+	// objects must be checked (compared) and which not. Therefore, only traverse
+	// bucket when we need to sync the objects.
+	if jobSync {
+		go func() {
+			defer diffResolver.CloseSrc()
+			err := fs.Walk(&fs.Options{
+				Bck:   job.Bck(),
+				Mpath: nil, // FIXME: we need to walk multiple mountpaths
+				CTs:   []string{fs.ObjectType},
+				Callback: func(fqn string, de fs.DirEntry) error {
+					if diffResolver.Stopped() {
+						return filepath.SkipDir
+					}
+					if de.IsDir() {
+						return nil
+					}
+					lom := &cluster.LOM{T: d.parent.t, FQN: fqn}
+					if err := lom.Init(job.Bck()); err != nil {
+						return err
+					}
+					// FIXME: The order of the objects may not be sorted as we
+					//  are walking multiple mountpaths (`Sorted` is only applied
+					//  to a single mountpath).
+					diffResolver.PushSrc(lom)
+					return nil
+				},
+				Sorted: true,
+			})
+			if err != nil {
+				diffResolver.Abort(err)
 			}
-			return true
+		}()
+	}
+
+	go func() {
+		defer func() {
+			diffResolver.CloseDst()
+			if !jobSync {
+				diffResolver.CloseSrc()
+			}
+		}()
+
+		for {
+			objs, ok := job.genNext()
+			if !ok || diffResolver.Stopped() {
+				return
+			}
+
+			for _, obj := range objs {
+				if d.checkAborted() {
+					err := cmn.NewAbortedError("dispatcher")
+					diffResolver.Abort(err)
+					return
+				} else if d.checkAbortedJob(job) {
+					diffResolver.Stop()
+					return
+				}
+
+				if !jobSync {
+					// When it is not a sync job, push LOM for a given object
+					// because we need to check if it exists.
+					lom := &cluster.LOM{T: d.parent.t, ObjName: obj.objName}
+					if err := lom.Init(job.Bck()); err != nil {
+						diffResolver.Abort(err)
+						return
+					}
+					diffResolver.PushSrc(lom)
+				}
+
+				if obj.link != "" {
+					diffResolver.PushDst(&WebResource{
+						ObjName: obj.objName,
+						Link:    obj.link,
+					})
+				} else {
+					diffResolver.PushDst(&CloudResource{
+						ObjName: obj.objName,
+					})
+				}
+			}
 		}
+	}()
 
-		for _, obj := range objs {
-			if aborted := d.checkAborted(); aborted || d.checkAbortedJob(job) {
-				return !aborted
+	for {
+		result, err := diffResolver.Next()
+		if err != nil {
+			return false
+		}
+		switch result.Action {
+		case DiffResolverRecv, DiffResolverSkip, DiffResolverErr:
+			dst := result.Dst
+			obj := dlObj{
+				objName:   dst.ObjName,
+				link:      dst.Link,
+				fromCloud: dst.Link == "",
 			}
 
-			err, ok := d.blockingDispatchDownloadSingle(job, obj)
+			dlStore.incScheduled(job.ID())
+
+			if result.Action == DiffResolverSkip {
+				dlStore.incSkipped(job.ID())
+				continue
+			}
+
+			t := &singleObjectTask{
+				parent: d.parent,
+				obj:    obj,
+				job:    job,
+			}
+
+			if result.Action == DiffResolverErr {
+				t.markFailed(err.Error())
+				continue
+			}
+
+			err, ok := d.blockingDispatchDownloadSingle(t)
 			if err != nil {
 				glog.Errorf("Download job %s failed, couldn't download object %s, aborting; %s", job.ID(), obj.link, err.Error())
-				cmn.AssertNoErr(dlStore.setAborted(job.ID()))
+				dlStore.setAborted(job.ID())
 				return ok
 			}
 			if !ok {
 				return false
 			}
+		case DiffResolverDelete:
+			// TODO: if !job.Sync() { cmn.Assert(false) } else { deleteObj }
+			cmn.Assert(false)
+		case DiffResolverSend:
+			cmn.Assert(false)
+		case DiffResolverEOF:
+			dlStore.setAllDispatched(job.ID(), true)
+			return true
 		}
 	}
 }
@@ -207,81 +325,29 @@ func (d *dispatcher) checkAborted() bool {
 	}
 }
 
-func (d *dispatcher) createTasksLom(job DlJob, obj dlObj) (*cluster.LOM, error) {
-	lom := &cluster.LOM{T: d.parent.t, ObjName: obj.objName}
-	err := lom.Init(job.Bck())
-	if err == nil {
-		err = lom.Load()
-	}
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	if err == nil {
-		equal, err := compareObjects(obj, lom)
-		if err != nil {
-			return nil, err
-		}
-		if equal {
-			if glog.V(4) {
-				glog.Infof("object %q already exists and seems to match remote - skipping", obj.objName)
-			}
-			return nil, nil
-		}
-		glog.Warningf("object %q already exists but does not match with remote - overriding", obj.objName)
-	}
-
-	if lom.ParsedFQN.MpathInfo == nil {
-		err = fmt.Errorf("download task for %s failed. Failed to get mountpath for the request's fqn %s", obj.link, lom.FQN)
-		glog.Error(err)
-		return nil, err
-	}
-	return lom, nil
-}
-
-func (d *dispatcher) prepareTask(job DlJob, obj dlObj) (*singleObjectTask, *jogger, error) {
-	t := &singleObjectTask{
-		parent: d.parent,
-		obj:    obj,
-		job:    job,
-	}
-
-	lom, err := d.createTasksLom(job, obj)
-	if err != nil {
-		t.markFailed(err.Error())
-		// NOTE: do not propagate single task errors
-		return nil, nil, nil
-	}
-
-	if lom == nil {
-		// object already exists
-		err = dlStore.incSkipped(job.ID())
-		return nil, nil, err
-	}
-
-	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
-	cmn.AssertMsg(ok, fmt.Sprintf("no jogger for mpath %s exists for %v", lom.ParsedFQN.MpathInfo.Path, t))
-	return t, j, nil
-}
-
-// returns false if dispatcher was aborted in the meantime, true otherwise
-func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj dlObj) (err error, ok bool) {
-	if err := dlStore.incScheduled(job.ID()); err != nil {
-		glog.Error(err)
-	}
-	task, jogger, err := d.prepareTask(job, obj)
-	if err != nil {
+// returns false if dispatcher encountered hard error, true otherwise
+func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (err error, ok bool) {
+	bck := cluster.NewBckEmbed(task.job.Bck())
+	if err := bck.Init(d.parent.t.GetBowner(), d.parent.t.Snode()); err != nil {
 		return err, true
 	}
-	if task == nil || jogger == nil {
-		return nil, true
+
+	mi, _, err := cluster.HrwMpath(bck.MakeUname(task.obj.objName))
+	if err != nil {
+		return err, false
+	}
+	jogger, ok := d.joggers[mi.Path]
+	if !ok {
+		err := fmt.Errorf("no jogger for mpath %s exists", mi.Path)
+		return err, false
 	}
 
 	// NOTE: Throttle job before making jogger busy - we don't want to clog the
 	//  jogger as other tasks from other jobs can be already ready to download.
-	job.throttler().acquire()
+	task.job.throttler().acquire()
 
 	// Firstly, check if the job was aborted when we were sleeping.
-	if d.checkAbortedJob(job) {
+	if d.checkAbortedJob(task.job) {
 		return nil, true
 	}
 
@@ -291,7 +357,7 @@ func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj dlObj) (err e
 	//  will wait with dispatching all of the requests anyway
 	case jogger.putCh(task) <- task:
 		return nil, true
-	case <-d.jobAbortedCh(job.ID()).Listen():
+	case <-d.jobAbortedCh(task.job.ID()).Listen():
 		return nil, true
 	case <-d.stopCh.Listen():
 		return nil, false
@@ -327,8 +393,7 @@ func (d *dispatcher) dispatchAbort(req *request) {
 		j.abortJob(req.id)
 	}
 
-	err = dlStore.setAborted(req.id)
-	cmn.AssertNoErr(err) // Everything should be okay since getReqFromDB
+	dlStore.setAborted(req.id)
 	req.writeResp(nil)
 }
 
