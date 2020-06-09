@@ -23,6 +23,16 @@ func init() {
 	loadLogLevel()
 }
 
+func fatalMsg(f string, v ...interface{}) {
+	s := fmt.Sprintf(f, v...)
+	if s == "" || s[len(s)-1] != '\n' {
+		fmt.Fprintln(os.Stderr, s)
+	} else {
+		fmt.Fprint(os.Stderr, s)
+	}
+	os.Exit(1)
+}
+
 // loadLogLevel sets debug verbosity for different packages based on
 // environment variables. It is to help enable asserts that were originally
 // used for testing/initial development and to set the verbosity of glog.
@@ -48,16 +58,16 @@ func loadLogLevel() {
 	for _, ele := range opts {
 		pair := strings.Split(ele, "=")
 		if len(pair) != 2 {
-			glog.Fatalf("failed to get module=level element: %q", ele)
+			fatalMsg("failed to get module=level element: %q", ele)
 		}
 		module, level := pair[0], pair[1]
 		logModule, exists := modules[module]
 		if !exists {
-			glog.Fatalf("unknown module: %s", module)
+			fatalMsg("unknown module: %s", module)
 		}
 		logLvl, err := strconv.Atoi(level)
 		if err != nil || logLvl <= 0 {
-			glog.Fatalf("invalid verbosity level=%s, err: %s", level, err)
+			fatalMsg("invalid verbosity level=%s, err: %s", level, err)
 		}
 		glog.SetV(logModule, glog.Level(logLvl))
 	}
