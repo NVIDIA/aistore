@@ -121,7 +121,6 @@ const (
 	HeaderObjCksumVal  = "checksum.value" // Checksum Value
 	HeaderObjAtime     = "atime"          // Object access time
 	HeaderObjCustomMD  = "custom_md"      // Object custom metadata
-	HeaderObjReplicSrc = "replica_src"    // In replication PUT request specifies the source target
 	HeaderObjSize      = "size"           // Object size (bytes)
 	HeaderObjVersion   = "version"        // Object version/generation - ais or Cloud
 	HeaderObjECMeta    = "ec_meta"        // Info about EC object/slice/replica

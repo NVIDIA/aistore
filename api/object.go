@@ -256,7 +256,7 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"
 // Assumes that args.Reader is already opened and ready for usage
-func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) (err error) {
+func PutObject(args PutObjectArgs) (err error) {
 	query := cmn.AddBckToQuery(nil, args.Bck)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
@@ -278,9 +278,6 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) (err e
 		if args.Cksum != nil {
 			req.Header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
 			req.Header.Set(cmn.HeaderObjCksumVal, args.Cksum.Value())
-		}
-		if len(replicateOpts) > 0 {
-			req.Header.Set(cmn.HeaderObjReplicSrc, replicateOpts[0].SourceURL)
 		}
 		if args.Size != 0 {
 			req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
