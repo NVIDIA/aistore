@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
-	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	"golang.org/x/sync/errgroup"
 )
@@ -368,13 +367,11 @@ func TestCloudListObjectVersions(t *testing.T) {
 		wg.Add(1)
 		go func(wid int) {
 			defer wg.Done()
-			reader, err := readers.NewRandReader(int64(objectSize), p.Cksum.Type)
-			tassert.CheckFatal(t, err)
 			objectsToPut := objectCount / workerCount
 			if wid == workerCount-1 { // last worker puts leftovers
 				objectsToPut += objectCount % workerCount
 			}
-			tutils.PutRR(t, baseParams, reader, bck, objectDir, objectsToPut, fnlen)
+			tutils.PutRR(t, baseParams, int64(objectSize), p.Cksum.Type, bck, objectDir, objectsToPut, fnlen)
 		}(wid)
 
 		wg.Wait()
@@ -477,14 +474,12 @@ func TestListObjects(t *testing.T) {
 						defer wg.Done()
 
 						objectSize := int64(rand.Intn(256) + 20)
-						reader, err := readers.NewRandReader(objectSize, p.Cksum.Type)
-						tassert.CheckFatal(t, err)
 						objDir := tutils.RandomObjDir(dirLen, 5)
 						objectsToPut := objectCount / workerCount
 						if wid == workerCount-1 { // last worker puts leftovers
 							objectsToPut += objectCount % workerCount
 						}
-						objNames := tutils.PutRR(t, baseParams, reader, bck, objDir, objectsToPut, fnlen)
+						objNames := tutils.PutRR(t, baseParams, objectSize, p.Cksum.Type, bck, objDir, objectsToPut, fnlen)
 						for _, objName := range objNames {
 							objs.Store(objName, objEntry{
 								name: objName,

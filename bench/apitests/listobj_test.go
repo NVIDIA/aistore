@@ -13,7 +13,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
-	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -53,11 +52,8 @@ func createAndFillBucket(b *testing.B, bckName string, objCnt uint, objSize int6
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-
-			reader, err := readers.NewRandReader(objSize, cksumType)
-			tassert.CheckFatal(b, err)
 			objDir := tutils.RandomObjDir(10, 5)
-			tutils.PutRR(b, baseParams, reader, bck, objDir, objCntPerWorker, 20)
+			tutils.PutRR(b, baseParams, objSize, cksumType, bck, objDir, objCntPerWorker, 20)
 		}()
 	}
 	wg.Wait()
