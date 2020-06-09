@@ -64,7 +64,7 @@ func createBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 					if !flagIsSet(c, ignoreErrorFlag) {
 						return fmt.Errorf(desc)
 					}
-					fmt.Fprint(c.App.Writer, desc)
+					fmt.Fprintln(c.App.Writer, desc)
 					continue
 				}
 			}
@@ -91,7 +91,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 			}
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "%q bucket destroyed", bck)
+		fmt.Fprintf(c.App.Writer, "%q bucket destroyed\n", bck)
 	}
 	return nil
 }
