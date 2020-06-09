@@ -130,9 +130,4 @@ test:bench:
     - schedules
   script:
     - go get -u golang.org/x/tools/cmd/benchcmp
-    - make deploy <<< $'5\n5\n5\n0'
-    - make test-bench > cur.txt
-    - git checkout HEAD^
-    - make deploy <<< $'5\n5\n5\n0'
-    - make test-bench > prev.txt
-    - benchmp cur.txt prev.txt
+    - make test-bench

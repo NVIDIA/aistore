@@ -2,14 +2,31 @@
 
 set -e
 
-# ./bench.sh cmp OLD_COMMIT [--dir DIRECTORY] [--bench BENCHMARK_NAME]
-bench::compare() {
-  if [[ $# -lt 1 ]]; then
-    echo "fatal: required at least one argument"
+run_test() {
+  commit=$1
+  results=$2
+  echo "Running benches on: ${commit}"
+
+  git checkout -q $commit
+  if [[ -n ${post_checkout} ]]; then
+    bash "${post_checkout}"
   fi
 
-  old_commit=$1
-  shift
+  test="BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test ${verbose} -p 1 -parallel 4 -count 1 -timeout 2h -run=NONE -bench=${bench_name} ${bench_dir}"
+  if [[ -n ${verbose} ]]; then
+    eval $test | tee -a $results
+  else
+    eval $test > $results
+  fi
+}
+
+# ./bench.sh cmp [OLD_COMMIT] [--dir DIRECTORY] [--bench BENCHMARK_NAME] [--post_checkout SCRIPT_NAME] [--verbose]
+bench::compare() {
+  old_commit=HEAD^
+  if [[ $# -eq 1 ]]; then
+    old_commit=$1
+    shift
+  fi
 
   # For now only support current commit.
   new_commit="@{-1}"
@@ -17,23 +34,23 @@ bench::compare() {
 
   bench_dir="./..." # By default run in root directory.
   bench_name="."    # By default run all benchmarks.
+  verbose=""
   while (( "$#" )); do
     case "${1}" in
-      --dir) bench_dir="./$2/..."; shift; shift;;
+      --dir) bench_dir="$2/..."; shift; shift;;
       --bench) bench_name=$2; shift; shift;;
+      --post-checkout) post_checkout=$2; shift; shift;;
+      --verbose) verbose="-v"; shift;;
       *) echo "fatal: unknown argument '${1}'"; exit 1;;
     esac
   done
 
   old_results=$(mktemp)
   new_results=$(mktemp)
-  echo "Running benches on: ${old_commit}"
-  git checkout -q ${old_commit}
-  go test -run=NONE -bench=${bench_name} ${bench_dir} > ${old_results}
-  echo "Running benches on: ${current_hash}"
-  git checkout -q ${new_commit}
-  go test -run=NONE -bench=${bench_name} ${bench_dir} > ${new_results}
-  benchcmp ${old_results} ${new_results}
+  run_test ${old_commit} ${old_results}
+  run_test ${current_hash} ${new_results}
+  errs=$(grep -ae "^--- FAIL: Bench" ${old_results} ${new_results})
+  perror $1 $errs
 }
 
 case "${1}" in

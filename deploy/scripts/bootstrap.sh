@@ -130,7 +130,8 @@ test-docker)
 
 test-bench)
   echo "Running benchmark tests..." >&2
-  . ${AISTORE_DIR}/deploy/scripts/bench_ci.sh
+  SCRIPT_ROOT=${AISTORE_DIR}/deploy/scripts
+  . ${SCRIPT_ROOT}/bench.sh cmp --dir "${AISTORE_DIR}" --verbose --post-checkout "${SCRIPT_ROOT}/clean_deploy.sh"
   ;;
 
 bench)
