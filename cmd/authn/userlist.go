@@ -21,11 +21,12 @@ import (
 )
 
 const (
-	authDB            = "authn.db"
-	usersCollection   = "user"
-	rolesCollection   = "role"
-	tokensCollection  = "token"
-	revokedCollection = "revoked"
+	authDB             = "authn.db"
+	usersCollection    = "user"
+	rolesCollection    = "role"
+	tokensCollection   = "token"
+	revokedCollection  = "revoked"
+	clustersCollection = "cluster"
 
 	adminID   = "admin"
 	adminPass = "admin"
@@ -53,9 +54,9 @@ var (
 		desc   string
 		perms  cmn.AccessAttrs
 	}{
-		{cmn.AuthClusterOwnerRole, "Full access to cluster ", cmn.AllAccess()},
-		{cmn.AuthBucketOwnerRole, "Full access to buckets ", cmn.ReadWriteAccess()},
-		{cmn.AuthGuestRole, "Read-only access to buckets", cmn.ReadOnlyAccess()},
+		{cmn.AuthClusterOwnerRole, "Full access to cluster %s", cmn.AllAccess()},
+		{cmn.AuthBucketOwnerRole, "Full access to buckets of cluster %s", cmn.ReadWriteAccess()},
+		{cmn.AuthGuestRole, "Read-only access to buckets of cluster %s", cmn.ReadOnlyAccess()},
 	}
 )
 
@@ -132,9 +133,81 @@ func (m *userManager) addUser(info *cmn.AuthUser) error {
 	return m.db.Set(usersCollection, info.ID, info)
 }
 
+// Registers a new role
+func (m *userManager) addRole(info *cmn.AuthRole) error {
+	if info.Name == "" {
+		return errors.New("role name is undefined")
+	}
+	if info.IsAdmin {
+		return errors.New("only built-in roles can have administrator permissions")
+	}
+
+	_, err := m.db.GetString(rolesCollection, info.Name)
+	if err == nil {
+		return fmt.Errorf("role %q already exists", info.Name)
+	}
+	return m.db.Set(rolesCollection, info.Name, info)
+}
+
+func (m *userManager) clusterList() (map[string]*cmn.AuthCluster, error) {
+	clusters, err := m.db.GetAll(clustersCollection, "")
+	if err != nil {
+		return nil, err
+	}
+	cluList := make(map[string]*cmn.AuthCluster, len(clusters))
+	for cid, s := range clusters {
+		cInfo := &cmn.AuthCluster{}
+		if err := jsoniter.Unmarshal([]byte(s), cInfo); err != nil {
+			glog.Errorf("Failed to parse cluster %s info: %v", cid, err)
+			continue
+		}
+		cluList[cInfo.ID] = cInfo
+	}
+	return cluList, nil
+}
+
+// Returns a cluster ID which ID or Alias equal cluID or cluAlias.
+func (m *userManager) cluLookup(cluID, cluAlias string) string {
+	cluList, err := m.clusterList()
+	if err != nil {
+		return ""
+	}
+	for cid, cInfo := range cluList {
+		if cid == cluID || cid == cluAlias {
+			return cid
+		}
+		if cluAlias == "" {
+			continue
+		}
+		if cInfo.ID == cluAlias || cInfo.Alias == cluAlias {
+			return cid
+		}
+	}
+	return ""
+}
+
+// Registers a new cluster
+func (m *userManager) addCluster(info *cmn.AuthCluster) error {
+	if info.ID == "" {
+		return errors.New("cluster UUID is undefined")
+	}
+
+	cid := m.cluLookup(info.ID, info.Alias)
+	if cid != "" {
+		return fmt.Errorf("cluster %s[%s] already registered", info.ID, cid)
+	}
+	if err := m.db.Set(clustersCollection, info.ID, info); err != nil {
+		return err
+	}
+	m.createRolesForCluster(info)
+	return nil
+}
+
 // Deletes an existing user
 func (m *userManager) delUser(userID string) error {
-	// TODO: allow delete an admin only if there is another one in DN
+	if userID == adminID {
+		return errors.New("cannot remove built-in administrator account")
+	}
 	token := &cmn.AuthToken{}
 	errToken := m.db.Get(tokensCollection, userID, token)
 	err := m.db.Delete(usersCollection, userID)
@@ -151,14 +224,21 @@ func (m *userManager) delUser(userID string) error {
 	return err
 }
 
-// Retunrs user info by user's ID
-func (m *userManager) getUser(userID string) (*cmn.AuthUser, error) {
-	uInfo := &cmn.AuthUser{}
-	err := m.db.Get(usersCollection, userID, uInfo)
-	if err != nil {
-		return nil, fmt.Errorf("user %q not found", userID)
+// Unregister an existing cluster
+func (m *userManager) delCluster(cluID string) error {
+	cid := m.cluLookup(cluID, cluID)
+	if cid == "" {
+		return fmt.Errorf("cluster %s not found", cluID)
 	}
-	return uInfo, nil
+	return m.db.Delete(clustersCollection, cid)
+}
+
+// Deletes an existing role
+func (m *userManager) delRole(role string) error {
+	if role == cmn.AuthAdminRole {
+		return errors.New("cannot remove built-in administrator role")
+	}
+	return m.db.Delete(rolesCollection, role)
 }
 
 // Updates an existing user. The function invalidates user tokens after
@@ -169,19 +249,89 @@ func (m *userManager) updateUser(userID string, updateReq *cmn.AuthUser) error {
 	if err != nil {
 		return fmt.Errorf("user %q not found", userID)
 	}
+	if userID == adminID && len(updateReq.Roles) != 0 {
+		return errors.New("cannot change administrator's role")
+	}
 
 	if updateReq.Password != "" {
 		uInfo.Password = encryptPassword(updateReq.Password)
 	}
-	uInfo.MergeClusterACLs(updateReq.Clusters)
-	uInfo.MergeBckACLs(updateReq.Buckets)
+	if len(updateReq.Roles) != 0 {
+		uInfo.Roles = updateReq.Roles
+	}
+	uInfo.Clusters = cmn.MergeClusterACLs(uInfo.Clusters, updateReq.Clusters)
+	uInfo.Buckets = cmn.MergeBckACLs(uInfo.Buckets, updateReq.Buckets)
 
 	return m.db.Set(usersCollection, userID, uInfo)
 }
 
+// Updates an existing role
+func (m *userManager) updateRole(role string, updateReq *cmn.AuthRole) error {
+	if role == cmn.AuthAdminRole {
+		return errors.New("cannot modify built-in administrator role")
+	}
+	rInfo := &cmn.AuthRole{}
+	err := m.db.Get(rolesCollection, role, rInfo)
+	if err != nil {
+		return fmt.Errorf("role %q not found", role)
+	}
+
+	if updateReq.Desc != "" {
+		rInfo.Desc = updateReq.Desc
+	}
+	if len(updateReq.Roles) != 0 {
+		rInfo.Roles = updateReq.Roles
+	}
+	rInfo.Clusters = cmn.MergeClusterACLs(rInfo.Clusters, updateReq.Clusters)
+	rInfo.Buckets = cmn.MergeBckACLs(rInfo.Buckets, updateReq.Buckets)
+
+	return m.db.Set(rolesCollection, role, rInfo)
+}
+
+func (m *userManager) updateCluster(info *cmn.AuthCluster) error {
+	if info.ID == "" {
+		return errors.New("cluster ID is undefined")
+	}
+	clu := &cmn.AuthCluster{}
+	err := m.db.Get(clustersCollection, info.ID, clu)
+	if err != nil {
+		return err
+	}
+	if info.Alias != "" {
+		cid := m.cluLookup("", info.Alias)
+		if cid != "" && cid != clu.ID {
+			return fmt.Errorf("alias %q is used for cluster %q", info.Alias, cid)
+		}
+		clu.Alias = info.Alias
+	}
+	if len(info.URLs) != 0 {
+		clu.URLs = info.URLs
+	}
+	return m.db.Set(clustersCollection, info.ID, clu)
+}
+
+// Before putting a list of cluster permissions to a token, cluster aliases
+// must be replaced with their IDs.
+func (m *userManager) fixClusterIDs(lst []*cmn.AuthCluster) {
+	cluList, err := m.clusterList()
+	if err != nil {
+		return
+	}
+	for _, cInfo := range lst {
+		if _, ok := cluList[cInfo.ID]; ok {
+			continue
+		}
+		for _, clu := range cluList {
+			if clu.Alias == cInfo.ID {
+				cInfo.ID = clu.ID
+			}
+		}
+	}
+}
+
 // Generates a token for a user if user credentials are valid. If the token is
 // already generated and is not expired yet the existing token is returned.
-// Token includes information about userID, AWS/GCP creds and expire token time.
+// Token includes user ID, permissions, and token expiration time.
 // If a new token was generated then it sends the proxy a new valid token list
 func (m *userManager) issueToken(userID, pwd string, ttl ...time.Duration) (string, error) {
 	var (
@@ -227,6 +377,7 @@ func (m *userManager) issueToken(userID, pwd string, ttl ...time.Duration) (stri
 			"admin":    true,
 		})
 	} else {
+		m.fixClusterIDs(uInfo.Clusters)
 		t = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"expires":  expires,
 			"username": userID,
@@ -335,22 +486,25 @@ func (m *userManager) roleList() ([]*cmn.AuthRole, error) {
 
 // Creates predefined roles for just added clusters. Errors are logged and
 // are not returned to a caller as it is not crucial.
-func (m *userManager) createRolesForClusters(cluList map[string][]string) {
-	for clu := range cluList {
-		for _, pr := range predefinedRoles {
-			uid := pr.prefix + "-" + clu
-			rInfo := &cmn.AuthRole{}
-			if err := m.db.Get(rolesCollection, uid, rInfo); err == nil {
-				continue
-			}
-			rInfo.Name = uid
-			rInfo.Desc = pr.desc
-			rInfo.Clusters = []*cmn.AuthCluster{
-				{ID: clu, Access: pr.perms},
-			}
-			if err := m.db.Set(rolesCollection, uid, rInfo); err != nil {
-				glog.Errorf("Failed to create role %s: %v", uid, err)
-			}
+func (m *userManager) createRolesForCluster(clu *cmn.AuthCluster) {
+	for _, pr := range predefinedRoles {
+		suffix := cmn.AnyString(clu.Alias, clu.ID)
+		uid := pr.prefix + "-" + suffix
+		rInfo := &cmn.AuthRole{}
+		if err := m.db.Get(rolesCollection, uid, rInfo); err == nil {
+			continue
+		}
+		rInfo.Name = uid
+		cluName := clu.ID
+		if clu.Alias != "" {
+			cluName += "[" + clu.Alias + "]"
+		}
+		rInfo.Desc = fmt.Sprintf(pr.desc, cluName)
+		rInfo.Clusters = []*cmn.AuthCluster{
+			{ID: clu.ID, Access: pr.perms},
+		}
+		if err := m.db.Set(rolesCollection, uid, rInfo); err != nil {
+			glog.Errorf("Failed to create role %s: %v", uid, err)
 		}
 	}
 }

@@ -5,7 +5,7 @@
 package main
 
 import (
-	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -171,7 +171,7 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.checkAuthorization(w, r); err != nil {
+	if err = a.checkAuthorization(w, r); err != nil {
 		glog.Errorf("Not authorized: %v\n", err)
 		return
 	}
@@ -271,27 +271,16 @@ func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) er
 		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("invalid header")
 	}
-
-	b, err := base64.StdEncoding.DecodeString(s[1])
+	secret := conf.Auth.Secret
+	token, err := cmn.DecryptToken(s[1], secret)
 	if err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
-		return fmt.Errorf("invalid header authorization")
+		return err
 	}
-
-	pair := strings.SplitN(string(b), ":", 2)
-	if len(pair) != 2 {
-		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
-		return fmt.Errorf("invalid header authorization")
-	}
-
-	uInfo, err := a.users.getUser(pair[0])
-	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
-		return fmt.Errorf("invalid credentials")
-	}
-	if !isSamePassword(pair[1], uInfo.Password) {
-		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
-		return fmt.Errorf("invalid credentials")
+	if !token.IsAdmin {
+		msg := "insufficient permissions"
+		cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusUnauthorized)
+		return errors.New(msg)
 	}
 
 	return nil
@@ -360,64 +349,39 @@ func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if _, err := checkRESTItems(w, r, 0, cmn.Version, pathClusters); err != nil {
 		return
 	}
-	cluConf := &clusterConfig{}
+	if err := a.checkAuthorization(w, r); err != nil {
+		glog.Errorf("Not authorized: %v", err)
+		return
+	}
+
+	cluConf := &cmn.AuthCluster{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
 		return
 	}
-	if len(cluConf.Conf) == 0 {
-		cmn.InvalidHandlerWithMsg(w, r, "Empty cluster list", http.StatusBadRequest)
-		return
-	}
-	conf.Cluster.mtx.Lock()
-	defer conf.Cluster.mtx.Unlock()
-	for cid := range cluConf.Conf {
-		if conf.clusterExists(cid) {
-			msg := fmt.Sprintf("Cluster %q already registered", cid)
-			cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusConflict)
-			return
-		}
-	}
-	if err := conf.updateClusters(cluConf); err != nil {
+	if err := a.users.addCluster(cluConf); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := conf.save(); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	a.users.createRolesForClusters(cluConf.Conf)
 }
 
 func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	if _, err := checkRESTItems(w, r, 0, cmn.Version, pathClusters); err != nil {
 		return
 	}
-	cluConf := &clusterConfig{}
+	if err := a.checkAuthorization(w, r); err != nil {
+		glog.Errorf("Not authorized: %v", err)
+		return
+	}
+
+	cluConf := &cmn.AuthCluster{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
-		return
-	}
-	if len(cluConf.Conf) == 0 {
-		cmn.InvalidHandlerWithMsg(w, r, "Empty cluster list", http.StatusBadRequest)
-		return
-	}
-	conf.Cluster.mtx.Lock()
-	defer conf.Cluster.mtx.Unlock()
-	for cid := range cluConf.Conf {
-		if !conf.clusterExists(cid) {
-			msg := fmt.Sprintf("Cluster %q not found", cid)
-			cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
-			return
-		}
-	}
-	if err := conf.updateClusters(cluConf); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := conf.save(); err != nil {
+	if err := a.users.updateCluster(cluConf); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
-		return
 	}
 }
 
@@ -426,21 +390,17 @@ func (a *authServ) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	if err = a.checkAuthorization(w, r); err != nil {
+		glog.Errorf("Not authorized: %v", err)
+		return
+	}
+
 	if len(apiItems) == 0 {
 		cmn.InvalidHandlerWithMsg(w, r, "Cluster name or ID is not defined", http.StatusInternalServerError)
 		return
 	}
-	conf.Cluster.mtx.Lock()
-	defer conf.Cluster.mtx.Unlock()
-	if !conf.clusterExists(apiItems[0]) {
-		msg := fmt.Sprintf("Cluster %q not found", apiItems[0])
-		cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
-		return
-	}
-	conf.deleteCluster(apiItems[0])
-	if err := conf.save(); err != nil {
+	if err := a.users.delCluster(apiItems[0]); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
-		return
 	}
 }
 
@@ -449,36 +409,112 @@ func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	conf.Cluster.mtx.RLock()
-	defer conf.Cluster.mtx.RUnlock()
-	cluList := &conf.Cluster
+	var cluList *cmn.AuthClusterList
 	if len(apiItems) != 0 {
 		cid := apiItems[0]
-		urls, ok := cluList.Conf[cid]
+		clu, ok := cluList.Clusters[cid]
 		if !ok {
 			msg := fmt.Sprintf("Cluster %q not found", cid)
 			cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
 			return
 		}
-		cluList = &clusterConfig{Conf: map[string][]string{cid: urls}}
+		cluList = &cmn.AuthClusterList{
+			Clusters: map[string]*cmn.AuthCluster{cid: {ID: cid, URLs: clu.URLs}},
+		}
+	} else {
+		clusters, err := a.users.clusterList()
+		if err != nil {
+			cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		cluList = &cmn.AuthClusterList{Clusters: clusters}
 	}
 	a.writeJSON(w, cluList, "auth")
 }
 
 func (a *authServ) roleHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
+	case http.MethodPost:
+		a.httpRolePost(w, r)
+	case http.MethodPut:
+		a.httpRolePut(w, r)
+	case http.MethodDelete:
+		a.httpRoleDel(w, r)
 	case http.MethodGet:
-		a.httpRoleList(w, r)
+		a.httpRoleGet(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /users handler")
+		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /roles handler")
 	}
 }
 
-func (a *authServ) httpRoleList(w http.ResponseWriter, r *http.Request) {
+func (a *authServ) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 	roles, err := a.users.roleList()
 	if err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
 	a.writeJSON(w, roles, "rolelist")
+}
+
+func (a *authServ) httpRoleDel(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, pathRoles)
+	if err != nil {
+		return
+	}
+	if err = a.checkAuthorization(w, r); err != nil {
+		glog.Errorf("Not authorized: %v", err)
+		return
+	}
+
+	roleID := apiItems[0]
+	if err = a.users.delRole(roleID); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+	}
+}
+
+func (a *authServ) httpRolePost(w http.ResponseWriter, r *http.Request) {
+	_, err := checkRESTItems(w, r, 0, cmn.Version, pathRoles)
+	if err != nil {
+		return
+	}
+	if err = a.checkAuthorization(w, r); err != nil {
+		glog.Errorf("Not authorized: %v", err)
+		return
+	}
+
+	info := &cmn.AuthRole{}
+	if err := cmn.ReadJSON(w, r, info); err != nil {
+		glog.Errorf("Failed to read role: %v", err)
+		return
+	}
+
+	if err := a.users.addRole(info); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to add role: %v", err), http.StatusInternalServerError)
+	}
+}
+
+func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, pathRoles)
+	if err != nil {
+		return
+	}
+	if err = a.checkAuthorization(w, r); err != nil {
+		glog.Errorf("Not authorized: %v", err)
+		return
+	}
+
+	role := apiItems[0]
+	updateReq := &cmn.AuthRole{}
+	err = jsoniter.NewDecoder(r.Body).Decode(updateReq)
+	if err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, "Invalid request")
+		return
+	}
+
+	if glog.V(4) {
+		glog.Infof("Update role %s\n", role)
+	}
+	if err := a.users.updateRole(role, updateReq); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+	}
 }

@@ -5,7 +5,6 @@ cat > $AUTHN_CONF_FILE <<EOL
 		"dir":   "$AUTHN_LOG_DIR",
 		"level": "${AUTHN_LOG_LEVEL:-3}"
 	},
-	"cluster": { },
 	"net": {
 		"http": {
 			"port":	${AUTHN_PORT:-52001},

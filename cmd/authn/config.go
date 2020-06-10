@@ -8,10 +8,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"sync"
 	"time"
-
-	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 const (
@@ -22,7 +19,6 @@ type (
 	config struct {
 		path    string
 		ConfDir string        `json:"confdir"`
-		Cluster clusterConfig `json:"cluster"`
 		Log     logConfig     `json:"log"`
 		Net     netConfig     `json:"net"`
 		Auth    authConfig    `json:"auth"`
@@ -50,10 +46,6 @@ type (
 		DefaultStr string        `json:"default_timeout"`
 		Default    time.Duration `json:"-"`
 	}
-	clusterConfig struct {
-		mtx  sync.RWMutex
-		Conf map[string][]string `json:"conf,omitempty"` // clusterID/Alias <=> list of proxy IPs to connect
-	}
 )
 
 // Replaces super user name and password, and secret key used to en(de)code
@@ -72,32 +64,4 @@ func (c *config) validate() (err error) {
 	}
 
 	return nil
-}
-
-func (c *config) updateClusters(cluConf *clusterConfig) error {
-	if len(cluConf.Conf) == 0 {
-		return nil
-	}
-	for cluster, lst := range cluConf.Conf {
-		if len(lst) == 0 {
-			return fmt.Errorf("cluster %q URL list is empty", cluster)
-		}
-	}
-	for cluster, lst := range cluConf.Conf {
-		c.Cluster.Conf[cluster] = lst
-	}
-	return nil
-}
-
-func (c *config) save() error {
-	return jsp.Save(conf.path, c, jsp.Plain())
-}
-
-func (c *config) clusterExists(id string) bool {
-	_, ok := c.Cluster.Conf[id]
-	return ok
-}
-
-func (c *config) deleteCluster(id string) {
-	delete(c.Cluster.Conf, id)
 }

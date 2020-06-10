@@ -23,7 +23,6 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	jwt "github.com/dgrijalva/jwt-go"
 )
 
 type (
@@ -52,29 +51,10 @@ var (
 )
 
 // Decrypts JWT token and returns all encrypted information.
-// Used by proxy - to check a user access and token validity(e.g, expiration),
-// and by target - only to get a user name for AWS/GCP access
+// Used by proxy and by AuthN.
 func decryptToken(tokenStr string) (*cmn.AuthToken, error) {
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-
-		return []byte(cmn.GCO.Get().Auth.Secret), nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return nil, cmn.ErrInvalidToken
-	}
-	tInfo := &cmn.AuthToken{}
-	if err := cmn.TryUnmarshal(claims, tInfo); err != nil {
-		return nil, cmn.ErrInvalidToken
-	}
-	return tInfo, nil
+	secret := cmn.GCO.Get().Auth.Secret
+	return cmn.DecryptToken(tokenStr, secret)
 }
 
 // Add tokens to list of invalid ones. After that it cleans up the list

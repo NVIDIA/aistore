@@ -26,13 +26,14 @@ const (
 )
 
 var (
+	ConfigDirPath  string
 	configFilePath string
 	defaultConfig  Config
 )
 
 func init() {
-	configDirPath := cmn.AppConfigPath(configDirName)
-	configFilePath = filepath.Join(configDirPath, configFileName)
+	ConfigDirPath = cmn.AppConfigPath(configDirName)
+	configFilePath = filepath.Join(ConfigDirPath, configFileName)
 
 	proto := "http"
 	if value := os.Getenv(cmn.EnvVars.UseHTTPS); cmn.IsParseBool(value) {

@@ -298,9 +298,9 @@ const (
 		"--{{FlagName $flag }}" +
 		"{{end}}{{end}}\n"
 
-	AuthNClusterTmpl = "ClusterID\tURLs\n" +
+	AuthNClusterTmpl = "ClUSTER ID\tALIAS\tURLs\n" +
 		"{{ range $clu := . }}" +
-		"{{ $clu.ID }}\t{{ JoinList $clu.URLs }}\n" +
+		"{{ $clu.ID }}\t{{ $clu.Alias }}\t{{ JoinList $clu.URLs }}\n" +
 		"{{end}}"
 
 	AuthNRoleTmpl = "ROLE\tDESCRIPTION\n" +

@@ -187,13 +187,15 @@ const (
 	listCommandArgument = "[PROVIDER://][BUCKET_NAME]"
 
 	// Auth
-	addUserArgument           = "USER_NAME USER_PASSWORD"
+	addUserArgument           = "USER_NAME USER_PASSWORD [ROLE ...]"
 	deleteUserArgument        = "USER_NAME"
 	userLoginArgument         = "USER_NAME USER_PASSWORD"
-	addAuthClusterArgument    = "CLUSTER_ID URL[,URL...]"
+	addAuthClusterArgument    = "CLUSTER_ID [ALIAS] URL [URL...]"
 	deleteAuthClusterArgument = "CLUSTER_ID"
 	showAuthClusterArgument   = "[CLUSTER_ID]"
 	showAuthRoleArgument      = "[ROLE]"
+	addAuthRoleArgument       = "ROLE [CLUSTER_ID PERMISSION ...]"
+	deleteRoleArgument        = "ROLE"
 )
 
 // Flags
@@ -262,7 +264,7 @@ var (
 	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
 	checksumFlags    = getCksumFlags()
 	// AuthN
-	roleFlag = cli.StringFlag{Name: "role", Usage: "a user role, eg., 'guest'(default), 'developer' or 'admin'"}
+	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "save token to file"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 

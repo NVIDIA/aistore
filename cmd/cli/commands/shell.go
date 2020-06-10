@@ -372,3 +372,105 @@ func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 		}
 	}
 }
+
+func isClusterID(cluList []*cmn.AuthCluster, id string) bool {
+	if id == "" {
+		return false
+	}
+	for _, clu := range cluList {
+		if clu.ID == id || clu.Alias == id {
+			return true
+		}
+	}
+	return false
+}
+
+func roleCluPermCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		return
+	}
+
+	cluList, err := api.GetClusterAuthN(authParams, cmn.AuthCluster{})
+	if err != nil {
+		return
+	}
+
+	args := c.Args()
+	last := c.Args().Get(c.NArg() - 1)
+	if isClusterID(cluList, last) {
+		for _, perm := range []string{"no", "ro", "rw", "admin"} {
+			fmt.Println(perm)
+		}
+		return
+	}
+	for _, clu := range cluList {
+		if cmn.StringInSlice(clu.ID, args) || cmn.StringInSlice(clu.Alias, args) {
+			continue
+		}
+		fmt.Println(cmn.AnyString(clu.Alias, clu.ID))
+	}
+}
+
+func oneRoleCompletions(c *cli.Context) {
+	if c.NArg() > 0 {
+		return
+	}
+
+	roleList, err := api.GetRolesAuthN(authParams)
+	if err != nil {
+		return
+	}
+
+	for _, role := range roleList {
+		fmt.Println(role.Name)
+	}
+}
+
+func multiRoleCompletions(c *cli.Context) {
+	if c.NArg() < 2 {
+		return
+	}
+
+	roleList, err := api.GetRolesAuthN(authParams)
+	if err != nil {
+		return
+	}
+
+	args := c.Args()[2:]
+	for _, role := range roleList {
+		if cmn.StringInSlice(role.Name, args) {
+			continue
+		}
+		fmt.Println(role.Name)
+	}
+}
+
+func oneUserCompletions(c *cli.Context) {
+	if c.NArg() > 0 {
+		return
+	}
+
+	userList, err := api.GetUsersAuthN(authParams)
+	if err != nil {
+		return
+	}
+
+	for _, user := range userList {
+		fmt.Println(user.ID)
+	}
+}
+
+func oneClusterCompletions(c *cli.Context) {
+	if c.NArg() > 0 {
+		return
+	}
+
+	cluList, err := api.GetClusterAuthN(authParams, cmn.AuthCluster{})
+	if err != nil {
+		return
+	}
+
+	for _, clu := range cluList {
+		fmt.Println(cmn.AnyString(clu.Alias, clu.ID))
+	}
+}

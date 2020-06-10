@@ -6,9 +6,11 @@ package cmn
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/dgrijalva/jwt-go"
 )
 
 const (
@@ -32,7 +34,9 @@ type (
 	// Default permissions for a cluster
 	AuthCluster struct {
 		ID     string      `json:"id"`
-		Access AccessAttrs `json:"perm,string"`
+		Alias  string      `json:"alias,omitempty"`
+		Access AccessAttrs `json:"perm,string,omitempty"`
+		URLs   []string    `json:"urls,omitempty"`
 	}
 	// Permissions for a single bucket
 	AuthBucket struct {
@@ -54,6 +58,9 @@ type (
 		Clusters []*AuthCluster `json:"clusters"`
 		Buckets  []*AuthBucket  `json:"buckets,omitempty"`
 		IsAdmin  bool           `json:"admin"`
+	}
+	AuthClusterList struct {
+		Clusters map[string]*AuthCluster `json:"clusters,omitempty"`
 	}
 )
 
@@ -108,38 +115,6 @@ func (tk *AuthToken) CheckPermissions(clusterID string, bck *Bck, perms AccessAt
 	return ErrNoPermissions
 }
 
-func (uInfo *AuthUser) MergeBckACLs(newACLs []*AuthBucket) {
-	for _, n := range newACLs {
-		found := false
-		for _, o := range uInfo.Buckets {
-			if o.Bck.Equal(n.Bck) {
-				found = true
-				o.Access = n.Access
-				break
-			}
-			if !found {
-				uInfo.Buckets = append(uInfo.Buckets, n)
-			}
-		}
-	}
-}
-
-func (uInfo *AuthUser) MergeClusterACLs(newACLs []*AuthCluster) {
-	for _, n := range newACLs {
-		found := false
-		for _, o := range uInfo.Clusters {
-			if o.ID == n.ID {
-				found = true
-				o.Access = n.Access
-				break
-			}
-		}
-		if !found {
-			uInfo.Clusters = append(uInfo.Clusters, n)
-		}
-	}
-}
-
 func (uInfo *AuthUser) IsAdmin() bool {
 	for _, r := range uInfo.Roles {
 		if r == AuthAdminRole {
@@ -147,4 +122,60 @@ func (uInfo *AuthUser) IsAdmin() bool {
 		}
 	}
 	return false
+}
+
+func MergeBckACLs(oldACLs, newACLs []*AuthBucket) []*AuthBucket {
+	for _, n := range newACLs {
+		found := false
+		for _, o := range oldACLs {
+			if o.Bck.Equal(n.Bck) {
+				found = true
+				o.Access = n.Access
+				break
+			}
+			if !found {
+				oldACLs = append(oldACLs, n)
+			}
+		}
+	}
+	return oldACLs
+}
+
+func MergeClusterACLs(oldACLs, newACLs []*AuthCluster) []*AuthCluster {
+	for _, n := range newACLs {
+		found := false
+		for _, o := range oldACLs {
+			if o.ID == n.ID {
+				found = true
+				o.Access = n.Access
+				break
+			}
+		}
+		if !found {
+			oldACLs = append(oldACLs, n)
+		}
+	}
+	return oldACLs
+}
+
+func DecryptToken(tokenStr, secret string) (*AuthToken, error) {
+	token, err := jwt.Parse(tokenStr, func(tk *jwt.Token) (interface{}, error) {
+		if _, ok := tk.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", tk.Header["alg"])
+		}
+		return []byte(secret), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return nil, ErrInvalidToken
+	}
+	tInfo := &AuthToken{}
+	if err := TryUnmarshal(claims, tInfo); err != nil {
+		return nil, ErrInvalidToken
+	}
+	return tInfo, nil
 }

@@ -19,7 +19,7 @@ import (
 var (
 	version, build string
 	configPath     string
-	conf           = &config{Cluster: clusterConfig{Conf: make(map[string][]string)}}
+	conf           = &config{}
 )
 
 // Set up glog with options from configuration file

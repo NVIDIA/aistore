@@ -18,40 +18,34 @@ import (
 
 // update list of revoked token on all clusters
 func (m *userManager) broadcastRevoked(token string) {
-	conf.Cluster.mtx.RLock()
-	if len(conf.Cluster.Conf) == 0 {
-		conf.Cluster.mtx.RUnlock()
-		glog.Warning("primary proxy is not defined")
-		return
-	}
-	conf.Cluster.mtx.RUnlock()
-
 	tokenList := ais.TokenList{Tokens: []string{token}}
 	body := cmn.MustMarshal(tokenList)
-
 	m.broadcast(http.MethodDelete, cmn.Tokens, body)
 }
 
 // broadcast the request to all clusters. If a cluster has a few URLS,
 // it sends to the first working one. Clusters are processed in parallel.
 func (m *userManager) broadcast(method, path string, body []byte) {
-	conf.Cluster.mtx.RLock()
-	defer conf.Cluster.mtx.RUnlock()
+	cluList, err := m.clusterList()
+	if err != nil {
+		glog.Errorf("Failed to read cluster list: %v", err)
+		return
+	}
 	wg := &sync.WaitGroup{}
-	for cid, urls := range conf.Cluster.Conf {
+	for _, clu := range cluList {
 		wg.Add(1)
-		go func(cid string, urls []string) {
+		go func(clu *cmn.AuthCluster) {
 			defer wg.Done()
 			var err error
-			for _, u := range urls {
+			for _, u := range clu.URLs {
 				if err = m.proxyRequest(method, u, path, body); err == nil {
 					break
 				}
 			}
 			if err != nil {
-				glog.Errorf("Failed to sync revoked tokens with %q: %v", cid, err)
+				glog.Errorf("Failed to sync revoked tokens with %q: %v", clu.ID, err)
 			}
-		}(cid, urls)
+		}(clu)
 	}
 	wg.Wait()
 }

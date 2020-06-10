@@ -123,7 +123,6 @@ func TestManager(t *testing.T) {
 	testInvalidUser(mgr, t)
 	testUserDelete(mgr, t)
 	deleteUsers(mgr, false, t)
-	clusterList(t)
 }
 
 func TestToken(t *testing.T) {
@@ -194,41 +193,4 @@ func TestToken(t *testing.T) {
 	}
 
 	deleteUsers(mgr, false, t)
-}
-
-func clusterList(t *testing.T) {
-	cluList := &clusterConfig{
-		Conf: map[string][]string{
-			"clu1": {"1.1.1.1"},
-			"clu2": {},
-		},
-	}
-	err := conf.updateClusters(cluList)
-	if err == nil {
-		t.Error("Registering a cluster with empty URL list must fail")
-	}
-	cluList = &clusterConfig{
-		Conf: map[string][]string{
-			"clu1": {"1.1.1.1"},
-			"clu2": {"2.2.2.2"},
-		},
-	}
-	err = conf.updateClusters(cluList)
-	tassert.CheckError(t, err)
-	cluList = &clusterConfig{
-		Conf: map[string][]string{
-			"clu3": {"3.3.3.3"},
-			"clu2": {"2.2.2.2", "4.4.4.4"},
-		},
-	}
-	err = conf.updateClusters(cluList)
-	tassert.CheckError(t, err)
-	if len(conf.Cluster.Conf) != 3 {
-		t.Errorf("Expected 3 registered clusters, %d found\n%+v",
-			len(conf.Cluster.Conf), conf.Cluster.Conf)
-	}
-	urls, ok := conf.Cluster.Conf["clu2"]
-	if !ok || len(urls) != 2 {
-		t.Errorf("clu2 must be updated: %v - %+v", ok, urls)
-	}
 }

@@ -5,6 +5,7 @@
 package commands
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -15,14 +16,15 @@ import (
 )
 
 func initAuthParams() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
+	tokenPath := os.Getenv(authnTokenPath)
+	custom := tokenPath != ""
+	if tokenPath == "" {
+		tokenPath = filepath.Join(config.ConfigDirPath, tokenFile)
 	}
-
-	// TODO: `credDir` should be `home/.config/ais/`
-	tokenPath := filepath.Join(home, credDir, credFile)
-	jsp.Load(tokenPath, &loggedUserToken, jsp.Plain())
+	err := jsp.Load(tokenPath, &loggedUserToken, jsp.Plain())
+	if err != nil && custom {
+		fmt.Fprintf(os.Stderr, "Failed to read token from %q: %v\n", tokenPath, err)
+	}
 }
 
 func initClusterParams() {

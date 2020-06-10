@@ -21,21 +21,19 @@ import (
 )
 
 const (
-	credDir  = ".ais"
-	credFile = "token"
+	tokenFile = "auth.token"
 
-	authnServerURL         = "AUTHN_URL"
-	authnSuperuserName     = "AUTHN_SU_NAME"
-	authnSuperuserPassword = "AUTHN_SU_PASS"
-	authnUserName          = "AUTHN_USER_NAME"
-	authnUserPassword      = "AUTHN_USER_PASS"
+	authnServerURL = "AUTHN_URL"
+	authnTokenPath = "AUTHN_TOKEN_FILE"
 
-	flagsAuthUserAdd = "user_add"
+	flagsAuthUserLogin = "user_login"
+	flagsAuthRoleAdd   = "role_add"
 )
 
 var (
 	authFlags = map[string][]cli.Flag{
-		flagsAuthUserAdd: {roleFlag},
+		flagsAuthUserLogin: {tokenFileFlag},
+		flagsAuthRoleAdd:   {descriptionFlag},
 	}
 	authCmds = []cli.Command{
 		{
@@ -44,20 +42,28 @@ var (
 			Subcommands: []cli.Command{
 				{
 					Name:  subcmdAuthAdd,
-					Usage: "add entity from auth",
+					Usage: "add entity to auth",
 					Subcommands: []cli.Command{
 						{
-							Name:      subcmdAuthUser,
-							Usage:     "add a new user",
-							ArgsUsage: addUserArgument,
-							Flags:     authFlags[flagsAuthUserAdd],
-							Action:    addUserHandler,
+							Name:         subcmdAuthUser,
+							Usage:        "add a new user",
+							ArgsUsage:    addUserArgument,
+							Action:       addUserHandler,
+							BashComplete: multiRoleCompletions,
 						},
 						{
 							Name:      subcmdAuthCluster,
 							Usage:     "register a new cluster",
 							ArgsUsage: addAuthClusterArgument,
 							Action:    addAuthClusterHandler,
+						},
+						{
+							Name:         subcmdAuthRole,
+							Usage:        "create a new role",
+							ArgsUsage:    addAuthRoleArgument,
+							Flags:        authFlags[flagsAuthRoleAdd],
+							Action:       addAuthRoleHandler,
+							BashComplete: roleCluPermCompletions,
 						},
 					},
 				},
@@ -66,16 +72,25 @@ var (
 					Usage: "remove entity from auth",
 					Subcommands: []cli.Command{
 						{
-							Name:      subcmdAuthUser,
-							Usage:     "remove an existing user",
-							ArgsUsage: deleteUserArgument,
-							Action:    deleteUserHandler,
+							Name:         subcmdAuthUser,
+							Usage:        "remove an existing user",
+							ArgsUsage:    deleteUserArgument,
+							Action:       deleteUserHandler,
+							BashComplete: oneUserCompletions,
 						},
 						{
-							Name:      subcmdAuthCluster,
-							Usage:     "unregister a cluster",
-							ArgsUsage: deleteAuthClusterArgument,
-							Action:    deleteAuthClusterHandler,
+							Name:         subcmdAuthCluster,
+							Usage:        "unregister a cluster",
+							ArgsUsage:    deleteAuthClusterArgument,
+							Action:       deleteAuthClusterHandler,
+							BashComplete: oneClusterCompletions,
+						},
+						{
+							Name:         subcmdAuthRole,
+							Usage:        "remove an existing role",
+							ArgsUsage:    deleteRoleArgument,
+							Action:       deleteRoleHandler,
+							BashComplete: oneRoleCompletions,
 						},
 					},
 				},
@@ -116,6 +131,7 @@ var (
 				{
 					Name:      subcmdAuthLogin,
 					Usage:     "log in with existing user credentials",
+					Flags:     authFlags[flagsAuthUserLogin],
 					ArgsUsage: userLoginArgument,
 					Action:    loginUserHandler,
 				},
@@ -149,27 +165,8 @@ func cliAuthnURL(cfg *config.Config) string {
 	return authURL
 }
 
-func cliAuthnAdminName(c *cli.Context) string {
-	name := os.Getenv(authnSuperuserName)
-	if name == "" {
-		name = readValue(c, "Superuser login")
-	}
-	return name
-}
-
-func cliAuthnAdminPassword(c *cli.Context) string {
-	pass := os.Getenv(authnSuperuserPassword)
-	if pass == "" {
-		pass = readValue(c, "Superuser password")
-	}
-	return pass
-}
-
 func cliAuthnUserName(c *cli.Context) string {
 	name := c.Args().Get(0)
-	if name == "" {
-		name = os.Getenv(authnUserName)
-	}
 	if name == "" {
 		name = readValue(c, "User login")
 	}
@@ -178,9 +175,6 @@ func cliAuthnUserName(c *cli.Context) string {
 
 func cliAuthnUserPassword(c *cli.Context) string {
 	pass := c.Args().Get(1)
-	if pass == "" {
-		pass = os.Getenv(authnUserPassword)
-	}
 	if pass == "" {
 		pass = readValue(c, "User password")
 	}
@@ -191,32 +185,40 @@ func addUserHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	spec := api.AuthnSpec{
-		AdminName:     cliAuthnAdminName(c),
-		AdminPassword: cliAuthnAdminPassword(c),
+	username := c.Args().Get(0)
+	if username == "" {
+		return missingArgumentsError(c, "user name")
 	}
-	roles := []string{}
-	if role := parseStrFlag(c, roleFlag); role != "" {
-		roles = strings.Split(role, ",")
+	userpass := c.Args().Get(1)
+	if username == "" {
+		return missingArgumentsError(c, "user password")
 	}
+	roles := c.Args()[2:]
 	user := &cmn.AuthUser{
-		ID:       cliAuthnUserName(c),
-		Password: cliAuthnUserPassword(c),
+		ID:       username,
+		Password: userpass,
 		Roles:    roles,
 	}
-	return api.AddUser(authParams, spec, user)
+	return api.AddUser(authParams, user)
 }
 
 func deleteUserHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	spec := api.AuthnSpec{
-		AdminName:     cliAuthnAdminName(c),
-		AdminPassword: cliAuthnAdminPassword(c),
-	}
 	userName := cliAuthnUserName(c)
-	return api.DeleteUser(authParams, spec, userName)
+	return api.DeleteUser(authParams, userName)
+}
+
+func deleteRoleHandler(c *cli.Context) (err error) {
+	if authnHTTPClient == nil {
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+	}
+	role := c.Args().Get(0)
+	if role == "" {
+		return missingArgumentsError(c, "role")
+	}
+	return api.DeleteRoleAuthN(authParams, role)
 }
 
 func loginUserHandler(c *cli.Context) (err error) {
@@ -231,34 +233,33 @@ func loginUserHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	home, err := os.UserHomeDir()
+	tokenPath := parseStrFlag(c, tokenFileFlag)
+	userPathUsed := tokenPath != ""
+	if tokenPath == "" {
+		tokenPath = filepath.Join(config.ConfigDirPath, tokenFile)
+	}
+	err = cmn.CreateDir(filepath.Dir(config.ConfigDirPath))
 	if err != nil {
+		fmt.Fprintf(c.App.Writer, "Token:\n%s\n", token.Token)
 		return fmt.Errorf(tokenSaveFailFmt, err)
 	}
-
-	tokenDir := filepath.Join(home, credDir)
-	err = cmn.CreateDir(tokenDir)
-	if err != nil {
-		return fmt.Errorf(tokenSaveFailFmt, err)
-	}
-	tokenPath := filepath.Join(tokenDir, credFile)
 	err = jsp.Save(tokenPath, token, jsp.Plain())
 	if err != nil {
+		fmt.Fprintf(c.App.Writer, "Token:\n%s\n", token.Token)
 		return fmt.Errorf(tokenSaveFailFmt, err)
 	}
 
-	fmt.Fprintf(c.App.Writer, "Token(%s):\n%s\n", tokenPath, token.Token)
+	if userPathUsed {
+		fmt.Fprintf(c.App.Writer, "Token saved to %s\n", tokenPath)
+	} else {
+		fmt.Fprintf(c.App.Writer, "Token(%s):\n%s\n", tokenPath, token.Token)
+	}
 	return nil
 }
 
 func logoutUserHandler(c *cli.Context) (err error) {
 	const logoutFailFmt = "logging out failed: %v"
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf(logoutFailFmt, err)
-	}
-
-	tokenPath := filepath.Join(home, credDir, credFile)
+	tokenPath := filepath.Join(config.ConfigDirPath, tokenFile)
 	if err = os.Remove(tokenPath); os.IsNotExist(err) {
 		return fmt.Errorf(logoutFailFmt, err)
 	}
@@ -274,21 +275,32 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 	if cid == "" {
 		return missingArgumentsError(c, "cluster id")
 	}
-	urls := c.Args().Get(1)
-	if strings.Contains(cid, "=") {
-		parts := strings.SplitN(cid, "=", 2)
-		cid = parts[0]
-		urls = parts[1]
-	} else if urls == "" {
-		return missingArgumentsError(c, "cluster URL list")
+	urlList := make([]string, 0)
+	alias := c.Args().Get(1)
+	if strings.HasPrefix(alias, "http") {
+		urlList = append(urlList, alias)
+		alias = ""
 	}
-	urlList := strings.Split(urls, ",")
+	for idx := 2; idx < c.NArg(); idx++ {
+		url := c.Args().Get(idx)
+		if strings.HasPrefix(url, "-") {
+			break
+		}
+		if !strings.HasPrefix(url, "http") {
+			return fmt.Errorf("URL %q does not contain protocol", url)
+		}
+		urlList = append(urlList, url)
+	}
+	if len(urlList) == 0 {
+		return missingArgumentsError(c, "cluster URL")
+	}
 
-	spec := api.ClusterSpec{
-		ClusterID: cid,
-		URLs:      urlList,
+	cluSpec := cmn.AuthCluster{
+		ID:    cid,
+		Alias: alias,
+		URLs:  urlList,
 	}
-	return api.RegisterClusterAuthN(authParams, spec)
+	return api.RegisterClusterAuthN(authParams, cluSpec)
 }
 
 func updateAuthClusterHandler(c *cli.Context) (err error) {
@@ -299,21 +311,28 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 	if cid == "" {
 		return missingArgumentsError(c, "cluster id")
 	}
-	urls := c.Args().Get(1)
-	if strings.Contains(cid, "=") {
-		parts := strings.SplitN(cid, "=", 2)
-		cid = parts[0]
-		urls = parts[1]
-	} else if urls == "" {
-		return missingArgumentsError(c, "cluster URL list")
+	urlList := make([]string, 0)
+	alias := c.Args().Get(1)
+	if strings.HasPrefix(alias, "http") {
+		urlList = append(urlList, alias)
+		alias = ""
 	}
-	urlList := strings.Split(urls, ",")
-
-	spec := api.ClusterSpec{
-		ClusterID: cid,
-		URLs:      urlList,
+	for idx := 2; idx < c.NArg(); idx++ {
+		url := c.Args().Get(idx)
+		if strings.HasPrefix(url, "-") {
+			break
+		}
+		if !strings.HasPrefix(url, "http") {
+			return fmt.Errorf("URL %q does not contain protocol", url)
+		}
+		urlList = append(urlList, url)
 	}
-	return api.UpdateClusterAuthN(authParams, spec)
+	cluSpec := cmn.AuthCluster{
+		ID:    cid,
+		Alias: alias,
+		URLs:  urlList,
+	}
+	return api.UpdateClusterAuthN(authParams, cluSpec)
 }
 
 func deleteAuthClusterHandler(c *cli.Context) (err error) {
@@ -324,20 +343,18 @@ func deleteAuthClusterHandler(c *cli.Context) (err error) {
 	if cid == "" {
 		return missingArgumentsError(c, "cluster id")
 	}
-	spec := api.ClusterSpec{
-		ClusterID: cid,
-	}
-	return api.UnregisterClusterAuthN(authParams, spec)
+	cluSpec := cmn.AuthCluster{ID: cid}
+	return api.UnregisterClusterAuthN(authParams, cluSpec)
 }
 
 func showAuthClusterHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	spec := api.ClusterSpec{
-		ClusterID: c.Args().Get(0),
+	cluSpec := cmn.AuthCluster{
+		ID: c.Args().Get(0),
 	}
-	list, err := api.GetClusterAuthN(authParams, spec)
+	list, err := api.GetClusterAuthN(authParams, cluSpec)
 	if err != nil {
 		return err
 	}
@@ -349,10 +366,7 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	spec := api.ClusterSpec{
-		ClusterID: c.Args().Get(0),
-	}
-	list, err := api.GetRolesAuthN(authParams, spec)
+	list, err := api.GetRolesAuthN(authParams)
 	if err != nil {
 		return err
 	}
@@ -370,4 +384,56 @@ func showUserHandler(c *cli.Context) (err error) {
 	}
 
 	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl)
+}
+
+// TODO: it is a basic parser for permissions.
+// Need better one that supports parsing specific permissions, not only
+// these three predefined ones. After the accurate pareser is implemeneted
+// the function will move to cmn/api_access.go
+func parseAccess(acc string) (cmn.AccessAttrs, error) {
+	switch acc {
+	case "admin":
+		return cmn.AllAccess(), nil
+	case "rw":
+		return cmn.ReadWriteAccess(), nil
+	case "ro":
+		return cmn.ReadOnlyAccess(), nil
+	case "no":
+		return cmn.NoAccess(), nil
+	default:
+		return 0, fmt.Errorf("invalid access %s", acc)
+	}
+}
+
+func addAuthRoleHandler(c *cli.Context) (err error) {
+	if authnHTTPClient == nil {
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+	}
+	args := c.Args()
+	role := args.First()
+	if role == "" {
+		return missingArgumentsError(c, "role name")
+	}
+	kvs := args.Tail()
+	cluList, err := makePairs(kvs)
+	if err != nil {
+		return err
+	}
+	rInfo := &cmn.AuthRole{
+		Name: role,
+		Desc: parseStrFlag(c, descriptionFlag),
+	}
+	if len(cluList) != 0 {
+		cluPerms := make([]*cmn.AuthCluster, 0, len(cluList))
+		for k, v := range cluList {
+			access, err := parseAccess(v)
+			if err != nil {
+				return err
+			}
+			ac := &cmn.AuthCluster{ID: k, Access: access}
+			cluPerms = append(cluPerms, ac)
+		}
+		rInfo.Clusters = cluPerms
+	}
+	return api.AddRoleAuthN(authParams, rInfo)
 }

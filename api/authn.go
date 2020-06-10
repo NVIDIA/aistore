@@ -19,13 +19,6 @@ type (
 		AdminPassword string
 	}
 
-	ClusterSpec struct {
-		AdminName     string
-		AdminPassword string
-		ClusterID     string
-		URLs          []string
-	}
-
 	loginRec struct {
 		Password string `json:"password"`
 	}
@@ -33,18 +26,9 @@ type (
 	AuthCreds struct {
 		Token string `json:"token"`
 	}
-
-	authClusterReg struct {
-		Conf map[string][]string `json:"conf"`
-	}
-
-	AuthClusterRec struct {
-		ID   string
-		URLs []string
-	}
 )
 
-func AddUser(baseParams BaseParams, spec AuthnSpec, newUser *cmn.AuthUser) error {
+func AddUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
 	msg, err := jsoniter.Marshal(newUser)
 	if err != nil {
 		return err
@@ -55,18 +39,14 @@ func AddUser(baseParams BaseParams, spec AuthnSpec, newUser *cmn.AuthUser) error
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Users),
 		Body:       msg,
-		User:       spec.AdminName,
-		Password:   spec.AdminPassword,
 	})
 }
 
-func DeleteUser(baseParams BaseParams, spec AuthnSpec, userID string) error {
+func DeleteUser(baseParams BaseParams, userID string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Users, userID),
-		User:       spec.AdminName,
-		Password:   spec.AdminPassword,
 	})
 }
 
@@ -88,66 +68,47 @@ func LoginUser(baseParams BaseParams, userID, pass string) (token *AuthCreds, er
 	return token, nil
 }
 
-func RegisterClusterAuthN(baseParams BaseParams, spec ClusterSpec) error {
-	req := authClusterReg{Conf: make(map[string][]string, 1)}
-	req.Conf[spec.ClusterID] = spec.URLs
-	msg, err := jsoniter.Marshal(req)
-	if err != nil {
-		return err
-	}
-
+func RegisterClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
+	msg := cmn.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Clusters),
 		Body:       msg,
-		User:       spec.AdminName,
-		Password:   spec.AdminPassword,
 	})
 }
 
-func UpdateClusterAuthN(baseParams BaseParams, spec ClusterSpec) error {
-	req := authClusterReg{Conf: make(map[string][]string, 1)}
-	req.Conf[spec.ClusterID] = spec.URLs
-	msg, err := jsoniter.Marshal(req)
-	if err != nil {
-		return err
-	}
-
+func UpdateClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
+	msg := cmn.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Clusters),
 		Body:       msg,
-		User:       spec.AdminName,
-		Password:   spec.AdminPassword,
 	})
 }
 
-func UnregisterClusterAuthN(baseParams BaseParams, spec ClusterSpec) error {
+func UnregisterClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Clusters, spec.ClusterID),
-		User:       spec.AdminName,
-		Password:   spec.AdminPassword,
+		Path:       cmn.URLPath(cmn.Version, cmn.Clusters, spec.ID),
 	})
 }
 
-func GetClusterAuthN(baseParams BaseParams, spec ClusterSpec) ([]*AuthClusterRec, error) {
+func GetClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) ([]*cmn.AuthCluster, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Clusters)
-	if spec.ClusterID != "" {
-		path = cmn.URLPath(path, spec.ClusterID)
+	if spec.ID != "" {
+		path = cmn.URLPath(path, spec.ID)
 	}
-	clusters := &authClusterReg{}
+	clusters := &cmn.AuthClusterList{}
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       path,
 	}, clusters)
-	rec := make([]*AuthClusterRec, 0, len(clusters.Conf))
-	for cid, urls := range clusters.Conf {
-		clu := &AuthClusterRec{ID: cid, URLs: urls}
+	rec := make([]*cmn.AuthCluster, 0, len(clusters.Clusters))
+	for _, clu := range clusters.Clusters {
 		rec = append(rec, clu)
 	}
 	less := func(i, j int) bool { return rec[i].ID < rec[j].ID }
@@ -155,17 +116,16 @@ func GetClusterAuthN(baseParams BaseParams, spec ClusterSpec) ([]*AuthClusterRec
 	return rec, err
 }
 
-func GetRolesAuthN(baseParams BaseParams, spec ClusterSpec) ([]*cmn.AuthRole, error) {
+func GetRolesAuthN(baseParams BaseParams) ([]*cmn.AuthRole, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Roles)
-	if spec.ClusterID != "" {
-		path = cmn.URLPath(path, spec.ClusterID)
-	}
 	roles := make([]*cmn.AuthRole, 0)
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       path,
 	}, &roles)
+	less := func(i, j int) bool { return roles[i].Name < roles[j].Name }
+	sort.Slice(roles, less)
 	return roles, err
 }
 
@@ -188,4 +148,22 @@ func GetUsersAuthN(baseParams BaseParams) ([]*cmn.AuthUser, error) {
 	sort.Slice(list, less)
 
 	return list, err
+}
+
+func AddRoleAuthN(baseParams BaseParams, roleSpec *cmn.AuthRole) error {
+	msg := cmn.MustMarshal(roleSpec)
+	baseParams.Method = http.MethodPost
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Roles),
+		Body:       msg,
+	})
+}
+
+func DeleteRoleAuthN(baseParams BaseParams, role string) error {
+	baseParams.Method = http.MethodDelete
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Roles, role),
+	})
 }
