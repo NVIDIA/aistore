@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -77,6 +78,10 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActCopyBucket:
 		if err = t.copyBucket(c); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
+	case cmn.ActECEncode:
+		if err = t.ecEncode(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	default:
@@ -159,6 +164,10 @@ func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCo
 	if err == nil {
 		err = mirror.ValidateNCopies(t.si.Name(), int(newCopies))
 	}
+	// NOTE: #791 "limited coexistence" here and elsewhere
+	if err == nil {
+		err = t.coExists(bck, msg)
+	}
 	if err != nil {
 		return
 	}
@@ -207,6 +216,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			xaction.Registry.DoAbort(cmn.ActPutCopies, c.bck)
 			xaction.Registry.RenewBckMakeNCopies(c.bck, t, int(txnSetBprops.nprops.Mirror.Copies))
 		}
+		// TODO: add reEC() logic for automatic erasure-coding upon changes in the bucket's EC conf
 	default:
 		cmn.Assert(false)
 	}
@@ -316,6 +326,9 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 	if capInfo := t.AvgCapUsed(config); capInfo.Err != nil {
 		return nil, capInfo.Err
 	}
+	if err = t.coExists(bckFrom, msg); err != nil {
+		return
+	}
 	bckTo = cluster.NewBck(bTo.Name, bTo.Provider, bTo.Ns)
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
@@ -344,8 +357,6 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 ////////////////
 // copyBucket //
 ////////////////
-
-// TODO -- FIXME: part copy-paste from the above
 
 func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
@@ -407,11 +418,55 @@ func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckT
 	if capInfo := t.AvgCapUsed(config); capInfo.Err != nil {
 		return nil, capInfo.Err
 	}
+	if err = t.coExists(bckFrom, msg); err != nil {
+		return
+	}
 	bckTo = cluster.NewBckEmbed(bTo)
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
 		return bckTo, cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
 	}
+	return
+}
+
+//////////////
+// ecEncode //
+//////////////
+
+func (t *targetrunner) ecEncode(c *txnServerCtx) error {
+	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+		return err
+	}
+	switch c.phase {
+	case cmn.ActBegin:
+		err := t.validateEcEncode(c.bck, c.msg)
+		if err == nil {
+			_, err = xaction.Registry.RenewECEncodeXact(t, c.bck, cmn.ActBegin)
+		}
+		if err != nil {
+			return err
+		}
+	case cmn.ActAbort:
+		// do nothing
+	case cmn.ActCommit:
+		xact, err := xaction.Registry.RenewECEncodeXact(t, c.bck, cmn.ActCommit)
+		if err != nil {
+			glog.Error(err)
+			return err
+		}
+		go xact.Run()
+
+	default:
+		cmn.Assert(false)
+	}
+	return nil
+}
+
+func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err error) {
+	if capInfo := t.AvgCapUsed(cmn.GCO.Get()); capInfo.Err != nil {
+		return capInfo.Err
+	}
+	err = t.coExists(bck, msg)
 	return
 }
 
@@ -443,4 +498,13 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, apiItems []st
 	c.bmdVer = t.owner.bmd.get().version()
 
 	return c, err
+}
+
+// TODO: #791 "limited coexistence" - extend and unify
+func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
+	if rebInfo := t.RebalanceInfo(); rebInfo.IsRebalancing {
+		err = fmt.Errorf("%s: rebalancing(%d) is in progress, cannot run '%s' on bucket %s",
+			t.si, rebInfo.RebID, msg.Action, bck)
+	}
+	return
 }

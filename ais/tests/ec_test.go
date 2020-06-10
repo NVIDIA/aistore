@@ -2259,19 +2259,12 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 // Simple test to check if EC correctly finds all the objects and its slices
 // that will be used by rebalance
 func TestECBucketEncode(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
-	// TODO: Renable if we implement listing bucket with additional objects like
-	// mirroring and EC. For now we remove the duplicates and in result get
-	// fewer objects.
-	t.Skip("ListObjects does not include EC and Mirroring objects")
-
 	const parityCnt = 2
 	var (
 		proxyURL = tutils.RandomProxyURL()
 		m        = ioContext{
 			t:        t,
-			num:      50,
+			num:      150,
 			proxyURL: proxyURL,
 		}
 	)
@@ -2304,7 +2297,7 @@ func TestECBucketEncode(t *testing.T) {
 	bckPropsToUpate := cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
 			Enabled:      api.Bool(true),
-			ObjSizeLimit: api.Int64(ecObjLimit),
+			ObjSizeLimit: api.Int64(1),
 			DataSlices:   api.Int(1),
 			ParitySlices: api.Int(parityCnt),
 		},
@@ -2312,7 +2305,7 @@ func TestECBucketEncode(t *testing.T) {
 	err = api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Starting making EC\n")
+	tutils.Logf("Erasure-coding bucket %s\n", m.bck)
 	err = api.ECEncodeBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
@@ -2323,11 +2316,13 @@ func TestECBucketEncode(t *testing.T) {
 	reslist, err = api.ListObjectsFast(baseParams, m.bck, nil)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Object count after EC finishes: %d\n", len(reslist.Entries))
-	expect := (parityCnt + 1) * m.num
-	if len(reslist.Entries) != expect {
-		t.Fatalf("list_objects after EC %s invalid number of files %d, expected %d", m.bck, len(reslist.Entries), expect)
+	if len(reslist.Entries) != m.num {
+		t.Fatalf("bucket %s: expected %d objects, got %d", m.bck, m.num, len(reslist.Entries))
 	}
+	tutils.Logf("Object counts after EC finishes: %d (%d)\n", len(reslist.Entries), (parityCnt+1)*m.num)
+	//
+	// TODO: support querying bucket for total number of entries with respect to mirroring and EC
+	//
 }
 
 func init() {

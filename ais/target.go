@@ -863,23 +863,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if !t.bucketSummary(w, r, bck, msg) {
 			return
 		}
-	case cmn.ActECEncode:
-		phase := apiItems[1]
-		switch phase {
-		case cmn.ActBegin:
-			err = t.beginECEncode(bck)
-		case cmn.ActAbort:
-			break // nothing to do
-		case cmn.ActCommit:
-			err = t.commitECEncode(bck)
-		default:
-			cmn.Assert(false)
-		}
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		glog.Infof("%s %s bucket %s", phase, msg.Action, bck)
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		t.invalmsghdlr(w, r, s)

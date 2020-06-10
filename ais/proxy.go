@@ -1539,17 +1539,6 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 	return nil
 }
 
-func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error) {
-	var (
-		body    = cmn.MustMarshal(p.newAisMsg(msg, nil, p.owner.bmd.get()))
-		urlPath = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		errmsg  = fmt.Sprintf("cannot %s bucket %s", msg.Action, bck)
-	)
-	// execute 2-phase
-	err = p.bcast2Phase(bcastArgs{req: cmn.ReqArgs{Path: urlPath, Body: body}}, errmsg, true /*commit*/)
-	return
-}
-
 func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
 	bmd := p.owner.bmd.get()
 	if query.IsAIS() {

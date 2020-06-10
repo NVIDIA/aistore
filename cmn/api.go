@@ -15,9 +15,9 @@ import (
 
 // ActionMsg is a JSON-formatted control structures for the REST API
 type ActionMsg struct {
-	Action string      `json:"action"` // shutdown, restart, setconfig - the enum below
-	Name   string      `json:"name"`   // action-specific params
-	Value  interface{} `json:"value"`
+	Action string      `json:"action"` // ActShutdown, ActRebalance, and many more (see api_const.go)
+	Name   string      `json:"name"`   // action-specific (e.g., bucket name)
+	Value  interface{} `json:"value"`  // ditto
 }
 
 type ActValPromote struct {

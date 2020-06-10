@@ -100,8 +100,8 @@ type Target interface {
 }
 
 type RebalanceInfo struct {
-	IsRebalancing bool
 	RebID         int64
+	IsRebalancing bool
 }
 
 type RebManager interface {

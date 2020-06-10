@@ -770,48 +770,6 @@ func (h *httprunner) bcastTo(args bcastArgs) chan callResult {
 	return h.bcast(args)
 }
 
-// execute 2-phase transaction vis-à-vis all targets with an optional commit if all good
-func (h *httprunner) bcast2Phase(args bcastArgs, errmsg string, commit bool) (err error) {
-	var (
-		results chan callResult
-		nr      int
-		path    = args.req.Path
-	)
-	// begin
-	args.req.Method = http.MethodPost
-	args.req.Path = cmn.URLPath(path, cmn.ActBegin)
-	results = h.bcastTo(args)
-	for res := range results {
-		if res.err != nil {
-			err = fmt.Errorf("%s: %s: %v(%d)", res.si, errmsg, res.err, res.status)
-			glog.Errorln(err.Error())
-			nr++
-		}
-	}
-	// abort
-	if err != nil {
-		args.req.Path = cmn.URLPath(path, cmn.ActAbort)
-		if nr < len(results) {
-			_ = h.bcastTo(args)
-		}
-		return
-	}
-	if !commit {
-		return
-	}
-	// commit
-	args.req.Path = cmn.URLPath(path, cmn.ActCommit)
-	results = h.bcastTo(args)
-	for res := range results {
-		if res.err != nil {
-			err = fmt.Errorf("%s: %s: %v(%d)", res.si, errmsg, res.err, res.status)
-			glog.Error(err)
-			break
-		}
-	}
-	return err
-}
-
 // NOTE: 'u' has only the path and query part, host portion will be set by this method.
 func (h *httprunner) bcast(bargs bcastArgs) chan callResult {
 	nodeCount := 0

@@ -1176,34 +1176,6 @@ func (t *targetrunner) enable() error {
 	return nil
 }
 
-func (t *targetrunner) beginECEncode(bck *cluster.Bck) (err error) {
-	// Do not start the xaction if there is no enough drive space (OOS or High)
-	capInfo := t.AvgCapUsed(cmn.GCO.Get())
-	if capInfo.Err != nil {
-		return capInfo.Err
-	}
-
-	// Do not start the xaction if any rebalance is running
-	rbInfo := t.RebalanceInfo()
-	if rbInfo.IsRebalancing {
-		return fmt.Errorf("cannot start bucket %q encoding while rebalance is running", bck)
-	}
-
-	_, err = xaction.Registry.RenewECEncodeXact(t, bck, cmn.ActBegin)
-	return err
-}
-
-func (t *targetrunner) commitECEncode(bckFrom *cluster.Bck) (err error) {
-	var xact *ec.XactBckEncode
-	xact, err = xaction.Registry.RenewECEncodeXact(t, bckFrom, cmn.ActCommit)
-	if err != nil {
-		glog.Error(err) // must not happen at commit time
-		return err
-	}
-	go xact.Run()
-	return nil
-}
-
 // lookupRemoteSingle sends the message to the given target to see if it has the specific object.
 func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := make(url.Values)
