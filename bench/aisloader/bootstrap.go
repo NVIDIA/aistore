@@ -112,6 +112,7 @@ type (
 		readerType           string
 		tmpDir               string // used only when usingFile
 		statsOutput          string
+		cksumType            string
 		statsdIP             string
 		bPropsStr            string
 		putSizeUpperBoundStr string // stop after writing that amount of data
@@ -296,7 +297,7 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&p.stoppable, "stoppable", false, "true: stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "true: show the configuration and parameters that aisloader will use for benchmark")
 	f.BoolVar(&p.traceHTTP, "trace-http", false, "true: trace HTTP latencies") // see httpLatencies
-
+	f.StringVar(&p.cksumType, "cksum-type", cmn.ChecksumXXHash, "cksum type to use for put object requests")
 	f.Parse(os.Args[1:])
 
 	if len(os.Args[1:]) == 0 {
@@ -430,6 +431,10 @@ func parseCmdLine() (params, error) {
 
 	if p.putShards > 100000 {
 		return params{}, fmt.Errorf("putshards should not exceed 100000")
+	}
+
+	if err := cmn.ValidateCksumType(p.cksumType); err != nil {
+		return params{}, err
 	}
 
 	if p.bPropsStr != "" {
@@ -861,7 +866,7 @@ func newPutWorkOrder() (*workOrder, error) {
 		op:        opPut,
 		objName:   objName,
 		size:      size,
-		cksumType: cmn.ChecksumXXHash, // TODO: allow flag-override
+		cksumType: runParams.cksumType,
 	}, nil
 }
 
