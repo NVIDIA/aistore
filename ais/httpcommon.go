@@ -96,7 +96,7 @@ type (
 		BMDVersion  int64  `json:"bmdversion,string"`
 		SmapVersion int64  `json:"smapversion,string"`
 		RMDVersion  int64  `json:"rmdversion,string"`
-		TxnID       string `json:"txn_id"`
+		UUID        string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 	}
 
 	// TODO: add usage
@@ -485,6 +485,8 @@ func (h *httprunner) initSI(daemonType string) {
 	}
 
 	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
+
+	cmn.InitShortid(h.si.Digest())
 }
 
 func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bool, tag string) {
@@ -1432,7 +1434,7 @@ func (h *httprunner) newAisMsgStr(msgStr string, smap *smapX, bmd *bucketMD) *ai
 	return h.newAisMsg(&cmn.ActionMsg{Value: msgStr}, smap, bmd)
 }
 
-func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucketMD) *aisMsg {
+func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucketMD, uuid ...string) *aisMsg {
 	msg := &aisMsg{ActionMsg: *actionMsg}
 	if smap != nil {
 		msg.SmapVersion = smap.Version
@@ -1443,6 +1445,9 @@ func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucke
 		msg.BMDVersion = bmd.Version
 	} else {
 		msg.BMDVersion = h.owner.bmd.Get().Version
+	}
+	if len(uuid) > 0 {
+		msg.UUID = uuid[0]
 	}
 	return msg
 }

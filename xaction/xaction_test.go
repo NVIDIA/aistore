@@ -90,7 +90,7 @@ func TestXactionAbortAll(t *testing.T) {
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "phase", nil)
+	xactBck, err := xactions.RenewBckFastRename(tMock, 123, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAll()
@@ -112,7 +112,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "phase", nil)
+	xactBck, err := xactions.RenewBckFastRename(tMock, 123, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAll(cmn.XactTypeGlobal)
@@ -135,7 +135,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "phase", nil)
+	xactBck, err := xactions.RenewBckFastRename(tMock, 123, bckFrom, bckTo, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAllBuckets(bckFrom)

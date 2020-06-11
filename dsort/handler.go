@@ -122,7 +122,7 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	managerUUID := cmn.GenUserID()
+	managerUUID := cmn.GenUUID()
 	checkResponses := func(responses []response) error {
 		for _, resp := range responses {
 			if resp.err == nil {

@@ -62,7 +62,7 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
 		return
 	}
 
-	g.newMountpathEvent(enableMpathAct, mpath)
+	g.addMpathEvent(enableMpathAct, mpath)
 	return
 }
 
@@ -77,7 +77,7 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) 
 		return disabled, err
 	}
 
-	g.lostMountpathEvent(disableMpathAct, mpath)
+	g.delMpathEvent(disableMpathAct, mpath)
 	return true, nil
 }
 
@@ -92,7 +92,7 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 		return
 	}
 
-	g.newMountpathEvent(addMpathAct, mpath)
+	g.addMpathEvent(addMpathAct, mpath)
 	return
 }
 
@@ -107,11 +107,11 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 		return
 	}
 
-	g.lostMountpathEvent(removeMpathAct, mpath)
+	g.delMpathEvent(removeMpathAct, mpath)
 	return
 }
 
-func (g *fsprungroup) newMountpathEvent(action, mpath string) {
+func (g *fsprungroup) addMpathEvent(action, mpath string) {
 	xaction.Registry.AbortAllMountpathsXactions()
 	g.RLock()
 	for _, r := range g.runners {
@@ -127,12 +127,12 @@ func (g *fsprungroup) newMountpathEvent(action, mpath string) {
 	g.RUnlock()
 	go func() {
 		g.t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
-		xaction.Registry.RenewObjsRedundancy(g.t)
+		xaction.Registry.MakeNCopiesOnMpathEvent(g.t, "add-mp")
 	}()
 	g.checkEnable(action, mpath)
 }
 
-func (g *fsprungroup) lostMountpathEvent(action, mpath string) {
+func (g *fsprungroup) delMpathEvent(action, mpath string) {
 	xaction.Registry.AbortAllMountpathsXactions()
 	g.RLock()
 	for _, r := range g.runners {
@@ -152,7 +152,7 @@ func (g *fsprungroup) lostMountpathEvent(action, mpath string) {
 
 	go func() {
 		g.t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
-		xaction.Registry.RenewObjsRedundancy(g.t)
+		xaction.Registry.MakeNCopiesOnMpathEvent(g.t, "del-mp")
 	}()
 }
 

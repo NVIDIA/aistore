@@ -151,7 +151,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		}
 		// do the work in xaction
 		xaction.Registry.DoAbort(cmn.ActPutCopies, c.bck)
-		xaction.Registry.RenewBckMakeNCopies(c.bck, t, int(copies))
+		xaction.Registry.RenewBckMakeNCopies(c.bck, t, c.uuid, int(copies))
 	default:
 		cmn.Assert(false)
 	}
@@ -214,7 +214,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		}
 		if remirror(txnSetBprops.bprops, txnSetBprops.nprops) {
 			xaction.Registry.DoAbort(cmn.ActPutCopies, c.bck)
-			xaction.Registry.RenewBckMakeNCopies(c.bck, t, int(txnSetBprops.nprops.Mirror.Copies))
+			xaction.Registry.RenewBckMakeNCopies(c.bck, t, c.uuid, int(txnSetBprops.nprops.Mirror.Copies))
 		}
 		// TODO: add reEC() logic for automatic erasure-coding upon changes in the bucket's EC conf
 	default:
@@ -294,7 +294,8 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if err = t.transactions.wait(txn, c.timeout); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		xact, err = xaction.Registry.RenewBckFastRename(t, txnRenB.bckFrom, txnRenB.bckTo, cmn.ActCommit, t.rebManager)
+		xact, err = xaction.Registry.RenewBckFastRename(t, c.msg.RMDVersion,
+			txnRenB.bckFrom, txnRenB.bckTo, cmn.ActCommit, t.rebManager)
 		if err != nil {
 			return err // must not happen at commit time
 		}
@@ -306,7 +307,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 
 		t.gfn.local.Activate()
 		t.gfn.global.activateTimed()
-		go xact.Run(c.msg.RMDVersion)
+		go xact.Run()
 	default:
 		cmn.Assert(false)
 	}
@@ -395,7 +396,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 			cmn.Assert(c.event == txnCommitEventNone)
 			t.transactions.find(c.uuid, true /* remove */)
 		}
-		xact, err = xaction.Registry.RenewBckCopy(t, txnCpBck.bckFrom, txnCpBck.bckTo, cmn.ActCommit)
+		xact, err = xaction.Registry.RenewBckCopy(t, txnCpBck.bckFrom, txnCpBck.bckTo, c.uuid, cmn.ActCommit)
 		if err != nil {
 			return err
 		}
@@ -441,7 +442,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 	case cmn.ActBegin:
 		err := t.validateEcEncode(c.bck, c.msg)
 		if err == nil {
-			_, err = xaction.Registry.RenewECEncodeXact(t, c.bck, cmn.ActBegin)
+			_, err = xaction.Registry.RenewECEncodeXact(t, c.bck, c.uuid, cmn.ActBegin)
 		}
 		if err != nil {
 			return err
@@ -449,7 +450,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 	case cmn.ActAbort:
 		// do nothing
 	case cmn.ActCommit:
-		xact, err := xaction.Registry.RenewECEncodeXact(t, c.bck, cmn.ActCommit)
+		xact, err := xaction.Registry.RenewECEncodeXact(t, c.bck, c.uuid, cmn.ActCommit)
 		if err != nil {
 			glog.Error(err)
 			return err
@@ -487,7 +488,7 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, apiItems []st
 	if c.bck, err = newBckFromQuery(bucket, query); err != nil {
 		return c, err
 	}
-	c.uuid = c.msg.TxnID
+	c.uuid = c.msg.UUID
 	if c.uuid == "" {
 		return c, nil
 	}

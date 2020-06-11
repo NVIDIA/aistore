@@ -117,15 +117,15 @@ type ecEncodeEntry struct {
 }
 
 func (e *ecEncodeEntry) Start(bck cmn.Bck) error {
-	xec := ec.NewXactBckEncode(bck, e.t)
+	xec := ec.NewXactBckEncode(bck, e.t, e.uuid)
 	e.xact = xec
 	return nil
 }
 
 func (*ecEncodeEntry) Kind() string    { return cmn.ActECEncode }
 func (e *ecEncodeEntry) Get() cmn.Xact { return e.xact }
-func (r *registry) RenewECEncodeXact(t cluster.Target, bck *cluster.Bck, phase string) (*ec.XactBckEncode, error) {
-	e := &ecEncodeEntry{t: t, phase: phase}
+func (r *registry) RenewECEncodeXact(t cluster.Target, bck *cluster.Bck, uuid, phase string) (*ec.XactBckEncode, error) {
+	e := &ecEncodeEntry{baseBckEntry: baseBckEntry{uuid}, t: t, phase: phase}
 	ee, err := r.renewBucketXaction(e, bck)
 	if err == nil {
 		return ee.Get().(*ec.XactBckEncode), nil
@@ -158,7 +158,7 @@ type mncEntry struct {
 func (e *mncEntry) Start(bck cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
-	xmnc := mirror.NewXactMNC(bck, e.t, slab, e.copies)
+	xmnc := mirror.NewXactMNC(bck, e.t, slab, e.uuid, e.copies)
 	go xmnc.Run()
 	e.xact = xmnc
 	return nil
@@ -167,7 +167,7 @@ func (*mncEntry) Kind() string    { return cmn.ActMakeNCopies }
 func (e *mncEntry) Get() cmn.Xact { return e.xact }
 
 // TODO: restart the EC (#531) in case of mountpath event
-func (r *registry) RenewObjsRedundancy(t cluster.Target) {
+func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
 	var (
 		cfg      = cmn.GCO.Get()
 		bmd      = t.GetBowner().Get()
@@ -175,25 +175,25 @@ func (r *registry) RenewObjsRedundancy(t cluster.Target) {
 	)
 	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 		if bck.Props.Mirror.Enabled {
-			r.RenewBckMakeNCopies(bck, t, int(bck.Props.Mirror.Copies))
+			r.RenewBckMakeNCopies(bck, t, tag, int(bck.Props.Mirror.Copies))
 		}
 		return false
 	})
-	// TODO -- FIXME: remote ais
+	// TODO: remote ais
 	if cfg.Cloud.Provider != "" {
 		provider = cfg.Cloud.Provider
 		namespace := cfg.Cloud.Ns
 		bmd.Range(&provider, &namespace, func(bck *cluster.Bck) bool {
 			if bck.Props.Mirror.Enabled {
-				r.RenewBckMakeNCopies(bck, t, int(bck.Props.Mirror.Copies))
+				r.RenewBckMakeNCopies(bck, t, tag, int(bck.Props.Mirror.Copies))
 			}
 			return false
 		})
 	}
 }
 
-func (r *registry) RenewBckMakeNCopies(bck *cluster.Bck, t cluster.Target, copies int) {
-	e := &mncEntry{t: t, copies: copies}
+func (r *registry) RenewBckMakeNCopies(bck *cluster.Bck, t cluster.Target, uuid string, copies int) {
+	e := &mncEntry{baseBckEntry: baseBckEntry{uuid}, t: t, copies: copies}
 	_, _ = r.renewBucketXaction(e, bck)
 }
 
@@ -304,7 +304,7 @@ type bccEntry struct {
 func (e *bccEntry) Start(_ cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
-	e.xact = mirror.NewXactBCC("", e.bckFrom, e.bckTo, e.t, slab)
+	e.xact = mirror.NewXactBCC(e.uuid, e.bckFrom, e.bckTo, e.t, slab)
 	return nil
 }
 func (e *bccEntry) Kind() string  { return cmn.ActCopyBucket }
@@ -322,12 +322,13 @@ func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error
 	return
 }
 
-func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, phase string) (*mirror.XactBckCopy, error) {
+func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, phase string) (*mirror.XactBckCopy, error) {
 	e := &bccEntry{
-		t:       t,
-		bckFrom: bckFrom,
-		bckTo:   bckTo,
-		phase:   phase,
+		baseBckEntry: baseBckEntry{uuid},
+		t:            t,
+		bckFrom:      bckFrom,
+		bckTo:        bckTo,
+		phase:        phase,
 	}
 	ee, err := r.renewBucketXaction(e, bckTo)
 	if err != nil {
@@ -361,7 +362,7 @@ type (
 func (r *FastRen) IsMountpathXact() bool { return true }
 func (r *FastRen) String() string        { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
-func (r *FastRen) Run(rmdVersion int64) {
+func (r *FastRen) Run() {
 	glog.Infoln(r.String())
 
 	// FIXME: smart wait for resilver. For now assuming that rebalance takes longer than resilver.
@@ -369,7 +370,7 @@ func (r *FastRen) Run(rmdVersion int64) {
 	for !finished {
 		time.Sleep(10 * time.Second)
 		rebStats, err := Registry.GetStats(XactQuery{
-			ID:       strconv.FormatInt(rmdVersion, 10),
+			ID:       r.ID().String(),
 			Kind:     cmn.ActRebalance,
 			Finished: true,
 		})
@@ -385,7 +386,7 @@ func (r *FastRen) Run(rmdVersion int64) {
 
 func (e *FastRenEntry) Start(bck cmn.Bck) error {
 	e.xact = &FastRen{
-		XactBase:   *cmn.NewXactBaseWithBucket("", e.Kind(), bck),
+		XactBase:   *cmn.NewXactBaseWithBucket(e.uuid, e.Kind(), bck),
 		t:          e.t,
 		bckFrom:    e.bckFrom,
 		bckTo:      e.bckTo,
@@ -415,14 +416,16 @@ func (e *FastRenEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err e
 	return
 }
 
-func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, phase string,
+func (r *registry) RenewBckFastRename(t cluster.Target, rmdVersion int64, bckFrom, bckTo *cluster.Bck, phase string,
 	mgr cluster.RebManager) (*FastRen, error) {
+	uuid := strconv.FormatInt(rmdVersion, 10)
 	e := &FastRenEntry{
-		t:          t,
-		rebManager: mgr,
-		bckFrom:    bckFrom,
-		bckTo:      bckTo,
-		phase:      phase,
+		baseBckEntry: baseBckEntry{uuid},
+		t:            t,
+		rebManager:   mgr,
+		bckFrom:      bckFrom,
+		bckTo:        bckTo,
+		phase:        phase,
 	}
 	ee, err := r.renewBucketXaction(e, bckTo)
 	if err == nil {
@@ -452,6 +455,7 @@ type (
 		Ctx      context.Context
 		RangeMsg *cmn.RangeMsg
 		ListMsg  *cmn.ListMsg
+		UUID     string
 		Evict    bool
 	}
 	objCallback = func(args *DeletePrefetchArgs, objName string) error
@@ -471,7 +475,7 @@ func (r *EvictDelete) Run(args *DeletePrefetchArgs) {
 func (e *evictDeleteEntry) Start(bck cmn.Bck) error {
 	e.xact = &EvictDelete{
 		listRangeBase: listRangeBase{
-			XactBase: *cmn.NewXactBaseWithBucket("", e.Kind(), bck),
+			XactBase: *cmn.NewXactBaseWithBucket(e.uuid, e.Kind(), bck),
 			t:        e.t,
 		},
 	}
@@ -491,8 +495,9 @@ func (e *evictDeleteEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 
 func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (*EvictDelete, error) {
 	e := &evictDeleteEntry{
-		t:    t,
-		args: args,
+		baseBckEntry: baseBckEntry{args.UUID},
+		t:            t,
+		args:         args,
 	}
 	ee, err := r.renewBucketXaction(e, bck)
 	if err == nil {
@@ -524,7 +529,7 @@ func (e *prefetchEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 func (e *prefetchEntry) Start(bck cmn.Bck) error {
 	e.xact = &Prefetch{
 		listRangeBase: listRangeBase{
-			XactBase: *cmn.NewXactBaseWithBucket("", e.Kind(), bck),
+			XactBase: *cmn.NewXactBaseWithBucket(e.uuid, e.Kind(), bck),
 			t:        e.t,
 		},
 	}
@@ -544,8 +549,9 @@ func (r *Prefetch) Run(args *DeletePrefetchArgs) {
 
 func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (*Prefetch, error) {
 	e := &prefetchEntry{
-		t:    t,
-		args: args,
+		baseBckEntry: baseBckEntry{args.UUID},
+		t:            t,
+		args:         args,
 	}
 	ee, err := r.renewBucketXaction(e, bck)
 	if err == nil {
@@ -581,7 +587,7 @@ func (e *tar2TfEntry) Kind() string  { return cmn.ActTar2Tf }
 func (e *tar2TfEntry) Get() cmn.Xact { return e.xact }
 
 func (r *registry) NewTar2TfXact(job *tar2tf.SamplesStreamJob, t cluster.Target, bck *cluster.Bck) (*tar2tf.Xact, error) {
-	id := cmn.GenUserID()
+	id := cmn.GenUUID()
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
 	}
@@ -637,7 +643,7 @@ func (r *registry) RenewQueryXact(t cluster.Target, q *query.ObjectsQuery, handl
 		return xact, nil
 	}
 
-	id := cmn.GenUserID()
+	id := cmn.GenUUID()
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
 	}
@@ -662,7 +668,9 @@ func (e *queryEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 //
 // baseBckEntry
 //
-type baseBckEntry struct{}
+type baseBckEntry struct {
+	uuid string
+}
 
 // nolint:unparam // `err` is set in different implementations
 func (b *baseBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {

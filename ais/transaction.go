@@ -140,28 +140,28 @@ func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 		ok     bool
 	)
 	txns.Lock()
-	if rndzvs, ok = txns.rendezvous[msg.TxnID]; !ok {
+	if rndzvs, ok = txns.rendezvous[msg.UUID]; !ok {
 		rndzvs.initiator, rndzvs.timestamp = caller, time.Now()
-		txns.rendezvous[msg.TxnID] = rndzvs
+		txns.rendezvous[msg.UUID] = rndzvs
 		txns.Unlock()
 		return nil
 	}
 	txns.Unlock()
 	return fmt.Errorf("rendezvous record %s:%s already exists",
-		msg.TxnID, cmn.FormatTimestamp(rndzvs.timestamp))
+		msg.UUID, cmn.FormatTimestamp(rndzvs.timestamp))
 }
 
 func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (errDone error) {
 	var running bool
 	txns.Lock()
-	if txn, ok := txns.m[msg.TxnID]; ok {
+	if txn, ok := txns.m[msg.UUID]; ok {
 		running, errDone = txn.commitAfter(caller, msg, err, args...)
 	}
 	if !running {
-		if rndzvs, ok := txns.rendezvous[msg.TxnID]; ok {
+		if rndzvs, ok := txns.rendezvous[msg.UUID]; ok {
 			rndzvs.err = &txnError{err: err}
 		} else {
-			errDone = fmt.Errorf("rendezvous record %s does not exist", msg.TxnID) // can't happen
+			errDone = fmt.Errorf("rendezvous record %s does not exist", msg.UUID) // can't happen
 		}
 	}
 	txns.Unlock()
@@ -342,7 +342,7 @@ func (txn *txnBckBase) String() string {
 }
 
 func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (found bool, errDone error) {
-	if txn.initiator != caller || msg.TxnID != txn.uuid() {
+	if txn.initiator != caller || msg.UUID != txn.uuid() {
 		return
 	}
 	bmd, _ := args[0].(*bucketMD)

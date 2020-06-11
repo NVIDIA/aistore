@@ -600,8 +600,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 	c.uuid = cmn.GenUUID()
 	c.smap = p.owner.smap.get()
 
-	c.msg = p.newAisMsg(msg, c.smap, nil)
-	c.msg.TxnID = c.uuid
+	c.msg = p.newAisMsg(msg, c.smap, nil, c.uuid)
 	c.body = cmn.MustMarshal(c.msg)
 
 	c.path = cmn.URLPath(cmn.Version, cmn.Txn, bck.Name)

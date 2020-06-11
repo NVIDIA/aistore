@@ -217,7 +217,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := cmn.GenUserID()
+	id := cmn.GenUUID()
 	if err, errCode := p.broadcastStartDownloadRequest(r, id, body); err != nil {
 		p.invalmsghdlr(w, r, fmt.Sprintf("Error starting download: %v.", err.Error()), errCode)
 		return

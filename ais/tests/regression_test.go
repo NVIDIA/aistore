@@ -292,9 +292,8 @@ func TestRenameBucket(t *testing.T) {
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		guid       = cmn.GenUUID()
 		renamedBck = cmn.Bck{
-			Name:     bck.Name + "_" + guid,
+			Name:     bck.Name + "_" + cmn.GenTie(),
 			Provider: cmn.ProviderAIS,
 		}
 		cksumType = cmn.DefaultBucketProps().Cksum.Type
@@ -309,7 +308,8 @@ func TestRenameBucket(t *testing.T) {
 			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
 			tassert.CheckFatal(t, err)
 
-			regData := regressionTestData{bck: bck, renamedBck: renamedBck, numBuckets: len(bcks), rename: true, wait: wait}
+			regData := regressionTestData{bck: bck, renamedBck: renamedBck,
+				numBuckets: len(bcks), rename: true, wait: wait}
 			doBucketRegressionTest(t, proxyURL, regData, cksumType)
 		})
 	}

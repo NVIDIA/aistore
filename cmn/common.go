@@ -28,7 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/teris-io/shortid"
 )
 
 const (
@@ -45,13 +44,6 @@ const (
 	ExtTarTgz = ".tar.gz"
 	// ExtZip is zip files extension
 	ExtZip = ".zip"
-
-	// Constant seeds for UUID generator
-	uuidWorker = 1
-	uuidSeed   = 17
-	// Alphabet for generating UUIDs - similar to the shortid.DEFAULT_ABC
-	// NOTE: len(uuidABC) > 0x3f - see GenTie()
-	uuidABC = "-5nZJDft6LuzsjGNpPwY7rQa39vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk_"
 
 	// misc
 	SizeofI64 = int(unsafe.Sizeof(uint64(0)))
@@ -185,10 +177,6 @@ func init() {
 	// General
 	rand.Seed(mono.NanoTime())
 
-	sid := shortid.MustNew(uuidWorker /* worker */, uuidABC, uuidSeed /* seed */)
-	// NOTE: `shortid` library uses 01/2016 as starting timestamp, maybe we
-	// should fork it and change it to the newer date?
-	shortid.SetDefault(sid)
 	rtie.Store(1013)
 
 	bucketReg = regexp.MustCompile(`^[.a-zA-Z0-9_-]*$`)
@@ -206,14 +194,6 @@ func init() {
 		DisallowUnknownFields: true,
 		SortMapKeys:           true,
 	}.Froze()
-}
-
-func GenTie() string {
-	tie := rtie.Add(1)
-	b0 := uuidABC[tie&0x3f]
-	b1 := uuidABC[-tie&0x3f]
-	b2 := uuidABC[(tie>>2)&0x3f]
-	return string([]byte{b0, b1, b2})
 }
 
 func RandString(n int) string {
@@ -291,24 +271,6 @@ func (ss StringSet) Add(key string) {
 func (ss StringSet) Contains(key string) bool {
 	_, ok := ss[key]
 	return ok
-}
-
-// GenUUID generates long and unique ID (optimizes possibility of collision and
-// length). It uses 8 character long strings and uses English alphabet as
-// characters. This gives a collision probability of ~1/(5*10^13) which should
-// suffice, even for most demanding use-cases.
-func GenUUID() (uuid string) {
-	return RandString(8)
-}
-
-// GenUserID generates unique and user-friendly IDs.
-func GenUserID() (uuid string) {
-	for {
-		uuid = shortid.MustGenerate()
-		if uuid[0] != '-' && uuid[0] != '_' && uuid[len(uuid)-1] != '-' && uuid[len(uuid)-1] != '_' {
-			return
-		}
-	}
 }
 
 // Exitf writes formatted message to STDOUT and exits with non-zero status code.

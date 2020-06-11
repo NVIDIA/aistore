@@ -43,9 +43,9 @@ type (
 // public methods
 //
 
-func NewXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, copies int) *XactBckMakeNCopies {
+func NewXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, copies int) *XactBckMakeNCopies {
 	return &XactBckMakeNCopies{
-		xactBckBase: *newXactBckBase("", cmn.ActMakeNCopies, bck, t),
+		xactBckBase: *newXactBckBase(id, cmn.ActMakeNCopies, bck, t),
 		slab:        slab,
 		copies:      copies,
 	}

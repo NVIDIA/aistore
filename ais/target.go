@@ -691,9 +691,9 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
 		)
-
 		args := &xaction.DeletePrefetchArgs{
 			Ctx:   t.contextWithAuth(r.Header),
+			UUID:  msg.UUID,
 			Evict: msg.Action == cmn.ActEvictObjects,
 		}
 		if err := cmn.TryUnmarshal(msg.Value, &rangeMsg); err == nil {
@@ -705,13 +705,11 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, details)
 			return
 		}
-
 		xact, err := xaction.Registry.RenewEvictDelete(t, bck, args)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-
 		go xact.Run(args)
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
@@ -820,12 +818,12 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var (
+			err      error
+			xact     *xaction.Prefetch
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
-			err      error
+			args     = &xaction.DeletePrefetchArgs{Ctx: t.contextWithAuth(r.Header)}
 		)
-
-		args := &xaction.DeletePrefetchArgs{Ctx: t.contextWithAuth(r.Header)}
 		if err = cmn.TryUnmarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
 		} else if err = cmn.TryUnmarshal(msg.Value, &listMsg); err == nil {
@@ -835,14 +833,12 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, details)
 			return
 		}
-
-		var xact *xaction.Prefetch
+		args.UUID = msg.UUID
 		xact, err = xaction.Registry.RenewPrefetch(t, bck, args)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-
 		go xact.Run(args)
 	case cmn.ActListObjects:
 		// list the bucket and return

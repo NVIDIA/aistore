@@ -609,7 +609,7 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller string) (err error) {
-	if msg.TxnID == "" {
+	if msg.UUID == "" {
 		err = t._recvBMD(newBMD, msg, tag, caller)
 		return
 	}

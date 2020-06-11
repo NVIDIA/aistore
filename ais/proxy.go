@@ -1591,7 +1591,7 @@ func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, msg *cmn.SelectMsg) (bool
 	isNew := msg.TaskID == ""
 	q := url.Values{}
 	if isNew {
-		msg.TaskID = cmn.GenUserID()
+		msg.TaskID = cmn.GenUUID()
 		q.Set(cmn.URLParamTaskAction, cmn.TaskStart)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("proxy: starting new async task %s", msg.TaskID)
@@ -1943,29 +1943,27 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 			return fmt.Errorf("failed to read ListRangeMsgBase Wait: Not a bool")
 		}
 	}
-	// Send json message to all
-	smap := p.owner.smap.get()
-	bmd := p.owner.bmd.get()
-	body := cmn.MustMarshal(p.newAisMsg(msg, smap, bmd))
+	var (
+		smap   = p.owner.smap.get()
+		bmd    = p.owner.bmd.get()
+		aisMsg = p.newAisMsg(msg, smap, bmd, cmn.GenUUID())
+		body   = cmn.MustMarshal(aisMsg)
+		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	)
 	if wait {
 		timeout = cmn.GCO.Get().Client.ListObjects
 	} else {
 		timeout = cmn.DefaultTimeout
 	}
-
 	results = p.bcastTo(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: method,
-			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-			Query:  query,
-			Body:   body,
-		},
+		req:     cmn.ReqArgs{Method: method, Path: path, Query: query, Body: body},
 		smap:    smap,
 		timeout: timeout,
 	})
 	for res := range results {
 		if res.err != nil {
-			return fmt.Errorf("%s failed to %s List/Range: %v (%d: %s)", res.si, msg.Action, res.err, res.status, res.details)
+			return fmt.Errorf("%s failed to %s List/Range: %v (%d: %s)",
+				res.si, msg.Action, res.err, res.status, res.details)
 		}
 	}
 	return nil
@@ -3200,7 +3198,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg.Action == cmn.ActXactStart {
-			xactMsg.ID = cmn.GenUserID()
+			xactMsg.ID = cmn.GenUUID()
 		}
 		results := p.bcastPut(bcastArgs{
 			req: cmn.ReqArgs{
