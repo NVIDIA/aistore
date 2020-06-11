@@ -28,7 +28,7 @@ func AbortDSort(baseParams BaseParams, managerUUID string) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort),
-		Query:      url.Values{cmn.URLParamID: []string{managerUUID}},
+		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
 	})
 }
 
@@ -37,7 +37,7 @@ func MetricsDSort(baseParams BaseParams, managerUUID string) (metrics map[string
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
-		Query:      url.Values{cmn.URLParamID: []string{managerUUID}},
+		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
 	}, &metrics)
 	return metrics, err
 }
@@ -47,7 +47,7 @@ func RemoveDSort(baseParams BaseParams, managerUUID string) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
-		Query:      url.Values{cmn.URLParamID: []string{managerUUID}},
+		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
 	})
 }
 

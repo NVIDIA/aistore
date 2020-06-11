@@ -177,7 +177,7 @@ func proxyGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	managerUUID := query.Get(cmn.URLParamID)
+	managerUUID := query.Get(cmn.URLParamUUID)
 
 	if managerUUID == "" {
 		proxyListSortHandler(w, r)
@@ -237,7 +237,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/sort?id=...
 func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	managerUUID := query.Get(cmn.URLParamID)
+	managerUUID := query.Get(cmn.URLParamUUID)
 	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
 	targets := ctx.smapOwner.Get().Tmap
 	responses := broadcast(http.MethodGet, path, nil, nil, targets)
@@ -287,7 +287,7 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	managerUUID := query.Get(cmn.URLParamID)
+	managerUUID := query.Get(cmn.URLParamUUID)
 	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
 	responses := broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
 
@@ -321,7 +321,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	managerUUID := query.Get(cmn.URLParamID)
+	managerUUID := query.Get(cmn.URLParamUUID)
 	targets := ctx.smapOwner.Get().Tmap
 
 	// First, broadcast to see if process is cleaned up first

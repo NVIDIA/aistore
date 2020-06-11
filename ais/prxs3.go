@@ -250,20 +250,20 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 	}
 	var (
 		bckList *cmn.BucketList
-		taskID  string
+		uuid    string
 		err     error
 	)
 	smsg := cmn.SelectMsg{Fast: false, TimeFormat: time.RFC3339}
 	smsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &smsg)
-	_, taskID, err = p.listAISBucket(bck, smsg)
+	_, uuid, err = p.listAISBucket(bck, smsg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	smsg.TaskID = taskID
+	smsg.UUID = uuid
 	for {
-		bckList, taskID, err = p.listAISBucket(bck, smsg)
+		bckList, uuid, err = p.listAISBucket(bck, smsg)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -272,7 +272,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 			break
 		}
 		// just in case
-		smsg.TaskID = taskID
+		smsg.UUID = uuid
 		time.Sleep(time.Second)
 	}
 	resp := s3compat.NewListObjectResult()

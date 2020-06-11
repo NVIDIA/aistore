@@ -113,7 +113,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 
 func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (err error, errCode int) {
 	query := r.URL.Query()
-	query.Set(cmn.URLParamID, id)
+	query.Set(cmn.URLParamUUID, id)
 
 	responses := p.broadcastDownloadRequest(http.MethodPost, r.URL.Path, body, query)
 	failures := make([]error, 0, len(responses))

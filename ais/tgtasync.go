@@ -56,7 +56,8 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 // - creates a new task that runs in background
 // - returns status of a running task by its ID
 // - returns the result of a task by its ID
-func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck, msg *cmn.SelectMsg) bool {
+func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string,
+	bck *cluster.Bck, smsg *cmn.SelectMsg) bool {
 	var (
 		query      = r.URL.Query()
 		taskAction = query.Get(cmn.URLParamTaskAction)
@@ -71,9 +72,9 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 		switch action {
 		case cmn.ActListObjects:
-			_, err = xaction.Registry.RenewBckListXact(ctx, t, bck, msg)
+			_, err = xaction.Registry.RenewBckListXact(ctx, t, bck, smsg)
 		case cmn.ActSummaryBucket:
-			_, err = xaction.Registry.RenewBckSummaryXact(ctx, t, bck, msg)
+			_, err = xaction.Registry.RenewBckSummaryXact(ctx, t, bck, smsg)
 		default:
 			t.invalmsghdlr(w, r, fmt.Sprintf("invalid action: %s", action))
 			return false
@@ -88,10 +89,10 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		return true
 	}
 
-	xactStats := xaction.Registry.GetXact(msg.TaskID)
+	xactStats := xaction.Registry.GetXact(smsg.UUID)
 	// task never started
 	if xactStats == nil {
-		s := fmt.Sprintf("Task %s not found", msg.TaskID)
+		s := fmt.Sprintf("Task %s not found", smsg.UUID)
 		if silent {
 			t.invalmsghdlrsilent(w, r, s, http.StatusNotFound)
 		} else {
@@ -117,7 +118,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 	switch action {
 	case cmn.ActListObjects:
-		if !msg.Fast {
+		if !smsg.Fast {
 			break
 		}
 		if bckList, ok := result.(*cmn.BucketList); ok && bckList != nil {

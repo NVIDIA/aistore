@@ -25,7 +25,9 @@ import (
 // baseTaskEntry
 //
 
-type baseTaskEntry struct{}
+type baseTaskEntry struct {
+	uuid string
+}
 
 func (e *baseTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
 	return stats.NewXactStats(xact)
@@ -40,13 +42,12 @@ type bckListTaskEntry struct {
 	ctx  context.Context
 	xact *bckListTask
 	t    cluster.Target
-	id   string
 	msg  *cmn.SelectMsg
 }
 
 func (e *bckListTaskEntry) Start(bck cmn.Bck) error {
 	xact := &bckListTask{
-		XactBase: *cmn.NewXactBaseWithBucket(e.id, cmn.ActListObjects, bck),
+		XactBase: *cmn.NewXactBaseWithBucket(e.uuid, cmn.ActListObjects, bck),
 		ctx:      e.ctx,
 		t:        e.t,
 		msg:      e.msg,
@@ -68,13 +69,12 @@ type bckSummaryTaskEntry struct {
 	ctx  context.Context
 	xact *bckSummaryTask
 	t    cluster.Target
-	id   string
 	msg  *cmn.SelectMsg
 }
 
 func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	xact := &bckSummaryTask{
-		XactBase: *cmn.NewXactBaseWithBucket(e.id, cmn.ActSummaryBucket, bck),
+		XactBase: *cmn.NewXactBaseWithBucket(e.uuid, cmn.ActSummaryBucket, bck),
 		t:        e.t,
 		msg:      e.msg,
 		ctx:      e.ctx,
@@ -182,7 +182,7 @@ func (t *bckSummaryTask) Run() {
 		return
 	}
 
-	si, err := cluster.HrwTargetTask(t.msg.TaskID, t.t.GetSowner().Get())
+	si, err := cluster.HrwTargetTask(t.msg.UUID, t.t.GetSowner().Get())
 	if err != nil {
 		t.UpdateResult(nil, err)
 		return

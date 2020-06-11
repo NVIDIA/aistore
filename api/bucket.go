@@ -98,9 +98,9 @@ func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketName
 // GetBucketsSummaries API
 //
 // Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
-func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.SelectMsg) (cmn.BucketsSummaries, error) {
-	if msg == nil {
-		msg = &cmn.SelectMsg{}
+func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, smsg *cmn.SelectMsg) (cmn.BucketsSummaries, error) {
+	if smsg == nil {
+		smsg = &cmn.SelectMsg{}
 	}
 
 	baseParams.Method = http.MethodPost
@@ -112,7 +112,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.Se
 		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
 	var summaries cmn.BucketsSummaries
-	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBucket, msg, &summaries); err != nil {
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBucket, smsg, &summaries); err != nil {
 		return nil, err
 	}
 	sort.Sort(summaries)
@@ -259,28 +259,27 @@ func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) e
 }
 
 // Polling:
-// 1. The function sends the requests as is (msg.taskID should be 0) to initiate
+// 1. The function sends the requests as is (smsg.UUID should be empty) to initiate
 //    asynchronous task. The destination returns ID of a newly created task
-// 2. Starts polling: request destination with received taskID in a loop while
+// 2. Starts polling: request destination with received UUID in a loop while
 //    the destination returns StatusAccepted=task is still running
 //	  Time between requests is dynamic: it starts at 200ms and increases
 //	  by half after every "not-StatusOK" request. It is limited with 10 seconds
 // 3. Breaks loop on error
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
-func waitForAsyncReqComplete(reqParams ReqParams, action string, origMsg *cmn.SelectMsg, v interface{}) error {
+func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.SelectMsg, v interface{}) error {
 	var (
+		uuid         string
+		sleep        = initialPollInterval
+		actMsg       = cmn.ActionMsg{Action: action, Value: smsg}
 		changeOfTask bool
-		id           string
-
-		sleep  = initialPollInterval
-		actMsg = cmn.ActionMsg{Action: action, Value: origMsg}
 	)
 	if reqParams.Query == nil {
 		reqParams.Query = url.Values{}
 	}
 	reqParams.Body = cmn.MustMarshal(actMsg)
-	resp, err := doHTTPRequestGetResp(reqParams, &id)
+	resp, err := doHTTPRequestGetResp(reqParams, &uuid)
 	if err != nil {
 		return err
 	}
@@ -289,10 +288,10 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, origMsg *cmn.Se
 	}
 	if resp.StatusCode == http.StatusAccepted {
 		// receiver started async task and returned the task ID
-		actMsg = handleAsyncReqAccepted(id, action, origMsg, reqParams)
+		actMsg = handleAsyncReqAccepted(uuid, action, smsg, reqParams)
 	}
 
-	defer reqParams.Query.Del(cmn.URLParamTaskID)
+	defer reqParams.Query.Del(cmn.URLParamUUID)
 
 	// poll async task for http.StatusOK completion
 	for {
@@ -303,7 +302,7 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, origMsg *cmn.Se
 		}
 		if !changeOfTask && resp.StatusCode == http.StatusAccepted {
 			// NOTE: async task changed on the fly
-			actMsg = handleAsyncReqAccepted(id, action, origMsg, reqParams)
+			actMsg = handleAsyncReqAccepted(uuid, action, smsg, reqParams)
 			changeOfTask = true
 		}
 		if resp.StatusCode == http.StatusOK {
@@ -317,14 +316,14 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, origMsg *cmn.Se
 	return err
 }
 
-func handleAsyncReqAccepted(id, action string, origMsg *cmn.SelectMsg, reqParams ReqParams) (actMsg cmn.ActionMsg) {
-	if origMsg != nil {
+func handleAsyncReqAccepted(uuid, action string, smsg *cmn.SelectMsg, reqParams ReqParams) (actMsg cmn.ActionMsg) {
+	if smsg != nil {
 		msg := cmn.SelectMsg{}
-		msg = *origMsg
-		msg.TaskID = id
+		msg = *smsg
+		msg.UUID = uuid
 		actMsg = cmn.ActionMsg{Action: action, Value: &msg}
 	}
-	reqParams.Query.Set(cmn.URLParamTaskID, id)
+	reqParams.Query.Set(cmn.URLParamUUID, uuid)
 	return
 }
 
@@ -332,7 +331,8 @@ func handleAsyncReqAccepted(id, action string, origMsg *cmn.SelectMsg, reqParams
 //
 // ListObjects returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListObjects (0 - return all objects in a bucket)
-func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObjects uint, query ...url.Values) (*cmn.BucketList, error) {
+func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg,
+	numObjects uint, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	var (
 		q       = url.Values{}
@@ -350,8 +350,8 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObje
 	}
 	q = cmn.AddBckToQuery(q, bck)
 
-	if msg == nil {
-		msg = &cmn.SelectMsg{}
+	if smsg == nil {
+		smsg = &cmn.SelectMsg{}
 	}
 
 	// An optimization to read as few objects from bucket as possible.
@@ -360,16 +360,16 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObje
 	// decreases `toRead` by the number of received objects. When `toRead` gets less
 	// than `pageSize`, the loop does the final request with reduced `pageSize`.
 	toRead := numObjects
-	msg.TaskID = ""
+	smsg.UUID = ""
 
-	pageSize := msg.PageSize
+	pageSize := smsg.PageSize
 	if pageSize == 0 {
 		pageSize = cmn.DefaultListPageSize
 	}
 
 	for iter := 1; ; iter++ {
 		if toRead != 0 && toRead <= pageSize {
-			msg.PageSize = toRead
+			smsg.PageSize = toRead
 		}
 
 		reqParams := ReqParams{
@@ -393,7 +393,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObje
 			page.Entries = make([]*cmn.BucketEntry, 0, pageSize)
 		}
 
-		if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, msg, &page); err != nil {
+		if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &page); err != nil {
 			return nil, err
 		}
 
@@ -404,7 +404,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObje
 		}
 
 		if page.PageMarker == "" {
-			msg.PageMarker = ""
+			smsg.PageMarker = ""
 			break
 		}
 
@@ -417,7 +417,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObje
 			}
 		}
 
-		msg.PageMarker = page.PageMarker
+		smsg.PageMarker = page.PageMarker
 	}
 
 	return bckList, nil
@@ -426,10 +426,10 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, numObje
 // ListObjectsPage returns the first page of bucket objects
 // On success the function updates msg.PageMarker, so a client can reuse
 // the message to fetch the next page
-func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
+func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
-	if msg == nil {
-		msg = &cmn.SelectMsg{}
+	if smsg == nil {
+		smsg = &cmn.SelectMsg{}
 	}
 
 	q := url.Values{}
@@ -447,10 +447,10 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, que
 	}
 
 	page := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
-	if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, msg, &page); err != nil {
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &page); err != nil {
 		return nil, err
 	}
-	msg.PageMarker = page.PageMarker
+	smsg.PageMarker = page.PageMarker
 	return page, nil
 }
 
@@ -458,18 +458,18 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, que
 // Build an object list with minimal set of properties: name and size.
 // All SelectMsg fields except prefix do not work and are skipped.
 // Function always returns the whole list of objects without paging
-func ListObjectsFast(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
-	if msg == nil {
-		msg = &cmn.SelectMsg{}
+func ListObjectsFast(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
+	if smsg == nil {
+		smsg = &cmn.SelectMsg{}
 	}
 
 	preallocSize := cmn.DefaultListPageSize
-	if msg.PageSize != 0 {
-		preallocSize = msg.PageSize
+	if smsg.PageSize != 0 {
+		preallocSize = smsg.PageSize
 	}
 
-	msg.Fast = true
-	msg.Cached = true
+	smsg.Fast = true
+	smsg.Cached = true
 
 	var q url.Values
 	if len(query) > 0 {
@@ -483,7 +483,7 @@ func ListObjectsFast(baseParams BaseParams, bck cmn.Bck, msg *cmn.SelectMsg, que
 		Query:      cmn.AddBckToQuery(q, bck),
 	}
 	bckList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
-	if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, msg, &bckList); err != nil {
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &bckList); err != nil {
 		return nil, err
 	}
 	return bckList, nil

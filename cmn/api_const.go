@@ -167,7 +167,6 @@ const (
 	URLParamSilent           = "sln" // true: destination should not log errors (HEAD request)
 	URLParamRebStatus        = "rbs" // true: get detailed rebalancing status
 	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
-	URLParamTaskID           = "tsk" // ID of a task to return its state/result
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 	URLParamECMeta           = "ecm" // true: EC metadata request
 	URLParamClusterInfo      = "cii" // true: Health to return ais.clusterInfo
@@ -175,20 +174,21 @@ const (
 	URLParamAppendType   = "appendty"
 	URLParamAppendHandle = "handle"
 
+	URLParamUUID = "uuid" // action (operation, transaction, task) UUID
+
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"
 	URLParamTotalInputShardsExtracted = "tise"
 	URLParamTotalUncompressedSize     = "tunc"
 
 	// downloader - FIXME: name collisions, consistency, usage beyond downloader
-	URLParamBucket            = "bucket" // FIXME
-	URLParamID                = "id"     // FIXME
+	URLParamBucket            = "bucket"
 	URLParamLink              = "link"
-	URLParamObjName           = "objname" // FIXME
+	URLParamObjName           = "objname"
 	URLParamSuffix            = "suffix"
 	URLParamTemplate          = "template"
 	URLParamSubdir            = "subdir"
-	URLParamTimeout           = "timeout" // FIXME
+	URLParamTimeout           = "timeout"
 	URLParamDescription       = "description"
 	URLParamLimitConnections  = "limit_conn"
 	URLParamLimitBytesPerHour = "limit_bph"

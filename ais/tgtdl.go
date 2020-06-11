@@ -26,28 +26,24 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		respErr    error
 		statusCode int
 	)
-
 	downloaderXact, err := xaction.Registry.RenewDownloader(t, t.statsT)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	switch r.Method {
 	case http.MethodPost:
-		id := r.URL.Query().Get(cmn.URLParamID)
-		cmn.Assert(id != "")
+		uuid := r.URL.Query().Get(cmn.URLParamUUID)
+		cmn.Assert(uuid != "")
 		ctx := t.contextWithAuth(r.Header)
-		dlJob, err := downloader.ParseStartDownloadRequest(ctx, r, id, t)
+		dlJob, err := downloader.ParseStartDownloadRequest(ctx, r, uuid, t)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("Downloading: %s", dlJob.ID())
 		}
-
 		response, respErr, statusCode = downloaderXact.Download(dlJob)
 
 	case http.MethodGet:
@@ -98,12 +94,16 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			response, respErr, statusCode = downloaderXact.RemoveJob(payload.ID)
 		default:
-			cmn.AssertMsg(false, fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).", items[0], cmn.Abort, cmn.Remove))
+			cmn.AssertMsg(false,
+				fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).",
+					items[0], cmn.Abort, cmn.Remove))
 			return
 		}
 
 	default:
-		cmn.AssertMsg(false, fmt.Sprintf("Invalid http method %s; expected one of %s, %s, %s", r.Method, http.MethodGet, http.MethodPost, http.MethodDelete))
+		cmn.AssertMsg(false,
+			fmt.Sprintf("Invalid http method %s; expected one of %s, %s, %s",
+				r.Method, http.MethodGet, http.MethodPost, http.MethodDelete))
 		return
 	}
 
@@ -111,7 +111,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, respErr.Error(), statusCode)
 		return
 	}
-
 	if response != nil {
 		b := cmn.MustMarshal(response)
 		_, err = w.Write(b)

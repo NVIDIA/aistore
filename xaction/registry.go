@@ -684,16 +684,15 @@ func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*dow
 }
 
 func (r *registry) RenewBckListXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,
-	msg *cmn.SelectMsg) (*bckListTask, error) {
-	id := msg.TaskID
-	if err := r.removeFinishedByID(id); err != nil {
+	smsg *cmn.SelectMsg) (*bckListTask, error) {
+	if err := r.removeFinishedByID(smsg.UUID); err != nil {
 		return nil, err
 	}
 	e := &bckListTaskEntry{
-		ctx: ctx,
-		t:   t,
-		id:  id,
-		msg: msg,
+		baseTaskEntry: baseTaskEntry{smsg.UUID},
+		ctx:           ctx,
+		t:             t,
+		msg:           smsg,
 	}
 	if err := e.Start(bck.Bck); err != nil {
 		return nil, err
@@ -703,16 +702,15 @@ func (r *registry) RenewBckListXact(ctx context.Context, t cluster.Target, bck *
 }
 
 func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,
-	msg *cmn.SelectMsg) (*bckSummaryTask, error) {
-	id := msg.TaskID
-	if err := r.removeFinishedByID(id); err != nil {
+	smsg *cmn.SelectMsg) (*bckSummaryTask, error) {
+	if err := r.removeFinishedByID(smsg.UUID); err != nil {
 		return nil, err
 	}
 	e := &bckSummaryTaskEntry{
-		id:  id,
-		ctx: ctx,
-		t:   t,
-		msg: msg,
+		baseTaskEntry: baseTaskEntry{smsg.UUID},
+		ctx:           ctx,
+		t:             t,
+		msg:           smsg,
 	}
 	if err := e.Start(bck.Bck); err != nil {
 		return nil, err
