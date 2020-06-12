@@ -129,7 +129,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.
 		header = lom.PopulateHdr(nil)
 	)
 	query = cmn.AddBckToQuery(query, ri.bckTo.Bck)
-	query.Add(cmn.URLParamProxyID, ri.smap.ProxySI.ID())
+	query.Add(cmn.URLParamTargetID, ri.t.si.ID())
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   si.URL(cmn.NetworkIntraData),

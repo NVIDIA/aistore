@@ -453,28 +453,31 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// verifyProxyRedirection returns if the http request was redirected from a proxy
-func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Request, action ...string) bool {
+func (t *targetrunner) validRedirect(w http.ResponseWriter, r *http.Request, tag string,
+	tok bool) (tid, pid string, query url.Values) {
 	var (
-		query  = r.URL.Query()
-		pid    = query.Get(cmn.URLParamProxyID)
-		method = r.Method
+		smap = t.owner.smap.get()
 	)
-	if len(action) > 0 {
-		method = action[0]
-	}
+	query = r.URL.Query()
+	tid, pid = query.Get(cmn.URLParamTargetID), query.Get(cmn.URLParamProxyID)
 	if pid == "" {
-		s := fmt.Sprintf("%s: %s is expected to be redirected", t.si, method)
-		t.invalmsghdlr(w, r, s)
-		return false
+		if tid != "" && tok {
+			if smap.GetTarget(tid) != nil {
+				return
+			}
+			t.invalmsghdlr(w, r, fmt.Sprintf("%s: %q from unknown [%s], %s", t.si, tag, tid, smap))
+			tid = ""
+			return
+		}
+		tid = ""
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s: %q is expected to be redirected", t.si, tag))
+		return
 	}
-	smap := t.owner.smap.get()
 	if smap.GetProxy(pid) == nil {
-		s := fmt.Sprintf("%s: %s from unknown [%s], %s", t.si, method, pid, smap.StringEx())
-		t.invalmsghdlr(w, r, s)
-		return false
+		pid = ""
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s: %q from unknown [%s], %s", t.si, tag, pid, smap))
 	}
-	return true
+	return
 }
 
 // Returns a slice. Does not use GFN.
@@ -583,8 +586,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	var (
-		query    = r.URL.Query()
-		appendTy = query.Get(cmn.URLParamAppendType)
+		query    url.Values
+		tid, pid string
 	)
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
@@ -592,12 +595,13 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objName := apitems[0], apitems[1]
 	started := time.Now()
-	if redelta := t.redirectLatency(started, query); redelta != 0 {
-		t.statsT.Add(stats.PutRedirLatency, redelta)
-	}
-	// PUT
-	if !t.verifyProxyRedirection(w, r) {
+	if tid, pid, query = t.validRedirect(w, r, r.Method, true); tid == "" && pid == "" {
 		return
+	}
+	if pid != "" {
+		if redelta := t.redirectLatency(started, query); redelta != 0 {
+			t.statsT.Add(stats.PutRedirLatency, redelta)
+		}
 	}
 	config := cmn.GCO.Get()
 	if capInfo := t.AvgCapUsed(config); capInfo.OOS {
@@ -624,6 +628,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		lom.Load() // need to know the current version if versioning enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
+	appendTy := query.Get(cmn.URLParamAppendType)
 	if appendTy == "" {
 		if err, errCode := t.doPut(r, lom, started); err != nil {
 			t.fshc(err, lom.FQN)

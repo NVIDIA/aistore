@@ -158,6 +158,7 @@ const (
 	// internal use
 	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
 	URLParamProxyID          = "pid" // ID of the redirecting proxy
+	URLParamTargetID         = "tid" // target (daemon) ID
 	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy
 	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary and the entire cluster)
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
