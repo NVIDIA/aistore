@@ -1217,6 +1217,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		header     = r.Header
 		cksumType  = header.Get(cmn.HeaderObjCksumType)
 		cksumValue = header.Get(cmn.HeaderObjCksumVal)
+		recvType   = r.URL.Query().Get(cmn.URLParamRecvType)
 	)
 	lom.ParseHdr(header) // TODO: check that values parsed here are not coming from the user
 	poi := &putObjInfo{
@@ -1227,6 +1228,13 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		cksumToCheck: cmn.NewCksum(cksumType, cksumValue),
 		ctx:          t.contextWithAuth(header),
 		workFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
+	}
+	if recvType != "" {
+		n, err := strconv.Atoi(recvType)
+		if err != nil {
+			return err, http.StatusBadRequest
+		}
+		poi.migrated = cluster.RecvType(n) == cluster.Migrated
 	}
 	sizeStr := header.Get("Content-Length")
 	if sizeStr != "" {

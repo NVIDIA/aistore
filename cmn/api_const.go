@@ -171,6 +171,7 @@ const (
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 	URLParamECMeta           = "ecm" // true: EC metadata request
 	URLParamClusterInfo      = "cii" // true: Health to return ais.clusterInfo
+	URLParamRecvType         = "rtp" // to tell real PUT from migration PUT
 
 	URLParamAppendType   = "appendty"
 	URLParamAppendHandle = "handle"

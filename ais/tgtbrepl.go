@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -130,6 +131,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.
 	)
 	query = cmn.AddBckToQuery(query, ri.bckTo.Bck)
 	query.Add(cmn.URLParamTargetID, ri.t.si.ID())
+	query.Add(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   si.URL(cmn.NetworkIntraData),
