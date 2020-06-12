@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -16,7 +15,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -413,55 +411,6 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, fmt.Sprintf("unrecognized path: %q in /daemon DELETE", apiItems[0]))
 		return
 	}
-}
-
-// Decrypts token and retrieves userID from request header
-// Returns empty userID in case of token is invalid
-func (t *targetrunner) userFromRequest(header http.Header) (*cmn.AuthToken, error) {
-	token := ""
-	tokenParts := strings.SplitN(header.Get(cmn.HeaderAuthorization), " ", 2)
-	if len(tokenParts) == 2 && tokenParts[0] == cmn.HeaderBearer {
-		token = tokenParts[1]
-	}
-
-	if token == "" {
-		// no token in header = use default credentials
-		return nil, nil
-	}
-
-	authrec, err := t.authn.validateToken(token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt token [%s]: %v", token, err)
-	}
-
-	return authrec, nil
-}
-
-// If Authn server is enabled then the function tries to read a user credentials
-// (at this moment userID is enough) from HTTP request header: looks for
-// 'Authorization' header and decrypts it.
-// Extracted user information is put to context that is passed to all consumers
-//
-// TODO: This function seems to be noop!
-func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
-	ct := context.Background()
-	config := cmn.GCO.Get()
-
-	if !config.Auth.Enabled {
-		return ct
-	}
-
-	user, err := t.userFromRequest(header)
-	if err != nil {
-		glog.Errorf("Failed to extract token: %v", err)
-		return ct
-	}
-
-	if user != nil {
-		ct = context.WithValue(ct, cmn.CtxUserID, user.UserID)
-	}
-
-	return ct
 }
 
 func (t *targetrunner) handleUnregisterReq() {

@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path"
@@ -303,7 +304,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		t:       t,
 		lom:     lom,
 		w:       w,
-		ctx:     t.contextWithAuth(r.Header),
+		ctx:     context.Background(),
 		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: objSize},
 		tag:     tag,
 	}
@@ -381,7 +382,7 @@ func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	err, errCode := t.objDelete(t.contextWithAuth(r.Header), lom, false)
+	err, errCode := t.objDelete(context.Background(), lom, false)
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			t.invalmsghdlrsilent(w, r,

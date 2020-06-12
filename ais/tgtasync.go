@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -62,8 +63,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		query      = r.URL.Query()
 		taskAction = query.Get(cmn.URLParamTaskAction)
 		silent     = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
-		ctx        = t.contextWithAuth(r.Header)
-		// create task call
+		ctx        = context.Background()
 	)
 	if taskAction == cmn.TaskStart {
 		var (

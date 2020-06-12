@@ -569,7 +569,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t:       t,
 		lom:     lom,
 		w:       w,
-		ctx:     t.contextWithAuth(r.Header),
+		ctx:     context.Background(),
 		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: 0},
 		isGFN:   isGFNRequest,
 		chunked: config.Net.HTTP.Chunked,
@@ -697,7 +697,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			listMsg  = &cmn.ListMsg{}
 		)
 		args := &xaction.DeletePrefetchArgs{
-			Ctx:   t.contextWithAuth(r.Header),
+			Ctx:   context.Background(),
 			UUID:  msg.UUID,
 			Evict: msg.Action == cmn.ActEvictObjects,
 		}
@@ -749,7 +749,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	err, errCode := t.objDelete(t.contextWithAuth(r.Header), lom, evict)
+	err, errCode := t.objDelete(context.Background(), lom, evict)
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			t.invalmsghdlrsilent(w, r,
@@ -827,7 +827,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			xact     *xaction.Prefetch
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
-			args     = &xaction.DeletePrefetchArgs{Ctx: t.contextWithAuth(r.Header)}
+			args     = &xaction.DeletePrefetchArgs{Ctx: context.Background()}
 		)
 		if err = cmn.TryUnmarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
@@ -922,7 +922,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// + cloud
-	bucketProps, err, code = t.Cloud(bck).HeadBucket(t.contextWithAuth(r.Header), bck)
+	bucketProps, err, code = t.Cloud(bck).HeadBucket(context.Background(), bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
@@ -1044,7 +1044,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		lom.PopulateHdr(hdr)
 	} else {
 		var objMeta cmn.SimpleKVs
-		objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(t.contextWithAuth(r.Header), lom)
+		objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: HEAD request failed, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)
@@ -1140,7 +1140,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 		query.Provider = config.Cloud.Provider
 	}
 	if query.Provider != "" {
-		bucketNames, err, code = t._listBcks(r, query, config)
+		bucketNames, err, code = t._listBcks(query, config)
 		if err != nil {
 			s := fmt.Sprintf("failed to list buckets for %s, err: %v(%d)", query, err, code)
 			t.invalmsghdlr(w, r, s, code)
@@ -1150,7 +1150,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 		for provider := range cmn.Providers {
 			var buckets cmn.BucketNames
 			query.Provider = provider
-			buckets, err, code = t._listBcks(r, query, config)
+			buckets, err, code = t._listBcks(query, config)
 			if err != nil {
 				glog.Errorf("failed to list buckets for %s, err: %v(%d)", query, err, code)
 			} else {
@@ -1162,11 +1162,11 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 	t.writeJSON(w, r, bucketNames, listBuckets)
 }
 
-func (t *targetrunner) _listBcks(r *http.Request, query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {
+func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {
 	// 3rd party cloud or remote ais
 	if query.Provider == cfg.Cloud.Provider || query.IsRemoteAIS() {
 		bck := cluster.NewBck("", query.Provider, query.Ns)
-		names, err, c = t.Cloud(bck).ListBuckets(t.contextWithAuth(r.Header), query)
+		names, err, c = t.Cloud(bck).ListBuckets(context.Background(), query)
 		sort.Sort(names)
 	} else { // BMD
 		names = t.selectBMDBuckets(t.owner.bmd.get(), query)
@@ -1226,7 +1226,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		lom:          lom,
 		r:            r.Body,
 		cksumToCheck: cmn.NewCksum(cksumType, cksumValue),
-		ctx:          t.contextWithAuth(header),
+		ctx:          context.Background(),
 		workFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
 	if recvType != "" {

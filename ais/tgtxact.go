@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -71,7 +72,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		switch msg.Action {
 		case cmn.ActXactStart:
-			if err := t.cmdXactStart(r, xactMsg, bck); err != nil {
+			if err := t.cmdXactStart(xactMsg, bck); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -120,7 +121,7 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-func (t *targetrunner) cmdXactStart(r *http.Request, xactMsg cmn.XactionMsg, bck *cluster.Bck) error {
+func (t *targetrunner) cmdXactStart(xactMsg cmn.XactionMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 	switch xactMsg.Kind {
@@ -141,7 +142,7 @@ func (t *targetrunner) cmdXactStart(r *http.Request, xactMsg cmn.XactionMsg, bck
 			return fmt.Errorf(erfmn, xactMsg.Kind)
 		}
 		args := &xaction.DeletePrefetchArgs{
-			Ctx:      t.contextWithAuth(r.Header),
+			Ctx:      context.Background(),
 			RangeMsg: &cmn.RangeMsg{},
 		}
 		xact, err := xaction.Registry.RenewPrefetch(t, bck, args)

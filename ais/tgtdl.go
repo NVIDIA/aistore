@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -35,7 +36,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		uuid := r.URL.Query().Get(cmn.URLParamUUID)
 		cmn.Assert(uuid != "")
-		ctx := t.contextWithAuth(r.Header)
+		ctx := context.Background()
 		dlJob, err := downloader.ParseStartDownloadRequest(ctx, r, uuid, t)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())

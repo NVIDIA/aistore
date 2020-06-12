@@ -80,7 +80,7 @@ func (awsp *awsProvider) Provider() string {
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	var (
 		h        = cmn.CloudHelpers.Amazon
 		cloudBck = bck.CloudBck()
@@ -196,7 +196,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 // HEAD BUCKET //
 /////////////////
 
-func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	var (
 		cloudBck = bck.CloudBck()
 		svc      = s3.New(createSession())
@@ -231,7 +231,7 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 // BUCKET NAMES //
 //////////////////
 
-func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
+func (awsp *awsProvider) ListBuckets(_ context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
 	var (
 		svc = s3.New(createSession())
 	)
@@ -258,7 +258,7 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 // HEAD OBJECT //
 ////////////////
 
-func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
 		h        = cmn.CloudHelpers.Amazon
 		cloudBck = lom.Bck().CloudBck()
@@ -351,7 +351,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 // PUT OBJECT //
 ////////////////
 
-func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+func (awsp *awsProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var (
 		uploadOutput          *s3manager.UploadOutput
 		h                     = cmn.CloudHelpers.Amazon
@@ -386,7 +386,7 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 // DELETE OBJECT //
 ///////////////////
 
-func (awsp *awsProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+func (awsp *awsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (err error, errCode int) {
 	var (
 		cloudBck = lom.Bck().CloudBck()
 		svc      = s3.New(createSession())
