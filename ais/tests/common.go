@@ -27,7 +27,6 @@ const rebalanceObjectDistributionTestCoef = 0.3
 
 const (
 	prefixDir               = "filter"
-	baseDir                 = "/tmp/ais"
 	ColdValidStr            = "coldmd5"
 	ChksumValidStr          = "chksum"
 	ColdMD5str              = "coldmd5"

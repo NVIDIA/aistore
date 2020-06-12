@@ -320,7 +320,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	}()
 
 	// generate some filenames to PUT to them in a loop
-	generateRandomData(md.numObjs)
+	generateRandomNames(md.numObjs)
 
 	// Checking detection on object PUT
 	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMpathList, suffix)
