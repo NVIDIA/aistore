@@ -4,8 +4,10 @@
  */
 package cmn
 
-// NOTE: BEWARE: `shortid` uses hardcoded 01/2016 as a starting timestamp
-import "github.com/teris-io/shortid"
+import (
+	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/teris-io/shortid"
+)
 
 const (
 	// Alphabet for generating UUIDs similar to the shortid.DEFAULT_ABC
@@ -25,15 +27,32 @@ func InitShortid(seed uint64) {
 
 // GenUUID generates unique and user-friendly IDs.
 func GenUUID() (uuid string) {
-	var err error
-	for _, sid := range sids {
+	var (
+		err  error
+		h, t string
+		now  = mono.NanoTime()
+		i    = int(now & int64(len(sids)-1))
+	)
+	for {
+		sid := sids[i]
 		uuid, err = sid.Generate()
-		if err == nil &&
-			uuid[0] != '-' && uuid[0] != '_' && uuid[len(uuid)-1] != '-' && uuid[len(uuid)-1] != '_' {
-			return
+		if err != nil {
+			i = (i + 1) % len(sids)
+			continue
 		}
+		if !isalpha(uuid[0]) {
+			h = string('A' + i)
+		}
+		u := uuid[len(uuid)-1]
+		if u == '-' || u == '_' {
+			t = string('a' + i)
+		}
+		return h + uuid + t
 	}
-	return RandString(9)
+}
+
+func isalpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' || c <= 'Z')
 }
 
 // misc
