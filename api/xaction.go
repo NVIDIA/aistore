@@ -125,7 +125,7 @@ func GetXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXa
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
 		Body:       cmn.MustMarshal(msg),
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactStats}},
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.QueryXactStats}},
 	}, &xactStats)
 	return xactStats, err
 }

@@ -2589,7 +2589,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.queryClusterStats(w, r, what)
 	case cmn.GetWhatSysInfo:
 		p.queryClusterSysinfo(w, r, what)
-	case cmn.GetWhatXactStats, cmn.GetWhatXactRunStatus:
+	case cmn.QueryXactStats:
 		p.queryXaction(w, r, what)
 	case cmn.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)

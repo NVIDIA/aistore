@@ -208,19 +208,19 @@ const (
 
 // URLParamWhat enum
 const (
-	GetWhatConfig        = "config"
-	GetWhatSmap          = "smap"
-	GetWhatBMD           = "bmd"
-	GetWhatStats         = "stats"
-	GetWhatXactStats     = "xstats"
-	GetWhatXactRunStatus = "xrunstatus"
-	GetWhatSmapVote      = "smapvote"
-	GetWhatMountpaths    = "mountpaths"
-	GetWhatSnode         = "snode"
-	GetWhatSysInfo       = "sysinfo"
-	GetWhatDiskStats     = "disk"
-	GetWhatDaemonStatus  = "status"
-	GetWhatRemoteAIS     = "remote"
+	GetWhatConfig       = "config"
+	GetWhatSmap         = "smap"
+	GetWhatBMD          = "bmd"
+	GetWhatStats        = "stats"
+	GetWhatSmapVote     = "smapvote"
+	GetWhatMountpaths   = "mountpaths"
+	GetWhatSnode        = "snode"
+	GetWhatSysInfo      = "sysinfo"
+	GetWhatDiskStats    = "disk"
+	GetWhatDaemonStatus = "status"
+	GetWhatRemoteAIS    = "remote"
+	GetWhatXactStats    = "getxstats" // stats(xaction-by-uuid)
+	QueryXactStats      = "qryxstats" // stats(all-matching-xactions)
 )
 
 // SelectMsg.TimeFormat enum

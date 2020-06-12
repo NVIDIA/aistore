@@ -383,44 +383,9 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	wg.Wait()
 
 	// 7. wait for rebalance to finish and unlock buckets
-	go p.waitRebalance(rmd, &nlpFrom, &nlpTo)
+	rebUUID := strconv.FormatInt(rmd.Version, 10)
+	go p.pollXactDone(rebUUID, unlock, msg.Action)
 	return
-}
-
-func (p *proxyrunner) waitRebalance(rmd *rebMD, nlpFrom, nlpTo *cluster.NameLockPair) {
-	defer func() {
-		nlpTo.Unlock()
-		nlpFrom.Unlock()
-	}()
-	var (
-		allFinished bool
-		msg         = cmn.XactionMsg{ID: strconv.FormatInt(rmd.Version, 10), Finished: true}
-		reqArgs     = cmn.ReqArgs{
-			Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
-			Body:  cmn.MustMarshal(msg),
-			Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactStats}},
-		}
-		sleep = cmn.GCO.Get().Timeout.CplaneOperation
-	)
-	for !allFinished {
-		time.Sleep(sleep)
-		allFinished = true
-		results := p.bcastGet(bcastArgs{req: reqArgs})
-		for res := range results {
-			if res.err != nil {
-				glog.Errorf("%s: (%s: %v)", p.si, res.si, res.err)
-				return
-			}
-			var xactStats []*stats.BaseXactStatsExt
-			if err := jsoniter.Unmarshal(res.outjson, &xactStats); err != nil {
-				glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", p.si, res.si, err)
-				return
-			}
-			if len(xactStats) == 0 {
-				allFinished = false
-			}
-		}
-	}
 }
 
 // copy-bucket: { confirm existence -- begin -- conditional metasync -- commit -- wait for copy-done and unlock }
@@ -502,42 +467,8 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
 	// 6. wait for copy to finish and unlock buckets
-	go p.waitCopyBuckets(bckTo, &nlpFrom, &nlpTo)
+	go p.pollXactDone(c.uuid, unlock, msg.Action /* xact kind */)
 	return
-}
-
-func (p *proxyrunner) waitCopyBuckets(bckTo *cluster.Bck, nlpFrom, nlpTo *cluster.NameLockPair) {
-	var (
-		// TODO: wait with cmn.XactionExtMsg.Finished
-		msg     = cmn.XactionMsg{Kind: cmn.ActCopyBucket, Bck: bckTo.Bck}
-		reqArgs = cmn.ReqArgs{
-			Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
-			Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactRunStatus}},
-			Body:  cmn.MustMarshal(msg),
-		}
-		config = cmn.GCO.Get()
-		sleep  = config.Timeout.CplaneOperation
-	)
-	time.Sleep(sleep)
-loop:
-	for {
-		results := p.bcastGet(bcastArgs{req: reqArgs, timeout: config.Timeout.CplaneOperation})
-		for res := range results {
-			if res.err != nil {
-				break loop
-			}
-			var status cmn.XactRunningStatus
-			err := jsoniter.Unmarshal(res.outjson, &status)
-			cmn.AssertNoErr(err)
-			if status.Running {
-				time.Sleep(sleep)
-				continue loop
-			}
-		}
-		break
-	}
-	nlpTo.Unlock()
-	nlpFrom.RUnlock()
 }
 
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }
@@ -680,4 +611,44 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 	targetCnt := p.owner.smap.Get().CountTargets()
 	err = nprops.Validate(targetCnt)
 	return
+}
+
+//
+// TODO: replace via intra-cluster notifications
+//
+func (p *proxyrunner) pollXactDone(uuid string, cleanup func(), kind string) {
+	var (
+		query   = make(url.Values)
+		reqArgs = cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Xactions), Query: query}
+		config  = cmn.GCO.Get()
+		sleep   = config.Timeout.CplaneOperation
+	)
+	query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
+	query.Set(cmn.URLParamUUID, uuid)
+	time.Sleep(sleep)
+	defer cleanup()
+loop:
+	for {
+		results := p.bcastGet(bcastArgs{req: reqArgs, timeout: config.Timeout.CplaneOperation})
+		for res := range results {
+			var stats stats.BaseXactStatsExt
+			if res.err != nil {
+				if res.status == http.StatusNotFound {
+					time.Sleep(sleep)
+					continue loop
+				}
+				break loop
+			}
+			if err := jsoniter.Unmarshal(res.outjson, &stats); err != nil {
+				glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", p.si, res.si, err)
+				return
+			}
+			cmn.Assert(stats.KindX == kind)
+			if stats.EndTimeX.IsZero() {
+				time.Sleep(sleep)
+				continue loop
+			}
+		}
+		break
+	}
 }

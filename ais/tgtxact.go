@@ -27,8 +27,13 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		var (
 			bck     *cluster.Bck
 			xactMsg = cmn.XactionMsg{}
-			what    = r.URL.Query().Get(cmn.URLParamWhat)
+			query   = r.URL.Query()
+			what    = query.Get(cmn.URLParamWhat)
 		)
+		if uuid := query.Get(cmn.URLParamUUID); uuid != "" {
+			t.getXactByID(w, r, what, uuid)
+			return
+		}
 		if cmn.ReadJSON(w, r, &xactMsg) != nil {
 			return
 		}
@@ -43,28 +48,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck,
 			OnlyRunning: !xactMsg.All, Finished: xactMsg.Finished,
 		}
-		switch what {
-		case cmn.GetWhatXactStats:
-			xactStats, err := xaction.Registry.GetStats(xactQuery)
-			if err != nil {
-				if _, ok := err.(cmn.XactionNotFoundError); ok {
-					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
-				} else {
-					t.invalmsghdlr(w, r, err.Error())
-				}
-				return
-			}
-			t.writeJSON(w, r, xactStats, what)
-		case cmn.GetWhatXactRunStatus:
-			running := xaction.Registry.IsXactRunning(xactQuery)
-			status := &cmn.XactRunningStatus{ID: xactQuery.ID, Kind: xactQuery.Kind, Running: running}
-			if bck != nil {
-				status.Bck = bck.Bck
-			}
-			t.writeJSON(w, r, status, what)
-		default:
-			t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
-		}
+		t.queryMatchingXact(w, r, what, xactQuery)
 	case http.MethodPut:
 		var (
 			msg     cmn.ActionMsg
@@ -78,7 +62,6 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-
 		if !xactMsg.Bck.IsEmpty() {
 			bck = cluster.NewBckEmbed(xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd, t.si); err != nil {
@@ -100,6 +83,40 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /xactions path")
+	}
+}
+
+func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid string) {
+	if what != cmn.GetWhatXactStats {
+		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
+		return
+	}
+	stats, err := xaction.Registry.GetStatsByID(uuid) // stats.XactStats
+	if err == nil {
+		t.writeJSON(w, r, stats, what)
+		return
+	}
+	if _, ok := err.(cmn.XactionNotFoundError); ok {
+		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+	} else {
+		t.invalmsghdlr(w, r, err.Error())
+	}
+}
+
+func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xaction.XactQuery) {
+	if what != cmn.QueryXactStats {
+		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
+		return
+	}
+	stats, err := xaction.Registry.GetStats(xactQuery) // []stats.XactStats
+	if err == nil {
+		t.writeJSON(w, r, stats, what)
+		return
+	}
+	if _, ok := err.(cmn.XactionNotFoundError); ok {
+		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+	} else {
+		t.invalmsghdlr(w, r, err.Error())
 	}
 }
 

@@ -372,6 +372,21 @@ func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []stats.Xa
 	return sts
 }
 
+func (r *registry) GetStatsByID(uuid string) (stats stats.XactStats, err error) {
+	r.entries.forEach(func(entry baseEntry) bool {
+		xact := entry.Get()
+		if xact != nil && xact.ID().Compare(uuid) == 0 {
+			stats = entry.Stats(xact)
+			return false
+		}
+		return true
+	})
+	if stats == nil {
+		err = cmn.NewXactionNotFoundError("ID='" + uuid + "'")
+	}
+	return
+}
+
 func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 	if query.ID != "" {
 		if !query.Finished {
