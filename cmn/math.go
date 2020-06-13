@@ -88,6 +88,13 @@ func MaxDuration(a, b time.Duration) time.Duration {
 	return b
 }
 
+func MinTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
+}
+
 // Min returns min value from given ints
 func Min(ints ...int) int {
 	Assert(len(ints) >= 2)

@@ -112,13 +112,15 @@ while503:
 // is what we are waiting for only by looking at its version.
 func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose bool, nodeCnt ...int) (*cluster.Smap, error) {
 	var (
-		lastVersion          int64
-		timeUntil, timeStart time.Time
-		totalProxies         int
-		totalTargets         int
+		lastVersion                               int64
+		smapChangeDeadline, timeStart, opDeadline time.Time
+		totalProxies                              int
+		totalTargets                              int
 	)
 	timeStart = time.Now()
-	timeUntil = timeStart.Add(proxyChangeLatency)
+	smapChangeDeadline = timeStart.Add(proxyChangeLatency)
+	opDeadline = timeStart.Add(3 * proxyChangeLatency)
+
 	if len(nodeCnt) > 0 {
 		totalProxies = nodeCnt[0]
 	}
@@ -162,12 +164,16 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 			if totalProxies == 0 {
 				expectedProxies = ps
 			}
-			Logf("waiting for Smap at %s[t%d/%d, p%d/%d] (%v)\n", proxyURL, ts, expectedTargets, ps, expectedProxies,
+			Logf("waiting for Smap at %s[t%d/%d, p%d/%d, v(%d)] (%v)\n", proxyURL, ts, expectedTargets, ps, expectedProxies, smap.Version,
 				d.Truncate(time.Second))
 		}
 
+		if smap.Version != lastVersion {
+			smapChangeDeadline = cmn.MinTime(time.Now().Add(proxyChangeLatency), opDeadline)
+		}
+
 		// if the primary's map changed to the state we want, wait for the map get populated
-		if err == nil && smap.Version == lastVersion && smap.Version > origVersion && doCheckSMap {
+		if err == nil && smap.Version > origVersion && doCheckSMap {
 			for {
 				smap, err = api.GetClusterMap(baseParams)
 				if err == nil {
@@ -178,7 +184,7 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 					return smap, err
 				}
 
-				if time.Now().After(timeUntil) {
+				if time.Now().After(smapChangeDeadline) {
 					return smap, fmt.Errorf("primary proxy's Smap timed out")
 				}
 				time.Sleep(time.Second)
@@ -191,17 +197,17 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 					proxyID = p.ID()
 				}
 			}
-			err = WaitMapVersionSync(timeUntil, smap, origVersion, []string{MockDaemonID, proxyID})
+			err = WaitMapVersionSync(smapChangeDeadline, smap, origVersion, []string{MockDaemonID, proxyID})
 			return smap, err
 		}
 
-		if time.Now().After(timeUntil) {
+		if time.Now().After(smapChangeDeadline) {
 			break
 		}
 
 		lastVersion = smap.Version
 		loopCnt++
-		time.Sleep(time.Second * time.Duration(loopCnt)) // sleep longer every loop
+		time.Sleep(cmn.MinDuration(time.Second*time.Duration(loopCnt), time.Second*7)) // sleep longer every loop
 	}
 
 	return nil, fmt.Errorf("timed out waiting for the cluster to stabilize")
