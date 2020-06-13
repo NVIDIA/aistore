@@ -144,6 +144,7 @@ func (is *infoStore) setAborted(id string) error {
 		return err
 	}
 	jInfo.Aborted.Store(true)
+	jInfo.FinishedTime.Store(time.Now())
 	return nil
 }
 
