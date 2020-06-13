@@ -2169,7 +2169,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.FailNow()
 	}
 
-	msg := &cmn.SelectMsg{}
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
 	res, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	oldBucketList := filterObjListOK(res.Entries)
