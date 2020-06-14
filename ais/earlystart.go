@@ -42,7 +42,7 @@ func (p *proxyrunner) bootstrap() {
 	if !loaded {
 		smap = nil
 	}
-	pid, primary = p.determineRole(smap, loaded)
+	pid, primary = p.determineRole(smap)
 
 	// 3. primary?
 	if primary {
@@ -86,11 +86,11 @@ func (p *proxyrunner) bootstrap() {
 //   loaded Smap, if exists
 // - handle AIS_PRIMARY_ID (TODO: target)
 // - see also "change of mind"
-func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (pid string, primary bool) {
+func (p *proxyrunner) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 	tag := "no Smap, "
-	if loaded {
-		smap.Pmap[p.si.ID()] = p.si
-		tag = smap.StringEx() + ", "
+	if loadedSmap != nil {
+		loadedSmap.Pmap[p.si.ID()] = p.si
+		tag = loadedSmap.StringEx() + ", "
 	}
 	// parse env
 	envP := struct {
@@ -109,27 +109,27 @@ func (p *proxyrunner) determineRole(smap *smapX, loaded bool) (pid string, prima
 	}
 	glog.Infof("%s: %sprimary-env=%+v", p.si, tag, envP)
 
-	if loaded && envP.pid != "" {
-		primary := smap.GetProxy(envP.pid)
+	if loadedSmap != nil && envP.pid != "" {
+		primary := loadedSmap.GetProxy(envP.pid)
 		if primary == nil {
 			glog.Errorf(
 				"%s: ignoring %s=%s - not found in the loaded %s",
-				p.si, cmn.EnvVars.IsPrimary, envP.pid, smap,
+				p.si, cmn.EnvVars.IsPrimary, envP.pid, loadedSmap,
 			)
 			envP.pid = ""
-		} else if smap.ProxySI.ID() != envP.pid {
+		} else if loadedSmap.ProxySI.ID() != envP.pid {
 			glog.Warningf(
 				"%s: new %s=%s, previous %s",
-				p.si, cmn.EnvVars.PrimaryID, envP.pid, smap.ProxySI,
+				p.si, cmn.EnvVars.PrimaryID, envP.pid, loadedSmap.ProxySI,
 			)
-			smap.ProxySI = primary
+			loadedSmap.ProxySI = primary
 		}
 	}
 	if envP.pid != "" {
 		primary = envP.pid == p.si.ID()
 		pid = envP.pid
-	} else if loaded {
-		primary = smap.isPrimary(p.si)
+	} else if loadedSmap != nil {
+		primary = loadedSmap.isPrimary(p.si)
 	} else {
 		primary = envP.primary
 	}
