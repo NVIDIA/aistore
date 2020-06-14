@@ -15,7 +15,6 @@ import (
 type (
 	ResultSetXact struct {
 		cmn.XactBase
-		cmn.NonmountpathXact
 		t     cluster.Target
 		timer *time.Timer
 
@@ -48,6 +47,8 @@ func NewResultSet(t cluster.Target, query *ObjectsQuery) *ResultSetXact {
 func (r *ResultSetXact) Start() {
 	r.StartWithHandle("")
 }
+
+func (r *ResultSetXact) IsMountpathXact() bool { return false } // TODO -- FIXME
 
 func (r *ResultSetXact) StartWithHandle(handle string) {
 	cmn.Assert(r.query.ObjectsSource != nil)

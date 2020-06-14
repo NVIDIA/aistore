@@ -28,7 +28,6 @@ const (
 type (
 	xactECBase struct {
 		cmn.XactDemandBase
-		cmn.MountpathXact
 		t cluster.Target
 
 		smap  cluster.Sowner // cluster map
@@ -137,6 +136,8 @@ func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata) *intraReq {
 	}
 	return req
 }
+
+func (r *xactECBase) IsMountpathXact() bool { return true }
 
 func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
 	attrs.Version = md.ObjVersion
@@ -450,7 +451,7 @@ func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transpor
 	return err
 }
 
-func (r *xactECBase) Stats() *ECStats {
+func (r *xactECBase) GetStats() *ECStats {
 	return r.stats.stats()
 }
 

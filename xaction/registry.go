@@ -61,15 +61,13 @@ type (
 		wg *sync.WaitGroup
 	}
 	Rebalance struct {
-		cmn.NonmountpathXact
 		RebBase
+		statsRunner *stats.Trunner // extended stats
 	}
 	Resilver struct {
-		cmn.MountpathXact
 		RebBase
 	}
 	Election struct {
-		cmn.NonmountpathXact
 		cmn.XactBase
 	}
 	bckListTask struct {
@@ -90,7 +88,6 @@ type (
 		Start(bck cmn.Bck) error // starts an xaction, will be called when entry is stored into registry
 		Kind() string
 		Get() cmn.Xact
-		Stats(xact cmn.Xact) stats.XactStats
 	}
 	XactQuery struct {
 		ID          string
@@ -125,9 +122,7 @@ func init() {
 func (xact *RebBase) MarkDone()      { xact.wg.Done() }
 func (xact *RebBase) WaitForFinish() { xact.wg.Wait() }
 
-//
-// misc methods
-//
+// rebalance
 
 func (xact *RebBase) String() string {
 	s := xact.XactBase.String()
@@ -136,11 +131,11 @@ func (xact *RebBase) String() string {
 	}
 	return s
 }
+
+func (xact *Rebalance) IsMountpathXact() bool { return false }
+
 func (xact *Rebalance) String() string {
 	return fmt.Sprintf("%s, %s", xact.RebBase.String(), xact.ID())
-}
-func (xact *Resilver) String() string {
-	return xact.RebBase.String()
 }
 
 func (xact *Rebalance) AbortedAfter(dur time.Duration) (aborted bool) {
@@ -152,6 +147,22 @@ func (xact *Rebalance) AbortedAfter(dur time.Duration) (aborted bool) {
 		}
 	}
 	return
+}
+
+// override  - extend cmn.XactBase.Stats()
+func (xact *Rebalance) Stats() cmn.XactStats {
+	baseStats := xact.XactBase.Stats().(*cmn.BaseXactStats)
+	rebStats := stats.RebalanceTargetStats{BaseXactStats: *baseStats}
+	rebStats.FillFromTrunner(xact.statsRunner)
+	return &rebStats
+}
+
+// resilver
+
+func (xact *Resilver) IsMountpathXact() bool { return true }
+
+func (xact *Resilver) String() string {
+	return xact.RebBase.String()
 }
 
 //
@@ -271,10 +282,16 @@ func newRegistry() *registry {
 	return xar
 }
 
-func (r *registry) GetXact(id string) baseEntry {
-	cmn.Assert(id != "")
-	entry := r.entries.find(XactQuery{ID: id})
-	return entry
+func (r *registry) GetXact(uuid string) (xact cmn.Xact) {
+	r.entries.forEach(func(entry baseEntry) bool {
+		x := entry.Get()
+		if x != nil && x.ID().Compare(uuid) == 0 {
+			xact = x
+			return false
+		}
+		return true
+	})
+	return
 }
 
 func (r *registry) GetRunning(query XactQuery) baseEntry {
@@ -353,7 +370,7 @@ func (r *registry) IsXactRunning(query XactQuery) (running bool) {
 	return entry != nil
 }
 
-func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []stats.XactStats {
+func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []cmn.XactStats {
 	matchingEntries := make([]baseEntry, 0, 20)
 	r.entries.forEach(func(entry baseEntry) bool {
 		if !match(entry.Get()) {
@@ -365,29 +382,14 @@ func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []stats.Xa
 
 	// TODO: we cannot do this inside `forEach` because possibly
 	//  we have recursive RLock what can deadlock.
-	sts := make([]stats.XactStats, 0, len(matchingEntries))
+	sts := make([]cmn.XactStats, 0, len(matchingEntries))
 	for _, entry := range matchingEntries {
-		sts = append(sts, entry.Stats(entry.Get()))
+		sts = append(sts, entry.Get().Stats())
 	}
 	return sts
 }
 
-func (r *registry) GetStatsByID(uuid string) (stats stats.XactStats, err error) {
-	r.entries.forEach(func(entry baseEntry) bool {
-		xact := entry.Get()
-		if xact != nil && xact.ID().Compare(uuid) == 0 {
-			stats = entry.Stats(xact)
-			return false
-		}
-		return true
-	})
-	if stats == nil {
-		err = cmn.NewXactionNotFoundError("ID='" + uuid + "'")
-	}
-	return
-}
-
-func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
+func (r *registry) GetStats(query XactQuery) ([]cmn.XactStats, error) {
 	if query.ID != "" {
 		if !query.Finished {
 			return r.matchingXactsStats(func(xact cmn.Xact) bool {
@@ -416,10 +418,10 @@ func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 		if query.OnlyRunning {
 			entry := r.GetRunning(XactQuery{Kind: query.Kind})
 			if entry == nil {
-				return []stats.XactStats{}, nil
+				return []cmn.XactStats{}, nil
 			}
 			xact := entry.Get()
-			return []stats.XactStats{entry.Stats(xact)}, nil
+			return []cmn.XactStats{xact.Stats()}, nil
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
 			return xact.Kind() == query.Kind
@@ -430,11 +432,11 @@ func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 		}
 
 		if query.OnlyRunning {
-			matching := make([]stats.XactStats, 0, 10)
+			matching := make([]cmn.XactStats, 0, 10)
 			for kind := range cmn.XactsMeta {
 				entry := r.GetRunning(XactQuery{Kind: kind, Bck: query.Bck})
 				if entry != nil {
-					matching = append(matching, entry.Stats(entry.Get()))
+					matching = append(matching, entry.Get().Stats())
 				}
 			}
 			return matching, nil
@@ -450,10 +452,10 @@ func (r *registry) GetStats(query XactQuery) ([]stats.XactStats, error) {
 		}
 
 		if query.OnlyRunning {
-			matching := make([]stats.XactStats, 0, 1)
+			matching := make([]cmn.XactStats, 0, 1)
 			entry := r.GetRunning(XactQuery{Kind: query.Kind, Bck: query.Bck})
 			if entry != nil {
-				matching = append(matching, entry.Stats(entry.Get()))
+				matching = append(matching, entry.Get().Stats())
 			}
 			return matching, nil
 		}
@@ -660,8 +662,8 @@ func (r *registry) RenewLRU(id string) *lru.Xaction {
 	return entry.xact
 }
 
-func (r *registry) RenewRebalance(id int64, statRunner *stats.Trunner) *Rebalance {
-	e := &rebalanceEntry{id: rebID(id), statRunner: statRunner}
+func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) *Rebalance {
+	e := &rebalanceEntry{id: rebID(id), statsRunner: statsRunner}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*rebalanceEntry)
 	if keep { // previous global rebalance is still running
@@ -687,6 +689,8 @@ func (r *registry) RenewElection() *Election {
 	}
 	return entry.xact
 }
+
+func (e *Election) IsMountpathXact() bool { return false }
 
 func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*downloader.Downloader, error) {
 	e := &downloaderEntry{t: t, statsT: statsT}

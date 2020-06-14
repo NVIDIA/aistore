@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -631,7 +630,7 @@ loop:
 	for {
 		results := p.bcastGet(bcastArgs{req: reqArgs, timeout: config.Timeout.CplaneOperation})
 		for res := range results {
-			var stats stats.BaseXactStatsExt
+			var stats cmn.BaseXactStatsExt
 			if res.err != nil {
 				if res.status == http.StatusNotFound {
 					time.Sleep(sleep)

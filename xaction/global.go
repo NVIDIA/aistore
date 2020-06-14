@@ -54,10 +54,9 @@ func (e *lruEntry) preRenewHook(_ globalEntry) bool { return true }
 type rebID int64
 
 type rebalanceEntry struct {
-	baseGlobalEntry
-	id         rebID // rebalance id
-	xact       *Rebalance
-	statRunner *stats.Trunner
+	id          rebID // rebalance id
+	xact        *Rebalance
+	statsRunner *stats.Trunner
 }
 
 var (
@@ -90,9 +89,8 @@ compare:
 }
 
 func (e *rebalanceEntry) Start(_ cmn.Bck) error {
-	xreb := &Rebalance{
-		RebBase: makeXactRebBase(e.id, cmn.ActRebalance),
-	}
+	xreb := &Rebalance{RebBase: makeXactRebBase(e.id, cmn.ActRebalance)}
+	xreb.statsRunner = e.statsRunner
 	e.xact = xreb
 	return nil
 }
@@ -117,13 +115,6 @@ func (e *rebalanceEntry) postRenewHook(previousEntry globalEntry) {
 	xreb := previousEntry.(*rebalanceEntry).xact
 	xreb.Abort()
 	xreb.WaitForFinish()
-}
-
-func (e *rebalanceEntry) Stats(xact cmn.Xact) stats.XactStats {
-	cmn.Assert(xact == e.xact)
-	rebStats := &stats.RebalanceTargetStats{BaseXactStats: *stats.NewXactStats(e.xact)}
-	rebStats.FillFromTrunner(e.statRunner)
-	return rebStats
 }
 
 //
@@ -219,7 +210,3 @@ func (b *baseGlobalEntry) preRenewHook(previousEntry globalEntry) (done bool) {
 }
 
 func (b *baseGlobalEntry) postRenewHook(_ globalEntry) {}
-
-func (b *baseGlobalEntry) Stats(xact cmn.Xact) stats.XactStats {
-	return stats.NewXactStats(xact)
-}

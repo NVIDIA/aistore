@@ -261,5 +261,5 @@ func (r *XactRespond) stop() {
 
 	XactCount.Dec()
 	r.XactDemandBase.Stop()
-	r.EndTime(time.Now())
+	r.SetEndTime(time.Now())
 }

@@ -411,7 +411,7 @@ func (reb *Manager) rebFini(md *rebArgs) {
 	reb.filterGFN.Reset()
 
 	if !reb.xact().Finished() {
-		reb.xact().EndTime(time.Now())
+		reb.xact().SetEndTime(time.Now())
 	} else {
 		glog.Infoln(reb.xact().String())
 	}

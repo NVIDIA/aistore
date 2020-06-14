@@ -89,9 +89,9 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		return true
 	}
 
-	xactStats := xaction.Registry.GetXact(smsg.UUID)
+	xact := xaction.Registry.GetXact(smsg.UUID)
 	// task never started
-	if xactStats == nil {
+	if xact == nil {
 		s := fmt.Sprintf("Task %s not found", smsg.UUID)
 		if silent {
 			t.invalmsghdlrsilent(w, r, s, http.StatusNotFound)
@@ -101,12 +101,12 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		return false
 	}
 	// task still running
-	if !xactStats.Get().Finished() {
+	if !xact.Finished() {
 		w.WriteHeader(http.StatusAccepted)
 		return true
 	}
 	// task has finished
-	result, err := xactStats.Get().Result()
+	result, err := xact.Result()
 	if err != nil {
 		if cmn.IsErrBucketNought(err) {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusGone)

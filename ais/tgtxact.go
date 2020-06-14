@@ -92,16 +92,13 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
 		return
 	}
-	stats, err := xaction.Registry.GetStatsByID(uuid) // stats.XactStats
-	if err == nil {
-		t.writeJSON(w, r, stats, what)
+	xact := xaction.Registry.GetXact(uuid)
+	if xact != nil {
+		t.writeJSON(w, r, xact.Stats(), what)
 		return
 	}
-	if _, ok := err.(cmn.XactionNotFoundError); ok {
-		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
-	} else {
-		t.invalmsghdlr(w, r, err.Error())
-	}
+	err := cmn.NewXactionNotFoundError("ID='" + uuid + "'")
+	t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 }
 
 func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xaction.XactQuery) {

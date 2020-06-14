@@ -133,7 +133,6 @@ type (
 	Downloader struct {
 		cmn.Named
 		cmn.XactDemandBase
-		cmn.MountpathXact
 
 		t          cluster.Target
 		mountpaths *fs.MountedFS
@@ -225,6 +224,7 @@ var (
 )
 
 func (d *Downloader) Name() string                    { return "downloader" }
+func (d *Downloader) IsMountpathXact() bool           { return true }
 func (d *Downloader) ReqAddMountpath(mpath string)    { d.mpathReqCh <- fs.MountpathAdd(mpath) }
 func (d *Downloader) ReqRemoveMountpath(mpath string) { d.mpathReqCh <- fs.MountpathRem(mpath) }
 func (d *Downloader) ReqEnableMountpath(_ string)     {}
@@ -295,7 +295,7 @@ func (d *Downloader) Stop(err error) {
 	d.t.GetFSPRG().Unreg(d)
 	d.XactDemandBase.Stop()
 	d.dispatcher.Abort()
-	d.EndTime(time.Now())
+	d.SetEndTime(time.Now())
 	glog.Infof("Stopped %s", d.GetRunName())
 	if err != nil {
 		glog.Errorf("stopping downloader; %s", err.Error())

@@ -66,7 +66,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
 		}
 	}
 	reb.t.GetGFN(cluster.GFNLocal).Deactivate()
-	xreb.EndTime(time.Now())
+	xreb.SetEndTime(time.Now())
 }
 
 //

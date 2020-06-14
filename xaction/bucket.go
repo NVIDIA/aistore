@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/query"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tar2tf"
 )
 
@@ -381,7 +380,7 @@ func (r *FastRen) Run() {
 	}
 
 	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD
-	r.EndTime(time.Now())
+	r.SetEndTime(time.Now())
 }
 
 func (e *FastRenEntry) Start(bck cmn.Bck) error {
@@ -469,7 +468,7 @@ func (r *EvictDelete) Run(args *DeletePrefetchArgs) {
 	} else {
 		r.listOperation(args, args.ListMsg)
 	}
-	r.EndTime(time.Now())
+	r.SetEndTime(time.Now())
 }
 
 func (e *evictDeleteEntry) Start(bck cmn.Bck) error {
@@ -544,7 +543,7 @@ func (r *Prefetch) Run(args *DeletePrefetchArgs) {
 	} else {
 		r.listOperation(args, args.ListMsg)
 	}
-	r.EndTime(time.Now())
+	r.SetEndTime(time.Now())
 }
 
 func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (*Prefetch, error) {
@@ -683,7 +682,3 @@ func (b *baseBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err e
 }
 
 func (b *baseBckEntry) postRenewHook(_ bucketEntry) {}
-
-func (b *baseBckEntry) Stats(xact cmn.Xact) stats.XactStats {
-	return stats.NewXactStats(xact)
-}

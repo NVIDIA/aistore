@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
-	"github.com/NVIDIA/aistore/stats"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -27,10 +26,6 @@ import (
 
 type baseTaskEntry struct {
 	uuid string
-}
-
-func (e *baseTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
-	return stats.NewXactStats(xact)
 }
 
 //
@@ -123,7 +118,7 @@ func (t *bckListTask) UpdateResult(result interface{}, err error) {
 		res.Result = result
 	}
 	t.res.Store(unsafe.Pointer(res))
-	t.EndTime(time.Now())
+	t.SetEndTime(time.Now())
 }
 
 func (t *bckListTask) Result() (interface{}, error) {
@@ -326,7 +321,7 @@ func (t *bckSummaryTask) UpdateResult(result interface{}, err error) {
 		res.Result = result
 	}
 	t.res.Store(unsafe.Pointer(res))
-	t.EndTime(time.Now())
+	t.SetEndTime(time.Now())
 }
 
 func (t *bckSummaryTask) Result() (interface{}, error) {

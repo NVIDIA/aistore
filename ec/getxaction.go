@@ -130,7 +130,7 @@ func (r *XactGet) Run() (err error) {
 	for {
 		select {
 		case <-ticker.C:
-			if s := fmt.Sprintf("%v", r.Stats()); s != "" {
+			if s := fmt.Sprintf("%v", r.GetStats()); s != "" {
 				glog.Info(s)
 			}
 		case req := <-r.ecCh:
@@ -211,7 +211,7 @@ func (r *XactGet) stop() {
 
 	// Don't close bundles, they are shared between bucket's EC actions
 
-	r.EndTime(time.Now())
+	r.SetEndTime(time.Now())
 }
 
 // Decode schedules an object to be restored from existing slices.

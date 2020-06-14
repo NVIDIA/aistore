@@ -74,12 +74,12 @@ type (
 		throttle   bool
 		aborted    bool
 	}
-
 	Xaction struct {
-		cmn.MountpathXact
 		cmn.XactBase
 	}
 )
+
+func (r *Xaction) IsMountpathXact() bool { return true }
 
 //====================== LRU: initiation  ======================================
 //

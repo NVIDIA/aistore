@@ -15,14 +15,13 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
 )
 
 type (
 	daemonTemplateStats struct {
 		DaemonID string
-		Stats    []*stats.BaseXactStatsExt
+		Stats    []*cmn.BaseXactStatsExt
 	}
 
 	xactionTemplateCtx struct {

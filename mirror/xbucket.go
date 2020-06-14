@@ -25,7 +25,6 @@ type (
 	xactBckBase struct {
 		// implements cmn.Xact and cmn.Runner interfaces
 		cmn.XactBase
-		cmn.MountpathXact
 		// runtime
 		doneCh   chan struct{}
 		mpathers map[string]mpather
@@ -55,6 +54,7 @@ func newXactBckBase(id, kind string, bck cmn.Bck, t cluster.Target) *xactBckBase
 //
 // as XactBck interface
 //
+func (r *xactBckBase) IsMountpathXact() bool        { return true }
 func (r *xactBckBase) DoneCh() chan struct{}        { return r.doneCh }
 func (r *xactBckBase) Target() cluster.Target       { return r.t }
 func (r *xactBckBase) Mpathers() map[string]mpather { return r.mpathers }
@@ -95,7 +95,7 @@ func (r *xactBckBase) stop() (err error) {
 	for _, mpather := range r.mpathers {
 		n += mpather.stop()
 	}
-	r.EndTime(time.Now())
+	r.SetEndTime(time.Now())
 	if n > 0 {
 		err = fmt.Errorf("%s: dropped %d object(s)", r, n)
 	}

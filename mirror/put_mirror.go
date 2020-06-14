@@ -22,7 +22,6 @@ type (
 	XactPutLRepl struct {
 		// implements cmn.Xact a cmn.Runner interfaces
 		cmn.XactDemandBase
-		cmn.MountpathXact
 		// runtime
 		workCh   chan *cluster.LOM
 		mpathers map[string]mpather
@@ -73,6 +72,8 @@ func RunXactPutLRepl(lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err 
 	}
 	return
 }
+
+func (r *XactPutLRepl) IsMountpathXact() bool { return true }
 
 func (r *XactPutLRepl) Run() error {
 	glog.Infoln(r.String())
@@ -168,7 +169,7 @@ func (r *XactPutLRepl) stop() (err error) {
 	for _, mpather := range r.mpathers {
 		n += mpather.stop()
 	}
-	r.EndTime(time.Now())
+	r.SetEndTime(time.Now())
 	if nn := drainWorkCh(r.workCh, r.String()+" drop"); nn > 0 {
 		n += nn
 		r.SubPending(nn)

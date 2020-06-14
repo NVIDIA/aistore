@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/stats"
 )
 
 const (
@@ -20,7 +19,7 @@ const (
 )
 
 type (
-	NodesXactStats map[string][]*stats.BaseXactStatsExt
+	NodesXactStats map[string][]*cmn.BaseXactStatsExt
 
 	XactReqArgs struct {
 		ID      string

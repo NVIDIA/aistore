@@ -29,7 +29,7 @@ func (t *Xact) IsMountpathXact() bool { return false }
 
 func (t *Xact) Run() {
 	defer func() {
-		t.EndTime(time.Now())
+		t.SetEndTime(time.Now())
 		t.Job.Wg.Done()
 	}()
 
