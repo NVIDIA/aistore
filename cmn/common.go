@@ -24,7 +24,6 @@ import (
 	"unicode"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	jsoniter "github.com/json-iterator/go"
@@ -137,7 +136,6 @@ type (
 )
 
 var (
-	rtie      atomic.Int32
 	bucketReg *regexp.Regexp
 	nsReg     *regexp.Regexp
 )
@@ -176,7 +174,6 @@ var (
 func init() {
 	// General
 	rand.Seed(mono.NanoTime())
-
 	rtie.Store(1013)
 
 	bucketReg = regexp.MustCompile(`^[.a-zA-Z0-9_-]*$`)

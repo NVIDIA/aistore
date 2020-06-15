@@ -485,8 +485,7 @@ func (h *httprunner) initSI(daemonType string) {
 	}
 
 	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
-
-	cmn.InitShortid(h.si.Digest())
+	cmn.InitShortID(h.si.Digest())
 }
 
 func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bool, tag string) {

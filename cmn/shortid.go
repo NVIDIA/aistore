@@ -5,7 +5,9 @@
 package cmn
 
 import (
-	"github.com/NVIDIA/aistore/cmn/mono"
+	"math/rand"
+
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/teris-io/shortid"
 )
 
@@ -16,43 +18,30 @@ const (
 )
 
 var (
-	sids [16]*shortid.Shortid
+	sid  *shortid.Shortid
+	rtie atomic.Int32
 )
 
-func InitShortid(seed uint64) {
-	for i := range sids {
-		sids[i] = shortid.MustNew(uint8(i+1) /*worker*/, uuidABC, seed)
-	}
+func InitShortID(seed uint64) {
+	sid = shortid.MustNew(4 /*worker*/, uuidABC, seed)
 }
 
-// GenUUID generates unique and user-friendly IDs.
+// GenUUID generates unique and human-readable IDs.
 func GenUUID() (uuid string) {
-	var (
-		err  error
-		h, t string
-		now  = mono.NanoTime()
-		i    = int(now & int64(len(sids)-1))
-	)
-	for {
-		sid := sids[i]
-		uuid, err = sid.Generate()
-		if err != nil {
-			i = (i + 1) % len(sids)
-			continue
-		}
-		if !isalpha(uuid[0]) {
-			h = string('A' + i)
-		}
-		u := uuid[len(uuid)-1]
-		if u == '-' || u == '_' {
-			t = string('a' + i)
-		}
-		return h + uuid + t
+	var h, t string
+	uuid = sid.MustGenerate()
+	if !isAlpha(uuid[0]) {
+		h = string('A' + rand.Int()%26)
 	}
+	c := uuid[len(uuid)-1]
+	if c == '-' || c == '_' {
+		t = string('a' + rand.Int()%26)
+	}
+	return h + uuid + t
 }
 
-func isalpha(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' || c <= 'Z')
+func isAlpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // misc
