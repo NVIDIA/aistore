@@ -30,7 +30,6 @@ pushd $AIS_DIR
 
 make kill
 make clean
-make rmcache
 
 echo -e "5\n5\n5\n${CLOUD}" | make deploy
 

@@ -120,7 +120,7 @@ deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies
 #
 # cleanup local deployment (cached objects, logs, and executables)
 #
-.PHONY: kill rmcache clean
+.PHONY: kill clean
 
 # when profiling, make sure to let it flush accumulated stats
 # e.g., insert sleep prior to SIGKILL or remove it altogether
@@ -130,10 +130,6 @@ kill: ## Kill all locally deployed targets and proxies
 	@pkill authn 2>/dev/null; true
 	@pkill -SIGKILL aisnode 2>/dev/null; true
 	@echo "done."
-
-# delete only caches, not logs
-rmcache: ## Delete AIS related caches
-	@"$(SCRIPTS_DIR)/rmcache.sh"
 
 clean: ## Remove all AIS related files and binaries
 	@echo -n "Cleaning... "
@@ -242,11 +238,7 @@ spell-fix: ## Fix spell checking issues
 
 
 # Misc Targets
-.PHONY: numget cpuprof flamegraph code-coverage
-
-# example extracting 'numget' stats out of all local logs
-numget:
-	@"$(SCRIPTS_DIR)/numget.sh"
+.PHONY: cpuprof flamegraph dev-init
 
 # run benchmarks 10 times to generate cpu.prof
 cpuprof:
@@ -255,16 +247,10 @@ cpuprof:
 flamegraph: cpuprof
 	@go tool pprof -http ":6060" /tmp/cpu.prof
 
-code-coverage:
-	@"$(SCRIPTS_DIR)/code_coverage.sh"
-
-# Target for devinit
-.PHONY: devinit
-
 # To help with working with a non-github remote
 # It replaces existing github.com AIStore remote with the one specified by REMOTE
-devinit:
-	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" devinit
+dev-init:
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" dev-init
 
 .PHONY: help
 help:
