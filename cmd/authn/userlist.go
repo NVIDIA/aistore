@@ -288,12 +288,12 @@ func (m *userManager) updateRole(role string, updateReq *cmn.AuthRole) error {
 	return m.db.Set(rolesCollection, role, rInfo)
 }
 
-func (m *userManager) updateCluster(info *cmn.AuthCluster) error {
+func (m *userManager) updateCluster(cluID string, info *cmn.AuthCluster) error {
 	if info.ID == "" {
 		return errors.New("cluster ID is undefined")
 	}
 	clu := &cmn.AuthCluster{}
-	err := m.db.Get(clustersCollection, info.ID, clu)
+	err := m.db.Get(clustersCollection, cluID, clu)
 	if err != nil {
 		return err
 	}
@@ -307,7 +307,7 @@ func (m *userManager) updateCluster(info *cmn.AuthCluster) error {
 	if len(info.URLs) != 0 {
 		clu.URLs = info.URLs
 	}
-	return m.db.Set(clustersCollection, info.ID, clu)
+	return m.db.Set(clustersCollection, cluID, clu)
 }
 
 // Before putting a list of cluster permissions to a token, cluster aliases

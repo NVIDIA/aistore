@@ -121,53 +121,78 @@ variables that AuthN looks for. All other values are arbitrary.
 When AuthN pod starts, it loads its configuration from local file, and then
 overrides secret values with ones from the pod's description.
 
-## User management
+## Rest API
 
-### Superuser
+### Notation
 
-After deploying the cluster, a superuser account is created automatically - a special account that cannot be deleted and only this account can manage users and their credentials.
+> `AUTHSRV` - denotes a (hostname:port) address of AuthN server
 
-Adding and deleting usernames requires superuser authentication. Super user credentials are sent in the request header via `Authorization` field (for curl it is `curl -u<username>:<password ...`, for HTTP requests it is header option `Authorization: Basic <base64-encoded-username:password>`).
+### Authorization
 
-### REST operations
+After deploying the cluster, a superuser role `Admin` and `admin` account are created automatically.
+Only users with `Admin` role can manage AuthN. Every request to AuthN(except login one) must
+contain authentication token in the header:
 
-| Operation | HTTP Action | Example |
-|---|---|---|
-| Add a user| POST {"name": "username", "password": "pass"} /v1/users | curl -X POST http://AUTHSRV/v1/users -d '{"name": "username","password":"pass"}' -H 'Content-Type: application/json' -uadmin:admin |
-| Delete a user | DELETE /v1/users/username | curl -X DELETE http://AUTHSRV/v1/users/username -uadmin:admin |
+```
+Authorization: Bearer <token-issued-by-AuthN-after-login>
+```
 
-## Token management
+For curl, it is an extra argument `-H 'Authorization: Bearer token'`.
 
-Generating a token for data access does not require superuser credentials. Users must provide correct their username and password to get their tokens. Token has expiration time that is 24 hours by default. After that, the token must be reissued. To change default expiration time, look for `expiration_time` in the configuration file.
-
-Call revoke token API to forcefully invalidate a token before it expires.
-
-### REST operations
-
-| Operation | HTTP Action | Example |
-|---|---|---|
-| Generate a token for a user (Log in) | POST {"password": "pass"} /v1/users/username | curl -X POST http://AUTHSRV/v1/users/username -d '{"password":"pass"}' -H 'Content-Type: application/json' |
-| Revoke a token (Log out) | DEL { "token": "issued_token" } /v1/tokens | curl -X DEL http://AUTHSRV/v1/tokens -d '{"token":"issued_token"}' -H 'Content-Type: application/json' |
-
-A generated token is returned as a JSON formatted message. Example: `{"token": "issued_token"}`.
-
-## Interaction with AIStore proxy/gateway
+### Tokens
 
 AIStore proxies and targets require a valid token in a request header - but only if AuthN is enabled. Every token includes all the information needed by the target:
+
+A token is validated by a proxy. The token must not be expired and it must not be in the blacklist. The blacklist is a list of revoked tokens.
+The list of revoked tokens is broadcast over the registered clusters on change. Periodically the list is cleaned up by removing expired tokens.
 
 - UserID (username)
 - User ACL
 - Time when the token expires
 
-A token is validated by a target. The token must not be expired and it must not be in the blacklist. The blacklist is a list of revoked tokens: tokens that are revoked with REST API or belong to deleted users. The list of revoked tokens is broadcast over the cluster on change. Periodically the list is cleaned up by removing expired tokens.
+Generating a token for data access does not require a token. Users must provide correct usernames and passwords to get their tokens.
+Token has expiration time that is 24 hours by default. To change default expiration time, look for `expiration_time` in the configuration file.
 
-### Calling AIStore proxy API
+A generated token is returned as a JSON formatted message. Example: `{"token": "issued_token"}`.
 
-If authentication is enabled a REST API call to the AIStore proxy must include a valid token issued by the AuthN. The token is passed in the request header in the format: `Authorization: Bearer <token>`. Curl example: `curl -L  http://PROXY/v1/buckets/* -X GET -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIs'`.
+Call revoke token API to forcefully invalidate a token before it expires.
 
-At this moment, only requests to buckets and objects API require a token.
+| Operation | HTTP Action | Example |
+|---|---|---|
+| Generate a token for a user (Log in) | POST {"password": "pass"} /v1/users/username | curl -X POST AUTHSRV/v1/users/username -d '{"password":"pass"}' -H 'Content-Type: application/json' |
+| Revoke a token (Log out) | DEL { "token": "issued_token" } /v1/tokens | curl -X DEL AUTHSRV/v1/tokens -d '{"token":"issued_token"}' -H 'Content-Type: application/json' |
 
-### AuthN server typical workflow
+### Clusters
+
+When a cluster is registered, an arbitrary alias can be assigned for the cluster. The alias is used to make role names and CLI commands more user-friendly. Internally, the alias is used to create default roles for a just registered cluster. If a cluster does not have an alias, the roles contain the cluster's ID.
+
+| Operation | HTTP Action | Example |
+|---|---|---|
+| Get a list of registered clusters | GET /v1/clusters | curl -X GET AUTHSRV/v1/clusters |
+| Get a registered cluster info | GET /v1/clusters/cluster-id | curl -X GET AUTHSRV/v1/clusters/cluster-id |
+| Register a cluster | POST /v1/clusters {"id": "cluster-id", "alias": "cluster-alias", "urls": ["http://CLUSTERIP:PORT"]}| curl -X POST AUTHSRV/v1/clusters -d '{"id": "cluster-id", "alias": "cluster-alias", "urls": ["http://CLUSTERIP:PORT"]}' -H 'Content-Type: application/json' |
+| Update a registered cluster | PUT /v1/clusters/id {"alias": "cluster-alias", "urls": ["http://CLUSTERIP:PORT"]}| curl -X PUT AUTHSRV/v1/clusters/id -d '{"alias": "cluster-alias", "urls": ["http://CLUSTERIP:PORT"]}' -H 'Content-Type: application/json' |
+| Delete a registered cluster | DELETE /v1/clusters/cluster-id | curl -X DELETE AUTHSRV/v1/clusters/cluster-id |
+
+### Roles
+
+| Operation | HTTP Action | Example |
+|---|---|---|
+| Get a list of roles | GET /v1/roles | curl -X GET AUTHSRV/v1/roles |
+| Create a new roles | POST /v1/roles {"name": "rolename", "desc": "description", "clusters": ["clusterid": permissions]} | curl -X AUTHSRV/v1/roles '{"name": "rolename", "desc": "description", "clusters": ["clusterid": permissions]}' |
+| Update an existing roles | PUT /v1/roles/role-name {"desc": "description", "clusters": ["clusterid": permissions]} | curl -X PUT AUTHSRV/v1/roles '{"desc": "description", "clusters": ["clusterid": permissions]}' |
+| Delete a role | DELETE /v1/roles/role-name | curl -X DELETE AUTHSRV/v1/roles/role-name |
+
+### Users
+
+| Operation | HTTP Action | Example |
+|---|---|---|
+| Get a list of users | GET /v1/users | curl -X GET AUTHSRV/v1/users |
+| Add a user| POST {"id": "username", "password": "pass", "roles": ["CluOne-owner", "CluTwo-readonly"]} /v1/users | curl -X POST AUTHSRV/v1/users -d '{"id": "username", "password":"pass", "roles": ["CluOne-owner", "CluTwo-readonly"]}' -H 'Content-Type: application/json' |
+| Update an existing user| PUT {"password": "pass", "roles": ["CluOne-owner", "CluTwo-readonly"]} /v1/users/user-id | curl -X PUT AUTHSRV/v1/users/user-id -d '{"password":"pass", "roles": ["CluOne-owner", "CluTwo-readonly"]}' -H 'Content-Type: application/json' |
+| Delete a user | DELETE /v1/users/username | curl -X DELETE AUTHSRV/v1/users/username |
+
+## AuthN server typical workflow
 
 If the AuthN server is enabled then all requests to buckets and objects should contain a valid token issued by AuthN. Requests without a token are rejected.
 
@@ -204,4 +229,4 @@ $ curl -L  http://PROXY/v1/buckets/* -X GET \
 
 ## Known limitations
 
-- **Per-bucket authentication**. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users log in, they have full access to all the data;
+- **Per-bucket authentication**. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users with read-write access log in, they have full access to all cluster's buckets.

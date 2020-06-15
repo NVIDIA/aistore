@@ -103,6 +103,13 @@ var (
 							ArgsUsage: addAuthClusterArgument,
 							Action:    updateAuthClusterHandler,
 						},
+						{
+							Name:         subcmdAuthUser,
+							Usage:        "add an existing user",
+							ArgsUsage:    addUserArgument,
+							Action:       updateUserHandler,
+							BashComplete: multiRoleCompletions,
+						},
 					},
 				},
 				{
@@ -179,6 +186,28 @@ func cliAuthnUserPassword(c *cli.Context) string {
 		pass = readValue(c, "User password")
 	}
 	return pass
+}
+
+func updateUserHandler(c *cli.Context) (err error) {
+	if authnHTTPClient == nil {
+		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+	}
+	username := c.Args().Get(0)
+	if username == "" {
+		return missingArgumentsError(c, "user name")
+	}
+	// TODO: allow to change only role
+	userpass := c.Args().Get(1)
+	if username == "" {
+		return missingArgumentsError(c, "user password")
+	}
+	roles := c.Args()[2:]
+	user := &cmn.AuthUser{
+		ID:       username,
+		Password: userpass,
+		Roles:    roles,
+	}
+	return api.UpdateUser(authParams, user)
 }
 
 func addUserHandler(c *cli.Context) (err error) {

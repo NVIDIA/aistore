@@ -42,6 +42,16 @@ func AddUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
 	})
 }
 
+func UpdateUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
+	msg := cmn.MustMarshal(newUser)
+	baseParams.Method = http.MethodPut
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Users, newUser.ID),
+		Body:       msg,
+	})
+}
+
 func DeleteUser(baseParams BaseParams, userID string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{

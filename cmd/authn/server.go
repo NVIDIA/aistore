@@ -198,7 +198,7 @@ func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
 
 // Updates user credentials
 func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 2, cmn.Version, pathUsers)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, pathUsers)
 	if err != nil {
 		return
 	}
@@ -366,7 +366,8 @@ func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
-	if _, err := checkRESTItems(w, r, 0, cmn.Version, pathClusters); err != nil {
+	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, pathClusters)
+	if err != nil {
 		return
 	}
 	if err := a.checkAuthorization(w, r); err != nil {
@@ -374,13 +375,14 @@ func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cluID := apiItems[0]
 	cluConf := &cmn.AuthCluster{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
 		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := a.users.updateCluster(cluConf); err != nil {
+	if err := a.users.updateCluster(cluID, cluConf); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
 	}
 }
