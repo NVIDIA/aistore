@@ -80,9 +80,10 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 	var (
 		outs []string
 
-		bucket   = GenRandomString(10)
-		space    = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
-		targetID = randomTarget()
+		lastResult = ""
+		bucket     = GenRandomString(10)
+		space      = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
+		targetID   = randomTarget()
 
 		inputFileName   = fileName + ".in"
 		outputFileName  = fileName + ".stdout"
@@ -101,6 +102,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		s = strings.ReplaceAll(s, "$OBJECT", object)
 		s = strings.ReplaceAll(s, "$RANDOM_TARGET", targetID)
 		s = strings.ReplaceAll(s, "$DIR", f.Dir)
+		s = strings.ReplaceAll(s, "$RESULT", lastResult)
 		return s
 	}
 
@@ -126,6 +128,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 
 	for _, scmd := range readContent(inFile, true /*ignoreEmpty*/) {
 		var (
+			saveResult    = false
 			ignoreOutput  = false
 			expectFail    = false
 			expectFailMsg = ""
@@ -136,6 +139,9 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			var comment string
 			tmp := strings.Split(scmd, " //")
 			scmd, comment = tmp[0], tmp[1]
+			if strings.Contains(comment, "SAVE_RESULT") {
+				saveResult = true
+			}
 			if strings.Contains(comment, "IGNORE") {
 				ignoreOutput = true
 			}
@@ -178,7 +184,9 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred(), desc)
 		}
 
-		if !ignoreOutput {
+		if saveResult {
+			lastResult = strings.TrimSpace(string(b))
+		} else if !ignoreOutput {
 			out := strings.Split(string(b), "\n")
 			if out[len(out)-1] == "" {
 				out = out[:len(out)-1]
