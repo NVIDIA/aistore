@@ -1679,7 +1679,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 
 	if smsg.UUID == "" {
 		newTaskID := cmn.GenUUID()
-		initResults := listCache.initResults(smsg, smap, bck, pageSize, newTaskID)
+		initResults := listCache.initResults(smap, smsg, bck, pageSize, newTaskID)
 		if initResults.err != nil {
 			return nil, "", initResults.err
 		}

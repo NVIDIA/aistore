@@ -60,23 +60,22 @@ type (
 	listObjectsCache struct {
 		p            *proxyrunner
 		requestCache sync.Map // string(bck, prefix, fast) ->  *requestCacheEntry
-		mtx          sync.RWMutex
 	}
 
 	requestCacheEntry struct {
 		pageMarkersCache sync.Map // page Marker -> *pageMarkerCacheEntry
 		parent           *listObjectsCache
-		lastInit         time.Time
+		lastUsage        time.Time
 	}
 
 	pageMarkerCacheEntry struct {
+		mtx          sync.Mutex
 		targetsCache sync.Map // target ID -> *targetCacheEntry
 		parent       *requestCacheEntry
 		bck          *cluster.Bck
 	}
 
 	targetCacheEntry struct {
-		mtx    sync.RWMutex
 		parent *pageMarkerCacheEntry
 		t      *cluster.Snode
 		buff   []*cmn.BucketEntry
@@ -125,13 +124,10 @@ func houseKeepListCache(p *proxyrunner) time.Duration {
 		return bucketPrefixStaleTime
 	}
 
-	listCache.mtx.Lock()
-	defer listCache.mtx.Unlock()
-
 	now := time.Now()
 	listCache.requestCache.Range(func(k, v interface{}) bool {
 		requestEntry := v.(*requestCacheEntry)
-		if requestEntry.lastInit.Add(bucketPrefixStaleTime).Before(now) {
+		if requestEntry.lastUsage.Add(bucketPrefixStaleTime).Before(now) {
 			listCache.requestCache.Delete(k)
 		}
 		return true
@@ -165,13 +161,18 @@ func newTargetCacheEntry(parent *pageMarkerCacheEntry, t *cluster.Snode) *target
 //////////////////////////
 
 func (c *listObjectsCache) next(smap *cluster.Smap, smsg cmn.SelectMsg, bck *cluster.Bck, pageSize uint) (result fetchResult) {
-	c.mtx.RLock()
-	defer c.mtx.RUnlock()
 	cmn.Assert(smsg.UUID != "")
-	result = c.initResults(smsg, smap, bck, pageSize, smsg.UUID)
-	if result.allOK && result.err == nil {
-		result = c.fetchAll(smap, bck, smsg, pageSize)
+	if smap.CountTargets() == 0 {
+		return fetchResult{err: fmt.Errorf("no targets registered")}
 	}
+	entries := c.allTargetsEntries(smsg, smap, bck)
+	cmn.Assert(len(entries) > 0)
+	entries[0].parent.mtx.Lock()
+	result = c.initResultsFromEntries(entries, smsg, pageSize, smsg.UUID)
+	if result.allOK && result.err == nil {
+		result = c.fetchAll(entries, smsg, pageSize)
+	}
+	entries[0].parent.mtx.Unlock()
 
 	if result.err != nil {
 		c.requestCache.Delete(smsg.ListObjectsCacheID(bck.Bck))
@@ -180,9 +181,7 @@ func (c *listObjectsCache) next(smap *cluster.Smap, smsg cmn.SelectMsg, bck *clu
 	return result
 }
 
-// initResults notifies targets to prepare next objects page.
-// It returns information if all calls succeed, and if there were any errors.
-func (c *listObjectsCache) initResults(smsg cmn.SelectMsg, smap *cluster.Smap, bck *cluster.Bck, size uint, newUUID string) fetchResult {
+func (c *listObjectsCache) targetEntry(t *cluster.Snode, smsg cmn.SelectMsg, bck *cluster.Bck) *targetCacheEntry {
 	id := smsg.ListObjectsCacheID(bck.Bck)
 	requestEntry, ok := c.getRequestEntry(id)
 	if !ok {
@@ -191,7 +190,7 @@ func (c *listObjectsCache) initResults(smsg cmn.SelectMsg, smap *cluster.Smap, b
 	}
 
 	defer func() {
-		requestEntry.lastInit = time.Now()
+		requestEntry.lastUsage = time.Now()
 	}()
 
 	pageMarkerEntry, ok := requestEntry.getPageMarkerCacheEntry(smsg.PageMarker)
@@ -200,38 +199,47 @@ func (c *listObjectsCache) initResults(smsg cmn.SelectMsg, smap *cluster.Smap, b
 		pageMarkerEntry = v.(*pageMarkerCacheEntry)
 	}
 
-	ch := pageMarkerEntry.initAllTargets(smap, smsg, size, newUUID)
+	targetEntry, ok := pageMarkerEntry.targetsCache.Load(t.DaemonID)
+	if !ok {
+		targetEntry, _ = pageMarkerEntry.targetsCache.LoadOrStore(t.DaemonID, newTargetCacheEntry(pageMarkerEntry, t))
+	}
+	return targetEntry.(*targetCacheEntry)
+}
+
+func (c *listObjectsCache) allTargetsEntries(smsg cmn.SelectMsg, smap *cluster.Smap, bck *cluster.Bck) []*targetCacheEntry {
+	result := make([]*targetCacheEntry, 0, len(smap.Tmap))
+	for _, t := range smap.Tmap {
+		result = append(result, c.targetEntry(t, smsg, bck))
+	}
+	return result
+}
+
+func (c *listObjectsCache) initResults(smap *cluster.Smap, smsg cmn.SelectMsg, bck *cluster.Bck, size uint, newUUID string) fetchResult {
+	entries := c.allTargetsEntries(smsg, smap, bck)
+	return c.initResultsFromEntries(entries, smsg, size, newUUID)
+}
+
+// initResultsFromEntries notifies targets to prepare next objects page.
+// It returns information if all calls succeed, and if there were any errors.
+func (c *listObjectsCache) initResultsFromEntries(entries []*targetCacheEntry, smsg cmn.SelectMsg, size uint, newUUID string) fetchResult {
+	ch := c.initAllTargets(entries, smsg, size, newUUID)
 	return gatherTargetListObjsResults(smsg.UUID, ch, 0, &smsg)
 }
 
 // fetchAll returns next `size` object names from each target. It include additional information
 // if all calls to targets succeeded and if there were any errors. It cache has buffered object names
 // it might return results without making any API calls.
-func (c *listObjectsCache) fetchAll(smap *cluster.Smap, bck *cluster.Bck, smsg cmn.SelectMsg, size uint) fetchResult {
+func (c *listObjectsCache) fetchAll(entries []*targetCacheEntry, smsg cmn.SelectMsg, size uint) fetchResult {
 	wg := &sync.WaitGroup{}
-	wg.Add(smap.CountTargets())
-	resCh := make(chan *targetListObjsResult, smap.CountTargets())
-	for _, t := range smap.Tmap {
-		c.fetchLocalOrRemote(t, bck, smsg, size, wg, resCh)
+	wg.Add(len(entries))
+	resCh := make(chan *targetListObjsResult, len(entries))
+	for _, entry := range entries {
+		entry.fetch(smsg, size, wg, resCh)
 	}
 
 	wg.Wait()
 	close(resCh)
-	return gatherTargetListObjsResults(smsg.UUID, resCh, smap.CountTargets(), &smsg)
-}
-
-// Fetch next object names from target or get them from cache.
-func (c *listObjectsCache) fetchLocalOrRemote(target *cluster.Snode, bck *cluster.Bck, smsg cmn.SelectMsg, size uint, wg *sync.WaitGroup, resCh chan *targetListObjsResult) {
-	requestEntry, ok := c.getRequestEntry(smsg.ListObjectsCacheID(bck.Bck))
-	cmn.Assert(ok)
-
-	pageMarkerEntry, ok := requestEntry.getPageMarkerCacheEntry(smsg.PageMarker)
-	cmn.Assert(ok)
-
-	targetEntry, ok := pageMarkerEntry.getTaskTargetEntry(target.DaemonID)
-	cmn.Assert(ok)
-
-	targetEntry.fetch(smsg, size, wg, resCh)
+	return gatherTargetListObjsResults(smsg.UUID, resCh, len(entries), &smsg)
 }
 
 // Discard all entries of given task which were included in marker `until`.
@@ -266,17 +274,11 @@ func (c *requestCacheEntry) getPageMarkerCacheEntry(pageMarker string) (*pageMar
 //////////////////////////////
 
 // Gathers init results for each target on `resultCh`
-func (c *pageMarkerCacheEntry) initAllTargets(smap *cluster.Smap, smsg cmn.SelectMsg, size uint, newUUID string) (resultCh chan *targetListObjsResult) {
-	resultCh = make(chan *targetListObjsResult, smap.CountTargets())
+func (c *listObjectsCache) initAllTargets(entries []*targetCacheEntry, smsg cmn.SelectMsg, size uint, newUUID string) (resultCh chan *targetListObjsResult) {
+	resultCh = make(chan *targetListObjsResult, len(entries))
 	wg := &sync.WaitGroup{}
-	wg.Add(smap.CountTargets())
-	for _, t := range smap.Tmap {
-		targetEntry, ok := c.getTaskTargetEntry(t.DaemonID)
-		if !ok {
-			v, _ := c.targetsCache.LoadOrStore(t.DaemonID, newTargetCacheEntry(c, t))
-			targetEntry = v.(*targetCacheEntry)
-		}
-
+	wg.Add(len(entries))
+	for _, targetEntry := range entries {
 		targetEntry.init(smsg, size, wg, resultCh, newUUID)
 	}
 	wg.Wait()
@@ -284,26 +286,16 @@ func (c *pageMarkerCacheEntry) initAllTargets(smap *cluster.Smap, smsg cmn.Selec
 	return
 }
 
-func (c *pageMarkerCacheEntry) getTaskTargetEntry(targetID string) (*targetCacheEntry, bool) {
-	v, ok := c.targetsCache.Load(targetID)
-	if !ok {
-		return nil, false
-	}
-	return v.(*targetCacheEntry), true
-}
-
 //////////////////////////
 //   targetCacheEntry   //
 /////////////////////////
 
 func (c *targetCacheEntry) init(smsg cmn.SelectMsg, size uint, wg *sync.WaitGroup, resCh chan *targetListObjsResult, newUUID string) {
-	c.mtx.RLock()
 	if (uint(len(c.buff)) >= size && size != 0) || c.done {
 		// Everything that is requested is already in the cache, we don't have to do any API calls.
 		// Returning StatusOK as if we did a request.
 		resCh <- &targetListObjsResult{status: http.StatusOK, err: nil}
 		wg.Done()
-		c.mtx.RUnlock()
 		return
 	}
 
@@ -311,7 +303,6 @@ func (c *targetCacheEntry) init(smsg cmn.SelectMsg, size uint, wg *sync.WaitGrou
 	go func() {
 		resCh <- c.initOnRemote(smsg, newUUID)
 		wg.Done()
-		c.mtx.RUnlock()
 	}()
 }
 
@@ -328,7 +319,6 @@ func (c *targetCacheEntry) initOnRemote(smsg cmn.SelectMsg, newUUID string) (res
 // Returns next `size` objects or less if no more exists.
 // If everything that is requested already is present in the cache, don't make any API calls.
 func (c *targetCacheEntry) fetch(smsg cmn.SelectMsg, size uint, wg *sync.WaitGroup, resCh chan *targetListObjsResult) {
-	c.mtx.Lock()
 	j := 0
 	for _, entry := range c.buff {
 		if entry.Name < smsg.PageMarker {
@@ -351,13 +341,11 @@ func (c *targetCacheEntry) fetch(smsg cmn.SelectMsg, size uint, wg *sync.WaitGro
 		}
 		resCh <- &targetListObjsResult{list: &cmn.BucketList{Entries: c.buff[:size]}, status: http.StatusOK}
 		wg.Done()
-		c.mtx.Unlock()
 		return
 	}
 
 	go func() {
 		resCh <- c.fetchFromRemote(smsg, size)
-		c.mtx.Unlock()
 		wg.Done()
 	}()
 }
