@@ -52,7 +52,8 @@ For AIStore **white paper** and design philosophy, for introduction to large-sca
 
 ## Prerequisites
 
-AIStore runs on commodity Linux machines with no special hardware requirements whatsoever. Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
+AIStore runs on commodity Linux machines with no special hardware requirements whatsoever.
+Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
 
 > It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.
 
@@ -86,6 +87,7 @@ $ cd github.com/NVIDIA/aistore
 $ make deploy
 $ go test ./tests -v -run=Mirror
 ```
+
 where:
 
 * `go get` installs sources and dependencies under your [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
@@ -107,19 +109,24 @@ Select:
 0
 ```
 
-Or, you can run all of the above non-interactively:
+Or, you can run all the above non-interactively:
 
 ```console
 $ make kill; make deploy <<< $'10\n3\n2\n0'
 ```
 
->  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
+> The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems.
+> Also notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
 > `make kill` will terminate local AIStore if it's already running.
 
-Finally, the `go test` (above) will create an ais bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
 
-Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running `go test` commands. For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
+For more development options and tools, please refer to [development docs](docs/development.md).
+
+Finally, the `go test` (above) will create an AIS bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
+
+Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running `go test` commands.
+For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
 
 ```console
 $ BUCKET=myS3bucket go test ./tests -v -run=download
@@ -131,7 +138,8 @@ Here's a minor variation of the above:
 $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
 ```
 
-This command runs a test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match `a\d+` regex.
+This command runs a test that matches the specified string ("download").
+The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match `a\d+` regex.
 
 ## Build, Make and Development Tools
 
