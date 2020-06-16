@@ -36,7 +36,6 @@ var (
 func LoadMetadata(fqn string) (*Metadata, error) {
 	b, err := ioutil.ReadFile(fqn)
 	if err != nil {
-		err = fmt.Errorf("failed to read metafile %q: %v", fqn, err)
 		return nil, err
 	}
 	md := &Metadata{}

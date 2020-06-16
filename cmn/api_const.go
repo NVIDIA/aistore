@@ -170,7 +170,6 @@ const (
 	URLParamRebStatus        = "rbs" // true: get detailed rebalancing status
 	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	URLParamTaskAction       = "tac" // "start", "status", "result"
-	URLParamECMeta           = "ecm" // true: EC metadata request
 	URLParamClusterInfo      = "cii" // true: Health to return ais.clusterInfo
 	URLParamRecvType         = "rtp" // to tell real PUT from migration PUT
 

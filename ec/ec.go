@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // EC module provides data protection on a per bucket basis. By default, the
@@ -123,6 +124,9 @@ const (
 
 	ActClearRequests  = "clear-requests"
 	ActEnableRequests = "enable-requests"
+
+	URLCT   = "ct"   // for using in URL path - requests for slices/replicas
+	URLMeta = "meta" /// .. - metadata requests
 
 	// EC switches to disk from SGL when memory pressure is high and the amount of
 	// memory required to encode an object exceeds the limit
@@ -321,13 +325,11 @@ func freeSlices(slices []*slice) {
 
 // requestECMeta returns an EC metadata found on a remote target.
 func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
-	path := cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName)
+	path := cmn.URLPath(cmn.Version, cmn.EC, URLMeta, bck.Name, objName)
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
-	query.Add(cmn.URLParamECMeta, "true")
-	query.Add(cmn.URLParamSilent, "true")
 	url := si.URL(cmn.NetworkIntraData) + path
-	rq, err := http.NewRequest(http.MethodHead, url, nil)
+	rq, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -336,18 +338,13 @@ func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 	if err != nil {
 		return nil, err
 	}
-	debug.AssertNoErr(resp.Body.Close())
+	defer func() { debug.AssertNoErr(resp.Body.Close()) }()
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("%s/%s not found on %s", bck, objName, si.ID())
 	} else if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to read %s HEAD request: %v", objName, err)
+		return nil, fmt.Errorf("failed to read %s GET request: %v", objName, err)
 	}
-	mdStr := resp.Header.Get(cmn.HeaderObjECMeta)
-	if mdStr == "" {
-		return nil, fmt.Errorf("empty metadata content for %s/%s from %s", bck, objName, si.ID())
-	}
-	if md, err = StringToMeta(mdStr); err != nil {
-		return nil, err
-	}
-	return md, nil
+	md = &Metadata{}
+	err = jsoniter.NewDecoder(resp.Body).Decode(md)
+	return md, err
 }

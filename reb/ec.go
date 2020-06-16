@@ -1448,42 +1448,38 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	// First, read metadata
 	qMeta := url.Values{}
 	qMeta = cmn.AddBckToQuery(qMeta, obj.bck)
-	qMeta.Add(cmn.URLParamECMeta, "true")
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("Getting slice %d for %s via API", slice.sliceID, obj.objName)
 	}
-	path := cmn.URLPath(cmn.Version, cmn.Objects, obj.bck.Name, obj.objName)
+	path := cmn.URLPath(cmn.Version, cmn.EC, ec.URLMeta, obj.bck.Name, obj.objName)
 	urlPath := si.URL(cmn.NetworkIntraData) + path
 
 	var (
 		rq   *http.Request
 		resp *http.Response
 	)
-	if rq, slice.err = http.NewRequest(http.MethodHead, urlPath, nil); slice.err != nil {
+	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {
 		return
 	}
 	rq.URL.RawQuery = qMeta.Encode()
 	if resp, slice.err = reb.client.Do(rq); slice.err != nil {
 		return
 	}
-	debug.AssertNoErr(resp.Body.Close())
 	if resp.StatusCode != http.StatusOK {
+		debug.AssertNoErr(resp.Body.Close())
 		slice.err = fmt.Errorf("failed to read metadata, HTTP status: %d", resp.StatusCode)
 		return
 	}
-	metaBytes := resp.Header.Get(cmn.HeaderObjECMeta)
-	if metaBytes == "" {
-		slice.err = fmt.Errorf("empty metadata")
-		return
-	}
 	metadata := ec.Metadata{}
-	if slice.err = jsoniter.Unmarshal([]byte(metaBytes), &metadata); slice.err != nil {
+	slice.err = jsoniter.NewDecoder(resp.Body).Decode(&metadata)
+	defer func() { debug.AssertNoErr(resp.Body.Close()) }()
+	if slice.err != nil {
 		return
 	}
 
 	// Second, get the slice
 	if slice.sliceID != 0 {
-		path = cmn.URLPath(cmn.Version, cmn.EC, obj.bck.Name, obj.objName)
+		path = cmn.URLPath(cmn.Version, cmn.EC, ec.URLCT, obj.bck.Name, obj.objName)
 	} else {
 		path = cmn.URLPath(cmn.Version, cmn.Objects, obj.bck.Name, obj.objName)
 	}

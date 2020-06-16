@@ -483,13 +483,24 @@ func (t *targetrunner) validRedirect(w http.ResponseWriter, r *http.Request, tag
 
 // Returns a slice. Does not use GFN.
 func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
-	var (
-		config = cmn.GCO.Get()
-	)
-	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.EC)
+	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.EC)
 	if err != nil {
 		return
 	}
+
+	if apiItems[0] == ec.URLMeta {
+		t.sendECMetafile(w, r, apiItems[1:])
+	} else if apiItems[0] == ec.URLCT {
+		t.sendECCT(w, r, apiItems[1:])
+	} else {
+		t.invalmsghdlr(w, r, "invalid EC URL path "+apiItems[0])
+	}
+}
+
+func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, apiItems []string) {
+	var (
+		config = cmn.GCO.Get()
+	)
 	bucket, objName := apiItems[0], apiItems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
@@ -510,7 +521,7 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 	sliceFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(bck.Bck, ec.SliceType, objName)
 	finfo, err := os.Stat(sliceFQN)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
 	file, err := os.Open(sliceFQN)
@@ -528,6 +539,32 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		glog.Errorf("Failed to send slice %s/%s: %v", bck, objName, err)
 	}
+}
+
+// Returns a CT's metadata.
+func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, apiItems []string) {
+	bucket, objName := apiItems[0], apiItems[1]
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err = bck.Init(t.owner.bmd, t.si); err != nil {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
+			t.invalmsghdlrsilent(w, r, err.Error())
+			return
+		}
+	}
+	md, err := ec.ObjectMetadata(bck, objName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+		} else {
+			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Write(md.Marshal())
 }
 
 // GET /v1/objects/bucket[+"/"+objName]
@@ -955,7 +992,6 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		exists         bool
 		checkExists    = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
 		checkExistsAny = cmn.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
-		checkEC        = cmn.IsParseBool(query.Get(cmn.URLParamECMeta))
 		// TODO: add cmn.URLParamHeadCloudAlways  - to always resync props from the Cloud
 		silent = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
 	)
@@ -971,28 +1007,6 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	)
 	if silent {
 		invalidHandler = t.invalmsghdlrsilent
-	}
-
-	// do it before LOM is initialized: target may have a slice instead of an object/replica
-	if checkEC {
-		bck, err := newBckFromQuery(bucket, query)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err = bck.Init(t.owner.bmd, t.si); err != nil {
-			if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
-				t.invalmsghdlr(w, r, err.Error())
-				return
-			}
-		}
-		md, err := ec.ObjectMetadata(bck, objName)
-		if err != nil {
-			invalidHandler(w, r, err.Error(), http.StatusNotFound)
-			return
-		}
-		hdr.Set(cmn.HeaderObjECMeta, ec.MetaToString(md))
-		return
 	}
 
 	bck, err := newBckFromQuery(bucket, query)
