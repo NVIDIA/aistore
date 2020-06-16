@@ -46,7 +46,13 @@ func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *
 func (r *XactBckCopy) Run() (err error) {
 	mpathCount := r.init()
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
-	return r.xactBckBase.run(mpathCount)
+	err = r.xactBckBase.run(mpathCount)
+	if n := r.Notif(); n != nil {
+		if n.Upon(cmn.UponTerm) {
+			n.Callback(n, err)
+		}
+	}
+	return
 }
 
 func (r *XactBckCopy) String() string { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }

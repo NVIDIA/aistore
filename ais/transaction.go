@@ -39,9 +39,9 @@ type (
 		rsvp(err error)
 	}
 	rndzvs struct { // rendezvous records
-		initiator string
-		err       *txnError
-		timestamp time.Time
+		callerName string
+		err        *txnError
+		timestamp  time.Time
 	}
 	transactions struct {
 		sync.RWMutex
@@ -57,12 +57,13 @@ type (
 			begin  time.Time
 			commit time.Time
 		}
-		action    string
-		smapVer   int64
-		bmdVer    int64
-		kind      string
-		initiator string
-		err       *txnError
+		action     string
+		smapVer    int64
+		bmdVer     int64
+		kind       string
+		callerName string
+		callerID   string
+		err        *txnError
 	}
 	txnBckBase struct {
 		txnBase
@@ -141,7 +142,7 @@ func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 	)
 	txns.Lock()
 	if rndzvs, ok = txns.rendezvous[msg.UUID]; !ok {
-		rndzvs.initiator, rndzvs.timestamp = caller, time.Now()
+		rndzvs.callerName, rndzvs.timestamp = caller, time.Now()
 		txns.rendezvous[msg.UUID] = rndzvs
 		txns.Unlock()
 		return nil
@@ -315,7 +316,8 @@ func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 	txn.tout = c.timeout
 	txn.smapVer = c.smapVer
 	txn.bmdVer = c.bmdVer
-	txn.initiator = c.caller
+	txn.callerName = c.callerName
+	txn.callerID = c.callerID
 }
 
 ////////////////
@@ -338,11 +340,11 @@ func (txn *txnBckBase) String() string {
 		}
 	}
 	return fmt.Sprintf("txn-%s[%s-(v%d, v%d)-%s-%s-%s%s], bucket %s",
-		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.initiator, tm, res, txn.bck.Name)
+		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.callerName, tm, res, txn.bck.Name)
 }
 
 func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (found bool, errDone error) {
-	if txn.initiator != caller || msg.UUID != txn.uuid() {
+	if txn.callerName != caller || msg.UUID != txn.uuid() {
 		return
 	}
 	bmd, _ := args[0].(*bucketMD)

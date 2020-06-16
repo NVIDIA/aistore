@@ -73,7 +73,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStart,
-		Value: cmn.XactionMsg{
+		Value: cmn.XactReqMsg{
 			Kind: args.Kind,
 			Bck:  args.Bck,
 		},
@@ -94,7 +94,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
-		Value: cmn.XactionMsg{
+		Value: cmn.XactReqMsg{
 			ID:   args.ID,
 			Kind: args.Kind,
 			Bck:  args.Bck,
@@ -113,7 +113,7 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 //
 // GetXactionStats gets all xaction stats for given kind and bucket (optional).
 func GetXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactStats, err error) {
-	msg := cmn.XactionMsg{
+	msg := cmn.XactReqMsg{
 		ID:   args.ID,
 		Kind: args.Kind,
 		Bck:  args.Bck,

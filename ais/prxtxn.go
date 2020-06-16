@@ -465,8 +465,28 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	c.req.Query.Set(cmn.URLParamTxnEvent, event)
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
-	// 6. wait for copy to finish and unlock buckets
-	go p.pollXactDone(c.uuid, unlock, msg.Action /* xact kind */)
+	// 6. wait for copy-finished notifications and then unlock buckets
+	tgtref, tgtcnt := 0, c.smap.CountTargets()
+	//
+	// TODO -- FIXME: make it a method (not a closure) and move refcounting to the base class
+	// TODO -- FIXME: support timeout
+	//
+	nl := notifListenerBase{
+		F: func(n notifListener) {
+			var (
+				notifXact = n.(*notifListenerXact)
+				msg       = notifXact.msg
+			)
+			tgtref++
+			if tgtref >= tgtcnt {
+				unlock()
+				delete(p.notifs, c.uuid)
+				if glog.FastV(4, glog.SmoduleAIS) {
+					glog.Infof("%v[%d]: %v(%v)", msg.Snode, tgtref, msg.Stats, msg.Err)
+				}
+			}
+		}}
+	p.notifs[c.uuid] = &notifListenerXact{notifListenerBase: nl}
 	return
 }
 

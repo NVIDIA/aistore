@@ -474,8 +474,9 @@ func (t *targetrunner) validRedirect(w http.ResponseWriter, r *http.Request, tag
 		return
 	}
 	if smap.GetProxy(pid) == nil {
+		err := &errNodeNotFound{tag + " from unknown", pid, t.si, smap}
+		t.invalmsghdlr(w, r, err.Error())
 		pid = ""
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s: %q from unknown [%s], %s", t.si, tag, pid, smap))
 	}
 	return
 }

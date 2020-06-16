@@ -22,15 +22,16 @@ import (
 // convenience structure to gather all (or most) of the relevant context in one place
 // (compare with txnClientCtx & prepTxnClient)
 type txnServerCtx struct {
-	uuid    string
-	timeout time.Duration
-	phase   string
-	smapVer int64
-	bmdVer  int64
-	msg     *aisMsg
-	caller  string
-	bck     *cluster.Bck
-	event   string
+	uuid       string
+	timeout    time.Duration
+	phase      string
+	smapVer    int64
+	bmdVer     int64
+	msg        *aisMsg
+	callerName string
+	callerID   string
+	bck        *cluster.Bck
+	event      string
 }
 
 // verb /v1/txn
@@ -400,11 +401,25 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 		if err != nil {
 			return err
 		}
+		// ask this xaction to notify via F callback when finished
+		xact.AddNotif(&cmn.NotifXact{
+			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: []string{c.callerID}, F: t.xactBckCpNotify},
+		})
 		go xact.Run()
 	default:
 		cmn.Assert(false)
 	}
 	return nil
+}
+
+func (t *targetrunner) xactBckCpNotify(n cmn.Notif, err error) {
+	var (
+		xactMsg = xactPushMsgTgt{Snode: t.si, Err: err}
+		notif   = n.(*cmn.NotifXact)
+		pid     = notif.Dsts[0]
+	)
+	xactMsg.Stats = notif.Xact.Stats()
+	t.notify(pid, cmn.MustMarshal(&xactMsg))
 }
 
 func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckTo *cluster.Bck, err error) {
@@ -483,7 +498,8 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, apiItems []st
 		c      = &txnServerCtx{}
 	)
 	c.msg = msg
-	c.caller = r.Header.Get(cmn.HeaderCallerName)
+	c.callerName = r.Header.Get(cmn.HeaderCallerName)
+	c.callerID = r.Header.Get(cmn.HeaderCallerID)
 	bucket, c.phase = apiItems[0], apiItems[1]
 	if c.bck, err = newBckFromQuery(bucket, query); err != nil {
 		return c, err

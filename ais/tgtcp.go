@@ -259,7 +259,8 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	smap := t.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("new primary proxy %s not present in the local %s", proxyID, smap.pp()))
+		err := &errNodeNotFound{"cannot set new primary", proxyID, t.si, smap}
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 

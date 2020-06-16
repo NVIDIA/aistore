@@ -255,7 +255,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 			metaction += cmn.Target
 		} else {
 			metaction += "unknown"
-			glog.Warningf("tried to remove node (%s) but it isn't present in the smap; (old smap: %s, new smap: %s)", sid, smap, newSmap)
+			glog.Warningf("%s: cannot remove node %s: not present in the %s; (old %s)", pkr.p.si, sid, newSmap, smap)
 		}
 		metaction += ": " + sid + "],"
 	}

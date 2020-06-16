@@ -65,8 +65,8 @@ type (
 		authn      *authManager
 		metasyncer *metasyncer
 		rproxy     reverseProxy
-
-		gmm *memsys.MMSA // system pagesize-based memory manager and slab allocator
+		notifs     map[string]notifListener // UUID => notifListener
+		gmm        *memsys.MMSA             // system pagesize-based memory manager and slab allocator
 	}
 	remBckAddArgs struct {
 		p        *proxyrunner
@@ -125,6 +125,8 @@ func (p *proxyrunner) Run() error {
 	p.rproxy.init()
 	initListObjectsCache(p)
 
+	p.notifs = make(map[string]notifListener)
+
 	//
 	// REST API: register proxy handlers and start listening
 	//
@@ -142,6 +144,7 @@ func (p *proxyrunner) Run() error {
 
 		{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Notifs, h: p.notifHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
@@ -507,9 +510,10 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		si = smap.Smap.GetTarget(nodeID)
+		si = smap.GetTarget(nodeID)
 		if si == nil {
-			p.invalmsghdlr(w, r, cmn.DoesNotExist)
+			err = &errNodeNotFound{"PUT failure", nodeID, p.si, smap}
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 	}
@@ -1872,7 +1876,8 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	if params.Target != "" {
 		tsi := smap.GetTarget(params.Target)
 		if tsi == nil {
-			p.invalmsghdlr(w, r, fmt.Sprintf("target %q does not exist", params.Target))
+			err = &errNodeNotFound{cmn.ActPromote + " failure", params.Target, p.si, smap}
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 		// NOTE:
@@ -1958,10 +1963,11 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 
 	nodeID := r.Header.Get(cmn.HeaderNodeID)
 	if nodeID == "" {
-		p.invalmsghdlr(w, r, "node_id was not provided in header")
+		p.invalmsghdlr(w, r, "missing node ID")
 		return
 	}
-	si := p.owner.smap.get().GetNode(nodeID)
+	smap := p.owner.smap.get()
+	si := smap.GetNode(nodeID)
 	if si != nil {
 		p.reverseNodeRequest(w, r, si)
 		return
@@ -1973,14 +1979,14 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	// removing all mountpaths.
 	nodeURL := r.Header.Get(cmn.HeaderNodeURL)
 	if nodeURL == "" {
-		msg := fmt.Sprintf("node with provided id (%s) does not exists", nodeID)
-		p.invalmsghdlr(w, r, msg)
+		err = &errNodeNotFound{"cannot rproxy", nodeID, p.si, smap}
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
 	parsedURL, err := url.Parse(nodeURL)
 	if err != nil {
-		msg := fmt.Sprintf("provided node_url is invalid: %s", nodeURL)
+		msg := fmt.Sprintf("%s: invalid URL %q for node %s", p.si, nodeURL, nodeID)
 		p.invalmsghdlr(w, r, msg)
 		return
 	}
@@ -2247,16 +2253,16 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil && newPrimaryURL == "" {
-		s := fmt.Sprintf("%s: failed to find new primary %s in %s", p.si, proxyID, smap.pp())
-		p.invalmsghdlr(w, r, s)
+		err := &errNodeNotFound{"failed to find new primary", proxyID, p.si, smap}
+		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
 	if newPrimaryURL == "" {
 		newPrimaryURL = psi.IntraControlNet.DirectURL
 	}
 	if newPrimaryURL == "" {
-		s := fmt.Sprintf("%s: failed to get new primary %s direct URL", p.si, proxyID)
-		p.invalmsghdlr(w, r, s)
+		err := &errNodeNotFound{"failed to get new primary's direct URL", proxyID, p.si, smap}
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	newSmap, err := p.smapFromURL(newPrimaryURL)
@@ -2324,8 +2330,8 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil {
-		s := fmt.Sprintf("New primary proxy %s not present in the %s", proxyID, smap.pp())
-		p.invalmsghdlr(w, r, s)
+		err := &errNodeNotFound{"cannot set new primary", proxyID, p.si, smap}
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
@@ -2601,7 +2607,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
-	xactMsg := cmn.XactionMsg{}
+	xactMsg := cmn.XactReqMsg{}
 	if cmn.ReadJSON(w, r, &xactMsg) != nil {
 		return
 	}
@@ -2995,8 +3001,8 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		node = smap.GetNode(sid)
 	)
 	if node == nil {
-		errstr := fmt.Sprintf("Unknown node %s", sid)
-		p.invalmsghdlr(w, r, errstr, http.StatusNotFound)
+		err = &errNodeNotFound{"cannot remove", sid, p.si, smap}
+		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
 	msg = &cmn.ActionMsg{Action: cmn.ActUnregTarget}
@@ -3033,9 +3039,11 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err error) {
-	node := p.owner.smap.get().GetNode(sid)
+	smap := p.owner.smap.get()
+	node := smap.GetNode(sid)
 	if node == nil {
-		return http.StatusNotFound, fmt.Errorf("unknown node %s", sid)
+		err = &errNodeNotFound{"cannot unregister", sid, p.si, smap}
+		return http.StatusNotFound, err
 	}
 
 	// Synchronously call the node to inform it that it no longer is part of
@@ -3065,7 +3073,8 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 	// NOTE: "failure to respond back" may have legitimate reasons - proceeeding even when all retries fail
 	node = clone.GetNode(sid)
 	if node == nil {
-		return http.StatusNotFound, fmt.Errorf("unknown node %s", sid)
+		err = &errNodeNotFound{"failed to unregister", sid, p.si, clone}
+		return http.StatusNotFound, err
 	}
 	if node.IsProxy() {
 		clone.delProxy(sid)
@@ -3157,7 +3166,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActXactStart, cmn.ActXactStop:
-		xactMsg := cmn.XactionMsg{}
+		xactMsg := cmn.XactReqMsg{}
 		if err := cmn.TryUnmarshal(msg.Value, &xactMsg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return

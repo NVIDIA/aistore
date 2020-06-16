@@ -281,10 +281,11 @@ const (
 	Transport = "transport"
 	Reverse   = "reverse"
 	Rebalance = "rebalance"
-	Txn       = "txn" // 2PC
 	Xactions  = "xactions"
-	Tar2Tf    = "tar2tf"
 	S3        = "s3"
+	Txn       = "txn"      // 2PC
+	Notifs    = "notifs"   // intra-cluster notifications
+	Tar2Tf    = "tar2tf"   // TODO: move out
 	Users     = "users"    // AuthN
 	Clusters  = "clusters" // AuthN
 	Roles     = "roles"    // AuthN

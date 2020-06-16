@@ -185,7 +185,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	err := h.owner.smap.modify(func(clone *smapX) error {
 		psi := clone.GetProxy(newPrimary)
 		if psi == nil {
-			return fmt.Errorf("new primary proxy %s not present in the local %s", newPrimary, clone.pp())
+			return &errNodeNotFound{"cannot accept new primary election", newPrimary, h.si, clone}
 		}
 		clone.ProxySI = psi
 		if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {

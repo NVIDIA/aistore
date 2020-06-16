@@ -150,6 +150,13 @@ type (
 	errBmdUUIDSplit     struct{ detail string }
 	// ditto Smap
 	errSmapUUIDDiffer struct{ detail string }
+	// node not found
+	errNodeNotFound struct {
+		msg  string
+		id   string
+		si   *cluster.Snode
+		smap *smapX
+	}
 )
 
 ///////////////////
@@ -158,10 +165,13 @@ type (
 
 var errNoBMD = errors.New("no bucket metadata")
 
-func (e errTgtBmdUUIDDiffer) Error() string { return e.detail }
-func (e errBmdUUIDSplit) Error() string     { return e.detail }
-func (e errPrxBmdUUIDDiffer) Error() string { return e.detail }
-func (e errSmapUUIDDiffer) Error() string   { return e.detail }
+func (e *errTgtBmdUUIDDiffer) Error() string { return e.detail }
+func (e *errBmdUUIDSplit) Error() string     { return e.detail }
+func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
+func (e *errSmapUUIDDiffer) Error() string   { return e.detail }
+func (e *errNodeNotFound) Error() string {
+	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
+}
 
 ////////////////
 // glogWriter //
@@ -721,6 +731,34 @@ func (h *httprunner) call(args callArgs) callResult {
 	}
 
 	return callResult{args.si, outjson, resp.Header, err, details, resp.StatusCode}
+}
+
+//
+// intra-cluster IPC, control plane: notify another node
+// TODO: bcastNotify
+//
+func (h *httprunner) notify(sid string, msgBody []byte, dstIsTarget ...bool) {
+	var (
+		smap = h.owner.smap.get()
+		path = cmn.URLPath(cmn.Version, cmn.Notifs)
+		si   *cluster.Snode
+	)
+	if len(dstIsTarget) == 0 || !dstIsTarget[0] {
+		si = smap.GetProxy(sid)
+	} else {
+		si = smap.GetTarget(sid)
+	}
+	if si == nil {
+		err := &errNodeNotFound{"failed to notify", sid, h.si, smap}
+		glog.Error(err)
+		return
+	}
+	args := callArgs{
+		si:      si,
+		req:     cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: msgBody},
+		timeout: cmn.DefaultTimeout,
+	}
+	_ = h.call(args)
 }
 
 ///////////////

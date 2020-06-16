@@ -28,45 +28,6 @@ type ActValPromote struct {
 	Verbose   bool   `json:"verbose"`
 }
 
-const (
-	XactTypeGlobal = "global"
-	XactTypeBck    = "bucket"
-	XactTypeTask   = "task"
-)
-
-type XactMetadata struct {
-	Type      string
-	Startable bool // determines if can be started via API
-}
-
-var XactsMeta = map[string]XactMetadata{
-	// global kinds
-	ActLRU:       {Type: XactTypeGlobal, Startable: true},
-	ActElection:  {Type: XactTypeGlobal, Startable: false},
-	ActResilver:  {Type: XactTypeGlobal, Startable: true},
-	ActRebalance: {Type: XactTypeGlobal, Startable: true},
-	ActDownload:  {Type: XactTypeGlobal, Startable: false},
-
-	// bucket's kinds
-	ActECGet:        {Type: XactTypeBck, Startable: false},
-	ActECPut:        {Type: XactTypeBck, Startable: false},
-	ActECRespond:    {Type: XactTypeBck, Startable: false},
-	ActMakeNCopies:  {Type: XactTypeBck, Startable: false},
-	ActPutCopies:    {Type: XactTypeBck, Startable: false},
-	ActRenameLB:     {Type: XactTypeBck, Startable: false},
-	ActCopyBucket:   {Type: XactTypeBck, Startable: false},
-	ActECEncode:     {Type: XactTypeBck, Startable: false},
-	ActEvictObjects: {Type: XactTypeBck, Startable: false},
-	ActDelete:       {Type: XactTypeBck, Startable: false},
-	ActLoadLomCache: {Type: XactTypeBck, Startable: false},
-	ActPrefetch:     {Type: XactTypeBck, Startable: true},
-	ActPromote:      {Type: XactTypeBck, Startable: false},
-
-	ActListObjects:   {Type: XactTypeTask, Startable: false},
-	ActSummaryBucket: {Type: XactTypeTask, Startable: false},
-	ActTar2Tf:        {Type: XactTypeTask, Startable: false},
-}
-
 // SelectMsg represents properties and options for requests which fetch entities
 // Note: if Fast is `true` then paging is disabled - all items are returned
 //       in one response. The result list is unsorted and contains only object
@@ -101,15 +62,6 @@ type RangeMsg struct {
 type MountpathList struct {
 	Available []string `json:"available"`
 	Disabled  []string `json:"disabled"`
-}
-
-type XactionMsg struct {
-	Target   string `json:"target,omitempty"`
-	ID       string `json:"id"`
-	Kind     string `json:"kind"`
-	Bck      Bck    `json:"bck"`
-	All      bool   `json:"all,omitempty"`
-	Finished bool   `json:"finished"`
 }
 
 // GetPropsDefault is a list of default (most relevant) GetProps* options

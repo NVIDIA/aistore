@@ -20,16 +20,18 @@ import (
 
 // verb /v1/xactions
 func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		xactMsg cmn.XactReqMsg
+		bck     *cluster.Bck
+	)
 	if _, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Xactions); err != nil {
 		return
 	}
 	switch r.Method {
 	case http.MethodGet:
 		var (
-			bck     *cluster.Bck
-			xactMsg = cmn.XactionMsg{}
-			query   = r.URL.Query()
-			what    = query.Get(cmn.URLParamWhat)
+			query = r.URL.Query()
+			what  = query.Get(cmn.URLParamWhat)
 		)
 		if uuid := query.Get(cmn.URLParamUUID); uuid != "" {
 			t.getXactByID(w, r, what, uuid)
@@ -52,9 +54,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		t.queryMatchingXact(w, r, what, xactQuery)
 	case http.MethodPut:
 		var (
-			msg     cmn.ActionMsg
-			xactMsg cmn.XactionMsg
-			bck     *cluster.Bck
+			msg cmn.ActionMsg
 		)
 		if cmn.ReadJSON(w, r, &msg) != nil {
 			return
@@ -118,7 +118,7 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-func (t *targetrunner) cmdXactStart(xactMsg cmn.XactionMsg, bck *cluster.Bck) error {
+func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 	switch xactMsg.Kind {

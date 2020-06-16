@@ -40,10 +40,12 @@ type (
 		IsMountpathXact() bool
 		Result() (interface{}, error)
 		Stats() XactStats
+		Notif() Notif
 
 		// modifiers
 		SetStartTime(s time.Time)
 		SetEndTime(e time.Time)
+		AddNotif(n Notif)
 		Abort()
 	}
 
@@ -70,26 +72,10 @@ type (
 		bck     Bck
 		abrt    chan struct{}
 		aborted atomic.Bool
+		notif   *NotifXact
 	}
 
 	XactBaseID string
-
-	BaseXactStats struct {
-		IDX         string    `json:"id"`
-		KindX       string    `json:"kind"`
-		BckX        Bck       `json:"bck"`
-		StartTimeX  time.Time `json:"start_time"`
-		EndTimeX    time.Time `json:"end_time"`
-		ObjCountX   int64     `json:"obj_count,string"`
-		BytesCountX int64     `json:"bytes_count,string"`
-		AbortedX    bool      `json:"aborted"`
-	}
-
-	// Used to cast to generic stats type, with some more information in ext
-	BaseXactStatsExt struct {
-		BaseXactStats
-		Ext interface{} `json:"ext"`
-	}
 
 	//
 	// xaction that self-terminates after staying idle for a while
@@ -111,6 +97,12 @@ type (
 	}
 	ErrXactExpired struct { // return it if called (right) after self-termination
 		msg string
+	}
+
+	// xaction notification
+	NotifXact struct {
+		NotifBase
+		Xact Xact
 	}
 )
 
@@ -210,6 +202,17 @@ func (xact *XactBase) SetEndTime(e time.Time) {
 	if xact.Kind() != ActAsyncTask && xact.Kind() != ActListObjects {
 		glog.Infoln(xact.String())
 	}
+}
+
+func (xact *XactBase) Notif() Notif { return xact.notif }
+
+func (xact *XactBase) AddNotif(n Notif) {
+	var ok bool
+	Assert(xact.notif == nil) // currently, "add" means "set"
+	xact.notif, ok = n.(*NotifXact)
+	Assert(ok)
+	xact.notif.Xact = xact
+	Assert(xact.notif.F != nil)
 }
 
 func (xact *XactBase) Abort() {
