@@ -1927,6 +1927,7 @@ func TestBackendBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(cloudObjList.Entries) > 0, "empty object list")
 
+	// Connect backend bucket to a aisBck
 	err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(cloudBck.Name),
@@ -1934,6 +1935,9 @@ func TestBackendBucket(t *testing.T) {
 		},
 	})
 	tassert.CheckFatal(t, err)
+	// Try putting one of the original cloud objects, it should work.
+	err = tutils.PutObjRR(baseParams, aisBck, cloudObjList.Entries[0].Name, 128, cmn.ChecksumNone)
+	tassert.Errorf(t, err == nil, "expected err==nil (put to a BackendBck should be allowed via aisBck )")
 
 	p, err = api.HeadBucket(baseParams, aisBck)
 	tassert.CheckFatal(t, err)
@@ -1995,6 +1999,10 @@ func TestBackendBucket(t *testing.T) {
 	// Check that we cannot do cold gets anymore.
 	_, err = api.GetObject(baseParams, aisBck, cloudObjList.Entries[1].Name)
 	tassert.Fatalf(t, err != nil, "expected error (object should not exist)")
+
+	// Check that we cannot do put anymore.
+	err = tutils.PutObjRR(baseParams, aisBck, cachedObjName, 256, cmn.ChecksumNone)
+	tassert.Errorf(t, err != nil, "expected err!=nil (put should not be allowed with objSrc!=BackendBck  )")
 }
 
 //

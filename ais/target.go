@@ -665,6 +665,17 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if lom.Bck().IsAIS() && lom.VerConf().Enabled {
 		lom.Load() // need to know the current version if versioning enabled
 	}
+	if objSrc, hasObjSrc := lom.GetCustomMD(cluster.SourceObjMD); hasObjSrc && objSrc != cluster.SourceWebObjMD {
+		bck := lom.Bck()
+		if bck.IsAIS() {
+			t.invalmsghdlr(w, r, "cannot override cloud-downloaded object")
+			return
+		}
+		if bck.CloudBck().Provider != objSrc {
+			t.invalmsghdlr(w, r, "cannot override cloud-downloaded object with an object from different cloud provider")
+			return
+		}
+	}
 	lom.SetAtimeUnix(started.UnixNano())
 	appendTy := query.Get(cmn.URLParamAppendType)
 	if appendTy == "" {

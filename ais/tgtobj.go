@@ -226,7 +226,17 @@ func (poi *putObjInfo) putCloud() (ver string, err error, errCode int) {
 		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
 		return
 	}
-	ver, err, errCode = poi.t.Cloud(bck).PutObj(poi.ctx, file, lom)
+
+	cloud := poi.t.Cloud(bck)
+	customMD := cmn.SimpleKVs{
+		cluster.SourceObjMD: cloud.Provider(),
+	}
+
+	ver, err, errCode = cloud.PutObj(poi.ctx, file, lom)
+	if ver != "" {
+		customMD[cluster.VersionObjMD] = ver
+	}
+	lom.SetCustomMD(customMD)
 	debug.AssertNoErr(file.Close())
 	return
 }

@@ -161,7 +161,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 	}
 }
 
-func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSkipped bool) { // nolint:unparam // it's better to keep link as parameter
+func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSkipped bool) {
 	id, err := api.DownloadSingle(tutils.BaseAPIParams(), generateDownloadDesc(), bck, objName, link)
 	tassert.CheckError(t, err)
 	waitForDownload(t, id, 20*time.Second)
@@ -940,8 +940,51 @@ func TestDownloadOverrideObject(t *testing.T) {
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	})
-	tassert.CheckFatal(t, err)
-	verifyProps(t, bck, objName, 10, "2")
+	tassert.Fatalf(t, err != nil, "expected: err!=nil, got: nil")
+	verifyProps(t, bck, objName, expectedSize, "1")
+
+	downloadObject(t, bck, objName, link, true /*shouldBeSkipped*/)
+	newProps := verifyProps(t, bck, objName, expectedSize, "1")
+	tassert.Errorf(
+		t, oldProps.Atime == newProps.Atime,
+		"atime match (%v != %v)", oldProps.Atime, newProps.Atime,
+	)
+}
+
+func TestDownloadOverrideObjectWeb(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
+		p = cmn.DefaultBucketProps()
+
+		objName = cmn.RandString(10)
+		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
+
+		expectedSize int64 = 17173
+		newSize      int64 = 10
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
+	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
+
+	// Update the file
+	r, _ := readers.NewRandReader(newSize, p.Cksum.Type)
+	err := api.PutObject(api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     objName,
+		Cksum:      r.Cksum(),
+		Reader:     r,
+	})
+	tassert.Fatalf(t, err == nil, "expected: err!=nil, got: %v", err)
+	verifyProps(t, bck, objName, newSize, "2")
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	newProps := verifyProps(t, bck, objName, expectedSize, "3")

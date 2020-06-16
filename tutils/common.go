@@ -125,28 +125,32 @@ func IsCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 	return bcks.Contains(cmn.QueryBcks(bck))
 }
 
+func PutObjRR(baseParams api.BaseParams, bck cmn.Bck, objName string, objSize int64, cksumType string) error {
+	reader, err := readers.NewRandReader(objSize, cksumType)
+	if err != nil {
+		return err
+	}
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     objName,
+		Cksum:      reader.Cksum(),
+		Reader:     reader,
+	}
+	return api.PutObject(putArgs)
+}
+
 func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType string, bck cmn.Bck, dir string, objCount, fnlen int) []string {
 	var (
 		objNames = make([]string, objCount)
 	)
 	for i := 0; i < objCount; i++ {
-		// FIXME: Separate RandReader per objected created to workaround https://github.com/golang/go/issues/30597
-		reader, err := readers.NewRandReader(objSize, cksumType)
-		tassert.CheckFatal(tb, err)
-
 		fname := GenRandomString(fnlen)
 		objName := filepath.Join(dir, fname)
-		putArgs := api.PutObjectArgs{
-			BaseParams: baseParams,
-			Bck:        bck,
-			Object:     objName,
-			Cksum:      reader.Cksum(),
-			Reader:     reader,
-		}
-		err = api.PutObject(putArgs)
-		tassert.CheckFatal(tb, err)
-
 		objNames[i] = objName
+		// FIXME: Separate RandReader per object created inside PutObjRR to workaround https://github.com/golang/go/issues/30597
+		err := PutObjRR(baseParams, bck, objName, objSize, cksumType)
+		tassert.CheckFatal(tb, err)
 	}
 
 	return objNames
