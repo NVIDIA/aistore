@@ -9,7 +9,7 @@ run_test() {
 
   git checkout -q $commit
   if [[ -n ${post_checkout} ]]; then
-    bash "${post_checkout}"
+    eval "${post_checkout}"
   fi
 
   test="BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test ${verbose} -p 1 -parallel 4 -count 1 -timeout 2h -run=NONE -bench=${bench_name} ${bench_dir}"
@@ -44,7 +44,6 @@ bench::compare() {
       *) echo "fatal: unknown argument '${1}'"; exit 1;;
     esac
   done
-
   old_results=$(mktemp)
   new_results=$(mktemp)
   run_test ${old_commit} ${old_results}
@@ -54,6 +53,6 @@ bench::compare() {
 }
 
 case "${1}" in
-  cmp) shift; bench::compare $@ ;;
+  cmp) shift; bench::compare "${@}" ;;
   *) echo "fatal: unknown argument '${1}'"; exit 1;;
 esac
