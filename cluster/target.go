@@ -61,6 +61,7 @@ type PutObjectParams struct {
 	Cksum        *cmn.Cksum // checksum to check
 	Started      time.Time
 	WithFinalize bool // determines if we should also finalize the object
+	SkipEncode   bool // Do not run EC encode after finalizing
 }
 
 type node interface {

@@ -52,6 +52,8 @@ type (
 		migrated bool
 		// Determines if the recv is cold recv: either from another cluster or cloud.
 		cold bool
+		// if true, poi won't erasure-encode an object when finalizing
+		skipEC bool
 	}
 
 	getObjInfo struct {
@@ -151,9 +153,11 @@ func (poi *putObjInfo) finalize() (err error, errCode int) {
 		poi.lom.Uncache()
 		return
 	}
-	if ecErr := ec.ECM.EncodeObject(poi.lom); ecErr != nil && ecErr != ec.ErrorECDisabled {
-		err = ecErr
-		return
+	if !poi.skipEC {
+		if ecErr := ec.ECM.EncodeObject(poi.lom); ecErr != nil && ecErr != ec.ErrorECDisabled {
+			err = ecErr
+			return
+		}
 	}
 
 	poi.t.putMirror(poi.lom)

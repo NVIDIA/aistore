@@ -149,9 +149,39 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 	}
 }
 
+func (r *XactRespond) writeReplica(bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) (string, error) {
+	lom := &cluster.LOM{T: r.t, ObjName: objName}
+	err := lom.Init(bck.Bck)
+	if err != nil {
+		return "", err
+	}
+	lom.SetVersion(objAttrs.Version)
+	lom.SetAtimeUnix(objAttrs.Atime)
+	if objAttrs.CksumType != "" {
+		lom.SetCksum(cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue))
+	}
+	err = WriteObject(r.t, lom, object, objAttrs.Size, cmn.ChecksumNone)
+	return lom.FQN, err
+}
+
+func (r *XactRespond) writeSlice(bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) (string, error) {
+	buf, slab := mm.Alloc()
+	defer slab.Free(buf)
+	sliceFQN, _, err := cluster.HrwFQN(bck, SliceType, objName)
+	if err != nil {
+		return "", err
+	}
+	tmpFQN := fs.CSM.GenContentFQN(sliceFQN, fs.WorkfileType, "ec")
+	ct, err := cluster.NewCTFromFQN(sliceFQN, r.t.GetBowner())
+	if err != nil {
+		return "", err
+	}
+	bdir := ct.ParsedFQN().MpathInfo.MakePathBck(bck.Bck)
+	_, err = cmn.SaveReaderSafe(tmpFQN, sliceFQN, object, buf, cmn.ChecksumNone, objAttrs.Size, bdir)
+	return sliceFQN, err
+}
+
 func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
-	uname := unique(iReq.sender, bck, objName)
-	bdir := ""
 	drain := func() {
 		if err := cmn.DrainReader(object); err != nil {
 			glog.Warningf("Failed to drain reader %s/%s: %v", bck.Name, objName, err)
@@ -164,11 +194,8 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 		// encoding or restoring an object. In this case it just saves
 		// the sent replica or slice to a local file along with its metadata
 		// look for metadata in request
-		if glog.V(4) {
-			glog.Infof("Response from %s, %s", iReq.sender, uname)
-		}
 
-		// First check if the request is valid: it must contain metadata
+		// Check if the request is valid: it must contain metadata
 		meta := iReq.meta
 		if meta == nil {
 			drain()
@@ -180,7 +207,6 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 		// the bucket is destroyed.
 		var (
 			objFQN string
-			lom    *cluster.LOM
 			err    error
 		)
 		if iReq.isSlice {
@@ -188,60 +214,30 @@ func (r *XactRespond) DispatchResp(iReq intraReq, bck *cluster.Bck, objName stri
 				glog.Infof("Got slice response from %s (#%d of %s/%s) v%s",
 					iReq.sender, iReq.meta.SliceID, bck.Name, objName, meta.ObjVersion)
 			}
-			objFQN, _, err = cluster.HrwFQN(bck, SliceType, objName)
-			if err != nil {
-				drain()
-				glog.Error(err)
-				return
-			}
+			objFQN, err = r.writeSlice(bck, objName, objAttrs, object)
 		} else {
 			if glog.V(4) {
 				glog.Infof("Got replica response from %s (%s/%s) v%s", iReq.sender, bck.Name, objName, meta.ObjVersion)
 			}
-			objFQN, _, err = cluster.HrwFQN(bck, fs.ObjectType, objName)
-			if err != nil {
-				drain()
-				glog.Error(err)
-				return
-			}
-			lom = &cluster.LOM{T: r.t, FQN: objFQN}
-			err = lom.Init(bck.Bck)
-			if err != nil {
-				glog.Errorf("Failed to init %s: %s", lom, err)
-				return
-			}
-			mi := lom.ParsedFQN.MpathInfo
-			bdir = mi.MakePathBck(lom.Bck().Bck)
+			objFQN, err = r.writeReplica(bck, objName, objAttrs, object)
 		}
-
-		// save slice/object
-		tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
-		buf, slab := mm.Alloc()
-		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, cmn.ChecksumNone, objAttrs.Size, bdir)
-		// save xattrs only for object replicas (slices have xattrs empty)
-		if err == nil && !iReq.isSlice {
-			lom.SetVersion(objAttrs.Version)
-			lom.SetAtimeUnix(objAttrs.Atime)
-			lom.SetSize(objAttrs.Size)
-			if objAttrs.CksumType != "" {
-				lom.SetCksum(cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue))
-			}
-			err = lom.Persist()
-		}
-
 		if err != nil {
 			drain()
-			glog.Errorf("Failed to save %s/%s data to %q: %v", bck.Name, objName, objFQN, err)
-			slab.Free(buf)
+			glog.Error(err)
 			return
 		}
 
 		// save its metadata
+		buf, slab := mm.Alloc()
+		defer slab.Free(buf)
 		metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
+		ct, err := cluster.NewCTFromFQN(metaFQN, r.t.GetBowner())
+		if err != nil {
+			return
+		}
+		bdir := ct.ParsedFQN().MpathInfo.MakePathBck(bck.Bck)
 		metaBuf := meta.Marshal()
 		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, cmn.ChecksumNone, -1, bdir)
-
-		slab.Free(buf)
 		if err != nil {
 			glog.Errorf("Failed to save metadata to %q: %v", metaFQN, err)
 		}

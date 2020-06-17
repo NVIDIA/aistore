@@ -226,25 +226,15 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	}
 
 	// Save received replica and its metadata locally - it is main replica
-	objFQN := req.LOM.FQN
-	req.LOM.FQN = objFQN
-	req.LOM.SetSize(writer.Size())
-	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
-	mi := req.LOM.ParsedFQN.MpathInfo
-	bdir := mi.MakePathBck(req.LOM.Bck().Bck)
-	if _, err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer),
-		buffer, cmn.ChecksumNone, writer.Size(), bdir); err != nil {
+	if err := WriteObject(c.parent.t, req.LOM, memsys.NewReader(writer), writer.Size(), cmn.ChecksumNone); err != nil {
 		writer.Free()
-		return err
-	}
-
-	if err := req.LOM.Persist(); err != nil {
-		writer.Free()
+		<-c.diskCh
 		return err
 	}
 
 	b := cmn.MustMarshal(meta)
-	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
+	metaFQN := fs.CSM.GenContentFQN(req.LOM.FQN, MetaType, "")
+	bdir := req.LOM.ParsedFQN.MpathInfo.MakePathBck(req.LOM.Bck().Bck)
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, cmn.ChecksumNone, -1, bdir); err != nil {
 		writer.Free()
 		<-c.diskCh
@@ -310,7 +300,6 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 	b := cmn.MustMarshal(meta)
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
 	bdir := req.LOM.ParsedFQN.MpathInfo.MakePathBck(req.LOM.Bck().Bck)
-
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, cmn.ChecksumNone, -1, bdir); err != nil {
 		<-c.diskCh
 		return err
@@ -604,32 +593,17 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 
 	src := io.MultiReader(srcReaders...)
-	mainFQN := req.LOM.FQN
 	if glog.V(4) {
-		glog.Infof("Saving main object %s/%s to %q", req.LOM.Bck(), req.LOM.ObjName, mainFQN)
+		glog.Infof("Saving main object %s/%s to %q", req.LOM.Bck(), req.LOM.ObjName, req.LOM.FQN)
 	}
 
 	c.diskCh <- struct{}{}
-	req.LOM.FQN = mainFQN
-	req.LOM.SetSize(meta.Size)
 	if version != "" {
 		req.LOM.SetVersion(version)
 	}
-	// recompute checksum of the full replica
-	var (
-		tmpFQN = fs.CSM.GenContentFQN(mainFQN, fs.WorkfileType, "ec")
-		mi     = req.LOM.ParsedFQN.MpathInfo
-		bdir   = mi.MakePathBck(req.LOM.Bck().Bck)
-	)
-	cksum, err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, conf.Type, meta.Size, bdir)
-	if err != nil {
-		<-c.diskCh
-		return restored, err
-	}
+	err = WriteObject(c.parent.t, req.LOM, src, meta.Size, conf.Type)
 	<-c.diskCh
-	req.LOM.SetCksum(cksum.Clone())
-	// Persist called without a lock. It's not a problem, as the LOM should not be used as the object is missing
-	if err := req.LOM.Persist(); err != nil {
+	if err != nil {
 		return restored, err
 	}
 
@@ -637,25 +611,13 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	mainMeta := *meta
 	mainMeta.SliceID = 0
 	metaBuf := mainMeta.Marshal()
-	metaSize := len(metaBuf)
-
-	metaFQN := fs.CSM.GenContentFQN(mainFQN, MetaType, "")
+	metaFQN := fs.CSM.GenContentFQN(req.LOM.FQN, MetaType, "")
+	bdir := req.LOM.ParsedFQN.MpathInfo.MakePathBck(req.LOM.Bck().Bck)
 	if glog.V(4) {
 		glog.Infof("Saving main meta %s/%s to %q", req.LOM.Bck(), req.LOM.ObjName, metaFQN)
 	}
 
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, cmn.ChecksumNone, -1, bdir); err != nil {
-		return restored, err
-	}
-
-	// FIXME: slice meta file should be a different kind of LOM
-	metaLom := &cluster.LOM{T: c.parent.t, FQN: metaFQN}
-	if err := metaLom.Init(req.LOM.Bck().Bck); err != nil {
-		return restored, err
-	}
-
-	metaLom.SetSize(int64(metaSize))
-	if err := metaLom.Persist(); err != nil {
 		return restored, err
 	}
 

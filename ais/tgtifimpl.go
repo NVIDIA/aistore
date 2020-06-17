@@ -146,6 +146,7 @@ func (t *targetrunner) PutObject(params cluster.PutObjectParams) error {
 		workFQN: params.WorkFQN,
 		ctx:     context.Background(),
 		started: params.Started,
+		skipEC:  params.SkipEncode,
 	}
 	if params.RecvType == cluster.Migrated {
 		poi.cksumToCheck = params.Cksum

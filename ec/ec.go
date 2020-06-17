@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -347,4 +348,24 @@ func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 	md = &Metadata{}
 	err = jsoniter.NewDecoder(resp.Body).Decode(md)
 	return md, err
+}
+
+// Saves the main replica to local drives
+func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int64, cksumType string) error {
+	if size > 0 {
+		reader = io.LimitReader(reader, size)
+	}
+	readCloser := ioutil.NopCloser(reader)
+	bdir := lom.ParsedFQN.MpathInfo.MakePathBck(lom.Bck().Bck)
+	if err := fs.Access(bdir); err != nil {
+		return err
+	}
+	return t.PutObject(cluster.PutObjectParams{
+		LOM:          lom,
+		Reader:       readCloser,
+		WorkFQN:      fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec"),
+		SkipEncode:   true,
+		WithFinalize: true,
+		RecvType:     cluster.Migrated, // to avoid changing version
+	})
 }

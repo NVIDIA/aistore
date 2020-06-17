@@ -402,6 +402,7 @@ func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, cksumType 
 		return nil, err
 	}
 	if err := Rename(tmpfqn, fqn); err != nil {
+		os.Remove(tmpfqn)
 		return nil, err
 	}
 	return cksum, nil
