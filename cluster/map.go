@@ -58,7 +58,21 @@ type (
 		UUID         string        `json:"uuid"`                    // UUID - assigned at creation time
 		CreationTime string        `json:"creation_time"`           // creation time
 	}
+
+	// Smap on-change listeners
+	Slistener interface {
+		String() string
+		ListenSmapChanged(chan int64)
+	}
+	SmapListeners interface {
+		Reg(sl Slistener)
+		Unreg(sl Slistener)
+	}
 )
+
+///////////
+// Snode //
+///////////
 
 func (d *Snode) Digest() uint64 {
 	if d.idDigest == 0 {
@@ -179,19 +193,34 @@ func (m *Smap) StringEx() string {
 func (m *Smap) CountTargets() int { return len(m.Tmap) }
 func (m *Smap) CountProxies() int { return len(m.Pmap) }
 
-func (m *Smap) GetTarget(sid string) *Snode {
-	si, ok := m.Tmap[sid]
+func (m *Smap) GetProxy(pid string) *Snode {
+	psi, ok := m.Pmap[pid]
 	if !ok {
 		return nil
 	}
-	return si
+	return psi
 }
 
-func (m *Smap) GetRandTarget() (si *Snode, err error) {
+func (m *Smap) GetTarget(sid string) *Snode {
+	tsi, ok := m.Tmap[sid]
+	if !ok {
+		return nil
+	}
+	return tsi
+}
+
+func (m *Smap) GetNode(id string) *Snode {
+	if node := m.GetTarget(id); node != nil {
+		return node
+	}
+	return m.GetProxy(id)
+}
+
+func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 	if m.CountTargets() == 0 {
 		return nil, ErrNoTargets
 	}
-	for _, si = range m.Tmap {
+	for _, tsi = range m.Tmap {
 		break
 	}
 	return
@@ -206,25 +235,10 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 		}
 		return nil, fmt.Errorf("internal error: couldn't find non primary proxy")
 	}
-	for _, proxy := range m.Pmap {
-		return proxy, nil
+	for _, psi := range m.Pmap {
+		return psi, nil
 	}
 	return nil, fmt.Errorf("cluster doesn't have enough proxies, expected at least 1")
-}
-
-func (m *Smap) GetProxy(pid string) *Snode {
-	pi, ok := m.Pmap[pid]
-	if !ok {
-		return nil
-	}
-	return pi
-}
-
-func (m *Smap) GetNode(id string) *Snode {
-	if node := m.GetTarget(id); node != nil {
-		return node
-	}
-	return m.GetProxy(id)
 }
 
 func (m *Smap) IsDuplicateURL(nsi *Snode) (osi *Snode, err error) {
@@ -272,11 +286,23 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 	return
 }
 
+/////////////
+// NodeMap //
+/////////////
+
 func (m *NodeMap) Add(snode *Snode) {
 	if *m == nil {
 		*m = make(NodeMap)
 	}
 	(*m)[snode.DaemonID] = snode
+}
+
+func (m NodeMap) Clone() (clone NodeMap) {
+	clone = make(NodeMap, len(m))
+	for id, node := range m {
+		clone[id] = node
+	}
+	return
 }
 
 func mapsEq(a, b NodeMap) bool {
@@ -293,11 +319,7 @@ func mapsEq(a, b NodeMap) bool {
 	return true
 }
 
-//
-// helper to find out Smap "delta" in terms of targets and proxies, added and removed
-// can be used as destination selectors - see the DestSelector typedef
-//
-
+// helper to find out NodeMap "delta" or "diff"
 func NodeMapDelta(old, new []NodeMap) (added, removed NodeMap) {
 	added, removed = make(NodeMap), make(NodeMap)
 	for i, mold := range old {
@@ -318,19 +340,3 @@ func NodeMapDelta(old, new []NodeMap) (added, removed NodeMap) {
 	}
 	return
 }
-
-//==================================================================
-//
-// minimal smap-update listening frame
-//
-//==================================================================
-type (
-	Slistener interface {
-		String() string
-		ListenSmapChanged(chan int64)
-	}
-	SmapListeners interface {
-		Reg(sl Slistener)
-		Unreg(sl Slistener)
-	}
-)

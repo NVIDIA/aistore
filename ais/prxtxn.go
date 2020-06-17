@@ -387,7 +387,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	return
 }
 
-// copy-bucket: { confirm existence -- begin -- conditional metasync -- commit -- wait for copy-done and unlock }
+// copy-bucket: { confirm existence -- begin -- conditional metasync -- start waiting for copy-done -- commit }
 func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
 		c       *txnClientCtx
@@ -460,34 +460,32 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		p.owner.bmd.Unlock()
 	}
 
-	// 5. commit
+	// 5. start waiting for `finished` notifications
+	nl := notifListenerBckCp{
+		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCp},
+		nlpFrom:           &nlpFrom,
+		nlpTo:             &nlpTo,
+	}
+	p.notifs.Lock()
+	p.notifs.m[c.uuid] = &nl
+	p.notifs.Unlock()
+
+	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	c.req.Query.Set(cmn.URLParamTxnEvent, event)
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
-	// 6. wait for copy-finished notifications and then unlock buckets
-	tgtref, tgtcnt := 0, c.smap.CountTargets()
-	//
-	// TODO -- FIXME: make it a method (not a closure) and move refcounting to the base class
-	// TODO -- FIXME: support timeout
-	//
-	nl := notifListenerBase{
-		F: func(n notifListener) {
-			var (
-				notifXact = n.(*notifListenerXact)
-				msg       = notifXact.msg
-			)
-			tgtref++
-			if tgtref >= tgtcnt {
-				unlock()
-				delete(p.notifs, c.uuid)
-				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Infof("%v[%d]: %v(%v)", msg.Snode, tgtref, msg.Stats, msg.Err)
-				}
-			}
-		}}
-	p.notifs[c.uuid] = &notifListenerXact{notifListenerBase: nl}
 	return
+}
+
+// callback to unlock buckets after all targets reported `done`
+func (p *proxyrunner) nlBckCp(n notifListener, msg interface{}, uuid string) {
+	nl := n.(*notifListenerBckCp)
+	nl.nlpTo.Unlock()
+	nl.nlpFrom.RUnlock()
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%+v", msg)
+	}
 }
 
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }

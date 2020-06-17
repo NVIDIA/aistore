@@ -65,8 +65,11 @@ type (
 		authn      *authManager
 		metasyncer *metasyncer
 		rproxy     reverseProxy
-		notifs     map[string]notifListener // UUID => notifListener
-		gmm        *memsys.MMSA             // system pagesize-based memory manager and slab allocator
+		notifs     struct {
+			sync.RWMutex
+			m map[string]notifListener // UUID => notifListener
+		}
+		gmm *memsys.MMSA // system pagesize-based memory manager and slab allocator
 	}
 	remBckAddArgs struct {
 		p        *proxyrunner
@@ -125,7 +128,7 @@ func (p *proxyrunner) Run() error {
 	p.rproxy.init()
 	initListObjectsCache(p)
 
-	p.notifs = make(map[string]notifListener)
+	p.notifs.m = make(map[string]notifListener)
 
 	//
 	// REST API: register proxy handlers and start listening
