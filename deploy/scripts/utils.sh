@@ -63,7 +63,7 @@ function python_yapf_fix {
 function perror {
   err_count=$(echo "$2" | sort -n | uniq | wc -l)
   if [[ -n $2 ]]; then
-    echo "${err_count}" >&2
+    echo "${2}" >&2
     echo "$1: ${err_count} failed" >&2
     exit 1
   fi
