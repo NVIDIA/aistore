@@ -164,6 +164,12 @@ func (t *targetrunner) PutObject(params cluster.PutObjectParams) error {
 	return err
 }
 
+func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
+	ctx := context.Background()
+	err, _ := t.objDelete(ctx, lom, true /*evict*/)
+	return err
+}
+
 func (t *targetrunner) CopyObject(lom *cluster.LOM, bckTo *cluster.Bck, buf []byte, localOnly bool) (copied bool, err error) {
 	ri := &replicInfo{smap: t.owner.smap.get(),
 		bckTo:     bckTo,

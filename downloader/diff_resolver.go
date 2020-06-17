@@ -22,9 +22,17 @@ const (
 )
 
 type (
+	DiffResolverCtx interface {
+		CompareObjects(*cluster.LOM, *DstElement) (bool, error)
+		IsObjFromCloud(*cluster.LOM) (bool, error)
+	}
+
+	defaultDiffResolverCtx struct{}
+
 	// DiffResolver is entity that computes difference between two streams
 	// of objects. The streams are expected to be in sorted order.
 	DiffResolver struct {
+		ctx      DiffResolverCtx
 		srcCh    chan *cluster.LOM
 		dstCh    chan *DstElement
 		resultCh chan DiffResolverResult
@@ -56,8 +64,12 @@ type (
 	}
 )
 
-func NewDiffResolver() *DiffResolver {
+func NewDiffResolver(ctx DiffResolverCtx) *DiffResolver {
+	if ctx == nil {
+		ctx = &defaultDiffResolverCtx{}
+	}
 	return &DiffResolver{
+		ctx:      ctx,
 		srcCh:    make(chan *cluster.LOM, 1000),
 		dstCh:    make(chan *DstElement, 1000),
 		resultCh: make(chan DiffResolverResult, 1000),
@@ -75,60 +87,61 @@ func (dr *DiffResolver) Start() {
 					Action: DiffResolverEOF,
 				}
 				return
-			} else if !srcOk {
+			} else if !srcOk || (dstOk && src.ObjName > dst.ObjName) {
 				dr.resultCh <- DiffResolverResult{
 					Action: DiffResolverRecv,
 					Dst:    dst,
 				}
 				dst, dstOk = <-dr.dstCh
-			} else if !dstOk {
-				dr.resultCh <- DiffResolverResult{
-					Action: DiffResolverSend,
-					Src:    src,
-				}
-				src, srcOk = <-dr.srcCh
-			} else {
-				if src.ObjName > dst.ObjName {
+			} else if !dstOk || (srcOk && src.ObjName < dst.ObjName) {
+				cloud, err := dr.ctx.IsObjFromCloud(src)
+				if err != nil {
 					dr.resultCh <- DiffResolverResult{
-						Action: DiffResolverRecv,
+						Action: DiffResolverErr,
+						Src:    src,
 						Dst:    dst,
+						Err:    err,
 					}
-					dst, dstOk = <-dr.dstCh
-				} else if src.ObjName < dst.ObjName {
-					// TODO: Check if source is cloud object. If it is and
-					//  destination is cloud as well then we should delete
-					//  the source!
+					return
+				}
+				if cloud {
+					cmn.Assert(!dstOk || dst.Link == "") // destination must be cloud as well
+					dr.resultCh <- DiffResolverResult{
+						Action: DiffResolverDelete,
+						Src:    src,
+					}
+				} else {
 					dr.resultCh <- DiffResolverResult{
 						Action: DiffResolverSend,
 						Src:    src,
 					}
-					src, srcOk = <-dr.srcCh
-				} else { /* s.ObjName == d.ObjName */
-					equal, err := CompareObjects(src, dst)
-					if err != nil {
-						dr.resultCh <- DiffResolverResult{
-							Action: DiffResolverErr,
-							Src:    src,
-							Dst:    dst,
-							Err:    err,
-						}
-						return
-					}
-					if equal {
-						dr.resultCh <- DiffResolverResult{
-							Action: DiffResolverSkip,
-							Src:    src,
-							Dst:    dst,
-						}
-					} else {
-						dr.resultCh <- DiffResolverResult{
-							Action: DiffResolverRecv,
-							Dst:    dst,
-						}
-					}
-					src, srcOk = <-dr.srcCh
-					dst, dstOk = <-dr.dstCh
 				}
+				src, srcOk = <-dr.srcCh
+			} else { /* s.ObjName == d.ObjName */
+				equal, err := dr.ctx.CompareObjects(src, dst)
+				if err != nil {
+					dr.resultCh <- DiffResolverResult{
+						Action: DiffResolverErr,
+						Src:    src,
+						Dst:    dst,
+						Err:    err,
+					}
+					return
+				}
+				if equal {
+					dr.resultCh <- DiffResolverResult{
+						Action: DiffResolverSkip,
+						Src:    src,
+						Dst:    dst,
+					}
+				} else {
+					dr.resultCh <- DiffResolverResult{
+						Action: DiffResolverRecv,
+						Dst:    dst,
+					}
+				}
+				src, srcOk = <-dr.srcCh
+				dst, dstOk = <-dr.dstCh
 			}
 		}
 	}()
@@ -182,7 +195,7 @@ func (dr *DiffResolver) Stop()           { dr.stopped.Store(true) }
 func (dr *DiffResolver) Stopped() bool   { return dr.stopped.Load() }
 func (dr *DiffResolver) Abort(err error) { dr.err.Store(err) }
 
-func CompareObjects(src *cluster.LOM, dst *DstElement) (bool, error) {
+func (*defaultDiffResolverCtx) CompareObjects(src *cluster.LOM, dst *DstElement) (bool, error) {
 	if err := src.Load(); err != nil {
 		if cmn.IsObjNotExist(err) {
 			return false, nil
@@ -190,4 +203,18 @@ func CompareObjects(src *cluster.LOM, dst *DstElement) (bool, error) {
 		return false, err
 	}
 	return compareObjects(src, dst)
+}
+
+func (*defaultDiffResolverCtx) IsObjFromCloud(src *cluster.LOM) (bool, error) {
+	if err := src.Load(); err != nil {
+		if cmn.IsObjNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	objSrc, ok := src.GetCustomMD(cluster.SourceObjMD)
+	if !ok {
+		return false, nil
+	}
+	return objSrc != cluster.SourceWebObjMD, nil
 }

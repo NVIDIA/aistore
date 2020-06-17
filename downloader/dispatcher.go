@@ -6,9 +6,9 @@ package downloader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -150,8 +150,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	}
 
 	var (
-		diffResolver = NewDiffResolver()
-		jobSync      = job.ID() == "" // non-trivial `false`, FIXME: change to `job.Sync()`
+		diffResolver = NewDiffResolver(nil)
 	)
 
 	diffResolver.Start()
@@ -160,33 +159,27 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	// We just want to download requested objects so we know exactly which
 	// objects must be checked (compared) and which not. Therefore, only traverse
 	// bucket when we need to sync the objects.
-	if jobSync {
+	if job.Sync() {
 		go func() {
 			defer diffResolver.CloseSrc()
-			err := fs.Walk(&fs.Options{
-				Bck:   job.Bck(),
-				Mpath: nil, // FIXME: we need to walk multiple mountpaths
-				CTs:   []string{fs.ObjectType},
+
+			err := fs.WalkBck(&fs.Options{
+				Bck: job.Bck(),
+				CTs: []string{fs.ObjectType},
 				Callback: func(fqn string, de fs.DirEntry) error {
 					if diffResolver.Stopped() {
-						return filepath.SkipDir
-					}
-					if de.IsDir() {
-						return nil
+						return cmn.NewAbortedError("stopped")
 					}
 					lom := &cluster.LOM{T: d.parent.t, FQN: fqn}
 					if err := lom.Init(job.Bck()); err != nil {
 						return err
 					}
-					// FIXME: The order of the objects may not be sorted as we
-					//  are walking multiple mountpaths (`Sorted` is only applied
-					//  to a single mountpath).
 					diffResolver.PushSrc(lom)
 					return nil
 				},
 				Sorted: true,
 			})
-			if err != nil {
+			if err != nil && !errors.As(err, &cmn.AbortedError{}) {
 				diffResolver.Abort(err)
 			}
 		}()
@@ -195,7 +188,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	go func() {
 		defer func() {
 			diffResolver.CloseDst()
-			if !jobSync {
+			if !job.Sync() {
 				diffResolver.CloseSrc()
 			}
 		}()
@@ -216,7 +209,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 					return
 				}
 
-				if !jobSync {
+				if !job.Sync() {
 					// When it is not a sync job, push LOM for a given object
 					// because we need to check if it exists.
 					lom := &cluster.LOM{T: d.parent.t, ObjName: obj.objName}
@@ -247,12 +240,22 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 			return false
 		}
 		switch result.Action {
-		case DiffResolverRecv, DiffResolverSkip, DiffResolverErr:
-			dst := result.Dst
-			obj := dlObj{
-				objName:   dst.ObjName,
-				link:      dst.Link,
-				fromCloud: dst.Link == "",
+		case DiffResolverRecv, DiffResolverSkip, DiffResolverErr, DiffResolverDelete:
+			var obj dlObj
+			if dst := result.Dst; dst != nil {
+				obj = dlObj{
+					objName:   dst.ObjName,
+					link:      dst.Link,
+					fromCloud: dst.Link == "",
+				}
+			} else {
+				src := result.Src
+				cmn.Assert(result.Action == DiffResolverDelete)
+				obj = dlObj{
+					objName:   src.ObjName,
+					link:      "",
+					fromCloud: true,
+				}
 			}
 
 			dlStore.incScheduled(job.ID())
@@ -273,6 +276,16 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 				continue
 			}
 
+			if result.Action == DiffResolverDelete {
+				cmn.Assert(job.Sync())
+				if err := d.parent.t.EvictObject(result.Src); err != nil {
+					t.markFailed(err.Error())
+				} else {
+					dlStore.incFinished(job.ID())
+				}
+				continue
+			}
+
 			err, ok := d.blockingDispatchDownloadSingle(t)
 			if err != nil {
 				glog.Errorf("Download job %s failed, couldn't download object %s, aborting; %s", job.ID(), obj.link, err.Error())
@@ -282,11 +295,8 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 			if !ok {
 				return false
 			}
-		case DiffResolverDelete:
-			// TODO: if !job.Sync() { cmn.Assert(false) } else { deleteObj }
-			cmn.Assert(false)
 		case DiffResolverSend:
-			cmn.Assert(false)
+			cmn.Assert(job.Sync())
 		case DiffResolverEOF:
 			dlStore.setAllDispatched(job.ID(), true)
 			return true

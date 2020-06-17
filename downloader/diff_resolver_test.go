@@ -11,6 +11,13 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
+type (
+	mockDiffResolverCtx struct{}
+)
+
+func (*mockDiffResolverCtx) CompareObjects(*cluster.LOM, *DstElement) (bool, error) { return true, nil }
+func (*mockDiffResolverCtx) IsObjFromCloud(*cluster.LOM) (bool, error)              { return false, nil }
+
 func TestDiffResolver(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -88,7 +95,8 @@ func TestDiffResolver(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			dr := NewDiffResolver()
+			ctx := &mockDiffResolverCtx{}
+			dr := NewDiffResolver(ctx)
 			dr.Start()
 			for _, s := range test.src {
 				dr.PushSrc(&cluster.LOM{ObjName: s})

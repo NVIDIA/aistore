@@ -44,6 +44,7 @@ func (*TargetMock) GetMMSA() *memsys.MMSA                                     { 
 func (*TargetMock) GetSmallMMSA() *memsys.MMSA                                { return memsys.DefaultSmallMM() }
 func (*TargetMock) PutObject(_ PutObjectParams) error                         { return nil }
 func (*TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error          { return nil }
+func (*TargetMock) EvictObject(_ *LOM) error                                  { return nil }
 func (*TargetMock) GetCold(_ context.Context, _ *LOM, _ bool) (error, int)    { return nil, http.StatusOK }
 func (*TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte, _ bool) (bool, error) { return false, nil }
 func (*TargetMock) PromoteFile(_ string, _ *Bck, _ string, _ *cmn.Cksum, _, _, _ bool) error {

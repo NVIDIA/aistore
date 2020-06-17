@@ -237,6 +237,7 @@ var (
 	limitConnectionsFlag  = cli.IntFlag{Name: "limit-connections,conns", Usage: "number of connections each target can make concurrently (each target can handle at most #mountpaths connections)"}
 	limitBytesPerHourFlag = cli.StringFlag{Name: "limit-bytes-per-hour,limit-bph,bph", Usage: "number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can maximally download in hour"}
 	objectsListFlag       = cli.StringFlag{Name: "object-list,from", Usage: "path to file containing JSON array of strings with object names to download"}
+	syncFlag              = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
 
 	// dSort
 	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: cmn.DSortNameLowercase + "-testing", Usage: "bucket where shards will be put"}

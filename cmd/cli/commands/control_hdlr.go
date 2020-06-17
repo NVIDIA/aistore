@@ -307,6 +307,7 @@ func startDownloadHandler(c *cli.Context) error {
 	case cloudDlType:
 		payload := downloader.DlCloudBody{
 			DlBase: basePayload,
+			Sync:   flagIsSet(c, syncFlag),
 			Prefix: source.cloud.prefix,
 		}
 		id, err = api.DownloadCloudWithParam(defaultAPIParams, payload)

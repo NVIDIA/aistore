@@ -98,6 +98,8 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 		wg                = &sync.WaitGroup{}
 	)
 
+	// TODO: rewrite as `fs.WalkBck`
+
 	// Function to traverse single mountpath.
 	walkMpath := func(mpathInfo *fs.MountpathInfo, bck cmn.Bck, cts []string) {
 		defer wg.Done()

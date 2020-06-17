@@ -41,6 +41,8 @@ type (
 		// If total length (size) of download job is not known, -1 should be returned.
 		Len() int
 
+		Sync() bool // Determines if it requires also syncing
+
 		// genNext is supposed to fulfill the following protocol:
 		// ok is set to true if there is batch to process, false otherwise
 		genNext() (objs []dlObj, ok bool)
@@ -79,6 +81,7 @@ type (
 		t   cluster.Target
 		ctx context.Context // context for the request, user etc...
 
+		sync   bool
 		prefix string
 		suffix string
 
@@ -110,6 +113,7 @@ func (j *baseDlJob) ID() string             { return j.id }
 func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
+func (j *baseDlJob) Sync() bool             { return false }
 func (j *baseDlJob) throttler() *throttler  { return j.t }
 func (j *baseDlJob) cleanup() {
 	dlStore.markFinished(j.ID())
@@ -152,7 +156,8 @@ func newSliceDlJob(base *baseDlJob, objs []dlObj) *sliceDlJob {
 	}
 }
 
-func (j *cloudBucketDlJob) Len() int { return -1 }
+func (j *cloudBucketDlJob) Len() int   { return -1 }
+func (j *cloudBucketDlJob) Sync() bool { return j.sync }
 func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
@@ -261,12 +266,13 @@ func (j *rangeDlJob) getNextObjs() error {
 	return nil
 }
 
-func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *baseDlJob, prefix, suffix string) (*cloudBucketDlJob, error) {
+func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *baseDlJob, sync bool, prefix, suffix string) (*cloudBucketDlJob, error) {
 	job := &cloudBucketDlJob{
 		baseDlJob:  *base,
 		pageMarker: "",
 		t:          t,
 		ctx:        ctx,
+		sync:       sync,
 		prefix:     prefix,
 		suffix:     suffix,
 	}

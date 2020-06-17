@@ -168,7 +168,7 @@ func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, 
 		if !bck.IsCloud() {
 			return nil, errors.New("bucket download requires a cloud bucket")
 		}
-		return newCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
+		return newCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Sync, cloudPayload.Prefix, cloudPayload.Suffix)
 	case dlTypeRange:
 		if !bck.IsAIS() {
 			return nil, errors.New("range download requires ais bucket")

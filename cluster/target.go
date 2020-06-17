@@ -88,6 +88,7 @@ type Target interface {
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(params PutObjectParams) error
+	EvictObject(lom *LOM) error
 	CopyObject(lom *LOM, bckTo *Bck, buf []byte, localOnly bool) (bool, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(srcFQN string, bck *Bck, objName string, cksum *cmn.Cksum, overwrite, safe, verbose bool) (err error)

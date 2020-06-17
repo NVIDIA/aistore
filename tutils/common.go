@@ -32,9 +32,9 @@ func Logln(msg string) {
 	}
 }
 
-func Logf(msg string, args ...interface{}) {
+func Logf(f string, a ...interface{}) {
 	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, prependTime(msg), args...)
+		fmt.Fprintf(os.Stdout, prependTime(f), a...)
 	}
 }
 

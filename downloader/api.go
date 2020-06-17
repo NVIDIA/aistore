@@ -356,6 +356,7 @@ func (b *DlMultiBody) String() string {
 // Cloud request
 type DlCloudBody struct {
 	DlBase
+	Sync   bool   `json:"sync"`
 	Prefix string `json:"prefix"`
 	Suffix string `json:"suffix"`
 }
