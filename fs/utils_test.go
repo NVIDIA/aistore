@@ -16,9 +16,11 @@ import (
 )
 
 type dirTreeDesc struct {
-	dirs  int  // number of (initially empty) directories at each depth (we recurse into single directory at each depth)
-	depth int  // depth of tree/nesting
-	empty bool // determines if there is a file somewhere in the directories
+	initDir string // directory where the tree is created (can be empty)
+	dirs    int    // number of (initially empty) directories at each depth (we recurse into single directory at each depth)
+	files   int    // number of files at each depth
+	depth   int    // depth of tree/nesting
+	empty   bool   // determines if there is a file somewhere in the directories
 }
 
 func TestIsDirEmpty(t *testing.T) {
@@ -38,7 +40,7 @@ func TestIsDirEmpty(t *testing.T) {
 	for _, test := range tests {
 		testName := fmt.Sprintf("dirs=%d#depth=%d#empty=%t", test.dirs, test.depth, test.empty)
 		t.Run(testName, func(t *testing.T) {
-			topDirName := prepareDirTree(t, test)
+			topDirName, _ := prepareDirTree(t, test)
 			defer os.RemoveAll(topDirName)
 
 			_, empty, err := fs.IsDirEmpty(topDirName)
@@ -78,7 +80,7 @@ func BenchmarkIsDirEmpty(b *testing.B) {
 	for _, bench := range benches {
 		benchName := fmt.Sprintf("dirs=%d#depth=%d#empty=%t", bench.dirs, bench.depth, bench.empty)
 		b.Run(benchName, func(b *testing.B) {
-			topDirName := prepareDirTree(b, bench)
+			topDirName, _ := prepareDirTree(b, bench)
 			defer os.RemoveAll(topDirName)
 
 			b.ResetTimer()
@@ -94,8 +96,11 @@ func BenchmarkIsDirEmpty(b *testing.B) {
 	}
 }
 
-func prepareDirTree(tb testing.TB, desc dirTreeDesc) string {
-	topDirName, err := ioutil.TempDir("", "")
+func prepareDirTree(tb testing.TB, desc dirTreeDesc) (string, []string) {
+	var (
+		fileNames = make([]string, 0, 100)
+	)
+	topDirName, err := ioutil.TempDir(desc.initDir, "")
 	tassert.CheckFatal(tb, err)
 
 	nestedDirectoryName := topDirName
@@ -105,6 +110,12 @@ func prepareDirTree(tb testing.TB, desc dirTreeDesc) string {
 			name, err := ioutil.TempDir(nestedDirectoryName, "")
 			tassert.CheckFatal(tb, err)
 			names = append(names, name)
+		}
+		for i := 1; i <= desc.files; i++ {
+			f, err := ioutil.TempFile(nestedDirectoryName, "")
+			tassert.CheckFatal(tb, err)
+			fileNames = append(fileNames, f.Name())
+			f.Close()
 		}
 		sort.Strings(names)
 		if desc.dirs > 0 {
@@ -116,7 +127,8 @@ func prepareDirTree(tb testing.TB, desc dirTreeDesc) string {
 	if !desc.empty {
 		f, err := ioutil.TempFile(nestedDirectoryName, "")
 		tassert.CheckFatal(tb, err)
+		fileNames = append(fileNames, f.Name())
 		f.Close()
 	}
-	return topDirName
+	return topDirName, fileNames
 }

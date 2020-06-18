@@ -5,6 +5,8 @@
 package fs
 
 import (
+	"container/heap"
+	"context"
 	"errors"
 	"os"
 	"sort"
@@ -12,13 +14,18 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/karrick/godirwalk"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
 	// Determines the threshold of error count which will result in halting
 	// the walking operation.
 	errThreshold = 1000
+
+	// Determines the buffer size of the mpath worker queue.
+	mpathQueueSize = 100
 )
 
 type (
@@ -46,6 +53,13 @@ type (
 	errCallbackWrapper struct {
 		counter atomic.Int64
 	}
+
+	objInfo struct {
+		mpathIdx int
+		fqn      string
+		objName  string
+	}
+	objInfos []objInfo
 )
 
 // PathErrToAction is a default error callback for fast godirwalk.Walk.
@@ -89,6 +103,29 @@ var _ DirEntry = &godirwalk.Dirent{}
 
 func (opts *Options) callback(fqn string, de *godirwalk.Dirent) error {
 	return opts.Callback(fqn, de)
+}
+
+func (h objInfos) Len() int           { return len(h) }
+func (h objInfos) Less(i, j int) bool { return h[i].objName < h[j].objName }
+func (h objInfos) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+
+func (h *objInfos) Push(x interface{}) {
+	info := x.(objInfo)
+	debug.Assert(info.objName == "")
+	parsedFQN, err := Mountpaths.ParseFQN(info.fqn)
+	if err != nil {
+		return
+	}
+	info.objName = parsedFQN.ObjName
+	*h = append(*h, info)
+}
+
+func (h *objInfos) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
 }
 
 func Walk(opts *Options) error {
@@ -167,4 +204,72 @@ func Walk(opts *Options) error {
 		}
 	}
 	return err
+}
+
+func WalkBck(opts *Options) error {
+	var (
+		mpaths, _  = Mountpaths.Get()
+		mpathChs   = make([]chan string, len(mpaths))
+		group, ctx = errgroup.WithContext(context.Background())
+	)
+
+	for i := 0; i < len(mpaths); i++ {
+		mpathChs[i] = make(chan string, mpathQueueSize)
+	}
+
+	cmn.Assert(opts.Mpath == nil)
+	idx := 0
+	for _, mpath := range mpaths {
+		group.Go(func(idx int, mpath *MountpathInfo) func() error {
+			return func() error {
+				defer close(mpathChs[idx])
+				o := *opts
+				o.Mpath = mpath
+				o.Callback = func(fqn string, de DirEntry) error {
+					select {
+					case <-ctx.Done():
+						return cmn.NewAbortedError("mpath: " + mpath.Path)
+					default:
+						break
+					}
+					if de.IsDir() {
+						return nil
+					}
+					mpathChs[idx] <- fqn
+					return nil
+				}
+				return Walk(&o)
+			}
+		}(idx, mpath))
+		idx++
+	}
+
+	// TODO: handle case when `opts.Sorted == false`
+	cmn.Assert(opts.Sorted)
+	group.Go(func() error {
+		var (
+			h = &objInfos{}
+		)
+		heap.Init(h)
+
+		for i := 0; i < len(mpathChs); i++ {
+			if fqn, ok := <-mpathChs[i]; ok {
+				heap.Push(h, objInfo{mpathIdx: i, fqn: fqn})
+			}
+		}
+
+		for h.Len() > 0 {
+			v := heap.Pop(h)
+			info := v.(objInfo)
+			if err := opts.Callback(info.fqn, nil); err != nil {
+				return err
+			}
+			if fqn, ok := <-mpathChs[info.mpathIdx]; ok {
+				heap.Push(h, objInfo{mpathIdx: info.mpathIdx, fqn: fqn})
+			}
+		}
+		return nil
+	})
+
+	return group.Wait()
 }
