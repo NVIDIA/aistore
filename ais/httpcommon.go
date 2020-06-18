@@ -775,6 +775,8 @@ func (h *httprunner) bcastPost(args bcastArgs) chan callResult {
 	args.req.Method = http.MethodPost
 	return h.bcastTo(args)
 }
+
+// nolint:unused // integral with callTargets and callAll
 func (h *httprunner) bcastPut(args bcastArgs) chan callResult {
 	cmn.Assert(args.req.Method == "")
 	args.req.Method = http.MethodPut
@@ -807,6 +809,37 @@ func (h *httprunner) bcastTo(args bcastArgs) chan callResult {
 		cmn.AssertMsg(false, "unknown network '"+args.network+"'")
 	}
 	return h.bcast(args)
+}
+
+func (h *httprunner) callBcast(method, path string, body []byte, to int, query ...url.Values) chan callResult {
+	cmn.Assert(method != "")
+	q := url.Values{}
+	if len(query) > 0 {
+		q = query[0]
+	}
+	return h.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: method,
+			Path:   path,
+			Body:   body,
+			Query:  q,
+		},
+		timeout: cmn.DefaultTimeout,
+		to:      to,
+	})
+}
+
+func (h *httprunner) callTargets(method, path string, body []byte, query ...url.Values) chan callResult {
+	return h.callBcast(method, path, body, cluster.Targets, query...)
+}
+
+// nolint:unused // integral with callTargets and callAll
+func (h *httprunner) callProxies(method, path string, body []byte, query ...url.Values) chan callResult {
+	return h.callBcast(method, path, body, cluster.Proxies, query...)
+}
+
+func (h *httprunner) callAll(method, path string, body []byte, query ...url.Values) chan callResult {
+	return h.callBcast(method, path, body, cluster.AllNodes, query...)
 }
 
 // NOTE: 'u' has only the path and query part, host portion will be set by this method.

@@ -21,18 +21,7 @@ import (
 func (p *proxyrunner) broadcastDownloadRequest(method, path string, body []byte, query url.Values) chan callResult {
 	query.Add(cmn.URLParamProxyID, p.si.ID())
 	query.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(time.Now().UnixNano()))
-	args := bcastArgs{
-		req: cmn.ReqArgs{
-			Method: method,
-			Path:   cmn.URLPath(cmn.Version, cmn.Download, path),
-			Query:  query,
-			Body:   body,
-		},
-		timeout: cmn.DefaultTimeout,
-		to:      cluster.Targets,
-		smap:    p.owner.smap.get(),
-	}
-	return p.bcastTo(args)
+	return p.callTargets(method, cmn.URLPath(cmn.Version, cmn.Download, path), body, query)
 }
 
 func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {

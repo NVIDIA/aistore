@@ -1885,19 +1885,8 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	//
 	// TODO -- FIXME: 2phase begin to check space, validate params, and check vs running xactions
 	//
-	var (
-		body = cmn.MustMarshal(msg)
-	)
 	query := cmn.AddBckToQuery(nil, bck.Bck)
-	results := p.bcastPost(bcastArgs{
-		req: cmn.ReqArgs{
-			Path:  cmn.URLPath(cmn.Version, cmn.Objects, bucket),
-			Query: query,
-			Body:  body,
-		},
-		timeout: cmn.DefaultTimeout,
-	})
-
+	results := p.callTargets(http.MethodPost, cmn.URLPath(cmn.Version, cmn.Objects, bucket), cmn.MustMarshal(msg), query)
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlrf(w, r, "%s failed, err: %s", msg.Action, res.err)
@@ -2395,17 +2384,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	urlPath := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Proxy, proxyid)
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
-	method := http.MethodPut
-	results := p.bcastTo(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: method,
-			Path:   urlPath,
-			Query:  q,
-		},
-		smap: smap,
-		to:   cluster.AllNodes,
-	})
-
+	results := p.callAll(http.MethodPut, urlPath, nil, q)
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlrf(w, r, "Failed to set primary %s: err %v from %s in the prepare phase", proxyid, res.err, res.si)
@@ -2423,14 +2402,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	// (II) commit phase
 	q.Set(cmn.URLParamPrepare, "false")
-	results = p.bcastTo(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: method,
-			Path:   urlPath,
-			Query:  q,
-		},
-		to: cluster.AllNodes,
-	})
+	results = p.callAll(http.MethodPut, urlPath, nil, q)
 
 	// FIXME: retry
 	for res := range results {
@@ -3121,12 +3093,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		body := cmn.MustMarshal(msg) // same message -> all targets and proxies
-		results := p.bcastTo(bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPut, Path: cmn.URLPath(cmn.Version, cmn.Daemon), Body: body},
-			to: cluster.AllNodes,
-		})
+		results := p.callAll(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Daemon), cmn.MustMarshal(msg)) // same message -> all targets and proxies
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlrf(w, r, "%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, res.details)
@@ -3136,12 +3103,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
-		body := cmn.MustMarshal(msg)
-		args := bcastArgs{
-			req: cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPath(cmn.Version, cmn.Daemon), Body: body},
-			to:  cluster.AllNodes,
-		}
-		p.bcastTo(args)
+		p.callAll(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Daemon), cmn.MustMarshal(msg))
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActXactStart, cmn.ActXactStop:
@@ -3166,12 +3128,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		if msg.Action == cmn.ActXactStart {
 			xactMsg.ID = cmn.GenUUID()
 		}
-		results := p.bcastPut(bcastArgs{
-			req: cmn.ReqArgs{
-				Path: cmn.URLPath(cmn.Version, cmn.Xactions),
-				Body: cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg}),
-			},
-		})
+		results := p.callTargets(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Xactions), cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg}))
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, res.err.Error())
@@ -3201,13 +3158,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		results := p.bcastPut(bcastArgs{
-			req: cmn.ReqArgs{
-				Path:  cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig),
-				Query: query,
-			},
-			to: cluster.AllNodes,
-		})
+		results := p.callAll(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig), nil, query)
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, res.err.Error())
@@ -3227,13 +3178,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			cmn.InvalidHandlerWithMsg(w, r, err.Error())
 			return
 		}
-		results := p.bcastPut(bcastArgs{
-			req: cmn.ReqArgs{
-				Path:  cmn.URLPath(cmn.Version, cmn.Daemon, action),
-				Query: query,
-			},
-			to: cluster.AllNodes,
-		})
+		results := p.callAll(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Daemon, action), nil, query)
 		// NOTE: save this config unconditionally
 		// TODO: metasync
 		if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", action, cmn.GetWhatRemoteAIS)); err != nil {
