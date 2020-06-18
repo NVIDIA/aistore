@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
-	lz4 "github.com/pierrec/lz4/v3"
+	"github.com/pierrec/lz4/v3"
 )
 
 // transport defaults

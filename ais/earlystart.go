@@ -405,14 +405,14 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 		now         = time.Now()
 		deadline    = now.Add(config.Timeout.Startup)
 		q           = url.Values{}
-		url         = cmn.URLPath(cmn.Version, cmn.Daemon)
+		path        = cmn.URLPath(cmn.Version, cmn.Daemon)
 		l           = bcastSmap.CountTargets() + bcastSmap.CountProxies()
 		bmds        = make(map[*cluster.Snode]*bucketMD, l)
 		smaps       = make(map[*cluster.Snode]*smapX, l)
 		done, slowp bool
 	)
 	q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
-	args := bcastArgs{req: cmn.ReqArgs{Path: url, Query: q}, smap: bcastSmap, to: cluster.AllNodes}
+	args := bcastArgs{req: cmn.ReqArgs{Path: path, Query: q}, smap: bcastSmap, to: cluster.AllNodes}
 	for {
 		last := time.Now().After(deadline)
 		maxVerSmap, maxVerBMD, done, slowp = p.bcastMaxVer(args, bmds, smaps)

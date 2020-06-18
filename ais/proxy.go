@@ -2623,7 +2623,7 @@ func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request
 			if res.err != nil {
 				return nil, res.details
 			}
-			sysInfoMap[res.si.ID()] = jsoniter.RawMessage(res.outjson)
+			sysInfoMap[res.si.ID()] = res.outjson
 		}
 		return sysInfoMap, ""
 	}
@@ -2701,7 +2701,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 			p.invalmsghdlr(w, r, res.details)
 			return nil
 		}
-		targetResults[res.si.ID()] = jsoniter.RawMessage(res.outjson)
+		targetResults[res.si.ID()] = res.outjson
 	}
 	return targetResults
 }

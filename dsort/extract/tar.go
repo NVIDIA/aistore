@@ -177,7 +177,7 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 		} else if header.Typeflag == tar.TypeReg {
 			data := cmn.NewSizedReader(tr, header.Size)
 
-			var extractMethod cmn.Bits = ExtractToMem
+			var extractMethod = ExtractToMem
 			if toDisk {
 				extractMethod = ExtractToDisk
 			}

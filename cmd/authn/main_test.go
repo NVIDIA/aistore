@@ -179,7 +179,7 @@ func TestToken(t *testing.T) {
 		_, err = mgr.userByToken(token)
 	}
 	if err != nil {
-		t.Errorf("Failed to test revoking token% v", err)
+		t.Errorf("Failed to test revoking token %v", err)
 	} else {
 		mgr.revokeToken(token)
 		info, err = mgr.userByToken(token)

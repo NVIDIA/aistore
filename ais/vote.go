@@ -373,7 +373,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 			}
 		} else {
 			resCh <- voteResult{
-				yes:      (VoteYes == Vote(r.outjson)),
+				yes:      VoteYes == Vote(r.outjson),
 				daemonID: r.si.ID(),
 				err:      nil,
 			}

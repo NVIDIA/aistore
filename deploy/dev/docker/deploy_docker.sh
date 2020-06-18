@@ -294,7 +294,7 @@ if [[ -z $CLOUD ]]; then
     echo " 3: Azure Cloud"
     read -r CLOUD
     is_number $CLOUD
-    if [ $CLOUD -ne 0 ] && [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ] && [ $CLOUD -ne 3]; then
+    if [ $CLOUD -ne 0 ] && [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ] && [ $CLOUD -ne 3 ]; then
         echo "Not a valid entry. Exiting..."
         exit 1
     fi

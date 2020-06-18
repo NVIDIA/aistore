@@ -137,7 +137,7 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 				return extractedSize, extractedCount, err
 			}
 
-			var extractMethod cmn.Bits = ExtractToMem
+			var extractMethod = ExtractToMem
 			if toDisk {
 				extractMethod = ExtractToDisk
 			}

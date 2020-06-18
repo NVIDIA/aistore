@@ -61,7 +61,7 @@ func readVMStat(vmstat *C.vm_statistics_data_t) error {
 		&count,
 	)
 	if status != C.KERN_SUCCESS {
-		return fmt.Errorf("host_statistics=%d", status)
+		return fmt.Errorf("host_statistics=%v", status)
 	}
 	return nil
 }

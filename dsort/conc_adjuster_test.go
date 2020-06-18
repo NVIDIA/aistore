@@ -22,7 +22,7 @@ func calcSemaLimit(acquire, release func()) int {
 	wg := &sync.WaitGroup{}
 	ch := make(chan int32, 200)
 
-	for j := 0; j < int(200); j++ {
+	for j := 0; j < 200; j++ {
 		acquire()
 		wg.Add(1)
 		go func() {

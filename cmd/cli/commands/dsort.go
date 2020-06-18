@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
-	mpb "github.com/vbauerster/mpb/v4"
+	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
 	"golang.org/x/sync/errgroup"
 )

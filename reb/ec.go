@@ -901,7 +901,7 @@ func (reb *Manager) detectBroken(md *rebArgs, res *globalCTList) {
 					continue
 				}
 
-				if bool(glog.FastV(4, glog.SmoduleReb)) {
+				if glog.FastV(4, glog.SmoduleReb) {
 					glog.Infof("[%s] BROKEN: %s [Main %d on %s], CTs %d of %d",
 						reb.t.Snode(), objName, obj.mainSliceID, obj.mainDaemon, obj.foundCT(), obj.requiredCT())
 				}

@@ -1,4 +1,4 @@
-if [[ "$#" < 1 ]]; then
+if [[ "$#" -lt 1 ]]; then
     # print all mountpoints
     echo "available mountpoints (pass as args to run):"
     lsblk | grep -e "disk" -e "raid" -e "part" | awk '{print $7}' | grep -ve "^$"
