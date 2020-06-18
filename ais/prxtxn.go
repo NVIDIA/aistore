@@ -479,11 +479,13 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 }
 
 // callback to unlock buckets after all targets reported `done`
-func (p *proxyrunner) nlBckCp(n notifListener, msg interface{}, uuid string) {
+func (p *proxyrunner) nlBckCp(n notifListener, msg interface{}, uuid string, err error) {
 	nl := n.(*notifListenerBckCp)
 	nl.nlpTo.Unlock()
 	nl.nlpFrom.RUnlock()
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if err != nil {
+		glog.Errorf("%s: failed to copy bucket(s): %+v, err: %v", p.si, msg, err)
+	} else if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%+v", msg)
 	}
 }
