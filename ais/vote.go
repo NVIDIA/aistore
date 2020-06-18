@@ -74,8 +74,7 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPut && apitems[0] == cmn.Voteres:
 		t.httpsetprimaryproxy(w, r)
 	default:
-		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}
 }
 
@@ -94,8 +93,7 @@ func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPut && apitems[0] == cmn.VoteInit:
 		p.httpRequestNewPrimary(w, r)
 	default:
-		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
-		p.invalmsghdlr(w, r, s)
+		p.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}
 }
 
@@ -111,27 +109,27 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 	candidate := msg.Record.Candidate
 	if candidate == "" {
-		h.invalmsghdlr(w, r, fmt.Sprintln("Cannot request vote without Candidate field"))
+		h.invalmsghdlr(w, r, "Cannot request vote without Candidate field")
 		return
 	}
 	smap := h.owner.smap.get()
 	if smap.ProxySI == nil {
-		h.invalmsghdlr(w, r, fmt.Sprintf("Cannot vote: current primary undefined, local %s", smap))
+		h.invalmsghdlrf(w, r, "Cannot vote: current primary undefined, local %s", smap)
 		return
 	}
 	currPrimaryID := smap.ProxySI.ID()
 	if candidate == currPrimaryID {
-		h.invalmsghdlr(w, r, fmt.Sprintf("Candidate %s == the current primary '%s'", candidate, currPrimaryID))
+		h.invalmsghdlrf(w, r, "Candidate %s == the current primary %q", candidate, currPrimaryID)
 		return
 	}
 	newsmap := &msg.Record.Smap
 	psi := newsmap.GetProxy(candidate)
 	if psi == nil {
-		h.invalmsghdlr(w, r, fmt.Sprintf("Candidate '%s' not present in the VoteRecord %s", candidate, newsmap.pp()))
+		h.invalmsghdlrf(w, r, "Candidate %q not present in the VoteRecord %s", candidate, newsmap.pp())
 		return
 	}
 	if !newsmap.isPresent(h.si) {
-		h.invalmsghdlr(w, r, fmt.Sprintf("Self '%s' not present in the VoteRecord Smap %s", h.si, newsmap.pp()))
+		h.invalmsghdlrf(w, r, "Self %q not present in the VoteRecord Smap %s", h.si, newsmap.pp())
 		return
 	}
 
@@ -155,14 +153,12 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	if vote {
 		_, err = w.Write([]byte(VoteYes))
 		if err != nil {
-			s := fmt.Sprintf("Error writing yes vote: %v", err)
-			h.invalmsghdlr(w, r, s)
+			h.invalmsghdlrf(w, r, "Error writing yes vote: %v", err)
 		}
 	} else {
 		_, err = w.Write([]byte(VoteNo))
 		if err != nil {
-			s := fmt.Sprintf("Error writing no vote: %v", err)
-			h.invalmsghdlr(w, r, s)
+			h.invalmsghdlrf(w, r, "Error writing no vote: %v", err)
 		}
 	}
 }
@@ -211,13 +207,11 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	}
 	newsmap := &msg.Request.Smap
 	if !newsmap.isValid() {
-		s := fmt.Sprintf("Invalid Smap in the Vote Request: %s", newsmap.pp())
-		p.invalmsghdlr(w, r, s)
+		p.invalmsghdlrf(w, r, "Invalid Smap in the Vote Request: %s", newsmap.pp())
 		return
 	}
 	if !newsmap.isPresent(p.si) {
-		s := fmt.Sprintf("Self '%s' not present in the Vote Request %s", p.si, newsmap.pp())
-		p.invalmsghdlr(w, r, s)
+		p.invalmsghdlrf(w, r, "Self %q not present in the Vote Request %s", p.si, newsmap.pp())
 		return
 	}
 
@@ -228,8 +222,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	smap := p.owner.smap.get()
 	psi, err := cluster.HrwProxy(&smap.Smap, smap.ProxySI.ID())
 	if err != nil {
-		s := fmt.Sprintf("Error preforming HRW: %s", err)
-		p.invalmsghdlr(w, r, s)
+		p.invalmsghdlrf(w, r, "Error preforming HRW: %s", err)
 		return
 	}
 

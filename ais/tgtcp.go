@@ -152,8 +152,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			ok    bool
 		)
 		if value, ok = msg.Value.(string); !ok {
-			t.invalmsghdlr(w, r, fmt.Sprintf("failed to parse action '%s' value: (%v, %T) not a string",
-				cmn.ActSetConfig, msg.Value, msg.Value))
+			t.invalmsghdlrf(w, r, "failed to parse action %q value: (%v, %T) not a string", cmn.ActSetConfig, msg.Value, msg.Value)
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
@@ -163,8 +162,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActShutdown:
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
-		s := fmt.Sprintf(fmtUnknownAct, msg)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -179,7 +177,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apite
 			return
 		}
 		if err := t.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("failed to sync Smap: %s", err))
+			t.invalmsghdlrf(w, r, "failed to sync Smap: %s", err)
 		}
 		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
 	case cmn.Mountpaths:
@@ -196,7 +194,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apite
 			action = apitems[0]
 		)
 		if what != cmn.GetWhatRemoteAIS {
-			t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
+			t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 			return
 		}
 		if err := t.attachDetachRemoteAIS(query, action); err != nil {
@@ -242,8 +240,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		prepare bool
 	)
 	if len(apiItems) != 2 {
-		s := fmt.Sprintf("Incorrect number of API items: %d, should be: %d", len(apiItems), 2)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, "Incorrect number of API items: %d, should be: %d", len(apiItems), 2)
 		return
 	}
 
@@ -251,8 +248,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	query := r.URL.Query()
 	preparestr := query.Get(cmn.URLParamPrepare)
 	if prepare, err = cmn.ParseBool(preparestr); err != nil {
-		s := fmt.Sprintf("Failed to parse %s URL Parameter: %v", cmn.URLParamPrepare, err)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, "Failed to parse %s URL Parameter: %v", cmn.URLParamPrepare, err)
 		return
 	}
 
@@ -383,8 +379,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if status, err := t.joinCluster(); err != nil {
-		s := fmt.Sprintf("%s: failed to register, status %d, err: %v", t.si, status, err)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, "%s: failed to register, status %d, err: %v", t.si, status, err)
 		return
 	}
 
@@ -409,7 +404,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		t.handleUnregisterReq()
 		return
 	default:
-		t.invalmsghdlr(w, r, fmt.Sprintf("unrecognized path: %q in /daemon DELETE", apiItems[0]))
+		t.invalmsghdlrf(w, r, "unrecognized path: %q in /daemon DELETE", apiItems[0])
 		return
 	}
 }
@@ -456,8 +451,7 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	case cmn.ActMountpathRemove:
 		t.handleRemoveMountpathReq(w, r, mountpath)
 	default:
-		s := fmt.Sprintf(fmtUnknownAct, msg)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -551,7 +545,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	if err := t.fsprg.removeMountpath(mountpath); err != nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %s", err.Error()))
+		t.invalmsghdlrf(w, r, "Could not remove mountpath, error: %s", err.Error())
 		return
 	}
 
@@ -996,8 +990,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 
 	if len(errs) > 0 {
-		msg := fmt.Sprintf("%v", errs)
-		t.invalmsghdlr(w, r, msg)
+		t.invalmsghdlrf(w, r, "%v", errs)
 		return
 	}
 }
@@ -1044,7 +1037,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	} else if callerID == "" || caller == "" {
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si, callerID, caller))
+		t.invalmsghdlrf(w, r, "%s: health-ping missing(%s, %s)", t.si, callerID, caller)
 		return
 	}
 

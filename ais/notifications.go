@@ -190,8 +190,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	nl, ok := n.m[uuid]
 	n.RUnlock()
 	if !ok {
-		s := fmt.Sprintf("%s: notification from %s: unknown UUID %q (%+v)", n.p.si, tid, uuid, msg)
-		n.p.invalmsghdlr(w, r, s, http.StatusNotFound)
+		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: notification from %s: unknown UUID %q (%+v)", n.p.si, tid, uuid, msg)
 		return
 	}
 	nl.lock()

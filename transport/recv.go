@@ -131,7 +131,7 @@ func Register(network, trname string, callback Receive, mems ...*memsys.MMSA) (u
 	upath = cmn.URLPath(cmn.Version, cmn.Transport, trname)
 	mux.HandleFunc(upath, h.receive)
 	if _, ok = handlers[network][trname]; ok {
-		glog.Errorf("Warning: re-registering transport handler '%s'", trname)
+		glog.Errorf("Warning: re-registering transport handler %q", trname)
 	}
 	handlers[network][trname] = h
 	mu.Unlock()

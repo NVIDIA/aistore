@@ -338,7 +338,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		}
 	}
 	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect, d)
-	debug.Infof("mmsa '%s' started", r.Name)
+	debug.Infof("mmsa %q started", r.Name)
 	return
 }
 
@@ -358,7 +358,7 @@ func (r *MMSA) Terminate() {
 	if r.doGC(mem.ActualFree, sizeToGC, true, swapping) {
 		gced = ", GC ran"
 	}
-	debug.Infof("mmsa '%s' terminated%s", r.Name, gced)
+	debug.Infof("mmsa %q terminated%s", r.Name, gced)
 }
 
 // allocate SGL
@@ -562,24 +562,24 @@ func (r *MMSA) env() (err error) {
 	var minfree int64
 	if a := os.Getenv("AIS_MINMEM_FREE"); a != "" {
 		if minfree, err = cmn.S2B(a); err != nil {
-			return fmt.Errorf("cannot parse AIS_MINMEM_FREE '%s'", a)
+			return fmt.Errorf("cannot parse AIS_MINMEM_FREE %q", a)
 		}
 		r.MinFree = uint64(minfree)
 	}
 	if a := os.Getenv("AIS_MINMEM_PCT_TOTAL"); a != "" {
 		if r.MinPctTotal, err = strconv.Atoi(a); err != nil {
-			return fmt.Errorf("cannot parse AIS_MINMEM_PCT_TOTAL '%s'", a)
+			return fmt.Errorf("cannot parse AIS_MINMEM_PCT_TOTAL %q", a)
 		}
 		if r.MinPctTotal < 0 || r.MinPctTotal > 100 {
-			return fmt.Errorf("invalid AIS_MINMEM_PCT_TOTAL '%s'", a)
+			return fmt.Errorf("invalid AIS_MINMEM_PCT_TOTAL %q", a)
 		}
 	}
 	if a := os.Getenv("AIS_MINMEM_PCT_FREE"); a != "" {
 		if r.MinPctFree, err = strconv.Atoi(a); err != nil {
-			return fmt.Errorf("cannot parse AIS_MINMEM_PCT_FREE '%s'", a)
+			return fmt.Errorf("cannot parse AIS_MINMEM_PCT_FREE %q", a)
 		}
 		if r.MinPctFree < 0 || r.MinPctFree > 100 {
-			return fmt.Errorf("invalid AIS_MINMEM_PCT_FREE '%s'", a)
+			return fmt.Errorf("invalid AIS_MINMEM_PCT_FREE %q", a)
 		}
 	}
 	return

@@ -81,7 +81,7 @@ func GetDiskstats() (output map[string]DiskStat) {
 func extractI64(field string) int64 {
 	val, err := strconv.ParseInt(field, 10, 64)
 	if err != nil {
-		glog.Errorf("Failed to convert field value '%s' to int: %v \n",
+		glog.Errorf("Failed to convert field value %q to int: %v \n",
 			field, err)
 		return 0
 	}

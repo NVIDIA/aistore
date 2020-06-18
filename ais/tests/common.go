@@ -678,7 +678,7 @@ func prefixLookupOne(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []str
 	if realNumFiles == numFiles {
 		tutils.Logf("Total files with prefix found: %v\n", numFiles)
 	} else {
-		t.Errorf("Expected number of files with prefix '%s' is %v but found %v files", prefix, realNumFiles, numFiles)
+		t.Errorf("Expected number of files with prefix %q is %v but found %v files", prefix, realNumFiles, numFiles)
 	}
 }
 
@@ -704,10 +704,10 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 
 		if numFiles == realNumFiles {
 			if numFiles != 0 {
-				tutils.Logf("Found %v files starting with '%s'\n", numFiles, key)
+				tutils.Logf("Found %v files starting with %q\n", numFiles, key)
 			}
 		} else {
-			t.Errorf("Expected number of files with prefix '%s' is %v but found %v files", key, realNumFiles, numFiles)
+			t.Errorf("Expected number of files with prefix %q is %v but found %v files", key, realNumFiles, numFiles)
 			tutils.Logf("Objects returned:\n")
 			for id, oo := range objList.Entries {
 				tutils.Logf("    %d[%d]. %s\n", i, id, oo.Name)
@@ -743,7 +743,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck) {
 		}
 
 		if len(objList.Entries) != test.objCount {
-			t.Errorf("Expected number of objects with prefix '%s' is %d but found %d",
+			t.Errorf("Expected number of objects with prefix %q is %d but found %d",
 				test.prefix, test.objCount, len(objList.Entries))
 			tutils.Logf("Objects returned:\n")
 			for id, oo := range objList.Entries {

@@ -164,7 +164,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 
 		if _, wasEvicted := evictMap[m.Name]; wasEvicted {
 			if m.Atime != "" {
-				t.Errorf("Evicted object %s/%s still has atime '%s'", bck, m.Name, m.Atime)
+				t.Errorf("Evicted object %s/%s still has atime %q", bck, m.Name, m.Atime)
 				t.Fail()
 			}
 			if m.CheckExists() {

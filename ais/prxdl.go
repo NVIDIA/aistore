@@ -208,8 +208,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		msg := fmt.Sprintf("Error starting download: %v.", err.Error())
-		p.invalmsghdlr(w, r, msg, http.StatusInternalServerError)
+		p.invalmsghdlrstatusf(w, r, http.StatusInternalServerError, "Error starting download: %v.", err.Error())
 		return
 	}
 
@@ -219,7 +218,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 
 	id := cmn.GenUUID()
 	if err, errCode := p.broadcastStartDownloadRequest(r, id, body); err != nil {
-		p.invalmsghdlr(w, r, fmt.Sprintf("Error starting download: %v.", err.Error()), errCode)
+		p.invalmsghdlrstatusf(w, r, errCode, "Error starting download: %v.", err.Error())
 		return
 	}
 

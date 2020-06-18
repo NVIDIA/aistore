@@ -448,8 +448,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.listBuckets(w, r, cmn.QueryBcks(bck.Bck))
 		}
 	default:
-		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, "Invalid route /buckets/%s", apiItems[0])
 	}
 }
 
@@ -465,12 +464,12 @@ func (t *targetrunner) validRedirect(w http.ResponseWriter, r *http.Request, tag
 			if smap.GetTarget(tid) != nil {
 				return
 			}
-			t.invalmsghdlr(w, r, fmt.Sprintf("%s: %q from unknown [%s], %s", t.si, tag, tid, smap))
+			t.invalmsghdlrf(w, r, "%s: %q from unknown [%s], %s", t.si, tag, tid, smap)
 			tid = ""
 			return
 		}
 		tid = ""
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s: %q is expected to be redirected", t.si, tag))
+		t.invalmsghdlrf(w, r, "%s: %q is expected to be redirected", t.si, tag)
 		return
 	}
 	if smap.GetProxy(pid) == nil {
@@ -493,7 +492,7 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 	} else if apiItems[0] == ec.URLCT {
 		t.sendECCT(w, r, apiItems[1:])
 	} else {
-		t.invalmsghdlr(w, r, "invalid EC URL path "+apiItems[0])
+		t.invalmsghdlrf(w, r, "invalid EC URL path %s", apiItems[0])
 	}
 }
 
@@ -737,8 +736,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) == 0 { // must be a List/Range request
-			s := "invalid API request: no message body"
-			t.invalmsghdlr(w, r, s)
+			t.invalmsghdlr(w, r, "invalid API request: no message body")
 			return
 		}
 		var (
@@ -755,8 +753,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		} else if err := cmn.TryUnmarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			details := fmt.Sprintf("invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
-			t.invalmsghdlr(w, r, details)
+			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
 			return
 		}
 		xact, err := xaction.Registry.RenewEvictDelete(t, bck, args)
@@ -766,8 +763,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		go xact.Run(args)
 	default:
-		s := fmt.Sprintf(fmtUnknownAct, msg)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -806,7 +802,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 				http.StatusNotFound,
 			)
 		} else {
-			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err), errCode)
+			t.invalmsghdlrstatusf(w, r, errCode, "error deleting %s: %v", lom, err)
 		}
 		return
 	}
@@ -867,8 +863,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActPrefetch:
 		if !bck.IsRemote() {
-			t.invalmsghdlr(w, r, fmt.Sprintf("%s: expecting remote bucket, got %s, action=%s",
-				t.si, bck, msg.Action))
+			t.invalmsghdlrf(w, r, "%s: expecting remote bucket, got %s, action=%s", t.si, bck, msg.Action)
 			return
 		}
 		var (
@@ -883,8 +878,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		} else if err = cmn.TryUnmarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			details := fmt.Sprintf("invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
-			t.invalmsghdlr(w, r, details)
+			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
 			return
 		}
 		args.UUID = msg.UUID
@@ -914,8 +908,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		s := fmt.Sprintf(fmtUnknownAct, msg)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -931,8 +924,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActPromote:
 		t.promoteFQN(w, r, &msg)
 	default:
-		s := fmt.Sprintf(fmtUnknownAct, msg)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -1168,8 +1160,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 	if query.Provider != "" {
 		bucketNames, err, code = t._listBcks(query, config)
 		if err != nil {
-			s := fmt.Sprintf("failed to list buckets for %s, err: %v(%d)", query, err, code)
-			t.invalmsghdlr(w, r, s, code)
+			t.invalmsghdlrstatusf(w, r, code, "failed to list buckets for %s, err: %v(%d)", query, err, code)
 			return
 		}
 	} else /* all providers */ {
@@ -1372,11 +1363,11 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		return
 	}
 	if lom.Bck().IsRemote() {
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename object from remote bucket", lom))
+		t.invalmsghdlrf(w, r, "%s: cannot rename object from remote bucket", lom)
 		return
 	}
 	if lom.Bck().Props.EC.Enabled {
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename erasure-coded object", lom))
+		t.invalmsghdlrf(w, r, "%s: cannot rename erasure-coded object", lom)
 		return
 	}
 
@@ -1421,8 +1412,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	// 2. init & validate
 	srcFQN := msg.Name
 	if srcFQN == "" {
-		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
-		t.invalmsghdlr(w, r, loghdr+"missing source filename")
+		t.invalmsghdlrf(w, r, fmtErr+"missing source filename", t.si, msg.Action)
 		return
 	}
 
@@ -1467,8 +1457,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		objName = filepath.Base(srcFQN)
 	}
 	if err = t.PromoteFile(srcFQN, bck, objName, nil /*expectedCksum*/, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
-		loghdr := fmt.Sprintf(fmtErr, t.si, msg.Action)
-		t.invalmsghdlr(w, r, loghdr+err.Error())
+		t.invalmsghdlrf(w, r, fmtErr+" %s", t.si, msg.Action, err.Error())
 	}
 }
 

@@ -39,8 +39,7 @@ func (t *targetrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.delObjS3(w, r, apitems)
 	default:
-		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
-		t.invalmsghdlr(w, r, s)
+		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}
 }
 
@@ -265,12 +264,12 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 	// TODO: remove
 	if objName, tag = cmn.S3ObjNameTag(path.Join(items[1:]...)); tag != "" {
 		if tag != cmn.TF {
-			t.invalmsghdlr(w, r, fmt.Sprintf("invalid tag=%q (expecting %q)", tag, cmn.TF))
+			t.invalmsghdlrf(w, r, "invalid tag=%q (expecting %q)", tag, cmn.TF)
 			return
 		}
 		if !cmn.HasTarExtension(objName) {
 			a := []string{cmn.ExtTar, cmn.ExtTarTgz, cmn.ExtTarTgz}
-			t.invalmsghdlr(w, r, fmt.Sprintf("invalid name %s: expecting one of %v extensions", objName, a))
+			t.invalmsghdlrf(w, r, "invalid name %s: expecting one of %v extensions", objName, a)
 			return
 		}
 	}
@@ -356,7 +355,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 
 	exists := err == nil
 	if !exists {
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
+		t.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s/%s %s", bucket, objName, cmn.DoesNotExist)
 		return
 	}
 	s3compat.SetHeaderFromLOM(w.Header(), lom, lom.Size())
@@ -390,7 +389,7 @@ func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []
 				http.StatusNotFound,
 			)
 		} else {
-			t.invalmsghdlr(w, r, fmt.Sprintf("error deleting %s: %v", lom, err), errCode)
+			t.invalmsghdlrstatusf(w, r, errCode, "error deleting %s: %v", lom, err)
 		}
 		return
 	}

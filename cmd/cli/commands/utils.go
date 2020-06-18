@@ -41,7 +41,7 @@ const (
 	// Error messages
 	dockerErrMsgFmt  = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
 	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
-	invalidCmdMsg    = "invalid command name '%s'"
+	invalidCmdMsg    = "invalid command name %q"
 
 	// Scheme parsing
 	defaultScheme = "https"
@@ -505,7 +505,7 @@ func updateLongRunParams(c *cli.Context) error {
 	if flagIsSet(c, countFlag) {
 		params.count = parseIntFlag(c, countFlag)
 		if params.count <= 0 {
-			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: '%s' set to %d, but expected value >= 1. Assuming '%s' = %d.\n",
+			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: %q set to %d, but expected value >= 1. Assuming %q = %d.\n",
 				countFlag.Name, params.count, countFlag.Name, countDefault)
 			params.count = countDefault
 		}
@@ -538,7 +538,7 @@ func makePairs(args []string) (nvs cmn.SimpleKVs, err error) {
 		if args[i] != keyAndValueSeparator && strings.Contains(args[i], keyAndValueSeparator) {
 			pairs := makeList(args[i], keyAndValueSeparator)
 			if pairs[1] == "" {
-				return nil, fmt.Errorf("no value for '%s'", pairs[0])
+				return nil, fmt.Errorf("no value for %q", pairs[0])
 			}
 			nvs[pairs[0]] = pairs[1]
 			i++
@@ -548,7 +548,7 @@ func makePairs(args []string) (nvs cmn.SimpleKVs, err error) {
 		} else {
 			// last name without a value
 			if i == ll-1 {
-				return nil, fmt.Errorf("no value for '%s'", args[i])
+				return nil, fmt.Errorf("no value for %q", args[i])
 			}
 			nvs[args[i]] = args[i+1]
 			i += 2

@@ -94,7 +94,7 @@ func extractDiskStat(fields []string, offset int) dblockStat {
 func extractI64(field string) int64 {
 	val, err := strconv.ParseInt(field, 10, 64)
 	if err != nil {
-		glog.Fatalf("Failed to convert field value '%s' to int: %v \n",
+		glog.Fatalf("Failed to convert field value %q to int: %v \n",
 			field, err)
 	}
 	return val

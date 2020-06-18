@@ -21,7 +21,7 @@ func (t *targetrunner) tar2tfHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		t.httptar2tfget(w, r)
 	default:
-		t.invalmsghdlr(w, r, r.Method+" operation not supported", 400)
+		t.invalmsghdlrf(w, r, "%s operation not supported", r.Method)
 	}
 }
 
@@ -41,7 +41,7 @@ func (t *targetrunner) httptar2tfget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(apiItems) < 2 {
-		t.invalmsghdlr(w, r, fmt.Sprintf("expected at least 2 api items, got %v", apiItems))
+		t.invalmsghdlrf(w, r, "expected at least 2 api items, got %v", apiItems)
 		return
 	}
 

@@ -80,7 +80,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			xaction.Registry.DoAbort(xactMsg.Kind, bck)
 			return
 		default:
-			t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownAct, msg))
+			t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 		}
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /xactions path")
@@ -89,7 +89,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid string) {
 	if what != cmn.GetWhatXactStats {
-		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
+		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 		return
 	}
 	xact := xaction.Registry.GetXact(uuid)
@@ -103,7 +103,7 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 
 func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xaction.XactQuery) {
 	if what != cmn.QueryXactStats {
-		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
+		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 		return
 	}
 	stats, err := xaction.Registry.GetStats(xactQuery) // []stats.XactStats

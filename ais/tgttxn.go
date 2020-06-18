@@ -86,7 +86,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	default:
-		t.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownAct, msg))
+		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -520,7 +520,7 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, apiItems []st
 // TODO: #791 "limited coexistence" - extend and unify
 func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
 	if rebInfo := t.RebalanceInfo(); rebInfo.IsRebalancing {
-		err = fmt.Errorf("%s: rebalancing(%d) is in progress, cannot run '%s' on bucket %s",
+		err = fmt.Errorf("%s: rebalancing(%d) is in progress, cannot run %q on bucket %s",
 			t.si, rebInfo.RebID, msg.Action, bck)
 	}
 	return

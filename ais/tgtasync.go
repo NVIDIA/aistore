@@ -76,7 +76,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		case cmn.ActSummaryBucket:
 			_, err = xaction.Registry.RenewBckSummaryXact(ctx, t, bck, smsg)
 		default:
-			t.invalmsghdlr(w, r, fmt.Sprintf("invalid action: %s", action))
+			t.invalmsghdlrf(w, r, "invalid action: %s", action)
 			return false
 		}
 
