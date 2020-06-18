@@ -93,7 +93,7 @@ func UpdateClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Clusters),
+		Path:       cmn.URLPath(cmn.Version, cmn.Clusters, cluSpec.ID),
 		Body:       msg,
 	})
 }
