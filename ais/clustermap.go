@@ -42,20 +42,78 @@ import (
 
 const smapFname = ".ais.smap" // Smap basename
 
-type smapX struct {
-	cluster.Smap
-}
-
-var (
-	// interface guard
-	_ revs = &smapX{}
+type (
+	smapX struct {
+		cluster.Smap
+	}
+	smapOwner struct {
+		sync.Mutex
+		smap      atomic.Pointer
+		listeners *smapLis
+	}
+	smapLis struct {
+		sync.RWMutex
+		listeners map[string]cluster.Slistener
+		postCh    chan struct{}
+		stopCh    *cmn.StopCh
+		running   atomic.Bool
+	}
 )
 
+// interface guard
+var (
+	_ revs                  = &smapX{}
+	_ cluster.Sowner        = &smapOwner{}
+	_ cluster.SmapListeners = &smapLis{}
+)
+
+//
+// constructors
+//
 func newSmap() (smap *smapX) {
 	smap = &smapX{}
 	smap.init(8, 8, 8)
 	return
 }
+
+func newSnode(id, proto, daeType string, publicAddr, intraControlAddr,
+	intraDataAddr *net.TCPAddr) (snode *cluster.Snode) {
+	publicNet := cluster.NetInfo{
+		NodeIPAddr: publicAddr.IP.String(),
+		DaemonPort: strconv.Itoa(publicAddr.Port),
+		DirectURL:  proto + "://" + publicAddr.String(),
+	}
+	intraControlNet := publicNet
+	if len(intraControlAddr.IP) > 0 {
+		intraControlNet = cluster.NetInfo{
+			NodeIPAddr: intraControlAddr.IP.String(),
+			DaemonPort: strconv.Itoa(intraControlAddr.Port),
+			DirectURL:  proto + "://" + intraControlAddr.String(),
+		}
+	}
+	intraDataNet := publicNet
+	if len(intraDataAddr.IP) > 0 {
+		intraDataNet = cluster.NetInfo{
+			NodeIPAddr: intraDataAddr.IP.String(),
+			DaemonPort: strconv.Itoa(intraDataAddr.Port),
+			DirectURL:  proto + "://" + intraDataAddr.String(),
+		}
+	}
+	snode = &cluster.Snode{
+		DaemonID:        id,
+		DaemonType:      daeType,
+		PublicNet:       publicNet,
+		IntraControlNet: intraControlNet,
+		IntraDataNet:    intraDataNet,
+	}
+	snode.SetName()
+	snode.Digest()
+	return
+}
+
+///////////
+// smapX //
+///////////
 
 func (m *smapX) init(tsize, psize, elsize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
@@ -273,20 +331,9 @@ func (m *smapX) pp() string {
 	return string(s)
 }
 
-//=====================================================================
-//
-// smapOwner
-//
-//=====================================================================
-
-type smapOwner struct {
-	sync.Mutex
-	smap      atomic.Pointer
-	listeners *smaplisteners
-}
-
-// implements cluster.Sowner
-var _ cluster.Sowner = &smapOwner{}
+///////////////
+// smapOwner //
+///////////////
 
 func newSmapOwner() *smapOwner {
 	return &smapOwner{
@@ -312,9 +359,8 @@ func (r *smapOwner) Listeners() cluster.SmapListeners { return r.listeners }
 func (r *smapOwner) put(smap *smapX) {
 	smap.InitDigests()
 	r.smap.Store(unsafe.Pointer(smap))
-
-	if r.listeners != nil {
-		r.listeners.notify(smap.version()) // notify of Smap change all listeners (cluster.Slistener)
+	if r.listeners.isRunning() {
+		r.listeners.postCh <- struct{}{}
 	}
 }
 
@@ -383,113 +429,67 @@ func (r *smapOwner) modify(pre func(clone *smapX) error, post ...func(clone *sma
 	return nil
 }
 
-//=====================================================================
-//
-// new cluster.Snode
-//
-//=====================================================================
-func newSnode(id, proto, daeType string, publicAddr, intraControlAddr, intraDataAddr *net.TCPAddr) (snode *cluster.Snode) {
-	publicNet := cluster.NetInfo{
-		NodeIPAddr: publicAddr.IP.String(),
-		DaemonPort: strconv.Itoa(publicAddr.Port),
-		DirectURL:  proto + "://" + publicAddr.String(),
+/////////////
+// smapLis //
+/////////////
+
+func newSmapListeners() *smapLis {
+	sls := &smapLis{
+		listeners: make(map[string]cluster.Slistener, 8),
+		postCh:    make(chan struct{}, 8),
 	}
-	intraControlNet := publicNet
-	if len(intraControlAddr.IP) > 0 {
-		intraControlNet = cluster.NetInfo{
-			NodeIPAddr: intraControlAddr.IP.String(),
-			DaemonPort: strconv.Itoa(intraControlAddr.Port),
-			DirectURL:  proto + "://" + intraControlAddr.String(),
+	return sls
+}
+
+func (sls *smapLis) isRunning() bool { return sls.running.Load() }
+
+func (sls *smapLis) run() {
+	sls.running.Store(true)
+	for {
+		select {
+		case <-sls.postCh:
+			sls.RLock()
+			for _, l := range sls.listeners {
+				l.ListenSmapChanged()
+			}
+			sls.RUnlock()
+		case <-sls.stopCh.Listen():
+			for { // drain
+				if _, ok := <-sls.postCh; !ok {
+					break
+				}
+			}
+			return
 		}
 	}
-	intraDataNet := publicNet
-	if len(intraDataAddr.IP) > 0 {
-		intraDataNet = cluster.NetInfo{
-			NodeIPAddr: intraDataAddr.IP.String(),
-			DaemonPort: strconv.Itoa(intraDataAddr.Port),
-			DirectURL:  proto + "://" + intraDataAddr.String(),
-		}
-	}
-	snode = &cluster.Snode{
-		DaemonID:        id,
-		DaemonType:      daeType,
-		PublicNet:       publicNet,
-		IntraControlNet: intraControlNet,
-		IntraDataNet:    intraDataNet,
-	}
-	snode.SetName()
-	snode.Digest()
-	return
 }
 
-//=====================================================================
-//
-// smaplisteners: implements cluster.Listeners interface
-//
-//=====================================================================
-var _ cluster.SmapListeners = &smaplisteners{}
-
-type smaplisteners struct {
-	sync.RWMutex
-	listenersChannels map[cluster.Slistener]chan int64
-	listenersNames    map[string]uint
-}
-
-func newSmapListeners() *smaplisteners {
-	return &smaplisteners{
-		listenersChannels: make(map[cluster.Slistener]chan int64),
-		listenersNames:    make(map[string]uint),
-	}
-}
-
-func (sls *smaplisteners) Reg(sl cluster.Slistener) {
+func (sls *smapLis) Reg(sl cluster.Slistener) {
+	var l int
 	cmn.Assert(sl.String() != "")
 	sls.Lock()
-
-	smapVersionCh := make(chan int64, 8)
-
-	if _, ok := sls.listenersChannels[sl]; ok {
-		cmn.AssertMsg(false, fmt.Sprintf("FATAL: smap-listener %s is already registered", sl))
-	}
-
-	if _, ok := sls.listenersNames[sl.String()]; ok {
-		glog.Warningf("duplicate smap-listener %s", sl)
-	} else {
-		sls.listenersNames[sl.String()] = 0
-	}
-
-	sls.listenersChannels[sl] = smapVersionCh
-	sls.listenersNames[sl.String()]++
-
+	_, ok := sls.listeners[sl.String()]
+	cmn.Assert(!ok)
+	sls.listeners[sl.String()] = sl
+	l = len(sls.listeners)
 	sls.Unlock()
-	glog.Infof("registered smap-listener %s", sl)
-
-	go sl.ListenSmapChanged(smapVersionCh)
+	if l == 1 {
+		sls.stopCh = cmn.NewStopCh()
+		go sls.run()
+	}
+	glog.Infof("registered Smap listener %q", sl)
 }
 
-func (sls *smaplisteners) Unreg(sl cluster.Slistener) {
+func (sls *smapLis) Unreg(sl cluster.Slistener) {
+	var l int
 	sls.Lock()
-
-	if _, ok := sls.listenersChannels[sl]; !ok {
-		cmn.AssertMsg(false, fmt.Sprintf("FATAL: smap-listener %s is not registered", sl))
-	}
-
-	close(sls.listenersChannels[sl])
-
-	delete(sls.listenersChannels, sl)
-	sls.listenersNames[sl.String()]--
-
-	if sls.listenersNames[sl.String()] == 0 {
-		delete(sls.listenersNames, sl.String())
-	}
-
+	_, ok := sls.listeners[sl.String()]
+	cmn.Assert(ok)
+	delete(sls.listeners, sl.String())
+	l = len(sls.listeners)
 	sls.Unlock()
-}
-
-func (sls *smaplisteners) notify(newMapVersion int64) {
-	sls.RLock()
-	for _, ch := range sls.listenersChannels {
-		ch <- newMapVersion
+	if l == 0 {
+		sls.running.Store(false)
+		sls.stopCh.Close()
 	}
-	sls.RUnlock()
 }

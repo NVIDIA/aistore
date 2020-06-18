@@ -67,8 +67,6 @@ func initManager(t cluster.Target, reg XactRegistry) error {
 		xacts:     make(map[string]*BckXacts),
 	}
 
-	sowner.Listeners().Reg(ECM)
-
 	if ECM.bmd.IsECUsed() {
 		ECM.initECBundles()
 	}
@@ -119,6 +117,10 @@ func (mgr *Manager) initECBundles() {
 	sowner := mgr.t.GetSowner()
 	mgr.reqBundle = transport.NewStreamBundle(sowner, mgr.t.Snode(), client, reqSbArgs)
 	mgr.respBundle = transport.NewStreamBundle(sowner, mgr.t.Snode(), client, respSbArgs)
+
+	mgr.smap = sowner.Get()
+	mgr.targetCnt.Store(int32(mgr.smap.CountTargets()))
+	sowner.Listeners().Reg(mgr)
 }
 
 func (mgr *Manager) closeECBundles() {
@@ -132,6 +134,7 @@ func (mgr *Manager) closeECBundles() {
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return
 	}
+	mgr.t.GetSowner().Listeners().Unreg(mgr)
 	mgr.reqBundle.Close(false)
 	mgr.reqBundle = nil
 	mgr.respBundle.Close(false)
@@ -405,61 +408,46 @@ func (mgr *Manager) BucketsMDChanged() {
 	})
 }
 
-func (mgr *Manager) ListenSmapChanged(newSmapVersionChannel chan int64) {
-	for {
-		newSmapVersion, ok := <-newSmapVersionChannel
-
-		if !ok {
-			// channel closed by Unreg
-			// We should end xactions and stop listening
-			mgr.RLock() // protect `mgr.xacts`
-			for _, bck := range mgr.xacts {
-				bck.StopGet()
-				bck.StopPut()
-			}
-			mgr.RUnlock()
-			return
-		}
-
-		if newSmapVersion <= mgr.smap.Version {
-			continue
-		}
-
-		mgr.smap = mgr.t.GetSowner().Get()
-		targetCnt := mgr.smap.CountTargets()
-		mgr.targetCnt.Store(int32(targetCnt))
-
-		mgr.Lock()
-
-		// Manager is initialized before being registered for smap changes
-		// bckMD will be present at this point
-		// stopping relevant EC xactions which can't be satisfied with current number of targets
-		// respond xaction is never stopped as it should respond regardless of the other targets
-		provider := cmn.ProviderAIS
-		mgr.bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
-			bckName, bckProps := bck.Name, bck.Props
-			bckXacts := mgr.getBckXactsUnlocked(bckName)
-			if !bckProps.EC.Enabled {
-				return false
-			}
-			if required := bckProps.EC.RequiredEncodeTargets(); targetCnt < required {
-				glog.Warningf("not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
-					bckName, targetCnt, required)
-				bckXacts.StopPut()
-			}
-			// NOTE: this doesn't guarantee that present targets are sufficient to restore an object
-			// if one target was killed, and a new one joined, this condition will be satisfied even though
-			// slices of the object are not present on the new target
-			if required := bckProps.EC.RequiredRestoreTargets(); targetCnt < required {
-				glog.Warningf("not enough targets for EC restoring for bucket %s; actual: %v, expected: %v",
-					bckName, targetCnt, required)
-				bckXacts.StopGet()
-			}
-			return false
-		})
-
-		mgr.Unlock()
+func (mgr *Manager) ListenSmapChanged() {
+	smap := mgr.t.GetSowner().Get()
+	if smap.Version <= mgr.smap.Version {
+		return
 	}
+
+	mgr.smap = mgr.t.GetSowner().Get()
+	targetCnt := mgr.smap.CountTargets()
+	mgr.targetCnt.Store(int32(targetCnt))
+
+	mgr.Lock()
+
+	// Manager is initialized before being registered for smap changes
+	// bckMD will be present at this point
+	// stopping relevant EC xactions which can't be satisfied with current number of targets
+	// respond xaction is never stopped as it should respond regardless of the other targets
+	provider := cmn.ProviderAIS
+	mgr.bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+		bckName, bckProps := bck.Name, bck.Props
+		bckXacts := mgr.getBckXactsUnlocked(bckName)
+		if !bckProps.EC.Enabled {
+			return false
+		}
+		if required := bckProps.EC.RequiredEncodeTargets(); targetCnt < required {
+			glog.Warningf("not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
+				bckName, targetCnt, required)
+			bckXacts.StopPut()
+		}
+		// NOTE: this doesn't guarantee that present targets are sufficient to restore an object
+		// if one target was killed, and a new one joined, this condition will be satisfied even though
+		// slices of the object are not present on the new target
+		if required := bckProps.EC.RequiredRestoreTargets(); targetCnt < required {
+			glog.Warningf("not enough targets for EC restoring for bucket %s; actual: %v, expected: %v",
+				bckName, targetCnt, required)
+			bckXacts.StopGet()
+		}
+		return false
+	})
+
+	mgr.Unlock()
 }
 
 // implementing cluster.Slistener interface

@@ -62,7 +62,7 @@ type (
 	// Smap on-change listeners
 	Slistener interface {
 		String() string
-		ListenSmapChanged(chan int64)
+		ListenSmapChanged()
 	}
 	SmapListeners interface {
 		Reg(sl Slistener)

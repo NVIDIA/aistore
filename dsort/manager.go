@@ -717,31 +717,21 @@ func (m *Manager) doWithAbort(reqArgs *cmn.ReqArgs) error {
 	return errors.WithStack(<-errCh)
 }
 
-func (m *Manager) ListenSmapChanged(ch chan int64) {
-	for {
-		newSmapVersion, ok := <-ch
+func (m *Manager) ListenSmapChanged() {
+	newSmap := m.ctx.smapOwner.Get()
+	if newSmap.Version <= m.smap.Version {
+		return
+	}
 
-		if !ok {
-			// channel was closed by unregister
-			return
-		}
-
-		if newSmapVersion <= m.smap.Version {
-			// We initialized with the same/older smap, safe to skip
-			continue
-		}
-
-		newSmap := m.ctx.smapOwner.Get()
-		if newSmap.CountTargets() != m.smap.CountTargets() {
-			// Currently adding new target as well as removing one is not
-			// supported during the run.
-			//
-			// TODO: dSort should survive adding new target. For now it is
-			// not possible as rebalance deletes moved object - dSort needs
-			// to use `GetObject` method instead of relaying on simple `os.Open`
-			err := errors.Errorf("number of target has changed during dSort run, aborting due to possible errors")
-			m.abort(err)
-		}
+	if newSmap.CountTargets() != m.smap.CountTargets() {
+		// Currently adding new target as well as removing one is not
+		// supported during the run.
+		//
+		// TODO: dSort should survive adding new target. For now it is
+		// not possible as rebalance deletes moved object - dSort needs
+		// to use `GetObject` method instead of relaying on simple `os.Open`
+		err := errors.Errorf("number of target has changed during dSort run, aborting due to possible errors")
+		m.abort(err)
 	}
 }
 

@@ -63,8 +63,10 @@ type (
 	}
 )
 
-// implements cluster.Slistener interface. registers with cluster.SmapListeners
-var _ cluster.Slistener = &StreamBundle{}
+// interface guard
+var (
+	_ cluster.Slistener = &StreamBundle{}
+)
 
 //
 // API
@@ -181,21 +183,12 @@ func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.
 func (sb *StreamBundle) String() string { return sb.lid }
 
 // keep streams to => (clustered nodes as per rxNodeType) in sync at all times
-func (sb *StreamBundle) ListenSmapChanged(newSmapVersionChannel chan int64) {
-	for {
-		newSmapVersion, ok := <-newSmapVersionChannel
-
-		if !ok {
-			// channel closed by Unreg, it's safe to end listening
-			return
-		}
-
-		if newSmapVersion <= sb.smap.Version {
-			continue
-		}
-
-		sb.Resync()
+func (sb *StreamBundle) ListenSmapChanged() {
+	smap := sb.sowner.Get()
+	if smap.Version <= sb.smap.Version {
+		return
 	}
+	sb.Resync()
 }
 
 func (sb *StreamBundle) GetStats() BundleStats {

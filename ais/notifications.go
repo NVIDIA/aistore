@@ -29,8 +29,9 @@ const (
 type (
 	notifs struct {
 		sync.RWMutex
-		p *proxyrunner
-		m map[string]notifListener // table [UUID => notifListener]
+		p       *proxyrunner
+		m       map[string]notifListener // table [UUID => notifListener]
+		smapVer int64
 	}
 	notifListener interface {
 		callback(n notifListener, msg interface{}, uuid string, err error)
@@ -73,7 +74,8 @@ type (
 
 // interface guard
 var (
-	_ notifListener = &notifListenerBase{}
+	_ notifListener     = &notifListenerBase{}
+	_ cluster.Slistener = &notifs{}
 )
 
 ///////////////////////
@@ -102,61 +104,25 @@ func (n *notifs) init(p *proxyrunner) {
 	n.p = p
 	n.m = make(map[string]notifListener, 8)
 	hk.Housekeeper.Register(notifsName+".gc", n.housekeep, notifsTimeoutGC)
-	p.owner.smap.Listeners().Reg(n)
 }
 
 func (n *notifs) String() string { return notifsName }
 
-func (n *notifs) ListenSmapChanged(newSmapVersionChannel chan int64) {
-	for {
-		<-newSmapVersionChannel // FIXME #804
+func (n *notifs) add(uuid string, nl notifListener) {
+	n.Lock()
+	n.m[uuid] = nl
+	if len(n.m) == 1 {
+		n.smapVer = n.p.owner.smap.get().Version
+		n.p.owner.smap.Listeners().Reg(n)
+	}
+	n.Unlock()
+}
 
-		if !n.p.ClusterStarted() {
-			continue
-		}
-		if len(n.m) == 0 {
-			continue
-		}
-		var (
-			removed = make(cmn.SimpleKVs)
-			smap    = n.p.owner.smap.get()
-		)
-		n.RLock()
-		for uuid, nl := range n.m {
-			nl.rlock()
-			srcs := nl.notifiers()
-			for id, si := range srcs {
-				if si == nil {
-					continue
-				}
-				if smap.GetNode(id) == nil {
-					removed[uuid] = id
-					break
-				}
-			}
-			nl.runlock()
-		}
-		if len(removed) == 0 {
-			n.RUnlock()
-			continue
-		}
-		for uuid, id := range removed {
-			s := fmt.Sprintf("%s: stop waiting for %q notifications", n.p.si, uuid)
-			err := &errNodeNotFound{s, id, n.p.si, smap}
-			nl, ok := n.m[uuid]
-			if !ok {
-				continue
-			}
-			nl.lock()
-			nl.callback(nl, nil /*msg*/, uuid, err)
-			nl.unlock()
-		}
-		n.RUnlock()
-		n.Lock()
-		for uuid := range removed {
-			delete(n.m, uuid)
-		}
-		n.Unlock()
+// is called under lock
+func (n *notifs) del(uuid string) {
+	delete(n.m, uuid)
+	if len(n.m) == 0 {
+		n.p.owner.smap.Listeners().Unreg(n)
 	}
 }
 
@@ -198,7 +164,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	nl.unlock()
 	if done {
 		n.Lock()
-		delete(n.m, uuid)
+		n.del(uuid)
 		n.Unlock()
 	}
 	if err != nil {
@@ -226,6 +192,10 @@ func (n *notifs) handleMsg(nl notifListener, msg interface{}, uuid, tid string) 
 	return
 }
 
+//
+// housekeeping
+//
+
 func (n *notifs) housekeep() time.Duration {
 	if len(n.m) == 0 {
 		return notifsTimeoutGC
@@ -245,4 +215,52 @@ func (n *notifs) housekeep() time.Duration {
 	}
 	// TODO -- FIXME: handle pending here
 	return 0
+}
+
+func (n *notifs) ListenSmapChanged() {
+	if !n.p.ClusterStarted() {
+		return
+	}
+	smap := n.p.owner.smap.get()
+	if n.smapVer >= smap.Version {
+		return
+	}
+	n.smapVer = smap.Version
+	removed := make(cmn.SimpleKVs)
+	n.RLock()
+	for uuid, nl := range n.m {
+		nl.rlock()
+		srcs := nl.notifiers()
+		for id, si := range srcs {
+			if si == nil {
+				continue
+			}
+			if smap.GetNode(id) == nil {
+				removed[uuid] = id
+				break
+			}
+		}
+		nl.runlock()
+	}
+	if len(removed) == 0 {
+		n.RUnlock()
+		return
+	}
+	for uuid, id := range removed {
+		s := fmt.Sprintf("%s: stop waiting for %q notifications", n.p.si, uuid)
+		err := &errNodeNotFound{s, id, n.p.si, smap}
+		nl, ok := n.m[uuid]
+		if !ok {
+			continue
+		}
+		nl.lock()
+		nl.callback(nl, nil /*msg*/, uuid, err)
+		nl.unlock()
+	}
+	n.RUnlock()
+	n.Lock()
+	for uuid := range removed {
+		n.del(uuid)
+	}
+	n.Unlock()
 }

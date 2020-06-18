@@ -466,9 +466,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		nlpFrom:           &nlpFrom,
 		nlpTo:             &nlpTo,
 	}
-	p.notifs.Lock()
-	p.notifs.m[c.uuid] = &nl
-	p.notifs.Unlock()
+	p.notifs.add(c.uuid, &nl)
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
