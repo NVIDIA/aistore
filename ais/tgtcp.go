@@ -841,7 +841,7 @@ func (t *targetrunner) detectMpathChanges() {
 func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, renamed string) (err error) {
 	smap := t.owner.smap.get()
 	if smap == nil || !smap.isValid() {
-		return errors.New("smap nil or missing")
+		return fmt.Errorf("%s: Smap is nil or invalid", t.si)
 	}
 	psi := smap.ProxySI
 	q := url.Values{}
@@ -849,25 +849,20 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	if renamed != "" {
 		q.Add(whatRenamedLB, renamed)
 	}
+	path := cmn.URLPath(cmn.Version, cmn.Daemon)
+	url := psi.URL(cmn.NetworkIntraControl)
 	args := callArgs{
-		si: psi,
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Base:   psi.IntraControlNet.DirectURL,
-			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-			Query:  q,
-		},
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		si:      psi,
+		req:     cmn.ReqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q},
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	}
 	res := t.call(args)
 	if res.err != nil {
-		return fmt.Errorf("failed to %s=%s, err: %v", what, cmn.GetWhatBMD, res.err)
+		return fmt.Errorf("%s: failed to GET(%q), err: %v", t.si, what, res.err)
 	}
-
 	err = jsoniter.Unmarshal(res.outjson, outStruct)
 	if err != nil {
-		return fmt.Errorf("unexpected: failed to unmarshal %s=%s response, err: %v [%v]",
-			what, psi.IntraControlNet.DirectURL, err, string(res.outjson))
+		return fmt.Errorf("%s: unexpected: failed to unmarshal GET(%q) response: %v", t.si, what, err)
 	}
 
 	return nil

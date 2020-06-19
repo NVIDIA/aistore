@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // convenience structure to gather all (or most) of the relevant context in one place
@@ -360,7 +359,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	wg.Wait()
 
-	rmd := p.owner.rmd.modify(
+	_ = p.owner.rmd.modify(
 		func(clone *rebMD) {
 			clone.inc()
 			clone.Resilver = true
@@ -375,15 +374,20 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
-			// 6. start rebalance and resilver
+			// 6. start waiting for `finished` notifications
+			nl := notifListenerFromTo{
+				notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckRen},
+				nlpFrom:           &nlpFrom,
+				nlpTo:             &nlpTo,
+			}
+			rebUUID := strconv.FormatInt(clone.version(), 10)
+			p.notifs.add(rebUUID, &nl)
+
+			// 7. start rebalance and resilver
 			wg = p.metasyncer.sync(revsPair{clone, c.msg})
 		},
 	)
 	wg.Wait()
-
-	// 7. wait for rebalance to finish and unlock buckets
-	rebUUID := strconv.FormatInt(rmd.Version, 10)
-	go p.pollXactDone(rebUUID, unlock, msg.Action)
 	return
 }
 
@@ -461,7 +465,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	}
 
 	// 5. start waiting for `finished` notifications
-	nl := notifListenerBckCp{
+	nl := notifListenerFromTo{
 		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCp},
 		nlpFrom:           &nlpFrom,
 		nlpTo:             &nlpTo,
@@ -474,18 +478,6 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
 	return
-}
-
-// callback to unlock buckets after all targets reported `done`
-func (p *proxyrunner) nlBckCp(n notifListener, msg interface{}, uuid string, err error) {
-	nl := n.(*notifListenerBckCp)
-	nl.nlpTo.Unlock()
-	nl.nlpFrom.RUnlock()
-	if err != nil {
-		glog.Errorf("%s: failed to copy bucket(s): %+v, err: %v", p.si, msg, err)
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%+v", msg)
-	}
 }
 
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }
@@ -598,6 +590,7 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, cop
 }
 
 func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate) (nprops *cmn.BucketProps, err error) {
+	const ers = "once enabled, EC configuration can be only disabled but cannot be changed"
 	var (
 		cfg    = cmn.GCO.Get()
 		bprops = bck.Props
@@ -606,7 +599,7 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 	nprops.Apply(propsToUpdate)
 	if bprops.EC.Enabled && nprops.EC.Enabled {
 		if !reflect.DeepEqual(bprops.EC, nprops.EC) {
-			err = errors.New("once enabled, EC configuration can be only disabled but cannot be changed")
+			err = errors.New(ers)
 			return
 		}
 	} else if nprops.EC.Enabled {
@@ -631,41 +624,29 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 }
 
 //
-// TODO: replace via intra-cluster notifications
+// notifications
 //
-func (p *proxyrunner) pollXactDone(uuid string, cleanup func(), kind string) {
-	var (
-		query   = make(url.Values)
-		reqArgs = cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Xactions), Query: query}
-		config  = cmn.GCO.Get()
-		sleep   = config.Timeout.CplaneOperation
-	)
-	query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
-	query.Set(cmn.URLParamUUID, uuid)
-	time.Sleep(sleep)
-	defer cleanup()
-loop:
-	for {
-		results := p.bcastGet(bcastArgs{req: reqArgs, timeout: config.Timeout.CplaneOperation})
-		for res := range results {
-			var stats cmn.BaseXactStatsExt
-			if res.err != nil {
-				if res.status == http.StatusNotFound {
-					time.Sleep(sleep)
-					continue loop
-				}
-				break loop
-			}
-			if err := jsoniter.Unmarshal(res.outjson, &stats); err != nil {
-				glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", p.si, res.si, err)
-				return
-			}
-			cmn.Assert(stats.KindX == kind)
-			if stats.EndTimeX.IsZero() {
-				time.Sleep(sleep)
-				continue loop
-			}
-		}
-		break
+
+// copy-bucket done
+func (p *proxyrunner) nlBckCp(n notifListener, msg interface{}, uuid string, err error) {
+	nl := n.(*notifListenerFromTo)
+	nl.nlpTo.Unlock()
+	nl.nlpFrom.RUnlock()
+	if err != nil {
+		glog.Errorf("%s(%q): failed to copy bucket: %+v, err: %v", p.si, uuid, msg, err)
+	} else if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
+	}
+}
+
+// rename-bucket done
+func (p *proxyrunner) nlBckRen(n notifListener, msg interface{}, uuid string, err error) {
+	nl := n.(*notifListenerFromTo)
+	nl.nlpTo.Unlock()
+	nl.nlpFrom.Unlock()
+	if err != nil {
+		glog.Errorf("%s(%q): failed to rename bucket: %+v, err: %v", p.si, uuid, msg, err)
+	} else if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
 	}
 }

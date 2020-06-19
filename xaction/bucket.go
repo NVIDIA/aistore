@@ -381,6 +381,12 @@ func (r *FastRen) Run() {
 
 	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.SetEndTime(time.Now())
+	// notifications
+	if n := r.Notif(); n != nil {
+		if n.Upon(cmn.UponTerm) {
+			n.Callback(n, nil /*error*/)
+		}
+	}
 }
 
 func (e *FastRenEntry) Start(bck cmn.Bck) error {

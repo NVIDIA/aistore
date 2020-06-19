@@ -306,6 +306,11 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 			return err // ditto
 		}
 
+		// ask this xaction to notify via F callback when finished
+		xact.AddNotif(&cmn.NotifXact{
+			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: []string{c.callerID}, F: t.xactCallerNotify},
+		})
+
 		t.gfn.local.Activate()
 		t.gfn.global.activateTimed()
 		go xact.Run()
@@ -403,23 +408,13 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 		}
 		// ask this xaction to notify via F callback when finished
 		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: []string{c.callerID}, F: t.xactBckCpNotify},
+			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: []string{c.callerID}, F: t.xactCallerNotify},
 		})
 		go xact.Run()
 	default:
 		cmn.Assert(false)
 	}
 	return nil
-}
-
-func (t *targetrunner) xactBckCpNotify(n cmn.Notif, err error) {
-	var (
-		xactMsg = xactPushMsgTgt{Snode: t.si, Err: err}
-		notif   = n.(*cmn.NotifXact)
-		pid     = notif.Dsts[0]
-	)
-	xactMsg.Stats = notif.Xact.Stats()
-	t.notify(pid, cmn.MustMarshal(&xactMsg))
 }
 
 func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckTo *cluster.Bck, err error) {
@@ -524,4 +519,18 @@ func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
 			t.si, rebInfo.RebID, msg.Action, bck)
 	}
 	return
+}
+
+//
+// notifications
+//
+
+func (t *targetrunner) xactCallerNotify(n cmn.Notif, err error) {
+	var (
+		xactMsg = xactPushMsgTgt{Snode: t.si, Err: err}
+		notif   = n.(*cmn.NotifXact)
+		pid     = notif.Dsts[0]
+	)
+	xactMsg.Stats = notif.Xact.Stats()
+	t.notify(pid, cmn.MustMarshal(&xactMsg))
 }

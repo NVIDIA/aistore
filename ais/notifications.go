@@ -53,7 +53,7 @@ type (
 		}
 		rc int
 	}
-	notifListenerBckCp struct {
+	notifListenerFromTo struct {
 		notifListenerBase
 		nlpFrom, nlpTo *cluster.NameLockPair
 	}
