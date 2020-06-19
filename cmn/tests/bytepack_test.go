@@ -139,11 +139,11 @@ func TestBytePackStruct(t *testing.T) {
 }
 
 func BenchmarkPackWriteString(b *testing.B) {
-	p := cmn.NewPacker(nil, 200*b.N)
+	p := cmn.NewPacker(nil, 90*b.N)
 
 	a := make([]string, 0, 1000)
 	for i := 0; i < 1000; i++ {
-		a = append(a, cmn.RandString(100))
+		a = append(a, cmn.RandString(80))
 	}
 
 	b.ReportAllocs()
