@@ -164,13 +164,13 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.ctx = ctx
 	m.smap = m.ctx.smapOwner.Get()
 
-	m.ctx.smapOwner.Listeners().Reg(m)
-
 	targetCount := m.smap.CountTargets()
 
 	m.rs = rs
 	m.Metrics = newMetrics(rs.Description, rs.ExtendedMetrics)
 	m.startShardCreation = make(chan struct{}, 1)
+
+	m.ctx.smapOwner.Listeners().Reg(m)
 
 	if err := m.setDSorter(); err != nil {
 		return err
@@ -731,7 +731,7 @@ func (m *Manager) ListenSmapChanged() {
 		// not possible as rebalance deletes moved object - dSort needs
 		// to use `GetObject` method instead of relaying on simple `os.Open`
 		err := errors.Errorf("number of target has changed during dSort run, aborting due to possible errors")
-		m.abort(err)
+		go m.abort(err)
 	}
 }
 

@@ -54,8 +54,8 @@ type (
 	smapLis struct {
 		sync.RWMutex
 		listeners map[string]cluster.Slistener
-		postCh    chan struct{}
-		stopCh    *cmn.StopCh
+		postCh    chan int64
+		wg        sync.WaitGroup
 		running   atomic.Bool
 	}
 )
@@ -359,9 +359,7 @@ func (r *smapOwner) Listeners() cluster.SmapListeners { return r.listeners }
 func (r *smapOwner) put(smap *smapX) {
 	smap.InitDigests()
 	r.smap.Store(unsafe.Pointer(smap))
-	if r.listeners.isRunning() {
-		r.listeners.postCh <- struct{}{}
-	}
+	r.listeners.notify(smap.version())
 }
 
 func (r *smapOwner) get() (smap *smapX) {
@@ -436,60 +434,69 @@ func (r *smapOwner) modify(pre func(clone *smapX) error, post ...func(clone *sma
 func newSmapListeners() *smapLis {
 	sls := &smapLis{
 		listeners: make(map[string]cluster.Slistener, 8),
-		postCh:    make(chan struct{}, 8),
+		postCh:    make(chan int64, 8),
 	}
 	return sls
 }
 
-func (sls *smapLis) isRunning() bool { return sls.running.Load() }
-
 func (sls *smapLis) run() {
+	// drain
+	for len(sls.postCh) > 0 {
+		<-sls.postCh
+	}
+	sls.wg.Done()
 	sls.running.Store(true)
-	for {
-		select {
-		case <-sls.postCh:
-			sls.RLock()
-			for _, l := range sls.listeners {
-				l.ListenSmapChanged()
-			}
-			sls.RUnlock()
-		case <-sls.stopCh.Listen():
-			for { // drain
-				if _, ok := <-sls.postCh; !ok {
-					break
-				}
-			}
-			return
+	for ver := range sls.postCh {
+		if ver == 0 {
+			break
 		}
+		sls.RLock()
+		for _, l := range sls.listeners {
+			// NOTE: Reg() or Unreg() from inside ListenSmapChanged() callback
+			//       may cause a trivial deadlock
+			l.ListenSmapChanged()
+		}
+		if len(sls.listeners) == 0 {
+			sls.RUnlock()
+			break
+		}
+		sls.RUnlock()
+	}
+	// drain
+	for len(sls.postCh) > 0 {
+		<-sls.postCh
 	}
 }
 
 func (sls *smapLis) Reg(sl cluster.Slistener) {
-	var l int
 	cmn.Assert(sl.String() != "")
 	sls.Lock()
 	_, ok := sls.listeners[sl.String()]
 	cmn.Assert(!ok)
 	sls.listeners[sl.String()] = sl
-	l = len(sls.listeners)
-	sls.Unlock()
-	if l == 1 {
-		sls.stopCh = cmn.NewStopCh()
+	if len(sls.listeners) == 1 {
+		sls.wg.Add(1)
 		go sls.run()
+		sls.wg.Wait()
 	}
+	sls.Unlock()
 	glog.Infof("registered Smap listener %q", sl)
 }
 
 func (sls *smapLis) Unreg(sl cluster.Slistener) {
-	var l int
 	sls.Lock()
 	_, ok := sls.listeners[sl.String()]
 	cmn.Assert(ok)
 	delete(sls.listeners, sl.String())
-	l = len(sls.listeners)
-	sls.Unlock()
-	if l == 0 {
+	if len(sls.listeners) == 0 {
 		sls.running.Store(false)
-		sls.stopCh.Close()
+		sls.postCh <- 0
+	}
+	sls.Unlock()
+}
+
+func (sls *smapLis) notify(ver int64) {
+	if sls.running.Load() {
+		sls.postCh <- ver
 	}
 }
