@@ -851,14 +851,19 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	}
 	path := cmn.URLPath(cmn.Version, cmn.Daemon)
 	url := psi.URL(cmn.NetworkIntraControl)
+	timeout := cmn.GCO.Get().Timeout.CplaneOperation
 	args := callArgs{
 		si:      psi,
 		req:     cmn.ReqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q},
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+		timeout: timeout,
 	}
 	res := t.call(args)
 	if res.err != nil {
-		return fmt.Errorf("%s: failed to GET(%q), err: %v", t.si, what, res.err)
+		time.Sleep(timeout / 2)
+		res = t.call(args)
+		if res.err != nil {
+			return fmt.Errorf("%s: failed to GET(%q), err: %v", t.si, what, res.err)
+		}
 	}
 	err = jsoniter.Unmarshal(res.outjson, outStruct)
 	if err != nil {
@@ -888,11 +893,13 @@ func (t *targetrunner) smapVersionFixup(r *http.Request) {
 }
 
 func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool) {
-	var caller string
+	var (
+		caller      string
+		newBucketMD = &bucketMD{}
+	)
 	if sleep {
-		time.Sleep(200 * time.Millisecond) // TODO -- FIXME: request proxy to execute syncCBmeta()
+		time.Sleep(200 * time.Millisecond)
 	}
-	newBucketMD := &bucketMD{}
 	if err := t.fetchPrimaryMD(cmn.GetWhatBMD, newBucketMD, bck.Name); err != nil {
 		glog.Error(err)
 		return
