@@ -21,11 +21,9 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
-	"github.com/OneOfOne/xxhash"
 )
 
 var (
-	server     *httptest.Server
 	baseParams api.BaseParams
 )
 
@@ -193,19 +191,19 @@ func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 }
 
 func TestMain(m *testing.M) {
-	verifyHash := flag.Bool("verifyhash", true, "True if verify hash when a packet is received")
+	verifyHash := flag.Bool("verifyhash", true, "verify hash when a packet is received")
 	flag.Parse()
 
-	// HTTP server; verifies xxhash (if configured)
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// HTTP server; verifies checksum (if configured)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			io.Copy(ioutil.Discard, bufio.NewReader(r.Body))
 			r.Body.Close()
 		}()
 
-		errf := func(s int, msg string) {
-			w.WriteHeader(s)
-			w.Write([]byte(msg))
+		errCb := func(statusCode int, f string, a ...interface{}) {
+			w.WriteHeader(statusCode)
+			w.Write([]byte(fmt.Sprintf(f, a...)))
 		}
 
 		if !*verifyHash {
@@ -213,29 +211,22 @@ func TestMain(m *testing.M) {
 		}
 
 		// Verify hash
-		t := r.Header.Get(cmn.HeaderObjCksumType)
-		if t != cmn.ChecksumXXHash {
-			errf(http.StatusBadRequest, fmt.Sprintf("Do not know how to handle hash type %s", t))
-			return
-		}
-
-		hasher := xxhash.New64()
-		data, err := ioutil.ReadAll(r.Body)
+		var (
+			cksumType  = r.Header.Get(cmn.HeaderObjCksumType)
+			cksumValue = r.Header.Get(cmn.HeaderObjCksumVal)
+		)
+		_, cksum, err := cmn.CopyAndChecksum(ioutil.Discard, r.Body, nil, cksumType)
 		if err != nil {
-			errf(http.StatusBadRequest, fmt.Sprintf("Server failed to read, error %v", err))
+			errCb(http.StatusBadRequest, "server failed to read, error %v", err)
 			return
 		}
-
-		hasher.Write(data)
-		cksum := cmn.HashToStr(hasher)
-		headerCksum := r.Header.Get(cmn.HeaderObjCksumVal)
-		if cksum != headerCksum {
-			errf(http.StatusNotAcceptable, fmt.Sprintf("Hash mismatch expected = %s, actual = %s", headerCksum, cksum))
+		if cksum.Value() != cksumValue {
+			errCb(http.StatusNotAcceptable, "cksum mismatch got: %q, expected: %q", cksum.Value(), cksumValue)
 		}
 	}))
-	baseParams = tutils.BaseAPIParams(server.URL)
+	baseParams = tutils.BaseAPIParams(srv.URL)
 
 	exitCode := m.Run()
-	server.Close()
+	srv.Close()
 	os.Exit(exitCode)
 }
