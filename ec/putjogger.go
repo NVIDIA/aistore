@@ -140,13 +140,9 @@ func (c *putJogger) encode(req *Request) error {
 	}
 
 	// Save metadata before encoding the object
-	metaFQN, _, err := cluster.HrwFQN(req.LOM.Bck(), MetaType, req.LOM.ObjName)
-	if err != nil {
-		return err
-	}
-	metaBuf := meta.Marshal()
-	bdir := req.LOM.ParsedFQN.MpathInfo.MakePathBck(req.LOM.Bck().Bck)
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), c.buffer, cmn.ChecksumNone, -1, bdir); err != nil {
+	ctMeta := cluster.NewCTFromLOM(req.LOM, MetaType)
+	metaBuf := bytes.NewReader(meta.Marshal())
+	if err := ctMeta.Write(c.parent.t, metaBuf, -1); err != nil {
 		return err
 	}
 

@@ -5,7 +5,6 @@
 package reb
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -556,9 +555,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Header) error {
 	cmn.Assert(req.md != nil)
 	var (
-		ctFQN    string
-		bdir     string
-		lom      *cluster.LOM
+		err      error
 		bck      = cluster.NewBckEmbed(hdr.Bck)
 		needSave = req.md.SliceID == 0 // full object always saved
 	)
@@ -566,10 +563,9 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 		return err
 	}
 	uname := bck.MakeUname(hdr.ObjName)
-	conf := bck.CksumConf()
 	if !needSave {
 		// slice is saved only if this target is not "main" one.
-		// Main one receives slices as well but it uses them only to rebuild "full"
+		// Main one receives slices as well but it uses them only to rebuild
 		tgt, err := cluster.HrwTarget(uname, reb.t.GetSowner().Get())
 		if err != nil {
 			return err
@@ -579,54 +575,17 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 	if !needSave {
 		return nil
 	}
-	mpath, _, err := cluster.HrwMpath(uname)
-	if err != nil {
-		return err
-	}
 
-	buffer, slab := reb.t.GetMMSA().Alloc()
-	defer slab.Free(buffer)
+	md := req.md.Marshal()
 	if req.md.SliceID != 0 {
-		ctFQN = mpath.MakePathFQN(hdr.Bck, ec.SliceType, hdr.ObjName)
-		tmpFQN := mpath.MakePathFQN(hdr.Bck, fs.WorkfileType, hdr.ObjName)
-		bdir = mpath.MakePathBck(hdr.Bck)
-		_, err = cmn.SaveReaderSafe(tmpFQN, ctFQN, data, buffer, conf.Type, hdr.ObjAttrs.Size, bdir)
+		err = ec.WriteSliceAndMeta(reb.t, hdr, data, md)
 	} else {
-		lom = &cluster.LOM{T: reb.t, ObjName: hdr.ObjName}
-		if err := lom.Init(hdr.Bck); err != nil {
-			return err
-		}
-		ctFQN = lom.FQN
-		lom.SetSize(hdr.ObjAttrs.Size)
-		if hdr.ObjAttrs.Version != "" {
-			lom.SetVersion(hdr.ObjAttrs.Version)
-		}
-		if hdr.ObjAttrs.CksumType != "" {
-			lom.SetCksum(cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue))
-		}
-		if hdr.ObjAttrs.Atime != 0 {
-			lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
-		}
-		bdir = mpath.MakePathBck(lom.Bck().Bck)
-		err = ec.WriteObject(reb.t, lom, data, hdr.ObjAttrs.Size, conf.Type)
-		if err == nil && hdr.ObjAttrs.CksumType != cmn.ChecksumNone {
-			cksumHdr := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
-			if !lom.Cksum().Equal(cksumHdr) {
-				err = fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/md %s",
-					hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Version, cksumHdr, lom.Cksum())
-			}
+		var lom *cluster.LOM
+		lom, err = ec.LomFromHeader(reb.t, hdr)
+		if err == nil {
+			err = ec.WriteReplicaAndMeta(reb.t, lom, data, md, hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 		}
 	}
-	if err != nil {
-		if rmErr := os.Remove(ctFQN); rmErr != nil && !os.IsNotExist(rmErr) {
-			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
-		}
-		return err
-	}
-
-	metaFQN := mpath.MakePathFQN(hdr.Bck, ec.MetaType, hdr.ObjName)
-	metaBytes := req.md.Marshal()
-	_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBytes), buffer, cmn.ChecksumNone, int64(len(metaBytes)), bdir)
 	return err
 }
 
@@ -1960,42 +1919,13 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 }
 
 func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Reader) (err error) {
-	var (
-		lom = &cluster.LOM{T: reb.t, ObjName: obj.objName}
-	)
-
+	lom := &cluster.LOM{T: reb.t, ObjName: obj.objName}
 	if err := lom.Init(obj.bck); err != nil {
 		return err
 	}
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("saving restored full object %s to %q", obj.objName, lom.FQN)
-	}
-
-	conf := lom.CksumConf()
-	if err := ec.WriteObject(reb.t, lom, src, obj.objSize, conf.Type); err != nil {
-		glog.Error(err)
-		reb.t.FSHC(err, lom.FQN)
-		return err
-	}
-
-	lom.Lock(true)
-	defer lom.Unlock(true)
-	buffer, slab := reb.t.GetMMSA().Alloc()
-	metaFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(obj.bck, ec.MetaType, obj.objName)
+	lom.SetSize(obj.objSize)
 	metaBuf := cmn.MustMarshal(&objMD)
-	bdir := lom.ParsedFQN.MpathInfo.MakePathBck(lom.Bck().Bck)
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, cmn.ChecksumNone, -1, bdir); err != nil {
-		glog.Error(err)
-		slab.Free(buffer)
-		if rmErr := os.Remove(lom.FQN); rmErr != nil {
-			glog.Errorf("Nested error while cleaning up: %v", rmErr)
-		}
-		reb.t.FSHC(err, metaFQN)
-		return err
-	}
-	slab.Free(buffer)
-	lom.Uncache()
-	return nil
+	return ec.WriteReplicaAndMeta(reb.t, lom, src, metaBuf, lom.Bprops().Cksum.Type, "")
 }
 
 // Default target does not have object (but it can be on another target) and

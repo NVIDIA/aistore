@@ -5,6 +5,7 @@
 package ec
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -22,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/transport"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -368,4 +370,65 @@ func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 		WithFinalize: true,
 		RecvType:     cluster.Migrated, // to avoid changing version
 	})
+}
+
+// Saves slice and its metafile
+func WriteSliceAndMeta(t cluster.Target, hdr transport.Header, data io.Reader, md []byte) error {
+	ct, err := cluster.NewCTFromBO(hdr.Bck.Name, hdr.Bck.Provider, hdr.ObjName, t.GetBowner(), SliceType)
+	if err != nil {
+		return err
+	}
+	tmpFQN := ct.Make(fs.WorkfileType)
+	if err := ct.Write(t, data, hdr.ObjAttrs.Size, tmpFQN); err != nil {
+		return err
+	}
+	ctMeta := ct.Clone(MetaType)
+	err = ctMeta.Write(t, bytes.NewReader(md), -1)
+	if err != nil {
+		if rmErr := os.Remove(ct.FQN()); rmErr != nil && !os.IsNotExist(rmErr) {
+			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
+		}
+	}
+	return err
+}
+
+func LomFromHeader(t cluster.Target, hdr transport.Header) (*cluster.LOM, error) {
+	lom := &cluster.LOM{T: t, ObjName: hdr.ObjName}
+	if err := lom.Init(hdr.Bck); err != nil {
+		return nil, err
+	}
+	lom.SetSize(hdr.ObjAttrs.Size)
+	if hdr.ObjAttrs.Version != "" {
+		lom.SetVersion(hdr.ObjAttrs.Version)
+	}
+	if hdr.ObjAttrs.Atime != 0 {
+		lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
+	}
+	if hdr.ObjAttrs.CksumType != cmn.ChecksumNone && hdr.ObjAttrs.CksumValue != "" {
+		lom.SetCksum(cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue))
+	}
+	return lom, nil
+}
+
+// Saves replica and its metafile
+func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, data io.Reader, md []byte, cksumType, cksumValue string) error {
+	err := WriteObject(t, lom, data, lom.Size(), cksumType)
+	if err != nil {
+		return err
+	}
+	if cksumType != cmn.ChecksumNone && cksumValue != "" {
+		cksumHdr := cmn.NewCksum(cksumType, cksumValue)
+		if !lom.Cksum().Equal(cksumHdr) {
+			return fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/md %s",
+				lom.Bck().Bck, lom.ObjName, lom.Version(), cksumHdr, lom.Cksum())
+		}
+	}
+	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+	err = ctMeta.Write(t, bytes.NewReader(md), -1)
+	if err != nil {
+		if rmErr := os.Remove(lom.FQN); rmErr != nil && !os.IsNotExist(rmErr) {
+			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
+		}
+	}
+	return err
 }

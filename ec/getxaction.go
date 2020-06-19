@@ -28,7 +28,7 @@ type (
 )
 
 type (
-	bgProcess = func(req *Request, toDisk bool, buffer []byte, cb func(error))
+	bgProcess = func(req *Request, toDisk bool, cb func(error))
 )
 
 //
@@ -107,7 +107,6 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 		stopCh: make(chan struct{}, 1),
 		jobs:   make(map[uint64]bgProcess, 4),
 		sema:   make(chan struct{}, maxBgJobsPerJogger),
-		diskCh: make(chan struct{}, 1),
 	}
 }
 
