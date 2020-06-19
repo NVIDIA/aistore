@@ -28,6 +28,8 @@ linters:
     - asciicheck
     - nolintlint
     # TODO: Add when available (and working):
+    # - gofumpt
+    # - exhaustive
     # - exportloopref
     # - goerr113
     #
