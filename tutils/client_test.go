@@ -6,7 +6,6 @@ package tutils_test
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -191,10 +190,6 @@ func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 }
 
 func TestMain(m *testing.M) {
-	verifyHash := flag.Bool("verifyhash", true, "verify hash when a packet is received")
-	flag.Parse()
-
-	// HTTP server; verifies checksum (if configured)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			io.Copy(ioutil.Discard, bufio.NewReader(r.Body))
@@ -206,11 +201,7 @@ func TestMain(m *testing.M) {
 			w.Write([]byte(fmt.Sprintf(f, a...)))
 		}
 
-		if !*verifyHash {
-			return
-		}
-
-		// Verify hash
+		// Verify checksum.
 		var (
 			cksumType  = r.Header.Get(cmn.HeaderObjCksumType)
 			cksumValue = r.Header.Get(cmn.HeaderObjCksumVal)
@@ -220,7 +211,7 @@ func TestMain(m *testing.M) {
 			errCb(http.StatusBadRequest, "server failed to read, error %v", err)
 			return
 		}
-		if cksum.Value() != cksumValue {
+		if cksum != nil && cksum.Value() != cksumValue {
 			errCb(http.StatusNotAcceptable, "cksum mismatch got: %q, expected: %q", cksum.Value(), cksumValue)
 		}
 	}))
