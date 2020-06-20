@@ -249,17 +249,24 @@ func (df *dsortFramework) start() {
 func (df *dsortFramework) createInputShards() {
 	const tmpDir = "/tmp"
 	var (
-		err error
+		wg    = &sync.WaitGroup{}
+		sema  = cmn.NewDynSemaphore(40)
+		errCh = make(chan error, df.tarballCnt)
 	)
+
 	tutils.Logf("creating %d tarballs...\n", df.tarballCnt)
-	wg := &sync.WaitGroup{}
-	errCh := make(chan error, df.tarballCnt)
 	for i := df.tarballCntToSkip; i < df.tarballCnt; i++ {
 		wg.Add(1)
+		sema.Acquire()
 		go func(i int) {
-			duplication := i < df.recordDuplicationsCnt
+			defer sema.Release()
 
-			path := fmt.Sprintf("%s/%s/%s%d", tmpDir, df.m.bck.Name, df.inputPrefix, i)
+			var (
+				err         error
+				duplication = i < df.recordDuplicationsCnt
+				path        = fmt.Sprintf("%s/%s/%s%d", tmpDir, df.m.bck.Name, df.inputPrefix, i)
+			)
+
 			if df.algorithm.Kind == dsort.SortKindContent {
 				err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == cmn.ExtTar {
